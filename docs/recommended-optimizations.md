@@ -11,9 +11,11 @@ passing.
   This is the median of 5 interleaved runs from identical initial weights, on this machine (8
   logical cores). The demo reproduces every end-to-end number here.
 - **Per-op:** single-example layer methods called 300 times in a loop, median over 5 loops, in
-  µs per call. These were ad hoc scripts, not committed. The shapes are the ones the demo's MNIST
-  networks use: a `ConvSpec(3, 8)` layer on 28x28 input, and the 32 x 5408 dense layer that
-  follows it.
+  µs per call. The shapes are the ones the demo's MNIST networks use: a `ConvSpec(3, 8)` layer on
+  28x28 input, and the 32 x 5408 dense layer that follows it. The table below came from ad hoc
+  scripts. `python -m indrajala_ml.demos.demo_layer_op_timing` now measures the same way and
+  reproduces it, each row to within about 10%. It also covers the batch ops (see "Batch ops"
+  below).
 
 Rust / numpy wall-clock ratio (below 1 means Rust is faster):
 
@@ -121,6 +123,17 @@ Both backends pay this, so it doesn't change the ratio, but it is a fixed per-ex
 neither the Rust nor the numpy maths can remove. Keeping the dataset as one pre-built array and
 slicing batches from it would remove it. That changes the trainer interface
 (`train.py` takes lists of `(state, label)` tuples), so it is a larger decision than 1–4.
+
+## Batch ops: Rust is slower than numpy at the wide dense shapes
+
+Found by the first run of `demo_layer_op_timing`, which added the batch ops. At batch 32 and 512,
+on the 32 x 5408 and 30 x 784 dense shapes, most Rust batch ops take 1.3x to 11x numpy's time
+(numpy's matmul calls OpenBLAS). For example, at batch 32, 32 x 5408: `forward_batch` 2296 vs
+567 µs, `downstream_batch` 2985 vs 272 µs, `accumulate_gradient_batch` 3904 vs 755 µs. At batch 1,
+`forward_batch` at 32 x 5408 is 312 vs 32 µs, which is mostly the `W.T` copy (optimization 1
+stage C). Why the end-to-end mini-batch ratios above don't show a gap this large hasn't been
+measured. Nothing here is acted on yet: optimization 1 removes the
+transposes, and the numbers the run gives after it will show how much of the gap remains.
 
 ## Not optimizations, but found in the same measurements
 

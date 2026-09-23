@@ -13,9 +13,8 @@ timing. Each has its own workplan:
 
 ## Implementation order
 
-0. **Shared stage 0: a committed per-op benchmark** (below). The per-op table in
-   `recommended-optimizations.md` came from ad hoc scripts that were never committed. Every plan
-   here needs before/after numbers for the same ops, so the harness comes first.
+0. **Shared stage 0: a committed per-op benchmark** (below). **Done:**
+   `indrajala_ml/demos/demo_layer_op_timing.py`.
 1. **Optimization 2** (dense accumulate_gradient). It is the most expensive Rust op in the
    measured case (639 µs), and it can be done bit-identically, so nothing downstream moves.
    Doing a bit-identical change first also means the later bit-changing changes are measured
@@ -39,16 +38,18 @@ before item 1 is a risk ordering, not a value ordering: both are high value.
 
 ## Shared stage 0: per-op benchmark harness
 
-A PR here, no crate change.
+Done: `python -m indrajala_ml.demos.demo_layer_op_timing`, a registered demo like the conv timing
+demo. Its first run reproduced the ad hoc per-op table, and found the batch-op gap recorded in
+`recommended-optimizations.md`. The spec it was built to:
 
-- `indrajala_ml/demos/bench_layer_ops.py` (or a `benchmarks/` script if the demos registry is the
-  wrong home; decide from how `demos/timing.py` is used). It times each single-example and
+- It times each single-example and
   batch layer method, for both backends, at the shapes in `recommended-optimizations.md`: a
   `ConvSpec(3, 8)` layer on 28x28 input, the 32 x 5408 dense layer after it, and the dense
   production shape (784 -> 30 -> 10). It also covers the 8x8 UCI conv shape used in item 4.
 - Method: 300 calls per loop, median of 5 loops, µs per call, numpy and Rust interleaved. That
   is the method the existing table used, so the first run should reproduce it. If it doesn't,
-  that's a finding to record before any optimization starts.
+  that's a finding to record before any optimization starts. Batch ops at batch 1, 32 and 512
+  run 300 // batch calls per loop (at least 10), so the whole table takes under a minute.
 - Output: a plain table, one row per op, numpy and Rust columns, and the Rust/numpy ratio.
 - Numpy and Rust only. Pure Python is never timed.
 - A smoke test that runs it with a tiny loop count, as `test_demo_conv_rust_vs_vectorized_digit_
