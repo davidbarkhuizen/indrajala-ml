@@ -62,6 +62,9 @@ within 2.7e-15.
 
 ## 2. Dense accumulate_gradient: fuse the outer product into the add (high value)
 
+**Stage A done:** one pass, bit-identical, 596 -> 62 µs at 32 x 5408 (see
+`workplans/optimization-2-dense-accumulate-gradient.md`). The figures below are from before it.
+
 `layer_accumulate_gradient` builds `outer(delta, x)` as a new 32 x 5408 array, then
 `combine_with_array` allocates a second one for `grad_W + outer`. The outer product alone
 measures **367 µs** of the **624 µs** call. One pass that writes

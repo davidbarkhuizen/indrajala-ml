@@ -22,6 +22,7 @@ from indrajala_math_rust import (
     layer_hidden_delta,
     layer_hidden_delta_batch,
     layer_output_delta,
+    outer,
 )
 
 from indrajala_ml.model.array_layer import ArrayLayer, sigmoid
@@ -155,6 +156,29 @@ def test_layer_accumulate_gradient_matches_array_layer(seed):
     )
     assert _to_numpy(new_grad_w) == pytest.approx(layer._grad_W)
     assert _to_numpy(new_grad_b) == pytest.approx(layer._grad_b)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("size, input_size", [(HIDDEN_SIZE, INPUT_SIZE), (32, 5408), (30, 784)])
+def test_layer_accumulate_gradient_is_bit_identical_to_grad_w_plus_outer(seed, size, input_size):
+    # the one-pass fused op keeps the separate product and sum (two roundings), so it matches
+    # both the crate's own outer + add composition and ArrayLayer.accumulate_gradient exactly
+    rng = np.random.default_rng(seed)
+    delta_data = rng.uniform(-1.0, 1.0, size)
+    x_data = rng.uniform(0.0, 1.0, input_size)
+    x_data[rng.random(input_size) < 0.2] = 0.0
+    grad_w_data = rng.uniform(-1.0, 1.0, (size, input_size))
+    delta, x, grad_w = Array(delta_data.tolist()), Array(x_data.tolist()), Array(grad_w_data.tolist())
+
+    new_grad_w, new_grad_b = layer_accumulate_gradient(delta, x, grad_w, Array.zeros(size))
+
+    assert new_grad_w.tolist() == (grad_w + outer(delta, x)).tolist()
+    layer = ArrayLayer(size, input_size)
+    layer.delta = delta_data
+    layer._grad_W = grad_w_data.copy()
+    layer.accumulate_gradient(x_data)
+    assert new_grad_w.tolist() == layer._grad_W.tolist()
+    assert new_grad_b.tolist() == layer._grad_b.tolist()
 
 
 @pytest.mark.parametrize("seed", SEEDS)
