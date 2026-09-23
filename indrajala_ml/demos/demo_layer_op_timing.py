@@ -77,8 +77,9 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes) -> list[Cas
     Every ArrayLayer method at one (size, input_size) shape. Each build draws the same values from
     a fresh seeded generator, so both backends time identical inputs. 'hidden_delta' times the
     layer *below* this one (size input_size) calling compute_hidden_delta with this layer as
-    next_layer, since that is where this layer's W is read. 'sgd step' is accumulate_gradient then
-    apply_accumulated_gradient, which is one single-example learn() step for this layer.
+    next_layer, since that is where this layer's W is read. 'sgd step' is this layer's share of
+    one single-example learn() step: sgd_step where the layer has one (the Rust layers), else
+    accumulate_gradient then apply_accumulated_gradient (numpy's ArrayNetworkBase.learn).
     """
 
     def single(op: str) -> Callable[[str], Callable[[], object]]:
@@ -100,6 +101,9 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes) -> list[Cas
                 return lambda: layer.accumulate_gradient(x)
             if op == "apply_accumulated_gradient":
                 return lambda: layer.apply_accumulated_gradient(LEARNING_RATE, 1)
+
+            if hasattr(layer, "sgd_step"):
+                return lambda: layer.sgd_step(x, LEARNING_RATE)
 
             def sgd_step():
                 layer.accumulate_gradient(x)

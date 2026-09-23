@@ -66,6 +66,12 @@ end-to-end conv and dense demos.
 
 ## Stage B: fused single-example SGD step (Python contract change; gated on stage A)
 
+**Done** (indrajala-math-rust #6, bumped here). The dense MNIST epoch takes 15% less Rust time
+(6.68 -> 5.65s, fused vs unfused on the same build), above the 10% bar, and the final weights
+after 60000 steps are bit-identical. The per-layer step at 32 x 5408 went from 463 to 64 µs.
+`sgd_step` also guards against a subclass overriding `accumulate_gradient`, not only
+`apply_accumulated_gradient`, since the fused step bypasses both.
+
 After stage A, a single-example step still allocates `grad_W`, reads it back in `apply`, and
 allocates zeros in `_reset_gradient_accum`. At `batch_size=1` the accumulator is always fresh:
 `RustArrayNetworkBase.learn` calls `accumulate_gradient` then `apply_accumulated_gradient` per

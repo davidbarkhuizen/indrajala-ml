@@ -71,9 +71,10 @@ class RustArrayNetworkBase:
         for i in reversed(range(len(self.layers) - 1)):
             self.layers[i].compute_hidden_delta(self.layers[i + 1])
 
+        # sgd_step is accumulate_gradient then apply_accumulated_gradient at batch_size=1, fused
+        # into one call where the layer's update is plain SGD
         for layer, input_activation in zip(self.layers, activations):
-            layer.accumulate_gradient(input_activation)
-            layer.apply_accumulated_gradient(learning_rate, batch_size=1)
+            layer.sgd_step(input_activation, learning_rate)
 
     def learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], object]]) -> None:
         validate_batch(batch)

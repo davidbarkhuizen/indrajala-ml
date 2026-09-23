@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer, unfused_sgd_step
 
 
 class AdamRustArrayLayer(RustArrayLayer):
@@ -55,3 +55,7 @@ class AdamRustArrayLayer(RustArrayLayer):
             batch_size,
         )
         self._reset_gradient_accum()
+
+    def sgd_step(self, input_activation: "pa.Array", learning_rate: float) -> None:
+        # not plain SGD, so not RustArrayLayer's fused step
+        unfused_sgd_step(self, input_activation, learning_rate)

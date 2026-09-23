@@ -62,8 +62,10 @@ within 2.7e-15.
 
 ## 2. Dense accumulate_gradient: fuse the outer product into the add (high value)
 
-**Stage A done:** one pass, bit-identical, 596 -> 62 µs at 32 x 5408 (see
-`workplans/optimization-2-dense-accumulate-gradient.md`). The figures below are from before it.
+**Done, both stages, bit-identical** (see `workplans/optimization-2-dense-accumulate-gradient.md`).
+Stage A (one-pass accumulate) took `accumulate_gradient` from 596 to 62 µs at 32 x 5408. Stage B
+(the fused single-example SGD step, `sgd_step`) took the whole per-layer step (accumulate +
+apply + reset) from 1308 to 64 µs. The figures below are from before either.
 
 `layer_accumulate_gradient` builds `outer(delta, x)` as a new 32 x 5408 array, then
 `combine_with_array` allocates a second one for `grad_W + outer`. The outer product alone
