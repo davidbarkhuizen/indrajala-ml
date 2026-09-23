@@ -12,7 +12,7 @@ dependencies = [
     "matplotlib",
     "pytest",
     "pyarrow",
-    "numpy",
+    "numpy>=1.20",  # numpy.lib.stride_tricks.sliding_window_view (conv_array_layer.py)
 ]
 
 [tool.setuptools.packages.find]
