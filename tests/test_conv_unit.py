@@ -1,6 +1,5 @@
 import pytest
 
-from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_unit import ConvUnit
 from indrajala_ml.model.state_node import StateNode
@@ -43,11 +42,8 @@ def test_constructor_rejects_a_receptive_field_size_mismatch():
 def test_compute_hidden_delta_propagates_downstream_when_active():
 
     unit = _conv_unit([0.5, -0.5], 0.1, [2.0, -3.0])  # active (value=2.6 > 0)
-    next_node = BackpropNode(input_nodes=[unit])
-    next_node.update_input_weights([0.8])
-    next_node.delta = -0.5
 
-    unit.compute_hidden_delta([next_node], own_index=0)
+    unit.compute_hidden_delta(downstream_sum=-0.5 * 0.8)
 
     assert unit.delta == pytest.approx(-0.5 * 0.8)
 
@@ -55,11 +51,8 @@ def test_compute_hidden_delta_propagates_downstream_when_active():
 def test_compute_hidden_delta_is_zero_when_the_unit_is_dead():
 
     unit = _conv_unit([0.1], -5.0, [1.0])  # dead (value=0.0)
-    next_node = BackpropNode(input_nodes=[unit])
-    next_node.update_input_weights([0.8])
-    next_node.delta = -0.5
 
-    unit.compute_hidden_delta([next_node], own_index=0)
+    unit.compute_hidden_delta(downstream_sum=-0.5 * 0.8)
 
     assert unit.delta == 0.0
 

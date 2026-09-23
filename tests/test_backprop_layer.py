@@ -56,6 +56,41 @@ def test_accumulate_then_apply_accumulated_gradients_matches_per_node_split():
         assert node.bias == pytest.approx(0.1 - 0.1 * (0.1 / 2))
 
 
+
+def test_downstream_sum_is_the_dense_delta_times_weight_sum():
+
+    layer = _layer(2, 3, (1.0, 2.0, 3.0))
+    layer.nodes[0].update_input_weights([0.5, -0.5, 0.25])
+    layer.nodes[1].update_input_weights([-1.0, 2.0, 0.75])
+    layer.nodes[0].delta = 0.2
+    layer.nodes[1].delta = -0.4
+
+    assert layer.downstream_sum(0) == pytest.approx(0.2 * 0.5 + -0.4 * -1.0)
+    assert layer.downstream_sum(1) == pytest.approx(0.2 * -0.5 + -0.4 * 2.0)
+    assert layer.downstream_sum(2) == pytest.approx(0.2 * 0.25 + -0.4 * 0.75)
+
+
+def test_compute_hidden_deltas_matches_calling_compute_hidden_delta_on_every_node_by_hand():
+
+    hidden = _layer(3, 2, (2.0, -3.0))
+    for node in hidden.nodes:
+        node.update_input_weights([0.3, -0.2])
+        node.forward()
+    next_layer = BackpropLayer(size=2, input_layer=hidden)
+    for i, node in enumerate(next_layer.nodes):
+        node.update_input_weights([0.5, -0.25, 1.0 + i])
+        node.delta = 0.1 * (i + 1)
+
+    for own_index, node in enumerate(hidden.nodes):
+        node.compute_hidden_delta(next_layer.nodes, own_index)
+    expected = [node.delta for node in hidden.nodes]
+    for node in hidden.nodes:
+        node.delta = 0.0
+
+    hidden.compute_hidden_deltas(next_layer)
+
+    assert [node.delta for node in hidden.nodes] == expected
+
 def test_snapshot_state_and_restore_state_round_trip():
 
     layer = _layer(2, 2, (0.0, 0.0))
