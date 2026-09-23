@@ -36,6 +36,12 @@ cost here is allocation and memory passes, not arithmetic. So:
 
 ## Stage A: one-pass `layer_accumulate_gradient` (crate + here)
 
+**Done** (indrajala-math-rust #5, bumped here). Bit-identical, as planned. The FMA variant was not
+materially faster, so it wasn't adopted. At 32 x 5408, Rust `accumulate_gradient` went from 596 to
+62 µs, and the single-example SGD step (accumulate + apply + reset) from 1308 to 463 µs. MNIST
+one-conv single-example went from 1.21 to 0.75 Rust/numpy. Dense MNIST, one epoch, went from 0.645
+to 0.423.
+
 **Crate PR:**
 
 - Rewrite `layer_accumulate_gradient` to allocate one output buffer and fill row `i` with
