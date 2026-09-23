@@ -102,9 +102,9 @@ def matching_array_backprop_networks(
     MultiClassBackpropClassifierNetwork and an array-backed sibling
     (VectorizedMultiClassBackpropClassifierNetwork / RustArrayMultiClassBackpropClassifierNetwork,
     passed as array_network_cls) with identical injected weights. Neither array backend's RNG
-    stream is meaningfully comparable to Python's random module (see docs/architecture/rust-array-core.md's
-    "the RNG exception"), so initial weights are always forced identical explicitly here instead
-    of via each network's own randomize(). `wrap` converts a nested Python list of weights (or a
+    stream is meaningfully comparable to Python's random module, so initial weights are always
+    forced identical explicitly here instead of via each network's own randomize(). `wrap`
+    converts a nested Python list of weights (or a
     flat list of biases) into the array backend's own array type - np.array for the numpy
     sibling, pa.Array for the Rust one.
     """
@@ -217,8 +217,8 @@ class AdamMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
     since this codebase has no per-node multi-class Adam sibling to build against otherwise. Gives
     every array-based Adam sibling (AdamVectorizedMultiClassBackpropClassifierNetwork,
     AdamRustArrayMultiClassBackpropClassifierNetwork) a genuine parity reference instead of a
-    hand-derived fixture, per docs/design-docs/adam/adam-array-layer.md's "correctness validation" section - shared
-    here rather than duplicated per test module, since both siblings need the identical reference.
+    hand-derived fixture, shared here rather than duplicated per test module, since both
+    siblings need the identical reference.
     """
 
     def __init__(
@@ -284,8 +284,7 @@ class L2MultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork)
     Test-only per-node L2 reference: MultiClassBackpropClassifierNetwork with its
     hidden_layer_cls/output_layer_cls extension points set to make_l2_layer_cls's node class -
     the same construction L2RegularizedBackpropClassifierNetwork uses for the single-output
-    case. Gives L2VectorizedMultiClassBackpropClassifierNetwork a genuine parity reference, per
-    docs/design-docs/array-siblings/l2-array-layer.md's "correctness validation" section.
+    case. Gives L2VectorizedMultiClassBackpropClassifierNetwork a genuine parity reference.
     """
 
     def __init__(
@@ -344,8 +343,7 @@ class MomentumMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNe
     Test-only per-node momentum reference: MultiClassBackpropClassifierNetwork with its
     hidden_layer_cls/output_layer_cls extension points set to make_momentum_layer_cls's node
     class - the same construction MomentumBackpropClassifierNetwork uses for the single-output
-    case. Gives MomentumVectorizedMultiClassBackpropClassifierNetwork a genuine parity reference,
-    per docs/design-docs/array-siblings/momentum-array-layer.md's "correctness validation" section.
+    case. Gives MomentumVectorizedMultiClassBackpropClassifierNetwork a genuine parity reference.
     """
 
     def __init__(
@@ -405,8 +403,7 @@ class ReLUMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
     hidden_layer_cls extension point set to ReLULayer - the output layer stays the default
     plain BackpropLayer (sigmoid), matching ReLUNode's hidden-layer-only convention (the same
     construction ReLUBackpropClassifierNetwork uses for the single-output case). Gives
-    ReLUVectorizedMultiClassBackpropClassifierNetwork a genuine parity reference, per
-    docs/design-docs/array-siblings/relu-array-layer.md's "correctness validation" section.
+    ReLUVectorizedMultiClassBackpropClassifierNetwork a genuine parity reference.
     """
 
     hidden_layer_cls = ReLULayer
@@ -456,14 +453,12 @@ class DropoutMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNet
     class - the output layer stays the default plain BackpropLayer (sigmoid), matching
     DropoutNode's hidden-layer-only convention. No genuine per-node
     DropoutMultiClassBackpropClassifierNetwork sibling exists in this codebase
-    (DropoutBackpropClassifierNetwork is scoped to the single-output case only, see
-    docs/features/dropout.md's "scope"), so this exists purely to give
-    DropoutVectorizedMultiClassBackpropClassifierNetwork/
+    (DropoutBackpropClassifierNetwork is scoped to the single-output case only), so this exists
+    purely to give DropoutVectorizedMultiClassBackpropClassifierNetwork/
     DropoutRustArrayMultiClassBackpropClassifierNetwork an eval-mode parity reference (dropout is
     a deterministic no-op at eval mode - training defaults to False on both sides, and neither
-    predict_probabilities nor classify_state ever toggles it on), per
-    docs/design-docs/array-siblings/dropout-array-layer.md's own "correctness validation" section, which notes a genuine
-    training-time comparison isn't achievable across two independent RNG streams.
+    predict_probabilities nor classify_state ever toggles it on). A genuine training-time
+    comparison isn't achievable across two independent RNG streams.
     """
 
     def __init__(
@@ -532,8 +527,7 @@ def matching_softmax_array_backprop_networks(
     matching_adam_array_backprop_networks's own docstring for the general shape this follows.
     Unlike momentum/L2/ReLU (which need a test-only per-node reference subclass built via
     make_*_layer_cls/hidden_layer_cls), a genuine per-node softmax reference already exists
-    (SoftmaxMultiClassBackpropClassifierNetwork), so this uses it directly - per
-    docs/design-docs/array-siblings/softmax-array-layer.md's own "correctness validation" section.
+    (SoftmaxMultiClassBackpropClassifierNetwork), so this uses it directly.
     """
     node_network = SoftmaxMultiClassBackpropClassifierNetwork(
         layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count
@@ -566,8 +560,7 @@ class CrossEntropyMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifi
     BinaryCrossEntropyBackpropClassifierNetwork uses for the single-output case (a single
     class-attribute override, needing no factory function since CrossEntropyOutputLayer takes no
     extra tunable coefficient - unlike L2/momentum's own make_*_layer_cls factories). Gives
-    CrossEntropyVectorizedMultiClassBackpropClassifierNetwork a genuine parity reference, per
-    docs/proposals/binary-cross-entropy-array-layer.md's "correctness validation" section.
+    CrossEntropyVectorizedMultiClassBackpropClassifierNetwork a genuine parity reference.
     """
 
     output_layer_cls = CrossEntropyOutputLayer

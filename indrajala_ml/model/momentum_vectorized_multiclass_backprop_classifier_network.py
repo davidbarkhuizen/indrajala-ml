@@ -8,8 +8,7 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class MomentumVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    The momentum sibling of VectorizedMultiClassBackpropClassifierNetwork - see
-    docs/design-docs/array-siblings/momentum-array-layer.md.
+    The momentum sibling of VectorizedMultiClassBackpropClassifierNetwork.
 
     momentum is a required constructor parameter, no default - the same posture
     MomentumBackpropClassifierNetwork's per-node counterpart already takes. Both hidden layers

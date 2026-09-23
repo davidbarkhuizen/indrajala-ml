@@ -11,8 +11,7 @@ class DropoutArrayLayer(ArrayLayer):
     the same inverted-dropout mechanism (Srivastava et al., 2014) - a training-time-only,
     per-forward-pass random mask zeroing a fraction of this layer's activations, rescaling the
     kept ones by 1/keep_probability - but as whole-array numpy ops over the layer's (size,
-    input_size) weight matrix, instead of a per-node Python loop. See
-    docs/design-docs/array-siblings/dropout-array-layer.md for the full design.
+    input_size) weight matrix, instead of a per-node Python loop.
 
     Unlike momentum/L2/Adam's own array siblings (which only touch apply_accumulated_gradient),
     dropout changes the *activation* itself, so this overrides forward/forward_batch and
@@ -27,7 +26,7 @@ class DropoutArrayLayer(ArrayLayer):
     _base_activation (the *pre*-mask sigmoid, not self.a/self.A) and a forward-time snapshot of
     training (_was_training, not the live attribute) - the same two subtleties
     dropout_layer.py's own DropoutNode design found by testing, re-derived here rather than
-    assumed to carry over unchanged (see docs/features/dropout.md's "design").
+    assumed to carry over unchanged.
 
     drop_probability is a required constructor argument, no default - the same posture
     make_dropout_node_cls itself takes.
@@ -60,7 +59,7 @@ class DropoutArrayLayer(ArrayLayer):
         # one independent mask row per example (batch_size, self.size), not one shared mask for
         # the whole batch - dropout's whole point is a fresh, independent draw per forward pass,
         # and a batched forward pass is still batch_size independent forward passes from
-        # dropout's perspective (see docs/design-docs/array-siblings/dropout-array-layer.md's "design")
+        # dropout's perspective
         batch_size = X.shape[0]
         self.Z = X @ self.W.T + self.b
         base = sigmoid(self.Z)

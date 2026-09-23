@@ -9,9 +9,9 @@ from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayB
 
 class EnsembleRustArrayBackpropClassifierNetwork:
     """
-    The Rust-array-core-backed sibling of EnsembleArrayBackpropClassifierNetwork - see
-    docs/proposals/ensemble-array-layer.md's "piece 2", built unconditionally alongside the numpy
-    stage (see RustArrayBackpropClassifierNetwork's own docstring). A direct structural mirror,
+    The Rust-array-core-backed sibling of EnsembleArrayBackpropClassifierNetwork, built
+    unconditionally alongside its numpy counterpart (see RustArrayBackpropClassifierNetwork's
+    own docstring). A direct structural mirror,
     substituting RustArrayBackpropClassifierNetwork throughout - same save()/load() shape (bare
     save_json/load_json, not save_array_model_json) for the same nested-snapshot reason
     EnsembleArrayBackpropClassifierNetwork's own docstring gives.

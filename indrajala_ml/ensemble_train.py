@@ -45,7 +45,7 @@ def select_balanced_indices(
     decoding the examples themselves - only their labels. See
     train_ensemble_parallel_from_indices, which uses this to let each worker load just its own
     selected examples directly, without any process needing the full dataset decoded in memory
-    at once (measured directly to matter: see docs/research/research-and-analysis.md).
+    at once.
     """
 
     assert class_count >= 2, f"class_count must be at least 2; got {class_count}"
@@ -136,15 +136,14 @@ def _train_classifier_on_binary_dataset(
     in hand: trains one class's binary classifier_cls (a BackpropClassifierNetwork, or a
     subclass - e.g. FanInAwareBackpropClassifierNetwork, see train_ensemble_parallel_from_indices's
     own classifier_cls parameter) completely independently - no state is shared with any other
-    worker, which is what makes this genuinely (not just approximately) parallelizable - see
-    docs/research/research-and-analysis.md's "parallelizing MNIST training" entry.
+    worker, which is what makes this genuinely (not just approximately) parallelizable.
 
-    Explicitly seeds this process's own random state before building anything - confirmed
-    directly this session that fork-based multiprocessing workers are not guaranteed to diverge
-    from each other's global random state on their own before their first random call, so
-    relying on incidental post-fork divergence would risk correlated (or even identical) initial
-    weights across sub-networks. seed=None still calls random.seed(None), which reseeds from the
-    OS's own entropy source independently per process - safe, just not reproducible.
+    Explicitly seeds this process's own random state before building anything: fork-based
+    multiprocessing workers are not guaranteed to diverge from each other's global random state
+    on their own before their first random call, so relying on incidental post-fork divergence
+    would risk correlated (or even identical) initial weights across sub-networks. seed=None
+    still calls random.seed(None), which reseeds from the OS's own entropy source independently
+    per process - safe, just not reproducible.
     """
 
     random.seed(seed)
@@ -197,8 +196,8 @@ def _train_one_indexed_classifier(
 ) -> tuple[int, list[list[tuple[list[float], float]]], TrainingDiagnostic]:
     """
     The index-based counterpart to _train_one_classifier, for datasets too large to pass a
-    fully-decoded binary_dataset through multiprocessing IPC without exhausting memory (measured
-    directly: see docs/research/research-and-analysis.md). Instead of receiving already-decoded examples,
+    fully-decoded binary_dataset through multiprocessing IPC without exhausting memory. Instead
+    of receiving already-decoded examples,
     this receives a path, a record_loader function (e.g.
     mnist_data.load_mnist_records_at_indices), and the (index, category) pairs
     select_balanced_indices already chose - and loads only its own examples, directly, itself.
@@ -361,16 +360,15 @@ def train_ensemble_parallel(
 ) -> tuple[EnsembleBackpropClassifierNetwork, dict[int, TrainingDiagnostic]]:
     """
     Trains one classifier_cls instance per class completely independently - dispatched across
-    a multiprocessing.Pool, since nothing needs to be synchronized between them (unlike the
-    data-parallel weight-averaging approach rejected in docs/research/research-and-analysis.md, this has
-    no communication cost beyond the one-time dispatch and final collection).
+    a multiprocessing.Pool, since nothing needs to be synchronized between them (unlike a
+    data-parallel weight-averaging approach, this has no communication cost beyond the one-time
+    dispatch and final collection).
 
     classifier_cls defaults to BackpropClassifierNetwork (every existing caller's behavior is
     unchanged) but accepts any subclass with a matching constructor/randomized() signature - e.g.
-    FanInAwareBackpropClassifierNetwork, whose init scheme was measured directly to matter at
-    real MNIST scale (see docs/research/research-and-analysis.md's "ensemble/real-MNIST investigation"
-    entry) in a way BackpropClassifierNetwork's own default scheme, tuned for 1-2D geometric
-    problems, does not.
+    FanInAwareBackpropClassifierNetwork, whose init scheme measurably matters at real MNIST scale
+    in a way BackpropClassifierNetwork's own default scheme, tuned for 1-2D geometric problems,
+    does not.
 
     worker_count is capped by _select_worker_count using both CPU count *and* an estimate of
     available memory, not cores alone - a worker deserializing its own dataset copy over IPC
@@ -379,10 +377,9 @@ def train_ensemble_parallel(
     This function expects dataset to already be fully decoded in memory, which is fine for
     small-to-medium data (this codebase's own UCI digits demo, the synthetic datasets its own
     tests use) - for something MNIST-sized, decoding every example up front, in every process
-    that touches it, was measured directly to cost several GB (not because of any particular
-    library - 47 million individual boxed Python float objects is simply a lot of memory,
-    however they got there). See train_ensemble_parallel_from_indices for that case, and
-    docs/research/research-and-analysis.md's "parallelizing MNIST training" entry for the measurements.
+    that touches it, costs several GB (not because of any particular library - 47 million
+    individual boxed Python float objects is simply a lot of memory, however they got there).
+    See train_ensemble_parallel_from_indices for that case.
 
     seed, when given, makes the whole run reproducible: it seeds a single random.Random used for
     every dataset's stratified sampling (in class order, so the sequence is deterministic) and
@@ -446,8 +443,7 @@ def train_ensemble_parallel_from_indices(
 
     Measured directly, on real MNIST data (a single class's ~11846-example balanced set, one
     worker): the naive fully-decoded-then-shipped-via-IPC approach train_ensemble_parallel uses
-    peaked at ~2.25GB; this index-based approach peaked at ~374MB for the same work - see
-    docs/research/research-and-analysis.md's "parallelizing MNIST training" entry.
+    peaked at ~2.25GB; this index-based approach peaked at ~374MB for the same work.
 
     record_loader must be a plain, module-level function (not a closure or lambda) for
     multiprocessing picklability, same as every worker function in this module. classifier_cls -
@@ -512,14 +508,9 @@ def train_ensemble_serial_from_indices(
     A second training path worth comparing against train_ensemble_parallel_from_indices for
     every classifier_cls, numpy- and Rust-backed alike (see _picklable_snapshot and
     RustArrayBackpropClassifierNetwork.restore()'s own tolerance for why the Rust-backed path
-    can use either training function, not just this one): per-classifier training is now (per
-    the array/Rust ports' own measured speedups) fast enough that training all class_count
-    classifiers serially may match or beat the parallel path's own multiprocessing
-    dispatch/collection overhead - see docs/research/research-multiclass-and-loss.md's "the
-    ensemble/real-MNIST investigation" entry for the measured comparison, and
-    docs/proposals/ensemble-array-layer.md's own "measurement plan" for why this question was
-    worth answering directly rather than assuming vectorization is strictly additive to the
-    existing multiprocessing-based design.
+    can use either training function, not just this one): on the array/Rust-backed paths,
+    per-classifier training is fast enough that training all class_count classifiers serially can
+    match or beat the parallel path's own multiprocessing dispatch/collection overhead.
 
     Same reproducibility contract as train_ensemble_parallel_from_indices: seed, when given,
     seeds one random.Random used for every class's stratified sampling (in class order) and to

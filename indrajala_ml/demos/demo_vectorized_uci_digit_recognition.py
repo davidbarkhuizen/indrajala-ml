@@ -21,14 +21,13 @@ MODEL_PATH = "data/digits/trained_model_vectorized.json"
 def main() -> None:
 
     print(
-        "Vectorization phase-1 validation: the same UCI hand-written digits task "
+        "Vectorized vs pure-Python validation: the same UCI hand-written digits task "
         "demo_uci_digit_recognition.py trains, here trained by "
-        "VectorizedMultiClassBackpropClassifierNetwork (docs/architecture/vectorized-array-classes.md) - a "
-        "numpy-array-backed sibling, parity-checked step-by-step against the pure-Python "
-        "MultiClassBackpropClassifierNetwork in tests/test_vectorized_multiclass_backprop_model.py. "
-        "This demo trains both, at the same seed and hyperparameters, and reports the actual "
-        "measured accuracy trajectory and wall-clock cost of each - the doc's own 'identical "
-        "accuracy trajectory, honestly measured' claim, checked here rather than assumed."
+        "VectorizedMultiClassBackpropClassifierNetwork, a numpy-array-backed sibling, "
+        "parity-checked step-by-step against the pure-Python MultiClassBackpropClassifierNetwork "
+        "in tests/test_vectorized_multiclass_backprop_model.py. This demo trains both, at the "
+        "same seed and hyperparameters, and reports the actual measured accuracy trajectory and "
+        "wall-clock cost of each."
     )
     print()
 

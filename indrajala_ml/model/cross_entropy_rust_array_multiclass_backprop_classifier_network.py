@@ -9,8 +9,7 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 class CrossEntropyRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
     The Rust-matmul-backed counterpart to
-    CrossEntropyVectorizedMultiClassBackpropClassifierNetwork - see
-    docs/design-docs/array-siblings/binary-cross-entropy-array-layer.md. Hidden layers are built from plain
+    CrossEntropyVectorizedMultiClassBackpropClassifierNetwork. Hidden layers are built from plain
     RustArrayLayer (sigmoid); only the output layer is a CrossEntropyRustArrayLayer - the same
     split CrossEntropyVectorizedMultiClassBackpropClassifierNetwork uses. Unlike softmax's own
     output (jointly normalized), predict_probabilities does not sum to 1.0, and classify_state

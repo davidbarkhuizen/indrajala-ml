@@ -6,8 +6,8 @@ from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
 
 class CrossEntropyArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
     """
-    The single-output numpy-array-backed sibling of BinaryCrossEntropyBackpropClassifierNetwork -
-    see docs/design-docs/array-siblings/binary-cross-entropy-array-layer.md. Structurally identical to
+    The single-output numpy-array-backed sibling of BinaryCrossEntropyBackpropClassifierNetwork.
+    Structurally identical to
     ArrayBackpropClassifierNetwork, except its output layer is a CrossEntropyArrayLayer instead
     of a plain ArrayLayer - the array-level analogue of
     BinaryCrossEntropyBackpropClassifierNetwork's own output_layer_cls-only override, applied to

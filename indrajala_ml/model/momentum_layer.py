@@ -15,9 +15,9 @@ def make_momentum_node_cls(momentum: float) -> type[BackpropNode]:
     A factory, not a fixed class, because momentum is a genuinely tunable coefficient - unlike
     every other node variant in this codebase (softmax, cross-entropy, ReLU), which differ by a
     fixed formula with no free parameter, there is no single momentum value this codebase's own
-    measurements support recommending as a default (see docs/research/research-and-analysis.md's
-    "momentum" entry: the canonical α=0.9 robustly hurt across a learning-rate sweep, and no
-    coefficient in 0.3-0.7 measurably beat no momentum at all, once enough seeds ruled out noise).
+    measurements support recommending as a default: the canonical α=0.9 robustly hurts across a
+    learning-rate sweep, and no coefficient in 0.3-0.7 measurably beats no momentum at all, once
+    enough seeds rule out noise.
     """
 
     class MomentumBackpropNode(BackpropNode):
@@ -27,10 +27,10 @@ def make_momentum_node_cls(momentum: float) -> type[BackpropNode]:
             self._prev_bias_delta = 0.0
 
         def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
-            # the averaged accumulated gradient (accum / batch_size) plugs in exactly where the
-            # single-example gradient (self.delta * node.value()) used to - the momentum term
-            # itself (momentum * prev) is unaffected by batching, since it's a function of the
-            # *previous update*, not of how this one's gradient was computed
+            # the averaged accumulated gradient (accum / batch_size) plugs in exactly where a
+            # single-example gradient (self.delta * node.value()) would in the unbatched formula -
+            # the momentum term itself (momentum * prev) is unaffected by batching, since it's a
+            # function of the *previous update*, not of how this one's gradient was computed
             new_weights = []
             new_prev = []
             for weight, accum, prev in zip(

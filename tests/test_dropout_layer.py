@@ -73,8 +73,8 @@ def test_set_training_mode_false_reverts_to_eval_behavior():
 
 def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative():
 
-    # the subtlety docs/features/dropout.md flags explicitly: the derivative factor must be
-    # base*(1-base) (the *pre*-scaling activation), not value()*(1-value()) the way
+    # the derivative factor must be base*(1-base) (the *pre*-scaling activation), not
+    # value()*(1-value()) the way
     # BackpropNode.compute_hidden_delta's own a*(1-a) would - see the hand-derivation in
     # dropout_layer.py's own compute_hidden_delta docstring
     layer, node = _dropout_node(drop_probability=0.5)

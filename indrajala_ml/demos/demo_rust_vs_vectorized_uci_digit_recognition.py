@@ -24,14 +24,12 @@ MODEL_PATH = "data/digits/trained_model_rust.json"
 def main() -> None:
 
     print(
-        "Rust production cutover validation (docs/architecture/rust-production-cutover.md). The same UCI "
-        "hand-written digits task demo_vectorized_uci_digit_recognition.py trains, extended with "
-        "a third column: RustArrayMultiClassBackpropClassifierNetwork, the Rust-array-core-backed "
-        "sibling that replaces numpy as the production backend (numpy stays on permanently as the "
-        "benchmark comparison - see that document's own 2026-09-16 clarification). Trains all "
-        "three at the same seed/hyperparameters and reports each one's measured accuracy and "
-        "wall-clock training time - docs/research/research-and-analysis.md's own measured 3.40x speedup "
-        "claim, checked here rather than assumed."
+        "Rust vs numpy validation. The same UCI hand-written digits task "
+        "demo_vectorized_uci_digit_recognition.py trains, extended with a third column: "
+        "RustArrayMultiClassBackpropClassifierNetwork, the Rust-array-core-backed sibling that "
+        "replaces numpy as the production backend (numpy stays on permanently as the benchmark "
+        "comparison). Trains all three at the same seed/hyperparameters and reports each one's "
+        "measured accuracy and wall-clock training time."
     )
     print()
 

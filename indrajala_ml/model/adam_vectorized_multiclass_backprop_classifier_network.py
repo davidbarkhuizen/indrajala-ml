@@ -9,9 +9,9 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class AdamVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    The Adam-optimized sibling of VectorizedMultiClassBackpropClassifierNetwork - see
-    docs/design-docs/adam/adam-array-layer.md. Both hidden layers and the output layer are built from
-    AdamArrayLayer with beta1/beta2/epsilon already bound via a closure (hidden_layer_cls ==
+    The Adam-optimized sibling of VectorizedMultiClassBackpropClassifierNetwork. Both hidden
+    layers and the output layer are built from AdamArrayLayer with beta1/beta2/epsilon already
+    bound via a closure (hidden_layer_cls ==
     output_layer_cls, set as instance attributes before super().__init__() runs) - the same
     pattern momentum/L2's own array siblings use.
 

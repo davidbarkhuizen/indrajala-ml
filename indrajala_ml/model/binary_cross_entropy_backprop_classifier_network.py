@@ -40,8 +40,7 @@ class BinaryCrossEntropyBackpropClassifierNetwork(BackpropClassifierNetwork):
     correct, since cross-entropy's delta is exactly as per-node-independent as quadratic loss's.
 
     Unlike the multi-class case, this is NOT a drop-in improvement at BackpropClassifierNetwork's
-    existing tuned learning rates - measured directly (see docs/research/research-and-analysis.md's
-    "binary cross-entropy for BackpropClassifierNetwork" entry): at the demo-tuned
+    existing tuned learning rates - measured directly: at the demo-tuned
     learning_rate=1.0 this class trains to a meaningfully *lower* training accuracy than
     BackpropClassifierNetwork on the same target (91.87% vs 97.80% mean over 10 seeds on a
     fixed XOR scenario), because cross-entropy's larger, undamped gradient overshoots at that

@@ -21,7 +21,7 @@ def make_dropout_node_cls(drop_probability: float) -> type[BackpropNode]:
 
     A factory, not a fixed class, for the same reason as make_momentum_node_cls/
     make_l2_node_cls: there is no single drop_probability this codebase has measured and can
-    recommend - see docs/features/dropout.md.
+    recommend.
     """
 
     assert 0.0 <= drop_probability < 1.0, f"drop_probability must be in [0.0, 1.0); got {drop_probability}"
@@ -67,8 +67,7 @@ def make_dropout_node_cls(drop_probability: float) -> type[BackpropNode]:
         def compute_output_delta(self, reference_value: float) -> None:
             raise NotImplementedError(
                 "DropoutNode is a hidden-layer regularizer, not an output one - dropping units "
-                "feeding the output layer isn't what this sibling builds (see docs/features/dropout.md's "
-                "own hidden-layer-only scope)."
+                "feeding the output layer isn't what this sibling builds."
             )
 
         def compute_hidden_delta(self, next_layer_nodes: Sequence["BackpropNode"], own_index: int) -> None:
@@ -85,7 +84,7 @@ def make_dropout_node_cls(drop_probability: float) -> type[BackpropNode]:
             # a*(1-a) != base*(1-base)/keep_probability in general. The correct chain rule for
             # d(base * mask/keep_probability)/dz is (mask/keep_probability) * base*(1-base) -
             # the ordinary sigmoid derivative on the *unscaled* activation, times the same
-            # 1/keep_probability rescale forward() used (see docs/features/dropout.md's own derivation).
+            # 1/keep_probability rescale forward() used.
             downstream = sum(node.delta * node.input_node_weights[own_index] for node in next_layer_nodes)
             sigmoid_derivative = self._base_activation * (1.0 - self._base_activation)
             scale = (1.0 / keep_probability) if self._was_training else 1.0

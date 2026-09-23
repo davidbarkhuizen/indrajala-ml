@@ -61,9 +61,8 @@ def _training_accuracy(
 class TrainingDiagnostic:
     """
     Summarizes how a train_linear_classifier_network() run's training-data accuracy
-    trajectory behaved, since there's no guarantee it converges (see docs/project/structure.md) and
-    eyeballing a chart is otherwise the only way to tell converged from plateaued from still
-    improving.
+    trajectory behaved, since there's no guarantee it converges and eyeballing a chart is
+    otherwise the only way to tell converged from plateaued from still improving.
     """
 
     def __init__(
@@ -123,11 +122,10 @@ def train_linear_classifier_network(
     learning_rate is either a plain float (every existing caller) or a schedule function from
     the current iteration index to a rate (e.g. lr_schedule.linear_warmup) - resolved once per
     learn() call, using the same iterations counter this function already tracks for its
-    convergence series. See docs/design-docs/infra/learning-rate-schedule.md for why iterations (not epoch_index)
-    is the right step index: a schedule targets per-step instability, and batch_size already
-    determines how many steps an epoch contains.
+    convergence series. Iterations (not epoch_index) is the right step index: a schedule targets
+    per-step instability, and batch_size already determines how many steps an epoch contains.
 
-    There's no guarantee this converges (see docs/project/structure.md) - training accuracy can
+    There's no guarantee this converges - training accuracy can
     oscillate rather than settle, especially once the target isn't exactly representable at
     student's cardinality/required_active. So rather than leaving student wherever the last
     epoch happened to land, it's left at whichever epoch's end had the best training-data
@@ -184,8 +182,7 @@ def train_linear_classifier_network(
 def _chunk_into_batches(data: list, batch_size: int) -> list[list]:
     # a final undersized batch (len(data) doesn't evenly divide batch_size) is kept, not
     # dropped - learn_batch already averages by its own len(batch), so no training data goes
-    # unused just because it didn't land on an exact batch boundary (see
-    # docs/features/mini-batch-gradient-descent.md's "batch construction" workplan item)
+    # unused just because it didn't land on an exact batch boundary
     assert batch_size >= 1, f"batch_size must be at least 1; got {batch_size}"
     return [data[i : i + batch_size] for i in range(0, len(data), batch_size)]
 
@@ -202,9 +199,8 @@ def train_backprop_network_mini_batch(
     """
     The mini-batch-shaped sibling of train_linear_classifier_network, for gradient-based
     students only: calls student.learn_batch, which LinearClassifierNetwork/AssociationNode's
-    discrete minimum-disturbance update rule has no equivalent of - see
-    docs/features/mini-batch-gradient-descent.md's "batch construction" item for why this is a separate
-    function rather than a branch inside that one. Like that function, actually duck-typed
+    discrete minimum-disturbance update rule has no equivalent of, hence the separate function
+    rather than a branch inside that one. Like that function, actually duck-typed
     across every learn_batch-supporting sibling (MultiClassBackpropClassifierNetwork included,
     not just BackpropClassifierNetwork itself), despite the type hint naming only the most
     common case - the same looseness train_linear_classifier_network's own hint already has.

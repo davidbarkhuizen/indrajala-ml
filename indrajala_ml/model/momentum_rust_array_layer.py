@@ -7,9 +7,8 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class MomentumRustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to MomentumArrayLayer - see docs/design-docs/array-siblings/momentum-array-layer.md's
-    Rust-matmul-backed follow-on. Same momentum update rule, same previous-delta state, but
-    `apply_accumulated_gradient` is a single fused Rust call
+    The Rust-matmul-backed counterpart to MomentumArrayLayer. Same momentum update rule, same
+    previous-delta state, but `apply_accumulated_gradient` is a single fused Rust call
     (`layer_momentum_apply_accumulated_gradient`, `fused.rs`) instead of a numpy expression -
     mirroring how `RustArrayLayer` itself relates to `ArrayLayer`.
 

@@ -9,16 +9,15 @@ class SoftmaxArrayLayer(ArrayLayer):
     """
     The array-based counterpart to softmax_output_layer.SoftmaxOutputNode/SoftmaxOutputLayer:
     joint softmax normalization across the whole output vector instead of an independent per-node
-    sigmoid, as whole-array numpy ops instead of a per-node Python loop. See
-    docs/design-docs/array-siblings/softmax-array-layer.md for the full design.
+    sigmoid, as whole-array numpy ops instead of a per-node Python loop.
 
     Output-layer-only, matching SoftmaxOutputLayer's own `assert size >= 2` convention (a
     single-node softmax has nothing to normalize against) - unlike ReLU's own hidden-layer-only
     array sibling, this overrides forward/forward_batch and compute_output_delta/
     compute_output_delta_batch, not compute_hidden_delta: softmax's cross-node coupling only
-    affects the forward pass (see structure.md#multi-class), so whatever layer feeds this one
-    still calls the inherited, unmodified compute_hidden_delta/compute_hidden_delta_batch, which
-    only ever reads next_layer.W/next_layer.delta, never next_layer.a directly.
+    affects the forward pass, so whatever layer feeds this one still calls the inherited,
+    unmodified compute_hidden_delta/compute_hidden_delta_batch, which only ever reads
+    next_layer.W/next_layer.delta, never next_layer.a directly.
     """
 
     def __init__(self, size: int, input_size: int) -> None:

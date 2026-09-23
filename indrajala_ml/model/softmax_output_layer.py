@@ -33,7 +33,7 @@ class SoftmaxOutputNode(BackpropNode):
         # softmax + cross-entropy loss's output delta simplifies to exactly this - no extra
         # sigmoid-derivative factor the way BackpropNode.compute_output_delta's a*(1-a) term
         # needs, since softmax's own Jacobian cancels against cross-entropy's derivative in the
-        # standard derivation (see docs/research/research-and-analysis.md's softmax/cross-entropy entry)
+        # standard derivation
         self.delta = self.value() - reference_value
 
 

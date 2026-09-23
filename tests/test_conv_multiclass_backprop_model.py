@@ -141,8 +141,7 @@ def test_classify_state_returns_a_valid_class_index():
 
 def test_snapshot_and_restore_round_trip_through_the_conv_layer_too():
 
-    # confirms stage 1's per-layer hook generalization (BackpropLayer.snapshot_state/
-    # restore_state, extracted in the layer-level-gradient-hooks PR) genuinely works
+    # confirms BackpropLayer's per-layer hooks (snapshot_state/restore_state) genuinely work
     # end-to-end here, conv layer included - not just for plain dense layers
     random.seed(0)
     network = _small_network()

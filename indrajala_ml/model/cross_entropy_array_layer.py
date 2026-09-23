@@ -10,8 +10,7 @@ class CrossEntropyArrayLayer(ArrayLayer):
     The array-based counterpart to binary_cross_entropy_backprop_classifier_network.CrossEntropyOutputNode:
     binary cross-entropy loss's delta simplifies to activation - target, with no extra
     sigmoid-derivative (a*(1-a)) factor - the same simplification SoftmaxArrayLayer's own delta
-    uses for the multi-class case (see that class's own compute_output_delta). See
-    docs/proposals/binary-cross-entropy-array-layer.md for the full design.
+    uses for the multi-class case (see that class's own compute_output_delta).
 
     forward/forward_batch/compute_hidden_delta/compute_hidden_delta_batch/
     apply_accumulated_gradient are all inherited unchanged from ArrayLayer - unlike

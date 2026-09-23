@@ -80,8 +80,7 @@ class BackpropNetworkBase:
         # classify_state()/predict_probability() on the same, mid-training student between
         # (not just after) learn()/learn_batch() steps, so this must be toggled on for the
         # duration of one training call and off again immediately after - never left on. A
-        # no-op for every layer except a training-aware sibling like DropoutLayer (see
-        # docs/features/dropout.md).
+        # no-op for every layer except a training-aware sibling like DropoutLayer.
         for layer in self.trainable_layers:
             layer.set_training_mode(training)
 
@@ -144,18 +143,17 @@ def randomize_fan_in_aware(network: BackpropNetworkBase) -> None:
     Fan-in-aware weight/bias initialization (limit = 1/sqrt(fan_in) per layer) - each weight
     drawn uniformly from [-limit, limit], scaled down as fan-in grows, so a layer's weighted
     input sum doesn't blow up (guaranteeing sigmoid saturation at every node) once fan-in
-    reaches the tens or hundreds. Originally written only for
-    MultiClassBackpropClassifierNetwork.randomize() (validated there against the real bundled
-    UCI digits dataset: 99.5% training accuracy, 96.9% test accuracy) - extracted here once
-    FanInAwareBackpropClassifierNetwork needed the identical scheme, so both classes share one
-    implementation instead of two copies of the same formula.
+    reaches the tens or hundreds. Validated against the real bundled UCI digits dataset (99.5%
+    training accuracy, 96.9% test accuracy). Shared by
+    MultiClassBackpropClassifierNetwork.randomize() and
+    FanInAwareBackpropClassifierNetwork.randomize(), so both classes use one implementation
+    instead of two copies of the same formula.
 
     Unlike BackpropClassifierNetwork.randomize()'s per-dimension-bounds-width scaling (tuned for
     1-2D geometric problems - see that method's own docstring), this scheme is dimension-generic:
-    it was measured directly to matter at real scale for EnsembleBackpropClassifierNetwork's
-    784-dimension MNIST sub-networks too (see docs/research/research-and-analysis.md's "ensemble/real-MNIST
-    investigation" entry - 83.5% of hidden activations already saturated at initialization under
-    the old scheme, fixed by this one, +6.6 points real-scale test accuracy with no other change).
+    at real scale, EnsembleBackpropClassifierNetwork's 784-dimension MNIST sub-networks reach
+    +6.6 points higher test accuracy with fan-in-aware init than with per-dimension-bounds-width
+    scaling, which leaves 83.5% of hidden activations already saturated at initialization.
     """
 
     previous_size = network.dimension

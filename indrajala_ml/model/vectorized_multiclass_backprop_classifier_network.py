@@ -11,12 +11,10 @@ from indrajala_ml.model.model_io import load_array_model_json, save_array_model_
 
 class VectorizedMultiClassBackpropClassifierNetwork(ArrayNetworkBase):
     """
-    A numpy-array-backed sibling of MultiClassBackpropClassifierNetwork - see
-    docs/architecture/vectorized-array-classes.md's "the architectural point" section for why array-based
-    vectorization needed a new class in the first place: it replaces "one Python object, one
-    method call, per node" with "one array, one matrix operation, for the whole layer", so
-    there's no per-node compute_hidden_delta(next_layer_nodes, own_index) to reuse and no
-    StateLayer/BackpropLayer involved at all.
+    A numpy-array-backed sibling of MultiClassBackpropClassifierNetwork: array-based vectorization
+    replaces "one Python object, one method call, per node" with "one array, one matrix operation,
+    for the whole layer", so there's no per-node compute_hidden_delta(next_layer_nodes, own_index)
+    to reuse and no StateLayer/BackpropLayer involved at all.
 
     The multiclass shape over ArrayNetworkBase - argmax-based classify_state/predict_probabilities,
     class_count validation, one-hot target encoding, and the class_count-carrying save/load
@@ -25,8 +23,9 @@ class VectorizedMultiClassBackpropClassifierNetwork(ArrayNetworkBase):
     softmax, dropout, cross-entropy) subclasses this directly, the same way their per-node
     counterparts subclass MultiClassBackpropClassifierNetwork.
 
-    Built and parity-checked against real numpy first, deliberately - see that doc's own "why
-    numpy here, now" section - not yet a decision to adopt numpy as a permanent dependency.
+    Parity-checked against the pure-Python reference implementation; numpy is a vectorization
+    backend here, not a permanent dependency commitment (RustArrayNetworkBase's Rust-backed
+    siblings are the production path).
     """
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int) -> None:

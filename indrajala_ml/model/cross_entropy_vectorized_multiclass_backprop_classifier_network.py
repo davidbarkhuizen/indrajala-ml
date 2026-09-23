@@ -8,8 +8,8 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class CrossEntropyVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    A cross-entropy-output-layer sibling of VectorizedMultiClassBackpropClassifierNetwork - see
-    docs/design-docs/array-siblings/binary-cross-entropy-array-layer.md. Unlike softmax's jointly-normalized
+    A cross-entropy-output-layer sibling of VectorizedMultiClassBackpropClassifierNetwork. Unlike
+    softmax's jointly-normalized
     output (one shared normalization across the whole output vector), this class's output layer
     applies an independent per-node cross-entropy delta at each of class_count outputs - a
     one-vs-rest-with-cross-entropy-loss variant, not a jointly-trained multiclass distribution:

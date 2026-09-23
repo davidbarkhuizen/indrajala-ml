@@ -11,9 +11,8 @@ from indrajala_ml.multiclass_evaluate import accuracy
 
 DIMENSION = 28 * 28
 CLASS_COUNT = 10
-LAYER_SIZES = [30]  # matches demo_vectorized_mnist_recognition.py's own already-measured
-# architecture, so this run's numbers are directly comparable to that demo's and
-# docs/research/research-and-analysis.md's own recorded figures.
+LAYER_SIZES = [30]  # matches demo_vectorized_mnist_recognition.py's own architecture, so this
+# run's numbers are directly comparable to that demo's.
 TRAIN_PATH = "data/mnist/mnist-train.bin"
 TEST_PATH = "data/mnist/mnist-test.bin"
 
@@ -21,14 +20,12 @@ TEST_PATH = "data/mnist/mnist-test.bin"
 def main() -> None:
 
     print(
-        "Rust production cutover validation at real MNIST scale (docs/architecture/rust-production-cutover.md). "
-        "One real training epoch over the full 60000-example MNIST training set, same "
-        "architecture/hyperparameters as demo_vectorized_mnist_recognition.py, now with a third "
-        "network: RustArrayMultiClassBackpropClassifierNetwork, the Rust-array-core-backed "
-        "sibling that replaces numpy as the production backend (numpy stays on permanently as "
-        "the benchmark comparison). This is the real, measured number behind "
-        "docs/research/research-and-analysis.md's own recorded 1.31x real-MNIST speedup, not a "
-        "re-assertion of it."
+        "Rust vs numpy validation at real MNIST scale. One real training epoch over the full "
+        "60000-example MNIST training set, same architecture/hyperparameters as "
+        "demo_vectorized_mnist_recognition.py, now with a third network: "
+        "RustArrayMultiClassBackpropClassifierNetwork, the Rust-array-core-backed sibling that "
+        "replaces numpy as the production backend (numpy stays on permanently as the benchmark "
+        "comparison)."
     )
     print()
 

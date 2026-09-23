@@ -8,8 +8,7 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class L2VectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    The L2 (weight decay) regularized sibling of VectorizedMultiClassBackpropClassifierNetwork -
-    see docs/design-docs/array-siblings/l2-array-layer.md.
+    The L2 (weight decay) regularized sibling of VectorizedMultiClassBackpropClassifierNetwork.
 
     l2_lambda is a required constructor parameter, no default - the same posture
     L2RegularizedBackpropClassifierNetwork's per-node counterpart already takes. Both hidden

@@ -1,20 +1,19 @@
 """
 Ensures this checkout's dataset source files are present and checksum-verified, fetching from
-their pinned `indrajala-datasets-*` repo (see docs/design-docs/infra/dataset-sourcing-proposal.md) only when a file
-is missing or doesn't match its expected SHA-256.
+their pinned `indrajala-datasets-*` repo only when a file is missing or doesn't match its
+expected SHA-256.
 
 Presence+checksum is checked first, network only as a last resort: a repeated `./cli setup`/
 `./cli fetch-data` against an unchanged local checkout performs zero network calls after the
 first successful fetch. Only MNIST is fetched here - UCI digits' digits.csv stays committed
-directly in `indrajala-ml` (see the proposal's "what changes for UCI digits" section), with its own
-`indrajala-datasets-uci-digits` packaging existing for metadata consistency, not because
-indrajala-ml needs to fetch it.
+directly in `indrajala-ml`, with its own `indrajala-datasets-uci-digits` packaging existing for
+metadata consistency, not because indrajala-ml needs to fetch it.
 
 Also regenerates each file's derived `.bin` (via `mnist_data.convert_parquet_to_binary`) if it's
-missing - a gap a CI dry run surfaced: `tests/test_mnist_data.py` reads the `.bin` files directly,
-and previously nothing but a dev's own memory of once running a demo script produced them. `.bin`
-files are gitignored, regenerable artifacts (see `.gitignore`'s own comment on `data/mnist/*.bin`),
-so this only ever runs the conversion once per fresh checkout, exactly like the fetch above.
+missing: `tests/test_mnist_data.py` reads the `.bin` files directly, so they need to exist
+before the test suite runs. `.bin` files are gitignored, regenerable artifacts (see
+`.gitignore`'s own comment on `data/mnist/*.bin`), so this only ever runs the conversion once
+per fresh checkout, exactly like the fetch above.
 """
 
 import hashlib

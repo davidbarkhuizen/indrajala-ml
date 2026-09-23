@@ -8,8 +8,8 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class DropoutVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    The dropout sibling of VectorizedMultiClassBackpropClassifierNetwork - see
-    docs/design-docs/array-siblings/dropout-array-layer.md. Hidden layers are built from DropoutArrayLayer (with
+    The dropout sibling of VectorizedMultiClassBackpropClassifierNetwork. Hidden layers are built
+    from DropoutArrayLayer (with
     drop_probability bound via a closure); the output layer stays the inherited plain ArrayLayer
     (sigmoid) - the array-level analogue of DropoutBackpropClassifierNetwork's own
     hidden_layer_cls-only override, matching DropoutNode's hidden-layer-only convention.
@@ -24,9 +24,7 @@ class DropoutVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassB
     not just a local slice, since it's also part of this class's own public surface (tests
     inspect it directly to confirm training mode resets between calls). learn/learn_batch's
     train/eval bracketing (set_training_mode(True)/try/finally around the forward pass only, not
-    the whole method - see the original per-node design's own reasoning in
-    docs/features/dropout.md) is now inherited from ArrayNetworkBase unchanged, free once this
-    hook does something.
+    the whole method) is inherited from ArrayNetworkBase unchanged.
     """
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, drop_probability: float) -> None:

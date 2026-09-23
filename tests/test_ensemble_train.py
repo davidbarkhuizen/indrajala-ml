@@ -138,8 +138,8 @@ def test_rejects_an_out_of_range_target_label():
 
 def test_build_balanced_binary_dataset_matches_select_balanced_indices():
 
-    # build_balanced_binary_dataset is now a thin wrapper around select_balanced_indices - this
-    # confirms the refactor didn't change behavior: the same states/categories come out, just
+    # build_balanced_binary_dataset is a thin wrapper around select_balanced_indices - this
+    # confirms the two produce identical output: the same states/categories come out, just
     # looked up from the index-based result rather than computed a second, independent way
     dataset = _synthetic_dataset({0: 6, 1: 10, 2: 10, 3: 10})
     labels = [label for _, label in dataset]
@@ -313,13 +313,11 @@ def test_train_ensemble_parallel_is_reproducible_under_a_fixed_seed():
 
 def test_train_ensemble_parallel_accepts_array_backed_classifier_cls():
 
-    # docs/proposals/ensemble-array-layer.md's own "training-path integration gap" section
-    # flagged this as untested: ArrayBackpropClassifierNetwork.randomized's accepted-and-discarded
-    # input_bounds parameter (see its own docstring) should let it plug into the existing
-    # multiprocessing.Pool path completely unchanged - numpy arrays pickle fine across a worker
-    # boundary natively (unlike indrajala_ml_array.Array - see
-    # test_train_ensemble_parallel_accepts_rust_array_backed_classifier_cls below for how that
-    # gap was closed instead of worked around).
+    # ArrayBackpropClassifierNetwork.randomized's accepted-and-discarded input_bounds parameter
+    # (see its own docstring) lets it plug into the existing multiprocessing.Pool path
+    # completely unchanged - numpy arrays pickle fine across a worker boundary natively (unlike
+    # indrajala_ml_array.Array - see
+    # test_train_ensemble_parallel_accepts_rust_array_backed_classifier_cls below for that case).
     #
     # train_ensemble_parallel's own _collect_ensemble_results always wraps the trained
     # classifiers in EnsembleBackpropClassifierNetwork (the per-node wrapper), regardless of
@@ -484,7 +482,7 @@ def test_train_ensemble_serial_from_indices_accepts_array_and_rust_backed_classi
 
     # the serial path this function provides for both backends - ArrayBackpropClassifierNetwork
     # (numpy) and RustArrayBackpropClassifierNetwork alike (see _picklable_snapshot for why Rust
-    # can use the parallel path too now, not just this one) - as a comparison point against each
+    # can also use the parallel path, not just this one) - as a comparison point against each
     # backend's own parallel-path result.
     dataset = _synthetic_multiclass_dataset()
     labels = [label for _, label in dataset]

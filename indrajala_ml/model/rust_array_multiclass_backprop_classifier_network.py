@@ -11,8 +11,8 @@ from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 
 class RustArrayMultiClassBackpropClassifierNetwork(RustArrayNetworkBase):
     """
-    The Rust-array-core-backed sibling of VectorizedMultiClassBackpropClassifierNetwork - see
-    docs/architecture/rust-production-cutover.md's phase 1. Mirrors that class's external contract exactly
+    The Rust-array-core-backed sibling of VectorizedMultiClassBackpropClassifierNetwork. Mirrors
+    that class's external contract exactly
     (learn, learn_batch, classify_state, predict_probabilities, randomize/randomized,
     snapshot/restore, save/load) so indrajala_ml/train.py's duck-typed
     train_linear_classifier_network/train_backprop_network_mini_batch work unchanged - only the
@@ -21,8 +21,7 @@ class RustArrayMultiClassBackpropClassifierNetwork(RustArrayNetworkBase):
     VectorizedMultiClassBackpropClassifierNetwork has to ArrayNetworkBase - every array-based
     multiclass sibling's Rust-matmul-backed counterpart subclasses this directly.
 
-    Per docs/architecture/rust-production-cutover.md's 2026-09-16 clarification, this class is the intended
-    production backend unconditionally - not contingent on beating
+    This class is the intended production backend unconditionally - not contingent on beating
     VectorizedMultiClassBackpropClassifierNetwork's numpy benchmark, which stays on permanently
     as the comparison point, not a bar this class had to clear first.
     """

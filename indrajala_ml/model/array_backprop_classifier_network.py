@@ -10,8 +10,8 @@ from indrajala_ml.model.model_io import load_single_output_array_model_json, sav
 
 class ArrayBackpropClassifierNetwork(ArrayNetworkBase):
     """
-    The single-output numpy-array-backed sibling of FanInAwareBackpropClassifierNetwork - see
-    docs/proposals/ensemble-array-layer.md's "piece 1". This class exists specifically to host
+    The single-output numpy-array-backed sibling of FanInAwareBackpropClassifierNetwork. This
+    class exists specifically to host
     EnsembleArrayBackpropClassifierNetwork's sub-networks, one independent binary classifier per
     class, not a jointly-trained multiclass network.
 
@@ -39,8 +39,7 @@ class ArrayBackpropClassifierNetwork(ArrayNetworkBase):
         # notion, but ensemble_train.py's classifier_cls contract always calls
         # classifier_cls(layer_sizes, dimension, input_bounds) /
         # classifier_cls.randomized(layer_sizes, dimension, input_bounds); accepting it here is
-        # the duck-typing relaxation docs/proposals/ensemble-array-layer.md's own "training-path
-        # integration gap" section named as the fix, rather than changing that shared contract.
+        # a duck-typing relaxation, rather than changing that shared contract.
         super().__init__(layer_sizes, dimension, 1)
 
     def predict_probability(self, state: tuple[float, ...]) -> float:

@@ -75,7 +75,7 @@ def test_set_training_mode_false_reverts_to_eval_behavior():
 
 def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative():
 
-    # the same subtlety docs/features/dropout.md flags for DropoutNode: the derivative factor must be
+    # the same subtlety that applies to DropoutNode: the derivative factor must be
     # base*(1-base) (the *pre*-scaling activation), not a*(1-a) on the rescaled activation
     layer = _dropout_layer(drop_probability=0.5)
     layer.set_training_mode(True)

@@ -46,9 +46,8 @@ def test_forward_matches_softmax_output_layer_across_a_random_sweep():
 
 def test_forward_matches_softmax_output_layer_for_large_magnitude_z_without_overflow():
 
-    # the numerically-adversarial case docs/design-docs/array-siblings/softmax-array-layer.md's "correctness validation"
-    # section calls for: confirms the array layer's max-shift trick matches the per-node
-    # reference's own overflow-safe behavior, not just the well-conditioned case
+    # the numerically-adversarial case: confirms the array layer's max-shift trick matches the
+    # per-node reference's own overflow-safe behavior, not just the well-conditioned case
     dimension = 1
     state_layer = StateLayer(dimension, [(-1.0, 1.0)])
     softmax_layer = SoftmaxOutputLayer(3, state_layer)
@@ -156,8 +155,8 @@ def test_compute_output_delta_batch_matches_per_row_single_example_results_stack
 
 def test_compute_hidden_delta_is_inherited_unchanged_from_array_layer():
 
-    # softmax's cross-node coupling only affects the forward pass (structure.md#multi-class) -
-    # whatever layer feeds this one still uses the plain sigmoid compute_hidden_delta formula
+    # softmax's cross-node coupling only affects the forward pass - whatever layer feeds this
+    # one still uses the plain sigmoid compute_hidden_delta formula
     from indrajala_ml.model.array_layer import ArrayLayer
 
     hidden = SoftmaxArrayLayer.__mro__[1]

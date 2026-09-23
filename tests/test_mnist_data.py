@@ -49,10 +49,10 @@ def test_load_mnist_dataset_decodes_a_known_real_sample_correctly():
     assert labels == [5, 0, 4, 1, 9]
 
     # specific pixel values from the first image, read directly off the decoded PNG and
-    # independently cross-checked (not re-derived from this loader) before this test was
-    # written - chosen to cover every PNG scanline filter type this image's IDAT stream
-    # actually uses (confirmed directly: row 0 is None, row 6 is Paeth, row 7 is Sub, row 11
-    # is Up), not just coordinates that happen to land on unfiltered rows
+    # independently cross-checked (not re-derived from this loader) - chosen to cover every PNG
+    # scanline filter type this image's IDAT stream actually uses (confirmed directly: row 0 is
+    # None, row 6 is Paeth, row 7 is Sub, row 11 is Up), not just coordinates that happen to
+    # land on unfiltered rows
     state0, _ = dataset[0]
 
     def pixel(row: int, col: int) -> float:

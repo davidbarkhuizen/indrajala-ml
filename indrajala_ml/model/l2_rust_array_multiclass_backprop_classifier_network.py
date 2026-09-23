@@ -8,8 +8,7 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class L2RustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust-matmul-backed counterpart to L2VectorizedMultiClassBackpropClassifierNetwork - see
-    docs/design-docs/array-siblings/l2-array-layer.md's Rust-matmul-backed follow-on. Both hidden layers and the
+    The Rust-matmul-backed counterpart to L2VectorizedMultiClassBackpropClassifierNetwork. Both hidden layers and the
     output layer are built from L2RustArrayLayer with l2_lambda already bound via a closure - the
     same pattern L2VectorizedMultiClassBackpropClassifierNetwork uses.
 

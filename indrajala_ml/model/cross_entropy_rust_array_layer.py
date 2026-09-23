@@ -7,8 +7,7 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class CrossEntropyRustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to CrossEntropyArrayLayer - see
-    docs/proposals/binary-cross-entropy-array-layer.md's "risks and open questions" section.
+    The Rust-matmul-backed counterpart to CrossEntropyArrayLayer.
     Needs no new Rust primitive at all: `SoftmaxArrayLayer.compute_output_delta`'s own formula
     (`self.a - reference`) is algebraically identical to what cross-entropy needs, and its
     existing Rust-fused counterpart, `pa.layer_softmax_output_delta` (`fused.rs`), is already
