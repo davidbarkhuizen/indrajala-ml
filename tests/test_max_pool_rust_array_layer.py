@@ -67,7 +67,9 @@ def test_forward_argmax_and_downstream_match_max_pool_array_layer_single_and_bat
     np.testing.assert_array_equal(downstream_batch, numpy_layer.downstream_batch())
 
     for i, x in enumerate(X):
-        np.testing.assert_array_equal(_np(rust_layer.forward(pa.Array(x.tolist()))), A[i])
+        a = rust_layer.forward(pa.Array(x.tolist()))
+        assert a.shape == rust_layer.argmax.shape == (numpy_layer.size,)
+        np.testing.assert_array_equal(_np(a), A[i])
         np.testing.assert_array_equal(_np(rust_layer.argmax), argmax_batch[i])
         rust_layer.delta = pa.Array(delta_batch[i].tolist())
         downstream = _np(rust_layer.downstream())

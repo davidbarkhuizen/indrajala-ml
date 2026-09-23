@@ -113,6 +113,11 @@ The candidates as first written:
 
 ## 4. Single-example conv path: the N = 1 reshape (low-to-medium value)
 
+**Done** (see `workplans/optimization-4-single-example-conv-path.md`): the conv and pool ops take
+a 1D vector as N = 1, so the single-example path makes no `reshape` calls. Rust's overhead is now
+0.3% on UCI digits (was 27-28.5%) and -0.5% on MNIST (was 5.6%). The figures below are from
+before.
+
 The Rust conv and pool layers wrap a single example as `(1, n)` with `Array.reshape`, which copies.
 Measured on one `ConvSpec(3, 8)` layer (forward + downstream + accumulate_gradient), comparing
 the single-example path against calling the batch ops on pre-shaped `(1, n)` input:

@@ -26,7 +26,8 @@ timing. Each has its own workplan:
    path are both bit-identical. **Stage A done** (a small gain). **Stage B closed, not merged:** no
    measured gain; single-example evaluation got 1-8% slower.
 4. **Optimization 4** (single-example conv path). It comes after 3A because dropping `Z`
-   removes one of the reshapes 4 would otherwise have to handle.
+   removes one of the reshapes 4 would otherwise have to handle. **Done:** Rust's N = 1
+   overhead went from 28.5% to 0.3% on the UCI conv layer.
 5. **Optimization 3**, stage C (the `O`-small formulation). It is a measurement question, and
    it touches the same function as 3A/3B, so it is done last among the Rust changes, on a
    settled `conv_forward_batch`.

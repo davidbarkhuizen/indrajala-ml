@@ -16,8 +16,8 @@ class MaxPoolRustArrayLayer:
     argmax_batch is an (N, channel_count * out_height * out_width) Array of slot indices, stored
     as floats - small exact integers - since indrajala_math_rust.Array has no integer type.
 
-    Weight-free: the gradient hooks are no-ops. The single-example path reshapes to (1, n) and
-    calls the batch ops, as ConvRustArrayLayer does.
+    Weight-free: the gradient hooks are no-ops. The single-example path passes its 1D arrays
+    straight to the batch ops, which take a vector as N = 1, as ConvRustArrayLayer does.
     """
 
     def __init__(
@@ -51,9 +51,7 @@ class MaxPoolRustArrayLayer:
         return self.A
 
     def forward(self, x: "pa.Array") -> "pa.Array":
-        self.forward_batch(x.reshape((1, self.input_size)))
-        self.a = self.A.reshape(self.size)
-        self.argmax = self.argmax_batch.reshape(self.size)
+        self.a, self.argmax = pa.max_pool_forward_batch(x, self.geometry)
         return self.a
 
     def compute_output_delta(self, reference: "pa.Array") -> None:
@@ -73,10 +71,7 @@ class MaxPoolRustArrayLayer:
         return pa.max_pool_downstream_batch(self.delta_batch, self.argmax_batch, self.geometry)
 
     def downstream(self) -> "pa.Array":
-        dX = pa.max_pool_downstream_batch(
-            self.delta.reshape((1, self.size)), self.argmax.reshape((1, self.size)), self.geometry
-        )
-        return dX.reshape(self.input_size)
+        return pa.max_pool_downstream_batch(self.delta, self.argmax, self.geometry)
 
     # weight-free: every gradient hook below is a deliberate no-op
 
