@@ -249,14 +249,15 @@ DEMOS: list[DemoInfo] = [
     DemoInfo(
         module="indrajala_ml.demos.demo_conv_depth_uci_digits_comparison",
         title="Conv depth comparison on UCI digits",
-        summary="Headless - one vs two stacked conv layers (plus a dense baseline) on UCI digits, across paired seeds.",
+        summary="Headless - conv depth and max pooling vs. stride (plus a dense baseline) on UCI digits, across paired seeds.",
         description=(
             "Headless, console-only. Trains a dense-only baseline, one conv layer, two stacked conv "
-            "layers, and a parameter-matched two-conv-layer variant on UCI digits, all with the same "
+            "layers, a parameter-matched two-conv-layer variant, and one conv layer downsampled to 3x3 "
+            "by max pooling vs. by a stride-2 convolution on UCI digits, all with the same "
             "dense tail, learning rate and epochs, over 8 seeds (each seed fixes the split and init, "
             "shared across configs). Prints mean/stdev training and held-out accuracy per config and "
             "paired per-seed test-accuracy differences against the single conv layer. Pure Python, so "
-            "accuracy only - no timing. Takes roughly 40+ minutes on 8 logical cores."
+            "accuracy only - no timing. Takes roughly an hour on 8 logical cores."
         ),
     ),
     DemoInfo(
