@@ -73,8 +73,7 @@ minimum-disturbance rule. Backprop networks come in three implementations of the
 
 Each implementation has variants for the same set of features, named by a prefix on the class:
 `ReLU`, `Softmax`, `CrossEntropy`, `L2`, `Momentum`, `Adam`, `Dropout`, `Ensemble`. Convolution
-and max pooling (`Conv…`, `MaxPool…`) exist in the pure-Python and numpy implementations, not yet
-in Rust. The numpy classes are the reference the Rust classes are tested against
+and max pooling (`Conv…`, `MaxPool…`) exist in all three implementations. The numpy classes are the reference the Rust classes are tested against
 (`tests/test_*fused_layer_ops.py`, `tests/test_numerical_parity.py`).
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,

@@ -11,6 +11,9 @@ from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import 
 )
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
+    ConvRustArrayMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
@@ -672,6 +675,48 @@ def assert_conv_array_network_weights_match(node_network, array_network, rtol=1e
             continue
         np.testing.assert_allclose(array_layer.W, expected_W, rtol=rtol, atol=atol)
         np.testing.assert_allclose(array_layer.b, expected_b, rtol=rtol, atol=atol)
+
+
+def matching_conv_numpy_rust_networks(
+    rng: random.Random,
+    input_height: int,
+    input_width: int,
+    conv_specs: list,
+    dense_layer_sizes: list[int],
+    class_count: int,
+):
+    """
+    A ConvVectorizedMultiClassBackpropClassifierNetwork and a
+    ConvRustArrayMultiClassBackpropClassifierNetwork with identical injected weights - drawn from
+    rng into the numpy network, then restored into the Rust one from its snapshot (the two
+    backends' RNGs aren't comparable, so neither network's own randomize() is used).
+    """
+    numpy_network = ConvVectorizedMultiClassBackpropClassifierNetwork(
+        input_height, input_width, conv_specs, dense_layer_sizes, class_count
+    )
+    rust_network = ConvRustArrayMultiClassBackpropClassifierNetwork(
+        input_height, input_width, conv_specs, dense_layer_sizes, class_count
+    )
+    for layer in numpy_network.layers:
+        if hasattr(layer, "W"):
+            rows, cols = layer.W.shape
+            layer.W = np.array([[rng.uniform(-1.0, 1.0) for _ in range(cols)] for _ in range(rows)])
+            layer.b = np.array([rng.uniform(-0.5, 0.5) for _ in range(layer.b.shape[0])])
+    rust_network.restore(numpy_network.snapshot())
+    return numpy_network, rust_network
+
+
+def assert_array_network_snapshots_match(numpy_network, rust_network, rtol=1e-12, atol=1e-13) -> None:
+    """Every (W, b) entry of two array-backed networks' snapshots, compared via .tolist() (both
+    backends have it); pool layers' empty entries must both be empty. The default tolerance is
+    tight on purpose: over the conv parity runs the numpy and Rust weights differ by at most
+    ~7e-16 (the two backends' summation orders), not by anything a 1e-9 tolerance would need."""
+    numpy_snapshot, rust_snapshot = numpy_network.snapshot(), rust_network.snapshot()
+    assert len(numpy_snapshot) == len(rust_snapshot)
+    for numpy_entry, rust_entry in zip(numpy_snapshot, rust_snapshot):
+        assert len(numpy_entry) == len(rust_entry)
+        for numpy_array, rust_array in zip(numpy_entry, rust_entry):
+            np.testing.assert_allclose(rust_array.tolist(), numpy_array.tolist(), rtol=rtol, atol=atol)
 
 
 def assert_array_network_weights_match(node_network, array_network, rtol=1e-9, atol=1e-9) -> None:
