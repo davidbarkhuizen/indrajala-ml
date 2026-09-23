@@ -102,6 +102,13 @@ workplan: whether a second conv layer helps on 8x8 digits.
 - Tests: hand-computed forward/argmax, gradient check through conv -> pool -> conv, then the
   same measured digits comparison as stage 4 with pooling in place of / in addition to stride.
 
+Status: `MaxPoolLayer`/`PoolSpec` (`max_pool_layer.py`) are in, and `conv_specs` may mix
+`ConvSpec` and `PoolSpec`. Correctness is covered by layer-level and network-level
+finite-difference gradient checks through conv -> pool -> conv. The stage-4 demo gains
+`conv1-pool` (3x3 conv then 2x2 max pool) and `conv1-stride2` (3x3 conv at stride 2), both ending
+at 3x3x8 with identical parameter counts, isolating pooling vs. strided downsampling. **Not run**,
+for the same reason as stage 4 - an open question alongside it.
+
 ## Out of scope
 
 A numpy `ConvArrayLayer` (im2col/col2im) and its Rust counterpart - the route to MNIST scale.

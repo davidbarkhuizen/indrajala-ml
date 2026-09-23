@@ -5,6 +5,7 @@ from indrajala_ml.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.multiclass_evaluate import accuracy
 from indrajala_ml.train import train_linear_classifier_network
@@ -19,11 +20,15 @@ SEEDS = list(range(8))
 # every config shares the same dense tail, learning rate, epoch count, and (per seed) the same
 # train/test split - only the convolutional front end differs. conv2-wide's second layer is
 # widened to 16 channels so its total parameter count roughly matches conv1's (conv2's
-# shrinking 4x4 output otherwise halves the dense layer's fan-in, confounding depth with size)
-CONV_CONFIGS: dict[str, list[ConvSpec]] = {
+# shrinking 4x4 output otherwise halves the dense layer's fan-in, confounding depth with size).
+# conv1-pool and conv1-stride2 both downsample conv1's 6x6 output to 3x3, one by max pooling and
+# one by striding the convolution itself - pooling's own contribution, at equal output size
+CONV_CONFIGS: dict[str, list[ConvSpec | PoolSpec]] = {
     "conv1": [ConvSpec(kernel_size=3, channel_count=8)],
     "conv2": [ConvSpec(kernel_size=3, channel_count=8), ConvSpec(kernel_size=3, channel_count=8)],
     "conv2-wide": [ConvSpec(kernel_size=3, channel_count=8), ConvSpec(kernel_size=3, channel_count=16)],
+    "conv1-pool": [ConvSpec(kernel_size=3, channel_count=8), PoolSpec(pool_size=2)],
+    "conv1-stride2": [ConvSpec(kernel_size=3, channel_count=8, stride=2)],
 }
 CONFIGS = ["dense"] + list(CONV_CONFIGS)
 
@@ -68,7 +73,7 @@ def main() -> None:
         "take 8x8 -> 6x6 -> 4x4, and the second layer's receptive field (5x5) already covers most "
         "of the image, so it's a genuinely open question - a null is a real possibility. "
         f"{len(CONFIGS)} configs x {len(SEEDS)} seeds, each seed its own 80/20 split and init, "
-        "shared across configs so differences pair up seed by seed. Takes roughly 40 minutes on 8 "
+        "shared across configs so differences pair up seed by seed. Takes roughly an hour on 8 "
         "logical cores."
     )
     print()

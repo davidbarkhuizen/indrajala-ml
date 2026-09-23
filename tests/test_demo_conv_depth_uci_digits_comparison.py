@@ -12,6 +12,10 @@ def test_parameter_counts_match_a_hand_count():
     assert demo.parameter_count(demo._build("conv2")) == 664 + 4128 + 330
     assert demo.parameter_count(demo._build("conv2-wide")) == 1248 + 8224 + 330
     assert demo.parameter_count(demo._build("dense")) == 2080 + 330
+    # conv1-pool and conv1-stride2 both end at 3x3x8: conv 80, dense 32*(8*3*3 + 1) = 2336,
+    # output 330 - the pool layer itself adds no parameters
+    assert demo.parameter_count(demo._build("conv1-pool")) == 80 + 2336 + 330
+    assert demo.parameter_count(demo._build("conv1-stride2")) == 80 + 2336 + 330
 
 
 def test_run_one_is_deterministic_per_seed(monkeypatch):
@@ -21,8 +25,8 @@ def test_run_one_is_deterministic_per_seed(monkeypatch):
     monkeypatch.setattr(demo, "EPOCHS", 1)
     subset = load_digits_dataset()[:60]
 
-    first = demo.run_one(subset, "conv2", seed=3)
-    second = demo.run_one(subset, "conv2", seed=3)
+    first = demo.run_one(subset, "conv1-pool", seed=3)
+    second = demo.run_one(subset, "conv1-pool", seed=3)
 
     assert (first["train"], first["test"]) == (second["train"], second["test"])
     assert 0.0 <= first["test"] <= 1.0

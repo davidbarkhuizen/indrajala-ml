@@ -6,6 +6,7 @@ from helpers import assert_save_and_load_round_trip, assert_snapshot_restore_rou
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
+from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import (
     ConvMultiClassBackpropClassifierNetwork,
 )
@@ -329,3 +330,96 @@ def test_two_conv_layer_save_and_load_round_trip(tmp_path):
 
     assert loaded.conv_specs == network.conv_specs
     assert len(loaded.conv_layers) == 2
+
+
+
+def _pooled_network() -> ConvMultiClassBackpropClassifierNetwork:
+    # 8x8 -> conv k3 -> 6x6x4 -> pool 2 -> 3x3x4 -> conv k2 -> 2x2x6
+    return ConvMultiClassBackpropClassifierNetwork(
+        input_height=8,
+        input_width=8,
+        conv_specs=[ConvSpec(3, 4), PoolSpec(2), ConvSpec(2, 6)],
+        dense_layer_sizes=[8],
+        class_count=10,
+    )
+
+
+def test_pool_spec_builds_a_max_pool_layer_in_the_chain():
+
+    network = _pooled_network()
+    first, pool, last = network.conv_layers
+
+    assert isinstance(pool, MaxPoolLayer)
+    assert (pool.out_height, pool.out_width, pool.channel_count) == (3, 3, 4)
+    assert last.input_layer is pool and last.input_channels == 4
+    assert (last.out_height, last.out_width, last.channel_count) == (2, 2, 6)
+    assert network.trainable_layers.index(pool) == 1
+
+
+def test_conv_specs_of_only_pooling_are_rejected():
+
+    with pytest.raises(AssertionError):
+        ConvMultiClassBackpropClassifierNetwork(8, 8, [PoolSpec(2)], [16], class_count=10)
+
+
+def test_pooling_does_not_shift_any_conv_layers_random_draws():
+
+    random.seed(0)
+    unpooled = ConvMultiClassBackpropClassifierNetwork(8, 8, [ConvSpec(3, 4)], [8], class_count=10)
+    unpooled.conv_layers[0].randomize_fan_in_aware()
+
+    random.seed(0)
+    pooled = _pooled_network()
+    pooled.randomize()
+
+    assert [k.weights for k in pooled.conv_layers[0].kernels] == [k.weights for k in unpooled.conv_layers[0].kernels]
+
+
+def test_network_gradient_check_through_a_pooling_layer():
+
+    # the same end-to-end finite-difference check as the two-conv-layer one above, with a max
+    # pool between the two conv layers
+    random.seed(3)
+    network = _pooled_network()
+    network.randomize()
+    state = tuple(random.uniform(0.0, 1.0) for _ in range(64))
+    category = 2
+
+    def loss() -> float:
+        outputs = network._forward(state)
+        return 0.5 * sum((a - (1.0 if i == category else 0.0)) ** 2 for i, a in enumerate(outputs))
+
+    network._forward(state)
+    network._backward(category)
+    network._accumulate_gradients()
+
+    first, _pool, last = network.conv_layers
+    assert any(unit.delta != 0.0 for unit in first.nodes)
+
+    epsilon = 1e-6
+    for layer in (first, last):
+        for kernel in layer.kernels:
+            for i in range(len(kernel.weights)):
+                original = kernel.weights[i]
+                kernel.weights[i] = original + epsilon
+                loss_plus = loss()
+                kernel.weights[i] = original - epsilon
+                loss_minus = loss()
+                kernel.weights[i] = original
+                assert kernel._weight_gradient_accum[i] == pytest.approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
+
+
+def test_pooled_snapshot_has_an_empty_pool_entry_and_save_load_round_trips(tmp_path):
+
+    random.seed(0)
+    network = _pooled_network()
+    network.randomize()
+    assert network.snapshot()[1] == []
+
+    state = tuple(random.uniform(0.0, 1.0) for _ in range(64))
+    loaded = assert_save_and_load_round_trip(
+        network, ConvMultiClassBackpropClassifierNetwork.load, tmp_path, "pooled_model.json", [state]
+    )
+
+    assert loaded.conv_specs == network.conv_specs
+    assert isinstance(loaded.conv_specs[1], PoolSpec)
