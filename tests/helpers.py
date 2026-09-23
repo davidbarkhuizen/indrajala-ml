@@ -9,6 +9,11 @@ from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import 
     BinaryCrossEntropyBackpropClassifierNetwork,
     CrossEntropyOutputLayer,
 )
+from indrajala_ml.model.conv_array_layer import ConvArrayLayer
+from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
+    ConvVectorizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
 from indrajala_ml.model.l2_regularization_layer import make_l2_layer_cls
@@ -601,6 +606,72 @@ def matching_cross_entropy_multiclass_array_backprop_networks(
         previous_size = size
 
     return node_network, array_network
+
+
+def matching_conv_array_backprop_networks(
+    rng: random.Random,
+    input_height: int,
+    input_width: int,
+    conv_specs: list,
+    dense_layer_sizes: list[int],
+    class_count: int,
+):
+    """
+    The conv counterpart of matching_array_backprop_networks: builds a
+    ConvMultiClassBackpropClassifierNetwork and a ConvVectorizedMultiClassBackpropClassifierNetwork
+    with identical injected weights, conv kernels included (kernel.weights = W[c] - the layouts
+    ConvArrayLayer documents). Pool layers have nothing to inject.
+    """
+    node_network = ConvMultiClassBackpropClassifierNetwork(
+        input_height, input_width, conv_specs, dense_layer_sizes, class_count
+    )
+    array_network = ConvVectorizedMultiClassBackpropClassifierNetwork(
+        input_height, input_width, conv_specs, dense_layer_sizes, class_count
+    )
+
+    for node_layer, array_layer in zip(node_network.trainable_layers, array_network.layers):
+        if isinstance(array_layer, ConvArrayLayer):
+            for c, kernel in enumerate(node_layer.kernels):
+                kernel.weights = [rng.uniform(-1.0, 1.0) for _ in range(array_layer.fan_in)]
+                kernel.bias = rng.uniform(-0.5, 0.5)
+                array_layer.W[c] = kernel.weights
+                array_layer.b[c] = kernel.bias
+        elif hasattr(array_layer, "W"):
+            for i, node in enumerate(node_layer.nodes):
+                node.update_input_weights([rng.uniform(-1.0, 1.0) for _ in range(array_layer.input_size)])
+                node.bias = rng.uniform(-1.0, 1.0)
+                array_layer.W[i] = node.input_node_weights
+                array_layer.b[i] = node.bias
+
+    return node_network, array_network
+
+
+def copy_conv_network_weights_into_array_network(node_network, array_network) -> None:
+    """Copies a ConvMultiClassBackpropClassifierNetwork's weights (e.g. after its own seeded
+    randomize()) into a same-shaped ConvVectorizedMultiClassBackpropClassifierNetwork."""
+    for node_layer, array_layer in zip(node_network.trainable_layers, array_network.layers):
+        if hasattr(node_layer, "kernels"):
+            array_layer.W = np.array([kernel.weights for kernel in node_layer.kernels])
+            array_layer.b = np.array([kernel.bias for kernel in node_layer.kernels])
+        elif hasattr(array_layer, "W"):
+            array_layer.W = np.array([node.input_node_weights for node in node_layer.nodes])
+            array_layer.b = np.array([node.bias for node in node_layer.nodes])
+
+
+def assert_conv_array_network_weights_match(node_network, array_network, rtol=1e-9, atol=1e-9) -> None:
+    """The conv counterpart of assert_array_network_weights_match: conv layers compare per
+    kernel, pool layers have nothing to compare."""
+    for node_layer, array_layer in zip(node_network.trainable_layers, array_network.layers):
+        if hasattr(node_layer, "kernels"):
+            expected_W = np.array([kernel.weights for kernel in node_layer.kernels])
+            expected_b = np.array([kernel.bias for kernel in node_layer.kernels])
+        elif hasattr(array_layer, "W"):
+            expected_W = np.array([node.input_node_weights for node in node_layer.nodes])
+            expected_b = np.array([node.bias for node in node_layer.nodes])
+        else:
+            continue
+        np.testing.assert_allclose(array_layer.W, expected_W, rtol=rtol, atol=atol)
+        np.testing.assert_allclose(array_layer.b, expected_b, rtol=rtol, atol=atol)
 
 
 def assert_array_network_weights_match(node_network, array_network, rtol=1e-9, atol=1e-9) -> None:

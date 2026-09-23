@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import fan_in_aware_weights_and_bias
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
+from indrajala_ml.model.conv_front_end import build_conv_front_end, spec_from_json, spec_to_json
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.model_io import load_json, save_json
@@ -40,6 +39,10 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
     is not a constructor parameter the way it is for the dense-only base class's more general
     geometric targets - it's fixed internally to [(0.0, 1.0)] * dimension, the same convention
     demo_mnist_ensemble_recognition.py's own MNIST training already uses.
+
+    ConvVectorizedMultiClassBackpropClassifierNetwork is the numpy sibling, parity-tested against
+    this class step by step (tests/test_conv_vectorized_multiclass_backprop_model.py). Both
+    chain their front end through conv_front_end.build_conv_front_end.
     """
 
     def __init__(
@@ -53,7 +56,6 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
 
         validate_class_count(class_count)
         validate_layer_sizes(dense_layer_sizes, label="dense_layer_sizes", noun="dense hidden layer")
-        assert any(isinstance(spec, ConvSpec) for spec in conv_specs), "conv_specs must contain at least one ConvSpec"
 
         self.class_count = class_count
         self.dimension = input_height * input_width
@@ -65,33 +67,29 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         self.input_bounds = [(0.0, 1.0)] * self.dimension
         self.input_layer = StateLayer(self.dimension, self.input_bounds)
 
-        self.conv_layers: list[ConvLayer | MaxPoolLayer] = []
-        previous: StateLayer | ConvLayer | MaxPoolLayer = self.input_layer
-        height, width, channels = input_height, input_width, 1
-        for spec in self.conv_specs:
-            layer: ConvLayer | MaxPoolLayer
-            if isinstance(spec, PoolSpec):
-                layer = MaxPoolLayer(
-                    input_layer=previous,
-                    input_height=height,
-                    input_width=width,
-                    input_channels=channels,
-                    pool_size=spec.pool_size,
-                    stride=spec.stride,
-                )
-            else:
-                layer = ConvLayer(
-                    input_layer=previous,
-                    input_height=height,
-                    input_width=width,
-                    kernel_size=spec.kernel_size,
-                    channel_count=spec.channel_count,
-                    stride=spec.stride,
-                    input_channels=channels,
-                )
-            self.conv_layers.append(layer)
-            previous = layer
-            height, width, channels = layer.out_height, layer.out_width, layer.channel_count
+        self.conv_layers: list[ConvLayer | MaxPoolLayer] = build_conv_front_end(
+            input_height,
+            input_width,
+            self.conv_specs,
+            make_conv=lambda spec, previous, height, width, channels: ConvLayer(
+                input_layer=previous,
+                input_height=height,
+                input_width=width,
+                kernel_size=spec.kernel_size,
+                channel_count=spec.channel_count,
+                stride=spec.stride,
+                input_channels=channels,
+            ),
+            make_pool=lambda spec, previous, height, width, channels: MaxPoolLayer(
+                input_layer=previous,
+                input_height=height,
+                input_width=width,
+                input_channels=channels,
+                pool_size=spec.pool_size,
+                stride=spec.stride,
+            ),
+            input_layer=self.input_layer,
+        )
 
         dense_layers: list[BackpropLayer] = []
         previous_layer: ConvLayer | MaxPoolLayer | BackpropLayer = self.conv_layers[-1]
@@ -152,7 +150,7 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
             {
                 "input_height": self.input_height,
                 "input_width": self.input_width,
-                "conv_layers": [_spec_to_json(spec) for spec in self.conv_specs],
+                "conv_layers": [spec_to_json(spec) for spec in self.conv_specs],
                 "dense_layer_sizes": self.dense_layer_sizes,
                 "class_count": self.class_count,
                 "snapshot": self.snapshot(),
@@ -166,18 +164,10 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         network = cls(
             input_height=state["input_height"],
             input_width=state["input_width"],
-            conv_specs=[_spec_from_json(spec) for spec in state["conv_layers"]],
+            conv_specs=[spec_from_json(spec) for spec in state["conv_layers"]],
             dense_layer_sizes=state["dense_layer_sizes"],
             class_count=state["class_count"],
         )
         network.restore(state["snapshot"])
         return network
 
-
-def _spec_to_json(spec: ConvSpec | PoolSpec) -> dict:
-    return {"type": "pool" if isinstance(spec, PoolSpec) else "conv", **asdict(spec)}
-
-
-def _spec_from_json(spec: dict) -> ConvSpec | PoolSpec:
-    fields = {key: value for key, value in spec.items() if key != "type"}
-    return PoolSpec(**fields) if spec["type"] == "pool" else ConvSpec(**fields)
