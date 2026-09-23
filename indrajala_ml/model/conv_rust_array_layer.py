@@ -17,6 +17,10 @@ class ConvRustArrayLayer:
     Arguments are validated as ConvArrayLayer validates them; the shape arithmetic then lives in
     one pa.ConvGeometry, built here and passed to every call.
 
+    Unlike ConvArrayLayer, it keeps no pre-activation Z/z: the Rust forward op applies the ReLU
+    during its output scatter and returns only A. The backward pass masks on A (derivative 0 where
+    A == 0, so at exactly z == 0), as ConvArrayLayer's does.
+
     The Rust conv ops are batch-only. The single-example path reshapes x/delta to (1, n) and
     calls them, the same N = 1 wrapping ConvArrayLayer uses (the reshape copies).
     """
@@ -56,13 +60,12 @@ class ConvRustArrayLayer:
         self._grad_b = pa.Array.zeros(channel_count)
 
     def forward_batch(self, X: "pa.Array") -> "pa.Array":
-        self.Z, self.A, self._cols = pa.conv_forward_batch(self.W, X, self.b, self.geometry)
+        self.A, self._cols = pa.conv_forward_batch(self.W, X, self.b, self.geometry)
         return self.A
 
     def forward(self, x: "pa.Array") -> "pa.Array":
         self.forward_batch(x.reshape((1, self.input_size)))
         self.a = self.A.reshape(self.size)
-        self.z = self.Z.reshape(self.size)
         return self.a
 
     def compute_output_delta(self, reference: "pa.Array") -> None:
