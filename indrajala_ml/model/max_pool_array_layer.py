@@ -4,7 +4,9 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 
-def validate_pool_arguments(input_height: int, input_width: int, input_channels: int, pool_size: int, stride: int) -> None:
+def validate_pool_arguments(
+    input_height: int, input_width: int, input_channels: int, pool_size: int, stride: int
+) -> None:
     # the same assertions as MaxPoolLayer's own constructor (minus the input_layer node-count
     # check - there's no input_layer object here), shared with MaxPoolRustArrayLayer
     assert pool_size >= 1, f"pool_size must be at least 1; got {pool_size}"
