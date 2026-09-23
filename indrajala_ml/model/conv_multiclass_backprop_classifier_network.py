@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import fan_in_aware_weights_and_bias
+from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.model_io import load_json, save_json
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
@@ -11,9 +12,9 @@ from indrajala_ml.model.state_layer import StateLayer
 class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
     A convolutional sibling of MultiClassBackpropClassifierNetwork - one ConvLayer (v1 scope:
-    directly after the input, single input channel, 'valid' padding - see
-    docs/convolutional-layers.md's "scoping v1") feeding one or more ordinary dense hidden
-    layers, then a plain one-vs-rest output layer, exactly like the dense-only base class.
+    directly after the input, single input channel, 'valid' padding) feeding one or more
+    ordinary dense hidden layers, then a plain one-vs-rest output layer, exactly like the
+    dense-only base class.
 
     A new class, not a retrofit, for the same reason as every other sibling in this codebase
     (see MultiClassBackpropClassifierNetwork's own docstring) - here specifically because the
@@ -28,10 +29,9 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
     _backward/classify_state/predict_probabilities, are inherited completely unchanged - none
     of them reach into layer internals directly, they go through the same per-layer hooks
     (accumulate_gradients/apply_accumulated_gradients/snapshot_state/restore_state) ConvLayer
-    itself implements (see docs/convolutional-layers.md's "the architectural point..." section).
+    itself implements.
 
-    Every real use case here is a normalized-pixel image (UCI digits, MNIST - see
-    docs/convolutional-layers.md's "expected effect and validation targets"), so input_bounds
+    Every real use case here is a normalized-pixel image (UCI digits, MNIST), so input_bounds
     is not a constructor parameter the way it is for the dense-only base class's more general
     geometric targets - it's fixed internally to [(0.0, 1.0)] * dimension, the same convention
     demo_mnist_ensemble_recognition.py's own MNIST training already uses.
@@ -48,11 +48,8 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         stride: int = 1,
     ) -> None:
 
-        assert class_count >= 2, f"class_count must be at least 2; got {class_count}"
-        assert len(dense_layer_sizes) >= 1, "dense_layer_sizes must specify at least one dense hidden layer"
-        assert all(size >= 1 for size in dense_layer_sizes), (
-            f"every dense hidden layer must have at least 1 node; got {dense_layer_sizes}"
-        )
+        validate_class_count(class_count)
+        validate_layer_sizes(dense_layer_sizes, label="dense_layer_sizes", noun="dense hidden layer")
 
         self.class_count = class_count
         self.dimension = input_height * input_width
@@ -125,7 +122,7 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         # which has no way to express conv hyperparameters. self.snapshot() (inherited
         # unchanged from BackpropNetworkBase) already works correctly here, conv layer
         # included, purely because ConvLayer implements snapshot_state() itself - the
-        # per-layer hook stage 1 of this workplan built for exactly this kind of sibling.
+        # per-layer hook BackpropLayer defines for exactly this kind of sibling.
         save_json(
             path,
             {

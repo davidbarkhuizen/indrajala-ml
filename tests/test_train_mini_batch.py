@@ -95,6 +95,26 @@ def test_iterations_counts_batches_not_examples_when_tracking_a_reference_classi
     assert [iteration for iteration, _ in result] == [0, 1, 2, 3, 4, 5]
 
 
+def test_train_mini_batch_calls_a_schedule_with_increasing_batch_step_indices():
+
+    reference, training_data = reachable_reference_and_training_data(1, 2, square_bounds(10.0), 20)
+    student = BackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0))
+
+    calls: list[int] = []
+
+    def recording_schedule(step: int) -> float:
+        calls.append(step)
+        return 0.5
+
+    # 20 examples / batch_size=4 = 5 batches/epoch, 2 epochs = 10 calls total, not 20 - the
+    # schedule steps against batches, not examples, per this function's own "iterations" note
+    train_backprop_network_mini_batch(
+        student, training_data, batch_size=4, learning_rate=recording_schedule, epochs=2
+    )
+
+    assert calls == list(range(10))
+
+
 def test_train_mini_batch_works_with_multiclass_network_via_duck_typing():
 
     # a small, linearly-separable-per-class target (one point per quadrant) - seeded so this

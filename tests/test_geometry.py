@@ -38,7 +38,7 @@ def test_is_positive_region_bounded_false_for_a_genuinely_empty_region():
 
     # the cardinality=1 case above is unbounded but non-empty (half of the plane still
     # satisfies it). Contradictory half-planes (x > 5 and x < -5) are a distinct scenario -
-    # a genuinely infeasible, empty intersection - previously unexercised by any test.
+    # a genuinely infeasible, empty intersection.
     bounds = square_bounds(10.0)
     classifier = LinearClassifierNetwork(2, 2, bounds)
     greater_than_five, less_than_negative_five = classifier.hidden_layer.nodes
@@ -71,8 +71,7 @@ def test_reference_positive_region_polygon_rejects_a_non_2d_classifier():
 
     # only ever reads each hidden node's first two weights - for dimension > 2 it would
     # otherwise silently project onto the first two dimensions and could report a completely
-    # wrong answer (verified before this fix: a classifier whose true 3D region is an
-    # unbounded infinite prism - bounded in x/y, unconstrained in z - was reported as bounded)
+    # wrong answer
     bounds = [(-10.0, 10.0)] * 3
     classifier = LinearClassifierNetwork(4, 3, bounds)
     for node, (weights, threshold) in zip(
@@ -91,11 +90,6 @@ def test_reference_positive_region_polygon_rejects_a_non_2d_classifier():
 
 def test_is_positive_region_bounded_true_for_a_large_scale_bounded_region():
 
-    # huge used to be a fixed 1.0e6 constant, independent of the classifier's own
-    # input_bounds - so a genuinely bounded region whose vertices approached or exceeded
-    # that fixed constant was incorrectly reported as unbounded. Verified before this fix:
-    # a bounded square with vertices at +/-2,000,000 (within bounds of half-width 1.0e7) was
-    # reported as unbounded.
     l = 1.0e7
     bounds = square_bounds(l)
     classifier = LinearClassifierNetwork(4, 2, bounds)

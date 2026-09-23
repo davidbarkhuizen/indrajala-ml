@@ -5,7 +5,7 @@ import random
 from typing import Any, Sequence
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.bounds import validate_input_bounds
+from indrajala_ml.model.bounds import validate_batch, validate_input_bounds, validate_layer_sizes
 from indrajala_ml.model.state_layer import StateLayer
 
 
@@ -38,8 +38,7 @@ class BackpropNetworkBase:
         output_size: int,
     ) -> None:
 
-        assert len(layer_sizes) >= 1, "layer_sizes must specify at least one hidden layer"
-        assert all(size >= 1 for size in layer_sizes), f"every hidden layer must have at least 1 node; got {layer_sizes}"
+        validate_layer_sizes(layer_sizes)
 
         self.dimension = dimension
 
@@ -76,6 +75,15 @@ class BackpropNetworkBase:
             for own_index, node in enumerate(self.hidden_layers[layer_index].nodes):
                 node.compute_hidden_delta(next_layer.nodes, own_index)
 
+    def _set_training_mode(self, training: bool) -> None:
+        # call-scoped, not lifecycle-scoped: train.py's own training loops call
+        # classify_state()/predict_probability() on the same, mid-training student between
+        # (not just after) learn()/learn_batch() steps, so this must be toggled on for the
+        # duration of one training call and off again immediately after - never left on. A
+        # no-op for every layer except a training-aware sibling like DropoutLayer.
+        for layer in self.trainable_layers:
+            layer.set_training_mode(training)
+
     def _learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]]) -> None:
         # the batch-shaped analogue of learn(): forward+backward+accumulate once per example,
         # then a single averaged weight update - batch_size=1 (a one-element batch) is required
@@ -85,12 +93,16 @@ class BackpropNetworkBase:
         # MultiClassBackpropClassifierNetwork's own learn_batch() - identical shape, differing
         # only in what a "target" is (a float reference value vs. an int category), which
         # _forward/_backward already abstract over.
-        assert len(batch) >= 1, "batch must not be empty"
-        for state, target in batch:
-            self._forward(state)
-            self._backward(target)
-            self._accumulate_gradients()
-        self._apply_accumulated_gradients(learning_rate, len(batch))
+        validate_batch(batch)
+        self._set_training_mode(True)
+        try:
+            for state, target in batch:
+                self._forward(state)
+                self._backward(target)
+                self._accumulate_gradients()
+            self._apply_accumulated_gradients(learning_rate, len(batch))
+        finally:
+            self._set_training_mode(False)
 
     def _apply_gradients(self, learning_rate: float) -> None:
         for layer in self.trainable_layers:
@@ -131,18 +143,17 @@ def randomize_fan_in_aware(network: BackpropNetworkBase) -> None:
     Fan-in-aware weight/bias initialization (limit = 1/sqrt(fan_in) per layer) - each weight
     drawn uniformly from [-limit, limit], scaled down as fan-in grows, so a layer's weighted
     input sum doesn't blow up (guaranteeing sigmoid saturation at every node) once fan-in
-    reaches the tens or hundreds. Originally written only for
-    MultiClassBackpropClassifierNetwork.randomize() (validated there against the real bundled
-    UCI digits dataset: 99.5% training accuracy, 96.9% test accuracy) - extracted here once
-    FanInAwareBackpropClassifierNetwork needed the identical scheme, so both classes share one
-    implementation instead of two copies of the same formula.
+    reaches the tens or hundreds. Validated against the real bundled UCI digits dataset (99.5%
+    training accuracy, 96.9% test accuracy). Shared by
+    MultiClassBackpropClassifierNetwork.randomize() and
+    FanInAwareBackpropClassifierNetwork.randomize(), so both classes use one implementation
+    instead of two copies of the same formula.
 
     Unlike BackpropClassifierNetwork.randomize()'s per-dimension-bounds-width scaling (tuned for
     1-2D geometric problems - see that method's own docstring), this scheme is dimension-generic:
-    it was measured directly to matter at real scale for EnsembleBackpropClassifierNetwork's
-    784-dimension MNIST sub-networks too (see docs/research-and-analysis.md's "ensemble/real-MNIST
-    investigation" entry - 83.5% of hidden activations already saturated at initialization under
-    the old scheme, fixed by this one, +6.6 points real-scale test accuracy with no other change).
+    at real scale, EnsembleBackpropClassifierNetwork's 784-dimension MNIST sub-networks reach
+    +6.6 points higher test accuracy with fan-in-aware init than with per-dimension-bounds-width
+    scaling, which leaves 83.5% of hidden activations already saturated at initialization.
     """
 
     previous_size = network.dimension

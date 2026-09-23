@@ -77,9 +77,6 @@ def test_class_balanced_disagreement_rate_raises_for_an_unreachable_reference_cl
 
 def test_class_balanced_disagreement_rate_rejects_a_zero_sample_count():
 
-    # per_class_sample_count=0 previously wasn't rejected - the sampling loop's condition
-    # was vacuously already satisfied (0 < 0 is False), so it returned immediately and
-    # divided 0/0
     bounds = square_bounds(10.0)
     classifier = LinearClassifierNetwork.randomized(1, 2, bounds)
 

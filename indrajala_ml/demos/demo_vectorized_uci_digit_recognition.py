@@ -1,11 +1,10 @@
-import time
-
 import matplotlib
 
 matplotlib.use("TkAgg")
 
 from matplotlib import pyplot
 
+from indrajala_ml.demos.timing import timed_train
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.graphics.chart import new_axes, new_confusion_matrix_figure, new_figure, sample_predictions_figure
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
@@ -13,7 +12,6 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
     VectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.multiclass_evaluate import accuracy, confusion_matrix
-from indrajala_ml.train import train_linear_classifier_network
 
 DIMENSION = 64
 CLASS_COUNT = 10
@@ -23,14 +21,13 @@ MODEL_PATH = "data/digits/trained_model_vectorized.json"
 def main() -> None:
 
     print(
-        "Vectorization phase-1 validation: the same UCI hand-written digits task "
+        "Vectorized vs pure-Python validation: the same UCI hand-written digits task "
         "demo_uci_digit_recognition.py trains, here trained by "
-        "VectorizedMultiClassBackpropClassifierNetwork (docs/vectorized-array-classes.md) - a "
-        "numpy-array-backed sibling, parity-checked step-by-step against the pure-Python "
-        "MultiClassBackpropClassifierNetwork in tests/test_vectorized_multiclass_backprop_model.py. "
-        "This demo trains both, at the same seed and hyperparameters, and reports the actual "
-        "measured accuracy trajectory and wall-clock cost of each - the doc's own 'identical "
-        "accuracy trajectory, honestly measured' claim, checked here rather than assumed."
+        "VectorizedMultiClassBackpropClassifierNetwork, a numpy-array-backed sibling, "
+        "parity-checked step-by-step against the pure-Python MultiClassBackpropClassifierNetwork "
+        "in tests/test_vectorized_multiclass_backprop_model.py. This demo trains both, at the "
+        "same seed and hyperparameters, and reports the actual measured accuracy trajectory and "
+        "wall-clock cost of each."
     )
     print()
 
@@ -43,13 +40,8 @@ def main() -> None:
     )
     array_student = VectorizedMultiClassBackpropClassifierNetwork.randomized([32], DIMENSION, CLASS_COUNT)
 
-    node_start = time.perf_counter()
-    node_result = train_linear_classifier_network(node_student, train_data, learning_rate=0.5, epochs=30)
-    node_elapsed = time.perf_counter() - node_start
-
-    array_start = time.perf_counter()
-    array_result = train_linear_classifier_network(array_student, train_data, learning_rate=0.5, epochs=30)
-    array_elapsed = time.perf_counter() - array_start
+    node_result, node_elapsed = timed_train(node_student, train_data, learning_rate=0.5, epochs=30)
+    array_result, array_elapsed = timed_train(array_student, train_data, learning_rate=0.5, epochs=30)
 
     node_diagnostic = node_result.diagnostic
     array_diagnostic = array_result.diagnostic

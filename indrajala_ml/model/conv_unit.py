@@ -10,10 +10,9 @@ from indrajala_ml.model.relu_layer import relu_activation, relu_hidden_delta
 class ConvUnit(AbstractNode):
     """
     One convolutional output spatial position within one channel - composition, not inheritance
-    from BackpropNode (see docs/convolutional-layers.md's "the architectural point that matters
-    more than any single function" for why: BackpropNode's input_node_weights is an owned,
+    from BackpropNode, because BackpropNode's input_node_weights is an owned,
     rebindable instance attribute, which fights a weight list many units need to read
-    identically rather than accommodating it). Only inherits from AbstractNode, a pure marker
+    identically rather than accommodating it. Only inherits from AbstractNode, a pure marker
     interface with no weight-related state to conflict with, so a ConvUnit is a valid
     input_nodes entry for a downstream dense BackpropLayer with zero special-casing there.
 

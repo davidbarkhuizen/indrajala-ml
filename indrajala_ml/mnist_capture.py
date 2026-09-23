@@ -7,7 +7,7 @@ CANVAS_SIZE = 28
 
 # the interactive capture tool's own painting resolution - deliberately higher than
 # TARGET_MAX_DIMENSION, so there's real room for scale_to_fit's aspect-preserving normalization
-# to do something meaningful (see demo_mnist_ensemble_capture.py and docs/structure.md's "MNIST" section)
+# to do something meaningful (see demo_mnist_ensemble_capture.py)
 CAPTURE_GRID_SIZE = 64
 
 # empirically tuned against a real trained model (mirroring exactly how

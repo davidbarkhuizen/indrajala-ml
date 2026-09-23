@@ -11,6 +11,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-python@v5
         with:
@@ -19,8 +21,7 @@ jobs:
       # Keyed on scripts/fetch_datasets.py's own content, which embeds both the pinned
       # indrajala-datasets-mnist tag and each file's expected SHA-256 - so bumping either one
       # changes the hash and invalidates the cache automatically, rather than risking a stale
-      # cache silently serving old data forever. See docs/dataset-sourcing-proposal.md's
-      # "CI-side caching" section.
+      # cache silently serving old data forever.
       - name: Cache MNIST dataset
         uses: actions/cache@v4
         with:

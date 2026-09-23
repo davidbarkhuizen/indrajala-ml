@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, randomize_fan_in_aware
+from indrajala_ml.model.bounds import validate_class_count
 from indrajala_ml.model.classification import argmax_first_occurrence
 from indrajala_ml.model.model_io import load_model_json, save_model_json
 
@@ -28,7 +29,7 @@ class MultiClassBackpropClassifierNetwork(BackpropNetworkBase):
         class_count: int,
     ) -> None:
 
-        assert class_count >= 2, f"class_count must be at least 2; got {class_count}"
+        validate_class_count(class_count)
         self.class_count = class_count
 
         super().__init__(layer_sizes, dimension, input_bounds, output_size=class_count)

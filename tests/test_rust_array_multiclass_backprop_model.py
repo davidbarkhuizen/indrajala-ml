@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -19,10 +19,9 @@ CLASS_COUNT = 3
 
 
 def _matching_networks(rng: random.Random):
-    # tier 1 (docs/rust-production-cutover.md's phase 2) - identical fixed weights/inputs
-    # injected directly, never randomize(), since indrajala_ml_array.uniform's RNG can never be
-    # seed-comparable against Python's random module (see rust-array-core.md's "the RNG
-    # exception"). The array-vs-node analogue of
+    # tier 1 - identical fixed weights/inputs injected directly, never randomize(), since
+    # indrajala_math_rust.uniform's RNG can never be seed-comparable against Python's random
+    # module. The array-vs-node analogue of
     # tests/test_vectorized_multiclass_backprop_model.py's own _matching_networks.
     return matching_array_backprop_networks(
         rng, RustArrayMultiClassBackpropClassifierNetwork, pa.Array, LAYER_SIZES, DIMENSION, CLASS_COUNT
@@ -54,7 +53,7 @@ def test_classify_state_matches_across_a_random_sweep():
 def test_learn_matches_after_every_step_not_just_at_the_end():
 
     # one silently-wrong intermediate step should fail loudly rather than being averaged away
-    # by many steps - tier 1's own required regression gate (docs/rust-production-cutover.md).
+    # by many steps - tier 1's own required regression gate.
     rng = random.Random(2)
     node_network, rust_network = _matching_networks(rng)
     learning_rate = 0.3

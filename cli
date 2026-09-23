@@ -6,7 +6,7 @@ option="${1:-}"
 
 venv_root=".venv"
 os_packages="python3-tk cargo"
-rust_crate_root="rust/indrajala_ml_array"
+rust_crate_root="rust"
 
 clean () {
 
@@ -28,6 +28,13 @@ create_venv () {
     echo "creating virtual environment @ $venv_root ..."
     python3 -m venv "$venv_root"
     echo "... created virtual environment @ $venv_root"
+}
+
+init_submodules () {
+
+    echo "initializing git submodules ..."
+    git submodule update --init --recursive
+    echo "... initialized git submodules"
 }
 
 activate_venv () {
@@ -71,10 +78,8 @@ fetch_data () {
 build_rust () {
 
     echo "building $rust_crate_root ..."
-    # --release, not a plain debug build: a debug build of this crate measured 65-427x slower
-    # than numpy on the same forward pass a release build only measures 2-10x slower on - see
-    # docs/rust-production-cutover.md's "the decisive finding this plan has to answer first" for
-    # the re-measurement that caught this.
+    # --release, not a plain debug build: a debug build of this crate measures 65-427x slower
+    # than numpy on the same forward pass a release build only measures 2-10x slower on.
     (cd "$rust_crate_root" && maturin develop --release)
     echo "... built $rust_crate_root"
 }
@@ -83,6 +88,7 @@ build_rust () {
 setup () {
 
     install_os_packages
+    init_submodules
     create_venv
     activate_venv
     install_and_upgrade_pip
@@ -96,7 +102,13 @@ setup () {
 run_tests () {
 
     activate_venv
-    python3 -m pytest --verbose tests/
+    # tests/ (this package's own tests) and $rust_crate_root/tests/ (the Rust crate's own
+    # Python-facing parity/correctness tests, e.g. test_fused_layer_ops.py) are both real,
+    # committed test suites - pytest with no path argument happens to collect both when run
+    # from the repo root (no testpaths config restricts it), which is how some past PRs' own
+    # test-plan counts (~1650+) included both without anyone noticing only one was ever run
+    # here or in CI. Listed explicitly so both actually run every time, not by accident.
+    python3 -m pytest --verbose tests/ "$rust_crate_root/tests/"
     deactivate_venv
 }
 

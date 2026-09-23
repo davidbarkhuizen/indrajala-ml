@@ -16,8 +16,7 @@ class EnsembleBackpropClassifierNetwork:
     nodes, jointly trained - kept as-is, unaffected by this class), there is nothing to
     synchronize during training here: every sub-network is trained completely independently
     (see indrajala_ml/ensemble_train.py), which is what makes training genuinely, not just
-    approximately, parallelizable across processes - see docs/research-and-analysis.md's
-    "parallelizing MNIST training" entry for the measurements behind this design.
+    approximately, parallelizable across processes.
 
     Unlike the other model classes in this codebase, __init__ doesn't build its own sub-networks
     from layer_sizes/dimension/input_bounds - it just assembles already-constructed

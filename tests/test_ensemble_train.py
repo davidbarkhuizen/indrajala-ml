@@ -12,9 +12,16 @@ from indrajala_ml.ensemble_train import (
     select_balanced_indices,
     train_ensemble_parallel,
     train_ensemble_parallel_from_indices,
+    train_ensemble_serial_from_indices,
 )
 from indrajala_ml.geometry import square_bounds
+from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
+from indrajala_ml.model.ensemble_array_backprop_classifier_network import EnsembleArrayBackpropClassifierNetwork
+from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
+    EnsembleRustArrayBackpropClassifierNetwork,
+)
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
+from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
 
 
 def _synthetic_dataset(counts: dict[int, int]) -> list[tuple[tuple[float, ...], int]]:
@@ -131,8 +138,8 @@ def test_rejects_an_out_of_range_target_label():
 
 def test_build_balanced_binary_dataset_matches_select_balanced_indices():
 
-    # build_balanced_binary_dataset is now a thin wrapper around select_balanced_indices - this
-    # confirms the refactor didn't change behavior: the same states/categories come out, just
+    # build_balanced_binary_dataset is a thin wrapper around select_balanced_indices - this
+    # confirms the two produce identical output: the same states/categories come out, just
     # looked up from the index-based result rather than computed a second, independent way
     dataset = _synthetic_dataset({0: 6, 1: 10, 2: 10, 3: 10})
     labels = [label for _, label in dataset]
@@ -304,6 +311,82 @@ def test_train_ensemble_parallel_is_reproducible_under_a_fixed_seed():
     assert ensemble_a.snapshot() == ensemble_b.snapshot()
 
 
+def test_train_ensemble_parallel_accepts_array_backed_classifier_cls():
+
+    # ArrayBackpropClassifierNetwork.randomized's accepted-and-discarded input_bounds parameter
+    # (see its own docstring) lets it plug into the existing multiprocessing.Pool path
+    # completely unchanged - numpy arrays pickle fine across a worker boundary natively (unlike
+    # indrajala_math_rust.Array - see
+    # test_train_ensemble_parallel_accepts_rust_array_backed_classifier_cls below for that case).
+    #
+    # train_ensemble_parallel's own _collect_ensemble_results always wraps the trained
+    # classifiers in EnsembleBackpropClassifierNetwork (the per-node wrapper), regardless of
+    # classifier_cls - fine for predict_probabilities/classify_state (duck-typed, calls
+    # classifier.predict_probability only), but that wrapper's own save() reaches into
+    # hidden_layers/input_bounds, which ArrayBackpropClassifierNetwork has neither of. The real
+    # ensemble wrapper for this backend is EnsembleArrayBackpropClassifierNetwork - built here by
+    # rewrapping .classifiers, not by changing train_ensemble_parallel's own return type.
+    dataset = _synthetic_multiclass_dataset()
+    bounds = square_bounds(10.0)
+
+    result, _ = train_ensemble_parallel(
+        dataset,
+        class_count=3,
+        layer_sizes=[4],
+        dimension=2,
+        input_bounds=bounds,
+        learning_rate=0.5,
+        epochs=5,
+        worker_count=2,
+        seed=0,
+        classifier_cls=ArrayBackpropClassifierNetwork,
+    )
+
+    assert all(isinstance(classifier, ArrayBackpropClassifierNetwork) for classifier in result.classifiers)
+    assert result.classify_state((-5.0, -5.0)) == 0
+    assert result.classify_state((5.0, 5.0)) == 1
+    assert result.classify_state((5.0, -5.0)) == 2
+
+    ensemble = EnsembleArrayBackpropClassifierNetwork(result.classifiers)
+    assert ensemble.classify_state((-5.0, -5.0)) == 0
+
+
+def test_train_ensemble_parallel_accepts_rust_array_backed_classifier_cls():
+
+    # indrajala_math_rust.Array does not support pickling (confirmed directly: pickle.dumps
+    # raises TypeError), which would otherwise make this the one classifier_cls that can never
+    # train through a multiprocessing.Pool worker boundary. Closed by
+    # ensemble_train._picklable_snapshot (converts a worker's returned snapshot to plain,
+    # always-picklable lists before it crosses the process boundary) paired with
+    # RustArrayBackpropClassifierNetwork.restore()'s own tolerance for receiving plain lists as
+    # well as pa.Array - no new public training function needed, the existing
+    # train_ensemble_parallel/train_ensemble_parallel_from_indices machinery already works
+    # unchanged once both sides of that boundary agree on a picklable representation.
+    dataset = _synthetic_multiclass_dataset()
+    bounds = square_bounds(10.0)
+
+    result, _ = train_ensemble_parallel(
+        dataset,
+        class_count=3,
+        layer_sizes=[4],
+        dimension=2,
+        input_bounds=bounds,
+        learning_rate=0.5,
+        epochs=5,
+        worker_count=2,
+        seed=0,
+        classifier_cls=RustArrayBackpropClassifierNetwork,
+    )
+
+    assert all(isinstance(classifier, RustArrayBackpropClassifierNetwork) for classifier in result.classifiers)
+    assert result.classify_state((-5.0, -5.0)) == 0
+    assert result.classify_state((5.0, 5.0)) == 1
+    assert result.classify_state((5.0, -5.0)) == 2
+
+    ensemble = EnsembleRustArrayBackpropClassifierNetwork(result.classifiers)
+    assert ensemble.classify_state((-5.0, -5.0)) == 0
+
+
 def test_train_ensemble_parallel_from_indices_produces_a_working_ensemble(tmp_path):
 
     dataset = _synthetic_multiclass_dataset()
@@ -337,6 +420,99 @@ def test_train_ensemble_parallel_from_indices_matches_the_fully_decoded_path(tmp
     direct_ensemble, _ = _train_synthetic(dataset, bounds, epochs=3, seed=7)
 
     assert indexed_ensemble.snapshot() == direct_ensemble.snapshot()
+
+
+def test_train_ensemble_serial_from_indices_produces_a_working_ensemble(tmp_path):
+
+    dataset = _synthetic_multiclass_dataset()
+    labels = [label for _, label in dataset]
+    path = str(tmp_path / "records.pkl")
+    write_test_records(path, dataset)
+    bounds = square_bounds(10.0)
+
+    ensemble, diagnostics = train_ensemble_serial_from_indices(
+        path,
+        load_test_records_at_indices,
+        labels,
+        class_count=3,
+        layer_sizes=[4],
+        dimension=2,
+        input_bounds=bounds,
+        learning_rate=0.5,
+        epochs=5,
+        seed=0,
+    )
+
+    assert ensemble.class_count == 3
+    assert set(diagnostics.keys()) == {0, 1, 2}
+    assert ensemble.classify_state((-5.0, -5.0)) == 0
+    assert ensemble.classify_state((5.0, 5.0)) == 1
+    assert ensemble.classify_state((5.0, -5.0)) == 2
+
+
+def test_train_ensemble_serial_from_indices_matches_the_parallel_path(tmp_path):
+
+    # no multiprocessing.Pool at all, but select_balanced_indices' choices and per-class seeding
+    # are identical either way (both draw from one random.Random(seed) in class order) - so the
+    # serial path should train to exactly the same result as the parallel one
+    dataset = _synthetic_multiclass_dataset()
+    labels = [label for _, label in dataset]
+    path = str(tmp_path / "records.pkl")
+    write_test_records(path, dataset)
+    bounds = square_bounds(10.0)
+
+    serial_ensemble, _ = train_ensemble_serial_from_indices(
+        path,
+        load_test_records_at_indices,
+        labels,
+        class_count=3,
+        layer_sizes=[4],
+        dimension=2,
+        input_bounds=bounds,
+        learning_rate=0.5,
+        epochs=3,
+        seed=7,
+    )
+    parallel_ensemble, _ = _train_synthetic_from_indices(path, labels, bounds, epochs=3, seed=7)
+
+    assert serial_ensemble.snapshot() == parallel_ensemble.snapshot()
+
+
+def test_train_ensemble_serial_from_indices_accepts_array_and_rust_backed_classifier_cls(tmp_path):
+
+    # the serial path this function provides for both backends - ArrayBackpropClassifierNetwork
+    # (numpy) and RustArrayBackpropClassifierNetwork alike (see _picklable_snapshot for why Rust
+    # can also use the parallel path, not just this one) - as a comparison point against each
+    # backend's own parallel-path result.
+    dataset = _synthetic_multiclass_dataset()
+    labels = [label for _, label in dataset]
+    path = str(tmp_path / "records.pkl")
+    write_test_records(path, dataset)
+    bounds = square_bounds(10.0)
+
+    for classifier_cls, ensemble_cls in [
+        (ArrayBackpropClassifierNetwork, EnsembleArrayBackpropClassifierNetwork),
+        (RustArrayBackpropClassifierNetwork, EnsembleRustArrayBackpropClassifierNetwork),
+    ]:
+        result, diagnostics = train_ensemble_serial_from_indices(
+            path,
+            load_test_records_at_indices,
+            labels,
+            class_count=3,
+            layer_sizes=[4],
+            dimension=2,
+            input_bounds=bounds,
+            learning_rate=0.5,
+            epochs=5,
+            seed=0,
+            classifier_cls=classifier_cls,
+        )
+
+        assert set(diagnostics.keys()) == {0, 1, 2}
+        ensemble = ensemble_cls(result.classifiers)
+        assert ensemble.classify_state((-5.0, -5.0)) == 0
+        assert ensemble.classify_state((5.0, 5.0)) == 1
+        assert ensemble.classify_state((5.0, -5.0)) == 2
 
 
 def test_available_memory_bytes_returns_a_real_positive_value_on_linux():

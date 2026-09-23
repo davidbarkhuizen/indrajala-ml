@@ -21,8 +21,7 @@ class ReLUBackpropClassifierNetwork(BackpropClassifierNetwork):
     tests ReLU specifically, not ReLU bundled with an init-scheme or loss-function change at the
     same time.
 
-    Measured directly (see docs/research-and-analysis.md's "ReLU hidden-layer activation" entry):
-    at BackpropClassifierNetwork's own demo-tuned learning_rate=1.0, this class trains to a
+    Measured directly: at BackpropClassifierNetwork's own demo-tuned learning_rate=1.0, this class trains to a
     meaningfully *lower* training accuracy on a fixed XOR scenario (74.03% vs 97.80% mean over 10
     seeds) - not because of dead ReLU units (checked directly: only 1/8), but because ReLU's flat,
     undamped active-region gradient needs a smaller learning rate than whatever's already tuned

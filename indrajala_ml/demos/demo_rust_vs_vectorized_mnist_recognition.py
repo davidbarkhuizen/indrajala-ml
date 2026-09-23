@@ -1,5 +1,4 @@
-import time
-
+from indrajala_ml.demos.timing import timed_train
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
@@ -9,13 +8,11 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
     VectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.multiclass_evaluate import accuracy
-from indrajala_ml.train import train_linear_classifier_network
 
 DIMENSION = 28 * 28
 CLASS_COUNT = 10
-LAYER_SIZES = [30]  # matches demo_vectorized_mnist_recognition.py's own already-measured
-# architecture, so this run's numbers are directly comparable to that demo's and
-# docs/research-and-analysis.md's own recorded figures.
+LAYER_SIZES = [30]  # matches demo_vectorized_mnist_recognition.py's own architecture, so this
+# run's numbers are directly comparable to that demo's.
 TRAIN_PATH = "data/mnist/mnist-train.bin"
 TEST_PATH = "data/mnist/mnist-test.bin"
 
@@ -23,14 +20,12 @@ TEST_PATH = "data/mnist/mnist-test.bin"
 def main() -> None:
 
     print(
-        "Rust production cutover validation at real MNIST scale (docs/rust-production-cutover.md). "
-        "One real training epoch over the full 60000-example MNIST training set, same "
-        "architecture/hyperparameters as demo_vectorized_mnist_recognition.py, now with a third "
-        "network: RustArrayMultiClassBackpropClassifierNetwork, the Rust-array-core-backed "
-        "sibling that replaces numpy as the production backend (numpy stays on permanently as "
-        "the benchmark comparison). This is the real, measured number behind "
-        "docs/research-and-analysis.md's own recorded 1.31x real-MNIST speedup, not a "
-        "re-assertion of it."
+        "Rust vs numpy validation at real MNIST scale. One real training epoch over the full "
+        "60000-example MNIST training set, same architecture/hyperparameters as "
+        "demo_vectorized_mnist_recognition.py, now with a third network: "
+        "RustArrayMultiClassBackpropClassifierNetwork, the Rust-array-core-backed sibling that "
+        "replaces numpy as the production backend (numpy stays on permanently as the benchmark "
+        "comparison)."
     )
     print()
 
@@ -47,23 +42,17 @@ def main() -> None:
     rust_student = RustArrayMultiClassBackpropClassifierNetwork.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT)
 
     print("training pure-Python network for 1 epoch (real baseline architecture - expect several minutes)...")
-    node_start = time.perf_counter()
-    node_result = train_linear_classifier_network(node_student, train_data, learning_rate=0.5, epochs=1)
-    node_elapsed = time.perf_counter() - node_start
+    node_result, node_elapsed = timed_train(node_student, train_data, learning_rate=0.5, epochs=1)
     node_test_accuracy = accuracy(node_student, test_data)
     print(f"  done in {node_elapsed:.1f}s ({node_elapsed / 60:.2f} min)")
 
     print("training numpy network for 1 epoch...")
-    numpy_start = time.perf_counter()
-    numpy_result = train_linear_classifier_network(numpy_student, train_data, learning_rate=0.5, epochs=1)
-    numpy_elapsed = time.perf_counter() - numpy_start
+    numpy_result, numpy_elapsed = timed_train(numpy_student, train_data, learning_rate=0.5, epochs=1)
     numpy_test_accuracy = accuracy(numpy_student, test_data)
     print(f"  done in {numpy_elapsed:.1f}s ({numpy_elapsed / 60:.2f} min)")
 
     print("training Rust network for 1 epoch...")
-    rust_start = time.perf_counter()
-    rust_result = train_linear_classifier_network(rust_student, train_data, learning_rate=0.5, epochs=1)
-    rust_elapsed = time.perf_counter() - rust_start
+    rust_result, rust_elapsed = timed_train(rust_student, train_data, learning_rate=0.5, epochs=1)
     rust_test_accuracy = accuracy(rust_student, test_data)
     print(f"  done in {rust_elapsed:.1f}s ({rust_elapsed / 60:.2f} min)")
 

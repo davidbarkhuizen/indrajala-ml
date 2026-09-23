@@ -159,13 +159,11 @@ DEMOS: list[DemoInfo] = [
         title="Vectorized UCI digit recognition (numpy)",
         summary="Trains pure-Python and numpy-array-backed networks on UCI digits; compares accuracy and wall-clock.",
         description=(
-            "Vectorization phase-1 validation (docs/vectorized-array-classes.md). Trains "
-            "MultiClassBackpropClassifierNetwork and its numpy-array-backed sibling "
-            "VectorizedMultiClassBackpropClassifierNetwork on the same UCI digits split, at the same seed and "
-            "hyperparameters, reporting each one's measured training/test accuracy and wall-clock training "
-            "time side by side - the doc's own 'identical accuracy trajectory, honestly measured' claim, "
-            "checked here rather than assumed. Then plots both training-accuracy-by-epoch curves overlaid, "
-            "a confusion matrix, and sample test predictions for the vectorized network."
+            "Vectorized vs pure-Python validation. Trains MultiClassBackpropClassifierNetwork and its "
+            "numpy-array-backed sibling VectorizedMultiClassBackpropClassifierNetwork on the same UCI digits "
+            "split, at the same seed and hyperparameters, reporting each one's measured training/test "
+            "accuracy and wall-clock training time side by side. Then plots both training-accuracy-by-epoch "
+            "curves overlaid, a confusion matrix, and sample test predictions for the vectorized network."
         ),
     ),
     DemoInfo(
@@ -173,13 +171,11 @@ DEMOS: list[DemoInfo] = [
         title="Rust vs vectorized UCI digit recognition",
         summary="Trains pure-Python, numpy, and Rust-array-core-backed networks on UCI digits side by side.",
         description=(
-            "Rust production cutover validation (docs/rust-production-cutover.md). Extends "
-            "demo_vectorized_uci_digit_recognition.py with a third network: "
-            "RustArrayMultiClassBackpropClassifierNetwork, the Rust-array-core-backed sibling that "
-            "replaces numpy as the production backend (numpy stays on permanently as the benchmark "
+            "Rust vs numpy validation. Extends demo_vectorized_uci_digit_recognition.py with a third "
+            "network: RustArrayMultiClassBackpropClassifierNetwork, the Rust-array-core-backed sibling "
+            "that replaces numpy as the production backend (numpy stays on permanently as the benchmark "
             "comparison). Trains all three at the same seed/hyperparameters and reports each one's "
-            "measured accuracy and wall-clock training time - docs/research-and-analysis.md's own "
-            "measured 3.40x speedup, checked here rather than assumed. Then plots all three "
+            "measured accuracy and wall-clock training time. Then plots all three "
             "training-accuracy-by-epoch curves overlaid, a confusion matrix, and sample test "
             "predictions for the Rust network."
         ),
@@ -214,14 +210,11 @@ DEMOS: list[DemoInfo] = [
         title="Vectorized MNIST recognition (numpy)",
         summary="One real epoch on full MNIST, pure-Python vs. numpy-array-backed - accuracy and wall-clock.",
         description=(
-            "Vectorization phase-1 validation at real MNIST scale (docs/vectorized-array-classes.md). "
-            "Headless, console-only - trains MultiClassBackpropClassifierNetwork and "
-            "VectorizedMultiClassBackpropClassifierNetwork for one real epoch each over the full 60000-example "
-            "MNIST training set (same 30-node-hidden-layer architecture docs/research-and-analysis.md's own "
-            "~12.5-minutes/epoch pure-Python baseline used, so the pure-Python number here is directly "
-            "comparable to that already-documented figure), then reports each one's test accuracy and "
-            "wall-clock epoch time side by side - the real, measured number behind "
-            "docs/vectorized-array-classes.md's own extrapolated speedup ceiling. Also times "
+            "Vectorized vs pure-Python validation at real MNIST scale. Headless, console-only - trains "
+            "MultiClassBackpropClassifierNetwork and VectorizedMultiClassBackpropClassifierNetwork for one "
+            "real epoch each over the full 60000-example MNIST training set (same 30-node-hidden-layer "
+            "architecture as the ~12.5-minutes/epoch pure-Python baseline), then reports each one's test "
+            "accuracy and wall-clock epoch time side by side. Also times "
             "load_mnist_dataset_as_array's bulk-decode against load_mnist_dataset's tuple-per-example decode "
             "on the same file. Takes on the order of 15-20 minutes to run (mostly the pure-Python epoch)."
         ),
@@ -231,16 +224,13 @@ DEMOS: list[DemoInfo] = [
         title="Rust vs vectorized MNIST recognition",
         summary="One real epoch on full MNIST, pure-Python vs. numpy vs. Rust-array-core-backed.",
         description=(
-            "Rust production cutover validation at real MNIST scale "
-            "(docs/rust-production-cutover.md). Headless, console-only - extends "
+            "Rust vs numpy validation at real MNIST scale. Headless, console-only - extends "
             "demo_vectorized_mnist_recognition.py with a third network: "
             "RustArrayMultiClassBackpropClassifierNetwork, the Rust-array-core-backed sibling that "
             "replaces numpy as the production backend. Trains all three for one real epoch each "
             "over the full 60000-example MNIST training set (same 30-node-hidden-layer "
             "architecture), then reports each one's test accuracy and wall-clock epoch time side "
-            "by side - the real, measured number behind docs/research-and-analysis.md's own "
-            "recorded 1.31x real-MNIST speedup. Takes on the order of 15-20 minutes to run (mostly "
-            "the pure-Python epoch)."
+            "by side. Takes on the order of 15-20 minutes to run (mostly the pure-Python epoch)."
         ),
     ),
     DemoInfo(
@@ -261,14 +251,12 @@ DEMOS: list[DemoInfo] = [
         title="Backprop variant comparison",
         summary="Reproduces this repo's documented model/loss/init comparisons, runnably, side by side.",
         description=(
-            "Three A/B comparisons drawn straight from docs/research-and-analysis.md, each trained fresh "
-            "and plotted rather than just quoted: multi-class loss function (one-vs-rest MSE vs softmax "
-            "cross-entropy, on the full UCI digits set), binary loss function (quadratic vs binary "
-            "cross-entropy, on the XOR target, at both an untuned and a retuned learning rate), and "
+            "Three A/B comparisons, each trained fresh and plotted: multi-class loss function (one-vs-rest "
+            "MSE vs softmax cross-entropy, on the full UCI digits set), binary loss function (quadratic vs "
+            "binary cross-entropy, on the XOR target, at both an untuned and a retuned learning rate), and "
             "weight-init scheme (this codebase's production fan-in-aware default vs Xavier/Glorot, on UCI "
             "digits). Prints each comparison's measured accuracy and plots a training-accuracy-by-epoch "
-            "chart per section, so the documented findings can be checked directly instead of only read "
-            "about. Takes about 4 minutes to train all seven variants (measured directly)."
+            "chart per section. Takes about 4 minutes to train all seven variants."
         ),
     ),
 ]

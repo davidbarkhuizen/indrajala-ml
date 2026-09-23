@@ -39,8 +39,7 @@ def test_learn_matches_the_binary_cross_entropy_update_rule_by_hand():
     #   a_h = 0.7502601055951177, a_o = 0.5987376536170401 (same forward pass as the sibling)
     #   delta_o = a_o - y = -0.4012623463829599 (no a_o*(1-a_o) factor, unlike quadratic loss's
     #   delta_o=-0.09640363012729687 for this same state - cross-entropy's delta is ~4x larger
-    #   here, the mechanism behind the learning-rate sensitivity measured in
-    #   docs/research-and-analysis.md)
+    #   here, the mechanism behind cross-entropy's learning-rate sensitivity)
     #   delta_h = (delta_o * w_o) * a_h * (1 - a_h) = -0.06014758200698453
     #   w -= learning_rate * delta * <that weight's input value>; b -= learning_rate * delta
     # state x=2.0, category y=1.0, learning_rate=0.1 - computed independently (not re-derived

@@ -35,9 +35,6 @@ def test_dimension_must_match_bounds_length():
 
 def test_input_bounds_must_all_have_positive_width():
 
-    # a zero-width dimension previously wasn't rejected at construction - it instead crashed
-    # later, deep inside randomize(), with a cryptic ZeroDivisionError (dividing by that
-    # dimension's zero half-width)
     with pytest.raises(AssertionError):
         LinearClassifierNetwork(1, 2, [(-10.0, 10.0), (5.0, 5.0)])
 
@@ -103,11 +100,9 @@ def test_randomize_scales_weight_range_with_input_bounds_half_width(monkeypatch)
 
 def test_randomize_produces_reachable_classifiers_at_a_tiny_bounds_scale():
 
-    # before this fix, the weight range was fixed regardless of input_bounds, so at a small
-    # enough scale the (comparatively enormous) fixed threshold range dominated w.x, making
-    # almost every random classifier permanently one class - verified via a 200-sample sweep
-    # at this exact scale: 0/200 classifiers had both classes reachable. This would have
-    # reliably exhausted regeneration_attempts and raised RuntimeError before the fix.
+    # the weight range must scale with input_bounds - at a small enough scale, a fixed
+    # threshold range disproportionately dominates w.x, making almost every random
+    # classifier permanently one class and exhausting regeneration_attempts.
     bounds = square_bounds(0.001)
 
     reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 50)
@@ -173,8 +168,8 @@ def test_learn_matches_the_perceptron_update_rule_by_hand():
 
 def test_association_node_activates_strictly_above_zero():
 
-    # per the activation function (see docs/theory.md), z <= 0 must classify as inactive,
-    # not just z < 0 - a fresh network (weights=[1, 1], threshold=0) puts z exactly on the
+    # per the activation function, z <= 0 must classify as inactive, not just z < 0 - a fresh
+    # network (weights=[1, 1], threshold=0) puts z exactly on the
     # decision boundary at this state (z = 1*1 + 1*-1 + 0 = 0)
     network = LinearClassifierNetwork(1, 2, square_bounds(10.0))
     network.update_state_layer((1.0, -1.0))

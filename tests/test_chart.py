@@ -45,10 +45,9 @@ def test_disagreement_axis_bounds():
 
 def test_plot_training_data_assigns_marker_and_color_by_sorted_category_not_set_order():
 
-    # category-to-marker/color assignment used to iterate a bare set() of category values -
-    # not a guaranteed-order operation - rather than an explicit sort. Pins down that class
-    # 0.0 always gets the first marker/color ("." / blue) and 1.0 the second ("x" / yellow),
-    # regardless of what order set() would have produced them in.
+    # category-to-marker/color assignment must go by sorted category order, not iteration
+    # order over a set(). Pins down that class 0.0 always gets the first marker/color
+    # ("." / blue) and 1.0 the second ("x" / yellow).
     bounds = square_bounds(10.0)
     training_data = [((1.0, 1.0), 1.0), ((-1.0, -1.0), 0.0), ((2.0, 2.0), 1.0), ((-2.0, -2.0), 0.0)]
 
@@ -65,8 +64,8 @@ def test_plot_training_data_assigns_marker_and_color_by_sorted_category_not_set_
 
 def test_plot_linear_classifier_network_draws_a_vertical_line_for_a_zero_y_weight():
 
-    # a*x + c = 0 (no y term) can't be solved for y as a function of x - previously crashed
-    # with ZeroDivisionError; should draw a vertical line at x = -c/a instead
+    # a*x + c = 0 (no y term) can't be solved for y as a function of x; should draw a
+    # vertical line at x = -c/a instead
     bounds = square_bounds(10.0)
     classifier = LinearClassifierNetwork(1, 2, bounds)
     node = classifier.hidden_layer.nodes[0]

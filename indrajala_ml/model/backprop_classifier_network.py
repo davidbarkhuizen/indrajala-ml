@@ -38,7 +38,11 @@ class BackpropClassifierNetwork(BackpropNetworkBase):
         return 1.0 if self.predict_probability(state) > 0.5 else 0.0
 
     def learn(self, learning_rate: float, state: tuple[float, ...], category: float) -> None:
-        self._forward(state)
+        self._set_training_mode(True)
+        try:
+            self._forward(state)
+        finally:
+            self._set_training_mode(False)
         self._backward(category)
         self._apply_gradients(learning_rate)
 

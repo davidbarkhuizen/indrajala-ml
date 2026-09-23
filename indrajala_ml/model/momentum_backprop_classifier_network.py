@@ -18,7 +18,7 @@ class MomentumBackpropClassifierNetwork(BackpropClassifierNetwork):
 
     momentum is a required constructor parameter, not a keyword default, deliberately: unlike
     every other sibling class's fixed formula, there is no single coefficient this codebase's own
-    measurements support recommending (see docs/research-and-analysis.md's "momentum" entry).
+    measurements support recommending.
     Rumelhart et al.'s own cited value, momentum=0.9, robustly *hurt* relative to no momentum at
     all across a 10x learning-rate sweep on a fixed XOR scenario (best case: 92.50% vs the
     no-momentum baseline's 97.80%). A finer sweep of lower coefficients (0.3-0.7) at the original

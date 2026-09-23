@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 
 
 class RustArrayLayer:
     """
-    The Rust-array-core-backed sibling of ArrayLayer - see docs/rust-production-cutover.md's
-    phase 1. Every method here is a single fused Rust call (docs/rust-production-cutover.md's
-    phase 0b, `fused.rs`) instead of a composition of individual `Array` operators, mirroring
+    The Rust-array-core-backed sibling of ArrayLayer. Every method here is a single fused Rust
+    call (`fused.rs`) instead of a composition of individual `Array` operators, mirroring
     ArrayLayer's own method names/formulas exactly so this class is a drop-in swap for it.
-    `indrajala_ml_array.Array` has no in-place arithmetic beyond `+=`/`-=`, so every method below
+    `indrajala_math_rust.Array` has no in-place arithmetic beyond `+=`/`-=`, so every method below
     rebinds `self.W`/`self.b`/`self._grad_W`/`self._grad_b` to the fused call's return value
     rather than mutating in place - the same rebind-not-mutate pattern `Array.__iadd__` itself
     already uses under the hood.

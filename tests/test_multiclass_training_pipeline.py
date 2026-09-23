@@ -11,8 +11,8 @@ def test_train_linear_classifier_network_drives_multiclass_backprop_on_real_digi
     # a small subset (200 of the 1797 bundled rows) and few epochs, so the test suite stays
     # fast - the full demo trains on the whole dataset. Measured directly (not guessed):
     # best_training_accuracy=0.98125 at epoch 13/15 (plateaued), test accuracy 0.9 on the
-    # held-out split. Proves train_linear_classifier_network - unchanged since it was written
-    # for the binary BackpropClassifierNetwork - drives this multi-class sibling too, since it
+    # held-out split. Proves train_linear_classifier_network (written for the binary
+    # BackpropClassifierNetwork) drives this multi-class sibling too, since it
     # only ever calls .learn()/.snapshot()/.restore()/.classify_state(), all of which
     # MultiClassBackpropClassifierNetwork implements with matching signatures.
     random.seed(0)

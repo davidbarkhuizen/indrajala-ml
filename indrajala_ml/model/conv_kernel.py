@@ -9,10 +9,9 @@ class ConvKernel:
     """
     One convolutional output channel's shared, trainable weights - a flat kernel_size x
     kernel_size weight list plus a bias, referenced by every ConvUnit (one per output spatial
-    position) in that channel, not owned independently by any of them. See
-    docs/convolutional-layers.md's "the architectural point that matters more than any single
-    function" for why this is a separate class from BackpropNode rather than a subclass of it:
-    BackpropNode's input_node_weights is an owned, rebindable instance attribute, which fights a
+    position) in that channel, not owned independently by any of them. This is a separate class
+    from BackpropNode rather than a subclass of it because BackpropNode's input_node_weights is
+    an owned, rebindable instance attribute, which fights a
     weight list many instances need to read and update identically, rather than accommodating
     it.
 

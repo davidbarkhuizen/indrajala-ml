@@ -20,8 +20,7 @@ def make_l2_node_cls(l2_lambda: float) -> type[BackpropNode]:
     sign of overfitting the way large weights are.
 
     A factory, not a fixed class, for the same reason as make_momentum_node_cls: there is no
-    single l2_lambda value this codebase has measured and can recommend - see
-    docs/research-and-analysis.md's "L2 weight regularization" entry.
+    single l2_lambda value this codebase has measured and can recommend.
     """
 
     class L2RegularizedBackpropNode(BackpropNode):

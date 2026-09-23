@@ -17,8 +17,7 @@ class L2RegularizedBackpropClassifierNetwork(BackpropClassifierNetwork):
     l2_lambda is a required constructor parameter, not a keyword default, matching
     MomentumBackpropClassifierNetwork's own posture.
 
-    Measured directly (see docs/research-and-analysis.md's "L2 weight regularization" entry) on
-    a small, fixed, finite proxy dataset (not the toy XOR target used for the other sibling
+    Measured directly on a small, fixed, finite proxy dataset (not the toy XOR target used for the other sibling
     classes - L2's whole purpose is generalization, which needs a dataset a network can actually
     overfit to): too small a coefficient (0.0001, 0.001) makes both training and held-out
     accuracy slightly *worse* than no regularization; l2_lambda=0.01 closes the train/test gap

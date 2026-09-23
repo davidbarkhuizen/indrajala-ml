@@ -10,19 +10,31 @@ def sigmoid(z: np.ndarray) -> np.ndarray:
     np.exp(-z) to inf, and 1/(1+inf) is 0.0 under IEEE 754, which is exactly the limiting value
     backprop_node.sigmoid's OverflowError branch returns by hand. Confirmed by
     tests/test_array_layer.py's dedicated overflow-boundary sweep, not assumed from the formulas
-    looking equivalent - see docs/vectorized-array-classes.md's "numerical parity validation".
+    looking equivalent.
     """
 
     with np.errstate(over="ignore"):
         return 1.0 / (1.0 + np.exp(-z))
 
 
+def fan_in_aware_random_layer(size: int, previous_size: int) -> tuple[np.ndarray, np.ndarray]:
+    """
+    The fan-in-aware initialization draw (limit = 1/sqrt(fan_in)) shared by
+    VectorizedMultiClassBackpropClassifierNetwork.randomize and
+    ArrayBackpropClassifierNetwork.randomize - the array-level analogue of
+    randomize_fan_in_aware (backprop_network_base.py), extracted here so both callers draw from
+    one formula instead of two independent copies.
+    """
+    limit = 1.0 / np.sqrt(previous_size)
+    W = np.random.uniform(-limit, limit, size=(size, previous_size))
+    b = np.random.uniform(-limit, limit, size=(size,))
+    return W, b
+
+
 class ArrayLayer:
     """
     One backprop layer's weights/activations as whole arrays, not `size` separate BackpropNode
-    objects - see docs/vectorized-array-classes.md's "class design" section for the full
-    forward/backward/gradient formula table this class implements incrementally, stage by stage.
-    Built incrementally: single-example forward() first, then this stage's forward_batch().
+    objects. Provides both a single-example forward() and a batched forward_batch().
     """
 
     def __init__(self, size: int, input_size: int) -> None:
@@ -81,8 +93,7 @@ class ArrayLayer:
         # the one-shot batched path VectorizedMultiClassBackpropClassifierNetwork.learn_batch
         # uses instead of calling accumulate_gradient once per example:
         # self.delta_batch.T @ input_activation_batch computes the same sum of per-example outer
-        # products as looping accumulate_gradient over every row, in one matrix multiply - per
-        # docs/vectorized-array-classes.md's own learn_batch formula.
+        # products as looping accumulate_gradient over every row, in one matrix multiply.
         self._grad_W += self.delta_batch.T @ input_activation_batch
         self._grad_b += self.delta_batch.sum(axis=0)
 
