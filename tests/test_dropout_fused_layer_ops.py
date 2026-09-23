@@ -22,7 +22,7 @@ import random
 import numpy as np
 import pytest
 
-from indrajala_ml_array import (
+from indrajala_math_rust import (
     Array,
     layer_dropout_forward,
     layer_dropout_forward_batch,

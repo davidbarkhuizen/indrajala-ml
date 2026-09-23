@@ -1,6 +1,6 @@
 import pytest
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
     EnsembleRustArrayBackpropClassifierNetwork,
 )

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 

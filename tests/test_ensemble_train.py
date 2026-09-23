@@ -316,7 +316,7 @@ def test_train_ensemble_parallel_accepts_array_backed_classifier_cls():
     # ArrayBackpropClassifierNetwork.randomized's accepted-and-discarded input_bounds parameter
     # (see its own docstring) lets it plug into the existing multiprocessing.Pool path
     # completely unchanged - numpy arrays pickle fine across a worker boundary natively (unlike
-    # indrajala_ml_array.Array - see
+    # indrajala_math_rust.Array - see
     # test_train_ensemble_parallel_accepts_rust_array_backed_classifier_cls below for that case).
     #
     # train_ensemble_parallel's own _collect_ensemble_results always wraps the trained
@@ -353,7 +353,7 @@ def test_train_ensemble_parallel_accepts_array_backed_classifier_cls():
 
 def test_train_ensemble_parallel_accepts_rust_array_backed_classifier_cls():
 
-    # indrajala_ml_array.Array does not support pickling (confirmed directly: pickle.dumps
+    # indrajala_math_rust.Array does not support pickling (confirmed directly: pickle.dumps
     # raises TypeError), which would otherwise make this the one classifier_cls that can never
     # train through a multiprocessing.Pool worker boundary. Closed by
     # ensemble_train._picklable_snapshot (converts a worker's returned snapshot to plain,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 
 from indrajala_ml.model.bounds import validate_class_count
 from indrajala_ml.model.model_io import load_array_model_json, save_array_model_json
@@ -16,7 +16,7 @@ class RustArrayMultiClassBackpropClassifierNetwork(RustArrayNetworkBase):
     (learn, learn_batch, classify_state, predict_probabilities, randomize/randomized,
     snapshot/restore, save/load) so indrajala_ml/train.py's duck-typed
     train_linear_classifier_network/train_backprop_network_mini_batch work unchanged - only the
-    array backend (`indrajala_ml_array.Array` via `RustArrayLayer`, not numpy via `ArrayLayer`)
+    array backend (`indrajala_math_rust.Array` via `RustArrayLayer`, not numpy via `ArrayLayer`)
     differs. The multiclass shape over RustArrayNetworkBase, the same relationship
     VectorizedMultiClassBackpropClassifierNetwork has to ArrayNetworkBase - every array-based
     multiclass sibling's Rust-matmul-backed counterpart subclasses this directly.

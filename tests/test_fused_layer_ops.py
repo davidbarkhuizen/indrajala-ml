@@ -12,7 +12,7 @@ import random
 import numpy as np
 import pytest
 
-from indrajala_ml_array import (
+from indrajala_math_rust import (
     Array,
     layer_accumulate_gradient,
     layer_accumulate_gradient_batch,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 
 from indrajala_ml.model.bounds import validate_batch, validate_layer_sizes
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
@@ -101,7 +101,7 @@ class RustArrayNetworkBase:
 
     def randomize(self) -> None:
         # the same fan-in-aware scheme ArrayNetworkBase.randomize uses, drawn from
-        # indrajala_ml_array.uniform instead of np.random.uniform - this can never be
+        # indrajala_math_rust.uniform instead of np.random.uniform - this can never be
         # seed-reproducible against the numpy sibling's own draws, since the two use unrelated
         # RNG implementations.
         previous_size = self.dimension

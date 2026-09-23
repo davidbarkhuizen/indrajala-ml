@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network import (
     L2RustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -20,7 +20,7 @@ L2_LAMBDA = 0.05
 
 def _matching_networks(rng: random.Random, bounds: float = 10.0):
     # tier 1: identical fixed weights/inputs injected directly, never randomize(), since
-    # indrajala_ml_array.uniform's RNG can never be seed-comparable against Python's random
+    # indrajala_math_rust.uniform's RNG can never be seed-comparable against Python's random
     # module.
     return matching_l2_array_backprop_networks(
         rng,

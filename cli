@@ -6,7 +6,7 @@ option="${1:-}"
 
 venv_root=".venv"
 os_packages="python3-tk cargo"
-rust_crate_root="rust/indrajala_ml_array"
+rust_crate_root="rust"
 
 clean () {
 
@@ -28,6 +28,13 @@ create_venv () {
     echo "creating virtual environment @ $venv_root ..."
     python3 -m venv "$venv_root"
     echo "... created virtual environment @ $venv_root"
+}
+
+init_submodules () {
+
+    echo "initializing git submodules ..."
+    git submodule update --init --recursive
+    echo "... initialized git submodules"
 }
 
 activate_venv () {
@@ -81,6 +88,7 @@ build_rust () {
 setup () {
 
     install_os_packages
+    init_submodules
     create_venv
     activate_venv
     install_and_upgrade_pip

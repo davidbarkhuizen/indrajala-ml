@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
 from tests.helpers import (
     assert_array_network_weights_match,
@@ -17,7 +17,7 @@ LAYER_SIZES = [5]
 
 def _matching_networks(rng: random.Random):
     # tier 1 - identical fixed weights/inputs injected directly, never randomize(), since
-    # indrajala_ml_array.uniform's RNG can never be seed-comparable against Python's random
+    # indrajala_math_rust.uniform's RNG can never be seed-comparable against Python's random
     # module
     return matching_single_output_array_backprop_networks(
         rng, RustArrayBackpropClassifierNetwork, pa.Array, LAYER_SIZES, DIMENSION

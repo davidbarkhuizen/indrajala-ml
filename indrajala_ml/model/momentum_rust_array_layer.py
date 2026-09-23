@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
