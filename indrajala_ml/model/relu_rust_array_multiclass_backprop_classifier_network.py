@@ -8,9 +8,8 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class ReLURustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust-matmul-backed counterpart to ReLUVectorizedMultiClassBackpropClassifierNetwork - see
-    docs/design-docs/array-siblings/relu-array-layer.md's Rust-matmul-backed follow-on. Hidden layers are built
-    from ReLURustArrayLayer; the output layer stays a plain RustArrayLayer (sigmoid) - the same
+    The Rust-matmul-backed counterpart to ReLUVectorizedMultiClassBackpropClassifierNetwork.
+    Hidden layers are built from ReLURustArrayLayer; the output layer stays a plain RustArrayLayer (sigmoid) - the same
     hidden-layer-only split ReLUVectorizedMultiClassBackpropClassifierNetwork uses.
 
     No hyperparameter and no extra constructor parameter, so nothing beyond this one

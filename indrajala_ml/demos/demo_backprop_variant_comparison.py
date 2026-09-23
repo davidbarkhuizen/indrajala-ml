@@ -48,9 +48,8 @@ def _xavier_glorot_randomize(network) -> None:
     """
     Glorot & Bengio 2010's init (limit = sqrt(6/(fan_in+fan_out)) per layer, uniform) - measured
     not worth adopting for this codebase's shallow networks (a clean null against the fan-in-aware
-    scheme MultiClassBackpropClassifierNetwork already uses - see docs/research/research-and-analysis.md's
-    "Xavier/Glorot init" entry). Kept only as a local comparison point in this demo, not a real
-    library class, since it lost.
+    scheme MultiClassBackpropClassifierNetwork already uses). Kept only as a local comparison
+    point in this demo, not a real library class, since it lost.
     """
 
     previous_size = network.dimension
@@ -66,8 +65,7 @@ def _compare_multiclass_loss_functions(train_data, test_data) -> list[tuple[str,
 
     print("=== multi-class loss function: one-vs-rest (MSE) vs softmax (cross-entropy) ===")
     print(
-        "Same architecture, same seed, same everything except the output layer/loss - the exact "
-        "comparison in docs/research/research-and-analysis.md's 'softmax/cross-entropy re-alignment' entry."
+        "Same architecture, same seed, same everything except the output layer/loss."
     )
 
     results = []
@@ -99,10 +97,9 @@ def _compare_binary_loss_functions() -> list[tuple[str, str, list[int], list[flo
 
     print("=== binary loss function: quadratic (MSE) vs binary cross-entropy ===")
     print(
-        "Same XOR scenario as test_backprop_training_pipeline.py's own pinned regression test - "
-        "the exact comparison in docs/research/research-and-analysis.md's 'binary cross-entropy for "
-        "BackpropClassifierNetwork' entry. Cross-entropy needs a smaller learning rate than "
-        "quadratic loss's own tuned value to perform comparably here - shown at both rates."
+        "Same XOR scenario as test_backprop_training_pipeline.py's own pinned regression test. "
+        "Cross-entropy needs a smaller learning rate than quadratic loss's own tuned value to "
+        "perform comparably here - shown at both rates."
     )
 
     bounds = square_bounds(10.0, XOR_DIMENSION)
@@ -143,9 +140,7 @@ def _compare_init_schemes(train_data, test_data) -> list[tuple[str, str, list[in
 
     print("=== init scheme: fan-in-aware vs Xavier/Glorot ===")
     print(
-        "Same architecture/data as the multi-class loss comparison above - the comparison in "
-        "docs/research/research-and-analysis.md's 'Xavier/Glorot init' entry, on the UCI digits set "
-        "instead of that entry's own MNIST proxy. Measured there as a clean null; reproduced here."
+        "Same architecture/data as the multi-class loss comparison above, on the UCI digits set."
     )
 
     results = []
@@ -180,12 +175,10 @@ def _compare_init_schemes(train_data, test_data) -> list[tuple[str, str, list[in
 def main() -> None:
 
     print(
-        "Reproduces, on demand, three comparisons docs/research/research-and-analysis.md documents from "
-        "one-off investigation scripts that were never saved anywhere runnable: multi-class loss "
-        "function (one-vs-rest vs softmax), binary loss function (quadratic vs cross-entropy), "
-        "and weight-init scheme (fan-in-aware vs Xavier/Glorot). Prints each comparison's "
-        "measured numbers and plots a training-accuracy-by-epoch chart per section, so the "
-        "documented findings can be checked directly instead of only read about."
+        "Runs three comparisons: multi-class loss function (one-vs-rest vs softmax), binary loss "
+        "function (quadratic vs cross-entropy), and weight-init scheme (fan-in-aware vs "
+        "Xavier/Glorot). Prints each comparison's measured numbers and plots a "
+        "training-accuracy-by-epoch chart per section."
     )
     print()
 

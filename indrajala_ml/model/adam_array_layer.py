@@ -11,7 +11,7 @@ class AdamArrayLayer(ArrayLayer):
     update rule - a per-parameter adaptive learning rate driven by bias-corrected running
     estimates of each weight's own gradient mean (m) and (uncentered) variance (v) - but as whole-
     array numpy ops over the layer's (size, input_size) weight matrix and size-length bias vector,
-    instead of a per-weight Python loop. See docs/design-docs/adam/adam-array-layer.md for the full design.
+    instead of a per-weight Python loop.
 
     beta1/beta2/epsilon are required here (no defaults), mirroring make_adam_node_cls's own
     posture - the safe Kingma & Ba defaults live one level up, on

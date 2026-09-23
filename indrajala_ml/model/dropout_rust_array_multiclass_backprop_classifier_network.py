@@ -8,8 +8,8 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class DropoutRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust-matmul-backed counterpart to DropoutVectorizedMultiClassBackpropClassifierNetwork -
-    see docs/design-docs/array-siblings/dropout-array-layer.md's Rust-matmul-backed follow-on. Hidden layers are
+    The Rust-matmul-backed counterpart to DropoutVectorizedMultiClassBackpropClassifierNetwork.
+    Hidden layers are
     built from DropoutRustArrayLayer (with drop_probability bound via a closure); the output
     layer stays the inherited plain RustArrayLayer (sigmoid) - the same hidden-layer-only split
     DropoutVectorizedMultiClassBackpropClassifierNetwork uses. drop_probability is a required

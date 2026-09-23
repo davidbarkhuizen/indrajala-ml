@@ -46,8 +46,8 @@ def test_classify_state_matches_across_a_random_sweep():
 def test_learn_matches_after_every_step_not_just_at_the_end():
 
     # one silently-wrong intermediate step should fail loudly rather than being averaged away
-    # by many steps - the same "required regression gate" discipline every prior array-layer
-    # workplan in this codebase used
+    # by many steps - the same "required regression gate" discipline every array-layer sibling's
+    # test suite in this codebase applies
     rng = random.Random(2)
     node_network, array_network = _matching_networks(rng)
     learning_rate = 0.3

@@ -16,10 +16,9 @@ LAYER_SIZES = [5]
 
 
 def _matching_networks(rng: random.Random):
-    # tier 1 (docs/architecture/rust-production-cutover.md's phase 2) - identical fixed
-    # weights/inputs injected directly, never randomize(), since indrajala_ml_array.uniform's RNG
-    # can never be seed-comparable against Python's random module (see rust-array-core.md's "the
-    # RNG exception")
+    # tier 1 - identical fixed weights/inputs injected directly, never randomize(), since
+    # indrajala_ml_array.uniform's RNG can never be seed-comparable against Python's random
+    # module
     return matching_single_output_array_backprop_networks(
         rng, RustArrayBackpropClassifierNetwork, pa.Array, LAYER_SIZES, DIMENSION
     )

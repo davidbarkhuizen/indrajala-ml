@@ -49,7 +49,7 @@ def test_classify_state_matches_across_a_random_sweep():
 def test_learn_matches_after_every_step_not_just_at_the_end():
 
     # one silently-wrong intermediate step should fail loudly rather than being averaged away
-    # by many steps - per docs/architecture/vectorized-array-classes.md's own "required regression gate"
+    # by many steps - this is the required regression gate for that
     rng = random.Random(2)
     node_network, array_network = _matching_networks(rng)
     learning_rate = 0.3

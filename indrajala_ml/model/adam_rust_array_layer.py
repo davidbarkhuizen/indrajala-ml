@@ -7,8 +7,7 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class AdamRustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to AdamArrayLayer - see docs/design-docs/adam/adam-array-layer.md's
-    Rust-matmul-backed follow-on. Same Adam (Kingma & Ba, 2014) update rule, same m/v/t state,
+    The Rust-matmul-backed counterpart to AdamArrayLayer. Same Adam (Kingma & Ba, 2014) update rule, same m/v/t state,
     but `apply_accumulated_gradient` is a single fused Rust call
     (`layer_adam_apply_accumulated_gradient`, `fused.rs`) instead of a numpy expression -
     mirroring how `RustArrayLayer` itself relates to `ArrayLayer`.

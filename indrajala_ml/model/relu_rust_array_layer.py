@@ -7,8 +7,7 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class ReLURustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to ReLUArrayLayer - see docs/design-docs/array-siblings/relu-array-layer.md's
-    Rust-matmul-backed follow-on. Same forward/backward formulas (`max(0, z)`, a boolean-mask
+    The Rust-matmul-backed counterpart to ReLUArrayLayer. Same forward/backward formulas (`max(0, z)`, a boolean-mask
     derivative), but each as a single fused Rust call (`layer_relu_forward`/
     `layer_relu_forward_batch`/`layer_relu_hidden_delta`/`layer_relu_hidden_delta_batch`,
     `fused.rs`, built on the Rust core's `array_relu`/`array_relu_mask` primitives) instead of a

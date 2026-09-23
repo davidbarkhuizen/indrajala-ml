@@ -193,8 +193,7 @@ def test_randomize_fan_in_aware_randomizes_every_kernel():
 
 def test_gradient_check_against_a_numerically_perturbed_loss():
 
-    # the standard, rigorous validation for a new backward-pass formula, per
-    # docs/features/convolutional-layers.md's own "numerical and behavioral risks" section: loss
+    # the standard, rigorous validation for a backward-pass formula: loss
     # L = sum of every unit's (post-ReLU) activation, so dL/da_i = 1 and (via the ReLU
     # derivative) dL/dz_i = 1 if active else 0 - setting exactly that as each unit's delta
     # before accumulate_gradients() is the real gradient this loss produces, checked here

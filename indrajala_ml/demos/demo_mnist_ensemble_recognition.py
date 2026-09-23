@@ -53,12 +53,9 @@ def main() -> None:
         "10 completely independent FanInAwareBackpropClassifierNetworks, one per digit, each "
         "trained on its own class-balanced binary dataset with no state shared between them at "
         "all. That's what makes this genuinely (not just approximately) parallelizable across "
-        "this machine's CPUs - see docs/research/research-and-analysis.md's 'parallelizing MNIST "
-        "training' entry for the measurements behind this design, including a real "
-        "memory-exhaustion failure and how it was actually fixed (not just worked around). "
-        "Fan-in-aware initialization (rather than plain BackpropClassifierNetwork's default) "
-        "was itself measured to matter at this scale - see the 'ensemble/real-MNIST "
-        "investigation' entry: +6.6 points test accuracy from this init fix alone."
+        "this machine's CPUs. Fan-in-aware initialization (rather than plain "
+        "BackpropClassifierNetwork's default) measurably matters at this scale: +6.6 points "
+        "test accuracy over the plain default."
     )
     print()
 

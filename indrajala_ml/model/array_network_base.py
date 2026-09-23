@@ -16,13 +16,11 @@ class ArrayNetworkBase:
     randomize, and snapshot/restore.
 
     Mirrors BackpropNetworkBase's own hidden_layer_cls/output_layer_cls extension-point design
-    exactly, one level up: a DRY audit found every method here was already byte-for-byte
-    identical across every array-based sibling in this codebase except for which layer class got
-    constructed, one constructor hyperparameter, and the target-array shape - so collapsing them
-    here is purely mechanical, not a redesign of any hand-derived formula. Every hand-derived
-    formula still lives entirely in the ArrayLayer subclass a sibling plugs in via
-    hidden_layer_cls/output_layer_cls (e.g. MomentumArrayLayer.apply_accumulated_gradient) -
-    unchanged by this refactor.
+    exactly, one level up: every method here is identical across every array-based sibling in
+    this codebase except for which layer class gets constructed, one constructor hyperparameter,
+    and the target-array shape - a purely mechanical collapse, not a redesign of any hand-derived
+    formula. Every hand-derived formula lives entirely in the ArrayLayer subclass a sibling plugs
+    in via hidden_layer_cls/output_layer_cls (e.g. MomentumArrayLayer.apply_accumulated_gradient).
 
     What stays out of this base, in the two "shape" subclasses instead
     (VectorizedMultiClassBackpropClassifierNetwork / ArrayBackpropClassifierNetwork):
@@ -127,7 +125,7 @@ class ArrayNetworkBase:
 
     def randomize(self) -> None:
         # the same fan-in-aware scheme (limit = 1/sqrt(fan_in)) every array-based sibling in
-        # this codebase already reimplemented independently before this base class existed
+        # this codebase would otherwise have to reimplement independently
         previous_size = self.dimension
         for layer in self.layers:
             layer.W, layer.b = fan_in_aware_random_layer(layer.size, previous_size)

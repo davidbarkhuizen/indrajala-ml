@@ -74,9 +74,8 @@ docs/_build/
 # PyBuilder
 .pybuilder/
 target/
-# (this trailing-slash, no-leading-slash pattern also already covers rust/*/target/ - the Rust
-# build output docs/rust-array-core.md's own "build integration" section calls out - not a
-# coincidence worth re-declaring separately)
+# (this trailing-slash, no-leading-slash pattern also covers rust/*/target/, the Rust crate's
+# own build output - no need to declare that separately)
 
 # Jupyter Notebook
 .ipynb_checkpoints

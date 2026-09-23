@@ -10,11 +10,9 @@ MNIST_DIGIT_COUNT = 10
 
 class BenchmarkProxy:
     """
-    A fixed, class-balanced MNIST-digit proxy dataset for a benchmarking sweep - see
-    docs/architecture/benchmarking.md. Built once and reused across every seed in a sweep (never resampled
-    per seed - the same practice every existing measurement in this codebase's docs already
-    follows), which is why this is a plain data holder, not something build_mnist_digit_proxy's
-    caller reconstructs per run.
+    A fixed, class-balanced MNIST-digit proxy dataset for a benchmarking sweep. Built once and
+    reused across every seed in a sweep (never resampled per seed), which is why this is a plain
+    data holder, not something build_mnist_digit_proxy's caller reconstructs per run.
 
     train_x/test_x are (n, 784) float64 arrays of [0.0, 1.0]-normalized pixels, matching
     mnist_data.load_mnist_dataset_as_array's own convention. train_y/test_y's dtype depends on
@@ -40,14 +38,13 @@ def build_mnist_digit_proxy(
     seed: int | None = None,
 ) -> BenchmarkProxy:
     """
-    Builds the fixed MNIST-digit proxy dataset shape every real-scale sweep in this codebase's
-    docs has hand-built independently (see docs/architecture/benchmarking.md's "why this, and why now") -
-    `examples_per_class` balanced examples per requested digit, decoded only for the examples
-    actually selected (never the full 60000/10000-record file), split into a stratified
-    train/test pair that preserves per-class balance in both halves.
+    Builds a fixed MNIST-digit proxy dataset - `examples_per_class` balanced examples per
+    requested digit, decoded only for the examples actually selected (never the full
+    60000/10000-record file), split into a stratified train/test pair that preserves per-class
+    balance in both halves.
 
-    len(digits) == 1 is the binary "digit vs. every other digit" framing every prior sweep in
-    this codebase's docs used, built directly on ensemble_train.select_balanced_indices's
+    len(digits) == 1 is the binary "digit vs. every other digit" framing, built directly on
+    ensemble_train.select_balanced_indices's
     already-tested stratified selection (the one requested digit vs. a genuinely stratified
     sample of every other digit) - digits[0] is the target (category 1.0), every other digit is
     implicitly the "rest" (category 0.0). len(digits) > 1 is a genuine N-way multiclass proxy

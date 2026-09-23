@@ -10,11 +10,8 @@ from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 
 class RustArrayBackpropClassifierNetwork(RustArrayNetworkBase):
     """
-    The Rust-array-core-backed sibling of ArrayBackpropClassifierNetwork - see
-    docs/architecture/rust-production-cutover.md's phase 1 and
-    docs/proposals/ensemble-array-layer.md's "piece 1". Built unconditionally alongside the numpy
-    stage, not gated behind its wall-clock verdict - per
-    docs/architecture/rust-production-cutover.md's 2026-09-16 clarification, this codebase treats
+    The Rust-array-core-backed sibling of ArrayBackpropClassifierNetwork. Built unconditionally
+    alongside the numpy sibling, not gated behind a wall-clock comparison - this codebase treats
     the Rust backend as the intended production path unconditionally, not contingent on beating
     the numpy benchmark first. The single-output shape over RustArrayNetworkBase, the same
     relationship ArrayBackpropClassifierNetwork has to ArrayNetworkBase.

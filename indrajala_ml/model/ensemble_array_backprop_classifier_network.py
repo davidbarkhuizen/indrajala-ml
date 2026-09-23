@@ -9,9 +9,9 @@ from indrajala_ml.model.model_io import load_json, save_json
 
 class EnsembleArrayBackpropClassifierNetwork:
     """
-    The numpy-array-backed sibling of EnsembleBackpropClassifierNetwork - see
-    docs/proposals/ensemble-array-layer.md's "piece 2": a direct structural mirror, substituting
-    ArrayBackpropClassifierNetwork (piece 1) for BackpropClassifierNetwork throughout. Same
+    The numpy-array-backed sibling of EnsembleBackpropClassifierNetwork: a direct structural
+    mirror, substituting ArrayBackpropClassifierNetwork for BackpropClassifierNetwork
+    throughout. Same
     "assemble already-constructed classifiers, don't build them" composition as its per-node
     counterpart - see that class's own docstring for why.
 

@@ -8,10 +8,8 @@ from indrajala_ml.multiclass_evaluate import accuracy
 
 DIMENSION = 28 * 28
 CLASS_COUNT = 10
-LAYER_SIZES = [30]  # matches docs/research/research-and-analysis.md's own already-measured pure-Python
-# baseline architecture (30-node hidden layer, ~12.5ms/iteration, ~12.5 minutes/epoch) - so this
-# run's pure-Python number is directly comparable to that already-documented figure, not a new,
-# unrelated one.
+LAYER_SIZES = [30]  # the pure-Python baseline architecture this demo measures against
+# (30-node hidden layer, ~12.5ms/iteration, ~12.5 minutes/epoch).
 TRAIN_PATH = "data/mnist/mnist-train.bin"
 TEST_PATH = "data/mnist/mnist-test.bin"
 
@@ -19,14 +17,13 @@ TEST_PATH = "data/mnist/mnist-test.bin"
 def main() -> None:
 
     print(
-        "Vectorization phase-1 validation, real MNIST scale (docs/architecture/vectorized-array-classes.md). "
-        "One real training epoch over the full 60000-example MNIST training set, same "
-        "architecture/hyperparameters, pure-Python MultiClassBackpropClassifierNetwork vs. its "
-        "numpy-array-backed VectorizedMultiClassBackpropClassifierNetwork sibling (already "
-        "parity-checked step-by-step in tests/test_vectorized_multiclass_backprop_model.py, and "
+        "Vectorized vs pure-Python validation, real MNIST scale. One real training epoch over "
+        "the full 60000-example MNIST training set, same architecture/hyperparameters, "
+        "pure-Python MultiClassBackpropClassifierNetwork vs. its numpy-array-backed "
+        "VectorizedMultiClassBackpropClassifierNetwork sibling (already parity-checked "
+        "step-by-step in tests/test_vectorized_multiclass_backprop_model.py, and "
         "accuracy-trajectory-checked at UCI digits scale in "
-        "demo_vectorized_uci_digit_recognition.py). This is the real, measured number behind "
-        "that doc's own extrapolated 'under 15 seconds' ceiling claim - not a re-assertion of it."
+        "demo_vectorized_uci_digit_recognition.py)."
     )
     print()
 
@@ -64,11 +61,10 @@ def main() -> None:
         print(f"speedup: {node_elapsed / array_elapsed:.2f}x")
     print()
 
-    # a separate, secondary measurement: docs/architecture/vectorized-array-classes.md's own "MNIST data
-    # loading" section flags load_mnist_dataset's tuple[float, ...]-per-example decode (47
-    # million boxed Python floats at full 60000-example scale) as the single biggest real win -
-    # this times that claim directly, not just the already-proven decode-correctness parity
-    # (tests/test_mnist_data.py).
+    # a separate, secondary measurement: load_mnist_dataset's tuple[float, ...]-per-example
+    # decode allocates 47 million boxed Python floats at full 60000-example scale, the single
+    # biggest cost numpy-array decoding avoids - this times that directly, not just the
+    # already-proven decode-correctness parity (tests/test_mnist_data.py).
     print("data loading comparison (full training file decode):")
     _, tuple_decode_elapsed = timed_call(load_mnist_dataset, TRAIN_PATH)
     _, array_decode_elapsed = timed_call(load_mnist_dataset_as_array, TRAIN_PATH)

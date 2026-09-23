@@ -7,8 +7,7 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class SoftmaxRustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to SoftmaxArrayLayer - see docs/design-docs/array-siblings/softmax-array-layer.md's
-    Rust-matmul-backed follow-on. Same forward/backward formulas (joint softmax normalization,
+    The Rust-matmul-backed counterpart to SoftmaxArrayLayer. Same forward/backward formulas (joint softmax normalization,
     `activation - target` delta with no `a*(1-a)` term), but each as a single fused Rust call
     (`layer_softmax_forward`/`layer_softmax_forward_batch`/`layer_softmax_output_delta`,
     `fused.rs`, built on the Rust core's `array_softmax` primitive) instead of a numpy expression -

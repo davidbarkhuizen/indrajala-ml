@@ -101,9 +101,9 @@ class RustArrayNetworkBase:
 
     def randomize(self) -> None:
         # the same fan-in-aware scheme ArrayNetworkBase.randomize uses, drawn from
-        # indrajala_ml_array.uniform instead of np.random.uniform - see rust-array-core.md's "the
-        # RNG exception" for why this can never be seed-reproducible against the numpy sibling's
-        # own draws.
+        # indrajala_ml_array.uniform instead of np.random.uniform - this can never be
+        # seed-reproducible against the numpy sibling's own draws, since the two use unrelated
+        # RNG implementations.
         previous_size = self.dimension
         for layer in self.layers:
             limit = 1.0 / (previous_size ** 0.5)

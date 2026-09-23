@@ -8,8 +8,7 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class ReLUVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    A ReLU-hidden-layer sibling of VectorizedMultiClassBackpropClassifierNetwork - see
-    docs/design-docs/array-siblings/relu-array-layer.md. Hidden layers are built from ReLUArrayLayer; the
+    A ReLU-hidden-layer sibling of VectorizedMultiClassBackpropClassifierNetwork. Hidden layers are built from ReLUArrayLayer; the
     output layer stays a plain ArrayLayer (sigmoid) - the array-level analogue of
     ReLUBackpropClassifierNetwork's own hidden_layer_cls-only override over BackpropNetworkBase,
     matching ReLUNode's hidden-layer-only convention.

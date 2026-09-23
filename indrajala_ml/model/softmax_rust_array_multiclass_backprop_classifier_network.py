@@ -8,9 +8,8 @@ from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
 
 class SoftmaxRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust-matmul-backed counterpart to SoftmaxVectorizedMultiClassBackpropClassifierNetwork -
-    see docs/design-docs/array-siblings/softmax-array-layer.md's Rust-matmul-backed follow-on. Hidden layers are
-    built from plain RustArrayLayer (sigmoid); only the output layer is a SoftmaxRustArrayLayer -
+    The Rust-matmul-backed counterpart to SoftmaxVectorizedMultiClassBackpropClassifierNetwork.
+    Hidden layers are built from plain RustArrayLayer (sigmoid); only the output layer is a SoftmaxRustArrayLayer -
     the same split SoftmaxVectorizedMultiClassBackpropClassifierNetwork uses.
 
     No hyperparameter and no extra constructor parameter, so nothing beyond this one

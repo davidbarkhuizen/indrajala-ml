@@ -38,9 +38,9 @@ def test_forward_at_eval_mode_matches_a_plain_sigmoid_no_rescale():
 def test_forward_and_hidden_delta_in_training_mode_are_internally_consistent_across_many_draws():
 
     # a bit-identical mask draw against the numpy-backed sibling isn't achievable (this crate's
-    # hand-rolled xorshift128+ generator can never reproduce numpy's Mersenne Twister stream, the
-    # same "the RNG exception" docs/architecture/rust-array-core.md already documents for uniform()) - so this
-    # checks the fused op's own internal contract instead: every kept unit's activation equals
+    # hand-rolled xorshift128+ generator can never reproduce numpy's Mersenne Twister stream,
+    # the same RNG-incomparability that applies to uniform()) - so this checks the fused op's
+    # own internal contract instead: every kept unit's activation equals
     # base/keep_probability exactly, every dropped unit's activation is exactly 0.0, and the
     # returned mask is what forward_batch actually used, not re-derived - across enough draws
     # that both outcomes are certain to appear at drop_probability=0.5

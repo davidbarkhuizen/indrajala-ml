@@ -168,8 +168,8 @@ def test_learn_matches_the_perceptron_update_rule_by_hand():
 
 def test_association_node_activates_strictly_above_zero():
 
-    # per the activation function (see docs/project/theory.md), z <= 0 must classify as inactive,
-    # not just z < 0 - a fresh network (weights=[1, 1], threshold=0) puts z exactly on the
+    # per the activation function, z <= 0 must classify as inactive, not just z < 0 - a fresh
+    # network (weights=[1, 1], threshold=0) puts z exactly on the
     # decision boundary at this state (z = 1*1 + 1*-1 + 0 = 0)
     network = LinearClassifierNetwork(1, 2, square_bounds(10.0))
     network.update_state_layer((1.0, -1.0))

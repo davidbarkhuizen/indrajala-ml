@@ -8,8 +8,7 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class SoftmaxVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    A softmax-output-layer sibling of VectorizedMultiClassBackpropClassifierNetwork - see
-    docs/design-docs/array-siblings/softmax-array-layer.md. Hidden layers stay plain ArrayLayer (sigmoid); only
+    A softmax-output-layer sibling of VectorizedMultiClassBackpropClassifierNetwork. Hidden layers stay plain ArrayLayer (sigmoid); only
     the output layer is a SoftmaxArrayLayer - the array-level analogue of
     SoftmaxMultiClassBackpropClassifierNetwork's own output_layer_cls-only override over
     BackpropNetworkBase.
