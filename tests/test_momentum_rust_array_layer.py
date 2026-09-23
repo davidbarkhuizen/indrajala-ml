@@ -2,7 +2,7 @@ import random
 
 import numpy as np
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 from indrajala_ml.model.momentum_layer import make_momentum_layer_cls
 from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer

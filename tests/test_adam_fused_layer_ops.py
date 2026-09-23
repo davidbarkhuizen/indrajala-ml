@@ -11,7 +11,7 @@ import random
 import numpy as np
 import pytest
 
-from indrajala_ml_array import Array, layer_adam_apply_accumulated_gradient
+from indrajala_math_rust import Array, layer_adam_apply_accumulated_gradient
 
 from indrajala_ml.model.adam_array_layer import AdamArrayLayer
 

@@ -96,7 +96,7 @@ def load_array_model_json(path: str) -> dict:
     """
     The load-side counterpart to save_array_model_json - reads the envelope back as-is; the
     caller reconstructs snapshot arrays with its own backend-specific array constructor
-    (numpy's np.array or indrajala_ml_array.Array), since this module has no array-backend
+    (numpy's np.array or indrajala_math_rust.Array), since this module has no array-backend
     dependency of its own.
     """
 

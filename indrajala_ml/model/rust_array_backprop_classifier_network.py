@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 
 from indrajala_ml.model.model_io import load_single_output_array_model_json, save_single_output_array_model_json
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 
 from indrajala_ml.model.classification import argmax_first_occurrence
 from indrajala_ml.model.model_io import load_json, save_json

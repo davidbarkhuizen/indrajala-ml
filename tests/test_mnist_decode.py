@@ -7,7 +7,7 @@ irreproducibility, unlike uniform().
 import numpy as np
 import pytest
 
-from indrajala_ml_array import decode_mnist_pixels
+from indrajala_math_rust import decode_mnist_pixels
 
 from indrajala_ml.mnist_data import RECORD_SIZE, load_mnist_dataset_as_array
 

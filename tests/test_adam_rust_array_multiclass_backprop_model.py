@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
     AdamRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -21,7 +21,7 @@ BETA1, BETA2, EPSILON = 0.9, 0.999, 1e-8
 
 def _matching_networks(rng: random.Random, bounds: float = 10.0):
     # tier 1, applied to the Adam sibling: identical fixed weights/inputs injected directly,
-    # never randomize(), since indrajala_ml_array.uniform's RNG can never be seed-comparable
+    # never randomize(), since indrajala_math_rust.uniform's RNG can never be seed-comparable
     # against Python's random module.
     return matching_adam_array_backprop_networks(
         rng,

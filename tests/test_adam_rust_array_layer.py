@@ -3,7 +3,7 @@ import random
 import numpy as np
 import pytest
 
-import indrajala_ml_array as pa
+import indrajala_math_rust as pa
 from indrajala_ml.model.adam_layer import make_adam_layer_cls
 from indrajala_ml.model.adam_rust_array_layer import AdamRustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer

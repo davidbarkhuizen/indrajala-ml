@@ -100,7 +100,7 @@ def _picklable_snapshot(snapshot):
     multiprocessing.Pool worker boundary, regardless of classifier_cls's backend - a no-op for
     a per-node classifier's snapshot (already plain lists/tuples/floats) and for a numpy-backed
     one (ndarrays already pickle natively; converting them here too is harmless, not required),
-    but the fix that actually matters: indrajala_ml_array.Array (RustArrayBackpropClassifierNetwork's
+    but the fix that actually matters: indrajala_math_rust.Array (RustArrayBackpropClassifierNetwork's
     own backend) does not support pickling at all (confirmed directly - pickle.dumps raises
     TypeError), so without this, a Rust-backed classifier_cls could never train through this
     module's multiprocessing.Pool path. Recurses through nested lists/tuples so it works
