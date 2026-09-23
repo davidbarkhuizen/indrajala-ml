@@ -4,6 +4,21 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 
+def validate_conv_arguments(
+    input_height: int, input_width: int, input_channels: int, kernel_size: int, channel_count: int, stride: int
+) -> None:
+    # the same assertions as ConvLayer's own constructor (minus the input_layer node-count check -
+    # there's no input_layer object here), shared with ConvRustArrayLayer
+    assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
+    assert kernel_size >= 1, f"kernel_size must be at least 1; got {kernel_size}"
+    assert channel_count >= 1, f"channel_count must be at least 1; got {channel_count}"
+    assert stride >= 1, f"stride must be at least 1; got {stride}"
+    assert kernel_size <= input_height and kernel_size <= input_width, (
+        f"kernel_size ({kernel_size}) must fit within input_height x input_width "
+        f"({input_height}x{input_width})"
+    )
+
+
 class ConvArrayLayer:
     """
     The numpy counterpart to ConvLayer (conv_layer.py): a ReLU convolutional hidden layer, 'valid'
@@ -41,16 +56,7 @@ class ConvArrayLayer:
         stride: int = 1,
     ) -> None:
 
-        # the same assertions as ConvLayer's own constructor (minus the input_layer node-count
-        # check - there's no input_layer object here)
-        assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
-        assert kernel_size >= 1, f"kernel_size must be at least 1; got {kernel_size}"
-        assert channel_count >= 1, f"channel_count must be at least 1; got {channel_count}"
-        assert stride >= 1, f"stride must be at least 1; got {stride}"
-        assert kernel_size <= input_height and kernel_size <= input_width, (
-            f"kernel_size ({kernel_size}) must fit within input_height x input_width "
-            f"({input_height}x{input_width})"
-        )
+        validate_conv_arguments(input_height, input_width, input_channels, kernel_size, channel_count, stride)
 
         self.input_height = input_height
         self.input_width = input_width
