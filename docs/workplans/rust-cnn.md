@@ -174,7 +174,9 @@ The comparison the numpy plan deferred. Only numpy and Rust are timed.
 - The questions this answers, with results recorded in the PR and not decided in advance: is
   the `N = 1` single-example path (reshape plus batch op) a significant cost in either backend,
   and is im2col-matmul the right formulation in Rust? Any optimization that follows from the
-  numbers is a separate decision after this stage, not part of this plan.
+  numbers is a separate decision after this stage, not part of this plan. (Both since answered by
+  measurement: `optimization-4-single-example-conv-path.md` removed the N = 1 cost, and
+  `optimization-3-conv-forward.md` stage C kept im2col-matmul with a faster row kernel.)
 
 ## Deferred / out of scope
 
