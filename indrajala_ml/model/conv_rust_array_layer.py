@@ -21,8 +21,9 @@ class ConvRustArrayLayer:
     during its output scatter and returns only A. The backward pass masks on A (derivative 0 where
     A == 0, so at exactly z == 0), as ConvArrayLayer's does.
 
-    The Rust conv ops are batch-only. The single-example path reshapes x/delta to (1, n) and
-    calls them, the same N = 1 wrapping ConvArrayLayer uses (the reshape copies).
+    The single-example path passes its 1D arrays straight to the same Rust batch ops, which take
+    a vector as N = 1 and return vectors, so there is no (1, n) wrapping: pa.Array.reshape copies,
+    unlike numpy's x[np.newaxis] view.
     """
 
     def __init__(
@@ -64,8 +65,7 @@ class ConvRustArrayLayer:
         return self.A
 
     def forward(self, x: "pa.Array") -> "pa.Array":
-        self.forward_batch(x.reshape((1, self.input_size)))
-        self.a = self.A.reshape(self.size)
+        self.a, self._cols = pa.conv_forward_batch(self.W, x, self.b, self.geometry)
         return self.a
 
     def compute_output_delta(self, reference: "pa.Array") -> None:
@@ -89,8 +89,7 @@ class ConvRustArrayLayer:
         return pa.conv_downstream_batch(self.W, self.delta_batch, self.geometry)
 
     def downstream(self) -> "pa.Array":
-        dX = pa.conv_downstream_batch(self.W, self.delta.reshape((1, self.size)), self.geometry)
-        return dX.reshape(self.input_size)
+        return pa.conv_downstream_batch(self.W, self.delta, self.geometry)
 
     def accumulate_gradient_batch(self, _input_activation_batch: "pa.Array") -> None:
         # reads the im2col columns forward cached, as ConvArrayLayer._accumulate does
@@ -100,7 +99,7 @@ class ConvRustArrayLayer:
 
     def accumulate_gradient(self, _input_activation: "pa.Array") -> None:
         self._grad_W, self._grad_b = pa.conv_accumulate_gradient_batch(
-            self.delta.reshape((1, self.size)), self._cols, self._grad_W, self._grad_b, self.geometry
+            self.delta, self._cols, self._grad_W, self._grad_b, self.geometry
         )
 
     def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
