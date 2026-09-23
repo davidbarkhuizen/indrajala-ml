@@ -65,20 +65,30 @@ class ArrayLayer:
     def compute_output_delta(self, reference: np.ndarray) -> None:
         self.delta = (self.a - reference) * self.a * (1.0 - self.a)
 
+    def downstream(self) -> np.ndarray:
+        # the gradient this layer sends back to its input, computed by the layer that owns the
+        # weights (the array-level counterpart to BackpropLayer.downstream_sum) rather than read
+        # out of next_layer.W by the upstream layer - so a conv or pool layer can sit on either
+        # side of any layer without special cases. self.W.T @ self.delta replaces
+        # BackpropNode.compute_hidden_delta's per-node Python sum() over downstream nodes with
+        # one matmul for the whole layer.
+        return self.W.T @ self.delta
+
+    def downstream_batch(self) -> np.ndarray:
+        # self.delta_batch.shape == (batch_size, self.size); self.W.shape == (self.size,
+        # self.input_size), so self.delta_batch @ self.W stacks downstream()'s single-example
+        # computation over every batch row
+        return self.delta_batch @ self.W
+
     def compute_hidden_delta(self, next_layer: "ArrayLayer") -> None:
-        # next_layer.W.T @ next_layer.delta replaces BackpropNode.compute_hidden_delta's
-        # per-node Python sum() over downstream nodes with one matmul for the whole layer
-        downstream = next_layer.W.T @ next_layer.delta
+        downstream = next_layer.downstream()
         self.delta = downstream * self.a * (1.0 - self.a)
 
     def compute_output_delta_batch(self, reference_batch: np.ndarray) -> None:
         self.delta_batch = (self.A - reference_batch) * self.A * (1.0 - self.A)
 
     def compute_hidden_delta_batch(self, next_layer: "ArrayLayer") -> None:
-        # next_layer.delta_batch.shape == (batch_size, next_layer.size); next_layer.W.shape ==
-        # (next_layer.size, self.size), so next_layer.delta_batch @ next_layer.W stacks
-        # compute_hidden_delta's single-example downstream computation over every batch row
-        downstream = next_layer.delta_batch @ next_layer.W
+        downstream = next_layer.downstream_batch()
         self.delta_batch = downstream * self.A * (1.0 - self.A)
 
     def accumulate_gradient(self, input_activation: np.ndarray) -> None:

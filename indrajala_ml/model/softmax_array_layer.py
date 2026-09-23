@@ -16,8 +16,9 @@ class SoftmaxArrayLayer(ArrayLayer):
     array sibling, this overrides forward/forward_batch and compute_output_delta/
     compute_output_delta_batch, not compute_hidden_delta: softmax's cross-node coupling only
     affects the forward pass, so whatever layer feeds this one still calls the inherited,
-    unmodified compute_hidden_delta/compute_hidden_delta_batch, which only ever reads
-    next_layer.W/next_layer.delta, never next_layer.a directly.
+    unmodified compute_hidden_delta/compute_hidden_delta_batch, which only ever calls
+    next_layer.downstream()/downstream_batch() (next_layer.W/next_layer.delta), never reads
+    next_layer.a directly.
     """
 
     def __init__(self, size: int, input_size: int) -> None:
