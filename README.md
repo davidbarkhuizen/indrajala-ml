@@ -21,6 +21,29 @@ Requires Python >= 3.10 and a Debian/Ubuntu host (`setup` apt-installs `python3-
 ./cli fetch-data     # re-verify / re-fetch datasets
 ```
 
+## Testing
+
+`./cli test` runs two pytest suites in the venv:
+
+| Suite | Tests | Covers |
+| --- | --- | --- |
+| `tests/` | ~1500 | this package: models, training, data loaders, Rust-vs-numpy parity |
+| `rust/tests/` | ~200 | the submodule's own `indrajala_math_rust` API, checked against numpy |
+
+Both need the submodule checked out **and** built into `.venv`: `tests/` imports
+`indrajala_math_rust` directly, and `rust/tests/` only exists once the submodule is initialised.
+MNIST must also be fetched, since some tests read `data/mnist/*.bin`. `./cli setup` does all of
+this; after a plain clone, or after bumping the submodule, run:
+
+```
+git submodule update --init   # populate rust/
+./cli build-rust              # rebuild indrajala_math_rust into .venv
+./cli fetch-data              # only needed once
+./cli test
+```
+
+CI (`.github/workflows/ci.yml`) runs `./cli setup` then `./cli test` on every push and PR.
+
 ## Layout
 
 | Path | Contents |
