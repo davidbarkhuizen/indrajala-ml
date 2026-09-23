@@ -15,9 +15,13 @@ class ConvLayer:
     apply_accumulated_gradients/apply_gradients/snapshot_state/restore_state/set_training_mode -
     see backprop_layer.py's own identical methods).
 
-    input_layer is either a StateLayer or another single-channel ConvLayer (a single input
-    channel either way - input_height*input_width must match its node count). 'valid' padding
-    only (no synthetic zero-padding - output shrinks by kernel_size-1 per stride-1 step).
+    input_layer is either a StateLayer or another ConvLayer, read as input_channels
+    channel-major planes of input_height x input_width (flat index c*H*W + r*W + col, the same
+    ordering this layer's own .nodes uses, so a ConvLayer's output feeds the next ConvLayer
+    directly with input_channels=its channel_count). Each receptive field spans every input
+    channel, input_channels x kernel_size x kernel_size, and each kernel's flat weights follow
+    the same (channel, kernel row, kernel col) order. 'valid' padding only (no synthetic
+    zero-padding - output shrinks by kernel_size-1 per stride-1 step).
 
     Backprop *through* this layer (to a preceding ConvLayer) uses a reverse map built once at
     construction - input node index -> every (unit, kernel weight index) pair whose receptive
@@ -38,11 +42,14 @@ class ConvLayer:
         kernel_size: int,
         channel_count: int,
         stride: int = 1,
+        input_channels: int = 1,
     ) -> None:
 
-        assert input_height * input_width == len(input_layer.nodes), (
-            f"input_height*input_width ({input_height * input_width}) must match input_layer's "
-            f"own node count ({len(input_layer.nodes)})"
+        assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
+        assert input_channels * input_height * input_width == len(input_layer.nodes), (
+            f"input_channels*input_height*input_width "
+            f"({input_channels * input_height * input_width}) must match input_layer's own node "
+            f"count ({len(input_layer.nodes)})"
         )
         assert kernel_size >= 1, f"kernel_size must be at least 1; got {kernel_size}"
         assert channel_count >= 1, f"channel_count must be at least 1; got {channel_count}"
@@ -55,6 +62,7 @@ class ConvLayer:
         self.input_layer = input_layer
         self.input_height = input_height
         self.input_width = input_width
+        self.input_channels = input_channels
         self.kernel_size = kernel_size
         self.channel_count = channel_count
         self.stride = stride
@@ -63,7 +71,7 @@ class ConvLayer:
         self.out_width = (input_width - kernel_size) // stride + 1
 
         self.kernels: list[ConvKernel] = [
-            ConvKernel(kernel_size=kernel_size, in_channels=1) for _ in range(channel_count)
+            ConvKernel(kernel_size=kernel_size, in_channels=input_channels) for _ in range(channel_count)
         ]
 
         self.nodes: list[ConvUnit] = []
@@ -78,10 +86,13 @@ class ConvLayer:
                         self._fan_out[input_index].append((unit, weight_index))
 
     def _receptive_field_indices(self, row: int, col: int) -> list[int]:
-        # row-major flat indexing into input_layer.nodes - matches how mnist_data.py/
-        # digits_data.py decode pixels (see this module's own hot-pixel test)
+        # channel-major, then row-major flat indexing into input_layer.nodes - row-major
+        # matches how mnist_data.py/digits_data.py decode pixels, channel-major matches this
+        # layer's own .nodes ordering (see this module's own hot-pixel tests)
+        plane = self.input_height * self.input_width
         return [
-            (row * self.stride + kr) * self.input_width + (col * self.stride + kc)
+            channel * plane + (row * self.stride + kr) * self.input_width + (col * self.stride + kc)
+            for channel in range(self.input_channels)
             for kr in range(self.kernel_size)
             for kc in range(self.kernel_size)
         ]

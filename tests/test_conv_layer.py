@@ -104,6 +104,96 @@ def test_receptive_field_wiring_via_a_single_hot_pixel():
             assert unit.value() == pytest.approx(expected), f"position ({row},{col})"
 
 
+
+def _multichannel_layer_with_state(
+    values: list[float], channels: int, height: int, width: int, kernel_size: int, channel_count: int = 1
+) -> ConvLayer:
+    size = channels * height * width
+    input_layer = StateLayer(size, [(-100.0, 100.0)] * size)
+    input_layer.update_state(tuple(values))
+    return ConvLayer(
+        input_layer=input_layer,
+        input_height=height,
+        input_width=width,
+        kernel_size=kernel_size,
+        channel_count=channel_count,
+        input_channels=channels,
+    )
+
+
+def test_multichannel_kernels_span_every_input_channel():
+
+    layer = _multichannel_layer_with_state([0.0] * 32, channels=2, height=4, width=4, kernel_size=3, channel_count=5)
+
+    assert all(len(kernel.weights) == 2 * 3 * 3 for kernel in layer.kernels)
+    assert all(len(unit.input_nodes) == 2 * 3 * 3 for unit in layer.nodes)
+    assert len(layer.nodes) == 5 * 2 * 2  # channel_count * out_height * out_width
+
+
+def test_constructor_rejects_an_input_channels_mismatch_with_input_layer():
+
+    input_layer = StateLayer(18, [(-10.0, 10.0)] * 18)  # 2 channels of 3x3
+    with pytest.raises(AssertionError):
+        ConvLayer(input_layer=input_layer, input_height=3, input_width=3, kernel_size=2, channel_count=1, input_channels=3)
+
+
+def test_multichannel_forward_matches_a_hand_computed_small_example():
+
+    # two 3x3 input channels, channel-major: channel 0 = [[1,2,3],[4,5,6],[7,8,9]], channel 1 =
+    # 10x that. kernel_size=2, one output channel; weights in (channel, kr, kc) order are
+    # [1,0,0,0 | 0,0,0,1] - channel 0's window top-left plus channel 1's window bottom-right:
+    #   (0,0): 1 + 50 = 51    (0,1): 2 + 60 = 62
+    #   (1,0): 4 + 80 = 84    (1,1): 5 + 90 = 95
+    channel_0 = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    channel_1 = [10 * v for v in channel_0]
+    layer = _multichannel_layer_with_state(channel_0 + channel_1, channels=2, height=3, width=3, kernel_size=2)
+    layer.kernels[0].weights = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+    layer.kernels[0].bias = 0.0
+
+    layer.forward()
+
+    assert [unit.value() for unit in layer.nodes] == pytest.approx([51.0, 62.0, 84.0, 95.0])
+
+
+@pytest.mark.parametrize("hot_channel", [0, 1, 2])
+def test_multichannel_receptive_field_wiring_via_a_single_hot_pixel(hot_channel):
+
+    # three 4x4 input channels, all zero except one pixel at (1, 2) in hot_channel; each input
+    # channel's kernel slice is filled with a distinct constant (1, 2, 3), so the nonzero
+    # outputs must sit at exactly the single-channel test's positions and carry exactly the
+    # hot channel's own constant - wrong channel offsets would show up as the wrong value
+    height = width = 4
+    plane = height * width
+    values = [0.0] * (3 * plane)
+    values[hot_channel * plane + 1 * width + 2] = 1.0
+
+    layer = _multichannel_layer_with_state(values, channels=3, height=height, width=width, kernel_size=2)
+    layer.kernels[0].weights = [1.0] * 4 + [2.0] * 4 + [3.0] * 4
+    layer.kernels[0].bias = 0.0
+    layer.forward()
+
+    expected_nonzero = {(0, 1), (0, 2), (1, 1), (1, 2)}
+    for row in range(3):
+        for col in range(3):
+            expected = float(hot_channel + 1) if (row, col) in expected_nonzero else 0.0
+            assert layer.nodes[row * 3 + col].value() == pytest.approx(expected), f"position ({row},{col})"
+
+
+def test_a_conv_layer_feeds_the_next_directly_as_channel_major_input():
+
+    # a ConvLayer's own .nodes ordering (channel-major) must be exactly the input ordering the
+    # next layer reads: with 1x1 kernels, second-layer unit (row, col) reads first-layer output
+    # channel c at (row, col) as its c-th input node
+    input_layer = StateLayer(9, [(-10.0, 10.0)] * 9)
+    first = ConvLayer(input_layer=input_layer, input_height=3, input_width=3, kernel_size=2, channel_count=2)
+    second = ConvLayer(
+        input_layer=first, input_height=2, input_width=2, kernel_size=1, channel_count=1, input_channels=2
+    )
+
+    for position, unit in enumerate(second.nodes):
+        assert unit.input_nodes[0] is first.nodes[position]
+        assert unit.input_nodes[1] is first.nodes[4 + position]
+
 def test_apply_gradients_matches_a_hand_computed_single_example():
 
     layer = _layer_with_state([1, 2, 3, 4, 5, 6, 7, 8, 9], height=3, width=3, kernel_size=2)
@@ -243,7 +333,7 @@ def test_gradient_check_against_a_numerically_perturbed_loss():
 def _stacked_conv_layers(height: int, width: int, stride: int) -> tuple[StateLayer, ConvLayer, ConvLayer]:
     input_layer = StateLayer(height * width, [(-10.0, 10.0)] * (height * width))
     input_layer.update_state(tuple(random.uniform(-2.0, 2.0) for _ in range(height * width)))
-    first = ConvLayer(input_layer=input_layer, input_height=height, input_width=width, kernel_size=2, channel_count=1)
+    first = ConvLayer(input_layer=input_layer, input_height=height, input_width=width, kernel_size=2, channel_count=2)
     second = ConvLayer(
         input_layer=first,
         input_height=first.out_height,
@@ -251,6 +341,7 @@ def _stacked_conv_layers(height: int, width: int, stride: int) -> tuple[StateLay
         kernel_size=2,
         channel_count=3,
         stride=stride,
+        input_channels=first.channel_count,
     )
     first.randomize_fan_in_aware()
     second.randomize_fan_in_aware()
