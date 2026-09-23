@@ -87,6 +87,47 @@ speculatively.
 
 ## Stage B: `layer_downstream` via vector @ matrix (changes bits)
 
+**Done** (indrajala-math-rust#7). `layer_downstream` is `matmul(delta, w)`, and now rejects a 2D
+`delta` (`delta @ W` would be a different product from `W.T @ delta` for one). A crate test pins
+it bit-exactly to a pure-Python sequential FMA chain (`Fraction`-exact, correctly rounded), the
+scalar path's definition, so the AVX2 path is shown to give the same bits. Putting back
+`W.T @ delta` fails 5 of its 7 shapes (the other two have `M = 1`).
+
+Bit-changing protocol: the full suite passed unchanged (2350), including the Rust conv pin
+0.9875 / epoch 10 / 0.925, so no 1-ULP control was needed. Old vs new, 20 seeds per shape:
+
+| shape (M x N) | op | max abs | median ULP | max diff in ULPs of the vector's largest element |
+| --- | --- | --- | --- | --- |
+| 30 x 784 | downstream | 2.66e-15 | 1 | 3 |
+| 30 x 784 | hidden_delta | 6.66e-16 | 1 | 3 |
+| 10 x 30 | downstream | 8.88e-16 | 1 | 2 |
+| 10 x 30 | hidden_delta | 2.22e-16 | 0 | 2 |
+| 32 x 5408 | downstream | 3.55e-15 | 1 | 4 |
+| 32 x 5408 | hidden_delta | 8.88e-16 | 1 | 4 |
+
+Raw max ULP reaches ~1e5, but only on entries near zero, where cancellation makes a ULP tiny.
+
+Timing, Rust µs per call (median of 4 old/new A/B rounds):
+
+| shape | op | numpy | before | after |
+| --- | --- | --- | --- | --- |
+| 32 x 5408 | downstream | 27.9 | 307.8 | 42.7 |
+| 32 x 5408 | hidden_delta | 36.6 | 312.1 | 48.7 |
+| 30 x 784 | downstream | 5.2 | 30.9 | 5.6 |
+| 30 x 784 | hidden_delta | 9.0 | 31.5 | 5.9 |
+| 10 x 30 | downstream | 1.7 | 0.9 | 0.5 |
+| 10 x 30 | hidden_delta | 4.2 | 1.2 | 0.7 |
+
+The end-to-end MNIST conv single-example case was already below 1 (0.47) after optimization 2.
+Conv demo, MNIST single-example, Rust/numpy: conv 0.47 -> 0.38, conv-pool-conv 0.51 -> 0.49,
+conv-conv-stride2 0.65 -> 0.61. Mini-batch doesn't use `layer_downstream`, and is unchanged.
+Dense MNIST (784 -> 30 -> 10), one single-example epoch over all 60000 from identical weights,
+median of 3 runs alternating old and new builds: Rust/numpy 0.370 -> 0.382, inside the noise
+(numpy, which doesn't use the crate, was itself ~5% slower in the new-build slots). As expected:
+at that shape stage B only touches the 10 x 30 `hidden_delta`, about 0.5 µs x 60000 = 0.03 s.
+Rust test accuracy moved 0.9283 -> 0.9318 (numpy 0.9292), the rounding sensitivity a few-ULP
+change is expected to cause.
+
 **Crate PR:**
 
 - `layer_downstream(w, delta)` computes `matmul(delta, w)` (the existing vector @ matrix case)

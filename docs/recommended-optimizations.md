@@ -42,7 +42,10 @@ layer after it:
 ## 1. Dense downstream: stop transposing `W` on every call (high value, small change)
 
 **Stage A (`delta_batch.T @ X`) closed, not merged: no measured gain** (see
-`workplans/optimization-1-dense-transposes.md`). Stages B and C are still open.
+`workplans/optimization-1-dense-transposes.md`). **Stage B (`layer_downstream`) done**, as
+proposed below: `downstream` went from 308 to 43 µs at 32 x 5408 and from 31 to 5.6 µs at 30 x
+784, with results within 4 ULPs (of each vector's largest element) of before. Stage C is open.
+The figures below are from before stage B.
 
 `fused.rs::layer_downstream` computes `matmul(&w.transpose(), delta)`. `RustArray::transpose`
 allocates and fills a full transposed copy of `W`. At 32 x 5408 that copy alone measures
