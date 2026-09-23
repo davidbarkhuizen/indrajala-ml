@@ -276,6 +276,20 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
+        module="indrajala_ml.demos.demo_layer_op_timing",
+        title="Per-op layer timing, numpy vs Rust",
+        summary="Headless - microseconds per call of every dense and conv layer op, numpy vs Rust.",
+        description=(
+            "Headless, console-only. Times each single-example and batch layer method (forward, "
+            "downstream, hidden delta, gradient accumulate/apply, and a whole single-example SGD step) "
+            "for both backends at the shapes the conv and dense demos use: the 32 x 5408 dense layer "
+            "after a ConvSpec(3, 8) layer on 28x28 input, the dense production network 784 -> 30 -> 10, "
+            "and a ConvSpec(3, 8) layer on 28x28 and 8x8 input, at batch sizes 1, 32 and 512. Each cell "
+            "is the median over 5 interleaved loops of microseconds per call, with the Rust/numpy ratio. "
+            "The before/after reference for the recommended optimizations. Takes a minute or two."
+        ),
+    ),
+    DemoInfo(
         module="indrajala_ml.demos.demo_backprop_variant_comparison",
         title="Backprop variant comparison",
         summary="Reproduces this repo's documented model/loss/init comparisons, runnably, side by side.",
