@@ -44,11 +44,11 @@ class ReLUArrayLayer(ArrayLayer):
         )
 
     def compute_hidden_delta(self, next_layer: "ArrayLayer") -> None:
-        downstream = next_layer.W.T @ next_layer.delta
+        downstream = next_layer.downstream()
         # relu_hidden_delta's derivative: 1 where z > 0 (equivalently a > 0), 0 otherwise - no
         # a*(1-a) damping term at all
         self.delta = downstream * (self.a > 0.0)
 
     def compute_hidden_delta_batch(self, next_layer: "ArrayLayer") -> None:
-        downstream = next_layer.delta_batch @ next_layer.W
+        downstream = next_layer.downstream_batch()
         self.delta_batch = downstream * (self.A > 0.0)

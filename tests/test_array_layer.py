@@ -307,3 +307,20 @@ def test_accumulate_gradient_batch_matches_looping_accumulate_gradient_over_ever
 
     assert np.allclose(one_shot._grad_W, looped._grad_W, rtol=1e-9, atol=1e-12)
     assert np.allclose(one_shot._grad_b, looped._grad_b, rtol=1e-9, atol=1e-12)
+
+
+def test_downstream_matches_the_hand_written_transpose_matmul_single_and_batch():
+
+    # downstream()/downstream_batch() are the gradient an ArrayLayer sends back to its input -
+    # pinned here against the expressions every compute_hidden_delta* site used to inline
+    # (next_layer.W.T @ next_layer.delta and next_layer.delta_batch @ next_layer.W)
+    rng = np.random.default_rng(0)
+    layer = ArrayLayer(4, 6)
+    layer.W = rng.uniform(-1.0, 1.0, size=(4, 6))
+    layer.delta = rng.uniform(-1.0, 1.0, size=4)
+    layer.delta_batch = rng.uniform(-1.0, 1.0, size=(3, 4))
+
+    np.testing.assert_array_equal(layer.downstream(), layer.W.T @ layer.delta)
+    np.testing.assert_array_equal(layer.downstream_batch(), layer.delta_batch @ layer.W)
+    assert layer.downstream().shape == (6,)
+    assert layer.downstream_batch().shape == (3, 6)

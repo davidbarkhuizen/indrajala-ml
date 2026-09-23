@@ -76,13 +76,13 @@ class DropoutArrayLayer(ArrayLayer):
         return self.A
 
     def compute_hidden_delta(self, next_layer: "ArrayLayer") -> None:
-        downstream = next_layer.W.T @ next_layer.delta
+        downstream = next_layer.downstream()
         sigmoid_derivative = self._base_activation * (1.0 - self._base_activation)
         scale = (self._mask / self._keep_probability) if self._was_training else 1.0
         self.delta = downstream * sigmoid_derivative * scale
 
     def compute_hidden_delta_batch(self, next_layer: "ArrayLayer") -> None:
-        downstream = next_layer.delta_batch @ next_layer.W
+        downstream = next_layer.downstream_batch()
         sigmoid_derivative = self._base_activation_batch * (1.0 - self._base_activation_batch)
         scale = (self._mask_batch / self._keep_probability) if self._was_training else 1.0
         self.delta_batch = downstream * sigmoid_derivative * scale
