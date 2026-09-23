@@ -75,3 +75,8 @@ Each implementation has variants for the same set of features, named by a prefix
 `ReLU`, `Softmax`, `CrossEntropy`, `L2`, `Momentum`, `Adam`, `Dropout`, `Ensemble`. Convolution
 (`Conv…`) exists only in the pure-Python implementation. The numpy classes are the reference
 the Rust classes are tested against (`tests/test_*fused_layer_ops.py`, `tests/test_numerical_parity.py`).
+
+The pure-Python implementation is for correctness and parity checking only: gradient checks,
+hand-computed examples, and the reference the array implementations are checked against. It is
+never used for performance (speed/timing) measurement; only the numpy and Rust implementations
+are timed. Accuracy comparisons of pure-Python models are fine.
