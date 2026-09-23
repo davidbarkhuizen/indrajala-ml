@@ -1,8 +1,20 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_unit import ConvUnit
 from indrajala_ml.model.state_layer import StateLayer
+
+
+@dataclass(frozen=True)
+class ConvSpec:
+    """One ConvLayer's own hyperparameters - everything except its input shape, which a network
+    derives from the previous layer (see ConvMultiClassBackpropClassifierNetwork)."""
+
+    kernel_size: int
+    channel_count: int
+    stride: int = 1
 
 
 class ConvLayer:
