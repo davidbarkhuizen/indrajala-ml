@@ -44,8 +44,10 @@ layer after it:
 **Stage A (`delta_batch.T @ X`) closed, not merged: no measured gain** (see
 `workplans/optimization-1-dense-transposes.md`). **Stage B (`layer_downstream`) done**, as
 proposed below: `downstream` went from 308 to 43 µs at 32 x 5408 and from 31 to 5.6 µs at 30 x
-784, with results within 4 ULPs (of each vector's largest element) of before. Stage C is open.
-The figures below are from before stage B.
+784, with results within 4 ULPs (of each vector's largest element) of before. **Stage C
+(`X @ W.T` in `forward_batch`) done**: `forward_batch` went from 330 to 58 µs at 32 x 5408 batch
+1 and from 2074 to 920 µs at batch 32, and every row of a batched forward is now bit-identical
+to the single-example forward. The figures below are from before stage B.
 
 `fused.rs::layer_downstream` computes `matmul(&w.transpose(), delta)`. `RustArray::transpose`
 allocates and fills a full transposed copy of `W`. At 32 x 5408 that copy alone measures
@@ -142,7 +144,7 @@ on the 32 x 5408 and 30 x 784 dense shapes, most Rust batch ops take 1.3x to 11x
 (numpy's matmul calls OpenBLAS). For example, at batch 32, 32 x 5408: `forward_batch` 2296 vs
 567 µs, `downstream_batch` 2985 vs 272 µs, `accumulate_gradient_batch` 3904 vs 755 µs. At batch 1,
 `forward_batch` at 32 x 5408 is 312 vs 32 µs, which is mostly the `W.T` copy (optimization 1
-stage C). Why the end-to-end mini-batch ratios above don't show a gap this large hasn't been
+stage C, since done: 58 µs). Why the end-to-end mini-batch ratios above don't show a gap this large hasn't been
 measured. Nothing here is acted on yet: optimization 1 removes the
 transposes, and the numbers the run gives after it will show how much of the gap remains.
 
@@ -151,6 +153,15 @@ Optimization 1 stage A ruled out one cause: removing the `delta_batch.T` copy fr
 That copy is only batch x `M`, tiny next to the matmul. So that op's gap is in the matmul itself
 or the separate `grad_W +` pass. One untested guess: at batch 32, 32 x 5408 the matmul is ~5.5M
 flops, just over `matmul_2d`'s 4M threading threshold, so it pays thread spawns for little work.
+
+Optimization 1 stage C removed the `W.T` copy from `forward_batch`. At 30 x 784, batch 32 it is
+still 271 vs 60 µs, 4.5x numpy, so that gap is in the kernel. An estimate, not measured: each
+`dot_product` has one 4-lane accumulator, so every FMA waits on the one before it (about 4
+cycles). At 752K multiply-adds, 188K dependent FMAs is about 250 µs at 3 GHz, which is the
+measured time. Computing 4 outputs at once (4 rows of `W` against one `x`), each with its own
+accumulator in `dot_product`'s grouping, would hide that latency and keep every output's bits.
+The same kernel would speed up the single-example `W @ x` too, and has to be used for both, to
+keep the batch-row = single-example property.
 
 ## Not optimizations, but found in the same measurements
 

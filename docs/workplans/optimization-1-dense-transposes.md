@@ -156,6 +156,80 @@ reports whether it crosses below 1.
 
 ## Stage C: transposed-right matmul for `linear_preactivation_batch` (changes bits; measure first)
 
+**Done** (indrajala-math-rust#8). `linear_preactivation_batch` calls `matmul_nt(x, w)`, which
+shares `matmul_2d`'s threading decision through a new `for_each_row_range`. Crate tests pin every
+row of each `layer_*forward_batch` (sigmoid, ReLU, softmax, eval-mode dropout) bit-exactly to the
+single-example op on that row, at 11 shapes including three over the threading threshold. The
+old `matmul(x, w.T)` fails 35 of them: every one with `K >= 4`, plus the rejection of a 1D `X`,
+which the old code accepted through the vector @ matrix case. Here,
+`tests/test_rust_array_layer_forward_batch.py` pins the same property for every dense Rust layer
+class, including the one-row batch.
+
+Measurement step, same binary, `W.T` hoisted out vs the current op (Rust µs per call, median of
+9 interleaved loops; `W.T alone` times the copy by itself):
+
+| shape | batch | current | hoisted | `W.T` alone | saved |
+| --- | --- | --- | --- | --- | --- |
+| 32 x 5408 | 1 | 331.5 | 60.2 | 276.1 | 82% |
+| 32 x 5408 | 32 | 1875.1 | 1387.8 | 325.8 | 26% |
+| 32 x 5408 | 512 | 10556.7 | 10539.3 | 325.1 | 0% |
+| 30 x 784 | 1 | 31.5 | 8.6 | 23.1 | 73% |
+| 30 x 784 | 32 | 277.8 | 251.6 | 23.2 | 9% |
+| 30 x 784 | 512 | 2202.7 | 2093.5 | 34.1 | 5% |
+| 10 x 30 | 1 | 1.2 | 0.7 | 0.6 | 43% |
+| 10 x 30 | 32 | 9.7 | 9.3 | 0.6 | 4% |
+| 10 x 30 | 512 | 140.0 | 139.7 | 0.7 | 0% |
+
+Well over the 10% bar at batch 1 on every shape, so the stage went ahead.
+
+`matmul_nt` against the old op, both built into one binary and interleaved (Rust µs per call,
+median of 9 loops, `layer_forward_batch`):
+
+| shape | batch | numpy | old | new | change |
+| --- | --- | --- | --- | --- | --- |
+| 32 x 5408 | 1 | 31.6 | 330.3 | 58.4 | -82% |
+| 32 x 5408 | 32 | 520.1 | 2073.5 | 920.0 | -56% |
+| 32 x 5408 | 512 | 3710.0 | 16711.9 | 7689.4 | -54% |
+| 30 x 784 | 1 | 11.2 | 36.4 | 9.2 | -75% |
+| 30 x 784 | 32 | 59.8 | 294.2 | 270.7 | -8% |
+| 30 x 784 | 512 | 1161.0 | 4760.8 | 4054.3 | -15% |
+| 10 x 30 | 1 | 7.2 | 1.3 | 0.7 | -45% |
+| 10 x 30 | 32 | 11.5 | 10.0 | 7.2 | -28% |
+| 10 x 30 | 512 | 68.0 | 146.1 | 107.8 | -26% |
+
+It wins at every shape, so the fear below that few long dot products lose to many short axpys
+didn't hold. It beats hoisting the copy out too (920 vs 1388 µs at 32 x 5408, batch 32). At 30 x
+784, batch 32, both Rust columns are still ~4.5x numpy: that gap is in the kernel, not the
+transpose (see `recommended-optimizations.md`).
+
+Bit-changing protocol: the full suite passed unchanged (2439), including the Rust conv pin 0.9875
+/ epoch 10 / 0.925, so no 1-ULP control was needed. Old vs new `layer_forward_batch`, 20 seeds
+per shape:
+
+| shape | batch | max abs | median ULP | max diff in ULPs of the row's largest element |
+| --- | --- | --- | --- | --- |
+| 32 x 5408 | 1 | 6.55e-15 | 12 | 59 |
+| 32 x 5408 | 32 | 2.20e-14 | 12 | 198 |
+| 30 x 784 | 1 | 1.67e-15 | 3 | 15 |
+| 30 x 784 | 32 | 2.16e-15 | 3 | 20 |
+| 10 x 30 | 1 | 2.22e-16 | 0 | 2 |
+| 10 x 30 | 32 | 2.22e-16 | 0 | 2 |
+
+Larger than stage B's, because the old op summed up to 5408 products in one sequential chain.
+Against an 80-bit `longdouble` reference the new op is the more accurate one: mean absolute error
+is 10-30% lower at every shape above, and the max is comparable (4.9e-15 old vs 5.3e-15 new at
+32 x 5408 batch 1, 1.4e-14 vs 9.8e-15 at batch 32).
+
+End to end. Dense MNIST (784 -> 30 -> 10), one mini-batch epoch (batch 32) over all 60000 from
+identical weights and shuffle order, 3 rounds alternating old and new builds: Rust 5.67 -> 5.38 s
+(median), Rust/numpy 0.678 -> 0.637. Test accuracy was 0.9001 for numpy and for both Rust builds.
+The conv demo's ratios are unchanged within noise (MNIST mini-batch: conv 0.89 -> 0.89,
+conv-pool-conv 0.62 -> 0.65, conv-conv-stride2 0.73 -> 0.73). Its dense tail is 32 x 32 x 10 there,
+and `layer_forward_batch` is 1.6% of the profiled mini-batch time, behind `conv_forward_batch` at
+52%.
+
+The plan as written:
+
 Nobody has measured whether this transpose matters. At the dense production shape `W` is 30 x
 784 (188 KB copy per `forward_batch`), and at the conv tail it's 32 x 5408.
 
