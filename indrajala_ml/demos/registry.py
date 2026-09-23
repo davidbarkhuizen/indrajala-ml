@@ -261,6 +261,21 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
+        module="indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition",
+        title="Rust vs vectorized conv networks",
+        summary="Headless - numpy vs Rust conv network training time from identical weights, UCI digits and MNIST.",
+        description=(
+            "Headless, console-only. Trains ConvVectorizedMultiClassBackpropClassifierNetwork (numpy) and "
+            "ConvRustArrayMultiClassBackpropClassifierNetwork (Rust) from identical initial weights, with "
+            "the single-example and the mini-batch trainer, for one conv layer, conv -> pool -> conv, and a "
+            "stride-2 second conv layer, on UCI digits and a 2000-example MNIST subset. Reports each "
+            "backend's median time over repeated interleaved runs, the Rust/numpy ratio, both backends' "
+            "test accuracy and how often their predictions agree. Then measures what the single-example "
+            "path's N = 1 wrapping costs each backend, and profiles where Rust's training time goes by op. "
+            "Takes several minutes."
+        ),
+    ),
+    DemoInfo(
         module="indrajala_ml.demos.demo_backprop_variant_comparison",
         title="Backprop variant comparison",
         summary="Reproduces this repo's documented model/loss/init comparisons, runnably, side by side.",
