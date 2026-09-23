@@ -75,6 +75,40 @@ ReLU-at-zero test. Nothing in the Rust backward path reads `Z`: `compute_hidden_
 
 ## Stage B: forward-only path for evaluation (bit-identical)
 
+**Closed, not merged: no measured gain.** Built as planned, kept for the record with no PR:
+crate branch `conv-infer-batch` (`ee432d0`) and branch `opt3-stage-b-infer` here (`a14ddcb`).
+`conv_infer_batch` fills one reused im2col row per output position and runs `axpy_row` over
+`W.T`'s rows, `k` increasing, as `matmul_2d_row_range` does. Its crate test required exact
+equality with `conv_forward_batch`'s `A` at the 7 test shapes (N = 1 and 3). It also covered 4
+more cases, including one over `matmul`'s threading threshold and one over its blocking threshold.
+Starting each sum from `b` instead of adding `b` at the end failed all 18 cases. The layer and
+network tests (`infer` == `forward` exactly, a gradient or backward step after `infer` raises,
+network `_forward` == the base forward loop exactly, predictions between `learn` steps change no
+weight) passed, with 2570 passed in the full suite.
+
+Rust µs per call, both paths in one build, interleaved, median of 3 rounds of 9 loops:
+
+| layer | N | `forward` | `infer` | change |
+| --- | --- | --- | --- | --- |
+| conv 28x28, 8 channels | 1 | 53.6 | 55.0 | +3% |
+| conv 28x28, 8 channels | 32 | 2280 | 1791 | -21% |
+| conv 8x8, 8 channels | 1 | 5.0 | 5.0 | -1% |
+| conv 8x8, 8 channels | 32 | 88.6 | 91.7 | +3% |
+| pool 26x26, 8 channels, /2 | 1 | 18.9 | 18.2 | -4% |
+
+The evaluation pass is single-example (`_forward`, one state at a time), so N = 1 is the case that
+matters. A whole-network evaluation pass (MNIST shapes, dense 32, 200 states, median of 7,
+interleaved, two runs) was slower with `infer`: conv +6.3%/+8.2%, conv-pool-conv +1.0%/+4.1%,
+conv-conv-stride2 +4.1%/+2.3%. So the end-to-end demo was not run.
+
+At N = 1 the skipped `cols` is 676 x 9 values, 48 KB, cheap to allocate and fill. The op's time
+is its 6084 `axpy_row` calls on 8-wide rows (676 positions x 9 kernel values), about 8 ns each,
+and `infer` makes the same calls. That per-row overhead is what stage C addresses. The one gain,
+`infer_batch` at 28x28, N = 32 (-21%), is on a path nothing evaluates with. It does point at
+something: batched `forward_batch` at N = 32 costs more per example than 32 single-example calls
+(2280 vs 32 x 53.6 = 1715 µs), likely because its 1.5 MB `cols` falls out of cache. That's for
+stage C's measurement to take into account, not measured here.
+
 The trainers' per-epoch accuracy passes (`classify_state`/`predict_probabilities` via
 `RustArrayNetworkBase._forward`) call `layer.forward`, which builds and keeps `cols` that
 nothing reads.
@@ -128,13 +162,13 @@ is a large share. Two candidate formulations:
 **Steps:**
 
 1. **Measurement first, no PR.** Prototype C1 and C2 as extra crate functions behind a local
-   branch. Time them against the stage A/B `conv_forward_batch` at `O` = 4, 8, 16, 32, on 28x28
+   branch. Time them against the stage A `conv_forward_batch` at `O` = 4, 8, 16, 32, on 28x28
    and 8x8, with `N` = 1 and 32. Also time the backward-side cost C1 adds (the transposed cache).
    Record everything in `recommended-optimizations.md` under item 3, including a formulation
    that loses.
 2. If one formulation wins on the whole training step (forward + accumulate), not just the
-   forward op: **crate PR** replacing the internals of `conv_forward_batch` (and
-   `conv_infer_batch`), possibly dispatching on `O` if the crossover is clear in the data. Tests:
+   forward op: **crate PR** replacing the internals of `conv_forward_batch` (stage B's
+   `conv_infer_batch` was not merged), possibly dispatching on `O` if the crossover is clear in the data. Tests:
    exact equality with the previous op wherever the plan claims bit-identity, and the
    brute-force reference as before.
 3. **Here:** bump, full suite, end-to-end demo. No Python change is expected unless the cached

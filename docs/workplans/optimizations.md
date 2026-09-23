@@ -23,7 +23,8 @@ timing. Each has its own workplan:
    goes first. **Stage A closed, not merged:** no measured gain. **Stages B and C done.** Stages B (`layer_downstream`) and C (`X @ W.T`) change summation order, so each
    gets its own PR with the parity protocol below.
 3. **Optimization 3** (conv forward), stages A and B. Dropping `Z` and adding a forward-only
-   path are both bit-identical. **Stage A done.**
+   path are both bit-identical. **Stage A done** (a small gain). **Stage B closed, not merged:** no
+   measured gain; single-example evaluation got 1-8% slower.
 4. **Optimization 4** (single-example conv path). It comes after 3A because dropping `Z`
    removes one of the reshapes 4 would otherwise have to handle.
 5. **Optimization 3**, stage C (the `O`-small formulation). It is a measurement question, and
