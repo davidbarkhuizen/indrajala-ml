@@ -53,9 +53,8 @@ def test_conv_forward_batch_matches_conv_array_layer_forward_batch(shape):
     X = rng.uniform(-1.0, 1.0, size=(BATCH_SIZE, layer.input_size))
     layer.forward_batch(X)
 
-    Z, A, cols = _rust_forward(layer, X)
+    A, cols = _rust_forward(layer, X)
 
-    np.testing.assert_allclose(_np(Z), layer.Z, rtol=RTOL, atol=ATOL)
     np.testing.assert_allclose(_np(A), layer.A, rtol=RTOL, atol=ATOL)
     # numpy caches (N, P, C*k*k); Rust the same rows flattened to (N*P, C*k*k)
     np.testing.assert_array_equal(_np(cols), layer._cols.reshape(-1, layer.fan_in))
@@ -92,7 +91,7 @@ def test_conv_accumulate_gradient_batch_matches_conv_array_layer_accumulate_grad
     grad_W0, grad_b0 = layer._grad_W.copy(), layer._grad_b.copy()
     layer.accumulate_gradient_batch(X)
 
-    _Z, _A, cols = _rust_forward(layer, X)
+    _A, cols = _rust_forward(layer, X)
     grad_W, grad_b = pa.conv_accumulate_gradient_batch(
         pa.Array(layer.delta_batch.tolist()),
         cols,

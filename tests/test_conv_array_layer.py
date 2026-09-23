@@ -172,6 +172,7 @@ def test_relu_derivative_is_zero_at_exactly_z_equals_zero():
 
     layer.forward(x)
     np.testing.assert_array_equal(layer.z, [0.0, 2.0, 2.0, 3.0])
+    np.testing.assert_array_equal(layer.a, [0.0, 2.0, 2.0, 3.0])  # what ConvRustArrayLayer's test pins
 
     layer.forward_batch(x[np.newaxis, :])
     layer.compute_hidden_delta_batch(_FixedDownstream(np.full((1, 4), 0.5)))

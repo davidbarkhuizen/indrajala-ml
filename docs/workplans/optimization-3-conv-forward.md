@@ -20,6 +20,32 @@ Three independent candidates, in increasing risk order.
 
 ## Stage A: stop returning `Z` (bit-identical)
 
+**Done** (indrajala-math-rust#9). `conv_forward_batch` returns `(A, cols)` and applies the ReLU
+while it scatters into the output, so it builds one output-sized array instead of two. A new crate
+test requires `A` to equal, bit for bit, the old two-pass result rebuilt from its parts: the
+crate's own `cols @ W.T`, `+ b`, the channel-major scatter, then `np.maximum`. Swapping in
+`matmul_nt` (a different summation order) fails all 14 of its cases. Also, an old build and the
+new one gave identical `A` and `cols` over 33 cases: the crate's 7 test shapes and 28x28x1 k3 O8,
+8x8x1 k3 O8, 13x13x8 k3 O16 and 26x26x8 k2 O8 s2, each at N = 1, 3 and 32. The ReLU-at-zero
+tests now pin `a == [0, 2, 2, 3]` in both backends, plus the exact-zero delta.
+
+Rust µs per call (`ConvRustArrayLayer` methods, 3x3 kernel, 8 channels, median of 9 loops), two
+runs per build with the builds alternated:
+
+| shape | op | old | new |
+| --- | --- | --- | --- |
+| 28x28 | `forward` | 56.8, 57.9 | 55.2, 55.4 |
+| 28x28 | `forward_batch`, N = 1 | 53.3, 68.9 | 52.6, 52.0 |
+| 28x28 | `forward_batch`, N = 32 | 2793, 2609 | 2703, 2482 |
+| 28x28 | `forward_batch`, N = 512 | 47634, 48620 | 40232, 41968 |
+| 8x8 | `forward` | 5.6, 5.6 | 5.2, 4.8 |
+| 8x8 | `forward_batch`, N = 1 | 4.1, 4.1 | 4.3, 3.9 |
+| 8x8 | `forward_batch`, N = 32 | 89.6, 118.4 | 102.7, 91.6 |
+
+A small gain, clearest where the output is largest (N = 512: about 14%). The single-example
+`forward` also drops the `Z` reshape (8x8: about 10%). At N = 1 and 32 the change is within the
+run-to-run spread.
+
 `Z` exists only to mirror `ConvArrayLayer.Z`. One test reads it: `tests/
 test_conv_rust_array_layer.py:149` asserts `layer.z == [0.0, 2.0, 2.0, 3.0]` in the
 ReLU-at-zero test. Nothing in the Rust backward path reads `Z`: `compute_hidden_delta` masks on

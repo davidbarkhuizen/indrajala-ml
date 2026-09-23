@@ -90,7 +90,9 @@ In a cProfile of Rust training on MNIST conv-pool-conv, `conv_forward_batch` is 
 profiled time single-example and **51%** mini-batch. That is its own time, and it includes the
 extra forward passes the trainers run to evaluate accuracy each epoch. It is already faster than
 numpy's conv forward (58 vs 81 µs), so this is about the Rust share, not the gap to numpy.
-Candidates, none measured yet:
+**The first candidate (don't return `Z`) is done** (see `workplans/optimization-3-conv-forward.md`
+stage A): bit-identical, and a small gain, about 14% at N = 512 and within noise at N = 1 and 32.
+The candidates as first written:
 
 - **Don't return `Z`.** `conv_forward_batch` builds `Z`, then a separate `A = relu(Z)`, then
   returns both. `Z` only exists to match `ConvArrayLayer.Z`, which a single ReLU-at-zero test

@@ -66,7 +66,6 @@ def test_forward_matches_conv_array_layer_single_and_batch(shape):
 
     A = _np(rust_layer.forward_batch(pa.Array(X.tolist())))
     np.testing.assert_allclose(A, numpy_layer.forward_batch(X), rtol=RTOL, atol=ATOL)
-    np.testing.assert_allclose(_np(rust_layer.Z), numpy_layer.Z, rtol=RTOL, atol=ATOL)
 
     for i, x in enumerate(X):
         a = _np(rust_layer.forward(pa.Array(x.tolist())))
@@ -74,7 +73,6 @@ def test_forward_matches_conv_array_layer_single_and_batch(shape):
         # single-example path == the batch row, exactly: the same op on the same row
         np.testing.assert_array_equal(a, A[i])
         np.testing.assert_allclose(a, numpy_layer.forward(x), rtol=RTOL, atol=ATOL)
-        np.testing.assert_allclose(_np(rust_layer.z), numpy_layer.z, rtol=RTOL, atol=ATOL)
 
 
 @pytest.mark.parametrize("shape", SHAPES)
@@ -139,14 +137,16 @@ def test_accumulate_and_apply_match_conv_array_layer_single_and_batch(shape):
 def test_relu_derivative_is_zero_at_exactly_z_equals_zero():
 
     # one kernel of ones, zero bias: the receptive field over the all-zero top-left patch has
-    # z == 0 exactly, so its delta is zero even though the downstream gradient isn't
+    # z == 0 exactly, so its delta is zero even though the downstream gradient isn't. The layer
+    # keeps no z; every other z is positive, so a == z here and a pins the exact-zero input
     layer = ConvRustArrayLayer(3, 3, 1, 2, 1)
     layer.W = pa.Array([[1.0, 1.0, 1.0, 1.0]])
     layer.b = pa.Array.zeros(1)
     x = [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
 
     layer.forward(pa.Array(x))
-    assert layer.z.tolist() == [0.0, 2.0, 2.0, 3.0]
+    assert layer.a.tolist() == [0.0, 2.0, 2.0, 3.0]
+    assert not hasattr(layer, "z") and not hasattr(layer, "Z")
 
     layer.forward_batch(pa.Array([x]))
     layer.compute_hidden_delta_batch(_FixedDownstream(pa.Array([[0.5] * 4])))
