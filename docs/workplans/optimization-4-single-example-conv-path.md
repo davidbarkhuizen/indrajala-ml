@@ -1,6 +1,7 @@
 # Workplan: optimization 4, remove the N = 1 reshapes from the single-example conv path
 
-Order: after optimization 3 stages A and B (see `optimizations.md`).
+Order: after optimization 3 stages A and B (see `optimizations.md`). Stage B was closed without
+merging, so there is no `conv_infer_batch` or `infer` to cover below.
 
 ## Context
 
@@ -11,7 +12,7 @@ example, today:
 
 | layer | method | reshapes |
 | --- | --- | --- |
-| conv | `forward` | `x` in; `A` and `Z` out |
+| conv | `forward` | `x` in; `A` out (`Z` until optimization 3 stage A) |
 | conv | `downstream` | `delta` in; `dX` out |
 | conv | `accumulate_gradient` | `delta` in |
 | pool | `forward` | `x` in; `A` and `argmax` out |
@@ -45,8 +46,7 @@ do, and it would touch every op in the crate for a conv-only benefit.
   rank and returns `(n, is_vector)`. `Shape::Vector(size)` gives `n = 1`. The existing error text
   is kept for any other shape.
 - Every op that returns per-example arrays tags its output as a vector when its batch input was
-  a vector: `conv_forward_batch` (`A`), `conv_infer_batch` (from optimization 3B),
-  `conv_downstream_batch` (`dX`), `max_pool_forward_batch` (`A`, `argmax`) and
+  a vector: `conv_forward_batch` (`A`), `conv_downstream_batch` (`dX`), `max_pool_forward_batch` (`A`, `argmax`) and
   `max_pool_downstream_batch` (`dX`). `cols` stays `(P, C·k·k)`. It's internal, so its rank is
   irrelevant.
 - `conv_accumulate_gradient_batch` accepts a vector `delta` (`n = 1`) and checks it against
@@ -64,7 +64,6 @@ do, and it would touch every op in the crate for a conv-only benefit.
   `MaxPoolRustArrayLayer.forward`/`downstream` pass the 1D arrays straight through, with no
   `reshape`. Single-example `self.a`/`self.argmax` are the op outputs directly. Update both
   docstrings, which currently describe the `(1, n)` wrapping.
-- `ConvRustArrayLayer.infer` (from optimization 3B) takes the same path.
 - Tests: the existing "single-example path == batch row" tests in
   `tests/test_conv_rust_array_layer.py` and `tests/test_max_pool_rust_array_layer.py` must pass
   unchanged. Tighten them to exact equality if they currently use `approx`: there's no reason

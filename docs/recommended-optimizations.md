@@ -92,6 +92,9 @@ extra forward passes the trainers run to evaluate accuracy each epoch. It is alr
 numpy's conv forward (58 vs 81 µs), so this is about the Rust share, not the gap to numpy.
 **The first candidate (don't return `Z`) is done** (see `workplans/optimization-3-conv-forward.md`
 stage A): bit-identical, and a small gain, about 14% at N = 512 and within noise at N = 1 and 32.
+**The second (skip `cols` when not training) was built and closed** (stage B): at N = 1 `cols`
+is only 48 KB, and a single-example evaluation pass without it measured 1-8% slower, not faster.
+The op's cost is its per-row `axpy_row` calls on 8-wide rows, the third candidate.
 The candidates as first written:
 
 - **Don't return `Z`.** `conv_forward_batch` builds `Z`, then a separate `A = relu(Z)`, then
