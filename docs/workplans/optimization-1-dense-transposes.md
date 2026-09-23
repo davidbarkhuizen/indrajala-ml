@@ -42,6 +42,28 @@ So stage A goes first and alone. B and C each follow the bit-changing protocol i
 
 ## Stage A: transposed-left matmul for `layer_accumulate_gradient_batch` (bit-identical)
 
+**Closed, not merged: no measured gain.** Built as planned on crate branch `matmul-tn`
+(`e59c511`, kept for the record, no PR): `matmul_2d` and `matmul_2d_row_range` take an `a`
+stride pair, and `matmul_tn` passes `(1, M)`. Its crate tests pinned exact bit-identity against
+`grad_W + delta_batch.T @ X` at 9 shapes covering every threading/blocking combination, plus 20
+seeds with signed zeros and subnormals. Reversing the `k` order on the strided path failed 22 of
+them.
+
+Measured as old vs new builds swapped round by round (6 rounds of 15 x 1500-call loops, Rust µs
+per call, median):
+
+| shape | batch | old | new | change |
+| --- | --- | --- | --- | --- |
+| 32 x 5408 | 32 | 3010 | 3013 | +0.1% |
+| 32 x 5408 | 512 | 22314 | 22262 | -0.2% |
+| 30 x 784 | 32 | 190 | 197 | +3.7% |
+| 30 x 784 | 512 | 3900 | 3749 | -3.9% |
+
+The batch-1 rows and 10 x 30 moved by a few µs, also inside the noise. Every change is smaller
+than the 10-25% spread between rounds. In hindsight the copy removed is `delta_batch.T`, batch x
+`M` (32 x 32 or 512 x 30), which is small next to the matmul. The 273 µs measured transpose is
+`W.T` in `layer_downstream`, which is stage B.
+
 **Crate PR:**
 
 - `linalg.rs`: `matmul_tn(a, b)` computes `a.T @ b` for `a (K, M)`, `b (K, N)` without

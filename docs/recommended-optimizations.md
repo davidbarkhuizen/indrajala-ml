@@ -41,6 +41,9 @@ layer after it:
 
 ## 1. Dense downstream: stop transposing `W` on every call (high value, small change)
 
+**Stage A (`delta_batch.T @ X`) closed, not merged: no measured gain** (see
+`workplans/optimization-1-dense-transposes.md`). Stages B and C are still open.
+
 `fused.rs::layer_downstream` computes `matmul(&w.transpose(), delta)`. `RustArray::transpose`
 allocates and fills a full transposed copy of `W`. At 32 x 5408 that copy alone measures
 **273 µs of the 327 µs call**. `matmul` already has a vector @ matrix case (`delta @ W`, the same
@@ -139,6 +142,12 @@ on the 32 x 5408 and 30 x 784 dense shapes, most Rust batch ops take 1.3x to 11x
 stage C). Why the end-to-end mini-batch ratios above don't show a gap this large hasn't been
 measured. Nothing here is acted on yet: optimization 1 removes the
 transposes, and the numbers the run gives after it will show how much of the gap remains.
+
+Optimization 1 stage A ruled out one cause: removing the `delta_batch.T` copy from
+`accumulate_gradient_batch` left it unchanged (within ±4%, the spread between runs is 10-25%).
+That copy is only batch x `M`, tiny next to the matmul. So that op's gap is in the matmul itself
+or the separate `grad_W +` pass. One untested guess: at batch 32, 32 x 5408 the matmul is ~5.5M
+flops, just over `matmul_2d`'s 4M threading threshold, so it pays thread spawns for little work.
 
 ## Not optimizations, but found in the same measurements
 
