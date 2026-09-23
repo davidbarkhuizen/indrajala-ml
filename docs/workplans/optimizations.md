@@ -30,7 +30,9 @@ timing. Each has its own workplan:
    overhead went from 28.5% to 0.3% on the UCI conv layer.
 5. **Optimization 3**, stage C (the `O`-small formulation). It is a measurement question, and
    it touches the same function as 3A/3B, so it is done last among the Rust changes, on a
-   settled `conv_forward_batch`.
+   settled `conv_forward_batch`. **Done:** a register-blocked `matmul_narrow` for `cols @ W.T`,
+   bit-identical. The conv forward took 33-64% less time at N = 1, and the MNIST conv-pool-conv
+   mini-batch ratio went from 0.63 to 0.46.
 6. **Optimization 5** (dataset as one array). It is the only one that changes the trainer
    interface, both backends pay it equally, and it is the lowest-value item. Do it last or not
    at all.

@@ -141,6 +141,126 @@ gain is proportional to how much of training is evaluation.
 
 ## Stage C: a formulation for small output channel counts (measure first)
 
+**Done** (indrajala-math-rust#11): C2 with `cols` kept. im2col stays; `cols @ W.T` goes through a
+new `linalg::matmul_narrow`, which keeps each output row's `O` running sums in AVX2 registers
+across all of `k` (blocks of 16 columns, then 4, then a scalar tail) instead of one `axpy_row`
+load/FMA/store pass per `k`. Every output is the same FMA chain, so it is bit-identical, and
+`cols`, the backward ops and the Python layer are unchanged.
+
+**Measurement step.** Prototypes on crate branch `conv-forward-formulations-proto` (`ef85831`,
+kept for the record, no PR):
+- C1: `W @ colsT`, as planned.
+- C2: this kernel, with `cols` kept.
+- C2-direct: the kernel with no `cols` (one scratch row per position).
+- Both C1 backward options: transpose `colsT` back, then the existing `D @ cols`; or `(colsT @
+  D_by_position).T`, which keeps every gradient element's FMA chain.
+
+All were exactly equal to the current ops (`A`, `cols`/`colsT`, `grad_W`, `grad_b`) over 176
+cases x 7 checks: 6 shapes including multi-channel and strided ones, `O` in {1, 3, 4, 6, 8, 16,
+20, 32}, and N up to 130 (matmul's threaded and blocked paths). So the choice is on speed
+alone. Rust µs per call, median of 7 loops, one build. A step is forward + accumulate, and C1's
+step uses its faster backward:
+
+| shape | O | N | forward now | C1 | C2 | C2-direct | accumulate now | C1: transpose back | C1: (colsT @ D).T | step now | step C1 (best backward) | step C2 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 28x28x1 | 4 | 1 | 49.9 | 13.2 | 17.6 | 22.5 | 18.6 | 24.3 | 32.7 | 68.5 | 37.5 | 36.2 |
+| 28x28x1 | 4 | 32 | 1687.6 | 488.8 | 566.9 | 703.0 | 661.1 | 944.9 | 1033.3 | 2348.7 | 1433.7 | 1228.0 |
+| 28x28x1 | 8 | 1 | 66.5 | 19.6 | 22.6 | 28.1 | 36.2 | 42.0 | 40.6 | 102.7 | 60.2 | 58.7 |
+| 28x28x1 | 8 | 32 | 1935.7 | 1135.8 | 1002.8 | 961.0 | 1319.0 | 1807.6 | 1468.0 | 3254.6 | 2603.8 | 2321.7 |
+| 28x28x1 | 16 | 1 | 65.6 | 32.5 | 29.3 | 34.6 | 71.8 | 79.9 | 59.8 | 137.4 | 92.3 | 101.1 |
+| 28x28x1 | 16 | 32 | 3633.5 | 3603.8 | 2603.2 | 2221.6 | 2883.7 | 3699.4 | 2791.7 | 6517.2 | 6395.4 | 5486.9 |
+| 28x28x1 | 32 | 1 | 101.5 | 59.5 | 48.0 | 52.1 | 143.4 | 148.8 | 102.1 | 244.9 | 161.6 | 191.4 |
+| 28x28x1 | 32 | 32 | 7567.3 | 6259.9 | 6894.0 | 5719.4 | 6342.3 | 6639.1 | 7911.7 | 13909.6 | 12899.1 | 13236.3 |
+| 8x8x1 | 4 | 1 | 3.6 | 1.7 | 1.9 | 2.7 | 1.7 | 2.1 | 2.8 | 5.3 | 3.8 | 3.6 |
+| 8x8x1 | 4 | 32 | 84.6 | 23.6 | 30.5 | 39.6 | 31.5 | 42.9 | 58.9 | 116.0 | 66.5 | 62.0 |
+| 8x8x1 | 8 | 1 | 3.6 | 2.2 | 2.2 | 2.3 | 2.7 | 3.0 | 3.1 | 6.3 | 5.2 | 4.8 |
+| 8x8x1 | 8 | 32 | 88.4 | 36.4 | 41.1 | 50.5 | 64.8 | 74.1 | 72.3 | 153.2 | 108.7 | 105.9 |
+| 8x8x1 | 16 | 1 | 4.4 | 3.2 | 2.5 | 2.8 | 4.7 | 5.1 | 4.2 | 9.1 | 7.4 | 7.2 |
+| 8x8x1 | 16 | 32 | 115.1 | 58.4 | 52.3 | 60.4 | 125.2 | 136.4 | 104.9 | 240.3 | 163.3 | 177.5 |
+| 8x8x1 | 32 | 1 | 6.5 | 5.1 | 3.7 | 4.4 | 8.8 | 9.0 | 6.5 | 15.3 | 11.7 | 12.5 |
+| 8x8x1 | 32 | 32 | 186.8 | 106.3 | 84.8 | 92.6 | 255.6 | 268.5 | 180.8 | 442.4 | 287.1 | 340.4 |
+| 13x13x8 | 4 | 1 | 52.9 | 19.3 | 21.7 | 22.9 | 9.9 | 16.3 | 41.9 | 62.8 | 35.5 | 31.6 |
+| 13x13x8 | 4 | 32 | 1725.0 | 679.0 | 705.1 | 712.7 | 311.8 | 792.8 | 1318.9 | 2036.8 | 1471.8 | 1016.9 |
+| 13x13x8 | 8 | 1 | 55.9 | 28.7 | 31.6 | 33.0 | 19.2 | 25.2 | 45.7 | 75.1 | 53.9 | 50.8 |
+| 13x13x8 | 8 | 32 | 1827.8 | 928.0 | 997.5 | 1016.4 | 614.8 | 1121.7 | 1418.8 | 2442.6 | 2049.7 | 1612.3 |
+| 13x13x8 | 16 | 1 | 70.1 | 46.9 | 26.9 | 26.4 | 37.5 | 44.0 | 60.4 | 107.5 | 91.0 | 64.4 |
+| 13x13x8 | 16 | 32 | 2074.8 | 1686.3 | 1309.2 | 1036.4 | 1165.4 | 1977.4 | 1604.4 | 3240.2 | 3290.7 | 2474.6 |
+| 13x13x8 | 32 | 1 | 106.6 | 87.8 | 43.3 | 43.2 | 79.2 | 84.9 | 99.0 | 185.8 | 172.6 | 122.5 |
+| 13x13x8 | 32 | 32 | 3293.0 | 2939.9 | 1895.7 | 1769.7 | 2088.8 | 3283.1 | 2664.9 | 5381.8 | 5604.8 | 3984.5 |
+
+- C2 beats the current step at all 24 configurations.
+- C1 has the fastest forward at small `O`. Transposing back is always slower than the current
+  accumulate, and `(colsT @ D).T` is faster only at `O` ≥ 16. C1 beats C2 on the step in 7
+  configurations, all at `O` ≥ 16, and it would change the cached layout.
+- C2-direct (no `cols`) only pays at large `O` and N, and it can't serve training.
+
+So C2 goes in for every `O`, with no dispatch. It never lost to the current op.
+
+**Tests.** The stage A exact test rebuilds `A` with `Array @` (plain `matmul`), so it is now
+`matmul_narrow`'s exact check against `matmul`. It gained 9 cases:
+- output widths 1, 5, 16, 21 and 35, which cover every kernel path;
+- 28x28 at N = 128, over the threading threshold;
+- fan_in 800 x 48, over matmul's blocking threshold;
+- 13x13x8 x 32 at N = 32.
+
+Reversing the `k` order in the 16-block, the 4-block or the tail fails 5, 6 and 16 cases.
+The full suite passed with the Rust conv pins unchanged (2550 passed).
+
+**Before and after** (`conv_forward_batch`, µs, two runs per build, builds alternated):
+
+| shape | O | N | old | new | change |
+| --- | --- | --- | --- | --- | --- |
+| 28x28x1 | 4 | 1 | 54.5, 55.1 | 20.5, 18.9 | -64% |
+| 28x28x1 | 4 | 32 | 1540.5, 1586.1 | 892.5, 603.3 | -52% |
+| 28x28x1 | 8 | 1 | 51.2, 52.8 | 24.2, 24.4 | -53% |
+| 28x28x1 | 8 | 32 | 4746.5, 4494.0 | 3683.8, 3330.1 | -24% |
+| 28x28x1 | 16 | 1 | 65.7, 65.2 | 32.0, 32.8 | -50% |
+| 28x28x1 | 16 | 32 | 7629.8, 7407.2 | 6110.1, 6153.8 | -18% |
+| 28x28x1 | 32 | 1 | 165.2, 102.6 | 119.2, 60.9 | -33% |
+| 28x28x1 | 32 | 32 | 12457.2, 12944.7 | 9719.4, 10324.3 | -21% |
+| 8x8x1 | 4 | 1 | 3.5, 3.6 | 1.9, 1.9 | -46% |
+| 8x8x1 | 4 | 32 | 81.4, 84.0 | 30.9, 30.8 | -63% |
+| 8x8x1 | 8 | 1 | 3.7, 3.7 | 2.3, 2.2 | -39% |
+| 8x8x1 | 8 | 32 | 90.3, 91.6 | 42.9, 70.9 | -37% |
+| 8x8x1 | 16 | 1 | 4.4, 4.4 | 2.7, 2.6 | -40% |
+| 8x8x1 | 16 | 32 | 110.7, 113.6 | 113.9, 58.9 | -23% |
+| 8x8x1 | 32 | 1 | 6.5, 6.6 | 4.2, 4.2 | -36% |
+| 8x8x1 | 32 | 32 | 176.4, 179.0 | 207.5, 103.2 | -13% |
+| 13x13x8 | 4 | 1 | 50.0, 51.6 | 22.3, 21.6 | -57% |
+| 13x13x8 | 4 | 32 | 1732.7, 1631.5 | 683.0, 721.1 | -58% |
+| 13x13x8 | 8 | 1 | 57.0, 57.2 | 31.8, 31.9 | -44% |
+| 13x13x8 | 8 | 32 | 1795.0, 1942.1 | 1013.5, 1030.1 | -45% |
+| 13x13x8 | 16 | 1 | 69.9, 70.4 | 27.1, 26.8 | -62% |
+| 13x13x8 | 16 | 32 | 2053.9, 1690.8 | 1558.8, 1277.2 | -24% |
+| 13x13x8 | 32 | 1 | 105.2, 106.7 | 46.6, 45.5 | -57% |
+| 13x13x8 | 32 | 32 | 3120.4, 3236.1 | 1807.5, 1954.7 | -41% |
+
+At N = 1 the new op takes 33-64% less time, and at N = 32 13-63% less. The large-N rows vary
+more between runs, but every one improved. End to end, Rust/numpy (before is #335; test
+accuracies and agreement columns are unchanged):
+
+| case | before | after |
+| --- | --- | --- |
+| UCI conv, single / mini-batch | 0.16 / 0.25 | 0.15 / 0.22 |
+| UCI conv-pool-conv, single / mini-batch | 0.08 / 0.11 | 0.08 / 0.09 |
+| UCI conv-conv-stride2, single / mini-batch | 0.11 / 0.17 | 0.10 / 0.13 |
+| MNIST conv, single / mini-batch | 0.31 / 0.87 | **0.26 / 0.67** |
+| MNIST conv-pool-conv, single / mini-batch | 0.44 / 0.63 | **0.32 / 0.46** |
+| MNIST conv-conv-stride2, single / mini-batch | 0.55 / 0.70 | **0.38 / 0.52** |
+
+`conv_forward_batch` fell from 51% to 36% of profiled Rust conv-pool-conv time
+(single-example), and from 51% to 38% (mini-batch).
+
+**Found along the way, not acted on.** The same narrow-row pattern is in the other two conv
+matmuls:
+- `conv_accumulate_gradient_batch`'s `D @ cols` has output rows `fan_in` wide (9 for the first
+  layer).
+- `conv_downstream_batch`'s `D_by_position @ W` has output rows `fan_in` wide too.
+
+At 28x28, O = 8, N = 1, accumulate now costs more than forward (36 vs 23 µs in the prototype
+run). `matmul_narrow` would apply to both unchanged and keep their bits. This is an estimate, not
+measured.
+
 With `O = 8`, `cols @ W.T` runs `axpy_row` on 8-wide output rows, two AVX2 lanes. Loop overhead
 is a large share. Two candidate formulations:
 

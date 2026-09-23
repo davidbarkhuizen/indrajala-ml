@@ -95,6 +95,10 @@ stage A): bit-identical, and a small gain, about 14% at N = 512 and within noise
 **The second (skip `cols` when not training) was built and closed** (stage B): at N = 1 `cols`
 is only 48 KB, and a single-example evaluation pass without it measured 1-8% slower, not faster.
 The op's cost is its per-row `axpy_row` calls on 8-wide rows, the third candidate.
+**The third (small output channel counts) is done** (stage C). im2col-then-matmul measured as the
+right formulation, but `matmul`'s row kernel wasn't. A register-blocked `matmul_narrow` for `cols
+@ W.T` is bit-identical and takes 33-64% less time at N = 1. The same pattern in the conv
+accumulate and downstream matmuls is recorded there, not yet acted on.
 The candidates as first written:
 
 - **Don't return `Z`.** `conv_forward_batch` builds `Z`, then a separate `A = relu(Z)`, then
