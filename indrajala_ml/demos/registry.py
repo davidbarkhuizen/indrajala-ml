@@ -74,6 +74,37 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
+        module="indrajala_ml.demos.demo_iris_linear_classifier_ceiling",
+        title="Iris: linear-classifier ceiling",
+        summary="Headless - real Fisher's Iris data: perceptron solves setosa-vs-rest, hits a real ceiling on versicolor-vs-virginica.",
+        description=(
+            "Headless, console-only - the first demo in this repo to train a LinearClassifierNetwork on "
+            "real data instead of a synthetic 2D geometric target. Fisher's Iris (1936) has one famous "
+            "linear-separability split: setosa is perfectly separable from the other two species (a "
+            "cardinality=1 perceptron reliably converges to 1.000), but versicolor and virginica overlap "
+            "and are NOT perfectly linearly separable - confirmed directly via a one-time linear-"
+            "programming feasibility check, not assumed. Sweeps cardinality/gate configurations on "
+            "versicolor-vs-virginica the same way demo_xor_linear_classifier_ceiling.py does, and none "
+            "reach 1.000 - a different kind of ceiling than XOR's inexpressible shape: this one is caused "
+            "by genuine feature-space overlap, and is representable almost perfectly, just not exactly."
+        ),
+    ),
+    DemoInfo(
+        module="indrajala_ml.demos.demo_iris_backprop_versus_perceptron",
+        title="Iris: backprop vs. perceptron on a real ceiling",
+        summary="Headless - unlike XOR, backprop doesn't clear the versicolor/virginica ceiling; it does generalize slightly better.",
+        description=(
+            "Headless, console-only - the direct counterpart to the Iris linear-classifier-ceiling demo, "
+            "asking whether BackpropClassifierNetwork clears that ceiling the way it clears XOR's. Repeats "
+            "an 80/20 train/test split 10 times (a single 20-example test set is too small and noisy to "
+            "trust alone) and averages perceptron vs. backprop training AND held-out accuracy. Measured "
+            "result: a null on training accuracy (both plateau at roughly the same ceiling, since extra "
+            "capacity doesn't help when the ceiling is caused by real data ambiguity, not an inexpressible "
+            "shape), but backprop's held-out test accuracy is measurably higher on average - reported as "
+            "measured, not rounded up to match the more dramatic XOR story."
+        ),
+    ),
+    DemoInfo(
         module="indrajala_ml.demos.demo_backprop_stripes_architecture_sweep",
         title="Backprop stripes architecture sweep",
         summary="Compares backprop architectures ([4],[8],[4,4],[8,8]) at matched node budgets.",
