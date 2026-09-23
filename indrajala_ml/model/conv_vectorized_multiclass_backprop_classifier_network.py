@@ -5,11 +5,14 @@ import numpy as np
 from indrajala_ml.model.array_layer import ArrayLayer, fan_in_aware_random_layer
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
-from indrajala_ml.model.conv_front_end import build_conv_front_end, spec_from_json, spec_to_json
+from indrajala_ml.model.conv_front_end import (
+    build_conv_array_network_layers,
+    load_conv_array_model_json,
+    save_conv_array_model_json,
+)
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.model_io import load_json, save_json
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
@@ -55,34 +58,16 @@ class ConvVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBack
         self.conv_specs = list(conv_specs)
         self.dense_layer_sizes = dense_layer_sizes
 
-        self.conv_layers: list[ConvArrayLayer | MaxPoolArrayLayer] = build_conv_front_end(
+        self.conv_layers, dense_layers, self.output_layer = build_conv_array_network_layers(
             input_height,
             input_width,
             self.conv_specs,
-            make_conv=lambda spec, _previous, height, width, channels: ConvArrayLayer(
-                input_height=height,
-                input_width=width,
-                input_channels=channels,
-                kernel_size=spec.kernel_size,
-                channel_count=spec.channel_count,
-                stride=spec.stride,
-            ),
-            make_pool=lambda spec, _previous, height, width, channels: MaxPoolArrayLayer(
-                input_height=height,
-                input_width=width,
-                input_channels=channels,
-                pool_size=spec.pool_size,
-                stride=spec.stride,
-            ),
+            dense_layer_sizes,
+            class_count,
+            conv_cls=ConvArrayLayer,
+            pool_cls=MaxPoolArrayLayer,
+            dense_cls=ArrayLayer,
         )
-
-        dense_layers: list[ArrayLayer] = []
-        previous_size = self.conv_layers[-1].size
-        for size in dense_layer_sizes:
-            dense_layers.append(ArrayLayer(size, previous_size))
-            previous_size = size
-
-        self.output_layer = ArrayLayer(class_count, previous_size)
         self.layers = self.conv_layers + dense_layers + [self.output_layer]
 
     def randomize(self) -> None:
@@ -128,30 +113,8 @@ class ConvVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBack
             layer.b = np.array(b, dtype=np.float64).copy()
 
     def save(self, path: str) -> None:
-        # the same envelope keys as ConvMultiClassBackpropClassifierNetwork.save, but the
-        # snapshot entries are this class's own (W, b) per layer, not per-kernel lists - a file
-        # saved by one class doesn't load into the other
-        save_json(
-            path,
-            {
-                "input_height": self.input_height,
-                "input_width": self.input_width,
-                "conv_layers": [spec_to_json(spec) for spec in self.conv_specs],
-                "dense_layer_sizes": self.dense_layer_sizes,
-                "class_count": self.class_count,
-                "snapshot": [[entry[0].tolist(), entry[1].tolist()] if entry else [] for entry in self.snapshot()],
-            },
-        )
+        save_conv_array_model_json(path, self)
 
     @classmethod
     def load(cls, path: str) -> "ConvVectorizedMultiClassBackpropClassifierNetwork":
-        state = load_json(path)
-        network = cls(
-            input_height=state["input_height"],
-            input_width=state["input_width"],
-            conv_specs=[spec_from_json(spec) for spec in state["conv_layers"]],
-            dense_layer_sizes=state["dense_layer_sizes"],
-            class_count=state["class_count"],
-        )
-        network.restore(state["snapshot"])
-        return network
+        return load_conv_array_model_json(cls, path)
