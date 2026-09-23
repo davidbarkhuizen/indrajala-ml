@@ -20,7 +20,7 @@ timing. Each has its own workplan:
    Doing a bit-identical change first also means the later bit-changing changes are measured
    against a baseline that has only one variable left.
 2. **Optimization 1** (dense transposes). Stage A (`delta_batch.T @ X`) is bit-identical and
-   goes first. Stages B (`layer_downstream`) and C (`X @ W.T`) change summation order, so each
+   goes first. **Stage A closed, not merged:** no measured gain. Stages B (`layer_downstream`) and C (`X @ W.T`) change summation order, so each
    gets its own PR with the parity protocol below.
 3. **Optimization 3** (conv forward), stages A and B. Dropping `Z` and adding a forward-only
    path are both bit-identical.
