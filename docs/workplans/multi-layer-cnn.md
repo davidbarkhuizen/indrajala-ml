@@ -82,8 +82,16 @@ null result is a real possibility and gets recorded honestly either way.
 ## Stage 4 - measured comparison: 1 vs 2 conv layers on UCI digits
 
 - Multi-seed comparison of one vs two conv layers (matched budget, same dense tail) on the
-  bundled UCI digits split; record mean/spread of training and test accuracy, and wall time.
+  bundled UCI digits split; record mean/spread of training and test accuracy. No wall time: the
+  pure-Python implementation is never used for timing (README, Models section).
 - Result recorded as-is, including a null or negative result.
+
+Status: the comparison exists as `demo_conv_depth_uci_digits_comparison.py` (dense baseline,
+conv1 3x3x8, conv2 3x3x8 -> 3x3x8, and a parameter-matched conv2-wide 3x3x8 -> 3x3x16; 8
+paired seeds, 20 epochs). **The measurement was not run to completion**: the first full sweep
+was stopped after ~46 minutes on 8 logical cores (4 physical) with no results, and the
+comparison was deliberately left unmeasured rather than rerun. Open question as of this
+workplan: whether a second conv layer helps on 8x8 digits.
 
 ## Stage 5 - `MaxPoolLayer`
 
