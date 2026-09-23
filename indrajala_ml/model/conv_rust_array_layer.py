@@ -3,6 +3,7 @@ from __future__ import annotations
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.conv_array_layer import validate_conv_arguments
+from indrajala_ml.model.rust_array_layer import unfused_sgd_step
 
 
 class ConvRustArrayLayer:
@@ -104,6 +105,10 @@ class ConvRustArrayLayer:
             self.W, self.b, self._grad_W, self._grad_b, learning_rate, batch_size
         )
         self._reset_gradient_accum()
+
+    def sgd_step(self, input_activation: "pa.Array", learning_rate: float) -> None:
+        # the conv gradient sums over output positions, so there's no fused dense step for it
+        unfused_sgd_step(self, input_activation, learning_rate)
 
     def _reset_gradient_accum(self) -> None:
         self._grad_W = pa.Array.zeros((self.channel_count, self.fan_in))

@@ -15,7 +15,7 @@ timing. Each has its own workplan:
 
 0. **Shared stage 0: a committed per-op benchmark** (below). **Done:**
    `indrajala_ml/demos/demo_layer_op_timing.py`.
-1. **Optimization 2** (dense accumulate_gradient). It is the most expensive Rust op in the
+1. **Optimization 2** (dense accumulate_gradient). **Done**, both stages. It is the most expensive Rust op in the
    measured case (639 µs), and it can be done bit-identically, so nothing downstream moves.
    Doing a bit-identical change first also means the later bit-changing changes are measured
    against a baseline that has only one variable left.
