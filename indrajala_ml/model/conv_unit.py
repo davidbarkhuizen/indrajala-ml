@@ -4,7 +4,7 @@ from typing import Sequence
 
 from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.conv_kernel import ConvKernel
-from indrajala_ml.model.relu_layer import relu_activation, relu_hidden_delta
+from indrajala_ml.model.relu_layer import relu_activation, relu_delta
 
 
 class ConvUnit(AbstractNode):
@@ -17,8 +17,11 @@ class ConvUnit(AbstractNode):
     input_nodes entry for a downstream dense BackpropLayer with zero special-casing there.
 
     forward()/compute_hidden_delta() call ReLUNode's own shared formulas (relu_layer.py's
-    relu_activation/relu_hidden_delta - ReLU is the standard default for convolutional hidden
+    relu_activation/relu_delta - ReLU is the standard default for convolutional hidden
     layers), reading weights from a shared ConvKernel instead of an owned list.
+    compute_hidden_delta takes the next layer's already-computed downstream sum (see
+    ConvLayer.compute_hidden_deltas) rather than scanning a node list, since the next layer may
+    itself be convolutional, where no node owns a weight indexed by this unit's position.
     """
 
     def __init__(self, input_nodes: Sequence[AbstractNode], kernel: ConvKernel) -> None:
@@ -56,8 +59,8 @@ class ConvUnit(AbstractNode):
             "suited to any of this codebase's output-layer contracts."
         )
 
-    def compute_hidden_delta(self, next_layer_nodes: Sequence["ConvUnit"], own_index: int) -> None:
-        self.delta = relu_hidden_delta(next_layer_nodes, own_index, self.value())
+    def compute_hidden_delta(self, downstream_sum: float) -> None:
+        self.delta = relu_delta(downstream_sum, self.value())
 
     def accumulate_gradient(self) -> None:
         receptive_field_values = [node.value() for node in self.input_nodes]

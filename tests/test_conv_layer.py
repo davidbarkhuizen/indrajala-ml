@@ -238,3 +238,104 @@ def test_gradient_check_against_a_numerically_perturbed_loss():
 
         numerical_gradient = (loss_plus - loss_minus) / (2 * epsilon)
         assert kernel._bias_gradient_accum == pytest.approx(numerical_gradient, abs=1e-4)
+
+
+def _stacked_conv_layers(height: int, width: int, stride: int) -> tuple[StateLayer, ConvLayer, ConvLayer]:
+    input_layer = StateLayer(height * width, [(-10.0, 10.0)] * (height * width))
+    input_layer.update_state(tuple(random.uniform(-2.0, 2.0) for _ in range(height * width)))
+    first = ConvLayer(input_layer=input_layer, input_height=height, input_width=width, kernel_size=2, channel_count=1)
+    second = ConvLayer(
+        input_layer=first,
+        input_height=first.out_height,
+        input_width=first.out_width,
+        kernel_size=2,
+        channel_count=3,
+        stride=stride,
+    )
+    first.randomize_fan_in_aware()
+    second.randomize_fan_in_aware()
+    return input_layer, first, second
+
+
+@pytest.mark.parametrize("stride", [1, 2])
+def test_downstream_sum_matches_a_brute_force_scan_over_every_unit(stride):
+
+    # the reverse map is only an optimization - it must give exactly the sum a dense scan over
+    # every downstream unit would, where a unit contributes delta * weight for each receptive
+    # field slot that reads the given input node (by identity) and nothing otherwise
+    random.seed(1)
+    _input_layer, first, second = _stacked_conv_layers(height=7, width=7, stride=stride)
+    first.forward()
+    second.forward()
+    for unit in second.nodes:
+        unit.delta = random.uniform(-1.0, 1.0)
+
+    for own_index, upstream in enumerate(first.nodes):
+        brute_force = sum(
+            unit.delta * unit.kernel.weights[weight_index]
+            for unit in second.nodes
+            for weight_index, node in enumerate(unit.input_nodes)
+            if node is upstream
+        )
+        assert second.downstream_sum(own_index) == pytest.approx(brute_force, abs=1e-12)
+
+
+def test_downstream_sum_is_zero_for_an_input_no_receptive_field_reads():
+
+    # stride 3 with kernel_size 2 over a 5x5 input reads rows/cols {0, 1, 3, 4} only - row/col 2
+    # is never in any receptive field, so its reverse-map entry is empty
+    input_layer = StateLayer(25, [(-10.0, 10.0)] * 25)
+    layer = ConvLayer(input_layer=input_layer, input_height=5, input_width=5, kernel_size=2, channel_count=1, stride=3)
+    for unit in layer.nodes:
+        unit.delta = 1.0
+
+    skipped = 2 * 5 + 2  # row 2, col 2
+    assert layer._fan_out[skipped] == []
+    assert layer.downstream_sum(skipped) == 0.0
+
+
+@pytest.mark.parametrize("stride", [1, 2])
+def test_gradient_check_through_two_stacked_conv_layers(stride):
+
+    # the same finite-difference check as the single-layer test above, but with loss
+    # L = sum of the *second* conv layer's activations, so every first-layer gradient has to
+    # flow back through the second layer's shared kernels via compute_hidden_deltas/
+    # downstream_sum - the backprop-through-convolution this layer previously didn't implement
+    random.seed(2)
+    _input_layer, first, second = _stacked_conv_layers(height=7, width=7, stride=stride)
+
+    def total_loss() -> float:
+        first.forward()
+        second.forward()
+        return sum(unit.value() for unit in second.nodes)
+
+    total_loss()
+    for unit in second.nodes:
+        unit.delta = 1.0 if unit.value() > 0.0 else 0.0
+    first.compute_hidden_deltas(second)
+    first.accumulate_gradients()
+    second.accumulate_gradients()
+
+    # guard against a vacuous pass: some first-layer units must actually carry gradient
+    assert any(unit.delta != 0.0 for unit in first.nodes)
+
+    epsilon = 1e-5
+    for layer in (first, second):
+        for kernel in layer.kernels:
+            parameters = [(kernel.weights, i, kernel._weight_gradient_accum[i]) for i in range(len(kernel.weights))]
+            for weights, i, analytic in parameters:
+                original = weights[i]
+                weights[i] = original + epsilon
+                loss_plus = total_loss()
+                weights[i] = original - epsilon
+                loss_minus = total_loss()
+                weights[i] = original
+                assert analytic == pytest.approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-4)
+
+            original_bias = kernel.bias
+            kernel.bias = original_bias + epsilon
+            loss_plus = total_loss()
+            kernel.bias = original_bias - epsilon
+            loss_minus = total_loss()
+            kernel.bias = original_bias
+            assert kernel._bias_gradient_accum == pytest.approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-4)

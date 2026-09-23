@@ -12,14 +12,19 @@ def relu_activation(z: float) -> float:
     return max(0.0, z)
 
 
-def relu_hidden_delta(next_layer_nodes: Sequence["BackpropNode"], own_index: int, activation: float) -> float:
+def relu_delta(downstream: float, activation: float) -> float:
     """ReLU's derivative is 1 where z > 0 and 0 where z <= 0 (the same either-branch convention
     most practical implementations use; z == 0 exactly is measure-zero and doesn't matter in
     practice) - and since activation == max(0, z), activation > 0 exactly when z > 0, so the
     derivative can be read off the already-cached activation without storing or recomputing z
-    separately. Shared verbatim with ConvUnit (conv_unit.py)."""
-    downstream = sum(node.delta * node.input_node_weights[own_index] for node in next_layer_nodes)
+    separately. Shared verbatim with ConvUnit (conv_unit.py), whose downstream sum comes from
+    the next layer's own downstream_sum() rather than a dense scan."""
     return downstream if activation > 0.0 else 0.0
+
+
+def relu_hidden_delta(next_layer_nodes: Sequence["BackpropNode"], own_index: int, activation: float) -> float:
+    downstream = sum(node.delta * node.input_node_weights[own_index] for node in next_layer_nodes)
+    return relu_delta(downstream, activation)
 
 
 class ReLUNode(BackpropNode):

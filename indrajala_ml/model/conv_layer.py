@@ -15,10 +15,15 @@ class ConvLayer:
     apply_accumulated_gradients/apply_gradients/snapshot_state/restore_state/set_training_mode -
     see backprop_layer.py's own identical methods).
 
-    v1 scope only: input_layer must be a
-    plain StateLayer, not another ConvLayer - single input channel, no stacking, since stacking
-    needs backprop-through-convolution this layer doesn't implement. 'valid' padding only (no
-    synthetic zero-padding - output shrinks by kernel_size-1 per stride-1 step).
+    input_layer is either a StateLayer or another single-channel ConvLayer (a single input
+    channel either way - input_height*input_width must match its node count). 'valid' padding
+    only (no synthetic zero-padding - output shrinks by kernel_size-1 per stride-1 step).
+
+    Backprop *through* this layer (to a preceding ConvLayer) uses a reverse map built once at
+    construction - input node index -> every (unit, kernel weight index) pair whose receptive
+    field reads that input node. downstream_sum(i) sums unit.delta * kernel weight over that
+    list only: the index form of a "full convolution with a flipped kernel", and sparse, since a
+    dense scan over every unit for every input node is O(units * inputs) per example.
 
     .nodes is channel-major: every (row, col) position for kernel 0, then kernel 1, and so on -
     a stable, documented ordering both this layer's own construction and any downstream dense
@@ -27,7 +32,7 @@ class ConvLayer:
 
     def __init__(
         self,
-        input_layer: StateLayer,
+        input_layer: StateLayer | ConvLayer,
         input_height: int,
         input_width: int,
         kernel_size: int,
@@ -61,26 +66,38 @@ class ConvLayer:
             ConvKernel(kernel_size=kernel_size, in_channels=1) for _ in range(channel_count)
         ]
 
-        self.nodes: list[ConvUnit] = [
-            ConvUnit(input_nodes=self._receptive_field_nodes(row, col), kernel=kernel)
-            for kernel in self.kernels
-            for row in range(self.out_height)
-            for col in range(self.out_width)
-        ]
+        self.nodes: list[ConvUnit] = []
+        self._fan_out: list[list[tuple[ConvUnit, int]]] = [[] for _ in input_layer.nodes]
+        for kernel in self.kernels:
+            for row in range(self.out_height):
+                for col in range(self.out_width):
+                    indices = self._receptive_field_indices(row, col)
+                    unit = ConvUnit(input_nodes=[input_layer.nodes[i] for i in indices], kernel=kernel)
+                    self.nodes.append(unit)
+                    for weight_index, input_index in enumerate(indices):
+                        self._fan_out[input_index].append((unit, weight_index))
 
-    def _receptive_field_nodes(self, row: int, col: int) -> list:
+    def _receptive_field_indices(self, row: int, col: int) -> list[int]:
         # row-major flat indexing into input_layer.nodes - matches how mnist_data.py/
         # digits_data.py decode pixels (see this module's own hot-pixel test)
-        indices = [
+        return [
             (row * self.stride + kr) * self.input_width + (col * self.stride + kc)
             for kr in range(self.kernel_size)
             for kc in range(self.kernel_size)
         ]
-        return [self.input_layer.nodes[i] for i in indices]
 
     def forward(self) -> None:
         for unit in self.nodes:
             unit.forward()
+
+    def compute_hidden_deltas(self, next_layer) -> None:
+        # the next layer (dense BackpropLayer or another ConvLayer) supplies each unit's
+        # downstream sum itself, in whichever form (dense or sparse) its own wiring needs
+        for own_index, unit in enumerate(self.nodes):
+            unit.compute_hidden_delta(next_layer.downstream_sum(own_index))
+
+    def downstream_sum(self, own_index: int) -> float:
+        return sum(unit.delta * unit.kernel.weights[weight_index] for unit, weight_index in self._fan_out[own_index])
 
     def set_training_mode(self, training: bool) -> None:
         # a no-op - see BackpropLayer's own identical no-op default for why every layer needs

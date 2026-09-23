@@ -39,6 +39,20 @@ class BackpropLayer:
         # inference (e.g. DropoutLayer) overrides this to propagate the flag to its own nodes.
         pass
 
+    def compute_hidden_deltas(self, next_layer: "BackpropLayer") -> None:
+        # BackpropNetworkBase._backward_hidden_layers's own per-node loop, extracted here so a
+        # sibling layer whose nodes can't read the next layer as a flat node list (ConvLayer's
+        # ConvUnits, which take a precomputed downstream sum instead) can override it once
+        for own_index, node in enumerate(self.nodes):
+            node.compute_hidden_delta(next_layer.nodes, own_index)
+
+    def downstream_sum(self, own_index: int) -> float:
+        # sum over this layer's nodes of delta * the weight each applies to the previous layer's
+        # own_index-th node - the dense form, every node fully connected; ConvLayer overrides
+        # this with its sparse, kernel-shared form. Same formula and summation order as
+        # BackpropNode.compute_hidden_delta's own downstream sum.
+        return sum(node.delta * node.input_node_weights[own_index] for node in self.nodes)
+
     # these five methods are BackpropNetworkBase's own per-node loops, extracted here so a
     # sibling layer with a different notion of "one weight-owning unit" than "one node" (e.g. a
     # convolutional layer sharing one kernel across many spatial-position nodes) can override

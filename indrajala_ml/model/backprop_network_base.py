@@ -72,8 +72,7 @@ class BackpropNetworkBase:
     def _backward_hidden_layers(self) -> None:
         for layer_index in reversed(range(len(self.hidden_layers))):
             next_layer = self.trainable_layers[layer_index + 1]
-            for own_index, node in enumerate(self.hidden_layers[layer_index].nodes):
-                node.compute_hidden_delta(next_layer.nodes, own_index)
+            self.hidden_layers[layer_index].compute_hidden_deltas(next_layer)
 
     def _set_training_mode(self, training: bool) -> None:
         # call-scoped, not lifecycle-scoped: train.py's own training loops call
