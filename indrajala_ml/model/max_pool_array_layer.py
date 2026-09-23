@@ -4,6 +4,18 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 
+def validate_pool_arguments(input_height: int, input_width: int, input_channels: int, pool_size: int, stride: int) -> None:
+    # the same assertions as MaxPoolLayer's own constructor (minus the input_layer node-count
+    # check - there's no input_layer object here), shared with MaxPoolRustArrayLayer
+    assert pool_size >= 1, f"pool_size must be at least 1; got {pool_size}"
+    assert stride >= 1, f"stride must be at least 1; got {stride}"
+    assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
+    assert pool_size <= input_height and pool_size <= input_width, (
+        f"pool_size ({pool_size}) must fit within input_height x input_width "
+        f"({input_height}x{input_width})"
+    )
+
+
 class MaxPoolArrayLayer:
     """
     The numpy counterpart to MaxPoolLayer (max_pool_layer.py): max pooling over input_channels
@@ -29,16 +41,7 @@ class MaxPoolArrayLayer:
     ) -> None:
 
         stride = pool_size if stride is None else stride
-
-        # the same assertions as MaxPoolLayer's own constructor (minus the input_layer
-        # node-count check - there's no input_layer object here)
-        assert pool_size >= 1, f"pool_size must be at least 1; got {pool_size}"
-        assert stride >= 1, f"stride must be at least 1; got {stride}"
-        assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
-        assert pool_size <= input_height and pool_size <= input_width, (
-            f"pool_size ({pool_size}) must fit within input_height x input_width "
-            f"({input_height}x{input_width})"
-        )
+        validate_pool_arguments(input_height, input_width, input_channels, pool_size, stride)
 
         self.input_height = input_height
         self.input_width = input_width
