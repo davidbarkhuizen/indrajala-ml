@@ -23,37 +23,25 @@ Rules for every stage:
 
 ## 1. One array network base for both backends
 
-**Where it stands.** The base is shared: `ArrayNetworkBase` calls the array operations that
-differ between numpy and Rust through `self.backend` (`indrajala_ml/model/array_backend.py`,
-`NUMPY` and `RUST`), and `RustArrayNetworkBase` is a subclass that sets `backend = RUST` and the
-Rust layer classes. The single-example step always calls `layer.sgd_step`: numpy's layers make the
-unfused `accumulate_gradient` and `apply_accumulated_gradient` calls, and Rust's plain dense layer
-fuses them.
+**Where it stands.** The base and the two shapes are shared. `ArrayNetworkBase` calls the array
+operations that differ between numpy and Rust through `self.backend`
+(`indrajala_ml/model/array_backend.py`, `NUMPY` and `RUST`), and `RustArrayNetworkBase` is a
+subclass that sets `backend = RUST` and the Rust layer classes. The single-example step always
+calls `layer.sgd_step`: numpy's layers make the unfused `accumulate_gradient` and
+`apply_accumulated_gradient` calls, and Rust's plain dense layer fuses them. The multiclass and
+single-output shapes are mixins (`array_network_shapes.py`), so each concrete name is the shape
+over one backend's base: `VectorizedMultiClassBackpropClassifierNetwork(ArrayMultiClassShape,
+ArrayNetworkBase)`, `RustArrayMultiClassBackpropClassifierNetwork(ArrayMultiClassShape,
+RustArrayNetworkBase)`, and likewise `ArraySingleOutputShape` for the single-output pair.
 
-**The duplication left.** The classes one level up are still pairs:
+**The duplication left.**
 
-- the multiclass pair `VectorizedMultiClassBackpropClassifierNetwork` /
-  `RustArrayMultiClassBackpropClassifierNetwork`;
-- the single-output pair `ArrayBackpropClassifierNetwork` / `RustArrayBackpropClassifierNetwork`;
 - the ensemble pair `EnsembleArrayBackpropClassifierNetwork` /
   `EnsembleRustArrayBackpropClassifierNetwork`;
 - the conv pair's `randomize`, `snapshot` and `restore`.
 
-Besides the operations already in the backend, the shape classes differ in these:
-
-| operation | numpy | Rust |
-|---|---|---|
-| zeros, argmax, argmax per row | `np.zeros`, `np.argmax`, `axis=1` | `pa.Array.zeros`, `pa.argmax`, per-row `index(max)` |
-| output to list | `float(x[0])`, `.tolist()` | `.tolist()` |
-
-**Target shape.** The backend gains those operations. The shape classes become one multiclass
-class and one single-output class, parameterized by backend. The existing concrete names stay as
-two-line subclasses that set `backend` and the default layer classes.
-
 **Stages** (one PR each):
 
-2. The multiclass and single-output shape pairs, with `save` and `load` converting through the
-   backend.
 3. The ensemble pair, and the conv pair's `randomize`, `snapshot` and `restore`. Only the conv
    pair's `classify_rows` stays per backend, because batched Rust conv inference was measured
    slower (`docs/optimizations/rejected.md`).
@@ -64,7 +52,7 @@ two-line subclasses that set `backend` and the default layer classes.
 **The duplication.** Every network with a hyperparameter spells each name out several times:
 
 - in `__init__`, which stores it and also closes over it in a layer-class lambda;
-- in a `randomized` override that exists only to pass it through (22 files define `randomized`);
+- in a `randomized` override that exists only to pass it through (19 files define `randomized`);
 - in `_extra_state` and `_extra_init_kwargs`, which round-trip it through `save` and `load`.
 
 This covers momentum, L2, Adam and dropout, in the numpy, Rust and per-node families.
