@@ -83,7 +83,7 @@ From the quick survey to the decisive measurement:
   chained (freed top-of-heap returned to the OS). `focused_benchmark.py --malloc both` separates
   it.
 - **A time can be bimodal between processes, not only noisy.** The one-pass max-pool downstream
-  probe at batch 32 runs at about 17 cycles a window (190-200 µs) in some processes and 42-49
+  at batch 32 (probe and op) runs at about 17 cycles a window (190-200 µs) in some processes and 42-49
   (470-570 µs) in others, tight within each. The counters show the same instructions, L1 and L2
   accesses in both modes; the slow one is integer-scheduler stalls (ALU-token stalls 24 against 1
   a window). Ruled out, each measured: page faults and allocator thresholds, clock frequency,
