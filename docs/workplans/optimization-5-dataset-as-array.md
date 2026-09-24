@@ -1,8 +1,9 @@
 # Workplan: optimization 5, build the training data as one backend array
 
-Order: last (see `optimizations.md`). Lowest value, and the only item that changes the trainer
-interface. It should be re-justified by measurement after items 1–4 have landed, because the
-fixed per-example cost it removes becomes a larger share only once the maths is faster.
+Candidate 7 in [`../optimizations.md`](../optimizations.md). Lowest value, and the only item
+that changes the trainer interface. Optimizations 1-4 and the kernel fixes after them have
+landed, so the fixed per-example cost it removes is now a larger share of each step; stage 0
+measures whether it is large enough.
 
 ## Context
 
@@ -20,7 +21,7 @@ contract is used by the pure-Python networks, the ensembles, and the sweeps.
 
 ## Stage 0: decide (measurement, no code PR)
 
-Before any interface work, measure on the current `main`, after items 1–4:
+Before any interface work, measure on the current `main`:
 
 1. The conversion's share of one epoch, single-example and mini-batch (32), for the dense
    production network (784 -> 30 -> 10) and the conv networks, in both backends. Use cProfile
@@ -30,8 +31,8 @@ Before any interface work, measure on the current `main`, after items 1–4:
    training row again on each epoch.
 
 **Go/no-go:** proceed only if the conversion is at least about 10% of epoch time for some
-production configuration. Otherwise record the numbers in `recommended-optimizations.md` item
-5 and close. The criterion is fixed here, before measuring, so the decision isn't argued after
+production configuration. Otherwise record the numbers in `../optimizations.md` candidate 7
+and close. The criterion is fixed here, before measuring, so the decision isn't argued after
 the fact.
 
 ## Design, if it goes ahead
