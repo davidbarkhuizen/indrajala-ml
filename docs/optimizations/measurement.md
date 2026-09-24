@@ -81,6 +81,10 @@ From the quick survey to the decisive measurement:
 - **glibc heap trimming can fault a batch op's buffers back in on every call** when calls are
   chained (freed top-of-heap returned to the OS). `focused_benchmark.py --malloc both` separates
   it.
+- **A time can be bimodal between processes, not only noisy.** The one-pass max-pool downstream
+  probe at batch 32 ran at 187-195 µs in some processes and 465-530 in others, tight within
+  each, under default and raised allocator thresholds alike (address-dependent, unexplained). A
+  median of loops in one process can't see it: run several processes before quoting a number.
 - **The conv demo's mini-batch runs barely train** (about 10% accuracy in 1-2 epochs at lr 0.5):
   their timings are valid, their accuracy columns are not.
 - **Rust dense-MNIST epoch times from before #365 aren't comparable** with later ones: the shared
