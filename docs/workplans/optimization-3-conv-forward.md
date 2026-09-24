@@ -261,6 +261,27 @@ At 28x28, O = 8, N = 1, accumulate now costs more than forward (36 vs 23 µs in 
 run). `matmul_narrow` would apply to both unchanged and keep their bits. This is an estimate, not
 measured.
 
+**Since done** (indrajala-math-rust#12). Both ops now use `matmul_narrow`, so every conv matmul
+goes through it, and both are bit-identical. New crate tests rebuild each op from plain `matmul`
+exactly. An old build and the new one gave identical `dX`, `grad_W` and `grad_b` over 175 cases.
+
+Timing: two runs per build, alternated, over the same 24-configuration grid.
+- Downstream takes 4-56% less time.
+- Accumulate takes 16-43% less in 21 configurations. The other three are 13x13x8 at N = 32
+  (O = 4, 8, 32), at +2%, +4% and -1%, within the old build's own spread. `cols` is large
+  there, and `matmul`'s cache blocking makes up for its row overhead.
+- At 28x28, O = 8, N = 1: downstream went from 49-53 to 22-26 µs, and accumulate from 37-41 to
+  28-31 µs.
+
+The demo's single-example conv layer (forward + downstream + accumulate) went from 124 to 82 µs
+on MNIST and from 9.6 to 6.7 µs on UCI. End to end, Rust/numpy on MNIST (before #336 → after):
+- conv-pool-conv: 0.32 → 0.29 single-example, 0.46 → 0.44 mini-batch.
+- conv-conv-stride2: 0.38 → 0.35 single-example, 0.52 → 0.50 mini-batch.
+- conv: 0.26 → 0.27 single-example, 0.67 → 0.72 mini-batch. That's within the demo's run-to-run
+  spread: this network's only conv layer is the first one, whose downstream is never called.
+
+The full suite passed, 2592.
+
 With `O = 8`, `cols @ W.T` runs `axpy_row` on 8-wide output rows, two AVX2 lanes. Loop overhead
 is a large share. Two candidate formulations:
 
