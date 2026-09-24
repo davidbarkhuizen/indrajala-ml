@@ -7,6 +7,10 @@ option="${1:-}"
 venv_root=".venv"
 os_packages="python3-tk cargo"
 rust_crate_root="rust"
+# Pinned here, not in requirements.txt (a pip-compile lock of the package's own dependencies):
+# the build tool for rust/, so CI's cached venv and wheel and a local setup all build with the
+# same maturin. Bump deliberately, then rebuild and re-run both test suites.
+maturin_version="1.15.0"
 
 clean () {
 
@@ -64,7 +68,7 @@ install_python_modules () {
 install_maturin () {
 
     echo "installing maturin ..."
-    python -m pip install maturin
+    python -m pip install "maturin==$maturin_version"
     echo "... installed maturin"
 }
 
@@ -84,13 +88,45 @@ build_rust () {
     echo "... built $rust_crate_root"
 }
 
+install_rust_wheel () {
+
+    # $1: a wheel directory CI caches, keyed on the rust/ submodule commit - most PRs don't move
+    # the submodule, so they reinstall the cached wheel instead of recompiling the crate (8-24 s
+    # measured per job). Empty directory (cache miss): build the wheel into it first.
+    # --force-reinstall: the wheel's version is always 0.1.0, and the cached venv may already
+    # hold an older build of it.
+    local wheel_dir="$1"
+    if ! ls "$wheel_dir"/*.whl >/dev/null 2>&1; then
+        echo "building $rust_crate_root wheel into $wheel_dir ..."
+        local wheel_out
+        wheel_out="$(realpath -m "$wheel_dir")"
+        (cd "$rust_crate_root" && maturin build --release --out "$wheel_out")
+    fi
+    echo "installing $rust_crate_root wheel from $wheel_dir ..."
+    python -m pip install --force-reinstall --no-deps "$wheel_dir"/*.whl
+    echo "... installed $rust_crate_root wheel"
+}
+
 
 setup () {
 
-    # --no-os-packages: CI passes this - neither apt package is used there (python3-tk installs
-    # into the system python, not setup-python's, and the runner image's rustup cargo precedes
-    # apt's on PATH), and skipping them saves ~17 s per job.
-    if [ "${1:-}" != "--no-os-packages" ]; then
+    # Both flags are for CI:
+    # --no-os-packages: neither apt package is used there (python3-tk installs into the system
+    #   python, not setup-python's, and the runner image's rustup cargo precedes apt's on PATH),
+    #   and skipping them saves ~17 s per job.
+    # --rust-wheel-dir <dir>: install rust/ from a cached wheel (see install_rust_wheel)
+    #   instead of `maturin develop`.
+    local os_packages=true
+    local rust_wheel_dir=""
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --no-os-packages) os_packages=false; shift ;;
+            --rust-wheel-dir) rust_wheel_dir="$2"; shift 2 ;;
+            *) usage; exit 1 ;;
+        esac
+    done
+
+    if [ "$os_packages" = true ]; then
         install_os_packages
     fi
     init_submodules
@@ -99,7 +135,11 @@ setup () {
     install_and_upgrade_pip
     install_python_modules
     install_maturin
-    build_rust
+    if [ -n "$rust_wheel_dir" ]; then
+        install_rust_wheel "$rust_wheel_dir"
+    else
+        build_rust
+    fi
     fetch_data
     deactivate_venv
 }
@@ -130,7 +170,7 @@ demo () {
 }
 
 usage () {
-    echo "usage: invoke [ clean | setup [--no-os-packages] | build-rust | fetch-data | test [pytest-path ...] | demo [demo-number] ]"
+    echo "usage: invoke [ clean | setup [--no-os-packages] [--rust-wheel-dir <dir>] | build-rust | fetch-data | test [pytest-path ...] | demo [demo-number] ]"
 }
 
 case "$option" in
