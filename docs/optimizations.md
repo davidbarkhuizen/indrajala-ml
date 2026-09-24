@@ -8,9 +8,9 @@ item is measured before and after, and must keep every parity test passing.
 This document is the only record of optimization work: there are no separate optimization workplans. Each open item, with its plan
 where it has one, is a candidate below. Four workplans have been folded in: threading
 (optimization 6, finished; its findings are in "Threading", and what it left open is candidate
-8), dense batch ops at short `k` (optimization 7; stage 0 done, stages A and B planned in
-candidate 1), the dataset as one backend array (optimization 5, not started; candidate 7) and
-the batch-size-scaling study (#365-#368, finished; its timing stage measured candidates 6 and 7
+9), dense batch ops at short `k` (optimization 7; stage 0 done, stages A and B planned in
+candidate 6), the dataset as one backend array (optimization 5, stage 0 go; candidate 1) and
+the batch-size-scaling study (#365-#368, finished; its timing stage measured candidates 1 and 7
 and the trainer's accuracy passes on full MNIST).
 
 ## Where things stand (2026-09-24)
@@ -70,11 +70,11 @@ this table was measured with numpy and Rust interleaved in one process and read 
 read 13.9x on the first); that was numpy's OpenBLAS threads
 taking cores from Rust (see "Other findings"). numpy's numbers are with OpenBLAS's default
 threading, which it uses even at 5.5M flops. On one thread each, the batch-32 rows are level
-or within 1.3x (32 x 5408 accumulate, its extra pass; candidate 1), Rust's `forward_batch` is
+or within 1.3x (32 x 5408 accumulate, its extra pass; candidate 6), Rust's `forward_batch` is
 level or faster at every row, and `downstream_batch` at batch 512 (`k` = 32 or 30) is 1.2x at
 32 x 5408 and 0.9-1.4x, overlapping, at 30 x 784. The large gap that remains is at batch 512
 with a long `k`: accumulate (`k` = 512) is 3.0-3.4x numpy at 32 x 5408 and 1.6-2.1x at 30 x 784
-(see candidate 6).
+(see candidate 7).
 
 The per-op tables compare against numpy; the profile of a whole epoch finds other costs. Rust
 time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
@@ -85,11 +85,12 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
   `conv_forward_batch` calls and all 8000 `layer_forward` calls, about 0.19 s of 0.74 s; the
   single-example epoch is similar (4000 of its 6000 conv forwards). numpy runs the same passes,
   so the ratios include them, and every stake quoted below as a share of an epoch is a share of
-  this timed epoch.
+  this timed epoch. That overstates the passes for longer runs: the trainers run n + 1 passes
+  for n epochs, so a one-epoch run has two and a long run about one per epoch.
 - **Conv MNIST, mini-batch 32** (0.74 s): `conv_forward_batch` 27% (its 63 batch calls about 1.5
-  ms each, against 0.86 ms for 32 single-example calls; candidate 2),
+  ms each, against 0.86 ms for 32 single-example calls; candidate 4),
   `conv_accumulate_gradient_batch` 10.5%, dense `accumulate_gradient_batch` 9.5% and
-  `downstream_batch` 6.7% (candidate 1), `forward_batch` 6.3%.
+  `downstream_batch` 6.7% (candidate 6), `forward_batch` 6.3%.
 - **Conv MNIST, single-example** (0.80 s): `layer_sgd_step` 20%, `conv_forward_batch` 20%,
   `layer_forward` 19%, dense `downstream` 11% (candidate 3), conv accumulate 7%.
 - **Conv-pool-conv MNIST**: `conv_forward_batch` 41-42% in both trainers, `max_pool_forward_batch`
@@ -97,7 +98,157 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
 
 ## Open candidates, in priority order
 
-1. **Dense `downstream_batch` and `accumulate_gradient_batch` at short `k`** (`matmul_2d`,
+Ranked by the Rust time each would save in configurations that are actually trained (the demos'
+single-example and batch-32 runs; batch 512 and up only in the batch-size-scaling study), then
+by how well the stake and the fix are established. Not by the Rust / numpy ratio: candidates 1
+and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling study.
+
+1. **The dataset as one backend array** (optimization 5; stage 0 go, 2026-09-24, see below).
+   Both backends convert Python tuples to an array on every call (`pa.Array(list(state))` in
+   `RustArrayNetworkBase._forward`/`learn`, a list of rows in `learn_batch`, `np.array` in the
+   numpy `ArrayNetworkBase`): 15.3 µs for one 784-pixel MNIST row in Rust, 29.5-32.1 µs in numpy
+   (re-measured; see "Per-row cost" at the end of this entry). That
+   doesn't change the ratio, but it is a fixed cost neither backend's maths can remove, and a
+   larger share now the maths is faster. The trainers (`train.py`) take `list[tuple[state,
+   label]]`, shuffle it in Python and pass tuples through, a contract shared with the
+   pure-Python networks, the ensembles and the sweeps.
+
+   **Stage 0, go/no-go, fixed before measuring:** measure the conversion's share of one epoch,
+   single-example and mini-batch 32, dense 784 -> 30 -> 10 and the conv networks, both backends
+   (cProfile own time of `Array.__new__`/`np.array`, plus an A/B against pre-converted inputs
+   through a test-only path), and what the per-epoch `_training_accuracy` passes spend
+   re-converting every row. Proceed only if the conversion is at least about 10% of epoch time
+   for some production configuration; otherwise record the numbers here and close.
+
+   **Design, if it goes ahead:** add a fast path, keep the existing interface. A
+   `PreparedDataset` built once per run holds the states as one backend matrix, the labels as a
+   list and its backend; the two array network bases get `prepare_dataset(rows)`, and
+   `learn_row`/`learn_batch_rows` that share their bodies with `learn`/`learn_batch` (which
+   become convert-then-call wrappers, so the paths can't drift). numpy row slices are free
+   views; a Rust slice copies, so a `gather_rows(matrix, indices)` crate op only if that copy
+   measures material. The trainers shuffle an index list in place of the tuple list, which
+   consumes the RNG identically (`shuffle` on a list of the same length makes the same
+   permutation), so every seeded end-to-end pin must stay exact, with a test that the same seed
+   gives the same visiting order on both paths. Tests: `learn_row` gives exactly the weights of
+   `learn`, step by step, for every numpy and Rust network class, enumerated from a registry so a
+   new class can't be missed. Out of scope: changing the `load_*` functions, and anything the
+   trainers compute.
+
+   **Stage 0's go/no-go is met (batch-size-scaling study, #367, 2026-09-24).** Dense 784 -> 30 ->
+   10, one full-MNIST epoch of `train_backprop_network_mini_batch`, median of 5, one process per
+   measurement, `scripts/batch_size_timing.py time`. Seconds per epoch:
+
+   | B | backend | trainer epoch | step loop | one accuracy pass | batch conversion | row conversion (60000 rows) |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | 32 | numpy | 8.18 | 2.07 | 2.99 | 1.75 | 1.76 |
+   | 32 | Rust | 3.78 | 1.28 | 1.26 | 0.91 | 0.90 |
+   | 128 | numpy | 9.42 | 3.25 | 2.93 | 1.73 | 1.73 |
+   | 128 | Rust | 4.37 | 1.64 | 1.22 | 0.97 | 0.90 |
+   | 512 | numpy | 9.41 | 3.34 | 3.11 | 1.83 | 1.77 |
+   | 512 | Rust | 4.85 | 2.16 | 1.25 | 1.24 | 0.90 |
+   | 1024 | numpy | 9.54 | 3.21 | 3.07 | 1.90 | 1.77 |
+   | 1024 | Rust | 4.54 | 1.93 | 1.24 | 1.26 | 0.93 |
+
+   "Batch conversion" is `pa.Array`/`np.array` of every batch's list of rows, the first line of
+   `learn_batch`. "Row conversion" is one array per training row, as each `classify_state` of
+   an accuracy pass does. Both are measured apart from training, in the same process. A
+   one-epoch run has two accuracy passes. For Rust at B = 32, conversion comes to 0.91 + 2 x
+   0.90 = 2.7 s of the 3.78 s epoch: about 70%, against the 10% bar. For numpy at B = 32 it is
+   5.3 s of 8.18 s. Over a long run (about one pass per epoch) the Rust share is about the same:
+   0.91 + 0.90 = 1.8 s of about 2.5 s. In the step loop alone, conversion is 57-71% of Rust's
+   time; the Rust ops themselves are 0.37-0.40 s per epoch at every batch size. The rest of
+   stage 0's list (single-example, the conv networks, the A/B against pre-converted inputs) was
+   not measured and isn't needed for the decision. The conv networks' share is unmeasured; at
+   15 µs a row, the 6000 conversions of a timed MNIST conv epoch would be about 90 ms of 0.74 s
+   (12%). **Status: go; the largest stake measured in this document.** Most of each accuracy
+   pass is conversion too (0.90 of 1.24 s in Rust); what is left of the pass is candidate 2.
+
+   **The stake is likely smaller than 70%.** At B = 32, the conversion measured apart (0.91 s)
+   plus the Rust ops (0.37 s) already equal the whole 1.28 s step loop, leaving nothing for
+   the Python of 1875 steps, which can't be right. The same loop measured 1.59 s in candidate
+   7's profile run, so the two step-loop figures also disagree by 24%. The likeliest reading is
+   that converting rows in a tight loop apart from training costs more than it does inside the
+   loop; that is unmeasured. So the implementation's A/B against pre-converted inputs is the
+   real stake, not the 70%, and must be reported as such.
+
+   Batch conversion also grows with the batch size (Rust 0.91 s at B = 32, 1.24-1.26 s at 512
+   and 1024), though the rows converted per epoch don't change. It is part of why the Rust step
+   loop gets slower at larger batches at the same flops per epoch: from B = 32 to 512 the step
+   loop grows 0.88 s (1.28 to 2.16) and batch conversion 0.33 s, about 40% of it. The Rust ops
+   stay flat and there are 16 times fewer steps, so the rest is unexplained.
+   (`demo_batch_size_scaling` prints 1.42 s per epoch at B = 32 and 2.02 s at 1024.)
+
+   **Per-row cost, re-measured (2026-09-24).** A loop converting all 60000 training rows
+   (`to_array(list(state))`, median of 5 loops, one process per cell, two passes each) costs
+   15.3 µs a row in Rust and 29.5-32.1 µs in numpy, not the 49 and 55 µs this entry quoted
+   before. That earlier figure is unexplained. It isn't the loader: with freshly boxed floats (the loader before
+   #365) the same loop costs 17.3 µs in Rust and 31.5-31.6 µs in numpy. #365's shared pixel
+   floats therefore make Rust conversion about 12% cheaper. Over the roughly 180000 row
+   conversions of a batch-32 Rust epoch (one batch pass, two accuracy passes) that is about
+   0.36 s of 3.8 s. **Rust dense-MNIST epoch times from before #365 are not directly comparable
+   with later ones.** numpy's change is within noise.
+
+2. **A batched accuracy pass** (promoted from "Other findings", 2026-09-24; not started).
+   `_training_accuracy` (`train.py`) calls `classify_state` once per training row, n + 1 times
+   over the training set for n epochs. After candidate 1 removes the row conversion, one Rust
+   pass on dense full MNIST still takes about 1.24 - 0.90 = 0.34 s, mostly per-row call overhead
+   (Python dispatch, one small forward per layer). That could be the largest single cost left in
+   a dense epoch. The number is inferred from the candidate 1 table, not measured, and it
+   inherits the doubt about the conversion measured apart (see candidate 1). Candidate: a
+   `classify_batch` on the array networks that runs `forward_batch` over chunks of rows (from
+   candidate 1's prepared matrix) and takes the argmax per row, with `_training_accuracy` falling
+   back to `classify_state` for networks without it (the pure-Python ones and the ensembles). It
+   is a trainer change, not a kernel change, and must change no training result. Dense batched
+   forward rows equal the single-example forward exactly ("Kernel invariants"). Conv, pooling,
+   softmax and dropout (which must keep its inference behaviour) need a test that each batched
+   prediction equals `classify_state`'s, for every network class. Two caveats:
+   - **Conv gains nothing yet.** Conv `forward_batch` currently costs 1.5-2.1x per example at N =
+     32 what single calls do (candidate 4), so a batched conv accuracy pass would be slower until
+     candidate 4 is fixed. Dense networks can go first.
+   - **Stage 0:** time one accuracy pass per row against batched (chunks of 32 and 512), dense
+     full MNIST and MNIST conv, both backends, from pre-converted inputs. Proceed only if it
+     saves at least about 10% of an epoch after candidate 1.
+
+3. **Dense single-example `downstream` at 32 x 5408 is 1.5-1.6x numpy.** First seen in the
+   interleaved per-op harness (50 vs 33 µs); in separate processes (focused benchmark, two
+   passes, 2026-09-24) it holds: 42.7-52.0 µs against 28.1-33.4. It is vector @ matrix, `delta
+   @ W` through `axpy_row`: 32 load/FMA/store passes over a 43 KB output row, the pattern #14
+   removed from `matmul_2d`. The same product as a one-row `downstream_batch` goes through the
+   tiled kernel and took 21.4-22.1 µs against numpy's 28.3-28.8 in the same runs. In the MNIST
+   conv single-example epoch its 2000 calls took 88 ms of 0.80 s (11%, profiled), so the tiled
+   kernel's rate would save about 44 ms (5%). Dense MNIST's only downstream is the 10 x 30
+   layer's, so this is the conv tail's. Candidate: route vector @ matrix through
+   `tiled_row_range` as a one-row matrix. It is the same FMA chain, so bit-identical, and the
+   crate tests that compare the two would need another reference. It ranks above candidate 4,
+   whose stake is about the same, because the cause and the fix are both known and the change
+   is small.
+
+4. **Conv `forward_batch` costs more per example than single-example calls.** Re-measured
+   2026-09-24 at 28x28, `ConvSpec(3, 8)`, Rust on one thread (focused benchmark, two passes):
+   26.5-28.7 µs for one example, 1365-1790 µs at N = 32 (1.5-2.1x the 848-918 of 32 single calls)
+   and 36.2-38.4 ms at N = 512 (2.5-2.8x). Before the `matmul_narrow` kernel it was 2280 against
+   1715 µs at N = 32 (1.3x), so the gap has widened as the single-example path got faster. The
+   other conv batch ops cost less extra at N = 32: downstream 1020-1023 µs against 800-867 for 32
+   calls (1.2-1.3x), accumulate 1037-1106 against 899-934 (1.1-1.2x; candidate 8 at N = 512). In
+   the MNIST conv mini-batch 32 epoch the 63 batch calls took about 96 ms (profiled, the 4000
+   accuracy-pass calls taken out at 27 µs each), so at the single-example rate they would save
+   about 40 ms, 5% of the worst end-to-end cell. That is about candidate 3's stake, but this has
+   neither a confirmed cause nor a design, so it ranks after it. It ranks above candidate 6,
+   whose stages are planned and measured but worth only 2.5-4%, and fixing it is what would let
+   conv networks gain from candidate 2. The likely cause, unmeasured: `cols` (48 KB at N = 1, 1.56 MB at N = 32,
+   25 MB at N = 512) falls out of L2 between im2col and the matmul. Time the op's parts (im2col,
+   the matmul, the ReLU scatter) first. Candidate: im2col and multiply one block of output
+   positions at a time, keeping `cols` for the backward pass.
+
+5. **`max_pool_forward_batch`** is the second- or third-largest Rust conv op: in profiled MNIST
+   conv-pool-conv training, 0.095 s of 0.86 s single-example (11%, 6000 calls, 4000 of them the
+   accuracy passes) and 10% at mini-batch 32. It has never been examined, and there is no
+   comparison with numpy's. It does no arithmetic, so the likely costs are the per-window index
+   arithmetic and the separate `argmax` output. Removing it entirely would save 10-11% of
+   conv-pool-conv; how much is recoverable is unknown, so it ranks below the candidates with a
+   measured stake but above candidate 6's smaller, better-established one.
+
+6. **Dense `downstream_batch` and `accumulate_gradient_batch` at short `k`** (`matmul_2d`,
    optimization 7). **Status: stage 0 done (#354); next stage A, then B; stage C skipped.** At
    32 x 5408, batch 32 these are the largest per-op ratios in the table (2.4-2.8x and 2.2-2.9x
    numpy), but stage 0 found that most of that is numpy's OpenBLAS threading: on one thread
@@ -171,15 +322,18 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
      product 572-614, `add` 142-163, and the transpose and `sum_axis0` 1 µs each. The likely
      cause of the rest is that the fused op keeps four 1.4 MB arrays live (`X`, the update,
      `grad_W` and the sum) against a 4 MB L3. That is unmeasured. Stage B removes one of them
-     and the pass, so it runs second.
+     and the pass, so it runs second. The three arrays left still come to 4.2 MB, more than the
+     L3, so stage B may recover little of the 240.
    - **Revised stake:** stages A and B together might save about 450 µs per pair of calls:
      about 150 from stage A (-14% on each of the two 524-588 µs products), 140-160 from stage
      B's removed `add`, and part of the 240 unattributed if it is the extra live array. Over
      62 pairs that is about 28 ms (4%) of the 0.72-0.75 s epoch, not the 8% the per-op ratios
-     suggested before stage 0. Without the unattributed part it is about 19 ms (2.5%).
+     suggested before stage 0. Without the unattributed part it is about 19 ms (2.5%), the more
+     likely figure (see above). Dense MNIST mini-batch gains a little too (-10 to -12% on its 30
+     x 784 products; accumulate is 11.5% of its step loop at B = 32, candidate 7), about 1-2%.
    - **Found on the way:** a larger gap at long `k`, and Rust's `transpose` of `delta_batch` at
      batch 512 taking 87-107 µs against numpy's 8-12 µs copy, about 9% of the 30 x 784
-     accumulate (both in candidate 6).
+     accumulate (both in candidate 7).
 
    **Stage A: multi-row register tiles in `tiled_row_range`.** Hold a tile of R rows x 16 columns
    (4R accumulators) across all of `k`, R = 2 (and R chosen by `k` only if the op table shows it
@@ -191,7 +345,7 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    `matmul_narrow` blocks of R rows, measure the conv ops (forward, downstream, accumulate at
    28x28, N = 32 and 512), and keep one row per block if they don't gain. Conv accumulate is the
    likeliest to gain: each row of `D` streams all of `cols` from memory at large N, and an R-row
-   tile reads it once for R rows (candidate 4). Each output
+   tile reads it once for R rows (candidate 8). Each output
    is still one FMA chain, `k` increasing from 0.0, so it is bit-identical. Extend the crate's
    `test_matrix_at_matrix_is_the_fma_chain_exactly` (`tests/test_linalg.py`) so `m` takes every
    value from 1 to 2R + 1 (every remainder, with and without a full tile) at the existing
@@ -225,63 +379,7 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    stage is claimed bit-identical, so the full suite must pass with no pin changes. Out of scope:
    threading these products (see "Threading") and any change to summation order.
 
-2. **Conv `forward_batch` costs more per example than single-example calls.** Re-measured
-   2026-09-24 at 28x28, `ConvSpec(3, 8)`, Rust on one thread (focused benchmark, two passes):
-   26.5-28.7 µs for one example, 1365-1790 µs at N = 32 (1.5-2.1x the 848-918 of 32 single calls)
-   and 36.2-38.4 ms at N = 512 (2.5-2.8x). Before the `matmul_narrow` kernel it was 2280 against
-   1715 µs at N = 32 (1.3x), so the gap has widened as the single-example path got faster. The
-   other conv batch ops cost less extra at N = 32: downstream 1020-1023 µs against 800-867 for 32
-   calls (1.2-1.3x), accumulate 1037-1106 against 899-934 (1.1-1.2x; candidate 4 at N = 512). In
-   the MNIST conv mini-batch 32 epoch the 63 batch calls took about 96 ms (profiled, the 4000
-   accuracy-pass calls taken out at 27 µs each), so at the single-example rate they would save
-   about 40 ms, 5% of the worst end-to-end cell. That is more than candidate 1's stake, but it
-   ranks second: candidate 1's stages are planned and measured, and this has neither a confirmed
-   cause nor a design. The likely cause, unmeasured: `cols` (48 KB at N = 1, 1.56 MB at N = 32,
-   25 MB at N = 512) falls out of L2 between im2col and the matmul. Time the op's parts (im2col,
-   the matmul, the ReLU scatter) first. Candidate: im2col and multiply one block of output
-   positions at a time, keeping `cols` for the backward pass.
-
-3. **Dense single-example `downstream` at 32 x 5408 is 1.5-1.6x numpy.** First seen in the
-   interleaved per-op harness (50 vs 33 µs); in separate processes (focused benchmark, two
-   passes, 2026-09-24) it holds: 42.7-52.0 µs against 28.1-33.4. It is vector @ matrix, `delta
-   @ W` through `axpy_row`: 32 load/FMA/store passes over a 43 KB output row, the pattern #14
-   removed from `matmul_2d`. The same product as a one-row `downstream_batch` goes through the
-   tiled kernel and took 21.4-22.1 µs against numpy's 28.3-28.8 in the same runs. In the MNIST
-   conv single-example epoch its 2000 calls took 88 ms of 0.80 s (11%, profiled), so the tiled
-   kernel's rate would save about 44 ms (5%). Dense MNIST's only downstream is the 10 x 30
-   layer's, so this is the conv tail's. Candidate: route vector @ matrix through
-   `tiled_row_range` as a one-row matrix. It is the same FMA chain, so bit-identical, and the
-   crate tests that compare the two would need another reference.
-
-4. **Conv accumulate with a large `cols`.** `D @ cols` (`D` the deltas by channel, `(O, N*P)`;
-   `cols` `(N*P, C*k*k)`) goes through `matmul_narrow`, so `k` is N*P and there are only O rows.
-   At 28x28, `ConvSpec(3, 8)`, on one thread (2026-09-24, as in candidate 2) it took 56.7-58.0 ms
-   at N = 512 against 14.4-15.0 ms for 512 single-example calls (3.8-4.0x); the bare `(8, 346112)
-   @ (346112, 9)` product took 42.5-46.9 ms of that. The likely cause, from the kernel's loop
-   order rather than counters: every output row makes one pass over `k` per column tile (two
-   4-wide tiles and a scalar column at 9 columns), and each pass streams all of `cols` (25 MB,
-   past the 4 MB L3), so 8 rows read it 24 times, about 600 MB per call, 13-14 GB/s. At N = 1
-   `cols` is 48 KB and stays in L2; at N = 32 (1.56 MB) the op is 1.1-1.2x its single calls, and
-   in the MNIST conv mini-batch 32 epoch it is 10.5% (78 ms, profiled). Candidate: block over
-   `k` so a slab of `cols` serves every row and column tile before the next, storing and
-   reloading the tile's accumulators between `k` blocks. The per-output `k` order is unchanged,
-   so it is bit-identical. Stage A's R-row tiles (candidate 1), given to `matmul_narrow`, would
-   divide the passes by R as a first step.
-
-   Earlier findings: at 13x13x8, N = 32, `matmul_narrow` gave no gain over the old `matmul_2d`,
-   which had `k`-blocking (+2%, +4%, -1% at O = 4, 8, 32; `cols` 0.3-2.2 MB); that blocking is
-   gone since #14. Moving the op to `matmul_2d` at 28x28, N = 512 measured 35-39 against 30-32 ms
-   (presumably threaded: one thread takes 57-58 ms), and was read as "row blocks are slower". It
-   can't show that: at `k` = 346112 `matmul_2d`'s 16 KB rule gives 1 row per block, the same code
-   path as `matmul_narrow`, so the difference was run-to-run variation.
-
-5. **`max_pool_forward_batch`** is the second- or third-largest Rust conv op: in profiled MNIST
-   conv-pool-conv training, 0.095 s of 0.86 s single-example (11%, 6000 calls, 4000 of them the
-   accuracy passes) and 10% at mini-batch 32. It has never been examined, and there is no
-   comparison with numpy's. It does no arithmetic, so the likely costs are the per-window index
-   arithmetic and the separate `argmax` output.
-
-6. **Dense `accumulate_gradient_batch` at long `k`** (`matmul_2d`, found in optimization 7's stage
+7. **Dense `accumulate_gradient_batch` at long `k`** (`matmul_2d`, found in optimization 7's stage
    0). Single-threaded, at batch 512 (`k` = 512) it is 3.0-3.4x numpy's single-threaded time at 32
    x 5408 (31.3-32.0 against 9.4-10.3 ms) and 1.6-2.1x at 30 x 784 (2335-2715 against 1269-1436
    µs). 2-row tiles recover only 7-31% there. The likely cause is `b`'s `k x 16` panel (64 KB at
@@ -290,7 +388,7 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    only at batch 512 and up, which only `demo_batch_size_scaling` and the batch-size-scaling
    study train at (dense, B up to 1024). Candidate: block over `k`, or pack `b`'s
    panel, storing and reloading the tile's accumulators between `k` blocks so each output keeps
-   its chain. Candidate 4 needs the same change in the same function (`matmul_narrow` also runs
+   its chain. Candidate 8 needs the same change in the same function (`matmul_narrow` also runs
    `tiled_row_range`), so one `k`-blocked `tiled_row_range` may serve both.
 
    Separately, the `transpose()` of `delta_batch` that feeds this product takes 87-107 µs at
@@ -312,90 +410,49 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
 
    The other three are `apply_accumulated_gradient`, `hidden_delta_batch` and `output_delta`.
    The Rust ops are about 0.4 s of every epoch whatever the batch; the rest of the step loop is
-   Python and batch conversion (candidate 7). At B = 512 and 1024 accumulate passes the
+   Python and batch conversion (candidate 1). At B = 512 and 1024 accumulate passes the
    promotion bar fixed before measuring (about 5% of the step loop). But the same op is already
    0.178 s, 11.5%, at B = 32 (3750 calls). Long `k` adds only 0.05-0.07 s per epoch on top of
-   the short-`k` cost. At numpy's single-threaded speed (1.6-2.1x faster at 30 x 784) the
-   saving would be about 0.1 s, about 5% of the step loop and 2% of the trainer's 4.85 s epoch.
-   **Decision: passes the bar, but only just. Do it after candidate 7.** That candidate removes
-   about 1 s of batch conversion from the same step loop, which would take this op's share to
-   roughly 20%.
+   the short-`k` cost. The 0.1 s saving estimated when this was decided, 5% of the step loop and
+   2% of the trainer's 4.85 s epoch, applied the one-thread ratio (Rust 1.6-2.1x numpy at 30 x
+   784) to these calls. But they are threaded in training (12M flops at B = 512), and at 0.94 ms
+   each they already beat numpy's one-thread 1.27-1.44 ms. A faster kernel would still speed up
+   each thread, but threaded calls pay the cold clock and spawn cost (see "Threading"), so the
+   saving is likely under 0.1 s and is unmeasured. **Decision: do it after candidate 1, and only
+   if a one-thread `k`-blocking probe gains enough to leave a threaded saving above the 5% bar.**
+   Candidate 1 removes about 1 s of batch conversion from the same step loop (subject to the
+   doubt in candidate 1), which would take this op's share to roughly 20-25%. Also note the
+   profile table's percentages imply a profiled loop slightly shorter than the unprofiled one
+   (for example 0.178 / 11.5% = 1.55 s at B = 32), which suggests the two columns come from
+   different runs.
 
-7. **The dataset as one backend array** (optimization 5; stage 0 go, 2026-09-24, see the end of this entry). Both backends
-   convert Python tuples to an array on every call (`pa.Array(list(state))` in
-   `RustArrayNetworkBase._forward`/`learn`, a list of rows in `learn_batch`, `np.array` in the
-   numpy `ArrayNetworkBase`): 49 µs for one 784-pixel MNIST row in Rust, 55 µs in numpy. That
-   doesn't change the ratio, but it is a fixed cost neither backend's maths can remove, and a
-   larger share now the maths is faster. The trainers (`train.py`) take `list[tuple[state,
-   label]]`, shuffle it in Python and pass tuples through, a contract shared with the
-   pure-Python networks, the ensembles and the sweeps.
+8. **Conv accumulate with a large `cols`.** `D @ cols` (`D` the deltas by channel, `(O, N*P)`;
+   `cols` `(N*P, C*k*k)`) goes through `matmul_narrow`, so `k` is N*P and there are only O rows.
+   At 28x28, `ConvSpec(3, 8)`, on one thread (2026-09-24, as in candidate 4) it took 56.7-58.0 ms
+   at N = 512 against 14.4-15.0 ms for 512 single-example calls (3.8-4.0x); the bare `(8, 346112)
+   @ (346112, 9)` product took 42.5-46.9 ms of that. The likely cause, from the kernel's loop
+   order rather than counters: every output row makes one pass over `k` per column tile (two
+   4-wide tiles and a scalar column at 9 columns), and each pass streams all of `cols` (25 MB,
+   past the 4 MB L3), so 8 rows read it 24 times, about 600 MB per call, 13-14 GB/s. At N = 1
+   `cols` is 48 KB and stays in L2; at N = 32 (1.56 MB) the op is 1.1-1.2x its single calls, and
+   in the MNIST conv mini-batch 32 epoch it is 10.5% (78 ms, profiled). Candidate: block over
+   `k` so a slab of `cols` serves every row and column tile before the next, storing and
+   reloading the tile's accumulators between `k` blocks. The per-output `k` order is unchanged,
+   so it is bit-identical. Stage A's R-row tiles (candidate 6), given to `matmul_narrow`, would
+   divide the passes by R as a first step. The stake in trained configurations is small: no
+   demo trains conv at N = 512, and at N = 32 the op is only 1.1-1.2x its single calls, so
+   closing that gap would save about 8-12 ms of the 78 (1-1.5%). It is worth doing alongside
+   candidate 7, which needs the same `k`-blocked `tiled_row_range`.
 
-   **Stage 0, go/no-go, fixed before measuring:** measure the conversion's share of one epoch,
-   single-example and mini-batch 32, dense 784 -> 30 -> 10 and the conv networks, both backends
-   (cProfile own time of `Array.__new__`/`np.array`, plus an A/B against pre-converted inputs
-   through a test-only path), and what the per-epoch `_training_accuracy` passes spend
-   re-converting every row. Proceed only if the conversion is at least about 10% of epoch time
-   for some production configuration; otherwise record the numbers here and close.
+   Earlier findings: at 13x13x8, N = 32, `matmul_narrow` gave no gain over the old `matmul_2d`,
+   which had `k`-blocking (+2%, +4%, -1% at O = 4, 8, 32; `cols` 0.3-2.2 MB); that blocking is
+   gone since #14. Moving the op to `matmul_2d` at 28x28, N = 512 measured 35-39 against 30-32 ms
+   (presumably threaded: one thread takes 57-58 ms), and was read as "row blocks are slower". It
+   can't show that: at `k` = 346112 `matmul_2d`'s 16 KB rule gives 1 row per block, the same code
+   path as `matmul_narrow`, so the difference was run-to-run variation.
 
-   **Design, if it goes ahead:** add a fast path, keep the existing interface. A
-   `PreparedDataset` built once per run holds the states as one backend matrix, the labels as a
-   list and its backend; the two array network bases get `prepare_dataset(rows)`, and
-   `learn_row`/`learn_batch_rows` that share their bodies with `learn`/`learn_batch` (which
-   become convert-then-call wrappers, so the paths can't drift). numpy row slices are free
-   views; a Rust slice copies, so a `gather_rows(matrix, indices)` crate op only if that copy
-   measures material. The trainers shuffle an index list in place of the tuple list, which
-   consumes the RNG identically (`shuffle` on a list of the same length makes the same
-   permutation), so every seeded end-to-end pin must stay exact, with a test that the same seed
-   gives the same visiting order on both paths. Tests: `learn_row` gives exactly the weights of
-   `learn`, step by step, for every numpy and Rust network class, enumerated from a registry so a
-   new class can't be missed. Out of scope: changing the `load_*` functions, and anything the
-   trainers compute.
-
-   **Stage 0's go/no-go is met (batch-size-scaling study, #367, 2026-09-24).** Dense 784 -> 30 ->
-   10, one full-MNIST epoch of `train_backprop_network_mini_batch`, median of 5, one process per
-   measurement, `scripts/batch_size_timing.py time`. Seconds per epoch:
-
-   | B | backend | trainer epoch | step loop | one accuracy pass | batch conversion | row conversion (60000 rows) |
-   | --- | --- | --- | --- | --- | --- | --- |
-   | 32 | numpy | 8.18 | 2.07 | 2.99 | 1.75 | 1.76 |
-   | 32 | Rust | 3.78 | 1.28 | 1.26 | 0.91 | 0.90 |
-   | 128 | numpy | 9.42 | 3.25 | 2.93 | 1.73 | 1.73 |
-   | 128 | Rust | 4.37 | 1.64 | 1.22 | 0.97 | 0.90 |
-   | 512 | numpy | 9.41 | 3.34 | 3.11 | 1.83 | 1.77 |
-   | 512 | Rust | 4.85 | 2.16 | 1.25 | 1.24 | 0.90 |
-   | 1024 | numpy | 9.54 | 3.21 | 3.07 | 1.90 | 1.77 |
-   | 1024 | Rust | 4.54 | 1.93 | 1.24 | 1.26 | 0.93 |
-
-   "Batch conversion" is `pa.Array`/`np.array` of every batch's list of rows, the first line of
-   `learn_batch`. "Row conversion" is one array per training row, as each `classify_state` of
-   an accuracy pass does. Both are measured apart from training, in the same process. A trainer
-   epoch runs two accuracy passes. For Rust at B = 32, conversion comes to 0.91 + 2 x 0.90 =
-   2.7 s of the 3.78 s epoch: about 70%, against the 10% bar. For numpy at B = 32 it is 5.3 s of 8.18 s. In
-   the step loop alone, conversion is 58-71% of Rust's time; the Rust ops themselves are
-   0.37-0.40 s per epoch at every batch size. The rest of stage 0's list (single-example, the
-   conv networks, the A/B against pre-converted inputs) was not measured and isn't needed for
-   the decision. The A/B belongs in the implementation's own before/after. **Status: go;
-   the largest stake measured in this document.** Most of each accuracy pass is conversion too
-   (0.90 of 1.24 s in Rust), so the prepared dataset also covers most of the stake of batching
-   the accuracy pass (see "Other findings").
-
-   Batch conversion also grows with the batch size (Rust 0.91 s at B = 32, 1.24-1.26 s at 512
-   and 1024), though the rows converted per epoch don't change. That is most of why the Rust
-   step loop gets slower at larger batches at the same flops per epoch: `demo_batch_size_scaling`
-   prints 1.42 s per epoch at B = 32 and 2.02 s at 1024.
-
-   **Per-row cost, re-measured (2026-09-24).** A loop converting all 60000 training rows
-   (`to_array(list(state))`, median of 5 loops, one process per cell, two passes each) costs
-   15.3 µs a row in Rust and 29.5-32.1 µs in numpy, not the 49 and 55 µs quoted above. That
-   earlier figure is unexplained. It isn't the loader: with freshly boxed floats (the loader before
-   #365) the same loop costs 17.3 µs in Rust and 31.5-31.6 µs in numpy. #365's shared pixel
-   floats therefore make Rust conversion about 12% cheaper. Over the roughly 180000 row
-   conversions of a batch-32 Rust epoch (one batch pass, two accuracy passes) that is about
-   0.36 s of 3.8 s. **Rust dense-MNIST epoch times from before #365 are not directly comparable
-   with later ones.** numpy's change is within noise.
-
-8. **Threading past the threshold (deferred).** Only the batch-size-scaling study and its demo
-   run products above 8M flops in training (the dense 30 x 784 products at B = 512 and 1024, 24-48M flops). The
+9. **Threading past the threshold (deferred).** Only the batch-size-scaling study and its demo
+   run products above 8M flops in training (the dense 30 x 784 products at B = 512 and 1024, 12-24M flops). The
    demos otherwise train at batch 32 or single-example. Even there, the Rust ops are 0.4 s of a
    2 s step loop, so threading changes would not pay much. Revisit only for a large-batch use case:
    - **A persistent pool.** Removes the 180-200 µs spawn cost at 8 threads. Workers that persist
@@ -419,50 +476,6 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    Out of scope for threading: splitting over `k` (a cross-thread reduction changes summation
    order), threading pooling or elementwise ops, and releasing the GIL (the trainers are
    single-threaded Python, so there is nothing to overlap with).
-
-9. **Dense `forward_batch`** (`matmul_nt`): register tiles done (#17); on one thread no gap is
-   left. The 5.6x at batch 64 recorded earlier (numpy and Rust interleaved) was the interleaving:
-   in separate processes batch 64 was 1.8x numpy (1161-1164 against 625-653 µs), and unthreaded
-   Rust was linear in the batch at about 2x numpy per row. So the cost was the kernel: every row
-   of `X` re-read all of `W` (1.4 MB at 32 x 5408, past L2). #17 runs 4 rows of `X` against 2 rows
-   of `W` at a time, bit-identical. Two focused passes, old and new in separate processes, the
-   second with the build order reversed (µs, unthreaded):
-
-   | shape | batch | old | new |
-   | --- | --- | --- | --- |
-   | 32 x 5408 | 32 | 635-916 | 490-903, then 545-555 |
-   | 32 x 5408 | 128 | 2621-3708 | 2339-2769 |
-   | 32 x 5408 | 512 | 10452-15660 | 8233-13628 (9331-10204 in the second pass) |
-   | 30 x 784 | 32 | 95-110 | 69-98 (76-77) |
-   | 30 x 784 | 512 | 1537-2109 | 1208-1478 |
-
-   **Threading on the new kernel** (default against unthreaded, new build, both passes):
-   threading still pays at 32 x 5408 from batch 128 (1455-2016 against 2339-2769 µs) and at
-   batch 512 (6226-7672 against 8233-13628), and a little at 30 x 784, batch 512 (1038-1275
-   against 1208-1478). At batch 64 (11M flops, threaded) the two overlap (887-1121 against
-   998-1361). With default threading, 30 x 784 at batch 512 went from 1472-1655 to 1038-1275.
-
-   **End to end**, one epoch, old against new build, one process per epoch, builds
-   alternated with the order swapped every run, medians of 6 (seconds):
-
-   | epoch | old | new |
-   | --- | --- | --- |
-   | MNIST conv, mini-batch 32 | 0.751 (0.710-0.856) | 0.743 (0.706-0.841) |
-   | MNIST conv, mini-batch 512 | 0.870 (0.787-0.878) | 0.843 (0.774-0.870) |
-   | dense MNIST, batch 32 | 4.170 (3.967-4.365) | 4.094 (4.007-4.337) |
-   | dense MNIST, batch 512 | 5.814 (5.774-6.054) | 6.000 (5.658-6.114) |
-
-   All within noise, as the arithmetic predicts: MNIST conv mini-batch 32's 62 forward calls
-   save about 12 ms of 0.75 s. What is left is not the kernel. With default threading, 32 x
-   5408 is still 1.1-2.2x numpy at batch 32 (470-659 against 294-415 µs), which was put down to
-   `W` streaming in from L3 once per 4 rows of `X`. But on one thread each (2026-09-24, two
-   passes) Rust is faster at every op table shape: 479 against 563-575 µs at batch 32,
-   8421-8477 against 8937-9918 at batch 512, and 1217-1257 against 1271-1308 at 30 x 784, batch
-   512. So the batch-32 gap is numpy's OpenBLAS threading, as in candidate 1, and at batch 512
-   numpy's threads beat Rust's (3695-4110 against 4747-4898 µs at 32 x 5408), a threading
-   question (candidate 8). The idea recorded before, blocking over `k` so a panel of `W` stays
-   in L2 across all rows of `X` (storing and reloading each pair's 4-lane accumulator between
-   panels, bit-identical), would speed up a kernel that is already ahead. Last in priority.
 
 ## Threading
 
@@ -650,6 +663,50 @@ Crate PR numbers are `indrajala-math-rust`'s. "Bit-identical" means every output
 | Threading threshold 4M → 8M flops, policy in `matmul_thread_count` | #16 | MNIST conv mini-batch 32 epoch 0.879 → 0.770 s (-12%); batch 512 and dense MNIST unchanged; bit-identical |
 | `matmul_nt` in 4 x 2 register tiles (4 rows of `X` against 2 rows of `W`; 2 x 4, 3 x 3 and 2 x 2 measured slower or tied) | #17 | unthreaded dense `forward_batch` 0.6-0.9x its old time (second pass: 32 x 5408, batch 32: 771-916 → 545-555 µs; 30 x 784, batch 32: 102-110 → 76-77); epochs within noise; bit-identical |
 
+**Dense `forward_batch`** (`matmul_nt`, #17), kept as a finding: formerly an open candidate, but
+on one thread no gap is left. The 5.6x at batch 64 recorded earlier (numpy and Rust
+interleaved) was the interleaving: in separate processes batch 64 was 1.8x numpy (1161-1164 against 625-653 µs), and unthreaded
+Rust was linear in the batch at about 2x numpy per row. So the cost was the kernel: every row
+of `X` re-read all of `W` (1.4 MB at 32 x 5408, past L2). #17 runs 4 rows of `X` against 2 rows
+of `W` at a time, bit-identical. Two focused passes, old and new in separate processes, the
+second with the build order reversed (µs, unthreaded):
+
+| shape | batch | old | new |
+| --- | --- | --- | --- |
+| 32 x 5408 | 32 | 635-916 | 490-903, then 545-555 |
+| 32 x 5408 | 128 | 2621-3708 | 2339-2769 |
+| 32 x 5408 | 512 | 10452-15660 | 8233-13628 (9331-10204 in the second pass) |
+| 30 x 784 | 32 | 95-110 | 69-98 (76-77) |
+| 30 x 784 | 512 | 1537-2109 | 1208-1478 |
+
+**Threading on the new kernel** (default against unthreaded, new build, both passes):
+threading still pays at 32 x 5408 from batch 128 (1455-2016 against 2339-2769 µs) and at
+batch 512 (6226-7672 against 8233-13628), and a little at 30 x 784, batch 512 (1038-1275
+against 1208-1478). At batch 64 (11M flops, threaded) the two overlap (887-1121 against
+998-1361). With default threading, 30 x 784 at batch 512 went from 1472-1655 to 1038-1275.
+
+**End to end**, one epoch, old against new build, one process per epoch, builds
+alternated with the order swapped every run, medians of 6 (seconds):
+
+| epoch | old | new |
+| --- | --- | --- |
+| MNIST conv, mini-batch 32 | 0.751 (0.710-0.856) | 0.743 (0.706-0.841) |
+| MNIST conv, mini-batch 512 | 0.870 (0.787-0.878) | 0.843 (0.774-0.870) |
+| dense MNIST, batch 32 | 4.170 (3.967-4.365) | 4.094 (4.007-4.337) |
+| dense MNIST, batch 512 | 5.814 (5.774-6.054) | 6.000 (5.658-6.114) |
+
+All within noise, as the arithmetic predicts: MNIST conv mini-batch 32's 62 forward calls
+save about 12 ms of 0.75 s. What is left is not the kernel. With default threading, 32 x
+5408 is still 1.1-2.2x numpy at batch 32 (470-659 against 294-415 µs), which was put down to
+`W` streaming in from L3 once per 4 rows of `X`. But on one thread each (2026-09-24, two
+passes) Rust is faster at every op table shape: 479 against 563-575 µs at batch 32,
+8421-8477 against 8937-9918 at batch 512, and 1217-1257 against 1271-1308 at 30 x 784, batch
+512. So the batch-32 gap is numpy's OpenBLAS threading, as in candidate 6, and at batch 512
+numpy's threads beat Rust's (3695-4110 against 4747-4898 µs at 32 x 5408), a threading
+question (candidate 9). The idea recorded before, blocking over `k` so a panel of `W` stays
+in L2 across all rows of `X` (storing and reloading each pair's 4-lane accumulator between
+panels, bit-identical), would speed up a kernel that is already ahead, so it is not a candidate.
+
 Closed with no measured gain, kept as findings:
 
 - **Transposed-left matmul for `accumulate_gradient_batch`** (crate branch `matmul-tn`,
@@ -697,18 +754,17 @@ Closed with no measured gain, kept as findings:
   1-2 epochs, and lr 2, 4 and 8 don't fix every configuration. Their timings are valid; their
   accuracy columns are not informative.
 - **On dense full MNIST the trainer's accuracy passes are over half the epoch.** In
-  `train_backprop_network_mini_batch` the two per-epoch `_training_accuracy` passes (60000
-  single-example `classify_state` calls each) take 52-67% of a Rust epoch and 62-73% of a numpy
-  one, at B = 32 to 1024 (batch-size-scaling study, #367; the table is in candidate 7). The share
-  is largest at B = 32. About 70% of each pass is converting the row to an array, so candidate
-  7 removes most of it. What is left, per-row call overhead, could be removed by a batched
-  accuracy pass: `forward_batch` over chunks of rows instead of one `classify_state` per row.
-  That is a trainer change, not a kernel change, and changes no training result. Its stake,
-  after candidate 7, is unmeasured.
+  `train_backprop_network_mini_batch` the two `_training_accuracy` passes of a one-epoch run
+  (60000 single-example `classify_state` calls each) take 52-67% of a Rust epoch and 62-73% of a
+  numpy one, at B = 32 to 1024 (batch-size-scaling study, #367; the table is in candidate 1).
+  Over a long run there is about one pass per epoch, so the share is smaller. The share is
+  largest at B = 32. About 70% of each pass is converting the row to an array, so candidate 1
+  removes most of it. What is left, per-row call overhead, is candidate 2 (a batched accuracy
+  pass).
 - **Dense epochs, Rust / numpy end to end by batch size** (same run, medians of 5): 0.46 at
   B = 32 and 128, 0.52 at 512 and 0.48 at 1024. The step loop alone: 0.62, 0.50, 0.65, 0.60.
 - **Loading full MNIST shares one float per pixel value** (#365). `load_mnist_dataset` reuses
   256 float objects instead of boxing 47 million. That took a training-set load from 1.9 GB to
   0.45 GB and from 5.1 s to 2.4 s, with identical values. Without it, 4 sweep workers don't fit
-  in this machine's 5 GB. It also makes Rust row conversion about 12% cheaper (candidate 7), so
+  in this machine's 5 GB. It also makes Rust row conversion about 12% cheaper (candidate 1), so
   Rust dense-MNIST epoch times from before #365 aren't directly comparable with later ones.
