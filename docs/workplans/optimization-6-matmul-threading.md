@@ -195,6 +195,15 @@ Stages A-C below run in the order stage 0 justifies. Skip any stage stage 0 show
 
 ## Stage A: threshold and thread-count policy (smallest change)
 
+**Next, per the stage 0 decision above.** The goal is that the 32 x 5408, batch-32 calls (5.5M
+flops) run on one thread, with no 2- or 4-thread counts. The acceptance number is end to end:
+one epoch of MNIST, one `ConvSpec(3, 8)`, dense 32, mini-batch 32, lr 0.5, the demo's
+2000-row subset. Build the network from a snapshot of `randomized(...)` taken after
+`np.random.seed(0)`, and call `random.seed(0)` before each epoch. Time 5 runs of each build,
+alternating builds and swapping the order every run. Stage 0 measured 0.846 s with the
+current policy against 0.752 s with `set_matmul_threading(1, 2**60)`; the new policy should
+match the second. Repeat at batch 512, where threading does pay (stage 0 step 2).
+
 Replace the single 4M-flop constant with a policy taken from the stage 0 sweep. Candidates:
 
 - a **minimum work per thread** (`threads = min(cap, total_flops / min_flops_per_thread)`),
