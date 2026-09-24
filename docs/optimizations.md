@@ -271,8 +271,7 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    gone since #14. Moving the op to `matmul_2d` at 28x28, N = 512 measured 35-39 against 30-32 ms
    (presumably threaded: one thread takes 57-58 ms), and was read as "row blocks are slower". It
    can't show that: at `k` = 346112 `matmul_2d`'s 16 KB rule gives 1 row per block, the same code
-   path as `matmul_narrow`, so the difference was run-to-run variation. The crate's
-   `matmul_narrow` comment repeats the claim.
+   path as `matmul_narrow`, so the difference was run-to-run variation.
 
 5. **`max_pool_forward_batch`** is the second- or third-largest Rust conv op: in profiled MNIST
    conv-pool-conv training, 0.095 s of 0.86 s single-example (11%, 6000 calls, 4000 of them the
