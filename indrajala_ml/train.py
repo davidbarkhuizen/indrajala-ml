@@ -55,7 +55,7 @@ def reachable_reference_and_training_data(
 def _prepared_for(
     student, training_data: list[tuple[tuple[float, ...], float]] | PreparedDataset
 ) -> PreparedDataset | None:
-    # the array networks train from one backend matrix (candidate 1 in docs/optimizations.md),
+    # the array networks train from one backend matrix (docs/optimizations/implemented.md),
     # prepared here once per run unless the caller already built one; every other student (the
     # pure-Python networks, the linear classifiers) keeps the tuple list
     if isinstance(training_data, PreparedDataset):
@@ -72,7 +72,7 @@ def _training_accuracy(
     prepared: PreparedDataset | None = None,
 ) -> float:
     if prepared is not None:
-        # classify_rows batches the forward passes (candidate 2 in docs/optimizations.md)
+        # classify_rows batches the forward passes (docs/optimizations/implemented.md)
         predictions = student.classify_rows(prepared)
         correct = sum(1 for predicted, category in zip(predictions, prepared.labels) if predicted == category)
         return correct / len(prepared)

@@ -1,6 +1,6 @@
 """
-Candidate 1's A/B (docs/optimizations.md): one training epoch through the trainers the demos use,
-before and after the dataset became one backend array (#373, #374).
+The prepared dataset's A/B (docs/optimizations/implemented.md): one training epoch through the
+trainers the demos use, before and after the dataset became one backend array (#373, #374).
 
     python scripts/prepared_dataset_timing.py time [--repeats 5] [--configs ...] [--epochs 1] [--out runs.json]
 
@@ -12,8 +12,8 @@ checkout first on PYTHONPATH (the output starts with the trainers module it impo
     PYTHONPATH=/path/to/old/checkout python scripts/prepared_dataset_timing.py time
 
 --epochs trains each run for more epochs (one accuracy pass per epoch, plus one before), as a
-longer run does; candidate 2's A/B used it. Configs, each one epoch by default, from numpy-drawn
-seed-0 weights with random.seed(0):
+longer run does; the batched accuracy pass's A/B used it. Configs, each one epoch by default,
+from numpy-drawn seed-0 weights with random.seed(0):
 - dense B=32 / dense single: 784 -> 30 -> 10 on full MNIST (60000 rows), learning rate 0.5;
 - conv B=32 / conv single: the conv demo's "conv" network (ConvSpec(3, 8), dense 32) on its
   2000-row MNIST subset, learning rate 0.5.

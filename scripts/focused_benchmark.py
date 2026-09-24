@@ -1,5 +1,5 @@
 """
-The focused per-op benchmark from docs/optimizations/method.md ("How to measure"), as a tool: every
+The focused per-op benchmark from docs/optimizations/measurement.md, as a tool: every
 (case, backend) runs in its own Python process, so numpy's OpenBLAS threads can never spin
 while Rust is timed. In each process: one warm-up call, a calibration that sizes a loop to about
 `--target-ms`, then `--loops` timed loops. It reports the median microseconds per call (and the
@@ -22,7 +22,7 @@ Examples:
 `--malloc raised` sets glibc's `MALLOC_TRIM_THRESHOLD_` and `MALLOC_MMAP_THRESHOLD_` to 1e9 in
 the timed processes, so freed memory is never handed back to the OS and nothing faults in again;
 `--malloc both` times each case under both settings. A time that drops with the faults is paying
-for them; one that doesn't is compute or cache traffic (candidate 4's stage 0).
+for them; one that doesn't is compute or cache traffic.
 
 Passes swap the backend order, so neither backend always runs first. Pure Python is never timed.
 """

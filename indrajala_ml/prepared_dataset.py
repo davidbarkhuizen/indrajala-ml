@@ -9,8 +9,9 @@ from indrajala_ml.mnist_data import RECORD_SIZE, _read_binary_records, load_mnis
 
 BACKENDS = ("numpy", "rust")
 
-# classify_rows forwards this many rows at once: candidate 2's stage 0 (docs/optimizations.md)
-# measured 32 fastest in Rust (512 was slower) and within 3% of 512's saving in numpy
+# classify_rows forwards this many rows at once: the accuracy-pass timing
+# (docs/optimizations/rejected.md) measured 32 fastest in Rust (512 was slower) and within 3% of
+# 512's saving in numpy
 CLASSIFY_CHUNK_ROWS = 32
 
 
@@ -18,7 +19,7 @@ class PreparedDataset:
     """
     A training or evaluation set held as one backend matrix (one row per example) plus its
     labels, so the array networks can read rows and batches by index instead of converting a
-    tuple on every call (candidate 1 in docs/optimizations.md). backend is "numpy" (an
+    tuple on every call (docs/optimizations/implemented.md). backend is "numpy" (an
     np.ndarray, float64) or "rust" (a pa.Array); a network only accepts its own backend's.
 
     Built once per run - by the trainers from a (state, label) tuple list, or by a caller from

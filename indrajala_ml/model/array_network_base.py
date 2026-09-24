@@ -74,7 +74,7 @@ class ArrayNetworkBase:
 
     def classify_rows(self, prepared: PreparedDataset) -> list:
         # classify_row for every row, as the trainers' accuracy pass needs it, through
-        # forward_batch over chunks of rows (candidate 2 in docs/optimizations.md). The
+        # forward_batch over chunks of rows (docs/optimizations/implemented.md). The
         # predictions are classify_row's, but not by construction: numpy's X @ W.T can differ
         # from W @ x in the last ULP, so an argmax between outputs an ULP apart could differ
         states = self._prepared_states(prepared)
