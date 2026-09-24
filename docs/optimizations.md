@@ -16,7 +16,8 @@ Everything else is below.
 Rust / numpy wall-clock ratio end to end (below 1 means Rust is faster). The conv rows are from
 `demo_conv_rust_vs_vectorized_digit_recognition` after indrajala-math-rust#16. Only the MNIST
 conv mini-batch cell changed with it (0.54 after #14). The other cells make no threaded calls,
-and their moves of 0.01-0.05 since #14 are run-to-run noise:
+and their moves of 0.01-0.05 since #14 are run-to-run noise. After #17 every cell was within
+0.05 of these (MNIST mini-batch 0.47, 0.43, 0.48):
 
 | architecture | UCI digits, single | UCI digits, mini-batch | MNIST subset, single | MNIST subset, mini-batch |
 | --- | --- | --- | --- | --- |
@@ -42,13 +43,17 @@ and 4x on the first, second, fourth and fifth rows. Rust here uses the default t
 | 32 x 5408 | `downstream_batch` | 32 | 232-246 | 729-834 | 3.0-3.6x |
 | 32 x 5408 | `accumulate_gradient_batch` | 32 | 411-453 | 1175-1498 | 2.6-3.6x |
 | 32 x 5408 | `forward_batch` | 512 | 3695-4110 | 4747-4898 | 1.2-1.3x |
+| 32 x 5408 | `forward_batch` | 32 | 294-415 | 470-659 | 1.1-2.2x |
 | 30 x 784 | `downstream_batch` | 512 | 416-945 | 1193-1401 | 1.3-3.4x |
 | 30 x 784 | `accumulate_gradient_batch` | 512 | 714-776 | 997-1336 | 1.3-1.9x |
-| 30 x 784 | `forward_batch` | 512 | 788-1039 | 1267-1301 | 1.2-1.7x |
+| 30 x 784 | `forward_batch` | 512 | 750-1027 | 1038-1275 | 1.0-1.7x |
 | 30 x 784 | `downstream_batch` | 32 | 46-50 | 73-85 | 1.5-1.8x |
 | 30 x 784 | `accumulate_gradient_batch` | 32 | 70-73 | 82-97 | 1.1-1.4x |
 
-The batch-512 Rust numbers are partly warm-clock numbers (the default ran right after an
+The `forward_batch` rows other than 32 x 5408 at batch 512 are after #17 (candidate 2). At
+32 x 5408, batch 512 the threaded time moved between 4.6 and 9.8 ms from run to run on the
+old build in the same session, so that row keeps its earlier numbers. The batch-512 Rust
+numbers are partly warm-clock numbers (the default ran right after an
 8-thread run in the sweep; see the workplan's step 2). The first two rows (5.5M flops) run on
 one thread since #16. In isolation `downstream_batch` measured 581-654 µs after it, and
 `accumulate_gradient_batch` 976-1180 (the workplan's stage A).
@@ -68,14 +73,29 @@ one thread since #16. In isolation `downstream_batch` measured 581-654 µs after
 
    Workplan: [`workplans/optimization-6-matmul-threading.md`](workplans/optimization-6-matmul-threading.md).
 
-2. **Dense `forward_batch` at large batches** (`matmul_nt`). 32 x 5408 is 1.2x numpy at batch 32
-   (682-971 µs) but 5.6x at batch 64 (3395 vs 608): 3.5-5x the time for twice the work. Batch
-   64 (11M flops) is still threaded after #16, and batch 32 no longer is. These numbers were
-   measured interleaved with numpy, which inflates Rust past the threshold (see "Other
-   findings"), so re-measure them in separate processes first, with threading on and off. Once that is settled, the remaining cost is memory traffic: each row of
-   `X` re-reads all of `W`. A register block of 2-4 rows of `X` against the same `W` rows would
-   let each `W` load serve several outputs. Each output keeps `dot_product`'s grouping, so it
-   is bit-identical.
+2. **Dense `forward_batch` at large batches** (`matmul_nt`): register tiles done (#17), the
+   rest open. Re-measured in separate processes first. The recorded 5.6x at batch 64 was the
+   interleaving: batch 64 was 1.8x numpy (1161-1164 against 625-653 µs), and unthreaded Rust
+   was linear in the batch at about 2x numpy per row. So the cost was the kernel, as expected:
+   every row of `X` re-read all of `W` (1.4 MB at 32 x 5408, past L2). #17 runs 4 rows of `X`
+   against 2 rows of `W` at a time, bit-identical. Two focused passes, old and new in separate
+   processes, the second with the build order reversed (µs, unthreaded):
+
+   | shape | batch | old | new |
+   | --- | --- | --- | --- |
+   | 32 x 5408 | 32 | 635-916 | 490-903, then 545-555 |
+   | 32 x 5408 | 128 | 2621-3708 | 2339-2769 |
+   | 32 x 5408 | 512 | 10452-15660 | 8233-13628 (9331-10204 in the second pass) |
+   | 30 x 784 | 32 | 95-110 | 69-98 (76-77) |
+   | 30 x 784 | 512 | 1537-2109 | 1208-1478 |
+
+   With default threading, 30 x 784 at batch 512 went from 1472-1655 to 1038-1275. End to
+   end, every epoch was within noise, as the arithmetic predicts: MNIST conv mini-batch 32's
+   62 forward calls save about 12 ms of 0.75 s. What is left: 32 x 5408 is still 1.3-1.6x
+   numpy at batch 32, because `W` still streams in from L3 once per 4 rows of `X`. Candidate:
+   block over `k` so that a panel of `W` stays in L2 across all rows of `X`, storing and
+   reloading each pair's 4-lane accumulator between panels. That keeps each output's
+   grouping, so it is bit-identical. Low value while no demo runs large batches.
 
 3. **Conv `forward_batch` at N = 32 costs more than 32 single-example calls.** Measured at 28x28
    (2280 vs 1715 µs, before the `matmul_narrow` kernel). The likely cause, unmeasured: the 1.5 MB
@@ -201,6 +221,7 @@ Crate PR numbers are `indrajala-math-rust`'s. "Bit-identical" means every output
 | `dot_products_into`: 8/4/2 rows at once in `dot_product`'s grouping | #13 | 30 x 784 forward 9.0 → 3.7 µs, batch 32 260 → 93 µs; bit-identical |
 | `matmul_2d` register-tiled, sharing `matmul_narrow`'s kernel | #14 | unthreaded dense batch downstream/accumulate 0.1-0.6x their old time; mini-batch dense MNIST epoch about -4%; bit-identical |
 | Threading threshold 4M → 8M flops (threading workplan, stage A) | #16 | MNIST conv mini-batch 32 epoch 0.879 → 0.770 s (-12%); batch 512 and dense MNIST unchanged; bit-identical |
+| `matmul_nt` in 4 x 2 register tiles (4 rows of `X` against 2 rows of `W`; 2 x 4, 3 x 3 and 2 x 2 measured slower or tied) | #17 | unthreaded dense `forward_batch` 0.6-0.9x its old time (32 x 5408, batch 32: 771-916 → 545-555 µs; 30 x 784, batch 32: 102-110 → 76-77); epochs within noise; bit-identical |
 
 Closed with no measured gain, kept as findings:
 
