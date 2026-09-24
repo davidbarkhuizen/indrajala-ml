@@ -177,6 +177,33 @@ accumulator in `dot_product`'s grouping, would hide that latency and keep every 
 The same kernel would speed up the single-example `W @ x` too, and has to be used for both, to
 keep the batch-row = single-example property.
 
+**Done, and the estimate held** (indrajala-math-rust#13). `dot_products_into` runs 8, then 4,
+then 2 rows of `W` against one vector at once, each in `dot_product`'s exact grouping. The matrix
+@ vector case and `matmul_nt` share it, so it is bit-identical everywhere and batch rows still
+equal the single-example forward. New crate tests pin every output to an exact `Fraction`-FMA
+emulation of the grouping; they also pass on the old build.
+
+Rust µs per call, before → after:
+
+| shape | op | before | after |
+| --- | --- | --- | --- |
+| 30 x 784 | forward | 9.0 | 3.7 |
+| 30 x 784 | batch 32 | 259.8 | 92.9 (numpy about 60) |
+| 32 x 5408 | forward | 57.1 | 19.7 (numpy about 31) |
+| 32 x 5408 | batch 32 | 1021 | 672 |
+| 32 x 5408 | batch 512 | 7338 | 4841 |
+
+At 30 x 784 and 16 x 784, batch 512 barely moves (1418 → 1350 µs). It is threaded, and memory
+traffic dominates there rather than FMA latency. Reusing each loaded `W` block across several
+rows of `X` would target that; not tried.
+
+Dense MNIST 784 -> 30 -> 10, one 60000-example epoch, identical weights, median of 3, builds
+alternated (Rust seconds; numpy's own time varied 15.2-17.2 s between the runs):
+- Single-example: Rust 5.49 → 5.06 s.
+- Mini-batch 32: Rust 5.45 → 4.69 s, ratio 0.665 → 0.557.
+
+Test accuracies were identical between the builds.
+
 ## Not optimizations, but found in the same measurements
 
 - **Single-example training runs diverge between backends, as they do within numpy.** In the
