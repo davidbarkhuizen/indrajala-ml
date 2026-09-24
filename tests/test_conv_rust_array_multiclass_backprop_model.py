@@ -165,21 +165,27 @@ def test_randomized_breaks_symmetry_and_builds_a_usable_network():
 
 def test_snapshot_has_an_empty_pool_entry_and_restore_round_trips():
 
+    def as_lists(snapshot):
+        return [[array.tolist() for array in entry] for entry in snapshot]
+
     network = ConvRustArrayMultiClassBackpropClassifierNetwork.randomized(8, 8, POOLED, [8], class_count=10)
     before = network.snapshot()
+    before_lists = as_lists(before)
     assert before[1] == ()
 
+    # Whole-snapshot comparisons, not the first conv layer's W alone: pa.uniform can't be seeded,
+    # and ~0.5% of initialisations leave that one layer exactly unchanged by a single example's
+    # step (measured over 2000). The output layer's bias always moves (its gradient is p - one_hot).
     for state, label in _digits_rows()[:5]:
         network.learn(0.5, state, label)
-    assert network.snapshot()[0][0].tolist() != before[0][0].tolist()
+    assert as_lists(network.snapshot()) != before_lists
 
     network.restore(before)
-    assert [[array.tolist() for array in entry] for entry in network.snapshot()] == [
-        [array.tolist() for array in entry] for entry in before
-    ]
+    assert as_lists(network.snapshot()) == before_lists
     # restore copies: training afterwards leaves the snapshot itself untouched
     network.learn(0.5, *_digits_rows()[0])
-    assert network.snapshot()[0][0].tolist() != before[0][0].tolist()
+    assert as_lists(network.snapshot()) != before_lists
+    assert as_lists(before) == before_lists
 
     with pytest.raises(AssertionError):
         network.restore([before[0], before[0], *before[2:]])
