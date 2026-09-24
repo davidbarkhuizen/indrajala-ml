@@ -34,7 +34,9 @@ included) at 26x26x8, PoolSpec(2), ReLU-like input:
 **Stake** (profiled call counts times the per-call savings, the slower downstream mode): about
 106 ms (13%) of the single-example run and 120 ms (13%) of the mini-batch 32 run with the 2x2
 body; 9-10% with the general division-free kernel alone. The UCI 6x6 pool is already 1.5 µs a
-call.
+call. The share is specific to narrow networks like the demos': pooling's cost grows with the
+activation size (C·H·W), a conv's with C_in·C_out·k² per position, so in wider CNNs pooling's
+share of an epoch falls, though every pooling layer gains.
 
 **Stage A: forward.** The division-free general kernel, plus the 2x2 stride-2 body as a fast
 path. The scan order and strict `>` are unchanged, so bit-identical. Tests in crate
