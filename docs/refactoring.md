@@ -23,9 +23,14 @@ Rules for every stage:
 
 ## 1. One array network base for both backends
 
-**The duplication.** `ArrayNetworkBase` and `RustArrayNetworkBase` are the same class body:
-`__init__`, `_forward_input`, `_learn_batch_input`, the abstract hooks, `snapshot` and almost all
-of `_learn_input` match line for line. The same holds for the classes one level up:
+**Where it stands.** The base is shared: `ArrayNetworkBase` calls the array operations that
+differ between numpy and Rust through `self.backend` (`indrajala_ml/model/array_backend.py`,
+`NUMPY` and `RUST`), and `RustArrayNetworkBase` is a subclass that sets `backend = RUST` and the
+Rust layer classes. The single-example step always calls `layer.sgd_step`: numpy's layers make the
+unfused `accumulate_gradient` and `apply_accumulated_gradient` calls, and Rust's plain dense layer
+fuses them.
+
+**The duplication left.** The classes one level up are still pairs:
 
 - the multiclass pair `VectorizedMultiClassBackpropClassifierNetwork` /
   `RustArrayMultiClassBackpropClassifierNetwork`;
@@ -34,50 +39,25 @@ of `_learn_input` match line for line. The same holds for the classes one level 
   `EnsembleRustArrayBackpropClassifierNetwork`;
 - the conv pair's `randomize`, `snapshot` and `restore`.
 
-`rust_array_network_base.py` says they aren't shared because "the two backends' array APIs
-differ throughout". That is out of date: the differences come down to these operations.
+Besides the operations already in the backend, the shape classes differ in these:
 
 | operation | numpy | Rust |
 |---|---|---|
-| tuple to vector | `np.array(state, dtype=np.float64)` | `pa.Array(list(state))` |
-| batch of tuples to matrix | `np.array([...], dtype=np.float64)` | `pa.Array([list(s) ...])` |
-| one row of a prepared matrix | `states[i]` | `states.row(i)` |
-| rows by index / by range | `states[list(idx)]`, a slice | `states.take_rows(list(...))` |
-| dataset backend name | `"numpy"` | `"rust"` |
-| fan-in-aware draw | `fan_in_aware_random_layer` | `fan_in_aware_random_rust_layer` |
-| list or array to owned array | `np.array(x, dtype=np.float64).copy()` | `x.copy()` or `pa.Array(x)` |
 | zeros, argmax, argmax per row | `np.zeros`, `np.argmax`, `axis=1` | `pa.Array.zeros`, `pa.argmax`, per-row `index(max)` |
 | output to list | `float(x[0])`, `.tolist()` | `.tolist()` |
 
-There is one behavioral difference. For single examples, Rust calls the fused `layer.sgd_step`,
-while numpy calls `accumulate_gradient` and then `apply_accumulated_gradient`.
-
-**Target shape.** A small backend object (`indrajala_ml/model/array_backend.py`: `NUMPY` and
-`RUST`, each a namespace of the operations above) and one `ArrayNetworkBase` that calls it through
-`self.backend`. Numpy's `ArrayLayer` gains an `sgd_step` that makes the same two calls, which
-keeps it bit-identical, so the shared `_learn_input` always calls `sgd_step`. The shape classes
-become one multiclass class and one single-output class, parameterized by backend. The existing
-concrete names stay as two-line subclasses that set `backend` and the default layer classes.
+**Target shape.** The backend gains those operations. The shape classes become one multiclass
+class and one single-output class, parameterized by backend. The existing concrete names stay as
+two-line subclasses that set `backend` and the default layer classes.
 
 **Stages** (one PR each):
 
-0. The golden-run probe and the timing baseline, both recorded on `main`.
-1. `array_backend.py` and `ArrayLayer.sgd_step`. `ArrayNetworkBase` takes over
-   `RustArrayNetworkBase`'s body through `self.backend`, and `RustArrayNetworkBase` becomes a
-   subclass that sets `backend = RUST`. Rust's single-output `restore`, which also accepts plain
-   lists, becomes the shared behavior through the backend's "to owned array". Measure the
-   hot-path timing.
 2. The multiclass and single-output shape pairs, with `save` and `load` converting through the
    backend.
 3. The ensemble pair, and the conv pair's `randomize`, `snapshot` and `restore`. Only the conv
    pair's `classify_rows` stays per backend, because batched Rust conv inference was measured
    slower (`docs/optimizations/rejected.md`).
-4. Update the docstrings that describe the two bases as separate, starting with
-   `RustArrayNetworkBase`'s.
-
-**Risk.** The hot path gains one attribute lookup per call (`self.backend.row`, and so on). If
-stage 1 measures a slowdown, bind the backend's functions as class attributes when the class is
-created instead.
+4. Update the docstrings that still describe the numpy and Rust networks as separate.
 
 ## 2. Hyperparameters declared once
 

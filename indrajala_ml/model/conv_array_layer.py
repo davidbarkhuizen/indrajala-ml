@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
+from indrajala_ml.model.array_layer import unfused_sgd_step
+
 
 def validate_conv_arguments(
     input_height: int, input_width: int, input_channels: int, kernel_size: int, channel_count: int, stride: int
@@ -167,6 +169,9 @@ class ConvArrayLayer:
         self.W -= learning_rate * self._grad_W / batch_size
         self.b -= learning_rate * self._grad_b / batch_size
         self._reset_gradient_accum()
+
+    def sgd_step(self, input_activation: np.ndarray, learning_rate: float) -> None:
+        unfused_sgd_step(self, input_activation, learning_rate)
 
     def _reset_gradient_accum(self) -> None:
         self._grad_W = np.zeros((self.channel_count, self.fan_in))

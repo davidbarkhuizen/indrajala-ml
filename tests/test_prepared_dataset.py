@@ -41,7 +41,7 @@ def _all_subclasses(cls):
 
 
 NETWORK_CLASSES = sorted(
-    {cls for base in (ArrayNetworkBase, RustArrayNetworkBase) for cls in _all_subclasses(base)},
+    {cls for cls in _all_subclasses(ArrayNetworkBase) if cls is not RustArrayNetworkBase},
     key=lambda cls: cls.__name__,
 )
 

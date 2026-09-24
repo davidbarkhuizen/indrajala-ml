@@ -3,16 +3,6 @@ from __future__ import annotations
 import indrajala_math_rust as pa
 
 
-def unfused_sgd_step(layer, input_activation: "pa.Array", learning_rate: float) -> None:
-    """
-    The sgd_step of a layer whose update isn't plain SGD (momentum, Adam, L2) or that isn't a
-    dense layer at all (conv): accumulate_gradient then apply_accumulated_gradient at
-    batch_size=1, exactly what RustArrayNetworkBase.learn called before sgd_step existed.
-    """
-    layer.accumulate_gradient(input_activation)
-    layer.apply_accumulated_gradient(learning_rate, batch_size=1)
-
-
 def fan_in_aware_random_rust_layer(size: int, previous_size: int) -> tuple["pa.Array", "pa.Array"]:
     """
     fan_in_aware_random_layer (array_layer.py), drawn from indrajala_math_rust.uniform instead of
@@ -93,7 +83,7 @@ class RustArrayLayer:
     def sgd_step(self, input_activation: "pa.Array", learning_rate: float) -> None:
         # accumulate_gradient then apply_accumulated_gradient(learning_rate, batch_size=1) as one
         # fused call, bit-identical to that pair. It relies on the accumulators being fresh
-        # zeros, which they always are in RustArrayNetworkBase.learn, its only caller: apply
+        # zeros, which they always are in ArrayNetworkBase._learn_input, its only caller: apply
         # resets them after every step. The accumulators aren't touched, so they stay zero. A
         # subclass that overrides accumulate_gradient or apply_accumulated_gradient must also
         # override this (tests/test_rust_array_layer_sgd_step.py checks it).
