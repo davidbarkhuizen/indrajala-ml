@@ -11,32 +11,7 @@ to [Rejected](rejected.md), with the reason in either case.
 
 ## Ranked
 
-### 1. Max-pool downstream: one pass for non-overlapping windows
-
-`max_pool_downstream_batch` is 6% of the profiled conv-pool-conv MNIST epoch in both trainers,
-and batched it is 1.9x slower than numpy (see [Current baseline](current-baseline.md#per-op)).
-The op sweeps every window once per slot (`k * k` passes), plus a validation pass over `argmax`.
-With non-overlapping windows (stride ≥ `k`) each input receives at most one delta, so one pass in
-window order, adding each delta into the zeroed `dx`, gives the same bits. Stage 0 (crate branch
-`probe/maxpool-stage0`, local only) measured a probe bit-identical to the op (`-0.0` deltas
-included) at 26x26x8, PoolSpec(2), ReLU-like input: 21-24 → 6.2-6.9 µs single, 1180-1290 → 190
-or 470-530 µs at batch 32. The batch time is bimodal between processes, under both allocator
-settings, so address-dependent (unexplained).
-
-**Stake** (the profiled time times the probe's per-call saving, the slower batch mode): about
-29 ms (4%) of the single-example run and 28 ms (4%) of the mini-batch 32 run. The UCI 6x6 pool is
-already 1.5 µs a call.
-
-**Stage B.** The one-pass loop when stride ≥ `k`, validation folded in; the slot-outer loop stays
-for overlapping windows. The bimodal batch time is investigated and unexplained (see
-[Measurement](measurement.md#gotchas)): quote both modes, from several processes. Tests: `==` including the sign of zero against the current
-op at stride = `k` and stride > `k`. Mutation that must fail: writing `d` in place of `0.0 + d` (a
-`-0.0` delta).
-
-**Acceptance:** the pool rows in the baseline, then `epoch_op_profile.py` old against new on
-conv-pool-conv; the full suite with no pin changes.
-
-### 2. Dense batch products at short `k`: multi-row tiles, then a fused gradient add
+### 1. Dense batch products at short `k`: multi-row tiles, then a fused gradient add
 
 `downstream_batch` and `accumulate_gradient_batch` at 32 x 5408, batch 32 are `(32, 32) @ (32,
 5408)` products through `matmul_2d`, in the conv mini-batch dense tail (63 calls of each per
@@ -74,7 +49,7 @@ the chain from `g`.
 ops if `tiled_row_range` changed, then the old-against-new epochs; the full suite with no pin
 changes.
 
-### 3. Dense `accumulate_gradient_batch` at long `k`, and a blocked transpose
+### 2. Dense `accumulate_gradient_batch` at long `k`, and a blocked transpose
 
 At batch 512 (`k` = 512), on one thread, accumulate is 3.0-3.4x numpy at 32 x 5408 and 1.6-2.1x
 at 30 x 784. Likely cause: `b`'s `k x 16` panel (64 KB at `k` = 512) no longer fits the 32 KB L1,
@@ -93,7 +68,7 @@ numpy's one-thread time, so the saving is likely under 0.1 s an epoch. **Gate:**
 `k`-blocking probe must gain enough to leave a threaded saving above 5% of the step loop;
 re-profile first.
 
-### 4. Conv accumulate with a large `cols`
+### 3. Conv accumulate with a large `cols`
 
 `D @ cols` (`(O, N*P) @ (N*P, C*k*k)`) through `matmul_narrow`: at 28x28, `ConvSpec(3, 8)`, N = 512,
 one thread, 57-58 ms against 14-15 ms for 512 single calls. Each output row makes one pass over

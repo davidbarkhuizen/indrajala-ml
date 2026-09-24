@@ -100,6 +100,22 @@ general kernel was no faster), so only the fixed-size body gets near the 0.9 µs
 (its 22 MB input bounds it). In the conv-pool-conv epoch the op went from 95-101 ms to 23-32 ms,
 8.5-9.5% of the profiled run.
 
+## Max-pool downstream: one pass without overlap
+
+`max_pool_downstream_batch` (`rust/src/conv.rs`) takes one pass per channel plane when windows
+don't overlap (stride ≥ `k`, the demos' `PoolSpec(2)`) (crate #25). Each input then receives at
+most one delta, so the pass stores `0.0 + d` at the winning input: the bits the add into the
+zeroed `dX` gave, `-0.0` deltas coming out `+0.0`. Slot offsets come from a `k * k` table, and
+the argmax check is folded in as an exact integer test. Overlapping windows keep the slot-outer
+loop, which fixes numpy's summation order.
+
+Why: the old op swept every window once per slot (`k * k` passes) after a separate validation
+pass. At 26x26x8: 22.8-24.4 → 5.7-6.3 µs single, 1211-1276 → 166-177 or 373-394 µs at N = 32 (two
+modes between processes; see [Measurement](measurement.md#gotchas)), 26-28 → 9.7-12.9 ms at
+N = 512. In the conv-pool-conv epoch the op went from 41-45 to 11.5-12.2 ms single-example and
+48-53 to 17.2-18.4 ms at mini-batch 32, about 4% of each run. A plain store measured the same as
+the add, and the offset table the same as a division or faster.
+
 ## Threading policy
 
 The only threading is `for_each_row_range` in `rust/src/linalg.rs`, used by the three matmul

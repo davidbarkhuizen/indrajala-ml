@@ -13,19 +13,18 @@ Rust / numpy wall-clock ratio (below 1 means Rust is faster), from
 
 | architecture | UCI digits, single | UCI digits, mini-batch | MNIST subset, single | MNIST subset, mini-batch |
 | --- | --- | --- | --- | --- |
-| conv | 0.12 | 0.17 | 0.26 | 0.49 |
-| conv-pool-conv | 0.09 | 0.09 | 0.30 | 0.41 |
-| conv-conv-stride2 | 0.11 | 0.12 | 0.35 | 0.46 |
+| conv | 0.17 | 0.73 | 0.19 | 0.54 |
+| conv-pool-conv | 0.11 | 0.46 | 0.26 | 0.44 |
+| conv-conv-stride2 | 0.13 | 0.53 | 0.35 | 0.51 |
 
 Dense MNIST 784 -> 30 -> 10, one 60000-example epoch: about 0.21 single-example and 0.54
 mini-batch 32.
 
 Caveats:
 
-- **The conv table is stale.** It is from crate #16-#17, before the prepared dataset, the batched
-  accuracy pass, single-example downstream through the tiled kernel and the per-example conv
-  forward. One demo run since moved cells those changes can't touch as much as the changes, so it
-  awaits a run with more repeats. The dense ratios are current.
+- **The conv table is one demo run** (each cell the median of 5) on the current build, after the
+  one-pass pool downstream (crate #25). The UCI mini-batch runs take 0.06-0.12 s in all, so fixed
+  per-run costs dominate their ratios; read them as noisy. The dense ratios are current.
 - **numpy runs with OpenBLAS's default threading, which slows its own training** (its MNIST conv
   mini-batch 32 epoch: 1.22-1.32 s at `OPENBLAS_NUM_THREADS=1` against 1.39-1.56 s by default).
   Against single-threaded numpy that cell would be nearer 0.55-0.6 (estimated, not measured side
@@ -66,9 +65,9 @@ N = 512.
 
 Max-pool ops, PoolSpec(2) on 26x26x8 (the conv-pool-conv MNIST layer), ReLU-like input, one
 thread each: forward 4.1-4.2 µs single against numpy's 95, 112-114 at batch 32 against 1570-1630;
-downstream 21-24 single against 48-50, but 1175-1290 at batch 32 against 617-735 (1.9x, and slower
-per example than its single calls). At 6x6x8 (UCI digits) the Rust forward is 1.0 µs single and
-downstream 1.4-1.6.
+downstream 5.7-6.3 single against 48-50, 166-177 or 373-394 at batch 32 (two modes between
+processes) against 617-735. At 6x6x8 (UCI digits) the Rust forward is 1.0 µs single and
+downstream 0.9-1.1.
 
 ## Where a Rust epoch spends its time
 
@@ -82,9 +81,10 @@ current shares are in parentheses, the rest is not re-profiled
   `downstream_batch` 6.7%, `forward_batch` 6.3%.
 - **Conv, single-example** (0.80 s): `layer_sgd_step` 20%, `conv_forward_batch` 20%,
   `layer_forward` 19%, dense `downstream` (5-7% now), conv accumulate 7%.
-- **Conv-pool-conv** (0.70-0.73 s single-example, 0.78-0.85 s mini-batch 32, current build):
-  `conv_forward_batch` 47% / 45%, `conv_accumulate_gradient_batch` 11% / 17%,
-  `max_pool_downstream_batch` 6% / 6%, `max_pool_forward_batch` 3% / 4%.
+- **Conv-pool-conv** (0.67-0.71 s single-example, 0.76-0.79 s mini-batch 32, current build):
+  `conv_forward_batch` 47% / 45%, `conv_accumulate_gradient_batch` 11% / 17% (profiled before
+  the one-pass pool downstream took about 4% off each run), `max_pool_forward_batch` 3% / 4%,
+  `max_pool_downstream_batch` 1.7% / 2.3%.
 - **About a quarter of a one-epoch conv run is the accuracy passes**, not training: the trainers
   run n + 1 per-row passes for n epochs (Rust conv keeps the per-row pass). Stakes quoted as a
   share of an epoch are shares of this timed one-epoch run, which overstates the passes for
