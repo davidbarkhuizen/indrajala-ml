@@ -53,6 +53,11 @@ threshold.
 
 ### 0a. A threading override for tests and benchmarks
 
+**Done** (crate PR #15). One change from the plan below: the threshold override is read *before*
+the default threshold comparison, since threshold 1 has to lower the threshold. On x86 it is one
+relaxed load. Mutations "later threads start one row late" and "last block drops a row" each
+fail all 20 new tests.
+
 Add a crate-level override, exposed to Python:
 
 ```rust
