@@ -2,6 +2,18 @@
 
 fast neural network classifiers from first-principles with no ML framework dependencies
 
+## The name
+
+*Indrajala* is Sanskrit for "Indra's net". From
+[Wikipedia](https://en.wikipedia.org/wiki/Indra%27s_net):
+
+> "Indra's net" is an infinitely-large net owned by the Vedic deva Indra, which hangs over his
+> palace on Mount Meru, the axis mundi of Buddhist and Hindu cosmology. In East Asian Buddhism,
+> Indra's net is considered as having a multifaceted jewel at each vertex, with each jewel being
+> reflected in all of the other jewels. In the Huayan school of Chinese Buddhism, which follows
+> the Buddhāvataṃsaka Sūtra, the image of "Indra's net" is used to describe the interconnectedness
+> or "perfect interfusion" (yuánróng, 圓融) of all phenomena in the universe.
+
 The Rust math backend lives in a separate repo,
 [indrajala-math-rust](https://github.com/davidbarkhuizen/indrajala-math-rust), mounted here as a
 git submodule at `rust/`. Clone with `git clone --recurse-submodules`, or run
