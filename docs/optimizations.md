@@ -129,16 +129,59 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    calls (1.2-1.3x), accumulate 1037-1106 against 899-934 (1.1-1.2x; candidate 8 at N = 512). In
    the MNIST conv mini-batch 32 epoch the 63 batch calls took about 96 ms (profiled, the 4000
    accuracy-pass calls taken out at 27 µs each), so at the single-example rate they would save
-   about 40 ms, 5% of the worst end-to-end cell. That is about candidate 3's stake, but this had
-   neither a confirmed cause nor a design, so it ranked after it; with candidate 3 done it is next. It ranks above candidate 6,
-   whose stages are planned and measured but worth only 2.5-4%, and fixing it is what would let
-   conv networks gain from candidate 2. The likely cause, unmeasured: `cols` (48 KB at N = 1, 1.56 MB at N = 32,
-   25 MB at N = 512) falls out of L2 between im2col and the matmul. A second, found in candidate
-   2's stage 0: glibc heap trimming, which faulted 27000 pages a pass into chained conv
-   `forward_batch` calls at N = 32 and cost them about a third of their time (see "Other
-   findings"). Check the faults per call first (`focused_benchmark.py` reports them), then time
-   the op's parts (im2col, the matmul, the ReLU scatter). Candidate: im2col and multiply one block of output
-   positions at a time, keeping `cols` for the backward pass.
+   about 40 ms, 5% of the worst end-to-end cell. It is also what would let conv networks gain
+   from candidate 2 (Rust conv keeps the per-row accuracy pass until then).
+
+   **Stage 0 (2026-09-24): the cause is zero-filling and cache traffic past L2, not page faults
+   and not the matmul. Go, with a per-example pipeline.** Measured with a local probe crate build
+   (`probe/cand4-stage0` in `rust/`, not pushed) that runs the op's work with a timer between its
+   parts, frees its buffers in the real call path's order, and checks its `A` and `cols` against
+   `conv_forward_batch` bit for bit:
+   - **Faults are ruled out for the isolated op.** The real op faults 0 times a call at N = 32 and
+     512 (`focused_benchmark.py`), and `--malloc raised` (no heap trimming) leaves its time
+     unchanged: 1400-1422 against 1401-1447 µs at N = 32. The chained-call faults under "Other
+     findings" are a separate, smaller effect (3-6% of an epoch).
+   - **The matmul scales linearly at N = 32:** bare `21632x9x8` 297-318 µs against 32 x 9.3.
+     (Not at N = 512: 11.0-12.8 ms against 4.8.)
+   - **The parts, µs at N = 32, fault-free** (both allocator thresholds raised, where the probe
+     and the real op agree; with glibc's defaults the probe faulted 195-490 times a call where
+     the real op faults 0-20, the docs' warning below about a probe's allocation pattern):
+
+     | part | now at N = 32 | 32 x N = 1 |
+     |---|---|---|
+     | zeroed `cols` (1.56 MB) | 217-235 | 32 |
+     | im2col | 248-279 | 240 |
+     | matmul, with its zeroed 1.38 MB output | 462-670 | 373 |
+     | zeroed `A` (1.38 MB) | 177-232 | 27 |
+     | ReLU scatter | 266-324 | 237 |
+
+     The three `vec![0.0; ...]` buffers are each overwritten in full; at N = 1 they sit in L1/L2
+     and zeroing them is free.
+   - **Three designs, all bit-identical to the current op** (probe totals, µs, fault-free, two
+     passes; single calls 26-29 µs, so 32 x 830-930 and 512 x 13.3-14.8 ms):
+
+     | design | N = 1 | N = 32 | N = 512 |
+     |---|---|---|---|
+     | now (zeroed buffers) | 28.5-31.1 | 1403-1736 | 30.4-32.3 ms |
+     | original loops into uninitialised buffers | 34.1-44.3 | 1182-1209 | 23.3-23.4 ms |
+     | no zeroing: `cols` appended, `A` gathered in output order | 26.0-26.6 | 1006-1071 | 17.9-19.8 ms |
+     | the same, one example at a time (im2col, matmul, gather) | 27.0-27.9 | 979-983 | 15.7-15.9 ms |
+
+     Just dropping the zero-fill is not enough: the strided scatter then pays for fetching `A`'s
+     lines itself (456-475 µs at N = 32, and 13-24 against 7.5 µs at N = 1). Writing `A`
+     sequentially (reading `by_position` with stride `O`) fixes that. Running the pipeline one
+     example at a time keeps each 48 KB slab of `cols` and the 43 KB `P x O` product hot, and
+     reuses one product buffer; it is the best at every N and brings N = 512 near the single
+     calls. `cols` is still kept whole for the backward pass.
+   - **Stake:** about 420-500 µs of the 1400 at N = 32, so about 26-32 ms (4%) of the conv
+     mini-batch 32 epoch's 63 calls, plus whatever candidate 2's batched accuracy pass then gains
+     for Rust conv (to measure: the blocked op is still 30.6 against 26-28 µs per example, so the
+     pass would gain only from the per-call overhead of the other layers).
+   - **Open for the fix:** a per-example matmul runs on one thread, so a threaded `forward_batch`
+     at large N would lose its row threading (per-block, or threads over examples, would keep
+     it). The same zeroed-output pattern is in `matmul_narrow` itself, so downstream (1.2-1.3x)
+     and accumulate (1.1-1.2x) may share part of the cause; col2im's scatter-add does need its
+     zeroed buffer.
 
 5. **`max_pool_forward_batch`** is the second- or third-largest Rust conv op: in profiled MNIST
    conv-pool-conv training, 0.095 s of 0.86 s single-example (11%, 6000 calls, 4000 of them the
@@ -510,6 +553,10 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   (5.3-5.8 against 9.9-10.1 ms), since cores take hundreds of ms of load to clock up. Rotate
   the order of settings. `perf` can't be used without root (`perf_event_paranoid` is 4), so probes
   go in a local crate build instead (timers and counters behind a Python-callable switch).
+- **Faults or compute:** `focused_benchmark.py --malloc both` times each case with glibc's
+  defaults and with `MALLOC_TRIM_THRESHOLD_` and `MALLOC_MMAP_THRESHOLD_` at 1e9 (nothing is
+  returned to the OS, so nothing faults in again), each in its own process. A time that drops
+  with the faults was paying for them.
 - **A probe's allocation pattern is not the real call path's.** Check faults on the real op.
   In optimization 7's probe, a tight Rust loop allocating a fresh 22 MB output every call
   (with a reused buffer of the same size also live) faulted on every page: 5410 faults per

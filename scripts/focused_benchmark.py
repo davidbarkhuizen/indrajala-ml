@@ -17,6 +17,12 @@ Examples:
     python scripts/focused_benchmark.py --shape 5408 --op downstream_batch --batch 32 --passes 2
     python scripts/focused_benchmark.py --matmul 32x128x1352 --matmul 32x32x5408 --backend rust
     python scripts/focused_benchmark.py --op accumulate --rust-threads 1 --openblas-threads 1
+    python scripts/focused_benchmark.py --shape 28x28 --op forward --backend rust --malloc both
+
+`--malloc raised` sets glibc's `MALLOC_TRIM_THRESHOLD_` and `MALLOC_MMAP_THRESHOLD_` to 1e9 in
+the timed processes, so freed memory is never handed back to the OS and nothing faults in again;
+`--malloc both` times each case under both settings. A time that drops with the faults is paying
+for them; one that doesn't is compute or cache traffic (candidate 4's stage 0).
 
 Passes swap the backend order, so neither backend always runs first. Pure Python is never timed.
 """
@@ -142,8 +148,14 @@ def worker(args) -> None:
     print(json.dumps(result))
 
 
-def run_in_process(case: Case, backend: str, args) -> dict:
+# glibc's thresholds at 1e9: freed memory stays in the heap, so it never faults in again.
+RAISED_MALLOC_ENV = {"MALLOC_TRIM_THRESHOLD_": "1000000000", "MALLOC_MMAP_THRESHOLD_": "1000000000"}
+
+
+def run_in_process(case: Case, backend: str, args, malloc: str = "default") -> dict:
     env = dict(os.environ)
+    if malloc == "raised":
+        env.update(RAISED_MALLOC_ENV)
     if backend == "numpy" and args.openblas_threads is not None:
         env["OPENBLAS_NUM_THREADS"] = str(args.openblas_threads)
     command = [sys.executable, "-B", os.path.abspath(__file__), "--worker", case_key(case), "--backend-to-run", backend]
@@ -183,6 +195,12 @@ def main() -> None:
     parser.add_argument("--target-ms", type=float, default=20.0)
     parser.add_argument("--rust-threads", type=int, help="set_matmul_threading(N, 0) before timing Rust")
     parser.add_argument("--openblas-threads", type=int, help="OPENBLAS_NUM_THREADS for the numpy processes")
+    parser.add_argument(
+        "--malloc",
+        choices=["default", "raised", "both"],
+        default="default",
+        help="glibc allocator thresholds in the timed processes (raised: no trimming, no mmap)",
+    )
     parser.add_argument("--json", help="also write every result to this file")
     parser.add_argument("--worker", help=argparse.SUPPRESS)
     parser.add_argument("--backend-to-run", help=argparse.SUPPRESS)
@@ -194,25 +212,31 @@ def main() -> None:
 
     backends = args.backend or list(BACKENDS)
     cases = [c for c in every_case(args.batch_sizes, args.matmul) if selected(c, args)]
+    mallocs = ["default", "raised"] if args.malloc == "both" else [args.malloc]
     settings = f"rust threads {args.rust_threads or 'default'}, OpenBLAS threads {args.openblas_threads or 'default'}"
+    settings += f", malloc {args.malloc}"
     print(f"{len(cases)} cases x {len(backends)} backends x {args.passes} passes, {settings}")
     print(f"median (min-max) µs per call over {args.loops} loops of ~{args.target_ms:g} ms; faults = minor page faults per call")
-    header = f"{'pass':>4} {'shape':<20} {'op':<26} {'batch':>5} {'backend':<7} {'median':>9} {'min-max':>17} {'faults':>7}"
+    header = f"{'pass':>4} {'shape':<20} {'op':<26} {'batch':>5} {'backend':<7} {'malloc':<7} {'median':>9} {'min-max':>17} {'faults':>7}"
     print(header)
     results = []
     for pass_index in range(args.passes):
         order = backends if pass_index % 2 == 0 else list(reversed(backends))
         for case in cases:
             for backend in order:
-                r = run_in_process(case, backend, args)
-                results.append({"pass": pass_index + 1, "shape": case.shape, "op": case.op, "batch": case.batch, "backend": backend, **r})
-                batch = "-" if case.batch is None else case.batch
-                spread = f"{r['min_us']:.1f}-{r['max_us']:.1f}"
-                print(
-                    f"{pass_index + 1:>4} {case.shape:<20} {case.op:<26} {batch:>5} {backend:<7} "
-                    f"{r['median_us']:>9.1f} {spread:>17} {r['faults_per_call']:>7.1f}",
-                    flush=True,
-                )
+                for malloc in mallocs if pass_index % 2 == 0 else list(reversed(mallocs)):
+                    r = run_in_process(case, backend, args, malloc)
+                    results.append(
+                        {"pass": pass_index + 1, "shape": case.shape, "op": case.op, "batch": case.batch,
+                         "backend": backend, "malloc": malloc, **r}
+                    )
+                    batch = "-" if case.batch is None else case.batch
+                    spread = f"{r['min_us']:.1f}-{r['max_us']:.1f}"
+                    print(
+                        f"{pass_index + 1:>4} {case.shape:<20} {case.op:<26} {batch:>5} {backend:<7} {malloc:<7} "
+                        f"{r['median_us']:>9.1f} {spread:>17} {r['faults_per_call']:>7.1f}",
+                        flush=True,
+                    )
     if args.json:
         with open(args.json, "w") as f:
             json.dump({"settings": vars(args), "results": results}, f, indent=1)
