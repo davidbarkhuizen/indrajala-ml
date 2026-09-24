@@ -457,6 +457,12 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   op; `rust_op_breakdown` in the demo gives it for any architecture and trainer). For a dense op
   change, also one epoch of dense MNIST 784 -> 30 -> 10 from identical weights, single-example
   and mini-batch 32, median of 3.
+- **One op's share of real epochs:** `python scripts/epoch_op_profile.py` runs the conv demo's
+  `rust_op_breakdown` (cProfile of one Rust training run on the MNIST subset), one process per
+  (architecture, trainer, repeat), and reports each crate op's min-max seconds and calls
+  (`--op` filters, `--label` names the build). Run it per build, builds alternated, for a change
+  worth a few % of an epoch: candidate 4's gain was lost in whole-epoch timing (numpy's
+  control moved as much) but separated cleanly here.
 - **A training-path change, before and after:** `python scripts/prepared_dataset_timing.py time`
   times one trainer epoch (dense full MNIST and the conv demo's subset, single-example and B =
   32, both backends), one process per measurement. Run it once as is and once with the old
