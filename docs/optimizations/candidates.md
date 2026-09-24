@@ -11,26 +11,7 @@ to [Rejected](rejected.md), with the reason in either case.
 
 ## Ranked
 
-### 1. Dense `accumulate_gradient_batch` at long `k`, and a blocked transpose
-
-At batch 512 (`k` = 512), on one thread, accumulate is 3.0-3.4x numpy at 32 x 5408 and 1.6-2.1x
-at 30 x 784. Likely cause: `b`'s `k x 16` panel (64 KB at `k` = 512) no longer fits the 32 KB L1,
-so 2-row tiles recover only part of it. Fix: block over `k` (or pack `b`'s panel), storing and
-reloading the tile's accumulators between blocks so each output keeps its chain. The conv
-accumulate candidate needs the same `k`-blocked `tiled_row_range`.
-
-Separately, Rust's `transpose()` of `delta_batch` feeding this product takes 87-107 µs at batch
-512 against numpy's 8-12 µs (a naive loop in `rust/src/array.rs` whose writes stride by `rows`),
-about 9% of the 30 x 784 op. A blocked transpose is a copy, so trivially bit-identical, and the
-cheaper thing to try first.
-
-**Stake:** only batch 512 and up trains here (the batch-size-scaling study). Accumulate is 11-13%
-of the dense step loop at every B, but those calls are threaded (12M+ flops) and already beat
-numpy's one-thread time, so the saving is likely under 0.1 s an epoch. **Gate:** a one-thread
-`k`-blocking probe must gain enough to leave a threaded saving above 5% of the step loop;
-re-profile first.
-
-### 2. Conv accumulate with a large `cols`
+### 1. Conv accumulate with a large `cols`
 
 `D @ cols` (`(O, N*P) @ (N*P, C*k*k)`) through `matmul_narrow`: at 28x28, `ConvSpec(3, 8)`, N = 512,
 one thread, 57-58 ms against 14-15 ms for 512 single calls. Each output row makes one pass over
@@ -38,9 +19,9 @@ one thread, 57-58 ms against 14-15 ms for 512 single calls. Each output row make
 call. Fix: block over `k` so a slab of `cols` serves every row and column tile before the next;
 the per-output order is unchanged, so bit-identical. `tiled_row_range`'s 2-row tiles (crate #26)
 would first halve the passes if `matmul_narrow` passed 2-row blocks, where `C*k*k` >= 16 (they
-only cover 16-wide column tiles). **Stake is small in trained configurations:** no demo trains conv at N = 512,
-and at N = 32 (`cols` 1.56 MB) the op is only 1.1-1.2x its single calls, about 1-1.5% of the
-epoch. Worth doing alongside the long-`k` candidate, which needs the same kernel change.
+only cover 16-wide column tiles). **Stake is small in trained configurations:** no demo trains
+conv at N = 512, and at N = 32 (`cols` 1.56 MB) the op is only 1.1-1.2x its single calls, about
+1-1.5% of the epoch.
 
 ## Deferred: threading past the threshold
 
