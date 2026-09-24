@@ -9,7 +9,7 @@ This document is the only record of optimization work: there are no separate opt
 where it has one, is a candidate below. Four workplans have been folded in: threading
 (optimization 6, finished; its findings are in "Threading", and what it left open is candidate
 9), dense batch ops at short `k` (optimization 7; stage 0 done, stages A and B planned in
-candidate 6), the dataset as one backend array (optimization 5, stage 0 go; candidate 1) and
+candidate 6), the dataset as one backend array (optimization 5, candidate 1, now done) and
 the batch-size-scaling study (#365-#368, finished; its timing stage measured candidates 1 and 7
 and the trainer's accuracy passes on full MNIST).
 
@@ -26,8 +26,9 @@ cell was within 0.05 of these (MNIST mini-batch 0.47, 0.43, 0.48), which is run-
 | conv-conv-stride2 | 0.11 | 0.12 | 0.35 | 0.46 |
 
 At the start, MNIST conv single-example was 1.21 (Rust slower) and conv-pool-conv mini-batch was
-0.66. Dense MNIST 784 -> 30 -> 10, one 60000-example epoch: Rust/numpy about 0.33
-single-example and 0.49-0.53 mini-batch 32.
+0.66. Dense MNIST 784 -> 30 -> 10, one 60000-example epoch: Rust/numpy about 0.19
+single-example and 0.31 mini-batch 32 since candidate 1 (#374; 0.31 and 0.47 before), both
+backends' epochs much shorter (see candidate 1's record under "Completed").
 
 Two caveats on these ratios. numpy runs with OpenBLAS's default threading, which slows its own
 training: its MNIST conv mini-batch 32 epoch took 1.22-1.32 s at `OPENBLAS_NUM_THREADS=1`
@@ -103,95 +104,16 @@ single-example and batch-32 runs; batch 512 and up only in the batch-size-scalin
 by how well the stake and the fix are established. Not by the Rust / numpy ratio: candidates 1
 and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling study.
 
-1. **The dataset as one backend array** (optimization 5; stage 0 go, 2026-09-24, see below).
-   Both backends convert Python tuples to an array on every call (`pa.Array(list(state))` in
-   `RustArrayNetworkBase._forward`/`learn`, a list of rows in `learn_batch`, `np.array` in the
-   numpy `ArrayNetworkBase`): 15.3 µs for one 784-pixel MNIST row in Rust, 29.5-32.1 µs in numpy
-   (re-measured; see "Per-row cost" at the end of this entry). That
-   doesn't change the ratio, but it is a fixed cost neither backend's maths can remove, and a
-   larger share now the maths is faster. The trainers (`train.py`) take `list[tuple[state,
-   label]]`, shuffle it in Python and pass tuples through, a contract shared with the
-   pure-Python networks, the ensembles and the sweeps.
-
-   **Stage 0, go/no-go, fixed before measuring:** measure the conversion's share of one epoch,
-   single-example and mini-batch 32, dense 784 -> 30 -> 10 and the conv networks, both backends
-   (cProfile own time of `Array.__new__`/`np.array`, plus an A/B against pre-converted inputs
-   through a test-only path), and what the per-epoch `_training_accuracy` passes spend
-   re-converting every row. Proceed only if the conversion is at least about 10% of epoch time
-   for some production configuration; otherwise record the numbers here and close.
-
-   **Design, if it goes ahead:** add a fast path, keep the existing interface. A
-   `PreparedDataset` built once per run holds the states as one backend matrix, the labels as a
-   list and its backend; the two array network bases get `prepare_dataset(rows)`, and
-   `learn_row`/`learn_batch_rows` that share their bodies with `learn`/`learn_batch` (which
-   become convert-then-call wrappers, so the paths can't drift). numpy row slices are free
-   views; a Rust slice copies, so a `gather_rows(matrix, indices)` crate op only if that copy
-   measures material. The trainers shuffle an index list in place of the tuple list, which
-   consumes the RNG identically (`shuffle` on a list of the same length makes the same
-   permutation), so every seeded end-to-end pin must stay exact, with a test that the same seed
-   gives the same visiting order on both paths. Tests: `learn_row` gives exactly the weights of
-   `learn`, step by step, for every numpy and Rust network class, enumerated from a registry so a
-   new class can't be missed. Out of scope: changing the `load_*` functions, and anything the
-   trainers compute.
-
-   **Stage 0's go/no-go is met (batch-size-scaling study, #367, 2026-09-24).** Dense 784 -> 30 ->
-   10, one full-MNIST epoch of `train_backprop_network_mini_batch`, median of 5, one process per
-   measurement, `scripts/batch_size_timing.py time`. Seconds per epoch:
-
-   | B | backend | trainer epoch | step loop | one accuracy pass | batch conversion | row conversion (60000 rows) |
-   | --- | --- | --- | --- | --- | --- | --- |
-   | 32 | numpy | 8.18 | 2.07 | 2.99 | 1.75 | 1.76 |
-   | 32 | Rust | 3.78 | 1.28 | 1.26 | 0.91 | 0.90 |
-   | 128 | numpy | 9.42 | 3.25 | 2.93 | 1.73 | 1.73 |
-   | 128 | Rust | 4.37 | 1.64 | 1.22 | 0.97 | 0.90 |
-   | 512 | numpy | 9.41 | 3.34 | 3.11 | 1.83 | 1.77 |
-   | 512 | Rust | 4.85 | 2.16 | 1.25 | 1.24 | 0.90 |
-   | 1024 | numpy | 9.54 | 3.21 | 3.07 | 1.90 | 1.77 |
-   | 1024 | Rust | 4.54 | 1.93 | 1.24 | 1.26 | 0.93 |
-
-   "Batch conversion" is `pa.Array`/`np.array` of every batch's list of rows, the first line of
-   `learn_batch`. "Row conversion" is one array per training row, as each `classify_state` of
-   an accuracy pass does. Both are measured apart from training, in the same process. A
-   one-epoch run has two accuracy passes. For Rust at B = 32, conversion comes to 0.91 + 2 x
-   0.90 = 2.7 s of the 3.78 s epoch: about 70%, against the 10% bar. For numpy at B = 32 it is
-   5.3 s of 8.18 s. Over a long run (about one pass per epoch) the Rust share is about the same:
-   0.91 + 0.90 = 1.8 s of about 2.5 s. In the step loop alone, conversion is 57-71% of Rust's
-   time; the Rust ops themselves are 0.37-0.40 s per epoch at every batch size. The rest of
-   stage 0's list (single-example, the conv networks, the A/B against pre-converted inputs) was
-   not measured and isn't needed for the decision. The conv networks' share is unmeasured; at
-   15 µs a row, the 6000 conversions of a timed MNIST conv epoch would be about 90 ms of 0.74 s
-   (12%). **Status: go; the largest stake measured in this document.** Most of each accuracy
-   pass is conversion too (0.90 of 1.24 s in Rust); what is left of the pass is candidate 2.
-
-   **The stake is likely smaller than 70%.** At B = 32, the conversion measured apart (0.91 s)
-   plus the Rust ops (0.37 s) already equal the whole 1.28 s step loop, leaving nothing for
-   the Python of 1875 steps, which can't be right. The same loop measured 1.59 s in candidate
-   7's profile run, so the two step-loop figures also disagree by 24%. The likeliest reading is
-   that converting rows in a tight loop apart from training costs more than it does inside the
-   loop; that is unmeasured. So the implementation's A/B against pre-converted inputs is the
-   real stake, not the 70%, and must be reported as such.
-
-   Batch conversion also grows with the batch size (Rust 0.91 s at B = 32, 1.24-1.26 s at 512
-   and 1024), though the rows converted per epoch don't change. It is part of why the Rust step
-   loop gets slower at larger batches at the same flops per epoch: from B = 32 to 512 the step
-   loop grows 0.88 s (1.28 to 2.16) and batch conversion 0.33 s, about 40% of it. The Rust ops
-   stay flat and there are 16 times fewer steps, so the rest is unexplained.
-   (`demo_batch_size_scaling` prints 1.42 s per epoch at B = 32 and 2.02 s at 1024.)
-
-   **Per-row cost, re-measured (2026-09-24).** A loop converting all 60000 training rows
-   (`to_array(list(state))`, median of 5 loops, one process per cell, two passes each) costs
-   15.3 µs a row in Rust and 29.5-32.1 µs in numpy, not the 49 and 55 µs this entry quoted
-   before. That earlier figure is unexplained. It isn't the loader: with freshly boxed floats (the loader before
-   #365) the same loop costs 17.3 µs in Rust and 31.5-31.6 µs in numpy. #365's shared pixel
-   floats therefore make Rust conversion about 12% cheaper. Over the roughly 180000 row
-   conversions of a batch-32 Rust epoch (one batch pass, two accuracy passes) that is about
-   0.36 s of 3.8 s. **Rust dense-MNIST epoch times from before #365 are not directly comparable
-   with later ones.** numpy's change is within noise.
+1. **The dataset as one backend array** (optimization 5): **done** (crate #19, #372-#374,
+   2026-09-24). The dense MNIST Rust epoch at B = 32 went from 3.72 to 1.69 s. See
+   "The dataset as one backend array" under "Completed". The entry stays here so the
+   numbers below keep their meaning.
 
 2. **A batched accuracy pass** (promoted from "Other findings", 2026-09-24; not started).
    `_training_accuracy` (`train.py`) calls `classify_state` once per training row, n + 1 times
-   over the training set for n epochs. After candidate 1 removes the row conversion, one Rust
-   pass on dense full MNIST still takes about 1.24 - 0.90 = 0.34 s, mostly per-row call overhead
+   over the training set for n epochs. Candidate 1 (done) removed the row conversion
+   (`classify_row` on the prepared matrix). What is left of one Rust pass on dense full MNIST
+   was estimated at about 1.24 - 0.90 = 0.34 s, mostly per-row call overhead
    (Python dispatch, one small forward per layer). That could be the largest single cost left in
    a dense epoch. The number is inferred from the candidate 1 table, not measured, and it
    inherits the doubt about the conversion measured apart (see candidate 1). Candidate: a
@@ -420,8 +342,8 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    each thread, but threaded calls pay the cold clock and spawn cost (see "Threading"), so the
    saving is likely under 0.1 s and is unmeasured. **Decision: do it after candidate 1, and only
    if a one-thread `k`-blocking probe gains enough to leave a threaded saving above the 5% bar.**
-   Candidate 1 removes about 1 s of batch conversion from the same step loop (subject to the
-   doubt in candidate 1), which would take this op's share to roughly 20-25%. Also note the
+   Candidate 1 (done) took the Rust B = 32 epoch from 3.72 to 1.69 s, most of it batch and row
+   conversion, so this op's share of the step loop is now larger; re-profile before deciding. Also note the
    profile table's percentages imply a profiled loop slightly shorter than the unprofiled one
    (for example 0.178 / 11.5% = 1.55 s at B = 32), which suggests the two columns come from
    different runs.
@@ -562,6 +484,10 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   op; `rust_op_breakdown` in the demo gives it for any architecture and trainer). For a dense op
   change, also one epoch of dense MNIST 784 -> 30 -> 10 from identical weights, single-example
   and mini-batch 32, median of 3.
+- **A training-path change, before and after:** `python scripts/prepared_dataset_timing.py time`
+  times one trainer epoch (dense full MNIST and the conv demo's subset, single-example and B =
+  32, both backends), one process per measurement. Run it once as is and once with the old
+  checkout first on `PYTHONPATH` (see its docstring for the namespace-package caveat).
 - **Dense full-MNIST epochs, broken down:** `python scripts/batch_size_timing.py time` and
   `... profile` (see its docstring). It times the trainer epoch, the step loop, one accuracy pass
   and the batch and row conversions separately, one process per (backend, batch size, repeat),
@@ -661,7 +587,142 @@ Crate PR numbers are `indrajala-math-rust`'s. "Bit-identical" means every output
 | `matmul_2d` register-tiled, sharing `matmul_narrow`'s kernel | #14 | unthreaded dense batch downstream/accumulate 0.1-0.6x their old time; mini-batch dense MNIST epoch about -4%; bit-identical |
 | `set_matmul_threading` override, and tests that the thread count can't change any kernel's bits | #15 | measurement and test infrastructure; no default behaviour changed |
 | Threading threshold 4M → 8M flops, policy in `matmul_thread_count` | #16 | MNIST conv mini-batch 32 epoch 0.879 → 0.770 s (-12%); batch 512 and dense MNIST unchanged; bit-identical |
+| `Array.from_rows`, `row` and `take_rows`, for the dataset as one backend array (candidate 1; the Python side is #373-#374) | #19 | dense MNIST Rust epoch at B = 32 3.72 → 1.69 s, single-example 4.60 → 2.57; training bit-identical |
 | `matmul_nt` in 4 x 2 register tiles (4 rows of `X` against 2 rows of `W`; 2 x 4, 3 x 3 and 2 x 2 measured slower or tied) | #17 | unthreaded dense `forward_batch` 0.6-0.9x its old time (second pass: 32 x 5408, batch 32: 771-916 → 545-555 µs; 30 x 784, batch 32: 102-110 → 76-77); epochs within noise; bit-identical |
+
+**The dataset as one backend array** (candidate 1, optimization 5; crate #19, #372-#374,
+2026-09-24). The trainers used to convert a tuple into an array on every call: each batch in
+`learn_batch` and each row in `learn` and in every accuracy-pass `classify_state`. Now an array
+network trains from a `PreparedDataset` (`indrajala_ml/prepared_dataset.py`): the training set
+as one backend matrix plus its labels. The trainers prepare it once per run from the tuple list,
+or take one the caller built (`prepared_mnist` loads MNIST straight into one). The networks read
+rows through `learn_row`, `learn_batch_rows` and `classify_row` (numpy row views and fancy
+indexing; the crate's new `Array.row` and `Array.take_rows`). `learn`/`learn_batch` now convert,
+then call the same step as the row methods. The mini-batch trainer shuffles row indices, which
+gives the same permutation for a seed. Training is unchanged bit for bit: every seeded pin
+passes as before, and `tests/test_prepared_dataset.py` checks all 22 array network classes
+step by step against the tuple path.
+
+Preparing is a one-time cost per run: 0.42-0.43 s in Rust (`Array.from_rows`, which reads
+tuples by index; `Array(tuples)` took 1.53 s and a first `from_rows` that iterated each row took
+1.38-1.46 s) and 1.42-1.45 s in numpy (`np.array`; `np.fromiter` was 1.29-1.31). From the
+MNIST binary, `prepared_mnist` builds no Python floats.
+
+**The A/B.** One epoch through the trainers the demos use, from the tuple list (preparation
+included) and from `prepared_mnist`, against the commit before the change (`96a1487`).
+`scripts/prepared_dataset_timing.py`, median of 5 (ranges), one process per measurement, the
+two sides run one after the other. Seconds:
+
+| config | backend | before | after | after, from the loader | after / before |
+| --- | --- | --- | --- | --- | --- |
+| dense MNIST, B = 32 | Rust | 3.72 (3.68-3.84) | 1.69 (1.64-1.81) | 1.22 (1.19-1.29) | 0.45 |
+| dense MNIST, B = 32 | numpy | 7.92 (7.56-8.33) | 5.37 (5.12-5.58) | 3.87 (3.71-4.19) | 0.68 |
+| dense MNIST, single | Rust | 4.60 (4.48-4.80) | 2.57 (2.41-2.68) | 2.03 (1.97-2.35) | 0.56 |
+| dense MNIST, single | numpy | 14.93 (14.43-15.64) | 13.76 (12.84-14.00) | 11.91 (11.61-12.40) | 0.92 |
+| conv MNIST 2000, B = 32 | Rust | 0.73 (0.70-0.81) | 0.64 (0.64-0.66) | 0.63 (0.61-0.65) | 0.88 |
+| conv MNIST 2000, B = 32 | numpy | 1.44 (1.39-1.68) | 1.36 (1.34-1.40) | 1.28 (1.26-1.29) | 0.94 |
+| conv MNIST 2000, single | Rust | 0.84 (0.78-0.92) | 0.76 (0.73-0.86) | 0.80 (0.70-0.88) | 0.90 |
+| conv MNIST 2000, single | numpy | 3.87 (3.67-4.06) | 3.89 (3.70-4.05) | 3.68 (3.65-4.02) | 1.01 |
+
+- **The 70% estimate held up better than feared.** The Rust B = 32 epoch lost 2.03 s, and
+  adding back preparation's 0.43 s gives about 2.46 s of conversion removed, against the
+  2.7 s measured apart. The doubt raised below (conversion measured apart plus the Rust ops
+  leaving no time for the step loop's Python) was worth about 10%, not most of the stake.
+- **Conv gains 12% in Rust at B = 32**, as the 15 µs-a-row estimate predicted. Single-example
+  conv is within noise in both backends.
+- **numpy single-example gains least** (8%). Its per-row cost is mostly its own per-call work,
+  not the conversion.
+- **Longer runs gain more.** A one-epoch run pays preparation once for one epoch and two
+  accuracy passes. Each further epoch saves its batch conversion and one accuracy pass's row
+  conversion, and preparation isn't repeated.
+- **Loading straight into the array** saves preparation and more (Rust B = 32 1.22 s against
+  1.69). The demos still load tuples; switching one is a caller change, not measured here.
+- Rust / numpy at B = 32 goes from 0.47 to 0.31 (0.32 from the loader): numpy converted more
+  slowly, so it lost more time to conversion before.
+
+**Before: the stake.** Both backends converted Python tuples to an array on every call (`pa.Array(list(state))` in
+`RustArrayNetworkBase._forward`/`learn`, a list of rows in `learn_batch`, `np.array` in the
+numpy `ArrayNetworkBase`): 15.3 µs for one 784-pixel MNIST row in Rust, 29.5-32.1 µs in numpy
+(re-measured; see "Per-row cost" below). That
+didn't change the ratio, but it is a fixed cost neither backend's maths can remove, and a
+larger share now the maths is faster. The trainers (`train.py`) take `list[tuple[state,
+label]]`, shuffle it in Python and pass tuples through, a contract shared with the
+pure-Python networks, the ensembles and the sweeps.
+
+**Stage 0, go/no-go, fixed before measuring:** measure the conversion's share of one epoch,
+single-example and mini-batch 32, dense 784 -> 30 -> 10 and the conv networks, both backends
+(cProfile own time of `Array.__new__`/`np.array`, plus an A/B against pre-converted inputs
+through a test-only path), and what the per-epoch `_training_accuracy` passes spend
+re-converting every row. Proceed only if the conversion is at least about 10% of epoch time
+for some production configuration; otherwise record the numbers here and close.
+
+**Design, if it goes ahead:** add a fast path, keep the existing interface. A
+`PreparedDataset` built once per run holds the states as one backend matrix, the labels as a
+list and its backend; the two array network bases get `prepare_dataset(rows)`, and
+`learn_row`/`learn_batch_rows` that share their bodies with `learn`/`learn_batch` (which
+become convert-then-call wrappers, so the paths can't drift). numpy row slices are free
+views; a Rust slice copies, so a `gather_rows(matrix, indices)` crate op only if that copy
+measures material. The trainers shuffle an index list in place of the tuple list, which
+consumes the RNG identically (`shuffle` on a list of the same length makes the same
+permutation), so every seeded end-to-end pin must stay exact, with a test that the same seed
+gives the same visiting order on both paths. Tests: `learn_row` gives exactly the weights of
+`learn`, step by step, for every numpy and Rust network class, enumerated from a registry so a
+new class can't be missed. Out of scope: changing the `load_*` functions, and anything the
+trainers compute.
+
+**Stage 0's go/no-go is met (batch-size-scaling study, #367, 2026-09-24).** Dense 784 -> 30 ->
+10, one full-MNIST epoch of `train_backprop_network_mini_batch`, median of 5, one process per
+measurement, `scripts/batch_size_timing.py time`. Seconds per epoch:
+
+| B | backend | trainer epoch | step loop | one accuracy pass | batch conversion | row conversion (60000 rows) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 32 | numpy | 8.18 | 2.07 | 2.99 | 1.75 | 1.76 |
+| 32 | Rust | 3.78 | 1.28 | 1.26 | 0.91 | 0.90 |
+| 128 | numpy | 9.42 | 3.25 | 2.93 | 1.73 | 1.73 |
+| 128 | Rust | 4.37 | 1.64 | 1.22 | 0.97 | 0.90 |
+| 512 | numpy | 9.41 | 3.34 | 3.11 | 1.83 | 1.77 |
+| 512 | Rust | 4.85 | 2.16 | 1.25 | 1.24 | 0.90 |
+| 1024 | numpy | 9.54 | 3.21 | 3.07 | 1.90 | 1.77 |
+| 1024 | Rust | 4.54 | 1.93 | 1.24 | 1.26 | 0.93 |
+
+"Batch conversion" is `pa.Array`/`np.array` of every batch's list of rows, the first line of
+`learn_batch`. "Row conversion" is one array per training row, as each `classify_state` of
+an accuracy pass does. Both are measured apart from training, in the same process. A
+one-epoch run has two accuracy passes. For Rust at B = 32, conversion comes to 0.91 + 2 x
+0.90 = 2.7 s of the 3.78 s epoch: about 70%, against the 10% bar. For numpy at B = 32 it is
+5.3 s of 8.18 s. Over a long run (about one pass per epoch) the Rust share is about the same:
+0.91 + 0.90 = 1.8 s of about 2.5 s. In the step loop alone, conversion is 57-71% of Rust's
+time; the Rust ops themselves are 0.37-0.40 s per epoch at every batch size. The rest of
+stage 0's list (single-example, the conv networks, the A/B against pre-converted inputs) was
+not measured and isn't needed for the decision. The conv networks' share is unmeasured; at
+15 µs a row, the 6000 conversions of a timed MNIST conv epoch would be about 90 ms of 0.74 s
+(12%). **Status: go; the largest stake measured in this document.** Most of each accuracy
+pass is conversion too (0.90 of 1.24 s in Rust); what is left of the pass is candidate 2.
+
+**The stake is likely smaller than 70%.** At B = 32, the conversion measured apart (0.91 s)
+plus the Rust ops (0.37 s) already equal the whole 1.28 s step loop, leaving nothing for
+the Python of 1875 steps, which can't be right. The same loop measured 1.59 s in candidate
+7's profile run, so the two step-loop figures also disagree by 24%. The likeliest reading is
+that converting rows in a tight loop apart from training costs more than it does inside the
+loop; that is unmeasured. So the implementation's A/B against pre-converted inputs is the
+real stake, not the 70%, and must be reported as such.
+
+Batch conversion also grows with the batch size (Rust 0.91 s at B = 32, 1.24-1.26 s at 512
+and 1024), though the rows converted per epoch don't change. It is part of why the Rust step
+loop gets slower at larger batches at the same flops per epoch: from B = 32 to 512 the step
+loop grows 0.88 s (1.28 to 2.16) and batch conversion 0.33 s, about 40% of it. The Rust ops
+stay flat and there are 16 times fewer steps, so the rest is unexplained.
+(`demo_batch_size_scaling` prints 1.42 s per epoch at B = 32 and 2.02 s at 1024.)
+
+**Per-row cost, re-measured (2026-09-24).** A loop converting all 60000 training rows
+(`to_array(list(state))`, median of 5 loops, one process per cell, two passes each) costs
+15.3 µs a row in Rust and 29.5-32.1 µs in numpy, not the 49 and 55 µs this entry quoted
+before. That earlier figure is unexplained. It isn't the loader: with freshly boxed floats (the loader before
+#365) the same loop costs 17.3 µs in Rust and 31.5-31.6 µs in numpy. #365's shared pixel
+floats therefore make Rust conversion about 12% cheaper. Over the roughly 180000 row
+conversions of a batch-32 Rust epoch (one batch pass, two accuracy passes) that is about
+0.36 s of 3.8 s. **Rust dense-MNIST epoch times from before #365 are not directly comparable
+with later ones.** numpy's change is within noise.
 
 **Dense `forward_batch`** (`matmul_nt`, #17), kept as a finding: formerly an open candidate, but
 on one thread no gap is left. The 5.6x at batch 64 recorded earlier (numpy and Rust
@@ -756,10 +817,11 @@ Closed with no measured gain, kept as findings:
 - **On dense full MNIST the trainer's accuracy passes are over half the epoch.** In
   `train_backprop_network_mini_batch` the two `_training_accuracy` passes of a one-epoch run
   (60000 single-example `classify_state` calls each) take 52-67% of a Rust epoch and 62-73% of a
-  numpy one, at B = 32 to 1024 (batch-size-scaling study, #367; the table is in candidate 1).
+  numpy one, at B = 32 to 1024 (batch-size-scaling study, #367; the table is in candidate 1's
+  record under "Completed").
   Over a long run there is about one pass per epoch, so the share is smaller. The share is
-  largest at B = 32. About 70% of each pass is converting the row to an array, so candidate 1
-  removes most of it. What is left, per-row call overhead, is candidate 2 (a batched accuracy
+  largest at B = 32. About 70% of each pass was converting the row to an array, which candidate 1
+  removed (#374). What is left, per-row call overhead, is candidate 2 (a batched accuracy
   pass).
 - **Dense epochs, Rust / numpy end to end by batch size** (same run, medians of 5): 0.46 at
   B = 32 and 128, 0.52 at 512 and 0.48 at 1024. The step loop alone: 0.62, 0.50, 0.65, 0.60.
