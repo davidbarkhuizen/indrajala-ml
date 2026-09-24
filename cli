@@ -108,7 +108,12 @@ run_tests () {
     # from the repo root (no testpaths config restricts it), which is how some past PRs' own
     # test-plan counts (~1650+) included both without anyone noticing only one was ever run
     # here or in CI. Listed explicitly so both actually run every time, not by accident.
-    python3 -m pytest --verbose tests/ "$rust_crate_root/tests/"
+    # Paths given (e.g. `./cli test rust/tests/`) run just those - CI runs each suite as its own
+    # parallel job this way, so the short rust/tests/ job finishes inside the long tests/ one.
+    if [ "$#" -eq 0 ]; then
+        set -- tests/ "$rust_crate_root/tests/"
+    fi
+    python3 -m pytest --verbose "$@"
     deactivate_venv
 }
 
@@ -120,7 +125,7 @@ demo () {
 }
 
 usage () {
-    echo "usage: invoke [ clean | setup | build-rust | fetch-data | test | demo [demo-number] ]"
+    echo "usage: invoke [ clean | setup | build-rust | fetch-data | test [pytest-path ...] | demo [demo-number] ]"
 }
 
 case "$option" in
@@ -146,8 +151,9 @@ case "$option" in
     ;;
 
     test)
+        shift
         clean
-        run_tests
+        run_tests "$@"
     ;;
 
     demo)

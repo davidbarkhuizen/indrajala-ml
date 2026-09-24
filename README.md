@@ -26,7 +26,7 @@ Requires Python >= 3.10 and a Debian/Ubuntu host (`setup` apt-installs `python3-
 
 ```
 ./cli setup          # submodule, .venv, pip deps, release build of rust/, fetch MNIST
-./cli test           # pytest tests/ and rust/tests/
+./cli test           # pytest tests/ and rust/tests/ (or: ./cli test <path> ...)
 ./cli demo           # interactive demo menu
 ./cli demo <n>       # run demo n directly
 ./cli build-rust     # rebuild rust/ after changing it
@@ -39,8 +39,8 @@ Requires Python >= 3.10 and a Debian/Ubuntu host (`setup` apt-installs `python3-
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
-| `tests/` | ~1500 | this package: models, training, data loaders, Rust-vs-numpy parity |
-| `rust/tests/` | ~200 | the submodule's own `indrajala_math_rust` API, checked against numpy |
+| `tests/` | ~2250 | this package: models, training, data loaders, Rust-vs-numpy parity |
+| `rust/tests/` | ~900 | the submodule's own `indrajala_math_rust` API, checked against numpy |
 
 Both need the submodule checked out **and** built into `.venv`: `tests/` imports
 `indrajala_math_rust` directly, and `rust/tests/` only exists once the submodule is initialised.
@@ -54,7 +54,8 @@ git submodule update --init   # populate rust/
 ./cli test
 ```
 
-CI (`.github/workflows/ci.yml`) runs `./cli setup` then `./cli test` on every push and PR.
+CI (`.github/workflows/ci.yml`) runs `./cli setup` then `./cli test <suite>` on every push and PR,
+one parallel job per suite.
 
 ## Layout
 

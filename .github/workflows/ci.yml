@@ -7,6 +7,13 @@ on:
 
 jobs:
   test:
+    # One job per pytest suite, run in parallel: each job pays its own setup, but the short
+    # rust/tests/ job finishes inside the long tests/ one instead of adding to it.
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [tests/, rust/tests/]
+    name: test (${{ matrix.suite }})
     runs-on: ubuntu-latest
 
     steps:
@@ -32,4 +39,4 @@ jobs:
         run: ./cli setup
 
       - name: Test
-        run: ./cli test
+        run: ./cli test ${{ matrix.suite }}
