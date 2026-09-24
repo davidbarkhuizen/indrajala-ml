@@ -14,21 +14,23 @@ Everything else is below.
 ## Where things stand (2026-09-24)
 
 Rust / numpy wall-clock ratio end to end (below 1 means Rust is faster). The conv rows are from
-`demo_conv_rust_vs_vectorized_digit_recognition` after indrajala-math-rust#14:
+`demo_conv_rust_vs_vectorized_digit_recognition` after indrajala-math-rust#16. Only the MNIST
+conv mini-batch cell changed with it (0.54 after #14). The other cells make no threaded calls,
+and their moves of 0.01-0.05 since #14 are run-to-run noise:
 
 | architecture | UCI digits, single | UCI digits, mini-batch | MNIST subset, single | MNIST subset, mini-batch |
 | --- | --- | --- | --- | --- |
-| conv | 0.13 | 0.17 | 0.21 | 0.54 |
-| conv-pool-conv | 0.08 | 0.09 | 0.31 | 0.44 |
-| conv-conv-stride2 | 0.10 | 0.12 | 0.36 | 0.48 |
+| conv | 0.12 | 0.17 | 0.26 | 0.49 |
+| conv-pool-conv | 0.09 | 0.09 | 0.30 | 0.41 |
+| conv-conv-stride2 | 0.11 | 0.12 | 0.35 | 0.46 |
 
 At the start, MNIST conv single-example was 1.21 (Rust slower) and conv-pool-conv mini-batch was
 0.66. Dense MNIST 784 -> 30 -> 10, one 60000-example epoch: Rust/numpy about 0.33
 single-example and 0.49-0.53 mini-batch 32.
 
 Per op, the single-example ops are all at or better than numpy. The large gaps left are all in
-batch ops **past `matmul`'s 4M-flop threading threshold**. Rust / numpy µs per call, two passes
-of the focused benchmark (see "How to measure"), after #14.
+batch ops **past 4M flops, `matmul`'s threading threshold until #16** (8M since). Rust / numpy
+µs per call, two passes of the focused benchmark (see "How to measure"), after #14.
 
 Re-measured in stage 0b of the threading workplan, with numpy and Rust in separate processes.
 The earlier table measured them interleaved in one process, and numpy's OpenBLAS threads kept
@@ -47,47 +49,30 @@ and 4x on the first, second, fourth and fifth rows. Rust here uses the default t
 | 30 x 784 | `accumulate_gradient_batch` | 32 | 70-73 | 82-97 | 1.1-1.4x |
 
 The batch-512 Rust numbers are partly warm-clock numbers (the default ran right after an
-8-thread run in the sweep; see the workplan's step 2).
+8-thread run in the sweep; see the workplan's step 2). The first two rows (5.5M flops) run on
+one thread since #16. In isolation `downstream_batch` measured 581-654 µs after it, and
+`accumulate_gradient_batch` 976-1180 (the workplan's stage A).
 
 ## Open candidates, in priority order
 
-1. **Threading in `for_each_row_range`** (`rust/src/linalg.rs`). Every threaded matmul goes
-   through it: `matmul_2d` (dense batch downstream and accumulate), `matmul_nt` (every
-   `forward_batch`) and `matmul_narrow` (the conv ops). Measured on the tiled kernel with
-   threading forced on:
-   - **Starting threads costs 100-200 µs per call.** `std::thread::scope` spawns fresh threads
-     on every call. A 64x64x64 matmul takes 28 µs on 1 thread and 120-200 µs on 2-8.
-   - **Threads don't help at 32 x 5408, batch 32.** `downstream_batch` takes 528-539 µs on 1
-     thread, 854-902 on 2, 729-737 on 4 and 565-685 on 8. The table's 3000 µs came from the
-     harness, not from threading (stage 0b).
-   - **Spawned workers run at an idle core's clock.** With the matmul replaced by register-only
-     FMA work, which has no memory traffic, a spawned worker takes 230-455 µs per row against
-     145 on the calling thread. That is 1.6-3.1x slower, even at 2 threads with 3 cores idle.
-     During a 1-thread run the busy core runs at 3.8 GHz and idle cores at 1.1-1.5 GHz. With
-     8 threads every core runs at 2.2-3.1 GHz, the all-core limit. The governor is `schedutil`,
-     which sets a core's clock from its tasks' recent load, and a thread spawned on every call
-     has no load history. That last step is an inference, not measured directly. A persistent
-     pool would keep its threads' history, so a pool may gain more than the spawn cost.
-   - **Large products still scale.** `(32, 512) @ (512, 5408)` goes from 32 ms on 1 thread to
-     6-7 ms on 8. 30 x 784 at batch 512 goes from 1.3-1.7 ms to 0.8 ms on 4 threads (no better
-     on 8).
-   - **Threading costs the MNIST conv mini-batch epoch 11%** (0.846 against 0.752 s, medians
-     of 5, threading on against off). Its 186 threaded calls per epoch are the only calls in any
-     demo configuration that cross the threshold (stage 0b step 3).
+1. **Threading in `for_each_row_range`**: stage A done (#16), the rest deferred. The threshold
+   is 8M flops, so the MNIST conv mini-batch 32's dense tail (5.5M) runs on one thread: that
+   epoch is 12% faster, and nothing else in the demos changed. What is left:
+   - **A persistent pool (stage B), deferred.** Spawning costs 180-200 µs per call at 8 threads,
+     and a spawned worker runs at an idle core's clock, 1.6-3.1x slower per row than the caller.
+     A pool might keep its cores warm, but in training its workers would still idle between
+     calls. It only pays at batch 512 and up, which no demo uses.
+   - **Between 4M and 8M, isolated calls are now slower** (up to 1.4x at `(244, 64) @ (64,
+     512)`), since back-to-back calls keep the cores warm and training doesn't. No production
+     call is in that range except the 5.5M tail, which gained end to end.
 
-   Stage 0 decided: stage A (a higher threshold, no 2- or 4-thread counts) first, since it
-   removes the only production cost. The pool (stage B) is deferred and the column split
-   (stage C) is skipped; see the workplan's decision. Every stage keeps each output on one
-   thread, so every output keeps its bits. This machine has 4 cores / 8 threads, and the
-   threshold is machine-dependent.
    Workplan: [`workplans/optimization-6-matmul-threading.md`](workplans/optimization-6-matmul-threading.md).
 
 2. **Dense `forward_batch` at large batches** (`matmul_nt`). 32 x 5408 is 1.2x numpy at batch 32
-   (682-971 µs) but 5.6x at batch 64 (3395 vs 608): 3.5-5x the time for twice the work, and
-   past the threading threshold. So it is likely candidate 1 first. These numbers were measured
-   interleaved with numpy, which inflates Rust past the threshold (see "Other findings"), so
-   re-measure them in separate processes first. Measure with threading off
-   before anything else. Once that is settled, the remaining cost is memory traffic: each row of
+   (682-971 µs) but 5.6x at batch 64 (3395 vs 608): 3.5-5x the time for twice the work. Batch
+   64 (11M flops) is still threaded after #16, and batch 32 no longer is. These numbers were
+   measured interleaved with numpy, which inflates Rust past the threshold (see "Other
+   findings"), so re-measure them in separate processes first, with threading on and off. Once that is settled, the remaining cost is memory traffic: each row of
    `X` re-reads all of `W`. A register block of 2-4 rows of `X` against the same `W` rows would
    let each `W` load serve several outputs. Each output keeps `dot_product`'s grouping, so it
    is bit-identical.
@@ -215,6 +200,7 @@ Crate PR numbers are `indrajala-math-rust`'s. "Bit-identical" means every output
 | Conv downstream and accumulate via `matmul_narrow` | #12 | downstream 4-56% less, accumulate 16-43% less in 21 of 24 configurations; bit-identical |
 | `dot_products_into`: 8/4/2 rows at once in `dot_product`'s grouping | #13 | 30 x 784 forward 9.0 → 3.7 µs, batch 32 260 → 93 µs; bit-identical |
 | `matmul_2d` register-tiled, sharing `matmul_narrow`'s kernel | #14 | unthreaded dense batch downstream/accumulate 0.1-0.6x their old time; mini-batch dense MNIST epoch about -4%; bit-identical |
+| Threading threshold 4M → 8M flops (threading workplan, stage A) | #16 | MNIST conv mini-batch 32 epoch 0.879 → 0.770 s (-12%); batch 512 and dense MNIST unchanged; bit-identical |
 
 Closed with no measured gain, kept as findings:
 
