@@ -1,5 +1,5 @@
 """
-The trainers' prepared-dataset path (candidate 1 in docs/optimizations.md): an array network
+The trainers' prepared-dataset path (docs/optimizations/implemented.md): an array network
 student trains from one backend matrix, prepared once per run or passed in by the caller,
 visiting exactly the examples, in exactly the order, the tuple path does for the same seed.
 The existing seeded end-to-end pins (the conv and multiclass pipelines) now run through this

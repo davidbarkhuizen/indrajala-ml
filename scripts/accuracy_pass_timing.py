@@ -1,6 +1,7 @@
 """
-Candidate 2's stage 0 (docs/optimizations.md): one training-set accuracy pass row by row, as
-_training_accuracy does it, against batched forward passes over chunks of the prepared matrix.
+The batched accuracy pass's stage 0 (docs/optimizations/implemented.md): one training-set
+accuracy pass row by row, as _training_accuracy does it, against batched forward passes over
+chunks of the prepared matrix.
 
     python scripts/accuracy_pass_timing.py time [--repeats 5] [--networks ...] [--out runs.json]
     python scripts/accuracy_pass_timing.py report runs.json
