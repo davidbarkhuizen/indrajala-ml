@@ -42,8 +42,9 @@ mini-batch gains too.
    each call gets a fresh mapping, its 338 pages fault on first touch (inside the kernel, or in
    the zeroing), at a few hundred ns each. glibc raises the threshold dynamically after the
    first such block is freed, so later calls may already reuse heap pages; only a count says.
-   Accumulate allocates 1.4 MB twice (the update and the sum). Stage 0 of the threading workplan found first touch made no difference *between
-   threads*; whether the faults cost anything at all was never measured.
+   Accumulate allocates 1.4 MB twice (the update and the sum). The threading work found first
+   touch made no difference *between threads* (see "Threading" in `../optimizations.md`);
+   whether the faults cost anything at all was never measured.
 3. **Accumulate's extra pass** (accumulate only). `combine_with_array` reads `grad_w` and the
    update and writes a third 1.4 MB array. Adding `grad_w` in the tile's store, `out = g +
    acc`, is the same single rounding of `g + u`, so it is bit-identical and removes the update
