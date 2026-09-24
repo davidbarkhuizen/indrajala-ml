@@ -32,7 +32,6 @@ import json
 import os
 import resource
 import statistics
-import subprocess
 import sys
 import time
 from typing import Callable
@@ -51,6 +50,8 @@ from indrajala_ml.demos.demo_layer_op_timing import (  # noqa: E402
     _backend_array,
     all_cases,
 )
+
+from process_runs import run_json_worker  # noqa: E402
 
 PART_OPS = ("bare downstream", "bare accumulate", "transpose", "add", "sum_axis0")
 
@@ -165,8 +166,7 @@ def run_in_process(case: Case, backend: str, args, malloc: str = "default") -> d
         command += ["--matmul", spec]
     if args.rust_threads is not None:
         command += ["--rust-threads", str(args.rust_threads)]
-    output = subprocess.run(command, env=env, check=True, capture_output=True, text=True).stdout
-    return json.loads(output.strip().splitlines()[-1])
+    return run_json_worker(command, env)
 
 
 def selected(case: Case, args) -> bool:

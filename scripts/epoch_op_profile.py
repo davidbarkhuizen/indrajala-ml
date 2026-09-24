@@ -18,10 +18,11 @@ compare ops across builds, not against timed epochs.
 
 import argparse
 import json
-import subprocess
 import sys
 
 from indrajala_ml.demos import demo_conv_rust_vs_vectorized_digit_recognition as demo
+
+from process_runs import run_json_worker
 
 
 def worker(architecture: str, trainer: str) -> dict:
@@ -33,8 +34,7 @@ def worker(architecture: str, trainer: str) -> dict:
 
 def run_in_process(architecture: str, trainer: str) -> dict:
     command = [sys.executable, "-B", __file__, "--worker", architecture, trainer]
-    output = subprocess.run(command, check=True, capture_output=True, text=True).stdout
-    return json.loads(output.strip().splitlines()[-1])
+    return run_json_worker(command)
 
 
 def main() -> None:

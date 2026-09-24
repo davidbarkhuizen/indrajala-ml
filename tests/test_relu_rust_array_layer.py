@@ -8,6 +8,7 @@ from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import set_random_node_weights
 
 
 def _snapshot_to_relu_rust_array_layer(backprop_layer) -> ReLURustArrayLayer:
@@ -28,11 +29,7 @@ def test_forward_matches_relu_node_across_a_random_sweep_including_the_z_equals_
         state_layer = StateLayer(dimension, [(-10.0, 10.0)] * dimension)
         relu_layer = ReLULayer(size, state_layer)
 
-        weights = [[rng.uniform(-3.0, 3.0) for _ in range(dimension)] for _ in range(size)]
-        biases = [rng.uniform(-3.0, 3.0) for _ in range(size)]
-        for node, node_weights, bias in zip(relu_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
+        set_random_node_weights(rng, relu_layer, dimension, 3.0)
 
         rust_layer = _snapshot_to_relu_rust_array_layer(relu_layer)
 

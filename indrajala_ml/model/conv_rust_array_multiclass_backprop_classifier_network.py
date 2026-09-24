@@ -12,7 +12,7 @@ from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
-from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer, fan_in_aware_random_rust_layer
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -81,20 +81,16 @@ class ConvRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpr
         return [self.classify_row(prepared, index) for index in range(len(prepared))]
 
     def randomize(self) -> None:
-        # the numpy conv network's scheme, drawn from pa.uniform: each conv layer scoped to its
+        # the numpy conv network's scheme, from the Rust RNG: each conv layer scoped to its
         # kernel fan-in, pool layers draw nothing, and the dense tail's fan-in starts from the
         # last conv/pool layer's flattened output size. Never seed-reproducible against numpy.
         for layer in self.conv_layers:
             if isinstance(layer, ConvRustArrayLayer):
-                limit = 1.0 / (layer.fan_in**0.5)
-                layer.W = pa.uniform(-limit, limit, (layer.channel_count, layer.fan_in))
-                layer.b = pa.uniform(-limit, limit, layer.channel_count)
+                layer.W, layer.b = fan_in_aware_random_rust_layer(layer.channel_count, layer.fan_in)
 
         previous_size = self.conv_layers[-1].size
         for layer in self.layers[len(self.conv_layers) :]:
-            limit = 1.0 / (previous_size**0.5)
-            layer.W = pa.uniform(-limit, limit, (layer.size, previous_size))
-            layer.b = pa.uniform(-limit, limit, layer.size)
+            layer.W, layer.b = fan_in_aware_random_rust_layer(layer.size, previous_size)
             previous_size = layer.size
 
     @classmethod

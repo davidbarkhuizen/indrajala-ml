@@ -8,6 +8,7 @@ from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.backprop_node import sigmoid as node_sigmoid
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import set_random_node_weights
 
 
 def test_sigmoid_matches_node_sigmoid_across_a_random_sweep_including_the_overflow_boundary():
@@ -44,11 +45,7 @@ def test_forward_matches_backprop_layer_across_a_random_sweep():
         state_layer = StateLayer(dimension, [(-10.0, 10.0)] * dimension)
         backprop_layer = BackpropLayer(size, state_layer)
 
-        weights = [[rng.uniform(-3.0, 3.0) for _ in range(dimension)] for _ in range(size)]
-        biases = [rng.uniform(-3.0, 3.0) for _ in range(size)]
-        for node, node_weights, bias in zip(backprop_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
+        set_random_node_weights(rng, backprop_layer, dimension, 3.0)
 
         array_layer = _snapshot_to_array_layer(backprop_layer)
 

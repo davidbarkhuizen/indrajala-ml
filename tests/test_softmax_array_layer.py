@@ -6,6 +6,7 @@ import pytest
 from indrajala_ml.model.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import set_random_node_weights
 
 
 def _snapshot_to_softmax_array_layer(softmax_layer: SoftmaxOutputLayer) -> SoftmaxArrayLayer:
@@ -26,11 +27,7 @@ def test_forward_matches_softmax_output_layer_across_a_random_sweep():
         state_layer = StateLayer(dimension, [(-10.0, 10.0)] * dimension)
         softmax_layer = SoftmaxOutputLayer(size, state_layer)
 
-        weights = [[rng.uniform(-3.0, 3.0) for _ in range(dimension)] for _ in range(size)]
-        biases = [rng.uniform(-3.0, 3.0) for _ in range(size)]
-        for node, node_weights, bias in zip(softmax_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
+        set_random_node_weights(rng, softmax_layer, dimension, 3.0)
 
         array_layer = _snapshot_to_softmax_array_layer(softmax_layer)
 
