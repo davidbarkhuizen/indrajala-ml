@@ -339,8 +339,9 @@ result. Mutation: shift one thread's column start by 4; the test must fail.
   (`./cli build-rust && ./cli test`) passes with no pin changes. **A pin that moves means the
   change isn't bit-identical and is a bug**, since every stage here is claimed bit-identical.
 - Update `../optimizations.md`: the op table, the end-to-end table, candidate 1's entry (or its
-  removal), and a row in "Completed" or "Closed with no measured gain" per stage. Update
-  candidate 2 (dense `forward_batch` at large batches), which was waiting on this.
+  removal), and a row in "Completed" or "Closed with no measured gain" per stage. Candidate 2
+  (dense `forward_batch` at large batches), which was waiting on stage A, is done (#17): its
+  entry records where threading still pays on the new kernel.
 
 ## Out of scope
 

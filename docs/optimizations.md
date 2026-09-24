@@ -89,10 +89,25 @@ one thread since #16. In isolation `downstream_batch` measured 581-654 µs after
    | 30 x 784 | 32 | 95-110 | 69-98 (76-77) |
    | 30 x 784 | 512 | 1537-2109 | 1208-1478 |
 
-   With default threading, 30 x 784 at batch 512 went from 1472-1655 to 1038-1275. End to
-   end, every epoch was within noise, as the arithmetic predicts: MNIST conv mini-batch 32's
-   62 forward calls save about 12 ms of 0.75 s. What is left: 32 x 5408 is still 1.3-1.6x
-   numpy at batch 32, because `W` still streams in from L3 once per 4 rows of `X`. Candidate:
+   **Threading on the new kernel** (default against unthreaded, new build, both passes):
+   threading still pays at 32 x 5408 from batch 128 (1455-2016 against 2339-2769 µs) and at
+   batch 512 (6226-7672 against 8233-13628), and a little at 30 x 784, batch 512 (1038-1275
+   against 1208-1478). At batch 64 (11M flops, threaded) the two overlap (887-1121 against
+   998-1361). With default threading, 30 x 784 at batch 512 went from 1472-1655 to 1038-1275.
+
+   **End to end**, one epoch, old against new build, one process per epoch, builds
+   alternated with the order swapped every run, medians of 6 (seconds):
+
+   | epoch | old | new |
+   | --- | --- | --- |
+   | MNIST conv, mini-batch 32 | 0.751 (0.710-0.856) | 0.743 (0.706-0.841) |
+   | MNIST conv, mini-batch 512 | 0.870 (0.787-0.878) | 0.843 (0.774-0.870) |
+   | dense MNIST, batch 32 | 4.170 (3.967-4.365) | 4.094 (4.007-4.337) |
+   | dense MNIST, batch 512 | 5.814 (5.774-6.054) | 6.000 (5.658-6.114) |
+
+   All within noise, as the arithmetic predicts: MNIST conv mini-batch 32's 62 forward calls
+   save about 12 ms of 0.75 s. What is left: 32 x 5408 is still 1.1-2.2x numpy at batch 32
+   (470-659 against 294-415 µs), because `W` still streams in from L3 once per 4 rows of `X`. Candidate:
    block over `k` so that a panel of `W` stays in L2 across all rows of `X`, storing and
    reloading each pair's 4-lane accumulator between panels. That keeps each output's
    grouping, so it is bit-identical. Low value while no demo runs large batches.
