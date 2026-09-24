@@ -45,10 +45,16 @@ jobs:
           path: data/mnist
           key: mnist-${{ hashFiles('scripts/fetch_datasets.py') }}
 
+      # rust/target, for ./cli setup's maturin build. Keyed by rust-cache on the toolchain,
+      # Cargo.lock and Cargo.toml; it keeps only the dependencies' artifacts, so the crate
+      # itself is always recompiled from the checked-out source.
+      - name: Cache crate build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust -> target
+
       - name: Setup
-        run: |
-          which -a cargo && cargo --version
-          ./cli setup --no-os-packages
+        run: ./cli setup --no-os-packages
 
       - name: Test
         run: ./cli test ${{ matrix.suite }}
