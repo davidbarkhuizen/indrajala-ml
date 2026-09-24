@@ -75,9 +75,9 @@ class ConvRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpr
         self.layers = self.conv_layers + dense_layers + [self.output_layer]
 
     def classify_rows(self, prepared: PreparedDataset) -> list[int]:
-        # row by row, not batched: Rust conv forward_batch costs more per example than single
-        # calls (candidate 4 in docs/optimizations.md), which made a batched accuracy pass
-        # slower (candidate 2's stage 0)
+        # row by row, not batched: even after candidate 4 (docs/optimizations.md) a batched pass
+        # measured a tie for one conv layer and slower with pooling or a second conv layer
+        # (candidate 4's stage 2), since the batched conv forward still writes cols it doesn't need
         return [self.classify_row(prepared, index) for index in range(len(prepared))]
 
     def randomize(self) -> None:
