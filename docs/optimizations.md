@@ -27,6 +27,14 @@ At the start, MNIST conv single-example was 1.21 (Rust slower) and conv-pool-con
 0.66. Dense MNIST 784 -> 30 -> 10, one 60000-example epoch: Rust/numpy about 0.33
 single-example and 0.49-0.53 mini-batch 32.
 
+Two caveats on these ratios. numpy runs with OpenBLAS's default threading, which slows its own
+training: its MNIST conv mini-batch 32 epoch took 1.22-1.32 s at `OPENBLAS_NUM_THREADS=1`
+against 1.39-1.56 s by default (optimization 7 stage 0), so against single-threaded numpy that
+cell would be nearer 0.55-0.6 (an estimate from runs in different sessions, not measured side
+by side). And the demo runs numpy then Rust in one process, so each Rust run starts while
+OpenBLAS's threads may still be spinning (see "Other findings"); that can only slow Rust, by at
+most the first 100-500 ms of each run, and is unmeasured.
+
 Per op, the single-example ops are all at or better than numpy except dense `downstream` at
 32 x 5408 (1.5x, candidate 7). The other gaps left are in batch ops. Rust / numpy µs per
 call, focused benchmark (see "How to measure"), numpy and Rust in separate processes, Rust
@@ -55,11 +63,13 @@ The `forward_batch` rows are after #17, except 32 x 5408 at batch 512, whose thr
 between 4.6 and 9.8 ms from run to run in the same session, so it keeps its earlier numbers. The
 batch-512 Rust numbers are partly warm-clock numbers (see "Threading"). An earlier version of
 this table was measured with numpy and Rust interleaved in one process and read 12-13x, 7x,
-4-8x and 4x on the first, second, fourth and fifth rows; that was numpy's OpenBLAS threads
+4-8x and 4x on the 32 x 5408 batch-32 `downstream_batch`, `accumulate_gradient_batch` and
+`forward_batch` rows and the 30 x 784 batch-512 `downstream_batch` row; that was numpy's OpenBLAS threads
 taking cores from Rust (see "Other findings"). numpy's numbers are with OpenBLAS's default
 threading, which it uses even at 5.5M flops. On one thread each, the batch-32 rows are level
-or close, and the gap that remains is at batch 512 with a long `k`: accumulate (`k` = 512) is
-3.1x numpy at 32 x 5408 and 1.8x at 30 x 784 (see candidate 3).
+or within 1.3x (32 x 5408 accumulate, its extra pass; candidate 1), and the gap that remains is
+at batch 512 with a long `k`: accumulate (`k` = 512) is 3.0-3.4x numpy at 32 x 5408 and
+1.6-2.1x at 30 x 784 (see candidate 3).
 
 ## Open candidates, in priority order
 
@@ -137,25 +147,31 @@ or close, and the gap that remains is at batch 512 with a long `k`: accumulate (
      cause of the rest is that the fused op keeps four 1.4 MB arrays live (`X`, the update,
      `grad_W` and the sum) against a 4 MB L3. That is unmeasured. Stage B removes one of them
      and the pass, so it runs second.
-   - **Revised stake:** stages A and B together might save about 450 µs per pair of calls,
-     about 28 ms (4%) of the 0.72 s epoch, not the 8% the per-op ratios suggested before
-     stage 0.
-   - **Found on the way:** a larger gap at long `k` (candidate 3), and Rust's `transpose` of
-     `delta_batch` at batch 512 taking 87-107 µs against numpy's 8-12 µs copy, about 9% of the
-     30 x 784 accumulate.
+   - **Revised stake:** stages A and B together might save about 450 µs per pair of calls:
+     about 150 from stage A (-14% on each of the two 524-588 µs products), 140-160 from stage
+     B's removed `add`, and part of the 240 unattributed if it is the extra live array. Over
+     62 pairs that is about 28 ms (4%) of the 0.72-0.75 s epoch, not the 8% the per-op ratios
+     suggested before stage 0. Without the unattributed part it is about 19 ms (2.5%).
+   - **Found on the way:** a larger gap at long `k`, and Rust's `transpose` of `delta_batch` at
+     batch 512 taking 87-107 µs against numpy's 8-12 µs copy, about 9% of the 30 x 784
+     accumulate (both in candidate 3).
 
    **Stage A: multi-row register tiles in `tiled_row_range`.** Hold a tile of R rows x 16
    columns (4R accumulators) across all of `k`, R = 2 (and R chosen by `k` only if the op table
    shows it matters; 3 won only at `k` = 128). The probe's `probe_tiled_avx2_fma` on crate
    branch `probe/opt7-stage0` (local only, not pushed) is a starting point. Rows left over
    (`rows % R`) run the current 1-row tile; the 4-wide and scalar column tails keep their loops.
-   `matmul_narrow` calls the same function with one row per block: measure the conv ops too
-   (forward, downstream, accumulate at 28x28, N = 32 and 512), and if they don't gain, keep them
-   on the 1-row tile by passing the tile height, the way `rows_per_block` is passed now. Each
-   output is still one FMA chain, `k` increasing from 0.0, so it is bit-identical. Extend the
-   crate's `test_matrix_at_matrix_is_the_fma_chain_exactly` (`tests/test_linalg.py`) so `m`
-   reaches every row remainder (1 to 2R + 1) at the existing `TILE_WIDTHS`; `BIG_SHAPES` and the
-   thread-count tests cover the large shapes. Mutations that must fail: give the tile's second
+   The tile runs within a row block, so `matmul_narrow`, which passes one row per block, keeps
+   the 1-row tile with no change. Whether conv gains is a separate step: give `matmul_narrow`
+   blocks of R rows, measure the conv ops (forward, downstream, accumulate at 28x28, N = 32 and
+   512), and keep one row per block if they don't gain. (Candidate 5's slower 16 KB blocks
+   don't decide this: an R-row block keeps `b`'s panel reuse to the tile.) Each output is still
+   one FMA chain, `k` increasing from 0.0, so it is bit-identical. Extend the crate's
+   `test_matrix_at_matrix_is_the_fma_chain_exactly` (`tests/test_linalg.py`) so `m` reaches
+   every row remainder (1 to 2R + 1) at the existing `TILE_WIDTHS`, and add a `k` large enough
+   that `rows_per_block` is odd (`k` from 513 to 682 gives 3), so a remainder falls at every
+   block's end, not only the last; `BIG_SHAPES` and the thread-count tests cover the large
+   shapes and a remainder at each thread's range end. Mutations that must fail: give the tile's second
    row the first row's `a` value at one `k`; drop the last remainder row.
 
    **Stage B: fuse the gradient add into the kernel (accumulate only).** A `matmul_2d_add(a, b,
@@ -182,7 +198,8 @@ or close, and the gap that remains is at batch 512 with a long `k`: accumulate (
    threading these products (see "Threading") and any change to summation order.
 
 2. **Dense `forward_batch` at large batches** (`matmul_nt`): register tiles done (#17), the
-   rest open. The recorded 5.6x at batch 64 was the interleaving: in separate processes batch
+   rest open. The 5.6x at batch 64 recorded earlier (numpy and Rust interleaved) was the
+   interleaving: in separate processes batch
    64 was 1.8x numpy (1161-1164 against 625-653 µs), and unthreaded Rust was linear in the batch
    at about 2x numpy per row. So the cost was the kernel: every row of `X` re-read all of `W`
    (1.4 MB at 32 x 5408, past L2). #17 runs 4 rows of `X` against 2 rows of `W` at a time,
@@ -221,9 +238,9 @@ or close, and the gap that remains is at batch 512 with a long `k`: accumulate (
    output's grouping, so it is bit-identical. Low value while no demo runs large batches.
 
 3. **Dense `accumulate_gradient_batch` at long `k`** (`matmul_2d`, found in optimization 7's
-   stage 0). Single-threaded, at batch 512 (`k` = 512) it is 3.1x numpy's single-threaded time
-   at 32 x 5408 (31.3-32.0 against 9.4-10.3 ms) and 1.8x at 30 x 784 (2335-2715 against
-   1269-1436 µs). 2-row tiles recover only 7-31% there. The likely cause is `b`'s `k x 16` panel
+   stage 0). Single-threaded, at batch 512 (`k` = 512) it is 3.0-3.4x numpy's single-threaded
+   time at 32 x 5408 (31.3-32.0 against 9.4-10.3 ms) and 1.6-2.1x at 30 x 784 (2335-2715
+   against 1269-1436 µs). 2-row tiles recover only 7-31% there. The likely cause is `b`'s `k x 16` panel
    (64 KB at `k` = 512) no longer fitting the 32 KB L1. At 32 x 5408 default threading hides it
    (6.8-11.7 ms against numpy's 12.9-13.5); at 30 x 784 it doesn't (997-1336 against 714-776
    µs). It matters only at batch 512, which no demo's default runs. Candidate: block over `k`,
@@ -231,6 +248,13 @@ or close, and the gap that remains is at batch 512 with a long `k`: accumulate (
    each output keeps its chain. Candidate 5 needs the same change in the same function
    (`matmul_narrow` also runs `tiled_row_range`), so one `k`-blocked `tiled_row_range` may
    serve both. Candidate 2's remaining step is the same idea in `matmul_nt`'s separate kernel.
+
+   Separately, the `transpose()` of `delta_batch` that feeds this product takes 87-107 µs at
+   batch 512 against numpy's 8-12 µs, about 9% of the 30 x 784 op (a naive element loop in
+   `rust/src/array.rs` whose writes stride by `rows`). The closed transposed-left matmul
+   ("Completed") removed this copy and measured within ±4%, calling it small next to the
+   matmul; at 30 x 784, batch 512 that no longer holds. A blocked transpose is a copy, so
+   trivially bit-identical, and cheaper to try than another kernel.
 
 4. **Conv `forward_batch` at N = 32 costs more than 32 single-example calls.** Measured at 28x28
    (2280 vs 1715 µs, before the `matmul_narrow` kernel). The likely cause, unmeasured: the 1.5 MB
@@ -398,7 +422,8 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   these, and the demo, in the background with an ETA.
 - **Old vs new builds:** alternate the builds (old, new, old, new) and run each benchmark on
   both. Builds take about 6 s (`./cli build-rust`). Commit the crate change before switching,
-  and switch with `git checkout main -- src/linalg.rs` and back, not a stash.
+  and switch with `git checkout main -- <changed files>` (for example `src/linalg.rs`, or
+  `src/fused.rs` too for stage B) and back, not a stash.
 - **This machine** (Ryzen 7 3700U laptop, 4 cores / 8 threads, 512 KB L2 per core, 4 MB L3)
   varies 20-30% between passes, sometimes more. A background IDE made a first measurement
   unusable once. Treat changes under about 20% as noise unless both passes agree, and re-check a
@@ -481,7 +506,7 @@ Crate PR numbers are `indrajala-math-rust`'s. "Bit-identical" means every output
 | `matmul_2d` register-tiled, sharing `matmul_narrow`'s kernel | #14 | unthreaded dense batch downstream/accumulate 0.1-0.6x their old time; mini-batch dense MNIST epoch about -4%; bit-identical |
 | `set_matmul_threading` override, and tests that the thread count can't change any kernel's bits | #15 | measurement and test infrastructure; no default behaviour changed |
 | Threading threshold 4M → 8M flops, policy in `matmul_thread_count` | #16 | MNIST conv mini-batch 32 epoch 0.879 → 0.770 s (-12%); batch 512 and dense MNIST unchanged; bit-identical |
-| `matmul_nt` in 4 x 2 register tiles (4 rows of `X` against 2 rows of `W`; 2 x 4, 3 x 3 and 2 x 2 measured slower or tied) | #17 | unthreaded dense `forward_batch` 0.6-0.9x its old time (32 x 5408, batch 32: 771-916 → 545-555 µs; 30 x 784, batch 32: 102-110 → 76-77); epochs within noise; bit-identical |
+| `matmul_nt` in 4 x 2 register tiles (4 rows of `X` against 2 rows of `W`; 2 x 4, 3 x 3 and 2 x 2 measured slower or tied) | #17 | unthreaded dense `forward_batch` 0.6-0.9x its old time (second pass: 32 x 5408, batch 32: 771-916 → 545-555 µs; 30 x 784, batch 32: 102-110 → 76-77); epochs within noise; bit-identical |
 
 Closed with no measured gain, kept as findings:
 
@@ -501,7 +526,9 @@ Closed with no measured gain, kept as findings:
   (see "Threading").
 - **Row blocks for `matmul_2d`.** 1-row blocks were 2-3x slower than 16 KB blocks where `K` is
   in the hundreds (`(32, 512) @ (512, 5408)`: 40-47 vs 15-16 ms). One block for all rows was
-  close to 16 KB blocks but not better.
+  close to 16 KB blocks but not better. The thread count wasn't recorded; the same product
+  takes 31-32 ms on one thread and 10-11 on 8 today (see "Threading"), so these were presumably
+  threaded, and the comparison holds only between the two settings.
 
 ## Other findings from the same measurements
 
@@ -520,7 +547,7 @@ Closed with no measured gain, kept as findings:
   (the shortest spin), or timing numpy in a separate process. With the short spin, numpy itself
   slowed from about 250 to 300-420 µs. A single Rust call was still slowed 100 ms after the
   numpy loop, and no longer at 500 ms. The Rust training path never calls numpy, so this only
-  affects benchmarks. Every per-op ratio past the threading threshold that was measured
+  affects benchmarks, the end-to-end demo included (see "Where things stand"). Every per-op ratio past the threading threshold that was measured
   interleaved is suspect.
 - **The conv demo's mini-batch runs barely train.** They reach about 10% accuracy at lr 0.5 in
   1-2 epochs, and lr 2, 4 and 8 don't fix every configuration. Their timings are valid; their
