@@ -207,9 +207,10 @@ Test accuracies were identical between the builds.
 
 ## Remaining candidates (as of 2026-09-24)
 
-What is still open after optimizations 1-4 and the dense dot-product fix. Nothing below has
-been measured as a fix. The per-op numbers come from `demo_layer_op_timing` on 2026-09-24 unless
-marked otherwise, Rust vs numpy µs per call.
+What is still open after optimizations 1-4 and the dense dot-product fix. Candidate 1's kernel
+part is done (indrajala-math-rust#14); nothing else below has been measured as a fix. The per-op
+numbers come from `demo_layer_op_timing` on 2026-09-24 unless marked otherwise, Rust vs numpy µs
+per call.
 
 1. **Dense batch downstream and accumulate at the wide shapes** (the "Batch ops" section above,
    with numbers after optimization 1):
@@ -267,13 +268,21 @@ marked otherwise, Rust vs numpy µs per call.
 
    Candidates: split by columns when `b` is the larger operand, a persistent thread pool, or a
    higher threshold. Any of them keeps every output's bits, since each output is still computed
-   by one thread.
+   by one thread. `matmul_nt` (every `forward_batch`) and `matmul_narrow` (the conv ops) use
+   the same `for_each_row_range` threading, so a fix there applies to them too (see 2).
 
 2. **Dense `forward_batch` at large batches is memory-bound.** The dot-product fix left batch 512
    at 30 x 784 and 16 x 784 barely changed (1418 → 1350 µs, focused benchmark). Each row of `X`
    re-reads all of `W`. Candidate: a register block of 2-4 rows of `X` against the same `W`
    rows, so each `W` load serves several outputs. Each output keeps `dot_product`'s grouping, so
    this is bit-identical.
+
+   Re-measured on 2026-09-24 (focused benchmark, 20 ms loops, median of 9): 32 x 5408 is 1.2x
+   numpy at batch 32 (682-971 µs) but 5.6x at batch 64 (3395 vs 608), and 30 x 784 is 3.4x at
+   batch 512. The jump from batch 32 to 64 is 3.5-5x the time for twice the work, and both are
+   past the threading threshold. `matmul_nt` splits `X`'s rows across threads, so every thread
+   streams all of `W` (1.4 MB at 32 x 5408). This is likely the threading problem in 1, not only
+   memory traffic. Measure with threading off first.
 
 3. **Conv `forward_batch` at N = 32 costs more than 32 single-example calls.** Measured at 28x28
    (2280 vs 1715 µs, optimization 3 stage B, before stage C). The likely cause, unmeasured: the
@@ -283,10 +292,14 @@ marked otherwise, Rust vs numpy µs per call.
 
 4. **Conv accumulate with a large `cols` has no cache blocking.** `matmul_narrow` gave no gain on
    `conv_accumulate_gradient_batch` at 13x13x8, N = 32 (+2%, +4%, -1% at O = 4, 8, 32), where
-   `cols` is 0.3-2.2 MB and `matmul_2d`'s blocking made up for its row overhead
-   (`workplans/optimization-3-conv-forward.md`, stage C follow-up). Candidate: block
-   `matmul_narrow` over `k` once `b` exceeds the same 256 KB threshold. The per-row `k` order is
-   unchanged, so it is bit-identical.
+   `cols` is 0.3-2.2 MB and `matmul_2d`'s old `k`-blocking made up for its row overhead
+   (`workplans/optimization-3-conv-forward.md`, stage C follow-up). Since
+   indrajala-math-rust#14 both functions share one kernel, `tiled_row_range`, and that
+   `k`-blocking is gone. `matmul_narrow` uses 1-row blocks. Moving it to `matmul_2d`'s 16 KB
+   row blocks made this op slower at 28x28, N = 512 (35-39 vs 30-32 ms), so row blocking
+   isn't the fix. Candidate: block over `k` with the tile's accumulators kept across `k` blocks
+   (stored and reloaded, not reset). The per-output `k` order is unchanged, so it is
+   bit-identical.
 
 5. **`max_pool_forward_batch` is now the second-largest Rust conv op**, about 10% of profiled
    conv-pool-conv training (single-example: 0.10 s of 1.0 s, 6000 calls). It has never been
