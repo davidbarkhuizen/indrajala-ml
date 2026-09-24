@@ -19,6 +19,7 @@ from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.multiclass_evaluate import accuracy as multiclass_accuracy
+from indrajala_ml.targets import XORTarget
 from indrajala_ml.train import random_alternating_training_data, train_linear_classifier_network
 
 DIGITS_DIMENSION = 64
@@ -30,18 +31,6 @@ DIGITS_LEARNING_RATE = 0.5
 XOR_DIMENSION = 2
 XOR_LAYER_SIZES = [8]
 XOR_EPOCHS = 100
-
-
-class XORTarget:
-    # same target as demo_xor_linear_classifier_ceiling.py's XORTarget - kept as an independent
-    # copy here (not imported), matching the same tests/ -> indrajala_ml/demos/ dependency
-    # avoidance test_backprop_training_pipeline.py's own XORTarget copy already uses
-    def __init__(self, bounds: list[tuple[float, float]]) -> None:
-        self.input_bounds = bounds
-
-    def classify_state(self, state: tuple[float, float]) -> float:
-        x, y = state
-        return 1.0 if (x > 0) != (y > 0) else 0.0
 
 
 def _xavier_glorot_randomize(network) -> None:

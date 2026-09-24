@@ -4,6 +4,7 @@ import pytest
 
 from indrajala_ml.geometry import is_positive_region_bounded, square_bounds
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.targets import XORTarget
 from indrajala_ml.train import (
     random_alternating_training_data,
     reachable_reference_and_training_data,
@@ -114,16 +115,7 @@ def test_train_linear_classifier_network_keeps_the_best_epoch_not_the_last():
     # the student is left at the best epoch's accuracy, not whatever the last one landed on.
     random.seed(0)
 
-    class XORTarget:
-        # not linearly separable, and not representable by an AND/OR/k-of-n gate over
-        # cardinality=3 half-planes either - see demo_xor_linear_classifier_ceiling.py
-        def __init__(self, bounds):
-            self.input_bounds = bounds
-
-        def classify_state(self, state):
-            x, y = state
-            return 1.0 if (x > 0) != (y > 0) else 0.0
-
+    # XOR isn't representable by an AND/OR/k-of-n gate over cardinality=3 half-planes
     bounds = square_bounds(10.0)
     training_data = random_alternating_training_data(1000, XORTarget(bounds))
 

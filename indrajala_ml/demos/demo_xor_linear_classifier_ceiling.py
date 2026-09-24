@@ -8,25 +8,8 @@ from indrajala_ml.evaluate import class_balanced_disagreement_rate
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.graphics.chart import new_axes, new_figure, plot_linear_classifier_network, plot_training_data
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.targets import XORTarget
 from indrajala_ml.train import random_alternating_training_data, train_linear_classifier_network
-
-
-class XORTarget:
-    """
-    A predicate exposing the same input_bounds/classify_state interface as
-    LinearClassifierNetwork, so it drops straight into train.py/evaluate.py's existing
-    machinery unchanged. Unlike every other demo's target - always a LinearClassifierNetwork
-    of the same architecture the student is trained with, so representable by construction -
-    this one's positive region (two diagonally opposite quadrants) isn't a union of convex
-    regions any single-hidden-layer combination of half-planes can express.
-    """
-
-    def __init__(self, bounds: list[tuple[float, float]]) -> None:
-        self.input_bounds = bounds
-
-    def classify_state(self, state: tuple[float, float]) -> float:
-        x, y = state
-        return 1.0 if (x > 0) != (y > 0) else 0.0
 
 
 def main() -> None:

@@ -2,23 +2,8 @@ import random
 
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.targets import XORTarget
 from indrajala_ml.train import random_alternating_training_data, train_linear_classifier_network
-
-
-class XORTarget:
-    # same target as demo_xor_linear_classifier_ceiling.py's XORTarget (not imported from there to
-    # avoid a tests/ -> indrajala_ml/demos/ dependency) - no LinearClassifierNetwork gate can
-    # represent this (see test_train.py's
-    # test_train_linear_classifier_network_keeps_the_best_epoch_not_the_last, capped around
-    # 0.845 training accuracy at cardinality=3). This is the automated counterpart to that
-    # ceiling: train_linear_classifier_network, reused completely unchanged (see the
-    # snapshot()/restore() rename), drives a BackpropClassifierNetwork well past it.
-    def __init__(self, bounds):
-        self.input_bounds = bounds
-
-    def classify_state(self, state):
-        x, y = state
-        return 1.0 if (x > 0) != (y > 0) else 0.0
 
 
 def test_train_linear_classifier_network_drives_a_backprop_network_past_the_linear_ceiling_on_xor():
@@ -27,7 +12,9 @@ def test_train_linear_classifier_network_drives_a_backprop_network_past_the_line
     # not still improving - more epochs don't help further, since the handful of remaining
     # errors sit essentially on the x=0/y=0 boundary itself, which a bounded-weight sigmoid
     # network can only approximate, never perfectly resolve) - comfortably clear of the ~0.845
-    # ceiling no LinearClassifierNetwork gate gets past on this same target.
+    # ceiling no LinearClassifierNetwork gate gets past on this same target (see test_train.py's
+    # test_train_linear_classifier_network_keeps_the_best_epoch_not_the_last): the automated
+    # counterpart to demo_xor_linear_classifier_ceiling.py.
     random.seed(0)
 
     bounds = square_bounds(10.0)

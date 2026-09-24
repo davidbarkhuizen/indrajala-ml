@@ -151,7 +151,7 @@ def test_positive_region_bounding_box_none_for_a_non_2d_classifier():
 def test_positive_region_bounding_box_none_for_a_duck_typed_target_without_geometry_attributes():
 
     # train.py/evaluate.py's functions accept any object exposing input_bounds/classify_state
-    # (see e.g. demo_xor_linear_classifier_ceiling.py's XORTarget) - dimension/required_active/
+    # (see e.g. indrajala_ml/targets.py's XORTarget) - dimension/required_active/
     # cardinality are LinearClassifierNetwork-specific and optional; their absence must fall
     # back to None (and thus to full-input_bounds sampling), not raise AttributeError
     class BoundsOnly:

@@ -7,7 +7,7 @@ from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_front_end import (
     build_conv_array_network_layers,
-    load_conv_array_model_json,
+    load_conv_model_json,
     save_conv_array_model_json,
 )
 from indrajala_ml.model.conv_layer import ConvSpec
@@ -117,4 +117,4 @@ class ConvVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBack
 
     @classmethod
     def load(cls, path: str) -> "ConvVectorizedMultiClassBackpropClassifierNetwork":
-        return load_conv_array_model_json(cls, path)
+        return load_conv_model_json(cls, path)
