@@ -98,7 +98,7 @@ The op's cost is its per-row `axpy_row` calls on 8-wide rows, the third candidat
 **The third (small output channel counts) is done** (stage C). im2col-then-matmul measured as the
 right formulation, but `matmul`'s row kernel wasn't. A register-blocked `matmul_narrow` for `cols
 @ W.T` is bit-identical and takes 33-64% less time at N = 1. The same pattern in the conv
-accumulate and downstream matmuls is recorded there, not yet acted on.
+accumulate and downstream matmuls has since been fixed the same way (indrajala-math-rust#12).
 The candidates as first written:
 
 - **Don't return `Z`.** `conv_forward_batch` builds `Z`, then a separate `A = relu(Z)`, then
