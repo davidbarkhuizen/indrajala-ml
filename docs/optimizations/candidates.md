@@ -143,11 +143,11 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    affects numpy in the same process too). Reusing output buffers through the Python API is
    ruled out: it breaks the immutable `RustArray` contract every caller relies on.
 
-   **Acceptance for A and B**, beyond the rules below: per op, every op table row (the
+   **Acceptance for A and B**, beyond the [rules](method.md#rules-for-an-optimization-pr): per op, every op table row (the
    `matmul_nt` rows must not move), plus the conv ops if `tiled_row_range` changed; end to end,
-   the old-against-new epochs in "How to measure", then the conv demo for the ratio table. Every
+   the old-against-new epochs in [How to measure](method.md#how-to-measure), then the conv demo for the ratio table. Every
    stage is claimed bit-identical, so the full suite must pass with no pin changes. Out of scope:
-   threading these products (see "Threading") and any change to summation order.
+   threading these products (see [Threading](kernels.md#threading)) and any change to summation order.
 
 7. **Dense `accumulate_gradient_batch` at long `k`** (`matmul_2d`, found in optimization 7's stage
    0). Single-threaded, at batch 512 (`k` = 512) it is 3.0-3.4x numpy's single-threaded time at 32
@@ -164,7 +164,7 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    Separately, the `transpose()` of `delta_batch` that feeds this product takes 87-107 µs at
    batch 512 against numpy's 8-12 µs, about 9% of the 30 x 784 op (a naive element loop in
    `rust/src/array.rs` whose writes stride by `rows`). The closed transposed-left matmul
-   ("Completed") removed this copy and measured within ±4%, calling it small next to the
+   ([History](history.md#closed-with-no-measured-gain)) removed this copy and measured within ±4%, calling it small next to the
    matmul; at 30 x 784, batch 512 that no longer holds. A blocked transpose is a copy, so
    trivially bit-identical, and cheaper to try than another kernel.
 
@@ -187,7 +187,7 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    2% of the trainer's 4.85 s epoch, applied the one-thread ratio (Rust 1.6-2.1x numpy at 30 x
    784) to these calls. But they are threaded in training (12M flops at B = 512), and at 0.94 ms
    each they already beat numpy's one-thread 1.27-1.44 ms. A faster kernel would still speed up
-   each thread, but threaded calls pay the cold clock and spawn cost (see "Threading"), so the
+   each thread, but threaded calls pay the cold clock and spawn cost (see [Threading](kernels.md#threading)), so the
    saving is likely under 0.1 s and is unmeasured. **Decision: do it after candidate 1, and only
    if a one-thread `k`-blocking probe gains enough to leave a threaded saving above the 5% bar.**
    Candidate 1 (done) took the Rust B = 32 epoch from 3.72 to 1.69 s, most of it batch and row

@@ -26,7 +26,7 @@ Part of the optimization record; the index is [../optimizations.md](../optimizat
   products. It can also force threads (`--rust-threads`, `--openblas-threads`). See its
   `--help`. **Time numpy and Rust in separate processes**, never
   interleaved in one. After a numpy BLAS call, OpenBLAS's threads keep spinning for between 100
-  and 500 ms, and a Rust batch op run in that time measured 2-5x slow (see "Other findings").
+  and 500 ms, and a Rust batch op run in that time measured 2-5x slow (see [Lessons](lessons.md)).
 - **End to end:** `python -m indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition`
   (about 3 minutes; median of 5 interleaved runs from identical initial weights, UCI digits and
   a 2000-row MNIST subset, single-example and mini-batch 32, plus a cProfile of Rust time by
@@ -57,7 +57,7 @@ Part of the optimization record; the index is [../optimizations.md](../optimizat
   and the batch and row conversions separately, one process per (backend, batch size, repeat),
   with the order rotated each repeat. **Don't judge a training-path change on trainer epoch time
   alone.** The two accuracy passes were 52-73% of a full-MNIST epoch before candidates 1 and 2
-  (see "Other findings"); after candidate 2 a batched pass is 0.21 s in Rust and 0.18 s in numpy,
+  (see [Lessons](lessons.md)); after candidate 2 a batched pass is 0.21 s in Rust and 0.18 s in numpy,
   still enough to blur a step-loop change. Its "accuracy pass" column still times the tuple path
   (`_training_accuracy` without a prepared dataset: `classify_state` and a row conversion each),
   which the trainers no longer use for array networks, so it overstates their pass.
@@ -102,7 +102,7 @@ Part of the optimization record; the index is [../optimizations.md](../optimizat
   sides, so compare a probe's parts with the real op there.
 - **Threading:** `set_matmul_threading(t, threshold)` forces a thread count and threshold in
   one process, so a sweep needs no rebuild. Accept a threading change on the end-to-end number
-  only (see "Threading").
+  only (see [Threading](kernels.md#threading)).
 - **Never time pure Python.** It is for correctness and parity only.
 
 ## Rules for an optimization PR
@@ -121,10 +121,10 @@ Part of the optimization record; the index is [../optimizations.md](../optimizat
   2. If an end-to-end pinned result moves (for example the Rust conv network's 0.9875 /
      epoch 10 / 0.925), don't loosen it silently. Compare it with a 1-ULP control: nudge one
      initial weight by 1 ULP on the *old* code. If the pin moves by a similar amount, it is
-     rounding sensitivity (see "Other findings"); update the pin and record the control in
+     rounding sensitivity (see [Lessons](lessons.md)); update the pin and record the control in
      the PR. If not, treat it as a bug.
   3. Record the max abs and max ULP difference from the old op at the benchmark shapes.
 - **Measure first, and close what doesn't pay.** Each stage is its own PR, merged before the
-  next starts. A stage that measures no gain is closed with its numbers recorded here, not
+  next starts. A stage that measures no gain is closed with its numbers recorded in [History](history.md), not
   merged. Every PR quotes the before/after per-op rows for the ops it touches and the end-to-end
   ratios.

@@ -54,7 +54,7 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   conv-pool-conv and conv-conv-stride2 have tails 968 and 1152 wide. Nothing is threaded in any
   demo at batch 32 since #16. The only demo that trains larger batches is
   `demo_batch_size_scaling` (dense, B = 128 to 1024), whose 30 x 784 products are threaded from
-  B = 512 (12M flops). In the batch-512 epochs of "How to measure", the conv ops (24.9M) and the
+  B = 512 (12M flops). In the batch-512 epochs of [How to measure](method.md#how-to-measure), the conv ops (24.9M) and the
   32 x 5408 tail (88.6M) are threaded and pay (+11% and +15% when forced unthreaded); dense
   MNIST's 12M calls come out even.
 - **Choosing 8M.** A product is threaded at or above the threshold, so every threshold above
@@ -80,6 +80,6 @@ doesn't depend on the machine. Each kernel has one fixed summation order:
   a time. Vector @ matrix is the one-row product (crate #20; it had its own `axpy_row` loop
   with the same chain).
 - **Threading** splits output rows across threads, so each output is computed by one thread and
-  the thread count can't change any value (see "Threading").
+  the thread count can't change any value (see [Threading](#threading)).
 - These orders differ from numpy's in the last few ULPs, so parity with numpy is checked with
   `rtol`. Crate tests pin each order exactly against a `Fraction`-emulated FMA reference.
