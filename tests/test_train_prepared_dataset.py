@@ -61,7 +61,7 @@ class _RowRecorder(_TupleRecorder):
         raise AssertionError("an array student must be trained through learn_batch_rows")
 
     def classify_state(self, state):
-        raise AssertionError("an array student's accuracy passes must use classify_row")
+        raise AssertionError("an array student's accuracy passes must use classify_rows")
 
     def _row(self, prepared, index):
         return tuple(prepared.states[index].tolist()), prepared.labels[index]
@@ -73,7 +73,10 @@ class _RowRecorder(_TupleRecorder):
         self.batches.append([self._row(prepared, index) for index in indices])
 
     def classify_row(self, prepared, index):
-        return 0
+        raise AssertionError("an array student's accuracy passes must use classify_rows")
+
+    def classify_rows(self, prepared):
+        return [0] * len(prepared)
 
 
 def _rows(count: int = 23) -> list:

@@ -42,6 +42,9 @@ class VectorizedMultiClassBackpropClassifierNetwork(ArrayNetworkBase):
     def _classify_output(self, output: np.ndarray) -> int:
         return int(np.argmax(output))
 
+    def _classify_output_batch(self, output_batch: np.ndarray) -> list[int]:
+        return np.argmax(output_batch, axis=1).tolist()
+
     def _target_array(self, category: int) -> np.ndarray:
         target = np.zeros(self.class_count)
         target[category] = 1.0

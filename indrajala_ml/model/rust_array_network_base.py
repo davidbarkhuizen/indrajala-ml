@@ -6,7 +6,7 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.model.bounds import validate_batch, validate_layer_sizes
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
-from indrajala_ml.prepared_dataset import PreparedDataset
+from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
 
 class RustArrayNetworkBase:
@@ -49,6 +49,18 @@ class RustArrayNetworkBase:
         # see ArrayNetworkBase.classify_row
         return self._classify_output(self._forward_input(self._prepared_states(prepared).row(index)))
 
+    def classify_rows(self, prepared: PreparedDataset) -> list:
+        # see ArrayNetworkBase.classify_rows; here a batched forward row equals the
+        # single-example forward exactly ("Kernel invariants" in docs/optimizations.md)
+        states = self._prepared_states(prepared)
+        predictions = []
+        for start in range(0, len(prepared), CLASSIFY_CHUNK_ROWS):
+            X = states.take_rows(list(range(start, min(start + CLASSIFY_CHUNK_ROWS, len(prepared)))))
+            for layer in self.layers:
+                X = layer.forward_batch(X)
+            predictions.extend(self._classify_output_batch(X))
+        return predictions
+
     def prepare_dataset(self, rows: Sequence[tuple[tuple[float, ...], object]]) -> PreparedDataset:
         return PreparedDataset.from_rows(rows, "rust")
 
@@ -68,6 +80,10 @@ class RustArrayNetworkBase:
         raise NotImplementedError
 
     def _classify_output(self, output: "pa.Array"):
+        raise NotImplementedError
+
+    def _classify_output_batch(self, output_batch: "pa.Array") -> list:
+        # see ArrayNetworkBase._classify_output_batch
         raise NotImplementedError
 
     # see ArrayNetworkBase: the public methods differ only in where the input array comes from

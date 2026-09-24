@@ -2,7 +2,7 @@
 Candidate 1's A/B (docs/optimizations.md): one training epoch through the trainers the demos use,
 before and after the dataset became one backend array (#373, #374).
 
-    python scripts/prepared_dataset_timing.py time [--repeats 5] [--configs ...] [--out runs.json]
+    python scripts/prepared_dataset_timing.py time [--repeats 5] [--configs ...] [--epochs 1] [--out runs.json]
 
 Every (config, backend, repeat) runs in its own process, never two backends in one, rotating the
 order each repeat, and the medians are reported. The script only uses interfaces that exist on
@@ -11,7 +11,9 @@ checkout first on PYTHONPATH (the output starts with the trainers module it impo
 
     PYTHONPATH=/path/to/old/checkout python scripts/prepared_dataset_timing.py time
 
-Configs, each one epoch from numpy-drawn seed-0 weights with random.seed(0):
+--epochs trains each run for more epochs (one accuracy pass per epoch, plus one before), as a
+longer run does; candidate 2's A/B used it. Configs, each one epoch by default, from numpy-drawn
+seed-0 weights with random.seed(0):
 - dense B=32 / dense single: 784 -> 30 -> 10 on full MNIST (60000 rows), learning rate 0.5;
 - conv B=32 / conv single: the conv demo's "conv" network (ConvSpec(3, 8), dense 32) on its
   2000-row MNIST subset, learning rate 0.5.
@@ -63,6 +65,7 @@ SEED = 0
 CONV_SPECS = [ConvSpec(3, 8)]
 CONV_DENSE_LAYER_SIZES = [32]
 CONV_TRAIN_LIMIT = 2000
+EPOCHS = 1  # --epochs
 CONV_CLASSES = {"numpy": ConvVectorizedMultiClassBackpropClassifierNetwork, "rust": ConvRustArrayMultiClassBackpropClassifierNetwork}
 
 
@@ -80,9 +83,9 @@ def _train_epoch(config: str, network, data) -> float:
     random.seed(SEED)
     start = time.perf_counter()
     if config.endswith("single"):
-        train_linear_classifier_network(network, data, learning_rate=LEARNING_RATE, epochs=1)
+        train_linear_classifier_network(network, data, learning_rate=LEARNING_RATE, epochs=EPOCHS)
     else:
-        train_backprop_network_mini_batch(network, data, BATCH_SIZE, learning_rate=LEARNING_RATE, epochs=1)
+        train_backprop_network_mini_batch(network, data, BATCH_SIZE, learning_rate=LEARNING_RATE, epochs=EPOCHS)
     return time.perf_counter() - start
 
 
@@ -102,13 +105,13 @@ def measure(config: str, backend: str) -> dict:
 
 def _run_worker(config: str, backend: str) -> dict:
     output = subprocess.run(
-        [sys.executable, __file__, "worker", config, backend], check=True, capture_output=True, text=True
+        [sys.executable, __file__, "worker", config, backend, "--epochs", str(EPOCHS)], check=True, capture_output=True, text=True
     ).stdout
     return json.loads(output.strip().splitlines()[-1])
 
 
 def time_all(configs: list[str], repeats: int) -> dict:
-    print(f"trainers: {train.__file__}; prepared path: {AFTER}\n")
+    print(f"trainers: {train.__file__}; prepared path: {AFTER}; epochs per run: {EPOCHS}\n")
     runs = {(config, backend): [] for config in configs for backend in BACKENDS}
     cells = list(runs)
     for repeat in range(repeats):
@@ -137,8 +140,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("args", nargs="*", help="worker only: config backend")
     parser.add_argument("--configs", nargs="+", choices=CONFIGS)
     parser.add_argument("--repeats", type=int, default=5)
+    parser.add_argument("--epochs", type=int, default=1, help="epochs per training run (default 1)")
     parser.add_argument("--out", help="write every run's raw measurements here as JSON")
     args = parser.parse_args(argv)
+    global EPOCHS
+    EPOCHS = args.epochs
 
     if args.mode == "worker":
         print(json.dumps(measure(args.args[0], args.args[1])))

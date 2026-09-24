@@ -72,8 +72,9 @@ def _training_accuracy(
     prepared: PreparedDataset | None = None,
 ) -> float:
     if prepared is not None:
-        labels = enumerate(prepared.labels)
-        correct = sum(1 for index, category in labels if student.classify_row(prepared, index) == category)
+        # classify_rows batches the forward passes (candidate 2 in docs/optimizations.md)
+        predictions = student.classify_rows(prepared)
+        correct = sum(1 for predicted, category in zip(predictions, prepared.labels) if predicted == category)
         return correct / len(prepared)
     correct = sum(1 for state, category in training_data if student.classify_state(state) == category)
     return correct / len(training_data)

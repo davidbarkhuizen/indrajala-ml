@@ -2,7 +2,8 @@
 The prepared-dataset path (candidate 1 in docs/optimizations.md) trains exactly as the tuple
 path does: for every numpy and Rust array network class, learn_row gives bit-for-bit the weights
 learn gives, step by step, learn_batch_rows those of learn_batch, and classify_row agrees with
-classify_state. The classes are enumerated from the two bases, so a new one can't be missed.
+classify_state. The batched accuracy pass (candidate 2) predicts what classify_row does, row for
+row. The classes are enumerated from the two bases, so a new one can't be missed.
 """
 
 import importlib
@@ -19,7 +20,8 @@ from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
-from indrajala_ml.prepared_dataset import PreparedDataset, prepared_mnist
+from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset, prepared_mnist
+from indrajala_ml.train import _training_accuracy
 
 MNIST_TRAIN = "data/mnist/mnist-train.bin"
 
@@ -147,6 +149,74 @@ def test_classify_row_matches_classify_state(cls):
     assert [network.classify_row(prepared, i) for i in range(len(rows))] == [
         network.classify_state(state) for state, _label in rows
     ]
+
+
+# more than two chunks, the last one partial
+CLASSIFY_ROW_COUNT = 2 * CLASSIFY_CHUNK_ROWS + 6
+
+
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
+def test_classify_rows_matches_classify_row(cls):
+    network, _ = _twin_networks(cls)
+    prepared = network.prepare_dataset(_rows(cls, CLASSIFY_ROW_COUNT))
+    predictions = network.classify_rows(prepared)
+    assert predictions == [network.classify_row(prepared, i) for i in range(len(prepared))]
+    assert {type(p) for p in predictions} == {float if _is_binary(cls) else int}
+
+
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
+def test_the_prepared_accuracy_pass_matches_the_tuple_one(cls):
+    network, _ = _twin_networks(cls)
+    rows = _rows(cls, CLASSIFY_ROW_COUNT)
+    prepared = network.prepare_dataset(rows)
+    assert _training_accuracy(network, rows, prepared) == _training_accuracy(network, rows)
+
+
+def test_classify_rows_runs_numpy_dropout_in_inference_mode():
+    # inference draws no mask, so the pass leaves np.random where it was
+    cls = next(cls for cls in NETWORK_CLASSES if cls.__name__ == "DropoutVectorizedMultiClassBackpropClassifierNetwork")
+    network, _ = _twin_networks(cls)
+    prepared = network.prepare_dataset(_rows(cls, CLASSIFY_ROW_COUNT))
+    np.random.seed(7)
+    network.classify_rows(prepared)
+    after = np.random.random()
+    np.random.seed(7)
+    assert after == np.random.random()
+    assert not network.layers[0]._was_training
+
+
+def test_classify_rows_runs_rust_dropout_in_inference_mode():
+    # at drop probability 0.5 a training-mode pass would drop half the hidden nodes, and the
+    # Rust mask can't be seeded, so equal predictions on two passes mean no mask was drawn
+    cls = next(cls for cls in NETWORK_CLASSES if cls.__name__ == "DropoutRustArrayMultiClassBackpropClassifierNetwork")
+    network = cls([5], DIMENSION, CLASS_COUNT, 0.5)
+    network.randomize()
+    prepared = network.prepare_dataset(_rows(cls, CLASSIFY_ROW_COUNT))
+    assert network.classify_rows(prepared) == [network.classify_row(prepared, i) for i in range(len(prepared))]
+    assert not network.layers[0]._was_training
+
+
+def _rust_multiclass():
+    cls = next(cls for cls in NETWORK_CLASSES if cls.__name__ == "RustArrayMultiClassBackpropClassifierNetwork")
+    return CONSTRUCTORS[cls.__name__](cls)
+
+
+def test_the_rust_row_argmax_breaks_ties_as_pa_argmax_does():
+    nan = float("nan")
+    rows = [[1.0, 3.0, 3.0], [2.0, 2.0, 2.0], [-0.0, 0.0, -1.0], [0.0, -0.0, 0.0], [nan, 1.0, 2.0], [1.0, nan, 2.0], [0.2, 0.1, nan]]
+    expected = [pa.argmax(pa.Array(row)) for row in rows]
+    assert _rust_multiclass()._classify_output_batch(pa.Array(rows)) == expected
+
+
+@pytest.mark.parametrize("backend", ["numpy", "rust"])
+def test_the_batched_binary_threshold_is_strictly_above_one_half(backend):
+    name = "ArrayBackpropClassifierNetwork" if backend == "numpy" else "RustArrayBackpropClassifierNetwork"
+    cls = next(cls for cls in NETWORK_CLASSES if cls.__name__ == name)
+    network = CONSTRUCTORS[name](cls)
+    column = [[0.5], [np.nextafter(0.5, 1.0)], [np.nextafter(0.5, 0.0)], [0.9]]
+    outputs = np.array(column) if backend == "numpy" else pa.Array(column)
+    single = [network._classify_output(np.array(row) if backend == "numpy" else pa.Array(row)) for row in column]
+    assert network._classify_output_batch(outputs) == single == [0.0, 1.0, 0.0, 1.0]
 
 
 @pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)

@@ -38,6 +38,9 @@ class RustArrayBackpropClassifierNetwork(RustArrayNetworkBase):
     def _classify_output(self, output: "pa.Array") -> float:
         return 1.0 if output.tolist()[0] > 0.5 else 0.0
 
+    def _classify_output_batch(self, output_batch: "pa.Array") -> list[float]:
+        return [1.0 if row[0] > 0.5 else 0.0 for row in output_batch.tolist()]
+
     def _target_array(self, category: float) -> "pa.Array":
         return pa.Array([category])
 

@@ -40,6 +40,11 @@ class RustArrayMultiClassBackpropClassifierNetwork(RustArrayNetworkBase):
     def _classify_output(self, output: "pa.Array") -> int:
         return pa.argmax(output)
 
+    def _classify_output_batch(self, output_batch: "pa.Array") -> list[int]:
+        # pa.argmax takes a vector only. max keeps the first of equal maxima (it replaces only on
+        # a strict >, as pa.argmax does) and index finds that one
+        return [row.index(max(row)) for row in output_batch.tolist()]
+
     def _target_array(self, category: int) -> "pa.Array":
         target = pa.Array.zeros(self.class_count)
         target[category] = 1.0
