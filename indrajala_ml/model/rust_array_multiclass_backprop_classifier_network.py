@@ -35,16 +35,19 @@ class RustArrayMultiClassBackpropClassifierNetwork(RustArrayNetworkBase):
         return self._forward(state).tolist()
 
     def classify_state(self, state: tuple[float, ...]) -> int:
-        return pa.argmax(self._forward(state))
+        return self._classify_output(self._forward(state))
+
+    def _classify_output(self, output: "pa.Array") -> int:
+        return pa.argmax(output)
 
     def _target_array(self, category: int) -> "pa.Array":
         target = pa.Array.zeros(self.class_count)
         target[category] = 1.0
         return target
 
-    def _target_batch_array(self, batch: Sequence[tuple[tuple[float, ...], int]], batch_size: int) -> "pa.Array":
-        target_batch = pa.Array.zeros((batch_size, self.class_count))
-        for row, (_state, category) in enumerate(batch):
+    def _target_batch_array(self, categories: Sequence[int]) -> "pa.Array":
+        target_batch = pa.Array.zeros((len(categories), self.class_count))
+        for row, category in enumerate(categories):
             target_batch[row, category] = 1.0
         return target_batch
 

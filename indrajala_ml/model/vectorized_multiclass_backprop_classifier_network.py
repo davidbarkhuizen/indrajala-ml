@@ -37,16 +37,19 @@ class VectorizedMultiClassBackpropClassifierNetwork(ArrayNetworkBase):
         return self._forward(state).tolist()
 
     def classify_state(self, state: tuple[float, ...]) -> int:
-        return int(np.argmax(self._forward(state)))
+        return self._classify_output(self._forward(state))
+
+    def _classify_output(self, output: np.ndarray) -> int:
+        return int(np.argmax(output))
 
     def _target_array(self, category: int) -> np.ndarray:
         target = np.zeros(self.class_count)
         target[category] = 1.0
         return target
 
-    def _target_batch_array(self, batch: Sequence[tuple[tuple[float, ...], int]], batch_size: int) -> np.ndarray:
-        target_batch = np.zeros((batch_size, self.class_count))
-        for row, (_state, category) in enumerate(batch):
+    def _target_batch_array(self, categories: Sequence[int]) -> np.ndarray:
+        target_batch = np.zeros((len(categories), self.class_count))
+        for row, category in enumerate(categories):
             target_batch[row, category] = 1.0
         return target_batch
 

@@ -6,6 +6,7 @@ import numpy as np
 
 from indrajala_ml.model.array_layer import ArrayLayer, fan_in_aware_random_layer
 from indrajala_ml.model.bounds import validate_batch, validate_layer_sizes
+from indrajala_ml.prepared_dataset import PreparedDataset
 
 
 class ArrayNetworkBase:
@@ -59,10 +60,25 @@ class ArrayNetworkBase:
         self.layers.append(self.output_layer)
 
     def _forward(self, state: tuple[float, ...]) -> np.ndarray:
-        x = np.array(state, dtype=np.float64)
+        return self._forward_input(np.array(state, dtype=np.float64))
+
+    def _forward_input(self, x: np.ndarray) -> np.ndarray:
         for layer in self.layers:
             x = layer.forward(x)
         return x
+
+    def classify_row(self, prepared: PreparedDataset, index: int):
+        # classify_state for row index of a prepared dataset; _classify_output is the shape
+        # class's argmax or 0.5 threshold, shared with classify_state
+        return self._classify_output(self._forward_input(self._prepared_states(prepared)[index]))
+
+    def prepare_dataset(self, rows: Sequence[tuple[tuple[float, ...], object]]) -> PreparedDataset:
+        return PreparedDataset.from_rows(rows, "numpy")
+
+    @staticmethod
+    def _prepared_states(prepared: PreparedDataset) -> np.ndarray:
+        assert prepared.backend == "numpy", f"a numpy network needs a numpy dataset; got {prepared.backend!r}"
+        return prepared.states
 
     def _set_training_mode(self, training: bool) -> None:
         # no-op for every sibling except dropout's own override - the array-level counterpart to
@@ -73,14 +89,25 @@ class ArrayNetworkBase:
     def _target_array(self, category) -> np.ndarray:
         raise NotImplementedError
 
-    def _target_batch_array(
-        self, batch: Sequence[tuple[tuple[float, ...], object]], batch_size: int
-    ) -> np.ndarray:
+    def _target_batch_array(self, categories: Sequence) -> np.ndarray:
         raise NotImplementedError
 
+    def _classify_output(self, output: np.ndarray):
+        raise NotImplementedError
+
+    # learn/learn_row and learn_batch/learn_batch_rows only differ in where the input array
+    # comes from (a converted tuple, or a prepared dataset's rows); the training step itself is
+    # _learn_input/_learn_batch_input, shared, so the two paths can't drift
+
     def learn(self, learning_rate: float, state: tuple[float, ...], category) -> None:
-        activations = [np.array(state, dtype=np.float64)]
-        x = activations[0]
+        self._learn_input(learning_rate, np.array(state, dtype=np.float64), category)
+
+    def learn_row(self, learning_rate: float, prepared: PreparedDataset, index: int) -> None:
+        # a row of a C-contiguous matrix is a view; no layer writes into its input
+        self._learn_input(learning_rate, self._prepared_states(prepared)[index], prepared.labels[index])
+
+    def _learn_input(self, learning_rate: float, x: np.ndarray, category) -> None:
+        activations = [x]
         self._set_training_mode(True)
         try:
             for layer in self.layers:
@@ -101,10 +128,18 @@ class ArrayNetworkBase:
 
     def learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], object]]) -> None:
         validate_batch(batch)
-        batch_size = len(batch)
+        X = np.array([state for state, _target in batch], dtype=np.float64)
+        self._learn_batch_input(learning_rate, X, [category for _state, category in batch])
 
-        activations = [np.array([state for state, _target in batch], dtype=np.float64)]
-        X = activations[0]
+    def learn_batch_rows(self, learning_rate: float, prepared: PreparedDataset, indices: Sequence[int]) -> None:
+        validate_batch(indices)
+        X = self._prepared_states(prepared)[list(indices)]
+        self._learn_batch_input(learning_rate, X, [prepared.labels[i] for i in indices])
+
+    def _learn_batch_input(self, learning_rate: float, X: np.ndarray, categories: Sequence) -> None:
+        batch_size = len(categories)
+
+        activations = [X]
         self._set_training_mode(True)
         try:
             for layer in self.layers:
@@ -113,7 +148,7 @@ class ArrayNetworkBase:
         finally:
             self._set_training_mode(False)
 
-        target_batch = self._target_batch_array(batch, batch_size)
+        target_batch = self._target_batch_array(categories)
         self.output_layer.compute_output_delta_batch(target_batch)
 
         for i in reversed(range(len(self.layers) - 1)):

@@ -33,13 +33,16 @@ class RustArrayBackpropClassifierNetwork(RustArrayNetworkBase):
         return self._forward(state).tolist()[0]
 
     def classify_state(self, state: tuple[float, ...]) -> float:
-        return 1.0 if self.predict_probability(state) > 0.5 else 0.0
+        return self._classify_output(self._forward(state))
+
+    def _classify_output(self, output: "pa.Array") -> float:
+        return 1.0 if output.tolist()[0] > 0.5 else 0.0
 
     def _target_array(self, category: float) -> "pa.Array":
         return pa.Array([category])
 
-    def _target_batch_array(self, batch: Sequence[tuple[tuple[float, ...], float]], batch_size: int) -> "pa.Array":
-        return pa.Array([[category] for _state, category in batch])
+    def _target_batch_array(self, categories: Sequence[float]) -> "pa.Array":
+        return pa.Array([[category] for category in categories])
 
     def restore(self, snapshot: list[tuple["pa.Array", "pa.Array"]]) -> None:
         # tolerates plain nested lists as well as pa.Array (wrapping via pa.Array(...) when
