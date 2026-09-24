@@ -368,6 +368,16 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    (0.90 of 1.24 s in Rust), so the prepared dataset also covers most of the stake of batching
    the accuracy pass (see "Other findings").
 
+   **Per-row cost, re-measured (2026-09-24).** A loop converting all 60000 training rows
+   (`to_array(list(state))`, median of 5 loops, one process per cell, two passes each) costs
+   15.3 µs a row in Rust and 29.5-32.1 µs in numpy, not the 49 and 55 µs quoted above. That
+   earlier figure is unexplained. It isn't the loader: with freshly boxed floats (the loader before
+   #365) the same loop costs 17.3 µs in Rust and 31.5-31.6 µs in numpy. #365's shared pixel
+   floats therefore make Rust conversion about 12% cheaper. Over the roughly 180000 row
+   conversions of a batch-32 Rust epoch (one batch pass, two accuracy passes) that is about
+   0.36 s of 3.8 s. **Rust dense-MNIST epoch times from before #365 are not directly comparable
+   with later ones.** numpy's change is within noise.
+
 8. **Threading past the threshold (deferred).** Only the batch-size-scaling study runs products above
    8M flops in training (the dense 30 x 784 products at B = 512 and 1024, 24-48M flops). The
    demos otherwise train at batch 32 or single-example. Even there, the Rust ops are 0.4 s of a
