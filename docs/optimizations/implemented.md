@@ -73,6 +73,12 @@ temporary removed is a real saving at these shapes:
   add's single rounding, bit-identical. At 32 x 5408, batch 32, one thread: 940-948 → 793-810 µs;
   30 x 784 unchanged within noise. In the conv mini-batch 32 epoch profile the op went 60-92 →
   55-79 ms, inside the block-to-block drift but in line with 100-150 µs on each of 63 calls.
+- **A blocked transpose** (crate #28): `.T` (the `delta_batch.T` copy feeding the dense
+  accumulate) copies in 8 x 8 blocks. The row-by-row loop wrote one output line per element at a
+  stride of `rows`; at batch 512 that stride is 4 KB, so every write fell in the same L1 set.
+  (512, 30): 89-93 → 14-15 µs (numpy's copy 8-11); batch 32 unchanged. The 30 x 784 accumulate
+  at batch 512 gains about the transpose (one thread, medians 1680 → 1596 µs); in the B = 512
+  step-loop profile the op went 0.170-0.182 → 0.148-0.170 s, about 0.5% of the step loop.
 - **A fused single-example SGD step**, `layer_sgd_step` (crate #6): the Rust layers' `sgd_step`
   updates weights in one call, with a Python fallback for momentum, Adam, L2 and conv. Per-layer
   step 463 → 64 µs; dense MNIST epoch -15%.

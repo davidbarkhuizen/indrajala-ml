@@ -9,15 +9,21 @@ what would reopen it, if anything. Crate branches named here are kept in `rust/`
 
 - **A transposed-left matmul for `accumulate_gradient_batch`** (crate branch `matmul-tn`), to
   skip copying `delta_batch.T`. Bit-identical, and within ±4% at every shape: the copy is batch
-  x `M`, small next to the product. Reopen only if the transpose itself becomes the cost; a
-  blocked transpose is the cheaper fix (see [Candidates](candidates.md)).
+  x `M`, small next to the product, and since the transpose is blocked (see
+  [Implemented](implemented.md#avoiding-copies-and-passes)) about 2% of the op at batch 512.
+- **`k`-blocking the dense `accumulate_gradient_batch` at long `k`** (batch 512 and up, where
+  `b`'s `k x 16` panel passes the L1). Failed its gate on the profile alone, with no probe: at B
+  = 512 the op is 0.15-0.17 s of a 1.8 s step loop (8-9%), so a threaded saving above 5% needs
+  it 2.4x faster, and on one thread the 30 x 784 product is already within 1.1-1.3x of
+  OpenBLAS's (1440-1690 against 1264 µs). Even a 2x kernel saves about 4%. Reopen only for a
+  use case that trains at large batch.
 - **Other conv formulations** (crate branch `conv-forward-formulations-proto`). `W @ colsT` had
   the fastest forward at small `O` but a costlier backward, and lost the training step to
   `matmul_narrow` in 17 of 24 configurations. A direct kernel with no `cols` paid only at large
   `O` and N, and can't serve training, which needs `cols`.
 - **`k`-blocking in `matmul_narrow` at small `cols`.** At 13x13x8, N = 32 (`cols` 0.3-2.2 MB) the
   old `k`-blocked `matmul_2d` gave nothing over `matmul_narrow` (+2%, +4%, -1%). It is only a
-  candidate where `cols` passes the L3 (see [Candidates](candidates.md#2-conv-accumulate-with-a-large-cols)).
+  candidate where `cols` passes the L3 (see [Candidates](candidates.md#1-conv-accumulate-with-a-large-cols)).
 - **Row-block sizes for `matmul_2d` other than 16 KB of `a`.** 1-row blocks were 2-3x slower at
   `k` in the hundreds (`b`'s panel is reloaded per row); one block for all rows was close to 16
   KB but no better.

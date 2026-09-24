@@ -49,12 +49,12 @@ last two columns put both on one thread:
 | 30 x 784 | `downstream_batch` | 32 | 45 | 65-67 | 1.5x | 72-79 | 70-77 |
 | 30 x 784 | `accumulate_gradient_batch` | 32 | 68-86 | 69 | 0.8-1.0x | 96-105 | 74-82 |
 | 30 x 784 | `downstream_batch` | 512 | 420-502 | 842-848 | 1.7-2.0x | 1332-1508 | 1199-1351 |
-| 30 x 784 | `accumulate_gradient_batch` | 512 | 756-759 | 866-877 | 1.1-1.2x | 1340-1383 | 1638-1788 |
+| 30 x 784 | `accumulate_gradient_batch` | 512 | 756-759 | 832-931 | 1.1-1.2x | 1340-1383 | 1506-1820 |
 | 30 x 784 | `forward_batch` | 512 | 750-1027 | 1038-1275 | 1.0-1.7x | 1271-1308 | 1217-1257 |
 
 Reading it: most of the default-threading gap at batch 32 is numpy's OpenBLAS threading; on one
 thread each, Rust is level or faster at batch 32 except 32 x 5408 accumulate (1.0-1.1x), and Rust's `forward_batch` is level or faster everywhere. The large one-thread gap left is
-accumulate at batch 512 (`k` = 512): 2.6-2.9x at 32 x 5408 and 1.2-1.3x at 30 x 784. The batch-512
+accumulate at batch 512 (`k` = 512): 2.6-2.9x at 32 x 5408 and 1.1-1.4x at 30 x 784. The batch-512
 Rust numbers are threaded and partly warm-clock numbers.
 
 Conv ops at 28x28, `ConvSpec(3, 8)`, one thread, against 32 or 512 single-example calls:
