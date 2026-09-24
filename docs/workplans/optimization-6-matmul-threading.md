@@ -195,7 +195,62 @@ Stages A-C below run in the order stage 0 justifies. Skip any stage stage 0 show
 
 ## Stage A: threshold and thread-count policy (smallest change)
 
-**Next, per the stage 0 decision above.** The goal is that the 32 x 5408, batch-32 calls (5.5M
+**Done (2026-09-24, crate PR #16).** The threshold goes from 4M to 8M flops. Above it the thread
+count is still `min(available_parallelism, 8, rows)`, all or nothing. The policy is now its own
+function, `matmul_thread_count`, and `matmul_threads_for(m, k, n)` exposes it to the tests.
+Bit-identical: the full suite passes with no pin changes.
+
+Choosing the threshold, before any crate change. `set_matmul_threading(8, T)` on the old build
+at T = 6M, 13M and 26M, and off. Medians of 5, same weights, settings rotated every run:
+
+| epoch | 4M | 6M | 13M | 26M | off |
+| --- | --- | --- | --- | --- | --- |
+| MNIST conv, mini-batch 32 | 0.820 | 0.777 | | | |
+| MNIST conv, mini-batch 512 | | 0.812 | 0.823 | 0.916 | 1.056 |
+| dense MNIST, batch 512 | | 5.736 | 5.718 | | 5.937 |
+
+At batch 512, threading pays for the 24.9M conv ops (13M → 26M, +11%) and the 88.6M dense
+tail (26M → off, +15%). Dense MNIST's 12M calls come out even (6M against 13M). 6M and 13M
+thread the same conv 512 calls, so their difference is noise. Every threshold from 5.5M up to
+12M gives the same demo calls. 8M is where the isolated ladder shows 8 threads clearly paying.
+
+Acceptance, old build (main) against new, one process per epoch, builds alternated with the
+order swapped every run, medians of 5 (seconds):
+
+| epoch | old | new |
+| --- | --- | --- |
+| MNIST conv, mini-batch 32 | 0.879 (0.875-0.886) | **0.770** (0.765-0.789), -12% |
+| MNIST conv, mini-batch 512 | 0.852 (0.838-0.863) | 0.867 (0.861-0.876) |
+| the same, rerun, 10 each | 0.882 (0.863-0.955) | 0.885 (0.855-0.930) |
+| dense MNIST, batch 512 | 5.980 (5.663-6.105) | 5.845 (5.482-6.034) |
+| dense MNIST, batch 32 | 4.604 (4.433-4.921) | 4.352 (4.341-4.447) |
+
+The new policy matches stage 0's threading-off time at batch 32 (0.752 then, 0.770 here).
+Conv 512 and both dense runs make the same threading decisions on both builds. So their
+differences are noise between builds: up to 5%, and 2% for conv 512 before its rerun came out
+equal.
+
+**The rows-per-thread floor, re-checked.** A local build with a 32-rows-per-thread floor on top
+of the new policy (branch `exp/threading-a-floor`, not pushed): conv 512 took 1.048 s
+(1.026-1.117) against 0.867, 21% slower. Dense 512 was 5.775 (5.619-5.857), within noise. The
+old comment's conclusion holds, and the comment now cites these numbers.
+
+**Per op, isolated (the focused benchmark, old against new, two processes each):** above 8M
+and below 4M every shape is within noise (the same calls). Between 4M and 8M, the products that
+are now unthreaded are slower in isolation: 32 x 5408 `forward_batch` at batch 32 739-913 µs
+against 650-743 (1.23x), and the ladder's `(244, 64) @ (64, 512)` (7.995M) 1531-1573 against
+1001-1225 (1.40x). The same product's `downstream_batch` and `accumulate_gradient_batch` got
+faster (0.84-0.85x). This is the cold-clock effect from stage 0: back-to-back isolated calls
+keep the cores warm, training doesn't. The end-to-end number is the acceptance number, so this
+is accepted and recorded.
+
+Tests: `test_policy_*` in the crate's `tests/test_linalg.py`. The 5.5M tail gets 1 thread.
+Dense 512, conv accumulate 512 and the 88.6M tail all get the same count, more than 1. The
+override and the row cap work. Thresholds of 5M and 30M each fail one of them.
+
+The original brief follows.
+
+The goal is that the 32 x 5408, batch-32 calls (5.5M
 flops) run on one thread, with no 2- or 4-thread counts. The acceptance number is end to end:
 one epoch of MNIST, one `ConvSpec(3, 8)`, dense 32, mini-batch 32, lr 0.5, the demo's
 2000-row subset. Build the network from a snapshot of `randomized(...)` taken after
