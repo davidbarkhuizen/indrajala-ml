@@ -365,6 +365,22 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    order), threading pooling or elementwise ops, and releasing the GIL (the trainers are
    single-threaded Python, so there is nothing to overlap with).
 
+10. **Leads from candidate 4, unranked (each needs a stage 0).**
+    - **Batched conv evaluation without `cols`.** Candidate 4's stage 2 found the batched
+      accuracy pass still loses in `conv_forward_batch` (15-25% more per example than single
+      calls in that pass), which still writes a whole-batch `cols` (1.56 MB at N = 32) that
+      evaluation never reads. `conv-infer-batch` (crate `ee432d0`) was closed on N = 1 evidence
+      only. The dense tail doesn't gain from batching either (see stage 2), so the stake is the
+      pooled and strided networks' 0.023-0.028 s per pass, and it is only worth having if it also
+      makes the pass a win there.
+    - **Other batch-sized zero-fills that are fully overwritten.** `matmul_narrow`'s output (conv
+      downstream's `dcols`, 1.56 MB at N = 32, and the accumulate's product), `deltas_by_position`
+      and `deltas_by_channel` (1.38 MB each at N = 32), `matmul_2d`'s output and
+      `max_pool_forward_batch`'s `a` and `argmax`. Conv downstream (1.2-1.3x its 32 single calls)
+      and accumulate (1.1-1.2x) may share candidate 4's cause. col2im's `dx` does need its zeros
+      (a scatter-add). Mind the finding under "Other findings" that the fill can be what brings
+      the lines into cache.
+
 ## Threading
 
 The only threading in the crate is `for_each_row_range` in `rust/src/linalg.rs`, used by the
@@ -469,6 +485,9 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   checkout first on `PYTHONPATH` (see its docstring for the namespace-package caveat); a
   `git worktree add` of `main` in a scratch directory makes that checkout. `--epochs N` trains
   each run for N epochs (one accuracy pass per epoch, plus one before), for a long run's share.
+  Read the other backend's cells as a control: a change to one backend can't move the other,
+  so when the control moves as much between builds (numpy -5.1% against Rust -5.6% in
+  candidate 4's A/B), the epoch numbers can't resolve the change; use `epoch_op_profile.py`.
 - **One accuracy pass, per row against batched:** `python scripts/accuracy_pass_timing.py time`
   (candidate 2's stage 0; `report runs.json` reprints a saved run). Dense full MNIST and the conv
   subset, both backends, one process per measurement, with the saving as a share of a one-epoch
@@ -513,7 +532,14 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   (with a reused buffer of the same size also live) faulted on every page: 5410 faults per
   call, about 10 ms (40%) at `(512, 32) @ (32, 5408)`. The same product through the Python
   op had 0.1 faults per call. So quote allocation and fault costs from the real op
-  (`focused_benchmark.py` reports faults per call), not from a probe loop.
+  (`focused_benchmark.py` reports faults per call), not from a probe loop. Candidate 4's
+  stage 0 probe showed it twice: freeing its buffers inside each repetition, it faulted 1024
+  times a call at N = 32 and its parts summed to 3.5 ms against the real op's 1.5; freeing them
+  in the real call path's order (the previous call's `A` and `cols` after the new ones exist)
+  it still faulted 195-490 times a call against the real op's 0-20, since glibc's mmap threshold
+  adapts to what the process freed before. Raising both glibc thresholds (`--malloc raised`
+  in `focused_benchmark.py`, or the env vars in a probe's process) removes the faults on both
+  sides, so compare a probe's parts with the real op there.
 - **Threading:** `set_matmul_threading(t, threshold)` forces a thread count and threshold in
   one process, so a sweep needs no rebuild. Accept a threading change on the end-to-end number
   only (see "Threading").
@@ -648,6 +674,17 @@ writes a whole-batch `cols` (1.56 MB at N = 32) that inference never reads, whil
 reuse the same small hot buffers. So the lead is a forward that skips `cols` in batched
 evaluation: `conv-infer-batch` was closed on N = 1 evidence (48 KB there), which doesn't cover
 N = 32. The override in `ConvRustArrayMultiClassBackpropClassifierNetwork.classify_rows` stays.
+
+Two more things the stage 2 runs showed:
+- **Batched evaluation doesn't gain in the dense tail either.** In the conv network's pass the
+  5408 -> 32 -> 10 tail took 43.7 ms batched (`layer_forward_batch`) against 40.2 ms per row
+  (`layer_forward`), cProfile's per-call overhead favouring the batched side. That matches the
+  per-op table above: Rust `forward_batch` at 32 x 5408, batch 32, is 470-659 µs, 15-21 µs a row,
+  no cheaper than a single-example forward. So a no-`cols` conv forward alone would leave the
+  pass near a tie for the one-conv network.
+- **Chunks of 512 are worse still in Rust**: batched 512 took 0.096 (conv), 0.232
+  (conv-pool-conv) and 0.262 s (conv-conv-stride2) against per-row 0.104, 0.163 and 0.141; numpy
+  at 512 also lost its gain on conv-conv-stride2 (0.425 against 0.384). 32 stays the chunk size.
 
 The candidate and its stage 0, as recorded when it was open:
 
@@ -1070,6 +1107,22 @@ Closed with no measured gain, kept as findings:
 
 ## Other findings from the same measurements
 
+- **Zero-filling a buffer can be what brings it into cache** (candidate 4's stage 0,
+  2026-09-24). Dropping the zero-fill of conv `forward_batch`'s buffers but keeping its loops
+  made the strided ReLU scatter slower, not the op faster in full: 456-475 against 266-324 µs at
+  N = 32, and 13-24 against 7.5 µs at N = 1, where the zeroed 43 KB `A` had been sitting in L1/L2.
+  The fill had been paying for the lines' first touch. Removing it paid only once `A` was written
+  in order (a gather from the product instead of a scatter into `A`). So when removing a
+  zero-fill, check that whatever writes the buffer first writes it sequentially.
+- **A bare product's benchmark can miss what the same product costs inside its op.** The conv
+  forward's product alone (`--matmul 21632x9x8`) scaled linearly at N = 32 (297-318 µs against 32
+  x 9.3), zeroed output and all, yet inside the op, after im2col had streamed 1.56 MB through the
+  cache, the same call with its zeroed output took 462-670 µs. Time an op's parts in place (a
+  probe build) before ruling one out on a bare benchmark.
+- **Timing clocks up between paired processes.** In one `--malloc both` pass the single-example
+  conv forward read 26-27 µs in the first process of a pair and 41-43 in the second, whichever
+  setting ran second, twice; later passes read 26-28 for both. Take a surprising gap between
+  two settings only after the order has been swapped.
 - **glibc heap trimming can fault a Rust batch op's buffers back in on every call** (found in
   candidate 2's stage 0, 2026-09-24; not yet a candidate). Chained Rust conv `forward_batch` calls
   over the 2000-row MNIST subset in chunks of 32 took 0.20 s with 27000 minor faults a pass;
