@@ -87,7 +87,12 @@ build_rust () {
 
 setup () {
 
-    install_os_packages
+    # --no-os-packages: CI passes this - neither apt package is used there (python3-tk installs
+    # into the system python, not setup-python's, and the runner image's rustup cargo precedes
+    # apt's on PATH), and skipping them saves ~17 s per job.
+    if [ "${1:-}" != "--no-os-packages" ]; then
+        install_os_packages
+    fi
     init_submodules
     create_venv
     activate_venv
@@ -125,7 +130,7 @@ demo () {
 }
 
 usage () {
-    echo "usage: invoke [ clean | setup | build-rust | fetch-data | test [pytest-path ...] | demo [demo-number] ]"
+    echo "usage: invoke [ clean | setup [--no-os-packages] | build-rust | fetch-data | test [pytest-path ...] | demo [demo-number] ]"
 }
 
 case "$option" in
@@ -135,7 +140,8 @@ case "$option" in
     ;;
 
     setup)
-        setup
+        shift
+        setup "$@"
     ;;
 
     build-rust)

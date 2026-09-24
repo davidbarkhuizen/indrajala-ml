@@ -22,8 +22,18 @@ jobs:
           submodules: recursive
 
       - uses: actions/setup-python@v5
+        id: setup-python
         with:
           python-version: "3.10"
+
+      # The whole venv, keyed on the exact interpreter and requirements.txt, so a hit leaves pip
+      # nothing to install. maturin (unpinned) stays at the cached version until the key changes;
+      # the indrajala_math_rust build inside the venv is always rebuilt by ./cli setup.
+      - name: Cache venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt') }}
 
       # Keyed on scripts/fetch_datasets.py's own content, which embeds both the pinned
       # indrajala-datasets-mnist tag and each file's expected SHA-256 - so bumping either one
@@ -36,7 +46,9 @@ jobs:
           key: mnist-${{ hashFiles('scripts/fetch_datasets.py') }}
 
       - name: Setup
-        run: ./cli setup
+        run: |
+          which -a cargo && cargo --version
+          ./cli setup --no-os-packages
 
       - name: Test
         run: ./cli test ${{ matrix.suite }}
