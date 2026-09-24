@@ -41,7 +41,7 @@ last two columns put both on one thread:
 | shape | op | batch | numpy | Rust | Rust/numpy | numpy, 1 thread | Rust, 1 thread |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 32 x 5408 | `downstream_batch` | 32 | 223-229 | 470-472 | 2.1x | 510-565 | 465-483 |
-| 32 x 5408 | `accumulate_gradient_batch` | 32 | 436-450 | 950-960 | 2.1-2.2x | 713-778 | 925-951 |
+| 32 x 5408 | `accumulate_gradient_batch` | 32 | 436-450 | 860-871 | 1.9-2.0x | 713-778 | 793-810 |
 | 32 x 5408 | `forward_batch` | 32 | 294-415 | 470-659 | 1.1-2.2x | 563-575 | 479 |
 | 32 x 5408 | `downstream_batch` | 512 | 11785-12838 | 10530-10877 | 0.8-0.9x | 11570-13657 | 13361-13654 |
 | 32 x 5408 | `accumulate_gradient_batch` | 512 | 12742-13818 | 6479-8509 | 0.5-0.7x | 9636-10499 | 27818-28065 |
@@ -53,8 +53,7 @@ last two columns put both on one thread:
 | 30 x 784 | `forward_batch` | 512 | 750-1027 | 1038-1275 | 1.0-1.7x | 1271-1308 | 1217-1257 |
 
 Reading it: most of the default-threading gap at batch 32 is numpy's OpenBLAS threading; on one
-thread each, Rust is level or faster at batch 32 except 32 x 5408 accumulate (1.2-1.3x, its extra
-pass), and Rust's `forward_batch` is level or faster everywhere. The large one-thread gap left is
+thread each, Rust is level or faster at batch 32 except 32 x 5408 accumulate (1.0-1.1x), and Rust's `forward_batch` is level or faster everywhere. The large one-thread gap left is
 accumulate at batch 512 (`k` = 512): 2.6-2.9x at 32 x 5408 and 1.2-1.3x at 30 x 784. The batch-512
 Rust numbers are threaded and partly warm-clock numbers.
 

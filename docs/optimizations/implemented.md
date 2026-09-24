@@ -67,6 +67,12 @@ temporary removed is a real saving at these shapes:
   `matmul_nt` for `X @ W.T` (crate #8, 330 → 58 µs at batch 1).
 - **One-pass dense `accumulate_gradient`**, adding `delta ⊗ x` into the gradient without an
   `outer` temporary (crate #5, 596 → 62 µs at 32 x 5408).
+- **Dense `accumulate_gradient_batch` adds `grad_W` in the product's store** (`matmul_add`,
+  crate #27): `tiled_row_range::<true>` stores `out + chain` into a copy of `grad_W`, so there is
+  no separate add pass or update array. Each chain still starts from 0.0, so it is the separate
+  add's single rounding, bit-identical. At 32 x 5408, batch 32, one thread: 940-948 → 793-810 µs;
+  30 x 784 unchanged within noise. In the conv mini-batch 32 epoch profile the op went 60-92 →
+  55-79 ms, inside the block-to-block drift but in line with 100-150 µs on each of 63 calls.
 - **A fused single-example SGD step**, `layer_sgd_step` (crate #6): the Rust layers' `sgd_step`
   updates weights in one call, with a Python fallback for momentum, Adam, L2 and conv. Per-layer
   step 463 → 64 µs; dense MNIST epoch -15%.

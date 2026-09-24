@@ -11,28 +11,7 @@ to [Rejected](rejected.md), with the reason in either case.
 
 ## Ranked
 
-### 1. Dense `accumulate_gradient_batch`: fuse the gradient add into the kernel store
-
-`accumulate_gradient_batch` at 32 x 5408, batch 32 builds the `(32, 32) @ (32, 5408)` product
-through `matmul_2d`, then `grad_w + update` as a second 1.4 MB pass (140-160 µs), and keeps four
-1.4 MB arrays live against a 4 MB L3 (a further 240 µs unattributed, probably that). On one thread
-it is the one batch-32 dense op still behind numpy (1.2-1.3x); `downstream_batch`, the same
-product without the add, is level or faster since the 2-row tiles (crate #26).
-
-**Stake:** the extra pass alone is about 9-10 ms (1.5%) of the conv mini-batch 32 epoch (63
-calls), more if the unattributed time goes with it; plus the 30 x 784 accumulate in dense MNIST
-mini-batch.
-
-**Fix:** a `matmul_2d_add` (or a `tiled_row_range` parameter) whose store writes `c + acc`. One
-output allocated, no `combine_with_array`. `g + u` with `u` the finished chain is the same single
-rounding, so bit-identical. Test: `==` against `grad_w + (delta.T @ X)` from separate crate calls,
-at `BIG_SHAPES` and `TILE_WIDTHS`, with `-0.0` and zeros in `grad_w`. Mutation that must fail:
-start the chain from `g`.
-
-**Acceptance:** the dense accumulate rows in the baseline, then the old-against-new epoch op
-profile; the full suite with no pin changes.
-
-### 2. Dense `accumulate_gradient_batch` at long `k`, and a blocked transpose
+### 1. Dense `accumulate_gradient_batch` at long `k`, and a blocked transpose
 
 At batch 512 (`k` = 512), on one thread, accumulate is 3.0-3.4x numpy at 32 x 5408 and 1.6-2.1x
 at 30 x 784. Likely cause: `b`'s `k x 16` panel (64 KB at `k` = 512) no longer fits the 32 KB L1,
@@ -51,7 +30,7 @@ numpy's one-thread time, so the saving is likely under 0.1 s an epoch. **Gate:**
 `k`-blocking probe must gain enough to leave a threaded saving above 5% of the step loop;
 re-profile first.
 
-### 3. Conv accumulate with a large `cols`
+### 2. Conv accumulate with a large `cols`
 
 `D @ cols` (`(O, N*P) @ (N*P, C*k*k)`) through `matmul_narrow`: at 28x28, `ConvSpec(3, 8)`, N = 512,
 one thread, 57-58 ms against 14-15 ms for 512 single calls. Each output row makes one pass over
