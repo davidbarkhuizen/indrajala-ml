@@ -5,19 +5,16 @@ the benchmark it is compared with. It started from the Rust CNN timing (#317-#32
 CNN stages), which found where Rust was slower than numpy or slower than it needed to be. Each
 item is measured before and after, and must keep every parity test passing.
 
-Two open items have a full workplan of their own: candidate 1,
-[`workplans/optimization-6-matmul-threading.md`](workplans/optimization-6-matmul-threading.md),
-and candidate 7,
+One open item has a workplan of its own: candidate 7,
 [`workplans/optimization-5-dataset-as-array.md`](workplans/optimization-5-dataset-as-array.md).
-Everything else is below.
+The threading workplan (optimization 6) is finished: stage A landed, the rest was deferred or
+skipped. Its findings are in "Threading" below, and what it left open is candidate 8.
 
 ## Where things stand (2026-09-24)
 
-Rust / numpy wall-clock ratio end to end (below 1 means Rust is faster). The conv rows are from
-`demo_conv_rust_vs_vectorized_digit_recognition` after indrajala-math-rust#16. Only the MNIST
-conv mini-batch cell changed with it (0.54 after #14). The other cells make no threaded calls,
-and their moves of 0.01-0.05 since #14 are run-to-run noise. After #17 every cell was within
-0.05 of these (MNIST mini-batch 0.47, 0.43, 0.48):
+Rust / numpy wall-clock ratio end to end (below 1 means Rust is faster), from
+`demo_conv_rust_vs_vectorized_digit_recognition` after indrajala-math-rust#16. After #17 every
+cell was within 0.05 of these (MNIST mini-batch 0.47, 0.43, 0.48), which is run-to-run noise:
 
 | architecture | UCI digits, single | UCI digits, mini-batch | MNIST subset, single | MNIST subset, mini-batch |
 | --- | --- | --- | --- | --- |
@@ -29,19 +26,14 @@ At the start, MNIST conv single-example was 1.21 (Rust slower) and conv-pool-con
 0.66. Dense MNIST 784 -> 30 -> 10, one 60000-example epoch: Rust/numpy about 0.33
 single-example and 0.49-0.53 mini-batch 32.
 
-Per op, the single-example ops are all at or better than numpy. The large gaps left are all in
-batch ops **past 4M flops, `matmul`'s threading threshold until #16** (8M since). Rust / numpy
-µs per call, two passes of the focused benchmark (see "How to measure"), after #14.
-
-Re-measured in stage 0b of the threading workplan, with numpy and Rust in separate processes.
-The earlier table measured them interleaved in one process, and numpy's OpenBLAS threads kept
-spinning and took cores from Rust (see "Other findings"). That made it read 12-13x, 7x, 4-8x
-and 4x on the first, second, fourth and fifth rows. Rust here uses the default threading.
+Per op, the single-example ops are all at or better than numpy. The gaps left are in batch
+ops. Rust / numpy µs per call, focused benchmark (see "How to measure"), numpy and Rust in
+separate processes, Rust with the default threading (threshold 8M flops since #16):
 
 | shape | op | batch | numpy | Rust | Rust/numpy |
 | --- | --- | --- | --- | --- | --- |
-| 32 x 5408 | `downstream_batch` | 32 | 232-246 | 729-834 | 3.0-3.6x |
-| 32 x 5408 | `accumulate_gradient_batch` | 32 | 411-453 | 1175-1498 | 2.6-3.6x |
+| 32 x 5408 | `downstream_batch` | 32 | 232-246 | 581-654 | 2.4-2.8x |
+| 32 x 5408 | `accumulate_gradient_batch` | 32 | 411-453 | 976-1180 | 2.2-2.9x |
 | 32 x 5408 | `forward_batch` | 512 | 3695-4110 | 4747-4898 | 1.2-1.3x |
 | 32 x 5408 | `forward_batch` | 32 | 294-415 | 470-659 | 1.1-2.2x |
 | 30 x 784 | `downstream_batch` | 512 | 416-945 | 1193-1401 | 1.3-3.4x |
@@ -50,36 +42,32 @@ and 4x on the first, second, fourth and fifth rows. Rust here uses the default t
 | 30 x 784 | `downstream_batch` | 32 | 46-50 | 73-85 | 1.5-1.8x |
 | 30 x 784 | `accumulate_gradient_batch` | 32 | 70-73 | 82-97 | 1.1-1.4x |
 
-The `forward_batch` rows other than 32 x 5408 at batch 512 are after #17 (candidate 2). At
-32 x 5408, batch 512 the threaded time moved between 4.6 and 9.8 ms from run to run on the
-old build in the same session, so that row keeps its earlier numbers. The batch-512 Rust
-numbers are partly warm-clock numbers (the default ran right after an
-8-thread run in the sweep; see the workplan's step 2). The first two rows (5.5M flops) run on
-one thread since #16. In isolation `downstream_batch` measured 581-654 µs after it, and
-`accumulate_gradient_batch` 976-1180 (the workplan's stage A).
+The first two rows (5.5M flops) run on one thread since #16; their Rust numbers are from then.
+The `forward_batch` rows are after #17, except 32 x 5408 at batch 512, whose threaded time moved
+between 4.6 and 9.8 ms from run to run in the same session, so it keeps its earlier numbers. The
+batch-512 Rust numbers are partly warm-clock numbers (see "Threading"). An earlier version of
+this table was measured with numpy and Rust interleaved in one process and read 12-13x, 7x,
+4-8x and 4x on the first, second, fourth and fifth rows; that was numpy's OpenBLAS threads
+taking cores from Rust (see "Other findings").
 
 ## Open candidates, in priority order
 
-1. **Threading in `for_each_row_range`**: stage A done (#16), the rest deferred. The threshold
-   is 8M flops, so the MNIST conv mini-batch 32's dense tail (5.5M) runs on one thread: that
-   epoch is 12% faster, and nothing else in the demos changed. What is left:
-   - **A persistent pool (stage B), deferred.** Spawning costs 180-200 µs per call at 8 threads,
-     and a spawned worker runs at an idle core's clock, 1.6-3.1x slower per row than the caller.
-     A pool might keep its cores warm, but in training its workers would still idle between
-     calls. It only pays at batch 512 and up, which no demo uses.
-   - **Between 4M and 8M, isolated calls are now slower** (up to 1.4x at `(244, 64) @ (64,
-     512)`), since back-to-back calls keep the cores warm and training doesn't. No production
-     call is in that range except the 5.5M tail, which gained end to end.
-
-   Workplan: [`workplans/optimization-6-matmul-threading.md`](workplans/optimization-6-matmul-threading.md).
+1. **Dense `downstream_batch` and `accumulate_gradient_batch` at 32 x 5408, batch 32**
+   (`matmul_2d`), the largest per-op ratios left: 2.4-2.8x and 2.2-2.9x numpy, unthreaded. Both
+   are `(32, 32) @ (32, 5408)` products, 5.5M flops with `k` only 32, so each 16-column tile
+   runs 32 FMAs per output before it is stored. They are in the MNIST conv mini-batch 32 dense
+   tail, the worst end-to-end cell: 62 calls of each per epoch. Closing both gaps to numpy
+   would save about 60 ms of that 0.75 s epoch (about 8%), an estimate from the per-op gaps.
+   The cause is unexamined. First step: profile the kernel at this shape (output write
+   traffic, 1.4 MB, against the tile loop) in a local probe build.
 
 2. **Dense `forward_batch` at large batches** (`matmul_nt`): register tiles done (#17), the
-   rest open. Re-measured in separate processes first. The recorded 5.6x at batch 64 was the
-   interleaving: batch 64 was 1.8x numpy (1161-1164 against 625-653 µs), and unthreaded Rust
-   was linear in the batch at about 2x numpy per row. So the cost was the kernel, as expected:
-   every row of `X` re-read all of `W` (1.4 MB at 32 x 5408, past L2). #17 runs 4 rows of `X`
-   against 2 rows of `W` at a time, bit-identical. Two focused passes, old and new in separate
-   processes, the second with the build order reversed (µs, unthreaded):
+   rest open. The recorded 5.6x at batch 64 was the interleaving: in separate processes batch
+   64 was 1.8x numpy (1161-1164 against 625-653 µs), and unthreaded Rust was linear in the batch
+   at about 2x numpy per row. So the cost was the kernel: every row of `X` re-read all of `W`
+   (1.4 MB at 32 x 5408, past L2). #17 runs 4 rows of `X` against 2 rows of `W` at a time,
+   bit-identical. Two focused passes, old and new in separate processes, the second with the
+   build order reversed (µs, unthreaded):
 
    | shape | batch | old | new |
    | --- | --- | --- | --- |
@@ -107,10 +95,10 @@ one thread since #16. In isolation `downstream_batch` measured 581-654 µs after
 
    All within noise, as the arithmetic predicts: MNIST conv mini-batch 32's 62 forward calls
    save about 12 ms of 0.75 s. What is left: 32 x 5408 is still 1.1-2.2x numpy at batch 32
-   (470-659 against 294-415 µs), because `W` still streams in from L3 once per 4 rows of `X`. Candidate:
-   block over `k` so that a panel of `W` stays in L2 across all rows of `X`, storing and
-   reloading each pair's 4-lane accumulator between panels. That keeps each output's
-   grouping, so it is bit-identical. Low value while no demo runs large batches.
+   (470-659 against 294-415 µs), because `W` still streams in from L3 once per 4 rows of `X`.
+   Candidate: block over `k` so that a panel of `W` stays in L2 across all rows of `X`,
+   storing and reloading each pair's 4-lane accumulator between panels. That keeps each
+   output's grouping, so it is bit-identical. Low value while no demo runs large batches.
 
 3. **Conv `forward_batch` at N = 32 costs more than 32 single-example calls.** Measured at 28x28
    (2280 vs 1715 µs, before the `matmul_narrow` kernel). The likely cause, unmeasured: the 1.5 MB
@@ -146,6 +134,82 @@ one thread since #16. In isolation `downstream_batch` measured 581-654 µs after
    trainer interface, so its workplan starts with a go/no-go measurement:
    [`workplans/optimization-5-dataset-as-array.md`](workplans/optimization-5-dataset-as-array.md).
 
+8. **Threading past the threshold (deferred).** No demo runs a product above 8M flops except at
+   batch 512, so none of these pays in a demo today. Revisit only for a large-batch use case:
+   - **A persistent pool.** Removes the 180-200 µs spawn cost at 8 threads. Workers that persist
+     might also keep their cores warm, but in training they would still idle between calls, so
+     the cold clock may remain unless they spin; that is untested. Design notes: rayon's global
+     pool with `out.par_chunks_mut(rows_per_thread * cols)` keeps the contiguous row blocks
+     (the crate's first dependency after pyo3; measure its build time and per-call overhead),
+     or a small hand-rolled pool (no dependency, but scoped borrows across persistent workers
+     need `unsafe` lifetime erasure or copying). Keep the split static and the pool lazily
+     initialized.
+   - **The caller computes the first block** and spawns one thread fewer. In isolation at 32 x
+     5408, batch 32 it took 443-584 µs at 4 threads against 729-779 for spawn-all, and 564-621
+     against 723-728 at 8. It is the cheapest threading change left, bit-identical, and untried
+     end to end.
+   - **Split by columns** when `b` is the larger operand, so each thread reads only its panel of
+     `b`: skipped. Nothing pointed at `b` traffic; a register-only probe (no memory traffic)
+     showed the same worker slowdown.
+
+   Out of scope for threading: splitting over `k` (a cross-thread reduction changes summation
+   order), threading pooling or elementwise ops, and releasing the GIL (the trainers are
+   single-threaded Python, so there is nothing to overlap with).
+
+## Threading
+
+The only threading in the crate is `for_each_row_range` in `rust/src/linalg.rs`, used by the
+three matmul kernels: `matmul_2d` (dense `downstream_batch`, `accumulate_gradient_batch`),
+`matmul_nt` (every dense `forward_batch`) and `matmul_narrow` (conv forward, downstream,
+accumulate). `matmul_thread_count` is the policy: below 8M flops one thread, otherwise
+`min(available_parallelism, 8, rows)`, all or nothing. Each thread gets a contiguous block of
+output rows under `std::thread::scope`, spawned on every call. `set_matmul_threading(max_threads,
+threshold_flops)` overrides both (`(0, 0)` restores the default) and `matmul_threads_for(m, k,
+n)` reports the policy's choice; both are for tests and benchmarks. The crate's
+`tests/test_linalg.py` checks every kernel at thread counts 1, 2, 3, 5 and 8 for `==` against
+the unthreaded result, and `test_policy_*` pins the policy at the production shapes.
+
+What the measurements found (crate #15, #16; a local probe build for the internals):
+
+- **Spawning costs** about 60-70 µs per call at 2 threads, 110-140 at 4 and 180-200 at 8
+  (an empty `compute`).
+- **A spawned worker runs 1.6-3.1x slower per row than the caller**, at every thread count, even
+  on register-only FMA work with no memory traffic. Per-core clocks during the runs: one core
+  at 3.8 GHz and the idle ones at 1.1-1.5 GHz with 1 thread, every core at 2.2-3.1 GHz with 8.
+  The reading, inferred rather than measured directly: `schedutil` doesn't raise the clock for
+  a thread spawned on every call, since it has no load history. This, not spawn cost, is the
+  main cost of threading a mid-sized product.
+- **First touch doesn't matter:** pre-touching the output or leaving it for the workers to write
+  first made no consistent difference.
+- **Break-even**, best of 2/4/8 threads against 1, isolated and repeated back to back:
+
+  | kernel (ladder shape) | 1M | 2M | 4M | 8M | 16M | 32M | 64M |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | `matmul_2d`, `(m, 64) @ (64, 512)` | 1.27 | 1.02 | 0.87 | 0.80 | 0.50 | 0.51 | 0.61 |
+  | `matmul_nt`, 30 x 784 `forward_batch` | 1.50 | 1.18 | 0.83 | 0.65 | 0.56 | 0.55 | 0.57 |
+  | `matmul_narrow`, conv 28x28 `forward_batch` | 1.25 | 1.11 | 1.15 | 1.07 | 1.01 | 0.90 | 0.77 |
+
+  2 threads never beat 1, except `matmul_2d` at 64M (0.68); 4 only marginally; 8 pays from
+  about 8M for `matmul_2d` and `matmul_nt`. Threading barely moves conv forward and downstream (the matmul is a small
+  part of those ops). Conv accumulate halves on 8 threads at N = 512 (58-60 → 30 ms). Large
+  products scale: `(32, 512) @ (512, 5408)` goes from 31-32 ms on 1 thread to 10-11 on 8.
+- **Isolated loops flatter threading.** Back-to-back calls keep every core clocked up; in
+  training the cores idle between calls, so each threaded call pays the cold clock. The 32 x
+  5408, batch 32 calls came out about even in isolation but made the MNIST conv mini-batch 32
+  epoch 11% slower (0.846 against 0.752 s, threading off), about 500 µs per call. **Threading
+  decisions are judged end to end.** Since #16, the products between 4M and 8M flops are
+  slower in isolation than before (up to 1.4x at `(244, 64) @ (64, 512)`) and faster in
+  training.
+- **Which demo calls are threaded.** Counted per call site over one epoch of each demo
+  configuration: at batch 32 or single-example, only MNIST `ConvSpec(3, 8)` mini-batch 32
+  ever crossed the old 4M threshold (its 32 x 5408 tail, 186 calls of 5.5M flops per epoch);
+  conv-pool-conv and conv-conv-stride2 have tails 968 and 1152 wide. Nothing is threaded in
+  any demo at batch 32 since #16. At batch 512 the conv ops (24.9M) and the 32 x 5408 tail
+  (88.6M) are threaded and pay (+11% and +15% when forced unthreaded); dense MNIST's 12M
+  calls come out even.
+- **Choosing 8M.** Every threshold from 5.5M to 12M threads the same demo calls; 8M is where
+  the ladder shows 8 threads clearly paying. A 32-rows-per-thread floor on top of it made the
+  conv mini-batch 512 epoch 21% slower (1.048 against 0.867 s), so there is none.
 ## How to measure
 
 - **Per op, quick survey:** `python -m indrajala_ml.demos.demo_layer_op_timing`. It times every
@@ -172,8 +236,14 @@ one thread since #16. In isolation `downstream_batch` measured 581-654 µs after
   unusable once. Treat changes under about 20% as noise unless both passes agree, and re-check a
   surprising result with the build order reversed. Idle cores drop to 1.1-1.5 GHz and a busy one
   boosts to 3.8 GHz (`schedutil`), so a single call after a pause measures slow. Time loops,
-  not single calls. `perf` can't be used without root (`perf_event_paranoid` is 4), so probes
+  not single calls. Clocks also carry over between settings: in a sweep, an 8-thread
+  setting run right after another one measured up to 2x faster at `(32, 512) @ (512, 5408)`
+  (5.3-5.8 against 9.9-10.1 ms), since cores take hundreds of ms of load to clock up. Rotate
+  the order of settings. `perf` can't be used without root (`perf_event_paranoid` is 4), so probes
   go in a local crate build instead (timers and counters behind a Python-callable switch).
+- **Threading:** `set_matmul_threading(t, threshold)` forces a thread count and threshold in
+  one process, so a sweep needs no rebuild. Accept a threading change on the end-to-end number
+  only (see "Threading").
 - **Never time pure Python.** It is for correctness and parity only.
 
 ## Rules for an optimization PR
@@ -215,7 +285,7 @@ doesn't depend on the machine. Each kernel has one fixed summation order:
   across all of `k`: `matmul_2d` in row blocks of about 16 KB of `a`, `matmul_narrow` one row at
   a time. Vector @ matrix goes through `axpy_row` with the same chain.
 - **Threading** splits output rows across threads, so each output is computed by one thread and
-  the thread count can't change any value.
+  the thread count can't change any value (see "Threading").
 - These orders differ from numpy's in the last few ULPs, so parity with numpy is checked with
   `rtol`. Crate tests pin each order exactly against a `Fraction`-emulated FMA reference.
 
@@ -235,7 +305,8 @@ Crate PR numbers are `indrajala-math-rust`'s. "Bit-identical" means every output
 | Conv downstream and accumulate via `matmul_narrow` | #12 | downstream 4-56% less, accumulate 16-43% less in 21 of 24 configurations; bit-identical |
 | `dot_products_into`: 8/4/2 rows at once in `dot_product`'s grouping | #13 | 30 x 784 forward 9.0 → 3.7 µs, batch 32 260 → 93 µs; bit-identical |
 | `matmul_2d` register-tiled, sharing `matmul_narrow`'s kernel | #14 | unthreaded dense batch downstream/accumulate 0.1-0.6x their old time; mini-batch dense MNIST epoch about -4%; bit-identical |
-| Threading threshold 4M → 8M flops (threading workplan, stage A) | #16 | MNIST conv mini-batch 32 epoch 0.879 → 0.770 s (-12%); batch 512 and dense MNIST unchanged; bit-identical |
+| `set_matmul_threading` override, and tests that the thread count can't change any kernel's bits | #15 | measurement and test infrastructure; no default behaviour changed |
+| Threading threshold 4M → 8M flops, policy in `matmul_thread_count` | #16 | MNIST conv mini-batch 32 epoch 0.879 → 0.770 s (-12%); batch 512 and dense MNIST unchanged; bit-identical |
 | `matmul_nt` in 4 x 2 register tiles (4 rows of `X` against 2 rows of `W`; 2 x 4, 3 x 3 and 2 x 2 measured slower or tied) | #17 | unthreaded dense `forward_batch` 0.6-0.9x its old time (32 x 5408, batch 32: 771-916 → 545-555 µs; 30 x 784, batch 32: 102-110 → 76-77); epochs within noise; bit-identical |
 
 Closed with no measured gain, kept as findings:
@@ -253,7 +324,7 @@ Closed with no measured gain, kept as findings:
 - **The threading guess.** The dense batch gaps were first blamed on `matmul_2d` threading
   just past its threshold. At batch 8 and 16 the same ops ran on one thread and were already
   3.5-9.4x numpy; the kernel was the main cause (#14). Threading is a real but separate cost
-  (candidate 1).
+  (see "Threading").
 - **Row blocks for `matmul_2d`.** 1-row blocks were 2-3x slower than 16 KB blocks where `K` is
   in the hundreds (`(32, 512) @ (512, 5408)`: 40-47 vs 15-16 ms). One block for all rows was
   close to 16 KB blocks but not better.
