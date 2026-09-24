@@ -915,9 +915,22 @@ Closed with no measured gain, kept as findings:
   heap) 0.14-0.15 s and 1000-1400 faults; with `MALLOC_TRIM_THRESHOLD_` and
   `MALLOC_MMAP_THRESHOLD_` at 1e9, 0.13-0.14 s and no faults either way. The likely mechanism is
   glibc returning the freed top of the heap (conv `cols` is 1.56 MB at N = 32) and faulting it
-  in again on the next allocation. Whether the training step loop pays the same is unmeasured;
-  if it does, conv mini-batch epochs are paying up to a third of their forward time in faults.
-  The fix would be in the crate (reused buffers) or the allocator's settings, not in Python.
+  in again on the next allocation. **Training pays it too, but only 3-6% of an epoch**
+  (2026-09-24): one Rust mini-batch 32 epoch over the same subset, whole trainer call, each
+  run in its own process, 5 runs each, default settings against both thresholds at 1e9:
+
+  | architecture | faults, default | faults, raised | median s, default | median s, raised |
+  |---|---|---|---|---|
+  | conv | 14860 | 6763 | 0.676 | 0.645 (-4.6%) |
+  | conv-pool-conv | 20732 | 7201-7466 | 0.969 | 0.918 (-5.3%) |
+  | conv-conv-stride2 | 27661 | 7863-7921 | 0.947 | 0.890 (-6.0%) |
+
+  Run ranges don't overlap at conv-pool-conv or conv-conv-stride2 and barely overlap at conv
+  (0.659-0.689 against 0.639-0.669). The saving is about 3-4 µs per fault avoided. Single-example
+  epochs aren't affected: 3200-4800 faults either way, and times within noise. So the
+  fix (reused buffers in the crate, or the allocator's settings) is worth at most about 6% of a
+  conv mini-batch epoch. Setting the thresholds is process-wide and would change numpy's
+  allocations as well.
 
 - **Single-example training is chaotically sensitive to rounding.** numpy and Rust networks
   trained from the same weights can end up classifying only 71-83% of test rows the same. numpy
