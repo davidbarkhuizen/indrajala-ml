@@ -4,6 +4,7 @@ from typing import Callable
 from indrajala_ml.evaluate import class_balanced_disagreement_rate, sample_class_balanced_states
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.prepared_dataset import PreparedDataset
 
 
 def random_alternating_training_data(
@@ -51,9 +52,29 @@ def reachable_reference_and_training_data(
     raise RuntimeError(f"no workable cardinality={cardinality} reference classifier found within these bounds")
 
 
+def _prepared_for(
+    student, training_data: list[tuple[tuple[float, ...], float]] | PreparedDataset
+) -> PreparedDataset | None:
+    # the array networks train from one backend matrix (candidate 1 in docs/optimizations.md),
+    # prepared here once per run unless the caller already built one; every other student (the
+    # pure-Python networks, the linear classifiers) keeps the tuple list
+    if isinstance(training_data, PreparedDataset):
+        assert hasattr(student, "learn_row"), f"{type(student).__name__} can't train from a PreparedDataset"
+        return training_data
+    if hasattr(student, "prepare_dataset"):
+        return student.prepare_dataset(training_data)
+    return None
+
+
 def _training_accuracy(
-    student: LinearClassifierNetwork, training_data: list[tuple[tuple[float, ...], float]]
+    student: LinearClassifierNetwork,
+    training_data: list[tuple[tuple[float, ...], float]],
+    prepared: PreparedDataset | None = None,
 ) -> float:
+    if prepared is not None:
+        labels = enumerate(prepared.labels)
+        correct = sum(1 for index, category in labels if student.classify_row(prepared, index) == category)
+        return correct / len(prepared)
     correct = sum(1 for state, category in training_data if student.classify_state(state) == category)
     return correct / len(training_data)
 
@@ -111,13 +132,17 @@ class ConvergenceSeries(list):
 
 def train_linear_classifier_network(
     student: LinearClassifierNetwork,
-    training_data: list[tuple[tuple[float, ...], float]],
+    training_data: list[tuple[tuple[float, ...], float]] | PreparedDataset,
     learning_rate: float | Callable[[int], float] = 0.25,
     epochs: int = 1,
     reference_classifier: LinearClassifierNetwork | None = None,
 ) -> ConvergenceSeries:
     """
     Trains student in place over training_data for the given number of epochs.
+
+    training_data is a list of (state, category) tuples, or a PreparedDataset for an array
+    network student. An array network trains from a PreparedDataset either way: one is prepared
+    from the tuples once per run when not passed in (see _prepared_for).
 
     learning_rate is either a plain float (every existing caller) or a schedule function from
     the current iteration index to a rate (e.g. lr_schedule.linear_warmup) - resolved once per
@@ -150,22 +175,31 @@ def train_linear_classifier_network(
     if reference_classifier:
         convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student)))
 
+    prepared = _prepared_for(student, training_data)
+
     best_snapshot = student.snapshot()
-    best_training_accuracy = _training_accuracy(student, training_data)
+    best_training_accuracy = _training_accuracy(student, training_data, prepared)
     best_epoch_index = -1  # -1: the untrained starting point was never beaten
     epoch_training_accuracies: list[float] = []
 
+    # an example is a row index on the prepared path and a (state, category) tuple otherwise
+    if prepared is not None:
+        examples = range(len(prepared))
+        learn_example = lambda lr, index: student.learn_row(lr, prepared, index)
+    else:
+        examples = training_data
+        learn_example = lambda lr, datum: student.learn(lr, *datum)
+
     for epoch_index in range(epochs):
-        for datum in training_data:
-            (reference_state, reference_category) = datum
+        for example in examples:
             current_lr = learning_rate(iterations) if callable(learning_rate) else learning_rate
-            student.learn(current_lr, reference_state, reference_category)
+            learn_example(current_lr, example)
             iterations += 1
 
             if reference_classifier:
                 convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student)))
 
-        training_accuracy = _training_accuracy(student, training_data)
+        training_accuracy = _training_accuracy(student, training_data, prepared)
         epoch_training_accuracies.append(training_accuracy)
         if training_accuracy > best_training_accuracy:
             best_training_accuracy = training_accuracy
@@ -189,7 +223,7 @@ def _chunk_into_batches(data: list, batch_size: int) -> list[list]:
 
 def train_backprop_network_mini_batch(
     student: BackpropClassifierNetwork,
-    training_data: list[tuple[tuple[float, ...], float]],
+    training_data: list[tuple[tuple[float, ...], float]] | PreparedDataset,
     batch_size: int,
     learning_rate: float | Callable[[int], float] = 0.25,
     epochs: int = 1,
@@ -217,6 +251,8 @@ def train_backprop_network_mini_batch(
     batch of an epoch is kept even when batch_size doesn't evenly divide len(training_data),
     per _chunk_into_batches above.
 
+    training_data takes a PreparedDataset too, as train_linear_classifier_network's does.
+
     Otherwise mirrors train_linear_classifier_network exactly: the same "keep the best epoch,
     not the latest" pocket snapshot (see that function's own docstring), and the same
     TrainingDiagnostic/ConvergenceSeries contract - "iterations" here counts batches (one
@@ -231,25 +267,36 @@ def train_backprop_network_mini_batch(
     if reference_classifier:
         convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student)))
 
+    prepared = _prepared_for(student, training_data)
+
     best_snapshot = student.snapshot()
-    best_training_accuracy = _training_accuracy(student, training_data)
+    best_training_accuracy = _training_accuracy(student, training_data, prepared)
     best_epoch_index = -1  # -1: the untrained starting point was never beaten
     epoch_training_accuracies: list[float] = []
 
+    # the prepared path shuffles row indices in place of the tuples: shuffle draws depend only
+    # on the list's length, so a seed gives the same permutation, and the same batches, either way
+    if prepared is not None:
+        examples = list(range(len(prepared)))
+        learn_batch = lambda lr, indices: student.learn_batch_rows(lr, prepared, indices)
+    else:
+        examples = training_data
+        learn_batch = student.learn_batch
+
     for epoch_index in range(epochs):
-        epoch_data = list(training_data)
+        epoch_data = list(examples)
         if reshuffle_each_epoch:
             shuffle(epoch_data)
 
         for batch in _chunk_into_batches(epoch_data, batch_size):
             current_lr = learning_rate(iterations) if callable(learning_rate) else learning_rate
-            student.learn_batch(current_lr, batch)
+            learn_batch(current_lr, batch)
             iterations += 1
 
             if reference_classifier:
                 convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student)))
 
-        training_accuracy = _training_accuracy(student, training_data)
+        training_accuracy = _training_accuracy(student, training_data, prepared)
         epoch_training_accuracies.append(training_accuracy)
         if training_accuracy > best_training_accuracy:
             best_training_accuracy = training_accuracy
