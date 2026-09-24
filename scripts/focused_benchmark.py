@@ -1,5 +1,5 @@
 """
-The focused per-op benchmark from docs/optimizations.md ("How to measure"), as a tool: every
+The focused per-op benchmark from docs/optimizations/method.md ("How to measure"), as a tool: every
 (case, backend) runs in its own Python process, so numpy's OpenBLAS threads can never spin
 while Rust is timed. In each process: one warm-up call, a calibration that sizes a loop to about
 `--target-ms`, then `--loops` timed loops. It reports the median microseconds per call (and the

@@ -1,7 +1,7 @@
 """
-The batch-size-scaling study's timing (#367; results in docs/optimizations.md, candidates 6 and
-7): dense 784 -> 30 -> 10 epoch timing on full MNIST by batch size, numpy against Rust, plus a
-Rust op profile.
+The batch-size-scaling study's timing (#367; results in docs/optimizations/candidates.md,
+candidates 6 and 7): dense 784 -> 30 -> 10 epoch timing on full MNIST by batch size, numpy
+against Rust, plus a Rust op profile.
 
     python scripts/batch_size_timing.py time [--repeats 5] [--batch-sizes 32 128 512 1024]
     python scripts/batch_size_timing.py profile [--batch-sizes 512 1024]

@@ -10,9 +10,10 @@ call count over the repeats, and the profiled total.
 This measures an op's share of an epoch directly. A change worth about 5% of an epoch can be
 lost in whole-epoch timing: candidate 4's epoch A/B read -5.6% for Rust while numpy's control
 moved -5.1% in the same runs, and this profile, builds alternated, separated them cleanly (see
-docs/optimizations.md). For an old/new crate comparison, run it once per build with `--label`
-and alternate the builds (old, new, new, old, ...), as "How to measure" describes; cProfile's
-overhead inflates the Python side, so compare ops across builds, not against timed epochs.
+docs/optimizations/history.md). For an old/new crate comparison, run it once per build with
+`--label` and alternate the builds (old, new, new, old, ...), as "How to measure"
+(docs/optimizations/method.md) describes; cProfile's overhead inflates the Python side, so
+compare ops across builds, not against timed epochs.
 """
 
 import argparse
