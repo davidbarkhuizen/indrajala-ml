@@ -78,7 +78,9 @@ every row cleanly.
 
 2. **Dense `forward_batch` at large batches** (`matmul_nt`). 32 x 5408 is 1.2x numpy at batch 32
    (682-971 µs) but 5.6x at batch 64 (3395 vs 608): 3.5-5x the time for twice the work, and
-   past the threading threshold. So it is likely candidate 1 first. Measure with threading off
+   past the threading threshold. So it is likely candidate 1 first. These numbers were measured
+   interleaved with numpy, which inflates Rust past the threshold (see "Other findings"), so
+   re-measure them in separate processes first. Measure with threading off
    before anything else. Once that is settled, the remaining cost is memory traffic: each row of
    `X` re-reads all of `W`. A register block of 2-4 rows of `X` against the same `W` rows would
    let each `W` load serve several outputs. Each output keeps `dot_product`'s grouping, so it
@@ -142,7 +144,10 @@ every row cleanly.
 - **This machine** (Ryzen 7 3700U laptop, 4 cores / 8 threads, 512 KB L2 per core, 4 MB L3)
   varies 20-30% between passes, sometimes more. A background IDE made a first measurement
   unusable once. Treat changes under about 20% as noise unless both passes agree, and re-check a
-  surprising result with the build order reversed.
+  surprising result with the build order reversed. Idle cores drop to 1.1-1.5 GHz and a busy one
+  boosts to 3.8 GHz (`schedutil`), so a single call after a pause measures slow. Time loops,
+  not single calls. `perf` can't be used without root (`perf_event_paranoid` is 4), so probes
+  go in a local crate build instead (timers and counters behind a Python-callable switch).
 - **Never time pure Python.** It is for correctness and parity only.
 
 ## Rules for an optimization PR
