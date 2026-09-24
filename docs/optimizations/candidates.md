@@ -11,14 +11,46 @@ to [Rejected](rejected.md), with the reason in either case.
 
 ## Ranked
 
-### 1. `max_pool_forward_batch`
+### 1. The max-pool ops: division-free forward, one-pass downstream
 
-The second- or third-largest Rust op in conv-pool-conv training: 10-11% of the profiled MNIST
-epoch in both trainers (0.095 s of 0.86 s single-example). Never examined, and never compared
-with numpy's. It does no arithmetic, so the likely costs are per-window index arithmetic and the
-separate `argmax` output, possibly also zero-filled batch buffers (see the leads). Removing it
-entirely would save 10-11%; how much is recoverable is unknown, which is why a larger but
-unmeasured stake ranks only just above the next one.
+`max_pool_forward_batch` and `max_pool_downstream_batch` are 17% of the profiled conv-pool-conv
+MNIST epoch in both trainers (forward 12% / 11%, downstream 5% / 6%). Both already beat numpy
+except batched downstream (1.9x); the gap is to their own floor (see
+[Current baseline](current-baseline.md#per-op)). Stage 0 (crate branch `probe/maxpool-stage0`,
+local only) measured probes bit-identical to the ops (`a`, `argmax` and `dx`, `-0.0` deltas
+included) at 26x26x8, PoolSpec(2), ReLU-like input:
+
+- **Forward.** The scan computes `slot / k`, `slot % k` and a full `input_index` for every slot,
+  with `k` known only at run time. Walking `(kr, kc)` over row slices instead: 16 → 9 µs single,
+  490 → 290 µs at batch 32. What is left is the loops with a run-time trip count, not branches (a
+  general select-based version is no faster): a fixed 2x2, stride-2 body reaches 3.7 µs and
+  102-112 µs. The floor (checks, both outputs allocated and returned) is 0.9 and 13 µs.
+- **Downstream.** It sweeps every window once per slot (`k * k` passes), plus a validation pass
+  over `argmax`. With non-overlapping windows (stride ≥ `k`) each input receives at most one
+  delta, so one pass in window order, adding each delta into the zeroed `dx`, gives the same
+  bits: 21-24 → 6.2-6.9 µs single, 1180-1290 → 190 or 470-530 µs at batch 32. The batch time is
+  bimodal between processes, under both allocator settings, so address-dependent (unexplained).
+
+**Stake** (profiled call counts times the per-call savings, the slower downstream mode): about
+106 ms (13%) of the single-example run and 120 ms (13%) of the mini-batch 32 run with the 2x2
+body; 9-10% with the general division-free kernel alone. The UCI 6x6 pool is already 1.5 µs a
+call.
+
+**Stage A: forward.** The division-free general kernel, plus the 2x2 stride-2 body as a fast
+path. The scan order and strict `>` are unchanged, so bit-identical. Tests in crate
+`tests/test_max_pool_ops.py`, against its brute-force reference with `==`: the fast path (2x2 at
+stride 2, odd and even sides), the general path (2x2 at stride 1, 3x3 at stride 2 and 3),
+ReLU-like input with all-zero windows and `-0.0` against `0.0` ties. Mutations that must fail:
+`>=` for `>`; the fast path's slots 1 and 2 swapped.
+
+**Stage B: downstream.** The one-pass loop when stride ≥ `k`, validation folded in; the
+slot-outer loop stays for overlapping windows. Settle the bimodal batch time first (a probe
+timing the pass against the zero-fill, at pinned buffer offsets). Tests: `==` including the sign
+of zero against the current op at stride = `k` and stride > `k`. Mutation that must fail: writing
+`d` in place of `0.0 + d` (a `-0.0` delta).
+
+**Acceptance:** the pool rows in the baseline, then `epoch_op_profile.py` old against new on
+conv-pool-conv; the full suite with no pin changes.
 
 ### 2. Dense batch products at short `k`: multi-row tiles, then a fused gradient add
 
@@ -114,7 +146,8 @@ lead that measures a stake worth having joins the ranking.
   architectures (`scripts/accuracy_pass_timing.py`).
 - **Batch-sized zero-fills that are fully overwritten.** `matmul_narrow`'s output (conv
   downstream's `dcols`, the accumulate's product), `deltas_by_position`, `deltas_by_channel`,
-  `matmul_2d`'s output and `max_pool_forward_batch`'s `a` and `argmax`. Conv downstream (1.2-1.3x
+  `matmul_2d`'s output and `max_pool_forward_batch`'s `a` and `argmax` (the call's floor with both
+  filled is 13 µs, against 102-112 µs for the 2x2 probe at batch 32). Conv downstream (1.2-1.3x
   its 32 single calls) and accumulate (1.1-1.2x) may share conv forward's former cause. col2im's
   `dx` needs its zeros (a scatter-add). Mind the first-touch gotcha. Stage 0: time each op's parts
   in place in a probe build.

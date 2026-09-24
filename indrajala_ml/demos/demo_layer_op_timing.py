@@ -9,6 +9,8 @@ import indrajala_math_rust as pa
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
+from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
+from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 CALLS = 300
@@ -31,10 +33,17 @@ CONV_SHAPES = [
 ]
 CONV_KERNEL_SIZE = 3
 CONV_CHANNELS = 8
+# (label, side): PoolSpec(2) on those conv layers' 8-channel outputs, as in conv-pool-conv
+POOL_SHAPES = [
+    ("pool 26x26, 8 ch", 26),
+    ("pool 6x6, 8 ch", 6),
+]
+POOL_SIZE = 2
 
 BACKENDS = ("numpy", "rust")
 DENSE_LAYERS = {"numpy": ArrayLayer, "rust": RustArrayLayer}
 CONV_LAYERS = {"numpy": ConvArrayLayer, "rust": ConvRustArrayLayer}
+POOL_LAYERS = {"numpy": MaxPoolArrayLayer, "rust": MaxPoolRustArrayLayer}
 
 
 @dataclass(frozen=True)
@@ -198,12 +207,55 @@ def conv_cases(label: str, side: int, batch_sizes) -> list[Case]:
     return cases
 
 
+def pool_cases(label: str, side: int, batch_sizes) -> list[Case]:
+    """
+    PoolSpec(2) on a side x side, 8-channel input: forward and downstream, single-example and
+    batched. The input is ReLU-like (about half exact zeros), as after a conv layer, so windows
+    tie as they do in training.
+    """
+
+    def build_layer(backend: str, batch: int):
+        rng = np.random.default_rng(SEED)
+        layer = POOL_LAYERS[backend](side, side, CONV_CHANNELS, POOL_SIZE)
+        X = np.maximum(rng.uniform(-1.0, 1.0, size=(batch, layer.input_size)), 0.0)
+        delta = rng.uniform(-0.1, 0.1, size=(batch, layer.size))
+        return layer, X, delta
+
+    def single(op: str) -> Callable[[str], Callable[[], object]]:
+        def build(backend: str) -> Callable[[], object]:
+            layer, X, delta = build_layer(backend, 1)
+            x = _backend_array(backend, X[0])
+            layer.forward(x)
+            layer.delta = _backend_array(backend, delta[0])
+            return (lambda: layer.forward(x)) if op == "forward" else layer.downstream
+
+        return build
+
+    def batched(op: str, batch: int) -> Callable[[str], Callable[[], object]]:
+        def build(backend: str) -> Callable[[], object]:
+            layer, X, delta = build_layer(backend, batch)
+            X = _backend_array(backend, X)
+            layer.forward_batch(X)
+            layer.delta_batch = _backend_array(backend, delta)
+            return (lambda: layer.forward_batch(X)) if op == "forward_batch" else layer.downstream_batch
+
+        return build
+
+    cases = [Case(label, op, None, single(op)) for op in ["forward", "downstream"]]
+    cases += [
+        Case(label, op, batch, batched(op, batch)) for op in ["forward_batch", "downstream_batch"] for batch in batch_sizes
+    ]
+    return cases
+
+
 def all_cases(batch_sizes=BATCH_SIZES) -> list[Case]:
     cases = []
     for label, size, input_size in DENSE_SHAPES:
         cases += dense_cases(label, size, input_size, batch_sizes)
     for label, side in CONV_SHAPES:
         cases += conv_cases(label, side, batch_sizes)
+    for label, side in POOL_SHAPES:
+        cases += pool_cases(label, side, batch_sizes)
     return cases
 
 

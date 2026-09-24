@@ -5,7 +5,7 @@ while Rust is timed. In each process: one warm-up call, a calibration that sizes
 `--target-ms`, then `--loops` timed loops. It reports the median microseconds per call (and the
 min-max over loops) and the minor page faults per call (`getrusage`, no root needed).
 
-Cases are demo_layer_op_timing's (every dense and conv layer op), plus:
+Cases are demo_layer_op_timing's (every dense, conv and max-pool layer op), plus:
 
 - per dense shape and batch, the parts of the two backward batch ops: `bare downstream`
   (`delta_batch @ W`), `bare accumulate` (`delta_batch.T @ X`), `transpose` (`delta_batch.T`),

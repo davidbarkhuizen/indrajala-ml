@@ -64,6 +64,11 @@ Conv ops at 28x28, `ConvSpec(3, 8)`, one thread, against 32 or 512 single-exampl
 downstream 1.2-1.3x and accumulate 1.1-1.2x their single calls at N = 32, accumulate 3.8-4.0x at
 N = 512.
 
+Max-pool ops, PoolSpec(2) on 26x26x8 (the conv-pool-conv MNIST layer), ReLU-like input, one
+thread each: forward 16 µs single against numpy's 95, 486-516 at batch 32 against 1570-1630;
+downstream 21-24 single against 48-50, but 1175-1290 at batch 32 against 617-735 (1.9x, and slower
+per example than its single calls). At 6x6x8 (UCI digits) every Rust pool op is 1.4-1.6 µs single.
+
 ## Where a Rust epoch spends its time
 
 cProfile of Rust time by op over one MNIST-subset epoch (2000 rows). Profiled before
@@ -76,8 +81,9 @@ current shares are in parentheses, the rest is not re-profiled
   `downstream_batch` 6.7%, `forward_batch` 6.3%.
 - **Conv, single-example** (0.80 s): `layer_sgd_step` 20%, `conv_forward_batch` 20%,
   `layer_forward` 19%, dense `downstream` (5-7% now), conv accumulate 7%.
-- **Conv-pool-conv**: `conv_forward_batch` 41-42% in both trainers, `max_pool_forward_batch`
-  10-11%.
+- **Conv-pool-conv** (0.80 s single-example, 0.90 s mini-batch 32, current build):
+  `conv_forward_batch` 42-43% / 41%, `max_pool_forward_batch` 12% / 11%,
+  `conv_accumulate_gradient_batch` 10% / 16%, `max_pool_downstream_batch` 5% / 6%.
 - **About a quarter of a one-epoch conv run is the accuracy passes**, not training: the trainers
   run n + 1 per-row passes for n epochs (Rust conv keeps the per-row pass). Stakes quoted as a
   share of an epoch are shares of this timed one-epoch run, which overstates the passes for
