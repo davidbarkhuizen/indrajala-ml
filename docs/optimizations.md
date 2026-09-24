@@ -6,10 +6,12 @@ CNN stages), which found where Rust was slower than numpy or slower than it need
 item is measured before and after, and must keep every parity test passing.
 
 This document is the only record of optimization work: there are no separate optimization workplans. Each open item, with its plan
-where it has one, is a candidate below. Three workplans have been folded in: threading
+where it has one, is a candidate below. Four workplans have been folded in: threading
 (optimization 6, finished; its findings are in "Threading", and what it left open is candidate
 8), dense batch ops at short `k` (optimization 7; stage 0 done, stages A and B planned in
-candidate 1) and the dataset as one backend array (optimization 5, not started; candidate 7).
+candidate 1), the dataset as one backend array (optimization 5, not started; candidate 7) and
+the batch-size-scaling study (#365-#368, finished; its timing stage measured candidates 6 and 7
+and the trainer's accuracy passes on full MNIST).
 
 ## Where things stand (2026-09-24)
 
@@ -285,8 +287,8 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    µs). 2-row tiles recover only 7-31% there. The likely cause is `b`'s `k x 16` panel (64 KB at
    `k` = 512) no longer fitting the 32 KB L1. At 32 x 5408 default threading hides it (6.8-11.7 ms
    against numpy's 12.9-13.5); at 30 x 784 it doesn't (997-1336 against 714-776 µs). It matters
-   only at batch 512, which no demo runs ([batch-size-scaling-workplan.md](batch-size-scaling-workplan.md)
-   plans one, and its stage 3 decides whether this candidate is worth doing). Candidate: block over `k`, or pack `b`'s
+   only at batch 512 and up, which only `demo_batch_size_scaling` and the batch-size-scaling
+   study train at (dense, B up to 1024). Candidate: block over `k`, or pack `b`'s
    panel, storing and reloading the tile's accumulators between `k` blocks so each output keeps
    its chain. Candidate 4 needs the same change in the same function (`matmul_narrow` also runs
    `tiled_row_range`), so one `k`-blocked `tiled_row_range` may serve both.
@@ -298,11 +300,20 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    matmul; at 30 x 784, batch 512 that no longer holds. A blocked transpose is a copy, so
    trivially bit-identical, and cheaper to try than another kernel.
 
-   **Measured end to end (batch-size-scaling stage 3, 2026-09-24).** Dense 784 -> 30 -> 10, one
-   full-MNIST epoch, `scripts/batch_size_timing.py profile`: `layer_accumulate_gradient_batch`
-   is 0.223 s (236 calls, 0.94 ms each) of a 2.12 s Rust step loop at B = 512, which is 10.7% of the
-   profiled loop, and 0.251 s (118 calls, 2.13 ms each) of 2.06 s at B = 1024, 12.9%. That
-   passes the workplan's promotion bar (about 5% of the step loop). But the same op is already
+   **Measured end to end (batch-size-scaling study, #367, 2026-09-24).** Dense 784 -> 30 -> 10,
+   one full-MNIST epoch, `scripts/batch_size_timing.py profile` (cProfile own time over one Rust
+   step loop, plain SGD; seconds, share of the profiled loop):
+
+   | B | step loop, unprofiled | Rust ops | `accumulate_gradient_batch` | `forward_batch` | the other three ops |
+   | --- | --- | --- | --- | --- | --- |
+   | 32 | 1.59 | 0.37 | 0.178 (3750 calls, 11.5%) | 0.161 (10.4%) | 0.028 (1.8%) |
+   | 512 | 2.12 | 0.38 | 0.223 (236 calls, 0.94 ms each, 10.7%) | 0.147 (7.1%) | 0.011 (0.5%) |
+   | 1024 | 2.06 | 0.40 | 0.251 (118 calls, 2.13 ms each, 12.9%) | 0.141 (7.3%) | 0.009 (0.5%) |
+
+   The other three are `apply_accumulated_gradient`, `hidden_delta_batch` and `output_delta`.
+   The Rust ops are about 0.4 s of every epoch whatever the batch; the rest of the step loop is
+   Python and batch conversion (candidate 7). At B = 512 and 1024 accumulate passes the
+   promotion bar fixed before measuring (about 5% of the step loop). But the same op is already
    0.178 s, 11.5%, at B = 32 (3750 calls). Long `k` adds only 0.05-0.07 s per epoch on top of
    the short-`k` cost. At numpy's single-threaded speed (1.6-2.1x faster at 30 x 784) the
    saving would be about 0.1 s, about 5% of the step loop and 2% of the trainer's 4.85 s epoch.
@@ -340,7 +351,7 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    new class can't be missed. Out of scope: changing the `load_*` functions, and anything the
    trainers compute.
 
-   **Stage 0's go/no-go is met (batch-size-scaling stage 3, 2026-09-24).** Dense 784 -> 30 ->
+   **Stage 0's go/no-go is met (batch-size-scaling study, #367, 2026-09-24).** Dense 784 -> 30 ->
    10, one full-MNIST epoch of `train_backprop_network_mini_batch`, median of 5, one process per
    measurement, `scripts/batch_size_timing.py time`. Seconds per epoch:
 
@@ -368,6 +379,11 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    (0.90 of 1.24 s in Rust), so the prepared dataset also covers most of the stake of batching
    the accuracy pass (see "Other findings").
 
+   Batch conversion also grows with the batch size (Rust 0.91 s at B = 32, 1.24-1.26 s at 512
+   and 1024), though the rows converted per epoch don't change. That is most of why the Rust
+   step loop gets slower at larger batches at the same flops per epoch: `demo_batch_size_scaling`
+   prints 1.42 s per epoch at B = 32 and 2.02 s at 1024.
+
    **Per-row cost, re-measured (2026-09-24).** A loop converting all 60000 training rows
    (`to_array(list(state))`, median of 5 loops, one process per cell, two passes each) costs
    15.3 µs a row in Rust and 29.5-32.1 µs in numpy, not the 49 and 55 µs quoted above. That
@@ -378,8 +394,8 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    0.36 s of 3.8 s. **Rust dense-MNIST epoch times from before #365 are not directly comparable
    with later ones.** numpy's change is within noise.
 
-8. **Threading past the threshold (deferred).** Only the batch-size-scaling study runs products above
-   8M flops in training (the dense 30 x 784 products at B = 512 and 1024, 24-48M flops). The
+8. **Threading past the threshold (deferred).** Only the batch-size-scaling study and its demo
+   run products above 8M flops in training (the dense 30 x 784 products at B = 512 and 1024, 24-48M flops). The
    demos otherwise train at batch 32 or single-example. Even there, the Rust ops are 0.4 s of a
    2 s step loop, so threading changes would not pay much. Revisit only for a large-batch use case:
    - **A persistent pool.** Removes the 180-200 µs spawn cost at 8 threads. Workers that persist
@@ -498,9 +514,11 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   configuration: at batch 32 or single-example, only MNIST `ConvSpec(3, 8)` mini-batch 32 ever
   crossed the old 4M threshold (its 32 x 5408 tail, 186 calls of 5.5M flops per epoch);
   conv-pool-conv and conv-conv-stride2 have tails 968 and 1152 wide. Nothing is threaded in any
-  demo at batch 32 since #16. In the batch-512 epochs of "How to measure" (no demo trains at
-  batch 512), the conv ops (24.9M) and the 32 x 5408 tail (88.6M) are threaded and pay (+11% and
-  +15% when forced unthreaded); dense MNIST's 12M calls come out even.
+  demo at batch 32 since #16. The only demo that trains larger batches is
+  `demo_batch_size_scaling` (dense, B = 128 to 1024), whose 30 x 784 products are threaded from
+  B = 512 (12M flops). In the batch-512 epochs of "How to measure", the conv ops (24.9M) and the
+  32 x 5408 tail (88.6M) are threaded and pay (+11% and +15% when forced unthreaded); dense
+  MNIST's 12M calls come out even.
 - **Choosing 8M.** A product is threaded at or above the threshold, so every threshold above
   5.54M (the tail at batch 32, 5,537,792) and up to 12.04M (dense MNIST at batch 512, 12,042,240)
   threads the same calls in these epochs; 8M is where the ladder shows 8 threads clearly paying.
@@ -531,6 +549,12 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   op; `rust_op_breakdown` in the demo gives it for any architecture and trainer). For a dense op
   change, also one epoch of dense MNIST 784 -> 30 -> 10 from identical weights, single-example
   and mini-batch 32, median of 3.
+- **Dense full-MNIST epochs, broken down:** `python scripts/batch_size_timing.py time` and
+  `... profile` (see its docstring). It times the trainer epoch, the step loop, one accuracy pass
+  and the batch and row conversions separately, one process per (backend, batch size, repeat),
+  with the order rotated each repeat. **Don't judge a training-path change on trainer epoch time
+  alone.** The two accuracy passes are a fixed 52-73% of a full-MNIST epoch (see "Other
+  findings"). They hide changes to the step loop, and their share changes with the batch size.
 - **End to end, old against new build** (for a kernel change, before the demo): one epoch of
   MNIST, one `ConvSpec(3, 8)`, dense 32, mini-batch 32, lr 0.5, the demo's 2000-row subset, from
   a snapshot of `randomized(...)` after `np.random.seed(0)`, with `random.seed(0)` before each
@@ -675,7 +699,7 @@ Closed with no measured gain, kept as findings:
 - **On dense full MNIST the trainer's accuracy passes are over half the epoch.** In
   `train_backprop_network_mini_batch` the two per-epoch `_training_accuracy` passes (60000
   single-example `classify_state` calls each) take 52-67% of a Rust epoch and 62-73% of a numpy
-  one, at B = 32 to 1024 (batch-size-scaling stage 3; the table is in candidate 7). The share
+  one, at B = 32 to 1024 (batch-size-scaling study, #367; the table is in candidate 7). The share
   is largest at B = 32. About 70% of each pass is converting the row to an array, so candidate
   7 removes most of it. What is left, per-row call overhead, could be removed by a batched
   accuracy pass: `forward_batch` over chunks of rows instead of one `classify_state` per row.
@@ -683,3 +707,8 @@ Closed with no measured gain, kept as findings:
   after candidate 7, is unmeasured.
 - **Dense epochs, Rust / numpy end to end by batch size** (same run, medians of 5): 0.46 at
   B = 32 and 128, 0.52 at 512 and 0.48 at 1024. The step loop alone: 0.62, 0.50, 0.65, 0.60.
+- **Loading full MNIST shares one float per pixel value** (#365). `load_mnist_dataset` reuses
+  256 float objects instead of boxing 47 million. That took a training-set load from 1.9 GB to
+  0.45 GB and from 5.1 s to 2.4 s, with identical values. Without it, 4 sweep workers don't fit
+  in this machine's 5 GB. It also makes Rust row conversion about 12% cheaper (candidate 7), so
+  Rust dense-MNIST epoch times from before #365 aren't directly comparable with later ones.

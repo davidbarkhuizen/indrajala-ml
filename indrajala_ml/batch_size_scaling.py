@@ -1,6 +1,30 @@
 """
-The pieces shared by the batch-size-scaling study (docs/batch-size-scaling-workplan.md): its
-sweep script, its timing script and its demo.
+The pieces shared by the batch-size-scaling study (#365-#368): its sweep script
+(scripts/batch_size_scaling_sweep.py), its timing script (scripts/batch_size_timing.py) and its
+demo (demo_batch_size_scaling).
+
+The question: does the linear learning-rate scaling rule (Goyal et al. 2017: multiply the rate
+by the factor the batch grows, with warmup) hold for the dense 784 -> 30 -> 10 network on full
+MNIST from batch 32 to 1024? Findings, 5 epochs, 5 seeds, Rust (the full tables are in the
+study's workplan, deleted after it finished: git show 5ee017f:docs/batch-size-scaling-workplan.md):
+
+- Best batch-32 rates: 4 at momentum 0.0 (95.44% +- 0.44%), 0.25 at momentum 0.9
+  (95.13% +- 0.35%). Both sit near the stability edge (16 diverges at 0.0; 4 at 0.9). The demos'
+  0.5 without momentum reaches only 93.61%.
+- Without warmup the scaled rate diverges from batch 128 up, at both momenta.
+- With warmup (linear_warmup, set in epochs and converted to steps) the rule holds to B = 128 at
+  momentum 0.0 and to B = 512 at momentum 0.9, with a 1-epoch warmup only (95.09% +- 0.09%, 16x
+  fewer steps). Past that it fails: at momentum 0.0, rates 64 and 128 stay at chance whatever the
+  warmup. The likely cause, untested: a curvature ceiling on the stable rate, which a larger
+  batch cannot raise.
+- The unscaled control falls further behind as B grows, but where the scaled rate diverges it is
+  the better choice by up to 80 points.
+- Momentum 0.9 holds the rule to a 4x larger batch than 0.0, but its effective rate
+  (0.25 / (1 - 0.9) = 2.5) is lower than 4, so momentum and rate are confounded.
+- Warmup costs nothing at batch 32. Momentum 0.9 at the unscaled rate is unstable in early
+  epochs at larger batches, which a 1-epoch warmup removes. This is unexplained.
+
+The timing findings are in docs/optimizations.md (candidates 6 and 7, "Other findings").
 
 The study runs its own epoch loop rather than train_backprop_network_mini_batch. The loop is the
 trainer's (reshuffle every epoch, chunk into batches, one learn_batch per batch, the schedule

@@ -1,8 +1,9 @@
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.mnist_data import load_mnist_dataset
 
-# a reduced stage 2 of docs/batch-size-scaling-workplan.md: momentum 0.9, whose batch-32 rate
-# stage 1 picked, with the 1-epoch warmup under which the rule held furthest there
+# a reduced version of the batch-size-scaling study's sweep (indrajala_ml/batch_size_scaling.py):
+# momentum 0.9, whose batch-32 rate the baseline sweep picked, with the 1-epoch warmup under which
+# the rule held furthest there
 BATCH_SIZES = [32, 128, 512, 1024]
 BASE_RATE = 0.25
 MOMENTUM = 0.9

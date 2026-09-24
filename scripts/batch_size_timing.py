@@ -1,6 +1,7 @@
 """
-Stage 3 of docs/batch-size-scaling-workplan.md: dense 784 -> 30 -> 10 epoch timing on full MNIST
-by batch size, numpy against Rust, plus a Rust op profile.
+The batch-size-scaling study's timing (#367; results in docs/optimizations.md, candidates 6 and
+7): dense 784 -> 30 -> 10 epoch timing on full MNIST by batch size, numpy against Rust, plus a
+Rust op profile.
 
     python scripts/batch_size_timing.py time [--repeats 5] [--batch-sizes 32 128 512 1024]
     python scripts/batch_size_timing.py profile [--batch-sizes 512 1024]
@@ -18,7 +19,7 @@ rotating the order each repeat, and reports medians. Each process starts from th
 - row conversion: turning every training row into a backend array, as each classify_state of the
   accuracy pass does.
 
-The rate is plain SGD at the scaled lr_32 = 4 with a one-epoch warmup, a stable stage 2 setting;
+The rate is plain SGD at the scaled lr_32 = 4 with a one-epoch warmup, a setting stable in the scaling sweep;
 the rate doesn't change the work per step. numpy runs with its default OpenBLAS threading.
 
 `profile` is the dense counterpart of the conv demo's rust_op_breakdown: cProfile over one Rust

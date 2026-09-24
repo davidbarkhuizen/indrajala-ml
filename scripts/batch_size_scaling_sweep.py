@@ -1,5 +1,6 @@
 """
-The accuracy sweeps of docs/batch-size-scaling-workplan.md, on full MNIST with the Rust backend.
+The accuracy sweeps of the batch-size-scaling study (findings in indrajala_ml/batch_size_scaling.py),
+on full MNIST with the Rust backend.
 
     python scripts/batch_size_scaling_sweep.py baseline --out baseline.json
     python scripts/batch_size_scaling_sweep.py scaling --lr32 0.0=3.0 --lr32 0.9=0.5 --out scaling.json
