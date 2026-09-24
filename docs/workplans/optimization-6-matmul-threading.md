@@ -28,8 +28,9 @@ What `../optimizations.md` measured, with threading forced on for the tiled kern
 - Large products still scale: `(32, 512) @ (512, 5408)` goes from 32 ms on 1 thread to 6-7 ms
   on 8. 30 x 784 at batch 512 goes from 1.3-1.7 ms to 0.8 ms on 4 threads, and no better on 8.
 
-**Open question: the 550 vs 3000 µs gap.** Spawning 8 threads is not 2400 µs. Stage 0 has to
-explain this gap before any fix is chosen. Possible causes, none measured:
+**Open question: the 550 vs 3000 µs gap. Answered in stage 0b step 1:** the 3000 µs came from
+the harness (numpy's OpenBLAS threads still spinning), and the causes below were each measured
+there. Kept as first written:
 
 - The two numbers came from different harnesses: a Rust-level microbenchmark and the Python
   per-op harness.
