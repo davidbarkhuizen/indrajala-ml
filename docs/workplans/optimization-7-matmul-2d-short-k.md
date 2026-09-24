@@ -55,6 +55,10 @@ mini-batch gains too.
 
 ## Stage 0: decompose the time (a local probe build, no crate PR)
 
+**Done 2026-09-24.** The numbers and the decision are in `../optimizations.md` candidate 1. Run
+A, then B; C is skipped (0 faults per call, zeroing 4-5%). Most of the per-op gap to numpy is
+OpenBLAS threading: on one thread each, the batch-32 ops are level.
+
 All with the focused benchmark (loops of about 20 ms, median of 9, two passes), numpy and Rust
 in separate processes, on current `main`. Use a scratch script, not a demo. At 32 x 5408 and 30
 x 784, batch 32 and 512:
@@ -81,8 +85,10 @@ stage that stage 0 shows can't save at least about 10% of the op.
 
 ## Stage A: multi-row register tiles in `tiled_row_range`
 
-Hold a tile of R rows x 16 columns (4R accumulators) across all of `k`, R chosen from stage 0
-(expected 2 or 3; 16 YMM registers bound it at 3 with the `b` loads and the broadcasts). Rows
+Hold a tile of R rows x 16 columns (4R accumulators) across all of `k`. Stage 0 measured R = 2
+faster than 3 at every shape except `k` = 128, where 3 won (-35% against -25%), so try R = 2,
+and R chosen by `k` only if the op table shows it matters. The probe's kernel
+(`probe_tiled_avx2_fma`, crate branch `probe/opt7-stage0`, local) is a starting point. Rows
 left over (`rows % R`) run the current 1-row tile. The 4-wide and scalar column tails keep their
 loops, with rows blocked the same way only if stage 0 shows it matters.
 
@@ -111,7 +117,7 @@ skips `combine_with_array`. Keep `sum_axis0` for `grad_b` as it is.
   covers). There is no such exact test today, only an `rtol` one. Mutation: start the chain from
   `g` (a different rounding); the test must fail.
 
-## Stage C: allocation (only if stage 0 finds page faults cost materially)
+## Stage C: allocation (skipped: stage 0 measured 0 faults per call and zeroing at 4-5%)
 
 Options, in order of preference; the stage 0 numbers decide:
 
@@ -151,5 +157,7 @@ Options, in order of preference; the stage 0 numbers decide:
 - Threading these products. They run on one thread since #16 for measured reasons (see
   "Threading" in `../optimizations.md`).
 - Changing any summation order. Every stage here keeps each output's FMA chain and rounding.
-- Blocking over `k`: at `k` = 32 the `b` panel per tile is 4 KB and already stays in L1.
+- Blocking over `k`: at `k` = 32 the `b` panel per tile is 4 KB and already stays in L1. At
+  `k` = 512 (accumulate at batch 512) it doesn't. Stage 0 found that gap and recorded it in
+  candidate 1 as a separate candidate.
 - `matmul_nt` (every `forward_batch`), which is candidate 2.
