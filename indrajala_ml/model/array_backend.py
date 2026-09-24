@@ -45,6 +45,18 @@ class NumpyBackend:
         # a copy the caller can't alias, from an array or nested lists (a loaded file)
         return np.array(values, dtype=np.float64).copy()
 
+    @staticmethod
+    def zeros(shape) -> np.ndarray:
+        return np.zeros(shape)
+
+    @staticmethod
+    def argmax(vector: np.ndarray) -> int:
+        return int(np.argmax(vector))
+
+    @staticmethod
+    def argmax_rows(matrix: np.ndarray) -> list[int]:
+        return np.argmax(matrix, axis=1).tolist()
+
 
 class RustBackend:
     """NumpyBackend's operations on indrajala_math_rust arrays."""
@@ -77,6 +89,20 @@ class RustBackend:
         # nested lists let a snapshot cross a multiprocessing.Pool worker boundary as plain,
         # picklable lists (ensemble_train._picklable_snapshot)
         return values.copy() if isinstance(values, pa.Array) else pa.Array(values)
+
+    @staticmethod
+    def zeros(shape) -> "pa.Array":
+        return pa.Array.zeros(shape)
+
+    @staticmethod
+    def argmax(vector: "pa.Array") -> int:
+        return pa.argmax(vector)
+
+    @staticmethod
+    def argmax_rows(matrix: "pa.Array") -> list[int]:
+        # pa.argmax takes a vector only. max keeps the first of equal maxima (it replaces only on
+        # a strict >, as pa.argmax does) and index finds that one
+        return [row.index(max(row)) for row in matrix.tolist()]
 
 
 NUMPY = NumpyBackend()
