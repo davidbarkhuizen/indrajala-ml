@@ -1,6 +1,6 @@
 # Workplan: batch-size scaling on full MNIST
 
-**Status: stages 1-3 done (2026-09-24); stage 4 next.** Results are in [Results](#results) at the end.
+**Status: stages 1-4 done (2026-09-24). Stage 5 (conv) is optional and not started.** Results are in [Results](#results) at the end.
 
 A demo and a measured study: does the linear learning-rate scaling rule (Goyal et al. 2017:
 multiply the rate by the factor the batch grows, with warmup) hold for this codebase's dense
@@ -392,3 +392,27 @@ step loop):
 The pitfall this workplan warned about was real: the epoch time barely moves with the batch
 size (Rust 3.78-4.85 s), because the fixed accuracy passes and the per-row conversion make up
 most of it.
+
+### Stage 4: the demo
+
+`indrajala_ml/demos/demo_batch_size_scaling.py` (in the demo menu as "Batch-size scaling (linear
+LR rule)"): the reduced stage 2 as planned, momentum 0.9, `lr_32` = 0.25, with no warmup and a
+1-epoch warmup, 3 seeds, 3 epochs, runs in series so the step-loop time is clean. It takes 2.4
+minutes. One run:
+
+```
+    B   rate  warmup  steps  mean acc     min     max step s/epoch
+   32   0.25       0   5625    94.53%  94.10%  95.12%        1.42
+   32   0.25    1875   5625    94.62%  94.55%  94.74%        1.44
+  128      1       0   1407    16.49%  11.35%  19.57%        1.57
+  128      1     469   1407    94.61%  94.29%  94.80%        1.58
+  512      4       0    354    10.42%   9.82%  11.35%        1.88
+  512      4     118    354    94.28%  94.07%  94.50%        1.90
+ 1024      8       0    177    10.42%   9.82%  11.35%        2.02
+ 1024      8      59    177    87.73%  84.80%  93.52%        2.04
+```
+
+It reproduces stage 2 at 3 epochs: without warmup the scaled rate diverges from B = 128 up, and
+with warmup it holds to B = 512 and slips at 1024. The step-loop time rises with the batch size
+(1.42 to 2.04 s per epoch), although the batch size doesn't change the number of Rust flops per
+epoch. Batch conversion grows with it (candidate 7 in optimizations.md).

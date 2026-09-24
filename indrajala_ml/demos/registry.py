@@ -290,6 +290,20 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
+        module="indrajala_ml.demos.demo_batch_size_scaling",
+        title="Batch-size scaling (linear LR rule)",
+        summary="Headless - does scaling the learning rate with the batch hold from batch 32 to 1024 on full MNIST?",
+        description=(
+            "Headless, console-only. Trains the dense 784 -> 30 -> 10 Rust network on full MNIST at batch "
+            "sizes 32, 128, 512 and 1024, with the learning rate scaled linearly with the batch (Goyal et al. "
+            "2017) from the batch-32 rate, momentum 0.9, with and without a one-epoch linear warmup. Three "
+            "seeds, three epochs each. Reports final test accuracy (mean, min, max over seeds) and the "
+            "median step-loop seconds per epoch. A reduced version of the batch-size-scaling study: without "
+            "warmup the scaled rate diverges from batch 128 up; with warmup it holds to about batch 512. "
+            "Takes a few minutes."
+        ),
+    ),
+    DemoInfo(
         module="indrajala_ml.demos.demo_backprop_variant_comparison",
         title="Backprop variant comparison",
         summary="Reproduces this repo's documented model/loss/init comparisons, runnably, side by side.",
