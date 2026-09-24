@@ -142,8 +142,11 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    neither a confirmed cause nor a design, so it ranks after it. It ranks above candidate 6,
    whose stages are planned and measured but worth only 2.5-4%, and fixing it is what would let
    conv networks gain from candidate 2. The likely cause, unmeasured: `cols` (48 KB at N = 1, 1.56 MB at N = 32,
-   25 MB at N = 512) falls out of L2 between im2col and the matmul. Time the op's parts (im2col,
-   the matmul, the ReLU scatter) first. Candidate: im2col and multiply one block of output
+   25 MB at N = 512) falls out of L2 between im2col and the matmul. A second, found in candidate
+   2's stage 0: glibc heap trimming, which faulted 27000 pages a pass into chained conv
+   `forward_batch` calls at N = 32 and cost them about a third of their time (see "Other
+   findings"). Check the faults per call first (`focused_benchmark.py` reports them), then time
+   the op's parts (im2col, the matmul, the ReLU scatter). Candidate: im2col and multiply one block of output
    positions at a time, keeping `cols` for the backward pass.
 
 5. **`max_pool_forward_batch`** is the second- or third-largest Rust conv op: in profiled MNIST
@@ -478,7 +481,9 @@ What the measurements found (crate #15, #16; a local probe build for the interna
 - **A training-path change, before and after:** `python scripts/prepared_dataset_timing.py time`
   times one trainer epoch (dense full MNIST and the conv demo's subset, single-example and B =
   32, both backends), one process per measurement. Run it once as is and once with the old
-  checkout first on `PYTHONPATH` (see its docstring for the namespace-package caveat).
+  checkout first on `PYTHONPATH` (see its docstring for the namespace-package caveat); a
+  `git worktree add` of `main` in a scratch directory makes that checkout. `--epochs N` trains
+  each run for N epochs (one accuracy pass per epoch, plus one before), for a long run's share.
 - **One accuracy pass, per row against batched:** `python scripts/accuracy_pass_timing.py time`
   (candidate 2's stage 0; `report runs.json` reprints a saved run). Dense full MNIST and the conv
   subset, both backends, one process per measurement, with the saving as a share of a one-epoch
@@ -487,8 +492,11 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   `... profile` (see its docstring). It times the trainer epoch, the step loop, one accuracy pass
   and the batch and row conversions separately, one process per (backend, batch size, repeat),
   with the order rotated each repeat. **Don't judge a training-path change on trainer epoch time
-  alone.** The two accuracy passes are a fixed 52-73% of a full-MNIST epoch (see "Other
-  findings"). They hide changes to the step loop, and their share changes with the batch size.
+  alone.** The two accuracy passes were 52-73% of a full-MNIST epoch before candidates 1 and 2
+  (see "Other findings"); after candidate 2 a batched pass is 0.21 s in Rust and 0.18 s in numpy,
+  still enough to blur a step-loop change. Its "accuracy pass" column still times the tuple path
+  (`_training_accuracy` without a prepared dataset: `classify_state` and a row conversion each),
+  which the trainers no longer use for array networks, so it overstates their pass.
 - **End to end, old against new build** (for a kernel change, before the demo): one epoch of
   MNIST, one `ConvSpec(3, 8)`, dense 32, mini-batch 32, lr 0.5, the demo's 2000-row subset, from
   a snapshot of `randomized(...)` after `np.random.seed(0)`, with `random.seed(0)` before each
