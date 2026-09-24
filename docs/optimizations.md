@@ -109,7 +109,8 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    "The dataset as one backend array" under "Completed". The entry stays here so the
    numbers below keep their meaning.
 
-2. **A batched accuracy pass** (promoted from "Other findings", 2026-09-24; not started).
+2. **A batched accuracy pass** (promoted from "Other findings", 2026-09-24; **stage 0 done, go**;
+   next: the implementation).
    `_training_accuracy` (`train.py`) calls `classify_state` once per training row, n + 1 times
    over the training set for n epochs. Candidate 1 (done) removed the row conversion
    (`classify_row` on the prepared matrix). What is left of one Rust pass on dense full MNIST
@@ -130,6 +131,48 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    - **Stage 0:** time one accuracy pass per row against batched (chunks of 32 and 512), dense
      full MNIST and MNIST conv, both backends, from pre-converted inputs. Proceed only if it
      saves at least about 10% of an epoch after candidate 1.
+
+   **Stage 0 done (2026-09-24): go for dense on both backends and numpy conv, no-go for Rust
+   conv.** `python scripts/accuracy_pass_timing.py time` (one process per network, backend and
+   repeat, median of 5; each measure the median of 3 runs in its process; seed-0 weights,
+   `prepared_mnist` inputs). Seconds for one pass:
+
+   | network | backend | per row | batched 32 | batched 512 | epoch B = 32 | epoch single |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | dense, 60000 rows | numpy | 1.50 (1.44-1.73) | 0.18 (0.17-0.19) | 0.14 (0.13-0.16) | 3.70 | 11.83 |
+   | dense, 60000 rows | Rust | 0.37 (0.36-0.46) | 0.21 (0.21-0.23) | 0.29 (0.29-0.32) | 1.18 | 1.92 |
+   | conv, 2000 rows | numpy | 0.27 (0.26-0.30) | 0.17 (0.16-0.18) | 0.20 (0.20-0.21) | 1.27 | 3.68 |
+   | conv, 2000 rows | Rust | 0.11 (0.10-0.11) | 0.13 (0.13-0.14) | 0.18 (0.18-0.19) | 0.60 | 0.74 |
+
+   The saving at chunk 32 as a share of an epoch (the epochs are the trainers given the prepared
+   dataset, so they include two passes). A one-epoch run has two passes; a long run about one
+   per epoch, so its share is one pass's saving over an epoch less one pass:
+
+   | network | backend | saved per pass | one-epoch, B = 32 | one-epoch, single | long run, B = 32 | long run, single |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | dense | numpy | 1.33 | 72% | 22% | 60% | 13% |
+   | dense | Rust | 0.16 | 27% | 16% | 19% | 10% |
+   | conv | numpy | 0.11 | 17% | 6% | 11% | 3% |
+   | conv | Rust | -0.03 | -9% | -7% | -5% | -4% |
+
+   - **Chunk 32, not 512.** Rust at 512 is slower than at 32 (0.29 against 0.21 s; 512 x 784 x 30
+     crosses the 8M-flop threading threshold, unexamined); numpy gains a little at 512 (0.14
+     against 0.18) but 32 takes 97% of its saving, so one chunk size serves both.
+   - **The per-row Rust pass is 0.37 s**, near the 0.34 s estimated from candidate 1's table.
+   - **Rust's argmax is 15% of its batched pass** (0.03 of 0.21 s): the crate's `argmax` takes a
+     vector, so the probe converts the output with `tolist` and takes each row's argmax in Python.
+     A row-wise crate argmax would save about 2.5% of a one-epoch B = 32 run, under the bar.
+   - **Rust conv is slower batched**, as caveat 1 predicted, so it keeps the per-row pass until
+     candidate 4 is fixed. Its forward-only pass (0.19 s) was even slower than forward plus argmax
+     (0.13 s), in every process: see the allocator finding under "Other findings".
+   - **Predictions:** no batched prediction differed from the per-row one, in any cell (60000
+     dense rows, 2000 conv rows, both chunk sizes). But **numpy's batched outputs are not
+     bit-identical to its per-row ones**: `X @ W.T` against `W @ x` differs by 1 ULP (max abs
+     2.2e-16) in 8273 of 50000 dense outputs and 2863 of 20000 conv outputs. So a numpy argmax
+     can flip where two outputs are within an ULP (or a binary output within an ULP of 0.5),
+     which could move the pocket-best epoch. Decided (2026-09-24): batch numpy anyway, tested for
+     equal predictions, not claimed bit-identical; the suite's pinned results must hold. Rust
+     dense rows are exact ("Kernel invariants").
 
 3. **Dense single-example `downstream` at 32 x 5408 is 1.5-1.6x numpy.** First seen in the
    interleaved per-op harness (50 vs 33 µs); in separate processes (focused benchmark, two
@@ -495,6 +538,10 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   times one trainer epoch (dense full MNIST and the conv demo's subset, single-example and B =
   32, both backends), one process per measurement. Run it once as is and once with the old
   checkout first on `PYTHONPATH` (see its docstring for the namespace-package caveat).
+- **One accuracy pass, per row against batched:** `python scripts/accuracy_pass_timing.py time`
+  (candidate 2's stage 0; `report runs.json` reprints a saved run). Dense full MNIST and the conv
+  subset, both backends, one process per measurement, with the saving as a share of a one-epoch
+  and a long run and a count of rows whose batched prediction differs.
 - **Dense full-MNIST epochs, broken down:** `python scripts/batch_size_timing.py time` and
   `... profile` (see its docstring). It times the trainer epoch, the step loop, one accuracy pass
   and the batch and row conversions separately, one process per (backend, batch size, repeat),
@@ -800,6 +847,17 @@ Closed with no measured gain, kept as findings:
   threaded, and the comparison holds only between the two settings.
 
 ## Other findings from the same measurements
+
+- **glibc heap trimming can fault a Rust batch op's buffers back in on every call** (found in
+  candidate 2's stage 0, 2026-09-24; not yet a candidate). Chained Rust conv `forward_batch` calls
+  over the 2000-row MNIST subset in chunks of 32 took 0.20 s with 27000 minor faults a pass;
+  with a `tolist` of each chunk's output between them (the Python objects pin the top of the
+  heap) 0.14-0.15 s and 1000-1400 faults; with `MALLOC_TRIM_THRESHOLD_` and
+  `MALLOC_MMAP_THRESHOLD_` at 1e9, 0.13-0.14 s and no faults either way. The likely mechanism is
+  glibc returning the freed top of the heap (conv `cols` is 1.56 MB at N = 32) and faulting it
+  in again on the next allocation. Whether the training step loop pays the same is unmeasured;
+  if it does, conv mini-batch epochs are paying up to a third of their forward time in faults.
+  The fix would be in the crate (reused buffers) or the allocator's settings, not in Python.
 
 - **Single-example training is chaotically sensitive to rounding.** numpy and Rust networks
   trained from the same weights can end up classifying only 71-83% of test rows the same. numpy
