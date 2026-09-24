@@ -1,6 +1,6 @@
 # Workplan: batch-size scaling on full MNIST
 
-**Status: stage 1 done (2026-09-24); stage 2 next.** Results are in [Results](#results) at the end.
+**Status: stages 1 and 2 done (2026-09-24); stage 3 next.** Results are in [Results](#results) at the end.
 
 A demo and a measured study: does the linear learning-rate scaling rule (Goyal et al. 2017:
 multiply the rate by the factor the batch grows, with warmup) hold for this codebase's dense
@@ -226,3 +226,110 @@ to 2.4 s), with identical values. Without it, 4 sweep workers don't fit in this 
   degraded. It didn't affect the choice, which takes the best mean among stable rates.
 - At momentum 0.9 and rate 0.25, epoch 1 has one slow seed (sd 3.90%). It has recovered by
   epoch 2.
+
+### Stage 2: the scaling sweep
+
+`python scripts/batch_size_scaling_sweep.py scaling --lr32 0.0=4 --lr32 0.9=0.25`: every cell
+from the plan, 5 epochs, seeds 0-4, Rust. At B = 32 the scaled and unscaled rates are the same,
+so that cell ran once. That makes 210 runs, which took 16 minutes on 4 workers. The band is the
+batch-32, no-warmup seeds' final accuracy, from lowest to highest. "In band" means the cell's
+final mean lies inside it, and "above" would mean over the top of it (no cell was).
+
+**momentum 0.0, `lr_32` = 4** (band 94.70% to 95.88%)
+
+| B | rate | value | warmup epochs (steps) | total steps | epoch 1 | epoch 2 | epoch 3 | epoch 4 | epoch 5 | in band |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 32 | scaled | 4 | 0 (0) | 9375 | 93.64% ± 0.32% | 94.64% ± 0.34% | 94.93% ± 0.12% | 95.32% ± 0.13% | 95.44% ± 0.44% | yes |
+| 32 | scaled | 4 | 0.25 (469) | 9375 | 93.35% ± 0.26% | 94.47% ± 0.27% | 95.13% ± 0.23% | 95.36% ± 0.18% | 95.40% ± 0.12% | yes |
+| 32 | scaled | 4 | 1 (1875) | 9375 | 92.35% ± 0.32% | 94.10% ± 0.37% | 94.91% ± 0.18% | 95.40% ± 0.11% | 95.41% ± 0.19% | yes |
+| 128 | scaled | 16 | 0 (0) | 2345 | 10.20% ± 0.68% | 11.29% ± 1.28% | 16.39% ± 7.72% | 23.35% ± 14.82% | 24.28% ± 16.13% | no |
+| 128 | unscaled | 4 | 0 (0) | 2345 | 91.56% ± 0.21% | 92.94% ± 0.16% | 93.72% ± 0.15% | 94.37% ± 0.16% | 94.52% ± 0.25% | no |
+| 128 | scaled | 16 | 0.25 (118) | 2345 | 92.98% ± 0.52% | 94.21% ± 0.41% | 94.87% ± 0.14% | 95.02% ± 0.14% | 95.39% ± 0.15% | yes |
+| 128 | unscaled | 4 | 0.25 (118) | 2345 | 91.28% ± 0.16% | 92.89% ± 0.20% | 93.68% ± 0.19% | 94.30% ± 0.20% | 94.51% ± 0.21% | no |
+| 128 | scaled | 16 | 1 (469) | 2345 | 91.52% ± 1.25% | 93.76% ± 0.33% | 94.64% ± 0.20% | 95.11% ± 0.17% | 95.28% ± 0.31% | yes |
+| 128 | unscaled | 4 | 1 (469) | 2345 | 89.72% ± 0.32% | 92.44% ± 0.25% | 93.48% ± 0.20% | 94.16% ± 0.27% | 94.41% ± 0.30% | no |
+| 512 | scaled | 64 | 0 (0) | 590 | 11.47% ± 2.49% | 11.47% ± 2.49% | 11.47% ± 2.49% | 11.47% ± 2.49% | 11.47% ± 2.49% | no |
+| 512 | unscaled | 4 | 0 (0) | 590 | 84.28% ± 1.70% | 89.74% ± 0.34% | 91.16% ± 0.21% | 91.75% ± 0.14% | 92.14% ± 0.30% | no |
+| 512 | scaled | 64 | 0.25 (30) | 590 | 10.06% ± 0.19% | 9.92% ± 0.24% | 10.19% ± 1.27% | 11.99% ± 3.52% | 11.90% ± 3.58% | no |
+| 512 | unscaled | 4 | 0.25 (30) | 590 | 83.29% ± 2.47% | 89.66% ± 0.49% | 91.18% ± 0.21% | 91.80% ± 0.19% | 92.17% ± 0.33% | no |
+| 512 | scaled | 64 | 1 (118) | 590 | 11.35% ± 2.14% | 11.48% ± 3.20% | 9.79% ± 1.00% | 11.92% ± 4.97% | 11.91% ± 4.96% | no |
+| 512 | unscaled | 4 | 1 (118) | 590 | 69.48% ± 3.11% | 88.83% ± 0.69% | 90.85% ± 0.25% | 91.54% ± 0.23% | 92.02% ± 0.35% | no |
+| 1024 | scaled | 128 | 0 (0) | 295 | 10.33% ± 0.60% | 10.33% ± 0.60% | 10.33% ± 0.60% | 10.33% ± 0.60% | 10.33% ± 0.60% | no |
+| 1024 | unscaled | 4 | 0 (0) | 295 | 66.62% ± 5.49% | 86.15% ± 0.54% | 89.16% ± 0.15% | 90.18% ± 0.07% | 90.78% ± 0.09% | no |
+| 1024 | scaled | 128 | 0.25 (15) | 295 | 10.19% ± 0.25% | 10.19% ± 0.25% | 9.54% ± 0.61% | 9.71% ± 0.50% | 9.65% ± 0.43% | no |
+| 1024 | unscaled | 4 | 0.25 (15) | 295 | 68.33% ± 4.09% | 86.42% ± 0.51% | 89.25% ± 0.30% | 90.16% ± 0.08% | 90.77% ± 0.14% | no |
+| 1024 | scaled | 128 | 1 (59) | 295 | 10.16% ± 0.86% | 9.87% ± 0.58% | 9.91% ± 0.60% | 9.87% ± 0.58% | 9.87% ± 0.58% | no |
+| 1024 | unscaled | 4 | 1 (59) | 295 | 46.53% ± 4.52% | 83.38% ± 0.58% | 88.54% ± 0.39% | 89.87% ± 0.11% | 90.56% ± 0.12% | no |
+
+**momentum 0.9, `lr_32` = 0.25** (band 94.76% to 95.69%)
+
+| B | rate | value | warmup epochs (steps) | total steps | epoch 1 | epoch 2 | epoch 3 | epoch 4 | epoch 5 | in band |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 32 | scaled | 0.25 | 0 (0) | 9375 | 90.75% ± 3.90% | 93.87% ± 0.46% | 94.50% ± 0.38% | 94.99% ± 0.35% | 95.13% ± 0.35% | yes |
+| 32 | scaled | 0.25 | 0.25 (469) | 9375 | 92.84% ± 0.21% | 94.16% ± 0.26% | 94.72% ± 0.06% | 95.13% ± 0.15% | 95.39% ± 0.15% | yes |
+| 32 | scaled | 0.25 | 1 (1875) | 9375 | 91.64% ± 0.21% | 93.84% ± 0.27% | 94.62% ± 0.11% | 95.15% ± 0.10% | 95.38% ± 0.16% | yes |
+| 128 | scaled | 1 | 0 (0) | 2345 | 14.01% ± 4.76% | 15.89% ± 4.77% | 15.93% ± 4.80% | 15.96% ± 4.83% | 18.08% ± 7.60% | no |
+| 128 | unscaled | 0.25 | 0 (0) | 2345 | 80.36% ± 11.62% | 88.95% ± 4.36% | 90.84% ± 4.11% | 91.43% ± 4.12% | 93.51% ± 0.19% | no |
+| 128 | scaled | 1 | 0.25 (118) | 2345 | 92.85% ± 0.15% | 94.30% ± 0.14% | 94.72% ± 0.11% | 95.18% ± 0.12% | 95.39% ± 0.11% | yes |
+| 128 | unscaled | 0.25 | 0.25 (118) | 2345 | 90.17% ± 0.23% | 92.22% ± 0.14% | 93.00% ± 0.12% | 93.62% ± 0.14% | 93.91% ± 0.17% | no |
+| 128 | scaled | 1 | 1 (469) | 2345 | 91.79% ± 0.14% | 93.90% ± 0.20% | 94.64% ± 0.21% | 95.16% ± 0.06% | 95.28% ± 0.05% | yes |
+| 128 | unscaled | 0.25 | 1 (469) | 2345 | 87.79% ± 0.61% | 91.77% ± 0.10% | 92.77% ± 0.13% | 93.42% ± 0.15% | 93.78% ± 0.12% | no |
+| 512 | scaled | 4 | 0 (0) | 590 | 11.02% ± 1.53% | 11.02% ± 1.53% | 11.02% ± 1.53% | 11.02% ± 1.53% | 11.02% ± 1.53% | no |
+| 512 | unscaled | 0.25 | 0 (0) | 590 | 30.48% ± 6.76% | 61.67% ± 8.80% | 74.99% ± 11.11% | 81.17% ± 10.72% | 85.05% ± 7.75% | no |
+| 512 | scaled | 4 | 0.25 (30) | 590 | 82.88% ± 12.04% | 89.82% ± 5.11% | 90.56% ± 4.58% | 92.76% ± 3.77% | 93.08% ± 3.93% | no |
+| 512 | unscaled | 0.25 | 0.25 (30) | 590 | 62.20% ± 4.78% | 86.57% ± 0.41% | 89.60% ± 0.23% | 90.60% ± 0.12% | 91.23% ± 0.08% | no |
+| 512 | scaled | 4 | 1 (118) | 590 | 90.62% ± 0.25% | 93.57% ± 0.20% | 94.24% ± 0.19% | 94.91% ± 0.18% | 95.09% ± 0.09% | yes |
+| 512 | unscaled | 0.25 | 1 (118) | 590 | 44.28% ± 2.96% | 84.33% ± 0.78% | 89.23% ± 0.25% | 90.36% ± 0.19% | 91.10% ± 0.14% | no |
+| 1024 | scaled | 8 | 0 (0) | 295 | 10.33% ± 0.60% | 10.33% ± 0.60% | 10.33% ± 0.60% | 10.33% ± 0.60% | 10.33% ± 0.60% | no |
+| 1024 | unscaled | 0.25 | 0 (0) | 295 | 13.31% ± 4.04% | 30.78% ± 5.47% | 44.85% ± 4.93% | 62.30% ± 8.46% | 69.84% ± 9.62% | no |
+| 1024 | scaled | 8 | 0.25 (15) | 295 | 36.90% ± 10.54% | 44.73% ± 18.12% | 46.06% ± 17.95% | 47.44% ± 18.02% | 47.50% ± 18.06% | no |
+| 1024 | unscaled | 0.25 | 0.25 (15) | 295 | 36.22% ± 5.71% | 57.84% ± 5.32% | 77.29% ± 2.89% | 85.90% ± 0.60% | 88.41% ± 0.12% | no |
+| 1024 | scaled | 8 | 1 (59) | 295 | 71.19% ± 10.87% | 86.79% ± 8.39% | 90.07% ± 4.77% | 90.73% ± 4.83% | 92.81% ± 3.82% | no |
+| 1024 | unscaled | 0.25 | 1 (59) | 295 | 30.67% ± 8.84% | 60.35% ± 1.88% | 78.56% ± 1.47% | 86.25% ± 0.36% | 88.54% ± 0.33% | no |
+
+**Against the hypotheses:**
+
+1. **Without warmup, the scaled rate diverges from batch 128 up: confirmed** at both momenta.
+   At B = 128 it ends at 24.28% ± 16.13% (momentum 0.0) and 18.08% ± 7.60% (0.9). At 512
+   and 1024 it stays at chance from the first epoch. This is the #233 proxy result at full
+   scale.
+2. **With warmup, the rule holds to:**
+   - **B = 128 without momentum**, with either warmup (95.39% at 0.25 epochs, 95.28% at 1).
+     At 512 and 1024 (rates 64 and 128) it fails completely, even with a 1-epoch warmup:
+     every run stays near chance.
+   - **B = 512 with momentum 0.9**, with the 1-epoch warmup only (95.09% ± 0.09%, 16x
+     fewer steps than batch 32). With the 0.25-epoch warmup, B = 512 misses the band (93.08%
+     ± 3.93%: one seed lags). At 1024 the 1-epoch warmup reaches 92.81% ± 3.82%, below the
+     band.
+
+   So a 5-epoch budget on this network breaks the rule at 4x to 16x the base batch, not at
+   the thousands Goyal et al. reached. A likely cause, not tested here: the stable rate has
+   a ceiling set by the loss surface's curvature, not by gradient noise. Without momentum,
+   the largest rate that trained at batch 32 was 8, and 16 at B = 128 still trained after
+   warmup, but 64 at B = 512 did not, with any warmup. A larger batch only removes gradient
+   noise, and the rule cannot push the rate past that ceiling. Longer warmup doesn't help
+   without momentum: 1 epoch is no better than 0.25 at any size.
+3. **The unscaled control falls further behind as B grows: confirmed.** Without momentum it
+   ends at 94.52%, 92.14% and 90.78% at B = 128, 512 and 1024 (no warmup). With momentum 0.9
+   it ends at 93.51%, 85.05% and 69.84%. Where the scaled rate diverges (B >= 512, momentum
+   0.0), the unscaled control is 80 points better. Where the rule is past its limit, not
+   scaling the rate is the better choice.
+4. **The #233 momentum asymmetry survives in the same direction**: momentum 0.9 with warmup
+   holds the rule to a 4x larger batch than momentum 0.0. But the comparison is confounded.
+   Momentum 0.9's effective batch-32 rate, 0.25 / (1 - 0.9) = 2.5, is lower than momentum
+   0.0's 4, so at every B its effective scaled rate is lower too (40 against 64 at B = 512).
+   The stage 1 grid picked each momentum's best rate. Separating momentum from the effective
+   rate would need a matched-effective-rate run (for example momentum 0.9 at `lr_32` = 0.4).
+   That is not done here.
+
+**Other findings:**
+
+- **Warmup costs nothing at batch 32** (95.40% and 95.41% against 95.44%, momentum 0.0). At
+  momentum 0.9 it helps (95.39% and 95.38% against 95.13%), because it removes the one slow
+  seed in epoch 1.
+- **Momentum 0.9 has an early instability that doesn't depend on scaling.** The unscaled
+  control, at the batch-32 rate, has a large spread in its early epochs without warmup: at
+  B = 128, 80.36% ± 11.62% after epoch 1, and at 1024, 69.84% ± 9.62% at the end. A 1-epoch
+  warmup makes it tight (±0.33% at 1024). The same momentum 0.9 rate is stable at batch 32
+  from epoch 2, so the larger batch adds instability at the same rate. This was not
+  predicted, and it is not explained here.
