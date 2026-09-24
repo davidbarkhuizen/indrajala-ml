@@ -5,7 +5,9 @@ the benchmark it is compared with. It started from the Rust CNN timing (#317-#32
 CNN stages), which found where Rust was slower than numpy or slower than it needed to be. Each
 item is measured before and after, and must keep every parity test passing.
 
-The one open item with a full workplan of its own is
+Two open items have a full workplan of their own: candidate 1,
+[`workplans/optimization-6-matmul-threading.md`](workplans/optimization-6-matmul-threading.md),
+and candidate 7,
 [`workplans/optimization-5-dataset-as-array.md`](workplans/optimization-5-dataset-as-array.md).
 Everything else is below.
 
@@ -58,6 +60,7 @@ of the focused benchmark (see "How to measure"), after #14:
    higher threshold. Each output is still computed by one thread under any of them, so every
    output keeps its bits. Measure each against a single-thread baseline at the shapes in the
    table above. This machine has 4 cores / 8 threads, and the threshold is machine-dependent.
+   Workplan: [`workplans/optimization-6-matmul-threading.md`](workplans/optimization-6-matmul-threading.md).
 
 2. **Dense `forward_batch` at large batches** (`matmul_nt`). 32 x 5408 is 1.2x numpy at batch 32
    (682-971 µs) but 5.6x at batch 64 (3395 vs 608): 3.5-5x the time for twice the work, and
