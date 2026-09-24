@@ -27,8 +27,8 @@ jobs:
           python-version: "3.10"
 
       # The whole venv, keyed on the exact interpreter and requirements.txt, so a hit leaves pip
-      # nothing to install. maturin (unpinned) stays at the cached version until the key changes;
-      # the indrajala_math_rust build inside the venv is always rebuilt by ./cli setup.
+      # nothing to install (maturin is pinned in ./cli, so pip enforces that pin on a hit too);
+      # indrajala_math_rust inside the venv is always reinstalled by ./cli setup.
       - name: Cache venv
         uses: actions/cache@v4
         with:
@@ -45,16 +45,32 @@ jobs:
           path: data/mnist
           key: mnist-${{ hashFiles('scripts/fetch_datasets.py') }}
 
-      # rust/target, for ./cli setup's maturin build. Keyed by rust-cache on the toolchain,
-      # Cargo.lock and Cargo.toml; it keeps only the dependencies' artifacts, so the crate
-      # itself is always recompiled from the checked-out source.
-      - name: Cache crate build
+      # The crate's release wheel, keyed on the rust/ submodule commit, the maturin pin in ./cli
+      # and the interpreter (the wheel is cp310-specific). Most PRs move none of them, so a hit
+      # skips compiling the crate.
+      - name: Rust wheel key
+        id: rust-commit
+        run: |
+          echo "sha=$(git -C rust rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "maturin=$(sed -n 's/^maturin_version="\(.*\)"$/\1/p' cli)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache crate wheel
+        id: rust-wheel
+        uses: actions/cache@v4
+        with:
+          path: .rust-wheel
+          key: rust-wheel-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-maturin${{ steps.rust-commit.outputs.maturin }}-${{ steps.rust-commit.outputs.sha }}
+
+      # Only on a wheel-cache miss (a submodule bump): rust/target's dependency builds, keyed by
+      # rust-cache on the toolchain, Cargo.lock and Cargo.toml; the crate itself always recompiles.
+      - name: Cache crate dependency builds
+        if: steps.rust-wheel.outputs.cache-hit != 'true'
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: rust -> target
 
       - name: Setup
-        run: ./cli setup --no-os-packages
+        run: ./cli setup --no-os-packages --rust-wheel-dir .rust-wheel
 
       - name: Test
         run: ./cli test ${{ matrix.suite }}

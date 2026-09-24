@@ -54,9 +54,11 @@ git submodule update --init   # populate rust/
 ./cli test
 ```
 
-CI (`.github/workflows/ci.yml`) runs `./cli setup --no-os-packages` (the runner image already
-has cargo, and CI's python is not apt's) then `./cli test <suite>` on every push and PR, one
-parallel job per suite, with `.venv`, MNIST and the crate's dependency builds cached.
+CI (`.github/workflows/ci.yml`) runs `./cli setup --no-os-packages --rust-wheel-dir .rust-wheel`
+then `./cli test <suite>` on every push and PR, one parallel job per suite. It skips apt (the
+runner image already has cargo, and CI's python is not apt's), and caches `.venv`, MNIST and the
+crate's release wheel, keyed on the `rust/` submodule commit, so the crate only compiles when
+the submodule moves.
 
 ## Layout
 
