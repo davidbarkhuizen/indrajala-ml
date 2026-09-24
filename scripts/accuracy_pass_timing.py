@@ -32,7 +32,6 @@ import argparse
 import json
 import random
 import statistics
-import subprocess
 import sys
 import time
 
@@ -48,6 +47,8 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
 )
 from indrajala_ml.prepared_dataset import prepared_mnist
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
+
+from process_runs import interleaved_runs, run_json_worker
 
 BACKENDS = ["numpy", "rust"]
 NETWORKS = ["dense", *ARCHITECTURES]
@@ -139,23 +140,12 @@ def measure(name: str, backend: str) -> dict:
 
 
 def _run_worker(name: str, backend: str) -> dict:
-    output = subprocess.run(
-        [sys.executable, __file__, "worker", name, backend], check=True, capture_output=True, text=True
-    ).stdout
-    return json.loads(output.strip().splitlines()[-1])
+    return run_json_worker([sys.executable, __file__, "worker", name, backend])
 
 
 def time_all(networks: list[str], repeats: int) -> dict:
-    runs = {(name, backend): [] for name in networks for backend in BACKENDS}
-    cells = list(runs)
-    for repeat in range(repeats):
-        # rotate so no cell always follows the same one
-        order = cells[repeat % len(cells) :] + cells[: repeat % len(cells)]
-        if repeat % 2:
-            order.reverse()
-        for name, backend in order:
-            runs[(name, backend)].append(_run_worker(name, backend))
-        print(f"repeat {repeat + 1}/{repeats} done", file=sys.stderr, flush=True)
+    cells = [(name, backend) for name in networks for backend in BACKENDS]
+    runs = interleaved_runs(cells, repeats, lambda cell: _run_worker(*cell))
 
     runs = {f"{name} / {backend}": cell_runs for (name, backend), cell_runs in runs.items()}
     report(runs)

@@ -5,7 +5,7 @@ from typing import Sequence
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.bounds import validate_batch, validate_layer_sizes
-from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer, fan_in_aware_random_rust_layer
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
 
@@ -148,15 +148,10 @@ class RustArrayNetworkBase:
             layer.apply_accumulated_gradient(learning_rate, batch_size)
 
     def randomize(self) -> None:
-        # the same fan-in-aware scheme ArrayNetworkBase.randomize uses, drawn from
-        # indrajala_math_rust.uniform instead of np.random.uniform - this can never be
-        # seed-reproducible against the numpy sibling's own draws, since the two use unrelated
-        # RNG implementations.
+        # the same fan-in-aware scheme ArrayNetworkBase.randomize uses, from the Rust RNG
         previous_size = self.dimension
         for layer in self.layers:
-            limit = 1.0 / (previous_size ** 0.5)
-            layer.W = pa.uniform(-limit, limit, (layer.size, previous_size))
-            layer.b = pa.uniform(-limit, limit, layer.size)
+            layer.W, layer.b = fan_in_aware_random_rust_layer(layer.size, previous_size)
             previous_size = layer.size
 
     def snapshot(self) -> list[tuple["pa.Array", "pa.Array"]]:

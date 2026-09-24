@@ -13,6 +13,16 @@ def unfused_sgd_step(layer, input_activation: "pa.Array", learning_rate: float) 
     layer.apply_accumulated_gradient(learning_rate, batch_size=1)
 
 
+def fan_in_aware_random_rust_layer(size: int, previous_size: int) -> tuple["pa.Array", "pa.Array"]:
+    """
+    fan_in_aware_random_layer (array_layer.py), drawn from indrajala_math_rust.uniform instead of
+    np.random.uniform - never seed-reproducible against the numpy draw, since the two use
+    unrelated RNG implementations.
+    """
+    limit = 1.0 / (previous_size**0.5)
+    return pa.uniform(-limit, limit, (size, previous_size)), pa.uniform(-limit, limit, size)
+
+
 class RustArrayLayer:
     """
     The Rust-array-core-backed sibling of ArrayLayer. Every method here is a single fused Rust

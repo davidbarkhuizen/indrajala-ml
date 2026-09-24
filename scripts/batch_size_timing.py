@@ -33,7 +33,6 @@ import json
 import pstats
 import random
 import statistics
-import subprocess
 import sys
 import time
 
@@ -44,6 +43,8 @@ from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import _rust_op_name
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.train import _training_accuracy, train_backprop_network_mini_batch
+
+from process_runs import interleaved_runs, run_json_worker
 
 BACKENDS = ["numpy", "rust"]
 BATCH_SIZES = [32, 128, 512, 1024]
@@ -126,23 +127,12 @@ def profile(batch_size: int, train_data: list) -> tuple[float, float, list]:
 
 
 def _run_worker(backend: str, batch_size: int) -> dict:
-    output = subprocess.run(
-        [sys.executable, __file__, "worker", backend, str(batch_size)], check=True, capture_output=True, text=True
-    ).stdout
-    return json.loads(output.strip().splitlines()[-1])
+    return run_json_worker([sys.executable, __file__, "worker", backend, str(batch_size)])
 
 
 def time_all(batch_sizes: list[int], repeats: int) -> dict:
-    runs = {(backend, batch_size): [] for batch_size in batch_sizes for backend in BACKENDS}
-    cells = list(runs)
-    for repeat in range(repeats):
-        # rotate so no cell always follows the same one
-        order = cells[repeat % len(cells) :] + cells[: repeat % len(cells)]
-        if repeat % 2:
-            order.reverse()
-        for backend, batch_size in order:
-            runs[(backend, batch_size)].append(_run_worker(backend, batch_size))
-        print(f"repeat {repeat + 1}/{repeats} done", file=sys.stderr, flush=True)
+    cells = [(backend, batch_size) for batch_size in batch_sizes for backend in BACKENDS]
+    runs = interleaved_runs(cells, repeats, lambda cell: _run_worker(*cell))
 
     medians = {cell: {m: statistics.median(run[m] for run in cell_runs) for m in MEASURES} for cell, cell_runs in runs.items()}
 

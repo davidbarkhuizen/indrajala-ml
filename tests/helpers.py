@@ -95,6 +95,36 @@ def wire_fixed_single_hidden_node(network) -> None:
     output_node.bias = -0.2
 
 
+def set_random_node_weights(rng: random.Random, node_layer, input_size: int, limit: float):
+    """
+    Draws a (size, input_size) weight matrix, then a size-length bias vector, each from
+    rng.uniform(-limit, limit), sets them on node_layer's nodes, and returns (weights, biases) so
+    an array-backed counterpart can be given the identical values.
+    """
+    size = len(node_layer.nodes)
+    weights = [[rng.uniform(-limit, limit) for _ in range(input_size)] for _ in range(size)]
+    biases = [rng.uniform(-limit, limit) for _ in range(size)]
+    for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
+        node.update_input_weights(node_weights)
+        node.bias = bias
+    return weights, biases
+
+
+def inject_matching_weights(rng: random.Random, node_network, array_network, wrap: Callable, dimension: int) -> None:
+    """
+    Gives a per-node network and its dense array-backed sibling identical random weights, layer
+    by layer from rng.uniform(-2, 2). `wrap` converts the nested lists into the array backend's
+    own array type - np.array for the numpy sibling, pa.Array for the Rust one.
+    """
+    assert len(node_network.trainable_layers) == len(array_network.layers)
+    previous_size = dimension
+    for node_layer, array_layer in zip(node_network.trainable_layers, array_network.layers):
+        weights, biases = set_random_node_weights(rng, node_layer, previous_size, 2.0)
+        array_layer.W = wrap(weights)
+        array_layer.b = wrap(biases)
+        previous_size = len(weights)
+
+
 def matching_array_backprop_networks(
     rng: random.Random,
     array_network_cls,
@@ -111,31 +141,14 @@ def matching_array_backprop_networks(
     (VectorizedMultiClassBackpropClassifierNetwork / RustArrayMultiClassBackpropClassifierNetwork,
     passed as array_network_cls) with identical injected weights. Neither array backend's RNG
     stream is meaningfully comparable to Python's random module, so initial weights are always
-    forced identical explicitly here instead of via each network's own randomize(). `wrap`
-    converts a nested Python list of weights (or a
-    flat list of biases) into the array backend's own array type - np.array for the numpy
-    sibling, pa.Array for the Rust one.
+    forced identical explicitly here instead of via each network's own randomize().
     """
     node_network = MultiClassBackpropClassifierNetwork(
         layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count
     )
     array_network = array_network_cls(layer_sizes, dimension, class_count)
 
-    previous_size = dimension
-    for layer_index, size in enumerate([*layer_sizes, class_count]):
-        weights = [[rng.uniform(-2.0, 2.0) for _ in range(previous_size)] for _ in range(size)]
-        biases = [rng.uniform(-2.0, 2.0) for _ in range(size)]
-
-        node_layer = node_network.trainable_layers[layer_index]
-        for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
-
-        array_network.layers[layer_index].W = wrap(weights)
-        array_network.layers[layer_index].b = wrap(biases)
-
-        previous_size = size
-
+    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
     return node_network, array_network
 
 
@@ -159,21 +172,7 @@ def matching_single_output_array_backprop_networks(
     node_network = FanInAwareBackpropClassifierNetwork(layer_sizes, dimension, [(-bounds, bounds)] * dimension)
     array_network = array_network_cls(layer_sizes, dimension)
 
-    previous_size = dimension
-    for layer_index, size in enumerate([*layer_sizes, 1]):
-        weights = [[rng.uniform(-2.0, 2.0) for _ in range(previous_size)] for _ in range(size)]
-        biases = [rng.uniform(-2.0, 2.0) for _ in range(size)]
-
-        node_layer = node_network.trainable_layers[layer_index]
-        for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
-
-        array_network.layers[layer_index].W = wrap(weights)
-        array_network.layers[layer_index].b = wrap(biases)
-
-        previous_size = size
-
+    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
     return node_network, array_network
 
 
@@ -198,21 +197,7 @@ def matching_cross_entropy_array_backprop_networks(
     node_network = BinaryCrossEntropyBackpropClassifierNetwork(layer_sizes, dimension, [(-bounds, bounds)] * dimension)
     array_network = array_network_cls(layer_sizes, dimension)
 
-    previous_size = dimension
-    for layer_index, size in enumerate([*layer_sizes, 1]):
-        weights = [[rng.uniform(-2.0, 2.0) for _ in range(previous_size)] for _ in range(size)]
-        biases = [rng.uniform(-2.0, 2.0) for _ in range(size)]
-
-        node_layer = node_network.trainable_layers[layer_index]
-        for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
-
-        array_network.layers[layer_index].W = wrap(weights)
-        array_network.layers[layer_index].b = wrap(biases)
-
-        previous_size = size
-
+    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
     return node_network, array_network
 
 
@@ -269,21 +254,7 @@ def matching_adam_array_backprop_networks(
     )
     array_network = array_network_cls(layer_sizes, dimension, class_count, beta1, beta2, epsilon)
 
-    previous_size = dimension
-    for layer_index, size in enumerate([*layer_sizes, class_count]):
-        weights = [[rng.uniform(-2.0, 2.0) for _ in range(previous_size)] for _ in range(size)]
-        biases = [rng.uniform(-2.0, 2.0) for _ in range(size)]
-
-        node_layer = node_network.trainable_layers[layer_index]
-        for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
-
-        array_network.layers[layer_index].W = wrap(weights)
-        array_network.layers[layer_index].b = wrap(biases)
-
-        previous_size = size
-
+    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
     return node_network, array_network
 
 
@@ -328,21 +299,7 @@ def matching_l2_array_backprop_networks(
     )
     array_network = array_network_cls(layer_sizes, dimension, class_count, l2_lambda)
 
-    previous_size = dimension
-    for layer_index, size in enumerate([*layer_sizes, class_count]):
-        weights = [[rng.uniform(-2.0, 2.0) for _ in range(previous_size)] for _ in range(size)]
-        biases = [rng.uniform(-2.0, 2.0) for _ in range(size)]
-
-        node_layer = node_network.trainable_layers[layer_index]
-        for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
-
-        array_network.layers[layer_index].W = wrap(weights)
-        array_network.layers[layer_index].b = wrap(biases)
-
-        previous_size = size
-
+    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
     return node_network, array_network
 
 
@@ -387,21 +344,7 @@ def matching_momentum_array_backprop_networks(
     )
     array_network = array_network_cls(layer_sizes, dimension, class_count, momentum)
 
-    previous_size = dimension
-    for layer_index, size in enumerate([*layer_sizes, class_count]):
-        weights = [[rng.uniform(-2.0, 2.0) for _ in range(previous_size)] for _ in range(size)]
-        biases = [rng.uniform(-2.0, 2.0) for _ in range(size)]
-
-        node_layer = node_network.trainable_layers[layer_index]
-        for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
-
-        array_network.layers[layer_index].W = wrap(weights)
-        array_network.layers[layer_index].b = wrap(biases)
-
-        previous_size = size
-
+    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
     return node_network, array_network
 
 
@@ -436,21 +379,7 @@ def matching_relu_array_backprop_networks(
     )
     array_network = array_network_cls(layer_sizes, dimension, class_count)
 
-    previous_size = dimension
-    for layer_index, size in enumerate([*layer_sizes, class_count]):
-        weights = [[rng.uniform(-2.0, 2.0) for _ in range(previous_size)] for _ in range(size)]
-        biases = [rng.uniform(-2.0, 2.0) for _ in range(size)]
-
-        node_layer = node_network.trainable_layers[layer_index]
-        for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
-
-        array_network.layers[layer_index].W = wrap(weights)
-        array_network.layers[layer_index].b = wrap(biases)
-
-        previous_size = size
-
+    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
     return node_network, array_network
 
 
@@ -503,21 +432,7 @@ def matching_dropout_array_backprop_networks(
     )
     array_network = array_network_cls(layer_sizes, dimension, class_count, drop_probability)
 
-    previous_size = dimension
-    for layer_index, size in enumerate([*layer_sizes, class_count]):
-        weights = [[rng.uniform(-2.0, 2.0) for _ in range(previous_size)] for _ in range(size)]
-        biases = [rng.uniform(-2.0, 2.0) for _ in range(size)]
-
-        node_layer = node_network.trainable_layers[layer_index]
-        for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
-
-        array_network.layers[layer_index].W = wrap(weights)
-        array_network.layers[layer_index].b = wrap(biases)
-
-        previous_size = size
-
+    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
     return node_network, array_network
 
 
@@ -542,21 +457,7 @@ def matching_softmax_array_backprop_networks(
     )
     array_network = array_network_cls(layer_sizes, dimension, class_count)
 
-    previous_size = dimension
-    for layer_index, size in enumerate([*layer_sizes, class_count]):
-        weights = [[rng.uniform(-2.0, 2.0) for _ in range(previous_size)] for _ in range(size)]
-        biases = [rng.uniform(-2.0, 2.0) for _ in range(size)]
-
-        node_layer = node_network.trainable_layers[layer_index]
-        for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
-
-        array_network.layers[layer_index].W = wrap(weights)
-        array_network.layers[layer_index].b = wrap(biases)
-
-        previous_size = size
-
+    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
     return node_network, array_network
 
 
@@ -593,21 +494,7 @@ def matching_cross_entropy_multiclass_array_backprop_networks(
     )
     array_network = array_network_cls(layer_sizes, dimension, class_count)
 
-    previous_size = dimension
-    for layer_index, size in enumerate([*layer_sizes, class_count]):
-        weights = [[rng.uniform(-2.0, 2.0) for _ in range(previous_size)] for _ in range(size)]
-        biases = [rng.uniform(-2.0, 2.0) for _ in range(size)]
-
-        node_layer = node_network.trainable_layers[layer_index]
-        for node, node_weights, bias in zip(node_layer.nodes, weights, biases):
-            node.update_input_weights(node_weights)
-            node.bias = bias
-
-        array_network.layers[layer_index].W = wrap(weights)
-        array_network.layers[layer_index].b = wrap(biases)
-
-        previous_size = size
-
+    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
     return node_network, array_network
 
 

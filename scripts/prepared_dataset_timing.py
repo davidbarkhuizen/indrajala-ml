@@ -31,7 +31,6 @@ import argparse
 import json
 import random
 import statistics
-import subprocess
 import sys
 import time
 
@@ -48,6 +47,8 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
+
+from process_runs import interleaved_runs, run_json_worker
 
 # indrajala_ml is a namespace package, so with an old checkout first on PYTHONPATH the new
 # prepared_dataset module can still be imported from this one; the trainers themselves tell
@@ -104,24 +105,13 @@ def measure(config: str, backend: str) -> dict:
 
 
 def _run_worker(config: str, backend: str) -> dict:
-    output = subprocess.run(
-        [sys.executable, __file__, "worker", config, backend, "--epochs", str(EPOCHS)], check=True, capture_output=True, text=True
-    ).stdout
-    return json.loads(output.strip().splitlines()[-1])
+    return run_json_worker([sys.executable, __file__, "worker", config, backend, "--epochs", str(EPOCHS)])
 
 
 def time_all(configs: list[str], repeats: int) -> dict:
     print(f"trainers: {train.__file__}; prepared path: {AFTER}; epochs per run: {EPOCHS}\n")
-    runs = {(config, backend): [] for config in configs for backend in BACKENDS}
-    cells = list(runs)
-    for repeat in range(repeats):
-        # rotate so no cell always follows the same one
-        order = cells[repeat % len(cells) :] + cells[: repeat % len(cells)]
-        if repeat % 2:
-            order.reverse()
-        for config, backend in order:
-            runs[(config, backend)].append(_run_worker(config, backend))
-        print(f"repeat {repeat + 1}/{repeats} done", file=sys.stderr, flush=True)
+    cells = [(config, backend) for config in configs for backend in BACKENDS]
+    runs = interleaved_runs(cells, repeats, lambda cell: _run_worker(*cell))
 
     print(f"median of {repeats}, seconds (one process per measurement)\n")
     print("| config | backend | epoch | prepare | epoch, loader |")
