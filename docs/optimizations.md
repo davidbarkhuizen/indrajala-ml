@@ -5,7 +5,9 @@ the benchmark it is compared with. It started from the Rust CNN timing (#317-#32
 CNN stages), which found where Rust was slower than numpy or slower than it needed to be. Each
 item is measured before and after, and must keep every parity test passing.
 
-One open item has a workplan of its own: candidate 7,
+Two open items have a workplan of their own: candidate 1,
+[`workplans/optimization-7-matmul-2d-short-k.md`](workplans/optimization-7-matmul-2d-short-k.md),
+and candidate 7,
 [`workplans/optimization-5-dataset-as-array.md`](workplans/optimization-5-dataset-as-array.md).
 The threading workplan (optimization 6) is finished: stage A landed, the rest was deferred or
 skipped. Its findings are in "Threading" below, and what it left open is candidate 8.
@@ -58,8 +60,10 @@ taking cores from Rust (see "Other findings").
    runs 32 FMAs per output before it is stored. They are in the MNIST conv mini-batch 32 dense
    tail, the worst end-to-end cell: 62 calls of each per epoch. Closing both gaps to numpy
    would save about 60 ms of that 0.75 s epoch (about 8%), an estimate from the per-op gaps.
-   The cause is unexamined. First step: profile the kernel at this shape (output write
-   traffic, 1.4 MB, against the tile loop) in a local probe build.
+   The cause is unmeasured. Hypotheses: the 16-column tile keeps only 4 FMA chains in flight
+   (latency-bound), page faults on the 1.4 MB output, and accumulate's separate `g + u` pass.
+   Workplan, starting with a measurement stage:
+   [`workplans/optimization-7-matmul-2d-short-k.md`](workplans/optimization-7-matmul-2d-short-k.md).
 
 2. **Dense `forward_batch` at large batches** (`matmul_nt`): register tiles done (#17), the
    rest open. The recorded 5.6x at batch 64 was the interleaving: in separate processes batch
