@@ -97,12 +97,12 @@ def build_conv_array_network_layers(
     return conv_layers, dense_layers, dense_cls(class_count, previous_size)
 
 
-def save_conv_array_model_json(path: str, network) -> None:
+def save_conv_model_json(path: str, network, snapshot: list) -> None:
     """
-    The save format shared by the numpy and Rust conv networks: the same envelope keys as
-    ConvMultiClassBackpropClassifierNetwork.save, but one (W, b) entry per layer (an empty one
-    for a pool layer) rather than per-kernel lists. Both backends' arrays have .tolist(), so a
-    file saved by either loads into the other; a pure-Python conv network's file doesn't.
+    The save envelope shared by every conv network: the constructor arguments, which a flat
+    layer_sizes list (save_model_json, save_array_model_json) can't express, and snapshot, already
+    in JSON form. The pure-Python network's snapshot is per-kernel and per-node lists; the array
+    networks' is save_conv_array_model_json's, so their files don't load into each other.
     """
     save_json(
         path,
@@ -112,14 +112,24 @@ def save_conv_array_model_json(path: str, network) -> None:
             "conv_layers": [spec_to_json(spec) for spec in network.conv_specs],
             "dense_layer_sizes": network.dense_layer_sizes,
             "class_count": network.class_count,
-            "snapshot": [[entry[0].tolist(), entry[1].tolist()] if entry else [] for entry in network.snapshot()],
+            "snapshot": snapshot,
         },
     )
 
 
-def load_conv_array_model_json(cls: type, path: str):
-    """The load-side counterpart to save_conv_array_model_json: builds cls from the envelope and
-    restores the (W, b) entries, which each backend's restore() accepts as nested lists."""
+def save_conv_array_model_json(path: str, network) -> None:
+    """
+    save_conv_model_json for the numpy and Rust conv networks: one (W, b) entry per layer (an
+    empty one for a pool layer). Both backends' arrays have .tolist(), so a file saved by either
+    loads into the other.
+    """
+    snapshot = [[entry[0].tolist(), entry[1].tolist()] if entry else [] for entry in network.snapshot()]
+    save_conv_model_json(path, network, snapshot)
+
+
+def load_conv_model_json(cls: type, path: str):
+    """The load-side counterpart to save_conv_model_json: builds cls from the envelope and
+    restores its snapshot, which every conv network's restore() accepts in its JSON form."""
     state = load_json(path)
     network = cls(
         input_height=state["input_height"],

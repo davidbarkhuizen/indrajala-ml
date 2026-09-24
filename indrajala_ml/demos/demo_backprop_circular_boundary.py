@@ -12,7 +12,7 @@ from indrajala_ml.train import random_alternating_training_data, train_linear_cl
 
 class CircleTarget:
     """
-    A circular positive region - unlike demo_xor_backprop_convergence.py's XORTarget (two straight-edged
+    A circular positive region - unlike targets.py's XORTarget (two straight-edged
     quadrants), this boundary is genuinely curved, not just a union of half-planes arranged
     awkwardly. A LinearClassifierNetwork's positive region (see
     geometry.reference_positive_region_polygon) is always a polygon - an intersection of

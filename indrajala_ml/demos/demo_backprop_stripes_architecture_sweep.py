@@ -16,7 +16,7 @@ from indrajala_ml.train import random_alternating_training_data, train_linear_cl
 class StripesTarget:
     """
     Vertical stripes, alternating class every cell_size units of x (y is irrelevant) - unlike
-    demo_xor_linear_classifier_ceiling.py's XORTarget (2 regions), this target's number of regions
+    targets.py's XORTarget (2 regions), this target's number of regions
     scales with how wide input_bounds is relative to cell_size, so it's a convenient dial for
     "how hard is this problem" independent of any classifier's architecture.
     """

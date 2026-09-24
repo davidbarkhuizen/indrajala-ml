@@ -3,10 +3,9 @@ from __future__ import annotations
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import fan_in_aware_weights_and_bias
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
-from indrajala_ml.model.conv_front_end import build_conv_front_end, spec_from_json, spec_to_json
+from indrajala_ml.model.conv_front_end import build_conv_front_end, load_conv_model_json, save_conv_model_json
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
-from indrajala_ml.model.model_io import load_json, save_json
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.model.state_layer import StateLayer
 
@@ -140,34 +139,11 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         return network
 
     def save(self, path: str) -> None:
-        # not save_model_json (model_io.py) - that envelope hardcodes layer_sizes: list[int],
-        # which has no way to express conv hyperparameters. self.snapshot() (inherited
-        # unchanged from BackpropNetworkBase) already works correctly here, conv layers
-        # included, purely because ConvLayer implements snapshot_state() itself - the
-        # per-layer hook BackpropLayer defines for exactly this kind of sibling.
-        save_json(
-            path,
-            {
-                "input_height": self.input_height,
-                "input_width": self.input_width,
-                "conv_layers": [spec_to_json(spec) for spec in self.conv_specs],
-                "dense_layer_sizes": self.dense_layer_sizes,
-                "class_count": self.class_count,
-                "snapshot": self.snapshot(),
-            },
-        )
+        # self.snapshot() (inherited unchanged from BackpropNetworkBase) already works here, conv
+        # layers included, because ConvLayer implements snapshot_state() itself - the per-layer
+        # hook BackpropLayer defines for exactly this kind of sibling.
+        save_conv_model_json(path, self, self.snapshot())
 
     @classmethod
     def load(cls, path: str) -> "ConvMultiClassBackpropClassifierNetwork":
-        state = load_json(path)
-
-        network = cls(
-            input_height=state["input_height"],
-            input_width=state["input_width"],
-            conv_specs=[spec_from_json(spec) for spec in state["conv_layers"]],
-            dense_layer_sizes=state["dense_layer_sizes"],
-            class_count=state["class_count"],
-        )
-        network.restore(state["snapshot"])
-        return network
-
+        return load_conv_model_json(cls, path)
