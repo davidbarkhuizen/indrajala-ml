@@ -59,7 +59,7 @@ Part of the optimization record; the index is [../optimizations.md](../optimizat
   (the shortest spin), or timing numpy in a separate process. With the short spin, numpy itself
   slowed from about 250 to 300-420 µs. A single Rust call was still slowed 100 ms after the
   numpy loop, and no longer at 500 ms. The Rust training path never calls numpy, so this only
-  affects benchmarks, the end-to-end demo included (see "Where things stand"). Rust's own
+  affects benchmarks, the end-to-end demo included (see [Where things stand](status.md)). Rust's own
   thread count doesn't protect it (the 1-thread run above was slowed too), so every per-op
   ratio measured interleaved with a threaded numpy call is suspect, whatever the Rust op's
   size.
@@ -70,7 +70,7 @@ Part of the optimization record; the index is [../optimizations.md](../optimizat
   `train_backprop_network_mini_batch` the two `_training_accuracy` passes of a one-epoch run
   (60000 single-example `classify_state` calls each) take 52-67% of a Rust epoch and 62-73% of a
   numpy one, at B = 32 to 1024 (batch-size-scaling study, #367; the table is in candidate 1's
-  record under "Completed").
+  record in [History](history.md#candidate-1-the-dataset-as-one-backend-array)).
   Over a long run there is about one pass per epoch, so the share is smaller. The share is
   largest at B = 32. About 70% of each pass was converting the row to an array, which candidate 1
   removed (#374). Candidate 2 (#379) batched the rest: the Rust B = 32 epoch lost another 19%,
