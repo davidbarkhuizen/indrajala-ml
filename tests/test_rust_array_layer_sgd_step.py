@@ -20,6 +20,7 @@ from indrajala_ml.model.adam_rust_array_layer import AdamRustArrayLayer
 from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
     AdamRustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.array_layer import unfused_sgd_step
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -46,7 +47,7 @@ from indrajala_ml.model.relu_rust_array_multiclass_backprop_classifier_network i
     ReLURustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
-from indrajala_ml.model.rust_array_layer import RustArrayLayer, unfused_sgd_step
+from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )

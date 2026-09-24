@@ -47,17 +47,6 @@ class RustArrayBackpropClassifierNetwork(RustArrayNetworkBase):
     def _target_batch_array(self, categories: Sequence[float]) -> "pa.Array":
         return pa.Array([[category] for category in categories])
 
-    def restore(self, snapshot: list[tuple["pa.Array", "pa.Array"]]) -> None:
-        # tolerates plain nested lists as well as pa.Array (wrapping via pa.Array(...) when
-        # needed), unlike RustArrayNetworkBase's own plain restore(): lets a snapshot cross a
-        # multiprocessing.Pool worker boundary as plain, picklable lists (see
-        # ensemble_train._picklable_snapshot) and land here without a separate reconstruction
-        # step at every call site. A deliberate override, not an oversight - the multiclass
-        # family has no equivalent multiprocessing path to support.
-        for layer, (W, b) in zip(self.layers, snapshot):
-            layer.W = W.copy() if isinstance(W, pa.Array) else pa.Array(W)
-            layer.b = b.copy() if isinstance(b, pa.Array) else pa.Array(b)
-
     @classmethod
     def randomized(
         cls,

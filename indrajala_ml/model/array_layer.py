@@ -17,6 +17,17 @@ def sigmoid(z: np.ndarray) -> np.ndarray:
         return 1.0 / (1.0 + np.exp(-z))
 
 
+def unfused_sgd_step(layer, input_activation, learning_rate: float) -> None:
+    """
+    accumulate_gradient then apply_accumulated_gradient at batch_size=1: the sgd_step of every
+    numpy layer, and of each Rust layer whose update isn't plain SGD (momentum, Adam, L2) or that
+    isn't a dense layer at all (conv), where there's no fused Rust step. Works for either
+    backend's layers.
+    """
+    layer.accumulate_gradient(input_activation)
+    layer.apply_accumulated_gradient(learning_rate, batch_size=1)
+
+
 def fan_in_aware_random_layer(size: int, previous_size: int) -> tuple[np.ndarray, np.ndarray]:
     """
     The fan-in-aware initialization draw (limit = 1/sqrt(fan_in)) shared by
@@ -111,6 +122,10 @@ class ArrayLayer:
         self.W -= learning_rate * self._grad_W / batch_size
         self.b -= learning_rate * self._grad_b / batch_size
         self._reset_gradient_accum()
+
+    def sgd_step(self, input_activation: np.ndarray, learning_rate: float) -> None:
+        # the single-example step ArrayNetworkBase._learn_input calls; RustArrayLayer fuses it
+        unfused_sgd_step(self, input_activation, learning_rate)
 
     def _reset_gradient_accum(self) -> None:
         self._grad_W = np.zeros((self.size, self.input_size))
