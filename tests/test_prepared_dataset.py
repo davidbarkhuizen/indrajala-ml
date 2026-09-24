@@ -1,0 +1,218 @@
+"""
+The prepared-dataset path (candidate 1 in docs/optimizations.md) trains exactly as the tuple
+path does: for every numpy and Rust array network class, learn_row gives bit-for-bit the weights
+learn gives, step by step, learn_batch_rows those of learn_batch, and classify_row agrees with
+classify_state. The classes are enumerated from the two bases, so a new one can't be missed.
+"""
+
+import importlib
+import pkgutil
+import random
+
+import indrajala_math_rust as pa
+import numpy as np
+import pytest
+
+import indrajala_ml.model
+from indrajala_ml.mnist_data import load_mnist_dataset
+from indrajala_ml.model.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.conv_layer import ConvSpec
+from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
+from indrajala_ml.prepared_dataset import PreparedDataset, prepared_mnist
+
+MNIST_TRAIN = "data/mnist/mnist-train.bin"
+
+SIDE = 6
+DIMENSION = SIDE * SIDE
+CLASS_COUNT = 3
+CONV_SPECS = [ConvSpec(3, 2), PoolSpec(2)]
+
+for _module in pkgutil.iter_modules(indrajala_ml.model.__path__):
+    importlib.import_module(f"indrajala_ml.model.{_module.name}")
+
+
+def _all_subclasses(cls):
+    for subclass in cls.__subclasses__():
+        yield subclass
+        yield from _all_subclasses(subclass)
+
+
+NETWORK_CLASSES = sorted(
+    {cls for base in (ArrayNetworkBase, RustArrayNetworkBase) for cls in _all_subclasses(base)},
+    key=lambda cls: cls.__name__,
+)
+
+# how to build each class; a class missing here fails test_every_class_has_a_constructor.
+# The Rust dropout mask comes from an RNG that can't be seeded, so its class runs with
+# drop_probability 0.0; the numpy dropout class reseeds np.random before each step instead.
+CONSTRUCTORS = {
+    "VectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
+    "AdamVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
+    "ConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
+    "CrossEntropyVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
+    "DropoutVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.3),
+    "L2VectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.01),
+    "MomentumVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.9),
+    "ReLUVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
+    "SoftmaxVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
+    "ArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
+    "CrossEntropyArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
+    "RustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
+    "AdamRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
+    "ConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
+    "CrossEntropyRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
+    "DropoutRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.0),
+    "L2RustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.01),
+    "MomentumRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.9),
+    "ReLURustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
+    "SoftmaxRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
+    "RustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
+    "CrossEntropyRustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
+}
+
+
+def _is_rust(cls) -> bool:
+    return issubclass(cls, RustArrayNetworkBase)
+
+
+def _is_binary(cls) -> bool:
+    return not hasattr(cls, "predict_probabilities")
+
+
+def _rows(cls, count: int = 20) -> list:
+    rng = random.Random(1)
+    labels = [float(i % 2) for i in range(count)] if _is_binary(cls) else [i % CLASS_COUNT for i in range(count)]
+    return [(tuple(rng.random() for _ in range(DIMENSION)), label) for label in labels]
+
+
+def _twin_networks(cls):
+    # two networks with identical starting weights, built through snapshot/restore so the Rust
+    # classes (whose randomize can't be seeded) are covered too
+    first = CONSTRUCTORS[cls.__name__](cls)
+    first.randomize()
+    second = CONSTRUCTORS[cls.__name__](cls)
+    second.restore(first.snapshot())
+    return first, second
+
+
+def _weights(network) -> list:
+    return [[array.tolist() for array in entry] for entry in network.snapshot()]
+
+
+def _seed_step(step: int) -> None:
+    # only the numpy dropout class draws from np.random while training
+    np.random.seed(step)
+
+
+def test_every_class_has_a_constructor():
+    assert len(NETWORK_CLASSES) >= 22
+    assert {cls.__name__ for cls in NETWORK_CLASSES} == set(CONSTRUCTORS)
+
+
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
+def test_learn_row_matches_learn_exactly_step_by_step(cls):
+    via_tuples, via_rows = _twin_networks(cls)
+    rows = _rows(cls)
+    prepared = via_rows.prepare_dataset(rows)
+
+    for step, index in enumerate([3, 0, 7, 7, 12, 19, 1]):
+        state, label = rows[index]
+        _seed_step(step)
+        via_tuples.learn(0.5, state, label)
+        _seed_step(step)
+        via_rows.learn_row(0.5, prepared, index)
+        assert _weights(via_rows) == _weights(via_tuples), f"step {step}"
+
+
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
+def test_learn_batch_rows_matches_learn_batch_exactly_step_by_step(cls):
+    via_tuples, via_rows = _twin_networks(cls)
+    rows = _rows(cls)
+    prepared = via_rows.prepare_dataset(rows)
+
+    for step, indices in enumerate([[5, 0, 8, 13], [19], [5, 5, 2], list(range(20))]):
+        _seed_step(step)
+        via_tuples.learn_batch(0.5, [rows[i] for i in indices])
+        _seed_step(step)
+        via_rows.learn_batch_rows(0.5, prepared, indices)
+        assert _weights(via_rows) == _weights(via_tuples), f"step {step}"
+
+
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
+def test_classify_row_matches_classify_state(cls):
+    network, _ = _twin_networks(cls)
+    rows = _rows(cls)
+    prepared = network.prepare_dataset(rows)
+    assert [network.classify_row(prepared, i) for i in range(len(rows))] == [
+        network.classify_state(state) for state, _label in rows
+    ]
+
+
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
+def test_training_leaves_the_prepared_matrix_unchanged(cls):
+    network, _ = _twin_networks(cls)
+    rows = _rows(cls)
+    prepared = network.prepare_dataset(rows)
+    before = prepared.states.tolist()
+    for index in range(len(rows)):
+        network.learn_row(0.5, prepared, index)
+    network.learn_batch_rows(0.5, prepared, list(range(len(rows))))
+    assert prepared.states.tolist() == before
+
+
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
+def test_a_network_rejects_the_other_backends_dataset(cls):
+    network, _ = _twin_networks(cls)
+    other = PreparedDataset.from_rows(_rows(cls), "numpy" if _is_rust(cls) else "rust")
+    with pytest.raises(AssertionError):
+        network.learn_row(0.5, other, 0)
+    with pytest.raises(AssertionError):
+        network.learn_batch_rows(0.5, other, [0, 1])
+    with pytest.raises(AssertionError):
+        network.classify_row(other, 0)
+
+
+def test_the_row_paths_train_in_training_mode():
+    # the Rust dropout class runs at drop_probability 0.0 above, where training mode changes no
+    # weight, so check the flag its layers record directly
+    cls = next(cls for cls in NETWORK_CLASSES if cls.__name__ == "DropoutRustArrayMultiClassBackpropClassifierNetwork")
+    network, _ = _twin_networks(cls)
+    prepared = network.prepare_dataset(_rows(cls))
+    hidden = network.layers[0]
+
+    network.learn_row(0.5, prepared, 0)
+    assert hidden._was_training
+    network.classify_row(prepared, 0)
+    assert not hidden._was_training
+    network.learn_batch_rows(0.5, prepared, [0, 1])
+    assert hidden._was_training
+
+
+@pytest.mark.parametrize("backend", ["numpy", "rust"])
+def test_from_rows_holds_the_rows_and_labels(backend):
+    rows = [((0.1, 0.2), 1), ((0.3, 0.4), 0), ((0.5, 0.6), 2)]
+    prepared = PreparedDataset.from_rows(rows, backend)
+    assert len(prepared) == 3
+    assert prepared.backend == backend
+    assert prepared.states.tolist() == [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]
+    assert prepared.labels == [1, 0, 2]
+    assert isinstance(prepared.states, np.ndarray if backend == "numpy" else pa.Array)
+
+
+def test_a_prepared_dataset_rejects_bad_input():
+    with pytest.raises(AssertionError):
+        PreparedDataset.from_rows([], "numpy")
+    with pytest.raises(AssertionError):
+        PreparedDataset.from_rows([((0.1,), 0)], "torch")
+    with pytest.raises(AssertionError):
+        PreparedDataset(np.zeros((2, 3)), [0], "numpy")
+
+
+@pytest.mark.parametrize("backend", ["numpy", "rust"])
+def test_prepared_mnist_matches_preparing_the_loaded_tuples(backend):
+    expected = PreparedDataset.from_rows(load_mnist_dataset(MNIST_TRAIN, limit=50), backend)
+    actual = prepared_mnist(MNIST_TRAIN, backend, limit=50)
+    assert actual.backend == backend
+    assert actual.labels == expected.labels
+    assert actual.states.tolist() == expected.states.tolist()

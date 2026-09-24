@@ -46,13 +46,16 @@ class ArrayBackpropClassifierNetwork(ArrayNetworkBase):
         return float(self._forward(state)[0])
 
     def classify_state(self, state: tuple[float, ...]) -> float:
-        return 1.0 if self.predict_probability(state) > 0.5 else 0.0
+        return self._classify_output(self._forward(state))
+
+    def _classify_output(self, output: np.ndarray) -> float:
+        return 1.0 if float(output[0]) > 0.5 else 0.0
 
     def _target_array(self, category: float) -> np.ndarray:
         return np.array([category], dtype=np.float64)
 
-    def _target_batch_array(self, batch: Sequence[tuple[tuple[float, ...], float]], batch_size: int) -> np.ndarray:
-        return np.array([[category] for _state, category in batch], dtype=np.float64)
+    def _target_batch_array(self, categories: Sequence[float]) -> np.ndarray:
+        return np.array([[category] for category in categories], dtype=np.float64)
 
     @classmethod
     def randomized(

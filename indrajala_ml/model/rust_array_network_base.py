@@ -6,6 +6,7 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.model.bounds import validate_batch, validate_layer_sizes
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.prepared_dataset import PreparedDataset
 
 
 class RustArrayNetworkBase:
@@ -37,10 +38,24 @@ class RustArrayNetworkBase:
         self.layers.append(self.output_layer)
 
     def _forward(self, state: tuple[float, ...]) -> "pa.Array":
-        x = pa.Array(list(state))
+        return self._forward_input(pa.Array(list(state)))
+
+    def _forward_input(self, x: "pa.Array") -> "pa.Array":
         for layer in self.layers:
             x = layer.forward(x)
         return x
+
+    def classify_row(self, prepared: PreparedDataset, index: int):
+        # see ArrayNetworkBase.classify_row
+        return self._classify_output(self._forward_input(self._prepared_states(prepared).row(index)))
+
+    def prepare_dataset(self, rows: Sequence[tuple[tuple[float, ...], object]]) -> PreparedDataset:
+        return PreparedDataset.from_rows(rows, "rust")
+
+    @staticmethod
+    def _prepared_states(prepared: PreparedDataset) -> "pa.Array":
+        assert prepared.backend == "rust", f"a Rust network needs a Rust dataset; got {prepared.backend!r}"
+        return prepared.states
 
     def _set_training_mode(self, training: bool) -> None:
         # no-op for every sibling except dropout's own override
@@ -49,14 +64,22 @@ class RustArrayNetworkBase:
     def _target_array(self, category) -> "pa.Array":
         raise NotImplementedError
 
-    def _target_batch_array(
-        self, batch: Sequence[tuple[tuple[float, ...], object]], batch_size: int
-    ) -> "pa.Array":
+    def _target_batch_array(self, categories: Sequence) -> "pa.Array":
         raise NotImplementedError
 
+    def _classify_output(self, output: "pa.Array"):
+        raise NotImplementedError
+
+    # see ArrayNetworkBase: the public methods differ only in where the input array comes from
+
     def learn(self, learning_rate: float, state: tuple[float, ...], category) -> None:
-        activations = [pa.Array(list(state))]
-        x = activations[0]
+        self._learn_input(learning_rate, pa.Array(list(state)), category)
+
+    def learn_row(self, learning_rate: float, prepared: PreparedDataset, index: int) -> None:
+        self._learn_input(learning_rate, self._prepared_states(prepared).row(index), prepared.labels[index])
+
+    def _learn_input(self, learning_rate: float, x: "pa.Array", category) -> None:
+        activations = [x]
         self._set_training_mode(True)
         try:
             for layer in self.layers:
@@ -78,10 +101,18 @@ class RustArrayNetworkBase:
 
     def learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], object]]) -> None:
         validate_batch(batch)
-        batch_size = len(batch)
+        X = pa.Array([list(state) for state, _target in batch])
+        self._learn_batch_input(learning_rate, X, [category for _state, category in batch])
 
-        activations = [pa.Array([list(state) for state, _target in batch])]
-        X = activations[0]
+    def learn_batch_rows(self, learning_rate: float, prepared: PreparedDataset, indices: Sequence[int]) -> None:
+        validate_batch(indices)
+        X = self._prepared_states(prepared).take_rows(list(indices))
+        self._learn_batch_input(learning_rate, X, [prepared.labels[i] for i in indices])
+
+    def _learn_batch_input(self, learning_rate: float, X: "pa.Array", categories: Sequence) -> None:
+        batch_size = len(categories)
+
+        activations = [X]
         self._set_training_mode(True)
         try:
             for layer in self.layers:
@@ -90,7 +121,7 @@ class RustArrayNetworkBase:
         finally:
             self._set_training_mode(False)
 
-        target_batch = self._target_batch_array(batch, batch_size)
+        target_batch = self._target_batch_array(categories)
         self.output_layer.compute_output_delta_batch(target_batch)
 
         for i in reversed(range(len(self.layers) - 1)):
