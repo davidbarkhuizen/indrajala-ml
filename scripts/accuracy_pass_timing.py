@@ -11,7 +11,8 @@ prepared_mnist's, so no pass converts a row.
 
 Networks, from numpy-drawn seed-0 weights (as scripts/prepared_dataset_timing.py):
 - dense: 784 -> 30 -> 10 on full MNIST (60000 rows);
-- conv: the conv demo's "conv" network (ConvSpec(3, 8), dense 32) on its 2000-row MNIST subset.
+- conv, conv-pool-conv, conv-conv-stride2: the conv demo's architectures (dense 32) on its
+  2000-row MNIST subset.
 
 Measures (seconds), each the median of 3 in-process runs:
 - per row: the classify_row loop _training_accuracy runs;
@@ -37,7 +38,7 @@ import time
 import numpy as np
 
 from indrajala_ml import batch_size_scaling as bss
-from indrajala_ml.model.conv_layer import ConvSpec
+from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import ARCHITECTURES
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -48,7 +49,7 @@ from indrajala_ml.prepared_dataset import prepared_mnist
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
 
 BACKENDS = ["numpy", "rust"]
-NETWORKS = ["dense", "conv"]
+NETWORKS = ["dense", *ARCHITECTURES]
 CHUNKS = [32, 512]
 MEASURES = (
     ["per row"]
@@ -59,7 +60,6 @@ MEASURES = (
 LEARNING_RATE = 0.5
 BATCH_SIZE = 32
 SEED = 0
-CONV_SPECS = [ConvSpec(3, 8)]
 CONV_DENSE_LAYER_SIZES = [32]
 CONV_TRAIN_LIMIT = 2000
 CONV_CLASSES = {"numpy": ConvVectorizedMultiClassBackpropClassifierNetwork, "rust": ConvRustArrayMultiClassBackpropClassifierNetwork}
@@ -70,8 +70,9 @@ def _network(name: str, backend: str):
     if name == "dense":
         return bss.initial_network(backend, 0.0, SEED)
     np.random.seed(SEED)
-    snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(28, 28, CONV_SPECS, CONV_DENSE_LAYER_SIZES, 10).snapshot()
-    network = CONV_CLASSES[backend](28, 28, CONV_SPECS, CONV_DENSE_LAYER_SIZES, 10)
+    conv_specs = ARCHITECTURES[name]
+    snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(28, 28, conv_specs, CONV_DENSE_LAYER_SIZES, 10).snapshot()
+    network = CONV_CLASSES[backend](28, 28, conv_specs, CONV_DENSE_LAYER_SIZES, 10)
     network.restore(snapshot)
     return network
 

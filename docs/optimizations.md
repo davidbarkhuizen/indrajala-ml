@@ -113,8 +113,8 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
 2. **A batched accuracy pass**: **done** (#378-#379, 2026-09-24). The trainers' accuracy pass
    runs `forward_batch` over 32-row chunks; the dense MNIST epoch at B = 32 went from 1.61 to
    1.31 s in Rust and 4.85 to 2.44 s in numpy. See "A batched accuracy pass" under
-   "Completed". Rust conv keeps the per-row pass; candidate 4 made its batched forward about
-   as cheap per example as single calls, so switching it is the next measured stage.
+   "Completed". Rust conv keeps the per-row pass: after candidate 4 a batched pass still
+   measured a tie for conv and slower for the pooled and strided networks (candidate 4's stage 2).
 
 3. **Dense single-example `downstream` through the tiled kernel**: **done** (crate #20,
    2026-09-24). At 32 x 5408 it went from 43.8-48.1 to 26.2-26.4 µs (numpy 29.0-29.3), and the
@@ -124,8 +124,9 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
 4. **Conv `forward_batch` one example at a time**: **done** (#383 stage 0, crate #21,
    2026-09-24). At N = 32 it went from 1351-1694 to 920-1010 µs (32 single calls: about 850), at
    N = 512 from 34.0-40.5 to 15.0-15.7 ms, and it saves 40-55 ms (5-6%) of the MNIST conv mini-batch
-   32 epochs. See "Conv forward_batch one example at a time" under "Completed". Rust conv still
-   has the per-row accuracy pass; switching it to candidate 2's batched pass is the next stage.
+   32 epochs. See "Conv forward_batch one example at a time" under "Completed". Switching Rust
+   conv to candidate 2's batched accuracy pass still doesn't pay (stage 2, closed; see there), so
+   it keeps the per-row pass.
 
 5. **`max_pool_forward_batch`** is the second- or third-largest Rust conv op: in profiled MNIST
    conv-pool-conv training, 0.095 s of 0.86 s single-example (11%, 6000 calls, 4000 of them the
@@ -621,6 +622,26 @@ time (the raised-threshold rows are the same).
   single"`, 9 runs per build in calls alternated old, new, new, old, old, new, read the Rust B =
   32 epoch 0.645 → 0.609 s (-5.6%), but numpy's, which the change can't touch, moved -5.1% in
   the same calls. The profile above measures the op directly.
+
+**Stage 2, Rust conv's batched accuracy pass: closed, no gain** (2026-09-24, on the new build).
+`scripts/accuracy_pass_timing.py`, which now covers all three demo architectures, 9 processes
+per cell (an earlier 5-repeat run, disturbed by other load, agreed); seconds per pass, 0
+predictions differing anywhere:
+
+| Rust network | per row | batched 32 | batched faster in |
+| --- | --- | --- | --- |
+| conv | 0.104 (0.095-0.127) | 0.103 (0.098-0.111) | 6 of 9 |
+| conv-pool-conv | 0.163 (0.158-0.180) | 0.186 (0.184-0.219) | 0 of 9 |
+| conv-conv-stride2 | 0.141 (0.139-0.153) | 0.169 (0.161-0.196) | 0 of 9 |
+
+(numpy's batched pass saves 0.05-0.20 s on each.) A cProfile of one pass by crate op puts the
+loss in `conv_forward_batch` itself: per row against batched, 47.8 against 55.4 ms (conv), 109.5
+against 136.0 (conv-pool-conv), 120.5 against 147.2 (conv-conv-stride2); then
+`max_pool_forward_batch` (31.5 against 37.0) and `take_rows` (3-4 ms). The batched op still
+writes a whole-batch `cols` (1.56 MB at N = 32) that inference never reads, while single calls
+reuse the same small hot buffers. So the lead is a forward that skips `cols` in batched
+evaluation: `conv-infer-batch` was closed on N = 1 evidence (48 KB there), which doesn't cover
+N = 32. The override in `ConvRustArrayMultiClassBackpropClassifierNetwork.classify_rows` stays.
 
 The candidate and its stage 0, as recorded when it was open:
 
