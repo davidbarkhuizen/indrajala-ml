@@ -39,8 +39,8 @@ by side). And the demo runs numpy then Rust in one process, so each Rust run sta
 OpenBLAS's threads may still be spinning (see "Other findings"); that can only slow Rust, by at
 most the first 100-500 ms of each run, and is unmeasured.
 
-Per op, the single-example ops are all at or better than numpy except dense `downstream` at
-32 x 5408 (1.5-1.6x, candidate 3). The other gaps left are in batch ops. Rust / numpy µs per
+Per op, the single-example ops are all at or better than numpy since candidate 3 (dense
+`downstream` at 32 x 5408 was 1.5-1.6x, now 0.9x). The gaps left are in batch ops. Rust / numpy µs per
 call, focused benchmark (see "How to measure"), numpy and Rust in separate processes, Rust
 with the default threading (threshold 8M flops since #16). The last two columns put both
 backends on one thread (`--openblas-threads 1 --rust-threads 1`, 2026-09-24: optimization 7
@@ -94,7 +94,7 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
   `conv_accumulate_gradient_batch` 10.5%, dense `accumulate_gradient_batch` 9.5% and
   `downstream_batch` 6.7% (candidate 6), `forward_batch` 6.3%.
 - **Conv MNIST, single-example** (0.80 s): `layer_sgd_step` 20%, `conv_forward_batch` 20%,
-  `layer_forward` 19%, dense `downstream` 11% (candidate 3), conv accumulate 7%.
+  `layer_forward` 19%, dense `downstream` 11% (5-7% since candidate 3), conv accumulate 7%.
 - **Conv-pool-conv MNIST**: `conv_forward_batch` 41-42% in both trainers, `max_pool_forward_batch`
   10-11% (candidate 5).
 
@@ -115,19 +115,10 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    1.31 s in Rust and 4.85 to 2.44 s in numpy. See "A batched accuracy pass" under
    "Completed". Rust conv keeps the per-row pass until candidate 4 is fixed.
 
-3. **Dense single-example `downstream` at 32 x 5408 is 1.5-1.6x numpy.** First seen in the
-   interleaved per-op harness (50 vs 33 µs); in separate processes (focused benchmark, two
-   passes, 2026-09-24) it holds: 42.7-52.0 µs against 28.1-33.4. It is vector @ matrix, `delta
-   @ W` through `axpy_row`: 32 load/FMA/store passes over a 43 KB output row, the pattern #14
-   removed from `matmul_2d`. The same product as a one-row `downstream_batch` goes through the
-   tiled kernel and took 21.4-22.1 µs against numpy's 28.3-28.8 in the same runs. In the MNIST
-   conv single-example epoch its 2000 calls took 88 ms of 0.80 s (11%, profiled), so the tiled
-   kernel's rate would save about 44 ms (5%). Dense MNIST's only downstream is the 10 x 30
-   layer's, so this is the conv tail's. Candidate: route vector @ matrix through
-   `tiled_row_range` as a one-row matrix. It is the same FMA chain, so bit-identical, and the
-   crate tests that compare the two would need another reference. It ranks above candidate 4,
-   whose stake is about the same, because the cause and the fix are both known and the change
-   is small.
+3. **Dense single-example `downstream` through the tiled kernel**: **done** (crate #20,
+   2026-09-24). At 32 x 5408 it went from 43.8-48.1 to 26.2-26.4 µs (numpy 29.0-29.3), and the
+   MNIST conv single-example Rust epoch lost about 45 ms (6%). See "Dense single-example
+   downstream through the tiled kernel" under "Completed".
 
 4. **Conv `forward_batch` costs more per example than single-example calls.** Re-measured
    2026-09-24 at 28x28, `ConvSpec(3, 8)`, Rust on one thread (focused benchmark, two passes):
@@ -138,8 +129,8 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    calls (1.2-1.3x), accumulate 1037-1106 against 899-934 (1.1-1.2x; candidate 8 at N = 512). In
    the MNIST conv mini-batch 32 epoch the 63 batch calls took about 96 ms (profiled, the 4000
    accuracy-pass calls taken out at 27 µs each), so at the single-example rate they would save
-   about 40 ms, 5% of the worst end-to-end cell. That is about candidate 3's stake, but this has
-   neither a confirmed cause nor a design, so it ranks after it. It ranks above candidate 6,
+   about 40 ms, 5% of the worst end-to-end cell. That is about candidate 3's stake, but this had
+   neither a confirmed cause nor a design, so it ranked after it; with candidate 3 done it is next. It ranks above candidate 6,
    whose stages are planned and measured but worth only 2.5-4%, and fixing it is what would let
    conv networks gain from candidate 2. The likely cause, unmeasured: `cols` (48 KB at N = 1, 1.56 MB at N = 32,
    25 MB at N = 512) falls out of L2 between im2col and the matmul. A second, found in candidate
@@ -568,7 +559,8 @@ doesn't depend on the machine. Each kernel has one fixed summation order:
 - **Matrix @ matrix (`matmul_2d`, `matmul_narrow`) and vector @ matrix:** one FMA chain per
   output, `k` increasing from 0.0. `tiled_row_range` holds 16-column output tiles in registers
   across all of `k`: `matmul_2d` in row blocks of about 16 KB of `a`, `matmul_narrow` one row at
-  a time. Vector @ matrix goes through `axpy_row` with the same chain.
+  a time. Vector @ matrix is the one-row product (crate #20; it had its own `axpy_row` loop
+  with the same chain).
 - **Threading** splits output rows across threads, so each output is computed by one thread and
   the thread count can't change any value (see "Threading").
 - These orders differ from numpy's in the last few ULPs, so parity with numpy is checked with
@@ -595,6 +587,51 @@ Crate PR numbers are `indrajala-math-rust`'s. "Bit-identical" means every output
 | `Array.from_rows`, `row` and `take_rows`, for the dataset as one backend array (candidate 1; the Python side is #373-#374) | #19 | dense MNIST Rust epoch at B = 32 3.72 → 1.69 s, single-example 4.60 → 2.57; training bit-identical |
 | `matmul_nt` in 4 x 2 register tiles (4 rows of `X` against 2 rows of `W`; 2 x 4, 3 x 3 and 2 x 2 measured slower or tied) | #17 | unthreaded dense `forward_batch` 0.6-0.9x its old time (second pass: 32 x 5408, batch 32: 771-916 → 545-555 µs; 30 x 784, batch 32: 102-110 → 76-77); epochs within noise; bit-identical |
 | A batched training-set accuracy pass: `classify_rows`, `forward_batch` over 32-row chunks (candidate 2) | - | dense MNIST epoch at B = 32 1.61 → 1.31 s in Rust, 4.85 → 2.44 in numpy; predictions equal, pinned results unchanged |
+| Vector @ matrix (single-example `layer_downstream`) through `tiled_row_range` as a one-row product, `axpy_row` removed (candidate 3) | #20 | 43.8-48.1 → 26.2-26.4 µs at 32 x 5408 (numpy 29.0-29.3); MNIST conv single-example Rust epoch about -6%; bit-identical |
+
+**Dense single-example downstream through the tiled kernel** (candidate 3; crate #20,
+2026-09-24). The vector @ matrix case of `matmul` (`layer_downstream`'s `delta @ W`) calls
+`tiled_row_range` with one row, the kernel `matmul_2d` and `matmul_narrow` use; `axpy_row`, its
+only user, is gone. The crate test that compared matrix @ matrix rows with vector @ matrix now
+compares the kernel with itself, so vector @ matrix is pinned against the `Fraction` FMA chain
+directly, at every column-tile width and at 32 x 5408, 30 x 784 and 10 x 30. The pins passed on
+the old build; rounding twice in the vector @ matrix case failed 26 of them. Crate suite 894
+passed; full suite 3138 passed with no pin moved.
+
+Focused benchmark, builds alternated old, new, old, new, each in its own process; µs per call:
+
+| shape | old | new | numpy |
+| --- | --- | --- | --- |
+| 32 x 5408 (conv tail) | 43.8-48.1 | 26.2-26.4 | 29.0-29.3 |
+| 30 x 784 | 5.8-6.4 | 3.4-3.5 | 5.6 |
+| 10 x 30 | 0.6 | 0.5 | 1.8 |
+
+- **In the epoch** (MNIST conv single-example, the demo's 2000 rows; cProfile via
+  `rust_op_breakdown`, 3 runs per build, builds alternated twice): the 2000 `layer_downstream`
+  calls took 86.2-90.4 ms old and 42.4-55.7 ms new, the 44 ms predicted.
+- **Epoch time** (`prepared_dataset_timing.py --configs "conv single"`, Rust medians): with 9
+  repeats, new build first, 0.744 → 0.700 s and 0.765 → 0.716 (about -6%). An earlier pass of 5
+  repeats, old first, read 0.776 → 0.655 and 0.695 → 0.706, inside the noise; a 44 ms saving
+  on a 0.7 s epoch needs more repeats than 5.
+- **The demo** after the change read MNIST conv single-example at 0.20 (0.26 before), but its
+  mini-batch cells, which this doesn't touch, moved by as much (conv 0.49 → 0.60), so the table
+  at the top keeps its numbers.
+
+The candidate, as recorded when it was open:
+
+**Dense single-example `downstream` at 32 x 5408 was 1.5-1.6x numpy.** First seen in the
+interleaved per-op harness (50 vs 33 µs); in separate processes (focused benchmark, two
+passes, 2026-09-24) it holds: 42.7-52.0 µs against 28.1-33.4. It is vector @ matrix, `delta
+@ W` through `axpy_row`: 32 load/FMA/store passes over a 43 KB output row, the pattern #14
+removed from `matmul_2d`. The same product as a one-row `downstream_batch` goes through the
+tiled kernel and took 21.4-22.1 µs against numpy's 28.3-28.8 in the same runs. In the MNIST
+conv single-example epoch its 2000 calls took 88 ms of 0.80 s (11%, profiled), so the tiled
+kernel's rate would save about 44 ms (5%). Dense MNIST's only downstream is the 10 x 30
+layer's, so this is the conv tail's. Candidate: route vector @ matrix through
+`tiled_row_range` as a one-row matrix. It is the same FMA chain, so bit-identical, and the
+crate tests that compare the two would need another reference. It ranks above candidate 4,
+whose stake is about the same, because the cause and the fix are both known and the change
+is small.
 
 **A batched accuracy pass** (candidate 2; #378 stage 0, #379, 2026-09-24). The trainers'
 `_training_accuracy` now calls `classify_rows(prepared)` on the array networks: both bases run
