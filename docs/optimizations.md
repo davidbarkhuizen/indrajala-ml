@@ -30,22 +30,24 @@ Per op, the single-example ops are all at or better than numpy. The large gaps l
 batch ops **past `matmul`'s 4M-flop threading threshold**. Rust / numpy µs per call, two passes
 of the focused benchmark (see "How to measure"), after #14.
 
-**The Rust column below is inflated.** It was measured with numpy and Rust loops interleaved in
-one process, and numpy's OpenBLAS threads keep spinning after each call and take cores from the
-Rust call (see "Other findings"). Timed in separate processes, the first row is 239-244 µs numpy
-against 528-570 µs Rust: 2.2-2.4x, not 12-13x. Stage 0b of the threading workplan re-measures
-every row cleanly.
+Re-measured in stage 0b of the threading workplan, with numpy and Rust in separate processes.
+The earlier table measured them interleaved in one process, and numpy's OpenBLAS threads kept
+spinning and took cores from Rust (see "Other findings"). That made it read 12-13x, 7x, 4-8x
+and 4x on the first, second, fourth and fifth rows. Rust here uses the default threading.
 
 | shape | op | batch | numpy | Rust | Rust/numpy |
 | --- | --- | --- | --- | --- | --- |
-| 32 x 5408 | `downstream_batch` | 32 | 238-258 | 3005-3075 | 12-13x |
-| 32 x 5408 | `accumulate_gradient_batch` | 32 | 449-453 | 3084-3306 | 7x |
-| 32 x 5408 | `forward_batch` | 512 | 5732-8715 | 12097-13058 | 1.4-2.3x |
-| 30 x 784 | `downstream_batch` | 512 | 477-834 | 2982-3877 | 4-8x |
-| 30 x 784 | `accumulate_gradient_batch` | 512 | 949-969 | 3477-3832 | 4x |
-| 30 x 784 | `forward_batch` | 512 | 805-1453 | 2968-4290 | 2-5x |
-| 30 x 784 | `downstream_batch` | 32 | 45 | 78 | 1.7x |
-| 30 x 784 | `accumulate_gradient_batch` | 32 | 88-93 | 94-96 | 1.0-1.1x |
+| 32 x 5408 | `downstream_batch` | 32 | 232-246 | 729-834 | 3.0-3.6x |
+| 32 x 5408 | `accumulate_gradient_batch` | 32 | 411-453 | 1175-1498 | 2.6-3.6x |
+| 32 x 5408 | `forward_batch` | 512 | 3695-4110 | 4747-4898 | 1.2-1.3x |
+| 30 x 784 | `downstream_batch` | 512 | 416-945 | 1193-1401 | 1.3-3.4x |
+| 30 x 784 | `accumulate_gradient_batch` | 512 | 714-776 | 997-1336 | 1.3-1.9x |
+| 30 x 784 | `forward_batch` | 512 | 788-1039 | 1267-1301 | 1.2-1.7x |
+| 30 x 784 | `downstream_batch` | 32 | 46-50 | 73-85 | 1.5-1.8x |
+| 30 x 784 | `accumulate_gradient_batch` | 32 | 70-73 | 82-97 | 1.1-1.4x |
+
+The batch-512 Rust numbers are partly warm-clock numbers (the default ran right after an
+8-thread run in the sweep; see the workplan's step 2).
 
 ## Open candidates, in priority order
 
@@ -69,11 +71,15 @@ every row cleanly.
    - **Large products still scale.** `(32, 512) @ (512, 5408)` goes from 32 ms on 1 thread to
      6-7 ms on 8. 30 x 784 at batch 512 goes from 1.3-1.7 ms to 0.8 ms on 4 threads (no better
      on 8).
+   - **Threading costs the MNIST conv mini-batch epoch 11%** (0.846 against 0.752 s, medians
+     of 5, threading on against off). Its 186 threaded calls per epoch are the only calls in any
+     demo configuration that cross the threshold (stage 0b step 3).
 
-   Candidates: split by columns when `b` is the larger operand, a persistent thread pool, or a
-   higher threshold. Each output is still computed by one thread under any of them, so every
-   output keeps its bits. Measure each against a single-thread baseline at the shapes in the
-   table above. This machine has 4 cores / 8 threads, and the threshold is machine-dependent.
+   Stage 0 decided: stage A (a higher threshold, no 2- or 4-thread counts) first, since it
+   removes the only production cost. The pool (stage B) is deferred and the column split
+   (stage C) is skipped; see the workplan's decision. Every stage keeps each output on one
+   thread, so every output keeps its bits. This machine has 4 cores / 8 threads, and the
+   threshold is machine-dependent.
    Workplan: [`workplans/optimization-6-matmul-threading.md`](workplans/optimization-6-matmul-threading.md).
 
 2. **Dense `forward_batch` at large batches** (`matmul_nt`). 32 x 5408 is 1.2x numpy at batch 32

@@ -108,10 +108,65 @@ OpenBLAS threads spinning, and they slow the Rust call 2-5x. Timed on its own, R
 - **Caller computes chunk 0** (spawn one thread fewer): 443-584 µs at 4 threads and 564-621 at
   8, against 729-779 and 723-728 for spawn-all in the same runs.
 
-What this means for stage A-C: stage C (`b` traffic) can't be the main cost here, since the
-register-only probe shows the same slowdown with no memory traffic. Stage B (a pool) could remove
-both the spawn cost and the idle clock, and the caller should do one chunk itself. Steps 2 and 3
-still decide it, measured in separate processes from numpy.
+**Step 2 done (2026-09-24).** Thread-count sweep over 40 cases, numpy and Rust in separate
+processes, two passes, with the focused benchmark. Rust ran at `(t, 1)` for t = 1, 2, 4, 8, then
+at the default `(0, 0)`. The full per-case table is in the stage 0 PR. Best of 2/4/8 threads
+against 1, from the flop ladder:
+
+| kernel (ladder shape) | 1M | 2M | 4M | 8M | 16M | 32M | 64M |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `matmul_2d`, `(m, 64) @ (64, 512)` | 1.27 | 1.02 | 0.87 | 0.80 | 0.50 | 0.51 | 0.61 |
+| `matmul_nt`, 30 x 784 `forward_batch` | 1.50 | 1.18 | 0.83 | 0.65 | 0.56 | 0.55 | 0.57 |
+| `matmul_narrow`, conv 28x28 `forward_batch` | 1.25 | 1.11 | 1.15 | 1.07 | 1.01 | 0.90 | 0.77 |
+
+- **2 threads never beat 1** up to 64M, except `matmul_2d` at 64M (0.68). 4 threads beat 1 at
+  `matmul_2d` 4M and above, marginally, and at `matmul_nt` only from 32M. 8 threads start to pay
+  at about 8M for `matmul_2d` and `matmul_nt`. Subtracting 8 threads' spawn cost (180-200 µs) moves
+  that to about 4-8M.
+- **Conv:** threading barely moves conv forward and downstream at any N (0.9-1.2 at N = 32 and
+  512), because the matmul is a small part of those ops. Conv accumulate, with 8 output rows and
+  a long `k`, halves on 8 threads at N = 512 (58-60 → 30 ms) and doesn't gain at N = 32.
+- **Large products scale:** `(32, 512) @ (512, 5408)` goes from 31-32 ms on 1 thread to 10-11 on
+  8; 32 x 5408 `accumulate_gradient_batch` at batch 512 from 30 to 6.5-10 ms.
+- **Clock warm-up.** The default setting is the same as `(8, 1)` on this machine, but in the
+  sweep it often measured faster, because it always ran right after t=8. With the order swapped,
+  `(32, 512) @ (512, 5408)` takes 9.9-10.1 ms for whichever 8-thread setting runs first after
+  t=1, and 5.3-5.8 ms for the one after it. Cores take hundreds of ms of load to clock up. The
+  32 x 5408, batch 32 call shows no such effect (600-626 µs either way). So the sweep's t=8
+  column for large products is partly cold, and its default column partly warm.
+
+**Step 3 done (2026-09-24).** A per-shape call counter in the local experiment build, one epoch
+of each conv demo configuration (UCI digits and the 2000-row MNIST subset, mini-batch 32 and
+single-example) and one 60000-row epoch of dense MNIST 784 -> 30 -> 10 at batch 32. **Only one
+configuration ever crosses the threshold:** MNIST, a single `ConvSpec(3, 8)`, mini-batch 32. 186
+of its 4504 threaded-kernel calls per epoch cross it, all in the 32 x 5408 dense tail: 124
+`matmul_2d` (`(32, 32) @ (32, 5408)`, downstream and accumulate) and 62 `matmul_nt` (forward),
+each 5.5M flops. conv-pool-conv and conv-conv-stride2 have dense tails 968 and 1152 wide, which
+stay below the threshold. Nothing crosses in any UCI run, any single-example run, or dense MNIST.
+
+**What threading costs end to end.** That configuration's epoch, default threading against
+threading off (`(1, 2**60)`), alternated, 5 each, same initial weights: **0.830-0.862 s against
+0.746-0.788 s, medians 0.846 and 0.752. Threading makes it 11% slower**, about 500 µs per
+threaded call. In isolation, repeated back to back, the same calls come out about even. In
+training the other cores idle between these calls, so each call pays the full cold-clock cost.
+
+### Decision (end of stage 0)
+
+- **Stage A first, and it is the only stage the demos justify.** Raising the threshold so that
+  5.5M-flop products run on one thread removes the only measured production cost (11% of the
+  MNIST conv mini-batch epoch). 8 threads pay from about 8M in the isolated ladder, but the
+  end-to-end result says the isolated ladder flatters threading, so the new threshold needs an
+  end-to-end check at batch 512 too, not just the ladder. Drop 2 and 4 threads: 2 never paid, and
+  4 only marginally.
+- **Stage B (pool): deferred, not justified by any demo.** A pool removes spawn cost (180-200 µs
+  at 8 threads), and threads that persist might keep their cores warm. But in training the
+  workers would still idle between calls, so the cold clock may remain unless the workers spin.
+  That is untested. It only pays at batch 512 and up, which no demo uses.
+- **Stage C (split by columns): skip.** Nothing points at `b` traffic. The register-only probe
+  in step 1 showed the same worker slowdown with no memory traffic at all.
+- **The remaining batch-32 gaps are kernel gaps, not threading.** Unthreaded at 32 x 5408, batch
+  32: `accumulate_gradient_batch` 1214-1374 µs against numpy's 411-453, and `downstream_batch`
+  587-1453 against 232-246. That is outside this workplan.
 
 All on the current kernel, focused per-op benchmark (loops of about 20 ms, median of 9, two
 passes). Use a scratch script, not a demo:
