@@ -160,7 +160,8 @@ on the 32 x 5408 and 30 x 784 dense shapes, most Rust batch ops take 1.3x to 11x
 `forward_batch` at 32 x 5408 is 312 vs 32 µs, which is mostly the `W.T` copy (optimization 1
 stage C, since done: 58 µs). Why the end-to-end mini-batch ratios above don't show a gap this large hasn't been
 measured. Nothing here is acted on yet: optimization 1 removes the
-transposes, and the numbers the run gives after it will show how much of the gap remains.
+transposes, and the numbers the run gives after it will show how much of the gap remains. (They
+did: see "Remaining candidates" below for the numbers after optimization 1.)
 
 Optimization 1 stage A ruled out one cause: removing the `delta_batch.T` copy from
 `accumulate_gradient_batch` left it unchanged (within ±4%, the spread between runs is 10-25%).
@@ -203,6 +204,64 @@ alternated (Rust seconds; numpy's own time varied 15.2-17.2 s between the runs):
 - Mini-batch 32: Rust 5.45 → 4.69 s, ratio 0.665 → 0.557.
 
 Test accuracies were identical between the builds.
+
+## Remaining candidates (as of 2026-09-24)
+
+What is still open after optimizations 1-4 and the dense dot-product fix. Nothing below has
+been measured as a fix. The per-op numbers come from `demo_layer_op_timing` on 2026-09-24 unless
+marked otherwise, Rust vs numpy µs per call.
+
+1. **Dense batch downstream and accumulate at the wide shapes** (the "Batch ops" section above,
+   with numbers after optimization 1):
+
+   | shape | op | batch | numpy | Rust | Rust/numpy |
+   | --- | --- | --- | --- | --- | --- |
+   | 32 x 5408 | `downstream_batch` | 32 | 296 | 2800 | 9.5x |
+   | 32 x 5408 | `accumulate_gradient_batch` | 32 | 716 | 3911 | 5.5x |
+   | 32 x 5408 | `hidden_delta_batch` | 32 | 1533 | 3588 | 2.3x |
+   | 30 x 784 | `downstream_batch` | 512 | 452 | 3777 | 8.4x |
+   | 30 x 784 | `accumulate_gradient_batch` | 512 | 776 | 3906 | 5.0x |
+
+   These are the largest remaining gaps to numpy. The only candidate cause on record is the
+   untested guess above: `matmul_2d` starting threads just over its 4M-flop threshold. The odd
+   shape of the numbers fits it: at 32 x 5408, `downstream_batch` is 9.5x numpy at batch 32 but
+   1.4x at batch 512. First step: profile one op at batch 32 with threading forced off, then on.
+
+2. **Dense `forward_batch` at large batches is memory-bound.** The dot-product fix left batch 512
+   at 30 x 784 and 16 x 784 barely changed (1418 → 1350 µs, focused benchmark). Each row of `X`
+   re-reads all of `W`. Candidate: a register block of 2-4 rows of `X` against the same `W`
+   rows, so each `W` load serves several outputs. Each output keeps `dot_product`'s grouping, so
+   this is bit-identical.
+
+3. **Conv `forward_batch` at N = 32 costs more than 32 single-example calls.** Measured at 28x28
+   (2280 vs 1715 µs, optimization 3 stage B, before stage C). The likely cause, unmeasured: the
+   1.5 MB `cols` falls out of cache between im2col and the matmul. Candidate: im2col and multiply
+   one block of output positions at a time, keeping `cols` for the backward pass. Re-measure
+   first, since stage C changed the matmul.
+
+4. **Conv accumulate with a large `cols` has no cache blocking.** `matmul_narrow` gave no gain on
+   `conv_accumulate_gradient_batch` at 13x13x8, N = 32 (+2%, +4%, -1% at O = 4, 8, 32), where
+   `cols` is 0.3-2.2 MB and `matmul_2d`'s blocking made up for its row overhead
+   (`workplans/optimization-3-conv-forward.md`, stage C follow-up). Candidate: block
+   `matmul_narrow` over `k` once `b` exceeds the same 256 KB threshold. The per-row `k` order is
+   unchanged, so it is bit-identical.
+
+5. **`max_pool_forward_batch` is now the second-largest Rust conv op**, about 10% of profiled
+   conv-pool-conv training (single-example: 0.10 s of 1.0 s, 6000 calls). It has never been
+   examined. It does no arithmetic, so the likely costs are the per-window index arithmetic and
+   the separate `argmax` output.
+
+6. **Dense single-example `downstream` at 32 x 5408 is still 1.5x numpy** (50 vs 33 µs), after
+   optimization 1 stage B took it from 308 to 43 µs. It is `delta @ W` through `axpy_row` over
+   32 rows 5408 wide, so it is bound by streaming `W` (1.4 MB) rather than by FMA latency. It
+   affects the conv-tail single-example step only. Low value.
+
+7. **The per-op harness's batch rows are noisy.** At batch 32 and 512 it runs 10 calls per loop.
+   On 2026-09-24 it reported 30 x 784 `forward_batch` at batch 512 as 3469 µs, where a focused
+   benchmark (median of 9 loops of about 20 ms each) measured 1350. Before acting on any batch
+   row above, re-measure with more calls per loop, or raise the harness's batch call count.
+
+Optimization 5 (the dataset as one array) is still open as well, above.
 
 ## Not optimizations, but found in the same measurements
 
