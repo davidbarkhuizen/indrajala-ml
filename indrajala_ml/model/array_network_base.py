@@ -6,7 +6,7 @@ import numpy as np
 
 from indrajala_ml.model.array_layer import ArrayLayer, fan_in_aware_random_layer
 from indrajala_ml.model.bounds import validate_batch, validate_layer_sizes
-from indrajala_ml.prepared_dataset import PreparedDataset
+from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
 
 class ArrayNetworkBase:
@@ -72,6 +72,20 @@ class ArrayNetworkBase:
         # class's argmax or 0.5 threshold, shared with classify_state
         return self._classify_output(self._forward_input(self._prepared_states(prepared)[index]))
 
+    def classify_rows(self, prepared: PreparedDataset) -> list:
+        # classify_row for every row, as the trainers' accuracy pass needs it, through
+        # forward_batch over chunks of rows (candidate 2 in docs/optimizations.md). The
+        # predictions are classify_row's, but not by construction: numpy's X @ W.T can differ
+        # from W @ x in the last ULP, so an argmax between outputs an ULP apart could differ
+        states = self._prepared_states(prepared)
+        predictions = []
+        for start in range(0, len(prepared), CLASSIFY_CHUNK_ROWS):
+            X = states[start : start + CLASSIFY_CHUNK_ROWS]
+            for layer in self.layers:
+                X = layer.forward_batch(X)
+            predictions.extend(self._classify_output_batch(X))
+        return predictions
+
     def prepare_dataset(self, rows: Sequence[tuple[tuple[float, ...], object]]) -> PreparedDataset:
         return PreparedDataset.from_rows(rows, "numpy")
 
@@ -93,6 +107,10 @@ class ArrayNetworkBase:
         raise NotImplementedError
 
     def _classify_output(self, output: np.ndarray):
+        raise NotImplementedError
+
+    def _classify_output_batch(self, output_batch: np.ndarray) -> list:
+        # _classify_output for each row of a (batch, output_size) forward_batch output
         raise NotImplementedError
 
     # learn/learn_row and learn_batch/learn_batch_rows only differ in where the input array

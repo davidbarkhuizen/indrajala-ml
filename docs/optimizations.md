@@ -26,9 +26,10 @@ cell was within 0.05 of these (MNIST mini-batch 0.47, 0.43, 0.48), which is run-
 | conv-conv-stride2 | 0.11 | 0.12 | 0.35 | 0.46 |
 
 At the start, MNIST conv single-example was 1.21 (Rust slower) and conv-pool-conv mini-batch was
-0.66. Dense MNIST 784 -> 30 -> 10, one 60000-example epoch: Rust/numpy about 0.19
-single-example and 0.31 mini-batch 32 since candidate 1 (#374; 0.31 and 0.47 before), both
-backends' epochs much shorter (see candidate 1's record under "Completed").
+0.66. Dense MNIST 784 -> 30 -> 10, one 60000-example epoch: Rust/numpy about 0.21
+single-example and 0.54 mini-batch 32 since candidate 2 (#379; 0.20 and 0.33 before it, 0.31 and
+0.47 before candidate 1), both backends' epochs much shorter (see candidates 1 and 2 under
+"Completed"). Candidate 2 raised the B = 32 ratio because numpy's accuracy pass gained more.
 
 Two caveats on these ratios. numpy runs with OpenBLAS's default threading, which slows its own
 training: its MNIST conv mini-batch 32 epoch took 1.22-1.32 s at `OPENBLAS_NUM_THREADS=1`
@@ -109,70 +110,10 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
    "The dataset as one backend array" under "Completed". The entry stays here so the
    numbers below keep their meaning.
 
-2. **A batched accuracy pass** (promoted from "Other findings", 2026-09-24; **stage 0 done, go**;
-   next: the implementation).
-   `_training_accuracy` (`train.py`) calls `classify_state` once per training row, n + 1 times
-   over the training set for n epochs. Candidate 1 (done) removed the row conversion
-   (`classify_row` on the prepared matrix). What is left of one Rust pass on dense full MNIST
-   was estimated at about 1.24 - 0.90 = 0.34 s, mostly per-row call overhead
-   (Python dispatch, one small forward per layer). That could be the largest single cost left in
-   a dense epoch. The number is inferred from the candidate 1 table, not measured, and it
-   inherits the doubt about the conversion measured apart (see candidate 1). Candidate: a
-   `classify_batch` on the array networks that runs `forward_batch` over chunks of rows (from
-   candidate 1's prepared matrix) and takes the argmax per row, with `_training_accuracy` falling
-   back to `classify_state` for networks without it (the pure-Python ones and the ensembles). It
-   is a trainer change, not a kernel change, and must change no training result. Dense batched
-   forward rows equal the single-example forward exactly ("Kernel invariants"). Conv, pooling,
-   softmax and dropout (which must keep its inference behaviour) need a test that each batched
-   prediction equals `classify_state`'s, for every network class. Two caveats:
-   - **Conv gains nothing yet.** Conv `forward_batch` currently costs 1.5-2.1x per example at N =
-     32 what single calls do (candidate 4), so a batched conv accuracy pass would be slower until
-     candidate 4 is fixed. Dense networks can go first.
-   - **Stage 0:** time one accuracy pass per row against batched (chunks of 32 and 512), dense
-     full MNIST and MNIST conv, both backends, from pre-converted inputs. Proceed only if it
-     saves at least about 10% of an epoch after candidate 1.
-
-   **Stage 0 done (2026-09-24): go for dense on both backends and numpy conv, no-go for Rust
-   conv.** `python scripts/accuracy_pass_timing.py time` (one process per network, backend and
-   repeat, median of 5; each measure the median of 3 runs in its process; seed-0 weights,
-   `prepared_mnist` inputs). Seconds for one pass:
-
-   | network | backend | per row | batched 32 | batched 512 | epoch B = 32 | epoch single |
-   | --- | --- | --- | --- | --- | --- | --- |
-   | dense, 60000 rows | numpy | 1.50 (1.44-1.73) | 0.18 (0.17-0.19) | 0.14 (0.13-0.16) | 3.70 | 11.83 |
-   | dense, 60000 rows | Rust | 0.37 (0.36-0.46) | 0.21 (0.21-0.23) | 0.29 (0.29-0.32) | 1.18 | 1.92 |
-   | conv, 2000 rows | numpy | 0.27 (0.26-0.30) | 0.17 (0.16-0.18) | 0.20 (0.20-0.21) | 1.27 | 3.68 |
-   | conv, 2000 rows | Rust | 0.11 (0.10-0.11) | 0.13 (0.13-0.14) | 0.18 (0.18-0.19) | 0.60 | 0.74 |
-
-   The saving at chunk 32 as a share of an epoch (the epochs are the trainers given the prepared
-   dataset, so they include two passes). A one-epoch run has two passes; a long run about one
-   per epoch, so its share is one pass's saving over an epoch less one pass:
-
-   | network | backend | saved per pass | one-epoch, B = 32 | one-epoch, single | long run, B = 32 | long run, single |
-   | --- | --- | --- | --- | --- | --- | --- |
-   | dense | numpy | 1.33 | 72% | 22% | 60% | 13% |
-   | dense | Rust | 0.16 | 27% | 16% | 19% | 10% |
-   | conv | numpy | 0.11 | 17% | 6% | 11% | 3% |
-   | conv | Rust | -0.03 | -9% | -7% | -5% | -4% |
-
-   - **Chunk 32, not 512.** Rust at 512 is slower than at 32 (0.29 against 0.21 s; 512 x 784 x 30
-     crosses the 8M-flop threading threshold, unexamined); numpy gains a little at 512 (0.14
-     against 0.18) but 32 takes 97% of its saving, so one chunk size serves both.
-   - **The per-row Rust pass is 0.37 s**, near the 0.34 s estimated from candidate 1's table.
-   - **Rust's argmax is 15% of its batched pass** (0.03 of 0.21 s): the crate's `argmax` takes a
-     vector, so the probe converts the output with `tolist` and takes each row's argmax in Python.
-     A row-wise crate argmax would save about 2.5% of a one-epoch B = 32 run, under the bar.
-   - **Rust conv is slower batched**, as caveat 1 predicted, so it keeps the per-row pass until
-     candidate 4 is fixed. Its forward-only pass (0.19 s) was even slower than forward plus argmax
-     (0.13 s), in every process: see the allocator finding under "Other findings".
-   - **Predictions:** no batched prediction differed from the per-row one, in any cell (60000
-     dense rows, 2000 conv rows, both chunk sizes). But **numpy's batched outputs are not
-     bit-identical to its per-row ones**: `X @ W.T` against `W @ x` differs by 1 ULP (max abs
-     2.2e-16) in 8273 of 50000 dense outputs and 2863 of 20000 conv outputs. So a numpy argmax
-     can flip where two outputs are within an ULP (or a binary output within an ULP of 0.5),
-     which could move the pocket-best epoch. Decided (2026-09-24): batch numpy anyway, tested for
-     equal predictions, not claimed bit-identical; the suite's pinned results must hold. Rust
-     dense rows are exact ("Kernel invariants").
+2. **A batched accuracy pass**: **done** (#378-#379, 2026-09-24). The trainers' accuracy pass
+   runs `forward_batch` over 32-row chunks; the dense MNIST epoch at B = 32 went from 1.61 to
+   1.31 s in Rust and 4.85 to 2.44 s in numpy. See "A batched accuracy pass" under
+   "Completed". Rust conv keeps the per-row pass until candidate 4 is fixed.
 
 3. **Dense single-example `downstream` at 32 x 5408 is 1.5-1.6x numpy.** First seen in the
    interleaved per-op harness (50 vs 33 µs); in separate processes (focused benchmark, two
@@ -645,6 +586,117 @@ Crate PR numbers are `indrajala-math-rust`'s. "Bit-identical" means every output
 | Threading threshold 4M → 8M flops, policy in `matmul_thread_count` | #16 | MNIST conv mini-batch 32 epoch 0.879 → 0.770 s (-12%); batch 512 and dense MNIST unchanged; bit-identical |
 | `Array.from_rows`, `row` and `take_rows`, for the dataset as one backend array (candidate 1; the Python side is #373-#374) | #19 | dense MNIST Rust epoch at B = 32 3.72 → 1.69 s, single-example 4.60 → 2.57; training bit-identical |
 | `matmul_nt` in 4 x 2 register tiles (4 rows of `X` against 2 rows of `W`; 2 x 4, 3 x 3 and 2 x 2 measured slower or tied) | #17 | unthreaded dense `forward_batch` 0.6-0.9x its old time (second pass: 32 x 5408, batch 32: 771-916 → 545-555 µs; 30 x 784, batch 32: 102-110 → 76-77); epochs within noise; bit-identical |
+| A batched training-set accuracy pass: `classify_rows`, `forward_batch` over 32-row chunks (candidate 2) | - | dense MNIST epoch at B = 32 1.61 → 1.31 s in Rust, 4.85 → 2.44 in numpy; predictions equal, pinned results unchanged |
+
+**A batched accuracy pass** (candidate 2; #378 stage 0, #379, 2026-09-24). The trainers'
+`_training_accuracy` now calls `classify_rows(prepared)` on the array networks: both bases run
+`forward_batch` over chunks of `CLASSIFY_CHUNK_ROWS` = 32 rows (`prepared_dataset.py`) and the
+shape classes' `_classify_output_batch` takes each row's argmax (`np.argmax(axis=1)`; in Rust
+`tolist` and a Python first-max, since the crate's `argmax` takes a vector) or 0.5 threshold.
+The Rust conv network overrides it with the per-row loop, since its batched forward is slower
+(below). `accuracy()` in `multiclass_evaluate.py` is unchanged. Tests
+(`tests/test_prepared_dataset.py`): for all 22 classes, `classify_rows` equals `classify_row`
+row for row over 70 rows (three chunks, the last partial) and the prepared accuracy pass equals
+the tuple one; both dropout classes classify in inference mode (numpy's draws nothing from
+`np.random`; Rust's at drop probability 0.5 predicts as `classify_row` does); the Rust row
+argmax breaks ties, signed zeros and NaNs as `pa.argmax` does; the batched binary threshold is
+strictly above 0.5 on both backends. Seven source mutations (last-max argmax, `>=` thresholds,
+a dropped or truncated chunk, float labels, misaligned predictions) each failed them. The full
+suite passed with every pinned training result unchanged.
+
+**The A/B.** `scripts/prepared_dataset_timing.py` (which gained `--epochs`), median of 5 (ranges),
+one process per measurement, against `main` at #378 on `PYTHONPATH`; one-epoch runs before then
+after, three-epoch runs after then before. Seconds:
+
+| config | backend | before | after | after / before | from the loader, before → after |
+| --- | --- | --- | --- | --- | --- |
+| dense MNIST, B = 32 | Rust | 1.61 (1.59-1.71) | 1.31 (1.31-1.32) | 0.81 | 1.15 → 0.89 |
+| dense MNIST, B = 32 | numpy | 4.85 (4.81-5.04) | 2.44 (2.42-2.45) | 0.50 | 3.49 → 1.03 |
+| dense MNIST, single | Rust | 2.58 (2.29-2.78) | 2.11 (2.06-2.30) | 0.82 | 2.00 → 1.89 |
+| dense MNIST, single | numpy | 12.96 (12.01-13.98) | 9.97 (9.69-10.85) | 0.77 | 11.61 → 8.44 |
+| conv MNIST 2000, B = 32 | Rust | 0.61 (0.61-0.64) | 0.64 (0.63-0.64) | 1.05 | 0.59 → 0.61 |
+| conv MNIST 2000, B = 32 | numpy | 1.24 (1.24-1.35) | 1.19 (1.19-1.20) | 0.96 | 1.17 → 1.03 |
+| conv MNIST 2000, single | Rust | 0.73 (0.71-0.81) | 0.74 (0.68-0.76) | 1.02 | 0.73 → 0.71 |
+| conv MNIST 2000, single | numpy | 3.66 (3.62-3.70) | 3.55 (3.52-3.55) | 0.97 | 3.61 → 3.44 |
+| dense MNIST, B = 32, 3 epochs | Rust | 3.39 (3.38-3.43) | 2.66 (2.65-2.67) | 0.78 | 2.86 → 2.29 |
+| dense MNIST, B = 32, 3 epochs | numpy | 9.35 (9.26-9.83) | 4.04 (4.01-4.10) | 0.43 | 8.27 → 2.59 |
+
+- **Stage 0 predicted the Rust saving.** Two passes at 0.157 s saved predicts 0.31 s for a
+  one-epoch run; the B = 32 epoch lost 0.30 s. Four passes predict 0.63 s for three epochs; it
+  lost 0.74 s. Rust single-example lost 0.47 s, noisier (its before range is 0.5 s wide).
+- **numpy gains most**, 2.4 s of a one-epoch B = 32 run (2.66 predicted) and 5.3 s of three
+  epochs, so Rust / numpy at dense B = 32 goes from 0.33 to 0.54: numpy's per-row pass was
+  slower, so it lost more.
+- **Rust conv is unchanged**, as it should be (it keeps the per-row pass); its B = 32 cell
+  moved +5%, inside the 20% noise band. numpy conv gained 4% (12% from the loader), less than
+  the 0.21 s stage 0 predicted for B = 32.
+- **Left over:** a row-wise crate argmax (about 2.5% of a Rust B = 32 one-epoch run, under
+  the bar), and batching Rust conv once candidate 4 makes its `forward_batch` cheaper per example.
+
+The plan and stage 0, as recorded when the candidate was open:
+
+`_training_accuracy` (`train.py`) calls `classify_state` once per training row, n + 1 times
+over the training set for n epochs. Candidate 1 (done) removed the row conversion
+(`classify_row` on the prepared matrix). What is left of one Rust pass on dense full MNIST
+was estimated at about 1.24 - 0.90 = 0.34 s, mostly per-row call overhead
+(Python dispatch, one small forward per layer). That could be the largest single cost left in
+a dense epoch. The number is inferred from the candidate 1 table, not measured, and it
+inherits the doubt about the conversion measured apart (see candidate 1). Candidate: a
+`classify_batch` on the array networks that runs `forward_batch` over chunks of rows (from
+candidate 1's prepared matrix) and takes the argmax per row, with `_training_accuracy` falling
+back to `classify_state` for networks without it (the pure-Python ones and the ensembles). It
+is a trainer change, not a kernel change, and must change no training result. Dense batched
+forward rows equal the single-example forward exactly ("Kernel invariants"). Conv, pooling,
+softmax and dropout (which must keep its inference behaviour) need a test that each batched
+prediction equals `classify_state`'s, for every network class. Two caveats:
+- **Conv gains nothing yet.** Conv `forward_batch` currently costs 1.5-2.1x per example at N =
+  32 what single calls do (candidate 4), so a batched conv accuracy pass would be slower until
+  candidate 4 is fixed. Dense networks can go first.
+- **Stage 0:** time one accuracy pass per row against batched (chunks of 32 and 512), dense
+  full MNIST and MNIST conv, both backends, from pre-converted inputs. Proceed only if it
+  saves at least about 10% of an epoch after candidate 1.
+
+**Stage 0 done (2026-09-24): go for dense on both backends and numpy conv, no-go for Rust
+conv.** `python scripts/accuracy_pass_timing.py time` (one process per network, backend and
+repeat, median of 5; each measure the median of 3 runs in its process; seed-0 weights,
+`prepared_mnist` inputs). Seconds for one pass:
+
+| network | backend | per row | batched 32 | batched 512 | epoch B = 32 | epoch single |
+| --- | --- | --- | --- | --- | --- | --- |
+| dense, 60000 rows | numpy | 1.50 (1.44-1.73) | 0.18 (0.17-0.19) | 0.14 (0.13-0.16) | 3.70 | 11.83 |
+| dense, 60000 rows | Rust | 0.37 (0.36-0.46) | 0.21 (0.21-0.23) | 0.29 (0.29-0.32) | 1.18 | 1.92 |
+| conv, 2000 rows | numpy | 0.27 (0.26-0.30) | 0.17 (0.16-0.18) | 0.20 (0.20-0.21) | 1.27 | 3.68 |
+| conv, 2000 rows | Rust | 0.11 (0.10-0.11) | 0.13 (0.13-0.14) | 0.18 (0.18-0.19) | 0.60 | 0.74 |
+
+The saving at chunk 32 as a share of an epoch (the epochs are the trainers given the prepared
+dataset, so they include two passes). A one-epoch run has two passes; a long run about one
+per epoch, so its share is one pass's saving over an epoch less one pass:
+
+| network | backend | saved per pass | one-epoch, B = 32 | one-epoch, single | long run, B = 32 | long run, single |
+| --- | --- | --- | --- | --- | --- | --- |
+| dense | numpy | 1.33 | 72% | 22% | 60% | 13% |
+| dense | Rust | 0.16 | 27% | 16% | 19% | 10% |
+| conv | numpy | 0.11 | 17% | 6% | 11% | 3% |
+| conv | Rust | -0.03 | -9% | -7% | -5% | -4% |
+
+- **Chunk 32, not 512.** Rust at 512 is slower than at 32 (0.29 against 0.21 s; 512 x 784 x 30
+  crosses the 8M-flop threading threshold, unexamined); numpy gains a little at 512 (0.14
+  against 0.18) but 32 takes 97% of its saving, so one chunk size serves both.
+- **The per-row Rust pass is 0.37 s**, near the 0.34 s estimated from candidate 1's table.
+- **Rust's argmax is 15% of its batched pass** (0.03 of 0.21 s): the crate's `argmax` takes a
+  vector, so the probe converts the output with `tolist` and takes each row's argmax in Python.
+  A row-wise crate argmax would save about 2.5% of a one-epoch B = 32 run, under the bar.
+- **Rust conv is slower batched**, as caveat 1 predicted, so it keeps the per-row pass until
+  candidate 4 is fixed. Its forward-only pass (0.19 s) was even slower than forward plus argmax
+  (0.13 s), in every process: see the allocator finding under "Other findings".
+- **Predictions:** no batched prediction differed from the per-row one, in any cell (60000
+  dense rows, 2000 conv rows, both chunk sizes). But **numpy's batched outputs are not
+  bit-identical to its per-row ones**: `X @ W.T` against `W @ x` differs by 1 ULP (max abs
+  2.2e-16) in 8273 of 50000 dense outputs and 2863 of 20000 conv outputs. So a numpy argmax
+  can flip where two outputs are within an ULP (or a binary output within an ULP of 0.5),
+  which could move the pocket-best epoch. Decided (2026-09-24): batch numpy anyway, tested for
+  equal predictions, not claimed bit-identical; the suite's pinned results must hold. Rust
+  dense rows are exact ("Kernel invariants").
 
 **The dataset as one backend array** (candidate 1, optimization 5; crate #19, #372-#374,
 2026-09-24). The trainers used to convert a tuple into an array on every call: each batch in
@@ -888,8 +940,8 @@ Closed with no measured gain, kept as findings:
   record under "Completed").
   Over a long run there is about one pass per epoch, so the share is smaller. The share is
   largest at B = 32. About 70% of each pass was converting the row to an array, which candidate 1
-  removed (#374). What is left, per-row call overhead, is candidate 2 (a batched accuracy
-  pass).
+  removed (#374). Candidate 2 (#379) batched the rest: the Rust B = 32 epoch lost another 19%,
+  numpy's 50%.
 - **Dense epochs, Rust / numpy end to end by batch size** (same run, medians of 5): 0.46 at
   B = 32 and 128, 0.52 at 512 and 0.48 at 1024. The step loop alone: 0.62, 0.50, 0.65, 0.60.
 - **Loading full MNIST shares one float per pixel value** (#365). `load_mnist_dataset` reuses

@@ -51,6 +51,9 @@ class ArrayBackpropClassifierNetwork(ArrayNetworkBase):
     def _classify_output(self, output: np.ndarray) -> float:
         return 1.0 if float(output[0]) > 0.5 else 0.0
 
+    def _classify_output_batch(self, output_batch: np.ndarray) -> list[float]:
+        return [1.0 if value > 0.5 else 0.0 for value in output_batch[:, 0].tolist()]
+
     def _target_array(self, category: float) -> np.ndarray:
         return np.array([category], dtype=np.float64)
 

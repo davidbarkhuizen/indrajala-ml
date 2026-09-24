@@ -16,6 +16,7 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.prepared_dataset import PreparedDataset
 
 
 def _to_rust_array(values) -> "pa.Array":
@@ -72,6 +73,12 @@ class ConvRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpr
             dense_cls=RustArrayLayer,
         )
         self.layers = self.conv_layers + dense_layers + [self.output_layer]
+
+    def classify_rows(self, prepared: PreparedDataset) -> list[int]:
+        # row by row, not batched: Rust conv forward_batch costs more per example than single
+        # calls (candidate 4 in docs/optimizations.md), which made a batched accuracy pass
+        # slower (candidate 2's stage 0)
+        return [self.classify_row(prepared, index) for index in range(len(prepared))]
 
     def randomize(self) -> None:
         # the numpy conv network's scheme, drawn from pa.uniform: each conv layer scoped to its

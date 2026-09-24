@@ -9,6 +9,10 @@ from indrajala_ml.mnist_data import RECORD_SIZE, _read_binary_records, load_mnis
 
 BACKENDS = ("numpy", "rust")
 
+# classify_rows forwards this many rows at once: candidate 2's stage 0 (docs/optimizations.md)
+# measured 32 fastest in Rust (512 was slower) and within 3% of 512's saving in numpy
+CLASSIFY_CHUNK_ROWS = 32
+
 
 class PreparedDataset:
     """
