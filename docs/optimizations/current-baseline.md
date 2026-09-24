@@ -13,9 +13,9 @@ Rust / numpy wall-clock ratio (below 1 means Rust is faster), from
 
 | architecture | UCI digits, single | UCI digits, mini-batch | MNIST subset, single | MNIST subset, mini-batch |
 | --- | --- | --- | --- | --- |
-| conv | 0.17 | 0.73 | 0.19 | 0.54 |
-| conv-pool-conv | 0.11 | 0.46 | 0.26 | 0.44 |
-| conv-conv-stride2 | 0.13 | 0.53 | 0.35 | 0.51 |
+| conv | 0.17 | 0.65 | 0.19 | 0.52 |
+| conv-pool-conv | 0.11 | 0.48 | 0.28 | 0.46 |
+| conv-conv-stride2 | 0.14 | 0.51 | 0.37 | 0.49 |
 
 Dense MNIST 784 -> 30 -> 10, one 60000-example epoch: about 0.21 single-example and 0.54
 mini-batch 32.
@@ -23,7 +23,7 @@ mini-batch 32.
 Caveats:
 
 - **The conv table is one demo run** (each cell the median of 5) on the current build, after the
-  one-pass pool downstream (crate #25). The UCI mini-batch runs take 0.06-0.12 s in all, so fixed
+  2-row register tiles (crate #26). The UCI mini-batch runs take 0.06-0.12 s in all, so fixed
   per-run costs dominate their ratios; read them as noisy. The dense ratios are current.
 - **numpy runs with OpenBLAS's default threading, which slows its own training** (its MNIST conv
   mini-batch 32 epoch: 1.22-1.32 s at `OPENBLAS_NUM_THREADS=1` against 1.39-1.56 s by default).
@@ -40,22 +40,22 @@ last two columns put both on one thread:
 
 | shape | op | batch | numpy | Rust | Rust/numpy | numpy, 1 thread | Rust, 1 thread |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 32 x 5408 | `downstream_batch` | 32 | 232-246 | 581-654 | 2.4-2.8x | 573-578 | 610-625 |
-| 32 x 5408 | `accumulate_gradient_batch` | 32 | 411-453 | 976-1180 | 2.2-2.9x | 807-871 | 1040-1083 |
+| 32 x 5408 | `downstream_batch` | 32 | 223-229 | 470-472 | 2.1x | 510-565 | 465-483 |
+| 32 x 5408 | `accumulate_gradient_batch` | 32 | 436-450 | 950-960 | 2.1-2.2x | 713-778 | 925-951 |
 | 32 x 5408 | `forward_batch` | 32 | 294-415 | 470-659 | 1.1-2.2x | 563-575 | 479 |
-| 32 x 5408 | `downstream_batch` | 512 | 11753-11777 | 10648-11847 | 0.9-1.0x | 12236-12361 | 14746-15199 |
-| 32 x 5408 | `accumulate_gradient_batch` | 512 | 12926-13493 | 6811-11720 | 0.5-0.9x | 9425-10298 | 31253-31958 |
+| 32 x 5408 | `downstream_batch` | 512 | 11785-12838 | 10530-10877 | 0.8-0.9x | 11570-13657 | 13361-13654 |
+| 32 x 5408 | `accumulate_gradient_batch` | 512 | 12742-13818 | 6479-8509 | 0.5-0.7x | 9636-10499 | 27818-28065 |
 | 32 x 5408 | `forward_batch` | 512 | 3695-4110 | 4747-4898 | 1.2-1.3x | 8937-9918 | 8421-8477 |
-| 30 x 784 | `downstream_batch` | 32 | 46-50 | 73-85 | 1.5-1.8x | 71-84 | 75-86 |
-| 30 x 784 | `accumulate_gradient_batch` | 32 | 70-73 | 82-97 | 1.1-1.4x | 90-102 | 84-93 |
-| 30 x 784 | `downstream_batch` | 512 | 416-945 | 1193-1401 | 1.3-3.4x | 1153-1466 | 1383-1560 |
-| 30 x 784 | `accumulate_gradient_batch` | 512 | 714-776 | 997-1336 | 1.3-1.9x | 1269-1436 | 2335-2715 |
+| 30 x 784 | `downstream_batch` | 32 | 45 | 65-67 | 1.5x | 72-79 | 70-77 |
+| 30 x 784 | `accumulate_gradient_batch` | 32 | 68-86 | 69 | 0.8-1.0x | 96-105 | 74-82 |
+| 30 x 784 | `downstream_batch` | 512 | 420-502 | 842-848 | 1.7-2.0x | 1332-1508 | 1199-1351 |
+| 30 x 784 | `accumulate_gradient_batch` | 512 | 756-759 | 866-877 | 1.1-1.2x | 1340-1383 | 1638-1788 |
 | 30 x 784 | `forward_batch` | 512 | 750-1027 | 1038-1275 | 1.0-1.7x | 1271-1308 | 1217-1257 |
 
 Reading it: most of the default-threading gap at batch 32 is numpy's OpenBLAS threading; on one
-thread each, the batch-32 rows are level or within 1.3x (32 x 5408 accumulate, its extra pass),
-and Rust's `forward_batch` is level or faster everywhere. The large one-thread gap left is
-accumulate at batch 512 (`k` = 512): 3.0-3.4x at 32 x 5408 and 1.6-2.1x at 30 x 784. The batch-512
+thread each, Rust is level or faster at batch 32 except 32 x 5408 accumulate (1.2-1.3x, its extra
+pass), and Rust's `forward_batch` is level or faster everywhere. The large one-thread gap left is
+accumulate at batch 512 (`k` = 512): 2.6-2.9x at 32 x 5408 and 1.2-1.3x at 30 x 784. The batch-512
 Rust numbers are threaded and partly warm-clock numbers.
 
 Conv ops at 28x28, `ConvSpec(3, 8)`, one thread, against 32 or 512 single-example calls:
@@ -76,9 +76,9 @@ single-example downstream through the tiled kernel and the per-example conv forw
 current shares are in parentheses, the rest is not re-profiled
 (`scripts/epoch_op_profile.py` refreshes it):
 
-- **Conv, mini-batch 32** (0.74 s): `conv_forward_batch` 27% (its 63 batch calls about 0.95 ms
-  each now), `conv_accumulate_gradient_batch` 10.5%, dense `accumulate_gradient_batch` 9.5%,
-  `downstream_batch` 6.7%, `forward_batch` 6.3%.
+- **Conv, mini-batch 32** (0.63-0.64 s, current build): `conv_forward_batch` 28-29%,
+  `conv_accumulate_gradient_batch` 12%, dense `accumulate_gradient_batch` 10%, `forward_batch` 7%,
+  `downstream_batch` 6.5-7%.
 - **Conv, single-example** (0.80 s): `layer_sgd_step` 20%, `conv_forward_batch` 20%,
   `layer_forward` 19%, dense `downstream` (5-7% now), conv accumulate 7%.
 - **Conv-pool-conv** (0.67-0.71 s single-example, 0.76-0.79 s mini-batch 32, current build):
