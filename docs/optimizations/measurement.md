@@ -25,6 +25,7 @@ From the quick survey to the decisive measurement:
 | Which ops look slow? | `python -m indrajala_ml.demos.demo_layer_op_timing` | every layer op, numpy and Rust interleaved; batch rows can be far off (interleaving). Finds candidates, never judges them. |
 | How fast is one op? | `python scripts/focused_benchmark.py` | loops of about 20 ms, median of 9, each (case, backend) in its own process; faults per call; `--matmul MxKxN`, `--rust-threads`, `--openblas-threads`, `--malloc both`. **The number to quote.** |
 | Faults or compute? | `focused_benchmark.py --malloc both` | glibc defaults against both allocator thresholds at 1e9; a time that drops with the faults was paying for them. |
+| Why is it slow (or slow in some processes)? | `python scripts/perf_region.py -- driver.py` | hardware counters for only the region a driver marks (`with counted():`), per unit of work, one row per process; `OPENBLAS_NUM_THREADS=1` unless `--openblas-threads`. Needs `kernel.perf_event_paranoid` <= 2 (`sudo sysctl`, until reboot). For cycles per instruction, `perf record` the driver and `perf annotate` the op. |
 | One op's share of real epochs | `python scripts/epoch_op_profile.py` | cProfile of Rust training by crate op, one process per (architecture, trainer, repeat); `--op`, `--label`. Resolves changes of a few % that epoch timing can't. |
 | A training-path change, old against new | `python scripts/prepared_dataset_timing.py time` | one trainer epoch per process, dense full MNIST and the conv subset, both backends; old checkout first on `PYTHONPATH` (a `git worktree` of `main`); `--epochs N`. |
 | An accuracy pass, per row against batched | `python scripts/accuracy_pass_timing.py time` | all demo architectures, both backends; counts differing predictions. |
@@ -82,9 +83,15 @@ From the quick survey to the decisive measurement:
   chained (freed top-of-heap returned to the OS). `focused_benchmark.py --malloc both` separates
   it.
 - **A time can be bimodal between processes, not only noisy.** The one-pass max-pool downstream
-  probe at batch 32 ran at 187-195 µs in some processes and 465-530 in others, tight within
-  each, under default and raised allocator thresholds alike (address-dependent, unexplained). A
-  median of loops in one process can't see it: run several processes before quoting a number.
+  probe at batch 32 runs at about 17 cycles a window (190-200 µs) in some processes and 42-49
+  (470-570 µs) in others, tight within each. The counters show the same instructions, L1 and L2
+  accesses in both modes; the slow one is integer-scheduler stalls (ALU-token stalls 24 against 1
+  a window). Ruled out, each measured: page faults and allocator thresholds, clock frequency,
+  the core and its SMT sibling, virtual placement (buffers pinned to a 2^28-aligned arena, ASLR
+  off), physical pages (re-paged between trials), the AVX upper state, SSBD, the `+=` read (a
+  store-only pass) and the division (a slot-offset table: still 4.7-8.5 ns a window). The cause is
+  unknown. A median of loops in one process can't see it: run several processes and quote both
+  modes.
 - **The conv demo's mini-batch runs barely train** (about 10% accuracy in 1-2 epochs at lr 0.5):
   their timings are valid, their accuracy columns are not.
 - **Rust dense-MNIST epoch times from before #365 aren't comparable** with later ones: the shared

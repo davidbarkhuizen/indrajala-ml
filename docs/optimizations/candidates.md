@@ -28,8 +28,8 @@ settings, so address-dependent (unexplained).
 already 1.5 µs a call.
 
 **Stage B.** The one-pass loop when stride ≥ `k`, validation folded in; the slot-outer loop stays
-for overlapping windows. Settle the bimodal batch time first (a probe timing the pass against the
-zero-fill, at pinned buffer offsets). Tests: `==` including the sign of zero against the current
+for overlapping windows. The bimodal batch time is investigated and unexplained (see
+[Measurement](measurement.md#gotchas)): quote both modes, from several processes. Tests: `==` including the sign of zero against the current
 op at stride = `k` and stride > `k`. Mutation that must fail: writing `d` in place of `0.0 + d` (a
 `-0.0` delta).
 
