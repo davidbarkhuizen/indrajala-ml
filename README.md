@@ -56,7 +56,7 @@ git submodule update --init   # populate rust/
 
 CI (`.github/workflows/ci.yml`) runs `./cli setup --no-os-packages` (the runner image already
 has cargo, and CI's python is not apt's) then `./cli test <suite>` on every push and PR, one
-parallel job per suite, with `.venv` and MNIST cached.
+parallel job per suite, with `.venv`, MNIST and the crate's dependency builds cached.
 
 ## Layout
 
