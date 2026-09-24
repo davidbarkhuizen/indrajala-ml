@@ -51,7 +51,7 @@ class RustArrayNetworkBase:
 
     def classify_rows(self, prepared: PreparedDataset) -> list:
         # see ArrayNetworkBase.classify_rows; here a batched forward row equals the
-        # single-example forward exactly ("Kernel invariants" in docs/optimizations.md)
+        # single-example forward exactly ("Kernel invariants" in docs/optimizations/kernels.md)
         states = self._prepared_states(prepared)
         predictions = []
         for start in range(0, len(prepared), CLASSIFY_CHUNK_ROWS):

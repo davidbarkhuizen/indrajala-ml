@@ -1,6 +1,6 @@
 """
 Capture the benchmark machine's profile as JSON, or compare a profile against a reference (see
-indrajala_ml/machine_profile.py and docs/optimizations.md, "This machine").
+indrajala_ml/machine_profile.py and docs/optimizations/method.md, "This machine").
 
     python scripts/machine_profile.py profile [--out FILE]
     python scripts/machine_profile.py compare docs/machine_profiles/ryzen7-3700u.json [CURRENT]
