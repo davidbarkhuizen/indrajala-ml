@@ -85,6 +85,21 @@ gotcha](measurement.md#gotchas)); writing `A` in order is what made it pay. N = 
 920-1010 µs; N = 512: 34-40 → 15-16 ms. The per-example product doesn't thread; at N = 512
 threading had given nothing.
 
+## Max-pool forward: no division per slot, and a fixed 2x2 body
+
+`max_pool_forward_batch` (`rust/src/conv.rs`) pools one channel plane at a time. The general
+kernel walks each window's rows as slices and counts the slot alongside; 2x2 windows at stride 2
+(the demos' `PoolSpec(2)`) take the same scan unrolled (crate #24). Both keep the row-major scan
+and strict `>`, so the first maximal slot wins with its sign of zero, bit for bit as before.
+
+Why: the old scan computed `slot / k`, `slot % k` and a full input index for every slot, with `k`
+known only at run time. Walking row slices removes that (16 → 9 µs a call in the stage 0 probe),
+but what is left is the loops with a run-time trip count, not the branches (a select-based
+general kernel was no faster), so only the fixed-size body gets near the 0.9 µs floor. At
+26x26x8: 16.6-17.2 → 4.1-4.2 µs single, 504-525 → 112-114 at N = 32, 9.2 → 5.7-5.8 ms at N = 512
+(its 22 MB input bounds it). In the conv-pool-conv epoch the op went from 95-101 ms to 23-32 ms,
+8.5-9.5% of the profiled run.
+
 ## Threading policy
 
 The only threading is `for_each_row_range` in `rust/src/linalg.rs`, used by the three matmul
