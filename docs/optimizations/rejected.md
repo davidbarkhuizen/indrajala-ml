@@ -17,7 +17,7 @@ what would reopen it, if anything. Crate branches named here are kept in `rust/`
   `O` and N, and can't serve training, which needs `cols`.
 - **`k`-blocking in `matmul_narrow` at small `cols`.** At 13x13x8, N = 32 (`cols` 0.3-2.2 MB) the
   old `k`-blocked `matmul_2d` gave nothing over `matmul_narrow` (+2%, +4%, -1%). It is only a
-  candidate where `cols` passes the L3 (see [Candidates](candidates.md#3-conv-accumulate-with-a-large-cols)).
+  candidate where `cols` passes the L3 (see [Candidates](candidates.md#2-conv-accumulate-with-a-large-cols)).
 - **Row-block sizes for `matmul_2d` other than 16 KB of `a`.** 1-row blocks were 2-3x slower at
   `k` in the hundreds (`b`'s panel is reloaded per row); one block for all rows was close to 16
   KB but no better.
