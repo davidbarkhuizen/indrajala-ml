@@ -174,3 +174,7 @@ data/mnist/trained_model.json
 
 # CI's cached indrajala_math_rust wheel (./cli setup --rust-wheel-dir)
 .rust-wheel/
+
+# refactoring's golden training run (scripts/golden_training_run.py) - valid only on the machine
+# that recorded it, since numpy's products go through BLAS
+data/refactoring/
