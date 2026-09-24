@@ -5,7 +5,7 @@ the benchmark it is compared with. It started from the Rust CNN timing (#317-#32
 CNN stages), which found where Rust was slower than numpy or slower than it needed to be. Each
 item is measured before and after, and must keep every parity test passing.
 
-This document is the only record: there are no separate workplans. Each open item, with its plan
+This document is the only record of optimization work: there are no separate optimization workplans. Each open item, with its plan
 where it has one, is a candidate below. Three workplans have been folded in: threading
 (optimization 6, finished; its findings are in "Threading", and what it left open is candidate
 8), dense batch ops at short `k` (optimization 7; stage 0 done, stages A and B planned in
@@ -285,7 +285,8 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
    µs). 2-row tiles recover only 7-31% there. The likely cause is `b`'s `k x 16` panel (64 KB at
    `k` = 512) no longer fitting the 32 KB L1. At 32 x 5408 default threading hides it (6.8-11.7 ms
    against numpy's 12.9-13.5); at 30 x 784 it doesn't (997-1336 against 714-776 µs). It matters
-   only at batch 512, which no demo runs. Candidate: block over `k`, or pack `b`'s
+   only at batch 512, which no demo runs ([batch-size-scaling-workplan.md](batch-size-scaling-workplan.md)
+   plans one, and its stage 3 decides whether this candidate is worth doing). Candidate: block over `k`, or pack `b`'s
    panel, storing and reloading the tile's accumulators between `k` blocks so each output keeps
    its chain. Candidate 4 needs the same change in the same function (`matmul_narrow` also runs
    `tiled_row_range`), so one `k`-blocked `tiled_row_range` may serve both.
