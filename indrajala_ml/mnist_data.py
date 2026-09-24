@@ -140,10 +140,14 @@ def load_mnist_dataset(path: str, limit: int | None = None) -> list[tuple[tuple[
 
     data = _read_binary_records(path, limit)
 
+    # one float object per pixel value, shared by every row: 60000 rows of freshly boxed floats
+    # are about 1.9 GB, too much for several sweep workers at once. The values are unchanged.
+    pixel_values = [pixel / 255.0 for pixel in range(256)]
+
     dataset: list[tuple[tuple[float, ...], int]] = []
     for offset in range(0, len(data), RECORD_SIZE):
         record = data[offset : offset + RECORD_SIZE]
-        state = tuple(pixel / 255.0 for pixel in record[:-1])
+        state = tuple(pixel_values[pixel] for pixel in record[:-1])
         label = record[-1]
         dataset.append((state, label))
 
