@@ -41,6 +41,13 @@ keep the pipes busy. All three matmul kernels are built on that:
   (`cols @ W.T` with only `C*k*k` or `O` columns). Replacing the old load/FMA/store loops (crate
   #11, #12, #14) cut conv forward 13-64%, downstream 4-56%, accumulate 16-43%, and unthreaded
   dense batch downstream/accumulate to 0.1-0.6x their time.
+- **Its 16-wide tiles cover 2 rows at once** (crate #26): 8 independent FMA chains instead of 4,
+  and each `b` row of the tile loaded once for both rows; a block's leftover row runs the 1-row
+  tile. Dense batch 32 `downstream_batch` went 551-677 → 445-476 µs at 32 x 5408 and accumulate
+  81-89 → 67-70 µs at 30 x 784; one-thread 30 x 784 accumulate at batch 512 0.63-0.70x. Only
+  `matmul_2d` gains: `matmul_narrow` and vector @ matrix pass one-row blocks. In the conv
+  mini-batch 32 epoch profile, dense downstream went 45-60 → 41-44 ms and accumulate 64-83 →
+  62-63 ms. A 3-row tile won only at `k` = 128 in the probe.
 - **Vector @ matrix goes through the same kernel as a one-row product** (crate #20), not its own
   `axpy_row` loop, which made 32 load/FMA/store passes over a 43 KB output row: single-example
   dense `downstream` at 32 x 5408 went 44-48 → 26 µs (numpy 29).

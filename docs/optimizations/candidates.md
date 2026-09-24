@@ -11,43 +11,26 @@ to [Rejected](rejected.md), with the reason in either case.
 
 ## Ranked
 
-### 1. Dense batch products at short `k`: multi-row tiles, then a fused gradient add
+### 1. Dense `accumulate_gradient_batch`: fuse the gradient add into the kernel store
 
-`downstream_batch` and `accumulate_gradient_batch` at 32 x 5408, batch 32 are `(32, 32) @ (32,
-5408)` products through `matmul_2d`, in the conv mini-batch dense tail (63 calls of each per
-epoch). Their 2.2-2.9x numpy ratio is mostly numpy's OpenBLAS threading: with both on one thread,
-`downstream_batch` is level and accumulate 1.2-1.3x. What is left:
+`accumulate_gradient_batch` at 32 x 5408, batch 32 builds the `(32, 32) @ (32, 5408)` product
+through `matmul_2d`, then `grad_w + update` as a second 1.4 MB pass (140-160 µs), and keeps four
+1.4 MB arrays live against a 4 MB L3 (a further 240 µs unattributed, probably that). On one thread
+it is the one batch-32 dense op still behind numpy (1.2-1.3x); `downstream_batch`, the same
+product without the add, is level or faster since the 2-row tiles (crate #26).
 
-- **The kernel is latency- and L1-bound, not bandwidth-bound.** Each row/tile runs 4 chains of `k`
-  dependent FMAs where Zen 2 needs about 10 in flight. A probe (crate branch `probe/opt7-stage0`,
-  local only, `probe_tiled_avx2_fma`) with 2-row tiles, bit-identical on 2133 shapes, cut the
-  kernel 10-18% at short `k` and 7-31% at `k` = 512; 3-row tiles won only at `k` = 128.
-- **Accumulate's extra pass:** it builds the product, then `grad_w + update` as a second 1.4 MB
-  pass (140-160 µs), and keeps four 1.4 MB arrays live against a 4 MB L3 (a further 240 µs
-  unattributed, probably that).
+**Stake:** the extra pass alone is about 9-10 ms (1.5%) of the conv mini-batch 32 epoch (63
+calls), more if the unattributed time goes with it; plus the 30 x 784 accumulate in dense MNIST
+mini-batch.
 
-**Stake:** about 19-28 ms (2.5-4%) of the conv mini-batch 32 epoch, plus 1-2% of dense MNIST
-mini-batch (its 30 x 784 products share the kernel).
+**Fix:** a `matmul_2d_add` (or a `tiled_row_range` parameter) whose store writes `c + acc`. One
+output allocated, no `combine_with_array`. `g + u` with `u` the finished chain is the same single
+rounding, so bit-identical. Test: `==` against `grad_w + (delta.T @ X)` from separate crate calls,
+at `BIG_SHAPES` and `TILE_WIDTHS`, with `-0.0` and zeros in `grad_w`. Mutation that must fail:
+start the chain from `g`.
 
-**Stage A: R-row register tiles in `tiled_row_range`**, R = 2; leftover rows run the 1-row tile.
-`matmul_narrow` passes one row per block, so conv is unchanged until it is given R-row blocks,
-measured separately (conv accumulate is likeliest to gain; see the conv accumulate candidate). Each
-output keeps its FMA chain, so bit-identical. Tests: extend
-`test_matrix_at_matrix_is_the_fma_chain_exactly` (crate `tests/test_linalg.py`) so `m` covers 1
-to 2R + 1 at every `TILE_WIDTHS`, and add a `k` in 513-682 so `rows_per_block` is odd (a remainder
-at every block's end). Mutations that must fail: the tile's second row reads the first row's `a`
-at one `k`; the last remainder row is dropped.
-
-**Stage B: fuse the gradient add into the kernel store** (accumulate only): a `matmul_2d_add`
-(or a `tiled_row_range` parameter) whose store writes `c + acc`. One output allocated, no
-`combine_with_array`. `g + u` with `u` the finished chain is the same single rounding, so
-bit-identical. Test: `==` against `grad_w + (delta.T @ X)` from separate crate calls, at
-`BIG_SHAPES` and `TILE_WIDTHS`, with `-0.0` and zeros in `grad_w`. Mutation that must fail: start
-the chain from `g`.
-
-**Acceptance:** every per-op row in the baseline (the `matmul_nt` rows must not move), the conv
-ops if `tiled_row_range` changed, then the old-against-new epochs; the full suite with no pin
-changes.
+**Acceptance:** the dense accumulate rows in the baseline, then the old-against-new epoch op
+profile; the full suite with no pin changes.
 
 ### 2. Dense `accumulate_gradient_batch` at long `k`, and a blocked transpose
 
@@ -74,8 +57,9 @@ re-profile first.
 one thread, 57-58 ms against 14-15 ms for 512 single calls. Each output row makes one pass over
 `k` per column tile, and each pass streams all of `cols` (25 MB, past the L3): about 600 MB per
 call. Fix: block over `k` so a slab of `cols` serves every row and column tile before the next;
-the per-output order is unchanged, so bit-identical. Stage A's R-row tiles would divide the
-passes by R first. **Stake is small in trained configurations:** no demo trains conv at N = 512,
+the per-output order is unchanged, so bit-identical. `tiled_row_range`'s 2-row tiles (crate #26)
+would first halve the passes if `matmul_narrow` passed 2-row blocks, where `C*k*k` >= 16 (they
+only cover 16-wide column tiles). **Stake is small in trained configurations:** no demo trains conv at N = 512,
 and at N = 32 (`cols` 1.56 MB) the op is only 1.1-1.2x its single calls, about 1-1.5% of the
 epoch. Worth doing alongside the long-`k` candidate, which needs the same kernel change.
 
