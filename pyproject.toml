@@ -12,9 +12,14 @@ dependencies = [
     "matplotlib",
     "pytest",
     "pyarrow",
+    "jsonschema",  # validates machine profiles (indrajala_ml/machine_profile.py)
+    "tomli; python_version < '3.11'",  # reads rust/Cargo.toml (machine_profile.py)
     "numpy>=1.20",  # numpy.lib.stride_tricks.sliding_window_view (conv_array_layer.py)
 ]
 
 [tool.setuptools.packages.find]
 include = ["indrajala_ml*"]
 namespaces = true
+
+[tool.setuptools.package-data]
+indrajala_ml = ["machine_profile.schema.json"]

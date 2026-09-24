@@ -1,0 +1,513 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Machine profile",
+  "description": "The benchmark machine's profile (indrajala_ml/machine_profile.py). identity is compared between profiles; state is recorded only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "identity",
+    "state"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpu",
+        "memory",
+        "gpus",
+        "os",
+        "software"
+      ],
+      "properties": {
+        "cpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "vendor",
+            "model_name",
+            "architecture",
+            "sockets",
+            "physical_cores",
+            "logical_cpus",
+            "threads_per_core",
+            "caches",
+            "isa",
+            "frequency"
+          ],
+          "properties": {
+            "vendor": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "model_name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "architecture": {
+              "type": "string"
+            },
+            "sockets": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "physical_cores": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "logical_cpus": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "threads_per_core": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "caches": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "level",
+                  "type",
+                  "size_kib",
+                  "shared_by_logical_cpus",
+                  "instances"
+                ],
+                "properties": {
+                  "level": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "size_kib": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "shared_by_logical_cpus": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "instances": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            },
+            "isa": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sse4_2",
+                "avx",
+                "avx2",
+                "fma",
+                "avx512f"
+              ],
+              "properties": {
+                "sse4_2": {
+                  "type": "boolean"
+                },
+                "avx": {
+                  "type": "boolean"
+                },
+                "avx2": {
+                  "type": "boolean"
+                },
+                "fma": {
+                  "type": "boolean"
+                },
+                "avx512f": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "frequency": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "driver",
+                "governor",
+                "min_mhz",
+                "max_mhz",
+                "boost_enabled"
+              ],
+              "properties": {
+                "driver": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "governor": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "min_mhz": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "max_mhz": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "boost_enabled": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "total_mib",
+            "swap_total_mib"
+          ],
+          "properties": {
+            "total_mib": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "swap_total_mib": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        "gpus": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "class",
+              "vendor",
+              "device"
+            ],
+            "properties": {
+              "class": {
+                "type": "string"
+              },
+              "vendor": {
+                "type": "string"
+              },
+              "device": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "os": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "system",
+            "kernel_release",
+            "distribution",
+            "perf_event_paranoid"
+          ],
+          "properties": {
+            "system": {
+              "type": "string"
+            },
+            "kernel_release": {
+              "type": "string"
+            },
+            "distribution": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "perf_event_paranoid": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        "software": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "python",
+            "numpy",
+            "rustc",
+            "crate_release_profile",
+            "thread_env"
+          ],
+          "properties": {
+            "python": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "implementation",
+                "version"
+              ],
+              "properties": {
+                "implementation": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                }
+              }
+            },
+            "numpy": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "version",
+                "blas"
+              ],
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "blas": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "version",
+                    "configuration"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "version": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "configuration": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "rustc": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "crate_release_profile": {
+              "description": "rust/Cargo.toml's [profile.release] table, \"default\" if it sets none, null if the crate is missing",
+              "oneOf": [
+                {
+                  "const": "default"
+                },
+                {
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "thread_env": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "OPENBLAS_NUM_THREADS",
+                "OMP_NUM_THREADS",
+                "MKL_NUM_THREADS",
+                "RAYON_NUM_THREADS"
+              ],
+              "properties": {
+                "OPENBLAS_NUM_THREADS": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "OMP_NUM_THREADS": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "MKL_NUM_THREADS": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "RAYON_NUM_THREADS": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "captured_at",
+        "hostname",
+        "load_average",
+        "memory_available_mib",
+        "cpu_mhz_now",
+        "power",
+        "commits"
+      ],
+      "properties": {
+        "captured_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "load_average": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "memory_available_mib": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "cpu_mhz_now": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "min",
+            "max"
+          ],
+          "properties": {
+            "min": {
+              "type": "integer"
+            },
+            "max": {
+              "type": "integer"
+            }
+          }
+        },
+        "power": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "on_ac",
+            "battery_percent"
+          ],
+          "properties": {
+            "on_ac": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "battery_percent": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        "commits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repo",
+            "repo_dirty",
+            "rust"
+          ],
+          "properties": {
+            "repo": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "repo_dirty": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "rust": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

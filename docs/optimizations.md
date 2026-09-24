@@ -462,6 +462,13 @@ What the measurements found (crate #15, #16; a local probe build for the interna
 
 ## How to measure
 
+- **First, check the machine:** `python scripts/machine_profile.py compare
+  docs/machine_profiles/ryzen7-3700u.json` before quoting new numbers against the ones here. It
+  exits 1 and names each changed identity field (CPU, caches, ISA, cpufreq driver and governor,
+  boost, memory, GPUs, kernel, Python, numpy and its BLAS build, rustc, the crate's release
+  profile, the thread env vars), and prints the state (clocks, load, free memory, power, commits)
+  side by side for context. Run it in the same shell and env as the benchmark: a thread env var
+  set for the run shows up as a difference. `profile --out FILE` records a new machine.
 - **Per op, quick survey:** `python -m indrajala_ml.demos.demo_layer_op_timing`. It times every
   dense and conv layer method, single-example and batch 1/32/512, numpy and Rust interleaved,
   300 calls per loop (300 // batch for batch ops, at least 10), median of 5 loops. **Its batch
@@ -504,8 +511,10 @@ What the measurements found (crate #15, #16; a local probe build for the interna
   both. Builds take about 6 s (`./cli build-rust`). Commit the crate change before switching,
   and switch with `git checkout main -- <changed files>` (for example `src/linalg.rs`, or
   `src/fused.rs` too for stage B) and back, not a stash.
-- **This machine** (Ryzen 7 3700U laptop, 4 cores / 8 threads, 512 KB L2 per core, 4 MB L3)
-  varies 20-30% between passes, sometimes more. A background IDE made a first measurement
+- **This machine** (Ryzen 7 3700U laptop, 4 cores / 8 threads, 512 KB L2 per core, 4 MB L3;
+  the full record is `docs/machine_profiles/ryzen7-3700u.json`, and `python
+  scripts/machine_profile.py compare docs/machine_profiles/ryzen7-3700u.json` checks that the
+  hardware, cpufreq policy, OS and software stack still match it) varies 20-30% between passes, sometimes more. A background IDE made a first measurement
   unusable once. Treat changes under about 20% as noise unless both passes agree, and re-check a
   surprising result with the build order reversed. Idle cores drop to 1.1-1.5 GHz and a busy one
   boosts to 3.8 GHz (`schedutil`), so a single call after a pause measures slow. Time loops,
