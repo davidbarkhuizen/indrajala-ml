@@ -86,6 +86,32 @@ Tests (crate `tests/test_linalg.py`):
 
 ### 0b. Measurements (recorded in the stage 0 PR description and `../optimizations.md`)
 
+**Step 1 done (2026-09-24).** The gap came from the harness. Interleaved numpy loops leave
+OpenBLAS threads spinning, and they slow the Rust call 2-5x. Timed on its own, Rust takes
+528-570 µs at every thread count (1: 528-539, 2: 854-902, 4: 729-737, 8: 565-685, default
+559-570); numpy takes 239-244. The listed causes, each tested on a local experiment build
+(crate branch `exp/threading-0b`, not pushed):
+
+- **Spawn only**, with an empty `compute`: 25-30 µs per call unthreaded, then 89-96 at 2
+  threads, 141-165 at 4 and 211-232 at 8. So spawning costs about 60-70, 110-140 and 180-200 µs.
+- **First touch:** pre-touching the output on the caller, or leaving it uninitialized for the
+  workers to write first, made no consistent difference at any thread count.
+- **Clock and SMT, the main cost.** Timed inside each worker, a worker's share of the work takes
+  430-800 µs at 2 threads (16 rows) and 250-315 at 8 (4 rows), against 535 µs for all 32 rows
+  on the caller. With register-only FMA work in place of the matmul (no memory traffic), a
+  spawned worker runs 1.6-3.1x slower per row than the caller, at every thread count. Per-core
+  clocks read during the runs: one core at 3.8 GHz and the idle ones at 1.1-1.5 GHz with 1
+  thread, and every core at 2.2-3.1 GHz with 8. The reading: `schedutil` doesn't raise the
+  clock for a thread spawned on every call, since it has no load history. That reading is
+  inferred, not measured directly.
+- **Caller computes chunk 0** (spawn one thread fewer): 443-584 µs at 4 threads and 564-621 at
+  8, against 729-779 and 723-728 for spawn-all in the same runs.
+
+What this means for stage A-C: stage C (`b` traffic) can't be the main cost here, since the
+register-only probe shows the same slowdown with no memory traffic. Stage B (a pool) could remove
+both the spawn cost and the idle clock, and the caller should do one chunk itself. Steps 2 and 3
+still decide it, measured in separate processes from numpy.
+
 All on the current kernel, focused per-op benchmark (loops of about 20 ms, median of 9, two
 passes). Use a scratch script, not a demo:
 

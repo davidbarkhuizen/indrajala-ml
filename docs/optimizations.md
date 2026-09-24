@@ -28,7 +28,13 @@ single-example and 0.49-0.53 mini-batch 32.
 
 Per op, the single-example ops are all at or better than numpy. The large gaps left are all in
 batch ops **past `matmul`'s 4M-flop threading threshold**. Rust / numpy µs per call, two passes
-of the focused benchmark (see "How to measure"), after #14:
+of the focused benchmark (see "How to measure"), after #14.
+
+**The Rust column below is inflated.** It was measured with numpy and Rust loops interleaved in
+one process, and numpy's OpenBLAS threads keep spinning after each call and take cores from the
+Rust call (see "Other findings"). Timed in separate processes, the first row is 239-244 µs numpy
+against 528-570 µs Rust: 2.2-2.4x, not 12-13x. Stage 0b of the threading workplan re-measures
+every row cleanly.
 
 | shape | op | batch | numpy | Rust | Rust/numpy |
 | --- | --- | --- | --- | --- | --- |
@@ -49,9 +55,17 @@ of the focused benchmark (see "How to measure"), after #14:
    threading forced on:
    - **Starting threads costs 100-200 µs per call.** `std::thread::scope` spawns fresh threads
      on every call. A 64x64x64 matmul takes 28 µs on 1 thread and 120-200 µs on 2-8.
-   - **Splitting by rows makes every thread stream all of `b`.** At 32 x 5408, batch 32,
-     `downstream_batch` takes about 550 µs on 1 thread and 550-630 µs on 8. With the threads
-     it is about 3000 µs in the op table above.
+   - **Threads don't help at 32 x 5408, batch 32.** `downstream_batch` takes 528-539 µs on 1
+     thread, 854-902 on 2, 729-737 on 4 and 565-685 on 8. The table's 3000 µs came from the
+     harness, not from threading (stage 0b).
+   - **Spawned workers run at an idle core's clock.** With the matmul replaced by register-only
+     FMA work, which has no memory traffic, a spawned worker takes 230-455 µs per row against
+     145 on the calling thread. That is 1.6-3.1x slower, even at 2 threads with 3 cores idle.
+     During a 1-thread run the busy core runs at 3.8 GHz and idle cores at 1.1-1.5 GHz. With
+     8 threads every core runs at 2.2-3.1 GHz, the all-core limit. The governor is `schedutil`,
+     which sets a core's clock from its tasks' recent load, and a thread spawned on every call
+     has no load history. That last step is an inference, not measured directly. A persistent
+     pool would keep its threads' history, so a pool may gain more than the spawn cost.
    - **Large products still scale.** `(32, 512) @ (512, 5408)` goes from 32 ms on 1 thread to
      6-7 ms on 8. 30 x 784 at batch 512 goes from 1.3-1.7 ms to 0.8 ms on 4 threads (no better
      on 8).
@@ -109,12 +123,14 @@ of the focused benchmark (see "How to measure"), after #14:
 - **Per op, quick survey:** `python -m indrajala_ml.demos.demo_layer_op_timing`. It times every
   dense and conv layer method, single-example and batch 1/32/512, numpy and Rust interleaved,
   300 calls per loop (300 // batch for batch ops, at least 10), median of 5 loops. **Its batch
-  rows are noisy and can be off either way**: it reported 30 x 784 `forward_batch` at batch 512
+  rows are noisy and can be off either way**, partly because of the interleaving (next item): it reported 30 x 784 `forward_batch` at batch 512
   as 3469 µs where a focused benchmark measured 1350, and `downstream_batch` at 32 x 5408, batch
   32 as 9.5x numpy where a focused benchmark measured 13.9x. Use it to find candidates, not to
   judge them.
-- **Per op, focused:** time the op in loops of about 20 ms, median of 9, numpy and Rust
-  interleaved loop by loop. Two passes per build at least. This is the number to quote.
+- **Per op, focused:** time the op in loops of about 20 ms, median of 9. Two passes per build
+  at least. This is the number to quote. **Time numpy and Rust in separate processes**, never
+  interleaved in one. After a numpy BLAS call, OpenBLAS's threads keep spinning for between 100
+  and 500 ms, and a Rust batch op run in that time measured 2-5x slow (see "Other findings").
 - **End to end:** `python -m indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition`
   (about 3 minutes; median of 5 interleaved runs from identical initial weights, UCI digits and
   a 2000-row MNIST subset, single-example and mini-batch 32, plus a cProfile of Rust time by
@@ -218,6 +234,16 @@ Closed with no measured gain, kept as findings:
   the second. So a bit-changing optimization shifts end-of-training numbers the same way. Judge
   it by the step-by-step parity tests (per-step agreement to about 1e-15), not by end-of-run
   accuracy.
+- **numpy's OpenBLAS threads slow a Rust call that runs soon after.** After a BLAS call,
+  OpenBLAS keeps its worker threads spinning for a while (`OPENBLAS_THREAD_TIMEOUT`). At 32 x
+  5408, batch 32, Rust `downstream_batch` measured 547-564 µs on its own. In loops interleaved
+  with numpy's it measured 996-1165 µs on 1 thread and 1752-2872 on 8. Tried one at a time, each
+  of these brought it back to 509-585 µs: `OPENBLAS_NUM_THREADS=1`, `OPENBLAS_THREAD_TIMEOUT=4`
+  (the shortest spin), or timing numpy in a separate process. With the short spin, numpy itself
+  slowed from about 250 to 300-420 µs. A single Rust call was still slowed 100 ms after the
+  numpy loop, and no longer at 500 ms. The Rust training path never calls numpy, so this only
+  affects benchmarks. Every per-op ratio past the threading threshold that was measured
+  interleaved is suspect.
 - **The conv demo's mini-batch runs barely train.** They reach about 10% accuracy at lr 0.5 in
   1-2 epochs, and lr 2, 4 and 8 don't fix every configuration. Their timings are valid; their
   accuracy columns are not informative.
