@@ -90,7 +90,7 @@ time by op, cProfile over one MNIST epoch (2000 rows), 2026-09-24:
   this timed epoch. That overstates the passes for longer runs: the trainers run n + 1 passes
   for n epochs, so a one-epoch run has two and a long run about one per epoch.
 - **Conv MNIST, mini-batch 32** (0.74 s): `conv_forward_batch` 27% (its 63 batch calls about 1.5
-  ms each, against 0.86 ms for 32 single-example calls; candidate 4),
+  ms each, against 0.86 ms for 32 single-example calls; about 0.95 ms since candidate 4),
   `conv_accumulate_gradient_batch` 10.5%, dense `accumulate_gradient_batch` 9.5% and
   `downstream_batch` 6.7% (candidate 6), `forward_batch` 6.3%.
 - **Conv MNIST, single-example** (0.80 s): `layer_sgd_step` 20%, `conv_forward_batch` 20%,
@@ -113,75 +113,19 @@ and 2 speed up both backends. Re-ranked 2026-09-24 after the batch-size-scaling 
 2. **A batched accuracy pass**: **done** (#378-#379, 2026-09-24). The trainers' accuracy pass
    runs `forward_batch` over 32-row chunks; the dense MNIST epoch at B = 32 went from 1.61 to
    1.31 s in Rust and 4.85 to 2.44 s in numpy. See "A batched accuracy pass" under
-   "Completed". Rust conv keeps the per-row pass until candidate 4 is fixed.
+   "Completed". Rust conv keeps the per-row pass; candidate 4 made its batched forward about
+   as cheap per example as single calls, so switching it is the next measured stage.
 
 3. **Dense single-example `downstream` through the tiled kernel**: **done** (crate #20,
    2026-09-24). At 32 x 5408 it went from 43.8-48.1 to 26.2-26.4 µs (numpy 29.0-29.3), and the
    MNIST conv single-example Rust epoch lost about 45 ms (6%). See "Dense single-example
    downstream through the tiled kernel" under "Completed".
 
-4. **Conv `forward_batch` costs more per example than single-example calls.** Re-measured
-   2026-09-24 at 28x28, `ConvSpec(3, 8)`, Rust on one thread (focused benchmark, two passes):
-   26.5-28.7 µs for one example, 1365-1790 µs at N = 32 (1.5-2.1x the 848-918 of 32 single calls)
-   and 36.2-38.4 ms at N = 512 (2.5-2.8x). Before the `matmul_narrow` kernel it was 2280 against
-   1715 µs at N = 32 (1.3x), so the gap has widened as the single-example path got faster. The
-   other conv batch ops cost less extra at N = 32: downstream 1020-1023 µs against 800-867 for 32
-   calls (1.2-1.3x), accumulate 1037-1106 against 899-934 (1.1-1.2x; candidate 8 at N = 512). In
-   the MNIST conv mini-batch 32 epoch the 63 batch calls took about 96 ms (profiled, the 4000
-   accuracy-pass calls taken out at 27 µs each), so at the single-example rate they would save
-   about 40 ms, 5% of the worst end-to-end cell. It is also what would let conv networks gain
-   from candidate 2 (Rust conv keeps the per-row accuracy pass until then).
-
-   **Stage 0 (2026-09-24): the cause is zero-filling and cache traffic past L2, not page faults
-   and not the matmul. Go, with a per-example pipeline.** Measured with a local probe crate build
-   (`probe/cand4-stage0` in `rust/`, not pushed) that runs the op's work with a timer between its
-   parts, frees its buffers in the real call path's order, and checks its `A` and `cols` against
-   `conv_forward_batch` bit for bit:
-   - **Faults are ruled out for the isolated op.** The real op faults 0 times a call at N = 32 and
-     512 (`focused_benchmark.py`), and `--malloc raised` (no heap trimming) leaves its time
-     unchanged: 1400-1422 against 1401-1447 µs at N = 32. The chained-call faults under "Other
-     findings" are a separate, smaller effect (3-6% of an epoch).
-   - **The matmul scales linearly at N = 32:** bare `21632x9x8` 297-318 µs against 32 x 9.3.
-     (Not at N = 512: 11.0-12.8 ms against 4.8.)
-   - **The parts, µs at N = 32, fault-free** (both allocator thresholds raised, where the probe
-     and the real op agree; with glibc's defaults the probe faulted 195-490 times a call where
-     the real op faults 0-20, the docs' warning below about a probe's allocation pattern):
-
-     | part | now at N = 32 | 32 x N = 1 |
-     |---|---|---|
-     | zeroed `cols` (1.56 MB) | 217-235 | 32 |
-     | im2col | 248-279 | 240 |
-     | matmul, with its zeroed 1.38 MB output | 462-670 | 373 |
-     | zeroed `A` (1.38 MB) | 177-232 | 27 |
-     | ReLU scatter | 266-324 | 237 |
-
-     The three `vec![0.0; ...]` buffers are each overwritten in full; at N = 1 they sit in L1/L2
-     and zeroing them is free.
-   - **Three designs, all bit-identical to the current op** (probe totals, µs, fault-free, two
-     passes; single calls 26-29 µs, so 32 x 830-930 and 512 x 13.3-14.8 ms):
-
-     | design | N = 1 | N = 32 | N = 512 |
-     |---|---|---|---|
-     | now (zeroed buffers) | 28.5-31.1 | 1403-1736 | 30.4-32.3 ms |
-     | original loops into uninitialised buffers | 34.1-44.3 | 1182-1209 | 23.3-23.4 ms |
-     | no zeroing: `cols` appended, `A` gathered in output order | 26.0-26.6 | 1006-1071 | 17.9-19.8 ms |
-     | the same, one example at a time (im2col, matmul, gather) | 27.0-27.9 | 979-983 | 15.7-15.9 ms |
-
-     Just dropping the zero-fill is not enough: the strided scatter then pays for fetching `A`'s
-     lines itself (456-475 µs at N = 32, and 13-24 against 7.5 µs at N = 1). Writing `A`
-     sequentially (reading `by_position` with stride `O`) fixes that. Running the pipeline one
-     example at a time keeps each 48 KB slab of `cols` and the 43 KB `P x O` product hot, and
-     reuses one product buffer; it is the best at every N and brings N = 512 near the single
-     calls. `cols` is still kept whole for the backward pass.
-   - **Stake:** about 420-500 µs of the 1400 at N = 32, so about 26-32 ms (4%) of the conv
-     mini-batch 32 epoch's 63 calls, plus whatever candidate 2's batched accuracy pass then gains
-     for Rust conv (to measure: the blocked op is still 30.6 against 26-28 µs per example, so the
-     pass would gain only from the per-call overhead of the other layers).
-   - **Open for the fix:** a per-example matmul runs on one thread, so a threaded `forward_batch`
-     at large N would lose its row threading (per-block, or threads over examples, would keep
-     it). The same zeroed-output pattern is in `matmul_narrow` itself, so downstream (1.2-1.3x)
-     and accumulate (1.1-1.2x) may share part of the cause; col2im's scatter-add does need its
-     zeroed buffer.
+4. **Conv `forward_batch` one example at a time**: **done** (#383 stage 0, crate #21,
+   2026-09-24). At N = 32 it went from 1351-1694 to 920-1010 µs (32 single calls: about 850), at
+   N = 512 from 34.0-40.5 to 15.0-15.7 ms, and it saves 40-55 ms (5-6%) of the MNIST conv mini-batch
+   32 epochs. See "Conv forward_batch one example at a time" under "Completed". Rust conv still
+   has the per-row accuracy pass; switching it to candidate 2's batched pass is the next stage.
 
 5. **`max_pool_forward_batch`** is the second- or third-largest Rust conv op: in profiled MNIST
    conv-pool-conv training, 0.095 s of 0.86 s single-example (11%, 6000 calls, 4000 of them the
@@ -635,6 +579,113 @@ Crate PR numbers are `indrajala-math-rust`'s. "Bit-identical" means every output
 | `matmul_nt` in 4 x 2 register tiles (4 rows of `X` against 2 rows of `W`; 2 x 4, 3 x 3 and 2 x 2 measured slower or tied) | #17 | unthreaded dense `forward_batch` 0.6-0.9x its old time (second pass: 32 x 5408, batch 32: 771-916 → 545-555 µs; 30 x 784, batch 32: 102-110 → 76-77); epochs within noise; bit-identical |
 | A batched training-set accuracy pass: `classify_rows`, `forward_batch` over 32-row chunks (candidate 2) | - | dense MNIST epoch at B = 32 1.61 → 1.31 s in Rust, 4.85 → 2.44 in numpy; predictions equal, pinned results unchanged |
 | Vector @ matrix (single-example `layer_downstream`) through `tiled_row_range` as a one-row product, `axpy_row` removed (candidate 3) | #20 | 43.8-48.1 → 26.2-26.4 µs at 32 x 5408 (numpy 29.0-29.3); MNIST conv single-example Rust epoch about -6%; bit-identical |
+| Conv `forward_batch` one example at a time: im2col, the product into one reused `(P, O)` buffer, `A` appended in order; no zeroed batch buffers (candidate 4) | #21 | N = 32 1351-1694 → 920-1010 µs, N = 512 34.0-40.5 → 15.0-15.7 ms; `conv_forward_batch` in the MNIST conv B = 32 epoch 204-221 → 161-179 ms; bit-identical |
+
+**Conv forward_batch one example at a time** (candidate 4; #383 stage 0, crate #21,
+2026-09-24). `conv_forward_batch` runs im2col, the product and the bias + ReLU per example:
+each example's rows are appended to `cols` (still kept whole for the backward pass), its `P`
+rows of `cols @ W.T` go through `tiled_row_range` (`matmul_narrow`'s kernel, now `pub(crate)`)
+into one `(P, O)` buffer reused for every example, and its row of `A` is appended in
+channel-major order. Nothing batch-sized is zero-filled, and `A` is written in order instead of
+scattered. The product no longer threads; at N = 512 threading had given nothing (35.6-37.8 ms
+against 34-37 on one thread). No `unsafe`. The existing exact tests (`A` against the crate's
+matmul, bias, scatter and ReLU; `cols` against the brute-force definition, over every kernel
+path) pass unchanged, and bias after the max (30 failures), the product from the previous
+example's rows (22), the wrong channel in the gather (29) and one `cols` value 1 ULP off in the
+last example (6) each failed them. Crate suite 894 passed; full suite passed with no pin moved.
+
+Focused benchmark, builds alternated old, new, old, new, default threads and one thread, glibc's
+allocator defaults and raised thresholds (`--malloc both`); µs per call:
+
+| N | old | new |
+| --- | --- | --- |
+| 1 | 26.3-28.5 | 25.7-26.6 |
+| 32 | 1351-1694 | 920-1010 |
+| 512 | 34.0-40.5 ms | 15.0-15.7 ms |
+
+The new op faults 676 times a call at N = 512 with glibc's defaults (0 before), at no cost in
+time (the raised-threshold rows are the same).
+
+- **In the epoch** (the demo's 2000 MNIST rows, one epoch, cProfile via `rust_op_breakdown`, 3
+  processes per build, builds alternated old, new, new, old, old, new; the mini-batch counts
+  include the 4000 or 8000 per-row accuracy-pass calls):
+
+  | architecture, trainer | `conv_forward_batch` old | new | profiled epoch old | new |
+  | --- | --- | --- | --- | --- |
+  | conv, B = 32 | 204-221 ms | 161-179 ms | 0.691-0.712 s | 0.631-0.674 s |
+  | conv-pool-conv, B = 32 | 414-427 ms | 358-362 ms | 0.926-0.954 s | 0.883-0.895 s |
+  | conv, single | 172-222 ms | 155-169 ms | 0.821-0.913 s | 0.794-0.853 s |
+  | conv-pool-conv, single | 359-367 ms | 340-348 ms | 0.815-0.837 s | 0.802-0.818 s |
+
+- **Epoch time could not resolve it**: `prepared_dataset_timing.py --configs "conv B=32" "conv
+  single"`, 9 runs per build in calls alternated old, new, new, old, old, new, read the Rust B =
+  32 epoch 0.645 → 0.609 s (-5.6%), but numpy's, which the change can't touch, moved -5.1% in
+  the same calls. The profile above measures the op directly.
+
+The candidate and its stage 0, as recorded when it was open:
+
+**Conv `forward_batch` costs more per example than single-example calls.** Re-measured
+2026-09-24 at 28x28, `ConvSpec(3, 8)`, Rust on one thread (focused benchmark, two passes):
+26.5-28.7 µs for one example, 1365-1790 µs at N = 32 (1.5-2.1x the 848-918 of 32 single calls)
+and 36.2-38.4 ms at N = 512 (2.5-2.8x). Before the `matmul_narrow` kernel it was 2280 against
+1715 µs at N = 32 (1.3x), so the gap has widened as the single-example path got faster. The
+other conv batch ops cost less extra at N = 32: downstream 1020-1023 µs against 800-867 for 32
+calls (1.2-1.3x), accumulate 1037-1106 against 899-934 (1.1-1.2x; candidate 8 at N = 512). In
+the MNIST conv mini-batch 32 epoch the 63 batch calls took about 96 ms (profiled, the 4000
+accuracy-pass calls taken out at 27 µs each), so at the single-example rate they would save
+about 40 ms, 5% of the worst end-to-end cell. It is also what would let conv networks gain
+from candidate 2 (Rust conv keeps the per-row accuracy pass until then).
+
+**Stage 0 (2026-09-24): the cause is zero-filling and cache traffic past L2, not page faults
+and not the matmul. Go, with a per-example pipeline.** Measured with a local probe crate build
+(`probe/cand4-stage0` in `rust/`, not pushed) that runs the op's work with a timer between its
+parts, frees its buffers in the real call path's order, and checks its `A` and `cols` against
+`conv_forward_batch` bit for bit:
+- **Faults are ruled out for the isolated op.** The real op faults 0 times a call at N = 32 and
+  512 (`focused_benchmark.py`), and `--malloc raised` (no heap trimming) leaves its time
+  unchanged: 1400-1422 against 1401-1447 µs at N = 32. The chained-call faults under "Other
+  findings" are a separate, smaller effect (3-6% of an epoch).
+- **The matmul scales linearly at N = 32:** bare `21632x9x8` 297-318 µs against 32 x 9.3.
+  (Not at N = 512: 11.0-12.8 ms against 4.8.)
+- **The parts, µs at N = 32, fault-free** (both allocator thresholds raised, where the probe
+  and the real op agree; with glibc's defaults the probe faulted 195-490 times a call where
+  the real op faults 0-20, the docs' warning below about a probe's allocation pattern):
+
+  | part | now at N = 32 | 32 x N = 1 |
+  |---|---|---|
+  | zeroed `cols` (1.56 MB) | 217-235 | 32 |
+  | im2col | 248-279 | 240 |
+  | matmul, with its zeroed 1.38 MB output | 462-670 | 373 |
+  | zeroed `A` (1.38 MB) | 177-232 | 27 |
+  | ReLU scatter | 266-324 | 237 |
+
+  The three `vec![0.0; ...]` buffers are each overwritten in full; at N = 1 they sit in L1/L2
+  and zeroing them is free.
+- **Three designs, all bit-identical to the current op** (probe totals, µs, fault-free, two
+  passes; single calls 26-29 µs, so 32 x 830-930 and 512 x 13.3-14.8 ms):
+
+  | design | N = 1 | N = 32 | N = 512 |
+  |---|---|---|---|
+  | now (zeroed buffers) | 28.5-31.1 | 1403-1736 | 30.4-32.3 ms |
+  | original loops into uninitialised buffers | 34.1-44.3 | 1182-1209 | 23.3-23.4 ms |
+  | no zeroing: `cols` appended, `A` gathered in output order | 26.0-26.6 | 1006-1071 | 17.9-19.8 ms |
+  | the same, one example at a time (im2col, matmul, gather) | 27.0-27.9 | 979-983 | 15.7-15.9 ms |
+
+  Just dropping the zero-fill is not enough: the strided scatter then pays for fetching `A`'s
+  lines itself (456-475 µs at N = 32, and 13-24 against 7.5 µs at N = 1). Writing `A`
+  sequentially (reading `by_position` with stride `O`) fixes that. Running the pipeline one
+  example at a time keeps each 48 KB slab of `cols` and the 43 KB `P x O` product hot, and
+  reuses one product buffer; it is the best at every N and brings N = 512 near the single
+  calls. `cols` is still kept whole for the backward pass.
+- **Stake:** about 420-500 µs of the 1400 at N = 32, so about 26-32 ms (4%) of the conv
+  mini-batch 32 epoch's 63 calls, plus whatever candidate 2's batched accuracy pass then gains
+  for Rust conv (to measure: the blocked op is still 30.6 against 26-28 µs per example, so the
+  pass would gain only from the per-call overhead of the other layers).
+- **Open for the fix:** a per-example matmul runs on one thread, so a threaded `forward_batch`
+  at large N would lose its row threading (per-block, or threads over examples, would keep
+  it). The same zeroed-output pattern is in `matmul_narrow` itself, so downstream (1.2-1.3x)
+  and accumulate (1.1-1.2x) may share part of the cause; col2im's scatter-add does need its
+  zeroed buffer.
 
 **Dense single-example downstream through the tiled kernel** (candidate 3; crate #20,
 2026-09-24). The vector @ matrix case of `matmul` (`layer_downstream`'s `delta @ W`) calls
