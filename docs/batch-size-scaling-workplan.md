@@ -1,6 +1,6 @@
 # Workplan: batch-size scaling on full MNIST
 
-**Status: stages 1 and 2 done (2026-09-24); stage 3 next.** Results are in [Results](#results) at the end.
+**Status: stages 1-3 done (2026-09-24); stage 4 next.** Results are in [Results](#results) at the end.
 
 A demo and a measured study: does the linear learning-rate scaling rule (Goyal et al. 2017:
 multiply the rate by the factor the batch grows, with warmup) hold for this codebase's dense
@@ -333,3 +333,62 @@ final mean lies inside it, and "above" would mean over the top of it (no cell wa
   warmup makes it tight (±0.33% at 1024). The same momentum 0.9 rate is stable at batch 32
   from epoch 2, so the larger batch adds instability at the same rate. This was not
   predicted, and it is not explained here.
+
+### Stage 3: timing and the op profile
+
+`python scripts/batch_size_timing.py time` and `... profile --batch-sizes 32 512 1024`, on an idle
+machine. Every (backend, batch size, repeat) runs in its own process, with the order rotated each
+repeat, from seed-0 weights with `random.seed(0)`. Plain SGD at the scaled `lr_32` = 4 with a
+1-epoch warmup; numpy uses its default OpenBLAS threading. The epoch table (trainer epoch, step
+loop, one accuracy pass, batch and row conversion, median of 5) is in
+[optimizations.md](optimizations.md), candidate 7. The Rust op profile (cProfile own time, one
+step loop):
+
+**B = 32: step loop 1.59 s unprofiled, 1.55 s profiled, Rust ops 0.37 s**
+
+| op | s | calls | ms / call | % of profiled |
+|---|---|---|---|---|
+| layer_accumulate_gradient_batch | 0.178 | 3750 | 0.047 | 11.5% |
+| layer_forward_batch | 0.161 | 3750 | 0.043 | 10.4% |
+| layer_apply_accumulated_gradient | 0.019 | 3750 | 0.005 | 1.3% |
+| layer_hidden_delta_batch | 0.007 | 1875 | 0.004 | 0.4% |
+| layer_output_delta | 0.002 | 1875 | 0.001 | 0.1% |
+
+**B = 512: step loop 2.12 s unprofiled, 2.08 s profiled, Rust ops 0.38 s**
+
+| op | s | calls | ms / call | % of profiled |
+|---|---|---|---|---|
+| layer_accumulate_gradient_batch | 0.223 | 236 | 0.943 | 10.7% |
+| layer_forward_batch | 0.147 | 236 | 0.624 | 7.1% |
+| layer_hidden_delta_batch | 0.007 | 118 | 0.057 | 0.3% |
+| layer_apply_accumulated_gradient | 0.003 | 236 | 0.014 | 0.2% |
+| layer_output_delta | 0.001 | 118 | 0.005 | 0.0% |
+
+**B = 1024: step loop 2.06 s unprofiled, 1.95 s profiled, Rust ops 0.40 s**
+
+| op | s | calls | ms / call | % of profiled |
+|---|---|---|---|---|
+| layer_accumulate_gradient_batch | 0.251 | 118 | 2.128 | 12.9% |
+| layer_forward_batch | 0.141 | 118 | 1.199 | 7.3% |
+| layer_hidden_delta_batch | 0.007 | 59 | 0.118 | 0.4% |
+| layer_apply_accumulated_gradient | 0.001 | 118 | 0.012 | 0.1% |
+| layer_output_delta | 0.001 | 59 | 0.010 | 0.0% |
+
+**Against the decision rule:**
+
+- **Candidate 6: passes the bar, but only just.** `layer_accumulate_gradient_batch` is
+  10.7% of the profiled step loop at B = 512 and 12.9% at 1024, over the 5% bar. But it is
+  already 11.5% at B = 32. Long `k` adds only 0.05-0.07 s per epoch, and closing the gap to
+  numpy would save about 0.1 s of a 4.85 s epoch. Recorded in optimizations.md: do it after
+  candidate 7.
+- **Candidate 7: go.** Converting tuples to arrays (batches in the step loop, rows in the two
+  accuracy passes) is about 70% of a Rust epoch at B = 32 (2.7 of 3.78 s), far above the
+  10% bar, so its stage 0 is done. The Rust ops are only 0.37-0.40 s of each epoch.
+- **The accuracy pass: it dominates.** The two passes are 52-67% of a Rust epoch, and 70% of each pass is
+  row conversion. A batched accuracy pass would be a trainer PR. It is recorded in
+  optimizations.md's "Other findings", and candidate 7 comes first because it removes most of
+  that stake anyway.
+
+The pitfall this workplan warned about was real: the epoch time barely moves with the batch
+size (Rust 3.78-4.85 s), because the fixed accuracy passes and the per-row conversion make up
+most of it.
