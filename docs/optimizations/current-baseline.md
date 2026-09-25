@@ -61,8 +61,8 @@ numbers are threaded and partly warm-clock numbers.
 Conv ops at 28x28, `ConvSpec(3, 8)`, one thread, against 32 or 512 single-example calls:
 `forward_batch` 920-1010 µs at N = 32 and 15.0-15.7 ms at N = 512 (single calls 26-29 µs);
 downstream 1.2-1.3x and accumulate 1.1-1.2x their single calls at N = 32, accumulate 3.8-4.0x at
-N = 512. The second-conv accumulate (13x13x8, 26x26x8/2, 26x26x8 in) is in candidate 1 of
-[Candidates](candidates.md).
+N = 512 (measured before `matmul_long_k`, which took the N = 32 accumulate to 0.83x). The
+second-conv accumulate per call is in [Implemented](implemented.md).
 
 Max-pool ops, PoolSpec(2) on 26x26x8 (the conv-pool-conv MNIST layer), ReLU-like input, one
 thread each: forward 4.1-4.2 µs single against numpy's 95, 112-114 at batch 32 against 1570-1630;
