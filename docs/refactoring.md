@@ -23,29 +23,22 @@ Rules for every stage:
 
 ## 1. Hyperparameters declared once
 
-**The duplication.** Every network with a hyperparameter spells each name out several times:
+**The duplication.** Every network with a hyperparameter (momentum, L2, Adam and dropout, in the
+numpy and Rust families) spells each name out twice in `__init__`: once to store it, and once in
+the layer-class lambda that closes over it.
 
-- in `__init__`, which stores it and also closes over it in a layer-class lambda;
-- in `_extra_state` and `_extra_init_kwargs`, which round-trip it through `save` and `load`.
-
-This covers momentum, L2, Adam and dropout, in the numpy, Rust and per-node families.
-
-`randomized` is already shared: `ArrayNetworkBase` and `BackpropNetworkBase` each define it once,
-forwarding `*args` and `**kwargs` to the constructor.
+`randomized`, `_extra_state` and `_extra_init_kwargs` are already shared: `ArrayNetworkBase`
+generates the save/load hooks from each sibling's `hyperparameters` tuple (e.g.
+`("beta1", "beta2", "epsilon")`).
 
 **Target shape.**
 
-- A class attribute `hyperparameters = ("beta1", "beta2", "epsilon")` lets the base class
-  generate `_extra_state` and `_extra_init_kwargs`.
 - A class method `layer_cls_for(**hyperparameters)` replaces each lambda assignment.
 - Each sibling is left with its `__init__` signature (its defaults and required arguments are
   documented API) and its docstring.
 
-**Stages:**
-
-1. `hyperparameters` generating `_extra_state` and `_extra_init_kwargs`, on the array families.
-   A saved-file round-trip test per sibling already exists and gates this stage.
-2. `layer_cls_for` replacing the lambda assignments in `__init__`.
+**Stage:** `layer_cls_for` replacing the lambda assignments in `__init__`. It touches layer
+construction only, not `learn*`, but the golden run gates it as usual.
 
 ## 2. Test files parameterized by backend
 
