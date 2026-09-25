@@ -1,8 +1,10 @@
 import random
 
-import numpy as np
 import pytest
 
+from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_network import (
+    SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.softmax_vectorized_multiclass_backprop_classifier_network import (
     SoftmaxVectorizedMultiClassBackpropClassifierNetwork,
 )
@@ -17,46 +19,50 @@ DIMENSION = 6
 LAYER_SIZES = [5]
 CLASS_COUNT = 3
 
+NETWORK_CLS = {
+    "numpy": SoftmaxVectorizedMultiClassBackpropClassifierNetwork,
+    "rust": SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
+}
 
-def _matching_networks(rng: random.Random, bounds: float = 10.0):
+
+@pytest.fixture
+def network_cls(backend):
+    return NETWORK_CLS[backend.name]
+
+
+def _matching_networks(rng: random.Random, backend):
     return matching_softmax_array_backprop_networks(
-        rng,
-        SoftmaxVectorizedMultiClassBackpropClassifierNetwork,
-        np.array,
-        LAYER_SIZES,
-        DIMENSION,
-        CLASS_COUNT,
-        bounds,
+        rng, NETWORK_CLS[backend.name], backend.owned, LAYER_SIZES, DIMENSION, CLASS_COUNT
     )
 
 
-def test_predict_probabilities_matches_across_a_random_sweep():
+def test_predict_probabilities_matches_across_a_random_sweep(backend):
 
     rng = random.Random(0)
-    node_network, array_network = _matching_networks(rng)
+    node_network, array_network = _matching_networks(rng, backend)
 
     for _ in range(50):
         state = tuple(rng.uniform(-10.0, 10.0) for _ in range(DIMENSION))
         expected = node_network.predict_probabilities(state)
         actual = array_network.predict_probabilities(state)
-        assert np.allclose(actual, expected, rtol=1e-9, atol=1e-12)
+        assert actual == pytest.approx(expected, rel=1e-9, abs=1e-12)
         assert sum(actual) == pytest.approx(1.0)
 
 
-def test_classify_state_matches_across_a_random_sweep():
+def test_classify_state_matches_across_a_random_sweep(backend):
 
     rng = random.Random(1)
-    node_network, array_network = _matching_networks(rng)
+    node_network, array_network = _matching_networks(rng, backend)
 
     for _ in range(50):
         state = tuple(rng.uniform(-10.0, 10.0) for _ in range(DIMENSION))
         assert array_network.classify_state(state) == node_network.classify_state(state)
 
 
-def test_learn_matches_after_every_step_not_just_at_the_end():
+def test_learn_matches_after_every_step_not_just_at_the_end(backend):
 
     rng = random.Random(2)
-    node_network, array_network = _matching_networks(rng)
+    node_network, array_network = _matching_networks(rng, backend)
     learning_rate = 0.01
 
     for step in range(30):
@@ -69,10 +75,10 @@ def test_learn_matches_after_every_step_not_just_at_the_end():
         assert_array_network_weights_match(node_network, array_network)
 
 
-def test_learn_batch_matches_after_every_batch_not_just_at_the_end():
+def test_learn_batch_matches_after_every_batch_not_just_at_the_end(backend):
 
     rng = random.Random(3)
-    node_network, array_network = _matching_networks(rng)
+    node_network, array_network = _matching_networks(rng, backend)
     learning_rate = 0.01
     batch_size = 8
 
@@ -88,9 +94,9 @@ def test_learn_batch_matches_after_every_batch_not_just_at_the_end():
         assert_array_network_weights_match(node_network, array_network)
 
 
-def test_randomized_builds_a_usable_network():
+def test_randomized_builds_a_usable_network(network_cls):
 
-    network = SoftmaxVectorizedMultiClassBackpropClassifierNetwork.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT)
+    network = network_cls.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT)
     state = tuple(0.1 * i for i in range(DIMENSION))
 
     probabilities = network.predict_probabilities(state)
@@ -100,41 +106,33 @@ def test_randomized_builds_a_usable_network():
     assert 0 <= network.classify_state(state) < CLASS_COUNT
 
 
-def test_snapshot_restore_round_trips_weights():
+def test_snapshot_restore_round_trips_weights(network_cls):
 
-    assert_array_network_snapshot_restore_round_trip(
-        SoftmaxVectorizedMultiClassBackpropClassifierNetwork, LAYER_SIZES, DIMENSION, CLASS_COUNT
-    )
+    assert_array_network_snapshot_restore_round_trip(network_cls, LAYER_SIZES, DIMENSION, CLASS_COUNT)
 
 
-def test_save_load_round_trips_weights_and_predictions(tmp_path):
+def test_save_load_round_trips_weights_and_predictions(network_cls, tmp_path):
 
-    network = SoftmaxVectorizedMultiClassBackpropClassifierNetwork.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT)
+    network = network_cls.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT)
     state = tuple(0.1 * i for i in range(DIMENSION))
 
-    assert_array_network_save_load_round_trip(
-        network,
-        SoftmaxVectorizedMultiClassBackpropClassifierNetwork.load,
-        tmp_path,
-        "softmax_vectorized_model.json",
-        state,
-    )
+    assert_array_network_save_load_round_trip(network, network_cls.load, tmp_path, "model.json", state)
 
 
-def test_construction_rejects_invalid_arguments():
+def test_construction_rejects_invalid_arguments(network_cls):
 
     with pytest.raises(AssertionError):
-        SoftmaxVectorizedMultiClassBackpropClassifierNetwork([], DIMENSION, CLASS_COUNT)
+        network_cls([], DIMENSION, CLASS_COUNT)
 
     with pytest.raises(AssertionError):
-        SoftmaxVectorizedMultiClassBackpropClassifierNetwork([0], DIMENSION, CLASS_COUNT)
+        network_cls([0], DIMENSION, CLASS_COUNT)
 
     with pytest.raises(AssertionError):
-        SoftmaxVectorizedMultiClassBackpropClassifierNetwork(LAYER_SIZES, DIMENSION, class_count=1)
+        network_cls(LAYER_SIZES, DIMENSION, class_count=1)
 
 
-def test_learn_batch_rejects_an_empty_batch():
+def test_learn_batch_rejects_an_empty_batch(network_cls):
 
-    network = SoftmaxVectorizedMultiClassBackpropClassifierNetwork.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT)
+    network = network_cls.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT)
     with pytest.raises(AssertionError):
         network.learn_batch(0.1, [])

@@ -160,13 +160,8 @@ def matching_single_output_array_backprop_networks(
     bounds: float = 10.0,
 ):
     """
-    The single-output analogue of matching_array_backprop_networks above, for
-    ArrayBackpropClassifierNetwork/RustArrayBackpropClassifierNetwork: builds a
-    FanInAwareBackpropClassifierNetwork per-node reference (not plain
-    BackpropClassifierNetwork - the array sibling's own randomize() is fan-in-aware only, per its
-    own docstring, so this is the genuinely matching per-node scheme) and an array-backed
-    sibling with identical injected weights, the same "force identical, never rely on
-    randomize()" reasoning matching_array_backprop_networks's own docstring gives.
+    matching_array_backprop_networks for the single-output array networks: the reference is
+    FanInAwareBackpropClassifierNetwork, whose initialization matches theirs.
     """
     node_network = FanInAwareBackpropClassifierNetwork(layer_sizes, dimension, [(-bounds, bounds)] * dimension)
     array_network = array_network_cls(layer_sizes, dimension)
@@ -184,14 +179,8 @@ def matching_cross_entropy_array_backprop_networks(
     bounds: float = 10.0,
 ):
     """
-    The cross-entropy analogue of matching_single_output_array_backprop_networks above, for
-    CrossEntropyArrayBackpropClassifierNetwork/CrossEntropyRustArrayBackpropClassifierNetwork:
-    builds a BinaryCrossEntropyBackpropClassifierNetwork per-node reference (the genuine per-node
-    counterpart, unlike matching_single_output_array_backprop_networks's own
-    FanInAwareBackpropClassifierNetwork, which only matches on init scheme, not loss function) and
-    a cross-entropy array-backed sibling with identical injected weights - the same "force
-    identical, never rely on randomize()" reasoning matching_array_backprop_networks's own
-    docstring gives.
+    matching_array_backprop_networks for the single-output cross-entropy networks, against
+    BinaryCrossEntropyBackpropClassifierNetwork.
     """
     node_network = BinaryCrossEntropyBackpropClassifierNetwork(layer_sizes, dimension, [(-bounds, bounds)] * dimension)
     array_network = array_network_cls(layer_sizes, dimension)
@@ -337,11 +326,8 @@ def matching_momentum_array_backprop_networks(
 
 class ReLUMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
-    Test-only per-node ReLU reference: MultiClassBackpropClassifierNetwork with its
-    hidden_layer_cls extension point set to ReLULayer - the output layer stays the default
-    plain BackpropLayer (sigmoid), matching ReLUNode's hidden-layer-only convention (the same
-    construction ReLUBackpropClassifierNetwork uses for the single-output case). Gives
-    ReLUVectorizedMultiClassBackpropClassifierNetwork a genuine parity reference.
+    Test-only per-node multiclass ReLU network, the parity reference for the ReLU array networks:
+    ReLULayer hidden layers and a sigmoid output layer.
     """
 
     hidden_layer_cls = ReLULayer
@@ -357,9 +343,7 @@ def matching_relu_array_backprop_networks(
     bounds: float = 10.0,
 ):
     """
-    The ReLU-sibling analogue of matching_array_backprop_networks above - see
-    matching_adam_array_backprop_networks's own docstring for the general shape this follows. No
-    extra coefficient argument, unlike the Adam/L2/momentum analogues - ReLU has none.
+    matching_array_backprop_networks for the ReLU networks.
     """
     node_network = ReLUMultiClassBackpropClassifierNetwork(
         layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count
@@ -433,11 +417,8 @@ def matching_softmax_array_backprop_networks(
     bounds: float = 10.0,
 ):
     """
-    The softmax-sibling analogue of matching_array_backprop_networks above - see
-    matching_adam_array_backprop_networks's own docstring for the general shape this follows.
-    Unlike momentum/L2/ReLU (which need a test-only per-node reference subclass built via
-    make_*_layer_cls/hidden_layer_cls), a genuine per-node softmax reference already exists
-    (SoftmaxMultiClassBackpropClassifierNetwork), so this uses it directly.
+    matching_array_backprop_networks for the softmax networks, against the production
+    SoftmaxMultiClassBackpropClassifierNetwork.
     """
     node_network = SoftmaxMultiClassBackpropClassifierNetwork(
         layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count
@@ -450,13 +431,8 @@ def matching_softmax_array_backprop_networks(
 
 class CrossEntropyMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
-    Test-only per-node cross-entropy reference: MultiClassBackpropClassifierNetwork with its
-    output_layer_cls extension point set to CrossEntropyOutputLayer - the hidden layers stay the
-    default plain BackpropLayer (sigmoid), the same construction
-    BinaryCrossEntropyBackpropClassifierNetwork uses for the single-output case (a single
-    class-attribute override, needing no factory function since CrossEntropyOutputLayer takes no
-    extra tunable coefficient - unlike L2/momentum's own make_*_layer_cls factories). Gives
-    CrossEntropyVectorizedMultiClassBackpropClassifierNetwork a genuine parity reference.
+    Test-only per-node multiclass cross-entropy network, the parity reference for the multiclass
+    cross-entropy array networks: sigmoid hidden layers and a CrossEntropyOutputLayer output.
     """
 
     output_layer_cls = CrossEntropyOutputLayer
@@ -472,9 +448,7 @@ def matching_cross_entropy_multiclass_array_backprop_networks(
     bounds: float = 10.0,
 ):
     """
-    The cross-entropy-multiclass-sibling analogue of matching_array_backprop_networks above - see
-    matching_adam_array_backprop_networks's own docstring for the general shape this follows. No
-    extra coefficient argument, matching matching_softmax_array_backprop_networks's own posture.
+    matching_array_backprop_networks for the multiclass cross-entropy networks.
     """
     node_network = CrossEntropyMultiClassBackpropClassifierNetwork(
         layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count

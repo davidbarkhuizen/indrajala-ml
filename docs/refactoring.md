@@ -22,7 +22,7 @@ Rules for every stage:
 
 ## 1. Test files parameterized by backend
 
-**The duplication.** 14 numpy/Rust pairs of test files (`test_*_array_layer.py` /
+**The duplication.** 7 numpy/Rust pairs of test files (`test_*_array_layer.py` /
 `test_*_rust_array_layer.py`, `test_*_vectorized_multiclass_backprop_model.py` /
 `test_*_rust_array_multiclass_backprop_model.py`, and so on) differ in:
 
