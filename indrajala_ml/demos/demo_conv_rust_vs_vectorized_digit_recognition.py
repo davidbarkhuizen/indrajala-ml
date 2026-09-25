@@ -38,6 +38,9 @@ ARCHITECTURES: dict[str, list[ConvSpec | PoolSpec]] = {
     "conv-pool-conv": [ConvSpec(3, 8), PoolSpec(2), ConvSpec(3, 8)],
     "conv-conv-stride2": [ConvSpec(3, 8), ConvSpec(3, 8, stride=2)],
     "conv-conv": [ConvSpec(3, 8), ConvSpec(3, 8)],
+    # wide enough that MNIST mini-batch 32 crosses the crate's 8M-flop threading threshold:
+    # the second conv's products are 21.2M, the dense tail's 9.4M
+    "conv-conv16": [ConvSpec(3, 8), ConvSpec(3, 16)],
 }
 TRAINERS = ["single-example", f"mini-batch ({BATCH_SIZE})"]
 BACKENDS = {

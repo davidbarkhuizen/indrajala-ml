@@ -14,8 +14,7 @@ prepared_mnist's, so no pass converts a row.
 
 Networks, from numpy-drawn seed-0 weights (as scripts/prepared_dataset_timing.py):
 - dense: 784 -> 30 -> 10 on full MNIST (60000 rows);
-- conv, conv-pool-conv, conv-conv-stride2: the conv demo's architectures (dense 32) on its
-  2000-row MNIST subset.
+- every architecture of the conv demo (dense 32) on its 2000-row MNIST subset.
 
 Measures (seconds), each the median of 3 in-process runs:
 - per row: the classify_row loop _training_accuracy runs;
