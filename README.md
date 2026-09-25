@@ -176,6 +176,8 @@ test passing, and:
   primitives: composable layers, batch norm, residual connections, then attention.
 - [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, the crate's against
   numpy's, and the path to seedable, numpy-identical Rust draws.
+- [docs/rng-numpy-parity-workplan.md](docs/rng-numpy-parity-workplan.md): replacing the crate's
+  RNG with a seedable, bit-identical copy of numpy's legacy `np.random`.
 
 ## License
 
