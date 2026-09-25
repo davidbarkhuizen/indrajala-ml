@@ -1,7 +1,8 @@
 # Workplan: batch-size scaling for the conv network
 
 **Status: stages 1 and 2 done. At momentum 0.0 the rule holds to B = 128 with warmup and fails
-at B = 512. Stage 3 (momentum conv) is next, if it's worth building.**
+at B = 512, where no rate reaches the band. Stage 3 (momentum conv, planned in detail below) is
+next, starting with 3a.**
 
 A measured study and a demo: does the linear learning-rate scaling rule (Goyal et al. 2017:
 multiply the rate by the factor the batch grows, with warmup) hold for the conv network on full
@@ -164,22 +165,131 @@ Result: full MNIST, Rust, momentum 0.0, `lr_32` = 2. The batch-32 band (no warmu
 
   Rate 16 is stable at B = 512 with warmup, though it stays at chance at B = 32 without warmup.
   So the stable rate rises by at least 2x, less than the 16x of the linear rule (32 stays at
-  chance). Batch size and warmup are confounded here: rate 16 at B = 32 with warmup is untested. The best capped rate finishes 2.5 points below the band and is still
-  climbing. Rates between 16 and 32 are untested.
+  chance). The best capped rate finishes 2.5 points below the band and is still
+  climbing.
+- **The stable rate at B = 512 tops out between 16 and 24, and the larger batch does raise it.**
+  Two more probe cells (same setup): rate 24 at B = 512 is erratic (29.12% ± 32.73%; one seed
+  reached 66.9%, two stayed at chance). Rate 16 at B = 32 with warmup trains badly (67.15% ±
+  3.07%, falling from 79.90% after the warmup epoch), where at B = 512 it reaches 94.63%. So the
+  batch, not the warmup, carries rate 16, and the stable rate grows about 2x for a 16x batch.
 - Warmup costs little at B = 32 (96.98% against 97.16%, within the spread).
 
 So the plan goes to stage 3.
 
-### Stage 3 (only if stage 2 fails): momentum conv
+### Stage 3: momentum conv
 
-A momentum sibling of each conv network, numpy and Rust: a conv layer subclass whose
-`apply_accumulated_gradient` keeps previous-delta state, as `MomentumArrayLayer` and
-`MomentumRustArrayLayer` do. Build it only if it's worth having in its own right, since it adds a
-network family. It needs parity tests (numpy against Rust step by step, within the 1-ULP control)
-and a save/load round trip. Then rerun stage 1 at momentum 0.9 and stage 2 with it.
+At momentum 0.0 the conv network plateaus below the band at B = 512 (stage 2), so momentum is the
+remaining lever. Dense needed momentum 0.9 to reach B = 512. Momentum conv is also worth having in
+its own right: the README lists `Momentum` and `Conv` as features of all three implementations,
+and no implementation combines them yet.
 
-If momentum conv isn't worth building, stop at stage 2. Record the null in the study's findings,
-and record in candidates.md that no trained configuration runs conv at N = 512.
+Each sub-stage is one PR (3a is a crate PR first, then the parent PR that moves `rust/`).
+
+#### 3a: numpy and Rust apply the update in the same order
+
+The Rust update ops group their arithmetic differently from numpy and pure Python, which are the
+references (`fused.rs`):
+
+| update | numpy and pure Python | Rust today | same bits |
+| --- | --- | --- | --- |
+| `layer_apply_accumulated_gradient` (dense and conv) | `(lr * g) / B` | `(lr / B) * g` | only for B a power of two |
+| `layer_momentum_apply_accumulated_gradient` | `(lr * g) / B + m * prev` | `(lr / B) * g + m * prev` | only for B a power of two |
+| `layer_l2_apply_accumulated_gradient` (W) | `lr * (g / B + λ * w)` | `w - (lr / B) * g - lr * λ * w` | no |
+| Adam, and `layer_sgd_step` (B = 1) | | | yes |
+
+Dividing by a power of two is exact, so the study's B = 32, 128 and 512 agree. But the last,
+partial batch of an epoch doesn't (60000 / 128 and 60000 / 512 both leave 96 rows), nor do the
+tests' batch sizes such as 6. So a numpy against Rust difference can come from the update's
+grouping rather than from BLAS, and conv training's chaotic sensitivity turns that into different
+end-of-run results.
+
+- **Change:** the three Rust ops compute each element exactly as the numpy expression does, same
+  operations in the same order. numpy is canonical: the README names it as the reference for Rust,
+  pure Python computes the same `learning_rate * accum / batch_size`, and the ops' doc comments
+  already quote the numpy expressions. Neither grouping is more accurate (both round twice).
+- **Tests (crate and parent):** the fused-op tests compare against the numpy layers with exact
+  equality (`==` on the bits), not a tolerance, at batch sizes 1, 6 and 96 as well as powers of
+  two. Mutation check: each new exact test must fail against the current ops.
+- **Golden run:** this is a numerics change, not a refactoring. The golden run's batches are 4
+  rows, so the prediction is bit-identical checkpoints for every network except the L2 ones.
+  Check the prediction, then re-record.
+- **Timing:** the apply ops now divide per element instead of multiplying. Time the step loop
+  before and after (`scripts/prepared_dataset_timing.py time`, both builds committed first,
+  separate processes). Expect noise: the apply is one pass over the parameters per batch.
+- **Out of scope:** reduction order in matmuls and gradient accumulation. OpenBLAS's blocking
+  isn't reproducible, and that is what the 1-ULP control covers.
+
+#### 3b: the conv networks honor hyperparameters (structural, bit-identical)
+
+The conv networks can't host a hyperparameter-bearing layer today:
+
+- `build_conv_array_network_layers` calls `dense_cls(size, previous_size)` directly, bypassing
+  `ArrayNetworkBase._new_layer`, which passes `layer_cls.hyperparameters` from the network. Change
+  it to take a layer factory, `network._new_layer`, for the dense and conv layers alike (conv
+  layer classes get `hyperparameters = ()`).
+- The conv save envelope (`save_conv_model_json` / `load_conv_model_json`) has no `extra`. Add it
+  as `save_array_model_json` has it: `ArrayConvShape.save` passes `_extra_state()`, and `load`
+  passes `_extra_init_kwargs(state)` to the constructor. Files without extra keys load unchanged.
+- The pure-Python `ConvMultiClassBackpropClassifierNetwork` hard-codes `BackpropLayer` for its
+  dense layers and `ConvKernel` inside `ConvLayer`. Add class-level hooks (`dense_layer_cls`, and
+  a kernel class on `ConvLayer`) defaulting to today's classes.
+
+Follows the README's Refactoring rules: golden run bit-identical, no hot-path change (only
+construction and save/load are touched, so no timing), public names and saved files unchanged.
+
+#### 3c: the pure-Python momentum conv reference
+
+- `MomentumConvKernel`: `ConvKernel` with the previous deltas, zero-initialized, and the update of
+  `make_momentum_node_cls`: `Δw = lr * accum / B + m * prev`, positions summed and examples
+  averaged as `ConvKernel` does. A factory, as `make_momentum_node_cls`, because momentum has no
+  default.
+- `MomentumConvMultiClassBackpropClassifierNetwork(..., momentum)`: momentum kernels in the conv
+  layers and `make_momentum_layer_cls(momentum)` for the dense and output layers. Pool layers are
+  unchanged: they have no weights.
+- **Tests:** at momentum 0.0, bit-identical to `ConvMultiClassBackpropClassifierNetwork` through
+  `learn` and `learn_batch` (`x + 0.0 * prev` is `x`). A hand-computed two-step kernel update. A
+  save/load round trip that keeps `momentum`. No new gradient check: momentum changes only the
+  update, and the gradients are covered by the existing conv checks.
+- The previous deltas are not saved, as for every momentum network (`snapshot()` covers W and b).
+
+#### 3d: numpy and Rust momentum conv
+
+- **Layers:** `MomentumConvArrayLayer(ConvArrayLayer)` and
+  `MomentumConvRustArrayLayer(ConvRustArrayLayer)`, with `hyperparameters = ("momentum",)` and
+  previous-delta state shaped as `W` `(channel_count, fan_in)` and `b` `(channel_count,)`. numpy
+  uses `MomentumArrayLayer`'s expression. Rust calls
+  `pa.layer_momentum_apply_accumulated_gradient`, which only checks that shapes match, so it takes
+  the conv shapes with no crate change.
+- **Networks:** `MomentumConvVectorizedMultiClassBackpropClassifierNetwork` and
+  `MomentumConvRustArrayMultiClassBackpropClassifierNetwork`: the conv networks with the momentum
+  conv layer and `MomentumArrayLayer` / `MomentumRustArrayLayer` for the dense tail, and
+  `hyperparameters = ("momentum",)`.
+- **Tests,** parametrized over both backends as the conv network tests are:
+  - parity with 3c's reference after every `learn` step and every `learn_batch` batch, over the
+    conv tests' `ARCHITECTURES` (pooling, stride and multi-channel), at a non-power-of-two batch
+    size, within the conv tests' `WEIGHT_ATOL` (1e-13);
+  - at momentum 0.0, bit-identical to the plain conv networks on the same backend;
+  - numpy against Rust after every batch. After 3a, any difference comes only from BLAS reduction
+    order, so the tolerance can be the conv tests' own;
+  - the layer against its formula on hand-set gradients (as `test_momentum_array_layer.py`), and
+    the fused op on conv shapes;
+  - save/load round trips, including a model saved by either backend loading into the other, with
+    `momentum` in the envelope.
+
+#### 3e: momentum in the study, and the reruns
+
+- `_initial_conv_network` builds the momentum conv network for `momentum > 0`, and conv's
+  `MOMENTA` becomes `[0.0, 0.9]`.
+- **Stage 1 at momentum 0.9:** `baseline --architecture conv --epochs 2 --seeds 3`, with conv
+  rates extended down to 0.03125 (dense's best at 0.9 was 0.25, far below its 4 at 0.0). About
+  15 minutes.
+- **Stage 2 at momentum 0.9:** `scaling --architecture conv --lr32 0.9=<rate>`, B = 32, 128 and
+  512, warmup 0 and 1, 3 seeds, 3 epochs. About 20 minutes.
+- **Gate:** if the scaled rate with warmup reaches the batch-32 band at B = 512, go to stage 4 at
+  both momenta. If not, record the null in the study's findings and candidates.md, and stop.
+
+Momentum and rate are confounded, as for dense: a pass at 0.9 shows that momentum makes B = 512
+work, not why.
 
 ### Stage 4: the scaling sweep and the timing
 
