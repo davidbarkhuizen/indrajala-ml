@@ -18,11 +18,16 @@ Examples:
     python scripts/focused_benchmark.py --matmul 32x128x1352 --matmul 32x32x5408 --backend rust
     python scripts/focused_benchmark.py --op accumulate --rust-threads 1 --openblas-threads 1
     python scripts/focused_benchmark.py --shape 28x28 --op forward --backend rust --malloc both
+    python scripts/focused_benchmark.py --shape 26x26x8, --op accumulate --kernel-overrides 0:1000000000
 
 `--malloc raised` sets glibc's `MALLOC_TRIM_THRESHOLD_` and `MALLOC_MMAP_THRESHOLD_` to 1e9 in
 the timed processes, so freed memory is never handed back to the OS and nothing faults in again;
 `--malloc both` times each case under both settings. A time that drops with the faults is paying
 for them; one that doesn't is compute or cache traffic.
+
+`--kernel-overrides R:K` calls `set_kernel_overrides(R, K)` in the Rust processes: `matmul_narrow`'s
+rows per block and `matmul_long_k`'s slab rows (0 keeps a default; a slab past `K` is unblocked),
+so one build times every setting.
 
 Passes swap the backend order, so neither backend always runs first. Pure Python is never timed.
 """
@@ -147,6 +152,10 @@ def worker(args: argparse.Namespace) -> None:
         import indrajala_math_rust as pa
 
         pa.set_matmul_threading(args.rust_threads, 0)
+    if args.backend_to_run == "rust" and args.kernel_overrides is not None:
+        import indrajala_math_rust as pa
+
+        pa.set_kernel_overrides(*(int(v) for v in args.kernel_overrides.split(":")))
     case = next(c for c in every_case(args.batch_sizes, args.matmul) if case_key(c) == args.worker)
     result = measure(case.build(args.backend_to_run), args.loops, args.target_ms / 1000)
     print(json.dumps(result))
@@ -169,6 +178,8 @@ def run_in_process(case: Case, backend: str, args: argparse.Namespace, malloc: s
         command += ["--matmul", spec]
     if args.rust_threads is not None:
         command += ["--rust-threads", str(args.rust_threads)]
+    if args.kernel_overrides is not None:
+        command += ["--kernel-overrides", args.kernel_overrides]
     return run_json_worker(command, env)
 
 
@@ -199,6 +210,11 @@ def main() -> None:
     parser.add_argument("--rust-threads", type=int, help="set_matmul_threading(N, 0) before timing Rust")
     parser.add_argument("--openblas-threads", type=int, help="OPENBLAS_NUM_THREADS for the numpy processes")
     parser.add_argument(
+        "--kernel-overrides",
+        help="R:K, set_kernel_overrides(R, K) before timing Rust (matmul_narrow rows per block, "
+        "matmul_long_k slab rows; 0 = default)",
+    )
+    parser.add_argument(
         "--malloc",
         choices=["default", "raised", "both"],
         default="default",
@@ -217,7 +233,7 @@ def main() -> None:
     cases = [c for c in every_case(args.batch_sizes, args.matmul) if selected(c, args)]
     mallocs = ["default", "raised"] if args.malloc == "both" else [args.malloc]
     settings = f"rust threads {args.rust_threads or 'default'}, OpenBLAS threads {args.openblas_threads or 'default'}"
-    settings += f", malloc {args.malloc}"
+    settings += f", malloc {args.malloc}, kernel overrides {args.kernel_overrides or 'default'}"
     print(f"{len(cases)} cases x {len(backends)} backends x {args.passes} passes, {settings}")
     print(
         f"median (min-max) µs per call over {args.loops} loops of ~{args.target_ms:g} ms; faults = minor page faults per call"

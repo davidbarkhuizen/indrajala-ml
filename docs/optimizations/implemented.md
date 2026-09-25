@@ -19,9 +19,11 @@ the only way an optimization can be proven not to change results. Each kernel ha
   `j` of a 4-lane accumulator sums indices `j, j+4, ...` by FMA, then `(l0 + l1) + (l2 + l3)`,
   then the `k % 4` tail in order. So a batched forward's rows equal the single-example forward
   exactly, which the batched accuracy pass relies on.
-- **Matrix @ matrix (`matmul_2d`, `matmul_narrow`) and vector @ matrix:** one FMA chain per output,
-  `k` increasing from 0.0.
-- **Threading** splits output rows, so each output is computed by one thread.
+- **Matrix @ matrix (`matmul_2d`, `matmul_narrow`, `matmul_long_k`) and vector @ matrix:** one FMA
+  chain per output, `k` increasing from 0.0 (`matmul_long_k` stores and resumes it between slabs
+  of `k`; a stored double is exact).
+- **Threading** splits output rows (column chunks in `matmul_long_k`), so each output is computed
+  by one thread.
 
 These differ from numpy's orders in the last few ULPs, so parity with numpy is checked with
 `rtol`; crate tests pin each order exactly against a `Fraction`-emulated FMA reference. Every
@@ -35,8 +37,8 @@ FMA pipes, about 5 cycles' latency) a tile also needs about 10 independent chain
 keep the pipes busy. All three matmul kernels are built on that:
 
 - **`tiled_row_range`** (`rust/src/linalg.rs`) holds 16-column output tiles (4 AVX2
-  accumulators) in registers across all of `k`, for `matmul_2d`, `matmul_narrow` and vector @
-  matrix. `matmul_2d` runs it in row blocks of about 16 KB of `a` (so a block of `a` and `b`'s
+  accumulators) in registers across all of `k` (or a slab of it), for `matmul_2d`,
+  `matmul_narrow`, `matmul_long_k` and vector @ matrix. `matmul_2d` runs it in row blocks of about 16 KB of `a` (so a block of `a` and `b`'s
   `k x 16` panel share L1); `matmul_narrow` in blocks of 4 rows, for conv's narrow products
   (`cols @ W.T` with only `C*k*k` or `O` columns). Replacing the old load/FMA/store loops (crate
   #11, #12, #14) cut conv forward 13-64%, downstream 4-56%, accumulate 16-43%, and unthreaded
@@ -54,6 +56,26 @@ keep the pipes busy. All three matmul kernels are built on that:
   alternated) the accumulate saved 0.6-2.0% of each second-conv network's epoch and the
   downstream up to 1.3%; nothing where training threads the accumulate (conv-conv mini-batch 32,
   10.6M flops: each thread already has 2 rows).
+- **The conv accumulate runs `k` in slabs, threaded over columns** (`matmul_long_k`, crate #36).
+  `D @ cols` (`(O, N*P) @ (N*P, C*k*k)`) makes one pass over all of `k` per row pair and column
+  tile, re-reading `cols` 4 times over; past the 4 MB L3 each pass came from memory, and row
+  threading (above 8M flops) made every thread stream all of `cols`. Now each chain runs 64-row
+  slabs of `cols`, stored and resumed, so a slab serves every row and tile from cache, and threads
+  take 16-wide column chunks, reading `cols` about once. In training (MNIST subset, builds
+  alternated, 4 processes each) the accumulate went, per call: conv-conv's second conv (`cols`
+  10.6 MB at N = 32) 4777 → 2656 µs, conv-pool-conv's 774 → 627, conv-conv-stride2's 953 → 755,
+  the first conv 1220-1374 → 1049-1165, single-example first conv 33-40 → 29-37. That is 0.135 s
+  of a 2.4 s conv-conv mini-batch 32 run (5.5%), 3.4-3.5% of the other second-conv mini-batch
+  runs, 1.6% of conv's, 0.2-1.5% single-example. Slabs of 64-1024 rows were within 5%, 4096
+  slower; column chunks alone (one slab) gained nothing. Other ops within noise.
+  `set_kernel_overrides(narrow_rows_per_block, long_k_block)` keeps both kernel choices
+  switchable at runtime for re-measurement (`--kernel-overrides` in `focused_benchmark.py` and
+  `op_call_timing.py`); the crate tests that no setting changes a bit.
+- **One kernel, compile-time structure for whole products.** `tiled_row_range` takes a `Panel`
+  (rows, columns, a `k` range, an output stride) and a mode (`OVERWRITE`, `ADD`, `RESUME`). With
+  those offsets at runtime the single-example conv forward and downstream ran 5-7% slower (26x26x8
+  forward 150-155 → 160-166 µs); outside `RESUME` the kernel takes the whole panel as known
+  structure, which measured level again.
 - **Vector @ matrix goes through the same kernel as a one-row product** (crate #20), not its own
   `axpy_row` loop, which made 32 load/FMA/store passes over a 43 KB output row: single-example
   dense `downstream` at 32 x 5408 went 44-48 → 26 µs (numpy 29).
@@ -143,8 +165,9 @@ the add, and the offset table the same as a division or faster.
 
 ## Threading policy
 
-The only threading is `for_each_row_range` in `rust/src/linalg.rs`, used by the three matmul
-kernels. `matmul_thread_count`: below 8M flops (`m * k * n`) one thread, otherwise
+The threading is `for_each_row_range` in `rust/src/linalg.rs`, used by `matmul_2d`, `matmul_nt`
+and `matmul_narrow`, and `matmul_long_k`'s split over column chunks (the same thread count,
+capped by the chunk count). `matmul_thread_count`: below 8M flops (`m * k * n`) one thread, otherwise
 `min(available_parallelism, 8, rows)`, all or nothing, contiguous output-row blocks under
 `std::thread::scope`, spawned per call (crate #15, #16). `set_matmul_threading(max_threads,
 threshold)` overrides it for tests and benchmarks; the crate tests every kernel for `==` at 1, 2,
@@ -164,8 +187,9 @@ Why the threshold is high:
   5.54M-12.04M threads the same calls in the demos; 8M is where the ladder shows the gain. A
   32-rows-per-thread floor on top made the conv mini-batch 512 epoch 21% slower, so there is none.
 
-So nothing is threaded in any demo at batch 32 or single-example; the batch-512 conv ops and the
-dense products at B ≥ 512 are, and pay (+11-15% when forced unthreaded).
+So at batch 32 only conv-conv's second-conv accumulate (10.6M flops) is threaded, over column
+chunks; the batch-512 conv ops and the dense products at B ≥ 512 are too, and pay (+11-15% when
+forced unthreaded).
 
 ## The dataset as one backend array
 

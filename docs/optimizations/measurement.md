@@ -24,15 +24,17 @@ From the quick survey to the decisive measurement:
 | question | tool | notes |
 | --- | --- | --- |
 | Which ops look slow? | `python -m indrajala_ml.demos.demo_layer_op_timing` | every layer op, numpy and Rust interleaved; batch rows can be far off (interleaving). Finds candidates, never judges them. |
-| How fast is one op? | `python scripts/focused_benchmark.py` | loops of about 20 ms, median of 9, each (case, backend) in its own process; faults per call; `--matmul MxKxN`, `--rust-threads`, `--openblas-threads`, `--malloc both`. **The number to quote.** |
+| How fast is one op? | `python scripts/focused_benchmark.py` | loops of about 20 ms, median of 9, each (case, backend) in its own process; faults per call; `--matmul MxKxN`, `--rust-threads`, `--openblas-threads`, `--malloc both`, `--kernel-overrides`. **The number to quote.** |
 | Faults or compute? | `focused_benchmark.py --malloc both` | glibc defaults against both allocator thresholds at 1e9; a time that drops with the faults was paying for them. |
 | Why is it slow (or slow in some processes)? | `python scripts/perf_region.py -- driver.py` | hardware counters for only the region a driver marks (`with counted():`), per unit of work, one row per process; `OPENBLAS_NUM_THREADS=1` unless `--openblas-threads`. Needs `kernel.perf_event_paranoid` <= 2 (`sudo sysctl`, until reboot). For cycles per instruction, `perf record` the driver and `perf annotate` the op. |
+| One op per call inside real training | `python scripts/op_call_timing.py` | every call of chosen crate functions timed in a conv-demo training run, grouped by argument shapes (so layers come apart), plus the run's seconds; one process per (architecture, trainer, setting, repeat); `--rust-threads`, `--kernel-overrides`. Sees training's thread count and cache state. |
 | One op's share of real epochs | `python scripts/epoch_op_profile.py` | cProfile of Rust training by crate op, one process per (architecture, trainer, repeat); `--op`, `--label`. Resolves changes of a few % that epoch timing can't. |
 | A training-path change, old against new | `python scripts/prepared_dataset_timing.py time` | one trainer epoch per process, dense full MNIST and the conv subset, both backends; old checkout first on `PYTHONPATH` (a `git worktree` of `main`); `--epochs N`. |
 | An accuracy pass, per row against batched | `python scripts/accuracy_pass_timing.py time` | all demo architectures, both backends; counts differing predictions. |
 | Dense full-MNIST epochs, broken down | `python scripts/batch_size_timing.py time` / `profile` | epoch, step loop, one accuracy pass and conversions apart, per batch size. Its accuracy-pass column times the old tuple path. |
 | The Rust/numpy ratios end to end | `python -m indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition` | about 3 minutes; median of 5 from identical weights, UCI digits and a 2000-row MNIST subset, plus a Rust op profile (`rust_op_breakdown`). |
 | A threading setting | `set_matmul_threading(t, threshold)` | in one process, no rebuild; accept only on end-to-end numbers. |
+| A kernel setting | `set_kernel_overrides(rows_per_block, k_block)` | `matmul_narrow`'s rows per block and `matmul_long_k`'s slab rows, no rebuild; `--kernel-overrides R:K` in the scripts above. |
 
 ## Protocols
 
@@ -98,7 +100,8 @@ From the quick survey to the decisive measurement:
   unknown. A median of loops in one process can't see it: run several processes and quote both
   modes.
 - **The conv demo's mini-batch runs barely train** (about 10% accuracy in 1-2 epochs at lr 0.5):
-  their timings are valid, their accuracy columns are not.
+  their timings are valid, their accuracy columns are not. conv-conv's single-example MNIST run is
+  unstable at lr 0.5 too (numpy collapsed to 0.11 where Rust reached 0.52; it trains at 0.2).
 - **Rust dense-MNIST epoch times from before #365 aren't comparable** with later ones: the shared
   pixel floats made row conversion 12% cheaper.
 
