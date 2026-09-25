@@ -2,6 +2,7 @@
 # (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
+import math
 from typing import ClassVar
 
 import indrajala_math_rust as pa
@@ -10,9 +11,11 @@ import indrajala_math_rust as pa
 def fan_in_aware_random_rust_layer(size: int, previous_size: int) -> tuple[pa.Array, pa.Array]:
     """
     fan_in_aware_random_layer drawn from indrajala_math_rust.uniform: the Rust backend's
-    random_layer. Its RNG is unrelated to numpy's, so the two never reproduce each other.
+    random_layer. The crate's RNG is numpy's np.random in a separate state, so after
+    pa.seed(s) this draws bit for bit what fan_in_aware_random_layer draws after
+    np.random.seed(s). math.sqrt, not ** 0.5: ** 0.5 is 1 ULP off np.sqrt at some fan-ins.
     """
-    limit = 1.0 / (previous_size**0.5)
+    limit = 1.0 / math.sqrt(previous_size)
     return pa.uniform(-limit, limit, (size, previous_size)), pa.uniform(-limit, limit, size)
 
 

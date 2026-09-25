@@ -223,8 +223,7 @@ class ArrayConvShape(_ConvShapeBase[A]):
     def randomize(self) -> None:
         # forward order, as ConvMultiClassBackpropClassifierNetwork.randomize: conv layers from
         # their kernel fan-in (a conv W is (channel_count, fan_in)), pool layers draw nothing,
-        # and the dense tail starts from the front end's flattened output size. Each backend
-        # draws from its own RNG, so numpy and Rust never reproduce each other from a seed.
+        # and the dense tail starts from the front end's flattened output size.
         for layer in self.conv_layers:
             if isinstance(layer, self.conv_layer_cls):
                 layer.W, layer.b = self.backend.random_layer(layer.channel_count, layer.fan_in)

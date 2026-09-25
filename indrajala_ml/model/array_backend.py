@@ -18,6 +18,8 @@ class NumpyBackend:
     """
 
     name = "numpy"
+    # seeds the RNG random_layer draws from: np.random here, the crate's own state on Rust
+    seed = staticmethod(np.random.seed)
     random_layer = staticmethod(fan_in_aware_random_layer)
 
     @staticmethod
@@ -63,6 +65,7 @@ class RustBackend:
     """NumpyBackend's operations on indrajala_math_rust arrays."""
 
     name = "rust"
+    seed = staticmethod(pa.seed)
     random_layer = staticmethod(fan_in_aware_random_rust_layer)
 
     @staticmethod

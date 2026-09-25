@@ -253,7 +253,7 @@ def test_snapshot_has_an_empty_pool_entry_and_restore_round_trips(network_cls: N
     before_lists = _as_lists(before)
     assert before[1] == ()
 
-    # whole-snapshot comparisons: pa.uniform can't be seeded, and ~0.5% of initialisations leave
+    # whole-snapshot comparisons: the network is unseeded, and ~0.5% of initialisations leave
     # the first conv layer's W alone unchanged by one example's step (measured over 2000); the
     # output bias always moves (its gradient is p - one_hot)
     for state, label in _digits_rows()[:5]:
