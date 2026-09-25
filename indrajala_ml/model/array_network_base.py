@@ -7,17 +7,20 @@ from typing import Any, Generic, Protocol, cast
 
 from typing_extensions import Self
 
-from indrajala_ml.model.array_protocols import A, ArrayBackend, ArrayNetworkLayer, WeightedArrayLayer
+from indrajala_ml.model.array_protocols import (
+    A,
+    ArrayBackend,
+    ArrayNetworkLayer,
+    HyperparameterLayerClass,
+    LayerT,
+    WeightedArrayLayer,
+)
 from indrajala_ml.model.bounds import validate_batch, validate_layer_sizes
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
 
-class DenseArrayLayerClass(Protocol[A]):
-    """A dense layer class as a network builds it: (size, input_size, *its hyperparameters)."""
-
-    hyperparameters: tuple[str, ...]
-
-    def __call__(self, *args: Any, **kwargs: Any) -> WeightedArrayLayer[A]: ...
+class DenseArrayLayerClass(HyperparameterLayerClass[WeightedArrayLayer[A]], Protocol[A]):
+    """A dense layer class: (size, input_size, *its hyperparameters)."""
 
 
 def as_weighted_array_layers(layers: Sequence[ArrayNetworkLayer[A]]) -> list[WeightedArrayLayer[A]]:
@@ -75,9 +78,10 @@ class ArrayNetworkBase(Generic[A]):
         self.output_layer = self._new_layer(self.output_layer_cls, output_size, previous_size)
         self.layers.append(self.output_layer)
 
-    def _new_layer(self, layer_cls: DenseArrayLayerClass[A], size: int, input_size: int) -> WeightedArrayLayer[A]:
-        # a hyperparameter-bearing sibling stores its hyperparameters before super().__init__()
-        return layer_cls(size, input_size, **{name: getattr(self, name) for name in layer_cls.hyperparameters})
+    def _new_layer(self, layer_cls: HyperparameterLayerClass[LayerT], *args: Any, **kwargs: Any) -> LayerT:
+        # dense and conv layers alike; a hyperparameter-bearing sibling stores its hyperparameters
+        # before super().__init__()
+        return layer_cls(*args, **kwargs, **{name: getattr(self, name) for name in layer_cls.hyperparameters})
 
     def _forward(self, state: tuple[float, ...]) -> A:
         return self._forward_input(self.backend.vector(state))

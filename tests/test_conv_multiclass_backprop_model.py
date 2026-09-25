@@ -6,6 +6,7 @@ import pytest
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import as_dense_layers
+from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import (
     ConvMultiClassBackpropClassifierNetwork,
@@ -161,6 +162,50 @@ def test_snapshot_and_restore_round_trip_through_the_conv_layer_too():
     assert_snapshot_restore_round_trip(
         network, lambda: network.learn(learning_rate=0.1, state=state, category=3), times=1
     )
+
+
+class _Kernel(ConvKernel):
+    pass
+
+
+class _ConvLayer(ConvLayer):
+    _kernel_cls = _Kernel
+
+
+class _HiddenLayer(BackpropLayer):
+    pass
+
+
+class _OutputLayer(BackpropLayer):
+    pass
+
+
+class _HookedNetwork(ConvMultiClassBackpropClassifierNetwork):
+    conv_layer_cls = _ConvLayer
+    hidden_layer_cls = _HiddenLayer
+    output_layer_cls = _OutputLayer
+
+
+def test_layer_and_kernel_class_hooks_build_every_layer():
+
+    network = _HookedNetwork(8, 8, [ConvSpec(3, 2), PoolSpec(2), ConvSpec(2, 3)], [6, 5], class_count=10)
+    first, pool, last = network.conv_layers
+
+    for layer in (first, last):
+        assert type(layer) is _ConvLayer
+        assert [type(kernel) for kernel in layer.kernels] == [_Kernel] * layer.channel_count
+    assert type(pool) is MaxPoolLayer
+    assert [type(layer) for layer in network.hidden_layers[3:]] == [_HiddenLayer, _HiddenLayer]
+    assert type(network.output_layer) is _OutputLayer
+
+
+def test_the_hooks_default_to_the_plain_classes():
+
+    network = _small_network()
+
+    assert type(network.conv_layers[0]) is ConvLayer
+    assert all(type(kernel) is ConvKernel for kernel in conv_layer(network, 0).kernels)
+    assert type(network.hidden_layers[1]) is BackpropLayer and type(network.output_layer) is BackpropLayer
 
 
 def test_save_and_load_round_trip(tmp_path: Path):
