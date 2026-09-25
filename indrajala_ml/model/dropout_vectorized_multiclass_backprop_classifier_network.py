@@ -8,22 +8,13 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class DropoutVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    The dropout sibling of VectorizedMultiClassBackpropClassifierNetwork. Hidden layers are built
-    from DropoutArrayLayer, which reads drop_probability from the network; the output layer stays the inherited plain ArrayLayer
-    (sigmoid) - the array-level analogue of DropoutBackpropClassifierNetwork's own
-    hidden_layer_cls-only override, matching DropoutNode's hidden-layer-only convention.
+    The dropout sibling of VectorizedMultiClassBackpropClassifierNetwork: DropoutArrayLayer hidden
+    layers, which read drop_probability (required) from the network, and a plain sigmoid output
+    layer, as in DropoutBackpropClassifierNetwork.
 
-    drop_probability is a required constructor parameter, no default - the same posture
-    DropoutBackpropClassifierNetwork's per-node counterpart already takes.
-
-    _set_training_mode overrides the base class's no-op hook to actually toggle every hidden
-    layer's own set_training_mode - the one real behavioral fork in this sibling, not a swapped
-    layer class. self.hidden_layers (self.layers[:-1] - self.layers[-1] is always the output
-    layer, per ArrayNetworkBase.__init__'s own construction order) is kept as a real attribute,
-    not just a local slice, since it's also part of this class's own public surface (tests
-    inspect it directly to confirm training mode resets between calls). learn/learn_batch's
-    train/eval bracketing (set_training_mode(True)/try/finally around the forward pass only, not
-    the whole method) is inherited from ArrayNetworkBase unchanged.
+    _set_training_mode switches the hidden layers' dropout on for the forward pass of each learn
+    call (ArrayNetworkBase brackets it). self.hidden_layers is part of the public surface: tests
+    check that training mode resets between calls.
     """
 
     hidden_layer_cls = DropoutArrayLayer

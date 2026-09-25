@@ -25,10 +25,8 @@ class LinearClassifierNetwork:
         validate_input_bounds(dimension, input_bounds)
         self.input_bounds = input_bounds
 
-        # how many of the cardinality hidden nodes must be active for the output to fire -
-        # defaults to cardinality (AND, i.e. every hidden node must agree). 1 gives OR (any
-        # one hidden node is enough); anything in between gives a general k-of-n gate, in
-        # the spirit of a MADALINE-style committee machine.
+        # how many hidden nodes must be active for the output to fire: cardinality (the
+        # default) is AND, 1 is OR, anything between a k-of-n gate, as in a MADALINE committee
         required_active = cardinality if required_active is None else required_active
         assert 1 <= required_active <= cardinality
         self.required_active = required_active
@@ -64,11 +62,9 @@ class LinearClassifierNetwork:
             # to active can only increase the count, moving the output toward firing.
             candidates = [node for node in self.hidden_layer.nodes if node.value() == 0.0]
         else:
-            # false positive: enough hidden nodes are active to fire - flipping any active
-            # one to inactive can only decrease the count, moving the output toward silent.
-            # This (and the branch above) holds for any required_active, not just AND -
-            # the output is a monotonically non-decreasing function of how many hidden
-            # nodes are active, regardless of the specific threshold.
+            # false positive: flipping an active node to inactive can only move the output
+            # toward silent. Both branches hold for any required_active: the output is a
+            # non-decreasing function of how many hidden nodes are active.
             candidates = [node for node in self.hidden_layer.nodes if node.value() == 1.0]
 
         responsible_node = min(candidates, key=lambda node: abs(node.z()))
@@ -78,18 +74,12 @@ class LinearClassifierNetwork:
         return _half_widths(self.input_bounds)
 
     def randomize(self) -> None:
-        # each weight's range scales inversely with its own dimension's half-width, so that
-        # w_i * x_i has a similar typical magnitude no matter how large or small that
-        # dimension's bounds are (and independently of the other dimensions' bounds, so
-        # asymmetric bounds are handled correctly too). The threshold's range doesn't need to
-        # scale at all once weights are normalised this way. Without this, a hidden node's
-        # weights stayed fixed while x shrank or grew with the bounds, so the threshold ended
-        # up dominating w.x whenever the bounds were much smaller than the range was
-        # implicitly tuned for, making almost every random node permanently active or
-        # permanently inactive (verified: at bounds half-width 0.001, 0/200 random
-        # cardinality=1 classifiers had both classes reachable at all). Calibrated so that at
-        # half-width 10 - what every existing demo and test uses - this reduces to exactly
-        # uniform(-2, 2) per weight, unchanged.
+        # each weight's range scales inversely with its dimension's half-width, so w_i * x_i
+        # has a similar magnitude whatever that dimension's bounds; the threshold's range then
+        # needn't scale. With fixed ranges the threshold dominated w.x at small bounds, making
+        # almost every random node permanently on or off (at half-width 0.001, 0 of 200 random
+        # cardinality=1 classifiers could reach both classes). At half-width 10, which the
+        # demos and tests use, this is uniform(-2, 2).
         half_widths = self.half_widths()
         for node in self.hidden_layer.nodes:
             node.update_input_weights(

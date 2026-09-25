@@ -8,17 +8,9 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class L2VectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    The L2 (weight decay) regularized sibling of VectorizedMultiClassBackpropClassifierNetwork.
-
-    l2_lambda is a required constructor parameter, no default - the same posture
-    L2RegularizedBackpropClassifierNetwork's per-node counterpart already takes. Both hidden
-    layers and the output layer are built from L2ArrayLayer, which reads l2_lambda from the
-    network (ArrayNetworkBase._new_layer), mirroring L2RegularizedBackpropClassifierNetwork's own
-    hidden_layer_cls == output_layer_cls choice.
-
-    snapshot()/restore() intentionally cover only W/b - L2 needs no extra per-parameter state to
-    capture in the first place (see L2ArrayLayer's own docstring), so this is not a new gap the
-    way it is for momentum/Adam's own array siblings.
+    The L2 (weight decay) sibling of VectorizedMultiClassBackpropClassifierNetwork: hidden and
+    output layers are L2ArrayLayers, which read l2_lambda (required) from the network. L2 keeps no
+    per-parameter state, so snapshot()/restore() of W/b is complete.
     """
 
     hidden_layer_cls = output_layer_cls = L2ArrayLayer

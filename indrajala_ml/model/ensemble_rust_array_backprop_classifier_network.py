@@ -6,8 +6,7 @@ from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayB
 
 class EnsembleRustArrayBackpropClassifierNetwork(ArrayEnsembleBase):
     """
-    EnsembleArrayBackpropClassifierNetwork on the Rust backend: ArrayEnsembleBase over
-    RustArrayBackpropClassifierNetwork.
+    ArrayEnsembleBase over RustArrayBackpropClassifierNetwork.
     """
 
     classifier_cls = RustArrayBackpropClassifierNetwork

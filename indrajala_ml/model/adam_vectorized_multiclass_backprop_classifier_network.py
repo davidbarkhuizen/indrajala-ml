@@ -9,20 +9,12 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class AdamVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    The Adam-optimized sibling of VectorizedMultiClassBackpropClassifierNetwork. Both hidden
-    layers and the output layer are built from AdamArrayLayer, which reads
-    beta1/beta2/epsilon from the network (ArrayNetworkBase._new_layer) - the same pattern
-    momentum/L2's own array siblings use.
+    The Adam sibling of VectorizedMultiClassBackpropClassifierNetwork: hidden and output layers are
+    AdamArrayLayers, which read beta1/beta2/epsilon from the network. They default to Kingma & Ba's
+    published values, as in AdamBackpropClassifierNetwork.
 
-    beta1/beta2/epsilon default to Kingma & Ba's own published values, matching
-    AdamBackpropClassifierNetwork's per-node counterpart.
-
-    snapshot()/restore() intentionally cover only W/b, matching the base array-backed sibling's
-    own contract unchanged (BackpropNetworkBase.snapshot/restore likewise only ever captured
-    weights/bias, never a momentum/Adam node's own velocity/m/v/t), not a new gap this class
-    introduces. A resumed-training scenario that needs m/v/t preserved across a snapshot/restore
-    round trip would need its own extended envelope; no measurement in this codebase has used one
-    so far.
+    snapshot()/restore() cover only W/b, not Adam's m/v/t, as every network's do; resuming training
+    with m/v/t intact would need an extended envelope.
     """
 
     hidden_layer_cls = output_layer_cls = AdamArrayLayer

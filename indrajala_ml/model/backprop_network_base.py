@@ -11,23 +11,15 @@ from indrajala_ml.model.state_layer import StateLayer
 
 class BackpropNetworkBase:
     """
-    Shared machinery behind BackpropClassifierNetwork and MultiClassBackpropClassifierNetwork:
-    layer assembly (input -> hidden layer(s) -> output layer), the forward pass, gradient
-    application, the hidden-layer half of backprop, and snapshot/restore. The two subclasses
-    differ only in output-layer size/shape (a single node vs class_count nodes), the resulting
-    predict_*/classify_state contract, and randomize()'s initialization scheme (see each
-    subclass's own docstring) - genuinely different concerns, not duplicated ones, so they stay
-    out of this base.
+    What BackpropClassifierNetwork and MultiClassBackpropClassifierNetwork share: layer assembly
+    (input -> hidden layer(s) -> output layer), the forward pass, applying gradients, the hidden
+    layers' backward pass, and snapshot/restore. The subclasses differ in the output layer's size,
+    the predict_*/classify_state contract, and randomize().
     """
 
-    # override point for a subclass whose output layer needs different per-node activation
-    # semantics (e.g. a softmax multi-class sibling's SoftmaxOutputLayer) - every existing
-    # subclass leaves this as plain BackpropLayer, so this is a pure extension point with zero
-    # behavior change for them
+    # the layer classes a sibling overrides for different per-node math (e.g. SoftmaxOutputLayer,
+    # ReLULayer)
     output_layer_cls: type[BackpropLayer] = BackpropLayer
-
-    # same override point, for the hidden layers instead (e.g. a ReLU sibling's ReLULayer) -
-    # every existing subclass leaves this as plain BackpropLayer too
     hidden_layer_cls: type[BackpropLayer] = BackpropLayer
 
     def __init__(
@@ -56,15 +48,14 @@ class BackpropNetworkBase:
 
         self.output_layer = self.output_layer_cls(size=output_size, input_layer=previous_layer)
 
-        # drives both the backward pass and snapshot/restore uniformly - every layer whose
-        # weights/bias are actually trained, in forward order
+        # every layer with trained weights, in forward order: the backward pass and
+        # snapshot/restore walk it
         self.trainable_layers: list[BackpropLayer] = self.hidden_layers + [self.output_layer]
 
     @classmethod
     def randomized(cls, *args, **kwargs):
-        # every subclass's randomized signature is its __init__ signature, so one pass-through
-        # serves them all, positional or keyword, defaults included; randomize() itself stays
-        # per subclass (see the class docstring)
+        # every subclass's randomized signature is its __init__ signature; randomize() is per
+        # subclass
         network = cls(*args, **kwargs)
         network.randomize()
         return network
@@ -84,23 +75,15 @@ class BackpropNetworkBase:
             self.hidden_layers[layer_index].compute_hidden_deltas(next_layer)
 
     def _set_training_mode(self, training: bool) -> None:
-        # call-scoped, not lifecycle-scoped: train.py's own training loops call
-        # classify_state()/predict_probability() on the same, mid-training student between
-        # (not just after) learn()/learn_batch() steps, so this must be toggled on for the
-        # duration of one training call and off again immediately after - never left on. A
-        # no-op for every layer except a training-aware sibling like DropoutLayer.
+        # on for one training call only: the trainers classify with the same network between
+        # learn steps. A no-op except for training-aware layers like DropoutLayer.
         for layer in self.trainable_layers:
             layer.set_training_mode(training)
 
     def _learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]]) -> None:
-        # the batch-shaped analogue of learn(): forward+backward+accumulate once per example,
-        # then a single averaged weight update - batch_size=1 (a one-element batch) is required
-        # to match learn()'s own result exactly, since apply_accumulated_gradient's batch_size=1
-        # case is already proven bit-identical to apply_gradient (see
-        # tests/test_gradient_accumulation.py). Shared by BackpropClassifierNetwork's and
-        # MultiClassBackpropClassifierNetwork's own learn_batch() - identical shape, differing
-        # only in what a "target" is (a float reference value vs. an int category), which
-        # _forward/_backward already abstract over.
+        # forward, backward and accumulate per example, then one averaged update. A one-example
+        # batch matches learn() bit for bit (tests/test_gradient_accumulation.py). The target is
+        # a float or a class index; _forward/_backward abstract over which.
         validate_batch(batch)
         self._set_training_mode(True)
         try:
@@ -134,11 +117,9 @@ class BackpropNetworkBase:
 
 def fan_in_aware_weights_and_bias(fan_in: int) -> tuple[list[float], float]:
     """
-    Draws fan_in weights plus one bias uniformly from [-limit, limit], limit = 1/sqrt(fan_in) -
-    the shared core of every fan-in-aware initialization scheme in this codebase: dense layers
-    below (randomize_fan_in_aware), ConvKernel.randomize_fan_in_aware (conv_kernel.py), and
-    ConvMultiClassBackpropClassifierNetwork.randomize's own dense tail
-    (conv_multiclass_backprop_classifier_network.py) - one formula, one place to change it.
+    fan_in weights and a bias drawn uniformly from [-limit, limit], limit = 1/sqrt(fan_in): the
+    formula every fan-in-aware initialization uses (randomize_fan_in_aware,
+    ConvKernel.randomize_fan_in_aware, the conv network's dense tail).
     """
     limit = 1.0 / math.sqrt(fan_in)
     weights = [random.uniform(-limit, limit) for _ in range(fan_in)]
@@ -148,20 +129,15 @@ def fan_in_aware_weights_and_bias(fan_in: int) -> tuple[list[float], float]:
 
 def randomize_fan_in_aware(network: BackpropNetworkBase) -> None:
     """
-    Fan-in-aware weight/bias initialization (limit = 1/sqrt(fan_in) per layer) - each weight
-    drawn uniformly from [-limit, limit], scaled down as fan-in grows, so a layer's weighted
-    input sum doesn't blow up (guaranteeing sigmoid saturation at every node) once fan-in
-    reaches the tens or hundreds. Validated against the real bundled UCI digits dataset (99.5%
-    training accuracy, 96.9% test accuracy). Shared by
-    MultiClassBackpropClassifierNetwork.randomize() and
-    FanInAwareBackpropClassifierNetwork.randomize(), so both classes use one implementation
-    instead of two copies of the same formula.
+    Fan-in-aware initialization, limit = 1/sqrt(fan_in) per layer, so a layer's weighted input sum
+    doesn't saturate every sigmoid once fan-in reaches the tens or hundreds. On UCI digits: 99.5%
+    training and 96.9% test accuracy. Used by MultiClassBackpropClassifierNetwork and
+    FanInAwareBackpropClassifierNetwork.
 
-    Unlike BackpropClassifierNetwork.randomize()'s per-dimension-bounds-width scaling (tuned for
-    1-2D geometric problems - see that method's own docstring), this scheme is dimension-generic:
-    at real scale, EnsembleBackpropClassifierNetwork's 784-dimension MNIST sub-networks reach
-    +6.6 points higher test accuracy with fan-in-aware init than with per-dimension-bounds-width
-    scaling, which leaves 83.5% of hidden activations already saturated at initialization.
+    Unlike BackpropClassifierNetwork.randomize()'s bounds-width scaling (tuned for 1-2D geometric
+    problems) it works at any dimension: the ensemble's 784-pixel MNIST sub-networks reach 6.6
+    points higher test accuracy with it; bounds-width scaling leaves 83.5% of hidden activations
+    saturated at initialization.
     """
 
     previous_size = network.dimension

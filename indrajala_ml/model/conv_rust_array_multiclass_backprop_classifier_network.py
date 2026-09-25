@@ -11,9 +11,8 @@ from indrajala_ml.prepared_dataset import PreparedDataset
 
 class ConvRustArrayMultiClassBackpropClassifierNetwork(ArrayConvShape, RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust sibling of ConvVectorizedMultiClassBackpropClassifierNetwork: ArrayConvShape on the
-    Rust backend, with ConvRustArrayLayers and MaxPoolRustArrayLayers in front of RustArrayLayers.
-    Only classify_rows differs from the numpy network.
+    ArrayConvShape on the Rust backend: ConvRustArrayLayers and MaxPoolRustArrayLayers in front of
+    RustArrayLayers. Only classify_rows differs from the numpy network.
     """
 
     conv_layer_cls = ConvRustArrayLayer

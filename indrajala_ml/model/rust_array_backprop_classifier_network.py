@@ -6,7 +6,6 @@ from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 
 class RustArrayBackpropClassifierNetwork(ArraySingleOutputShape, RustArrayNetworkBase):
     """
-    ArraySingleOutputShape on the Rust array core: ArrayBackpropClassifierNetwork with the Rust
-    backend, hosting EnsembleRustArrayBackpropClassifierNetwork's sub-networks.
-    CrossEntropyRustArrayBackpropClassifierNetwork subclasses this directly.
+    ArraySingleOutputShape on the Rust backend: the sub-network of
+    EnsembleRustArrayBackpropClassifierNetwork.
     """

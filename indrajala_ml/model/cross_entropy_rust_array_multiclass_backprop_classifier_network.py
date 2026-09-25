@@ -8,15 +8,8 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class CrossEntropyRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    CrossEntropyVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same
-    network, with CrossEntropyRustArrayLayer in place of CrossEntropyArrayLayer. Hidden layers
-    stay plain RustArrayLayer (sigmoid); only the output layer is cross-entropy. Unlike
-    softmax's own output (jointly normalized), predict_probabilities does not sum to 1.0, and
-    classify_state still picks the argmax (both inherited unchanged here).
-
-    No hyperparameter and no extra constructor parameter, so nothing beyond this one
-    class-attribute override is needed - __init__/randomized/save/load are all inherited
-    unchanged from RustArrayMultiClassBackpropClassifierNetwork.
+    CrossEntropyVectorizedMultiClassBackpropClassifierNetwork on the Rust backend, with a
+    CrossEntropyRustArrayLayer output.
     """
 
     output_layer_cls = CrossEntropyRustArrayLayer

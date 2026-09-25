@@ -20,14 +20,12 @@ from indrajala_ml.model.model_io import (
 
 class ArrayMultiClassShape:
     """
-    The multiclass shape over ArrayNetworkBase, for either backend: argmax-based
-    classify_state/predict_probabilities, class_count validation, one-hot target encoding, and
-    the class_count-carrying save/load envelope - the array-level analogue of
-    MultiClassBackpropClassifierNetwork's own relationship to BackpropNetworkBase.
+    The multiclass shape over ArrayNetworkBase, for either backend: argmax classify_state,
+    predict_probabilities, one-hot targets, and the save/load envelope with class_count.
 
-    A mixin, listed before the backend's base (ArrayNetworkBase or RustArrayNetworkBase), which
-    supplies self.backend: VectorizedMultiClassBackpropClassifierNetwork and
-    RustArrayMultiClassBackpropClassifierNetwork are this shape on numpy and on Rust.
+    A mixin, listed before the backend's base, which supplies self.backend:
+    VectorizedMultiClassBackpropClassifierNetwork and RustArrayMultiClassBackpropClassifierNetwork
+    are this shape on numpy and on Rust.
     """
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int) -> None:
@@ -59,9 +57,7 @@ class ArrayMultiClassShape:
         return target_batch
 
     def save(self, path: str) -> None:
-        # not save_model_json (model_io.py) - that envelope hardcodes input_bounds, which this
-        # shape has no notion of (no StateLayer). save_array_model_json is the shared envelope
-        # every array-backed multiclass sibling uses instead.
+        # not save_model_json, whose envelope carries input_bounds, which the array networks lack
         save_array_model_json(
             path,
             layer_sizes=self.layer_sizes,
@@ -87,14 +83,12 @@ class ArrayMultiClassShape:
 
 class ArraySingleOutputShape:
     """
-    The single-output shape over ArrayNetworkBase, for either backend: 0.5-threshold
-    classify_state/predict_probability, a scalar target, and the class_count-free save/load
-    envelope. It exists to host the ensembles' sub-networks, one independent binary classifier
-    per class, not a jointly-trained multiclass network.
+    The single-output shape over ArrayNetworkBase, for either backend: 0.5-threshold classify_state,
+    predict_probability, a scalar target, and the save/load envelope without class_count. It hosts
+    the ensembles' sub-networks, one binary classifier per class.
 
-    A mixin, listed before the backend's base, like ArrayMultiClassShape:
-    ArrayBackpropClassifierNetwork and RustArrayBackpropClassifierNetwork are this shape on numpy
-    and on Rust.
+    A mixin like ArrayMultiClassShape: ArrayBackpropClassifierNetwork and
+    RustArrayBackpropClassifierNetwork are this shape on numpy and on Rust.
     """
 
     def __init__(
@@ -103,11 +97,8 @@ class ArraySingleOutputShape:
         dimension: int,
         input_bounds: list[tuple[float, float]] | None = None,
     ) -> None:
-        # input_bounds is accepted and discarded - this shape has no StateLayer/input_bounds
-        # notion, but ensemble_train.py's classifier_cls contract always calls
-        # classifier_cls(layer_sizes, dimension, input_bounds) /
-        # classifier_cls.randomized(layer_sizes, dimension, input_bounds); accepting it here is
-        # a duck-typing relaxation, rather than changing that shared contract.
+        # input_bounds is accepted and ignored: ensemble_train.py constructs every classifier_cls
+        # as classifier_cls(layer_sizes, dimension, input_bounds)
         super().__init__(layer_sizes, dimension, 1)
 
     def predict_probability(self, state: tuple[float, ...]) -> float:
@@ -129,8 +120,7 @@ class ArraySingleOutputShape:
         return self.backend.matrix([[category] for category in categories])
 
     def save(self, path: str) -> None:
-        # save_single_output_array_model_json (model_io.py), not save_array_model_json - this
-        # shape has no class_count notion at all, unlike every multiclass array-backed sibling.
+        # the envelope without class_count
         save_single_output_array_model_json(
             path,
             layer_sizes=self.layer_sizes,
@@ -149,28 +139,21 @@ class ArraySingleOutputShape:
 
 class ArrayConvShape:
     """
-    The convolutional shape over the multiclass shape, for either backend: a front end of conv
-    and max-pool layers (one ConvSpec or PoolSpec each, in order), then one or more sigmoid dense
-    layers, then a one-vs-rest sigmoid output layer.
+    The convolutional shape over the multiclass shape, for either backend: a front end of conv and
+    max-pool layers (one ConvSpec or PoolSpec each, in order), one or more sigmoid dense layers, and
+    a one-vs-rest sigmoid output layer.
 
-    A mixin, listed before the backend's plain multiclass network, which supplies self.backend
-    and hidden_layer_cls (the dense layer class): ConvVectorizedMultiClassBackpropClassifierNetwork
-    and ConvRustArrayMultiClassBackpropClassifierNetwork are this shape on numpy and on Rust, and
-    set conv_layer_cls and pool_layer_cls.
+    A mixin, listed before the backend's plain multiclass network, which supplies self.backend and
+    hidden_layer_cls (the dense layer class). ConvVectorizedMultiClassBackpropClassifierNetwork and
+    ConvRustArrayMultiClassBackpropClassifierNetwork are this shape on numpy and on Rust, and set
+    conv_layer_cls and pool_layer_cls.
 
-    Like the pure-Python conv class, __init__ doesn't call super().__init__(): ArrayNetworkBase's
-    constructor builds every layer from a flat layer_sizes list, which can't express conv
-    hyperparameters. It builds self.layers/self.output_layer directly instead, and everything
-    else - predict_probabilities/classify_state/the one-hot targets from ArrayMultiClassShape,
-    _forward/learn/learn_batch from ArrayNetworkBase - is inherited unchanged. Those only iterate
-    self.layers through the per-layer hooks (forward*/compute_*_delta*/downstream*/
-    accumulate_gradient*/apply_accumulated_gradient) the conv and pool array layers implement.
-
-    What's overridden is anything assuming every layer has a dense (size, previous_size) W:
-    randomize (conv layers draw from their kernel fan-in, pool layers draw nothing),
-    snapshot/restore (an empty entry for a pool layer, mirroring MaxPoolLayer's own []
-    snapshot), and save/load (the pure-Python conv class's JSON envelope keys). Both backends
-    save the same format, so a model saved by either loads into the other.
+    __init__ doesn't call super().__init__(), whose flat layer_sizes can't describe conv layers; it
+    builds self.layers directly. Everything that only walks self.layers through the per-layer hooks
+    (the forward pass, learn*, the multiclass shape's outputs and targets) is inherited. Overridden
+    is what assumes a dense W in every layer: randomize, snapshot/restore (an empty entry for a pool
+    layer) and save/load (the pure-Python conv network's envelope, so a model saved by any of the
+    three loads into the others).
     """
 
     conv_layer_cls: type
@@ -208,12 +191,10 @@ class ArrayConvShape:
         self.layers = self.conv_layers + dense_layers + [self.output_layer]
 
     def randomize(self) -> None:
-        # forward order, as ConvMultiClassBackpropClassifierNetwork.randomize: each conv layer
-        # scoped to its kernel fan-in (the random layer's (size, previous_size) shape is exactly
-        # a conv W's (channel_count, input_channels * kernel_size**2)), pool layers draw nothing,
-        # and the dense tail's fan-in starts from the last conv/pool layer's flattened output
-        # size. Each backend draws from its own RNG, so numpy and Rust are never
-        # seed-reproducible against each other.
+        # forward order, as ConvMultiClassBackpropClassifierNetwork.randomize: conv layers from
+        # their kernel fan-in (a conv W is (channel_count, fan_in)), pool layers draw nothing,
+        # and the dense tail starts from the front end's flattened output size. Each backend
+        # draws from its own RNG, so numpy and Rust never reproduce each other from a seed.
         for layer in self.conv_layers:
             if isinstance(layer, self.conv_layer_cls):
                 layer.W, layer.b = self.backend.random_layer(layer.channel_count, layer.fan_in)

@@ -9,11 +9,8 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class AdamRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    AdamVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network, with
-    AdamRustArrayLayer in place of AdamArrayLayer (hidden and output layers).
-
-    snapshot()/restore() cover only W/b, not Adam's m/v/t (see
-    AdamVectorizedMultiClassBackpropClassifierNetwork's docstring for why).
+    AdamVectorizedMultiClassBackpropClassifierNetwork on the Rust backend, with AdamRustArrayLayer
+    for the hidden and output layers. snapshot()/restore() cover only W/b, not Adam's m/v/t.
     """
 
     hidden_layer_cls = output_layer_cls = AdamRustArrayLayer

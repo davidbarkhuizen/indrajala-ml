@@ -9,15 +9,12 @@ from indrajala_ml.model.bounds import half_widths as _half_widths
 
 class BackpropClassifierNetwork(BackpropNetworkBase):
     """
-    A sigmoid-activation, gradient-descent-trained network of arbitrary depth
-    (input -> hidden layer(s) -> a trainable single-node output layer), added alongside
-    LinearClassifierNetwork rather than as a retrofit of it: AssociationNode's hard step
-    function and discrete minimum-disturbance update rule are fundamentally different from
-    gradient-based learning, and every hidden node here can contribute either positively or
-    negatively to the output (unlike LinearClassifierNetwork's fixed weight-of-1.0-per-node
-    output layer, which can only ever be a monotonically non-decreasing function of how many
-    hidden nodes are active) - see demo_xor_linear_classifier_ceiling.py for what that restriction
-    can't express, and demo_xor_backprop_convergence.py for this class succeeding on exactly that target.
+    A sigmoid network of any depth trained by gradient descent: input -> hidden layer(s) -> one
+    trainable output node. Separate from LinearClassifierNetwork, not a retrofit: AssociationNode's
+    hard step and minimum-disturbance rule aren't gradient-based, and its fixed weight-1.0 output
+    layer can only be a non-decreasing function of how many hidden nodes fire, while here each
+    hidden node can push the output either way. demo_xor_linear_classifier_ceiling.py shows what the
+    restriction can't express, and demo_xor_backprop_convergence.py this class learning it.
     """
 
     def __init__(
@@ -57,15 +54,12 @@ class BackpropClassifierNetwork(BackpropNetworkBase):
         return _half_widths(self.input_bounds)
 
     def randomize(self) -> None:
-        # first hidden layer: same scale-invariance rationale as
-        # LinearClassifierNetwork.randomize() - each weight's range scales inversely with its
-        # own input dimension's half-width, so a random node has a similar chance of splitting
-        # the input space regardless of input_bounds' scale. Every later trainable layer's
-        # inputs are already sigmoid-normalised to (0, 1), so a fixed small range suffices.
-        # Independent random draws per node (not a shared default) are required here, unlike
-        # AssociationNode's identical default weights being harmless - identical starting
-        # weights across nodes in a BackpropLayer would receive identical gradients forever
-        # and the layer would collapse to one effective unit.
+        # first hidden layer: as LinearClassifierNetwork.randomize(), each weight's range scales
+        # inversely with its input dimension's half-width, so a random node has a similar chance
+        # of splitting the input space whatever input_bounds' scale. Later layers' inputs are
+        # sigmoid outputs in (0, 1), so a fixed range suffices. Every node draws independently:
+        # identical starting weights would get identical gradients forever, collapsing the
+        # layer to one effective unit.
         half_widths = self.half_widths()
         for node in self.hidden_layers[0].nodes:
             node.update_input_weights(
