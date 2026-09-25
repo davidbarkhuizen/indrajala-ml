@@ -29,6 +29,7 @@ from indrajala_ml.model.l2_array_layer import L2ArrayLayer
 from indrajala_ml.model.l2_regularization_layer import make_l2_node_cls
 from indrajala_ml.model.l2_rust_array_layer import L2RustArrayLayer
 from indrajala_ml.model.momentum_array_layer import MomentumArrayLayer
+from indrajala_ml.model.momentum_conv_layer import make_momentum_kernel_cls
 from indrajala_ml.model.momentum_layer import make_momentum_node_cls
 from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
@@ -86,14 +87,22 @@ def _apply_nodes(
     return _step_nodes(_nodes(node_cls, W, b), grad_W, grad_b, LEARNING_RATE, batch_size)
 
 
-def _apply_kernels(W: Matrix, b: list[float], grad_W: Matrix, grad_b: list[float], batch_size: int) -> Weights:
-    kernels: list[ConvKernel] = []
-    for weights, bias, accum, bias_accum in zip(W, b, grad_W, grad_b):
-        kernel = ConvKernel(kernel_size=3, in_channels=2, weights=list(weights), bias=bias)
+def _kernels(kernel_cls: type[ConvKernel], W: Matrix, b: list[float]) -> list[ConvKernel]:
+    # CONV_SHAPE's kernels: 3 x 3 over 2 input channels
+    return [kernel_cls(kernel_size=3, in_channels=2, weights=list(weights), bias=bias) for weights, bias in zip(W, b)]
+
+
+def _step_kernels(
+    kernels: list[ConvKernel], grad_W: Matrix, grad_b: list[float], learning_rate: float, batch_size: int
+) -> Weights:
+    for kernel, accum, bias_accum in zip(kernels, grad_W, grad_b):
         kernel._weight_gradient_accum, kernel._bias_gradient_accum = list(accum), bias_accum
-        kernel.apply_accumulated_gradient(LEARNING_RATE, batch_size)
-        kernels.append(kernel)
+        kernel.apply_accumulated_gradient(learning_rate, batch_size)
     return [kernel.weights for kernel in kernels], [kernel.bias for kernel in kernels]
+
+
+def _apply_kernels(W: Matrix, b: list[float], grad_W: Matrix, grad_b: list[float], batch_size: int) -> Weights:
+    return _step_kernels(_kernels(ConvKernel, W, b), grad_W, grad_b, LEARNING_RATE, batch_size)
 
 
 def _step_layer(
@@ -195,6 +204,13 @@ def _momentum_nodes(momentum: float, W: Matrix, b: list[float]) -> Step:
     )
 
 
+def _momentum_kernels(momentum: float, W: Matrix, b: list[float]) -> Step:
+    kernels = _kernels(make_momentum_kernel_cls(momentum), W, b)
+    return lambda grad_W, grad_b, learning_rate, batch_size: _step_kernels(
+        kernels, grad_W, grad_b, learning_rate, batch_size
+    )
+
+
 def _momentum_layer(layer_cls: type[MomentumArrayLayer] | type[MomentumRustArrayLayer], to_array: Wrap) -> Start:
     def start(momentum: float, W: Matrix, b: list[float]) -> Step:
         layer = layer_cls(*DENSE_SHAPE, momentum)
@@ -206,11 +222,12 @@ def _momentum_layer(layer_cls: type[MomentumArrayLayer] | type[MomentumRustArray
     return start
 
 
-# (name, start(momentum, W, b) -> step(grad_W, grad_b, learning_rate, batch_size))
-MOMENTUM_IMPLEMENTATIONS: list[tuple[str, Start]] = [
-    ("MomentumBackpropNode", _momentum_nodes),
-    ("MomentumArrayLayer", _momentum_layer(MomentumArrayLayer, np.array)),
-    ("MomentumRustArrayLayer", _momentum_layer(MomentumRustArrayLayer, pa.Array)),
+# (name, the weights' shape, start(momentum, W, b) -> step(grad_W, grad_b, learning_rate, batch_size))
+MOMENTUM_IMPLEMENTATIONS: list[tuple[str, tuple[int, int], Start]] = [
+    ("MomentumBackpropNode", DENSE_SHAPE, _momentum_nodes),
+    ("MomentumConvKernel", CONV_SHAPE, _momentum_kernels),
+    ("MomentumArrayLayer", DENSE_SHAPE, _momentum_layer(MomentumArrayLayer, np.array)),
+    ("MomentumRustArrayLayer", DENSE_SHAPE, _momentum_layer(MomentumRustArrayLayer, pa.Array)),
 ]
 
 
@@ -224,12 +241,14 @@ def _momentum(
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("batch_size", BATCH_SIZES)
 @pytest.mark.parametrize("momentum", MOMENTA)
-@pytest.mark.parametrize("name, start", MOMENTUM_IMPLEMENTATIONS, ids=[i[0] for i in MOMENTUM_IMPLEMENTATIONS])
-def test_momentum_is_the_papers_form_exactly(name: str, start: Start, momentum: float, batch_size: int, seed: int):
+@pytest.mark.parametrize("name, shape, start", MOMENTUM_IMPLEMENTATIONS, ids=[i[0] for i in MOMENTUM_IMPLEMENTATIONS])
+def test_momentum_is_the_papers_form_exactly(
+    name: str, shape: tuple[int, int], start: Start, momentum: float, batch_size: int, seed: int
+):
     # eq. (9) for W and b alike, over several steps: the velocity only shows a mistake across
     # repeated steps. At momentum 0.0 this is exactly SGD's w - lr * (g / B)
     rng = random.Random(seed)
-    rows, cols = DENSE_SHAPE
+    rows, cols = shape
     scale = LEARNING_RATE / batch_size
     W = [[scale * rng.uniform(-3.0, 3.0) for _ in range(cols)] for _ in range(rows)]
     b = [scale * rng.uniform(-3.0, 3.0) for _ in range(rows)]

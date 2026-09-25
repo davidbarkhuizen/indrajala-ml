@@ -118,9 +118,9 @@ per backend.
 
 Each implementation has variants for the same set of features, named by a prefix on the class:
 `ReLU`, `Softmax`, `CrossEntropy`, `L2`, `Momentum`, `Adam`, `Dropout`, `Ensemble`. Convolution
-and max pooling (`Conv…`, `MaxPool…`) exist in all three implementations. The numpy classes are
-the reference the Rust classes are tested against (`tests/test_*fused_layer_ops.py`,
-`tests/test_numerical_parity.py`).
+and max pooling (`Conv…`, `MaxPool…`) exist in all three implementations; momentum conv
+(`MomentumConv…`) is pure Python only so far. The numpy classes are the reference the Rust
+classes are tested against (`tests/test_*fused_layer_ops.py`, `tests/test_numerical_parity.py`).
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,
 hand-computed examples, and the reference the array implementations are checked against. It is
