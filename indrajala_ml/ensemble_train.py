@@ -9,6 +9,7 @@ from typing import Any, cast
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.classifier_protocols import BinaryClassifier, BinaryClassifierClass
 from indrajala_ml.model.ensemble_backprop_classifier_network import ClassifierT, EnsembleBackpropClassifierNetwork
+from indrajala_ml.seeding import seed_everything
 from indrajala_ml.train import TrainingDiagnostic, train_linear_classifier_network
 
 RecordLoader = Callable[[str, list[int]], list[tuple[tuple[float, ...], int]]]
@@ -115,12 +116,13 @@ def _train_classifier_on_binary_dataset(
     The training both Pool workers share, given a binary dataset: one class's classifier_cls, with
     no state shared with any other worker.
 
-    Seeds this process's random state first: forked workers can share the parent's random state,
-    which would give sub-networks correlated or identical initial weights. seed=None reseeds from
-    the OS, independent per process but not reproducible.
+    Seeds this process's RNGs first (seed_everything: random, np.random and the crate's, which
+    the per-node, numpy and Rust classifiers draw from): forked workers inherit the parent's
+    states, which would give sub-networks identical initial weights. seed=None reseeds from the
+    OS, independent per process but not reproducible.
     """
 
-    random.seed(seed)
+    seed_everything(seed)
     student = classifier_cls.randomized(layer_sizes, dimension, input_bounds)
     result = train_linear_classifier_network(student, binary_dataset, learning_rate=learning_rate, epochs=epochs)
 

@@ -66,8 +66,8 @@ def load_datasets() -> dict[str, tuple[int, list[Example[int]], list[Example[int
 
 
 def initial_snapshot(side: int, conv_specs: ConvSpecs) -> list[tuple[FloatArray, ...]]:
-    # drawn once, by the numpy network, and restored into both backends - identical starting
-    # weights, since the two backends' RNGs aren't comparable
+    # drawn once, by the numpy network, and restored into both backends: identical starting
+    # weights for every run
     np.random.seed(SEED)
     return ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(
         side, side, conv_specs, DENSE_LAYER_SIZES, CLASS_COUNT
