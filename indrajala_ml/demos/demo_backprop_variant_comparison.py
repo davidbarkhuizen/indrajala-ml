@@ -1,3 +1,5 @@
+# pyright: reportUnknownMemberType=false
+# (matplotlib's untyped **kwargs, as in graphics/chart.py)
 import math
 import random
 
@@ -11,9 +13,11 @@ from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.graphics.chart import new_axes, new_figure, plot_labeled_series
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
     BinaryCrossEntropyBackpropClassifierNetwork,
 )
+from indrajala_ml.model.classifier_protocols import Example
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
@@ -33,7 +37,7 @@ XOR_LAYER_SIZES = [8]
 XOR_EPOCHS = 100
 
 
-def _xavier_glorot_randomize(network) -> None:
+def _xavier_glorot_randomize(network: BackpropNetworkBase) -> None:
     """
     Glorot & Bengio 2010's initialization (uniform, limit = sqrt(6/(fan_in+fan_out)) per layer). A
     null against fan-in-aware initialization on these shallow networks, so it stays a comparison in
@@ -49,12 +53,14 @@ def _xavier_glorot_randomize(network) -> None:
         previous_size = layer.size
 
 
-def _compare_multiclass_loss_functions(train_data, test_data) -> list[tuple[str, str, list[int], list[float]]]:
+def _compare_multiclass_loss_functions(
+    train_data: list[Example[int]], test_data: list[Example[int]]
+) -> list[tuple[str, str, list[int], list[float]]]:
 
     print("=== multi-class loss function: one-vs-rest (MSE) vs softmax (cross-entropy) ===")
     print("Same architecture, same seed, same everything except the output layer/loss.")
 
-    results = []
+    results: list[tuple[str, str, list[int], list[float]]] = []
     for name, color, cls in [
         ("one-vs-rest (MSE)", "yellow", MultiClassBackpropClassifierNetwork),
         ("softmax (cross-entropy)", "cyan", SoftmaxMultiClassBackpropClassifierNetwork),
@@ -97,7 +103,7 @@ def _compare_binary_loss_functions() -> list[tuple[str, str, list[int], list[flo
         ("cross-entropy, lr=0.1 (retuned)", "cyan", BinaryCrossEntropyBackpropClassifierNetwork, 0.1),
     ]
 
-    results = []
+    results: list[tuple[str, str, list[int], list[float]]] = []
     for name, color, cls, learning_rate in configs:
         # separate data and weight-init seeds, so a config's initial weights don't depend on how
         # many draws generating training_data consumed
@@ -118,12 +124,14 @@ def _compare_binary_loss_functions() -> list[tuple[str, str, list[int], list[flo
     return results
 
 
-def _compare_init_schemes(train_data, test_data) -> list[tuple[str, str, list[int], list[float]]]:
+def _compare_init_schemes(
+    train_data: list[Example[int]], test_data: list[Example[int]]
+) -> list[tuple[str, str, list[int], list[float]]]:
 
     print("=== init scheme: fan-in-aware vs Xavier/Glorot ===")
     print("Same architecture/data as the multi-class loss comparison above, on the UCI digits set.")
 
-    results = []
+    results: list[tuple[str, str, list[int], list[float]]] = []
     for name, color, randomize_fn in [
         ("fan-in-aware (production default)", "yellow", None),
         ("Xavier/Glorot", "magenta", _xavier_glorot_randomize),

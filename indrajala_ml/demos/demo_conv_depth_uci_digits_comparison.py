@@ -1,8 +1,10 @@
 import random
 import statistics
+from typing import Any
 
 from indrajala_ml.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
+from indrajala_ml.model.classifier_protocols import Example
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.max_pool_layer import PoolSpec
@@ -33,7 +35,7 @@ CONV_CONFIGS: dict[str, list[ConvSpec | PoolSpec]] = {
 CONFIGS = ["dense"] + list(CONV_CONFIGS)
 
 
-def _build(config: str):
+def _build(config: str) -> MultiClassBackpropClassifierNetwork[Any]:
     if config == "dense":
         return MultiClassBackpropClassifierNetwork.randomized(
             DENSE_LAYER_SIZES, SIDE * SIDE, [(0.0, 1.0)] * (SIDE * SIDE), CLASS_COUNT
@@ -43,11 +45,11 @@ def _build(config: str):
     )
 
 
-def parameter_count(network) -> int:
+def parameter_count(network: MultiClassBackpropClassifierNetwork[Any]) -> int:
     return sum(len(weights) + 1 for layer in network.snapshot() for weights, _bias in layer)
 
 
-def run_one(dataset, config: str, seed: int) -> dict[str, float]:
+def run_one(dataset: list[Example[int]], config: str, seed: int) -> dict[str, float]:
     # module-level, for run_parameter_sweep's picklability requirement; the seed drives both
     # the split and the weight initialization, and is shared across configs, so results pair up
     # seed-by-seed

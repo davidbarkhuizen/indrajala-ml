@@ -1,7 +1,11 @@
+# pyright: reportConstantRedefinition=false
+# (matrices are named as in the literature, W, which strict mode takes for constants)
 import cProfile
 import pstats
 import random
 import statistics
+from collections.abc import Sequence
+from typing import Any, cast
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -9,6 +13,8 @@ import numpy as np
 from indrajala_ml.demos.timing import timed_call, timed_train
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.mnist_data import load_mnist_dataset
+from indrajala_ml.model.array_layer import FloatArray
+from indrajala_ml.model.classifier_protocols import Example, StateClassifier
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -18,7 +24,7 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
 )
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.multiclass_evaluate import accuracy
-from indrajala_ml.train import train_backprop_network_mini_batch
+from indrajala_ml.train import ConvergenceSeries, train_backprop_network_mini_batch
 
 CLASS_COUNT = 10
 DENSE_LAYER_SIZES = [32]
@@ -38,13 +44,16 @@ BACKENDS = {
     "rust": ConvRustArrayMultiClassBackpropClassifierNetwork,
 }
 
+ConvNetwork = ConvVectorizedMultiClassBackpropClassifierNetwork | ConvRustArrayMultiClassBackpropClassifierNetwork
+ConvSpecs = list[ConvSpec | PoolSpec]
+
 MNIST_TRAIN_PATH = "data/mnist/mnist-train.bin"
 MNIST_TEST_PATH = "data/mnist/mnist-test.bin"
 MNIST_TRAIN_LIMIT = 2000
 MNIST_TEST_LIMIT = 500
 
 
-def load_datasets() -> dict[str, tuple[int, list, list, int]]:
+def load_datasets() -> dict[str, tuple[int, list[Example[int]], list[Example[int]], int]]:
     """name -> (side, train_data, test_data, epochs)."""
     train_uci, test_uci = split_train_test(load_digits_dataset(), test_fraction=0.2, seed=SEED)
     train_mnist = load_mnist_dataset(MNIST_TRAIN_PATH, limit=MNIST_TRAIN_LIMIT)
@@ -55,7 +64,7 @@ def load_datasets() -> dict[str, tuple[int, list, list, int]]:
     }
 
 
-def initial_snapshot(side: int, conv_specs: list) -> list[tuple]:
+def initial_snapshot(side: int, conv_specs: ConvSpecs) -> list[tuple[FloatArray, ...]]:
     # drawn once, by the numpy network, and restored into both backends - identical starting
     # weights, since the two backends' RNGs aren't comparable
     np.random.seed(SEED)
@@ -64,7 +73,15 @@ def initial_snapshot(side: int, conv_specs: list) -> list[tuple]:
     ).snapshot()
 
 
-def train_once(backend: str, trainer: str, side: int, conv_specs: list, snapshot, train_data, epochs: int):
+def train_once(
+    backend: str,
+    trainer: str,
+    side: int,
+    conv_specs: ConvSpecs,
+    snapshot: Sequence[tuple[Any, ...]],
+    train_data: list[Example[int]],
+    epochs: int,
+) -> tuple[ConvNetwork, ConvergenceSeries, float]:
     """(network, ConvergenceSeries, elapsed seconds) for one timed training run from snapshot."""
     network = BACKENDS[backend](side, side, conv_specs, DENSE_LAYER_SIZES, CLASS_COUNT)
     network.restore(snapshot)
@@ -83,12 +100,20 @@ def train_once(backend: str, trainer: str, side: int, conv_specs: list, snapshot
     return network, result, elapsed
 
 
-def compare(side: int, conv_specs: list, trainer: str, train_data, test_data, epochs: int, repeats: int) -> dict:
+def compare(
+    side: int,
+    conv_specs: ConvSpecs,
+    trainer: str,
+    train_data: list[Example[int]],
+    test_data: list[Example[int]],
+    epochs: int,
+    repeats: int,
+) -> dict[str, Any]:
     """Times both backends from identical initial weights, interleaving their runs so any drift
     in machine load hits both alike; reports median seconds and each backend's accuracy."""
     snapshot = initial_snapshot(side, conv_specs)
     elapsed: dict[str, list[float]] = {backend: [] for backend in BACKENDS}
-    outcome: dict[str, tuple] = {}
+    outcome: dict[str, tuple[ConvNetwork, float, float]] = {}
     for _repeat in range(repeats):
         for backend in BACKENDS:
             network, result, seconds = train_once(backend, trainer, side, conv_specs, snapshot, train_data, epochs)
@@ -116,18 +141,18 @@ def compare(side: int, conv_specs: list, trainer: str, train_data, test_data, ep
     }
 
 
-def _agreement(first, second, test_data) -> float:
+def _agreement(first: StateClassifier[int], second: StateClassifier[int], test_data: Sequence[Example[int]]) -> float:
     return statistics.mean(first.classify_state(state) == second.classify_state(state) for state, _label in test_data)
 
 
-def _nudged_by_one_ulp(snapshot: list[tuple]) -> list[tuple]:
+def _nudged_by_one_ulp(snapshot: list[tuple[FloatArray, ...]]) -> list[tuple[FloatArray, ...]]:
     W, b = snapshot[0]
     W = W.copy()
     W[0, 0] = np.nextafter(W[0, 0], np.inf)
     return [(W, b), *snapshot[1:]]
 
 
-def wrapping_cost(side: int, rows: list, repeats: int) -> dict[str, tuple[float, float]]:
+def wrapping_cost(side: int, rows: list[Example[int]], repeats: int) -> dict[str, tuple[float, float]]:
     """
     backend -> (single-example microseconds per example, batch-of-one microseconds per example)
     for one ConvSpec(3, 8) layer's forward + downstream + accumulate_gradient. Both paths run
@@ -136,9 +161,10 @@ def wrapping_cost(side: int, rows: list, repeats: int) -> dict[str, tuple[float,
     wrapping costs. Inputs and deltas are converted to each backend's arrays before timing.
     """
     spec = ARCHITECTURES["conv"][0]
-    results = {}
+    results: dict[str, tuple[float, float]] = {}
     for backend, network_cls in BACKENDS.items():
-        layer = network_cls(side, side, [spec], DENSE_LAYER_SIZES, CLASS_COUNT).conv_layers[0]
+        # either backend's conv layer, chosen by name, and typed Any as its arrays are
+        layer: Any = network_cls(side, side, [spec], DENSE_LAYER_SIZES, CLASS_COUNT).conv_layers[0]
         rng = np.random.default_rng(SEED)
         layer.W = _backend_array(backend, rng.uniform(-0.3, 0.3, size=(layer.channel_count, layer.fan_in)))
         deltas = rng.uniform(-1.0, 1.0, size=(len(rows), layer.size))
@@ -148,21 +174,22 @@ def wrapping_cost(side: int, rows: list, repeats: int) -> dict[str, tuple[float,
             (_backend_array(backend, x[None, :]), _backend_array(backend, d[None, :])) for x, d in zip(states, deltas)
         ]
 
-        def run_single():
+        def run_single() -> None:
             for x, delta in single:
                 layer.forward(x)
                 layer.delta = delta
                 layer.downstream()
                 layer.accumulate_gradient(x)
 
-        def run_batched():
+        def run_batched() -> None:
             for X, delta_batch in batched:
                 layer.forward_batch(X)
                 layer.delta_batch = delta_batch
                 layer.downstream_batch()
                 layer.accumulate_gradient_batch(X)
 
-        single_seconds, batched_seconds = [], []
+        single_seconds: list[float] = []
+        batched_seconds: list[float] = []
         for _repeat in range(repeats):
             single_seconds.append(timed_call(run_single)[1])
             batched_seconds.append(timed_call(run_batched)[1])
@@ -174,11 +201,14 @@ def wrapping_cost(side: int, rows: list, repeats: int) -> dict[str, tuple[float,
     return results
 
 
-def _backend_array(backend: str, values: np.ndarray):
+def _backend_array(backend: str, values: FloatArray) -> Any:
+    # the backend's array, numpy or Rust, chosen by name
     return values.copy() if backend == "numpy" else pa.Array(values.tolist())
 
 
-def rust_op_breakdown(side: int, conv_specs: list, trainer: str, train_data, epochs: int) -> tuple[float, list]:
+def rust_op_breakdown(
+    side: int, conv_specs: ConvSpecs, trainer: str, train_data: list[Example[int]], epochs: int
+) -> tuple[float, list[tuple[str, float, int]]]:
     """
     cProfile over one Rust training run: (total profiled seconds, [(op name, seconds, calls)])
     for every indrajala_math_rust call, largest first. cProfile's own per-call overhead inflates
@@ -191,14 +221,16 @@ def rust_op_breakdown(side: int, conv_specs: list, trainer: str, train_data, epo
     profiler.disable()
 
     stats = pstats.Stats(profiler)
-    ops = []
-    # Stats.stats and .total_tt are CPython's (undocumented) attributes, which typeshed omits
-    raw_stats = stats.stats  # pyright: ignore[reportAttributeAccessIssue]
+    ops: list[tuple[str, float, int]] = []
+    # Stats.stats and .total_tt are CPython's (undocumented) attributes, which typeshed omits:
+    # (file, line, name) -> (primitive calls, total calls, own seconds, cumulative, callers)
+    raw_stats = cast("dict[tuple[str, int, str], tuple[int, int, float, float, Any]]", stats.stats)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+    total_seconds = cast(float, stats.total_tt)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
     for (_file, _line, name), (_calls, total_calls, own_seconds, _cumulative, _callers) in raw_stats.items():
         op = _rust_op_name(name)
         if op is not None:
             ops.append((op, own_seconds, total_calls))
-    return stats.total_tt, sorted(ops, key=lambda op: op[1], reverse=True)  # pyright: ignore[reportAttributeAccessIssue]
+    return total_seconds, sorted(ops, key=lambda op: op[1], reverse=True)
 
 
 def _rust_op_name(profiler_name: str) -> str | None:

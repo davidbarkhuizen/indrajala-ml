@@ -41,12 +41,14 @@ best epoch would hide exactly the divergence the study looks for.
 import math
 import random
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.lr_schedule import linear_warmup
+from indrajala_ml.model.classifier_protocols import BatchTrainableClassifier, Example
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -151,7 +153,13 @@ def _initial_conv_network(backend: str, momentum: float, seed: int):
     return network
 
 
-def train_epoch(network, train_data: list, batch_size: int, learning_rate, first_step: int) -> tuple[int, float]:
+def train_epoch(
+    network: BatchTrainableClassifier[int],
+    train_data: Sequence[Example[int]],
+    batch_size: int,
+    learning_rate: float | Callable[[int], float],
+    first_step: int,
+) -> tuple[int, float]:
     """
     One epoch of the trainer's loop: reshuffle (from the caller's random state), then one
     learn_batch per batch. Returns (steps taken, seconds spent in learn_batch calls); the
@@ -172,8 +180,8 @@ def train_epoch(network, train_data: list, batch_size: int, learning_rate, first
 
 def train_and_evaluate(
     backend: str,
-    train_data: list,
-    test_data: list,
+    train_data: Sequence[Example[int]],
+    test_data: Sequence[Example[int]],
     batch_size: int,
     rate: float,
     warmup_epochs: float,
@@ -181,7 +189,7 @@ def train_and_evaluate(
     epochs: int,
     seed: int,
     architecture: str = "dense",
-) -> dict:
+) -> dict[str, Any]:
     """
     One run: test accuracy after every epoch, steps per epoch and step-loop seconds per epoch.
     """
@@ -189,8 +197,8 @@ def train_and_evaluate(
     random.seed(seed)  # the shuffle order
     schedule = learning_rate_schedule(rate, warmup_steps(warmup_epochs, len(train_data), batch_size))
 
-    test_accuracies = []
-    step_seconds = []
+    test_accuracies: list[float] = []
+    step_seconds: list[float] = []
     step = 0
     for _ in range(epochs):
         steps, seconds = train_epoch(network, train_data, batch_size, schedule, step)
