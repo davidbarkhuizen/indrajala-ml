@@ -40,7 +40,9 @@ replaced the plain dense pair:
   and `test_x[rust]`. It is the production backend object (`array_backend.py`): `backend.name`
   picks the class from the file's `{"numpy": ..., "rust": ...}` map, and `backend.owned` wraps
   nested lists in that backend's arrays.
-- Closeness is checked with `np.testing.assert_allclose`, which takes either backend's lists.
+- Where the pair's tolerances differ, the merged test keeps the stricter one for both backends:
+  `pytest.approx(expected, rel, abs)` (on `.tolist()` for arrays) bounds the error by the larger
+  of the two tolerances, where `np.allclose` allows their sum.
 - Backend-specific tests stay in the merged file, run on their backend only.
 - Comments and docstrings are trimmed as the files are merged.
 
