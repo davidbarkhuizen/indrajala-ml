@@ -128,9 +128,8 @@ def learning_rate_schedule(rate: float, warmup_step_count: int) -> float | Calla
 
 def initial_network(backend: str, momentum: float, seed: int, architecture: str = "dense"):
     """
-    A fresh network whose weights are drawn by numpy from `seed`, so every backend, rate, batch
-    size and momentum sees the same starting weights for a given seed (the Rust RNG isn't
-    comparable to numpy's).
+    A fresh network whose weights are drawn once by numpy from `seed` and restored, so every
+    backend, rate, batch size and momentum sees the same starting weights for a given seed.
     """
     if architecture == "conv":
         return _initial_conv_network(backend, momentum, seed)

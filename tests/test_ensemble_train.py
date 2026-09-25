@@ -2,6 +2,7 @@ import math
 import pickle
 import random
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -589,3 +590,34 @@ def test_select_worker_count_falls_back_to_cpu_and_class_count_when_memory_is_un
     )
 
     assert worker_count == 4
+
+
+@pytest.mark.parametrize(
+    "classifier_cls", [ArrayBackpropClassifierNetwork, RustArrayBackpropClassifierNetwork], ids=["numpy", "rust"]
+)
+def test_array_classifiers_get_independent_reproducible_initial_weights(classifier_cls: Any):
+
+    # the array classifiers draw from np.random or the crate's RNG, not random: forked workers
+    # inherit those states, so a worker that reseeds only random builds identical sub-networks
+    dataset = _synthetic_multiclass_dataset()
+    runs = [
+        [
+            repr([[array.tolist() for array in entry] for entry in classifier.snapshot()])
+            for classifier in train_ensemble_parallel(
+                dataset,
+                class_count=3,
+                layer_sizes=[4],
+                dimension=2,
+                input_bounds=square_bounds(10.0),
+                learning_rate=0.5,
+                epochs=0,
+                worker_count=3,
+                seed=seed,
+                classifier_cls=classifier_cls,
+            )[0].classifiers
+        ]
+        for seed in (7, 7, 8)
+    ]
+    assert len(set(runs[0])) == 3
+    assert runs[0] == runs[1]
+    assert runs[0] != runs[2]

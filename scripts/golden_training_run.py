@@ -6,8 +6,8 @@ refactoring stage can show that training is unchanged exactly, not within a tole
     python scripts/golden_training_run.py record golden.json   # on main, before the first stage
     python scripts/golden_training_run.py check golden.json    # after each stage
 
-Each network is built with the same injected weights (a seeded random.Random, never
-randomize(): pa.uniform can't be seeded), then trained with learn, learn_row, learn_batch and
+Each network is built with the same injected weights (a seeded random.Random, independent of
+either backend's RNG), then trained with learn, learn_row, learn_batch and
 learn_batch_rows in turn, its snapshot recorded after each. At the end it records classify_rows,
 classify_row, classify_state and predict_probabilities (predict_probability for single-output
 networks) over the whole dataset, and the snapshot and predictions after a save/load round trip.
@@ -18,9 +18,8 @@ value of every network that differs. numpy's products go through BLAS, so a gold
 valid on the machine that recorded it; record one on main and check against it on the same
 machine.
 
-Dropout: numpy's masks come from np.random, seeded before each dropout network. Rust's can't be
-seeded, so the Rust dropout network trains with drop_probability=0.0, which still runs the
-training-mode path (every mask entry is 1).
+Dropout: every network runs after seed_everything(SEED), so the numpy and Rust dropout networks
+train at the same drop_probability and draw the same masks.
 """
 
 import argparse
@@ -105,6 +104,7 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
     VectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.prepared_dataset import PreparedDataset
+from indrajala_ml.seeding import seed_everything
 
 # A network is typed Any here: the script drives every array network class, dense, conv,
 # single-output and ensemble, of both backends, through the methods they share by name. Recorded
@@ -141,7 +141,7 @@ DENSE_NETWORKS = {
     "rust adam": (AdamRustArrayMultiClassBackpropClassifierNetwork, ()),
     "rust relu": (ReLURustArrayMultiClassBackpropClassifierNetwork, ()),
     "rust softmax": (SoftmaxRustArrayMultiClassBackpropClassifierNetwork, ()),
-    "rust dropout": (DropoutRustArrayMultiClassBackpropClassifierNetwork, (0.0,)),
+    "rust dropout": (DropoutRustArrayMultiClassBackpropClassifierNetwork, (0.3,)),
     "rust cross-entropy": (CrossEntropyRustArrayMultiClassBackpropClassifierNetwork, ()),
 }
 CONV_NETWORKS = {
@@ -241,7 +241,7 @@ def _round_trip(network: Any, rows: Sequence[Example[Any]], predict: str) -> dic
 
 def _run_network(name: str, network: Any, rows: Sequence[Example[Any]], predict: str) -> dict[str, Any]:
     _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
-    np.random.seed(SEED)
+    seed_everything(SEED)
     checkpoints, prepared = _train(network, rows)
     return {
         "snapshots": checkpoints,

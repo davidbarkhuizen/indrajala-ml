@@ -663,8 +663,7 @@ def matching_conv_numpy_rust_networks(
     """
     A ConvVectorizedMultiClassBackpropClassifierNetwork and a
     ConvRustArrayMultiClassBackpropClassifierNetwork with identical injected weights - drawn from
-    rng into the numpy network, then restored into the Rust one from its snapshot (the two
-    backends' RNGs aren't comparable, so neither network's own randomize() is used).
+    rng into the numpy network, then restored into the Rust one from its snapshot.
     """
     numpy_network = ConvVectorizedMultiClassBackpropClassifierNetwork(
         input_height, input_width, conv_specs, dense_layer_sizes, class_count
