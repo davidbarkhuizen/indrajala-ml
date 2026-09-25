@@ -28,7 +28,7 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
     parameter.
 
     The numpy and Rust networks (ArrayConvShape) are parity-tested against this one step by step
-    (tests/test_conv_vectorized_multiclass_backprop_model.py); all three build their front end
+    (tests/test_conv_array_multiclass_backprop_model.py); all three build their front end
     through conv_front_end.build_conv_front_end.
     """
 
