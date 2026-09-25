@@ -24,6 +24,9 @@ class RustArrayLayer:
     already uses under the hood.
     """
 
+    # as ArrayLayer.hyperparameters
+    hyperparameters: tuple[str, ...] = ()
+
     def __init__(self, size: int, input_size: int) -> None:
         self.size = size
         self.input_size = input_size

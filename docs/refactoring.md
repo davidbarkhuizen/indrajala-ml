@@ -21,26 +21,7 @@ Rules for every stage:
 - **Public names stay.** Demos, `demos/registry.py`, `ensemble_train.py` and the tests construct
   the concrete classes by name, and saved model files must still load.
 
-## 1. Hyperparameters declared once
-
-**The duplication.** Every network with a hyperparameter (momentum, L2, Adam and dropout, in the
-numpy and Rust families) spells each name out twice in `__init__`: once to store it, and once in
-the layer-class lambda that closes over it.
-
-`randomized`, `_extra_state` and `_extra_init_kwargs` are already shared: `ArrayNetworkBase`
-generates the save/load hooks from each sibling's `hyperparameters` tuple (e.g.
-`("beta1", "beta2", "epsilon")`).
-
-**Target shape.**
-
-- A class method `layer_cls_for(**hyperparameters)` replaces each lambda assignment.
-- Each sibling is left with its `__init__` signature (its defaults and required arguments are
-  documented API) and its docstring.
-
-**Stage:** `layer_cls_for` replacing the lambda assignments in `__init__`. It touches layer
-construction only, not `learn*`, but the golden run gates it as usual.
-
-## 2. Test files parameterized by backend
+## 1. Test files parameterized by backend
 
 **The duplication.** 21 numpy/Rust pairs of test files (`test_*_array_layer.py` /
 `test_*_rust_array_layer.py`, `test_*_vectorized_multiclass_backprop_model.py` /

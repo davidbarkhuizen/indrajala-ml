@@ -12,9 +12,8 @@ class L2VectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpr
 
     l2_lambda is a required constructor parameter, no default - the same posture
     L2RegularizedBackpropClassifierNetwork's per-node counterpart already takes. Both hidden
-    layers and the output layer are built from L2ArrayLayer with l2_lambda already bound via a
-    closure (hidden_layer_cls/output_layer_cls set as instance attributes before
-    super().__init__() runs), mirroring L2RegularizedBackpropClassifierNetwork's own
+    layers and the output layer are built from L2ArrayLayer, which reads l2_lambda from the
+    network (ArrayNetworkBase._new_layer), mirroring L2RegularizedBackpropClassifierNetwork's own
     hidden_layer_cls == output_layer_cls choice.
 
     snapshot()/restore() intentionally cover only W/b - L2 needs no extra per-parameter state to
@@ -22,11 +21,9 @@ class L2VectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpr
     way it is for momentum/Adam's own array siblings.
     """
 
+    hidden_layer_cls = output_layer_cls = L2ArrayLayer
     hyperparameters = ("l2_lambda",)
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, l2_lambda: float) -> None:
         self.l2_lambda = l2_lambda
-        self.hidden_layer_cls = self.output_layer_cls = (
-            lambda size, input_size: L2ArrayLayer(size, input_size, l2_lambda)
-        )
         super().__init__(layer_sizes, dimension, class_count)

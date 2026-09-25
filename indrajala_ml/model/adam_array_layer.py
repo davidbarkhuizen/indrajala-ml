@@ -19,6 +19,8 @@ class AdamArrayLayer(ArrayLayer):
     AdamBackpropClassifierNetwork/make_adam_node_cls already use.
     """
 
+    hyperparameters = ("beta1", "beta2", "epsilon")
+
     def __init__(self, size: int, input_size: int, beta1: float, beta2: float, epsilon: float) -> None:
         super().__init__(size, input_size)
         self._beta1 = beta1

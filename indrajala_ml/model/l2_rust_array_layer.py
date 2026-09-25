@@ -17,6 +17,8 @@ class L2RustArrayLayer(RustArrayLayer):
     already has.
     """
 
+    hyperparameters = ("l2_lambda",)
+
     def __init__(self, size: int, input_size: int, l2_lambda: float) -> None:
         super().__init__(size, input_size)
         self._l2_lambda = l2_lambda

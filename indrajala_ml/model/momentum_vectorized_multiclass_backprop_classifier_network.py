@@ -12,9 +12,8 @@ class MomentumVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClass
 
     momentum is a required constructor parameter, no default - the same posture
     MomentumBackpropClassifierNetwork's per-node counterpart already takes. Both hidden layers
-    and the output layer are built from MomentumArrayLayer with momentum already bound via a
-    closure (hidden_layer_cls/output_layer_cls set as instance attributes before
-    super().__init__() runs) - mirroring MomentumBackpropClassifierNetwork's own
+    and the output layer are built from MomentumArrayLayer, which reads momentum from the
+    network (ArrayNetworkBase._new_layer) - mirroring MomentumBackpropClassifierNetwork's own
     hidden_layer_cls == output_layer_cls choice, and the same pattern
     AdamBackpropClassifierNetwork already uses one layer down over BackpropNetworkBase.
 
@@ -24,11 +23,9 @@ class MomentumVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClass
     class introduces.
     """
 
+    hidden_layer_cls = output_layer_cls = MomentumArrayLayer
     hyperparameters = ("momentum",)
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, momentum: float) -> None:
         self.momentum = momentum
-        self.hidden_layer_cls = self.output_layer_cls = (
-            lambda size, input_size: MomentumArrayLayer(size, input_size, momentum)
-        )
         super().__init__(layer_sizes, dimension, class_count)

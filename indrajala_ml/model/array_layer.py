@@ -48,6 +48,11 @@ class ArrayLayer:
     objects. Provides both a single-example forward() and a batched forward_batch().
     """
 
+    # the constructor keyword arguments after (size, input_size) that a subclass takes (e.g.
+    # MomentumArrayLayer's momentum); ArrayNetworkBase passes them from the network's attributes
+    # of the same names
+    hyperparameters: tuple[str, ...] = ()
+
     def __init__(self, size: int, input_size: int) -> None:
         self.size = size
         self.input_size = input_size

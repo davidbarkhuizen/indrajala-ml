@@ -20,6 +20,8 @@ class MomentumArrayLayer(ArrayLayer):
     worth recommending).
     """
 
+    hyperparameters = ("momentum",)
+
     def __init__(self, size: int, input_size: int, momentum: float) -> None:
         super().__init__(size, input_size)
         self._momentum = momentum

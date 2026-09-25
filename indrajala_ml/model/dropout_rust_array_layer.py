@@ -27,6 +27,8 @@ class DropoutRustArrayLayer(RustArrayLayer):
     DropoutArrayLayer already has.
     """
 
+    hyperparameters = ("drop_probability",)
+
     def __init__(self, size: int, input_size: int, drop_probability: float) -> None:
         super().__init__(size, input_size)
         assert 0.0 <= drop_probability < 1.0, f"drop_probability must be in [0.0, 1.0); got {drop_probability}"
