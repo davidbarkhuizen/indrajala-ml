@@ -22,8 +22,8 @@ class ArrayNetworkBase:
     formula. Every hand-derived formula lives entirely in the ArrayLayer subclass a sibling plugs
     in via hidden_layer_cls/output_layer_cls (e.g. MomentumArrayLayer.apply_accumulated_gradient).
 
-    What stays out of this base, in the two "shape" subclasses instead
-    (VectorizedMultiClassBackpropClassifierNetwork / ArrayBackpropClassifierNetwork):
+    What stays out of this base, in the shape mixins instead (ArrayMultiClassShape /
+    ArraySingleOutputShape, array_network_shapes.py, each listed before either backend's base):
     predict_probabilities/predict_probability and classify_state (argmax vs. 0.5-threshold),
     class_count handling, and save/load (the JSON envelope and its class_count presence differ
     between the two shapes) - genuinely different concerns, not duplicated ones, matching where

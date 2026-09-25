@@ -9,14 +9,12 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class AdamRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust-matmul-backed counterpart to AdamVectorizedMultiClassBackpropClassifierNetwork. Both
-    hidden layers and the output layer are built from AdamRustArrayLayer with beta1/beta2/epsilon
-    already bound via a closure -
-    the same pattern AdamVectorizedMultiClassBackpropClassifierNetwork uses.
+    AdamVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network, with
+    AdamRustArrayLayer in place of AdamArrayLayer (hidden and output layers, beta1/beta2/epsilon
+    bound via a closure).
 
-    snapshot()/restore() intentionally cover only W/b, the same posture every array-based sibling
-    in this codebase already has (see AdamVectorizedMultiClassBackpropClassifierNetwork's own
-    docstring for the full reasoning) - not a new gap this class introduces.
+    snapshot()/restore() cover only W/b, not Adam's m/v/t (see
+    AdamVectorizedMultiClassBackpropClassifierNetwork's docstring for why).
     """
 
     def __init__(

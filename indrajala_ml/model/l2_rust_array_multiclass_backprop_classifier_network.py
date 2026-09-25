@@ -8,12 +8,9 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class L2RustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust-matmul-backed counterpart to L2VectorizedMultiClassBackpropClassifierNetwork. Both hidden layers and the
-    output layer are built from L2RustArrayLayer with l2_lambda already bound via a closure - the
-    same pattern L2VectorizedMultiClassBackpropClassifierNetwork uses.
-
-    l2_lambda is a required constructor argument, no default, the same posture
-    L2VectorizedMultiClassBackpropClassifierNetwork already has.
+    L2VectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network, with
+    L2RustArrayLayer in place of L2ArrayLayer (hidden and output layers, l2_lambda bound via a
+    closure). l2_lambda is required, as there.
     """
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, l2_lambda: float) -> None:

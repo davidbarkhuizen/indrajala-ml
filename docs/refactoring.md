@@ -21,28 +21,7 @@ Rules for every stage:
 - **Public names stay.** Demos, `demos/registry.py`, `ensemble_train.py` and the tests construct
   the concrete classes by name, and saved model files must still load.
 
-## 1. One array network base for both backends
-
-**Where it stands.** The base and the two shapes are shared. `ArrayNetworkBase` calls the array
-operations that differ between numpy and Rust through `self.backend`
-(`indrajala_ml/model/array_backend.py`, `NUMPY` and `RUST`), and `RustArrayNetworkBase` is a
-subclass that sets `backend = RUST` and the Rust layer classes. The single-example step always
-calls `layer.sgd_step`: numpy's layers make the unfused `accumulate_gradient` and
-`apply_accumulated_gradient` calls, and Rust's plain dense layer fuses them. The multiclass and
-single-output shapes are mixins (`array_network_shapes.py`), so each concrete name is the shape
-over one backend's base: `VectorizedMultiClassBackpropClassifierNetwork(ArrayMultiClassShape,
-ArrayNetworkBase)`, `RustArrayMultiClassBackpropClassifierNetwork(ArrayMultiClassShape,
-RustArrayNetworkBase)`, and likewise `ArraySingleOutputShape` for the single-output pair. The
-conv pair is `ArrayConvShape` over each backend's plain multiclass network, differing only in
-its conv and pool layer classes and Rust's row-by-row `classify_rows` (batched Rust conv
-inference was measured slower, `docs/optimizations/rejected.md`). The ensemble pair is
-`ArrayEnsembleBase` (`array_ensemble_base.py`), differing only in `classifier_cls`.
-
-**Stages** (one PR each):
-
-4. Update the docstrings that still describe the numpy and Rust networks as separate.
-
-## 2. Hyperparameters declared once
+## 1. Hyperparameters declared once
 
 **The duplication.** Every network with a hyperparameter spells each name out several times:
 
@@ -70,10 +49,7 @@ This covers momentum, L2, Adam and dropout, in the numpy, Rust and per-node fami
 2. `hyperparameters` generating `_extra_state` and `_extra_init_kwargs`, on the array families.
    A saved-file round-trip test per sibling already exists and gates this stage.
 
-Doing item 1 first halves this item's file count if the sibling pairs are also merged; the two
-items don't otherwise depend on each other.
-
-## 3. Test files parameterized by backend
+## 2. Test files parameterized by backend
 
 **The duplication.** 21 numpy/Rust pairs of test files (`test_*_array_layer.py` /
 `test_*_rust_array_layer.py`, `test_*_vectorized_multiclass_backprop_model.py` /
@@ -101,5 +77,5 @@ The pairs total about 6,500 lines.
 as the template. Each PR compares the collected test list before and after
 (`pytest --collect-only -q`): every old test maps to a parameterized one.
 
-Doing item 1 first makes the network-level merges simpler: one class parameterized by backend
-means the fixture supplies a backend, not a class.
+The numpy and Rust networks already share `ArrayNetworkBase`, so the fixture's `wrap` can be the
+backend object's `vector`/`matrix` (`indrajala_ml/model/array_backend.py`).

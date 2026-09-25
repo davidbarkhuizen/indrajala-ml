@@ -8,9 +8,9 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class ReLURustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust-matmul-backed counterpart to ReLUVectorizedMultiClassBackpropClassifierNetwork.
-    Hidden layers are built from ReLURustArrayLayer; the output layer stays a plain RustArrayLayer (sigmoid) - the same
-    hidden-layer-only split ReLUVectorizedMultiClassBackpropClassifierNetwork uses.
+    ReLUVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network, with
+    ReLURustArrayLayer in place of ReLUArrayLayer. Hidden layers are ReLU; the output layer stays
+    a plain RustArrayLayer (sigmoid).
 
     No hyperparameter and no extra constructor parameter, so nothing beyond this one
     class-attribute override is needed - __init__/randomized/save/load are all inherited

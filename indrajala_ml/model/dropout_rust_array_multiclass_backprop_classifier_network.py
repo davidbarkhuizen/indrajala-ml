@@ -8,17 +8,13 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class DropoutRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust-matmul-backed counterpart to DropoutVectorizedMultiClassBackpropClassifierNetwork.
-    Hidden layers are
-    built from DropoutRustArrayLayer (with drop_probability bound via a closure); the output
-    layer stays the inherited plain RustArrayLayer (sigmoid) - the same hidden-layer-only split
-    DropoutVectorizedMultiClassBackpropClassifierNetwork uses. drop_probability is a required
-    constructor argument, no default, matching that class's own posture.
+    DropoutVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network,
+    with DropoutRustArrayLayer in place of DropoutArrayLayer (hidden layers only,
+    drop_probability bound via a closure); the output layer stays a plain RustArrayLayer
+    (sigmoid). drop_probability is required, as there.
 
-    _set_training_mode overrides the base class's no-op hook the same way
-    DropoutVectorizedMultiClassBackpropClassifierNetwork's own override does - see that class's
-    docstring for the full reasoning, unchanged here, including keeping self.hidden_layers as a
-    real attribute rather than a local slice.
+    _set_training_mode and self.hidden_layers are the numpy class's, repeated; see its docstring
+    for why.
     """
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, drop_probability: float) -> None:
