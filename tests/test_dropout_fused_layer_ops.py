@@ -5,20 +5,18 @@ indrajala_ml.model.dropout_array_layer.DropoutArrayLayer - the actual production
 functions replace - the same treatment test_relu_fused_layer_ops.py gives ReLUArrayLayer's own
 fused ops.
 
-Unlike every other *_fused_layer_ops.py test module, training=True can't be checked for
-bit-identical parity against the numpy-backed reference: this crate's hand-rolled xorshift128+
-generator can never reproduce numpy's Mersenne Twister stream (the same RNG-implementation gap
-that rules out bit-identical parity for uniform()), and here the mask *is* the mechanism
-under test, not incidental to it. So training=False (deterministic, no RNG involved at all) is
-checked for exact parity across a random sweep, the same as every other fused op; training=True is
-checked structurally instead - shape, {0.0, 1.0}-valued entries, and that layer_dropout_forward's
-own returned (a, mask, base_activation) triple is internally consistent with the hand-derived
-inverted-dropout formula, plus that layer_dropout_hidden_delta reproduces the correct chain-rule
-result when fed a *forced* mask/base_activation pair (sidestepping the RNG entirely).
+training=True is checked against the reference too: the crate's RNG is numpy's np.random in a
+separate state, so after np.random.seed(s) and pa.seed(s) both draw the same masks, bit for bit.
+The training-mode tests seed both, then compare forward, forward_batch and a full learn_batch step
+of DropoutRustArrayLayer with DropoutArrayLayer, masks exactly and values to the training=False
+tests' bar. layer_dropout_hidden_delta is also checked with a forced mask/base_activation pair,
+against the hand-derived chain rule.
 """
 
 import random
+from typing import Any
 
+import indrajala_math_rust as pa
 import numpy as np
 import pytest
 from indrajala_math_rust import (
@@ -29,7 +27,10 @@ from indrajala_math_rust import (
     layer_dropout_hidden_delta_batch,
 )
 
+from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
+from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from tests.helpers import approx, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)
@@ -136,26 +137,82 @@ def test_layer_dropout_hidden_delta_batch_at_eval_mode_matches_dropout_array_lay
     assert rust_to_numpy(actual) == approx(this_layer.delta_batch)
 
 
-@pytest.mark.parametrize("seed", SEEDS)
-def test_layer_dropout_forward_in_training_mode_is_internally_consistent_with_the_hand_derived_formula(seed: int):
-    rng = random.Random(seed)
+def _training_layers(rng: random.Random) -> tuple[DropoutArrayLayer, DropoutRustArrayLayer]:
+    # the same weights on both backends, in training mode
     w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
     b_data = random_vector(rng, HIDDEN_SIZE)
-    x_data = random_vector(rng, INPUT_SIZE)
+    numpy_layer = DropoutArrayLayer(HIDDEN_SIZE, INPUT_SIZE, DROP_PROBABILITY)
+    numpy_layer.W, numpy_layer.b = np.array(w_data), np.array(b_data)
+    rust_layer = DropoutRustArrayLayer(HIDDEN_SIZE, INPUT_SIZE, DROP_PROBABILITY)
+    rust_layer.W, rust_layer.b = Array(w_data), Array(b_data)
+    numpy_layer.set_training_mode(True)
+    rust_layer.set_training_mode(True)
+    return numpy_layer, rust_layer
 
-    a, mask, base_activation = layer_dropout_forward(
-        Array(w_data), Array(x_data), Array(b_data), DROP_PROBABILITY, True
-    )
-    a_values = rust_to_numpy(a)
-    mask_values = rust_to_numpy(mask)
-    base_values = rust_to_numpy(base_activation)
 
-    for kept, base, actual in zip(mask_values, base_values, a_values):
-        assert kept in (0.0, 1.0)
-        if kept == 1.0:
-            assert actual == approx(base / KEEP_PROBABILITY)
-        else:
-            assert actual == 0.0
+def _seed_both(seed: int) -> None:
+    np.random.seed(seed)
+    pa.seed(seed)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_forward_in_training_mode_matches_dropout_array_layer_after_the_same_seed(seed: int):
+    rng = random.Random(seed)
+    numpy_layer, rust_layer = _training_layers(rng)
+    _seed_both(seed)
+    for _ in range(5):  # consecutive passes: the position carries across calls
+        x_data = random_vector(rng, INPUT_SIZE)
+        expected = numpy_layer.forward(np.array(x_data))
+        actual = rust_layer.forward(Array(x_data))
+        assert rust_to_numpy(rust_layer._mask).tolist() == numpy_layer._mask.tolist()
+        assert rust_to_numpy(rust_layer._base_activation) == approx(numpy_layer._base_activation)
+        assert rust_to_numpy(actual) == approx(expected)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_forward_batch_in_training_mode_matches_dropout_array_layer_after_the_same_seed(seed: int):
+    rng = random.Random(seed)
+    numpy_layer, rust_layer = _training_layers(rng)
+    _seed_both(seed)
+    for _ in range(3):
+        x_data = random_matrix(rng, BATCH_SIZE, INPUT_SIZE)
+        expected = numpy_layer.forward_batch(np.array(x_data))
+        actual = rust_layer.forward_batch(Array(x_data))
+        assert rust_to_numpy(rust_layer._mask_batch).tolist() == numpy_layer._mask_batch.tolist()
+        assert rust_to_numpy(rust_layer._base_activation_batch) == approx(numpy_layer._base_activation_batch)
+        assert rust_to_numpy(actual) == approx(expected)
+
+
+# Any: a layer, its next layer and a batch of one backend, which a union can't express
+def _learn_batch_step(layer: Any, next_layer: Any, X: Any) -> None:
+    layer.forward_batch(X)
+    layer.compute_hidden_delta_batch(next_layer)
+    layer.accumulate_gradient_batch(X)
+    layer.apply_accumulated_gradient(0.5, BATCH_SIZE)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_a_learn_batch_step_in_training_mode_matches_dropout_array_layer_after_the_same_seed(seed: int):
+    # forward_batch, hidden delta from a next layer, gradient accumulation and the update
+    rng = random.Random(seed)
+    numpy_layer, rust_layer = _training_layers(rng)
+    next_w_data = random_matrix(rng, NEXT_SIZE, HIDDEN_SIZE)
+    next_delta_batch_data = random_matrix(rng, BATCH_SIZE, NEXT_SIZE)
+    numpy_next = ArrayLayer(NEXT_SIZE, HIDDEN_SIZE)
+    numpy_next.W, numpy_next.delta_batch = np.array(next_w_data), np.array(next_delta_batch_data)
+    rust_next = RustArrayLayer(NEXT_SIZE, HIDDEN_SIZE)
+    rust_next.W, rust_next.delta_batch = Array(next_w_data), Array(next_delta_batch_data)
+
+    _seed_both(seed)
+    for _ in range(3):
+        x_data = random_matrix(rng, BATCH_SIZE, INPUT_SIZE)
+        _learn_batch_step(numpy_layer, numpy_next, np.array(x_data))
+        _learn_batch_step(rust_layer, rust_next, Array(x_data))
+
+        assert rust_to_numpy(rust_layer._mask_batch).tolist() == numpy_layer._mask_batch.tolist()
+        assert rust_to_numpy(rust_layer.delta_batch) == approx(numpy_layer.delta_batch)
+        assert rust_to_numpy(rust_layer.W) == approx(numpy_layer.W)
+        assert rust_to_numpy(rust_layer.b) == approx(numpy_layer.b)
 
 
 def test_layer_dropout_forward_batch_in_training_mode_draws_an_independent_mask_per_row():

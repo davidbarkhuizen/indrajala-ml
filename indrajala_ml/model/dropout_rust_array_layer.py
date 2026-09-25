@@ -8,9 +8,10 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 class DropoutRustArrayLayer(RustArrayLayer):
     """
     DropoutArrayLayer on the Rust backend: forward*, compute_hidden_delta* are each one fused call
-    (layer_dropout_*), drawing the mask with the crate's bernoulli_mask. The mask is drawn fresh
-    every training forward pass from an RNG unrelated to numpy's, so parity with the numpy layer is
-    exact at training=False and only statistical at training=True. drop_probability is required.
+    (layer_dropout_*), drawing the mask with the crate's bernoulli_mask. The crate's RNG is numpy's
+    np.random in a separate state, so after pa.seed(s) the masks are the ones DropoutArrayLayer
+    draws after np.random.seed(s), and parity is exact in training too. drop_probability is
+    required.
     """
 
     hyperparameters = ("drop_probability",)

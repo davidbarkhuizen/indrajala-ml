@@ -15,7 +15,7 @@ import random
 
 import numpy as np
 import pytest
-from indrajala_math_rust import Array, argmax, decode_mnist_pixels, exp, outer, sum_axis0, uniform
+from indrajala_math_rust import Array, argmax, decode_mnist_pixels, exp, outer, seed, sum_axis0, uniform
 
 from indrajala_ml.mnist_data import RECORD_SIZE, load_mnist_dataset_as_array
 from tests.helpers import approx, rust_to_numpy
@@ -114,13 +114,11 @@ def test_full_subset_sweep_against_numpy(seed: int):
     assert rust_to_numpy(reshaped) == approx(np.array(flat.tolist()).reshape(3, 4))
 
 
-def test_uniform_is_excluded_from_bit_identical_parity_by_design():
-    # the one documented exception: statistical plausibility only, not per-draw equality
-    # against numpy's Mersenne Twister.
-    draws = uniform(-1.0, 1.0, 2000)
-    values = [draws[i] for i in range(2000)]
-    assert all(-1.0 <= value < 1.0 for value in values)
-    assert abs(sum(values) / len(values)) < 0.1
+def test_uniform_matches_numpy_bit_for_bit_after_the_same_seed():
+    # the crate's RNG is numpy's np.random in a separate state (rust/tests/test_random_numpy_parity.py)
+    np.random.seed(2000)
+    seed(2000)
+    assert uniform(-1.0, 1.0, 2000).tolist() == np.random.uniform(-1.0, 1.0, 2000).tolist()
 
 
 def test_mnist_decode_matches_the_real_reference_implementation():

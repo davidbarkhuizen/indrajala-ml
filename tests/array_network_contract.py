@@ -51,8 +51,8 @@ class ArrayNetworkSpec:
     learning_rate: float = 0.1
     learn_steps: int = 30
     learn_batches: int = 15
-    # False when training can't be compared with the reference (dropout's masks come from
-    # unrelated RNGs): predictions are compared at eval only, and there are no learn tests
+    # False when training can't be compared with the reference (the per-node dropout reference
+    # draws its masks from Python's random): predictions are compared at eval only, and there are no learn tests
     parity_in_training: bool = True
     probabilities_sum_to_one: bool = False
     # the save/load round-trip test for the hyperparameters: its name suffix and the values saved

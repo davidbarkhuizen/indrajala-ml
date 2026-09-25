@@ -54,8 +54,8 @@ NETWORK_CLASSES: list[type[Any]] = sorted(
 )
 
 # how to build each class; a class missing here fails test_every_class_has_a_constructor.
-# The Rust dropout mask comes from an RNG that can't be seeded, so its class runs with
-# drop_probability 0.0; the numpy dropout class reseeds np.random before each step instead.
+# The dropout classes reseed their backend's RNG before each step (_seed_step), so both twins
+# draw the same masks.
 CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "VectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "AdamVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
@@ -75,7 +75,7 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "AdamRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "ConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
     "CrossEntropyRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
-    "DropoutRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.0),
+    "DropoutRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.3),
     "L2RustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.01),
     "MomentumRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.9),
     "MomentumConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
@@ -116,8 +116,9 @@ def _weights(network: Any) -> list[list[Any]]:
 
 
 def _seed_step(step: int) -> None:
-    # only the numpy dropout class draws from np.random while training
+    # only the dropout classes draw while training: numpy from np.random, Rust from the crate's RNG
     np.random.seed(step)
+    pa.seed(step)
 
 
 def test_every_class_has_a_constructor():
@@ -199,13 +200,15 @@ def test_classify_rows_runs_numpy_dropout_in_inference_mode():
 
 
 def test_classify_rows_runs_rust_dropout_in_inference_mode():
-    # at drop probability 0.5 a training-mode pass would drop half the hidden nodes, and the
-    # Rust mask can't be seeded, so equal predictions on two passes mean no mask was drawn
+    # inference draws no mask, so the pass leaves the crate's RNG where it was
     cls = DropoutRustArrayMultiClassBackpropClassifierNetwork
-    network = cls([5], DIMENSION, CLASS_COUNT, 0.5)
-    network.randomize()
+    network, _ = _twin_networks(cls)
     prepared = network.prepare_dataset(_rows(cls, CLASSIFY_ROW_COUNT))
-    assert network.classify_rows(prepared) == [network.classify_row(prepared, i) for i in range(len(prepared))]
+    pa.seed(7)
+    network.classify_rows(prepared)
+    after = pa.random(1).tolist()
+    pa.seed(7)
+    assert after == pa.random(1).tolist()
     assert not network.hidden_layers[0]._was_training
 
 
@@ -265,8 +268,7 @@ def test_a_network_rejects_the_other_backends_dataset(cls: type[Any]):
 
 
 def test_the_row_paths_train_in_training_mode():
-    # the Rust dropout class runs at drop_probability 0.0 above, where training mode changes no
-    # weight, so check the flag its layers record directly
+    # the flag the Rust dropout class's layers record, checked directly
     cls = next(cls for cls in NETWORK_CLASSES if cls.__name__ == "DropoutRustArrayMultiClassBackpropClassifierNetwork")
     network, _ = _twin_networks(cls)
     prepared = network.prepare_dataset(_rows(cls))
