@@ -7,23 +7,13 @@ from indrajala_ml.model.model_io import load_model_json, save_model_json
 
 class EnsembleBackpropClassifierNetwork:
     """
-    A multi-class classifier composed of class_count completely independent
-    BackpropClassifierNetworks (already built, unchanged - each one already is a single binary
-    classifier with its own hidden layer), one per class, each trained on its own "is this class
-    C?" binary problem with no shared state between them at all.
+    A multiclass classifier made of class_count independent BackpropClassifierNetworks, one per
+    class, each trained on its own "is this class C?" problem with no shared state. Unlike
+    MultiClassBackpropClassifierNetwork (one shared hidden layer, jointly trained), nothing needs
+    synchronizing, so the sub-networks train in parallel processes (ensemble_train.py).
 
-    Unlike MultiClassBackpropClassifierNetwork (one shared hidden layer, class_count output
-    nodes, jointly trained - kept as-is, unaffected by this class), there is nothing to
-    synchronize during training here: every sub-network is trained completely independently
-    (see indrajala_ml/ensemble_train.py), which is what makes training genuinely, not just
-    approximately, parallelizable across processes.
-
-    Unlike the other model classes in this codebase, __init__ doesn't build its own sub-networks
-    from layer_sizes/dimension/input_bounds - it just assembles already-constructed
-    BackpropClassifierNetworks, since the real use cases are "assemble from independently,
-    (often already parallel-)trained classifiers" or "reconstruct from a loaded snapshot", not
-    "build one fresh and train it as a whole" (there is no "as a whole" training step for this
-    class - see ensemble_train.train_ensemble_parallel).
+    __init__ takes already-built classifiers, not layer sizes: an ensemble is assembled from
+    separately trained classifiers or rebuilt from a saved one, never trained as a whole.
     """
 
     def __init__(self, classifiers: list[BackpropClassifierNetwork]) -> None:

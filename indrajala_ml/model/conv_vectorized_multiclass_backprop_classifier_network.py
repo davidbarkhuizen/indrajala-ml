@@ -10,8 +10,8 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class ConvVectorizedMultiClassBackpropClassifierNetwork(ArrayConvShape, VectorizedMultiClassBackpropClassifierNetwork):
     """
-    The numpy sibling of ConvMultiClassBackpropClassifierNetwork: ArrayConvShape on the numpy
-    backend, with ConvArrayLayers and MaxPoolArrayLayers in front of ArrayLayers.
+    ArrayConvShape on the numpy backend: ConvArrayLayers and MaxPoolArrayLayers in front of
+    ArrayLayers.
     """
 
     conv_layer_cls = ConvArrayLayer

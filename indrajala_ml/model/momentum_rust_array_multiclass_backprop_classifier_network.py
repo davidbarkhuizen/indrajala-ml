@@ -8,8 +8,8 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class MomentumRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    MomentumVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network,
-    with MomentumRustArrayLayer in place of MomentumArrayLayer (hidden and output layers). momentum is required, as there.
+    MomentumVectorizedMultiClassBackpropClassifierNetwork on the Rust backend, with
+    MomentumRustArrayLayer for the hidden and output layers.
     """
 
     hidden_layer_cls = output_layer_cls = MomentumRustArrayLayer

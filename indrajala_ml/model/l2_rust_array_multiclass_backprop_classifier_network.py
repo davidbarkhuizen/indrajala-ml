@@ -8,8 +8,8 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class L2RustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    L2VectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network, with
-    L2RustArrayLayer in place of L2ArrayLayer (hidden and output layers). l2_lambda is required, as there.
+    L2VectorizedMultiClassBackpropClassifierNetwork on the Rust backend, with L2RustArrayLayer for
+    the hidden and output layers.
     """
 
     hidden_layer_cls = output_layer_cls = L2RustArrayLayer

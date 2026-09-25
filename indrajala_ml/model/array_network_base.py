@@ -10,32 +10,20 @@ from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
 class ArrayNetworkBase:
     """
-    Shared machinery behind every array-backed sibling network in this codebase, numpy and Rust
-    (RustArrayNetworkBase sets the backend) - plain, momentum, L2, Adam, ReLU, softmax, dropout,
-    cross-entropy, both the multiclass and single-output shapes: layer assembly, the forward
-    pass, learn/learn_batch, fan-in-aware randomize, and snapshot/restore.
+    What every array-backed network shares, numpy and Rust (RustArrayNetworkBase sets the backend):
+    layer assembly, the forward pass, learn/learn_batch and their prepared-dataset forms,
+    classify_rows, fan-in-aware randomize, and snapshot/restore.
 
-    Mirrors BackpropNetworkBase's own hidden_layer_cls/output_layer_cls extension-point design
-    exactly, one level up: every method here is identical across every array-based sibling in
-    this codebase except for which layer class gets constructed, one constructor hyperparameter,
-    and the target-array shape - a purely mechanical collapse, not a redesign of any hand-derived
-    formula. Every hand-derived formula lives entirely in the ArrayLayer subclass a sibling plugs
-    in via hidden_layer_cls/output_layer_cls (e.g. MomentumArrayLayer.apply_accumulated_gradient).
-
-    What stays out of this base, in the shape mixins instead (ArrayMultiClassShape /
-    ArraySingleOutputShape, array_network_shapes.py, each listed before either backend's base):
-    predict_probabilities/predict_probability and classify_state (argmax vs. 0.5-threshold),
-    class_count handling, and save/load (the JSON envelope and its class_count presence differ
-    between the two shapes) - genuinely different concerns, not duplicated ones, matching where
-    BackpropClassifierNetwork/MultiClassBackpropClassifierNetwork already draw the same line over
-    BackpropNetworkBase.
+    A sibling differs only in its layer classes (hidden_layer_cls/output_layer_cls) and their
+    hyperparameters; every hand-derived formula lives in the layer class (e.g.
+    MomentumArrayLayer.apply_accumulated_gradient). What differs between the multiclass and
+    single-output networks (classify_state, targets, class_count, save/load) is in the shape mixins
+    in array_network_shapes.py, listed before the backend's base.
     """
 
-    # override points for a sibling whose hidden/output layers need different per-layer math
-    # (e.g. MomentumArrayLayer) - every "plain" shape class leaves these as ArrayLayer, so this
-    # is a pure extension point with zero behavior change for them. Every sibling sets them as
-    # plain class attributes; a layer class's own hyperparameters (e.g. MomentumArrayLayer's
-    # momentum) are passed from this network's attributes of the same names (_new_layer).
+    # the layer classes a sibling overrides for different per-layer math (e.g. MomentumArrayLayer);
+    # a layer class's hyperparameters come from the network's attributes of the same names
+    # (_new_layer)
     hidden_layer_cls: type = ArrayLayer
     output_layer_cls: type = ArrayLayer
 
@@ -43,10 +31,9 @@ class ArrayNetworkBase:
     # RustArrayNetworkBase sets RUST
     backend = NUMPY
 
-    # the constructor keyword arguments a hyperparameter-bearing sibling stores under the same
-    # attribute names (e.g. ("beta1", "beta2", "epsilon")) - its layers read them (_new_layer),
-    # and the shapes' save/load round-trip them through _extra_state/_extra_init_kwargs; empty
-    # for every other sibling
+    # the constructor keyword arguments a sibling stores under the same attribute names (e.g.
+    # ("beta1", "beta2", "epsilon")): its layers read them (_new_layer), and the shapes'
+    # save/load round-trip them through _extra_state/_extra_init_kwargs
     hyperparameters: tuple[str, ...] = ()
 
     def __init__(self, layer_sizes: list[int], dimension: int, output_size: int) -> None:
@@ -106,9 +93,7 @@ class ArrayNetworkBase:
         return prepared.states
 
     def _set_training_mode(self, training: bool) -> None:
-        # no-op for every sibling except dropout's own override - the array-level counterpart to
-        # BackpropNetworkBase._set_training_mode, and to DropoutArrayLayer.set_training_mode
-        # which this hook delegates to once dropout overrides it.
+        # a no-op; the dropout networks override it to toggle their dropout layers
         pass
 
     def _target_array(self, category):
@@ -198,9 +183,7 @@ class ArrayNetworkBase:
         return network
 
     def randomize(self) -> None:
-        # the same fan-in-aware scheme (limit = 1/sqrt(fan_in)) every array-based sibling in
-        # this codebase would otherwise have to reimplement independently, drawn from the
-        # backend's own RNG
+        # fan-in-aware (limit = 1/sqrt(fan_in)), drawn from the backend's RNG
         previous_size = self.dimension
         for layer in self.layers:
             layer.W, layer.b = self.backend.random_layer(layer.size, previous_size)

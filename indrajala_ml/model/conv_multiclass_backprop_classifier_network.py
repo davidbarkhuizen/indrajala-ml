@@ -12,37 +12,23 @@ from indrajala_ml.model.state_layer import StateLayer
 
 class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
-    A convolutional sibling of MultiClassBackpropClassifierNetwork - a convolutional front end
-    of stacked ConvLayers and MaxPoolLayers (one ConvSpec or PoolSpec each, in order; the first
-    reads the single-channel input image, each later one reads the previous layer's
-    channel_count channels) feeding one or more ordinary dense hidden layers, then a plain
-    one-vs-rest output layer, exactly like the dense-only base class. conv_specs/conv_layers
-    name that whole front end, pooling layers included.
+    A convolutional MultiClassBackpropClassifierNetwork: a front end of ConvLayers and
+    MaxPoolLayers (one ConvSpec or PoolSpec each, in order; the first reads the single-channel
+    image, each later one the previous layer's channels), then one or more dense hidden layers and a
+    one-vs-rest output layer. conv_specs/conv_layers name the whole front end, pooling included.
 
-    A new class, not a retrofit, for the same reason as every other sibling in this codebase
-    (see MultiClassBackpropClassifierNetwork's own docstring) - here specifically because the
-    constructor shape genuinely differs: MultiClassBackpropClassifierNetwork.__init__ (via
-    BackpropNetworkBase.__init__) assumes every hidden layer is built the same way from a flat
-    layer_sizes: list[int] and one hidden_layer_cls; a ConvLayer's own constructor needs conv
-    hyperparameters (a ConvSpec plus the input shape it's chained from), not a single int size,
-    so this class does not call super().__init__() at all - it builds
-    input_layer/hidden_layers/output_layer/trainable_layers directly, in the exact shape
-    BackpropNetworkBase's inherited methods (_forward_outputs, _backward_hidden_layers, the
-    five gradient/persistence methods) already expect. Those methods, and learn/learn_batch/
-    _backward/classify_state/predict_probabilities, are inherited completely unchanged - none
-    of them reach into layer internals directly, they go through the same per-layer hooks
-    (compute_hidden_deltas/downstream_sum/accumulate_gradients/apply_accumulated_gradients/
-    snapshot_state/restore_state) ConvLayer itself implements.
+    __init__ doesn't call super().__init__(), whose flat layer_sizes and single hidden_layer_cls
+    can't describe conv layers; it builds input_layer/hidden_layers/output_layer/trainable_layers
+    directly, in the shape BackpropNetworkBase's methods expect. Those, and learn/learn_batch/
+    _backward/classify_state/predict_probabilities, are inherited: they go through per-layer hooks
+    (compute_hidden_deltas, downstream_sum, the gradient and snapshot methods) that ConvLayer
+    implements.
 
-    Every real use case here is a normalized-pixel image (UCI digits, MNIST), so input_bounds
-    is not a constructor parameter the way it is for the dense-only base class's more general
-    geometric targets - it's fixed internally to [(0.0, 1.0)] * dimension, the same convention
-    demo_mnist_ensemble_recognition.py's own MNIST training already uses.
+    Inputs are normalized pixels, so input_bounds is fixed at [(0.0, 1.0)] * dimension, not a
+    parameter.
 
-    ConvVectorizedMultiClassBackpropClassifierNetwork and
-    ConvRustArrayMultiClassBackpropClassifierNetwork are the array-backed siblings (ArrayConvShape
-    on each backend), parity-tested against this class step by step
-    (tests/test_conv_vectorized_multiclass_backprop_model.py). All three chain their front end
+    The numpy and Rust networks (ArrayConvShape) are parity-tested against this one step by step
+    (tests/test_conv_vectorized_multiclass_backprop_model.py); all three build their front end
     through conv_front_end.build_conv_front_end.
     """
 
@@ -105,20 +91,14 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         self.trainable_layers: list[ConvLayer | MaxPoolLayer | BackpropLayer] = self.hidden_layers + [self.output_layer]
 
     def randomize(self) -> None:
-        # every conv layer first, in forward order, each scoped to its own kernel fan-in
-        # (kernel_size**2 * input_channels - see ConvKernel.randomize_fan_in_aware); a
-        # MaxPoolLayer's own randomize_fan_in_aware is a no-op that draws nothing, so adding
-        # pooling never shifts any conv layer's random draws
+        # conv layers first, in forward order, each from its kernel fan-in
+        # (kernel_size**2 * input_channels); a MaxPoolLayer draws nothing, so adding pooling
+        # never shifts a conv layer's draws
         for conv_layer in self.conv_layers:
             conv_layer.randomize_fan_in_aware()
 
-        # fan_in_aware_weights_and_bias (backprop_network_base.py) applied directly here rather
-        # than via randomize_fan_in_aware(network), since that function assumes every trainable
-        # layer is a plain BackpropLayer with a .size attribute and nodes with
-        # update_input_weights - true for every dense layer here, but not for the conv layers,
-        # which need their own kernel-fan-in-scoped randomize_fan_in_aware() above instead.
-        # previous_size starts at the last conv layer's own flattened output size (its true
-        # fan-out into the first dense layer), not network.dimension.
+        # the dense tail, not randomize_fan_in_aware(network), which assumes every trainable
+        # layer is dense; the first dense layer's fan-in is the front end's flattened output
         previous_size = len(self.conv_layers[-1].nodes)
         for layer in self.hidden_layers[len(self.conv_layers):] + [self.output_layer]:
             for node in layer.nodes:
@@ -128,9 +108,7 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
             previous_size = layer.size
 
     def save(self, path: str) -> None:
-        # self.snapshot() (inherited unchanged from BackpropNetworkBase) already works here, conv
-        # layers included, because ConvLayer implements snapshot_state() itself - the per-layer
-        # hook BackpropLayer defines for exactly this kind of sibling.
+        # the inherited snapshot() covers conv layers through their snapshot_state()
         save_conv_model_json(path, self, self.snapshot())
 
     @classmethod

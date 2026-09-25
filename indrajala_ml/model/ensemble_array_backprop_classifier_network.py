@@ -6,8 +6,8 @@ from indrajala_ml.model.array_ensemble_base import ArrayEnsembleBase
 
 class EnsembleArrayBackpropClassifierNetwork(ArrayEnsembleBase):
     """
-    The numpy-array-backed sibling of EnsembleBackpropClassifierNetwork: ArrayEnsembleBase over
-    ArrayBackpropClassifierNetwork.
+    ArrayEnsembleBase over ArrayBackpropClassifierNetwork: the numpy form of
+    EnsembleBackpropClassifierNetwork.
     """
 
     classifier_cls = ArrayBackpropClassifierNetwork

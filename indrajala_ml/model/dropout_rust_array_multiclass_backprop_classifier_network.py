@@ -8,12 +8,8 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class DropoutRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    DropoutVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network,
-    with DropoutRustArrayLayer in place of DropoutArrayLayer (hidden layers only); the output layer stays a plain RustArrayLayer
-    (sigmoid). drop_probability is required, as there.
-
-    _set_training_mode and self.hidden_layers are the numpy class's, repeated; see its docstring
-    for why.
+    DropoutVectorizedMultiClassBackpropClassifierNetwork on the Rust backend, with
+    DropoutRustArrayLayer hidden layers and a plain RustArrayLayer output.
     """
 
     hidden_layer_cls = DropoutRustArrayLayer

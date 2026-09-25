@@ -10,15 +10,12 @@ from indrajala_ml.model.model_io import load_model_json, save_model_json
 
 class MultiClassBackpropClassifierNetwork(BackpropNetworkBase):
     """
-    A one-vs-rest multi-class sibling of BackpropClassifierNetwork, built entirely on the same
-    BackpropNode/BackpropLayer building blocks - a new class, not a retrofit, because
-    classify_state()'s return type/contract changes (a class index, not a 0.0/1.0 float), and
-    every existing backprop demo depends on the binary float contract.
+    A one-vs-rest multiclass sibling of BackpropClassifierNetwork, from the same BackpropNode and
+    BackpropLayer blocks. A separate class because classify_state returns a class index, not a
+    0.0/1.0 float.
 
-    The output layer has class_count nodes instead of one; each is trained independently
-    against a one-hot target (BackpropNode.compute_output_delta needs no changes for this - it
-    was already a per-node, sibling-independent computation). At inference, the predicted class
-    is whichever output node has the highest activation.
+    The output layer has class_count nodes, each trained independently against a one-hot target
+    (the per-node output delta needs no change); the predicted class is the most active node.
     """
 
     def __init__(
@@ -57,11 +54,8 @@ class MultiClassBackpropClassifierNetwork(BackpropNetworkBase):
         self._backward_hidden_layers()
 
     def randomize(self) -> None:
-        # fan-in-aware initialization, unlike BackpropClassifierNetwork.randomize()'s
-        # per-dimension-bounds-width scaling (tuned for 1-2D geometric problems) - that scaling
-        # produces exploding pre-activation sums (guaranteed sigmoid saturation) once fan-in
-        # reaches the tens or hundreds, as it does here (dimension=64 for 8x8 digit images). See
-        # randomize_fan_in_aware's own docstring for the scheme itself and its validation.
+        # not BackpropClassifierNetwork's bounds-width scaling, which saturates every sigmoid
+        # once fan-in reaches the tens (64 for 8x8 digit images)
         randomize_fan_in_aware(self)
 
     def save(self, path: str) -> None:
