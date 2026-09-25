@@ -9,19 +9,14 @@ from indrajala_ml.model.relu_layer import relu_activation, relu_delta
 
 class ConvUnit(AbstractNode):
     """
-    One convolutional output spatial position within one channel - composition, not inheritance
-    from BackpropNode, because BackpropNode's input_node_weights is an owned,
-    rebindable instance attribute, which fights a weight list many units need to read
-    identically rather than accommodating it. Only inherits from AbstractNode, a pure marker
-    interface with no weight-related state to conflict with, so a ConvUnit is a valid
-    input_nodes entry for a downstream dense BackpropLayer with zero special-casing there.
+    One output position of one conv channel. Not a BackpropNode, whose owned, rebound weight list
+    doesn't suit a kernel many units share; an AbstractNode, so it can feed a dense BackpropLayer
+    as any node does.
 
-    forward()/compute_hidden_delta() call ReLUNode's own shared formulas (relu_layer.py's
-    relu_activation/relu_delta - ReLU is the standard default for convolutional hidden
-    layers), reading weights from a shared ConvKernel instead of an owned list.
-    compute_hidden_delta takes the next layer's already-computed downstream sum (see
-    ConvLayer.compute_hidden_deltas) rather than scanning a node list, since the next layer may
-    itself be convolutional, where no node owns a weight indexed by this unit's position.
+    forward()/compute_hidden_delta() use relu_layer's relu_activation/relu_delta, with weights from
+    the shared ConvKernel. compute_hidden_delta takes the downstream sum from the next layer (see
+    ConvLayer.compute_hidden_deltas), since a conv next layer has no node owning a weight at this
+    unit's index.
     """
 
     def __init__(self, input_nodes: Sequence[AbstractNode], kernel: ConvKernel) -> None:
@@ -34,8 +29,7 @@ class ConvUnit(AbstractNode):
         self.input_nodes: Sequence[AbstractNode] = input_nodes
         self.kernel = kernel
 
-        # populated by forward()/compute_hidden_delta() - see BackpropNode's own identical
-        # convention (backprop_node.py) for why these have no default
+        # set by forward()/compute_hidden_delta(); no default, as in BackpropNode
         self._activation: float
         self.delta: float
 

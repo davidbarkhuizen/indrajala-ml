@@ -7,15 +7,8 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class SoftmaxRustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to SoftmaxArrayLayer. Same forward/backward formulas (joint softmax normalization,
-    `activation - target` delta with no `a*(1-a)` term), but each as a single fused Rust call
-    (`layer_softmax_forward`/`layer_softmax_forward_batch`/`layer_softmax_output_delta`,
-    `fused.rs`, built on the Rust core's `array_softmax` primitive) instead of a numpy expression -
-    mirroring how `RustArrayLayer` itself relates to `ArrayLayer`. `compute_hidden_delta`/
-    `compute_hidden_delta_batch`/`apply_accumulated_gradient` are inherited unchanged from
-    `RustArrayLayer` - softmax's cross-node coupling only affects the forward pass.
-
-    Output-layer-only, matching `SoftmaxArrayLayer`'s own `size >= 2` convention.
+    SoftmaxArrayLayer on the Rust backend: forward* and compute_output_delta* are each one fused
+    call (layer_softmax_*). Output only, size >= 2.
     """
 
     def __init__(self, size: int, input_size: int) -> None:

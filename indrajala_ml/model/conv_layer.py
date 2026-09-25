@@ -9,8 +9,9 @@ from indrajala_ml.model.state_layer import StateLayer
 
 @dataclass(frozen=True)
 class ConvSpec:
-    """One ConvLayer's own hyperparameters - everything except its input shape, which a network
-    derives from the previous layer (see ConvMultiClassBackpropClassifierNetwork)."""
+    """
+    One ConvLayer's hyperparameters; its input shape comes from the previous layer.
+    """
 
     kernel_size: int
     channel_count: int
@@ -19,31 +20,21 @@ class ConvSpec:
 
 class ConvLayer:
     """
-    A convolutional hidden layer - channel_count ConvKernels, each shared across every output
-    spatial position in its channel, wired to local kernel_size x kernel_size receptive fields
-    of input_layer rather than the whole thing. Not a BackpropLayer subclass (composition, not
-    inheritance), but implements the same duck-typed surface
-    BackpropNetworkBase's generic machinery relies on (forward/.nodes/accumulate_gradients/
-    apply_accumulated_gradients/apply_gradients/snapshot_state/restore_state/set_training_mode -
-    see backprop_layer.py's own identical methods).
+    A convolutional hidden layer: channel_count ConvKernels, each shared by every output position of
+    its channel and wired to kernel_size x kernel_size receptive fields. Not a BackpropLayer, but it
+    implements the layer methods BackpropNetworkBase calls (forward, .nodes, the gradient methods,
+    snapshot_state/restore_state, set_training_mode).
 
-    input_layer is either a StateLayer or another ConvLayer, read as input_channels
-    channel-major planes of input_height x input_width (flat index c*H*W + r*W + col, the same
-    ordering this layer's own .nodes uses, so a ConvLayer's output feeds the next ConvLayer
-    directly with input_channels=its channel_count). Each receptive field spans every input
-    channel, input_channels x kernel_size x kernel_size, and each kernel's flat weights follow
-    the same (channel, kernel row, kernel col) order. 'valid' padding only (no synthetic
-    zero-padding - output shrinks by kernel_size-1 per stride-1 step).
+    input_layer is a StateLayer or the previous conv or pool layer, read as input_channels
+    channel-major planes of input_height x input_width (index c*H*W + r*W + col, the order of this
+    layer's own .nodes, so conv layers chain). A receptive field spans every input channel, in the
+    kernel weights' (channel, row, col) order. 'valid' padding only.
 
-    Backprop *through* this layer (to a preceding ConvLayer) uses a reverse map built once at
-    construction - input node index -> every (unit, kernel weight index) pair whose receptive
-    field reads that input node. downstream_sum(i) sums unit.delta * kernel weight over that
-    list only: the index form of a "full convolution with a flipped kernel", and sparse, since a
-    dense scan over every unit for every input node is O(units * inputs) per example.
+    Backprop through this layer uses a reverse map built at construction, from each input node to
+    the (unit, weight index) pairs that read it: downstream_sum(i) sums over that list only, the
+    index form of a full convolution with a flipped kernel, instead of scanning every unit.
 
-    .nodes is channel-major: every (row, col) position for kernel 0, then kernel 1, and so on -
-    a stable, documented ordering both this layer's own construction and any downstream dense
-    layer's flattened view depend on.
+    .nodes is channel-major: every (row, col) position for kernel 0, then kernel 1, and so on.
     """
 
     def __init__(
@@ -98,9 +89,8 @@ class ConvLayer:
                         self._fan_out[input_index].append((unit, weight_index))
 
     def _receptive_field_indices(self, row: int, col: int) -> list[int]:
-        # channel-major, then row-major flat indexing into input_layer.nodes - row-major
-        # matches how mnist_data.py/digits_data.py decode pixels, channel-major matches this
-        # layer's own .nodes ordering (see this module's own hot-pixel tests)
+        # channel-major, then row-major, into input_layer.nodes: row-major as the loaders decode
+        # pixels, channel-major as .nodes
         plane = self.input_height * self.input_width
         return [
             channel * plane + (row * self.stride + kr) * self.input_width + (col * self.stride + kc)
@@ -114,8 +104,7 @@ class ConvLayer:
             unit.forward()
 
     def compute_hidden_deltas(self, next_layer) -> None:
-        # the next layer (dense BackpropLayer or another ConvLayer) supplies each unit's
-        # downstream sum itself, in whichever form (dense or sparse) its own wiring needs
+        # the next layer supplies each unit's downstream sum, dense or sparse
         for own_index, unit in enumerate(self.nodes):
             unit.compute_hidden_delta(next_layer.downstream_sum(own_index))
 
@@ -123,9 +112,7 @@ class ConvLayer:
         return sum(unit.delta * unit.kernel.weights[weight_index] for unit, weight_index in self._fan_out[own_index])
 
     def set_training_mode(self, training: bool) -> None:
-        # a no-op - see BackpropLayer's own identical no-op default for why every layer needs
-        # this method (BackpropNetworkBase._set_training_mode calls it unconditionally on
-        # every trainable_layer); DropoutLayer is the one sibling that isn't a no-op
+        # a no-op; BackpropNetworkBase calls it on every trainable layer
         pass
 
     def accumulate_gradients(self) -> None:

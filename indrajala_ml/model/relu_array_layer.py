@@ -7,18 +7,9 @@ from indrajala_ml.model.array_layer import ArrayLayer
 
 class ReLUArrayLayer(ArrayLayer):
     """
-    The array-based counterpart to relu_layer.ReLUNode/ReLULayer: max(0, z) instead of sigmoid,
-    as whole-array numpy ops instead of a per-node Python loop.
-
-    Unlike momentum/L2/Adam's own array siblings (which only touch apply_accumulated_gradient),
-    ReLU changes the *activation* itself, so this overrides forward/forward_batch and
-    compute_hidden_delta/compute_hidden_delta_batch instead - apply_accumulated_gradient is
-    inherited unchanged from ArrayLayer, and there's no persistent per-parameter state at all.
-
-    Hidden-layer-only by convention, matching ReLUNode's own posture: compute_output_delta/
-    compute_output_delta_batch raise NotImplementedError rather than silently computing a
-    meaningless sigmoid-shaped output delta on an unbounded ReLU activation - this class should
-    never actually be used as an output layer.
+    ReLU (max(0, z)) hidden layer over arrays, as ReLUNode/ReLULayer. ReLU changes the activation,
+    so this overrides forward* and compute_hidden_delta*; the update is ArrayLayer's. Hidden only:
+    compute_output_delta* raise.
     """
 
     def forward(self, x: np.ndarray) -> np.ndarray:
@@ -45,8 +36,7 @@ class ReLUArrayLayer(ArrayLayer):
 
     def compute_hidden_delta(self, next_layer: "ArrayLayer") -> None:
         downstream = next_layer.downstream()
-        # relu_hidden_delta's derivative: 1 where z > 0 (equivalently a > 0), 0 otherwise - no
-        # a*(1-a) damping term at all
+        # derivative 1 where a > 0 (z > 0), else 0
         self.delta = downstream * (self.a > 0.0)
 
     def compute_hidden_delta_batch(self, next_layer: "ArrayLayer") -> None:

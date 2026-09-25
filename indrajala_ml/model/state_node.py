@@ -3,7 +3,7 @@ from indrajala_ml.model.base_node import AbstractNode
 
 class StateNode(AbstractNode):
     """
-    sense point
+    One input value, as a node the first layer reads.
     """
 
     def __init__(self, value: float = 0.0) -> None:

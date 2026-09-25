@@ -8,15 +8,11 @@ from indrajala_ml.model.state_layer import StateLayer
 
 class BackpropLayer:
     """
-    A layer of BackpropNodes, each fully connected to the given input layer - modeled on
-    AssociationLayer, but with an explicit forward() pass: node.value() is a pure cache read,
-    so the layer-level forward() is what actually populates every node's cached activation.
+    A layer of BackpropNodes, each fully connected to the input layer. node.value() only reads a
+    cached activation; forward() computes it.
     """
 
-    # override point for a layer whose nodes need a different per-node class (e.g.
-    # SoftmaxOutputLayer's SoftmaxOutputNode) - a plain class attribute, not a constructor
-    # parameter, since every node in a layer is always the same class and this keeps every
-    # existing caller (BackpropNetworkBase, tests) unchanged
+    # the node class, overridden by a sibling layer (e.g. SoftmaxOutputLayer)
     _node_cls: type[BackpropNode] = BackpropNode
 
     def __init__(self, size: int, input_layer: StateLayer | "BackpropLayer") -> None:
@@ -34,29 +30,23 @@ class BackpropLayer:
             node.forward()
 
     def set_training_mode(self, training: bool) -> None:
-        # a no-op by default - every existing layer type is unaffected and needs no change at
-        # all. Only a sibling whose forward pass genuinely differs between training and
-        # inference (e.g. DropoutLayer) overrides this to propagate the flag to its own nodes.
+        # a no-op except in a layer whose forward pass differs in training (DropoutLayer)
         pass
 
     def compute_hidden_deltas(self, next_layer: "BackpropLayer") -> None:
-        # BackpropNetworkBase._backward_hidden_layers's own per-node loop, extracted here so a
-        # sibling layer whose nodes can't read the next layer as a flat node list (ConvLayer's
-        # ConvUnits, which take a precomputed downstream sum instead) can override it once
+        # a layer method so ConvLayer, whose units take a precomputed downstream sum, can
+        # override it
         for own_index, node in enumerate(self.nodes):
             node.compute_hidden_delta(next_layer.nodes, own_index)
 
     def downstream_sum(self, own_index: int) -> float:
         # sum over this layer's nodes of delta * the weight each applies to the previous layer's
-        # own_index-th node - the dense form, every node fully connected; ConvLayer overrides
-        # this with its sparse, kernel-shared form. Same formula and summation order as
-        # BackpropNode.compute_hidden_delta's own downstream sum.
+        # own_index-th node, in BackpropNode.compute_hidden_delta's order; ConvLayer overrides it
+        # with its sparse, kernel-shared form
         return sum(node.delta * node.input_node_weights[own_index] for node in self.nodes)
 
-    # these five methods are BackpropNetworkBase's own per-node loops, extracted here so a
-    # sibling layer with a different notion of "one weight-owning unit" than "one node" (e.g. a
-    # convolutional layer sharing one kernel across many spatial-position nodes) can override
-    # just these, once per layer, instead of the network reaching into layer.nodes directly
+    # the network calls these per layer, not per node, so a layer whose weights aren't one set
+    # per node (ConvLayer's shared kernels) can override them
     def apply_gradients(self, learning_rate: float) -> None:
         for node in self.nodes:
             node.apply_gradient(learning_rate)

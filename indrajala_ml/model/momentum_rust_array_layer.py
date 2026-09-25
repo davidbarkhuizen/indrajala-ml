@@ -8,13 +8,8 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class MomentumRustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to MomentumArrayLayer. Same momentum update rule, same
-    previous-delta state, but `apply_accumulated_gradient` is a single fused Rust call
-    (`layer_momentum_apply_accumulated_gradient`, `fused.rs`) instead of a numpy expression -
-    mirroring how `RustArrayLayer` itself relates to `ArrayLayer`.
-
-    momentum is a required constructor argument, no default, the same posture MomentumArrayLayer
-    already has.
+    MomentumArrayLayer on the Rust backend: the same update and previous-delta state, applied by one
+    fused call (layer_momentum_apply_accumulated_gradient). momentum is required.
     """
 
     hyperparameters = ("momentum",)

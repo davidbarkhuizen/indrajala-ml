@@ -7,17 +7,13 @@ from indrajala_ml.model.max_pool_array_layer import validate_pool_arguments
 
 class MaxPoolRustArrayLayer:
     """
-    The Rust-array-core-backed counterpart to MaxPoolArrayLayer: max pooling over input_channels
-    channel-major planes, each channel pooled independently, with the same layouts and the same
-    tie-breaking (the first maximal slot in row-major (pr, pc) order wins). Each method is a
-    single fused Rust call (`conv.rs`), sharing ConvRustArrayLayer's pa.ConvGeometry with
-    kernel_size = pool_size.
+    MaxPoolArrayLayer on the Rust backend: the same layouts and tie-breaking (the first maximal slot
+    in row-major order), each method one fused call (conv.rs) with a pa.ConvGeometry whose
+    kernel_size is pool_size.
 
-    argmax_batch is an (N, channel_count * out_height * out_width) Array of slot indices, stored
-    as floats - small exact integers - since indrajala_math_rust.Array has no integer type.
-
-    Weight-free: the gradient hooks are no-ops. The single-example path passes its 1D arrays
-    straight to the batch ops, which take a vector as N = 1, as ConvRustArrayLayer does.
+    argmax_batch holds slot indices as floats (small exact integers), since
+    indrajala_math_rust.Array has no integer type. No weights: the gradient methods are no-ops.
+    Single-example calls pass 1D arrays to the batch ops, as ConvRustArrayLayer's do.
     """
 
     def __init__(

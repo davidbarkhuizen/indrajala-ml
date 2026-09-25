@@ -8,14 +8,8 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class AdamRustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to AdamArrayLayer. Same Adam (Kingma & Ba, 2014) update rule, same m/v/t state,
-    but `apply_accumulated_gradient` is a single fused Rust call
-    (`layer_adam_apply_accumulated_gradient`, `fused.rs`) instead of a numpy expression -
-    mirroring how `RustArrayLayer` itself relates to `ArrayLayer`.
-
-    beta1/beta2/epsilon are required here (no defaults), the same posture AdamArrayLayer already
-    has - the safe Kingma & Ba defaults live one level up, on
-    AdamRustArrayMultiClassBackpropClassifierNetwork.
+    AdamArrayLayer on the Rust backend: the same update and m/v/t state, applied by one fused call
+    (layer_adam_apply_accumulated_gradient). beta1/beta2/epsilon are required.
     """
 
     hyperparameters = ("beta1", "beta2", "epsilon")

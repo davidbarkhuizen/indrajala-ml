@@ -7,16 +7,9 @@ from indrajala_ml.model.array_layer import ArrayLayer
 
 class AdamArrayLayer(ArrayLayer):
     """
-    The array-based counterpart to adam_layer.make_adam_node_cls: same Adam (Kingma & Ba, 2014)
-    update rule - a per-parameter adaptive learning rate driven by bias-corrected running
-    estimates of each weight's own gradient mean (m) and (uncentered) variance (v) - but as whole-
-    array numpy ops over the layer's (size, input_size) weight matrix and size-length bias vector,
-    instead of a per-weight Python loop.
-
-    beta1/beta2/epsilon are required here (no defaults), mirroring make_adam_node_cls's own
-    posture - the safe Kingma & Ba defaults live one level up, on
-    AdamVectorizedMultiClassBackpropClassifierNetwork, the same split
-    AdamBackpropClassifierNetwork/make_adam_node_cls already use.
+    Adam (Kingma & Ba, 2014) over whole arrays: the update of adam_layer.make_adam_node_cls, with
+    bias-corrected running estimates of each parameter's gradient mean (m) and uncentered variance
+    (v). beta1/beta2/epsilon are required here; the defaults live on the network.
     """
 
     hyperparameters = ("beta1", "beta2", "epsilon")

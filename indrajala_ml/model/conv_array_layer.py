@@ -9,8 +9,8 @@ from indrajala_ml.model.array_layer import unfused_sgd_step
 def validate_conv_arguments(
     input_height: int, input_width: int, input_channels: int, kernel_size: int, channel_count: int, stride: int
 ) -> None:
-    # the same assertions as ConvLayer's own constructor (minus the input_layer node-count check -
-    # there's no input_layer object here), shared with ConvRustArrayLayer
+    # ConvLayer's constructor checks, less the input_layer node count; shared with
+    # ConvRustArrayLayer
     assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
     assert kernel_size >= 1, f"kernel_size must be at least 1; got {kernel_size}"
     assert channel_count >= 1, f"channel_count must be at least 1; got {channel_count}"
@@ -23,29 +23,23 @@ def validate_conv_arguments(
 
 class ConvArrayLayer:
     """
-    The numpy counterpart to ConvLayer (conv_layer.py): a ReLU convolutional hidden layer, 'valid'
-    padding, with the whole layer's kernels as one matrix and every receptive field of a batch as
-    one im2col array, instead of one ConvUnit object per output position.
+    ConvLayer (conv_layer.py) over numpy arrays: a ReLU convolutional hidden layer, 'valid'
+    padding, with the kernels as one matrix and a batch's receptive fields as one im2col array.
 
-    Not an ArrayLayer subclass, mirroring ConvLayer not subclassing BackpropLayer: ArrayLayer's
-    size/input_size define its W and gradient-accumulator shapes, but here size is the flattened
-    output count (channel_count * out_height * out_width - what the next layer chains from) while
-    W is (channel_count, input_channels * kernel_size**2). Implements the same duck-typed surface
-    ArrayNetworkBase drives (forward*/compute_*_delta*/downstream*/accumulate_gradient*/
+    Not an ArrayLayer: size is the flattened output count (channel_count * out_height * out_width),
+    while W is (channel_count, input_channels * kernel_size**2). It implements the methods
+    ArrayNetworkBase calls (forward*, compute_*_delta*, downstream*, accumulate_gradient*,
     apply_accumulated_gradient).
 
-    Layouts, which ConvRustArrayLayer shares (its im2col flattened to (N*P, C*k*k)):
+    Layouts, shared with ConvRustArrayLayer (whose im2col is flattened to (N*P, C*k*k)):
 
-    - activations are flat at the layer boundary, (N, C*H*W) channel-major (flat index
-      c*H*W + r*W + col) - ConvLayer's own .nodes ordering, so a dense layer after the conv front
-      end has the same weight matrix in both implementations;
-    - W[c] is output channel c's kernel in (channel, kernel row, kernel col) order - exactly
-      ConvKernel.weights, so W[c] = kernel.weights injects identical weights;
-    - im2col columns are (N, P, C*k*k), P = out_height*out_width in row-major output order,
-      column order matching W's rows.
+    - activations are flat and channel-major, (N, C*H*W), index c*H*W + r*W + col: ConvLayer's
+      .nodes order, so a dense layer after the front end has the same weights in both;
+    - W[c] is output channel c's kernel in (channel, kernel row, kernel col) order, as
+      ConvKernel.weights;
+    - im2col is (N, P, C*k*k), P = out_height*out_width in row-major order, columns in W's order.
 
-    The single-example path (forward/compute_hidden_delta/downstream/accumulate_gradient) is a
-    thin N = 1 wrapper over the batch path, so the maths has one implementation.
+    The single-example methods are N = 1 wrappers over the batch ones.
     """
 
     def __init__(
@@ -150,10 +144,8 @@ class ConvArrayLayer:
         return self._downstream(self.delta[np.newaxis, :])[0]
 
     def _accumulate(self, delta_batch: np.ndarray) -> None:
-        # uses the im2col columns forward cached rather than rebuilding them from the input
-        # activation - forward always precedes this in ArrayNetworkBase.learn/learn_batch. Spatial
-        # positions and batch rows are both summed here; apply_accumulated_gradient averages by
-        # batch_size only, the same composition ConvKernel documents.
+        # reads the im2col columns forward cached. Positions and batch rows are both summed;
+        # apply_accumulated_gradient averages by batch_size only, as ConvKernel does
         n = delta_batch.shape[0]
         D = delta_batch.reshape(n, self.channel_count, self.positions)
         self._grad_W += np.einsum("nop,npk->ok", D, self._cols)

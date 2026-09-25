@@ -7,29 +7,15 @@ from indrajala_ml.model.array_layer import ArrayLayer, sigmoid
 
 class DropoutArrayLayer(ArrayLayer):
     """
-    The array-based counterpart to dropout_layer.make_dropout_node_cls/make_dropout_layer_cls:
-    the same inverted-dropout mechanism (Srivastava et al., 2014) - a training-time-only,
-    per-forward-pass random mask zeroing a fraction of this layer's activations, rescaling the
-    kept ones by 1/keep_probability - but as whole-array numpy ops over the layer's (size,
-    input_size) weight matrix, instead of a per-node Python loop.
+    Inverted dropout (Srivastava et al., 2014) over arrays, as make_dropout_node_cls: in training
+    each forward pass zeroes a random fraction of activations and scales the rest by
+    1/keep_probability. Dropout changes the activation, so this overrides forward* and
+    compute_hidden_delta*; the update is ArrayLayer's.
 
-    Unlike momentum/L2/Adam's own array siblings (which only touch apply_accumulated_gradient),
-    dropout changes the *activation* itself, so this overrides forward/forward_batch and
-    compute_hidden_delta/compute_hidden_delta_batch instead - accumulate_gradient/
-    apply_accumulated_gradient are inherited unchanged from ArrayLayer, and there's no
-    persistent per-parameter state at all (training/_mask/_base_activation are all
-    per-forward-pass-scoped, the same category _activation/delta already are).
-
-    training is a plain mutable attribute (default False, the same safe-failure-mode default
-    dropout_layer.py's own DropoutNode chooses), toggled by set_training_mode - the array-level
-    counterpart to DropoutLayer.set_training_mode. The backward pass must read
-    _base_activation (the *pre*-mask sigmoid, not self.a/self.A) and a forward-time snapshot of
-    training (_was_training, not the live attribute) - the same two subtleties
-    dropout_layer.py's own DropoutNode design found by testing, re-derived here rather than
-    assumed to carry over unchanged.
-
-    drop_probability is a required constructor argument, no default - the same posture
-    make_dropout_node_cls itself takes.
+    training defaults to False and is set by set_training_mode. The backward pass reads
+    _base_activation (the sigmoid before the mask, not self.a) and _was_training (training as
+    forward saw it, since the network switches training off before the backward pass).
+    drop_probability is required.
     """
 
     hyperparameters = ("drop_probability",)
@@ -58,10 +44,7 @@ class DropoutArrayLayer(ArrayLayer):
         return self.a
 
     def forward_batch(self, X: np.ndarray) -> np.ndarray:
-        # one independent mask row per example (batch_size, self.size), not one shared mask for
-        # the whole batch - dropout's whole point is a fresh, independent draw per forward pass,
-        # and a batched forward pass is still batch_size independent forward passes from
-        # dropout's perspective
+        # an independent mask row per example, as batch_size single forward passes would draw
         batch_size = X.shape[0]
         self.Z = X @ self.W.T + self.b
         base = sigmoid(self.Z)

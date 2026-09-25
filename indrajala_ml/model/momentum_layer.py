@@ -6,18 +6,12 @@ from indrajala_ml.model.backprop_node import BackpropNode
 
 def make_momentum_node_cls(momentum: float) -> type[BackpropNode]:
     """
-    Returns a BackpropNode subclass whose apply_gradient adds the momentum term from Rumelhart,
-    Hinton & Williams (1986)'s own generalized delta rule - Δw(n) = η·δ·a + α·Δw(n-1) - which
-    BackpropNode.apply_gradient never had. Each node tracks its own previous weight/bias delta
-    (zero-initialized) and folds momentum * that previous delta into the current step, then
-    remembers the new delta for next time.
+    A BackpropNode subclass with the momentum term of Rumelhart, Hinton & Williams (1986)'s
+    generalized delta rule, Δw(n) = η·δ·a + α·Δw(n-1): each node keeps its previous weight and bias
+    deltas (zero-initialized) and adds momentum times them to each step.
 
-    A factory, not a fixed class, because momentum is a genuinely tunable coefficient - unlike
-    every other node variant in this codebase (softmax, cross-entropy, ReLU), which differ by a
-    fixed formula with no free parameter, there is no single momentum value this codebase's own
-    measurements support recommending as a default: the canonical α=0.9 robustly hurts across a
-    learning-rate sweep, and no coefficient in 0.3-0.7 measurably beats no momentum at all, once
-    enough seeds rule out noise.
+    A factory because momentum has no default: α = 0.9 hurt across a learning-rate sweep, and no
+    value in 0.3-0.7 beat no momentum once enough seeds ruled out noise.
     """
 
     class MomentumBackpropNode(BackpropNode):
@@ -27,10 +21,8 @@ def make_momentum_node_cls(momentum: float) -> type[BackpropNode]:
             self._prev_bias_delta = 0.0
 
         def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
-            # the averaged accumulated gradient (accum / batch_size) plugs in exactly where a
-            # single-example gradient (self.delta * node.value()) would in the unbatched formula -
-            # the momentum term itself (momentum * prev) is unaffected by batching, since it's a
-            # function of the *previous update*, not of how this one's gradient was computed
+            # the averaged gradient takes the single-example gradient's place; the momentum term
+            # depends only on the previous update
             new_weights = []
             new_prev = []
             for weight, accum, prev in zip(
@@ -53,12 +45,8 @@ def make_momentum_node_cls(momentum: float) -> type[BackpropNode]:
 
 def make_momentum_layer_cls(momentum: float) -> type[BackpropLayer]:
     """
-    The layer-level counterpart to make_momentum_node_cls - a BackpropLayer whose nodes are all
-    MomentumBackpropNodes at the given coefficient. Unlike ReLULayer (hidden-only) or
-    CrossEntropyOutputLayer (output-only), this is used for both hidden and output layers - the
-    momentum term modifies the weight-update rule itself, which every trainable layer shares,
-    not the activation or loss (see MomentumBackpropClassifierNetwork, which sets both
-    hidden_layer_cls and output_layer_cls to the same momentum-configured layer class).
+    A BackpropLayer of make_momentum_node_cls nodes, used for hidden and output layers alike:
+    momentum changes the weight update, which every trainable layer shares.
     """
 
     class MomentumLayer(BackpropLayer):

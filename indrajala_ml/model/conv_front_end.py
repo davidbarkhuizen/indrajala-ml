@@ -17,16 +17,14 @@ def build_conv_front_end(
     input_layer=None,
 ) -> list:
     """
-    Chains a convolutional front end through conv_specs - the one loop shared by
-    ConvMultiClassBackpropClassifierNetwork (pure Python) and, through
-    build_conv_array_network_layers, the numpy and Rust conv networks, which differ only in which
-    layer classes they build. The first layer reads the single-channel input image; each later
-    one reads the previous layer's out_height x out_width x channel_count output.
+    Chains a conv front end through conv_specs, for the pure-Python conv network and (through
+    build_conv_array_network_layers) the numpy and Rust ones. The first layer reads the
+    single-channel image; each later one the previous layer's out_height x out_width x
+    channel_count output.
 
-    make_conv(spec, previous, height, width, channels) / make_pool(spec, previous, height,
-    width, channels) build one layer; previous is the preceding layer (input_layer for the
-    first), for the pure-Python layers' node wiring - the array layers ignore it. Every built
-    layer must expose out_height/out_width/channel_count.
+    make_conv / make_pool(spec, previous, height, width, channels) build one layer. previous is the
+    preceding layer (input_layer for the first), which the pure-Python layers wire nodes to and the
+    array layers ignore. Every layer must expose out_height/out_width/channel_count.
     """
     assert any(isinstance(spec, ConvSpec) for spec in conv_specs), "conv_specs must contain at least one ConvSpec"
 
@@ -62,10 +60,8 @@ def build_conv_array_network_layers(
     dense_cls: type,
 ) -> tuple[list, list, object]:
     """
-    The layers of an array-backed conv network - the conv front end, the dense hidden layers and
-    the output layer - shared by ConvVectorizedMultiClassBackpropClassifierNetwork (numpy) and
-    ConvRustArrayMultiClassBackpropClassifierNetwork (Rust), which differ only in the layer
-    classes. The dense tail's fan-in starts from the last conv/pool layer's flattened output.
+    The numpy or Rust conv network's layers: the front end, the dense hidden layers and the output
+    layer. The dense tail's fan-in is the front end's flattened output.
     """
     conv_layers = build_conv_front_end(
         input_height,

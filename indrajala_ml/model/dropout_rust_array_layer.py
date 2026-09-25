@@ -7,24 +7,10 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class DropoutRustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to DropoutArrayLayer. Same inverted-dropout formulas, but forward/forward_batch/
-    compute_hidden_delta/compute_hidden_delta_batch are each a single fused Rust call
-    (`layer_dropout_forward`/`layer_dropout_forward_batch`/`layer_dropout_hidden_delta`/
-    `layer_dropout_hidden_delta_batch`, `fused.rs`, built on the Rust core's new
-    `bernoulli_mask`/`draw_bernoulli_mask` RNG primitive, `random.rs`) instead of a numpy
-    expression - mirroring how `RustArrayLayer` itself relates to `ArrayLayer`.
-    `accumulate_gradient`/`apply_accumulated_gradient` are inherited unchanged from
-    `RustArrayLayer`.
-
-    Unlike `uniform()` (`randomize()`'s own RNG source, drawn once at construction time), this
-    mask is drawn fresh on every training-time forward pass - the same "no numpy-seed-compatible
-    RNG to match" caveat this crate's `uniform()` already carries applies here too, sharper here
-    since the mask *is* the mechanism under test, not incidental to it: parity against the
-    numpy-backed sibling can only be checked statistically at training=True, exactly at
-    training=False.
-
-    drop_probability is a required constructor argument, no default - the same posture
-    DropoutArrayLayer already has.
+    DropoutArrayLayer on the Rust backend: forward*, compute_hidden_delta* are each one fused call
+    (layer_dropout_*), drawing the mask with the crate's bernoulli_mask. The mask is drawn fresh
+    every training forward pass from an RNG unrelated to numpy's, so parity with the numpy layer is
+    exact at training=False and only statistical at training=True. drop_probability is required.
     """
 
     hyperparameters = ("drop_probability",)

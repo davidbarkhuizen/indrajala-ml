@@ -8,22 +8,15 @@ from indrajala_ml.model.conv_array_layer import validate_conv_arguments
 
 class ConvRustArrayLayer:
     """
-    The Rust-array-core-backed counterpart to ConvArrayLayer: the same ReLU convolutional hidden
-    layer, 'valid' padding, with the same layouts (see ConvArrayLayer's docstring) - channel-major
-    (N, C*H*W) activations, a (channel_count, C*k*k) kernel matrix, and (N*P, C*k*k) im2col
-    columns - but each method a single fused Rust call (`conv.rs`). Every conv tensor crosses the
-    boundary as a matrix: indrajala_math_rust.Array stays 1D/2D.
+    ConvArrayLayer on the Rust backend: the same ReLU conv layer and layouts, each method one fused
+    call (conv.rs). Conv tensors cross as matrices, since indrajala_math_rust.Array is 1D/2D only.
+    The shape arithmetic lives in one pa.ConvGeometry, passed to every call.
 
-    Arguments are validated as ConvArrayLayer validates them; the shape arithmetic then lives in
-    one pa.ConvGeometry, built here and passed to every call.
+    It keeps no pre-activation Z: the forward op applies the ReLU as it writes A. The backward pass
+    masks on A (derivative 0 at exactly z == 0), as ConvArrayLayer's does.
 
-    Unlike ConvArrayLayer, it keeps no pre-activation Z/z: the Rust forward op applies the ReLU
-    during its output scatter and returns only A. The backward pass masks on A (derivative 0 where
-    A == 0, so at exactly z == 0), as ConvArrayLayer's does.
-
-    The single-example path passes its 1D arrays straight to the same Rust batch ops, which take
-    a vector as N = 1 and return vectors, so there is no (1, n) wrapping: pa.Array.reshape copies,
-    unlike numpy's x[np.newaxis] view.
+    Single-example calls pass 1D arrays straight to the batch ops, which take a vector as N = 1:
+    pa.Array.reshape copies, unlike numpy's x[np.newaxis].
     """
 
     def __init__(

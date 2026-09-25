@@ -8,9 +8,10 @@ from indrajala_ml.model.base_node import AbstractNode
 
 @dataclass(frozen=True)
 class PoolSpec:
-    """One MaxPoolLayer's own hyperparameters - stride defaults to pool_size (non-overlapping
-    windows), the standard choice. The input shape comes from the previous layer, as for
-    ConvSpec (see ConvMultiClassBackpropClassifierNetwork)."""
+    """
+    One MaxPoolLayer's hyperparameters; stride defaults to pool_size (non-overlapping windows). The
+    input shape comes from the previous layer.
+    """
 
     pool_size: int
     stride: int | None = None
@@ -18,17 +19,15 @@ class PoolSpec:
 
 class PoolUnit(AbstractNode):
     """
-    One max-pooling output position - no weights, no bias, no activation function. forward()
-    caches which window slot held the maximum (the first one, on an exact tie), and that slot is
-    the only input this unit's delta flows back to: d max(x) / d x_i is 1 for the argmax and 0
-    for every other slot, since nudging a non-maximal input doesn't change the output at all.
+    One max-pooling output position, with no weights. forward() records which window slot held the
+    maximum (the first, on a tie); the unit's delta flows back to that input only, since
+    d max(x) / d x_i is 0 for every other slot.
     """
 
     def __init__(self, input_nodes: Sequence[AbstractNode]) -> None:
         self.input_nodes: Sequence[AbstractNode] = input_nodes
 
-        # populated by forward()/compute_hidden_delta() - see BackpropNode's own identical
-        # convention (backprop_node.py) for why these have no default
+        # set by forward()/compute_hidden_delta(); no default, as in BackpropNode
         self._activation: float
         self.argmax_slot: int
         self.delta: float
@@ -51,20 +50,16 @@ class PoolUnit(AbstractNode):
 class MaxPoolLayer:
     """
     A max-pooling hidden layer over input_channels channel-major planes of input_height x
-    input_width (the same layout ConvLayer reads and produces, so either can follow the
-    other). Each channel is pooled independently - channel_count == input_channels, and .nodes
-    is channel-major like ConvLayer's own.
+    input_width, the layout ConvLayer reads and writes, so either can follow the other. Each
+    channel is pooled separately (channel_count == input_channels); .nodes is channel-major.
 
-    Weight-free, but implements the same duck-typed layer surface ConvLayer does, so
-    BackpropNetworkBase's generic machinery drives it unchanged: forward and the two backward
-    hooks (compute_hidden_deltas/downstream_sum) do real work; every gradient/persistence hook
-    is a no-op, and snapshot_state() is an empty list - it still sits in trainable_layers, since
-    both the forward pass and snapshot/restore iterate over that one list.
+    No weights, but it implements ConvLayer's layer methods: forward and the backward hooks do work,
+    the gradient and snapshot methods are no-ops (snapshot_state() is []). It sits in
+    trainable_layers because the forward pass and snapshot/restore both walk that list.
 
-    downstream_sum(i) uses the same reverse-map shape ConvLayer's does - input index -> every
-    (unit, window slot) pair that reads it - but a unit only contributes its delta when that
-    slot won its last forward pass. With overlapping windows (stride < pool_size) one input can
-    win several windows, and then receives every one of their deltas.
+    downstream_sum(i) uses ConvLayer's reverse map, from each input to the (unit, slot) pairs that
+    read it, counting a unit's delta only if that slot won. With overlapping windows (stride <
+    pool_size) an input can win several windows and receives each one's delta.
     """
 
     def __init__(

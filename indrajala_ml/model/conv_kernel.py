@@ -7,23 +7,14 @@ from indrajala_ml.model.backprop_network_base import fan_in_aware_weights_and_bi
 
 class ConvKernel:
     """
-    One convolutional output channel's shared, trainable weights - a flat in_channels x
-    kernel_size x kernel_size weight list (in that order) plus a bias, referenced by every
-    ConvUnit (one per output spatial position) in that channel, not owned independently by any
-    of them. This is a separate class
-    from BackpropNode rather than a subclass of it because BackpropNode's input_node_weights is
-    an owned, rebindable instance attribute, which fights a
-    weight list many instances need to read and update identically, rather than accommodating
-    it.
+    One conv output channel's shared weights, a flat in_channels x kernel_size x kernel_size
+    list (in that order), and bias, read by every ConvUnit of the channel. Not a BackpropNode: its
+    input_node_weights is owned per node and rebound on update, which doesn't suit a list many units
+    share.
 
-    accumulate_gradient()/apply_accumulated_gradient() mirror BackpropNode's own pair
-    (indrajala_ml/model/backprop_node.py) exactly, but are invoked differently: once per
-    *contributing spatial position* (every ConvUnit in this channel, for every training example
-    in a mini-batch) rather than once per training example, and applied once per *kernel*
-    rather than once per node. Every position's contribution is summed into the same
-    accumulator with no separate averaging - only apply_accumulated_gradient's own division by
-    batch_size (the mini-batch size, not the position count) happens, so spatial contributions
-    are summed and mini-batch examples are averaged, composing the two dimensions correctly.
+    accumulate_gradient() is called once per contributing position (every unit of the channel, for
+    every example) and apply_accumulated_gradient() once per kernel, dividing by batch_size only:
+    positions are summed, examples averaged.
     """
 
     def __init__(
@@ -50,10 +41,7 @@ class ConvKernel:
         self._bias_gradient_accum: float = 0.0
 
     def randomize_fan_in_aware(self) -> None:
-        # fan_in_aware_weights_and_bias (backprop_network_base.py) - a kernel's own fan-in is
-        # exactly its receptive field size (kernel_size**2 * in_channels), not the whole
-        # previous layer's size, since every weight only ever multiplies one of that many input
-        # values
+        # a kernel's fan-in is its receptive field, kernel_size**2 * in_channels
         self.weights, self.bias = fan_in_aware_weights_and_bias(len(self.weights))
 
     def accumulate_gradient(self, delta: float, receptive_field_values: Sequence[float]) -> None:
