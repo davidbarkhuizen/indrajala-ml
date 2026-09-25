@@ -1,7 +1,9 @@
 import struct
 import zlib
+from typing import Any, cast
 
 import numpy as np
+import numpy.typing as npt
 
 IMAGE_SIZE = 28
 RECORD_SIZE = IMAGE_SIZE * IMAGE_SIZE + 1  # IMAGE_SIZE*IMAGE_SIZE pixel bytes + 1 label byte
@@ -84,10 +86,11 @@ def convert_parquet_to_binary(parquet_path: str, binary_path: str, limit: int | 
     data's. It belongs to this offline step only, as scikit-learn does to digits.csv's extraction.
     """
 
-    import pyarrow.parquet as pq
+    # pyarrow ships no type stubs: the table is typed Any, its rows as to_pylist's dicts
+    import pyarrow.parquet as pq  # pyright: ignore[reportMissingTypeStubs]
 
-    table = pq.read_table(parquet_path)
-    rows = table.slice(0, limit).to_pylist() if limit is not None else table.to_pylist()
+    table = cast(Any, pq.read_table(parquet_path))  # pyright: ignore[reportUnknownMemberType]
+    rows: list[dict[str, Any]] = table.slice(0, limit).to_pylist() if limit is not None else table.to_pylist()
 
     with open(binary_path, "wb") as f:
         for row in rows:
@@ -99,7 +102,7 @@ def convert_parquet_to_binary(parquet_path: str, binary_path: str, limit: int | 
             f.write(bytes([row["label"]]))
 
 
-def _read_binary_records(path: str, limit: int | None = None) -> bytes:
+def read_binary_records(path: str, limit: int | None = None) -> bytes:
     """
     Up to limit records (all when None) from the start of the file, checked to be whole records.
     load_mnist_records_at_indices seeks per index instead.
@@ -121,7 +124,7 @@ def load_mnist_dataset(path: str, limit: int | None = None) -> list[tuple[tuple[
     are 60000/10000 records.
     """
 
-    data = _read_binary_records(path, limit)
+    data = read_binary_records(path, limit)
 
     # one float object per pixel value, shared by every row: 60000 rows of freshly boxed floats
     # are about 1.9 GB, too much for several sweep workers at once. The values are unchanged.
@@ -137,13 +140,13 @@ def load_mnist_dataset(path: str, limit: int | None = None) -> list[tuple[tuple[
     return dataset
 
 
-def load_mnist_dataset_as_array(path: str, limit: int | None = None) -> np.ndarray:
+def load_mnist_dataset_as_array(path: str, limit: int | None = None) -> npt.NDArray[np.float64]:
     """
     load_mnist_dataset's pixels as one (n, 784) array in [0.0, 1.0], via np.frombuffer, instead of
     47 million boxed floats. Pixels only: load_mnist_labels gives the labels.
     """
 
-    data = _read_binary_records(path, limit)
+    data = read_binary_records(path, limit)
 
     record_count = len(data) // RECORD_SIZE
     records = np.frombuffer(data, dtype=np.uint8).reshape(record_count, RECORD_SIZE)
@@ -157,7 +160,7 @@ def load_mnist_labels(path: str) -> list[int]:
     GB once copied into a worker.
     """
 
-    data = _read_binary_records(path)
+    data = read_binary_records(path)
 
     return [data[offset + IMAGE_SIZE * IMAGE_SIZE] for offset in range(0, len(data), RECORD_SIZE)]
 

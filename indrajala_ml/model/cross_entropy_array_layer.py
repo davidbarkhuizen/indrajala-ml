@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import numpy as np
-
-from indrajala_ml.model.array_layer import ArrayLayer
+from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 
 
 class CrossEntropyArrayLayer(ArrayLayer):
@@ -14,8 +12,8 @@ class CrossEntropyArrayLayer(ArrayLayer):
     (one-vs-rest with cross-entropy, unlike softmax's joint normalization).
     """
 
-    def compute_output_delta(self, reference: np.ndarray) -> None:
+    def compute_output_delta(self, reference: FloatArray) -> None:
         self.delta = self.a - reference
 
-    def compute_output_delta_batch(self, reference_batch: np.ndarray) -> None:
+    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
         self.delta_batch = self.A - reference_batch

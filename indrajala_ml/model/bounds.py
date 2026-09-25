@@ -1,3 +1,6 @@
+from collections.abc import Sized
+
+
 def validate_input_bounds(dimension: int, input_bounds: list[tuple[float, float]]) -> None:
     """
     One (lo, hi) pair per input dimension, each of positive width: the precondition of every network
@@ -31,7 +34,7 @@ def validate_class_count(class_count: int) -> None:
     assert class_count >= 2, f"class_count must be at least 2; got {class_count}"
 
 
-def validate_batch(batch) -> None:
+def validate_batch(batch: Sized) -> None:
     """
     A batch must hold at least one example.
     """

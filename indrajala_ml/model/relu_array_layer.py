@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from indrajala_ml.model.array_layer import ArrayLayer
+from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 
 
 class ReLUArrayLayer(ArrayLayer):
@@ -12,23 +12,23 @@ class ReLUArrayLayer(ArrayLayer):
     compute_output_delta* raise.
     """
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: FloatArray) -> FloatArray:
         self.z = self.W @ x + self.b
         self.a = np.maximum(0.0, self.z)  # relu_layer.relu_activation, vectorized
         return self.a
 
-    def forward_batch(self, X: np.ndarray) -> np.ndarray:
+    def forward_batch(self, X: FloatArray) -> FloatArray:
         self.Z = X @ self.W.T + self.b
         self.A = np.maximum(0.0, self.Z)
         return self.A
 
-    def compute_output_delta(self, reference: np.ndarray) -> None:
+    def compute_output_delta(self, reference: FloatArray) -> None:
         raise NotImplementedError(
             "ReLUArrayLayer is a hidden-layer activation, not an output one - an unbounded "
             "activation isn't suited to any of this codebase's output-layer contracts."
         )
 
-    def compute_output_delta_batch(self, reference_batch: np.ndarray) -> None:
+    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
         raise NotImplementedError(
             "ReLUArrayLayer is a hidden-layer activation, not an output one - an unbounded "
             "activation isn't suited to any of this codebase's output-layer contracts."

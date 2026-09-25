@@ -26,8 +26,10 @@ import shlex
 import socket
 import subprocess
 import sys
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -43,8 +45,11 @@ ISA_FLAGS = ["sse4_2", "avx", "avx2", "fma", "avx512f"]
 THREAD_ENV_VARS = ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "RAYON_NUM_THREADS"]
 GPU_CLASSES = {"VGA compatible controller", "3D controller", "Display controller"}
 
+# a JSON object: the profile, and the sections the collectors return
+JSONObject = dict[str, Any]
 
-def read_text(path):
+
+def read_text(path: str | Path) -> str | None:
     """The file's text, or None if it can't be read."""
     try:
         return Path(path).read_text()
@@ -52,7 +57,7 @@ def read_text(path):
         return None
 
 
-def run_command(args, cwd=None):
+def run_command(args: Sequence[str], cwd: str | Path | None = None) -> str | None:
     """The command's stripped stdout, or None if it can't be run or fails."""
     try:
         result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=10, check=False)
@@ -66,11 +71,11 @@ def run_command(args, cwd=None):
 # --- collectors (text in, fields out) ---
 
 
-def parse_cpuinfo(text):
+def parse_cpuinfo(text: str) -> JSONObject:
     """vendor, model_name, sockets, physical_cores, logical_cpus and ISA flags from
     /proc/cpuinfo. Fields the text lacks are None."""
-    processors = []
-    current = {}
+    processors: list[dict[str, str]] = []
+    current: dict[str, str] = {}
     for line in text.splitlines():
         if not line.strip():
             if current:
@@ -83,7 +88,7 @@ def parse_cpuinfo(text):
         processors.append(current)
     processors = [p for p in processors if "processor" in p]
 
-    first = processors[0] if processors else {}
+    first: dict[str, str] = processors[0] if processors else {}
     flags = set(first.get("flags", "").split())
     packages = {p.get("physical id") for p in processors if "physical id" in p}
     cores = {(p.get("physical id"), p.get("core id")) for p in processors if "core id" in p}
@@ -97,7 +102,7 @@ def parse_cpuinfo(text):
     }
 
 
-def parse_cpu_list(text):
+def parse_cpu_list(text: str) -> int:
     """The number of CPUs in a sysfs CPU list such as "0-3,8"."""
     count = 0
     for part in text.strip().split(","):
@@ -108,7 +113,7 @@ def parse_cpu_list(text):
     return count
 
 
-def parse_size_kib(text):
+def parse_size_kib(text: str) -> int:
     """A sysfs cache size ("512K", "4096K", "8M") in KiB."""
     text = text.strip()
     units = {"K": 1, "M": 1024, "G": 1024 * 1024}
@@ -117,16 +122,16 @@ def parse_size_kib(text):
     return int(text) // 1024
 
 
-def summarize_caches(entries):
+def summarize_caches(entries: Iterable[Mapping[str, str]]) -> list[JSONObject]:
     """One entry per distinct cache, from every CPU's sysfs index* entries (dicts of level,
     type, size and shared_cpu_list text). A cache shared by several CPUs appears once per CPU in
     sysfs, so entries are first de-duplicated by (level, type, shared_cpu_list); identical caches
     (the per-core L2s) are then counted as instances of one entry."""
-    distinct = {}
+    distinct: dict[tuple[int, str, str], Mapping[str, str]] = {}
     for entry in entries:
         key = (int(entry["level"]), entry["type"].strip(), entry["shared_cpu_list"].strip())
         distinct[key] = entry
-    summary = {}
+    summary: dict[tuple[int, str, int, int], int] = {}
     for (level, cache_type, shared), entry in distinct.items():
         described = (level, cache_type, parse_size_kib(entry["size"]), parse_cpu_list(shared))
         summary[described] = summary.get(described, 0) + 1
@@ -136,13 +141,13 @@ def summarize_caches(entries):
     ]
 
 
-def parse_frequency(files):
+def parse_frequency(files: Mapping[str, str | None]) -> JSONObject | None:
     """The cpufreq policy from cpu0's cpufreq files (a dict of file name -> text, None when
     missing) and the global boost file (key "boost"). None if there is no cpufreq at all."""
     if files.get("scaling_driver") is None and files.get("scaling_governor") is None:
         return None
 
-    def mhz(name):
+    def mhz(name: str) -> int | None:
         text = files.get(name)
         return int(text.strip()) // 1000 if text is not None else None
 
@@ -150,17 +155,17 @@ def parse_frequency(files):
     if boost is None:
         boost = files.get("cpb")
     return {
-        "driver": files["scaling_driver"].strip() if files.get("scaling_driver") else None,
-        "governor": files["scaling_governor"].strip() if files.get("scaling_governor") else None,
+        "driver": driver.strip() if (driver := files.get("scaling_driver")) else None,
+        "governor": governor.strip() if (governor := files.get("scaling_governor")) else None,
         "min_mhz": mhz("cpuinfo_min_freq"),
         "max_mhz": mhz("cpuinfo_max_freq"),
         "boost_enabled": boost.strip() == "1" if boost is not None else None,
     }
 
 
-def parse_meminfo(text):
+def parse_meminfo(text: str) -> dict[str, int]:
     """/proc/meminfo's fields in MiB (the file gives kB)."""
-    fields = {}
+    fields: dict[str, int] = {}
     for line in text.splitlines():
         key, _, value = line.partition(":")
         parts = value.split()
@@ -169,10 +174,10 @@ def parse_meminfo(text):
     return fields
 
 
-def parse_lspci(text):
+def parse_lspci(text: str) -> list[dict[str, str]]:
     """The display controllers in `lspci -mm` output. Each line is: slot "class" "vendor"
     "device", optional -rXX / -pXX flags, then the subsystem vendor and device."""
-    gpus = []
+    gpus: list[dict[str, str]] = []
     for line in text.splitlines():
         fields = [f for f in shlex.split(line) if not f.startswith("-")]
         if len(fields) >= 4 and fields[1] in GPU_CLASSES:
@@ -180,7 +185,7 @@ def parse_lspci(text):
     return gpus
 
 
-def parse_os_release(text):
+def parse_os_release(text: str) -> str | None:
     """PRETTY_NAME from /etc/os-release."""
     for line in text.splitlines():
         key, _, value = line.partition("=")
@@ -189,23 +194,23 @@ def parse_os_release(text):
     return None
 
 
-def parse_power(supplies):
+def parse_power(supplies: Mapping[str, Mapping[str, str | None]]) -> JSONObject:
     """on_ac and battery_percent from /sys/class/power_supply (a dict of supply name -> dict of
     file name -> text). Either is None when there is no such supply."""
-    on_ac = None
-    battery_percent = None
+    on_ac: bool | None = None
+    battery_percent: int | None = None
     for files in supplies.values():
         supply_type = (files.get("type") or "").strip()
-        if supply_type == "Mains" and files.get("online") is not None:
-            on_ac = (on_ac or False) or files["online"].strip() == "1"
-        elif supply_type == "Battery" and files.get("capacity") is not None:
-            battery_percent = int(files["capacity"].strip())
+        if supply_type == "Mains" and (online := files.get("online")) is not None:
+            on_ac = (on_ac or False) or online.strip() == "1"
+        elif supply_type == "Battery" and (capacity := files.get("capacity")) is not None:
+            battery_percent = int(capacity.strip())
     return {"on_ac": on_ac, "battery_percent": battery_percent}
 
 
-def parse_blas(config):
+def parse_blas(config: Mapping[str, Any] | None) -> JSONObject | None:
     """The BLAS numpy was built against, from numpy.show_config(mode="dicts")."""
-    blas = (config or {}).get("Build Dependencies", {}).get("blas")
+    blas: Mapping[str, Any] | None = (config or {}).get("Build Dependencies", {}).get("blas")
     if not blas:
         return None
     return {
@@ -215,31 +220,32 @@ def parse_blas(config):
     }
 
 
-def parse_release_profile(cargo_toml):
+def parse_release_profile(cargo_toml: str) -> JSONObject | str:
     """The crate's [profile.release] table, or "default" if it sets none."""
-    profile = tomllib.loads(cargo_toml).get("profile", {}).get("release")
+    profile: JSONObject | None = tomllib.loads(cargo_toml).get("profile", {}).get("release")
     return profile if profile else "default"
 
 
 # --- reading the real sources ---
 
 
-def _cpu_dirs():
+def _cpu_dirs() -> list[Path]:
     root = Path("/sys/devices/system/cpu")
     return sorted(p for p in root.glob("cpu[0-9]*") if p.name[3:].isdigit())
 
 
-def _cache_entries():
-    entries = []
+def _cache_entries() -> list[dict[str, str]]:
+    entries: list[dict[str, str]] = []
     for cpu in _cpu_dirs():
         for index in sorted(cpu.glob("cache/index*")):
             files = {name: read_text(index / name) for name in ("level", "type", "size", "shared_cpu_list")}
-            if all(value is not None for value in files.values()):
-                entries.append(files)
+            present = {name: text for name, text in files.items() if text is not None}
+            if len(present) == len(files):
+                entries.append(present)
     return entries
 
 
-def _frequency_files():
+def _frequency_files() -> dict[str, str | None]:
     cpufreq = Path("/sys/devices/system/cpu/cpu0/cpufreq")
     names = ["scaling_driver", "scaling_governor", "cpuinfo_min_freq", "cpuinfo_max_freq", "cpb"]
     files = {name: read_text(cpufreq / name) for name in names}
@@ -247,8 +253,8 @@ def _frequency_files():
     return files
 
 
-def _cpu_mhz_now():
-    values = []
+def _cpu_mhz_now() -> dict[str, int] | None:
+    values: list[int] = []
     for cpu in _cpu_dirs():
         text = read_text(cpu / "cpufreq" / "scaling_cur_freq")
         if text is not None:
@@ -258,46 +264,46 @@ def _cpu_mhz_now():
     return {"min": min(values), "max": max(values)}
 
 
-def _power_supplies():
-    supplies = {}
+def _power_supplies() -> dict[str, dict[str, str | None]]:
+    supplies: dict[str, dict[str, str | None]] = {}
     for supply in sorted(Path("/sys/class/power_supply").glob("*")):
         supplies[supply.name] = {name: read_text(supply / name) for name in ("type", "online", "capacity")}
     return supplies
 
 
-def _numpy_software():
+def _numpy_software() -> JSONObject | None:
     try:
         import numpy
     except ImportError:
         return None
     try:
-        config = numpy.show_config(mode="dicts")
+        config: Mapping[str, Any] | None = numpy.show_config(mode="dicts")
     except TypeError:  # numpy < 1.26 has no mode argument
         config = None
     return {"version": numpy.__version__, "blas": parse_blas(config)}
 
 
-def _git_commit(path):
+def _git_commit(path: Path) -> str | None:
     return run_command(["git", "rev-parse", "HEAD"], cwd=path)
 
 
-def _git_dirty(path):
+def _git_dirty(path: Path) -> bool | None:
     status = run_command(["git", "status", "--porcelain"], cwd=path)
     return None if status is None else bool(status)
 
 
-def _perf_event_paranoid():
+def _perf_event_paranoid() -> int | None:
     text = read_text("/proc/sys/kernel/perf_event_paranoid")
     return int(text.strip()) if text is not None else None
 
 
-def capture():
+def capture() -> JSONObject:
     """The profile of the machine this runs on."""
     # clocks first: the rest (numpy's import, git, rustc, lspci) boosts the cores within ms
     cpu_mhz_now = _cpu_mhz_now()
     cpuinfo = parse_cpuinfo(read_text("/proc/cpuinfo") or "")
-    logical = cpuinfo["logical_cpus"] or os.cpu_count()
-    physical = cpuinfo["physical_cores"]
+    logical: int | None = cpuinfo["logical_cpus"] or os.cpu_count()
+    physical: int | None = cpuinfo["physical_cores"]
     meminfo = parse_meminfo(read_text("/proc/meminfo") or "")
     lspci = run_command(["lspci", "-mm"])
     os_release = read_text("/etc/os-release")
@@ -364,11 +370,11 @@ def capture():
 # --- schema and comparison ---
 
 
-def load_schema():
+def load_schema() -> JSONObject:
     return json.loads(SCHEMA_PATH.read_text())
 
 
-def validate(profile):
+def validate(profile: JSONObject) -> None:
     """Raise jsonschema.ValidationError if the profile doesn't match the schema."""
     import jsonschema
 
@@ -381,30 +387,42 @@ class Difference:
     reference: object
     current: object
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.path}: {json.dumps(self.reference)} -> {json.dumps(self.current)}"
 
 
-def _differences(path, reference, current):
-    if isinstance(reference, dict) and isinstance(current, dict):
-        for key in sorted(set(reference) | set(current)):
-            yield from _differences(f"{path}.{key}", reference.get(key), current.get(key))
-    elif isinstance(reference, list) and isinstance(current, list) and len(reference) == len(current):
-        for index, (ref_item, cur_item) in enumerate(zip(reference, current)):
+def _as_json_object(value: object) -> dict[str, object] | None:
+    # a parsed JSON value as an object (string keys), or None if it isn't one
+    return cast("dict[str, object]", value) if isinstance(value, dict) else None
+
+
+def _as_json_list(value: object) -> list[object] | None:
+    return cast("list[object]", value) if isinstance(value, list) else None
+
+
+def _differences(path: str, reference: object, current: object) -> Iterator[Difference]:
+    reference_object, current_object = _as_json_object(reference), _as_json_object(current)
+    reference_list, current_list = _as_json_list(reference), _as_json_list(current)
+    if reference_object is not None and current_object is not None:
+        for key in sorted(set(reference_object) | set(current_object)):
+            yield from _differences(f"{path}.{key}", reference_object.get(key), current_object.get(key))
+    elif reference_list is not None and current_list is not None and len(reference_list) == len(current_list):
+        for index, (ref_item, cur_item) in enumerate(zip(reference_list, current_list)):
             yield from _differences(f"{path}[{index}]", ref_item, cur_item)
     elif reference != current:
         yield Difference(path, reference, current)
 
 
-def compare(reference, current):
+def compare(reference: JSONObject, current: JSONObject) -> list[Difference]:
     """Every leaf of the identity that differs, as dotted paths. Lists of different lengths
     (an extra GPU or cache) are reported whole. State is never compared."""
     return list(_differences("identity", reference["identity"], current["identity"]))
 
 
-def _flatten(prefix, value):
-    if isinstance(value, dict):
-        for key, item in value.items():
+def _flatten(prefix: str, value: object) -> Iterator[tuple[str, object]]:
+    value_object = _as_json_object(value)
+    if value_object is not None:
+        for key, item in value_object.items():
             yield from _flatten(f"{prefix}.{key}", item)
     else:
         yield prefix, value
@@ -413,7 +431,7 @@ def _flatten(prefix, value):
 # --- CLI ---
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])  # None under -OO
     commands = parser.add_subparsers(dest="command", required=True)
     profile_parser = commands.add_parser("profile", help="capture this machine's profile")

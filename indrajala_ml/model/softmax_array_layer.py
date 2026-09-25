@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from indrajala_ml.model.array_layer import ArrayLayer
+from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 
 
 class SoftmaxArrayLayer(ArrayLayer):
@@ -17,22 +17,22 @@ class SoftmaxArrayLayer(ArrayLayer):
         assert size >= 2, f"a softmax layer needs at least 2 nodes to normalize over; got size={size}"
         super().__init__(size, input_size)
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: FloatArray) -> FloatArray:
         self.z = self.W @ x + self.b
         shifted = self.z - np.max(self.z)  # the stable shift of SoftmaxOutputLayer.forward
         exp_values = np.exp(shifted)
         self.a = exp_values / exp_values.sum()
         return self.a
 
-    def forward_batch(self, X: np.ndarray) -> np.ndarray:
+    def forward_batch(self, X: FloatArray) -> FloatArray:
         self.Z = X @ self.W.T + self.b
         shifted = self.Z - self.Z.max(axis=1, keepdims=True)  # row-wise max, one row per example
         exp_values = np.exp(shifted)
         self.A = exp_values / exp_values.sum(axis=1, keepdims=True)
         return self.A
 
-    def compute_output_delta(self, reference: np.ndarray) -> None:
+    def compute_output_delta(self, reference: FloatArray) -> None:
         self.delta = self.a - reference  # no a*(1-a) term, as SoftmaxOutputNode
 
-    def compute_output_delta_batch(self, reference_batch: np.ndarray) -> None:
+    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
         self.delta_batch = self.A - reference_batch

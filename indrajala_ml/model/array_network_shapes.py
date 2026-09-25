@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Generic
 
+from typing_extensions import Self
+
+from indrajala_ml.model.array_network_base import as_weighted_array_layers
+from indrajala_ml.model.array_protocols import A, WeightedArrayLayer
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.conv_front_end import (
+    ArrayConvLayer,
+    ArrayFrontEndLayer,
     build_conv_array_network_layers,
     load_conv_model_json,
     save_conv_array_model_json,
@@ -23,13 +29,13 @@ if TYPE_CHECKING:
 
     # For the type checker only, each mixin subclasses what it's mixed into, so the attributes
     # and methods its host supplies (backend, layers, _forward, snapshot, ...) resolve; at
-    # runtime they're plain classes and the concrete network's MRO is unchanged.
+    # runtime each is a plain Generic class ahead of the backend's base in the MRO.
     _ShapeBase = ArrayNetworkBase
 else:
-    _ShapeBase = object
+    _ShapeBase = Generic
 
 
-class ArrayMultiClassShape(_ShapeBase):
+class ArrayMultiClassShape(_ShapeBase[A]):
     """
     The multiclass shape over ArrayNetworkBase, for either backend: argmax classify_state,
     predict_probabilities, one-hot targets, and the save/load envelope with class_count.
@@ -50,18 +56,18 @@ class ArrayMultiClassShape(_ShapeBase):
     def classify_state(self, state: tuple[float, ...]) -> int:
         return self._classify_output(self._forward(state))
 
-    def _classify_output(self, output) -> int:
+    def _classify_output(self, output: A) -> int:
         return self.backend.argmax(output)
 
-    def _classify_output_batch(self, output_batch) -> list[int]:
+    def _classify_output_batch(self, output_batch: A) -> list[int]:
         return self.backend.argmax_rows(output_batch)
 
-    def _target_array(self, category: int):
+    def _target_array(self, category: int) -> A:
         target = self.backend.zeros(self.class_count)
         target[category] = 1.0
         return target
 
-    def _target_batch_array(self, categories: Sequence[int]):
+    def _target_batch_array(self, categories: Sequence[int]) -> A:
         target_batch = self.backend.zeros((len(categories), self.class_count))
         for row, category in enumerate(categories):
             target_batch[row, category] = 1.0
@@ -79,7 +85,7 @@ class ArrayMultiClassShape(_ShapeBase):
         )
 
     @classmethod
-    def load(cls, path: str):
+    def load(cls, path: str) -> Self:
         state = load_array_model_json(path)
         network = cls(
             state["layer_sizes"],
@@ -92,7 +98,7 @@ class ArrayMultiClassShape(_ShapeBase):
         return network
 
 
-class ArraySingleOutputShape(_ShapeBase):
+class ArraySingleOutputShape(_ShapeBase[A]):
     """
     The single-output shape over ArrayNetworkBase, for either backend: 0.5-threshold classify_state,
     predict_probability, a scalar target, and the save/load envelope without class_count. It hosts
@@ -118,16 +124,16 @@ class ArraySingleOutputShape(_ShapeBase):
     def classify_state(self, state: tuple[float, ...]) -> float:
         return self._classify_output(self._forward(state))
 
-    def _classify_output(self, output) -> float:
+    def _classify_output(self, output: A) -> float:
         return 1.0 if output.tolist()[0] > 0.5 else 0.0
 
-    def _classify_output_batch(self, output_batch) -> list[float]:
+    def _classify_output_batch(self, output_batch: A) -> list[float]:
         return [1.0 if row[0] > 0.5 else 0.0 for row in output_batch.tolist()]
 
-    def _target_array(self, category: float):
+    def _target_array(self, category: float) -> A:
         return self.backend.vector([category])
 
-    def _target_batch_array(self, categories: Sequence[float]):
+    def _target_batch_array(self, categories: Sequence[float]) -> A:
         return self.backend.matrix([[category] for category in categories])
 
     def save(self, path: str) -> None:
@@ -141,7 +147,7 @@ class ArraySingleOutputShape(_ShapeBase):
         )
 
     @classmethod
-    def load(cls, path: str):
+    def load(cls, path: str) -> Self:
         state = load_single_output_array_model_json(path)
         network = cls(state["layer_sizes"], state["dimension"], **cls._extra_init_kwargs(state))
         network.restore(state["snapshot"])
@@ -149,10 +155,13 @@ class ArraySingleOutputShape(_ShapeBase):
 
 
 # as _ShapeBase: the conv shape's host is a backend's multiclass network
-_ConvShapeBase = ArrayMultiClassShape if TYPE_CHECKING else object
+if TYPE_CHECKING:
+    _ConvShapeBase = ArrayMultiClassShape
+else:
+    _ConvShapeBase = Generic
 
 
-class ArrayConvShape(_ConvShapeBase):
+class ArrayConvShape(_ConvShapeBase[A]):
     """
     The convolutional shape over the multiclass shape, for either backend: a front end of conv and
     max-pool layers (one ConvSpec or PoolSpec each, in order), one or more sigmoid dense layers, and
@@ -171,8 +180,8 @@ class ArrayConvShape(_ConvShapeBase):
     three loads into the others).
     """
 
-    conv_layer_cls: type
-    pool_layer_cls: type
+    conv_layer_cls: type[ArrayConvLayer[A]]
+    pool_layer_cls: type[ArrayFrontEndLayer[A]]
 
     def __init__(
         self,
@@ -203,7 +212,7 @@ class ArrayConvShape(_ConvShapeBase):
             pool_cls=self.pool_layer_cls,
             dense_cls=self.hidden_layer_cls,
         )
-        self.layers = self.conv_layers + dense_layers + [self.output_layer]
+        self.layers = [*self.conv_layers, *dense_layers, self.output_layer]
 
     def randomize(self) -> None:
         # forward order, as ConvMultiClassBackpropClassifierNetwork.randomize: conv layers from
@@ -215,21 +224,27 @@ class ArrayConvShape(_ConvShapeBase):
                 layer.W, layer.b = self.backend.random_layer(layer.channel_count, layer.fan_in)
 
         previous_size = self.conv_layers[-1].size
-        for layer in self.layers[len(self.conv_layers) :]:
+        for layer in as_weighted_array_layers(self.layers[len(self.conv_layers) :]):
             layer.W, layer.b = self.backend.random_layer(layer.size, previous_size)
             previous_size = layer.size
 
-    def snapshot(self) -> list[tuple]:
-        return [
-            () if isinstance(layer, self.pool_layer_cls) else (layer.W.copy(), layer.b.copy()) for layer in self.layers
-        ]
+    def snapshot(self) -> list[tuple[A, ...]]:
+        entries: list[tuple[A, ...]] = []
+        for layer in self.layers:
+            if isinstance(layer, self.pool_layer_cls):
+                entries.append(())
+            else:
+                assert isinstance(layer, WeightedArrayLayer)  # conv and dense layers have W, b
+                entries.append((layer.W.copy(), layer.b.copy()))
+        return entries
 
-    def restore(self, snapshot: list[tuple]) -> None:
+    def restore(self, snapshot: Sequence[tuple[Any, ...]]) -> None:
         # accepts either backend's snapshot, or a loaded file's lists
         for layer, entry in zip(self.layers, snapshot):
             if isinstance(layer, self.pool_layer_cls):
                 assert len(entry) == 0, f"a {type(layer).__name__} has no state to restore; got {entry!r}"
                 continue
+            assert isinstance(layer, WeightedArrayLayer)
             W, b = entry
             layer.W = self.backend.owned(W)
             layer.b = self.backend.owned(b)
@@ -238,5 +253,5 @@ class ArrayConvShape(_ConvShapeBase):
         save_conv_array_model_json(path, self)
 
     @classmethod
-    def load(cls, path: str):
+    def load(cls, path: str) -> Self:
         return load_conv_model_json(cls, path)

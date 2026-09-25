@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 import indrajala_math_rust as pa
 import numpy as np
+import numpy.typing as npt
 
-from indrajala_ml.mnist_data import RECORD_SIZE, _read_binary_records, load_mnist_dataset_as_array, load_mnist_labels
+from indrajala_ml.mnist_data import RECORD_SIZE, load_mnist_dataset_as_array, load_mnist_labels, read_binary_records
 
 BACKENDS = ("numpy", "rust")
 
@@ -26,7 +28,8 @@ class PreparedDataset:
     an array loader (prepared_mnist) - and never modified: the numpy networks read rows as views.
     """
 
-    def __init__(self, states, labels: Sequence, backend: str) -> None:
+    # states is the backend's matrix; labels are the rows' own (floats or class indices)
+    def __init__(self, states: npt.NDArray[np.float64] | pa.Array, labels: Sequence[Any], backend: str) -> None:
         assert backend in BACKENDS, f"backend must be one of {BACKENDS}; got {backend!r}"
         assert len(labels) >= 1, "a prepared dataset must not be empty"
         assert states.shape[0] == len(labels), f"{states.shape[0]} rows but {len(labels)} labels"
@@ -41,7 +44,9 @@ class PreparedDataset:
     def from_rows(cls, rows: Sequence[tuple[tuple[float, ...], object]], backend: str) -> PreparedDataset:
         assert len(rows) >= 1, "a prepared dataset must not be empty"
         states = [state for state, _label in rows]
-        matrix = np.array(states, dtype=np.float64) if backend == "numpy" else pa.Array.from_rows(states)
+        matrix: npt.NDArray[np.float64] | pa.Array = (
+            np.array(states, dtype=np.float64) if backend == "numpy" else pa.Array.from_rows(states)
+        )
         return cls(matrix, [label for _state, label in rows], backend)
 
 
@@ -51,9 +56,10 @@ def prepared_mnist(path: str, backend: str, limit: int | None = None) -> Prepare
     per-pixel Python floats load_mnist_dataset builds: the same values, in milliseconds.
     """
 
+    states: npt.NDArray[np.float64] | pa.Array
     if backend == "numpy":
         states = load_mnist_dataset_as_array(path, limit)
     else:
-        states = pa.decode_mnist_pixels(_read_binary_records(path, limit), RECORD_SIZE)
+        states = pa.decode_mnist_pixels(read_binary_records(path, limit), RECORD_SIZE)
     labels = load_mnist_labels(path)[: states.shape[0]]
     return PreparedDataset(states, labels, backend)

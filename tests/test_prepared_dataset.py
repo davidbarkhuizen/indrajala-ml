@@ -22,6 +22,7 @@ from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_networ
     DropoutRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset, prepared_mnist
 from indrajala_ml.train import _training_accuracy
@@ -44,7 +45,7 @@ def _all_subclasses(cls):
 
 
 NETWORK_CLASSES = sorted(
-    {cls for cls in _all_subclasses(ArrayNetworkBase) if cls is not RustArrayNetworkBase},
+    {cls for cls in _all_subclasses(ArrayNetworkBase) if cls not in (NumpyArrayNetworkBase, RustArrayNetworkBase)},
     key=lambda cls: cls.__name__,
 )
 
@@ -185,7 +186,7 @@ def test_classify_rows_runs_numpy_dropout_in_inference_mode():
     after = np.random.random()
     np.random.seed(7)
     assert after == np.random.random()
-    assert not network.layers[0]._was_training
+    assert not network.hidden_layers[0]._was_training
 
 
 def test_classify_rows_runs_rust_dropout_in_inference_mode():
@@ -196,7 +197,7 @@ def test_classify_rows_runs_rust_dropout_in_inference_mode():
     network.randomize()
     prepared = network.prepare_dataset(_rows(cls, CLASSIFY_ROW_COUNT))
     assert network.classify_rows(prepared) == [network.classify_row(prepared, i) for i in range(len(prepared))]
-    assert not network.layers[0]._was_training
+    assert not network.hidden_layers[0]._was_training
 
 
 def _rust_multiclass():

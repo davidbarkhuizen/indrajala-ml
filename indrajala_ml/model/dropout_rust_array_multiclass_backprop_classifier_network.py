@@ -18,7 +18,9 @@ class DropoutRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBac
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, drop_probability: float) -> None:
         self.drop_probability = drop_probability
         super().__init__(layer_sizes, dimension, class_count)
-        self.hidden_layers = self.layers[:-1]
+        hidden = self.layers[:-1]
+        self.hidden_layers = [layer for layer in hidden if isinstance(layer, DropoutRustArrayLayer)]
+        assert len(self.hidden_layers) == len(hidden)  # hidden_layer_cls: every hidden layer drops out
 
     def _set_training_mode(self, training: bool) -> None:
         for layer in self.hidden_layers:

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
+from indrajala_ml.model.base_node import AbstractNode
 
 
 def make_momentum_node_cls(momentum: float) -> type[BackpropNode]:
@@ -17,7 +20,12 @@ def make_momentum_node_cls(momentum: float) -> type[BackpropNode]:
     """
 
     class MomentumBackpropNode(BackpropNode):
-        def __init__(self, input_nodes, input_node_weights=None, bias: float = 0.0) -> None:
+        def __init__(
+            self,
+            input_nodes: Sequence[AbstractNode],
+            input_node_weights: Sequence[float] | None = None,
+            bias: float = 0.0,
+        ) -> None:
             super().__init__(input_nodes, input_node_weights, bias)
             self._weight_velocities = [0.0] * len(self.input_nodes)
             self._bias_velocity = 0.0

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from indrajala_ml.model.base_node import AbstractNode
-from indrajala_ml.model.layer_protocols import InputLayer
+from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 
 
 @dataclass(frozen=True)
@@ -121,7 +121,7 @@ class MaxPoolLayer:
         for unit in self.nodes:
             unit.forward()
 
-    def compute_hidden_deltas(self, next_layer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         for own_index, unit in enumerate(self.nodes):
             unit.compute_hidden_delta(next_layer.downstream_sum(own_index))
 
@@ -142,10 +142,10 @@ class MaxPoolLayer:
     def apply_gradients(self, learning_rate: float) -> None:
         pass
 
-    def snapshot_state(self) -> list:
+    def snapshot_state(self) -> list[tuple[list[float], float]]:
         return []
 
-    def restore_state(self, layer_snapshot: list) -> None:
+    def restore_state(self, layer_snapshot: list[tuple[list[float], float]]) -> None:
         assert layer_snapshot == [], f"a MaxPoolLayer has no state to restore; got {layer_snapshot!r}"
 
     def randomize_fan_in_aware(self) -> None:

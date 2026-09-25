@@ -1,7 +1,16 @@
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
+import numpy.typing as npt
 from numpy.lib.stride_tricks import sliding_window_view
+
+from indrajala_ml.model.array_layer import FloatArray
+from indrajala_ml.model.array_protocols import ArrayNetworkLayer
+
+# each window's winning slot index, as np.argmax returns it
+IndexArray = npt.NDArray[np.intp]
 
 
 def validate_pool_arguments(
@@ -55,36 +64,36 @@ class MaxPoolArrayLayer:
         self.input_size = input_channels * input_height * input_width
         self.size = input_channels * self.out_height * self.out_width
 
-    def forward_batch(self, X: np.ndarray) -> np.ndarray:
+    def forward_batch(self, X: FloatArray) -> FloatArray:
         n = X.shape[0]
         p, s = self.pool_size, self.stride
         planes = X.reshape(n, self.input_channels, self.input_height, self.input_width)
         # numpy 2.2's stub types axis as one int; the function takes a tuple (numpy's docs)
-        windows = sliding_window_view(planes, (p, p), axis=(2, 3))[:, :, ::s, ::s]  # pyright: ignore[reportCallIssue, reportArgumentType]
+        windows = cast(FloatArray, sliding_window_view(planes, (p, p), axis=(2, 3)))[:, :, ::s, ::s]  # pyright: ignore[reportCallIssue, reportArgumentType]
         slots = windows.reshape(n, self.input_channels, self.out_height, self.out_width, p * p)
-        self.argmax_batch = slots.argmax(axis=-1)  # (N, C, out_height, out_width)
+        self.argmax_batch: IndexArray = slots.argmax(axis=-1)  # (N, C, out_height, out_width)
         self.A = np.take_along_axis(slots, self.argmax_batch[..., np.newaxis], axis=-1).reshape(n, self.size)
         return self.A
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: FloatArray) -> FloatArray:
         self.a = self.forward_batch(x[np.newaxis, :])[0]
         self.argmax = self.argmax_batch[0]
         return self.a
 
-    def compute_output_delta(self, reference: np.ndarray) -> None:
+    def compute_output_delta(self, reference: FloatArray) -> None:
         raise NotImplementedError("MaxPoolArrayLayer is a hidden layer, not an output one.")
 
-    def compute_output_delta_batch(self, reference_batch: np.ndarray) -> None:
+    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
         self.compute_output_delta(reference_batch)
 
-    def compute_hidden_delta_batch(self, next_layer) -> None:
+    def compute_hidden_delta_batch(self, next_layer: ArrayNetworkLayer[FloatArray]) -> None:
         # max is the identity on its winning input - no activation derivative to multiply in
         self.delta_batch = next_layer.downstream_batch()
 
-    def compute_hidden_delta(self, next_layer) -> None:
+    def compute_hidden_delta(self, next_layer: ArrayNetworkLayer[FloatArray]) -> None:
         self.delta = next_layer.downstream()
 
-    def _downstream(self, delta_batch: np.ndarray, argmax_batch: np.ndarray) -> np.ndarray:
+    def _downstream(self, delta_batch: FloatArray, argmax_batch: IndexArray) -> FloatArray:
         # the vectorized form of MaxPoolLayer.downstream_sum: each window's delta goes to its
         # winning slot only. One masked strided slice-add per slot (pr, pc) - within one slot
         # every window reads a distinct input, so += never collides; with overlapping windows
@@ -101,22 +110,22 @@ class MaxPoolArrayLayer:
             dX[:, :, pr : pr + row_span : s, pc : pc + col_span : s] += D * (argmax_batch == slot)
         return dX.reshape(n, self.input_size)
 
-    def downstream_batch(self) -> np.ndarray:
+    def downstream_batch(self) -> FloatArray:
         return self._downstream(self.delta_batch, self.argmax_batch)
 
-    def downstream(self) -> np.ndarray:
+    def downstream(self) -> FloatArray:
         return self._downstream(self.delta[np.newaxis, :], self.argmax[np.newaxis])[0]
 
     # weight-free: every gradient hook below is a deliberate no-op
 
-    def accumulate_gradient_batch(self, _input_activation_batch: np.ndarray) -> None:
+    def accumulate_gradient_batch(self, _input_activation_batch: FloatArray) -> None:
         pass
 
-    def accumulate_gradient(self, _input_activation: np.ndarray) -> None:
+    def accumulate_gradient(self, _input_activation: FloatArray) -> None:
         pass
 
     def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
         pass
 
-    def sgd_step(self, _input_activation: np.ndarray, learning_rate: float) -> None:
+    def sgd_step(self, _input_activation: FloatArray, learning_rate: float) -> None:
         pass

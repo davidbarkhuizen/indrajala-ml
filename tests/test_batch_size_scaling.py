@@ -5,6 +5,7 @@ import pytest
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.mnist_data import load_mnist_dataset
+from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.train import train_backprop_network_mini_batch
 
 
@@ -33,13 +34,19 @@ def test_learning_rate_schedule_is_constant_without_warmup_and_ramps_with_it():
     assert [schedule(step) for step in range(6)] == [0.5, 1.0, 1.5, 2.0, 2.0, 2.0]
 
 
+def _numpy(array: object) -> FloatArray:
+    # a numpy network's snapshot entry (bss.initial_network's type spans both backends)
+    assert isinstance(array, np.ndarray)
+    return array
+
+
 @pytest.mark.parametrize("momentum", [0.0, 0.9])
 def test_initial_network_is_identical_across_backends(momentum):
     numpy_weights = bss.initial_network("numpy", momentum, seed=7).snapshot()
     rust_weights = bss.initial_network("rust", momentum, seed=7).snapshot()
     for (numpy_W, numpy_b), (rust_W, rust_b) in zip(numpy_weights, rust_weights):
-        assert np.array_equal(numpy_W, np.array(rust_W.tolist()))
-        assert np.array_equal(numpy_b, np.array(rust_b.tolist()))
+        assert np.array_equal(_numpy(numpy_W), np.array(rust_W.tolist()))
+        assert np.array_equal(_numpy(numpy_b), np.array(rust_b.tolist()))
 
 
 def test_initial_conv_network_is_identical_across_backends():
@@ -47,8 +54,8 @@ def test_initial_conv_network_is_identical_across_backends():
     rust_weights = bss.initial_network("rust", 0.0, seed=7, architecture="conv").snapshot()
     assert len(numpy_weights) == 3  # the conv layer, the dense 32, the output layer
     for (numpy_W, numpy_b), (rust_W, rust_b) in zip(numpy_weights, rust_weights):
-        assert np.array_equal(numpy_W, np.array(rust_W.tolist()))
-        assert np.array_equal(numpy_b, np.array(rust_b.tolist()))
+        assert np.array_equal(_numpy(numpy_W), np.array(rust_W.tolist()))
+        assert np.array_equal(_numpy(numpy_b), np.array(rust_b.tolist()))
 
 
 def test_initial_network_rejects_conv_momentum_and_unknown_architectures():
@@ -61,7 +68,7 @@ def test_initial_network_rejects_conv_momentum_and_unknown_architectures():
 def test_initial_network_differs_between_seeds():
     first = bss.initial_network("numpy", 0.0, seed=0).snapshot()
     second = bss.initial_network("numpy", 0.0, seed=1).snapshot()
-    assert not np.array_equal(first[0][0], second[0][0])
+    assert not np.array_equal(_numpy(first[0][0]), _numpy(second[0][0]))
 
 
 def test_train_epoch_takes_the_same_steps_as_the_trainer(mnist_subset):
@@ -83,8 +90,8 @@ def test_train_epoch_takes_the_same_steps_as_the_trainer(mnist_subset):
     assert steps == 7  # ceil(200 / 32)
     assert step_seconds > 0.0
     for (trainer_W, trainer_b), (study_W, study_b) in zip(trainer_network.snapshot(), study_network.snapshot()):
-        assert np.array_equal(trainer_W, study_W)
-        assert np.array_equal(trainer_b, study_b)
+        assert np.array_equal(_numpy(trainer_W), _numpy(study_W))
+        assert np.array_equal(_numpy(trainer_b), _numpy(study_b))
 
 
 def test_train_and_evaluate_reports_every_epoch(mnist_subset):
