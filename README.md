@@ -40,7 +40,7 @@ Requires Python >= 3.10 and a Debian/Ubuntu host (`setup` apt-installs `python3-
 | Suite | Tests | Covers |
 | --- | --- | --- |
 | `tests/` | ~2250 | this package: models, training, data loaders, Rust-vs-numpy parity |
-| `rust/tests/` | ~900 | the submodule's own `indrajala_math_rust` API, checked against numpy |
+| `rust/tests/` | ~1200 | the submodule's own `indrajala_math_rust` API, checked against numpy |
 
 Both need the submodule checked out **and** built into `.venv`: `tests/` imports
 `indrajala_math_rust` directly, and `rust/tests/` only exists once the submodule is initialised.
@@ -70,11 +70,15 @@ the submodule moves.
 | `indrajala_ml/evaluate.py`, `multiclass_evaluate.py` | disagreement rate, accuracy, confusion matrix |
 | `indrajala_ml/ensemble_train.py` | one-vs-rest ensemble training over multiprocessing |
 | `indrajala_ml/*_data.py` | MNIST, UCI digits and Iris loaders |
+| `indrajala_ml/prepared_dataset.py` | a dataset as one backend matrix, which the array networks train from |
 | `indrajala_ml/benchmark_sweep.py`, `benchmark_data.py` | multi-seed parameter sweeps over MNIST proxy tasks |
+| `indrajala_ml/batch_size_scaling.py` | the batch-size scaling study (linear learning-rate scaling with warmup) |
 | `indrajala_ml/graphics/chart.py` | matplotlib plotting |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
 | `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
+| `scripts/` (the rest) | benchmark, profiling and sweep tools (see `docs/optimizations/measurement.md`), and the refactoring golden run |
+| `docs/` | optimization docs, refactoring and study work plans, machine profiles |
 
 ## Models
 
@@ -94,10 +98,20 @@ per backend.
 
 Each implementation has variants for the same set of features, named by a prefix on the class:
 `ReLU`, `Softmax`, `CrossEntropy`, `L2`, `Momentum`, `Adam`, `Dropout`, `Ensemble`. Convolution
-and max pooling (`Conv…`, `MaxPool…`) exist in all three implementations. The numpy classes are the reference the Rust classes are tested against
-(`tests/test_*fused_layer_ops.py`, `tests/test_numerical_parity.py`).
+and max pooling (`Conv…`, `MaxPool…`) exist in all three implementations. The numpy classes are
+the reference the Rust classes are tested against (`tests/test_*fused_layer_ops.py`,
+`tests/test_numerical_parity.py`).
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,
 hand-computed examples, and the reference the array implementations are checked against. It is
 never used for performance (speed/timing) measurement; only the numpy and Rust implementations
 are timed. Accuracy comparisons of pure-Python models are fine.
+
+## Docs
+
+- [docs/optimizations.md](docs/optimizations.md): Rust against numpy, what has been optimized and
+  rejected, the candidates left, and how to measure a change.
+- [docs/refactoring.md](docs/refactoring.md): structural duplication still in the code, with a
+  staged plan for each item.
+- [docs/conv-batch-size-scaling-workplan.md](docs/conv-batch-size-scaling-workplan.md): the
+  planned study of batch-size scaling for the conv network.

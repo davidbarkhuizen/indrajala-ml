@@ -1,7 +1,6 @@
 # Refactoring: work plans
 
-Structural duplication still in the code, with a staged plan for each item, largest payoff
-first. Each plan changes structure only, never numerics: every stage must keep every parity test
+Structural duplication still in the code, with a staged plan for each item. Each plan changes structure only, never numerics: every stage must keep every parity test
 passing and leave training bit-identical. When an item is done it is removed from this page, and
 its measurements go in its PR.
 

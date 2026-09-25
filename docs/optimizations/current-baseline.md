@@ -53,9 +53,10 @@ last two columns put both on one thread:
 | 30 x 784 | `forward_batch` | 512 | 750-1027 | 1038-1275 | 1.0-1.7x | 1271-1308 | 1217-1257 |
 
 Reading it: most of the default-threading gap at batch 32 is numpy's OpenBLAS threading; on one
-thread each, Rust is level or faster at batch 32 except 32 x 5408 accumulate (1.0-1.1x), and Rust's `forward_batch` is level or faster everywhere. The large one-thread gap left is
-accumulate at batch 512 (`k` = 512): 2.6-2.9x at 32 x 5408 and 1.1-1.4x at 30 x 784. The batch-512
-Rust numbers are threaded and partly warm-clock numbers.
+thread each, Rust is level or faster at batch 32 except 32 x 5408 accumulate (1.0-1.1x), and
+Rust's `forward_batch` is level or faster everywhere. The large one-thread gap left is accumulate
+at batch 512 (`k` = 512): 2.6-2.9x at 32 x 5408 and 1.1-1.4x at 30 x 784. The batch-512 Rust
+numbers are threaded and partly warm-clock numbers.
 
 Conv ops at 28x28, `ConvSpec(3, 8)`, one thread, against 32 or 512 single-example calls:
 `forward_batch` 920-1010 µs at N = 32 and 15.0-15.7 ms at N = 512 (single calls 26-29 µs);
