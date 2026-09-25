@@ -267,8 +267,8 @@ DEMOS: list[DemoInfo] = [
         description=(
             "Headless, console-only. Trains ConvVectorizedMultiClassBackpropClassifierNetwork (numpy) and "
             "ConvRustArrayMultiClassBackpropClassifierNetwork (Rust) from identical initial weights, with "
-            "the single-example and the mini-batch trainer, for one conv layer, conv -> pool -> conv, and a "
-            "stride-2 second conv layer, on UCI digits and a 2000-example MNIST subset. Reports each "
+            "the single-example and the mini-batch trainer, for one conv layer, conv -> pool -> conv, a "
+            "stride-2 second conv layer and conv -> conv, on UCI digits and a 2000-example MNIST subset. Reports each "
             "backend's median time over repeated interleaved runs, the Rust/numpy ratio, both backends' "
             "test accuracy and how often their predictions agree. Then measures what the single-example "
             "path's N = 1 wrapping costs each backend, and profiles where Rust's training time goes by op. "
