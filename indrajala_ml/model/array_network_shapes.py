@@ -58,18 +58,6 @@ class ArrayMultiClassShape:
             target_batch[row, category] = 1.0
         return target_batch
 
-    def _extra_state(self) -> dict:
-        # override point for a sibling with its own hyperparameter to round-trip through
-        # save/load (e.g. {"l2_lambda": self.l2_lambda}) - empty for the plain classes and every
-        # hyperparameter-free sibling (ReLU, softmax, cross-entropy)
-        return {}
-
-    @classmethod
-    def _extra_init_kwargs(cls, state: dict) -> dict:
-        # the inverse of _extra_state: reconstructs a sibling's extra constructor kwargs from a
-        # loaded state dict - empty for the plain classes and every hyperparameter-free sibling
-        return {}
-
     def save(self, path: str) -> None:
         # not save_model_json (model_io.py) - that envelope hardcodes input_bounds, which this
         # shape has no notion of (no StateLayer). save_array_model_json is the shared envelope
@@ -139,15 +127,6 @@ class ArraySingleOutputShape:
 
     def _target_batch_array(self, categories: Sequence[float]):
         return self.backend.matrix([[category] for category in categories])
-
-    def _extra_state(self) -> dict:
-        # override point for a sibling with its own hyperparameter to round-trip through
-        # save/load - empty for the plain classes and the cross-entropy siblings
-        return {}
-
-    @classmethod
-    def _extra_init_kwargs(cls, state: dict) -> dict:
-        return {}
 
     def save(self, path: str) -> None:
         # save_single_output_array_model_json (model_io.py), not save_array_model_json - this

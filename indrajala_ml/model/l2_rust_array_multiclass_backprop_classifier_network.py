@@ -13,16 +13,11 @@ class L2RustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackprop
     closure). l2_lambda is required, as there.
     """
 
+    hyperparameters = ("l2_lambda",)
+
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, l2_lambda: float) -> None:
         self.l2_lambda = l2_lambda
         self.hidden_layer_cls = self.output_layer_cls = (
             lambda size, input_size: L2RustArrayLayer(size, input_size, l2_lambda)
         )
         super().__init__(layer_sizes, dimension, class_count)
-
-    def _extra_state(self) -> dict:
-        return {"l2_lambda": self.l2_lambda}
-
-    @classmethod
-    def _extra_init_kwargs(cls, state: dict) -> dict:
-        return {"l2_lambda": state["l2_lambda"]}

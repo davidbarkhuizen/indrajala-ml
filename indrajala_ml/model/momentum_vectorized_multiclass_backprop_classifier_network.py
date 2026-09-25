@@ -24,16 +24,11 @@ class MomentumVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClass
     class introduces.
     """
 
+    hyperparameters = ("momentum",)
+
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, momentum: float) -> None:
         self.momentum = momentum
         self.hidden_layer_cls = self.output_layer_cls = (
             lambda size, input_size: MomentumArrayLayer(size, input_size, momentum)
         )
         super().__init__(layer_sizes, dimension, class_count)
-
-    def _extra_state(self) -> dict:
-        return {"momentum": self.momentum}
-
-    @classmethod
-    def _extra_init_kwargs(cls, state: dict) -> dict:
-        return {"momentum": state["momentum"]}

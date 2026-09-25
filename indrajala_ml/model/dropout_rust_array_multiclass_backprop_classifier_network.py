@@ -17,6 +17,8 @@ class DropoutRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBac
     for why.
     """
 
+    hyperparameters = ("drop_probability",)
+
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, drop_probability: float) -> None:
         self.drop_probability = drop_probability
         self.hidden_layer_cls = lambda size, input_size: DropoutRustArrayLayer(size, input_size, drop_probability)
@@ -26,10 +28,3 @@ class DropoutRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBac
     def _set_training_mode(self, training: bool) -> None:
         for layer in self.hidden_layers:
             layer.set_training_mode(training)
-
-    def _extra_state(self) -> dict:
-        return {"drop_probability": self.drop_probability}
-
-    @classmethod
-    def _extra_init_kwargs(cls, state: dict) -> dict:
-        return {"drop_probability": state["drop_probability"]}

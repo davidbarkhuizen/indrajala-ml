@@ -17,6 +17,8 @@ class AdamRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpr
     AdamVectorizedMultiClassBackpropClassifierNetwork's docstring for why).
     """
 
+    hyperparameters = ("beta1", "beta2", "epsilon")
+
     def __init__(
         self,
         layer_sizes: list[int],
@@ -33,10 +35,3 @@ class AdamRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpr
             lambda size, input_size: AdamRustArrayLayer(size, input_size, beta1, beta2, epsilon)
         )
         super().__init__(layer_sizes, dimension, class_count)
-
-    def _extra_state(self) -> dict:
-        return {"beta1": self.beta1, "beta2": self.beta2, "epsilon": self.epsilon}
-
-    @classmethod
-    def _extra_init_kwargs(cls, state: dict) -> dict:
-        return {"beta1": state["beta1"], "beta2": state["beta2"], "epsilon": state["epsilon"]}

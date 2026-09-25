@@ -46,6 +46,11 @@ class ArrayNetworkBase:
     # RustArrayNetworkBase sets RUST
     backend = NUMPY
 
+    # the constructor keyword arguments a hyperparameter-bearing sibling stores under the same
+    # attribute names (e.g. ("beta1", "beta2", "epsilon")) - the shapes' save/load round-trip
+    # them through _extra_state/_extra_init_kwargs; empty for every other sibling
+    hyperparameters: tuple[str, ...] = ()
+
     def __init__(self, layer_sizes: list[int], dimension: int, output_size: int) -> None:
 
         validate_layer_sizes(layer_sizes)
@@ -198,6 +203,14 @@ class ArrayNetworkBase:
         for layer in self.layers:
             layer.W, layer.b = self.backend.random_layer(layer.size, previous_size)
             previous_size = layer.size
+
+    def _extra_state(self) -> dict:
+        return {name: getattr(self, name) for name in self.hyperparameters}
+
+    @classmethod
+    def _extra_init_kwargs(cls, state: dict) -> dict:
+        # the inverse of _extra_state: a loaded state dict's hyperparameters, as constructor kwargs
+        return {name: state[name] for name in cls.hyperparameters}
 
     def snapshot(self) -> list[tuple]:
         return [(layer.W.copy(), layer.b.copy()) for layer in self.layers]
