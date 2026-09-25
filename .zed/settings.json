@@ -17,12 +17,15 @@
   },
   "lsp": {
     "ruff": {
+      "binary": {
+        "path": ".venv/bin/ruff",
+        "arguments": ["server"],
+      },
       "initialization_options": {
         "settings": {
           "lint": {
             "enable": true,
           },
-          "lineLength": 120,
         },
       },
     },

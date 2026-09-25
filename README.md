@@ -68,8 +68,9 @@ the submodule moves.
 `./cli lint` runs `ruff check` and `ruff format --check`; `ruff check --fix . && ruff format .`
 (in the venv) applies the fixable findings. Ruff is pinned in `./cli` (`ruff_version`), because
 its default rule set changes between releases; `pyproject.toml`'s `[tool.ruff]` sets the line
-length (120), excludes `rust/` and holds the per-file ignores. The crate lints its own Rust with
-`cargo fmt` and `cargo clippy` (see `rust/README.md`).
+length (120), excludes `rust/` and holds the per-file ignores. Zed runs the same pinned ruff:
+`.zed/settings.json` points its ruff language server at `.venv/bin/ruff`. The crate lints its own
+Rust with `cargo fmt` and `cargo clippy` (see `rust/README.md`).
 
 ## Layout
 
