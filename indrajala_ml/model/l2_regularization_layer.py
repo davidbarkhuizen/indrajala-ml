@@ -25,7 +25,7 @@ def make_l2_node_cls(l2_lambda: float) -> type[BackpropNode]:
                     for weight, accum in zip(self.input_node_weights, self._weight_gradient_accum)
                 ]
             )
-            self.bias = self.bias - learning_rate * self._bias_gradient_accum / batch_size
+            self.bias = self.bias - learning_rate * (self._bias_gradient_accum / batch_size)
             self._reset_gradient_accum()
 
     return L2RegularizedBackpropNode

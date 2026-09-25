@@ -52,10 +52,10 @@ class ConvKernel:
 
     def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
         self.weights = [
-            weight - learning_rate * accum / batch_size
+            weight - learning_rate * (accum / batch_size)
             for weight, accum in zip(self.weights, self._weight_gradient_accum)
         ]
-        self.bias = self.bias - learning_rate * self._bias_gradient_accum / batch_size
+        self.bias = self.bias - learning_rate * (self._bias_gradient_accum / batch_size)
         self._reset_gradient_accum()
 
     def _reset_gradient_accum(self) -> None:

@@ -17,5 +17,5 @@ class L2ArrayLayer(ArrayLayer):
 
     def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
         self.W -= learning_rate * (self._grad_W / batch_size + self._l2_lambda * self.W)
-        self.b -= learning_rate * self._grad_b / batch_size  # bias unregularized
+        self.b -= learning_rate * (self._grad_b / batch_size)  # bias unregularized
         self._reset_gradient_accum()
