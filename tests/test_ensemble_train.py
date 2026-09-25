@@ -34,9 +34,7 @@ def _synthetic_dataset(counts: dict[int, int]) -> list[tuple[tuple[float, ...], 
 
 
 def write_test_records(path: str, records: list[tuple[tuple[float, ...], int]]) -> None:
-    # a minimal, picklable-file-backed stand-in for a real on-disk dataset format (like
-    # mnist_data.py's binary format) - module-level, not a closure, so the matching loader below
-    # can be passed to multiprocessing workers
+    # a stand-in on-disk dataset; module-level so its loader can be sent to worker processes
     with open(path, "wb") as f:
         pickle.dump(records, f)
 
@@ -91,9 +89,8 @@ def test_negative_remainder_is_spread_across_the_first_few_classes():
 
 def test_negative_sampling_is_capped_by_availability():
 
-    # class 1 only has 1 example available, far fewer than the 3 that would otherwise be drawn
-    # from it (9 positives / 3 other classes = 3 each) - it should contribute just that 1, not
-    # raise or pad, and the total negative count falls correspondingly short of 9
+    # class 1 has 1 example, not the 3 (9 positives / 3 classes) it would give: it gives 1,
+    # without raising or padding, and the negatives fall short of 9
     dataset = _synthetic_dataset({0: 9, 1: 1, 2: 10, 3: 10})
 
     result = build_balanced_binary_dataset(dataset, target_label=0, class_count=4, rng=random.Random(0))
@@ -138,9 +135,6 @@ def test_rejects_an_out_of_range_target_label():
 
 def test_build_balanced_binary_dataset_matches_select_balanced_indices():
 
-    # build_balanced_binary_dataset is a thin wrapper around select_balanced_indices - this
-    # confirms the two produce identical output: the same states/categories come out, just
-    # looked up from the index-based result rather than computed a second, independent way
     dataset = _synthetic_dataset({0: 6, 1: 10, 2: 10, 3: 10})
     labels = [label for _, label in dataset]
 
@@ -171,9 +165,7 @@ def test_select_balanced_indices_rejects_an_out_of_range_target_label():
 
 
 def _synthetic_multiclass_dataset() -> list[tuple[tuple[float, float], int]]:
-    # three well-separated 2D clusters - small, but genuinely learnable (unlike the label-only
-    # synthetic dataset above, these states actually carry signal), so training this for real
-    # through the full multiprocessing.Pool path is meaningful, not just mechanically exercised
+    # three well-separated 2D clusters: learnable, unlike the label-only dataset above
     centers = {0: (-5.0, -5.0), 1: (5.0, 5.0), 2: (5.0, -5.0)}
     rng = random.Random(1)
     dataset = []
@@ -248,14 +240,9 @@ def test_train_ensemble_parallel_produces_a_working_ensemble():
 
 def test_train_ensemble_parallel_respects_a_custom_classifier_cls():
 
-    # confirms classifier_cls actually reaches the forked worker processes, not just the main
-    # one - epochs=0 leaves every sub-network's weights exactly at randomize()'s own output, so
-    # the resulting weight magnitude cleanly distinguishes FanInAwareBackpropClassifierNetwork's
-    # scheme (limit=1/sqrt(dimension)=1/sqrt(2)=0.707) from the default BackpropClassifierNetwork
-    # scheme this test's dimension/bounds would otherwise produce (2.0/half_width=2.0/10.0=0.2 for
-    # the first hidden layer, but unbounded beyond it - the fan-in-aware ceiling is the
-    # unambiguous signal here since it applies uniformly to every layer, including the output
-    # layer, where the default scheme instead draws from a fixed uniform(-1.0, 1.0))
+    # classifier_cls must reach the worker processes. epochs=0 leaves the initial weights, and
+    # only the fan-in-aware scheme bounds every layer, output included, by 1/sqrt(fan_in) (the
+    # default draws the output layer from uniform(-1.0, 1.0))
     dataset = _synthetic_multiclass_dataset()
     bounds = square_bounds(10.0)
 
@@ -281,14 +268,9 @@ def test_train_ensemble_parallel_respects_a_custom_classifier_cls():
 
 def test_train_ensemble_parallel_gives_each_worker_independent_initial_weights():
 
-    # epochs=0: train_linear_classifier_network's loop body never runs, so each returned
-    # sub-network is left exactly at its randomized(), untrained state (confirmed directly -
-    # its snapshot is unchanged from before the call) - isolates "are initial weights actually
-    # independent per worker" from "training on different data made them diverge anyway",
-    # which a nonzero epoch count can't distinguish (confirmed by mutation testing: hardcoding
-    # every worker's seed to the same value still passed a version of this test using epochs=1,
-    # since post-training divergence from each sub-network's different binary dataset masked
-    # the identical initial weights)
+    # epochs=0 leaves each sub-network untrained, so only the seeding can make them differ. With
+    # epochs=1, a mutant giving every worker the same seed passed: training on different data
+    # hid the identical initial weights
     dataset = _synthetic_multiclass_dataset()
     bounds = square_bounds(10.0)
 
@@ -313,19 +295,9 @@ def test_train_ensemble_parallel_is_reproducible_under_a_fixed_seed():
 
 def test_train_ensemble_parallel_accepts_array_backed_classifier_cls():
 
-    # ArrayBackpropClassifierNetwork.randomized's accepted-and-discarded input_bounds parameter
-    # (see its own docstring) lets it plug into the existing multiprocessing.Pool path
-    # completely unchanged - numpy arrays pickle fine across a worker boundary natively (unlike
-    # indrajala_math_rust.Array - see
-    # test_train_ensemble_parallel_accepts_rust_array_backed_classifier_cls below for that case).
-    #
-    # train_ensemble_parallel's own _collect_ensemble_results always wraps the trained
-    # classifiers in EnsembleBackpropClassifierNetwork (the per-node wrapper), regardless of
-    # classifier_cls - fine for predict_probabilities/classify_state (duck-typed, calls
-    # classifier.predict_probability only), but that wrapper's own save() reaches into
-    # hidden_layers/input_bounds, which ArrayBackpropClassifierNetwork has neither of. The real
-    # ensemble wrapper for this backend is EnsembleArrayBackpropClassifierNetwork - built here by
-    # rewrapping .classifiers, not by changing train_ensemble_parallel's own return type.
+    # the result is always the per-node EnsembleBackpropClassifierNetwork, which classifies
+    # array classifiers fine but can't save them; EnsembleArrayBackpropClassifierNetwork
+    # rewraps .classifiers for that
     dataset = _synthetic_multiclass_dataset()
     bounds = square_bounds(10.0)
 
@@ -353,15 +325,8 @@ def test_train_ensemble_parallel_accepts_array_backed_classifier_cls():
 
 def test_train_ensemble_parallel_accepts_rust_array_backed_classifier_cls():
 
-    # indrajala_math_rust.Array does not support pickling (confirmed directly: pickle.dumps
-    # raises TypeError), which would otherwise make this the one classifier_cls that can never
-    # train through a multiprocessing.Pool worker boundary. Closed by
-    # ensemble_train._picklable_snapshot (converts a worker's returned snapshot to plain,
-    # always-picklable lists before it crosses the process boundary) paired with
-    # RustArrayBackpropClassifierNetwork.restore()'s own tolerance for receiving plain lists as
-    # well as pa.Array - no new public training function needed, the existing
-    # train_ensemble_parallel/train_ensemble_parallel_from_indices machinery already works
-    # unchanged once both sides of that boundary agree on a picklable representation.
+    # indrajala_math_rust.Array can't be pickled: _picklable_snapshot sends plain lists back
+    # from the worker, and the Rust network's restore() accepts them
     dataset = _synthetic_multiclass_dataset()
     bounds = square_bounds(10.0)
 
@@ -406,10 +371,7 @@ def test_train_ensemble_parallel_from_indices_produces_a_working_ensemble(tmp_pa
 
 def test_train_ensemble_parallel_from_indices_matches_the_fully_decoded_path(tmp_path):
 
-    # same data, same seed, same everything - the index-based path should train to exactly the
-    # same result as the fully-decoded path, since select_balanced_indices' choices and
-    # per-worker seeding are identical either way, only *how* each worker gets its examples
-    # differs
+    # same selection and per-worker seeds; only how each worker gets its examples differs
     dataset = _synthetic_multiclass_dataset()
     labels = [label for _, label in dataset]
     path = str(tmp_path / "records.pkl")
@@ -452,9 +414,8 @@ def test_train_ensemble_serial_from_indices_produces_a_working_ensemble(tmp_path
 
 def test_train_ensemble_serial_from_indices_matches_the_parallel_path(tmp_path):
 
-    # no multiprocessing.Pool at all, but select_balanced_indices' choices and per-class seeding
-    # are identical either way (both draw from one random.Random(seed) in class order) - so the
-    # serial path should train to exactly the same result as the parallel one
+    # no Pool, but the same selection and per-class seeds (one random.Random(seed), in class
+    # order)
     dataset = _synthetic_multiclass_dataset()
     labels = [label for _, label in dataset]
     path = str(tmp_path / "records.pkl")
@@ -480,10 +441,7 @@ def test_train_ensemble_serial_from_indices_matches_the_parallel_path(tmp_path):
 
 def test_train_ensemble_serial_from_indices_accepts_array_and_rust_backed_classifier_cls(tmp_path):
 
-    # the serial path this function provides for both backends - ArrayBackpropClassifierNetwork
-    # (numpy) and RustArrayBackpropClassifierNetwork alike (see _picklable_snapshot for why Rust
-    # can also use the parallel path, not just this one) - as a comparison point against each
-    # backend's own parallel-path result.
+    # each backend's serial result must equal its parallel one
     dataset = _synthetic_multiclass_dataset()
     labels = [label for _, label in dataset]
     path = str(tmp_path / "records.pkl")
@@ -554,10 +512,8 @@ def test_estimate_bytes_per_example_rejects_an_empty_dataset():
 
 def test_select_worker_count_is_limited_by_available_memory(monkeypatch):
 
-    # 100MB available, budget half of it (50MB) for workers, each estimated at
-    # 1000 examples * 1000 bytes/example * 2.0x safety multiplier = 2,000,000 bytes/worker ->
-    # floor(50_000_000 / 2_000_000) = 25 workers by memory alone - but cpu_count/class_count
-    # below are set high enough not to bind, isolating the memory limit specifically
+    # half of 100MB for workers at 1000 examples * 1000 bytes * 2.0 safety = 2MB each: 25
+    # workers. cpu_count and class_count are set high enough not to bind
     monkeypatch.setattr("indrajala_ml.ensemble_train._available_memory_bytes", lambda: 100_000_000)
     monkeypatch.setattr("os.cpu_count", lambda: 64)
 

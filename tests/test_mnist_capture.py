@@ -79,12 +79,9 @@ def test_resize_area_weighted_uniform_input_is_invariant_to_scale():
 
 def test_resize_area_weighted_splits_a_single_source_pixel_across_two_output_rows():
 
-    # 3x1 -> 2x1 (row_scale=1.5): the middle source pixel (value 4.0) genuinely straddles both
-    # output rows - output 0 = (0*1.0 + 4*0.5) / 1.5 = 4/3; output 1 = (4*0.5 + 8*1.0) / 1.5 =
-    # 20/3 - hand-computed, not re-derived from the implementation. (A target size of 1 in
-    # either direction would be degenerate here - the whole source falls in a single output
-    # pixel, so every overlap is trivially 1.0 and no genuine splitting is exercised; caught by
-    # mutation testing, which is why this uses a real 3x1 -> 2x1 split instead.)
+    # 3x1 -> 2x1 (row_scale=1.5): the middle pixel (4.0) straddles both output rows.
+    # Hand-derived: (0*1.0 + 4*0.5) / 1.5 = 4/3 and (4*0.5 + 8*1.0) / 1.5 = 20/3. A target
+    # size of 1 splits nothing, and a mutation test showed it missed bugs
     source = [[0.0], [4.0], [8.0]]
 
     result = resize_area_weighted(source, 2, 1)
@@ -95,11 +92,7 @@ def test_resize_area_weighted_splits_a_single_source_pixel_across_two_output_row
 
 def test_resize_area_weighted_splits_a_single_source_pixel_across_two_output_pixels():
 
-    # the row-direction case above collapses the whole source into a single output pixel,
-    # where every overlap is trivially 1.0 (nothing to actually split) - this instead resizes
-    # 1x3 -> 1x2 (col_scale=1.5), so the middle source pixel (value 4.0) genuinely straddles
-    # both output pixels: output 0 = (0*1.0 + 4*0.5) / 1.5 = 4/3; output 1 =
-    # (4*0.5 + 8*1.0) / 1.5 = 20/3 - hand-computed, not re-derived from the implementation
+    # the column-direction version of the test above: 1x3 -> 1x2, the same 4/3 and 20/3
     source = [[0.0, 4.0, 8.0]]
 
     result = resize_area_weighted(source, 1, 2)
@@ -132,12 +125,9 @@ def test_scale_to_fit_a_square_source_stays_square():
 
 def test_scale_to_fit_clamps_floating_point_overshoot_to_the_source_range():
 
-    # resize_area_weighted's average is mathematically bounded by the source's own min/max
-    # (here [0.0, 1.0]) - but summing many small floating-point overlap contributions can
-    # overshoot that bound by a tiny amount. A minimal repro found directly (not hand-derived):
-    # a 1x1 all-ones source resized to 1x3 produces 1.0000000000000002 without the clamp - this
-    # would fail intensity_to_color's strict [0.0, 1.0] assertion downstream, a real bug hit
-    # during interactive demo_mnist_ensemble_capture.py smoke testing.
+    # summed overlap fractions can overshoot the source range: a 1x1 all-ones source resized
+    # to 1x3 gives 1.0000000000000002 unclamped, which intensity_to_color rejects (a real bug in
+    # demo_mnist_ensemble_capture.py)
     source = [[1.0]]
 
     result = scale_to_fit(source, max_dimension=3)

@@ -17,12 +17,8 @@ from helpers import classifier_with_tiny_bounded_region, unreachable_class_class
 
 def test_sample_class_balanced_states_succeeds_within_a_tight_budget_for_a_tiny_region():
 
-    # would reliably exhaust a budget this small under naive full-input_bounds rejection
-    # sampling (median cardinality=4 bounded region covers ~1.5% of the box; this one is
-    # deliberately far smaller, at 0.01% - verified directly: naive sampling found only 1/20
-    # positive points in 5000 attempts, where sampling from a tight box around the region
-    # instead found 20/20 in 28) - succeeds here because positive-class points are drawn from
-    # a tight box around the region itself, not the whole box
+    # a region 0.01% of the box: naive rejection sampling found 1 of 20 positives in 5000
+    # attempts; the tight box around the region finds 20 in 28
     bounds = square_bounds(10.0)
     classifier = classifier_with_tiny_bounded_region(bounds)
 

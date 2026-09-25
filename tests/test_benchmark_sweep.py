@@ -4,9 +4,7 @@ from indrajala_ml.benchmark_sweep import estimate_sweep_wallclock, run_parameter
 
 
 def _toy_worker(shared_context, config: int, seed: int) -> float:
-    # deterministic pure function of (config, seed), ignoring shared_context - no real training,
-    # since this test proves the runner's own mechanics (dispatch, seeding, aggregation) work,
-    # not a real measurement
+    # deterministic in (config, seed): tests the runner's dispatch, seeding and aggregation
     return config * 10.0 + seed
 
 
@@ -16,9 +14,8 @@ def _sleepy_worker(shared_context, config: int, seed: int) -> float:
 
 
 def _shared_context_worker(shared_context, config: int, seed: int) -> float:
-    # exercises the actual fix: shared_context must arrive in every worker process exactly as
-    # passed by the caller, not via a module-level global a caller might otherwise be tempted to
-    # rely on (which would only work under multiprocessing's fork start method, not spawn)
+    # shared_context must reach every worker as passed; a module-level global would work only
+    # under fork, not spawn
     return shared_context["offset"] + config + seed
 
 
@@ -65,10 +62,8 @@ def test_estimate_sweep_wallclock_projects_from_a_single_real_run():
 
 def test_estimate_sweep_wallclock_passes_shared_context_through_to_the_worker():
 
-    # estimate_sweep_wallclock returns a timing projection, not the worker's own return value -
-    # so the actual check is that this doesn't raise. Without the fix, shared_context defaults
-    # to None and _shared_context_worker's own shared_context["offset"] lookup would raise
-    # TypeError, not silently return a wrong number.
+    # returns a timing, not the worker's value, so the check is that it doesn't raise: a
+    # missing shared_context makes the worker's lookup raise TypeError
     projected = estimate_sweep_wallclock(
         _shared_context_worker,
         sample_config=0,

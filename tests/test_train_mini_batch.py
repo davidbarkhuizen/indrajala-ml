@@ -47,11 +47,8 @@ def test_train_mini_batch_rejects_empty_training_data():
 
 def test_batch_size_one_no_reshuffle_matches_train_linear_classifier_network_exactly():
 
-    # with batch_size=1 (learn_batch's own proven-bit-identical special case - see
-    # tests/test_learn_batch.py) and reshuffling disabled, train_backprop_network_mini_batch's
-    # per-epoch processing order exactly matches train_linear_classifier_network's own fixed
-    # per-example order - the two should therefore land on an identical final snapshot and an
-    # identical accuracy trajectory, not just a similar one
+    # batch_size=1 without reshuffling visits examples in train_linear_classifier_network's
+    # order, so the snapshot and accuracy trajectory must be identical
     reference, training_data = reachable_reference_and_training_data(1, 2, square_bounds(10.0), 200)
 
     via_learn = BackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0))
@@ -117,11 +114,8 @@ def test_train_mini_batch_calls_a_schedule_with_increasing_batch_step_indices():
 
 def test_train_mini_batch_works_with_multiclass_network_via_duck_typing():
 
-    # a small, linearly-separable-per-class target (one point per quadrant) - seeded so this
-    # is deterministic, and given enough epochs that convergence (not just "some weight moved",
-    # which the pocket algorithm doesn't guarantee if no epoch ever improves - see
-    # test_batch_size_one_no_reshuffle_matches_train_linear_classifier_network_exactly's own
-    # pocket-tracking behavior) is the actual, reliable thing being checked
+    # one point per quadrant, seeded, with enough epochs to converge (pocket tracking means
+    # "some weight moved" isn't guaranteed)
     random.seed(0)
 
     class_count = 3

@@ -13,10 +13,8 @@ from tests.helpers import set_random_node_weights
 
 def test_sigmoid_matches_node_sigmoid_across_a_random_sweep_including_the_overflow_boundary():
 
-    # backprop_node.sigmoid's own docstring pins math.exp(710) as raising OverflowError and
-    # math.exp(700) as not - both sides of that boundary, plus the ordinary range, get checked
-    # here so numpy's inf-based overflow path is confirmed to land on the same limiting value,
-    # not assumed from the formulas looking equivalent (see array_layer.sigmoid's docstring).
+    # math.exp overflows between 700 and 710; both sides, so numpy's inf path is checked to
+    # reach the same limit
     rng = random.Random(0)
     z_values = [rng.uniform(-50.0, 50.0) for _ in range(200)]
     z_values += [-700.0, -709.0, -710.0, -1000.0, -1e10, 700.0, 709.0, 710.0, 1000.0, 0.0]
@@ -223,9 +221,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_backprop_node_across_a_
 
 def test_accumulate_across_a_batch_then_apply_matches_backprop_node_across_a_random_sweep():
 
-    # multiple examples accumulated (different input, different delta each time) before any
-    # weight is written, then one apply at batch_size>1 - mirrors mini-batch gradient descent's
-    # own accumulate/apply split (see tests/test_gradient_accumulation.py's batched cases)
+    # several examples accumulated, then one apply at batch_size > 1
     rng = random.Random(8)
     dimension = 4
     size = 3
@@ -308,9 +304,7 @@ def test_accumulate_gradient_batch_matches_looping_accumulate_gradient_over_ever
 
 def test_downstream_matches_the_hand_written_transpose_matmul_single_and_batch():
 
-    # downstream()/downstream_batch() are the gradient an ArrayLayer sends back to its input -
-    # pinned here against the expressions every compute_hidden_delta* site used to inline
-    # (next_layer.W.T @ next_layer.delta and next_layer.delta_batch @ next_layer.W)
+    # the gradient sent back to the input: W.T @ delta, and delta_batch @ W
     rng = np.random.default_rng(0)
     layer = ArrayLayer(4, 6)
     layer.W = rng.uniform(-1.0, 1.0, size=(4, 6))

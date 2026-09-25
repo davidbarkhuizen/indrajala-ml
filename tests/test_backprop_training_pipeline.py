@@ -8,13 +8,9 @@ from indrajala_ml.train import random_alternating_training_data, train_linear_cl
 
 def test_train_linear_classifier_network_drives_a_backprop_network_past_the_linear_ceiling_on_xor():
 
-    # measured directly: best_training_accuracy=0.9666666666666667 at epoch 78/100 (plateaued,
-    # not still improving - more epochs don't help further, since the handful of remaining
-    # errors sit essentially on the x=0/y=0 boundary itself, which a bounded-weight sigmoid
-    # network can only approximate, never perfectly resolve) - comfortably clear of the ~0.845
-    # ceiling no LinearClassifierNetwork gate gets past on this same target (see test_train.py's
-    # test_train_linear_classifier_network_keeps_the_best_epoch_not_the_last): the automated
-    # counterpart to demo_xor_linear_classifier_ceiling.py.
+    # measured: 0.9666666666666667 at epoch 78 of 100, plateaued (the remaining errors sit on
+    # the x=0/y=0 boundary), well past the ~0.845 no LinearClassifierNetwork reaches on this
+    # target (test_train.py)
     random.seed(0)
 
     bounds = square_bounds(10.0)

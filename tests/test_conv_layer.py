@@ -59,11 +59,8 @@ def test_constructor_rejects_a_shape_mismatch_with_input_layer():
 
 def test_forward_matches_a_hand_computed_small_example():
 
-    # 3x3 input, row-major: [[1,2,3],[4,5,6],[7,8,9]]; kernel_size=2, stride=1 -> 2x2 output.
-    # kernel weights [1,0,0,0] (order: (kr=0,kc=0),(0,1),(1,0),(1,1)) picks each window's
-    # top-left element - which is just the input value at (row,col) itself for a stride-1,
-    # top-left-anchored window - independently verified by hand below, not re-derived from the
-    # implementation under test:
+    # 3x3 input [[1,2,3],[4,5,6],[7,8,9]], kernel_size=2, stride=1 -> 2x2 output. Weights
+    # [1,0,0,0] in (kr, kc) order pick each window's top-left element; hand-derived:
     #   (0,0): window [1,2,4,5] . [1,0,0,0] = 1 -> relu(1) = 1
     #   (0,1): window [2,3,5,6] . [1,0,0,0] = 2 -> relu(2) = 2
     #   (1,0): window [4,5,7,8] . [1,0,0,0] = 4 -> relu(4) = 4
@@ -79,12 +76,8 @@ def test_forward_matches_a_hand_computed_small_example():
 
 def test_receptive_field_wiring_via_a_single_hot_pixel():
 
-    # 4x4 input, all zero except one pixel at (row=1, col=2) set to 1.0; kernel_size=2,
-    # stride=1, all-ones kernel, zero bias - only output positions whose 2x2 window covers
-    # (1, 2) should be nonzero, and each should be exactly 1.0 (only one input contributes).
-    # Windows covering (1,2): top-left corner at (0,1),(0,2),(1,1),(1,2) - i.e. output positions
-    # (0,1),(0,2),(1,1),(1,2) in a 3x3 output grid (out_height=out_width=3 for 4x4 input,
-    # kernel_size=2).
+    # 4x4 input with one hot pixel at (1, 2), all-ones 2x2 kernel, zero bias: exactly the four
+    # windows covering (1, 2) - outputs (0,1), (0,2), (1,1), (1,2) of the 3x3 grid - are 1.0
     height = width = 4
     values = [0.0] * (height * width)
     hot_row, hot_col = 1, 2
@@ -158,10 +151,8 @@ def test_multichannel_forward_matches_a_hand_computed_small_example():
 @pytest.mark.parametrize("hot_channel", [0, 1, 2])
 def test_multichannel_receptive_field_wiring_via_a_single_hot_pixel(hot_channel):
 
-    # three 4x4 input channels, all zero except one pixel at (1, 2) in hot_channel; each input
-    # channel's kernel slice is filled with a distinct constant (1, 2, 3), so the nonzero
-    # outputs must sit at exactly the single-channel test's positions and carry exactly the
-    # hot channel's own constant - wrong channel offsets would show up as the wrong value
+    # each input channel's kernel slice is a distinct constant (1, 2, 3), so the single-channel
+    # test's positions must carry the hot channel's constant; a wrong channel offset changes it
     height = width = 4
     plane = height * width
     values = [0.0] * (3 * plane)
@@ -181,9 +172,8 @@ def test_multichannel_receptive_field_wiring_via_a_single_hot_pixel(hot_channel)
 
 def test_a_conv_layer_feeds_the_next_directly_as_channel_major_input():
 
-    # a ConvLayer's own .nodes ordering (channel-major) must be exactly the input ordering the
-    # next layer reads: with 1x1 kernels, second-layer unit (row, col) reads first-layer output
-    # channel c at (row, col) as its c-th input node
+    # .nodes is channel-major, the order the next layer reads: with 1x1 kernels, second-layer
+    # unit (row, col) reads first-layer channel c at (row, col) as its c-th input
     input_layer = StateLayer(9, [(-10.0, 10.0)] * 9)
     first = ConvLayer(input_layer=input_layer, input_height=3, input_width=3, kernel_size=2, channel_count=2)
     second = ConvLayer(
@@ -204,9 +194,8 @@ def test_apply_gradients_matches_a_hand_computed_single_example():
     for unit in layer.nodes:
         unit.delta = 0.1  # a fixed downstream delta at every position, for a simple hand check
 
-    # accum per weight index = sum over positions of delta * that position's own receptive
-    # field value at that index. Position windows (top-left-anchored values): [1,2,4,5],
-    # [2,3,5,6], [4,5,7,8], [5,6,8,9] - index 0 (top-left) across all 4 positions: 1+2+4+5=12
+    # accum[i] = sum over positions of delta * window[i]; windows [1,2,4,5], [2,3,5,6],
+    # [4,5,7,8], [5,6,8,9], so index 0 sums 1+2+4+5 = 12
     layer.apply_gradients(learning_rate=0.1)
 
     expected_weight_0 = 1.0 - 0.1 * (0.1 * 1 + 0.1 * 2 + 0.1 * 4 + 0.1 * 5)
@@ -217,10 +206,8 @@ def test_apply_gradients_matches_a_hand_computed_single_example():
 
 def test_apply_accumulated_gradients_applies_once_per_kernel_not_once_per_unit():
 
-    # channel_count=2, several units per channel - apply_accumulated_gradients must move each
-    # kernel's weights by exactly the summed-then-batch-divided amount once, not repeatedly
-    # (which apply_accumulated_gradient's own accumulator reset already guards against, but
-    # this test exercises it through the real layer/kernel wiring, not in isolation)
+    # several units share each kernel; the kernel must move once, by the summed gradient over
+    # batch_size
     layer = _layer_with_state([1.0] * 16, height=4, width=4, kernel_size=3, channel_count=2)
     layer.forward()
     for unit in layer.nodes:
@@ -283,11 +270,8 @@ def test_randomize_fan_in_aware_randomizes_every_kernel():
 
 def test_gradient_check_against_a_numerically_perturbed_loss():
 
-    # the standard, rigorous validation for a backward-pass formula: loss
-    # L = sum of every unit's (post-ReLU) activation, so dL/da_i = 1 and (via the ReLU
-    # derivative) dL/dz_i = 1 if active else 0 - setting exactly that as each unit's delta
-    # before accumulate_gradients() is the real gradient this loss produces, checked here
-    # against a numerically-perturbed finite-difference estimate for every weight and bias.
+    # loss L = sum of every unit's post-ReLU activation, so dL/dz_i = 1 if active else 0; with
+    # that as each unit's delta, every weight and bias gradient must match finite differences
     random.seed(0)
     height = width = 4
     input_layer = StateLayer(height * width, [(-10.0, 10.0)] * (height * width))
@@ -351,9 +335,8 @@ def _stacked_conv_layers(height: int, width: int, stride: int) -> tuple[StateLay
 @pytest.mark.parametrize("stride", [1, 2])
 def test_downstream_sum_matches_a_brute_force_scan_over_every_unit(stride):
 
-    # the reverse map is only an optimization - it must give exactly the sum a dense scan over
-    # every downstream unit would, where a unit contributes delta * weight for each receptive
-    # field slot that reads the given input node (by identity) and nothing otherwise
+    # the reverse map is an optimization: it must equal a scan summing delta * weight over every
+    # receptive-field slot that reads the input node
     random.seed(1)
     _input_layer, first, second = _stacked_conv_layers(height=7, width=7, stride=stride)
     first.forward()
@@ -388,10 +371,8 @@ def test_downstream_sum_is_zero_for_an_input_no_receptive_field_reads():
 @pytest.mark.parametrize("stride", [1, 2])
 def test_gradient_check_through_two_stacked_conv_layers(stride):
 
-    # the same finite-difference check as the single-layer test above, but with loss
-    # L = sum of the *second* conv layer's activations, so every first-layer gradient has to
-    # flow back through the second layer's shared kernels via compute_hidden_deltas/
-    # downstream_sum - the backprop-through-convolution this layer previously didn't implement
+    # loss L = sum of the second conv layer's activations, so first-layer gradients flow back
+    # through compute_hidden_deltas/downstream_sum
     random.seed(2)
     _input_layer, first, second = _stacked_conv_layers(height=7, width=7, stride=stride)
 

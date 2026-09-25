@@ -85,9 +85,8 @@ def test_random_alternating_training_data_raises_for_an_unreachable_class():
 
 def test_random_alternating_training_data_succeeds_within_a_tight_budget_for_a_tiny_region():
 
-    # same fix as evaluate.sample_class_balanced_states (which this delegates to): naive
-    # full-input_bounds rejection sampling would reliably exhaust a budget this small for a
-    # region this tiny (0.01% of the box's area)
+    # via evaluate.sample_class_balanced_states: naive rejection sampling would exhaust this
+    # budget on a region 0.01% of the box
     bounds = square_bounds(10.0)
     classifier = classifier_with_tiny_bounded_region(bounds)
 
@@ -108,11 +107,8 @@ def test_reachable_reference_and_training_data_raises_when_no_reference_is_ever_
 
 def test_train_linear_classifier_network_keeps_the_best_epoch_not_the_last():
 
-    # this exact setup (seed, target, cardinality, required_active, epoch count) doesn't
-    # converge - per-epoch training accuracy measured directly (without pocket tracking):
-    # 0.623, 0.710, 0.807, 0.845, 0.830, 0.816, 0.801, 0.843, 0.827, 0.829 for epochs 0-9.
-    # The raw last epoch (0.829) is worse than the best one seen (epoch 3, 0.845) - confirms
-    # the student is left at the best epoch's accuracy, not whatever the last one landed on.
+    # measured per-epoch accuracy without pocket tracking: 0.623, 0.710, 0.807, 0.845, 0.830,
+    # 0.816, 0.801, 0.843, 0.827, 0.829, so the best epoch (3) isn't the last
     random.seed(0)
 
     # XOR isn't representable by an AND/OR/k-of-n gate over cardinality=3 half-planes
@@ -124,9 +120,7 @@ def test_train_linear_classifier_network_keeps_the_best_epoch_not_the_last():
 
     assert _training_accuracy(student, training_data) == pytest.approx(0.845)
 
-    # the same non-convergence is visible in the diagnostic without needing to eyeball a
-    # chart: the best epoch (index 3, accuracy 0.845) wasn't the last one (index 9), so this
-    # is a plateau, not still-improving or converged
+    # best epoch index 3, last 9: a plateau
     diagnostic = result.diagnostic
     assert diagnostic.epoch_training_accuracies == [
         pytest.approx(a) for a in [0.623, 0.710, 0.807, 0.845, 0.830, 0.816, 0.801, 0.843, 0.827, 0.829]

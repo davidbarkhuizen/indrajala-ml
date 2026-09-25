@@ -10,16 +10,9 @@ from indrajala_ml.train import train_linear_classifier_network
 
 def test_train_linear_classifier_network_drives_softmax_multiclass_backprop_on_real_digit_data():
 
-    # the direct softmax/cross-entropy counterpart of
-    # test_multiclass_training_pipeline.py::test_train_linear_classifier_network_drives_multiclass_backprop_on_real_digit_data
-    # - same 200-row subset, same seeds, same architecture/learning_rate/epochs, so the two
-    # loss functions' actual difference on real data is directly comparable, not just each
-    # measured in isolation. Measured directly (not guessed): best_training_accuracy=1.0 at
-    # epoch 15/15 (genuinely converged, not just plateaued), test accuracy 0.975 - both higher
-    # than the one-vs-rest sibling's 0.98125 training / 0.9 test on this exact same split. Not
-    # a claim that softmax is always better (200 rows is a small, easy-to-overfit sample), just
-    # a real, reproducible measurement that it isn't worse here, and comes with the semantic
-    # correctness benefit (probabilities that sum to 1) for free.
+    # test_multiclass_training_pipeline.py's setup with softmax. Measured: training accuracy
+    # 1.0 (converged), test 0.975, against one-vs-rest's 0.98125 and 0.9 on the same split (200
+    # rows: not evidence softmax is better in general)
     random.seed(0)
 
     dataset = load_digits_dataset()

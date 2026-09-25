@@ -59,9 +59,7 @@ def test_learn_batch_accumulates_over_every_example_before_updating_weights():
 
 def test_learn_batch_matches_averaging_three_individual_learn_steps_gradients_by_hand():
 
-    # learn_batch's own internals (forward+backward+accumulate per example, one averaged apply)
-    # reimplemented independently here at the network level, not re-derived from the
-    # implementation under test, and checked to agree
+    # a separate implementation: per-example gradients, averaged, applied once
     learning_rate = 0.1
     batch = [((3.0, -4.0), 1.0), ((1.0, 2.0), 0.0), ((-5.0, 5.0), 1.0)]
 
@@ -89,9 +87,7 @@ def test_learn_batch_rejects_an_empty_batch():
 
 def test_learn_batch_is_inherited_unchanged_by_momentum_sibling():
 
-    # MomentumBackpropClassifierNetwork overrides no learn-related method - learn_batch must
-    # come from BackpropClassifierNetwork and dispatch correctly through the momentum node
-    # class's own apply_accumulated_gradient override
+    # inherited learn_batch must reach the momentum node's apply_accumulated_gradient
     learning_rate = 0.1
     batch = [((3.0, -4.0), 1.0), ((1.0, 2.0), 0.0)]
 

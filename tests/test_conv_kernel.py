@@ -56,10 +56,8 @@ def test_accumulate_gradient_rejects_a_mismatched_receptive_field_length():
 
 def test_multiple_spatial_positions_sum_not_average_while_batch_size_still_averages():
 
-    # two spatial positions contribute to the same kernel this step (as every position in a
-    # ConvLayer's channel does), then a mini-batch of 2 examples repeats that - accumulate_gradient
-    # never divides; only apply_accumulated_gradient's own batch_size division does, so spatial
-    # contributions are summed and mini-batch examples are averaged, not both averaged together
+    # spatial positions are summed and only the batch is averaged: accumulate_gradient never
+    # divides, apply_accumulated_gradient divides by batch_size
     kernel = ConvKernel(kernel_size=1, in_channels=1, weights=[0.5], bias=0.1)
 
     # "example 1": two spatial positions, values 1.0 and 2.0, same delta=0.2
@@ -69,8 +67,7 @@ def test_multiple_spatial_positions_sum_not_average_while_batch_size_still_avera
     kernel.accumulate_gradient(delta=0.2, receptive_field_values=[1.0])
     kernel.accumulate_gradient(delta=0.2, receptive_field_values=[2.0])
 
-    # accum = 0.2*1.0 + 0.2*2.0 + 0.2*1.0 + 0.2*2.0 = 1.2 (summed over all 4 calls, no averaging)
-    # apply with batch_size=2 (the mini-batch size, not the position count) divides by 2 only
+    # accum = 0.2*1.0 + 0.2*2.0 + 0.2*1.0 + 0.2*2.0 = 1.2, divided by batch_size 2, not by 4
     kernel.apply_accumulated_gradient(learning_rate=0.1, batch_size=2)
     assert kernel.weights == pytest.approx([0.5 - 0.1 * (1.2 / 2)])
 
