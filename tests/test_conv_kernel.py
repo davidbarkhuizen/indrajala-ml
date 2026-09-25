@@ -4,6 +4,7 @@ import random
 import pytest
 
 from indrajala_ml.model.conv_kernel import ConvKernel
+from tests.helpers import approx
 
 
 def test_default_weights_are_zero_initialized_with_correct_fan_in():
@@ -43,8 +44,8 @@ def test_accumulate_then_apply_at_batch_size_one_matches_the_direct_formula():
     kernel.apply_accumulated_gradient(learning_rate=0.1, batch_size=1)
 
     # weight -= lr * delta * x, per position; bias -= lr * delta
-    assert kernel.weights == pytest.approx([0.5 - 0.1 * 0.2 * 1.0, -0.5 - 0.1 * 0.2 * 2.0])
-    assert kernel.bias == pytest.approx(0.1 - 0.1 * 0.2)
+    assert kernel.weights == approx([0.5 - 0.1 * 0.2 * 1.0, -0.5 - 0.1 * 0.2 * 2.0])
+    assert kernel.bias == approx(0.1 - 0.1 * 0.2)
 
 
 def test_accumulate_gradient_rejects_a_mismatched_receptive_field_length():
@@ -69,7 +70,7 @@ def test_multiple_spatial_positions_sum_not_average_while_batch_size_still_avera
 
     # accum = 0.2*1.0 + 0.2*2.0 + 0.2*1.0 + 0.2*2.0 = 1.2, divided by batch_size 2, not by 4
     kernel.apply_accumulated_gradient(learning_rate=0.1, batch_size=2)
-    assert kernel.weights == pytest.approx([0.5 - 0.1 * (1.2 / 2)])
+    assert kernel.weights == approx([0.5 - 0.1 * (1.2 / 2)])
 
 
 def test_apply_accumulated_gradient_resets_the_accumulator():
@@ -81,4 +82,4 @@ def test_apply_accumulated_gradient_resets_the_accumulator():
     weights_after_first_apply = list(kernel.weights)
 
     kernel.apply_accumulated_gradient(0.1, batch_size=1)
-    assert kernel.weights == pytest.approx(weights_after_first_apply)
+    assert kernel.weights == approx(weights_after_first_apply)

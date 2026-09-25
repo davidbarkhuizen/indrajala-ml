@@ -9,17 +9,19 @@ from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import Backend
 
-LAYER_CLS = {"numpy": CrossEntropyArrayLayer, "rust": CrossEntropyRustArrayLayer}
+LayerCls = type[CrossEntropyArrayLayer] | type[CrossEntropyRustArrayLayer]
+LAYER_CLS: dict[str, LayerCls] = {"numpy": CrossEntropyArrayLayer, "rust": CrossEntropyRustArrayLayer}
 BASE_LAYER_CLS = {"numpy": ArrayLayer, "rust": RustArrayLayer}
 
 
 @pytest.fixture
-def layer_cls(backend):
+def layer_cls(backend: Backend) -> LayerCls:
     return LAYER_CLS[backend.name]
 
 
-def _array_layer_like(cross_entropy_layer: CrossEntropyOutputLayer, backend):
+def _array_layer_like(cross_entropy_layer: CrossEntropyOutputLayer, backend: Backend):
     array_layer = LAYER_CLS[backend.name](cross_entropy_layer.size, len(cross_entropy_layer.input_layer.nodes))
     snapshot = cross_entropy_layer.snapshot_state()
     array_layer.W = backend.owned([weights for weights, _bias in snapshot])
@@ -27,7 +29,7 @@ def _array_layer_like(cross_entropy_layer: CrossEntropyOutputLayer, backend):
     return array_layer
 
 
-def test_compute_output_delta_matches_cross_entropy_output_node_across_a_random_sweep(backend):
+def test_compute_output_delta_matches_cross_entropy_output_node_across_a_random_sweep(backend: Backend):
 
     rng = random.Random(60)
     dimension = 4
@@ -46,7 +48,7 @@ def test_compute_output_delta_matches_cross_entropy_output_node_across_a_random_
         cross_entropy_layer.forward()
 
         targets = [rng.choice([0.0, 1.0]) for _ in range(size)]
-        expected = []
+        expected: list[float] = []
         for node, target in zip(cross_entropy_layer.nodes, targets):
             node.compute_output_delta(target)
             expected.append(node.delta)
@@ -58,7 +60,9 @@ def test_compute_output_delta_matches_cross_entropy_output_node_across_a_random_
         assert np.allclose(array_layer.delta.tolist(), expected, rtol=1e-9, atol=1e-12)
 
 
-def test_compute_output_delta_batch_matches_per_row_single_example_results_stacked(layer_cls, backend):
+def test_compute_output_delta_batch_matches_per_row_single_example_results_stacked(
+    layer_cls: LayerCls, backend: Backend
+):
 
     rng = random.Random(61)
     dimension = 4
@@ -72,7 +76,7 @@ def test_compute_output_delta_batch_matches_per_row_single_example_results_stack
     X = [[rng.uniform(-10.0, 10.0) for _ in range(dimension)] for _ in range(batch_size)]
     reference_rows = [[rng.choice([0.0, 1.0]) for _ in range(size)] for _ in range(batch_size)]
 
-    expected = []
+    expected: list[list[float]] = []
     for row in range(batch_size):
         array_layer.forward(backend.owned(X[row]))
         array_layer.compute_output_delta(backend.owned(reference_rows[row]))
@@ -83,7 +87,7 @@ def test_compute_output_delta_batch_matches_per_row_single_example_results_stack
     assert np.allclose(array_layer.delta_batch.tolist(), expected, rtol=1e-9, atol=1e-12)
 
 
-def test_forward_is_inherited_unchanged_from_array_layer(layer_cls, backend):
+def test_forward_is_inherited_unchanged_from_array_layer(layer_cls: LayerCls, backend: Backend):
 
     base = BASE_LAYER_CLS[backend.name]
     assert layer_cls.__mro__[1] is base
@@ -91,14 +95,14 @@ def test_forward_is_inherited_unchanged_from_array_layer(layer_cls, backend):
     assert layer_cls.forward_batch is base.forward_batch
 
 
-def test_compute_hidden_delta_is_inherited_unchanged_from_array_layer(layer_cls, backend):
+def test_compute_hidden_delta_is_inherited_unchanged_from_array_layer(layer_cls: LayerCls, backend: Backend):
 
     base = BASE_LAYER_CLS[backend.name]
     assert layer_cls.compute_hidden_delta is base.compute_hidden_delta
     assert layer_cls.compute_hidden_delta_batch is base.compute_hidden_delta_batch
 
 
-def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(layer_cls, backend):
+def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(layer_cls: LayerCls, backend: Backend):
 
     array_layer = layer_cls(2, 2)
     array_layer.W = backend.owned([[1.0, 2.0], [3.0, 4.0]])

@@ -4,7 +4,6 @@ import pytest
 
 matplotlib.use("Agg")
 
-from helpers import classifier_with_bounded_square_region
 
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.graphics.chart import (
@@ -16,6 +15,7 @@ from indrajala_ml.graphics.chart import (
     reference_region_bounds,
 )
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from tests.helpers import classifier_with_bounded_square_region
 
 
 def test_reference_region_bounds_expands_to_include_a_bounded_region():

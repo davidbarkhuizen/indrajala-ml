@@ -1,9 +1,8 @@
-import pytest
-
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.momentum_layer import make_momentum_layer_cls, make_momentum_node_cls
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.state_node import StateNode
+from tests.helpers import approx
 
 
 def _momentum_node(momentum: float, weight: float, bias: float):
@@ -28,8 +27,8 @@ def test_first_apply_gradient_matches_plain_sgd_since_there_is_no_prior_delta():
     momentum_node.apply_gradient(0.1)
     plain_node.apply_gradient(0.1)
 
-    assert momentum_node.input_node_weights[0] == pytest.approx(plain_node.input_node_weights[0])
-    assert momentum_node.bias == pytest.approx(plain_node.bias)
+    assert momentum_node.input_node_weights[0] == approx(plain_node.input_node_weights[0])
+    assert momentum_node.bias == approx(plain_node.bias)
 
 
 def test_second_apply_gradient_adds_the_momentum_term_by_hand():
@@ -44,13 +43,13 @@ def test_second_apply_gradient_adds_the_momentum_term_by_hand():
 
     node.delta = 0.2
     node.apply_gradient(0.1)
-    assert node.input_node_weights[0] == pytest.approx(0.48)
-    assert node.bias == pytest.approx(0.08)
+    assert node.input_node_weights[0] == approx(0.48)
+    assert node.bias == approx(0.08)
 
     node.delta = 0.2
     node.apply_gradient(0.1)
-    assert node.input_node_weights[0] == pytest.approx(0.442)
-    assert node.bias == pytest.approx(0.042)
+    assert node.input_node_weights[0] == approx(0.442)
+    assert node.bias == approx(0.042)
 
 
 def test_a_rate_change_scales_the_whole_velocity_by_hand():
@@ -67,8 +66,8 @@ def test_a_rate_change_scales_the_whole_velocity_by_hand():
     node.delta = 0.2
     node.apply_gradient(0.2)
 
-    assert node.input_node_weights[0] == pytest.approx(0.404)
-    assert node.bias == pytest.approx(0.004)
+    assert node.input_node_weights[0] == approx(0.404)
+    assert node.bias == approx(0.004)
 
 
 def test_zero_momentum_is_bit_identical_to_plain_sgd_across_many_steps():

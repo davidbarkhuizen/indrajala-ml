@@ -1,7 +1,6 @@
-import pytest
-
 from indrajala_ml.model.adam_layer import make_adam_node_cls
 from indrajala_ml.model.state_node import StateNode
+from tests.helpers import approx
 
 BETA1, BETA2, EPSILON = 0.9, 0.999, 1e-8
 
@@ -35,13 +34,13 @@ def test_two_apply_gradient_steps_match_hand_derived_moment_accumulation():
 
     node.delta = 0.2
     node.apply_gradient(0.1)
-    assert node.input_node_weights[0] == pytest.approx(0.4000000049999997)
-    assert node.bias == pytest.approx(4.999999733690252e-09, abs=1e-9)
+    assert node.input_node_weights[0] == approx(0.4000000049999997)
+    assert node.bias == approx(4.999999733690252e-09, abs=1e-9)
 
     node.delta = 0.2
     node.apply_gradient(0.1)
-    assert node.input_node_weights[0] == pytest.approx(0.3000000100000002)
-    assert node.bias == pytest.approx(-0.0999999899999998)
+    assert node.input_node_weights[0] == approx(0.3000000100000002)
+    assert node.bias == approx(-0.0999999899999998)
 
 
 def test_step_count_increments_once_per_apply_call():

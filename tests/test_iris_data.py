@@ -1,6 +1,5 @@
-import pytest
-
 from indrajala_ml.iris_data import load_iris_dataset
+from tests.helpers import approx
 
 # split_train_test's own tests live in test_dataset_utils.py - see test_digits_data.py's own
 # note on why it isn't re-tested per dataset here.
@@ -29,8 +28,8 @@ def test_load_iris_dataset_normalizes_against_the_dataset_own_min_max():
     # the bounds are the dataset's own min/max, so every feature reaches both 0.0 and 1.0
     for dimension in range(4):
         values = [state[dimension] for state, _ in dataset]
-        assert min(values) == pytest.approx(0.0, abs=1e-9)
-        assert max(values) == pytest.approx(1.0, abs=1e-9)
+        assert min(values) == approx(0.0, abs=1e-9)
+        assert max(values) == approx(1.0, abs=1e-9)
 
 
 def test_load_iris_dataset_decodes_the_well_known_first_row_correctly():
@@ -40,4 +39,4 @@ def test_load_iris_dataset_decodes_the_well_known_first_row_correctly():
     # Iris's well-known first row: sepal 5.1/3.5, petal 1.4/0.2, setosa
     state, label = dataset[0]
     assert label == 0
-    assert state == pytest.approx((0.2222222222222222, 0.625, 0.06779661016949151, 0.041666666666666664))
+    assert state == approx((0.2222222222222222, 0.625, 0.06779661016949151, 0.041666666666666664))

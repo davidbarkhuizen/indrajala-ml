@@ -1,8 +1,11 @@
-import pytest
-from helpers import assert_randomize_breaks_symmetry, assert_snapshot_restore_round_trip, wire_fixed_single_hidden_node
-
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
+from tests.helpers import (
+    approx,
+    assert_randomize_breaks_symmetry,
+    assert_snapshot_restore_round_trip,
+    wire_fixed_single_hidden_node,
+)
 
 
 def _fixed_network() -> BackpropClassifierNetwork:
@@ -20,7 +23,7 @@ def test_predict_probability_matches_a_hand_computed_forward_pass():
     #   z_o = 0.8*a_h - 0.2 = 0.4002080844760941, a_o = sigmoid(z_o) = 0.5987376536170401
     network = _fixed_network()
 
-    assert network.predict_probability((2.0,)) == pytest.approx(0.5987376536170401)
+    assert network.predict_probability((2.0,)) == approx(0.5987376536170401)
 
 
 def test_classify_state_thresholds_strictly_above_half():
@@ -34,7 +37,7 @@ def test_classify_state_thresholds_strictly_above_half():
     output_node.bias = 0.0
 
     # z_o = 0.0 -> a_o = sigmoid(0) = 0.5 exactly - must not classify as active
-    assert network.predict_probability((0.0,)) == pytest.approx(0.5)
+    assert network.predict_probability((0.0,)) == approx(0.5)
     assert network.classify_state((0.0,)) == 0.0
 
 
@@ -50,10 +53,10 @@ def test_learn_matches_the_backprop_update_rule_by_hand():
 
     network.learn(0.1, (2.0,), 1.0)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.5028901018503833)
-    assert hidden_node.bias == pytest.approx(0.10144505092519163)
-    assert output_node.input_node_weights[0] == pytest.approx(0.8072327797719059)
-    assert output_node.bias == pytest.approx(-0.19035963698727032)
+    assert hidden_node.input_node_weights[0] == approx(0.5028901018503833)
+    assert hidden_node.bias == approx(0.10144505092519163)
+    assert output_node.input_node_weights[0] == approx(0.8072327797719059)
+    assert output_node.bias == approx(-0.19035963698727032)
 
 
 def test_randomize_breaks_symmetry_between_nodes_in_the_same_layer():

@@ -1,8 +1,11 @@
-import pytest
-from helpers import assert_randomize_breaks_symmetry, assert_snapshot_restore_round_trip, wire_fixed_single_hidden_node
-
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
+from tests.helpers import (
+    approx,
+    assert_randomize_breaks_symmetry,
+    assert_snapshot_restore_round_trip,
+    wire_fixed_single_hidden_node,
+)
 
 
 def _fixed_network() -> AdamBackpropClassifierNetwork:
@@ -26,10 +29,10 @@ def test_first_learn_step_matches_a_near_pure_sign_step():
 
     network.learn(0.1, (2.0,), 1.0)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.5999999653991552)
-    assert hidden_node.bias == pytest.approx(0.1999999307983345)
-    assert output_node.input_node_weights[0] == pytest.approx(0.8999999861740591)
-    assert output_node.bias == pytest.approx(-0.10000001037305228)
+    assert hidden_node.input_node_weights[0] == approx(0.5999999653991552)
+    assert hidden_node.bias == approx(0.1999999307983345)
+    assert output_node.input_node_weights[0] == approx(0.8999999861740591)
+    assert output_node.bias == approx(-0.10000001037305228)
 
 
 def test_second_learn_step_shows_real_moment_accumulation_by_hand():
@@ -42,10 +45,10 @@ def test_second_learn_step_shows_real_moment_accumulation_by_hand():
     network.learn(0.1, (2.0,), 1.0)
     network.learn(0.1, (2.0,), 1.0)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.698656243383243)
-    assert hidden_node.bias == pytest.approx(0.2986561708026665)
-    assert output_node.input_node_weights[0] == pytest.approx(0.9994690924170146)
-    assert output_node.bias == pytest.approx(-0.0009660949980676292)
+    assert hidden_node.input_node_weights[0] == approx(0.698656243383243)
+    assert hidden_node.bias == approx(0.2986561708026665)
+    assert output_node.input_node_weights[0] == approx(0.9994690924170146)
+    assert output_node.bias == approx(-0.0009660949980676292)
 
 
 def test_trains_over_many_steps_without_erroring_or_stalling():

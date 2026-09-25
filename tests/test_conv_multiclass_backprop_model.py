@@ -1,7 +1,7 @@
 import random
+from pathlib import Path
 
 import pytest
-from helpers import assert_save_and_load_round_trip, assert_snapshot_restore_round_trip, conv_layer, conv_layers_only
 
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.model.backprop_layer import BackpropLayer
@@ -13,6 +13,13 @@ from indrajala_ml.model.conv_multiclass_backprop_classifier_network import (
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.multiclass_evaluate import accuracy
 from indrajala_ml.train import train_linear_classifier_network
+from tests.helpers import (
+    approx,
+    assert_save_and_load_round_trip,
+    assert_snapshot_restore_round_trip,
+    conv_layer,
+    conv_layers_only,
+)
 
 
 def _small_network() -> ConvMultiClassBackpropClassifierNetwork:
@@ -156,7 +163,7 @@ def test_snapshot_and_restore_round_trip_through_the_conv_layer_too():
     )
 
 
-def test_save_and_load_round_trip(tmp_path):
+def test_save_and_load_round_trip(tmp_path: Path):
 
     random.seed(0)
     network = _small_network()
@@ -299,9 +306,7 @@ def test_network_gradient_check_from_output_loss_back_to_the_first_conv_layer():
                 kernel.weights[i] = original - epsilon
                 loss_minus = loss()
                 kernel.weights[i] = original
-                assert kernel._weight_gradient_accum[i] == pytest.approx(
-                    (loss_plus - loss_minus) / (2 * epsilon), abs=1e-7
-                )
+                assert kernel._weight_gradient_accum[i] == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
 
             original_bias = kernel.bias
             kernel.bias = original_bias + epsilon
@@ -309,10 +314,10 @@ def test_network_gradient_check_from_output_loss_back_to_the_first_conv_layer():
             kernel.bias = original_bias - epsilon
             loss_minus = loss()
             kernel.bias = original_bias
-            assert kernel._bias_gradient_accum == pytest.approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
+            assert kernel._bias_gradient_accum == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
 
 
-def test_two_conv_layer_save_and_load_round_trip(tmp_path):
+def test_two_conv_layer_save_and_load_round_trip(tmp_path: Path):
 
     random.seed(0)
     network = _two_conv_layer_network()
@@ -402,12 +407,10 @@ def test_network_gradient_check_through_a_pooling_layer():
                 kernel.weights[i] = original - epsilon
                 loss_minus = loss()
                 kernel.weights[i] = original
-                assert kernel._weight_gradient_accum[i] == pytest.approx(
-                    (loss_plus - loss_minus) / (2 * epsilon), abs=1e-7
-                )
+                assert kernel._weight_gradient_accum[i] == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
 
 
-def test_pooled_snapshot_has_an_empty_pool_entry_and_save_load_round_trips(tmp_path):
+def test_pooled_snapshot_has_an_empty_pool_entry_and_save_load_round_trips(tmp_path: Path):
 
     random.seed(0)
     network = _pooled_network()

@@ -3,6 +3,7 @@ import pytest
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_unit import ConvUnit
 from indrajala_ml.model.state_node import StateNode
+from tests.helpers import approx
 
 
 def _conv_unit(weights: list[float], bias: float, values: list[float]) -> ConvUnit:
@@ -19,7 +20,7 @@ def test_forward_relu_positive_branch_passes_z_through():
     # z = 0.5*2.0 + (-0.5)*(-3.0) + 0.1 = 1.0 + 1.5 + 0.1 = 2.6 (positive) -> relu(2.6) = 2.6
     unit = _conv_unit([0.5, -0.5], 0.1, [2.0, -3.0])
 
-    assert unit.value() == pytest.approx(2.6)
+    assert unit.value() == approx(2.6)
 
 
 def test_forward_relu_negative_branch_is_zero():
@@ -43,7 +44,7 @@ def test_compute_hidden_delta_propagates_downstream_when_active():
 
     unit.compute_hidden_delta(downstream_sum=-0.5 * 0.8)
 
-    assert unit.delta == pytest.approx(-0.5 * 0.8)
+    assert unit.delta == approx(-0.5 * 0.8)
 
 
 def test_compute_hidden_delta_is_zero_when_the_unit_is_dead():
@@ -71,8 +72,8 @@ def test_accumulate_gradient_delegates_into_the_shared_kernel():
     unit.accumulate_gradient()
 
     # accum_w = delta * receptive_field_value, per weight; accum_b = delta
-    assert unit.kernel._weight_gradient_accum == pytest.approx([0.3 * 2.0, 0.3 * -3.0])
-    assert unit.kernel._bias_gradient_accum == pytest.approx(0.3)
+    assert unit.kernel._weight_gradient_accum == approx([0.3 * 2.0, 0.3 * -3.0])
+    assert unit.kernel._bias_gradient_accum == approx(0.3)
 
 
 def test_accumulate_gradient_from_two_units_sharing_one_kernel_sums_into_it():
@@ -88,5 +89,5 @@ def test_accumulate_gradient_from_two_units_sharing_one_kernel_sums_into_it():
     unit_a.accumulate_gradient()
     unit_b.accumulate_gradient()
 
-    assert kernel._weight_gradient_accum == pytest.approx([0.2 * 2.0 + 0.4 * 3.0])
-    assert kernel._bias_gradient_accum == pytest.approx(0.2 + 0.4)
+    assert kernel._weight_gradient_accum == approx([0.2 * 2.0 + 0.4 * 3.0])
+    assert kernel._bias_gradient_accum == approx(0.2 + 0.4)

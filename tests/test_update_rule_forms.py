@@ -1,3 +1,5 @@
+# pyright: reportConstantRedefinition=false
+# (matrices are named as in the literature, W, which strict mode takes for constants)
 """
 The update rules follow the literature's form and grouping, in all three implementations, so
 their results are comparable with the literature and with each other (README, Update rules).
@@ -11,6 +13,8 @@ epoch at B = 128 and 512).
 
 import random
 import struct
+from collections.abc import Callable, Sequence
+from functools import partial
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -29,6 +33,7 @@ from indrajala_ml.model.momentum_layer import make_momentum_node_cls
 from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_node import StateNode
+from tests.helpers import Wrap
 
 BATCH_SIZES = [1, 6, 96, 4, 128, 512]
 SEEDS = range(5)
@@ -39,35 +44,50 @@ L2_LAMBDA = 0.01
 DENSE_SHAPE = (4, 7)
 CONV_SHAPE = (3, 18)
 
+Matrix = list[list[float]]
+# a step's new (W, b)
+Weights = tuple[Sequence[Sequence[float]], Sequence[float]]
+# apply(W, b, grad_W, grad_b, batch_size) -> the new (W, b)
+Apply = Callable[[Matrix, list[float], Matrix, list[float], int], Weights]
+# step(grad_W, grad_b, learning_rate, batch_size) -> the new (W, b)
+Step = Callable[[Matrix, list[float], float, int], Weights]
+# start(momentum, W, b) -> step
+Start = Callable[[float, Matrix, list[float]], Step]
+ArrayLayers = ArrayLayer | RustArrayLayer | ConvArrayLayer | ConvRustArrayLayer
 
-def _sgd(w, g, batch_size):
+
+def _sgd(w: float, g: float, batch_size: int) -> float:
     return w - LEARNING_RATE * (g / batch_size)
 
 
-def _weight_decay(w, g, batch_size):
+def _weight_decay(w: float, g: float, batch_size: int) -> float:
     return w - LEARNING_RATE * (g / batch_size + L2_LAMBDA * w)
 
 
-def _nodes(node_cls, W, b):
+def _nodes(node_cls: type[BackpropNode], W: Matrix, b: list[float]) -> list[BackpropNode]:
     return [
         node_cls(input_nodes=[StateNode() for _ in weights], input_node_weights=list(weights), bias=bias)
         for weights, bias in zip(W, b)
     ]
 
 
-def _step_nodes(nodes, grad_W, grad_b, learning_rate, batch_size):
+def _step_nodes(
+    nodes: list[BackpropNode], grad_W: Matrix, grad_b: list[float], learning_rate: float, batch_size: int
+) -> Weights:
     for node, accum, bias_accum in zip(nodes, grad_W, grad_b):
         node._weight_gradient_accum, node._bias_gradient_accum = list(accum), bias_accum
         node.apply_accumulated_gradient(learning_rate, batch_size)
     return [node.input_node_weights for node in nodes], [node.bias for node in nodes]
 
 
-def _apply_nodes(node_cls, W, b, grad_W, grad_b, batch_size):
+def _apply_nodes(
+    node_cls: type[BackpropNode], W: Matrix, b: list[float], grad_W: Matrix, grad_b: list[float], batch_size: int
+) -> Weights:
     return _step_nodes(_nodes(node_cls, W, b), grad_W, grad_b, LEARNING_RATE, batch_size)
 
 
-def _apply_kernels(W, b, grad_W, grad_b, batch_size):
-    kernels = []
+def _apply_kernels(W: Matrix, b: list[float], grad_W: Matrix, grad_b: list[float], batch_size: int) -> Weights:
+    kernels: list[ConvKernel] = []
     for weights, bias, accum, bias_accum in zip(W, b, grad_W, grad_b):
         kernel = ConvKernel(kernel_size=3, in_channels=2, weights=list(weights), bias=bias)
         kernel._weight_gradient_accum, kernel._bias_gradient_accum = list(accum), bias_accum
@@ -76,57 +96,73 @@ def _apply_kernels(W, b, grad_W, grad_b, batch_size):
     return [kernel.weights for kernel in kernels], [kernel.bias for kernel in kernels]
 
 
-def _step_layer(layer, to_array, grad_W, grad_b, learning_rate, batch_size):
+def _step_layer(
+    layer: ArrayLayers, to_array: Wrap, grad_W: Matrix, grad_b: list[float], learning_rate: float, batch_size: int
+) -> Weights:
     layer._grad_W, layer._grad_b = to_array(grad_W), to_array(grad_b)
     layer.apply_accumulated_gradient(learning_rate, batch_size)
     return layer.W.tolist(), layer.b.tolist()
 
 
-def _apply_layer(layer, to_array, W, b, grad_W, grad_b, batch_size):
+def _apply_layer(
+    layer: ArrayLayers,
+    to_array: Wrap,
+    W: Matrix,
+    b: list[float],
+    grad_W: Matrix,
+    grad_b: list[float],
+    batch_size: int,
+) -> Weights:
     layer.W, layer.b = to_array(W), to_array(b)
     return _step_layer(layer, to_array, grad_W, grad_b, LEARNING_RATE, batch_size)
 
 
-def _numpy(layer):
-    return lambda *args: _apply_layer(layer, np.array, *args)
-
-
-def _rust(layer):
-    return lambda *args: _apply_layer(layer, pa.Array, *args)
+def _fresh_layer(make_layer: Callable[[], ArrayLayers], to_array: Wrap) -> Apply:
+    # a new layer for every call, so no state carries over between parametrized runs
+    return lambda W, b, grad_W, grad_b, batch_size: _apply_layer(
+        make_layer(), to_array, W, b, grad_W, grad_b, batch_size
+    )
 
 
 # (name, the formula it follows, the weights' shape, apply(W, b, grad_W, grad_b, batch_size))
-IMPLEMENTATIONS = [
-    ("BackpropNode", _sgd, DENSE_SHAPE, lambda *args: _apply_nodes(BackpropNode, *args)),
+IMPLEMENTATIONS: list[tuple[str, Callable[[float, float, int], float], tuple[int, int], Apply]] = [
+    ("BackpropNode", _sgd, DENSE_SHAPE, partial(_apply_nodes, BackpropNode)),
     ("ConvKernel", _sgd, CONV_SHAPE, _apply_kernels),
-    ("ArrayLayer", _sgd, DENSE_SHAPE, lambda *args: _numpy(ArrayLayer(*DENSE_SHAPE))(*args)),
-    ("ConvArrayLayer", _sgd, CONV_SHAPE, lambda *args: _numpy(ConvArrayLayer(5, 5, 2, 3, 3))(*args)),
-    ("RustArrayLayer", _sgd, DENSE_SHAPE, lambda *args: _rust(RustArrayLayer(*DENSE_SHAPE))(*args)),
-    ("ConvRustArrayLayer", _sgd, CONV_SHAPE, lambda *args: _rust(ConvRustArrayLayer(5, 5, 2, 3, 3))(*args)),
+    ("ArrayLayer", _sgd, DENSE_SHAPE, _fresh_layer(lambda: ArrayLayer(*DENSE_SHAPE), np.array)),
+    ("ConvArrayLayer", _sgd, CONV_SHAPE, _fresh_layer(lambda: ConvArrayLayer(5, 5, 2, 3, 3), np.array)),
+    ("RustArrayLayer", _sgd, DENSE_SHAPE, _fresh_layer(lambda: RustArrayLayer(*DENSE_SHAPE), pa.Array)),
+    ("ConvRustArrayLayer", _sgd, CONV_SHAPE, _fresh_layer(lambda: ConvRustArrayLayer(5, 5, 2, 3, 3), pa.Array)),
+    ("L2RegularizedBackpropNode", _weight_decay, DENSE_SHAPE, partial(_apply_nodes, make_l2_node_cls(L2_LAMBDA))),
     (
-        "L2RegularizedBackpropNode",
+        "L2ArrayLayer",
         _weight_decay,
         DENSE_SHAPE,
-        lambda *args: _apply_nodes(make_l2_node_cls(L2_LAMBDA), *args),
+        _fresh_layer(lambda: L2ArrayLayer(*DENSE_SHAPE, L2_LAMBDA), np.array),
     ),
-    ("L2ArrayLayer", _weight_decay, DENSE_SHAPE, lambda *args: _numpy(L2ArrayLayer(*DENSE_SHAPE, L2_LAMBDA))(*args)),
     (
         "L2RustArrayLayer",
         _weight_decay,
         DENSE_SHAPE,
-        lambda *args: _rust(L2RustArrayLayer(*DENSE_SHAPE, L2_LAMBDA))(*args),
+        _fresh_layer(lambda: L2RustArrayLayer(*DENSE_SHAPE, L2_LAMBDA), pa.Array),
     ),
 ]
 
 
-def _bits(values):
+def _bits(values: Sequence[float]) -> list[bytes]:
     return [struct.pack("<d", v) for v in values]
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("batch_size", BATCH_SIZES)
 @pytest.mark.parametrize("name, weight_rule, shape, apply", IMPLEMENTATIONS, ids=[i[0] for i in IMPLEMENTATIONS])
-def test_apply_accumulated_gradient_is_the_papers_form_exactly(name, weight_rule, shape, apply, batch_size, seed):
+def test_apply_accumulated_gradient_is_the_papers_form_exactly(
+    name: str,
+    weight_rule: Callable[[float, float, int], float],
+    shape: tuple[int, int],
+    apply: Apply,
+    batch_size: int,
+    seed: int,
+):
     rng = random.Random(seed)
     rows, cols = shape
     # parameters on the scale of the update: against weights much larger than it, the groupings'
@@ -152,29 +188,35 @@ MOMENTA = [0.0, 0.9]
 MOMENTUM_LEARNING_RATES = [0.05, 0.1, 0.4]
 
 
-def _momentum_nodes(momentum, W, b):
+def _momentum_nodes(momentum: float, W: Matrix, b: list[float]) -> Step:
     nodes = _nodes(make_momentum_node_cls(momentum), W, b)
-    return lambda *args: _step_nodes(nodes, *args)
+    return lambda grad_W, grad_b, learning_rate, batch_size: _step_nodes(
+        nodes, grad_W, grad_b, learning_rate, batch_size
+    )
 
 
-def _momentum_layer(layer_cls, to_array):
-    def start(momentum, W, b):
+def _momentum_layer(layer_cls: type[MomentumArrayLayer] | type[MomentumRustArrayLayer], to_array: Wrap) -> Start:
+    def start(momentum: float, W: Matrix, b: list[float]) -> Step:
         layer = layer_cls(*DENSE_SHAPE, momentum)
         layer.W, layer.b = to_array(W), to_array(b)
-        return lambda *args: _step_layer(layer, to_array, *args)
+        return lambda grad_W, grad_b, learning_rate, batch_size: _step_layer(
+            layer, to_array, grad_W, grad_b, learning_rate, batch_size
+        )
 
     return start
 
 
 # (name, start(momentum, W, b) -> step(grad_W, grad_b, learning_rate, batch_size))
-MOMENTUM_IMPLEMENTATIONS = [
+MOMENTUM_IMPLEMENTATIONS: list[tuple[str, Start]] = [
     ("MomentumBackpropNode", _momentum_nodes),
     ("MomentumArrayLayer", _momentum_layer(MomentumArrayLayer, np.array)),
     ("MomentumRustArrayLayer", _momentum_layer(MomentumRustArrayLayer, pa.Array)),
 ]
 
 
-def _momentum(w, u, g, momentum, learning_rate, batch_size):
+def _momentum(
+    w: float, u: float, g: float, momentum: float, learning_rate: float, batch_size: int
+) -> tuple[float, float]:
     u = momentum * u + g / batch_size
     return w - learning_rate * u, u
 
@@ -183,7 +225,7 @@ def _momentum(w, u, g, momentum, learning_rate, batch_size):
 @pytest.mark.parametrize("batch_size", BATCH_SIZES)
 @pytest.mark.parametrize("momentum", MOMENTA)
 @pytest.mark.parametrize("name, start", MOMENTUM_IMPLEMENTATIONS, ids=[i[0] for i in MOMENTUM_IMPLEMENTATIONS])
-def test_momentum_is_the_papers_form_exactly(name, start, momentum, batch_size, seed):
+def test_momentum_is_the_papers_form_exactly(name: str, start: Start, momentum: float, batch_size: int, seed: int):
     # eq. (9) for W and b alike, over several steps: the velocity only shows a mistake across
     # repeated steps. At momentum 0.0 this is exactly SGD's w - lr * (g / B)
     rng = random.Random(seed)

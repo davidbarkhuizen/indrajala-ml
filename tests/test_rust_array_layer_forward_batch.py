@@ -7,6 +7,7 @@ including the one-row batch.
 
 import importlib
 import pkgutil
+from collections.abc import Callable
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -21,8 +22,9 @@ from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
+from tests.helpers import all_subclasses
 
-LAYER_CLASSES = {
+LAYER_CLASSES: dict[str, Callable[[int, int], RustArrayLayer]] = {
     "plain": lambda size, input_size: RustArrayLayer(size, input_size),
     "relu": lambda size, input_size: ReLURustArrayLayer(size, input_size),
     "softmax": lambda size, input_size: SoftmaxRustArrayLayer(size, input_size),
@@ -35,10 +37,10 @@ LAYER_CLASSES = {
 
 # (size, input_size): a small layer, the dense production layers (784 -> 30 -> 10), and the conv
 # tail (the dense layer after a ConvSpec(3, 8) layer on 28x28 input)
-SHAPES = [(7, 11), (30, 784), (10, 30), (32, 5408)]
+SHAPES: list[tuple[int, int]] = [(7, 11), (30, 784), (10, 30), (32, 5408)]
 
 
-def _layer(name, size, input_size, rng: np.random.Generator):
+def _layer(name: str, size: int, input_size: int, rng: np.random.Generator) -> RustArrayLayer:
     layer = LAYER_CLASSES[name](size, input_size)
     layer.W = pa.Array(rng.uniform(-0.3, 0.3, (size, input_size)).tolist())
     layer.b = pa.Array(rng.uniform(-0.3, 0.3, size).tolist())
@@ -48,7 +50,7 @@ def _layer(name, size, input_size, rng: np.random.Generator):
 @pytest.mark.parametrize("name", LAYER_CLASSES)
 @pytest.mark.parametrize("size, input_size", SHAPES)
 @pytest.mark.parametrize("batch", [1, 5])
-def test_forward_batch_rows_are_bit_identical_to_forward(name, size, input_size, batch):
+def test_forward_batch_rows_are_bit_identical_to_forward(name: str, size: int, input_size: int, batch: int):
     rng = np.random.default_rng(size * 10_000 + input_size + batch)
     layer = _layer(name, size, input_size, rng)
     X = rng.uniform(0.0, 1.0, (batch, input_size))
@@ -60,10 +62,11 @@ def test_forward_batch_rows_are_bit_identical_to_forward(name, size, input_size,
 
 
 @pytest.mark.parametrize("size, input_size", SHAPES)
-def test_dropout_training_base_activation_rows_are_bit_identical_to_forward(size, input_size):
+def test_dropout_training_base_activation_rows_are_bit_identical_to_forward(size: int, input_size: int):
     # at training time the mask is random, but the pre-mask sigmoid each call keeps is not
     rng = np.random.default_rng(size + input_size)
     layer = _layer("dropout", size, input_size, rng)
+    assert isinstance(layer, DropoutRustArrayLayer)
     layer.set_training_mode(True)
     X = rng.uniform(0.0, 1.0, (3, input_size))
 
@@ -74,14 +77,8 @@ def test_dropout_training_base_activation_rows_are_bit_identical_to_forward(size
         assert rows[i] == layer._base_activation.tolist()
 
 
-def _all_subclasses(cls):
-    for subclass in cls.__subclasses__():
-        yield subclass
-        yield from _all_subclasses(subclass)
-
-
 def test_every_dense_rust_layer_is_covered():
     for module in pkgutil.iter_modules(indrajala_ml.model.__path__):
         importlib.import_module(f"indrajala_ml.model.{module.name}")
     covered = {type(factory(2, 3)) for factory in LAYER_CLASSES.values()}
-    assert {RustArrayLayer, *_all_subclasses(RustArrayLayer)} == covered
+    assert {RustArrayLayer, *all_subclasses(RustArrayLayer)} == covered

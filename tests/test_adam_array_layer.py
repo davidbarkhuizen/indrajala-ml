@@ -6,19 +6,22 @@ import pytest
 from indrajala_ml.model.adam_array_layer import AdamArrayLayer
 from indrajala_ml.model.adam_layer import make_adam_layer_cls
 from indrajala_ml.model.adam_rust_array_layer import AdamRustArrayLayer
+from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import Backend
 
 BETA1, BETA2, EPSILON = 0.9, 0.999, 1e-8
 
-LAYER_CLS = {"numpy": AdamArrayLayer, "rust": AdamRustArrayLayer}
+LayerCls = type[AdamArrayLayer] | type[AdamRustArrayLayer]
+LAYER_CLS: dict[str, LayerCls] = {"numpy": AdamArrayLayer, "rust": AdamRustArrayLayer}
 
 
 @pytest.fixture
-def layer_cls(backend):
+def layer_cls(backend: Backend) -> LayerCls:
     return LAYER_CLS[backend.name]
 
 
-def _array_layer_like(backprop_layer, backend):
+def _array_layer_like(backprop_layer: BackpropLayer, backend: Backend):
     input_size = len(backprop_layer.input_layer.nodes)
     array_layer = LAYER_CLS[backend.name](backprop_layer.size, input_size, BETA1, BETA2, EPSILON)
     snapshot = backprop_layer.snapshot_state()
@@ -27,7 +30,7 @@ def _array_layer_like(backprop_layer, backend):
     return array_layer
 
 
-def test_accumulate_then_apply_at_batch_size_one_matches_adam_backprop_node_at_every_step(backend):
+def test_accumulate_then_apply_at_batch_size_one_matches_adam_backprop_node_at_every_step(backend: Backend):
 
     # compared after every step: the m/v/t state only shows a mistake across repeated steps
     rng = random.Random(11)
@@ -64,7 +67,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_adam_backprop_node_at_e
         assert np.allclose(array_layer.b.tolist(), expected_b, rtol=1e-9, atol=1e-12)
 
 
-def test_accumulate_across_a_batch_then_apply_matches_adam_backprop_node_at_every_batch(backend):
+def test_accumulate_across_a_batch_then_apply_matches_adam_backprop_node_at_every_batch(backend: Backend):
 
     rng = random.Random(12)
     dimension = 4
@@ -106,7 +109,7 @@ def test_accumulate_across_a_batch_then_apply_matches_adam_backprop_node_at_ever
         assert np.allclose(array_layer.b.tolist(), expected_b, rtol=1e-9, atol=1e-12)
 
 
-def test_step_count_increments_once_per_apply_call(layer_cls, backend):
+def test_step_count_increments_once_per_apply_call(layer_cls: LayerCls, backend: Backend):
 
     array_layer = layer_cls(3, 2, BETA1, BETA2, EPSILON)
     assert array_layer._t == 0
@@ -122,7 +125,7 @@ def test_step_count_increments_once_per_apply_call(layer_cls, backend):
     assert array_layer._t == 2
 
 
-def test_apply_accumulated_gradient_resets_the_accumulator(layer_cls, backend):
+def test_apply_accumulated_gradient_resets_the_accumulator(layer_cls: LayerCls, backend: Backend):
 
     array_layer = layer_cls(3, 2, BETA1, BETA2, EPSILON)
     array_layer.delta = backend.owned([0.1, 0.2, 0.3])

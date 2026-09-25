@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -10,9 +12,10 @@ from indrajala_ml.mnist_data import (
     load_mnist_labels,
     load_mnist_records_at_indices,
 )
+from tests.helpers import approx
 
 
-def test_convert_parquet_to_binary_produces_a_correctly_shaped_file(tmp_path):
+def test_convert_parquet_to_binary_produces_a_correctly_shaped_file(tmp_path: Path):
 
     binary_path = str(tmp_path / "converted.bin")
 
@@ -54,11 +57,11 @@ def test_load_mnist_dataset_decodes_a_known_real_sample_correctly():
     def pixel(row: int, col: int) -> float:
         return state0[row * IMAGE_SIZE + col]
 
-    assert pixel(0, 0) == pytest.approx(0 / 255)  # filter type 0 (None)
-    assert pixel(6, 10) == pytest.approx(94 / 255)  # filter type 4 (Paeth)
-    assert pixel(7, 20) == pytest.approx(82 / 255)  # filter type 1 (Sub)
-    assert pixel(11, 11) == pytest.approx(139 / 255)  # filter type 2 (Up)
-    assert pixel(11, 13) == pytest.approx(190 / 255)  # filter type 2 (Up)
+    assert pixel(0, 0) == approx(0 / 255)  # filter type 0 (None)
+    assert pixel(6, 10) == approx(94 / 255)  # filter type 4 (Paeth)
+    assert pixel(7, 20) == approx(82 / 255)  # filter type 1 (Sub)
+    assert pixel(11, 11) == approx(139 / 255)  # filter type 2 (Up)
+    assert pixel(11, 13) == approx(190 / 255)  # filter type 2 (Up)
 
 
 def test_load_mnist_dataset_test_split_shape():
@@ -78,7 +81,7 @@ def test_load_mnist_dataset_without_limit_reads_the_full_file():
     assert len(dataset) == 10000
 
 
-def test_load_mnist_dataset_rejects_a_file_whose_size_is_not_a_record_multiple(tmp_path):
+def test_load_mnist_dataset_rejects_a_file_whose_size_is_not_a_record_multiple(tmp_path: Path):
 
     bad_path = str(tmp_path / "truncated.bin")
     with open(bad_path, "wb") as f:
@@ -137,7 +140,7 @@ def test_load_mnist_dataset_as_array_without_limit_reads_the_full_file():
     assert actual.shape == (10000, IMAGE_SIZE * IMAGE_SIZE)
 
 
-def test_load_mnist_dataset_as_array_rejects_a_file_whose_size_is_not_a_record_multiple(tmp_path):
+def test_load_mnist_dataset_as_array_rejects_a_file_whose_size_is_not_a_record_multiple(tmp_path: Path):
 
     bad_path = str(tmp_path / "truncated.bin")
     with open(bad_path, "wb") as f:

@@ -14,10 +14,14 @@ from __future__ import annotations
 import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 import pytest
 
 from tests.helpers import (
+    Backend,
+    approx,
     assert_array_network_save_load_round_trip,
     assert_array_network_snapshot_restore_round_trip,
     assert_array_network_weights_match,
@@ -29,17 +33,21 @@ DIMENSION = 6
 LAYER_SIZES = [5]
 CLASS_COUNT = 3
 
+# a network class, per-node or array, is Any here: the specs cover every array network class, whose
+# constructors take different hyperparameters
+TestFunction = Callable[..., None]
+
 
 @dataclass(frozen=True)
 class ArrayNetworkSpec:
     # backend name -> network class
-    network_cls: dict[str, type]
+    network_cls: dict[str, Any]
     # a matching_*_array_backprop_networks helper: builds the per-node reference and the array
     # network with identical weights
-    matching: Callable
+    matching: Callable[..., tuple[Any, Any]]
     # multiclass only (single-output networks have none of the fields from here to the end):
     # the constructor's hyperparameters after class_count, in order (e.g. {"momentum": 0.5})
-    hyperparameters: dict = field(default_factory=dict)
+    hyperparameters: dict[str, float] = field(default_factory=dict[str, float])
     learning_rate: float = 0.1
     learn_steps: int = 30
     learn_batches: int = 15
@@ -49,16 +57,16 @@ class ArrayNetworkSpec:
     probabilities_sum_to_one: bool = False
     # the save/load round-trip test for the hyperparameters: its name suffix and the values saved
     saved_hyperparameters_test: str | None = None
-    saved_hyperparameters: dict = field(default_factory=dict)
+    saved_hyperparameters: dict[str, float] = field(default_factory=dict[str, float])
     # hyperparameter values the constructor must reject
-    invalid_hyperparameters: dict = field(default_factory=dict)
+    invalid_hyperparameters: dict[str, float] = field(default_factory=dict[str, float])
 
 
-def _test_registry() -> tuple[dict[str, Callable], Callable]:
-    tests: dict[str, Callable] = {}
+def _test_registry() -> tuple[dict[str, TestFunction], Callable[[str], Callable[[TestFunction], TestFunction]]]:
+    tests: dict[str, TestFunction] = {}
 
-    def test(name: str):
-        def register(function: Callable) -> Callable:
+    def test(name: str) -> Callable[[TestFunction], TestFunction]:
+        def register(function: TestFunction) -> TestFunction:
             function.__name__ = name
             tests[name] = function
             return function
@@ -68,21 +76,21 @@ def _test_registry() -> tuple[dict[str, Callable], Callable]:
     return tests, test
 
 
-def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
+def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, TestFunction]:
     hyperparameters = tuple(spec.hyperparameters.values())
     eval_suffix = "" if spec.parity_in_training else "_at_eval_mode"
     tests, test = _test_registry()
 
-    def matching_networks(rng: random.Random, backend):
+    def matching_networks(rng: random.Random, backend: Backend) -> tuple[Any, Any]:
         return spec.matching(
             rng, spec.network_cls[backend.name], backend.owned, LAYER_SIZES, DIMENSION, CLASS_COUNT, *hyperparameters
         )
 
-    def randomized(backend):
+    def randomized(backend: Backend) -> Any:
         return spec.network_cls[backend.name].randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT, *hyperparameters)
 
     @test(f"test_predict_probabilities{eval_suffix}_matches_across_a_random_sweep")
-    def _(backend):
+    def _(backend: Backend) -> None:
         rng = random.Random(0)
         node_network, array_network = matching_networks(rng, backend)
 
@@ -90,12 +98,12 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
             state = tuple(rng.uniform(-10.0, 10.0) for _ in range(DIMENSION))
             expected = node_network.predict_probabilities(state)
             actual = array_network.predict_probabilities(state)
-            assert actual == pytest.approx(expected, rel=1e-9, abs=1e-12)
+            assert actual == approx(expected, rel=1e-9, abs=1e-12)
             if spec.probabilities_sum_to_one:
-                assert sum(actual) == pytest.approx(1.0)
+                assert sum(actual) == approx(1.0)
 
     @test(f"test_classify_state{eval_suffix}_matches_across_a_random_sweep")
-    def _(backend):
+    def _(backend: Backend) -> None:
         rng = random.Random(1)
         node_network, array_network = matching_networks(rng, backend)
 
@@ -106,7 +114,7 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
     if spec.parity_in_training:
 
         @test("test_learn_matches_after_every_step_not_just_at_the_end")
-        def _(backend):
+        def _(backend: Backend) -> None:
             # checked after every step, so one wrong step can't be averaged away by the rest (and
             # a stateful update, e.g. Adam's m/v/t, shows a mistake only across steps)
             rng = random.Random(2)
@@ -122,7 +130,7 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
                 assert_array_network_weights_match(node_network, array_network)
 
         @test("test_learn_batch_matches_after_every_batch_not_just_at_the_end")
-        def _(backend):
+        def _(backend: Backend) -> None:
             rng = random.Random(3)
             node_network, array_network = matching_networks(rng, backend)
             batch_size = 8
@@ -139,7 +147,7 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
                 assert_array_network_weights_match(node_network, array_network)
 
     @test("test_randomized_builds_a_usable_network")
-    def _(backend):
+    def _(backend: Backend) -> None:
         network = randomized(backend)
         state = tuple(0.1 * i for i in range(DIMENSION))
 
@@ -147,17 +155,17 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
         assert len(probabilities) == CLASS_COUNT
         assert all(0.0 <= p <= 1.0 for p in probabilities)
         if spec.probabilities_sum_to_one:
-            assert sum(probabilities) == pytest.approx(1.0)
+            assert sum(probabilities) == approx(1.0)
         assert 0 <= network.classify_state(state) < CLASS_COUNT
 
     @test("test_snapshot_restore_round_trips_weights")
-    def _(backend):
+    def _(backend: Backend) -> None:
         assert_array_network_snapshot_restore_round_trip(
             spec.network_cls[backend.name], LAYER_SIZES, DIMENSION, CLASS_COUNT, *hyperparameters
         )
 
     @test("test_save_load_round_trips_weights_and_predictions")
-    def _(backend, tmp_path):
+    def _(backend: Backend, tmp_path: Path) -> None:
         network = randomized(backend)
         state = tuple(0.1 * i for i in range(DIMENSION))
 
@@ -167,7 +175,7 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
     if spec.saved_hyperparameters_test is not None:
 
         @test(f"test_save_load_round_trips_the_{spec.saved_hyperparameters_test}")
-        def _(backend, tmp_path):
+        def _(backend: Backend, tmp_path: Path) -> None:
             network_cls = spec.network_cls[backend.name]
             network = network_cls.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT, **spec.saved_hyperparameters)
             path = str(tmp_path / "hyperparameters.json")
@@ -178,7 +186,7 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
                 assert getattr(loaded, name) == value
 
     @test("test_construction_rejects_invalid_arguments")
-    def _(backend):
+    def _(backend: Backend) -> None:
         network_cls = spec.network_cls[backend.name]
 
         with pytest.raises(AssertionError):
@@ -195,7 +203,7 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
                 network_cls(LAYER_SIZES, DIMENSION, CLASS_COUNT, **{**spec.hyperparameters, name: value})
 
     @test("test_learn_batch_rejects_an_empty_batch")
-    def _(backend):
+    def _(backend: Backend) -> None:
         network = randomized(backend)
         with pytest.raises(AssertionError):
             network.learn_batch(0.1, [])
@@ -203,17 +211,17 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
     return tests
 
 
-def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
+def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, TestFunction]:
     tests, test = _test_registry()
 
-    def matching_networks(rng: random.Random, backend):
+    def matching_networks(rng: random.Random, backend: Backend) -> tuple[Any, Any]:
         return spec.matching(rng, spec.network_cls[backend.name], backend.owned, LAYER_SIZES, DIMENSION)
 
-    def randomized(backend):
+    def randomized(backend: Backend) -> Any:
         return spec.network_cls[backend.name].randomized(LAYER_SIZES, DIMENSION)
 
     @test("test_predict_probability_matches_across_a_random_sweep")
-    def _(backend):
+    def _(backend: Backend) -> None:
         rng = random.Random(0)
         node_network, array_network = matching_networks(rng, backend)
 
@@ -221,10 +229,10 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
             state = tuple(rng.uniform(-10.0, 10.0) for _ in range(DIMENSION))
             expected = node_network.predict_probability(state)
             actual = array_network.predict_probability(state)
-            assert actual == pytest.approx(expected, rel=1e-9, abs=1e-12)
+            assert actual == approx(expected, rel=1e-9, abs=1e-12)
 
     @test("test_classify_state_matches_across_a_random_sweep")
-    def _(backend):
+    def _(backend: Backend) -> None:
         rng = random.Random(1)
         node_network, array_network = matching_networks(rng, backend)
 
@@ -233,7 +241,7 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
             assert array_network.classify_state(state) == node_network.classify_state(state)
 
     @test("test_learn_matches_after_every_step_not_just_at_the_end")
-    def _(backend):
+    def _(backend: Backend) -> None:
         rng = random.Random(2)
         node_network, array_network = matching_networks(rng, backend)
 
@@ -247,7 +255,7 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
             assert_array_network_weights_match(node_network, array_network)
 
     @test("test_learn_batch_matches_after_every_batch_not_just_at_the_end")
-    def _(backend):
+    def _(backend: Backend) -> None:
         rng = random.Random(3)
         node_network, array_network = matching_networks(rng, backend)
         batch_size = 8
@@ -264,7 +272,7 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
             assert_array_network_weights_match(node_network, array_network)
 
     @test("test_randomized_builds_a_usable_network")
-    def _(backend):
+    def _(backend: Backend) -> None:
         network = randomized(backend)
         state = tuple(0.1 * i for i in range(DIMENSION))
 
@@ -272,7 +280,7 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
         assert network.classify_state(state) in (0.0, 1.0)
 
     @test("test_randomized_accepts_and_discards_input_bounds_for_duck_type_compatibility")
-    def _(backend):
+    def _(backend: Backend) -> None:
         # ensemble_train.py calls classifier_cls.randomized(layer_sizes, dimension, input_bounds)
         network_cls = spec.network_cls[backend.name]
         network = network_cls.randomized(LAYER_SIZES, DIMENSION, [(-1.0, 1.0)] * DIMENSION)
@@ -280,13 +288,13 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
         assert 0.0 <= network.predict_probability(state) <= 1.0
 
     @test("test_snapshot_restore_round_trips_weights")
-    def _(backend):
+    def _(backend: Backend) -> None:
         assert_single_output_array_network_snapshot_restore_round_trip(
             spec.network_cls[backend.name], LAYER_SIZES, DIMENSION
         )
 
     @test("test_save_load_round_trips_weights_and_predictions")
-    def _(backend, tmp_path):
+    def _(backend: Backend, tmp_path: Path) -> None:
         network = randomized(backend)
         state = tuple(0.1 * i for i in range(DIMENSION))
 
@@ -296,7 +304,7 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
         )
 
     @test("test_construction_rejects_invalid_arguments")
-    def _(backend):
+    def _(backend: Backend) -> None:
         network_cls = spec.network_cls[backend.name]
 
         with pytest.raises(AssertionError):
@@ -306,7 +314,7 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, Callable]:
             network_cls([0], DIMENSION)
 
     @test("test_learn_batch_rejects_an_empty_batch")
-    def _(backend):
+    def _(backend: Backend) -> None:
         network = randomized(backend)
         with pytest.raises(AssertionError):
             network.learn_batch(0.1, [])

@@ -1,9 +1,8 @@
-import pytest
-
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import approx
 
 
 def _layer(size: int, dimension: int, state: tuple[float, ...]) -> BackpropLayer:
@@ -31,8 +30,8 @@ def test_apply_gradients_matches_calling_apply_gradient_on_every_node_by_hand():
     layer.apply_gradients(0.1)
 
     for node, (expected_weights, expected_bias) in zip(layer.nodes, expected):
-        assert node.input_node_weights == pytest.approx(expected_weights)
-        assert node.bias == pytest.approx(expected_bias)
+        assert node.input_node_weights == approx(expected_weights)
+        assert node.bias == approx(expected_bias)
 
 
 def test_accumulate_then_apply_accumulated_gradients_matches_per_node_split():
@@ -52,8 +51,8 @@ def test_accumulate_then_apply_accumulated_gradients_matches_per_node_split():
     # accum for weight = 0.2*2.0 + (-0.1)*2.0 = 0.2 -> weight -= 0.1 * (0.2/2)
     # accum for bias = 0.2 + (-0.1) = 0.1 -> bias -= 0.1 * (0.1/2)
     for node in layer.nodes:
-        assert node.input_node_weights[0] == pytest.approx(0.5 - 0.1 * (0.2 / 2))
-        assert node.bias == pytest.approx(0.1 - 0.1 * (0.1 / 2))
+        assert node.input_node_weights[0] == approx(0.5 - 0.1 * (0.2 / 2))
+        assert node.bias == approx(0.1 - 0.1 * (0.1 / 2))
 
 
 def test_downstream_sum_is_the_dense_delta_times_weight_sum():
@@ -64,9 +63,9 @@ def test_downstream_sum_is_the_dense_delta_times_weight_sum():
     layer.nodes[0].delta = 0.2
     layer.nodes[1].delta = -0.4
 
-    assert layer.downstream_sum(0) == pytest.approx(0.2 * 0.5 + -0.4 * -1.0)
-    assert layer.downstream_sum(1) == pytest.approx(0.2 * -0.5 + -0.4 * 2.0)
-    assert layer.downstream_sum(2) == pytest.approx(0.2 * 0.25 + -0.4 * 0.75)
+    assert layer.downstream_sum(0) == approx(0.2 * 0.5 + -0.4 * -1.0)
+    assert layer.downstream_sum(1) == approx(0.2 * -0.5 + -0.4 * 2.0)
+    assert layer.downstream_sum(2) == approx(0.2 * 0.25 + -0.4 * 0.75)
 
 
 def test_compute_hidden_deltas_matches_calling_compute_hidden_delta_on_every_node_by_hand():
@@ -117,31 +116,31 @@ class _CallCountingLayer:
     methods to confirm they call each of these once per *layer*, not once per node, which is
     exactly the seam a convolutional layer (many nodes sharing one kernel) depends on."""
 
-    def __init__(self, nodes):
+    def __init__(self, nodes: list[object]):
         self.nodes = nodes
         self.accumulate_calls = 0
         self.apply_accumulated_calls = 0
         self.apply_gradients_calls = 0
         self.snapshot_calls = 0
         self.restore_calls = 0
-        self.last_apply_args = None
-        self.last_restored = None
+        self.last_apply_args: tuple[float, int] | None = None
+        self.last_restored: object = None
 
     def accumulate_gradients(self):
         self.accumulate_calls += 1
 
-    def apply_accumulated_gradients(self, learning_rate, batch_size):
+    def apply_accumulated_gradients(self, learning_rate: float, batch_size: int):
         self.apply_accumulated_calls += 1
         self.last_apply_args = (learning_rate, batch_size)
 
-    def apply_gradients(self, learning_rate):
+    def apply_gradients(self, learning_rate: float):
         self.apply_gradients_calls += 1
 
     def snapshot_state(self):
         self.snapshot_calls += 1
         return f"fake-snapshot-{id(self)}"
 
-    def restore_state(self, layer_snapshot):
+    def restore_state(self, layer_snapshot: object):
         self.restore_calls += 1
         self.last_restored = layer_snapshot
 

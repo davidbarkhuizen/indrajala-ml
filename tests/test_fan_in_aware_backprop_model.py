@@ -1,10 +1,13 @@
 import math
 
-import pytest
-from helpers import assert_randomize_breaks_symmetry, assert_snapshot_restore_round_trip, wire_fixed_single_hidden_node
-
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
+from tests.helpers import (
+    approx,
+    assert_randomize_breaks_symmetry,
+    assert_snapshot_restore_round_trip,
+    wire_fixed_single_hidden_node,
+)
 
 
 def test_predict_probability_is_identical_to_the_default_init_sibling():
@@ -13,7 +16,7 @@ def test_predict_probability_is_identical_to_the_default_init_sibling():
     network = FanInAwareBackpropClassifierNetwork([1], 1, [(-10.0, 10.0)])
     wire_fixed_single_hidden_node(network)
 
-    assert network.predict_probability((2.0,)) == pytest.approx(0.5987376536170401)
+    assert network.predict_probability((2.0,)) == approx(0.5987376536170401)
 
 
 def test_randomize_breaks_symmetry_between_nodes_in_the_same_layer():

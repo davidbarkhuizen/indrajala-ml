@@ -1,4 +1,7 @@
 import random
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -22,15 +25,20 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.multiclass_evaluate import accuracy
 from indrajala_ml.train import train_linear_classifier_network
 from tests.helpers import (
+    Backend,
     assert_conv_array_network_weights_match,
     copy_conv_network_weights_into_array_network,
     matching_conv_array_backprop_networks,
     matching_conv_numpy_rust_networks,
+    weighted,
 )
 
 CLASS_COUNT = 10
 
-NETWORK_CLS = {
+NetworkCls = (
+    type[ConvVectorizedMultiClassBackpropClassifierNetwork] | type[ConvRustArrayMultiClassBackpropClassifierNetwork]
+)
+NETWORK_CLS: dict[str, NetworkCls] = {
     "numpy": ConvVectorizedMultiClassBackpropClassifierNetwork,
     "rust": ConvRustArrayMultiClassBackpropClassifierNetwork,
 }
@@ -57,7 +65,7 @@ PROBABILITY_ATOL = 1e-14
 
 
 @pytest.fixture
-def network_cls(backend):
+def network_cls(backend: Backend) -> NetworkCls:
     return NETWORK_CLS[backend.name]
 
 
@@ -67,19 +75,19 @@ def _digits_rows() -> list[tuple[tuple[float, ...], int]]:
     return load_digits_dataset()[:120]
 
 
-def _matching_networks(rng: random.Random, architecture: str, backend):
+def _matching_networks(rng: random.Random, architecture: str, backend: Backend):
     conv_specs, dense_layer_sizes = ARCHITECTURES[architecture]
     return matching_conv_array_backprop_networks(
         rng, 8, 8, conv_specs, dense_layer_sizes, CLASS_COUNT, NETWORK_CLS[backend.name], backend.owned
     )
 
 
-def _as_lists(snapshot):
+def _as_lists(snapshot: Sequence[tuple[Any, ...]]) -> list[list[Any]]:
     return [[array.tolist() for array in entry] for entry in snapshot]
 
 
 @pytest.mark.parametrize("architecture", ARCHITECTURES)
-def test_predict_probabilities_and_classify_state_match_across_a_sweep(backend, architecture):
+def test_predict_probabilities_and_classify_state_match_across_a_sweep(backend: Backend, architecture: str):
 
     rng = random.Random(0)
     node_network, array_network = _matching_networks(rng, architecture, backend)
@@ -97,7 +105,7 @@ def test_predict_probabilities_and_classify_state_match_across_a_sweep(backend, 
 
 
 @pytest.mark.parametrize("architecture", ARCHITECTURES)
-def test_learn_matches_after_every_step_not_just_at_the_end(backend, architecture):
+def test_learn_matches_after_every_step_not_just_at_the_end(backend: Backend, architecture: str):
 
     rng = random.Random(1)
     node_network, array_network = _matching_networks(rng, architecture, backend)
@@ -109,7 +117,7 @@ def test_learn_matches_after_every_step_not_just_at_the_end(backend, architectur
 
 
 @pytest.mark.parametrize("architecture", ARCHITECTURES)
-def test_learn_batch_matches_after_every_batch_not_just_at_the_end(backend, architecture):
+def test_learn_batch_matches_after_every_batch_not_just_at_the_end(backend: Backend, architecture: str):
 
     rng = random.Random(2)
     node_network, array_network = _matching_networks(rng, architecture, backend)
@@ -122,7 +130,7 @@ def test_learn_batch_matches_after_every_batch_not_just_at_the_end(backend, arch
         assert_conv_array_network_weights_match(node_network, array_network, rtol=0, atol=WEIGHT_ATOL)
 
 
-def test_the_parity_runs_really_exercise_relu_zeros_and_pooling_ties(backend):
+def test_the_parity_runs_really_exercise_relu_zeros_and_pooling_ties(backend: Backend):
 
     # guards the claim the parity tests above rest on: on real digits rows, some conv outputs
     # are exactly zero and some pooling windows hold a tied maximum. These network-level runs
@@ -132,9 +140,11 @@ def test_the_parity_runs_really_exercise_relu_zeros_and_pooling_ties(backend):
     rng = random.Random(0)
     _node_network, array_network = _matching_networks(rng, "conv_pool_conv", backend)
     X = backend.owned([list(state) for state, _label in _digits_rows()])
-    conv, pool = array_network.layers[0], array_network.layers[1]
+    # Any: the network's own layers, chained within one backend, which a union can't express
+    layers: list[Any] = list(array_network.layers)
+    conv, pool = layers[0], layers[1]
     assert isinstance(conv, (ConvArrayLayer, ConvRustArrayLayer))
-    array_network.layers[2].forward_batch(pool.forward_batch(conv.forward_batch(X)))
+    layers[2].forward_batch(pool.forward_batch(conv.forward_batch(X)))
 
     A = np.array(conv.A.tolist())
     assert np.any(A == 0.0)
@@ -144,7 +154,7 @@ def test_the_parity_runs_really_exercise_relu_zeros_and_pooling_ties(backend):
     assert np.any(tied)
 
 
-def test_reproduces_the_pinned_pure_python_uci_digits_result(network_cls):
+def test_reproduces_the_pinned_pure_python_uci_digits_result(network_cls: NetworkCls):
 
     # test_conv_multiclass_backprop_model.py pins best_training_accuracy 0.9875 at epoch index 10
     # and test accuracy 0.925 for the pure-Python network. Same seeded initial weights (through a
@@ -175,7 +185,7 @@ def test_reproduces_the_pinned_pure_python_uci_digits_result(network_cls):
     assert accuracy(student, test_data) == 0.925
 
 
-def test_construction_shape_chains_conv_and_pool_layers(backend, network_cls):
+def test_construction_shape_chains_conv_and_pool_layers(backend: Backend, network_cls: NetworkCls):
 
     conv_cls, pool_cls, dense_cls = LAYER_CLS[backend.name]
     network = network_cls(8, 8, POOLED, [8], class_count=10)
@@ -190,7 +200,7 @@ def test_construction_shape_chains_conv_and_pool_layers(backend, network_cls):
 
     dense, output = network.layers[3:]
     assert isinstance(dense, dense_cls) and np.array(dense.W.tolist()).shape == (8, 2 * 2 * 6)
-    assert output is network.output_layer and np.array(output.W.tolist()).shape == (10, 8)
+    assert output is network.output_layer and np.array(weighted(output).W.tolist()).shape == (10, 8)
     assert network.layers == network.conv_layers + [dense, output]
 
 
@@ -205,24 +215,27 @@ def test_construction_shape_chains_conv_and_pool_layers(backend, network_cls):
         (8, 8, [ConvSpec(9, 4)], [8], 10),  # kernel larger than the input
     ],
 )
-def test_construction_rejects_invalid_arguments(network_cls, arguments):
+def test_construction_rejects_invalid_arguments(
+    network_cls: NetworkCls, arguments: tuple[int, int, list[ConvSpec | PoolSpec], list[int], int]
+):
 
     with pytest.raises(AssertionError):
         network_cls(*arguments)
 
 
-def test_randomized_breaks_symmetry_and_builds_a_usable_network(network_cls):
+def test_randomized_breaks_symmetry_and_builds_a_usable_network(network_cls: NetworkCls):
 
     network = network_cls.randomized(8, 8, POOLED, [8], class_count=10)
     first, _pool, last = network.conv_layers
 
     for layer in (first, last):
+        assert isinstance(layer, (ConvArrayLayer, ConvRustArrayLayer))
         W = np.array(layer.W.tolist())
         assert len({tuple(row) for row in W}) == layer.channel_count
         # fan-in-aware: every draw within 1/sqrt(input_channels * kernel_size**2)
         limit = 1.0 / np.sqrt(layer.fan_in)
         assert np.all(np.abs(W) <= limit) and np.all(np.abs(layer.b.tolist()) <= limit)
-    assert np.all(np.abs(network.layers[3].W.tolist()) <= 1.0 / np.sqrt(last.size))
+    assert np.all(np.abs(weighted(network.layers[3]).W.tolist()) <= 1.0 / np.sqrt(last.size))
     assert np.all(np.abs(network.output_layer.W.tolist()) <= 1.0 / np.sqrt(8))
 
     state = tuple(0.01 * i for i in range(64))
@@ -232,7 +245,7 @@ def test_randomized_breaks_symmetry_and_builds_a_usable_network(network_cls):
     assert 0 <= network.classify_state(state) < 10
 
 
-def test_snapshot_has_an_empty_pool_entry_and_restore_round_trips(network_cls):
+def test_snapshot_has_an_empty_pool_entry_and_restore_round_trips(network_cls: NetworkCls):
 
     network = network_cls.randomized(8, 8, POOLED, [8], class_count=10)
     before = network.snapshot()
@@ -258,7 +271,9 @@ def test_snapshot_has_an_empty_pool_entry_and_restore_round_trips(network_cls):
 
 
 @pytest.mark.parametrize("conv_specs", [[ConvSpec(3, 4)], OVERLAPPING_POOL_STRIDED])
-def test_save_load_round_trips_specs_weights_and_predictions(network_cls, tmp_path, conv_specs):
+def test_save_load_round_trips_specs_weights_and_predictions(
+    network_cls: NetworkCls, tmp_path: Path, conv_specs: list[ConvSpec | PoolSpec]
+):
 
     network = network_cls.randomized(8, 8, conv_specs, [8], class_count=10)
     path = str(tmp_path / "conv_model.json")
@@ -273,7 +288,9 @@ def test_save_load_round_trips_specs_weights_and_predictions(network_cls, tmp_pa
 
 
 @pytest.mark.parametrize("save_backend", ["numpy", "rust"])
-def test_a_model_saved_by_either_backend_loads_into_the_other_with_the_same_predictions(tmp_path, save_backend):
+def test_a_model_saved_by_either_backend_loads_into_the_other_with_the_same_predictions(
+    tmp_path: Path, save_backend: str
+):
 
     rng = random.Random(3)
     numpy_network, rust_network = matching_conv_numpy_rust_networks(

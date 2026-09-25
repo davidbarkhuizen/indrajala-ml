@@ -2,6 +2,7 @@ import pytest
 
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.multiclass_evaluate import accuracy, confusion_matrix
+from tests.helpers import approx
 
 
 def _fixed_network() -> MultiClassBackpropClassifierNetwork:
@@ -27,7 +28,7 @@ def test_accuracy_counts_correct_predictions():
     # always predicts class 0 at this state - 2 correct, 1 wrong
     test_data = [((2.0,), 0), ((2.0,), 0), ((2.0,), 1)]
 
-    assert accuracy(network, test_data) == pytest.approx(2 / 3)
+    assert accuracy(network, test_data) == approx(2 / 3)
 
 
 def test_accuracy_rejects_empty_test_data():

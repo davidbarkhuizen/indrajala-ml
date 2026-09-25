@@ -1,7 +1,6 @@
 import random
 
 import pytest
-from helpers import network_with_hidden_thresholds
 
 from indrajala_ml.evaluate import class_balanced_disagreement_rate
 from indrajala_ml.geometry import square_bounds
@@ -11,6 +10,7 @@ from indrajala_ml.train import (
     reachable_reference_and_training_data,
     train_linear_classifier_network,
 )
+from tests.helpers import approx, network_with_hidden_thresholds
 
 
 def test_half_widths_of_asymmetric_bounds():
@@ -73,7 +73,7 @@ def test_randomized_returns_an_already_randomized_classifier():
     )
 
 
-def test_randomize_scales_weight_range_with_input_bounds_half_width(monkeypatch):
+def test_randomize_scales_weight_range_with_input_bounds_half_width(monkeypatch: pytest.MonkeyPatch):
 
     # each dimension's weight range is 20 / half_width, so w_i * x_i has a similar magnitude
     # whatever its bounds, asymmetric bounds included; the threshold's range stays fixed
@@ -90,8 +90,8 @@ def test_randomize_scales_weight_range_with_input_bounds_half_width(monkeypatch)
     network.randomize()
 
     weight_call_1, weight_call_2, threshold_call = calls[:3]
-    assert weight_call_1 == pytest.approx((-0.02, 0.02))  # 20 / half_width 1000
-    assert weight_call_2 == pytest.approx((-20_000.0, 20_000.0))  # 20 / half_width 0.001
+    assert weight_call_1 == approx((-0.02, 0.02))  # 20 / half_width 1000
+    assert weight_call_2 == approx((-20_000.0, 20_000.0))  # 20 / half_width 0.001
     assert threshold_call == (-5, 5)
 
 
@@ -263,7 +263,7 @@ def test_learn_updates_only_the_single_closest_to_flipping_node():
     network.learn(learning_rate, state, 0)
 
     assert near.input_node_weights == [-0.5, -0.75]
-    assert near.threshold == pytest.approx(0.15)
+    assert near.threshold == approx(0.15)
     assert (list(far.input_node_weights), far.threshold) == ([0.0, 0.0], 3.0)
     assert (list(farther.input_node_weights), farther.threshold) == ([0.0, 0.0], 6.0)
 

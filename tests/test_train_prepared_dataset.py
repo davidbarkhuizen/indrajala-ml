@@ -7,12 +7,16 @@ path unchanged.
 """
 
 import random
+from collections.abc import Sequence
+from typing import Any, cast
 
 import numpy as np
 import pytest
 
 from indrajala_ml.mnist_data import load_mnist_dataset
+from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.classifier_protocols import Example, State
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -29,57 +33,58 @@ class _TupleRecorder:
     """A student without prepare_dataset: the trainers give it tuples. Records each state seen."""
 
     def __init__(self) -> None:
-        self.learned: list = []
-        self.batches: list = []
+        self.learned: list[Example[int]] = []
+        self.batches: list[list[Example[int]]] = []
 
-    def learn(self, learning_rate, state, category) -> None:
+    def learn(self, learning_rate: float, state: State, category: int) -> None:
         self.learned.append((state, category))
 
-    def learn_batch(self, learning_rate, batch) -> None:
+    def learn_batch(self, learning_rate: float, batch: Sequence[Example[int]]) -> None:
         self.batches.append(list(batch))
 
-    def classify_state(self, state):
+    def classify_state(self, state: State) -> int:
         return 0
 
-    def snapshot(self):
+    def snapshot(self) -> None:
         return None
 
-    def restore(self, snapshot) -> None:
+    def restore(self, snapshot: object) -> None:
         pass
 
 
 class _RowRecorder(_TupleRecorder):
     """A student with the prepared-path methods: records the rows it's given, as tuples again."""
 
-    def prepare_dataset(self, rows) -> PreparedDataset:
+    def prepare_dataset(self, rows: Sequence[Example[int]]) -> PreparedDataset:
         return PreparedDataset.from_rows(rows, "numpy")
 
-    def learn(self, learning_rate, state, category) -> None:
+    def learn(self, learning_rate: float, state: State, category: int) -> None:
         raise AssertionError("an array student must be trained through learn_row")
 
-    def learn_batch(self, learning_rate, batch) -> None:
+    def learn_batch(self, learning_rate: float, batch: Sequence[Example[int]]) -> None:
         raise AssertionError("an array student must be trained through learn_batch_rows")
 
-    def classify_state(self, state):
+    def classify_state(self, state: State) -> int:
         raise AssertionError("an array student's accuracy passes must use classify_rows")
 
-    def _row(self, prepared, index):
-        return tuple(prepared.states[index].tolist()), prepared.labels[index]
+    def _row(self, prepared: PreparedDataset, index: int) -> Example[int]:
+        states = cast(FloatArray, prepared.states)  # prepare_dataset's, numpy
+        return tuple(states[index].tolist()), prepared.labels[index]
 
-    def learn_row(self, learning_rate, prepared, index) -> None:
+    def learn_row(self, learning_rate: float, prepared: PreparedDataset, index: int) -> None:
         self.learned.append(self._row(prepared, index))
 
-    def learn_batch_rows(self, learning_rate, prepared, indices) -> None:
+    def learn_batch_rows(self, learning_rate: float, prepared: PreparedDataset, indices: Sequence[int]) -> None:
         self.batches.append([self._row(prepared, index) for index in indices])
 
-    def classify_row(self, prepared, index):
+    def classify_row(self, prepared: PreparedDataset, index: int) -> int:
         raise AssertionError("an array student's accuracy passes must use classify_rows")
 
-    def classify_rows(self, prepared):
+    def classify_rows(self, prepared: PreparedDataset) -> list[int]:
         return [0] * len(prepared)
 
 
-def _rows(count: int = 23) -> list:
+def _rows(count: int = 23) -> list[Example[int]]:
     rng = random.Random(4)
     return [(tuple(rng.random() for _ in range(3)), i % 3) for i in range(count)]
 
@@ -93,7 +98,7 @@ def test_single_example_visits_the_same_examples_in_the_same_order():
 
 
 @pytest.mark.parametrize("reshuffle_each_epoch", [True, False])
-def test_mini_batch_makes_the_same_batches_for_the_same_seed(reshuffle_each_epoch):
+def test_mini_batch_makes_the_same_batches_for_the_same_seed(reshuffle_each_epoch: bool):
     rows = _rows()
     via_tuples, via_rows = _TupleRecorder(), _RowRecorder()
     random.seed(11)
@@ -110,7 +115,9 @@ def _numpy_network() -> VectorizedMultiClassBackpropClassifierNetwork:
     return VectorizedMultiClassBackpropClassifierNetwork.randomized([4], 3, 3)
 
 
-def _weights(network) -> list:
+def _weights(
+    network: VectorizedMultiClassBackpropClassifierNetwork | RustArrayMultiClassBackpropClassifierNetwork,
+) -> list[list[Any]]:
     return [[array.tolist() for array in entry] for entry in network.snapshot()]
 
 

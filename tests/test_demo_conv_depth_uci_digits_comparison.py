@@ -1,3 +1,5 @@
+import pytest
+
 from indrajala_ml.demos import demo_conv_depth_uci_digits_comparison as demo
 from indrajala_ml.digits_data import load_digits_dataset
 
@@ -18,7 +20,7 @@ def test_parameter_counts_match_a_hand_count():
     assert demo.parameter_count(demo._build("conv1-stride2")) == 80 + 2336 + 330
 
 
-def test_run_one_is_deterministic_per_seed(monkeypatch):
+def test_run_one_is_deterministic_per_seed(monkeypatch: pytest.MonkeyPatch):
 
     # a small subset and one epoch keep this fast; the same (config, seed) must reproduce
     # exactly, since the demo's paired comparison relies on each seed fixing split and init

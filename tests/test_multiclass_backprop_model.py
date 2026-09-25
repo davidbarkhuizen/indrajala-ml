@@ -1,12 +1,13 @@
-import pytest
-from helpers import (
+from pathlib import Path
+
+from indrajala_ml.geometry import square_bounds
+from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
+from tests.helpers import (
+    approx,
     assert_randomize_breaks_symmetry,
     assert_save_and_load_round_trip,
     assert_snapshot_restore_round_trip,
 )
-
-from indrajala_ml.geometry import square_bounds
-from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 
 
 def _fixed_network() -> MultiClassBackpropClassifierNetwork:
@@ -32,8 +33,8 @@ def test_predict_probabilities_matches_a_hand_computed_forward_pass():
 
     probabilities = network.predict_probabilities((2.0,))
 
-    assert probabilities[0] == pytest.approx(0.5987376536170401)
-    assert probabilities[1] == pytest.approx(0.5436193278499907)
+    assert probabilities[0] == approx(0.5987376536170401)
+    assert probabilities[1] == approx(0.5436193278499907)
 
 
 def test_classify_state_returns_the_argmax_class_index():
@@ -57,12 +58,12 @@ def test_learn_matches_the_one_vs_rest_update_rule_by_hand():
 
     network.learn(0.1, (2.0,), 1)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.49441465949423663)
-    assert hidden_node.bias == pytest.approx(0.09720732974711832)
-    assert output_node_0.input_node_weights[0] == pytest.approx(0.7892077150303392)
-    assert output_node_0.bias == pytest.approx(-0.21438472456309046)
-    assert output_node_1.input_node_weights[0] == pytest.approx(-0.29150504211018)
-    assert output_node_1.bias == pytest.approx(0.4113226837285739)
+    assert hidden_node.input_node_weights[0] == approx(0.49441465949423663)
+    assert hidden_node.bias == approx(0.09720732974711832)
+    assert output_node_0.input_node_weights[0] == approx(0.7892077150303392)
+    assert output_node_0.bias == approx(-0.21438472456309046)
+    assert output_node_1.input_node_weights[0] == approx(-0.29150504211018)
+    assert output_node_1.bias == approx(0.4113226837285739)
 
 
 def test_randomize_breaks_symmetry_between_nodes_in_the_same_layer():
@@ -89,7 +90,7 @@ def test_snapshot_and_restore_round_trip():
     assert_snapshot_restore_round_trip(network, lambda: network.learn(0.1, (1.0, -2.0), 2))
 
 
-def test_save_and_load_round_trip(tmp_path):
+def test_save_and_load_round_trip(tmp_path: Path):
 
     network = MultiClassBackpropClassifierNetwork.randomized([3, 2], 2, square_bounds(10.0), 4)
     for _ in range(5):

@@ -9,6 +9,8 @@ row. The classes are enumerated from the two bases, so a new one can't be missed
 import importlib
 import pkgutil
 import random
+from collections.abc import Callable
+from typing import Any
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -17,6 +19,7 @@ import pytest
 import indrajala_ml.model
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.classifier_protocols import Example
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
     DropoutRustArrayMultiClassBackpropClassifierNetwork,
@@ -26,6 +29,7 @@ from indrajala_ml.model.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset, prepared_mnist
 from indrajala_ml.train import _training_accuracy
+from tests.helpers import all_subclasses
 
 MNIST_TRAIN = "data/mnist/mnist-train.bin"
 
@@ -38,21 +42,21 @@ for _module in pkgutil.iter_modules(indrajala_ml.model.__path__):
     importlib.import_module(f"indrajala_ml.model.{_module.name}")
 
 
-def _all_subclasses(cls):
-    for subclass in cls.__subclasses__():
-        yield subclass
-        yield from _all_subclasses(subclass)
+def _class_name(cls: type[Any]) -> str:
+    return cls.__name__
 
 
-NETWORK_CLASSES = sorted(
-    {cls for cls in _all_subclasses(ArrayNetworkBase) if cls not in (NumpyArrayNetworkBase, RustArrayNetworkBase)},
-    key=lambda cls: cls.__name__,
+# a network (class) is Any here: the tests drive every array network class through the methods
+# its shape has (multiclass, single-output or conv), each class built as CONSTRUCTORS says
+_BASES: set[type[Any]] = {NumpyArrayNetworkBase, RustArrayNetworkBase}
+NETWORK_CLASSES: list[type[Any]] = sorted(
+    {cls for cls in all_subclasses(ArrayNetworkBase) if cls not in _BASES}, key=_class_name
 )
 
 # how to build each class; a class missing here fails test_every_class_has_a_constructor.
 # The Rust dropout mask comes from an RNG that can't be seeded, so its class runs with
 # drop_probability 0.0; the numpy dropout class reseeds np.random before each step instead.
-CONSTRUCTORS = {
+CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "VectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "AdamVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "ConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
@@ -78,21 +82,21 @@ CONSTRUCTORS = {
 }
 
 
-def _is_rust(cls) -> bool:
+def _is_rust(cls: type[Any]) -> bool:
     return issubclass(cls, RustArrayNetworkBase)
 
 
-def _is_binary(cls) -> bool:
+def _is_binary(cls: type[Any]) -> bool:
     return not hasattr(cls, "predict_probabilities")
 
 
-def _rows(cls, count: int = 20) -> list:
+def _rows(cls: type[Any], count: int = 20) -> list[Example[float]] | list[Example[int]]:
     rng = random.Random(1)
     labels = [float(i % 2) for i in range(count)] if _is_binary(cls) else [i % CLASS_COUNT for i in range(count)]
     return [(tuple(rng.random() for _ in range(DIMENSION)), label) for label in labels]
 
 
-def _twin_networks(cls):
+def _twin_networks(cls: type[Any]) -> tuple[Any, Any]:
     # two networks with identical starting weights, built through snapshot/restore so the Rust
     # classes (whose randomize can't be seeded) are covered too
     first = CONSTRUCTORS[cls.__name__](cls)
@@ -102,7 +106,7 @@ def _twin_networks(cls):
     return first, second
 
 
-def _weights(network) -> list:
+def _weights(network: Any) -> list[list[Any]]:
     return [[array.tolist() for array in entry] for entry in network.snapshot()]
 
 
@@ -116,8 +120,8 @@ def test_every_class_has_a_constructor():
     assert {cls.__name__ for cls in NETWORK_CLASSES} == set(CONSTRUCTORS)
 
 
-@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
-def test_learn_row_matches_learn_exactly_step_by_step(cls):
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=_class_name)
+def test_learn_row_matches_learn_exactly_step_by_step(cls: type[Any]):
     via_tuples, via_rows = _twin_networks(cls)
     rows = _rows(cls)
     prepared = via_rows.prepare_dataset(rows)
@@ -131,8 +135,8 @@ def test_learn_row_matches_learn_exactly_step_by_step(cls):
         assert _weights(via_rows) == _weights(via_tuples), f"step {step}"
 
 
-@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
-def test_learn_batch_rows_matches_learn_batch_exactly_step_by_step(cls):
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=_class_name)
+def test_learn_batch_rows_matches_learn_batch_exactly_step_by_step(cls: type[Any]):
     via_tuples, via_rows = _twin_networks(cls)
     rows = _rows(cls)
     prepared = via_rows.prepare_dataset(rows)
@@ -145,8 +149,8 @@ def test_learn_batch_rows_matches_learn_batch_exactly_step_by_step(cls):
         assert _weights(via_rows) == _weights(via_tuples), f"step {step}"
 
 
-@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
-def test_classify_row_matches_classify_state(cls):
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=_class_name)
+def test_classify_row_matches_classify_state(cls: type[Any]):
     network, _ = _twin_networks(cls)
     rows = _rows(cls)
     prepared = network.prepare_dataset(rows)
@@ -159,8 +163,8 @@ def test_classify_row_matches_classify_state(cls):
 CLASSIFY_ROW_COUNT = 2 * CLASSIFY_CHUNK_ROWS + 6
 
 
-@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
-def test_classify_rows_matches_classify_row(cls):
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=_class_name)
+def test_classify_rows_matches_classify_row(cls: type[Any]):
     network, _ = _twin_networks(cls)
     prepared = network.prepare_dataset(_rows(cls, CLASSIFY_ROW_COUNT))
     predictions = network.classify_rows(prepared)
@@ -168,8 +172,8 @@ def test_classify_rows_matches_classify_row(cls):
     assert {type(p) for p in predictions} == {float if _is_binary(cls) else int}
 
 
-@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
-def test_the_prepared_accuracy_pass_matches_the_tuple_one(cls):
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=_class_name)
+def test_the_prepared_accuracy_pass_matches_the_tuple_one(cls: type[Any]):
     network, _ = _twin_networks(cls)
     rows = _rows(cls, CLASSIFY_ROW_COUNT)
     prepared = network.prepare_dataset(rows)
@@ -200,7 +204,7 @@ def test_classify_rows_runs_rust_dropout_in_inference_mode():
     assert not network.hidden_layers[0]._was_training
 
 
-def _rust_multiclass():
+def _rust_multiclass() -> Any:
     cls = next(cls for cls in NETWORK_CLASSES if cls.__name__ == "RustArrayMultiClassBackpropClassifierNetwork")
     return CONSTRUCTORS[cls.__name__](cls)
 
@@ -221,7 +225,7 @@ def test_the_rust_row_argmax_breaks_ties_as_pa_argmax_does():
 
 
 @pytest.mark.parametrize("backend", ["numpy", "rust"])
-def test_the_batched_binary_threshold_is_strictly_above_one_half(backend):
+def test_the_batched_binary_threshold_is_strictly_above_one_half(backend: str):
     name = "ArrayBackpropClassifierNetwork" if backend == "numpy" else "RustArrayBackpropClassifierNetwork"
     cls = next(cls for cls in NETWORK_CLASSES if cls.__name__ == name)
     network = CONSTRUCTORS[name](cls)
@@ -231,8 +235,8 @@ def test_the_batched_binary_threshold_is_strictly_above_one_half(backend):
     assert network._classify_output_batch(outputs) == single == [0.0, 1.0, 0.0, 1.0]
 
 
-@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
-def test_training_leaves_the_prepared_matrix_unchanged(cls):
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=_class_name)
+def test_training_leaves_the_prepared_matrix_unchanged(cls: type[Any]):
     network, _ = _twin_networks(cls)
     rows = _rows(cls)
     prepared = network.prepare_dataset(rows)
@@ -243,8 +247,8 @@ def test_training_leaves_the_prepared_matrix_unchanged(cls):
     assert prepared.states.tolist() == before
 
 
-@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=lambda cls: cls.__name__)
-def test_a_network_rejects_the_other_backends_dataset(cls):
+@pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=_class_name)
+def test_a_network_rejects_the_other_backends_dataset(cls: type[Any]):
     network, _ = _twin_networks(cls)
     other = PreparedDataset.from_rows(_rows(cls), "numpy" if _is_rust(cls) else "rust")
     with pytest.raises(AssertionError):
@@ -272,7 +276,7 @@ def test_the_row_paths_train_in_training_mode():
 
 
 @pytest.mark.parametrize("backend", ["numpy", "rust"])
-def test_from_rows_holds_the_rows_and_labels(backend):
+def test_from_rows_holds_the_rows_and_labels(backend: str):
     rows = [((0.1, 0.2), 1), ((0.3, 0.4), 0), ((0.5, 0.6), 2)]
     prepared = PreparedDataset.from_rows(rows, backend)
     assert len(prepared) == 3
@@ -292,7 +296,7 @@ def test_a_prepared_dataset_rejects_bad_input():
 
 
 @pytest.mark.parametrize("backend", ["numpy", "rust"])
-def test_prepared_mnist_matches_preparing_the_loaded_tuples(backend):
+def test_prepared_mnist_matches_preparing_the_loaded_tuples(backend: str):
     expected = PreparedDataset.from_rows(load_mnist_dataset(MNIST_TRAIN, limit=50), backend)
     actual = prepared_mnist(MNIST_TRAIN, backend, limit=50)
     assert actual.backend == backend

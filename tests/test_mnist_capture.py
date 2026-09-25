@@ -13,6 +13,7 @@ from indrajala_ml.mnist_capture import (
     resize_area_weighted,
     scale_to_fit,
 )
+from tests.helpers import approx
 
 
 def _empty_grid(size: int) -> list[list[float]]:
@@ -86,8 +87,8 @@ def test_resize_area_weighted_splits_a_single_source_pixel_across_two_output_row
 
     result = resize_area_weighted(source, 2, 1)
 
-    assert result[0][0] == pytest.approx(4 / 3)
-    assert result[1][0] == pytest.approx(20 / 3)
+    assert result[0][0] == approx(4 / 3)
+    assert result[1][0] == approx(20 / 3)
 
 
 def test_resize_area_weighted_splits_a_single_source_pixel_across_two_output_pixels():
@@ -97,8 +98,8 @@ def test_resize_area_weighted_splits_a_single_source_pixel_across_two_output_pix
 
     result = resize_area_weighted(source, 1, 2)
 
-    assert result[0][0] == pytest.approx(4 / 3)
-    assert result[0][1] == pytest.approx(20 / 3)
+    assert result[0][0] == approx(4 / 3)
+    assert result[0][1] == approx(20 / 3)
 
 
 def test_scale_to_fit_preserves_aspect_ratio_for_a_tall_source():
@@ -220,8 +221,8 @@ def test_preprocess_capture_centers_an_off_center_stroke():
     result_centroid_row, result_centroid_col = center_of_mass(result)
     # centered on the 28x28 canvas - well within a couple pixels of dead center, unlike the
     # source capture's own centroid (column ~6, nowhere near 32 - the source's own center)
-    assert result_centroid_col == pytest.approx(14.0, abs=1.5)
-    assert result_centroid_row == pytest.approx(14.0, abs=1.5)
+    assert result_centroid_col == approx(14.0, abs=1.5)
+    assert result_centroid_row == approx(14.0, abs=1.5)
     assert any(value > 0.0 for row in result for value in row)
 
 

@@ -3,17 +3,17 @@ import time
 from indrajala_ml.benchmark_sweep import estimate_sweep_wallclock, run_parameter_sweep, summarize_sweep_results
 
 
-def _toy_worker(shared_context, config: int, seed: int) -> float:
+def _toy_worker(shared_context: object, config: int, seed: int) -> float:
     # deterministic in (config, seed): tests the runner's dispatch, seeding and aggregation
     return config * 10.0 + seed
 
 
-def _sleepy_worker(shared_context, config: int, seed: int) -> float:
+def _sleepy_worker(shared_context: object, config: int, seed: int) -> float:
     time.sleep(0.05)
     return float(config + seed)
 
 
-def _shared_context_worker(shared_context, config: int, seed: int) -> float:
+def _shared_context_worker(shared_context: dict[str, float], config: int, seed: int) -> float:
     # shared_context must reach every worker as passed; a module-level global would work only
     # under fork, not spawn
     return shared_context["offset"] + config + seed

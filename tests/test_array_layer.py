@@ -1,14 +1,13 @@
 import random
 
 import numpy as np
-import pytest
 
-from indrajala_ml.model.array_layer import ArrayLayer, sigmoid
+from indrajala_ml.model.array_layer import ArrayLayer, FloatArray, sigmoid
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.backprop_node import sigmoid as node_sigmoid
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import set_random_node_weights
+from tests.helpers import approx, set_random_node_weights
 
 
 def test_sigmoid_matches_node_sigmoid_across_a_random_sweep_including_the_overflow_boundary():
@@ -22,7 +21,7 @@ def test_sigmoid_matches_node_sigmoid_across_a_random_sweep_including_the_overfl
     for z in z_values:
         expected = node_sigmoid(z)
         actual = float(sigmoid(np.array([z]))[0])
-        assert actual == pytest.approx(expected, abs=1e-12)
+        assert actual == approx(expected, abs=1e-12)
 
 
 def _snapshot_to_array_layer(backprop_layer: BackpropLayer) -> ArrayLayer:
@@ -93,7 +92,7 @@ def test_compute_output_delta_matches_node_compute_output_delta_across_a_random_
         array_layer.a = np.array([a])
         array_layer.compute_output_delta(np.array([reference]))
 
-        assert array_layer.delta[0] == pytest.approx(node.delta, abs=1e-12)
+        assert array_layer.delta[0] == approx(node.delta, abs=1e-12)
 
 
 def test_compute_hidden_delta_matches_node_compute_hidden_delta_across_a_random_sweep():
@@ -116,7 +115,7 @@ def test_compute_hidden_delta_matches_node_compute_hidden_delta_across_a_random_
         for node, a in zip(hidden_layer.nodes, activations):
             node._activation = a
 
-        expected = []
+        expected: list[float] = []
         for i, node in enumerate(hidden_layer.nodes):
             node.compute_hidden_delta(next_layer.nodes, i)
             expected.append(node.delta)
@@ -141,7 +140,7 @@ def test_compute_output_delta_batch_matches_per_row_single_example_results_stack
     A = np.array([[rng.uniform(0.0, 1.0) for _ in range(size)] for _ in range(batch_size)])
     reference_batch = np.array([[rng.uniform(0.0, 1.0) for _ in range(size)] for _ in range(batch_size)])
 
-    expected_rows = []
+    expected_rows: list[FloatArray] = []
     for a_row, reference_row in zip(A, reference_batch):
         array_layer.a = a_row
         array_layer.compute_output_delta(reference_row)
@@ -168,7 +167,7 @@ def test_compute_hidden_delta_batch_matches_per_row_single_example_results_stack
     hidden_layer = ArrayLayer(hidden_size, 0)
     A = np.array([[rng.uniform(0.0, 1.0) for _ in range(hidden_size)] for _ in range(batch_size)])
 
-    expected_rows = []
+    expected_rows: list[FloatArray] = []
     for row_index in range(batch_size):
         hidden_layer.a = A[row_index]
         next_layer.delta = next_layer.delta_batch[row_index]

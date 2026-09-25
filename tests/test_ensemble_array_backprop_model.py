@@ -1,3 +1,6 @@
+from pathlib import Path
+from typing import Any
+
 import pytest
 
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
@@ -6,25 +9,28 @@ from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
     EnsembleRustArrayBackpropClassifierNetwork,
 )
 from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
+from tests.helpers import Backend, approx
 
-ENSEMBLE_CLS = {
+EnsembleCls = type[EnsembleArrayBackpropClassifierNetwork] | type[EnsembleRustArrayBackpropClassifierNetwork]
+ENSEMBLE_CLS: dict[str, EnsembleCls] = {
     "numpy": EnsembleArrayBackpropClassifierNetwork,
     "rust": EnsembleRustArrayBackpropClassifierNetwork,
 }
-CLASSIFIER_CLS = {"numpy": ArrayBackpropClassifierNetwork, "rust": RustArrayBackpropClassifierNetwork}
+# a classifier (class) is Any here: an ensemble takes its own backend's classifiers, which a union can't express
+CLASSIFIER_CLS: dict[str, Any] = {"numpy": ArrayBackpropClassifierNetwork, "rust": RustArrayBackpropClassifierNetwork}
 
 
 @pytest.fixture
-def ensemble_cls(backend):
+def ensemble_cls(backend: Backend) -> EnsembleCls:
     return ENSEMBLE_CLS[backend.name]
 
 
 @pytest.fixture
-def classifier_cls(backend):
+def classifier_cls(backend: Backend) -> Any:
     return CLASSIFIER_CLS[backend.name]
 
 
-def _fixed_classifier(backend, output_weight: float, output_bias: float):
+def _fixed_classifier(backend: Backend, output_weight: float, output_bias: float) -> Any:
     # one input and one hidden node, the same in every classifier, so each output is
     # hand-computable: a_h = sigmoid(0.5*2.0 + 0.1) = 0.7502601055951177
     classifier = CLASSIFIER_CLS[backend.name]([1], 1)
@@ -35,7 +41,9 @@ def _fixed_classifier(backend, output_weight: float, output_bias: float):
     return classifier
 
 
-def _fixed_ensemble(ensemble_cls, backend):
+def _fixed_ensemble(
+    ensemble_cls: EnsembleCls, backend: Backend
+) -> EnsembleArrayBackpropClassifierNetwork | EnsembleRustArrayBackpropClassifierNetwork:
     return ensemble_cls(
         [
             _fixed_classifier(backend, 0.8, -0.2),
@@ -45,13 +53,13 @@ def _fixed_ensemble(ensemble_cls, backend):
     )
 
 
-def test_ensemble_requires_at_least_two_classifiers(ensemble_cls, backend):
+def test_ensemble_requires_at_least_two_classifiers(ensemble_cls: EnsembleCls, backend: Backend):
 
     with pytest.raises(AssertionError):
         ensemble_cls([_fixed_classifier(backend, 0.8, -0.2)])
 
 
-def test_predict_probabilities_matches_each_sub_networks_own_output(ensemble_cls, backend):
+def test_predict_probabilities_matches_each_sub_networks_own_output(ensemble_cls: EnsembleCls, backend: Backend):
 
     # computed independently, as in test_ensemble_backprop_classifier_network.py:
     # a_o0 = sigmoid(0.8*a_h - 0.2) = 0.5987376536170401
@@ -61,19 +69,19 @@ def test_predict_probabilities_matches_each_sub_networks_own_output(ensemble_cls
 
     probabilities = ensemble.predict_probabilities((2.0,))
 
-    assert probabilities[0] == pytest.approx(0.5987376536170401)
-    assert probabilities[1] == pytest.approx(0.5436193278499907)
-    assert probabilities[2] == pytest.approx(0.8176520510294325)
+    assert probabilities[0] == approx(0.5987376536170401)
+    assert probabilities[1] == approx(0.5436193278499907)
+    assert probabilities[2] == approx(0.8176520510294325)
 
 
-def test_classify_state_returns_the_argmax_across_sub_networks(ensemble_cls, backend):
+def test_classify_state_returns_the_argmax_across_sub_networks(ensemble_cls: EnsembleCls, backend: Backend):
 
     ensemble = _fixed_ensemble(ensemble_cls, backend)
 
     assert ensemble.classify_state((2.0,)) == 2
 
 
-def test_snapshot_and_restore_round_trip(ensemble_cls, classifier_cls):
+def test_snapshot_and_restore_round_trip(ensemble_cls: EnsembleCls, classifier_cls: Any):
 
     ensemble = ensemble_cls([classifier_cls.randomized([3], 2) for _ in range(3)])
 
@@ -98,7 +106,7 @@ def test_snapshot_and_restore_round_trip(ensemble_cls, classifier_cls):
             assert b1.tolist() == b2.tolist()
 
 
-def test_save_and_load_round_trip(ensemble_cls, classifier_cls, tmp_path):
+def test_save_and_load_round_trip(ensemble_cls: EnsembleCls, classifier_cls: Any, tmp_path: Path):
 
     ensemble = ensemble_cls([classifier_cls.randomized([3], 2) for _ in range(3)])
     for classifier in ensemble.classifiers:
@@ -111,5 +119,5 @@ def test_save_and_load_round_trip(ensemble_cls, classifier_cls, tmp_path):
 
     assert loaded.class_count == ensemble.class_count
     for state in [(1.0, -2.0), (-3.0, 4.0), (0.0, 0.0)]:
-        assert loaded.predict_probabilities(state) == pytest.approx(ensemble.predict_probabilities(state))
+        assert loaded.predict_probabilities(state) == approx(ensemble.predict_probabilities(state))
         assert loaded.classify_state(state) == ensemble.classify_state(state)

@@ -1,11 +1,10 @@
 import random
 
-import pytest
-
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.l2_regularization_layer import make_l2_node_cls
 from indrajala_ml.model.momentum_layer import make_momentum_node_cls
 from indrajala_ml.model.state_node import StateNode
+from tests.helpers import approx
 
 
 def _plain_node(weight: float, bias: float, x: float) -> BackpropNode:
@@ -32,8 +31,8 @@ def test_accumulate_then_apply_at_batch_size_one_matches_the_direct_formula():
         node.accumulate_gradient()
         node.apply_accumulated_gradient(learning_rate, batch_size=1)
 
-        assert node.input_node_weights[0] == pytest.approx(weight - learning_rate * delta * x)
-        assert node.bias == pytest.approx(bias - learning_rate * delta)
+        assert node.input_node_weights[0] == approx(weight - learning_rate * delta * x)
+        assert node.bias == approx(bias - learning_rate * delta)
 
 
 def test_accumulate_then_apply_at_batch_size_one_is_bit_identical_to_apply_gradient():
@@ -71,8 +70,8 @@ def test_accumulate_gradient_sums_across_multiple_examples_before_any_weight_wri
     x_node.update_value(1.0)
     node.delta = 0.2
     node.accumulate_gradient()
-    assert node.input_node_weights[0] == pytest.approx(0.5)  # untouched
-    assert node.bias == pytest.approx(0.1)  # untouched
+    assert node.input_node_weights[0] == approx(0.5)  # untouched
+    assert node.bias == approx(0.1)  # untouched
 
     x_node.update_value(2.0)
     node.delta = -0.1
@@ -80,8 +79,8 @@ def test_accumulate_gradient_sums_across_multiple_examples_before_any_weight_wri
 
     # accum_w = 0.2*1.0 + (-0.1)*2.0 = 0.0, accum_b = 0.2 + (-0.1) = 0.1
     node.apply_accumulated_gradient(0.1, batch_size=2)
-    assert node.input_node_weights[0] == pytest.approx(0.5 - 0.1 * (0.0 / 2))
-    assert node.bias == pytest.approx(0.1 - 0.1 * (0.1 / 2))
+    assert node.input_node_weights[0] == approx(0.5 - 0.1 * (0.0 / 2))
+    assert node.bias == approx(0.1 - 0.1 * (0.1 / 2))
 
 
 def test_apply_accumulated_gradient_resets_the_accumulator():
@@ -101,8 +100,8 @@ def test_apply_accumulated_gradient_resets_the_accumulator():
     # a second apply with nothing accumulated in between must be a no-op (accumulator reset to
     # zero, not left over from the batch just applied)
     node.apply_accumulated_gradient(0.1, batch_size=1)
-    assert node.input_node_weights[0] == pytest.approx(weight_after_first_apply)
-    assert node.bias == pytest.approx(bias_after_first_apply)
+    assert node.input_node_weights[0] == approx(weight_after_first_apply)
+    assert node.bias == approx(bias_after_first_apply)
 
 
 def _batch_examples() -> list[tuple[float, float]]:
@@ -135,13 +134,13 @@ def test_momentum_apply_accumulated_gradient_matches_hand_computed_batch_values(
 
     _accumulate_batch(node, _batch_examples())
     node.apply_accumulated_gradient(0.1, batch_size=2)
-    assert node.input_node_weights[0] == pytest.approx(0.47)
-    assert node.bias == pytest.approx(0.07)
+    assert node.input_node_weights[0] == approx(0.47)
+    assert node.bias == approx(0.07)
 
     _accumulate_batch(node, _batch_examples())
     node.apply_accumulated_gradient(0.1, batch_size=2)
-    assert node.input_node_weights[0] == pytest.approx(0.413)
-    assert node.bias == pytest.approx(0.013)
+    assert node.input_node_weights[0] == approx(0.413)
+    assert node.bias == approx(0.013)
 
 
 def test_l2_apply_accumulated_gradient_matches_hand_computed_batch_values():
@@ -156,8 +155,8 @@ def test_l2_apply_accumulated_gradient_matches_hand_computed_batch_values():
 
     _accumulate_batch(node, _batch_examples())
     node.apply_accumulated_gradient(0.1, batch_size=2)
-    assert node.input_node_weights[0] == pytest.approx(0.465)
-    assert node.bias == pytest.approx(0.07)
+    assert node.input_node_weights[0] == approx(0.465)
+    assert node.bias == approx(0.07)
 
 
 def test_momentum_and_l2_batch_size_one_still_match_apply_gradient_exactly():

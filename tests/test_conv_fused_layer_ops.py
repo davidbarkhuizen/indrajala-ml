@@ -11,35 +11,32 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_layer import ArrayLayer
+from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
-from tests.test_conv_array_layer import SHAPES
+from tests.helpers import to_numpy
+from tests.test_conv_array_layer import SHAPES, ConvShape
 
 BATCH_SIZE = 4
 RTOL = 1e-12
 ATOL = 1e-14
 
 
-def _np(arr) -> np.ndarray:
-    return np.array(arr.tolist())
-
-
 def _geometry(layer: ConvArrayLayer) -> "pa.ConvGeometry":
     return pa.ConvGeometry(layer.input_height, layer.input_width, layer.input_channels, layer.kernel_size, layer.stride)
 
 
-def _rust_forward(layer: ConvArrayLayer, X: np.ndarray):
+def _rust_forward(layer: ConvArrayLayer, X: FloatArray) -> tuple[pa.Array, pa.Array]:
     return pa.conv_forward_batch(
         pa.Array(layer.W.tolist()), pa.Array(X.tolist()), pa.Array(layer.b.tolist()), _geometry(layer)
     )
 
 
-def _rust_downstream(layer: ConvArrayLayer) -> np.ndarray:
+def _rust_downstream(layer: ConvArrayLayer) -> FloatArray:
     W, delta_batch = pa.Array(layer.W.tolist()), pa.Array(layer.delta_batch.tolist())
-    return _np(pa.conv_downstream_batch(W, delta_batch, _geometry(layer)))
+    return to_numpy(pa.conv_downstream_batch(W, delta_batch, _geometry(layer)))
 
 
-def _random_layer(seed, shape) -> tuple[ConvArrayLayer, np.random.Generator]:
+def _random_layer(seed: int, shape: ConvShape) -> tuple[ConvArrayLayer, np.random.Generator]:
     rng = np.random.default_rng(seed)
     layer = ConvArrayLayer(*shape)
     layer.W = rng.uniform(-1.0, 1.0, size=layer.W.shape)
@@ -48,20 +45,20 @@ def _random_layer(seed, shape) -> tuple[ConvArrayLayer, np.random.Generator]:
 
 
 @pytest.mark.parametrize("shape", SHAPES)
-def test_conv_forward_batch_matches_conv_array_layer_forward_batch(shape):
+def test_conv_forward_batch_matches_conv_array_layer_forward_batch(shape: ConvShape):
     layer, rng = _random_layer(0, shape)
     X = rng.uniform(-1.0, 1.0, size=(BATCH_SIZE, layer.input_size))
     layer.forward_batch(X)
 
     A, cols = _rust_forward(layer, X)
 
-    np.testing.assert_allclose(_np(A), layer.A, rtol=RTOL, atol=ATOL)
+    np.testing.assert_allclose(to_numpy(A), layer.A, rtol=RTOL, atol=ATOL)
     # numpy caches (N, P, C*k*k); Rust the same rows flattened to (N*P, C*k*k)
-    np.testing.assert_array_equal(_np(cols), layer._cols.reshape(-1, layer.fan_in))
+    np.testing.assert_array_equal(to_numpy(cols), layer._cols.reshape(-1, layer.fan_in))
 
 
 @pytest.mark.parametrize("shape", SHAPES)
-def test_conv_downstream_batch_matches_conv_array_layer_downstream_batch(shape):
+def test_conv_downstream_batch_matches_conv_array_layer_downstream_batch(shape: ConvShape):
     layer, rng = _random_layer(1, shape)
     layer.delta_batch = rng.uniform(-1.0, 1.0, size=(BATCH_SIZE, layer.size))
 
@@ -80,7 +77,7 @@ def test_conv_downstream_batch_gives_unread_inputs_exactly_zero_gradient_in_both
 
 
 @pytest.mark.parametrize("shape", SHAPES)
-def test_conv_accumulate_gradient_batch_matches_conv_array_layer_accumulate_gradient_batch(shape):
+def test_conv_accumulate_gradient_batch_matches_conv_array_layer_accumulate_gradient_batch(shape: ConvShape):
     layer, rng = _random_layer(3, shape)
     X = rng.uniform(-1.0, 1.0, size=(BATCH_SIZE, layer.input_size))
     layer.forward_batch(X)
@@ -100,8 +97,8 @@ def test_conv_accumulate_gradient_batch_matches_conv_array_layer_accumulate_grad
         _geometry(layer),
     )
 
-    np.testing.assert_allclose(_np(grad_W), layer._grad_W, rtol=RTOL, atol=1e-13)
-    np.testing.assert_allclose(_np(grad_b), layer._grad_b, rtol=RTOL, atol=1e-13)
+    np.testing.assert_allclose(to_numpy(grad_W), layer._grad_W, rtol=RTOL, atol=1e-13)
+    np.testing.assert_allclose(to_numpy(grad_b), layer._grad_b, rtol=RTOL, atol=1e-13)
 
 
 def test_layer_downstream_matches_array_layer_downstream():
@@ -113,7 +110,9 @@ def test_layer_downstream_matches_array_layer_downstream():
 
     W = pa.Array(layer.W.tolist())
     downstream = pa.layer_downstream(W, pa.Array(layer.delta.tolist()))
-    np.testing.assert_allclose(_np(downstream), layer.downstream(), rtol=RTOL)
+    np.testing.assert_allclose(to_numpy(downstream), layer.downstream(), rtol=RTOL)
     np.testing.assert_allclose(
-        _np(pa.layer_downstream_batch(W, pa.Array(layer.delta_batch.tolist()))), layer.downstream_batch(), rtol=RTOL
+        to_numpy(pa.layer_downstream_batch(W, pa.Array(layer.delta_batch.tolist()))),
+        layer.downstream_batch(),
+        rtol=RTOL,
     )

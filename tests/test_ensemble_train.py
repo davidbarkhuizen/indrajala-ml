@@ -1,6 +1,7 @@
 import math
 import pickle
 import random
+from pathlib import Path
 
 import pytest
 
@@ -22,11 +23,12 @@ from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
 )
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
 from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
+from tests.helpers import approx
 
 
 def _synthetic_dataset(counts: dict[int, int]) -> list[tuple[tuple[float, ...], int]]:
     # each example's state is a distinct singleton tuple, so identity is easy to trace
-    dataset = []
+    dataset: list[tuple[tuple[float, ...], int]] = []
     for label, count in counts.items():
         for i in range(count):
             dataset.append(((float(label), float(i)), label))
@@ -168,7 +170,7 @@ def _synthetic_multiclass_dataset() -> list[tuple[tuple[float, float], int]]:
     # three well-separated 2D clusters: learnable, unlike the label-only dataset above
     centers = {0: (-5.0, -5.0), 1: (5.0, 5.0), 2: (5.0, -5.0)}
     rng = random.Random(1)
-    dataset = []
+    dataset: list[tuple[tuple[float, float], int]] = []
     for label, (cx, cy) in centers.items():
         for _ in range(20):
             dataset.append(((cx + rng.uniform(-1.0, 1.0), cy + rng.uniform(-1.0, 1.0)), label))
@@ -352,7 +354,7 @@ def test_train_ensemble_parallel_accepts_rust_array_backed_classifier_cls():
     assert ensemble.classify_state((-5.0, -5.0)) == 0
 
 
-def test_train_ensemble_parallel_from_indices_produces_a_working_ensemble(tmp_path):
+def test_train_ensemble_parallel_from_indices_produces_a_working_ensemble(tmp_path: Path):
 
     dataset = _synthetic_multiclass_dataset()
     labels = [label for _, label in dataset]
@@ -369,7 +371,7 @@ def test_train_ensemble_parallel_from_indices_produces_a_working_ensemble(tmp_pa
     assert ensemble.classify_state((5.0, -5.0)) == 2
 
 
-def test_train_ensemble_parallel_from_indices_matches_the_fully_decoded_path(tmp_path):
+def test_train_ensemble_parallel_from_indices_matches_the_fully_decoded_path(tmp_path: Path):
 
     # same selection and per-worker seeds; only how each worker gets its examples differs
     dataset = _synthetic_multiclass_dataset()
@@ -384,7 +386,7 @@ def test_train_ensemble_parallel_from_indices_matches_the_fully_decoded_path(tmp
     assert indexed_ensemble.snapshot() == direct_ensemble.snapshot()
 
 
-def test_train_ensemble_serial_from_indices_produces_a_working_ensemble(tmp_path):
+def test_train_ensemble_serial_from_indices_produces_a_working_ensemble(tmp_path: Path):
 
     dataset = _synthetic_multiclass_dataset()
     labels = [label for _, label in dataset]
@@ -412,7 +414,7 @@ def test_train_ensemble_serial_from_indices_produces_a_working_ensemble(tmp_path
     assert ensemble.classify_state((5.0, -5.0)) == 2
 
 
-def test_train_ensemble_serial_from_indices_matches_the_parallel_path(tmp_path):
+def test_train_ensemble_serial_from_indices_matches_the_parallel_path(tmp_path: Path):
 
     # no Pool, but the same selection and per-class seeds (one random.Random(seed), in class
     # order)
@@ -439,7 +441,7 @@ def test_train_ensemble_serial_from_indices_matches_the_parallel_path(tmp_path):
     assert serial_ensemble.snapshot() == parallel_ensemble.snapshot()
 
 
-def test_train_ensemble_serial_from_indices_accepts_array_and_rust_backed_classifier_cls(tmp_path):
+def test_train_ensemble_serial_from_indices_accepts_array_and_rust_backed_classifier_cls(tmp_path: Path):
 
     # each backend's serial result must equal its parallel one
     dataset = _synthetic_multiclass_dataset()
@@ -492,7 +494,7 @@ def test_estimate_bytes_per_example_matches_a_direct_pickle_measurement():
     estimated = _estimate_bytes_per_example(dataset, sample_size=50)
 
     direct = len(pickle.dumps(dataset[:50])) / 50
-    assert estimated == pytest.approx(direct)
+    assert estimated == approx(direct)
 
 
 def test_estimate_bytes_per_example_handles_a_dataset_smaller_than_the_sample_size():
@@ -510,7 +512,7 @@ def test_estimate_bytes_per_example_rejects_an_empty_dataset():
         _estimate_bytes_per_example([], sample_size=50)
 
 
-def test_select_worker_count_is_limited_by_available_memory(monkeypatch):
+def test_select_worker_count_is_limited_by_available_memory(monkeypatch: pytest.MonkeyPatch):
 
     # half of 100MB for workers at 1000 examples * 1000 bytes * 2.0 safety = 2MB each: 25
     # workers. cpu_count and class_count are set high enough not to bind
@@ -524,7 +526,7 @@ def test_select_worker_count_is_limited_by_available_memory(monkeypatch):
     assert worker_count == 25
 
 
-def test_select_worker_count_is_limited_by_cpu_count_when_memory_is_abundant(monkeypatch):
+def test_select_worker_count_is_limited_by_cpu_count_when_memory_is_abundant(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr("indrajala_ml.ensemble_train._available_memory_bytes", lambda: 10_000_000_000)
     monkeypatch.setattr("os.cpu_count", lambda: 4)
@@ -536,7 +538,7 @@ def test_select_worker_count_is_limited_by_cpu_count_when_memory_is_abundant(mon
     assert worker_count == 4
 
 
-def test_select_worker_count_is_limited_by_class_count(monkeypatch):
+def test_select_worker_count_is_limited_by_class_count(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr("indrajala_ml.ensemble_train._available_memory_bytes", lambda: 10_000_000_000)
     monkeypatch.setattr("os.cpu_count", lambda: 64)
@@ -548,7 +550,7 @@ def test_select_worker_count_is_limited_by_class_count(monkeypatch):
     assert worker_count == 3
 
 
-def test_select_worker_count_respects_an_explicit_lower_request(monkeypatch):
+def test_select_worker_count_respects_an_explicit_lower_request(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr("indrajala_ml.ensemble_train._available_memory_bytes", lambda: 10_000_000_000)
     monkeypatch.setattr("os.cpu_count", lambda: 64)
@@ -560,7 +562,7 @@ def test_select_worker_count_respects_an_explicit_lower_request(monkeypatch):
     assert worker_count == 2
 
 
-def test_select_worker_count_never_goes_below_one_even_under_severe_memory_pressure(monkeypatch):
+def test_select_worker_count_never_goes_below_one_even_under_severe_memory_pressure(monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr("indrajala_ml.ensemble_train._available_memory_bytes", lambda: 1)
     monkeypatch.setattr("os.cpu_count", lambda: 64)
@@ -575,7 +577,9 @@ def test_select_worker_count_never_goes_below_one_even_under_severe_memory_press
     assert worker_count == 1
 
 
-def test_select_worker_count_falls_back_to_cpu_and_class_count_when_memory_is_undetectable(monkeypatch):
+def test_select_worker_count_falls_back_to_cpu_and_class_count_when_memory_is_undetectable(
+    monkeypatch: pytest.MonkeyPatch,
+):
 
     monkeypatch.setattr("indrajala_ml.ensemble_train._available_memory_bytes", lambda: None)
     monkeypatch.setattr("os.cpu_count", lambda: 4)

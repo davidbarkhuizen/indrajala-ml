@@ -9,18 +9,19 @@ from indrajala_ml.model.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import set_random_node_weights
+from tests.helpers import Backend, approx, set_random_node_weights
 
-LAYER_CLS = {"numpy": SoftmaxArrayLayer, "rust": SoftmaxRustArrayLayer}
+LayerCls = type[SoftmaxArrayLayer] | type[SoftmaxRustArrayLayer]
+LAYER_CLS: dict[str, LayerCls] = {"numpy": SoftmaxArrayLayer, "rust": SoftmaxRustArrayLayer}
 BASE_LAYER_CLS = {"numpy": ArrayLayer, "rust": RustArrayLayer}
 
 
 @pytest.fixture
-def layer_cls(backend):
+def layer_cls(backend: Backend) -> LayerCls:
     return LAYER_CLS[backend.name]
 
 
-def _array_layer_like(softmax_layer: SoftmaxOutputLayer, backend):
+def _array_layer_like(softmax_layer: SoftmaxOutputLayer, backend: Backend):
     array_layer = LAYER_CLS[backend.name](softmax_layer.size, len(softmax_layer.input_layer.nodes))
     snapshot = softmax_layer.snapshot_state()
     array_layer.W = backend.owned([weights for weights, _bias in snapshot])
@@ -28,7 +29,7 @@ def _array_layer_like(softmax_layer: SoftmaxOutputLayer, backend):
     return array_layer
 
 
-def test_forward_matches_softmax_output_layer_across_a_random_sweep(backend):
+def test_forward_matches_softmax_output_layer_across_a_random_sweep(backend: Backend):
 
     rng = random.Random(50)
     dimension = 4
@@ -49,10 +50,10 @@ def test_forward_matches_softmax_output_layer_across_a_random_sweep(backend):
 
         actual = array_layer.forward(backend.owned(x)).tolist()
         assert np.allclose(actual, expected, rtol=1e-9, atol=1e-12)
-        assert sum(actual) == pytest.approx(1.0)
+        assert sum(actual) == approx(1.0)
 
 
-def test_forward_matches_softmax_output_layer_for_large_magnitude_z_without_overflow(backend):
+def test_forward_matches_softmax_output_layer_for_large_magnitude_z_without_overflow(backend: Backend):
 
     # the max shift keeps e^z finite, as the per-node reference's does
     dimension = 1
@@ -70,13 +71,13 @@ def test_forward_matches_softmax_output_layer_for_large_magnitude_z_without_over
 
     actual = array_layer.forward(backend.owned([0.0])).tolist()
     assert np.allclose(actual, expected, rtol=1e-9, atol=1e-12)
-    assert actual[0] == pytest.approx(1.0)
-    assert actual[1] == pytest.approx(0.0)
-    assert actual[2] == pytest.approx(0.0)
+    assert actual[0] == approx(1.0)
+    assert actual[1] == approx(0.0)
+    assert actual[2] == approx(0.0)
     assert not np.isnan(actual).any()
 
 
-def test_forward_batch_matches_per_row_single_example_results_stacked(layer_cls, backend):
+def test_forward_batch_matches_per_row_single_example_results_stacked(layer_cls: LayerCls, backend: Backend):
 
     rng = random.Random(51)
     dimension = 4
@@ -96,7 +97,7 @@ def test_forward_batch_matches_per_row_single_example_results_stacked(layer_cls,
     assert np.allclose(actual.sum(axis=1), 1.0)
 
 
-def test_compute_output_delta_matches_softmax_output_node_across_a_random_sweep(backend):
+def test_compute_output_delta_matches_softmax_output_node_across_a_random_sweep(backend: Backend):
 
     rng = random.Random(52)
     dimension = 4
@@ -115,7 +116,7 @@ def test_compute_output_delta_matches_softmax_output_node_across_a_random_sweep(
         softmax_layer.forward()
 
         category = rng.randrange(size)
-        expected = []
+        expected: list[float] = []
         for i, node in enumerate(softmax_layer.nodes):
             target = 1.0 if i == category else 0.0
             node.compute_output_delta(target)
@@ -128,7 +129,9 @@ def test_compute_output_delta_matches_softmax_output_node_across_a_random_sweep(
         assert np.allclose(array_layer.delta.tolist(), expected, rtol=1e-9, atol=1e-12)
 
 
-def test_compute_output_delta_batch_matches_per_row_single_example_results_stacked(layer_cls, backend):
+def test_compute_output_delta_batch_matches_per_row_single_example_results_stacked(
+    layer_cls: LayerCls, backend: Backend
+):
 
     rng = random.Random(53)
     dimension = 4
@@ -143,7 +146,7 @@ def test_compute_output_delta_batch_matches_per_row_single_example_results_stack
     categories = [rng.randrange(size) for _ in range(batch_size)]
     reference_rows = [[1.0 if i == category else 0.0 for i in range(size)] for category in categories]
 
-    expected = []
+    expected: list[list[float]] = []
     for row in range(batch_size):
         array_layer.forward(backend.owned(X[row]))
         array_layer.compute_output_delta(backend.owned(reference_rows[row]))
@@ -154,7 +157,7 @@ def test_compute_output_delta_batch_matches_per_row_single_example_results_stack
     assert np.allclose(array_layer.delta_batch.tolist(), expected, rtol=1e-9, atol=1e-12)
 
 
-def test_compute_hidden_delta_is_inherited_unchanged_from_array_layer(layer_cls, backend):
+def test_compute_hidden_delta_is_inherited_unchanged_from_array_layer(layer_cls: LayerCls, backend: Backend):
 
     # softmax couples the nodes in the forward pass only; the layer before it uses the plain
     # hidden-delta formula
@@ -164,7 +167,7 @@ def test_compute_hidden_delta_is_inherited_unchanged_from_array_layer(layer_cls,
     assert layer_cls.compute_hidden_delta_batch is base.compute_hidden_delta_batch
 
 
-def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(layer_cls, backend):
+def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(layer_cls: LayerCls, backend: Backend):
 
     array_layer = layer_cls(2, 2)
     array_layer.W = backend.owned([[1.0, 2.0], [3.0, 4.0]])
@@ -177,7 +180,7 @@ def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(laye
     assert np.allclose(array_layer.b.tolist(), [4.9, 5.9])
 
 
-def test_construction_rejects_a_size_smaller_than_two(layer_cls):
+def test_construction_rejects_a_size_smaller_than_two(layer_cls: LayerCls):
 
     with pytest.raises(AssertionError):
         layer_cls(1, 3)
