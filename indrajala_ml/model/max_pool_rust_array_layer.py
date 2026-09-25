@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import indrajala_math_rust as pa
 
+from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.max_pool_array_layer import validate_pool_arguments
 
 
@@ -56,11 +57,11 @@ class MaxPoolRustArrayLayer:
     def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
         self.compute_output_delta(reference_batch)
 
-    def compute_hidden_delta_batch(self, next_layer) -> None:
+    def compute_hidden_delta_batch(self, next_layer: ArrayNetworkLayer[pa.Array]) -> None:
         # max is the identity on its winning input - no activation derivative to multiply in
         self.delta_batch = next_layer.downstream_batch()
 
-    def compute_hidden_delta(self, next_layer) -> None:
+    def compute_hidden_delta(self, next_layer: ArrayNetworkLayer[pa.Array]) -> None:
         self.delta = next_layer.downstream()
 
     def downstream_batch(self) -> pa.Array:

@@ -1,8 +1,11 @@
+# pyright: reportConstantRedefinition=false
+# (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_layer import unfused_sgd_step
+from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.conv_array_layer import validate_conv_arguments
 
 
@@ -71,11 +74,11 @@ class ConvRustArrayLayer:
     def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
         self.compute_output_delta(reference_batch)
 
-    def compute_hidden_delta_batch(self, next_layer) -> None:
+    def compute_hidden_delta_batch(self, next_layer: ArrayNetworkLayer[pa.Array]) -> None:
         # array_relu_mask: derivative 0 at exactly z == 0, the same convention as ConvArrayLayer
         self.delta_batch = pa.array_relu_mask(next_layer.downstream_batch(), self.A)
 
-    def compute_hidden_delta(self, next_layer) -> None:
+    def compute_hidden_delta(self, next_layer: ArrayNetworkLayer[pa.Array]) -> None:
         self.delta = pa.array_relu_mask(next_layer.downstream(), self.a)
 
     def downstream_batch(self) -> pa.Array:

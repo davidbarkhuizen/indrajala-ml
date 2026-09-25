@@ -5,7 +5,7 @@ import random
 from collections.abc import Sequence
 from typing import Any, Generic, cast
 
-from typing_extensions import TypeVar
+from typing_extensions import Self, TypeVar
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.bounds import validate_batch, validate_input_bounds, validate_layer_sizes
@@ -64,7 +64,7 @@ class BackpropNetworkBase(Generic[LayerT]):
         self.trainable_layers: list[LayerT | BackpropLayer] = [*self.hidden_layers, self.output_layer]
 
     @classmethod
-    def randomized(cls, *args, **kwargs):
+    def randomized(cls, *args: Any, **kwargs: Any) -> Self:
         # every subclass's randomized signature is its __init__ signature; randomize() is per
         # subclass
         network = cls(*args, **kwargs)

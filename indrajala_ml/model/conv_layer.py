@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_unit import ConvUnit
-from indrajala_ml.model.layer_protocols import InputLayer
+from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 
 
 @dataclass(frozen=True)
@@ -102,7 +102,7 @@ class ConvLayer:
         for unit in self.nodes:
             unit.forward()
 
-    def compute_hidden_deltas(self, next_layer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         # the next layer supplies each unit's downstream sum, dense or sparse
         for own_index, unit in enumerate(self.nodes):
             unit.compute_hidden_delta(next_layer.downstream_sum(own_index))

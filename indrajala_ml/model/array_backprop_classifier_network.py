@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from indrajala_ml.model.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.array_network_shapes import ArraySingleOutputShape
+from indrajala_ml.model.numpy_array_network_base import NumpyArrayNetworkBase
 
 
-class ArrayBackpropClassifierNetwork(ArraySingleOutputShape, ArrayNetworkBase):
+class ArrayBackpropClassifierNetwork(ArraySingleOutputShape[FloatArray], NumpyArrayNetworkBase):
     """
     ArraySingleOutputShape on the numpy backend: the sub-network of
     EnsembleArrayBackpropClassifierNetwork.

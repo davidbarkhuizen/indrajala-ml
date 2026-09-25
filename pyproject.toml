@@ -36,7 +36,9 @@ extend-exclude = ["rust"]  # the crate's own repo (submodule)
 "indrajala_ml/demos/demo_conv_rust_vs_vectorized_digit_recognition.py" = ["B023"]
 "scripts/accuracy_pass_timing.py" = ["B023"]
 
-# pinned in ./cli (pyright_version); `./cli lint` runs it. Standard mode everywhere for now.
+# pinned in ./cli (pyright_version); `./cli lint` runs it. Standard mode for tests/ and
+# scripts/; strict for the package, listed below as each part is brought up to it.
 [tool.pyright]
 include = ["indrajala_ml", "tests", "scripts"]
 typeCheckingMode = "standard"
+strict = ["indrajala_ml/model", "indrajala_ml/machine_profile.py"]

@@ -133,6 +133,7 @@ def test_the_parity_runs_really_exercise_relu_zeros_and_pooling_ties(backend):
     _node_network, array_network = _matching_networks(rng, "conv_pool_conv", backend)
     X = backend.owned([list(state) for state, _label in _digits_rows()])
     conv, pool = array_network.layers[0], array_network.layers[1]
+    assert isinstance(conv, (ConvArrayLayer, ConvRustArrayLayer))
     array_network.layers[2].forward_batch(pool.forward_batch(conv.forward_batch(X)))
 
     A = np.array(conv.A.tolist())

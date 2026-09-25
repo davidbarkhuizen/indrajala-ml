@@ -1,16 +1,39 @@
+# pyright: reportConstantRedefinition=false
+# (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any, Generic, Protocol, cast
 
-from indrajala_ml.model.array_backend import NUMPY
-from indrajala_ml.model.array_layer import ArrayLayer
+from typing_extensions import Self
+
+from indrajala_ml.model.array_protocols import A, ArrayBackend, ArrayNetworkLayer, WeightedArrayLayer
 from indrajala_ml.model.bounds import validate_batch, validate_layer_sizes
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
 
-class ArrayNetworkBase:
+class DenseArrayLayerClass(Protocol[A]):
+    """A dense layer class as a network builds it: (size, input_size, *its hyperparameters)."""
+
+    hyperparameters: tuple[str, ...]
+
+    def __call__(self, *args: Any, **kwargs: Any) -> WeightedArrayLayer[A]: ...
+
+
+def as_weighted_array_layers(layers: Sequence[ArrayNetworkLayer[A]]) -> list[WeightedArrayLayer[A]]:
     """
-    What every array-backed network shares, numpy and Rust (RustArrayNetworkBase sets the backend):
+    layers, checked to all have weights (W, b, size): a dense network's, whose randomize and
+    snapshot/restore read them (the conv networks, with weightless pool layers, override both).
+    """
+    dense = [layer for layer in layers if isinstance(layer, WeightedArrayLayer)]
+    assert len(dense) == len(layers), f"expected only dense layers; got {[type(layer).__name__ for layer in layers]}"
+    return dense
+
+
+class ArrayNetworkBase(Generic[A]):
+    """
+    What every array-backed network shares, numpy and Rust (NumpyArrayNetworkBase and
+    RustArrayNetworkBase set the backend, A being its array type):
     layer assembly, the forward pass, learn/learn_batch and their prepared-dataset forms,
     classify_rows, fan-in-aware randomize, and snapshot/restore.
 
@@ -23,13 +46,13 @@ class ArrayNetworkBase:
 
     # the layer classes a sibling overrides for different per-layer math (e.g. MomentumArrayLayer);
     # a layer class's hyperparameters come from the network's attributes of the same names
-    # (_new_layer)
-    hidden_layer_cls: type = ArrayLayer
-    output_layer_cls: type = ArrayLayer
+    # (_new_layer). Set by the backend's base.
+    hidden_layer_cls: DenseArrayLayerClass[A]
+    output_layer_cls: DenseArrayLayerClass[A]
 
-    # the array operations that differ between numpy and Rust (array_backend.py);
-    # RustArrayNetworkBase sets RUST
-    backend = NUMPY
+    # the array operations that differ between numpy and Rust (array_backend.py), set by the
+    # backend's base
+    backend: ArrayBackend[A]
 
     # the constructor keyword arguments a sibling stores under the same attribute names (e.g.
     # ("beta1", "beta2", "epsilon")): its layers read them (_new_layer), and the shapes'
@@ -43,7 +66,7 @@ class ArrayNetworkBase:
         self.layer_sizes = layer_sizes
         self.dimension = dimension
 
-        self.layers: list = []
+        self.layers: list[ArrayNetworkLayer[A]] = []
         previous_size = dimension
         for size in layer_sizes:
             self.layers.append(self._new_layer(self.hidden_layer_cls, size, previous_size))
@@ -52,31 +75,31 @@ class ArrayNetworkBase:
         self.output_layer = self._new_layer(self.output_layer_cls, output_size, previous_size)
         self.layers.append(self.output_layer)
 
-    def _new_layer(self, layer_cls: type, size: int, input_size: int):
+    def _new_layer(self, layer_cls: DenseArrayLayerClass[A], size: int, input_size: int) -> WeightedArrayLayer[A]:
         # a hyperparameter-bearing sibling stores its hyperparameters before super().__init__()
         return layer_cls(size, input_size, **{name: getattr(self, name) for name in layer_cls.hyperparameters})
 
-    def _forward(self, state: tuple[float, ...]):
+    def _forward(self, state: tuple[float, ...]) -> A:
         return self._forward_input(self.backend.vector(state))
 
-    def _forward_input(self, x):
+    def _forward_input(self, x: A) -> A:
         for layer in self.layers:
             x = layer.forward(x)
         return x
 
-    def classify_row(self, prepared: PreparedDataset, index: int):
+    def classify_row(self, prepared: PreparedDataset, index: int) -> Any:
         # classify_state for row index of a prepared dataset; _classify_output is the shape
         # class's argmax or 0.5 threshold, shared with classify_state
         return self._classify_output(self._forward_input(self.backend.row(self._prepared_states(prepared), index)))
 
-    def classify_rows(self, prepared: PreparedDataset) -> list:
+    def classify_rows(self, prepared: PreparedDataset) -> list[Any]:
         # classify_row for every row, as the trainers' accuracy pass needs it, through
         # forward_batch over chunks of rows (docs/optimizations/implemented.md). The
         # predictions are classify_row's, but only by construction on Rust, where a batched
         # forward row equals the single-example forward exactly: numpy's X @ W.T can differ from
         # W @ x in the last ULP, so an argmax between outputs an ULP apart could differ
         states = self._prepared_states(prepared)
-        predictions = []
+        predictions: list[Any] = []
         for start in range(0, len(prepared), CLASSIFY_CHUNK_ROWS):
             X = self.backend.row_range(states, start, min(start + CLASSIFY_CHUNK_ROWS, len(prepared)))
             for layer in self.layers:
@@ -87,25 +110,28 @@ class ArrayNetworkBase:
     def prepare_dataset(self, rows: Sequence[tuple[tuple[float, ...], object]]) -> PreparedDataset:
         return PreparedDataset.from_rows(rows, self.backend.name)
 
-    def _prepared_states(self, prepared: PreparedDataset):
+    def _prepared_states(self, prepared: PreparedDataset) -> A:
         name = self.backend.name
         assert prepared.backend == name, f"a {name} network needs a {name} dataset; got {prepared.backend!r}"
-        return prepared.states
+        return cast(A, prepared.states)  # the assert: this backend's array type
 
     def _set_training_mode(self, training: bool) -> None:
         # a no-op; the dropout networks override it to toggle their dropout layers
         pass
 
-    def _target_array(self, category):
+    # the shape's hooks (array_network_shapes.py), over its label type: a float (single output) or
+    # a class index (multiclass)
+
+    def _target_array(self, category: Any) -> A:
         raise NotImplementedError
 
-    def _target_batch_array(self, categories: Sequence):
+    def _target_batch_array(self, categories: Sequence[Any]) -> A:
         raise NotImplementedError
 
-    def _classify_output(self, output):
+    def _classify_output(self, output: A) -> Any:
         raise NotImplementedError
 
-    def _classify_output_batch(self, output_batch) -> list:
+    def _classify_output_batch(self, output_batch: A) -> list[Any]:
         # _classify_output for each row of a (batch, output_size) forward_batch output
         raise NotImplementedError
 
@@ -113,7 +139,7 @@ class ArrayNetworkBase:
     # comes from (a converted tuple, or a prepared dataset's rows); the training step itself is
     # _learn_input/_learn_batch_input, shared, so the two paths can't drift
 
-    def learn(self, learning_rate: float, state: tuple[float, ...], category) -> None:
+    def learn(self, learning_rate: float, state: tuple[float, ...], category: Any) -> None:
         self._learn_input(learning_rate, self.backend.vector(state), category)
 
     def learn_row(self, learning_rate: float, prepared: PreparedDataset, index: int) -> None:
@@ -121,7 +147,7 @@ class ArrayNetworkBase:
             learning_rate, self.backend.row(self._prepared_states(prepared), index), prepared.labels[index]
         )
 
-    def _learn_input(self, learning_rate: float, x, category) -> None:
+    def _learn_input(self, learning_rate: float, x: A, category: Any) -> None:
         activations = [x]
         self._set_training_mode(True)
         try:
@@ -152,7 +178,7 @@ class ArrayNetworkBase:
         X = self.backend.rows(self._prepared_states(prepared), indices)
         self._learn_batch_input(learning_rate, X, [prepared.labels[i] for i in indices])
 
-    def _learn_batch_input(self, learning_rate: float, X, categories: Sequence) -> None:
+    def _learn_batch_input(self, learning_rate: float, X: A, categories: Sequence[Any]) -> None:
         batch_size = len(categories)
 
         activations = [X]
@@ -175,7 +201,7 @@ class ArrayNetworkBase:
             layer.apply_accumulated_gradient(learning_rate, batch_size)
 
     @classmethod
-    def randomized(cls, *args, **kwargs):
+    def randomized(cls, *args: Any, **kwargs: Any) -> Self:
         # every sibling's randomized signature is its __init__ signature, so one pass-through
         # serves them all, positional or keyword, defaults included
         network = cls(*args, **kwargs)
@@ -185,24 +211,24 @@ class ArrayNetworkBase:
     def randomize(self) -> None:
         # fan-in-aware (limit = 1/sqrt(fan_in)), drawn from the backend's RNG
         previous_size = self.dimension
-        for layer in self.layers:
+        for layer in as_weighted_array_layers(self.layers):
             layer.W, layer.b = self.backend.random_layer(layer.size, previous_size)
             previous_size = layer.size
 
-    def _extra_state(self) -> dict:
+    def _extra_state(self) -> dict[str, Any]:
         return {name: getattr(self, name) for name in self.hyperparameters}
 
     @classmethod
-    def _extra_init_kwargs(cls, state: dict) -> dict:
+    def _extra_init_kwargs(cls, state: dict[str, Any]) -> dict[str, Any]:
         # the inverse of _extra_state: a loaded state dict's hyperparameters, as constructor kwargs
         return {name: state[name] for name in cls.hyperparameters}
 
-    def snapshot(self) -> list[tuple]:
-        return [(layer.W.copy(), layer.b.copy()) for layer in self.layers]
+    def snapshot(self) -> list[tuple[A, ...]]:  # (W, b) per layer; the conv networks add () for a pool layer
+        return [(layer.W.copy(), layer.b.copy()) for layer in as_weighted_array_layers(self.layers)]
 
-    def restore(self, snapshot: list[tuple]) -> None:
+    def restore(self, snapshot: Sequence[tuple[Any, ...]]) -> None:
         # accepts this backend's arrays or nested lists (a loaded file, or a snapshot pickled
         # across a worker boundary)
-        for layer, (W, b) in zip(self.layers, snapshot):
+        for layer, (W, b) in zip(as_weighted_array_layers(self.layers), snapshot):
             layer.W = self.backend.owned(W)
             layer.b = self.backend.owned(b)

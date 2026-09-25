@@ -1,4 +1,8 @@
+# pyright: reportConstantRedefinition=false
+# (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
+
+from typing import ClassVar
 
 import indrajala_math_rust as pa
 
@@ -20,7 +24,7 @@ class RustArrayLayer:
     """
 
     # as ArrayLayer.hyperparameters
-    hyperparameters: tuple[str, ...] = ()
+    hyperparameters: ClassVar[tuple[str, ...]] = ()
 
     def __init__(self, size: int, input_size: int) -> None:
         self.size = size

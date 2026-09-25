@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 import indrajala_math_rust as pa
 import numpy as np
 
-from indrajala_ml.model.array_layer import fan_in_aware_random_layer
+from indrajala_ml.model.array_layer import FloatArray, fan_in_aware_random_layer
 from indrajala_ml.model.rust_array_layer import fan_in_aware_random_rust_layer
 
 
@@ -20,41 +21,41 @@ class NumpyBackend:
     random_layer = staticmethod(fan_in_aware_random_layer)
 
     @staticmethod
-    def vector(state: Sequence[float]) -> np.ndarray:
+    def vector(state: Sequence[float]) -> FloatArray:
         return np.array(state, dtype=np.float64)
 
     @staticmethod
-    def matrix(states: Sequence[Sequence[float]]) -> np.ndarray:
+    def matrix(states: Sequence[Sequence[float]]) -> FloatArray:
         return np.array(states, dtype=np.float64)
 
     @staticmethod
-    def row(states: np.ndarray, index: int) -> np.ndarray:
+    def row(states: FloatArray, index: int) -> FloatArray:
         # a row of a C-contiguous matrix is a view; no layer writes into its input
         return states[index]
 
     @staticmethod
-    def rows(states: np.ndarray, indices: Sequence[int]) -> np.ndarray:
+    def rows(states: FloatArray, indices: Sequence[int]) -> FloatArray:
         return states[list(indices)]
 
     @staticmethod
-    def row_range(states: np.ndarray, start: int, stop: int) -> np.ndarray:
+    def row_range(states: FloatArray, start: int, stop: int) -> FloatArray:
         return states[start:stop]
 
     @staticmethod
-    def owned(values) -> np.ndarray:
+    def owned(values: Any) -> FloatArray:
         # a copy the caller can't alias, from an array or nested lists (a loaded file)
         return np.array(values, dtype=np.float64).copy()
 
     @staticmethod
-    def zeros(shape) -> np.ndarray:
+    def zeros(shape: int | tuple[int, int]) -> FloatArray:
         return np.zeros(shape)
 
     @staticmethod
-    def argmax(vector: np.ndarray) -> int:
+    def argmax(vector: FloatArray) -> int:
         return int(np.argmax(vector))
 
     @staticmethod
-    def argmax_rows(matrix: np.ndarray) -> list[int]:
+    def argmax_rows(matrix: FloatArray) -> list[int]:
         return np.argmax(matrix, axis=1).tolist()
 
 
@@ -85,13 +86,13 @@ class RustBackend:
         return states.take_rows(list(range(start, stop)))
 
     @staticmethod
-    def owned(values) -> pa.Array:
+    def owned(values: Any) -> pa.Array:
         # nested lists let a snapshot cross a multiprocessing.Pool worker boundary as plain,
         # picklable lists (ensemble_train._picklable_snapshot)
         return values.copy() if isinstance(values, pa.Array) else pa.Array(values)
 
     @staticmethod
-    def zeros(shape) -> pa.Array:
+    def zeros(shape: int | tuple[int, int]) -> pa.Array:
         return pa.Array.zeros(shape)
 
     @staticmethod

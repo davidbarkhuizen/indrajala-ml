@@ -1,8 +1,10 @@
+# pyright: reportConstantRedefinition=false
+# (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
 import numpy as np
 
-from indrajala_ml.model.array_layer import ArrayLayer, sigmoid
+from indrajala_ml.model.array_layer import ArrayLayer, FloatArray, sigmoid
 
 
 class DropoutArrayLayer(ArrayLayer):
@@ -30,7 +32,7 @@ class DropoutArrayLayer(ArrayLayer):
     def set_training_mode(self, training: bool) -> None:
         self.training = training
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: FloatArray) -> FloatArray:
         self.z = self.W @ x + self.b
         base = sigmoid(self.z)
         if self.training:
@@ -43,7 +45,7 @@ class DropoutArrayLayer(ArrayLayer):
         self._was_training = self.training
         return self.a
 
-    def forward_batch(self, X: np.ndarray) -> np.ndarray:
+    def forward_batch(self, X: FloatArray) -> FloatArray:
         # an independent mask row per example, as batch_size single forward passes would draw
         batch_size = X.shape[0]
         self.Z = X @ self.W.T + self.b

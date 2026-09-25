@@ -5,13 +5,17 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.adam_layer import make_adam_layer_cls
+from indrajala_ml.model.array_layer import ArrayLayer
+from indrajala_ml.model.array_protocols import WeightedArrayLayer
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
     BinaryCrossEntropyBackpropClassifierNetwork,
     CrossEntropyOutputLayer,
 )
+from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -25,6 +29,7 @@ from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.model.momentum_layer import make_momentum_layer_cls
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.model.relu_layer import ReLULayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
@@ -472,12 +477,14 @@ def matching_conv_array_backprop_networks(
 
     for node_layer, array_layer in zip(node_network.trainable_layers, array_network.layers):
         if isinstance(node_layer, ConvLayer):
+            assert isinstance(array_layer, (ConvArrayLayer, ConvRustArrayLayer))
             for kernel in node_layer.kernels:
                 kernel.weights = [rng.uniform(-1.0, 1.0) for _ in range(array_layer.fan_in)]
                 kernel.bias = rng.uniform(-0.5, 0.5)
             array_layer.W = wrap([kernel.weights for kernel in node_layer.kernels])
             array_layer.b = wrap([kernel.bias for kernel in node_layer.kernels])
         elif isinstance(node_layer, BackpropLayer):  # a pool layer has no weights
+            assert isinstance(array_layer, (ArrayLayer, RustArrayLayer))
             for node in node_layer.nodes:
                 node.update_input_weights([rng.uniform(-1.0, 1.0) for _ in range(array_layer.input_size)])
                 node.bias = rng.uniform(-1.0, 1.0)
@@ -536,7 +543,7 @@ def matching_conv_numpy_rust_networks(
         input_height, input_width, conv_specs, dense_layer_sizes, class_count
     )
     for layer in numpy_network.layers:
-        if hasattr(layer, "W"):
+        if isinstance(layer, WeightedArrayLayer):  # every layer but a pool layer
             rows, cols = layer.W.shape
             layer.W = np.array([[rng.uniform(-1.0, 1.0) for _ in range(cols)] for _ in range(rows)])
             layer.b = np.array([rng.uniform(-0.5, 0.5) for _ in range(layer.b.shape[0])])

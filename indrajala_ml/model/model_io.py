@@ -9,7 +9,7 @@ class SupportsToList(Protocol):
     def tolist(self) -> Any: ...
 
 
-def save_json(path: str, state: dict) -> None:
+def save_json(path: str, state: dict[str, Any]) -> None:
     """
     Writes state as JSON: for a save() whose envelope isn't save_model_json's (the conv networks,
     the array ensembles).
@@ -18,7 +18,7 @@ def save_json(path: str, state: dict) -> None:
         json.dump(state, f)
 
 
-def load_json(path: str) -> dict:
+def load_json(path: str) -> dict[str, Any]:
     """
     Reads a JSON file, with no envelope assumptions.
     """
@@ -52,7 +52,7 @@ def save_model_json(
     )
 
 
-def load_model_json(path: str) -> dict:
+def load_model_json(path: str) -> dict[str, Any]:
     """
     Reads save_model_json's envelope, with input_bounds turned back into tuples (JSON saves them as
     lists).
@@ -69,8 +69,8 @@ def save_array_model_json(
     layer_sizes: list[int],
     dimension: int,
     class_count: int,
-    snapshot: Sequence[tuple[SupportsToList, SupportsToList]],
-    extra: dict | None = None,
+    snapshot: Sequence[tuple[SupportsToList, ...]],
+    extra: dict[str, Any] | None = None,
 ) -> None:
     """
     The envelope of every multiclass array network, numpy and Rust: layer_sizes, dimension,
@@ -90,7 +90,7 @@ def save_array_model_json(
     save_json(path, state)
 
 
-def load_array_model_json(path: str) -> dict:
+def load_array_model_json(path: str) -> dict[str, Any]:
     """
     Reads save_array_model_json's envelope; the network's restore() converts the snapshot through
     its backend.
@@ -104,8 +104,8 @@ def save_single_output_array_model_json(
     *,
     layer_sizes: list[int],
     dimension: int,
-    snapshot: Sequence[tuple[SupportsToList, SupportsToList]],
-    extra: dict | None = None,
+    snapshot: Sequence[tuple[SupportsToList, ...]],
+    extra: dict[str, Any] | None = None,
 ) -> None:
     """
     save_array_model_json without class_count, for the single-output array networks (ensemble
@@ -122,7 +122,7 @@ def save_single_output_array_model_json(
     save_json(path, state)
 
 
-def load_single_output_array_model_json(path: str) -> dict:
+def load_single_output_array_model_json(path: str) -> dict[str, Any]:
     """
     Reads save_single_output_array_model_json's envelope.
     """

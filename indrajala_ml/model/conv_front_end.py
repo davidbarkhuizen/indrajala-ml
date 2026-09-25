@@ -4,19 +4,53 @@ from collections.abc import Callable, Sequence
 from dataclasses import asdict
 from typing import Any, Protocol, TypeVar
 
+from indrajala_ml.model.array_protocols import A, ArrayNetworkLayer, WeightedArrayLayer
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.model_io import load_json, save_json
+
+
+class FrontEndLayer(Protocol):
+    """A conv or pool layer of any network: its output's shape, which the next layer reads."""
+
+    @property
+    def out_height(self) -> int: ...
+
+    @property
+    def out_width(self) -> int: ...
+
+    @property
+    def channel_count(self) -> int: ...
+
+
+class ArrayFrontEndLayer(ArrayNetworkLayer[A], FrontEndLayer, Protocol[A]):
+    """A numpy or Rust conv or pool layer."""
+
+    @property
+    def size(self) -> int: ...
+
+
+class ArrayConvLayer(ArrayFrontEndLayer[A], Protocol[A]):
+    """A numpy or Rust conv layer: its kernels as W, (channel_count, fan_in)."""
+
+    W: A
+    b: A
+
+    @property
+    def fan_in(self) -> int: ...
+
+
+LayerT = TypeVar("LayerT", bound=FrontEndLayer)
 
 
 def build_conv_front_end(
     input_height: int,
     input_width: int,
     conv_specs: Sequence[ConvSpec | PoolSpec],
-    make_conv: Callable,
-    make_pool: Callable,
-    input_layer=None,
-) -> list:
+    make_conv: Callable[[ConvSpec, Any, int, int, int], LayerT],
+    make_pool: Callable[[PoolSpec, Any, int, int, int], LayerT],
+    input_layer: object = None,
+) -> list[LayerT]:
     """
     Chains a conv front end through conv_specs, for the pure-Python conv network and (through
     build_conv_array_network_layers) the numpy and Rust ones. The first layer reads the
@@ -29,23 +63,25 @@ def build_conv_front_end(
     """
     assert any(isinstance(spec, ConvSpec) for spec in conv_specs), "conv_specs must contain at least one ConvSpec"
 
-    layers = []
+    layers: list[LayerT] = []
     previous = input_layer
     height, width, channels = input_height, input_width, 1
     for spec in conv_specs:
-        make = make_pool if isinstance(spec, PoolSpec) else make_conv
-        layer = make(spec, previous, height, width, channels)
+        if isinstance(spec, PoolSpec):
+            layer = make_pool(spec, previous, height, width, channels)
+        else:
+            layer = make_conv(spec, previous, height, width, channels)
         layers.append(layer)
         previous = layer
         height, width, channels = layer.out_height, layer.out_width, layer.channel_count
     return layers
 
 
-def spec_to_json(spec: ConvSpec | PoolSpec) -> dict:
+def spec_to_json(spec: ConvSpec | PoolSpec) -> dict[str, Any]:
     return {"type": "pool" if isinstance(spec, PoolSpec) else "conv", **asdict(spec)}
 
 
-def spec_from_json(spec: dict) -> ConvSpec | PoolSpec:
+def spec_from_json(spec: dict[str, Any]) -> ConvSpec | PoolSpec:
     fields = {key: value for key, value in spec.items() if key != "type"}
     return PoolSpec(**fields) if spec["type"] == "pool" else ConvSpec(**fields)
 
@@ -56,10 +92,10 @@ def build_conv_array_network_layers(
     conv_specs: Sequence[ConvSpec | PoolSpec],
     dense_layer_sizes: list[int],
     class_count: int,
-    conv_cls: type,
-    pool_cls: type,
-    dense_cls: type,
-) -> tuple[list, list, object]:
+    conv_cls: Callable[..., ArrayFrontEndLayer[A]],
+    pool_cls: Callable[..., ArrayFrontEndLayer[A]],
+    dense_cls: Callable[[int, int], WeightedArrayLayer[A]],
+) -> tuple[list[ArrayFrontEndLayer[A]], list[WeightedArrayLayer[A]], WeightedArrayLayer[A]]:
     """
     The numpy or Rust conv network's layers: the front end, the dense hidden layers and the output
     layer. The dense tail's fan-in is the front end's flattened output.
@@ -85,7 +121,7 @@ def build_conv_array_network_layers(
         ),
     )
 
-    dense_layers = []
+    dense_layers: list[WeightedArrayLayer[A]] = []
     previous_size = conv_layers[-1].size
     for size in dense_layer_sizes:
         dense_layers.append(dense_cls(size, previous_size))
@@ -94,7 +130,21 @@ def build_conv_array_network_layers(
     return conv_layers, dense_layers, dense_cls(class_count, previous_size)
 
 
-def save_conv_model_json(path: str, network, snapshot: list) -> None:
+class ConvNetworkShape(Protocol):
+    """The constructor arguments every conv network keeps, which its save envelope records."""
+
+    input_height: int
+    input_width: int
+    conv_specs: list[ConvSpec | PoolSpec]
+    dense_layer_sizes: list[int]
+    class_count: int
+
+
+class ConvArrayNetwork(ConvNetworkShape, Protocol):
+    def snapshot(self) -> Sequence[tuple[Any, ...]]: ...
+
+
+def save_conv_model_json(path: str, network: ConvNetworkShape, snapshot: list[Any]) -> None:
     """
     The save envelope shared by every conv network: the constructor arguments, which a flat
     layer_sizes list (save_model_json, save_array_model_json) can't express, and snapshot, already
@@ -114,7 +164,7 @@ def save_conv_model_json(path: str, network, snapshot: list) -> None:
     )
 
 
-def save_conv_array_model_json(path: str, network) -> None:
+def save_conv_array_model_json(path: str, network: ConvArrayNetwork) -> None:
     """
     save_conv_model_json for the numpy and Rust conv networks: one (W, b) entry per layer (an
     empty one for a pool layer). Both backends' arrays have .tolist(), so a file saved by either

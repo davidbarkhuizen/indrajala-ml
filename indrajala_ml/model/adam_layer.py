@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
+from indrajala_ml.model.base_node import AbstractNode
 
 
 def make_adam_node_cls(beta1: float, beta2: float, epsilon: float) -> type[BackpropNode]:
@@ -18,7 +20,12 @@ def make_adam_node_cls(beta1: float, beta2: float, epsilon: float) -> type[Backp
     """
 
     class AdamBackpropNode(BackpropNode):
-        def __init__(self, input_nodes, input_node_weights=None, bias: float = 0.0) -> None:
+        def __init__(
+            self,
+            input_nodes: Sequence[AbstractNode],
+            input_node_weights: Sequence[float] | None = None,
+            bias: float = 0.0,
+        ) -> None:
             super().__init__(input_nodes, input_node_weights, bias)
             self._weight_m = [0.0] * len(self.input_nodes)
             self._weight_v = [0.0] * len(self.input_nodes)
@@ -31,9 +38,9 @@ def make_adam_node_cls(beta1: float, beta2: float, epsilon: float) -> type[Backp
             bias_correction1 = 1 - beta1**self._t
             bias_correction2 = 1 - beta2**self._t
 
-            new_weights = []
-            new_m = []
-            new_v = []
+            new_weights: list[float] = []
+            new_m: list[float] = []
+            new_v: list[float] = []
             for weight, accum, m, v in zip(
                 self.input_node_weights, self._weight_gradient_accum, self._weight_m, self._weight_v
             ):
