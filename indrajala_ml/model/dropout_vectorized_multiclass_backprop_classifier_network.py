@@ -9,8 +9,7 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 class DropoutVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
     The dropout sibling of VectorizedMultiClassBackpropClassifierNetwork. Hidden layers are built
-    from DropoutArrayLayer (with
-    drop_probability bound via a closure); the output layer stays the inherited plain ArrayLayer
+    from DropoutArrayLayer, which reads drop_probability from the network; the output layer stays the inherited plain ArrayLayer
     (sigmoid) - the array-level analogue of DropoutBackpropClassifierNetwork's own
     hidden_layer_cls-only override, matching DropoutNode's hidden-layer-only convention.
 
@@ -27,11 +26,11 @@ class DropoutVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassB
     the whole method) is inherited from ArrayNetworkBase unchanged.
     """
 
+    hidden_layer_cls = DropoutArrayLayer
     hyperparameters = ("drop_probability",)
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, drop_probability: float) -> None:
         self.drop_probability = drop_probability
-        self.hidden_layer_cls = lambda size, input_size: DropoutArrayLayer(size, input_size, drop_probability)
         super().__init__(layer_sizes, dimension, class_count)
         self.hidden_layers = self.layers[:-1]
 

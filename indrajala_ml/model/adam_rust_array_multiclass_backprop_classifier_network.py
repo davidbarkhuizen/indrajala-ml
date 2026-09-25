@@ -10,13 +10,13 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 class AdamRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
     AdamVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network, with
-    AdamRustArrayLayer in place of AdamArrayLayer (hidden and output layers, beta1/beta2/epsilon
-    bound via a closure).
+    AdamRustArrayLayer in place of AdamArrayLayer (hidden and output layers).
 
     snapshot()/restore() cover only W/b, not Adam's m/v/t (see
     AdamVectorizedMultiClassBackpropClassifierNetwork's docstring for why).
     """
 
+    hidden_layer_cls = output_layer_cls = AdamRustArrayLayer
     hyperparameters = ("beta1", "beta2", "epsilon")
 
     def __init__(
@@ -31,7 +31,4 @@ class AdamRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpr
         self.beta1 = beta1
         self.beta2 = beta2
         self.epsilon = epsilon
-        self.hidden_layer_cls = self.output_layer_cls = (
-            lambda size, input_size: AdamRustArrayLayer(size, input_size, beta1, beta2, epsilon)
-        )
         super().__init__(layer_sizes, dimension, class_count)

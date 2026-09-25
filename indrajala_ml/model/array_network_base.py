@@ -33,12 +33,9 @@ class ArrayNetworkBase:
 
     # override points for a sibling whose hidden/output layers need different per-layer math
     # (e.g. MomentumArrayLayer) - every "plain" shape class leaves these as ArrayLayer, so this
-    # is a pure extension point with zero behavior change for them. A hyperparameter-free
-    # sibling (ReLU, softmax, cross-entropy) can set one of these as a plain class attribute; a
-    # hyperparameter-bearing sibling (momentum, L2, Adam, dropout) sets it as an *instance*
-    # attribute in its own __init__ (a closure capturing the hyperparameter) before calling
-    # super().__init__() - the same pattern AdamBackpropClassifierNetwork already uses one layer
-    # down, over BackpropNetworkBase's own hidden_layer_cls/output_layer_cls.
+    # is a pure extension point with zero behavior change for them. Every sibling sets them as
+    # plain class attributes; a layer class's own hyperparameters (e.g. MomentumArrayLayer's
+    # momentum) are passed from this network's attributes of the same names (_new_layer).
     hidden_layer_cls: type = ArrayLayer
     output_layer_cls: type = ArrayLayer
 
@@ -47,8 +44,9 @@ class ArrayNetworkBase:
     backend = NUMPY
 
     # the constructor keyword arguments a hyperparameter-bearing sibling stores under the same
-    # attribute names (e.g. ("beta1", "beta2", "epsilon")) - the shapes' save/load round-trip
-    # them through _extra_state/_extra_init_kwargs; empty for every other sibling
+    # attribute names (e.g. ("beta1", "beta2", "epsilon")) - its layers read them (_new_layer),
+    # and the shapes' save/load round-trip them through _extra_state/_extra_init_kwargs; empty
+    # for every other sibling
     hyperparameters: tuple[str, ...] = ()
 
     def __init__(self, layer_sizes: list[int], dimension: int, output_size: int) -> None:
@@ -61,11 +59,15 @@ class ArrayNetworkBase:
         self.layers: list = []
         previous_size = dimension
         for size in layer_sizes:
-            self.layers.append(self.hidden_layer_cls(size, previous_size))
+            self.layers.append(self._new_layer(self.hidden_layer_cls, size, previous_size))
             previous_size = size
 
-        self.output_layer = self.output_layer_cls(output_size, previous_size)
+        self.output_layer = self._new_layer(self.output_layer_cls, output_size, previous_size)
         self.layers.append(self.output_layer)
+
+    def _new_layer(self, layer_cls: type, size: int, input_size: int):
+        # a hyperparameter-bearing sibling stores its hyperparameters before super().__init__()
+        return layer_cls(size, input_size, **{name: getattr(self, name) for name in layer_cls.hyperparameters})
 
     def _forward(self, state: tuple[float, ...]):
         return self._forward_input(self.backend.vector(state))

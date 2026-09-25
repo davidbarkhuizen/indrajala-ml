@@ -10,10 +10,9 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 class AdamVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
     The Adam-optimized sibling of VectorizedMultiClassBackpropClassifierNetwork. Both hidden
-    layers and the output layer are built from AdamArrayLayer with beta1/beta2/epsilon already
-    bound via a closure (hidden_layer_cls ==
-    output_layer_cls, set as instance attributes before super().__init__() runs) - the same
-    pattern momentum/L2's own array siblings use.
+    layers and the output layer are built from AdamArrayLayer, which reads
+    beta1/beta2/epsilon from the network (ArrayNetworkBase._new_layer) - the same pattern
+    momentum/L2's own array siblings use.
 
     beta1/beta2/epsilon default to Kingma & Ba's own published values, matching
     AdamBackpropClassifierNetwork's per-node counterpart.
@@ -26,6 +25,7 @@ class AdamVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBack
     so far.
     """
 
+    hidden_layer_cls = output_layer_cls = AdamArrayLayer
     hyperparameters = ("beta1", "beta2", "epsilon")
 
     def __init__(
@@ -40,7 +40,4 @@ class AdamVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBack
         self.beta1 = beta1
         self.beta2 = beta2
         self.epsilon = epsilon
-        self.hidden_layer_cls = self.output_layer_cls = (
-            lambda size, input_size: AdamArrayLayer(size, input_size, beta1, beta2, epsilon)
-        )
         super().__init__(layer_sizes, dimension, class_count)
