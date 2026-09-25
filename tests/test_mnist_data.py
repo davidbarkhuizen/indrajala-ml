@@ -24,9 +24,8 @@ def test_convert_parquet_to_binary_produces_a_correctly_shaped_file(tmp_path):
 
     dataset = load_mnist_dataset(binary_path)
     labels = [label for _, label in dataset]
-    # the standard MNIST training set's well-known first-few labels - confirms the conversion
-    # (parquet -> PNG decode -> flat binary) round-trips real data correctly, not just the
-    # right byte count
+    # MNIST's well-known first training labels: the parquet -> PNG -> binary conversion
+    # round-trips real data
     assert labels == [5, 0, 4, 1, 9]
 
 
@@ -48,11 +47,8 @@ def test_load_mnist_dataset_decodes_a_known_real_sample_correctly():
     labels = [label for _, label in dataset]
     assert labels == [5, 0, 4, 1, 9]
 
-    # specific pixel values from the first image, read directly off the decoded PNG and
-    # independently cross-checked (not re-derived from this loader) - chosen to cover every PNG
-    # scanline filter type this image's IDAT stream actually uses (confirmed directly: row 0 is
-    # None, row 6 is Paeth, row 7 is Sub, row 11 is Up), not just coordinates that happen to
-    # land on unfiltered rows
+    # pixels from the first image, checked independently of this loader, one per PNG filter
+    # type it uses: row 0 None, row 6 Paeth, row 7 Sub, row 11 Up
     state0, _ = dataset[0]
 
     def pixel(row: int, col: int) -> float:

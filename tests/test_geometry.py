@@ -36,9 +36,7 @@ def test_is_positive_region_bounded_false_for_cardinality_one():
 
 def test_is_positive_region_bounded_false_for_a_genuinely_empty_region():
 
-    # the cardinality=1 case above is unbounded but non-empty (half of the plane still
-    # satisfies it). Contradictory half-planes (x > 5 and x < -5) are a distinct scenario -
-    # a genuinely infeasible, empty intersection.
+    # unlike the unbounded half-plane above, x > 5 and x < -5 intersect in nothing
     bounds = square_bounds(10.0)
     classifier = LinearClassifierNetwork(2, 2, bounds)
     greater_than_five, less_than_negative_five = classifier.hidden_layer.nodes
@@ -53,10 +51,8 @@ def test_is_positive_region_bounded_false_for_a_genuinely_empty_region():
 
 def test_reference_positive_region_polygon_rejects_a_non_and_classifier():
 
-    # the intersection-of-half-planes computed here is only actually the classifier's
-    # positive region under AND (required_active == cardinality) - for any other
-    # required_active the true region is a union of such intersections, which this function
-    # doesn't compute, so it must refuse rather than silently return a wrong polygon
+    # the intersection is the positive region only under AND; otherwise the region is a union
+    # of intersections, so the function must refuse, not return a wrong polygon
     bounds = square_bounds(10.0)
     classifier = LinearClassifierNetwork(2, 2, bounds, required_active=1)
 
@@ -69,9 +65,7 @@ def test_reference_positive_region_polygon_rejects_a_non_and_classifier():
 
 def test_reference_positive_region_polygon_rejects_a_non_2d_classifier():
 
-    # only ever reads each hidden node's first two weights - for dimension > 2 it would
-    # otherwise silently project onto the first two dimensions and could report a completely
-    # wrong answer
+    # it reads only the first two weights, so dimension > 2 would silently give a wrong answer
     bounds = [(-10.0, 10.0)] * 3
     classifier = LinearClassifierNetwork(4, 3, bounds)
     for node, (weights, threshold) in zip(
@@ -150,10 +144,8 @@ def test_positive_region_bounding_box_none_for_a_non_2d_classifier():
 
 def test_positive_region_bounding_box_none_for_a_duck_typed_target_without_geometry_attributes():
 
-    # train.py/evaluate.py's functions accept any object exposing input_bounds/classify_state
-    # (see e.g. indrajala_ml/targets.py's XORTarget) - dimension/required_active/
-    # cardinality are LinearClassifierNetwork-specific and optional; their absence must fall
-    # back to None (and thus to full-input_bounds sampling), not raise AttributeError
+    # targets need only input_bounds and classify_state (e.g. targets.py's XORTarget); without
+    # the linear classifier's geometry, fall back to None, not AttributeError
     class BoundsOnly:
         def __init__(self, bounds):
             self.input_bounds = bounds

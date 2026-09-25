@@ -6,9 +6,7 @@ from indrajala_ml.model.state_node import StateNode
 
 
 def _conv_unit(weights: list[float], bias: float, values: list[float]) -> ConvUnit:
-    # kernel_size=1, in_channels=len(weights) satisfies ConvKernel's own
-    # kernel_size**2*in_channels == len(weights) assertion regardless of len(weights)'s
-    # square-ness - fine for these unit-level tests, which don't otherwise use kernel_size
+    # kernel_size=1, in_channels=len(weights) passes ConvKernel's size check for any length
     kernel = ConvKernel(kernel_size=1, in_channels=len(weights), weights=list(weights), bias=bias)
     input_nodes = [StateNode(v) for v in values]
     unit = ConvUnit(input_nodes=input_nodes, kernel=kernel)

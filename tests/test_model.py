@@ -76,10 +76,8 @@ def test_randomized_returns_an_already_randomized_classifier():
 
 def test_randomize_scales_weight_range_with_input_bounds_half_width(monkeypatch):
 
-    # weight_i's range must be calibrated per dimension (20 / half_width) so that w_i * x_i
-    # has a similar typical magnitude regardless of that dimension's bounds - independently
-    # of the other dimensions', so asymmetric bounds are handled correctly too. The
-    # threshold's range doesn't need to scale at all once weights are normalised this way.
+    # each dimension's weight range is 20 / half_width, so w_i * x_i has a similar magnitude
+    # whatever its bounds, asymmetric bounds included; the threshold's range stays fixed
     calls: list[tuple[float, float]] = []
     original_uniform = random.uniform
 
@@ -100,9 +98,8 @@ def test_randomize_scales_weight_range_with_input_bounds_half_width(monkeypatch)
 
 def test_randomize_produces_reachable_classifiers_at_a_tiny_bounds_scale():
 
-    # the weight range must scale with input_bounds - at a small enough scale, a fixed
-    # threshold range disproportionately dominates w.x, making almost every random
-    # classifier permanently one class and exhausting regeneration_attempts.
+    # with unscaled weights, at small bounds the threshold dominates w.x, nearly every random
+    # classifier is one class, and regeneration_attempts runs out
     bounds = square_bounds(0.001)
 
     reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 50)
@@ -138,12 +135,8 @@ def test_learn_reduces_to_single_node_update_for_cardinality_one():
 
 def test_learn_matches_the_perceptron_update_rule_by_hand():
 
-    # test_learn_reduces_to_single_node_update_for_cardinality_one checks that
-    # network.learn() dispatches to the same node.learn() call an equivalent standalone
-    # node would receive - but both sides of that comparison go through the same update
-    # rule, so it can't catch a bug in the rule's arithmetic itself. This pins that
-    # arithmetic (w += learning_rate * (reference - actual) * input) against hand-computed
-    # expected values instead.
+    # the cardinality-one test compares the rule with itself; this pins
+    # w += learning_rate * (reference - actual) * input to hand-derived values
 
     dimension = 2
     bounds = square_bounds(10.0)
@@ -168,9 +161,7 @@ def test_learn_matches_the_perceptron_update_rule_by_hand():
 
 def test_association_node_activates_strictly_above_zero():
 
-    # per the activation function, z <= 0 must classify as inactive, not just z < 0 - a fresh
-    # network (weights=[1, 1], threshold=0) puts z exactly on the
-    # decision boundary at this state (z = 1*1 + 1*-1 + 0 = 0)
+    # z <= 0 is inactive: weights [1, 1], threshold 0 give z = 1*1 + 1*-1 + 0 = 0 here
     network = LinearClassifierNetwork(1, 2, square_bounds(10.0))
     network.update_state_layer((1.0, -1.0))
     node = network.hidden_layer.nodes[0]
@@ -225,10 +216,8 @@ def test_required_active_two_of_three_gives_majority_semantics():
 
 def test_learn_converges_under_or_combination():
 
-    # the minimum-disturbance candidate-selection in learn() was designed against AND, but
-    # it only relies on the output being a monotonically non-decreasing function of how many
-    # hidden nodes are active - true for OR too. This confirms it actually trains under OR,
-    # not just that OR's classify_state() truth table is correct in isolation.
+    # minimum-disturbance selection needs only an output monotone in the active count, which
+    # OR also is
     random.seed(0)
 
     cardinality, dimension, l = 2, 2, 10.0
@@ -249,20 +238,16 @@ def test_learn_converges_under_or_combination():
 
 def test_learn_updates_only_the_single_closest_to_flipping_node():
 
-    # the minimum-disturbance rule is only exercised elsewhere by statistical convergence
-    # tests (disagreement trends down over many iterations), which could still pass even if
-    # the "closest to flipping" selection were subtly wrong. This pins the selection itself:
-    # given known z() values, only the smallest-|z| node among the responsible ones should
-    # change, and every other node must be left exactly as it was.
+    # the convergence tests could pass with a wrong selection: given known z() values, only the
+    # responsible node with the smallest |z| may change
 
     dimension = 2
     bounds = square_bounds(10.0)
     learning_rate = 0.25
     state = (2.0, 3.0)
 
-    # false negative: two inactive nodes (z <= 0); the closer-to-flipping one (threshold
-    # -0.5, |z|=0.5) should be updated, not the farther one (threshold -5.0, |z|=5.0) - and
-    # the already-active third node must be untouched
+    # false negative: of two inactive nodes, the one at |z|=0.5 moves, not the one at |z|=5.0;
+    # the active third node is untouched
     network = network_with_hidden_thresholds(dimension, bounds, [-5.0, -0.5, 2.0])
     far, near, active = network.hidden_layer.nodes
     network.learn(learning_rate, state, 1)

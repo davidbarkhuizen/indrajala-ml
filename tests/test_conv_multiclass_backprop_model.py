@@ -71,9 +71,7 @@ def test_randomize_randomizes_conv_kernels_and_every_dense_layer():
 
 def test_randomized_classmethod_uses_this_classs_own_constructor_signature():
 
-    # a real risk if this override were missing: the inherited randomized() from
-    # MultiClassBackpropClassifierNetwork calls cls(layer_sizes, dimension, input_bounds,
-    # class_count) - the wrong signature entirely for this class's constructor
+    # MultiClassBackpropClassifierNetwork.randomized would call cls() with the wrong signature
     random.seed(0)
     network = ConvMultiClassBackpropClassifierNetwork.randomized(
         input_height=8, input_width=8, conv_specs=[ConvSpec(3, 4)], dense_layer_sizes=[16], class_count=10
@@ -110,10 +108,8 @@ def test_forward_and_backward_run_without_error_and_move_every_weight():
 
 def test_learn_batch_also_moves_every_weight():
 
-    # calls learn_batch directly, not via train_backprop_network_mini_batch - that wrapper's
-    # own pocket-algorithm rollback (see train.py's train_backprop_network_mini_batch
-    # docstring) would restore the starting snapshot if no epoch's training accuracy beat it,
-    # a real property of that function, not something to route around here
+    # learn_batch directly: train_backprop_network_mini_batch's pocket rollback could restore
+    # the starting weights
     random.seed(0)
     network = _small_network()
     network.randomize()
@@ -141,8 +137,6 @@ def test_classify_state_returns_a_valid_class_index():
 
 def test_snapshot_and_restore_round_trip_through_the_conv_layer_too():
 
-    # confirms BackpropLayer's per-layer hooks (snapshot_state/restore_state) genuinely work
-    # end-to-end here, conv layer included - not just for plain dense layers
     random.seed(0)
     network = _small_network()
     network.randomize()
@@ -178,16 +172,8 @@ def test_save_and_load_round_trip(tmp_path):
 
 def test_trains_on_a_real_uci_digits_subset():
 
-    # a small subset (200 of the 1797 bundled rows) and few epochs, mirroring
-    # test_multiclass_training_pipeline.py's own precedent for the dense-only sibling - proves
-    # train_linear_classifier_network (unchanged, calling only .learn()/.snapshot()/.restore()/
-    # .classify_state()) drives this conv-based network too, and that real backprop through a
-    # conv layer into a downstream dense layer actually improves training accuracy, not just
-    # runs without crashing. Measured directly (not guessed): best_training_accuracy=0.9875 at
-    # epoch 11/15 (plateaued), test accuracy 0.925 on the held-out split - not directly
-    # comparable to MultiClassBackpropClassifierNetwork's own 0.98125/0.9 on this exact subset
-    # (test_multiclass_training_pipeline.py) since architecture and parameter count both
-    # differ, but in the same range, on the same small subset.
+    # 200 of the 1797 rows, 15 epochs: train_linear_classifier_network drives the conv network,
+    # and backprop through the conv layer really learns. The pinned values are measured
     random.seed(0)
 
     dataset = load_digits_dataset()

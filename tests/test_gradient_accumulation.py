@@ -17,10 +17,7 @@ def _plain_node(weight: float, bias: float, x: float) -> BackpropNode:
 
 def test_accumulate_then_apply_at_batch_size_one_matches_the_direct_formula():
 
-    # batch_size=1 must reproduce plain SGD's own textbook formula
-    # (weight - learning_rate*delta*x) exactly, computed independently here, not re-derived
-    # from the implementation under test - a random sweep, not a single hand-picked case, since
-    # this is the required regression gate every batch_size>1 result depends on
+    # batch_size=1 must reproduce weight - learning_rate*delta*x, over a random sweep
     rng = random.Random(0)
 
     for _ in range(200):
@@ -65,9 +62,7 @@ def test_accumulate_then_apply_at_batch_size_one_is_bit_identical_to_apply_gradi
 
 def test_accumulate_gradient_sums_across_multiple_examples_before_any_weight_write():
 
-    # two examples in one batch, x changing between them (as it would across a real mini-batch,
-    # since the same input StateNode is re-used but its value changes each example) - weights
-    # must stay untouched until apply_accumulated_gradient is called
+    # two examples with different x: no weight moves until apply_accumulated_gradient
     x_node = StateNode(1.0)
     node = BackpropNode(input_nodes=[x_node])
     node.update_input_weights([0.5])
@@ -126,8 +121,8 @@ def _accumulate_batch(node: BackpropNode, examples: list[tuple[float, float]]) -
 
 def test_momentum_apply_accumulated_gradient_matches_hand_computed_batch_values():
 
-    # weight=0.5, bias=0.1, learning_rate=0.1, momentum=0.9, batch_size=2, examples as in
-    # _batch_examples() (accum_w=0.6, accum_b=0.6 -> averaged 0.3 each) - computed independently:
+    # hand-derived, learning_rate=0.1, momentum=0.9, batch_size=2, _batch_examples() (averaged
+    # gradient 0.3 for weight and bias):
     #   batch 1: delta_w = 0.1*0.3 + 0.9*0.0 = 0.03 -> weight = 0.5-0.03 = 0.47
     #            bias_delta = 0.1*0.3 + 0.9*0.0 = 0.03 -> bias = 0.1-0.03 = 0.07
     #   batch 2 (same examples again): delta_w = 0.1*0.3 + 0.9*0.03 = 0.057 -> weight = 0.413
@@ -150,8 +145,7 @@ def test_momentum_apply_accumulated_gradient_matches_hand_computed_batch_values(
 
 def test_l2_apply_accumulated_gradient_matches_hand_computed_batch_values():
 
-    # weight=0.5, bias=0.1, learning_rate=0.1, l2_lambda=0.1, batch_size=2, same examples as
-    # above (averaged gradient 0.3 for both weight and bias) - computed independently:
+    # hand-derived, learning_rate=0.1, l2_lambda=0.1, the same averaged gradient 0.3:
     #   weight = 0.5 - 0.1*(0.3 + 0.1*0.5) = 0.5 - 0.1*0.35 = 0.465
     #   bias = 0.1 - 0.1*0.3 = 0.07 (never regularized)
     node_cls = make_l2_node_cls(0.1)
@@ -167,9 +161,7 @@ def test_l2_apply_accumulated_gradient_matches_hand_computed_batch_values():
 
 def test_momentum_and_l2_batch_size_one_still_match_apply_gradient_exactly():
 
-    # the same batch_size=1 parity guarantee as the plain-node test above, but for the two
-    # subclasses that override apply_accumulated_gradient - both must still dispatch through it
-    # correctly when called via the inherited apply_gradient
+    # the batch_size=1 check for the two subclasses that override apply_accumulated_gradient
     for node_cls in (make_momentum_node_cls(0.9), make_l2_node_cls(0.1)):
         rng = random.Random(hash(node_cls.__name__) & 0xFFFF)
         for _ in range(50):

@@ -642,9 +642,7 @@ def classifier_with_bounded_square_region(bounds: list[tuple[float, float]]) -> 
 
 def classifier_with_tiny_bounded_region(bounds: list[tuple[float, float]]) -> LinearClassifierNetwork:
 
-    # positive region is exactly [-0.1, 0.1] x [-0.1, 0.1] - a 0.04 unit^2 square, a tiny
-    # fraction of a square_bounds(10.0)-sized (400 unit^2) box (0.01%), for exercising the
-    # tight-box positive-region sampling optimisation (see geometry.positive_region_bounding_box)
+    # positive region [-0.1, 0.1]^2: 0.01% of square_bounds(10.0), for tight-box sampling
     classifier = LinearClassifierNetwork(4, 2, bounds)
     for node, (weights, threshold) in zip(
         classifier.hidden_layer.nodes,
@@ -657,10 +655,8 @@ def classifier_with_tiny_bounded_region(bounds: list[tuple[float, float]]) -> Li
 
 def unreachable_class_classifier(bounds: list[tuple[float, float]]) -> LinearClassifierNetwork:
 
-    # tiny weights + a large threshold mean the decision boundary never crosses these bounds,
-    # so one class can never be sampled - used to exercise the safety guard against an
-    # unreachable-class sampling loop hanging forever (see
-    # demo_unreachable_class_safety_guard.py for the same idea as a standalone demo)
+    # the decision boundary never crosses these bounds, so one class can't be sampled: for the
+    # guard that stops the sampling loop hanging
     classifier = LinearClassifierNetwork(1, 2, bounds)
     node = classifier.hidden_layer.nodes[0]
     node.update_input_weights([0.01, 0.01])

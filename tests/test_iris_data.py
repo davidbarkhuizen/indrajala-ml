@@ -26,10 +26,7 @@ def test_load_iris_dataset_normalizes_against_the_dataset_own_min_max():
 
     dataset = load_iris_dataset()
 
-    # each of the 4 features' normalization bounds are the dataset's own real min/max (see
-    # iris_data._FEATURE_MIN/_FEATURE_MAX), so both 0.0 and 1.0 should actually be reached,
-    # not just approached - a sanity check that normalization used the right constants, not
-    # a wider or narrower range that would leave one end never actually hit
+    # the bounds are the dataset's own min/max, so every feature reaches both 0.0 and 1.0
     for dimension in range(4):
         values = [state[dimension] for state, _ in dataset]
         assert min(values) == pytest.approx(0.0, abs=1e-9)
@@ -40,9 +37,7 @@ def test_load_iris_dataset_decodes_the_well_known_first_row_correctly():
 
     dataset = load_iris_dataset()
 
-    # the classic Iris dataset's well-known first row: sepal length/width 5.1/3.5, petal
-    # length/width 1.4/0.2, label 0 (setosa) - a load-order sanity check, the same role
-    # mnist_data's own "well-known first-5 labels" check plays for that dataset
+    # Iris's well-known first row: sepal 5.1/3.5, petal 1.4/0.2, setosa
     state, label = dataset[0]
     assert label == 0
     assert state == pytest.approx((0.2222222222222222, 0.625, 0.06779661016949151, 0.041666666666666664))
