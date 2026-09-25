@@ -172,6 +172,8 @@ test passing, and:
   rejected, the candidates left, and how to measure a change.
 - [docs/conv-batch-size-scaling-workplan.md](docs/conv-batch-size-scaling-workplan.md): the
   planned study of batch-size scaling for the conv network.
+- [docs/pypi-release-workplan.md](docs/pypi-release-workplan.md): publishing the Rust crate to
+  PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 
 ## License
 
