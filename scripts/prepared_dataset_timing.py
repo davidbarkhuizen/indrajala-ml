@@ -27,12 +27,15 @@ Measures (seconds):
   Python floats; its load time is not included.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import random
 import statistics
 import sys
 import time
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from process_runs import interleaved_runs, run_json_worker
@@ -48,6 +51,20 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
+
+# types only: with an old checkout first on PYTHONPATH (see AFTER) the script imports nothing new
+if TYPE_CHECKING:
+    from indrajala_ml.model.classifier_protocols import Example
+    from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
+        RustArrayMultiClassBackpropClassifierNetwork,
+    )
+    from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
+        VectorizedMultiClassBackpropClassifierNetwork,
+    )
+    from indrajala_ml.prepared_dataset import PreparedDataset
+
+    # the dense and conv networks of either backend
+    Network = VectorizedMultiClassBackpropClassifierNetwork | RustArrayMultiClassBackpropClassifierNetwork
 
 # indrajala_ml is a namespace package, so with an old checkout first on PYTHONPATH the new
 # prepared_dataset module can still be imported from this one; the trainers themselves tell
@@ -70,7 +87,7 @@ CONV_CLASSES = {
 }
 
 
-def _network(config: str, backend: str):
+def _network(config: str, backend: str) -> Network:
     if config.startswith("dense"):
         return bss.initial_network(backend, 0.0, SEED)
     np.random.seed(SEED)
@@ -82,7 +99,7 @@ def _network(config: str, backend: str):
     return network
 
 
-def _train_epoch(config: str, network, data) -> float:
+def _train_epoch(config: str, network: Network, data: list[Example[int]] | PreparedDataset) -> float:
     random.seed(SEED)
     start = time.perf_counter()
     if config.endswith("single"):
@@ -92,7 +109,7 @@ def _train_epoch(config: str, network, data) -> float:
     return time.perf_counter() - start
 
 
-def measure(config: str, backend: str) -> dict:
+def measure(config: str, backend: str) -> dict[str, float]:
     limit = None if config.startswith("dense") else CONV_TRAIN_LIMIT
     train_data = load_mnist_dataset(bss.TRAIN_PATH, limit=limit)
     result = {"epoch": _train_epoch(config, _network(config, backend), train_data)}
@@ -108,11 +125,11 @@ def measure(config: str, backend: str) -> dict:
     return result
 
 
-def _run_worker(config: str, backend: str) -> dict:
+def _run_worker(config: str, backend: str) -> dict[str, Any]:
     return run_json_worker([sys.executable, __file__, "worker", config, backend, "--epochs", str(EPOCHS)])
 
 
-def time_all(configs: list[str], repeats: int) -> dict:
+def time_all(configs: list[str], repeats: int) -> dict[str, list[dict[str, Any]]]:
     print(f"trainers: {train.__file__}; prepared path: {AFTER}; epochs per run: {EPOCHS}\n")
     cells = [(config, backend) for config in configs for backend in BACKENDS]
     runs = interleaved_runs(cells, repeats, lambda cell: _run_worker(*cell))
@@ -138,7 +155,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--out", help="write every run's raw measurements here as JSON")
     args = parser.parse_args(argv)
     global EPOCHS
-    EPOCHS = args.epochs
+    EPOCHS = args.epochs  # pyright: ignore[reportConstantRedefinition]  (--epochs sets it, once)
 
     if args.mode == "worker":
         print(json.dumps(measure(args.args[0], args.args[1])))

@@ -22,10 +22,12 @@ import argparse
 import json
 import statistics
 import sys
+from typing import Any
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.mnist_data import load_mnist_dataset
+from indrajala_ml.model.classifier_protocols import Example
 
 BASELINE_RATES = {
     "dense": [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
@@ -39,10 +41,14 @@ EPOCHS = 5
 WORKERS = 4  # each worker holds its own copy of the dataset; memory, not cores, is the limit
 STABLE_ACCURACY = 0.20  # chance (0.10) plus a margin: every seed must end at least here
 
-_datasets: dict = {}
+# (batch_size, rate, warmup_epochs, momentum)
+Config = tuple[int, float, float, float]
+Datasets = tuple[list[Example[int]], list[Example[int]]]
+
+_datasets: dict[tuple[str, str, int | None], Datasets] = {}
 
 
-def _load(context: dict) -> tuple[list, list]:
+def _load(context: dict[str, Any]) -> Datasets:
     key = (context["train_path"], context["test_path"], context["limit"])
     if key not in _datasets:
         _datasets.clear()
@@ -53,8 +59,7 @@ def _load(context: dict) -> tuple[list, list]:
     return _datasets[key]
 
 
-def run_config(context: dict, config: tuple, seed: int) -> dict:
-    # config: (batch_size, rate, warmup_epochs, momentum)
+def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, Any]:
     batch_size, rate, warmup_epochs, momentum = config
     train_data, test_data = _load(context)
     return bss.train_and_evaluate(
@@ -76,12 +81,12 @@ def _mean_sd(values: list[float]) -> str:
     return f"{statistics.mean(values):.2%} ± {sd:.2%}"
 
 
-def per_epoch_row(runs: list[dict]) -> list[str]:
+def per_epoch_row(runs: list[dict[str, Any]]) -> list[str]:
     epochs = len(runs[0]["test_accuracies"])
     return [_mean_sd([run["test_accuracies"][e] for run in runs]) for e in range(epochs)]
 
 
-def final_accuracies(runs: list[dict]) -> list[float]:
+def final_accuracies(runs: list[dict[str, Any]]) -> list[float]:
     return [run["test_accuracies"][-1] for run in runs]
 
 
@@ -91,14 +96,16 @@ def _table(header: list[str], rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
-def baseline(context: dict, seeds: list[int], rates: list[float], momenta: list[float]) -> dict:
-    configs = [(bss.BASE_BATCH_SIZE, rate, 0.0, momentum) for momentum in momenta for rate in rates]
+def baseline(
+    context: dict[str, Any], seeds: list[int], rates: list[float], momenta: list[float]
+) -> dict[Config, list[dict[str, Any]]]:
+    configs: list[Config] = [(bss.BASE_BATCH_SIZE, rate, 0.0, momentum) for momentum in momenta for rate in rates]
     results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=WORKERS, report_progress=True)
 
     epochs = context["epochs"]
     for momentum in momenta:
         print(f"\n### momentum {momentum}\n")
-        rows = []
+        rows: list[list[str]] = []
         for rate in rates:
             runs = results[(bss.BASE_BATCH_SIZE, rate, 0.0, momentum)]
             finals = final_accuracies(runs)
@@ -124,10 +131,10 @@ def baseline(context: dict, seeds: list[int], rates: list[float], momenta: list[
 
 
 def scaling(
-    context: dict, seeds: list[int], lr32: dict[float, float], batch_sizes: list[int], warmups: list[float]
-) -> dict:
-    configs = []
-    labels = {}
+    context: dict[str, Any], seeds: list[int], lr32: dict[float, float], batch_sizes: list[int], warmups: list[float]
+) -> dict[Config, list[dict[str, Any]]]:
+    configs: list[Config] = []
+    labels: dict[Config, str] = {}
     for momentum, base_rate in lr32.items():
         for batch_size in batch_sizes:
             for warmup in warmups:
@@ -138,7 +145,7 @@ def scaling(
                     # at batch 32 the two rates coincide; run the cell once
                     if batch_size == bss.BASE_BATCH_SIZE and rate_kind == "unscaled":
                         continue
-                    config = (batch_size, rate, warmup, momentum)
+                    config: Config = (batch_size, rate, warmup, momentum)
                     configs.append(config)
                     labels[config] = rate_kind
     results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=WORKERS, report_progress=True)
@@ -151,7 +158,7 @@ def scaling(
         low, high = min(band), max(band)
         print(f"\n### momentum {momentum}, lr_32 = {base_rate:g}")
         print(f"batch-32 band (no warmup, final epoch): {_mean_sd(band)}, seeds span {low:.2%} - {high:.2%}\n")
-        rows = []
+        rows: list[list[str]] = []
         for config in configs:
             batch_size, rate, warmup, config_momentum = config
             if config_momentum != momentum:
@@ -195,7 +202,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--warmups", type=float, nargs="+", default=WARMUP_EPOCHS, help="warmup epochs (scaling)")
     args = parser.parse_args(argv)
 
-    context = {
+    context: dict[str, Any] = {
         "train_path": bss.TRAIN_PATH,
         "test_path": bss.TEST_PATH,
         "limit": args.limit,

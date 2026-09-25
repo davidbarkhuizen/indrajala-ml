@@ -1,3 +1,5 @@
+# pyright: reportConstantRedefinition=false
+# (matrices are named as in the literature, X, which strict mode takes for constants)
 """
 The batched accuracy pass's stage 0 (docs/optimizations/implemented.md): one training-set
 accuracy pass row by row, as _training_accuracy does it, against batched forward passes over
@@ -35,7 +37,7 @@ import statistics
 import sys
 import time
 from collections.abc import Callable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import numpy as np
 from process_runs import interleaved_runs, run_json_worker
@@ -48,7 +50,13 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.prepared_dataset import prepared_mnist
+from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
+    RustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
+    VectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.prepared_dataset import PreparedDataset, prepared_mnist
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
 
 BACKENDS = ["numpy", "rust"]
@@ -70,8 +78,11 @@ IN_PROCESS_RUNS = 3
 
 T = TypeVar("T")
 
+# the dense and conv networks of either backend
+Network = VectorizedMultiClassBackpropClassifierNetwork | RustArrayMultiClassBackpropClassifierNetwork
 
-def _network(name: str, backend: str):
+
+def _network(name: str, backend: str) -> Network:
     if name == "dense":
         return bss.initial_network(backend, 0.0, SEED)
     np.random.seed(SEED)
@@ -84,16 +95,17 @@ def _network(name: str, backend: str):
     return network
 
 
-def _per_row(network, prepared) -> list:
+def _per_row(network: Network, prepared: PreparedDataset) -> list[int]:
     return [network.classify_row(prepared, index) for index in range(len(prepared))]
 
 
-def _forward_chunks(network, prepared, chunk: int, backend: str, argmax: bool) -> list:
-    states = prepared.states
-    predictions = []
+def _forward_chunks(network: Network, prepared: PreparedDataset, chunk: int, backend: str, argmax: bool) -> list[int]:
+    # either backend's matrix, chosen by name: its arrays are typed Any at that one boundary
+    states: Any = prepared.states
+    predictions: list[int] = []
     for start in range(0, len(prepared), chunk):
         stop = min(start + chunk, len(prepared))
-        X = states[start:stop] if backend == "numpy" else states.take_rows(list(range(start, stop)))
+        X: Any = states[start:stop] if backend == "numpy" else states.take_rows(list(range(start, stop)))
         for layer in network.layers:
             X = layer.forward_batch(X)
         if not argmax:
@@ -116,7 +128,7 @@ def _median_of_runs(fn: Callable[[], T]) -> tuple[float, T]:
     return statistics.median(seconds for seconds, _ in runs), runs[0][1]
 
 
-def _epoch(name: str, backend: str, prepared, single: bool) -> float:
+def _epoch(name: str, backend: str, prepared: PreparedDataset, single: bool) -> float:
     network = _network(name, backend)
     random.seed(SEED)
     if single:
@@ -128,12 +140,12 @@ def _epoch(name: str, backend: str, prepared, single: bool) -> float:
     )[0]
 
 
-def measure(name: str, backend: str) -> dict:
+def measure(name: str, backend: str) -> dict[str, float]:
     limit = None if name == "dense" else CONV_TRAIN_LIMIT
     prepared = prepared_mnist(bss.TRAIN_PATH, backend, limit=limit)
     network = _network(name, backend)
 
-    result = {}
+    result: dict[str, float] = {}
     result["per row"], reference = _median_of_runs(lambda: _per_row(network, prepared))
     for chunk in CHUNKS:
         result[f"forward {chunk}"], _ = _median_of_runs(
@@ -148,20 +160,20 @@ def measure(name: str, backend: str) -> dict:
     return result
 
 
-def _run_worker(name: str, backend: str) -> dict:
+def _run_worker(name: str, backend: str) -> dict[str, Any]:
     return run_json_worker([sys.executable, __file__, "worker", name, backend])
 
 
-def time_all(networks: list[str], repeats: int) -> dict:
+def time_all(networks: list[str], repeats: int) -> dict[str, list[dict[str, Any]]]:
     cells = [(name, backend) for name in networks for backend in BACKENDS]
-    runs = interleaved_runs(cells, repeats, lambda cell: _run_worker(*cell))
+    cell_runs_by_cell = interleaved_runs(cells, repeats, lambda cell: _run_worker(*cell))
 
-    runs = {f"{name} / {backend}": cell_runs for (name, backend), cell_runs in runs.items()}
+    runs = {f"{name} / {backend}": cell_runs for (name, backend), cell_runs in cell_runs_by_cell.items()}
     report(runs)
     return runs
 
 
-def report(runs: dict) -> None:
+def report(runs: dict[str, list[dict[str, Any]]]) -> None:
     repeats = len(next(iter(runs.values())))
     medians = {
         cell: {m: statistics.median(run[m] for run in cell_runs) for m in MEASURES} for cell, cell_runs in runs.items()

@@ -35,15 +35,23 @@ import random
 import statistics
 import sys
 import time
+from collections.abc import Callable
+from typing import Any, cast
 
 import indrajala_math_rust as pa
 import numpy as np
 from process_runs import interleaved_runs, run_json_worker
 
 from indrajala_ml import batch_size_scaling as bss
-from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import _rust_op_name
+from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import (
+    _rust_op_name,  # pyright: ignore[reportPrivateUsage]  (the conv demo's op names, shared)
+)
 from indrajala_ml.mnist_data import load_mnist_dataset
-from indrajala_ml.train import _training_accuracy, train_backprop_network_mini_batch
+from indrajala_ml.model.classifier_protocols import Example
+from indrajala_ml.train import (
+    _training_accuracy,  # pyright: ignore[reportPrivateUsage]  (the trainer's own pass, timed alone)
+    train_backprop_network_mini_batch,
+)
 
 BACKENDS = ["numpy", "rust"]
 BATCH_SIZES = [32, 128, 512, 1024]
@@ -54,16 +62,16 @@ SEED = 0
 MEASURES = ["epoch", "steps", "accuracy pass", "batch conversion", "row conversion"]
 
 
-def _schedule(train_size: int, batch_size: int):
+def _schedule(train_size: int, batch_size: int) -> float | Callable[[int], float]:
     rate = bss.scaled_learning_rate(BASE_RATE, batch_size)
     return bss.learning_rate_schedule(rate, bss.warmup_steps(WARMUP_EPOCHS, train_size, batch_size))
 
 
-def _to_array(backend: str):
+def _to_array(backend: str) -> Callable[[Any], object]:
     return np.array if backend == "numpy" else pa.Array
 
 
-def measure(backend: str, batch_size: int, train_data: list) -> dict:
+def measure(backend: str, batch_size: int, train_data: list[Example[int]]) -> dict[str, float]:
     schedule = _schedule(len(train_data), batch_size)
     to_array = _to_array(backend)
 
@@ -101,7 +109,7 @@ def measure(backend: str, batch_size: int, train_data: list) -> dict:
     }
 
 
-def profile(batch_size: int, train_data: list) -> tuple[float, float, list]:
+def profile(batch_size: int, train_data: list[Example[int]]) -> tuple[float, float, list[tuple[str, float, int]]]:
     """(step-loop seconds unprofiled, total profiled seconds, [(op, seconds, calls)]), largest first."""
     schedule = _schedule(len(train_data), batch_size)
 
@@ -117,21 +125,23 @@ def profile(batch_size: int, train_data: list) -> tuple[float, float, list]:
     profiler.disable()
 
     stats = pstats.Stats(profiler)
-    ops = []
-    # Stats.stats and .total_tt are CPython's (undocumented) attributes, which typeshed omits
-    raw_stats = stats.stats  # pyright: ignore[reportAttributeAccessIssue]
+    ops: list[tuple[str, float, int]] = []
+    # Stats.stats and .total_tt are CPython's (undocumented) attributes, which typeshed omits:
+    # (file, line, name) -> (primitive calls, total calls, own seconds, cumulative, callers)
+    raw_stats = cast("dict[tuple[str, int, str], tuple[int, int, float, float, Any]]", stats.stats)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+    total_seconds = cast(float, stats.total_tt)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
     for (_file, _line, name), (_calls, total_calls, own_seconds, _cumulative, _callers) in raw_stats.items():
         op = _rust_op_name(name)
         if op is not None:
             ops.append((op, own_seconds, total_calls))
-    return steps, stats.total_tt, sorted(ops, key=lambda op: op[1], reverse=True)  # pyright: ignore[reportAttributeAccessIssue]
+    return steps, total_seconds, sorted(ops, key=lambda op: op[1], reverse=True)
 
 
-def _run_worker(backend: str, batch_size: int) -> dict:
+def _run_worker(backend: str, batch_size: int) -> dict[str, Any]:
     return run_json_worker([sys.executable, __file__, "worker", backend, str(batch_size)])
 
 
-def time_all(batch_sizes: list[int], repeats: int) -> dict:
+def time_all(batch_sizes: list[int], repeats: int) -> dict[str, list[dict[str, Any]]]:
     cells = [(backend, batch_size) for batch_size in batch_sizes for backend in BACKENDS]
     runs = interleaved_runs(cells, repeats, lambda cell: _run_worker(*cell))
 

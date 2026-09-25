@@ -19,20 +19,21 @@ compare ops across builds, not against timed epochs.
 import argparse
 import json
 import sys
+from typing import Any
 
 from process_runs import run_json_worker
 
 from indrajala_ml.demos import demo_conv_rust_vs_vectorized_digit_recognition as demo
 
 
-def worker(architecture: str, trainer: str) -> dict:
+def worker(architecture: str, trainer: str) -> dict[str, Any]:
     datasets = demo.load_datasets()
     side, train_data, _test_data, epochs = datasets[f"MNIST 28x28 ({demo.MNIST_TRAIN_LIMIT} train)"]
     total, ops = demo.rust_op_breakdown(side, demo.ARCHITECTURES[architecture], trainer, train_data, epochs)
     return {"epochs": epochs, "total": total, "ops": {name: [seconds, calls] for name, seconds, calls in ops}}
 
 
-def run_in_process(architecture: str, trainer: str) -> dict:
+def run_in_process(architecture: str, trainer: str) -> dict[str, Any]:
     command = [sys.executable, "-B", __file__, "--worker", architecture, trainer]
     return run_json_worker(command)
 
@@ -57,7 +58,7 @@ def main() -> None:
         return
 
     cells = [(architecture, trainer) for architecture in args.architectures for trainer in args.trainers]
-    runs = {cell: [] for cell in cells}
+    runs: dict[tuple[str, str], list[dict[str, Any]]] = {cell: [] for cell in cells}
     for repeat in range(args.repeats):
         order = cells[repeat % len(cells) :] + cells[: repeat % len(cells)]
         for cell in order:
@@ -71,8 +72,8 @@ def main() -> None:
     for (architecture, trainer), cell_runs in runs.items():
         totals = [run["total"] for run in cell_runs]
         print(f"| {architecture} | {trainer} | (profiled total) | {min(totals):.3f}-{max(totals):.3f} | |")
-        names = {name for run in cell_runs for name in run["ops"]}
-        names = [n for n in names if not args.op or any(o in n for o in args.op)]
+        all_names: set[str] = {name for run in cell_runs for name in run["ops"]}
+        names = [n for n in all_names if not args.op or any(o in n for o in args.op)]
         largest = sorted(names, key=lambda n: -max(run["ops"].get(n, [0, 0])[0] for run in cell_runs))
         for name in largest:
             seconds = [run["ops"].get(name, [0.0, 0])[0] for run in cell_runs]

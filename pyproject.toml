@@ -41,4 +41,4 @@ extend-exclude = ["rust"]  # the crate's own repo (submodule)
 [tool.pyright]
 include = ["indrajala_ml", "tests", "scripts"]
 typeCheckingMode = "standard"
-strict = ["indrajala_ml"]
+strict = ["indrajala_ml", "scripts"]
