@@ -172,3 +172,7 @@ test passing, and:
   rejected, the candidates left, and how to measure a change.
 - [docs/conv-batch-size-scaling-workplan.md](docs/conv-batch-size-scaling-workplan.md): the
   planned study of batch-size scaling for the conv network.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

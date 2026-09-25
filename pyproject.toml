@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,7 @@ name = "indrajala-ml"
 version = "0.1.0"
 description = "A from-scratch, hand-derived implementation of Rosenblatt's perceptron/MADALINE and backprop classifier networks."
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "matplotlib",
