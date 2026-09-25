@@ -1,69 +1,133 @@
 # RNG audit
 
-What random number generators this project uses, how the Rust crate's generator
-(`rust/src/random.rs`) compares with numpy's, what is wrong with the current arrangement, and what to change. The
-measurements come from two committed harnesses:
+The random number generators this project uses: how the Rust crate's generator
+(`rust/src/random.rs`) reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and
+what is still open. The measurements and checks come from these harnesses:
 
-- `tests/test_numpy_rng_streams.py`: a pure-Python MT19937 that reproduces numpy's legacy
-  `np.random` stream bit for bit, and a check that numpy's PCG64 `Generator` uses the crate's float
-  formula.
-- `scripts/rng_audit.py quality | time`: statistical checks and per-draw timing for the crate,
-  legacy `np.random` and `default_rng()`, timed with one process per backend.
+- `rust/tests/test_random_numpy_parity.py`: the crate against `np.random`, bit for bit. It covers
+  every draw function, the fused dropout masks, every seeding path and numpy's rejections.
+- `tests/test_seeded_init_parity.py`: seeded `randomized()` gives bit-identical numpy and Rust
+  networks, for every array network class.
+- `tests/test_dropout_fused_layer_ops.py` and `tests/test_dropout_array_multiclass_backprop_model.py`:
+  seeded training-mode dropout, with identical masks at the layer and the network level.
+- `tests/test_numpy_rng_streams.py`: a pure-Python MT19937 that reproduces `np.random`'s stream and
+  seeding. It is the algorithm the crate ports, checked against numpy without the crate. It also
+  pins how the stdlib `random`'s stream relates to numpy's.
+- `scripts/rng_audit.py quality | time`: statistical checks, and per-draw timing with one process
+  per backend.
 
-Measured on an AMD Ryzen 7 3700U, numpy 2.2.6 (the parity test also passes on numpy 1.21.5).
+Measured on an AMD Ryzen 7 3700U, numpy 2.2.6. The crate's CI runs the parity tests against the
+latest numpy.
 
 ## Where randomness comes from
 
-| Use | Code | Generator | How it is seeded |
+| Use | Code | Generator | Seeded by |
 |---|---|---|---|
-| Pure-Python weight init | `fan_in_aware_weights_and_bias`, `randomize()` of the node networks | stdlib `random`, global MT19937 | `random.seed(s)` at the call site |
+| Pure-Python weight init | `fan_in_aware_weights_and_bias`, `randomize()` of the node networks | stdlib `random`, global MT19937 | `random.seed(s)` |
 | Pure-Python dropout | `DropoutNode.forward` (`random.random() >= p`) | stdlib `random`, global | `random.seed(s)` |
 | Epoch shuffle, all backends | `train.py`, `epoch_order` (`random.shuffle`) | stdlib `random`, global | `random.seed(s)` |
-| Data splits, sampling, ensemble jobs | `dataset_utils`, `benchmark_data`, `ensemble_train` | `random.Random(seed)` instances | explicit seed argument |
-| numpy weight init | `fan_in_aware_random_layer` (`np.random.uniform`) | legacy `np.random`, global MT19937 | `np.random.seed(s)` |
-| numpy dropout | `DropoutArrayLayer` (`np.random.random(shape) >= p`) | legacy `np.random`, global | `np.random.seed(s)` |
-| Rust weight init | `fan_in_aware_random_rust_layer` (`pa.uniform`) | crate xorshift128+ | none: a new seed from the wall clock on every call |
-| Rust dropout | `layer_dropout_forward*` and `bernoulli_mask` (`draw_bernoulli_mask`) | crate xorshift128+ | none, as above |
+| Data splits, sampling, ensemble jobs | `dataset_utils`, `benchmark_data`, `ensemble_train` | `random.Random(seed)` instances | an explicit seed argument |
+| numpy weight init | `fan_in_aware_random_layer` (`np.random.uniform`) | legacy `np.random`, global MT19937 | `np.random.seed(s)`, `NUMPY.seed(s)` |
+| numpy dropout | `DropoutArrayLayer` (`np.random.random(shape) >= p`) | legacy `np.random`, global | as above |
+| Rust weight init | `fan_in_aware_random_rust_layer` (`pa.uniform`) | the crate's MT19937, a global separate from numpy's | `pa.seed(s)`, `RUST.seed(s)` |
+| Rust dropout | `layer_dropout_forward*` and `bernoulli_mask` | the crate's, as above | as above |
 
-So a seeded run needs up to three generators seeded in step, and on the Rust backend one of them
-can't be seeded at all.
+`seed_everything(s)` (`indrajala_ml/seeding.py`) seeds all three global states alike. The
+ensemble workers call it, because a forked worker inherits all three states from its parent.
+`backend.seed(s)` seeds only the state that backend's `random_layer` and dropout draw from.
 
-## The crate's generator compared with numpy's
+After the same seed, numpy and Rust draw the same weights and masks, so a seeded Rust run
+reproduces a seeded numpy run. They agree to the backends' matmul differences, which are about an
+ULP. Python's `random` is the same MT19937 with the same two-draw double, but `random.seed(s)`
+runs `init_by_array` over `|s|`'s 32-bit words, low word first. So `random.seed(s)` gives the
+stream of `np.random.seed(words)` and `pa.seed(words)`, not of `np.random.seed(s)`
+(`test_stdlib_random_is_np_random_seeded_with_the_seeds_words`).
+
+## The crate's generator
 
 | | crate (`random.rs`) | numpy legacy `np.random` | numpy `default_rng()` |
 |---|---|---|---|
-| Algorithm | xorshift128+ | MT19937 | PCG64 (128-bit LCG, XSL-RR output) |
-| State, period | 128 bits, 2^128 - 1 | 19937 bits, 2^19937 - 1 | 128 bits + increment, 2^128 |
-| Seeding | splitmix64 of `nanos ^ counter * φ`, new per call | `init_genrand(seed)` for an int seed | `SeedSequence` hash of the seed or OS entropy |
-| Seedable | no | yes | yes |
-| Unit float | `(u64 >> 11) * 2^-53` | `((a >> 5) * 2^26 + (b >> 6)) * 2^-53`, two 32-bit draws | `(u64 >> 11) * 2^-53` |
-| `uniform` | `low + (high - low) * u` | the same | the same |
+| Algorithm | MT19937 | MT19937 | PCG64 (128-bit LCG, XSL-RR output) |
+| State, period | 19937 bits, 2^19937 - 1 | the same | 128 bits + increment, 2^128 |
+| Seeding | numpy's, below | `init_genrand`, `init_by_array` or entropy | `SeedSequence` hash of the seed or OS entropy |
+| Unit float | `((a >> 5) * 2^26 + (b >> 6)) * 2^-53`, two 32-bit draws | the same | `(u64 >> 11) * 2^-53` |
+| `uniform` | `low + (high - low) * u`, `OverflowError` on a non-finite range | the same | the same |
 | Dropout mask | `u >= p` | `np.random.random(shape) >= p`, the same | the same |
-| Stream stability | n/a | frozen (NEP 19 compatibility guarantee) | may change between numpy versions |
+| Stream stability | numpy's | frozen (NEP 19 compatibility guarantee) | may change between numpy versions |
 
-The crate's formulas match numpy's: 53-bit floats, the same `uniform` transform and the same
-mask comparison. The distributions are therefore identical, and only the underlying bit streams
-differ. `test_pcg64_generator_floats_are_the_crates_top_53_bits_formula` confirms that `Generator`
-builds its floats exactly the way the crate does.
+The crate is a copy of `np.random`, not a view of numpy's state. The two states are separate:
+`pa.seed(s)` never touches numpy's, and one seed gives the same stream in each. Borrowing numpy's
+state through `get_state`/`set_state` costs about 115 µs per round trip, against about 12 µs for a
+batch-32 dropout mask, and it would make the crate depend on numpy's internals.
+
+`random(shape)`, `uniform(low, high, shape)` and `bernoulli_mask(p, shape)` fill in C order. The
+fused `layer_dropout_forward*` draw one flat `batch * size` mask in row-major order, only when
+`training` is true, as `DropoutArrayLayer` does. The order of draws is part of the contract. Every
+draw happens in one call on the calling thread, and never in the kernels' scoped worker threads.
+The state is a `Mutex`, which is never contended because the crate never releases the GIL.
+
+### Seeding
+
+`pa.seed(seed)` matches `np.random.seed` for every input: the same stream for every seed numpy
+accepts, and the same exception type for every seed it rejects. numpy's three paths:
+
+1. **Anything `operator.index` accepts runs `init_genrand(s)`.** That covers Python ints, bools and
+   numpy integer scalars. numpy first calls `.squeeze()` when the seed has one, so `np.array([5])`
+   and `np.array([[5]])` seed exactly like `5`. `np.array([5], dtype=np.uint64)` also squeezes to
+   an index. A Python list `[5]` has no `squeeze`, so it takes path 2 and gives a different stream
+   from `5`. An int outside `[0, 2^32 - 1]` raises `ValueError("Seed must be between 0 and 2**32 - 1")`.
+2. **Any other sequence runs `init_by_array(key)`.** That covers lists, tuples, ranges, 1-D
+   arrays and buffers such as `array.array`, `bytearray` and `memoryview`. numpy takes
+   `np.asarray(seed)`, then checks it in this order: non-empty (`ValueError("Seed must be
+   non-empty")`), cast to int64 with `casting='safe'` (`TypeError`), 1-D (`ValueError("Seed array
+   must be 1-d")`), then every word in range (`ValueError`, as path 1). The cast fails for:
+   - float, complex, string and object elements;
+   - `uint64` arrays and buffers;
+   - a list holding a value of 2^63 or more, or below -2^63, since numpy picks `uint64` or object
+     for the whole list;
+   - timedelta arrays.
+
+   An inhomogeneous nested list fails in `asarray`, with numpy's `ValueError`.
+3. **`None` draws from OS entropy.** Key word 0 is `0x80000000`, so the state is never all zero,
+   and the rest is entropy. The position is kept, not reset, so until the next twist the draws are
+   tempered entropy words.
+
+The unseeded state follows numpy's global `RandomState`. It is built at import: key word 0 is
+`0x80000000`, the rest is entropy, and the position is 623. Processes forked from an importer
+therefore inherit one stream, as they inherit numpy's. The crate's entropy comes from std's
+`RandomState`, keyed from the OS once per thread, with the pid and the clock mixed in, so it needs
+no dependency.
+
+The crate doesn't link numpy, so it duck-types these rules. It calls `squeeze` if present, then
+tries `operator.index`. Otherwise it walks the seed the way `np.asarray` discovers a shape and a
+dtype. numpy values are read through `.dtype.kind` and `.itemsize`: kinds `b`, `i` and `u` are
+accepted, except 8-byte `u`. Buffers are read through `memoryview.format`. The three `ValueError`
+messages match numpy's word for word. numpy's cast `TypeError` messages aren't reproduced.
+
+numpy versions differ on one seed. numpy 2.2 still takes `np.bool_` as an index, with a
+deprecation warning, while later versions reject it: its `squeeze` gives a 0-d array, which fails
+as "Seed array must be 1-d". `pa.seed` follows `operator.index`, so it matches whichever numpy is
+installed.
+
+The position after `seed(None)` isn't observable without `get_state`, which the crate doesn't
+provide. A probe build that exposed `(pos, key[0])` confirmed each case against numpy's
+`get_state()[2]`: 623 at import, kept by `seed(None)`, and 624 after an int or sequence seed.
 
 ### Statistical quality
 
-`scripts/rng_audit.py quality`, 10M draws per generator:
+`scripts/rng_audit.py quality --repeats 20`, 10M draws per generator:
 
 | Generator | chi-square z (4096 bins) | KS p | lag-1 z | call-to-call z |
 |---|---:|---:|---:|---:|
-| crate | -0.93 | 0.551 | -0.49 | -0.28 |
-| numpy legacy | -0.66 | 0.305 | -0.84 | +0.82 |
-| numpy PCG64 | +1.72 | 0.411 | -0.16 | -0.15 |
+| crate | +0.18 | 0.246 | +0.39 | -0.90 |
+| numpy legacy | +0.45 | 0.505 | -0.26 | +0.31 |
+| numpy PCG64 | +1.13 | 0.559 | +0.08 | +0.81 |
 
-`bernoulli_mask` keep rate over 2M draws: z = +0.97, +0.60 and -0.54 at drop probabilities 0.1, 0.5
-and 0.9.
-
-Every statistic is within chance for all three generators. A single run can land on a borderline
-value: an exploratory run gave the crate KS p = 0.045 and lag-1 z = +2.03. The harness's 20
-repeats on 2M draws settle it: the KS p-values spread over [0.02, 0.88], and the lag-1 z has mean
-+0.21 and sd 0.94, as independent draws should. The call-to-call z is the check that matters for
-the crate's reseed-per-call design: the first draws of consecutive calls are uncorrelated.
+`bernoulli_mask`'s keep rate over 2M draws: z = -1.07, +0.78 and +0.72 at drop probabilities 0.1,
+0.5 and 0.9. Over 20 repeats on 2M draws, the crate's KS p-values spread over [0.09, 1.00], and its
+lag-1 z has mean -0.33 and sd 1.20, as independent draws should. Every statistic is within chance.
+The crate and numpy legacy are the same algorithm, so their rows differ only by their entropy
+seeds.
 
 ### Speed
 
@@ -71,139 +135,56 @@ the crate's reseed-per-call design: the first draws of consecutive calls are unc
 
 | Case | crate | numpy legacy | numpy PCG64 |
 |---|---:|---:|---:|
-| uniform (128, 64) | 2.99 | 6.37 | 4.16 |
-| uniform (784, 128) | 2.93 | 6.03 | 3.90 |
-| uniform (1000, 1000) | 3.20 | 6.28 | 4.03 |
-| mask (1, 128) | 5.79 | 27.07 | 25.81 |
-| mask (32, 128) | 3.10 | 6.51 | 4.75 |
-| mask (512, 128) | 2.98 | 5.87 | 4.04 |
+| uniform (128, 64) | 5.80 | 6.42 | 4.12 |
+| uniform (784, 128) | 5.75 | 6.13 | 3.84 |
+| uniform (1000, 1000) | 5.82 | 6.27 | 4.24 |
+| mask (1, 128) | 7.86 | 27.12 | 25.86 |
+| mask (32, 128) | 5.33 | 6.51 | 4.87 |
+| mask (512, 128) | 5.21 | 5.88 | 4.12 |
 
-The crate is the fastest of the three, about 2x faster than legacy `np.random` and 1.3x faster than
-PCG64 per draw. At batch 1, numpy's per-call overhead dominates. The RNG is not a hot path: a
-784 x 128 init happens once per network, and a batch-32 dropout mask over 128 units takes
-about 12 µs of a training step.
+The crate runs MT19937 slightly faster than numpy's legacy path, and avoids numpy's per-call
+overhead at batch 1. The RNG is not a hot path. A 784 x 128 init happens once per network, and
+the dropout mask is a small part of a training step. One Rust dropout epoch (784-128-10, batch 32,
+p = 0.5, 8192 rows) takes a median of 206 ms. The xorshift128+ generator the crate used before
+drew at about 3 ns, and the same epoch took 200 ms, within that build's 193-226 ms spread.
 
-## Findings
+## Open findings
 
-### 1. The premise that numpy's stream can't be reproduced is false (high)
+### Three global states (medium)
 
-`random.rs`, `rust/README.md`, `rust_array_layer.py`, `array_network_shapes.py`, the crate's
-`test_random_uniform.py`/`test_dropout_rng.py` and `scripts/golden_training_run.py` all say that a
-hand-rolled generator can never reproduce numpy's Mersenne Twister stream, so Rust/numpy parity for
-random ops can only be statistical. That is wrong. MT19937, its `init_genrand` seeding and numpy's
-53-bit `random_double` are short, public, deterministic algorithms, and numpy freezes the legacy
-stream. `test_mersenne_twister_reproduces_the_legacy_stream_randomize_and_dropout_draw` reproduces
-`np.random.seed(s)`, then `uniform` for W, `uniform` for b, then a `random() >= p` dropout mask,
-bit for bit, at seeds 0, 1, 42 and 2^32 - 1, in about 60 lines of Python. The stdlib's
-`random.seed(0)` stream differs from numpy's even though both are MT19937, because the stdlib
-seeds through `init_by_array`. A port would match `np.random` specifically.
+`random`, `np.random` and the crate's RNG are all global. `seed_everything` seeds them together,
+but with global state every draw shifts every later one. For example, a dropout mask drawn during
+training changes the weights the next `randomize()` gets unless the code reseeds in between. The
+scripts still seed per call site: `batch_size_scaling`, `accuracy_pass_timing` and the timing
+scripts draw weights once with numpy and restore them into both backends, which is correct and
+simple. numpy's own guidance (NEP 19) is to pass explicit `Generator` objects. That is the larger,
+cleaner version: generator objects in the crate and on the Python side, passed to layers.
 
-This premise is the root of findings 2 and 5. Once it goes, "same seed, same weights and masks on
-both backends" is achievable, which would make Rust/numpy parity exact for randomized networks,
-the one place it is statistical today.
+### FMA contraction on other platforms (low, latent)
 
-### 2. The Rust backend is not reproducible (high)
+Rust never fuses `low + range * u` into an FMA. numpy's C might, depending on the compiler and
+flags. GCC in ISO C mode doesn't contract, but clang contracts within an expression by default,
+and arm64 has FMA in its baseline. Linux x86_64 wheels target a baseline without FMA, so today's
+CI can't show a difference. The PyPI plan's multi-platform CI
+([pypi-release-workplan.md](pypi-release-workplan.md), stage 3) runs the parity tests on arm64
+and macOS and will catch it. If a numpy build contracts, record it and decide then. Don't
+pre-emptively add `mul_add`.
 
-`uniform` and `bernoulli_mask` take no seed and reseed from the wall clock on every call. The
-consequences are already visible in the repo:
-
-- `golden_training_run.py` injects weights from `random.Random`, because `randomize()` can't be
-  seeded on Rust. It trains the Rust dropout network at `drop_probability=0.0`, so the bit-identical
-  refactoring gate never covers a real Rust dropout mask.
-- `batch_size_scaling.initial_network` draws Rust networks' weights with numpy so that seeds mean
-  anything.
-- Any Rust run with `randomize()` or dropout can't be repeated. A regression can't be bisected from
-  a seed, and paired-seed comparisons that include Rust dropout aren't paired. Training is
-  chaotically sensitive (1-ULP differences flip end-of-run conv results), so run-to-run variance
-  isn't a small effect either.
-- `DropoutRustArrayLayer` is tested for parity with `DropoutArrayLayer` only at `training=False`,
-  and only statistically at `training=True`.
-
-### 3. Unseeded draws seed from the clock and a per-process counter (low)
-
-`fresh_seed()` is `nanos ^ counter * 0x9E3779B97F4A7C15`, expanded by splitmix64. Within one
-process the counter keeps calls apart. After `fork`, which is how `multiprocessing.Pool` starts
-sweep workers on Linux, every child inherits the same counter value. Two workers that call
-`uniform` in the same nanosecond therefore draw identical streams. This hasn't been observed and is
-unlikely at nanosecond resolution, but it's the textbook failure of time-based seeding. numpy's
-unseeded `default_rng()` draws from OS entropy instead. The fix needs no dependency: std's
-`std::collections::hash_map::RandomState` is keyed from OS randomness once per process and
-per-thread incremented, so hashing the counter with it gives OS-derived seeds. Reading
-`/dev/urandom` also works on Linux and macOS.
-
-### 4. xorshift128+ is dated, but its known weakness doesn't reach the floats (low)
-
-xorshift128+ fails TestU01's linearity tests (MatrixRank, LinearComp) on its lowest bits (Vigna,
-*Further scramblings of Marsaglia's xorshift generators*, 2017; Lemire and O'Neill, 2019). The crate
-discards the low 11 bits when it makes a float, which is how Vigna recommends using the `+`
-scramblers, and the quality checks above find nothing. The shift triple 23/17/26 is the one from
-the paper's preprint, which V8 shipped. The published version uses 23/18/5. Vigna's current
-recommendation for floats is xoshiro256+. None of this matters if the crate adopts MT19937
-(recommendation 1). If it keeps its own generator instead, move to xoshiro256+ or ++.
-
-### 5. Three generators, two global states (medium)
-
-The Python side uses the stdlib `random` global (shuffles, pure-Python init and dropout) and the
-legacy `np.random` global (numpy init and dropout). A reproducible numpy run needs both seeded, and
-the scripts do this pairwise at each call site (`batch_size_scaling`, `accuracy_pass_timing`,
-`golden_training_run`, the tests). With global state, every draw shifts every later one. For
-example, a dropout mask drawn during training changes the weights the next `randomize()` gets
-unless the code reseeds in between. numpy's own guidance (NEP 19) is to pass explicit `Generator`
-objects. The tests already use `default_rng` in places, while the production code uses the legacy
-global.
-
-### 6. The Rust init limit uses `** 0.5`, the other backends use `sqrt` (low, latent)
-
-`fan_in_aware_random_rust_layer` computes `1.0 / (previous_size**0.5)`. The numpy layer uses
-`np.sqrt` and the pure-Python code uses `math.sqrt`, which agree with each other. `x ** 0.5` isn't
-correctly rounded: over fan-ins 1 to 99,999 it differs from `sqrt` in 82 cases (e.g. 2921, 5579),
-and 71 of those survive the `1.0 /` as a 1-ULP different limit. None of the fan-ins in use hit
-this, and it can't show today because Rust init is unseeded. It would break bit-identical seeded
-parity for those fan-ins once recommendation 1 lands.
-
-### 7. `[low, high)` is not strictly guaranteed (informational)
+### `[low, high)` is not strictly guaranteed (informational)
 
 `low + (high - low) * u` can round up to `high` for some asymmetric ranges. This is true of numpy
-too, and numpy's docs say so. The `random.rs` docstring and `test_random_uniform.py` claim a strict
-upper bound. For the symmetric `[-limit, limit)` that init uses, no fan-in from 1 to 4999 can
-produce `limit`.
+too, and numpy's docs say so. The crate's `test_random_uniform.py` asserts a strict upper bound
+for `(-2, 5)`, which holds for its draws. For the symmetric `[-limit, limit)` that init uses, no
+fan-in from 1 to 4999 can produce `limit`.
 
-## Recommendations
+## Open work
 
-In order:
-
-1. **Make the crate's RNG a seedable MT19937 that reproduces `np.random` bit for bit.** Planned in
-   [rng-numpy-parity-workplan.md](rng-numpy-parity-workplan.md). Port
-   `init_genrand`, the twist and tempering, and numpy's `random_double` into `random.rs` (about 60
-   lines, no dependency, in keeping with the crate's hand-built posture). Expose a module-level
-   `seed(int)` that mirrors `np.random.seed`, which the repo's code already calls, and have
-   `uniform`, `bernoulli_mask` and the fused dropout ops draw from that state. Then
-   `np.random.seed(s)` on numpy and `pa.seed(s)` on Rust give identical weights and masks, provided
-   the draws happen in the same order, which `randomize()` already guarantees. Gate it on a crate
-   test that compares against `np.random` directly, with `tests/test_numpy_rng_streams.py` as the
-   pure-Python oracle. This fixes finding 2, retires the workarounds in `golden_training_run.py` and
-   `batch_size_scaling.py`, and makes the dropout parity tests exact. Cost: MT runs at about legacy
-   numpy's speed per draw, roughly 2x the current crate; measure it with `rng_audit.py time`. One
-   open design choice: global state like `np.random`, which is simple and matches today's call
-   sites, or a `Generator`-style object passed to layers, which is explicit and thread-safe but
-   touches every constructor. A Rust global needs a `Mutex` or `thread_local`, but it won't be
-   contended, since the crate never releases the GIL and threads only inside kernels. Parity also
-   requires drawing in numpy's C order on one thread: the draws can't move into the kernels'
-   scoped worker threads.
-
-   Matching PCG64 and `default_rng` instead is also possible, since the float formula already
-   matches. It needs a `SeedSequence` port, moving the Python side to `Generator` objects first,
-   and it gives up the frozen-stream guarantee. Legacy MT matches the code as it stands.
-
-2. **Seed unseeded draws from OS entropy** (finding 3), whether or not 1 lands.
-
-3. **Use `math.sqrt` in `fan_in_aware_random_rust_layer`** (finding 6). It's a one-line change and a
-   precondition for exact seeded parity.
-
-4. **Add one seeding entry point on the Python side**, e.g. `seed_everything(s)` that seeds `random`,
-   `np.random` and (after 1) the crate, instead of pairwise seeding at each call site (finding 5).
-   Moving production code to explicit `Generator`/`random.Random` objects is the larger, cleaner
-   version.
-
-5. **Correct the docs as the code changes:** the "can never reproduce" wording listed in finding 1,
-   the `[low, high)` claim (finding 7), and the `rust/README.md` row for `random.rs`.
+- Explicit generator objects (numpy's `Generator` style) instead of global state, as above.
+- PCG64 and `default_rng` parity. The float formula differs from the legacy stream's, and a port
+  needs a `SeedSequence` port too. It gives up the frozen-stream guarantee that makes the legacy
+  stream a stable target.
+- Matching the pure-Python networks with the array networks from one seed. The streams already
+  match when seeded through the words, as above. What's left is draw order: the per-node networks
+  draw weights node by node, and their dropout draws one `random.random()` per node. Until that's
+  checked, the per-node dropout reference is compared with the array networks only at eval.
+- `get_state`/`set_state`, and broadcast `low`/`high`, aren't provided. The repo doesn't use them.
