@@ -65,6 +65,19 @@ class WeightedArrayLayer(ArrayNetworkLayer[A], Protocol[A]):
     b: A
 
 
+LayerT = TypeVar("LayerT")
+LayerT_co = TypeVar("LayerT_co", covariant=True)
+
+
+class HyperparameterLayerClass(Protocol[LayerT_co]):
+    """A layer class as ArrayNetworkBase._new_layer builds it: its shape arguments, then its
+    hyperparameters, from the network's attributes of the same names."""
+
+    hyperparameters: tuple[str, ...]
+
+    def __call__(self, *args: Any, **kwargs: Any) -> LayerT_co: ...
+
+
 class ArrayBackend(Protocol[A]):
     """The array operations ArrayNetworkBase needs from a backend (array_backend.py)."""
 

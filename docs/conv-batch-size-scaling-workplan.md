@@ -2,7 +2,8 @@
 
 **Status: stages 1 and 2 done. At momentum 0.0 the rule holds to B = 128 with warmup and fails
 at B = 512, where no rate reaches the band. Stage 3 (momentum conv, planned in detail below) is
-under way: 3a (SGD and weight decay in the literature's form) is done, 3b (momentum) is next.**
+under way: 3a and 3b (the update rules in the literature's form) and 3c (the conv networks honor
+hyperparameters) are done, 3d (the pure-Python momentum conv reference) is next.**
 
 A measured study and a demo: does the linear learning-rate scaling rule (Goyal et al. 2017:
 multiply the rate by the factor the batch grows, with warmup) hold for the conv network on full
@@ -265,32 +266,36 @@ are marked pending a rerun, in place.
   equivalent, so the study's no-warmup momentum cells change only by rounding. Mark the findings
   as pending a rerun, in place, until then.
 
-#### 3c: the conv networks honor hyperparameters (structural, bit-identical)
+#### 3c: the conv networks honor hyperparameters (done)
 
-The conv networks can't host a hyperparameter-bearing layer today:
+Done (parent PR below, no crate change). The golden run is bit-identical and a plain conv
+network's save file has the same keys. New tests build an array sibling whose conv, dense and
+output layer classes take a hyperparameter, and a pure-Python network with every hook overridden.
+Each fails on the old wiring.
 
-- `build_conv_array_network_layers` calls `dense_cls(size, previous_size)` directly, bypassing
-  `ArrayNetworkBase._new_layer`, which passes `layer_cls.hyperparameters` from the network. Change
-  it to take a layer factory, `network._new_layer`, for the dense and conv layers alike (conv
-  layer classes get `hyperparameters = ()`).
-- The conv save envelope (`save_conv_model_json` / `load_conv_model_json`) has no `extra`. Add it
-  as `save_array_model_json` has it: `ArrayConvShape.save` passes `_extra_state()`, and `load`
-  passes `_extra_init_kwargs(state)` to the constructor. Files without extra keys load unchanged.
-- The pure-Python `ConvMultiClassBackpropClassifierNetwork` hard-codes `BackpropLayer` for its
-  dense layers and `ConvKernel` inside `ConvLayer`. Add class-level hooks (`dense_layer_cls`, and
-  a kernel class on `ConvLayer`) defaulting to today's classes.
-
-Follows the README's Refactoring rules: golden run bit-identical, no hot-path change (only
-construction and save/load are touched, so no timing), public names and saved files unchanged.
+- **Array networks:** `build_conv_array_network_layers` builds the conv, dense and output layers
+  through a layer factory, `network._new_layer`, which now takes any layer class and its
+  arguments (`HyperparameterLayerClass` in `array_protocols.py`). The conv layer classes have
+  `hyperparameters = ()`. The output layer is `output_layer_cls`'s. It was `hidden_layer_cls`'s,
+  and for the plain conv networks the two are the same class.
+- **Save envelope:** `save_conv_model_json` takes `extra` as `save_array_model_json` does, and
+  `load_conv_model_json` takes `extra_init_kwargs`. `ArrayConvShape` passes `_extra_state()` and
+  `_extra_init_kwargs`.
+- **Pure Python:** `ConvMultiClassBackpropClassifierNetwork` builds its layers from
+  `conv_layer_cls` and the inherited `hidden_layer_cls` / `output_layer_cls` (not a new
+  `dense_layer_cls`), and `ConvLayer` its kernels from `_kernel_cls`, as `BackpropLayer` does
+  with `_node_cls`.
 
 #### 3d: the pure-Python momentum conv reference
 
 - `MomentumConvKernel`: `ConvKernel` with a velocity, zero-initialized, and 3b's eq. (9) update:
   `u = m * u + accum / B; w = w - lr * u`, positions summed and examples averaged as `ConvKernel`
   does. A factory, as `make_momentum_node_cls`, because momentum has no default.
-- `MomentumConvMultiClassBackpropClassifierNetwork(..., momentum)`: momentum kernels in the conv
-  layers and `make_momentum_layer_cls(momentum)` for the dense and output layers. Pool layers are
-  unchanged: they have no weights.
+- `MomentumConvMultiClassBackpropClassifierNetwork(..., momentum)`: sets 3c's hooks in `__init__`,
+  as `MomentumBackpropClassifierNetwork` does: `conv_layer_cls` a `ConvLayer` whose `_kernel_cls`
+  is the momentum kernel, and `make_momentum_layer_cls(momentum)` for `hidden_layer_cls` and
+  `output_layer_cls`. Pool layers are unchanged: they have no weights. `save` passes
+  `extra={"momentum": ...}` and `load` its `extra_init_kwargs`.
 - **Tests:** at momentum 0.0, bit-identical to `ConvMultiClassBackpropClassifierNetwork` through
   `learn` and `learn_batch` (at `m` = 0, eq. (9) is exactly 3a's `w - lr * (g / B)`). A hand-computed two-step kernel update. A
   save/load round trip that keeps `momentum`. No new gradient check: momentum changes only the

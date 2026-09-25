@@ -33,10 +33,16 @@ class ConvMultiClassBackpropClassifierNetwork(
     Inputs are normalized pixels, so input_bounds is fixed at [(0.0, 1.0)] * dimension, not a
     parameter.
 
+    The layer classes are hooks, as BackpropNetworkBase's: conv_layer_cls for the conv layers and
+    the inherited hidden_layer_cls/output_layer_cls for the dense tail. A sibling sets them for a
+    different update, as MomentumBackpropClassifierNetwork does.
+
     The numpy and Rust networks (ArrayConvShape) are parity-tested against this one step by step
     (tests/test_conv_array_multiclass_backprop_model.py); all three build their front end
     through conv_front_end.build_conv_front_end.
     """
+
+    conv_layer_cls: type[ConvLayer] = ConvLayer
 
     def __init__(
         self,
@@ -64,7 +70,7 @@ class ConvMultiClassBackpropClassifierNetwork(
             input_height,
             input_width,
             self.conv_specs,
-            make_conv=lambda spec, previous, height, width, channels: ConvLayer(
+            make_conv=lambda spec, previous, height, width, channels: self.conv_layer_cls(
                 input_layer=previous,
                 input_height=height,
                 input_width=width,
@@ -87,11 +93,11 @@ class ConvMultiClassBackpropClassifierNetwork(
         dense_layers: list[BackpropLayer] = []
         previous_layer: ConvLayer | MaxPoolLayer | BackpropLayer = self.conv_layers[-1]
         for size in dense_layer_sizes:
-            layer = BackpropLayer(size=size, input_layer=previous_layer)
+            layer = self.hidden_layer_cls(size=size, input_layer=previous_layer)
             dense_layers.append(layer)
             previous_layer = layer
 
-        self.output_layer = BackpropLayer(size=class_count, input_layer=previous_layer)
+        self.output_layer = self.output_layer_cls(size=class_count, input_layer=previous_layer)
 
         self.hidden_layers = [*self.conv_layers, *dense_layers]
         self.trainable_layers = [*self.hidden_layers, self.output_layer]

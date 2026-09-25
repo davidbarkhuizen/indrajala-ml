@@ -101,9 +101,13 @@ ClassT = TypeVar("ClassT")
 
 
 def all_subclasses(cls: type[ClassT]) -> Iterator[type[ClassT]]:
-    """Every subclass of cls, at any depth (only those of modules imported so far)."""
+    """
+    Every subclass of cls in indrajala_ml, at any depth (only those of modules imported so far):
+    not the test files' own, so a test's sibling classes don't join a walk over the real ones.
+    """
     for subclass in cls.__subclasses__():
-        yield subclass
+        if subclass.__module__.startswith("indrajala_ml."):
+            yield subclass
         yield from all_subclasses(subclass)
 
 

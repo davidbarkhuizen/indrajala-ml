@@ -1,3 +1,4 @@
+import json
 import random
 from collections.abc import Sequence
 from pathlib import Path
@@ -316,3 +317,124 @@ def test_a_model_saved_by_either_backend_loads_into_the_other_with_the_same_pred
             other.predict_probabilities(state), saved.predict_probabilities(state), rtol=1e-12, atol=1e-14
         )
         assert other.classify_state(state) == saved.classify_state(state)
+
+
+# layer classes taking one hyperparameter, scale, recorded but unused, as a sibling's take momentum
+class _ScaledConvArrayLayer(ConvArrayLayer):
+    hyperparameters = ("scale",)
+
+    def __init__(self, *args: Any, scale: float, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.scale = scale
+
+
+class _ScaledArrayLayer(ArrayLayer):
+    hyperparameters = ("scale",)
+
+    def __init__(self, *args: Any, scale: float, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.scale = scale
+
+
+class _ScaledConvRustArrayLayer(ConvRustArrayLayer):
+    hyperparameters = ("scale",)
+
+    def __init__(self, *args: Any, scale: float, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.scale = scale
+
+
+class _ScaledRustArrayLayer(RustArrayLayer):
+    hyperparameters = ("scale",)
+
+    def __init__(self, *args: Any, scale: float, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.scale = scale
+
+
+# distinct output classes, so a test can tell output_layer_cls from hidden_layer_cls
+class _ScaledOutputArrayLayer(_ScaledArrayLayer):
+    pass
+
+
+class _ScaledOutputRustArrayLayer(_ScaledRustArrayLayer):
+    pass
+
+
+class _ScaledConvVectorizedNetwork(ConvVectorizedMultiClassBackpropClassifierNetwork):
+    hyperparameters = ("scale",)
+    conv_layer_cls = _ScaledConvArrayLayer
+    hidden_layer_cls = _ScaledArrayLayer
+    output_layer_cls = _ScaledOutputArrayLayer
+
+    def __init__(self, *args: Any, scale: float, **kwargs: Any) -> None:
+        self.scale = scale
+        super().__init__(*args, **kwargs)
+
+
+class _ScaledConvRustNetwork(ConvRustArrayMultiClassBackpropClassifierNetwork):
+    hyperparameters = ("scale",)
+    conv_layer_cls = _ScaledConvRustArrayLayer
+    hidden_layer_cls = _ScaledRustArrayLayer
+    output_layer_cls = _ScaledOutputRustArrayLayer
+
+    def __init__(self, *args: Any, scale: float, **kwargs: Any) -> None:
+        self.scale = scale
+        super().__init__(*args, **kwargs)
+
+
+def _scale(layer: object) -> float:
+    assert isinstance(
+        layer, (_ScaledConvArrayLayer, _ScaledArrayLayer, _ScaledConvRustArrayLayer, _ScaledRustArrayLayer)
+    ), f"a {type(layer).__name__} has no scale"
+    return layer.scale
+
+
+SCALED_NETWORK_CLS: dict[str, type[_ScaledConvVectorizedNetwork] | type[_ScaledConvRustNetwork]] = {
+    "numpy": _ScaledConvVectorizedNetwork,
+    "rust": _ScaledConvRustNetwork,
+}
+
+
+def test_a_siblings_conv_and_dense_layers_take_its_hyperparameters(backend: Backend):
+
+    sibling = SCALED_NETWORK_CLS[backend.name]
+    network = sibling(8, 8, POOLED, [8, 6], class_count=10, scale=0.25)
+    first, pool, last = network.conv_layers
+    hidden_1, hidden_2, output = network.layers[3:]
+
+    for layer in (first, last):
+        assert type(layer) is sibling.conv_layer_cls and _scale(layer) == 0.25
+    assert isinstance(pool, LAYER_CLS[backend.name][1]) and not hasattr(pool, "scale")
+    for layer in (hidden_1, hidden_2):
+        assert type(layer) is sibling.hidden_layer_cls and _scale(layer) == 0.25
+    # the output layer is output_layer_cls's, not hidden_layer_cls's
+    assert type(output) is sibling.output_layer_cls and _scale(output) == 0.25
+
+
+def test_a_siblings_hyperparameters_round_trip_through_save_and_load(backend: Backend, tmp_path: Path):
+
+    sibling = SCALED_NETWORK_CLS[backend.name]
+    network = sibling.randomized(8, 8, POOLED, [8], class_count=10, scale=0.25)
+    path = str(tmp_path / "conv_model.json")
+    network.save(path)
+    loaded = sibling.load(path)
+
+    assert json.loads(Path(path).read_text())["scale"] == 0.25
+    assert loaded.scale == 0.25 and _scale(loaded.output_layer) == 0.25
+    assert _as_lists(loaded.snapshot()) == _as_lists(network.snapshot())
+
+
+def test_a_plain_conv_network_saves_the_envelope_without_extra_keys(network_cls: NetworkCls, tmp_path: Path):
+
+    path = str(tmp_path / "conv_model.json")
+    network_cls.randomized(8, 8, POOLED, [8], class_count=10).save(path)
+
+    assert set(json.loads(Path(path).read_text())) == {
+        "input_height",
+        "input_width",
+        "conv_layers",
+        "dense_layer_sizes",
+        "class_count",
+        "snapshot",
+    }

@@ -37,6 +37,9 @@ class ConvLayer:
     .nodes is channel-major: every (row, col) position for kernel 0, then kernel 1, and so on.
     """
 
+    # the kernel class, as BackpropLayer._node_cls: a subclass overrides it for a different update
+    _kernel_cls: type[ConvKernel] = ConvKernel
+
     def __init__(
         self,
         input_layer: InputLayer,
@@ -73,7 +76,7 @@ class ConvLayer:
         self.out_width = (input_width - kernel_size) // stride + 1
 
         self.kernels: list[ConvKernel] = [
-            ConvKernel(kernel_size=kernel_size, in_channels=input_channels) for _ in range(channel_count)
+            self._kernel_cls(kernel_size=kernel_size, in_channels=input_channels) for _ in range(channel_count)
         ]
 
         self.nodes: list[ConvUnit] = []

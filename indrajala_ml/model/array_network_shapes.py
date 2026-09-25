@@ -167,8 +167,8 @@ class ArrayConvShape(_ConvShapeBase[A]):
     max-pool layers (one ConvSpec or PoolSpec each, in order), one or more sigmoid dense layers, and
     a one-vs-rest sigmoid output layer.
 
-    A mixin, listed before the backend's plain multiclass network, which supplies self.backend and
-    hidden_layer_cls (the dense layer class). ConvVectorizedMultiClassBackpropClassifierNetwork and
+    A mixin, listed before the backend's plain multiclass network, which supplies self.backend,
+    hidden_layer_cls and output_layer_cls (the dense layer classes). ConvVectorizedMultiClassBackpropClassifierNetwork and
     ConvRustArrayMultiClassBackpropClassifierNetwork are this shape on numpy and on Rust, and set
     conv_layer_cls and pool_layer_cls.
 
@@ -177,7 +177,10 @@ class ArrayConvShape(_ConvShapeBase[A]):
     (the forward pass, learn*, the multiclass shape's outputs and targets) is inherited. Overridden
     is what assumes a dense W in every layer: randomize, snapshot/restore (an empty entry for a pool
     layer) and save/load (the pure-Python conv network's envelope, so a model saved by any of the
-    three loads into the others).
+    three loads into the others), with the network's hyperparameters in it.
+
+    The conv and dense layers are built through _new_layer, so a sibling's layer classes take the
+    network's hyperparameters as the dense networks' do.
     """
 
     conv_layer_cls: type[ArrayConvLayer[A]]
@@ -210,7 +213,9 @@ class ArrayConvShape(_ConvShapeBase[A]):
             class_count,
             conv_cls=self.conv_layer_cls,
             pool_cls=self.pool_layer_cls,
-            dense_cls=self.hidden_layer_cls,
+            hidden_cls=self.hidden_layer_cls,
+            output_cls=self.output_layer_cls,
+            new_layer=self._new_layer,
         )
         self.layers = [*self.conv_layers, *dense_layers, self.output_layer]
 
@@ -250,8 +255,8 @@ class ArrayConvShape(_ConvShapeBase[A]):
             layer.b = self.backend.owned(b)
 
     def save(self, path: str) -> None:
-        save_conv_array_model_json(path, self)
+        save_conv_array_model_json(path, self, extra=self._extra_state())
 
     @classmethod
     def load(cls, path: str) -> Self:
-        return load_conv_model_json(cls, path)
+        return load_conv_model_json(cls, path, cls._extra_init_kwargs)
