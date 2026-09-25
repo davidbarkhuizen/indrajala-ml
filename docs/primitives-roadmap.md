@@ -23,8 +23,8 @@ connection, no recurrence and no attention.
 ## 1. Composable layers and optimizers first
 
 Every feature so far is a sibling class per backend: `Momentum…`, `Conv…`, `MomentumConv…`.
-Combining two features costs a planned stage: momentum with conv took conv workplan stages
-3c-3e. Batch norm crossed with {dense, conv} × {SGD, momentum, Adam} × three implementations
+Combining two features costs planned stages: momentum with conv took three PRs (#448, #451,
+#452). Batch norm crossed with {dense, conv} × {SGD, momentum, Adam} × three implementations
 would multiply the class count again.
 
 A planned step should make the optimizer and the normalization composable (for example, a
@@ -34,12 +34,12 @@ walks in the tests and the golden run all depend on the class structure.
 
 ## 2. Batch normalization next
 
-- **It serves the open question.** The conv batch-size study keeps hitting a ceiling on the
-  stable rate (conv workplan stages 2 and 3f). Batch normalization is the literature's standard
-  way to raise it (Ioffe & Szegedy 2015). It is also part of the setup the study tests: Goyal et
-  al. 2017 train ResNet-50, which uses it, and their section 2.3 fixes its statistics at 32
-  examples per worker whatever the total batch. Without it, the study is not comparable with the
-  paper's full setup.
+- **It serves the open question.** The conv batch-size study hit a ceiling on the stable rate:
+  the linear rule fails at B = 512 at momentum 0.0 and 0.9 (findings in `batch_size_scaling.py`).
+  Batch normalization is the literature's standard way to raise it (Ioffe & Szegedy 2015). It is
+  also part of the setup the study tests: Goyal et al. 2017 train ResNet-50, which uses it, and
+  their section 2.3 fixes its statistics at 32 examples per worker whatever the total batch.
+  Without it, the study is not comparable with the paper's full setup.
 - **It tests the parity rules.** It is the first layer whose forward pass depends on the rest of
   the batch. It behaves differently in training (batch statistics) and inference (running
   averages), and its backward pass is a known source of errors. Hand-computed tests and gradient

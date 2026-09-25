@@ -21,9 +21,10 @@ the per-output order is unchanged, so bit-identical. `tiled_row_range`'s 2-row t
 would first halve the passes if `matmul_narrow` passed 2-row blocks, where `C*k*k` >= 16 (they
 only cover 16-wide column tiles). **Stake is small in trained configurations:** no demo trains
 conv at N = 512, and at N = 32 (`cols` 1.56 MB) the op is only 1.1-1.2x its single calls, about
-1-1.5% of the epoch. [The conv batch-size-scaling workplan](../conv-batch-size-scaling-workplan.md)
-would give it a trained B = 512 workload; a scratch probe there puts the threaded stake at about
-7-12% of a B = 512 step.
+1-1.5% of the epoch. The conv batch-size-scaling study (findings in `batch_size_scaling.py`)
+found no trained B = 512 conv workload: the linear rule fails there at momentum 0.0 and 0.9, and
+the best capped rate stays 2.5 points below the batch-32 band. A scratch probe put the threaded
+stake at about 7-12% of a B = 512 step, if such a workload is ever trained.
 
 ## Deferred: threading past the threshold
 

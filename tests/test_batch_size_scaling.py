@@ -8,6 +8,18 @@ from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.classifier_protocols import Example
+from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
+    ConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
+    ConvVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
+    MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
+    MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.train import train_backprop_network_mini_batch
 
 
@@ -51,18 +63,32 @@ def test_initial_network_is_identical_across_backends(momentum: float):
         assert np.array_equal(_numpy(numpy_b), np.array(rust_b.tolist()))
 
 
-def test_initial_conv_network_is_identical_across_backends():
-    numpy_weights = bss.initial_network("numpy", 0.0, seed=7, architecture="conv").snapshot()
-    rust_weights = bss.initial_network("rust", 0.0, seed=7, architecture="conv").snapshot()
+@pytest.mark.parametrize("momentum", [0.0, 0.9])
+def test_initial_conv_network_is_identical_across_backends(momentum: float):
+    numpy_weights = bss.initial_network("numpy", momentum, seed=7, architecture="conv").snapshot()
+    rust_weights = bss.initial_network("rust", momentum, seed=7, architecture="conv").snapshot()
     assert len(numpy_weights) == 3  # the conv layer, the dense 32, the output layer
     for (numpy_W, numpy_b), (rust_W, rust_b) in zip(numpy_weights, rust_weights):
         assert np.array_equal(_numpy(numpy_W), np.array(rust_W.tolist()))
         assert np.array_equal(_numpy(numpy_b), np.array(rust_b.tolist()))
 
 
-def test_initial_network_rejects_conv_momentum_and_unknown_architectures():
-    with pytest.raises(ValueError, match="no momentum"):
-        bss.initial_network("rust", 0.9, seed=0, architecture="conv")
+@pytest.mark.parametrize(
+    "backend, momentum, network_cls",
+    [
+        ("numpy", 0.0, ConvVectorizedMultiClassBackpropClassifierNetwork),
+        ("numpy", 0.9, MomentumConvVectorizedMultiClassBackpropClassifierNetwork),
+        ("rust", 0.0, ConvRustArrayMultiClassBackpropClassifierNetwork),
+        ("rust", 0.9, MomentumConvRustArrayMultiClassBackpropClassifierNetwork),
+    ],
+)
+def test_initial_conv_network_has_momentum_only_above_zero(backend: str, momentum: float, network_cls: type):
+    network = bss.initial_network(backend, momentum, seed=0, architecture="conv")
+    assert type(network) is network_cls
+    assert getattr(network, "momentum", 0.0) == momentum
+
+
+def test_initial_network_rejects_unknown_architectures():
     with pytest.raises(ValueError, match="unknown architecture"):
         bss.initial_network("rust", 0.0, seed=0, architecture="lstm")
 
@@ -122,3 +148,20 @@ def test_train_and_evaluate_trains_the_conv_network(mnist_subset: tuple[list[Exa
     )
     assert first["steps"] == 2 * 4
     assert first["test_accuracies"] == second["test_accuracies"]
+
+
+def test_train_and_evaluate_trains_the_momentum_conv_network(
+    mnist_subset: tuple[list[Example[int]], list[Example[int]]],
+):
+    # reproducible for a seed, and momentum changes the run: from the same weights and shuffle,
+    # momentum 0.9 ends somewhere other than 0.0
+    train_data, test_data = mnist_subset
+    runs = [
+        bss.train_and_evaluate(
+            "rust", train_data, test_data, 64, 0.25, 1.0, momentum, epochs=2, seed=0, architecture="conv"
+        )
+        for momentum in (0.9, 0.9, 0.0)
+    ]
+    assert runs[0]["steps"] == 2 * 4
+    assert runs[0]["test_accuracies"] == runs[1]["test_accuracies"]
+    assert runs[0]["test_accuracies"] != runs[2]["test_accuracies"]

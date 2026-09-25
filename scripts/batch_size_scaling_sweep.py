@@ -4,12 +4,12 @@ on full MNIST with the Rust backend.
 
     python scripts/batch_size_scaling_sweep.py baseline --out baseline.json
     python scripts/batch_size_scaling_sweep.py scaling --lr32 0.0=3.0 --lr32 0.9=0.5 --out scaling.json
-    python scripts/batch_size_scaling_sweep.py baseline --architecture conv --epochs 2 --seeds 3
+    python scripts/batch_size_scaling_sweep.py baseline --architecture conv --momenta 0.9 --epochs 2 --seeds 3
     python scripts/batch_size_scaling_sweep.py scaling --architecture conv --lr32 0.0=2 \
         --batch-sizes 32 128 512 --warmups 0 1 --epochs 3 --seeds 3
 
-`baseline` (stage 1) sweeps the batch-32 rate at momentum 0.0 and 0.9 (conv: at 0.0 only, since
-no conv network has momentum). `scaling` (stage 2) runs every batch size x rate (scaled,
+`baseline` (stage 1) sweeps the batch-32 rate at momentum 0.0 and 0.9 (or the --momenta given).
+`scaling` (stage 2) runs every batch size x rate (scaled,
 unscaled) x warmup x momentum cell, with each momentum's own batch-32 rate from stage 1. Both
 print per-epoch test accuracy (mean ± sd over seeds) and write every run's raw result to --out as
 JSON.
@@ -31,9 +31,9 @@ from indrajala_ml.model.classifier_protocols import Example
 
 BASELINE_RATES = {
     "dense": [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
-    "conv": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
+    "conv": [0.03125, 0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
 }
-MOMENTA = {"dense": [0.0, 0.9], "conv": [0.0]}
+MOMENTA = [0.0, 0.9]
 BATCH_SIZES = [32, 128, 512, 1024]
 WARMUP_EPOCHS = [0.0, 0.25, 1.0]
 SEEDS = [0, 1, 2, 3, 4]
@@ -191,6 +191,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("stage", choices=["baseline", "scaling"])
     parser.add_argument("--architecture", choices=bss.ARCHITECTURES, default="dense")
+    parser.add_argument("--momenta", type=float, nargs="+", default=MOMENTA, help="baseline")
     parser.add_argument("--lr32", action="append", default=[], help="momentum=rate, once per momentum (scaling)")
     parser.add_argument("--out", help="write every run's raw result here as JSON")
     parser.add_argument("--limit", type=int, help="use only the first LIMIT train and test rows (smoke runs)")
@@ -213,7 +214,7 @@ def main(argv: list[str] | None = None) -> None:
     seeds = SEEDS[: args.seeds]
 
     if args.stage == "baseline":
-        results = baseline(context, seeds, BASELINE_RATES[args.architecture], MOMENTA[args.architecture])
+        results = baseline(context, seeds, BASELINE_RATES[args.architecture], args.momenta)
     else:
         lr32 = _parse_lr32(args.lr32)
         if not lr32:
