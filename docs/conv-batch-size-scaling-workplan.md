@@ -152,8 +152,20 @@ Result: full MNIST, Rust, momentum 0.0, `lr_32` = 2. The batch-32 band (no warmu
   is far from training.
 - **The unscaled control at B = 512 reaches about 90.5%, 6.5 points below the band.** It is still
   climbing, and it has 16x fewer steps than B = 32.
-- **Untested:** a rate between 8 and 32 at B = 512, such as 8 (the largest stable batch-32 rate)
-  with warmup. That tests a rate ceiling, not the linear rule.
+- **A capped rate at B = 512 trains, but it doesn't reach the band in 3 epochs.** A scratch probe
+  (the sweep's `run_config`, B = 512, one-epoch warmup, seeds 0-2, 3 epochs) tested rates below
+  the scaled 32:
+
+  | rate | epoch 1 | epoch 2 | epoch 3 | worst seed |
+  | --- | --- | --- | --- | --- |
+  | 4 | 77.93% ± 1.52% | 87.00% ± 2.28% | 91.18% ± 1.04% | 90.22% |
+  | 8 | 84.61% ± 3.45% | 87.41% ± 4.06% | 92.29% ± 1.68% | 90.55% |
+  | 16 | 75.40% ± 9.19% | 92.73% ± 0.55% | 94.63% ± 1.02% | 93.46% |
+
+  Rate 16 is stable at B = 512 with warmup, though it stays at chance at B = 32 without warmup.
+  So the stable rate rises by at least 2x, less than the 16x of the linear rule (32 stays at
+  chance). Batch size and warmup are confounded here: rate 16 at B = 32 with warmup is untested. The best capped rate finishes 2.5 points below the band and is still
+  climbing. Rates between 16 and 32 are untested.
 - Warmup costs little at B = 32 (96.98% against 97.16%, within the spread).
 
 So the plan goes to stage 3.
