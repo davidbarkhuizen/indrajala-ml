@@ -98,7 +98,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
 | `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
 | `scripts/` (the rest) | benchmark, profiling and sweep tools (see `docs/optimizations/measurement.md`), and the refactoring golden run |
-| `docs/` | optimization docs, the PyPI release workplan, the primitives roadmap, machine profiles |
+| `docs/` | optimization docs, the PyPI release workplan, the primitives roadmap, the RNG audit, machine profiles |
 
 ## Models
 
@@ -174,6 +174,8 @@ test passing, and:
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, then attention.
+- [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, the crate's against
+  numpy's, and the path to seedable, numpy-identical Rust draws.
 
 ## License
 
