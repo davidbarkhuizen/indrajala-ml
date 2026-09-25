@@ -190,7 +190,7 @@ def _inject(network, backend: str, rng: random.Random) -> None:
     network.restore(snapshot)
 
 
-def _train(network, rows: list) -> dict:
+def _train(network, rows: list) -> tuple[dict, object]:
     prepared = network.prepare_dataset(rows)
     checkpoints = {}
     for state, category in rows[:3]:

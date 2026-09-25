@@ -113,6 +113,7 @@ def _batch_examples() -> list[tuple[float, float]]:
 
 def _accumulate_batch(node: BackpropNode, examples: list[tuple[float, float]]) -> None:
     (x_node,) = node.input_nodes
+    assert isinstance(x_node, StateNode)
     for x, delta in examples:
         x_node.update_value(x)
         node.delta = delta

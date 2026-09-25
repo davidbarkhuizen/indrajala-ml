@@ -1,5 +1,5 @@
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from matplotlib import lines, pyplot
 from matplotlib.axes import Axes
@@ -80,12 +80,12 @@ def reference_region_bounds(
     ]
 
 
-def plot_training_data(axes: Axes, training_data: list[tuple[tuple[float, float], float]]):
+def plot_training_data(axes: Axes, training_data: Sequence[tuple[tuple[float, ...], float]]) -> None:
 
     markers = [".", "x"]
     colors = ["blue", "yellow"]
 
-    categories: list[tuple[int, list[tuple[float, float]]]] = []
+    categories: list[tuple[float, list[tuple[float, ...]]]] = []
 
     # sorted, so 0.0 gets the first marker and color and 1.0 the second
     for category_value in sorted({output_value for (_, output_value) in training_data}):
@@ -218,7 +218,7 @@ def style_dark_legend(legend: Legend) -> None:
         text.set_color("white")
 
 
-def plot_labeled_series(axes: Axes, results: list[tuple[str, str, list[float], list[float]]]) -> None:
+def plot_labeled_series(axes: Axes, results: Sequence[tuple[str, str, Sequence[float], Sequence[float]]]) -> None:
     """
     Plots each (label, color, x, y) series on axes, with a dark legend: the multi-series convergence
     chart of the sweep demos.
@@ -248,6 +248,18 @@ def new_convergence_chart_pair(linear_title: str, log_title: str, x_max: float) 
     log_axes.set_yscale("log")
 
     return linear_axes, log_axes
+
+
+def place_tk_window(axes: Axes, geometry: str) -> None:
+    """Moves axes' figure window to a Tk geometry string ("+x+y"); needs the TkAgg backend."""
+    # imported here: only a TkAgg demo calls this, and the module imports tkinter
+    from matplotlib.backends._backend_tk import FigureManagerTk
+
+    figure = axes.figure
+    assert figure is not None
+    manager = figure.canvas.manager
+    assert isinstance(manager, FigureManagerTk), f"place_tk_window needs the TkAgg backend; got {manager!r}"
+    manager.window.wm_geometry(geometry)
 
 
 def new_figure(label: str) -> Figure:

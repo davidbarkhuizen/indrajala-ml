@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
+from typing_extensions import Self
+
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import fan_in_aware_weights_and_bias
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
@@ -10,7 +14,9 @@ from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClass
 from indrajala_ml.model.state_layer import StateLayer
 
 
-class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
+class ConvMultiClassBackpropClassifierNetwork(
+    MultiClassBackpropClassifierNetwork[ConvLayer | MaxPoolLayer | BackpropLayer]
+):
     """
     A convolutional MultiClassBackpropClassifierNetwork: a front end of ConvLayers and
     MaxPoolLayers (one ConvSpec or PoolSpec each, in order; the first reads the single-channel
@@ -36,7 +42,7 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         self,
         input_height: int,
         input_width: int,
-        conv_specs: list[ConvSpec | PoolSpec],
+        conv_specs: Sequence[ConvSpec | PoolSpec],
         dense_layer_sizes: list[int],
         class_count: int,
     ) -> None:
@@ -87,8 +93,8 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
 
         self.output_layer = BackpropLayer(size=class_count, input_layer=previous_layer)
 
-        self.hidden_layers: list[ConvLayer | MaxPoolLayer | BackpropLayer] = self.conv_layers + dense_layers
-        self.trainable_layers: list[ConvLayer | MaxPoolLayer | BackpropLayer] = self.hidden_layers + [self.output_layer]
+        self.hidden_layers = [*self.conv_layers, *dense_layers]
+        self.trainable_layers = [*self.hidden_layers, self.output_layer]
 
     def randomize(self) -> None:
         # conv layers first, in forward order, each from its kernel fan-in
@@ -101,6 +107,7 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         # layer is dense; the first dense layer's fan-in is the front end's flattened output
         previous_size = len(self.conv_layers[-1].nodes)
         for layer in self.hidden_layers[len(self.conv_layers) :] + [self.output_layer]:
+            assert isinstance(layer, BackpropLayer)  # everything after the front end is dense
             for node in layer.nodes:
                 weights, bias = fan_in_aware_weights_and_bias(previous_size)
                 node.update_input_weights(weights)
@@ -112,5 +119,5 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         save_conv_model_json(path, self, self.snapshot())
 
     @classmethod
-    def load(cls, path: str) -> ConvMultiClassBackpropClassifierNetwork:
+    def load(cls, path: str) -> Self:
         return load_conv_model_json(cls, path)

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_unit import ConvUnit
-from indrajala_ml.model.state_layer import StateLayer
+from indrajala_ml.model.layer_protocols import InputLayer
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,7 @@ class ConvLayer:
 
     def __init__(
         self,
-        input_layer: StateLayer | ConvLayer,
+        input_layer: InputLayer,
         input_height: int,
         input_width: int,
         kernel_size: int,

@@ -192,11 +192,13 @@ def rust_op_breakdown(side: int, conv_specs: list, trainer: str, train_data, epo
 
     stats = pstats.Stats(profiler)
     ops = []
-    for (_file, _line, name), (_calls, total_calls, own_seconds, _cumulative, _callers) in stats.stats.items():
+    # Stats.stats and .total_tt are CPython's (undocumented) attributes, which typeshed omits
+    raw_stats = stats.stats  # pyright: ignore[reportAttributeAccessIssue]
+    for (_file, _line, name), (_calls, total_calls, own_seconds, _cumulative, _callers) in raw_stats.items():
         op = _rust_op_name(name)
         if op is not None:
             ops.append((op, own_seconds, total_calls))
-    return stats.total_tt, sorted(ops, key=lambda op: op[1], reverse=True)
+    return stats.total_tt, sorted(ops, key=lambda op: op[1], reverse=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def _rust_op_name(profiler_name: str) -> str | None:

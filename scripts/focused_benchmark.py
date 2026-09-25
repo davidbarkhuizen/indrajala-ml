@@ -78,7 +78,11 @@ def dense_part_cases(label: str, size: int, input_size: int, batch_sizes) -> lis
                 return lambda: grad_w + update
             import indrajala_math_rust as pa
 
-            return (lambda: delta.sum(axis=0)) if backend == "numpy" else (lambda: pa.sum_axis0(delta))
+            if isinstance(delta, np.ndarray):  # the numpy backend's
+                numpy_delta = delta
+                return lambda: numpy_delta.sum(axis=0)
+            rust_delta = delta
+            return lambda: pa.sum_axis0(rust_delta)
 
         return build
 

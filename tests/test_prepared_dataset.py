@@ -18,6 +18,9 @@ import indrajala_ml.model
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.conv_layer import ConvSpec
+from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
+    DropoutRustArrayMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset, prepared_mnist
@@ -188,7 +191,7 @@ def test_classify_rows_runs_numpy_dropout_in_inference_mode():
 def test_classify_rows_runs_rust_dropout_in_inference_mode():
     # at drop probability 0.5 a training-mode pass would drop half the hidden nodes, and the
     # Rust mask can't be seeded, so equal predictions on two passes mean no mask was drawn
-    cls = next(cls for cls in NETWORK_CLASSES if cls.__name__ == "DropoutRustArrayMultiClassBackpropClassifierNetwork")
+    cls = DropoutRustArrayMultiClassBackpropClassifierNetwork
     network = cls([5], DIMENSION, CLASS_COUNT, 0.5)
     network.randomize()
     prepared = network.prepare_dataset(_rows(cls, CLASSIFY_ROW_COUNT))

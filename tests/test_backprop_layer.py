@@ -152,7 +152,7 @@ def test_network_level_methods_dispatch_once_per_layer_not_once_per_node():
 
     fake_hidden = _CallCountingLayer(nodes=[object(), object(), object(), object()])
     fake_output = _CallCountingLayer(nodes=[object()])
-    network.trainable_layers = [fake_hidden, fake_output]
+    network.trainable_layers = [fake_hidden, fake_output]  # pyright: ignore[reportAttributeAccessIssue] - fakes
 
     network._accumulate_gradients()
     assert fake_hidden.accumulate_calls == 1
@@ -172,7 +172,7 @@ def test_network_level_methods_dispatch_once_per_layer_not_once_per_node():
     assert fake_output.snapshot_calls == 1
     assert snapshot == [f"fake-snapshot-{id(fake_hidden)}", f"fake-snapshot-{id(fake_output)}"]
 
-    network.restore(["restored-hidden", "restored-output"])
+    network.restore(["restored-hidden", "restored-output"])  # pyright: ignore[reportArgumentType] - fakes
     assert fake_hidden.restore_calls == 1
     assert fake_hidden.last_restored == "restored-hidden"
     assert fake_output.restore_calls == 1

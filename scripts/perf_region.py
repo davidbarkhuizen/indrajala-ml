@@ -46,6 +46,7 @@ def counted():
     if not ctl_path:
         yield
         return
+    assert ack_path, f"{ACK_ENV} must be set with {CTL_ENV}"
     with open(ctl_path, "w") as ctl, open(ack_path) as ack:
 
         def command(word: str) -> None:

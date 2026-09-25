@@ -1,11 +1,14 @@
 import random
+from collections.abc import Sequence
+
+from indrajala_ml.model.classifier_protocols import Example, L
 
 
 def split_train_test(
-    data: list[tuple[tuple[float, ...], int]],
+    data: Sequence[Example[L]],
     test_fraction: float = 0.2,
     seed: int | None = None,
-) -> tuple[list[tuple[tuple[float, ...], int]], list[tuple[tuple[float, ...], int]]]:
+) -> tuple[list[Example[L]], list[Example[L]]]:
     """
     Shuffles a copy of data and splits it into (train, test), for the fixed datasets (UCI digits,
     Iris); the synthetic targets are resampled instead.

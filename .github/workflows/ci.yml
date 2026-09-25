@@ -6,21 +6,53 @@ on:
   pull_request:
 
 jobs:
-  # ruff only, at ./cli's pinned version (ruff_version), in a bare venv: no submodule, crate or
-  # dataset, so it reports in seconds, independently of the test jobs.
+  # ./cli lint: ruff and pyright at ./cli's pins. pyright needs the package's dependencies and
+  # the crate's installed type stub, so this job sets up as the test jobs do (same caches) and
+  # skips only the dataset and tests.
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-python@v5
+        id: setup-python
         with:
           python-version: "3.10"
 
-      - name: Install ruff
+      - name: Cache venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Rust wheel key
+        id: rust-commit
         run: |
-          python -m venv .venv
-          .venv/bin/pip install "ruff==$(sed -n 's/^ruff_version="\(.*\)"$/\1/p' cli)"
+          echo "sha=$(git -C rust rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "maturin=$(sed -n 's/^maturin_version="\(.*\)"$/\1/p' cli)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache crate wheel
+        id: rust-wheel
+        uses: actions/cache@v4
+        with:
+          path: .rust-wheel
+          key: rust-wheel-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-maturin${{ steps.rust-commit.outputs.maturin }}-${{ steps.rust-commit.outputs.sha }}
+
+      - name: Install pinned Rust toolchain
+        if: steps.rust-wheel.outputs.cache-hit != 'true'
+        working-directory: rust
+        run: rustup toolchain install
+
+      - name: Cache crate dependency builds
+        if: steps.rust-wheel.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust -> target
+
+      - name: Setup
+        run: ./cli setup --no-os-packages --rust-wheel-dir .rust-wheel --no-data
 
       - name: Lint
         run: ./cli lint

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_node import BackpropNode
-from indrajala_ml.model.state_layer import StateLayer
+from indrajala_ml.model.layer_protocols import InputLayer
 
 
 class BackpropLayer:
@@ -15,13 +15,13 @@ class BackpropLayer:
     # the node class, overridden by a sibling layer (e.g. SoftmaxOutputLayer)
     _node_cls: type[BackpropNode] = BackpropNode
 
-    def __init__(self, size: int, input_layer: StateLayer | BackpropLayer) -> None:
+    def __init__(self, size: int, input_layer: InputLayer) -> None:
 
         assert size >= 1, f"a layer must have at least 1 node; got size={size}"
 
         self.size: int = size
 
-        self.input_layer: StateLayer | BackpropLayer = input_layer
+        self.input_layer: InputLayer = input_layer
 
         self.nodes: Sequence[BackpropNode] = [self._node_cls(input_nodes=self.input_layer.nodes) for _ in range(size)]
 

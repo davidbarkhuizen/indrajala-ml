@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from indrajala_ml.model.base_node import AbstractNode
+from indrajala_ml.model.layer_protocols import InputLayer
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,7 @@ class MaxPoolLayer:
 
     def __init__(
         self,
-        input_layer,
+        input_layer: InputLayer,
         input_height: int,
         input_width: int,
         input_channels: int,

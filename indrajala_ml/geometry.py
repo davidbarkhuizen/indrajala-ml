@@ -1,3 +1,4 @@
+from indrajala_ml.model.classifier_protocols import TargetClassifier
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 
 
@@ -93,7 +94,7 @@ def is_positive_region_bounded(classifier: LinearClassifierNetwork) -> bool:
 
 
 def positive_region_bounding_box(
-    classifier: LinearClassifierNetwork, margin_fraction: float = 0.1
+    classifier: TargetClassifier[float], margin_fraction: float = 0.1
 ) -> list[tuple[float, float]] | None:
     """
     A tight axis-aligned box around the classifier's positive region, expanded by margin_fraction
@@ -104,11 +105,11 @@ def positive_region_bounding_box(
     positive points from this box (evaluate.sample_class_balanced_states) makes near-unreachable
     draws near-certain.
 
-    classifier needs only input_bounds and classify_state; without LinearClassifierNetwork's
-    dimension/required_active/cardinality this returns None.
+    classifier needs only input_bounds and classify_state; for anything but a
+    LinearClassifierNetwork (whose dimension/required_active/cardinality it reads) this returns None.
     """
 
-    if not all(hasattr(classifier, attribute) for attribute in ("dimension", "required_active", "cardinality")):
+    if not isinstance(classifier, LinearClassifierNetwork):
         return None
 
     if classifier.dimension != 2 or classifier.required_active != classifier.cardinality:

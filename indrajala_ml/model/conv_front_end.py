@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import asdict
+from typing import Any, Protocol, TypeVar
 
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
@@ -11,7 +12,7 @@ from indrajala_ml.model.model_io import load_json, save_json
 def build_conv_front_end(
     input_height: int,
     input_width: int,
-    conv_specs: list[ConvSpec | PoolSpec],
+    conv_specs: Sequence[ConvSpec | PoolSpec],
     make_conv: Callable,
     make_pool: Callable,
     input_layer=None,
@@ -52,7 +53,7 @@ def spec_from_json(spec: dict) -> ConvSpec | PoolSpec:
 def build_conv_array_network_layers(
     input_height: int,
     input_width: int,
-    conv_specs: list[ConvSpec | PoolSpec],
+    conv_specs: Sequence[ConvSpec | PoolSpec],
     dense_layer_sizes: list[int],
     class_count: int,
     conv_cls: type,
@@ -123,7 +124,14 @@ def save_conv_array_model_json(path: str, network) -> None:
     save_conv_model_json(path, network, snapshot)
 
 
-def load_conv_model_json(cls: type, path: str):
+class _RestorableNetwork(Protocol):
+    def restore(self, snapshot: Any) -> None: ...
+
+
+NetworkT = TypeVar("NetworkT", bound=_RestorableNetwork)
+
+
+def load_conv_model_json(cls: Callable[..., NetworkT], path: str) -> NetworkT:
     """The load-side counterpart to save_conv_model_json: builds cls from the envelope and
     restores its snapshot, which every conv network's restore() accepts in its JSON form."""
     state = load_json(path)

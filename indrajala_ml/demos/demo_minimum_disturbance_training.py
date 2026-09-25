@@ -10,6 +10,7 @@ from indrajala_ml.graphics.chart import (
     new_axes,
     new_convergence_chart_pair,
     new_figure,
+    place_tk_window,
     plot_linear_classifier_network,
     plot_training_data,
     reference_region_bounds,
@@ -83,7 +84,7 @@ def main() -> None:
 
     linear_convergence_axes.plot(n, disagreement)
 
-    linear_convergence_axes.figure.canvas.manager.window.wm_geometry("+800+0")
+    place_tk_window(linear_convergence_axes, "+800+0")
     pyplot.show(block=False)
 
     print(
@@ -95,7 +96,7 @@ def main() -> None:
 
     log_convergence_axes.plot(n, disagreement)
 
-    log_convergence_axes.figure.canvas.manager.window.wm_geometry("+800+500")
+    place_tk_window(log_convergence_axes, "+800+500")
     pyplot.show(block=False)
 
     # ---------------------

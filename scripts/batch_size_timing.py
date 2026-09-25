@@ -118,11 +118,13 @@ def profile(batch_size: int, train_data: list) -> tuple[float, float, list]:
 
     stats = pstats.Stats(profiler)
     ops = []
-    for (_file, _line, name), (_calls, total_calls, own_seconds, _cumulative, _callers) in stats.stats.items():
+    # Stats.stats and .total_tt are CPython's (undocumented) attributes, which typeshed omits
+    raw_stats = stats.stats  # pyright: ignore[reportAttributeAccessIssue]
+    for (_file, _line, name), (_calls, total_calls, own_seconds, _cumulative, _callers) in raw_stats.items():
         op = _rust_op_name(name)
         if op is not None:
             ops.append((op, own_seconds, total_calls))
-    return steps, stats.total_tt, sorted(ops, key=lambda op: op[1], reverse=True)
+    return steps, stats.total_tt, sorted(ops, key=lambda op: op[1], reverse=True)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def _run_worker(backend: str, batch_size: int) -> dict:

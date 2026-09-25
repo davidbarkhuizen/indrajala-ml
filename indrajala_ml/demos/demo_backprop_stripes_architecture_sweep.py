@@ -28,7 +28,7 @@ class StripesTarget:
         self.input_bounds = bounds
         self.cell_size = cell_size
 
-    def classify_state(self, state: tuple[float, float]) -> float:
+    def classify_state(self, state: tuple[float, ...]) -> float:
         x, _ = state
         return 1.0 if math.floor(x / self.cell_size) % 2 == 0 else 0.0
 

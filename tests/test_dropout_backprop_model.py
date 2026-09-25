@@ -5,6 +5,7 @@ from helpers import assert_randomize_breaks_symmetry, assert_snapshot_restore_ro
 
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.dropout_backprop_classifier_network import DropoutBackpropClassifierNetwork
+from indrajala_ml.model.dropout_layer import TrainingModeNode
 
 
 def _fixed_network(drop_probability: float = 0.5) -> DropoutBackpropClassifierNetwork:
@@ -101,7 +102,8 @@ def test_learn_batch_leaves_training_mode_off_afterward():
 
     network.learn_batch(0.1, batch)
 
-    assert all(not node.training for node in network.hidden_layers[0].nodes)
+    nodes = network.hidden_layers[0].nodes
+    assert all(isinstance(node, TrainingModeNode) and not node.training for node in nodes)
 
 
 def test_randomize_breaks_symmetry_between_nodes_in_the_same_layer():

@@ -15,6 +15,7 @@ dependencies = [
     "jsonschema",  # validates machine profiles (indrajala_ml/machine_profile.py)
     "tomli; python_version < '3.11'",  # reads rust/Cargo.toml (machine_profile.py)
     "numpy>=1.20",  # numpy.lib.stride_tricks.sliding_window_view (conv_array_layer.py)
+    "typing_extensions>=4.4",  # TypeVar defaults (backprop_network_base.LayerT)
 ]
 
 [tool.setuptools.packages.find]
@@ -34,3 +35,8 @@ extend-exclude = ["rust"]  # the crate's own repo (submodule)
 # B023: the timing closures are called inside the loop iteration that defines them.
 "indrajala_ml/demos/demo_conv_rust_vs_vectorized_digit_recognition.py" = ["B023"]
 "scripts/accuracy_pass_timing.py" = ["B023"]
+
+# pinned in ./cli (pyright_version); `./cli lint` runs it. Standard mode everywhere for now.
+[tool.pyright]
+include = ["indrajala_ml", "tests", "scripts"]
+typeCheckingMode = "standard"

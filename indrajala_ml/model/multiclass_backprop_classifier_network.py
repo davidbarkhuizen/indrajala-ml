@@ -2,13 +2,20 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, randomize_fan_in_aware
+from typing_extensions import Self
+
+from indrajala_ml.model.backprop_network_base import (
+    BackpropNetworkBase,
+    LayerT,
+    as_dense_layers,
+    randomize_fan_in_aware,
+)
 from indrajala_ml.model.bounds import validate_class_count
 from indrajala_ml.model.classification import argmax_first_occurrence
 from indrajala_ml.model.model_io import load_model_json, save_model_json
 
 
-class MultiClassBackpropClassifierNetwork(BackpropNetworkBase):
+class MultiClassBackpropClassifierNetwork(BackpropNetworkBase[LayerT]):
     """
     A one-vs-rest multiclass sibling of BackpropClassifierNetwork, from the same BackpropNode and
     BackpropLayer blocks. A separate class because classify_state returns a class index, not a
@@ -61,7 +68,7 @@ class MultiClassBackpropClassifierNetwork(BackpropNetworkBase):
     def save(self, path: str) -> None:
         save_model_json(
             path,
-            layer_sizes=[layer.size for layer in self.hidden_layers],
+            layer_sizes=[layer.size for layer in as_dense_layers(self.hidden_layers)],
             dimension=self.dimension,
             input_bounds=self.input_bounds,
             class_count=self.class_count,
@@ -69,7 +76,7 @@ class MultiClassBackpropClassifierNetwork(BackpropNetworkBase):
         )
 
     @classmethod
-    def load(cls, path: str) -> MultiClassBackpropClassifierNetwork:
+    def load(cls, path: str) -> Self:
         state = load_model_json(path)
         network = cls(state["layer_sizes"], state["dimension"], state["input_bounds"], state["class_count"])
         network.restore(state["snapshot"])

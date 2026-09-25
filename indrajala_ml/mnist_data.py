@@ -32,6 +32,7 @@ def _decode_grayscale_png(data: bytes) -> list[int]:
         elif chunk_type == b"IEND":
             break
 
+    assert width is not None and height is not None, "no IHDR chunk"
     assert bit_depth == 8 and color_type == 0, (
         f"expected 8-bit grayscale; got bit_depth={bit_depth}, color_type={color_type}"
     )

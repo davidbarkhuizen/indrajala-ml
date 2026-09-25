@@ -20,7 +20,7 @@ class CircleTarget:
         self.input_bounds = bounds
         self.radius = radius
 
-    def classify_state(self, state: tuple[float, float]) -> float:
+    def classify_state(self, state: tuple[float, ...]) -> float:
         x, y = state
         return 1.0 if (x * x + y * y) < self.radius * self.radius else 0.0
 
