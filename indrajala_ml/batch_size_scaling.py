@@ -24,6 +24,11 @@ study's workplan, deleted after it finished: git show 5ee017f:docs/batch-size-sc
 - Warmup costs nothing at batch 32. Momentum 0.9 at the unscaled rate is unstable in early
   epochs at larger batches, which a 1-epoch warmup removes. This is unexplained.
 
+Pending a rerun: the momentum 0.9 findings with warmup were measured with Rumelhart et al.'s
+momentum (Goyal et al.'s eq. (10), without the momentum correction a changing rate needs). The
+momentum layers now follow eq. (9) (README, Update rules), which differs from it only while the rate
+changes. The cells without warmup change only by rounding.
+
 The timing findings are in docs/optimizations/ (current-baseline.md and candidates.md).
 
 The study runs its own epoch loop rather than train_backprop_network_mini_batch. The loop is the

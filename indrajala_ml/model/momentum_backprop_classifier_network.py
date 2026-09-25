@@ -6,9 +6,8 @@ from indrajala_ml.model.momentum_layer import make_momentum_layer_cls
 
 class MomentumBackpropClassifierNetwork(BackpropClassifierNetwork):
     """
-    A momentum sibling of BackpropClassifierNetwork: the momentum term of Rumelhart, Hinton &
-    Williams (1986)'s generalized delta rule in every trainable layer's update (see
-    make_momentum_layer_cls). Both hidden_layer_cls and output_layer_cls are momentum layers, set as
+    A momentum sibling of BackpropClassifierNetwork: momentum as Goyal et al. 2017's eq. (9) in
+    every trainable layer's update (see make_momentum_node_cls). Both hidden_layer_cls and output_layer_cls are momentum layers, set as
     instance attributes in __init__ before BackpropNetworkBase.__init__ runs.
 
     momentum is required: no measurement here supports a default. Rumelhart et al.'s 0.9 hurt

@@ -8,7 +8,7 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class MomentumRustArrayLayer(RustArrayLayer):
     """
-    MomentumArrayLayer on the Rust backend: the same update and previous-delta state, applied by one
+    MomentumArrayLayer on the Rust backend: the same update and velocity state, applied by one
     fused call (layer_momentum_apply_accumulated_gradient). momentum is required.
     """
 
@@ -17,22 +17,22 @@ class MomentumRustArrayLayer(RustArrayLayer):
     def __init__(self, size: int, input_size: int, momentum: float) -> None:
         super().__init__(size, input_size)
         self._momentum = momentum
-        self._prev_delta_W = pa.Array.zeros((size, input_size))
-        self._prev_delta_b = pa.Array.zeros(size)
+        self._velocity_W = pa.Array.zeros((size, input_size))
+        self._velocity_b = pa.Array.zeros(size)
 
     def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
         (
             self.W,
             self.b,
-            self._prev_delta_W,
-            self._prev_delta_b,
+            self._velocity_W,
+            self._velocity_b,
         ) = pa.layer_momentum_apply_accumulated_gradient(
             self.W,
             self.b,
             self._grad_W,
             self._grad_b,
-            self._prev_delta_W,
-            self._prev_delta_b,
+            self._velocity_W,
+            self._velocity_b,
             self._momentum,
             learning_rate,
             batch_size,
