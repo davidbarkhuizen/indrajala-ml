@@ -5,15 +5,12 @@ from indrajala_ml.capture_common import stamp_brush
 TARGET_MAX_DIMENSION = 20
 CANVAS_SIZE = 28
 
-# the interactive capture tool's own painting resolution - deliberately higher than
-# TARGET_MAX_DIMENSION, so there's real room for scale_to_fit's aspect-preserving normalization
-# to do something meaningful (see demo_mnist_ensemble_capture.py)
+# the capture tool's painting resolution, above TARGET_MAX_DIMENSION so scale_to_fit has room
+# to work
 CAPTURE_GRID_SIZE = 64
 
-# empirically tuned against a real trained model (mirroring exactly how
-# digit_capture.CAPTURE_BRUSH_RADIUS was chosen) - a single mouse-cell-wide stroke is far
-# thinner than any real digit stroke once cropped and scaled down to fit the 20px box, the
-# same failure mode fixed for the smaller UCI-digits capture tool
+# tuned against a trained model, as digit_capture's radius was: a one-cell stroke is far
+# thinner than a real digit's once scaled into the 20px box
 CAPTURE_BRUSH_RADIUS = 4
 
 
@@ -21,11 +18,8 @@ def paint_brush_stroke(
     grid: list[list[float]], row: int, col: int, radius: int = CAPTURE_BRUSH_RADIUS
 ) -> list[list[float]]:
     """
-    Returns a new capture grid (grid itself is left untouched) with a radius-cell square brush
-    stamped fully on, centered at (row, col), clipped to the grid's bounds - the same actual
-    stamping algorithm digit_capture.paint_brush_stroke uses for the smaller UCI-digits capture
-    tool, shared via capture_common.stamp_brush; only this grid-size-specific validation lives
-    here.
+    A copy of grid with a square brush stamped at (row, col) (capture_common.stamp_brush), after
+    this grid's size checks.
     """
 
     assert len(grid) == CAPTURE_GRID_SIZE and all(
@@ -37,9 +31,8 @@ def paint_brush_stroke(
 
 def bounding_box(grid: list[list[float]]) -> tuple[int, int, int, int] | None:
     """
-    The (min_row, min_col, max_row, max_col) of every pixel with a positive value, or None if
-    the grid is empty (nothing drawn yet) - the first step of MNIST's real preprocessing
-    (crop to the digit's own extent before size-normalizing it).
+    (min_row, min_col, max_row, max_col) of every positive pixel, or None for an empty grid: MNIST's
+    first preprocessing step crops to it.
     """
 
     min_row = min_col = max_row = max_col = None
@@ -65,13 +58,9 @@ def crop(grid: list[list[float]], box: tuple[int, int, int, int]) -> list[list[f
 
 def resize_area_weighted(source: list[list[float]], target_height: int, target_width: int) -> list[list[float]]:
     """
-    General-purpose area-weighted resampling: each output pixel's value is the intensity-
-    weighted average of every source pixel it overlaps, by exact overlap area. This is what
-    MNIST's own documentation calls "anti-aliasing" - unlike nearest-neighbor or simple
-    non-overlapping block-counting (which only works for integer scale ratios, see
-    digit_capture.downsample_to_target_grid for the UCI digits dataset's own reference
-    algorithm), this handles arbitrary source/target sizes correctly, needed here since a
-    cropped bounding box is an arbitrary size and 64 doesn't evenly divide 20 or 28.
+    Area-weighted resampling: each output pixel is the average of the source pixels it overlaps,
+    weighted by overlap area (MNIST's "anti-aliasing"). Unlike block counting
+    (digit_capture.downsample_to_target_grid), it handles any size ratio, which a cropped box needs.
     """
 
     assert target_height >= 1 and target_width >= 1, "target dimensions must be at least 1"
@@ -110,10 +99,8 @@ def resize_area_weighted(source: list[list[float]], target_height: int, target_w
 
 def scale_to_fit(source: list[list[float]], max_dimension: int = TARGET_MAX_DIMENSION) -> list[list[float]]:
     """
-    Aspect-ratio-preserving resize so the longer dimension equals max_dimension - MNIST's real
-    size-normalization step ("size normalized to fit in a 20x20 pixel box while preserving
-    aspect ratio"). A tall, narrow crop (e.g. a "1") stays narrow; a wide one fills more of
-    both dimensions - the box is a ceiling on the longer side, not a fixed size to stretch into.
+    Resizes, keeping the aspect ratio, so the longer side is max_dimension: MNIST's "size normalized
+    to fit in a 20x20 pixel box while preserving aspect ratio". A narrow "1" stays narrow.
     """
 
     source_height = len(source)
@@ -129,20 +116,15 @@ def scale_to_fit(source: list[list[float]], max_dimension: int = TARGET_MAX_DIME
 
     resized = resize_area_weighted(source, target_height, target_width)
 
-    # resize_area_weighted's average is mathematically bounded by source's own min/max - here
-    # always [0.0, 1.0], a binary capture grid - but summing many small floating-point overlap
-    # contributions can overshoot that bound by a tiny amount (observed directly:
-    # 1.0000000000000002), which intensity_to_color's strict [0.0, 1.0] assertion then rejects.
-    # Clamping here (where the [0.0, 1.0] input range is actually guaranteed, unlike the
-    # general-purpose resize_area_weighted itself) corrects the representation, not the math.
+    # the area-weighted average of [0.0, 1.0] values can round just past 1.0
+    # (1.0000000000000002), which intensity_to_color rejects; clamp
     return [[min(1.0, max(0.0, value)) for value in row] for row in resized]
 
 
 def center_of_mass(grid: list[list[float]]) -> tuple[float, float]:
     """
-    The intensity-weighted centroid (row, col) of grid - MNIST's real centering step uses this,
-    not the bounding box's geometric center, to decide where to place a normalized glyph within
-    the 28x28 field.
+    The intensity-weighted centroid (row, col): MNIST centers on this, not the bounding box's
+    center.
     """
 
     total = 0.0
@@ -166,12 +148,9 @@ def center_of_mass(grid: list[list[float]]) -> tuple[float, float]:
 
 def place_centered(small_grid: list[list[float]], canvas_size: int = CANVAS_SIZE) -> list[list[float]]:
     """
-    Pastes small_grid into a canvas_size x canvas_size zero-filled canvas, translated so its
-    center_of_mass lands on the canvas center - MNIST's real centering step ("translating the
-    image so as to position this point at the center of the 28x28 field"). Pixels that would
-    fall outside the canvas after translation are simply clipped (dropped), which only happens
-    for content already close to the intended max_dimension x max_dimension size, so at most a
-    thin edge.
+    Pastes small_grid into a zeroed canvas_size square so its center of mass lands on the center
+    ("translating the image so as to position this point at the center of the 28x28 field").
+    Pixels translated off the canvas are dropped, at most a thin edge.
     """
 
     canvas = [[0.0] * canvas_size for _ in range(canvas_size)]
@@ -200,11 +179,8 @@ def place_centered(small_grid: list[list[float]], canvas_size: int = CANVAS_SIZE
 
 def preprocess_capture(capture_grid: list[list[float]]) -> list[list[float]]:
     """
-    The full pipeline demo_mnist_ensemble_capture.py calls on every stroke: crop to the drawn content's
-    bounding box, scale_to_fit(..., 20), then place_centered(..., 28) - genuinely reproducing
-    MNIST's own three-step reference preprocessing (crop -> aspect-preserving anti-aliased
-    scale-to-20 -> center-of-mass placement into 28), not an approximation of it. Returns an
-    all-zero 28x28 canvas when nothing has been drawn yet.
+    MNIST's preprocessing of a capture: crop to the drawn content, scale_to_fit(..., 20), then
+    place_centered(..., 28). An empty capture gives an all-zero 28x28 canvas.
     """
 
     box = bounding_box(capture_grid)

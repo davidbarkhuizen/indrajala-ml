@@ -1,13 +1,8 @@
 def stamp_brush(grid: list[list[float]], row: int, col: int, radius: int) -> list[list[float]]:
     """
-    Returns a new capture grid (grid itself is left untouched) with a radius-cell square brush
-    stamped fully on, centered at (row, col), clipped to the grid's bounds. The actual stamping
-    algorithm behind both digit_capture.paint_brush_stroke (UCI digits, 32x32 capture grid,
-    radius=2) and mnist_capture.paint_brush_stroke (MNIST, 64x64 capture grid, radius=4) - grid
-    size and radius are already just parameters here, so the two call sites differ only in
-    which values they pass and which grid-size-specific validation they layer on top (see each
-    module's own paint_brush_stroke for why the brush was sized the way it was for that
-    pipeline).
+    A copy of grid with a square brush of the given radius stamped fully on at (row, col), clipped
+    to the grid. Shared by digit_capture.paint_brush_stroke (32x32 grid, radius 2) and
+    mnist_capture.paint_brush_stroke (64x64, radius 4), which add their own validation.
     """
 
     grid_size = len(grid)
