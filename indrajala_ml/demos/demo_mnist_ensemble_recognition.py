@@ -84,10 +84,8 @@ def main() -> None:
         print(f"digit {label}: binary training accuracy {diagnostic.best_training_accuracy:.3f} ({status})")
 
     test_data = load_mnist_dataset(TEST_PATH)
-    # confusion_matrix and accuracy would otherwise each classify the full 10000-example test
-    # set independently - at this scale (pure Python, no vectorization), that's an avoidable
-    # doubling of an already-slow pass; compute the matrix once and derive accuracy from its
-    # diagonal instead of calling both
+    # accuracy from the confusion matrix's diagonal, rather than a second slow pure-Python pass
+    # over the 10000 test examples
     matrix = confusion_matrix(ensemble, test_data, CLASS_COUNT)
     test_accuracy = sum(matrix[label][label] for label in range(CLASS_COUNT)) / len(test_data)
     print(f"overall 10-way test accuracy: {test_accuracy:.3f}")

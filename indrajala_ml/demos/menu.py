@@ -74,9 +74,7 @@ def main(argv: list[str] | None = None) -> None:
     argv = sys.argv[1:] if argv is None else argv
 
     if argv:
-        # a demo number was passed directly (e.g. `./cli demo 3`) - run it and exit, skipping
-        # the interactive menu entirely, so scripts/LLMs can launch a specific demo without
-        # driving a prompt loop
+        # `./cli demo 3`: run that demo and exit, without the menu, so scripts can launch one
         _run_demo(_parse_direct_selection(argv[0]))
         return
 

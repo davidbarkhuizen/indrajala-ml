@@ -56,9 +56,8 @@ def reference_region_bounds(
     margin_fraction: float = 0.1,
 ) -> list[tuple[float, float]]:
     """
-    Returns fallback_bounds expanded just enough to fully contain the classifier's positive
-    region when that region is bounded (see geometry.reference_positive_region_polygon);
-    returns fallback_bounds unchanged when it's unbounded (or empty).
+    fallback_bounds, expanded to contain the classifier's positive region when it is bounded
+    (geometry.reference_positive_region_polygon); unchanged otherwise.
     """
 
     polygon = reference_positive_region_polygon(classifier)
@@ -88,9 +87,7 @@ def plot_training_data(axes: Axes, training_data: list[tuple[tuple[float, float]
 
     categories: list[tuple[int, list[tuple[float, float]]]] = []
 
-    # sorted rather than a bare set(): iteration order over a set isn't a guaranteed
-    # contract, so relying on it would make which class gets which marker/color
-    # implementation-defined rather than a predictable 0.0 -> first, 1.0 -> second
+    # sorted, so 0.0 gets the first marker and color and 1.0 the second
     for category_value in sorted(set(output_value for (_, output_value) in training_data)):
         categories.append(
             (category_value, [xy for (xy, output_value) in training_data if output_value == category_value])
@@ -111,12 +108,9 @@ def plot_classifier_probability_heatmap(
     resolution: int = 150,
 ) -> None:
     """
-    Renders classifier's predicted probability of the positive class as a grid heatmap over
-    bounds - unlike plot_linear_classifier_network's decision lines, this works for any
-    classifier whose positive region isn't a union of half-planes (e.g.
-    BackpropClassifierNetwork). Uses predict_probability when the classifier exposes it
-    (a smooth 0..1 value), falling back to the binary classify_state otherwise, so this also
-    works, degenerately, on a plain LinearClassifierNetwork.
+    The classifier's positive-class probability as a heatmap over bounds, for classifiers whose
+    region isn't a union of half-planes (e.g. BackpropClassifierNetwork). Uses predict_probability
+    when there is one, else classify_state's 0/1.
     """
 
     predict = getattr(classifier, "predict_probability", classifier.classify_state)
@@ -136,10 +130,7 @@ def plot_classifier_probability_heatmap(
 
 def plot_confusion_matrix(axes: Axes, matrix: list[list[int]], class_labels: list[str] | None = None) -> None:
     """
-    Renders a confusion matrix (matrix[true][predicted] = count, see
-    multiclass_evaluate.confusion_matrix) as a heatmap with each cell's count annotated - same
-    imshow technique plot_classifier_probability_heatmap uses, just over a class x class grid
-    instead of a spatial one.
+    A confusion matrix (matrix[true][predicted] = count) as a heatmap with each cell's count.
     """
 
     class_count = len(matrix)
@@ -166,9 +157,7 @@ def new_confusion_matrix_figure(
     title: str, matrix: list[list[int]], class_labels: list[str] | None = None
 ) -> Figure:
     """
-    Bundles the new_figure -> new_axes(scaled=False) -> plot_confusion_matrix sequence every
-    recognition demo repeats verbatim, since the only piece that actually varies between them is
-    the title, the matrix itself, and (optionally) class_labels.
+    A new figure and axes with plot_confusion_matrix drawn on it, as every recognition demo shows.
     """
 
     figure = new_figure(title)
@@ -185,9 +174,8 @@ def sample_predictions_figure(
     image_shape: tuple[int, int] = (8, 8),
 ) -> Figure:
     """
-    Bundles the "classify the first count test examples, build (pixels, predicted, true) samples,
-    plot_sample_predictions" sequence every recognition demo repeats verbatim - classify_fn is
-    whichever trained classifier's own classify_state (or equivalent) the caller wants sampled.
+    Classifies the first count test examples with classify_fn and plots them with
+    plot_sample_predictions.
     """
 
     sample_count = min(count, len(test_data))
@@ -203,9 +191,8 @@ def plot_sample_predictions(
     image_shape: tuple[int, int] = (8, 8),
 ) -> None:
     """
-    A grid of small subplots, one per (pixels, predicted_label, true_label) sample, each
-    imshowing the reshaped image with a title flagging correct (white) vs. incorrect (red)
-    predictions. Dimension-agnostic beyond image_shape - not digit-specific.
+    A grid of subplots, one image per (pixels, predicted_label, true_label) sample, titled white
+    when correct and red when not. Any image_shape.
     """
 
     columns = math.ceil(math.sqrt(len(samples)))
@@ -224,9 +211,8 @@ def plot_sample_predictions(
 
 def style_dark_legend(legend: Legend) -> None:
     """
-    Styles a matplotlib legend to match this codebase's dark chart theme (see new_figure/
-    new_axes, which paint everything else black-with-white) - a legend's own frame/text default
-    to a light theme regardless of the axes' facecolor, so this has to be done explicitly.
+    Styles a legend for the dark chart theme: a legend's frame and text stay light whatever the
+    axes' facecolor.
     """
 
     legend.get_frame().set_facecolor("black")
@@ -236,10 +222,8 @@ def style_dark_legend(legend: Legend) -> None:
 
 def plot_labeled_series(axes: Axes, results: list[tuple[str, str, list[float], list[float]]]) -> None:
     """
-    Plots each (label, color, x, y) series in results on axes and adds a dark-styled legend -
-    the shared multi-series convergence-chart pattern behind
-    demo_linear_classifier_cardinality_sweep.py and demo_backprop_stripes_architecture_sweep.py,
-    which differ only in how each series' label is computed before being passed in here.
+    Plots each (label, color, x, y) series on axes, with a dark legend: the multi-series convergence
+    chart of the sweep demos.
     """
 
     for label, color, x, y in results:
@@ -256,10 +240,8 @@ def disagreement_axis_bounds(x_max: float, log: bool = False) -> list[tuple[floa
 
 def new_convergence_chart_pair(linear_title: str, log_title: str, x_max: float) -> tuple[Axes, Axes]:
     """
-    Bundles the new_figure -> new_axes(disagreement_axis_bounds(...), scaled=False) sequence
-    every convergence-chart demo repeats twice (once linear-scaled, once log-scaled - the log
-    axes additionally gets set_yscale("log")) - callers still do their own plotting (a single
-    axes.plot, or plot_labeled_series for a multi-series sweep) on the two returned axes.
+    Linear and log-scaled disagreement axes, each on a new figure, for a convergence chart;
+    callers plot on both.
     """
 
     linear_axes = new_axes(new_figure(linear_title), disagreement_axis_bounds(x_max), scaled=False)

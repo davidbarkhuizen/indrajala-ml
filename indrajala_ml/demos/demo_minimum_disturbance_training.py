@@ -30,19 +30,14 @@ def main() -> None:
 
     input_bounds = square_bounds(l, dimension)
 
-    # generate a (random) reference classifier network and use it to produce a set of
-    # training data - a higher cardinality shrinks the reference's positive region, so this
-    # regenerates the reference rather than failing on one unlucky randomize(). A 2D convex
-    # region needs at least 3 half-planes to be bounded at all (cardinality 1-2 never are),
-    # so once that's possible, only accept a reference whose region actually is bounded -
-    # the demo always showcases the bounded-region case when one is achievable
+    # a random reference classifier and its training data, redrawn when a class is unreachable.
+    # A 2D region needs 3 half-planes to be bounded, so from cardinality 3 only a reference with
+    # a bounded region is accepted
     #
     require_bounded_region = classifier_cardinality >= 3
 
-    # a bounded region is rare (randomly-oriented half-planes only enclose a finite area
-    # ~10% of the time at cardinality=4), but rejecting on it is cheap - it's a pure geometry
-    # check with no sampling - so a much larger attempt budget than the reachability retry
-    # alone would need is still fast in practice
+    # random half-planes enclose a bounded region only ~10% of the time at cardinality=4, but
+    # the check is pure geometry, so a large attempt budget stays fast
     reference_classifier, training_data = reachable_reference_and_training_data(
         classifier_cardinality,
         dimension,

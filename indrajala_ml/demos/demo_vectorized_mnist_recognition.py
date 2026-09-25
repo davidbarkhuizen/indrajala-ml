@@ -61,10 +61,8 @@ def main() -> None:
         print(f"speedup: {node_elapsed / array_elapsed:.2f}x")
     print()
 
-    # a separate, secondary measurement: load_mnist_dataset's tuple[float, ...]-per-example
-    # decode allocates 47 million boxed Python floats at full 60000-example scale, the single
-    # biggest cost numpy-array decoding avoids - this times that directly, not just the
-    # already-proven decode-correctness parity (tests/test_mnist_data.py).
+    # a second measurement: the tuple decode's 47 million boxed floats against the array decode
+    # (tests/test_mnist_data.py checks they agree)
     print("data loading comparison (full training file decode):")
     _, tuple_decode_elapsed = timed_call(load_mnist_dataset, TRAIN_PATH)
     _, array_decode_elapsed = timed_call(load_mnist_dataset_as_array, TRAIN_PATH)

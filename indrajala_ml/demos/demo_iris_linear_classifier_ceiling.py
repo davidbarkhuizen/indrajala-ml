@@ -24,11 +24,9 @@ def main() -> None:
     )
     print()
 
-    # setosa vs. the other two species - real data, but this split IS representable by a single
-    # half-plane, so a plain cardinality=1 perceptron should converge given enough epochs, the
-    # same convergence guarantee the classic single-layer perceptron has for linearly separable
-    # data. Verified directly (5/5 random seeds converged to 1.0 at 100 epochs) before writing
-    # this demo - 100 epochs is generous headroom over that, not a tuned-to-just-barely-pass value.
+    # setosa vs the other two: linearly separable, so a cardinality=1 perceptron converges, as
+    # the perceptron convergence theorem guarantees (5 of 5 seeds reached 1.0 within 100
+    # epochs, so 100 has headroom)
     setosa_data = [(state, 1.0 if label == SETOSA_LABEL else 0.0) for state, label in dataset]
     setosa_student = LinearClassifierNetwork.randomized(1, dimension, bounds)
     setosa_result = train_linear_classifier_network(setosa_student, setosa_data, learning_rate=0.25, epochs=100)
@@ -43,9 +41,8 @@ def main() -> None:
     )
     print()
 
-    # versicolor vs. virginica only (setosa excluded) - the genuinely NOT-linearly-separable
-    # case. Swept across cardinality/gate the same way demo_xor_linear_classifier_ceiling.py
-    # does, so this isn't just one unlucky architecture's failure to converge.
+    # versicolor vs virginica: not linearly separable. Swept across cardinality and gate, as in
+    # demo_xor_linear_classifier_ceiling.py, so it isn't one architecture's failure
     vv_data = [
         (state, 1.0 if label == VIRGINICA_LABEL else 0.0) for state, label in dataset if label != SETOSA_LABEL
     ]

@@ -15,13 +15,10 @@ def _grid_to_state(grid: list[list[float]]) -> tuple[float, ...]:
     return tuple(value for row in grid for value in row)
 
 
-# Captures a digit the same way real MNIST source data was itself produced (see
-# mnist_capture.preprocess_capture): the user paints a binary CAPTURE_GRID_SIZE x
-# CAPTURE_GRID_SIZE bitmap by mouse (each stroke stamped CAPTURE_BRUSH_RADIUS cells wide, via
-# mnist_capture.paint_brush_stroke - a single-cell-wide mouse line is far thinner than any real
-# digit stroke once cropped and scaled down), which is then genuinely cropped to its own bounding
-# box, aspect-preserving-anti-aliased-scaled to fit a 20px box, and center-of-mass-placed into a
-# 28x28 field. See indrajala_ml/demos/capture_app.py for the shared capture UI this config drives.
+# Captures a digit as MNIST's source data was preprocessed (mnist_capture.preprocess_capture):
+# a binary CAPTURE_GRID_SIZE-square bitmap painted with a CAPTURE_BRUSH_RADIUS brush is cropped
+# to its bounding box, scaled to fit a 20px box and placed by center of mass in a 28x28 field.
+# The UI is capture_app.py's.
 CONFIG = CaptureConfig(
     capture_grid_size=CAPTURE_GRID_SIZE,
     capture_tile_size=8,

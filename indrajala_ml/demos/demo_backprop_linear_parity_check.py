@@ -24,10 +24,8 @@ def main() -> None:
     bounds = square_bounds(10.0, dimension)
     training_set_size = 1000
 
-    # every other backprop demo picks a target no LinearClassifierNetwork can represent well
-    # (XOR, stripes, a circle) - this one is the opposite check: a single half-plane
-    # (cardinality=1) is the easiest possible target, squarely representable by both, so this
-    # demo is a parity check rather than a "backprop wins" demo
+    # a single half-plane (cardinality=1), which both networks represent: a parity check, where
+    # the other backprop demos pick targets the linear classifier can't learn
     reference, training_data = reachable_reference_and_training_data(1, dimension, bounds, training_set_size)
 
     print(

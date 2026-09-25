@@ -10,9 +10,9 @@ ON_COLOR = "#ffffff"
 
 
 class StateClassifier(Protocol):
-    """Whatever a capture demo classifies with - MultiClassBackpropClassifierNetwork and
-    EnsembleBackpropClassifierNetwork both satisfy this without either needing to know about
-    the other."""
+    """
+    What a capture demo classifies with (the multiclass network or the ensemble).
+    """
 
     def classify_state(self, state: tuple[float, ...]) -> int: ...
     def predict_probabilities(self, state: tuple[float, ...]) -> list[float]: ...
@@ -21,9 +21,8 @@ class StateClassifier(Protocol):
 @dataclass(frozen=True)
 class CaptureConfig:
     """
-    Everything that actually differs between the UCI-digits and MNIST capture demos: grid
-    sizes, tile sizes, the brush stroke, and the capture-grid -> model-input pipeline. See
-    demo_uci_digit_capture.py and demo_mnist_ensemble_capture.py for each demo's own values.
+    What differs between the UCI-digits and MNIST capture demos: grid and tile sizes, the brush, and
+    the capture-grid -> model-input pipeline.
     """
 
     capture_grid_size: int
@@ -38,14 +37,10 @@ class CaptureConfig:
 
 class CaptureApp:
     """
-    Shared interactive capture-and-classify UI behind both demo_uci_digit_capture.py and
-    demo_mnist_ensemble_capture.py: paint a binary capture grid by mouse, brush-stamped so a
-    single-cell-wide mouse line doesn't come out fainter than any real training stroke (see
-    each demo's own CaptureConfig.brush_radius for why the radius differs), live-preprocessed
-    into the shape the classifier was actually trained on and shown in a second preview
-    canvas, and classified on every stroke. The two demos differ only in the CaptureConfig
-    they supply and the classifier they load - this class has no UCI- or MNIST-specific
-    knowledge of its own.
+    The capture-and-classify UI of both capture demos: paint a binary capture grid by mouse (with a
+    brush, since a one-cell line is fainter than any training stroke), preview it preprocessed into
+    the model's input shape, and classify it on every stroke. The demos differ only in their
+    CaptureConfig and classifier.
     """
 
     def __init__(self, root: tk.Tk, classifier: StateClassifier, config: CaptureConfig) -> None:
@@ -152,9 +147,8 @@ def run_capture_demo(
     config: CaptureConfig,
 ) -> None:
     """
-    Shared main()-body for a capture demo: load the trained classifier a companion recognition
-    demo produces (see load_classifier - each classifier class's own .load classmethod), or
-    print a hint and exit if it hasn't been trained yet, then run the capture UI.
+    A capture demo's main(): loads the classifier its recognition demo saved (or prints a hint and
+    exits if there is none) and runs the capture UI.
     """
 
     try:

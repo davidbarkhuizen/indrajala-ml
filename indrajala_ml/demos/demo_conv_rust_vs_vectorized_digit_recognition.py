@@ -96,12 +96,11 @@ def compare(side: int, conv_specs: list, trainer: str, train_data, test_data, ep
             outcome[backend] = (network, result.diagnostic.best_training_accuracy, accuracy(network, test_data))
 
     numpy_network, rust_network = outcome["numpy"][0], outcome["rust"][0]
-    # the control for "agree": numpy against itself, started from the same weights but with one
-    # weight moved by 1 ULP. Measured: over a long single-example run at this learning rate the
-    # training is chaotically sensitive to rounding, and ULP-level differences between the
-    # backends' summation orders grow to different final networks - as a 1 ULP nudge does to
-    # numpy alone. Rust agreeing with numpy about as often as this control does is the parity
-    # evidence; the step-by-step parity tests pin the per-step agreement (within ~1e-15).
+    # the control for "agree": numpy against itself from the same weights with one moved by 1
+    # ULP. Long single-example runs are chaotically sensitive to rounding, so the backends'
+    # different summation orders end at different networks, as the nudge does. Rust agreeing
+    # with numpy about as often as the control is the parity evidence; the step-by-step parity
+    # tests pin per-step agreement (within ~1e-15).
     perturbed_network, _result, _seconds = train_once(
         "numpy", trainer, side, conv_specs, _nudged_by_one_ulp(snapshot), train_data, epochs
     )

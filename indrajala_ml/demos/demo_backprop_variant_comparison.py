@@ -35,10 +35,9 @@ XOR_EPOCHS = 100
 
 def _xavier_glorot_randomize(network) -> None:
     """
-    Glorot & Bengio 2010's init (limit = sqrt(6/(fan_in+fan_out)) per layer, uniform) - measured
-    not worth adopting for this codebase's shallow networks (a clean null against the fan-in-aware
-    scheme MultiClassBackpropClassifierNetwork already uses). Kept only as a local comparison
-    point in this demo, not a real library class, since it lost.
+    Glorot & Bengio 2010's initialization (uniform, limit = sqrt(6/(fan_in+fan_out)) per layer). A
+    null against fan-in-aware initialization on these shallow networks, so it stays a comparison in
+    this demo only.
     """
 
     previous_size = network.dimension
@@ -102,10 +101,8 @@ def _compare_binary_loss_functions() -> list[tuple[str, str, list[int], list[flo
 
     results = []
     for name, color, cls, learning_rate in configs:
-        # separate data-generation and weight-init seeds, matching the original investigation
-        # script this section reproduces - not a single continuous draw sequence, so each
-        # config's weight init doesn't depend on how many random calls generating training_data
-        # happened to consume first
+        # separate data and weight-init seeds, so a config's initial weights don't depend on how
+        # many draws generating training_data consumed
         random.seed(0)
         training_data = random_alternating_training_data(300, target)
         random.seed(1000)
