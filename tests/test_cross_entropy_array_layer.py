@@ -1,22 +1,33 @@
 import random
 
 import numpy as np
+import pytest
 
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import CrossEntropyOutputLayer
 from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
+from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
 
+LAYER_CLS = {"numpy": CrossEntropyArrayLayer, "rust": CrossEntropyRustArrayLayer}
+BASE_LAYER_CLS = {"numpy": ArrayLayer, "rust": RustArrayLayer}
 
-def _snapshot_to_cross_entropy_array_layer(cross_entropy_layer: CrossEntropyOutputLayer) -> CrossEntropyArrayLayer:
-    array_layer = CrossEntropyArrayLayer(cross_entropy_layer.size, len(cross_entropy_layer.input_layer.nodes))
+
+@pytest.fixture
+def layer_cls(backend):
+    return LAYER_CLS[backend.name]
+
+
+def _array_layer_like(cross_entropy_layer: CrossEntropyOutputLayer, backend):
+    array_layer = LAYER_CLS[backend.name](cross_entropy_layer.size, len(cross_entropy_layer.input_layer.nodes))
     snapshot = cross_entropy_layer.snapshot_state()
-    array_layer.W = np.array([weights for weights, _bias in snapshot])
-    array_layer.b = np.array([bias for _weights, bias in snapshot])
+    array_layer.W = backend.owned([weights for weights, _bias in snapshot])
+    array_layer.b = backend.owned([bias for _weights, bias in snapshot])
     return array_layer
 
 
-def test_compute_output_delta_matches_cross_entropy_output_node_across_a_random_sweep():
+def test_compute_output_delta_matches_cross_entropy_output_node_across_a_random_sweep(backend):
 
     rng = random.Random(60)
     dimension = 4
@@ -40,60 +51,61 @@ def test_compute_output_delta_matches_cross_entropy_output_node_across_a_random_
             node.compute_output_delta(target)
             expected.append(node.delta)
 
-        array_layer = _snapshot_to_cross_entropy_array_layer(cross_entropy_layer)
-        array_layer.forward(np.array(x))
-        array_layer.compute_output_delta(np.array(targets))
+        array_layer = _array_layer_like(cross_entropy_layer, backend)
+        array_layer.forward(backend.owned(x))
+        array_layer.compute_output_delta(backend.owned(targets))
 
-        assert np.allclose(array_layer.delta, expected, rtol=1e-9, atol=1e-12)
+        assert np.allclose(array_layer.delta.tolist(), expected, rtol=1e-9, atol=1e-12)
 
 
-def test_compute_output_delta_batch_matches_per_row_single_example_results_stacked():
+def test_compute_output_delta_batch_matches_per_row_single_example_results_stacked(layer_cls, backend):
 
     rng = random.Random(61)
     dimension = 4
     size = 3
     batch_size = 5
 
-    array_layer = CrossEntropyArrayLayer(size, dimension)
-    array_layer.W = np.array([[rng.uniform(-3.0, 3.0) for _ in range(dimension)] for _ in range(size)])
-    array_layer.b = np.array([rng.uniform(-3.0, 3.0) for _ in range(size)])
+    array_layer = layer_cls(size, dimension)
+    array_layer.W = backend.owned([[rng.uniform(-3.0, 3.0) for _ in range(dimension)] for _ in range(size)])
+    array_layer.b = backend.owned([rng.uniform(-3.0, 3.0) for _ in range(size)])
 
-    X = np.array([[rng.uniform(-10.0, 10.0) for _ in range(dimension)] for _ in range(batch_size)])
-    reference_batch = np.array([[rng.choice([0.0, 1.0]) for _ in range(size)] for _ in range(batch_size)])
+    X = [[rng.uniform(-10.0, 10.0) for _ in range(dimension)] for _ in range(batch_size)]
+    reference_rows = [[rng.choice([0.0, 1.0]) for _ in range(size)] for _ in range(batch_size)]
 
-    expected_rows = []
+    expected = []
     for row in range(batch_size):
-        array_layer.forward(X[row])
-        array_layer.compute_output_delta(reference_batch[row])
-        expected_rows.append(array_layer.delta)
-    expected = np.stack(expected_rows)
+        array_layer.forward(backend.owned(X[row]))
+        array_layer.compute_output_delta(backend.owned(reference_rows[row]))
+        expected.append(array_layer.delta.tolist())
 
-    array_layer.forward_batch(X)
-    array_layer.compute_output_delta_batch(reference_batch)
-    assert np.allclose(array_layer.delta_batch, expected, rtol=1e-9, atol=1e-12)
-
-
-def test_forward_is_inherited_unchanged_from_array_layer():
-
-    assert CrossEntropyArrayLayer.__mro__[1] is ArrayLayer
-    assert CrossEntropyArrayLayer.forward is ArrayLayer.forward
-    assert CrossEntropyArrayLayer.forward_batch is ArrayLayer.forward_batch
+    array_layer.forward_batch(backend.owned(X))
+    array_layer.compute_output_delta_batch(backend.owned(reference_rows))
+    assert np.allclose(array_layer.delta_batch.tolist(), expected, rtol=1e-9, atol=1e-12)
 
 
-def test_compute_hidden_delta_is_inherited_unchanged_from_array_layer():
+def test_forward_is_inherited_unchanged_from_array_layer(layer_cls, backend):
 
-    assert CrossEntropyArrayLayer.compute_hidden_delta is ArrayLayer.compute_hidden_delta
-    assert CrossEntropyArrayLayer.compute_hidden_delta_batch is ArrayLayer.compute_hidden_delta_batch
+    base = BASE_LAYER_CLS[backend.name]
+    assert layer_cls.__mro__[1] is base
+    assert layer_cls.forward is base.forward
+    assert layer_cls.forward_batch is base.forward_batch
 
 
-def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer():
+def test_compute_hidden_delta_is_inherited_unchanged_from_array_layer(layer_cls, backend):
 
-    array_layer = CrossEntropyArrayLayer(2, 2)
-    array_layer.W = np.array([[1.0, 2.0], [3.0, 4.0]])
-    array_layer.b = np.array([5.0, 6.0])
-    array_layer.delta = np.array([1.0, 1.0])
-    array_layer.accumulate_gradient(np.array([1.0, 1.0]))
+    base = BASE_LAYER_CLS[backend.name]
+    assert layer_cls.compute_hidden_delta is base.compute_hidden_delta
+    assert layer_cls.compute_hidden_delta_batch is base.compute_hidden_delta_batch
+
+
+def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(layer_cls, backend):
+
+    array_layer = layer_cls(2, 2)
+    array_layer.W = backend.owned([[1.0, 2.0], [3.0, 4.0]])
+    array_layer.b = backend.owned([5.0, 6.0])
+    array_layer.delta = backend.owned([1.0, 1.0])
+    array_layer.accumulate_gradient(backend.owned([1.0, 1.0]))
     array_layer.apply_accumulated_gradient(learning_rate=0.1, batch_size=1)
 
-    assert np.allclose(array_layer.W, np.array([[0.9, 1.9], [2.9, 3.9]]))
-    assert np.allclose(array_layer.b, np.array([4.9, 5.9]))
+    assert np.allclose(array_layer.W.tolist(), [[0.9, 1.9], [2.9, 3.9]])
+    assert np.allclose(array_layer.b.tolist(), [4.9, 5.9])
