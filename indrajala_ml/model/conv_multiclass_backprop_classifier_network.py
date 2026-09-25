@@ -100,7 +100,7 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         # the dense tail, not randomize_fan_in_aware(network), which assumes every trainable
         # layer is dense; the first dense layer's fan-in is the front end's flattened output
         previous_size = len(self.conv_layers[-1].nodes)
-        for layer in self.hidden_layers[len(self.conv_layers):] + [self.output_layer]:
+        for layer in self.hidden_layers[len(self.conv_layers) :] + [self.output_layer]:
             for node in layer.nodes:
                 weights, bias = fan_in_aware_weights_and_bias(previous_size)
                 node.update_input_weights(weights)
@@ -112,5 +112,5 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         save_conv_model_json(path, self, self.snapshot())
 
     @classmethod
-    def load(cls, path: str) -> "ConvMultiClassBackpropClassifierNetwork":
+    def load(cls, path: str) -> ConvMultiClassBackpropClassifierNetwork:
         return load_conv_model_json(cls, path)

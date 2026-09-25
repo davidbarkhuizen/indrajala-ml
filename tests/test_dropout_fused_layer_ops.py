@@ -21,7 +21,6 @@ import random
 
 import numpy as np
 import pytest
-
 from indrajala_math_rust import (
     Array,
     layer_dropout_forward,
@@ -177,9 +176,7 @@ def test_layer_dropout_forward_batch_in_training_mode_draws_an_independent_mask_
     b_data = _random_vector(rng, HIDDEN_SIZE)
     x_data = _random_matrix(rng, 30, INPUT_SIZE)
 
-    _a, mask, _base = layer_dropout_forward_batch(
-        Array(w_data), Array(x_data), Array(b_data), 0.5, True
-    )
+    _a, mask, _base = layer_dropout_forward_batch(Array(w_data), Array(x_data), Array(b_data), 0.5, True)
     rows = [tuple(mask[r, c] for c in range(HIDDEN_SIZE)) for r in range(30)]
     assert len(set(rows)) > 1
 
@@ -191,15 +188,9 @@ def test_layer_dropout_hidden_delta_in_training_mode_uses_the_returned_mask_and_
     next_delta = Array([-0.5])
     base_activation = Array([0.7502601055951177])
 
-    kept = layer_dropout_hidden_delta(
-        next_w, next_delta, base_activation, Array([1.0]), KEEP_PROBABILITY, True
-    )
-    dropped = layer_dropout_hidden_delta(
-        next_w, next_delta, base_activation, Array([0.0]), KEEP_PROBABILITY, True
-    )
-    eval_mode = layer_dropout_hidden_delta(
-        next_w, next_delta, base_activation, Array([0.0]), KEEP_PROBABILITY, False
-    )
+    kept = layer_dropout_hidden_delta(next_w, next_delta, base_activation, Array([1.0]), KEEP_PROBABILITY, True)
+    dropped = layer_dropout_hidden_delta(next_w, next_delta, base_activation, Array([0.0]), KEEP_PROBABILITY, True)
+    eval_mode = layer_dropout_hidden_delta(next_w, next_delta, base_activation, Array([0.0]), KEEP_PROBABILITY, False)
 
     base = 0.7502601055951177
     sigmoid_derivative = base * (1.0 - base)
@@ -213,6 +204,4 @@ def test_layer_dropout_hidden_delta_in_training_mode_uses_the_returned_mask_and_
 
 def test_layer_dropout_hidden_delta_rejects_mismatched_shapes():
     with pytest.raises(ValueError):
-        layer_dropout_hidden_delta(
-            Array.zeros((2, 3)), Array.zeros(2), Array.zeros(5), Array.zeros(5), 0.5, True
-        )
+        layer_dropout_hidden_delta(Array.zeros((2, 3)), Array.zeros(2), Array.zeros(5), Array.zeros(5), 0.5, True)

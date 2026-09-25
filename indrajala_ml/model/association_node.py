@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.base_node import AbstractNode, WeightedInputNode
 
@@ -11,7 +11,9 @@ class AssociationNode(WeightedInputNode):
         threshold: float = 0.0,
         default_input_node_weight: float = 1.0,
     ) -> None:
-        super().__init__(input_nodes, input_node_weights, offset=threshold, default_input_node_weight=default_input_node_weight)
+        super().__init__(
+            input_nodes, input_node_weights, offset=threshold, default_input_node_weight=default_input_node_weight
+        )
 
     @property
     def threshold(self) -> float:

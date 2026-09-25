@@ -50,7 +50,9 @@ def main() -> None:
 
     training_curve_figure = new_figure("digit recognition: training accuracy by epoch")
     training_curve_axes = new_axes(training_curve_figure, scaled=False)
-    training_curve_axes.plot(range(1, len(diagnostic.epoch_training_accuracies) + 1), diagnostic.epoch_training_accuracies)
+    training_curve_axes.plot(
+        range(1, len(diagnostic.epoch_training_accuracies) + 1), diagnostic.epoch_training_accuracies
+    )
     training_curve_axes.set_xlabel("epoch")
     training_curve_axes.set_ylabel("training accuracy")
 

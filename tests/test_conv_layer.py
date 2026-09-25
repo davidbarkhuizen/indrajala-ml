@@ -97,7 +97,6 @@ def test_receptive_field_wiring_via_a_single_hot_pixel():
             assert unit.value() == pytest.approx(expected), f"position ({row},{col})"
 
 
-
 def _multichannel_layer_with_state(
     values: list[float], channels: int, height: int, width: int, kernel_size: int, channel_count: int = 1
 ) -> ConvLayer:
@@ -127,7 +126,9 @@ def test_constructor_rejects_an_input_channels_mismatch_with_input_layer():
 
     input_layer = StateLayer(18, [(-10.0, 10.0)] * 18)  # 2 channels of 3x3
     with pytest.raises(AssertionError):
-        ConvLayer(input_layer=input_layer, input_height=3, input_width=3, kernel_size=2, channel_count=1, input_channels=3)
+        ConvLayer(
+            input_layer=input_layer, input_height=3, input_width=3, kernel_size=2, channel_count=1, input_channels=3
+        )
 
 
 def test_multichannel_forward_matches_a_hand_computed_small_example():
@@ -183,6 +184,7 @@ def test_a_conv_layer_feeds_the_next_directly_as_channel_major_input():
     for position, unit in enumerate(second.nodes):
         assert unit.input_nodes[0] is first.nodes[position]
         assert unit.input_nodes[1] is first.nodes[4 + position]
+
 
 def test_apply_gradients_matches_a_hand_computed_single_example():
 
@@ -276,9 +278,7 @@ def test_gradient_check_against_a_numerically_perturbed_loss():
     height = width = 4
     input_layer = StateLayer(height * width, [(-10.0, 10.0)] * (height * width))
     input_layer.update_state(tuple(random.uniform(-2.0, 2.0) for _ in range(height * width)))
-    layer = ConvLayer(
-        input_layer=input_layer, input_height=height, input_width=width, kernel_size=2, channel_count=2
-    )
+    layer = ConvLayer(input_layer=input_layer, input_height=height, input_width=width, kernel_size=2, channel_count=2)
     layer.randomize_fan_in_aware()
 
     def total_loss() -> float:

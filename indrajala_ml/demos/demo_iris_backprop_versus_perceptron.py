@@ -39,9 +39,7 @@ def main() -> None:
     )
     print()
 
-    vv_data = [
-        (state, 1.0 if label == VIRGINICA_LABEL else 0.0) for state, label in dataset if label != SETOSA_LABEL
-    ]
+    vv_data = [(state, 1.0 if label == VIRGINICA_LABEL else 0.0) for state, label in dataset if label != SETOSA_LABEL]
 
     perceptron_train_accuracies: list[float] = []
     perceptron_test_accuracies: list[float] = []

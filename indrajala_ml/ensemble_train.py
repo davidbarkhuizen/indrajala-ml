@@ -3,7 +3,7 @@ import multiprocessing.pool
 import os
 import pickle
 import random
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork

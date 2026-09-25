@@ -1,4 +1,5 @@
 import pytest
+from helpers import classifier_with_bounded_square_region
 
 from indrajala_ml.geometry import (
     is_positive_region_bounded,
@@ -7,8 +8,6 @@ from indrajala_ml.geometry import (
     square_bounds,
 )
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
-
-from helpers import classifier_with_bounded_square_region
 
 
 def test_square_bounds():

@@ -11,7 +11,6 @@ import random
 
 import numpy as np
 import pytest
-
 from indrajala_math_rust import (
     Array,
     layer_accumulate_gradient,
@@ -131,9 +130,7 @@ def test_layer_hidden_delta_batch_matches_array_layer_compute_hidden_delta_batch
     next_layer.delta_batch = np.array(next_delta_batch_data)
     this_layer.compute_hidden_delta_batch(next_layer)
 
-    actual = layer_hidden_delta_batch(
-        Array(next_w_data), Array(next_delta_batch_data), Array(a_batch_data)
-    )
+    actual = layer_hidden_delta_batch(Array(next_w_data), Array(next_delta_batch_data), Array(a_batch_data))
     assert _to_numpy(actual) == pytest.approx(this_layer.delta_batch)
 
 
@@ -222,8 +219,12 @@ def test_layer_apply_accumulated_gradient_matches_array_layer_exactly(seed, batc
     layer.apply_accumulated_gradient(learning_rate, batch_size)
 
     new_w, new_b = layer_apply_accumulated_gradient(
-        Array(w_data), Array(b_data), Array(grad_w_data), Array(grad_b_data),
-        learning_rate, batch_size,
+        Array(w_data),
+        Array(b_data),
+        Array(grad_w_data),
+        Array(grad_b_data),
+        learning_rate,
+        batch_size,
     )
     assert _to_numpy(new_w).tobytes() == layer.W.tobytes()
     assert _to_numpy(new_b).tobytes() == layer.b.tobytes()

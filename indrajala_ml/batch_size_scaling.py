@@ -41,7 +41,7 @@ best epoch would hide exactly the divergence the study looks for.
 import math
 import random
 import time
-from typing import Callable
+from collections.abc import Callable
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -112,13 +112,17 @@ def initial_network(backend: str, momentum: float, seed: int, architecture: str 
 
     if backend == "numpy":
         if momentum:
-            network = MomentumVectorizedMultiClassBackpropClassifierNetwork(LAYER_SIZES, DIMENSION, CLASS_COUNT, momentum)
+            network = MomentumVectorizedMultiClassBackpropClassifierNetwork(
+                LAYER_SIZES, DIMENSION, CLASS_COUNT, momentum
+            )
         else:
             network = VectorizedMultiClassBackpropClassifierNetwork(LAYER_SIZES, DIMENSION, CLASS_COUNT)
         network.restore(snapshot)
     elif backend == "rust":
         if momentum:
-            network = MomentumRustArrayMultiClassBackpropClassifierNetwork(LAYER_SIZES, DIMENSION, CLASS_COUNT, momentum)
+            network = MomentumRustArrayMultiClassBackpropClassifierNetwork(
+                LAYER_SIZES, DIMENSION, CLASS_COUNT, momentum
+            )
         else:
             network = RustArrayMultiClassBackpropClassifierNetwork(LAYER_SIZES, DIMENSION, CLASS_COUNT)
         network.restore([(pa.Array(W.tolist()), pa.Array(b.tolist())) for W, b in snapshot])

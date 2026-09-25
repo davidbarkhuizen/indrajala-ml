@@ -73,7 +73,7 @@ def run_process(events: str, driver: list[str], openblas_threads: str) -> dict:
         command = ["perf", "stat", "-x,", "-o", out, "-D", "-1", "--control", f"fifo:{ctl},{ack}", "-e", events]
         command += ["--", sys.executable, *driver]
         env = dict(os.environ, **{CTL_ENV: ctl, ACK_ENV: ack, "OPENBLAS_NUM_THREADS": openblas_threads})
-        result = subprocess.run(command, env=env, capture_output=True, text=True)
+        result = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
         if result.returncode != 0:
             sys.exit(f"driver failed ({result.returncode}):\n{result.stdout}\n{result.stderr}")
         values: dict = {}
@@ -96,7 +96,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--processes", type=int, default=6, help="separate processes to run the driver in")
     parser.add_argument("--events", default=DEFAULT_EVENTS, help="comma-separated perf events")
-    parser.add_argument("--openblas-threads", default="1", help="OPENBLAS_NUM_THREADS for the driver (spinning workers pollute counts)")
+    parser.add_argument(
+        "--openblas-threads", default="1", help="OPENBLAS_NUM_THREADS for the driver (spinning workers pollute counts)"
+    )
     parser.add_argument("--json", help="also write every process's raw counts here")
     parser.add_argument("driver", nargs=argparse.REMAINDER, help="-- driver.py [driver args]")
     args = parser.parse_args()

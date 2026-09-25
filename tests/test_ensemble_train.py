@@ -566,7 +566,10 @@ def test_select_worker_count_never_goes_below_one_even_under_severe_memory_press
     monkeypatch.setattr("os.cpu_count", lambda: 64)
 
     worker_count = _select_worker_count(
-        class_count=64, estimated_examples_per_classifier=1_000_000, bytes_per_example=1000.0, requested_worker_count=None
+        class_count=64,
+        estimated_examples_per_classifier=1_000_000,
+        bytes_per_example=1000.0,
+        requested_worker_count=None,
     )
 
     assert worker_count == 1

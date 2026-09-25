@@ -22,9 +22,9 @@ def paint_brush_stroke(
     this grid's size checks.
     """
 
-    assert len(grid) == CAPTURE_GRID_SIZE and all(
-        len(r) == CAPTURE_GRID_SIZE for r in grid
-    ), "grid must be CAPTURE_GRID_SIZE x CAPTURE_GRID_SIZE"
+    assert len(grid) == CAPTURE_GRID_SIZE and all(len(r) == CAPTURE_GRID_SIZE for r in grid), (
+        "grid must be CAPTURE_GRID_SIZE x CAPTURE_GRID_SIZE"
+    )
 
     return stamp_brush(grid, row, col, radius)
 

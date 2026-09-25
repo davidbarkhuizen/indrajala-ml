@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.conv_front_end import (
@@ -206,8 +206,7 @@ class ArrayConvShape:
 
     def snapshot(self) -> list[tuple]:
         return [
-            () if isinstance(layer, self.pool_layer_cls) else (layer.W.copy(), layer.b.copy())
-            for layer in self.layers
+            () if isinstance(layer, self.pool_layer_cls) else (layer.W.copy(), layer.b.copy()) for layer in self.layers
         ]
 
     def restore(self, snapshot: list[tuple]) -> None:

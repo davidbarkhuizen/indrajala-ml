@@ -53,6 +53,6 @@ class AdamRustArrayLayer(RustArrayLayer):
         )
         self._reset_gradient_accum()
 
-    def sgd_step(self, input_activation: "pa.Array", learning_rate: float) -> None:
+    def sgd_step(self, input_activation: pa.Array, learning_rate: float) -> None:
         # not plain SGD, so not RustArrayLayer's fused step
         unfused_sgd_step(self, input_activation, learning_rate)

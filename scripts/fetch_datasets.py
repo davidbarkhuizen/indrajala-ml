@@ -64,8 +64,7 @@ def ensure_dataset_file(local_path: str, expected_sha256: str, fetch_url: str) -
 
     actual_sha256 = sha256_of(local_path)
     assert actual_sha256 == expected_sha256, (
-        f"{local_path}: downloaded but checksum didn't match "
-        f"(expected {expected_sha256}, got {actual_sha256})"
+        f"{local_path}: downloaded but checksum didn't match (expected {expected_sha256}, got {actual_sha256})"
     )
     print(f"{local_path}: fetched and verified")
 

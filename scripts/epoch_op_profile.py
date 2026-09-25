@@ -20,9 +20,9 @@ import argparse
 import json
 import sys
 
-from indrajala_ml.demos import demo_conv_rust_vs_vectorized_digit_recognition as demo
-
 from process_runs import run_json_worker
+
+from indrajala_ml.demos import demo_conv_rust_vs_vectorized_digit_recognition as demo
 
 
 def worker(architecture: str, trainer: str) -> dict:
@@ -39,9 +39,13 @@ def run_in_process(architecture: str, trainer: str) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--architectures", nargs="+", choices=list(demo.ARCHITECTURES), default=list(demo.ARCHITECTURES))
+    parser.add_argument(
+        "--architectures", nargs="+", choices=list(demo.ARCHITECTURES), default=list(demo.ARCHITECTURES)
+    )
     parser.add_argument("--trainers", nargs="+", choices=demo.TRAINERS, default=demo.TRAINERS)
-    parser.add_argument("--op", action="append", default=[], help="only report ops whose name contains this, repeatable")
+    parser.add_argument(
+        "--op", action="append", default=[], help="only report ops whose name contains this, repeatable"
+    )
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--label", default="", help="a name for this build, printed and saved with the runs")
     parser.add_argument("--out", help="write every run here as JSON")

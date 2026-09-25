@@ -10,7 +10,6 @@ import random
 
 import numpy as np
 import pytest
-
 from indrajala_math_rust import Array, layer_adam_apply_accumulated_gradient
 
 from indrajala_ml.model.adam_array_layer import AdamArrayLayer
@@ -102,8 +101,20 @@ def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_across_s
         layer.apply_accumulated_gradient(learning_rate, batch_size=1)
 
         w, b, m_w, v_w, m_b, v_b = layer_adam_apply_accumulated_gradient(
-            w, b, Array(grad_w_data), Array(grad_b_data), m_w, v_w, m_b, v_b,
-            t, BETA1, BETA2, EPSILON, learning_rate, 1,
+            w,
+            b,
+            Array(grad_w_data),
+            Array(grad_b_data),
+            m_w,
+            v_w,
+            m_b,
+            v_b,
+            t,
+            BETA1,
+            BETA2,
+            EPSILON,
+            learning_rate,
+            1,
         )
 
         assert _to_numpy(w) == pytest.approx(layer.W)
@@ -115,18 +126,14 @@ def test_rejects_batch_size_zero():
     w = Array.zeros((2, 3))
     b = Array.zeros(2)
     with pytest.raises(ValueError):
-        layer_adam_apply_accumulated_gradient(
-            w, b, w, b, w, w, b, b, 1, BETA1, BETA2, EPSILON, 0.1, 0
-        )
+        layer_adam_apply_accumulated_gradient(w, b, w, b, w, w, b, b, 1, BETA1, BETA2, EPSILON, 0.1, 0)
 
 
 def test_rejects_t_zero():
     w = Array.zeros((2, 3))
     b = Array.zeros(2)
     with pytest.raises(ValueError):
-        layer_adam_apply_accumulated_gradient(
-            w, b, w, b, w, w, b, b, 0, BETA1, BETA2, EPSILON, 0.1, 1
-        )
+        layer_adam_apply_accumulated_gradient(w, b, w, b, w, w, b, b, 0, BETA1, BETA2, EPSILON, 0.1, 1)
 
 
 def test_rejects_mismatched_shapes():
@@ -134,6 +141,4 @@ def test_rejects_mismatched_shapes():
     b = Array.zeros(2)
     wrong_shape_m_w = Array.zeros((3, 2))
     with pytest.raises(ValueError):
-        layer_adam_apply_accumulated_gradient(
-            w, b, w, b, wrong_shape_m_w, w, b, b, 1, BETA1, BETA2, EPSILON, 0.1, 1
-        )
+        layer_adam_apply_accumulated_gradient(w, b, w, b, wrong_shape_m_w, w, b, b, 1, BETA1, BETA2, EPSILON, 0.1, 1)

@@ -8,10 +8,10 @@ including the one-row batch.
 import importlib
 import pkgutil
 
+import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-import indrajala_math_rust as pa
 import indrajala_ml.model
 from indrajala_ml.model.adam_rust_array_layer import AdamRustArrayLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer

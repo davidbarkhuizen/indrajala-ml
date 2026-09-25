@@ -4,7 +4,12 @@ matplotlib.use("TkAgg")
 
 from matplotlib import pyplot
 
-from indrajala_ml.evaluate import agreement_label, class_balanced_disagreement_rate, compare_on_random_point, smoothed_series
+from indrajala_ml.evaluate import (
+    agreement_label,
+    class_balanced_disagreement_rate,
+    compare_on_random_point,
+    smoothed_series,
+)
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.graphics.chart import new_convergence_chart_pair, plot_labeled_series
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
@@ -50,7 +55,7 @@ def main() -> None:
         # 0.250 there, 0.017 for the final student)
         final_disagreement = class_balanced_disagreement_rate(reference, student, per_class_sample_count=300)
 
-        new_state, reference_category, student_category = compare_on_random_point(reference, student)
+        _new_state, reference_category, student_category = compare_on_random_point(reference, student)
         agreement = agreement_label(reference_category, student_category)
         print(
             f"cardinality={cardinality}: disagreement {convergence_series[0][1]:.3f} -> "
@@ -60,9 +65,7 @@ def main() -> None:
 
     x_max = float(training_set_size * epoch_count)
 
-    smoothed_results = [
-        (label, color, n, smoothed_series(disagreement)) for label, color, n, disagreement in results
-    ]
+    smoothed_results = [(label, color, n, smoothed_series(disagreement)) for label, color, n, disagreement in results]
 
     print(
         "smoothed convergence chart: x-axis = training iteration (pooled across epochs), "

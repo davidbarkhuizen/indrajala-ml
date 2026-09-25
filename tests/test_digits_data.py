@@ -16,5 +16,5 @@ def test_load_digits_dataset_returns_the_full_bundled_dataset():
 
     # not every state is the same, and not every pixel is at the normalized extreme - a
     # sanity check that parsing/normalization actually did something, not just returned zeros
-    assert len(set(label for _, label in dataset)) == 10
+    assert len({label for _, label in dataset}) == 10
     assert any(value not in (0.0, 1.0) for state, _ in dataset for value in state)

@@ -25,21 +25,21 @@ class DropoutRustArrayLayer(RustArrayLayer):
     def set_training_mode(self, training: bool) -> None:
         self.training = training
 
-    def forward(self, x: "pa.Array") -> "pa.Array":
+    def forward(self, x: pa.Array) -> pa.Array:
         self.a, self._mask, self._base_activation = pa.layer_dropout_forward(
             self.W, x, self.b, self._drop_probability, self.training
         )
         self._was_training = self.training
         return self.a
 
-    def forward_batch(self, X: "pa.Array") -> "pa.Array":
+    def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A, self._mask_batch, self._base_activation_batch = pa.layer_dropout_forward_batch(
             self.W, X, self.b, self._drop_probability, self.training
         )
         self._was_training = self.training
         return self.A
 
-    def compute_hidden_delta(self, next_layer: "RustArrayLayer") -> None:
+    def compute_hidden_delta(self, next_layer: RustArrayLayer) -> None:
         self.delta = pa.layer_dropout_hidden_delta(
             next_layer.W,
             next_layer.delta,
@@ -49,7 +49,7 @@ class DropoutRustArrayLayer(RustArrayLayer):
             self._was_training,
         )
 
-    def compute_hidden_delta_batch(self, next_layer: "RustArrayLayer") -> None:
+    def compute_hidden_delta_batch(self, next_layer: RustArrayLayer) -> None:
         self.delta_batch = pa.layer_dropout_hidden_delta_batch(
             next_layer.W,
             next_layer.delta_batch,

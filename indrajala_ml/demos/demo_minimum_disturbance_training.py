@@ -61,11 +61,11 @@ def main() -> None:
 
     # use the trained student to classify a fresh point, never seen during training
     #
-    new_state, reference_category, student_category = compare_on_random_point(
-        reference_classifier, student_classifier
-    )
+    new_state, reference_category, student_category = compare_on_random_point(reference_classifier, student_classifier)
     agreement = agreement_label(reference_category, student_category)
-    print(f"prediction on new point {new_state}: reference={reference_category}, student={student_category} ({agreement})")
+    print(
+        f"prediction on new point {new_state}: reference={reference_category}, student={student_category} ({agreement})"
+    )
 
     n: list[int] = [x[0] for x in convergence_series]
     disagreement: list[float] = smoothed_series([x[1] for x in convergence_series])

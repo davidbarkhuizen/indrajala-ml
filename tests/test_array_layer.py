@@ -163,9 +163,7 @@ def test_compute_hidden_delta_batch_matches_per_row_single_example_results_stack
 
     next_layer = ArrayLayer(next_size, hidden_size)
     next_layer.W = np.array([[rng.uniform(-3.0, 3.0) for _ in range(hidden_size)] for _ in range(next_size)])
-    next_layer.delta_batch = np.array(
-        [[rng.uniform(-5.0, 5.0) for _ in range(next_size)] for _ in range(batch_size)]
-    )
+    next_layer.delta_batch = np.array([[rng.uniform(-5.0, 5.0) for _ in range(next_size)] for _ in range(batch_size)])
 
     hidden_layer = ArrayLayer(hidden_size, 0)
     A = np.array([[rng.uniform(0.0, 1.0) for _ in range(hidden_size)] for _ in range(batch_size)])

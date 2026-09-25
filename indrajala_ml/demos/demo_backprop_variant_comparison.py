@@ -52,9 +52,7 @@ def _xavier_glorot_randomize(network) -> None:
 def _compare_multiclass_loss_functions(train_data, test_data) -> list[tuple[str, str, list[int], list[float]]]:
 
     print("=== multi-class loss function: one-vs-rest (MSE) vs softmax (cross-entropy) ===")
-    print(
-        "Same architecture, same seed, same everything except the output layer/loss."
-    )
+    print("Same architecture, same seed, same everything except the output layer/loss.")
 
     results = []
     for name, color, cls in [
@@ -107,9 +105,7 @@ def _compare_binary_loss_functions() -> list[tuple[str, str, list[int], list[flo
         training_data = random_alternating_training_data(300, target)
         random.seed(1000)
         student = cls.randomized(XOR_LAYER_SIZES, XOR_DIMENSION, bounds)
-        result = train_linear_classifier_network(
-            student, training_data, learning_rate=learning_rate, epochs=XOR_EPOCHS
-        )
+        result = train_linear_classifier_network(student, training_data, learning_rate=learning_rate, epochs=XOR_EPOCHS)
         diagnostic = result.diagnostic
         print(
             f"  {name}: training accuracy {diagnostic.best_training_accuracy:.3f} (best epoch "
@@ -125,9 +121,7 @@ def _compare_binary_loss_functions() -> list[tuple[str, str, list[int], list[flo
 def _compare_init_schemes(train_data, test_data) -> list[tuple[str, str, list[int], list[float]]]:
 
     print("=== init scheme: fan-in-aware vs Xavier/Glorot ===")
-    print(
-        "Same architecture/data as the multi-class loss comparison above, on the UCI digits set."
-    )
+    print("Same architecture/data as the multi-class loss comparison above, on the UCI digits set.")
 
     results = []
     for name, color, randomize_fn in [

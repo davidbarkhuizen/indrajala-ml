@@ -47,10 +47,13 @@ def main() -> None:
         backprop_student, training_data, learning_rate=1.0, epochs=20, reference_classifier=reference
     )
 
-    for label, student, result in [("linear", linear_student, linear_result), ("backprop", backprop_student, backprop_result)]:
+    for label, student, result in [
+        ("linear", linear_student, linear_result),
+        ("backprop", backprop_student, backprop_result),
+    ]:
         diagnostic = result.diagnostic
         disagreement = class_balanced_disagreement_rate(reference, student, per_class_sample_count=300)
-        new_state, reference_category, student_category = compare_on_random_point(reference, student)
+        _new_state, reference_category, student_category = compare_on_random_point(reference, student)
         agreement = agreement_label(reference_category, student_category)
         print(
             f"{label}: training accuracy {diagnostic.best_training_accuracy:.3f}, disagreement "

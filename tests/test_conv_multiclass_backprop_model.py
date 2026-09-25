@@ -1,15 +1,15 @@
 import random
 
 import pytest
-
 from helpers import assert_save_and_load_round_trip, assert_snapshot_restore_round_trip
+
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
-from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import (
     ConvMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.multiclass_evaluate import accuracy
 from indrajala_ml.train import train_linear_classifier_network
 
@@ -241,7 +241,9 @@ def test_randomize_draws_one_rng_sequence_per_layer_in_forward_order():
     two_layer = _two_conv_layer_network()
     two_layer.randomize()
 
-    assert [k.weights for k in two_layer.conv_layers[0].kernels] == [k.weights for k in one_layer.conv_layers[0].kernels]
+    assert [k.weights for k in two_layer.conv_layers[0].kernels] == [
+        k.weights for k in one_layer.conv_layers[0].kernels
+    ]
     for kernel in two_layer.conv_layers[1].kernels:
         assert len(set(kernel.weights)) > 1
 
@@ -292,7 +294,9 @@ def test_network_gradient_check_from_output_loss_back_to_the_first_conv_layer():
                 kernel.weights[i] = original - epsilon
                 loss_minus = loss()
                 kernel.weights[i] = original
-                assert kernel._weight_gradient_accum[i] == pytest.approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
+                assert kernel._weight_gradient_accum[i] == pytest.approx(
+                    (loss_plus - loss_minus) / (2 * epsilon), abs=1e-7
+                )
 
             original_bias = kernel.bias
             kernel.bias = original_bias + epsilon
@@ -318,7 +322,6 @@ def test_two_conv_layer_save_and_load_round_trip(tmp_path):
     assert len(loaded.conv_layers) == 2
 
 
-
 def _pooled_network() -> ConvMultiClassBackpropClassifierNetwork:
     # 8x8 -> conv k3 -> 6x6x4 -> pool 2 -> 3x3x4 -> conv k2 -> 2x2x6
     return ConvMultiClassBackpropClassifierNetwork(
@@ -333,7 +336,7 @@ def _pooled_network() -> ConvMultiClassBackpropClassifierNetwork:
 def test_pool_spec_builds_a_max_pool_layer_in_the_chain():
 
     network = _pooled_network()
-    first, pool, last = network.conv_layers
+    _first, pool, last = network.conv_layers
 
     assert isinstance(pool, MaxPoolLayer)
     assert (pool.out_height, pool.out_width, pool.channel_count) == (3, 3, 4)
@@ -392,7 +395,9 @@ def test_network_gradient_check_through_a_pooling_layer():
                 kernel.weights[i] = original - epsilon
                 loss_minus = loss()
                 kernel.weights[i] = original
-                assert kernel._weight_gradient_accum[i] == pytest.approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
+                assert kernel._weight_gradient_accum[i] == pytest.approx(
+                    (loss_plus - loss_minus) / (2 * epsilon), abs=1e-7
+                )
 
 
 def test_pooled_snapshot_has_an_empty_pool_entry_and_save_load_round_trips(tmp_path):

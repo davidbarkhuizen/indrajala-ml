@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.conv_kernel import ConvKernel
@@ -35,8 +35,7 @@ class ConvUnit(AbstractNode):
 
     def z(self) -> float:
         return (
-            sum(node.value() * weight for node, weight in zip(self.input_nodes, self.kernel.weights))
-            + self.kernel.bias
+            sum(node.value() * weight for node, weight in zip(self.input_nodes, self.kernel.weights)) + self.kernel.bias
         )
 
     def forward(self) -> float:

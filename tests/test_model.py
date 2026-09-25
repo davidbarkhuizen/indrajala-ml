@@ -1,6 +1,7 @@
 import random
 
 import pytest
+from helpers import network_with_hidden_thresholds
 
 from indrajala_ml.evaluate import class_balanced_disagreement_rate
 from indrajala_ml.geometry import square_bounds
@@ -10,8 +11,6 @@ from indrajala_ml.train import (
     reachable_reference_and_training_data,
     train_linear_classifier_network,
 )
-
-from helpers import network_with_hidden_thresholds
 
 
 def test_half_widths_of_asymmetric_bounds():
@@ -102,7 +101,7 @@ def test_randomize_produces_reachable_classifiers_at_a_tiny_bounds_scale():
     # classifier is one class, and regeneration_attempts runs out
     bounds = square_bounds(0.001)
 
-    reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 50)
+    _reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 50)
 
     assert len(training_data) == 50
 

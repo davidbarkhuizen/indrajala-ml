@@ -13,8 +13,7 @@ def validate_pool_arguments(
     assert stride >= 1, f"stride must be at least 1; got {stride}"
     assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
     assert pool_size <= input_height and pool_size <= input_width, (
-        f"pool_size ({pool_size}) must fit within input_height x input_width "
-        f"({input_height}x{input_width})"
+        f"pool_size ({pool_size}) must fit within input_height x input_width ({input_height}x{input_width})"
     )
 
 

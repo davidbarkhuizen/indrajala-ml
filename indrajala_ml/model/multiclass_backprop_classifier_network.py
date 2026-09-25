@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, randomize_fan_in_aware
 from indrajala_ml.model.bounds import validate_class_count
@@ -69,7 +69,7 @@ class MultiClassBackpropClassifierNetwork(BackpropNetworkBase):
         )
 
     @classmethod
-    def load(cls, path: str) -> "MultiClassBackpropClassifierNetwork":
+    def load(cls, path: str) -> MultiClassBackpropClassifierNetwork:
         state = load_model_json(path)
         network = cls(state["layer_sizes"], state["dimension"], state["input_bounds"], state["class_count"])
         network.restore(state["snapshot"])

@@ -26,15 +26,15 @@ def _decode_grayscale_png(data: bytes) -> list[int]:
         pos += 8 + length + 4  # skip the trailing CRC
 
         if chunk_type == b"IHDR":
-            width, height, bit_depth, color_type, _compression, _filter, _interlace = struct.unpack(
-                ">IIBBBBB", chunk
-            )
+            width, height, bit_depth, color_type, _compression, _filter, _interlace = struct.unpack(">IIBBBBB", chunk)
         elif chunk_type == b"IDAT":
             idat += chunk
         elif chunk_type == b"IEND":
             break
 
-    assert bit_depth == 8 and color_type == 0, f"expected 8-bit grayscale; got bit_depth={bit_depth}, color_type={color_type}"
+    assert bit_depth == 8 and color_type == 0, (
+        f"expected 8-bit grayscale; got bit_depth={bit_depth}, color_type={color_type}"
+    )
 
     raw = zlib.decompress(idat)
     stride = width
@@ -91,7 +91,9 @@ def convert_parquet_to_binary(parquet_path: str, binary_path: str, limit: int | 
     with open(binary_path, "wb") as f:
         for row in rows:
             pixels = _decode_grayscale_png(row["image"]["bytes"])
-            assert len(pixels) == IMAGE_SIZE * IMAGE_SIZE, f"expected a {IMAGE_SIZE}x{IMAGE_SIZE} image; got {len(pixels)} pixels"
+            assert len(pixels) == IMAGE_SIZE * IMAGE_SIZE, (
+                f"expected a {IMAGE_SIZE}x{IMAGE_SIZE} image; got {len(pixels)} pixels"
+            )
             f.write(bytes(pixels))
             f.write(bytes([row["label"]]))
 
@@ -105,7 +107,9 @@ def _read_binary_records(path: str, limit: int | None = None) -> bytes:
     with open(path, "rb") as f:
         data = f.read(limit * RECORD_SIZE) if limit is not None else f.read()
 
-    assert len(data) % RECORD_SIZE == 0, f"file size is not a multiple of RECORD_SIZE ({RECORD_SIZE}); got {len(data)} bytes"
+    assert len(data) % RECORD_SIZE == 0, (
+        f"file size is not a multiple of RECORD_SIZE ({RECORD_SIZE}); got {len(data)} bytes"
+    )
     return data
 
 

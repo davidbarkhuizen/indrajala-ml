@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.momentum_array_layer import MomentumArrayLayer
-from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
 from indrajala_ml.model.momentum_layer import make_momentum_layer_cls
+from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
 
 MOMENTUM = 0.5

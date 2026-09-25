@@ -42,18 +42,18 @@ class MaxPoolRustArrayLayer:
         self.input_size = self.geometry.input_size
         self.size = input_channels * self.geometry.positions
 
-    def forward_batch(self, X: "pa.Array") -> "pa.Array":
+    def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A, self.argmax_batch = pa.max_pool_forward_batch(X, self.geometry)
         return self.A
 
-    def forward(self, x: "pa.Array") -> "pa.Array":
+    def forward(self, x: pa.Array) -> pa.Array:
         self.a, self.argmax = pa.max_pool_forward_batch(x, self.geometry)
         return self.a
 
-    def compute_output_delta(self, reference: "pa.Array") -> None:
+    def compute_output_delta(self, reference: pa.Array) -> None:
         raise NotImplementedError("MaxPoolRustArrayLayer is a hidden layer, not an output one.")
 
-    def compute_output_delta_batch(self, reference_batch: "pa.Array") -> None:
+    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
         self.compute_output_delta(reference_batch)
 
     def compute_hidden_delta_batch(self, next_layer) -> None:
@@ -63,22 +63,22 @@ class MaxPoolRustArrayLayer:
     def compute_hidden_delta(self, next_layer) -> None:
         self.delta = next_layer.downstream()
 
-    def downstream_batch(self) -> "pa.Array":
+    def downstream_batch(self) -> pa.Array:
         return pa.max_pool_downstream_batch(self.delta_batch, self.argmax_batch, self.geometry)
 
-    def downstream(self) -> "pa.Array":
+    def downstream(self) -> pa.Array:
         return pa.max_pool_downstream_batch(self.delta, self.argmax, self.geometry)
 
     # weight-free: every gradient hook below is a deliberate no-op
 
-    def accumulate_gradient_batch(self, _input_activation_batch: "pa.Array") -> None:
+    def accumulate_gradient_batch(self, _input_activation_batch: pa.Array) -> None:
         pass
 
-    def accumulate_gradient(self, _input_activation: "pa.Array") -> None:
+    def accumulate_gradient(self, _input_activation: pa.Array) -> None:
         pass
 
     def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
         pass
 
-    def sgd_step(self, _input_activation: "pa.Array", learning_rate: float) -> None:
+    def sgd_step(self, _input_activation: pa.Array, learning_rate: float) -> None:
         pass

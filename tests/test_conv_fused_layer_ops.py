@@ -7,10 +7,10 @@ numpy's, so values are compared with rtol; the im2col columns are pure copies an
 exactly.
 """
 
+import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-import indrajala_math_rust as pa
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from tests.test_conv_array_layer import SHAPES

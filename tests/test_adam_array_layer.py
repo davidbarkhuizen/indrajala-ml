@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.adam_array_layer import AdamArrayLayer
-from indrajala_ml.model.adam_rust_array_layer import AdamRustArrayLayer
 from indrajala_ml.model.adam_layer import make_adam_layer_cls
+from indrajala_ml.model.adam_rust_array_layer import AdamRustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
 
 BETA1, BETA2, EPSILON = 0.9, 0.999, 1e-8

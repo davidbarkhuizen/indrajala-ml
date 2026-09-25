@@ -43,9 +43,9 @@ def downsample_to_target_grid(capture_grid: list[list[float]]) -> list[list[floa
     """
 
     assert len(capture_grid) == CAPTURE_GRID_SIZE, f"capture_grid must have {CAPTURE_GRID_SIZE} rows"
-    assert all(
-        len(row) == CAPTURE_GRID_SIZE for row in capture_grid
-    ), f"every row must have {CAPTURE_GRID_SIZE} columns"
+    assert all(len(row) == CAPTURE_GRID_SIZE for row in capture_grid), (
+        f"every row must have {CAPTURE_GRID_SIZE} columns"
+    )
 
     target_grid = [[0.0] * GRID_SIZE for _ in range(GRID_SIZE)]
 
@@ -77,9 +77,9 @@ def paint_brush_stroke(
     "0" classified correctly at 2 was read as "4". The stamping is capture_common.stamp_brush.
     """
 
-    assert len(grid) == CAPTURE_GRID_SIZE and all(
-        len(r) == CAPTURE_GRID_SIZE for r in grid
-    ), "grid must be CAPTURE_GRID_SIZE x CAPTURE_GRID_SIZE"
+    assert len(grid) == CAPTURE_GRID_SIZE and all(len(r) == CAPTURE_GRID_SIZE for r in grid), (
+        "grid must be CAPTURE_GRID_SIZE x CAPTURE_GRID_SIZE"
+    )
 
     return stamp_brush(grid, row, col, radius)
 

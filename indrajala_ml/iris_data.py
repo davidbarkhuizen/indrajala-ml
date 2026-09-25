@@ -24,9 +24,7 @@ def load_iris_dataset(path: str = "data/iris/iris.csv") -> list[tuple[tuple[floa
             values = line.strip().split(",")
             assert len(values) == 5, f"expected 4 measurements + 1 label per line; got {len(values)} values"
             raw_features = tuple(float(v) for v in values[:4])
-            normalized = tuple(
-                (raw - lo) / (hi - lo) for raw, lo, hi in zip(raw_features, _FEATURE_MIN, _FEATURE_MAX)
-            )
+            normalized = tuple((raw - lo) / (hi - lo) for raw, lo, hi in zip(raw_features, _FEATURE_MIN, _FEATURE_MAX))
             label = int(values[4])
             dataset.append((normalized, label))
 

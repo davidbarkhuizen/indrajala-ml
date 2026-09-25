@@ -286,7 +286,9 @@ def run_all() -> dict:
 
     single_output_rows = _rows(DIMENSION, [0.0, 1.0])
     for name, network_cls in SINGLE_OUTPUT_NETWORKS.items():
-        results[name] = _run_network(name, network_cls(LAYER_SIZES, DIMENSION), single_output_rows, "predict_probability")
+        results[name] = _run_network(
+            name, network_cls(LAYER_SIZES, DIMENSION), single_output_rows, "predict_probability"
+        )
 
     for name, (ensemble_cls, classifier_cls) in ENSEMBLES.items():
         results[name] = _run_ensemble(name, ensemble_cls, classifier_cls)

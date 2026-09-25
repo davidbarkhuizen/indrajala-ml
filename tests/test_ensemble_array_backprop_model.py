@@ -77,9 +77,7 @@ def test_snapshot_and_restore_round_trip(ensemble_cls, classifier_cls):
 
     ensemble = ensemble_cls([classifier_cls.randomized([3], 2) for _ in range(3)])
 
-    before = [
-        [(W.copy(), b.copy()) for W, b in classifier_snapshot] for classifier_snapshot in ensemble.snapshot()
-    ]
+    before = [[(W.copy(), b.copy()) for W, b in classifier_snapshot] for classifier_snapshot in ensemble.snapshot()]
 
     for classifier in ensemble.classifiers:
         for _ in range(5):

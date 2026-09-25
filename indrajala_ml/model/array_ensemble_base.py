@@ -38,10 +38,12 @@ class ArrayEnsembleBase:
             classifier.restore(classifier_snapshot)
 
     def save(self, path: str) -> None:
-        assert len({classifier.dimension for classifier in self.classifiers}) == 1, "every classifier must share a dimension"
-        assert (
-            len({tuple(classifier.layer_sizes) for classifier in self.classifiers}) == 1
-        ), "every classifier must share layer_sizes"
+        assert len({classifier.dimension for classifier in self.classifiers}) == 1, (
+            "every classifier must share a dimension"
+        )
+        assert len({tuple(classifier.layer_sizes) for classifier in self.classifiers}) == 1, (
+            "every classifier must share layer_sizes"
+        )
         first = self.classifiers[0]
         save_json(
             path,
@@ -50,7 +52,8 @@ class ArrayEnsembleBase:
                 "dimension": first.dimension,
                 "class_count": self.class_count,
                 "snapshot": [
-                    [(W.tolist(), b.tolist()) for W, b in classifier_snapshot] for classifier_snapshot in self.snapshot()
+                    [(W.tolist(), b.tolist()) for W, b in classifier_snapshot]
+                    for classifier_snapshot in self.snapshot()
                 ],
             },
         )
@@ -59,7 +62,9 @@ class ArrayEnsembleBase:
     def load(cls, path: str):
         state = load_json(path)
 
-        classifiers = [cls.classifier_cls(state["layer_sizes"], state["dimension"]) for _ in range(state["class_count"])]
+        classifiers = [
+            cls.classifier_cls(state["layer_sizes"], state["dimension"]) for _ in range(state["class_count"])
+        ]
         ensemble = cls(classifiers)
         # each classifier's restore converts the file's nested lists through its backend
         ensemble.restore(state["snapshot"])

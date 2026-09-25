@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.l2_array_layer import L2ArrayLayer
-from indrajala_ml.model.l2_rust_array_layer import L2RustArrayLayer
 from indrajala_ml.model.l2_regularization_layer import make_l2_layer_cls
+from indrajala_ml.model.l2_rust_array_layer import L2RustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
 
 L2_LAMBDA = 0.05

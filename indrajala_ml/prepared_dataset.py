@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -38,7 +38,7 @@ class PreparedDataset:
         return len(self.labels)
 
     @classmethod
-    def from_rows(cls, rows: Sequence[tuple[tuple[float, ...], object]], backend: str) -> "PreparedDataset":
+    def from_rows(cls, rows: Sequence[tuple[tuple[float, ...], object]], backend: str) -> PreparedDataset:
         assert len(rows) >= 1, "a prepared dataset must not be empty"
         states = [state for state, _label in rows]
         matrix = np.array(states, dtype=np.float64) if backend == "numpy" else pa.Array.from_rows(states)

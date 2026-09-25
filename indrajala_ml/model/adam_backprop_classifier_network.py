@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.adam_layer import make_adam_layer_cls
+from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 
 # Kingma & Ba (2014)'s published defaults. Unlike momentum's coefficient these have defaults:
 # in practice they are near-fixed constants, not a tuned knob.

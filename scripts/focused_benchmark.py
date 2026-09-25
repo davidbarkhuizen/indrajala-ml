@@ -34,15 +34,16 @@ import resource
 import statistics
 import sys
 import time
-from typing import Callable
+from collections.abc import Callable
 
 # run as `python scripts/focused_benchmark.py` from the repo root, which puts scripts/ (not the
 # repo root) on sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import numpy as np  # noqa: E402
+import numpy as np
+from process_runs import run_json_worker
 
-from indrajala_ml.demos.demo_layer_op_timing import (  # noqa: E402
+from indrajala_ml.demos.demo_layer_op_timing import (
     BACKENDS,
     DENSE_SHAPES,
     SEED,
@@ -50,8 +51,6 @@ from indrajala_ml.demos.demo_layer_op_timing import (  # noqa: E402
     _backend_array,
     all_cases,
 )
-
-from process_runs import run_json_worker  # noqa: E402
 
 PART_OPS = ("bare downstream", "bare accumulate", "transpose", "add", "sum_axis0")
 
@@ -216,7 +215,9 @@ def main() -> None:
     settings = f"rust threads {args.rust_threads or 'default'}, OpenBLAS threads {args.openblas_threads or 'default'}"
     settings += f", malloc {args.malloc}"
     print(f"{len(cases)} cases x {len(backends)} backends x {args.passes} passes, {settings}")
-    print(f"median (min-max) µs per call over {args.loops} loops of ~{args.target_ms:g} ms; faults = minor page faults per call")
+    print(
+        f"median (min-max) µs per call over {args.loops} loops of ~{args.target_ms:g} ms; faults = minor page faults per call"
+    )
     header = f"{'pass':>4} {'shape':<20} {'op':<26} {'batch':>5} {'backend':<7} {'malloc':<7} {'median':>9} {'min-max':>17} {'faults':>7}"
     print(header)
     results = []
@@ -227,8 +228,15 @@ def main() -> None:
                 for malloc in mallocs if pass_index % 2 == 0 else list(reversed(mallocs)):
                     r = run_in_process(case, backend, args, malloc)
                     results.append(
-                        {"pass": pass_index + 1, "shape": case.shape, "op": case.op, "batch": case.batch,
-                         "backend": backend, "malloc": malloc, **r}
+                        {
+                            "pass": pass_index + 1,
+                            "shape": case.shape,
+                            "op": case.op,
+                            "batch": case.batch,
+                            "backend": backend,
+                            "malloc": malloc,
+                            **r,
+                        }
                     )
                     batch = "-" if case.batch is None else case.batch
                     spread = f"{r['min_us']:.1f}-{r['max_us']:.1f}"

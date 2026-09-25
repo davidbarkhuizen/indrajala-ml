@@ -15,16 +15,16 @@ class SoftmaxRustArrayLayer(RustArrayLayer):
         assert size >= 2, f"a softmax layer needs at least 2 nodes to normalize over; got size={size}"
         super().__init__(size, input_size)
 
-    def forward(self, x: "pa.Array") -> "pa.Array":
+    def forward(self, x: pa.Array) -> pa.Array:
         self.a = pa.layer_softmax_forward(self.W, x, self.b)
         return self.a
 
-    def forward_batch(self, X: "pa.Array") -> "pa.Array":
+    def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A = pa.layer_softmax_forward_batch(self.W, X, self.b)
         return self.A
 
-    def compute_output_delta(self, reference: "pa.Array") -> None:
+    def compute_output_delta(self, reference: pa.Array) -> None:
         self.delta = pa.layer_softmax_output_delta(self.a, reference)
 
-    def compute_output_delta_batch(self, reference_batch: "pa.Array") -> None:
+    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
         self.delta_batch = pa.layer_softmax_output_delta(self.A, reference_batch)

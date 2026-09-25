@@ -49,7 +49,7 @@ def test_batch_size_one_no_reshuffle_matches_train_linear_classifier_network_exa
 
     # batch_size=1 without reshuffling visits examples in train_linear_classifier_network's
     # order, so the snapshot and accuracy trajectory must be identical
-    reference, training_data = reachable_reference_and_training_data(1, 2, square_bounds(10.0), 200)
+    _reference, training_data = reachable_reference_and_training_data(1, 2, square_bounds(10.0), 200)
 
     via_learn = BackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0))
     via_mini_batch = BackpropClassifierNetwork([4], 2, square_bounds(10.0))
@@ -66,7 +66,7 @@ def test_batch_size_one_no_reshuffle_matches_train_linear_classifier_network_exa
 
 def test_larger_batch_size_still_trains_and_reports_epoch_accuracies():
 
-    reference, training_data = reachable_reference_and_training_data(1, 2, square_bounds(10.0), 200)
+    _reference, training_data = reachable_reference_and_training_data(1, 2, square_bounds(10.0), 200)
     student = BackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0))
     before = student.snapshot()
 
@@ -94,7 +94,7 @@ def test_iterations_counts_batches_not_examples_when_tracking_a_reference_classi
 
 def test_train_mini_batch_calls_a_schedule_with_increasing_batch_step_indices():
 
-    reference, training_data = reachable_reference_and_training_data(1, 2, square_bounds(10.0), 20)
+    _reference, training_data = reachable_reference_and_training_data(1, 2, square_bounds(10.0), 20)
     student = BackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0))
 
     calls: list[int] = []
@@ -105,9 +105,7 @@ def test_train_mini_batch_calls_a_schedule_with_increasing_batch_step_indices():
 
     # 20 examples / batch_size=4 = 5 batches/epoch, 2 epochs = 10 calls total, not 20 - the
     # schedule steps against batches, not examples, per this function's own "iterations" note
-    train_backprop_network_mini_batch(
-        student, training_data, batch_size=4, learning_rate=recording_schedule, epochs=2
-    )
+    train_backprop_network_mini_batch(student, training_data, batch_size=4, learning_rate=recording_schedule, epochs=2)
 
     assert calls == list(range(10))
 

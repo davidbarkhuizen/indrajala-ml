@@ -175,7 +175,7 @@ def test_forward_batch_draws_an_independent_mask_per_row_not_one_shared_per_batc
 
     rows = layer._mask_batch.tolist()
     assert (len(rows), len(rows[0])) == (20, 4)
-    assert len(set(tuple(row) for row in rows)) > 1
+    assert len({tuple(row) for row in rows}) > 1
 
 
 def test_forward_batch_at_eval_mode_matches_forward_per_row_stacked(layer_cls, backend):

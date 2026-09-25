@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.base_node import AbstractNode, WeightedInputNode
 
@@ -67,7 +67,7 @@ class BackpropNode(WeightedInputNode):
         a = self.value()
         self.delta = (a - reference_value) * a * (1.0 - a)
 
-    def compute_hidden_delta(self, next_layer_nodes: Sequence["BackpropNode"], own_index: int) -> None:
+    def compute_hidden_delta(self, next_layer_nodes: Sequence[BackpropNode], own_index: int) -> None:
         # every node in next_layer_nodes has this node at own_index in its input_node_weights,
         # since a BackpropLayer builds every node from the same input_layer.nodes
         a = self.value()

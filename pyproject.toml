@@ -23,3 +23,14 @@ namespaces = true
 
 [tool.setuptools.package-data]
 indrajala_ml = ["machine_profile.schema.json"]
+
+# ruff is pinned in ./cli (ruff_version), so its default rule set - which changes between
+# releases - is the same locally and in CI; `./cli lint` runs both checks.
+[tool.ruff]
+line-length = 120
+extend-exclude = ["rust"]  # the crate's own repo (submodule)
+
+[tool.ruff.lint.per-file-ignores]
+# B023: the timing closures are called inside the loop iteration that defines them.
+"indrajala_ml/demos/demo_conv_rust_vs_vectorized_digit_recognition.py" = ["B023"]
+"scripts/accuracy_pass_timing.py" = ["B023"]

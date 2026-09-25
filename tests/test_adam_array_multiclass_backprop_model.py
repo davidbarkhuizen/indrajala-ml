@@ -1,8 +1,8 @@
-from indrajala_ml.model.adam_vectorized_multiclass_backprop_classifier_network import (
-    AdamVectorizedMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
     AdamRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.adam_vectorized_multiclass_backprop_classifier_network import (
+    AdamVectorizedMultiClassBackpropClassifierNetwork,
 )
 from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_tests
 from tests.helpers import matching_adam_array_backprop_networks

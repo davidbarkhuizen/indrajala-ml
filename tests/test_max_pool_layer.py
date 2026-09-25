@@ -7,7 +7,9 @@ from indrajala_ml.model.max_pool_layer import MaxPoolLayer
 from indrajala_ml.model.state_layer import StateLayer
 
 
-def _pool_with_state(values: list[float], channels: int, height: int, width: int, pool_size: int, stride=None) -> MaxPoolLayer:
+def _pool_with_state(
+    values: list[float], channels: int, height: int, width: int, pool_size: int, stride=None
+) -> MaxPoolLayer:
     size = channels * height * width
     input_layer = StateLayer(size, [(-100.0, 100.0)] * size)
     input_layer.update_state(tuple(values))
@@ -166,4 +168,6 @@ def test_gradient_check_through_conv_pool_conv(pool_stride):
                 kernel.weights[i] = original - epsilon
                 loss_minus = total_loss()
                 kernel.weights[i] = original
-                assert kernel._weight_gradient_accum[i] == pytest.approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-5)
+                assert kernel._weight_gradient_accum[i] == pytest.approx(
+                    (loss_plus - loss_minus) / (2 * epsilon), abs=1e-5
+                )

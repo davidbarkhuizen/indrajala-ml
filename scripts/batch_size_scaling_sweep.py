@@ -117,17 +117,24 @@ def baseline(context: dict, seeds: list[int], rates: list[float], momenta: list[
                 key=lambda rate: statistics.mean(final_accuracies(results[(bss.BASE_BATCH_SIZE, rate, 0.0, momentum)])),
             )
             finals = final_accuracies(results[(bss.BASE_BATCH_SIZE, best, 0.0, momentum)])
-            print(f"\nlr_32 = {best:g}: batch-32 band {_mean_sd(finals)} (min {min(finals):.2%}, max {max(finals):.2%})")
+            print(
+                f"\nlr_32 = {best:g}: batch-32 band {_mean_sd(finals)} (min {min(finals):.2%}, max {max(finals):.2%})"
+            )
     return results
 
 
-def scaling(context: dict, seeds: list[int], lr32: dict[float, float], batch_sizes: list[int], warmups: list[float]) -> dict:
+def scaling(
+    context: dict, seeds: list[int], lr32: dict[float, float], batch_sizes: list[int], warmups: list[float]
+) -> dict:
     configs = []
     labels = {}
     for momentum, base_rate in lr32.items():
         for batch_size in batch_sizes:
             for warmup in warmups:
-                for rate_kind, rate in (("scaled", bss.scaled_learning_rate(base_rate, batch_size)), ("unscaled", base_rate)):
+                for rate_kind, rate in (
+                    ("scaled", bss.scaled_learning_rate(base_rate, batch_size)),
+                    ("unscaled", base_rate),
+                ):
                     # at batch 32 the two rates coincide; run the cell once
                     if batch_size == bss.BASE_BATCH_SIZE and rate_kind == "unscaled":
                         continue
@@ -182,7 +189,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--limit", type=int, help="use only the first LIMIT train and test rows (smoke runs)")
     parser.add_argument("--epochs", type=int, default=EPOCHS)
     parser.add_argument("--seeds", type=int, default=len(SEEDS))
-    parser.add_argument("--batch-sizes", type=int, nargs="+", default=BATCH_SIZES, help="scaling; include 32 for the band")
+    parser.add_argument(
+        "--batch-sizes", type=int, nargs="+", default=BATCH_SIZES, help="scaling; include 32 for the band"
+    )
     parser.add_argument("--warmups", type=float, nargs="+", default=WARMUP_EPOCHS, help="warmup epochs (scaling)")
     args = parser.parse_args(argv)
 

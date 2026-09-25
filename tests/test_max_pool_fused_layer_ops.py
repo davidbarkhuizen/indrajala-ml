@@ -6,10 +6,10 @@ in numpy's slot order. So everything must match exactly, not within a tolerance 
 all, since a different tie winner would route a gradient to a different input.
 """
 
+import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-import indrajala_math_rust as pa
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from tests.test_max_pool_array_layer import SHAPES, _tie_heavy_inputs
 
