@@ -66,7 +66,7 @@ def report(**values: float) -> None:
     print(REPORT_PREFIX, json.dumps(values), flush=True)
 
 
-def run_process(events: str, driver: list[str], openblas_threads: str) -> dict:
+def run_process(events: str, driver: list[str], openblas_threads: str) -> dict[str, dict[str, float]]:
     with tempfile.TemporaryDirectory() as tmp:
         ctl, ack, out = (os.path.join(tmp, name) for name in ("ctl", "ack", "out"))
         os.mkfifo(ctl)
@@ -77,11 +77,12 @@ def run_process(events: str, driver: list[str], openblas_threads: str) -> dict:
         result = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
         if result.returncode != 0:
             sys.exit(f"driver failed ({result.returncode}):\n{result.stdout}\n{result.stderr}")
-        values: dict = {}
+        values: dict[str, float] = {}
         for line in result.stdout.splitlines():
             if line.startswith(REPORT_PREFIX):
                 values.update(json.loads(line[len(REPORT_PREFIX) :]))
-        counts, running = {}, {}
+        counts: dict[str, float] = {}
+        running: dict[str, float] = {}
         with open(out) as f:
             for line in f:
                 fields = line.strip().split(",")

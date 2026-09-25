@@ -34,7 +34,8 @@ import resource
 import statistics
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from typing import Any
 
 # run as `python scripts/focused_benchmark.py` from the repo root, which puts scripts/ (not the
 # repo root) on sys.path
@@ -48,14 +49,14 @@ from indrajala_ml.demos.demo_layer_op_timing import (
     DENSE_SHAPES,
     SEED,
     Case,
-    _backend_array,
+    _backend_array,  # pyright: ignore[reportPrivateUsage]  (the demo's cases build their arrays with it)
     all_cases,
 )
 
 PART_OPS = ("bare downstream", "bare accumulate", "transpose", "add", "sum_axis0")
 
 
-def dense_part_cases(label: str, size: int, input_size: int, batch_sizes) -> list[Case]:
+def dense_part_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[int]) -> list[Case]:
     """The parts of downstream_batch and accumulate_gradient_batch, on the same inputs."""
 
     def part(op: str, batch: int) -> Callable[[str], Callable[[], object]]:
@@ -78,11 +79,9 @@ def dense_part_cases(label: str, size: int, input_size: int, batch_sizes) -> lis
                 return lambda: grad_w + update
             import indrajala_math_rust as pa
 
-            if isinstance(delta, np.ndarray):  # the numpy backend's
-                numpy_delta = delta
-                return lambda: numpy_delta.sum(axis=0)
-            rust_delta = delta
-            return lambda: pa.sum_axis0(rust_delta)
+            if backend == "numpy":
+                return lambda: delta.sum(axis=0)
+            return lambda: pa.sum_axis0(delta)
 
         return build
 
@@ -101,7 +100,7 @@ def matmul_case(spec: str) -> Case:
     return Case(f"matmul {m}x{k}x{n}", "bare matmul", None, build)
 
 
-def every_case(batch_sizes, matmuls) -> list[Case]:
+def every_case(batch_sizes: Sequence[int], matmuls: Sequence[str]) -> list[Case]:
     cases = all_cases(batch_sizes)
     for label, size, input_size in DENSE_SHAPES:
         cases += dense_part_cases(label, size, input_size, batch_sizes)
@@ -112,7 +111,7 @@ def case_key(case: Case) -> str:
     return f"{case.shape}|{case.op}|{case.batch}"
 
 
-def measure(fn: Callable[[], object], loops: int, target_s: float) -> dict:
+def measure(fn: Callable[[], object], loops: int, target_s: float) -> dict[str, float]:
     """Median and range of µs per call over `loops` loops of about `target_s` each, faults per call."""
     fn()
     count, elapsed = 1, 0.0
@@ -125,7 +124,8 @@ def measure(fn: Callable[[], object], loops: int, target_s: float) -> dict:
             break
         count *= 2
     count = max(1, round(count * target_s / elapsed))
-    per_call, faults = [], 0
+    per_call: list[float] = []
+    faults = 0
     for _ in range(loops):
         faults_before = resource.getrusage(resource.RUSAGE_SELF).ru_minflt
         start = time.perf_counter()
@@ -142,7 +142,7 @@ def measure(fn: Callable[[], object], loops: int, target_s: float) -> dict:
     }
 
 
-def worker(args) -> None:
+def worker(args: argparse.Namespace) -> None:
     if args.backend_to_run == "rust" and args.rust_threads is not None:
         import indrajala_math_rust as pa
 
@@ -156,7 +156,7 @@ def worker(args) -> None:
 RAISED_MALLOC_ENV = {"MALLOC_TRIM_THRESHOLD_": "1000000000", "MALLOC_MMAP_THRESHOLD_": "1000000000"}
 
 
-def run_in_process(case: Case, backend: str, args, malloc: str = "default") -> dict:
+def run_in_process(case: Case, backend: str, args: argparse.Namespace, malloc: str = "default") -> dict[str, Any]:
     env = dict(os.environ)
     if malloc == "raised":
         env.update(RAISED_MALLOC_ENV)
@@ -172,7 +172,7 @@ def run_in_process(case: Case, backend: str, args, malloc: str = "default") -> d
     return run_json_worker(command, env)
 
 
-def selected(case: Case, args) -> bool:
+def selected(case: Case, args: argparse.Namespace) -> bool:
     if args.matmul and case.op == "bare matmul":
         return True
     if args.only_matmul:
@@ -224,7 +224,7 @@ def main() -> None:
     )
     header = f"{'pass':>4} {'shape':<20} {'op':<26} {'batch':>5} {'backend':<7} {'malloc':<7} {'median':>9} {'min-max':>17} {'faults':>7}"
     print(header)
-    results = []
+    results: list[dict[str, Any]] = []
     for pass_index in range(args.passes):
         order = backends if pass_index % 2 == 0 else list(reversed(backends))
         for case in cases:

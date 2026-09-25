@@ -29,6 +29,8 @@ import os
 import random
 import sys
 import tempfile
+from collections.abc import Sequence
+from typing import Any, TypeVar, cast
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -40,6 +42,7 @@ from indrajala_ml.model.adam_vectorized_multiclass_backprop_classifier_network i
     AdamVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
+from indrajala_ml.model.classifier_protocols import Example
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -101,6 +104,12 @@ from indrajala_ml.model.softmax_vectorized_multiclass_backprop_classifier_networ
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.prepared_dataset import PreparedDataset
+
+# A network is typed Any here: the script drives every array network class, dense, conv,
+# single-output and ensemble, of both backends, through the methods they share by name. Recorded
+# values (nested lists and dicts of float.hex strings and labels) are JSON, typed Any as json's are.
+L = TypeVar("L")
 
 SEED = 0
 LEARNING_RATE = 0.1
@@ -155,32 +164,32 @@ def _backend(name: str) -> str:
     return name.split()[0]
 
 
-def _bits(value):
+def _bits(value: Any) -> Any:
     # nested lists of floats (or a backend array) as float.hex, so equality is bitwise
     if hasattr(value, "tolist"):
         value = value.tolist()
     if isinstance(value, (list, tuple)):
-        return [_bits(item) for item in value]
+        return [_bits(item) for item in cast("list[Any] | tuple[Any, ...]", value)]
     if isinstance(value, float):
         return float.hex(value)
     return value
 
 
-def _rows(dimension: int, labels: list) -> list:
+def _rows(dimension: int, labels: Sequence[L]) -> list[Example[L]]:
     rng = random.Random(f"{SEED} rows {dimension}")
     return [(tuple(rng.uniform(0.0, 1.0) for _ in range(dimension)), labels[i % len(labels)]) for i in range(ROW_COUNT)]
 
 
-def _random_like(rng: random.Random, value):
+def _random_like(rng: random.Random, value: Any) -> Any:
     if isinstance(value, list):
-        return [_random_like(rng, item) for item in value]
+        return [_random_like(rng, item) for item in cast("list[Any]", value)]
     return rng.uniform(-1.0, 1.0)
 
 
-def _inject(network, backend: str, rng: random.Random) -> None:
+def _inject(network: Any, backend: str, rng: random.Random) -> None:
     # every layer's W and b drawn in the shape the network's own snapshot has; a pool layer's
     # empty entry stays empty
-    snapshot = []
+    snapshot: list[tuple[Any, ...]] = []
     for entry in network.snapshot():
         if len(entry) == 0:
             snapshot.append(())
@@ -190,9 +199,9 @@ def _inject(network, backend: str, rng: random.Random) -> None:
     network.restore(snapshot)
 
 
-def _train(network, rows: list) -> tuple[dict, object]:
-    prepared = network.prepare_dataset(rows)
-    checkpoints = {}
+def _train(network: Any, rows: Sequence[Example[Any]]) -> tuple[dict[str, Any], PreparedDataset]:
+    prepared: PreparedDataset = network.prepare_dataset(rows)
+    checkpoints: dict[str, Any] = {}
     for state, category in rows[:3]:
         network.learn(LEARNING_RATE, state, category)
     checkpoints["learn"] = _bits(network.snapshot())
@@ -208,7 +217,7 @@ def _train(network, rows: list) -> tuple[dict, object]:
     return checkpoints, prepared
 
 
-def _predictions(network, rows: list, prepared, predict: str) -> dict:
+def _predictions(network: Any, rows: Sequence[Example[Any]], prepared: PreparedDataset, predict: str) -> dict[str, Any]:
     states = [state for state, _category in rows]
     return {
         "classify_rows": _bits(network.classify_rows(prepared)),
@@ -218,11 +227,11 @@ def _predictions(network, rows: list, prepared, predict: str) -> dict:
     }
 
 
-def _round_trip(network, rows: list, predict: str) -> dict:
+def _round_trip(network: Any, rows: Sequence[Example[Any]], predict: str) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as directory:
         path = os.path.join(directory, "model.json")
         network.save(path)
-        loaded = type(network).load(path)
+        loaded = network.__class__.load(path)
     states = [state for state, _category in rows]
     return {
         "snapshot": _bits(loaded.snapshot()),
@@ -230,7 +239,7 @@ def _round_trip(network, rows: list, predict: str) -> dict:
     }
 
 
-def _run_network(name: str, network, rows: list, predict: str) -> dict:
+def _run_network(name: str, network: Any, rows: Sequence[Example[Any]], predict: str) -> dict[str, Any]:
     _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
     np.random.seed(SEED)
     checkpoints, prepared = _train(network, rows)
@@ -241,10 +250,10 @@ def _run_network(name: str, network, rows: list, predict: str) -> dict:
     }
 
 
-def _run_ensemble(name: str, ensemble_cls, classifier_cls) -> dict:
+def _run_ensemble(name: str, ensemble_cls: Any, classifier_cls: Any) -> dict[str, Any]:
     rng = random.Random(f"{SEED} weights {name}")
-    classifiers = []
-    snapshots = {}
+    classifiers: list[Any] = []
+    snapshots: dict[str, Any] = {}
     for class_index in range(ENSEMBLE_SIZE):
         classifier = classifier_cls(LAYER_SIZES, DIMENSION)
         _inject(classifier, _backend(name), rng)
@@ -272,8 +281,8 @@ def _run_ensemble(name: str, ensemble_cls, classifier_cls) -> dict:
     }
 
 
-def run_all() -> dict:
-    results = {}
+def run_all() -> dict[str, Any]:
+    results: dict[str, Any] = {}
     multiclass_rows = _rows(DIMENSION, list(range(CLASS_COUNT)))
     for name, (network_cls, hyperparameters) in DENSE_NETWORKS.items():
         network = network_cls(LAYER_SIZES, DIMENSION, CLASS_COUNT, *hyperparameters)
@@ -295,19 +304,21 @@ def run_all() -> dict:
     return results
 
 
-def _first_difference(expected, actual, path: str = "") -> str | None:
+def _first_difference(expected: Any, actual: Any, path: str = "") -> str | None:
     if isinstance(expected, dict) and isinstance(actual, dict):
-        if expected.keys() != actual.keys():
-            return f"{path}: keys {sorted(expected)} != {sorted(actual)}"
-        for key in expected:
-            found = _first_difference(expected[key], actual[key], f"{path}/{key}")
+        expected_dict, actual_dict = cast("dict[str, Any]", expected), cast("dict[str, Any]", actual)
+        if expected_dict.keys() != actual_dict.keys():
+            return f"{path}: keys {sorted(expected_dict)} != {sorted(actual_dict)}"
+        for key in expected_dict:
+            found = _first_difference(expected_dict[key], actual_dict[key], f"{path}/{key}")
             if found:
                 return found
         return None
     if isinstance(expected, list) and isinstance(actual, list):
-        if len(expected) != len(actual):
-            return f"{path}: length {len(expected)} != {len(actual)}"
-        for index, (e, a) in enumerate(zip(expected, actual)):
+        expected_list, actual_list = cast("list[Any]", expected), cast("list[Any]", actual)
+        if len(expected_list) != len(actual_list):
+            return f"{path}: length {len(expected_list)} != {len(actual_list)}"
+        for index, (e, a) in enumerate(zip(expected_list, actual_list)):
             found = _first_difference(e, a, f"{path}[{index}]")
             if found:
                 return found
@@ -315,7 +326,7 @@ def _first_difference(expected, actual, path: str = "") -> str | None:
     return None if expected == actual else f"{path}: expected {expected!r}, got {actual!r}"
 
 
-def check(golden: dict, results: dict) -> bool:
+def check(golden: dict[str, Any], results: dict[str, Any]) -> bool:
     identical = True
     for name in sorted(golden.keys() | results.keys()):
         if name not in results or name not in golden:
