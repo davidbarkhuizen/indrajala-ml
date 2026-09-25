@@ -4,7 +4,7 @@ Performance work on the Rust backend (`rust/`, the `indrajala-math-rust` crate),
 numpy. Every optimization is measured before and after and must keep every parity test passing;
 most are bit-identical.
 
-**Where it stands:** Rust is 0.09-0.49x numpy's wall-clock time end to end on the conv demo, and
+**Where it stands:** Rust is 0.11-0.65x numpy's wall-clock time end to end on the conv demo, and
 about 0.21x (single-example) and 0.54x (mini-batch 32) on a dense MNIST epoch. The gaps left are
 in batch ops.
 

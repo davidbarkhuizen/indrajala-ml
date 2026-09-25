@@ -13,8 +13,9 @@ numbers against the docs, run `python scripts/machine_profile.py compare
 docs/machine_profiles/ryzen7-3700u.json` in the same shell and env as the benchmark: it exits 1 and
 names each changed identity field (CPU, caches, cpufreq policy, kernel, Python, numpy and its
 BLAS, rustc, the crate's release profile, thread env vars). `profile --out FILE` records a new
-machine. `perf` is unavailable (`perf_event_paranoid` is 4), so internals are timed in a local
-probe build of the crate (timers and counters behind a Python-callable switch).
+machine. `perf` needs `kernel.perf_event_paranoid` <= 2, and it is 4 by default here (`sudo
+sysctl` lowers it until reboot); without it, internals are timed in a local probe build of the
+crate (timers and counters behind a Python-callable switch).
 
 ## Tools
 
@@ -83,8 +84,8 @@ From the quick survey to the decisive measurement:
   chained (freed top-of-heap returned to the OS). `focused_benchmark.py --malloc both` separates
   it.
 - **A time can be bimodal between processes, not only noisy.** The one-pass max-pool downstream
-  at batch 32 (probe and op) runs at about 17 cycles a window (190-200 µs) in some processes and 42-49
-  (470-570 µs) in others, tight within each. The counters show the same instructions, L1 and L2
+  at batch 32 (probe and op) runs at about 17 cycles a window (190-200 µs) in some processes
+  and 42-49 (470-570 µs) in others, tight within each. The counters show the same instructions, L1 and L2
   accesses in both modes; the slow one is integer-scheduler stalls (ALU-token stalls 24 against 1
   a window). Ruled out, each measured: page faults and allocator thresholds, clock frequency,
   the core and its SMT sibling, virtual placement (buffers pinned to a 2^28-aligned arena, ASLR
