@@ -1,4 +1,5 @@
 import matplotlib
+import numpy as np
 import pytest
 
 matplotlib.use("Agg")
@@ -57,9 +58,9 @@ def test_plot_training_data_assigns_marker_and_color_by_sorted_category_not_set_
     assert len(axes.lines) == 2
     zero_line, one_line = axes.lines
     assert zero_line.get_marker() == "." and zero_line.get_color() == "blue"
-    assert list(zero_line.get_xdata()) == [-1.0, -2.0]
+    assert np.asarray(zero_line.get_xdata()).tolist() == [-1.0, -2.0]
     assert one_line.get_marker() == "x" and one_line.get_color() == "yellow"
-    assert list(one_line.get_xdata()) == [1.0, 2.0]
+    assert np.asarray(one_line.get_xdata()).tolist() == [1.0, 2.0]
 
 
 def test_plot_linear_classifier_network_draws_a_vertical_line_for_a_zero_y_weight():
@@ -77,8 +78,8 @@ def test_plot_linear_classifier_network_draws_a_vertical_line_for_a_zero_y_weigh
 
     assert len(axes.lines) == 1
     line = axes.lines[0]
-    assert list(line.get_xdata()) == [5.0, 5.0]
-    assert list(line.get_ydata()) == list(bounds[1])
+    assert np.asarray(line.get_xdata()).tolist() == [5.0, 5.0]
+    assert np.asarray(line.get_ydata()).tolist() == list(bounds[1])
 
 
 def test_plot_linear_classifier_network_skips_a_node_with_no_weights_at_all():

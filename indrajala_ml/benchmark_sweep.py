@@ -2,14 +2,18 @@ import multiprocessing
 import os
 import statistics
 import time
-from collections.abc import Callable, Hashable
-from typing import Any
+from collections.abc import Callable, Hashable, Mapping, Sequence
+from typing import Any, TypeVar
 
-_worker_fn: Callable[[Any, Hashable, int], Any] | None = None
+ConfigT = TypeVar("ConfigT", bound=Hashable)
+ResultT = TypeVar("ResultT")
+
+# set once per worker process by _init_worker; typed loosely, since one process runs one sweep
+_worker_fn: Callable[..., Any] | None = None
 _shared_context: Any = None
 
 
-def _init_worker(worker_fn: Callable[[Any, Hashable, int], Any], shared_context: Any) -> None:
+def _init_worker(worker_fn: Callable[..., Any], shared_context: Any) -> None:
     # once per worker process: worker_fn and shared_context are pickled once per worker through
     # initargs, not once per job
     global _worker_fn, _shared_context
@@ -17,20 +21,20 @@ def _init_worker(worker_fn: Callable[[Any, Hashable, int], Any], shared_context:
     _shared_context = shared_context
 
 
-def _run_one_job(job: tuple[Hashable, int]) -> tuple[Hashable, int, Any]:
+def _run_one_job(job: tuple[Hashable, int]) -> Any:
     config, seed = job
     assert _worker_fn is not None, "_run_one_job called before a Pool initializer set _worker_fn"
-    return config, seed, _worker_fn(_shared_context, config, seed)
+    return _worker_fn(_shared_context, config, seed)
 
 
 def run_parameter_sweep(
-    configs: list[Hashable],
-    seeds: list[int],
-    worker_fn: Callable[[Any, Hashable, int], Any],
+    configs: Sequence[ConfigT],
+    seeds: Sequence[int],
+    worker_fn: Callable[[Any, ConfigT, int], ResultT],
     shared_context: Any = None,
     worker_count: int | None = None,
     report_progress: bool = True,
-) -> dict[Hashable, list[Any]]:
+) -> dict[ConfigT, list[ResultT]]:
     """
     Runs worker_fn(shared_context, config, seed) for every (config, seed) pair on a
     multiprocessing.Pool, returning each config's results in seed order. worker_fn must be a
@@ -51,12 +55,13 @@ def run_parameter_sweep(
 
     resolved_worker_count = worker_count or os.cpu_count() or 1
     jobs = [(config, seed) for config in configs for seed in seeds]
-    results: dict[Hashable, list[Any]] = {config: [] for config in configs}
+    results: dict[ConfigT, list[ResultT]] = {config: [] for config in configs}
 
     with multiprocessing.Pool(
         resolved_worker_count, initializer=_init_worker, initargs=(worker_fn, shared_context)
     ) as pool:
-        for completed, (config, _seed, result) in enumerate(pool.imap(_run_one_job, jobs), start=1):
+        # imap yields in job order, so each result pairs with its job
+        for completed, ((config, _seed), result) in enumerate(zip(jobs, pool.imap(_run_one_job, jobs)), start=1):
             results[config].append(result)
             if report_progress:
                 print(f"{completed}/{len(jobs)} jobs complete", flush=True)
@@ -65,8 +70,8 @@ def run_parameter_sweep(
 
 
 def estimate_sweep_wallclock(
-    worker_fn: Callable[[Any, Hashable, int], Any],
-    sample_config: Hashable,
+    worker_fn: Callable[[Any, ConfigT, int], object],
+    sample_config: ConfigT,
     sample_seed: int,
     planned_run_count: int,
     shared_context: Any = None,
@@ -87,7 +92,7 @@ def estimate_sweep_wallclock(
     return single_job_seconds * planned_run_count / resolved_worker_count
 
 
-def summarize_sweep_results(results: dict[Hashable, list[float]], value_format: str = ".2%") -> str:
+def summarize_sweep_results(results: Mapping[Hashable, Sequence[float]], value_format: str = ".2%") -> str:
     """
     Mean and stdev per config as a markdown table, for one result per (config, seed). Other layouts
     (e.g. one column per batch size) are the caller's.

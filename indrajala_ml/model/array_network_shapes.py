@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.conv_front_end import (
@@ -17,8 +18,18 @@ from indrajala_ml.model.model_io import (
     save_single_output_array_model_json,
 )
 
+if TYPE_CHECKING:
+    from indrajala_ml.model.array_network_base import ArrayNetworkBase
 
-class ArrayMultiClassShape:
+    # For the type checker only, each mixin subclasses what it's mixed into, so the attributes
+    # and methods its host supplies (backend, layers, _forward, snapshot, ...) resolve; at
+    # runtime they're plain classes and the concrete network's MRO is unchanged.
+    _ShapeBase = ArrayNetworkBase
+else:
+    _ShapeBase = object
+
+
+class ArrayMultiClassShape(_ShapeBase):
     """
     The multiclass shape over ArrayNetworkBase, for either backend: argmax classify_state,
     predict_probabilities, one-hot targets, and the save/load envelope with class_count.
@@ -81,7 +92,7 @@ class ArrayMultiClassShape:
         return network
 
 
-class ArraySingleOutputShape:
+class ArraySingleOutputShape(_ShapeBase):
     """
     The single-output shape over ArrayNetworkBase, for either backend: 0.5-threshold classify_state,
     predict_probability, a scalar target, and the save/load envelope without class_count. It hosts
@@ -137,7 +148,11 @@ class ArraySingleOutputShape:
         return network
 
 
-class ArrayConvShape:
+# as _ShapeBase: the conv shape's host is a backend's multiclass network
+_ConvShapeBase = ArrayMultiClassShape if TYPE_CHECKING else object
+
+
+class ArrayConvShape(_ConvShapeBase):
     """
     The convolutional shape over the multiclass shape, for either backend: a front end of conv and
     max-pool layers (one ConvSpec or PoolSpec each, in order), one or more sigmoid dense layers, and
@@ -163,7 +178,7 @@ class ArrayConvShape:
         self,
         input_height: int,
         input_width: int,
-        conv_specs: list[ConvSpec | PoolSpec],
+        conv_specs: Sequence[ConvSpec | PoolSpec],
         dense_layer_sizes: list[int],
         class_count: int,
     ) -> None:

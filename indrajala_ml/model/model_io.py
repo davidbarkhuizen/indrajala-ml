@@ -1,4 +1,12 @@
 import json
+from collections.abc import Sequence
+from typing import Any, Protocol
+
+
+class SupportsToList(Protocol):
+    """A numpy or Rust array, as the array networks' snapshots hold them."""
+
+    def tolist(self) -> Any: ...
 
 
 def save_json(path: str, state: dict) -> None:
@@ -61,7 +69,7 @@ def save_array_model_json(
     layer_sizes: list[int],
     dimension: int,
     class_count: int,
-    snapshot: object,
+    snapshot: Sequence[tuple[SupportsToList, SupportsToList]],
     extra: dict | None = None,
 ) -> None:
     """
@@ -96,7 +104,7 @@ def save_single_output_array_model_json(
     *,
     layer_sizes: list[int],
     dimension: int,
-    snapshot: object,
+    snapshot: Sequence[tuple[SupportsToList, SupportsToList]],
     extra: dict | None = None,
 ) -> None:
     """

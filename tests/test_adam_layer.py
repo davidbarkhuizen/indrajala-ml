@@ -6,6 +6,11 @@ from indrajala_ml.model.state_node import StateNode
 BETA1, BETA2, EPSILON = 0.9, 0.999, 1e-8
 
 
+def _step_count(node: object) -> int:
+    # AdamBackpropNode's t, private to make_adam_node_cls's class
+    return vars(node)["_t"]
+
+
 def _adam_node(weight: float, bias: float):
     node_cls = make_adam_node_cls(BETA1, BETA2, EPSILON)
     x = StateNode(1.0)
@@ -43,12 +48,12 @@ def test_step_count_increments_once_per_apply_call():
 
     # t, the per-node step count behind bias correction
     node = _adam_node(weight=0.5, bias=0.1)
-    assert node._t == 0
+    assert _step_count(node) == 0
 
     node.delta = 0.2
     node.apply_gradient(0.1)
-    assert node._t == 1
+    assert _step_count(node) == 1
 
     node.delta = 0.2
     node.apply_gradient(0.1)
-    assert node._t == 2
+    assert _step_count(node) == 2

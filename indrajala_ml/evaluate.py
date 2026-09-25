@@ -1,11 +1,11 @@
 from random import uniform
 
 from indrajala_ml.geometry import positive_region_bounding_box
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.classifier_protocols import StateClassifier, TargetClassifier
 
 
 def sample_class_balanced_states(
-    classifier: LinearClassifierNetwork, count: int, max_attempts: int = 20_000
+    classifier: TargetClassifier[float], count: int, max_attempts: int = 20_000
 ) -> tuple[list[tuple[float, ...]], list[tuple[float, ...]]]:
     """
     (positive_states, negative_states): count states each that classifier puts in that class.
@@ -39,7 +39,7 @@ def sample_class_balanced_states(
 
 
 def compare_on_random_point(
-    reference: LinearClassifierNetwork, student: LinearClassifierNetwork
+    reference: TargetClassifier[float], student: StateClassifier[float]
 ) -> tuple[tuple[float, ...], float, float]:
 
     state = tuple(uniform(*bounds) for bounds in reference.input_bounds)
@@ -65,8 +65,8 @@ def smoothed_series(values: list[float], window: int = 31) -> list[float]:
 
 
 def class_balanced_disagreement_rate(
-    reference: LinearClassifierNetwork,
-    student: LinearClassifierNetwork,
+    reference: TargetClassifier[float],
+    student: StateClassifier[object],
     per_class_sample_count: int = 10,
     max_attempts: int = 20_000,
 ) -> float:

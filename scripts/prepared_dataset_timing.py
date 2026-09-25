@@ -53,8 +53,6 @@ from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_c
 # prepared_dataset module can still be imported from this one; the trainers themselves tell
 # which side of the change is running
 AFTER = hasattr(train, "_prepared_for")
-if AFTER:
-    from indrajala_ml.prepared_dataset import prepared_mnist
 
 BACKENDS = ["numpy", "rust"]
 CONFIGS = ["dense B=32", "dense single", "conv B=32", "conv single"]
@@ -100,6 +98,8 @@ def measure(config: str, backend: str) -> dict:
     result = {"epoch": _train_epoch(config, _network(config, backend), train_data)}
 
     if AFTER:
+        from indrajala_ml.prepared_dataset import prepared_mnist
+
         network = _network(config, backend)
         start = time.perf_counter()
         network.prepare_dataset(train_data)

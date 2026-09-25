@@ -1,4 +1,5 @@
 import random
+from collections.abc import Sequence
 
 import pytest
 
@@ -98,7 +99,7 @@ def test_receptive_field_wiring_via_a_single_hot_pixel():
 
 
 def _multichannel_layer_with_state(
-    values: list[float], channels: int, height: int, width: int, kernel_size: int, channel_count: int = 1
+    values: Sequence[float], channels: int, height: int, width: int, kernel_size: int, channel_count: int = 1
 ) -> ConvLayer:
     size = channels * height * width
     input_layer = StateLayer(size, [(-100.0, 100.0)] * size)

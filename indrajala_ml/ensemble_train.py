@@ -4,9 +4,11 @@ import os
 import pickle
 import random
 from collections.abc import Callable, Iterable
+from typing import Any
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
+from indrajala_ml.model.classifier_protocols import BinaryClassifier, BinaryClassifierClass
+from indrajala_ml.model.ensemble_backprop_classifier_network import ClassifierT, EnsembleBackpropClassifierNetwork
 from indrajala_ml.train import TrainingDiagnostic, train_linear_classifier_network
 
 RecordLoader = Callable[[str, list[int]], list[tuple[tuple[float, ...], int]]]
@@ -82,7 +84,7 @@ def build_balanced_binary_dataset(
     return [(dataset[index][0], category) for index, category in index_category_pairs]
 
 
-def _picklable_snapshot(snapshot):
+def _picklable_snapshot(snapshot: object) -> object:
     """
     A classifier's snapshot() as nested lists, which cross a multiprocessing.Pool boundary for any
     backend: indrajala_math_rust.Array doesn't pickle. Recurses through lists and tuples, calling
@@ -106,8 +108,8 @@ def _train_classifier_on_binary_dataset(
     learning_rate: float,
     epochs: int,
     seed: int | None,
-    classifier_cls: type[BackpropClassifierNetwork],
-) -> tuple[int, list[list[tuple[list[float], float]]], TrainingDiagnostic]:
+    classifier_cls: BinaryClassifierClass[ClassifierT],
+) -> tuple[int, object, TrainingDiagnostic]:
     """
     The training both Pool workers share, given a binary dataset: one class's classifier_cls, with
     no state shared with any other worker.
@@ -134,9 +136,9 @@ def _train_one_classifier(
         float,
         int,
         int | None,
-        type[BackpropClassifierNetwork],
+        BinaryClassifierClass[BinaryClassifier],
     ],
-) -> tuple[int, list[list[tuple[list[float], float]]], TrainingDiagnostic]:
+) -> tuple[int, object, TrainingDiagnostic]:
     """
     The Pool worker for a decoded dataset (module-level, so it pickles).
     """
@@ -160,9 +162,9 @@ def _train_one_indexed_classifier(
         float,
         int,
         int | None,
-        type[BackpropClassifierNetwork],
+        BinaryClassifierClass[BinaryClassifier],
     ],
-) -> tuple[int, list[list[tuple[list[float], float]]], TrainingDiagnostic]:
+) -> tuple[int, object, TrainingDiagnostic]:
     """
     The Pool worker for datasets too large to send decoded: it gets a path, a record_loader (e.g.
     mnist_data.load_mnist_records_at_indices) and the (index, category) pairs
@@ -249,12 +251,12 @@ def _select_worker_count(
 
 
 def _assemble_ensemble_from_results(
-    results: list[tuple[int, list[list[tuple[list[float], float]]], TrainingDiagnostic]],
+    results: list[tuple[int, object, TrainingDiagnostic]],
     layer_sizes: list[int],
     dimension: int,
     input_bounds: list[tuple[float, float]],
-    classifier_cls: type[BackpropClassifierNetwork],
-) -> tuple[EnsembleBackpropClassifierNetwork, dict[int, TrainingDiagnostic]]:
+    classifier_cls: BinaryClassifierClass[ClassifierT],
+) -> tuple[EnsembleBackpropClassifierNetwork[ClassifierT], dict[int, TrainingDiagnostic]]:
     """
     The tail of every ensemble trainer, parallel or serial: sorts the (label, snapshot, diagnostic)
     results into label order, rebuilds each classifier_cls from its snapshot (restore() sets the
@@ -276,13 +278,13 @@ def _assemble_ensemble_from_results(
 
 def _collect_ensemble_results(
     pool: multiprocessing.pool.Pool,
-    worker_fn: Callable[..., tuple[int, list[list[tuple[list[float], float]]], TrainingDiagnostic]],
-    jobs: Iterable,
+    worker_fn: Callable[..., tuple[int, object, TrainingDiagnostic]],
+    jobs: Iterable[Any],
     layer_sizes: list[int],
     dimension: int,
     input_bounds: list[tuple[float, float]],
-    classifier_cls: type[BackpropClassifierNetwork],
-) -> tuple[EnsembleBackpropClassifierNetwork, dict[int, TrainingDiagnostic]]:
+    classifier_cls: BinaryClassifierClass[ClassifierT],
+) -> tuple[EnsembleBackpropClassifierNetwork[ClassifierT], dict[int, TrainingDiagnostic]]:
     """
     Runs worker_fn over jobs with pool.imap and hands the results to
     _assemble_ensemble_from_results.
@@ -302,8 +304,8 @@ def train_ensemble_parallel(
     epochs: int,
     worker_count: int | None = None,
     seed: int | None = None,
-    classifier_cls: type[BackpropClassifierNetwork] = BackpropClassifierNetwork,
-) -> tuple[EnsembleBackpropClassifierNetwork, dict[int, TrainingDiagnostic]]:
+    classifier_cls: BinaryClassifierClass[ClassifierT] = BackpropClassifierNetwork,
+) -> tuple[EnsembleBackpropClassifierNetwork[ClassifierT], dict[int, TrainingDiagnostic]]:
     """
     Trains one classifier_cls per class on a multiprocessing.Pool. Nothing is synchronized between
     them, so the only communication is dispatch and collection.
@@ -366,8 +368,8 @@ def train_ensemble_parallel_from_indices(
     epochs: int,
     worker_count: int | None = None,
     seed: int | None = None,
-    classifier_cls: type[BackpropClassifierNetwork] = BackpropClassifierNetwork,
-) -> tuple[EnsembleBackpropClassifierNetwork, dict[int, TrainingDiagnostic]]:
+    classifier_cls: BinaryClassifierClass[ClassifierT] = BackpropClassifierNetwork,
+) -> tuple[EnsembleBackpropClassifierNetwork[ClassifierT], dict[int, TrainingDiagnostic]]:
     """
     train_ensemble_parallel for large datasets: takes a path, a record_loader that loads examples by
     index from it (e.g. mnist_data.load_mnist_records_at_indices), and the labels (e.g.
@@ -426,8 +428,8 @@ def train_ensemble_serial_from_indices(
     learning_rate: float,
     epochs: int,
     seed: int | None = None,
-    classifier_cls: type[BackpropClassifierNetwork] = BackpropClassifierNetwork,
-) -> tuple[EnsembleBackpropClassifierNetwork, dict[int, TrainingDiagnostic]]:
+    classifier_cls: BinaryClassifierClass[ClassifierT] = BackpropClassifierNetwork,
+) -> tuple[EnsembleBackpropClassifierNetwork[ClassifierT], dict[int, TrainingDiagnostic]]:
     """
     train_ensemble_parallel_from_indices in this process, one class after another, calling
     _train_one_indexed_classifier directly. For the array networks, training is fast enough that

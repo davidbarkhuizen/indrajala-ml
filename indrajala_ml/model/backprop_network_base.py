@@ -3,14 +3,21 @@ from __future__ import annotations
 import math
 import random
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Generic, cast
+
+from typing_extensions import TypeVar
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.bounds import validate_batch, validate_input_bounds, validate_layer_sizes
+from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.state_layer import StateLayer
 
+# the hidden layers' type: dense layers, except in the conv network, whose front end puts conv and
+# pool layers first (ConvMultiClassBackpropClassifierNetwork)
+LayerT = TypeVar("LayerT", bound=TrainableLayer, default=BackpropLayer)
 
-class BackpropNetworkBase:
+
+class BackpropNetworkBase(Generic[LayerT]):
     """
     What BackpropClassifierNetwork and MultiClassBackpropClassifierNetwork share: layer assembly
     (input -> hidden layer(s) -> output layer), the forward pass, applying gradients, the hidden
@@ -40,18 +47,21 @@ class BackpropNetworkBase:
 
         self.input_layer = StateLayer(dimension, input_bounds)
 
-        self.hidden_layers: list[BackpropLayer] = []
-        previous_layer: StateLayer | BackpropLayer = self.input_layer
+        dense_layers: list[BackpropLayer] = []
+        previous_layer: InputLayer = self.input_layer
         for size in layer_sizes:
             layer = self.hidden_layer_cls(size=size, input_layer=previous_layer)
-            self.hidden_layers.append(layer)
+            dense_layers.append(layer)
             previous_layer = layer
+        # LayerT is BackpropLayer for every network built here; the conv network, the one other
+        # LayerT, builds its layers in its own __init__
+        self.hidden_layers: list[LayerT] = cast("list[LayerT]", dense_layers)
 
         self.output_layer = self.output_layer_cls(size=output_size, input_layer=previous_layer)
 
         # every layer with trained weights, in forward order: the backward pass and
         # snapshot/restore walk it
-        self.trainable_layers: list[BackpropLayer] = self.hidden_layers + [self.output_layer]
+        self.trainable_layers: list[LayerT | BackpropLayer] = [*self.hidden_layers, self.output_layer]
 
     @classmethod
     def randomized(cls, *args, **kwargs):
@@ -60,6 +70,17 @@ class BackpropNetworkBase:
         network = cls(*args, **kwargs)
         network.randomize()
         return network
+
+    # per subclass: the output layer's initialization, and the forward/backward passes over a
+    # float target (single output) or a class index (multiclass)
+    def randomize(self) -> None:
+        raise NotImplementedError
+
+    def _forward(self, state: tuple[float, ...]) -> Any:
+        raise NotImplementedError
+
+    def _backward(self, target: Any, /) -> None:
+        raise NotImplementedError
 
     def update_state_layer(self, state: tuple[float, ...]) -> None:
         self.input_layer.update_state(state)
@@ -128,7 +149,18 @@ def fan_in_aware_weights_and_bias(fan_in: int) -> tuple[list[float], float]:
     return weights, bias
 
 
-def randomize_fan_in_aware(network: BackpropNetworkBase) -> None:
+def as_dense_layers(layers: Sequence[TrainableLayer]) -> list[BackpropLayer]:
+    """
+    layers, checked to be dense (BackpropLayer and its siblings), for what only a dense network
+    does: the conv network overrides randomize and save, whose dense forms read every layer's
+    size and node weights.
+    """
+    dense = [layer for layer in layers if isinstance(layer, BackpropLayer)]
+    assert len(dense) == len(layers), f"expected only dense layers; got {[type(layer).__name__ for layer in layers]}"
+    return dense
+
+
+def randomize_fan_in_aware(network: BackpropNetworkBase[Any]) -> None:
     """
     Fan-in-aware initialization, limit = 1/sqrt(fan_in) per layer, so a layer's weighted input sum
     doesn't saturate every sigmoid once fan-in reaches the tens or hundreds. On UCI digits: 99.5%
@@ -142,7 +174,7 @@ def randomize_fan_in_aware(network: BackpropNetworkBase) -> None:
     """
 
     previous_size = network.dimension
-    for layer in network.trainable_layers:
+    for layer in as_dense_layers(network.trainable_layers):
         for node in layer.nodes:
             weights, bias = fan_in_aware_weights_and_bias(previous_size)
             node.update_input_weights(weights)

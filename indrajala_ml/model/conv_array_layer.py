@@ -79,7 +79,8 @@ class ConvArrayLayer:
         k, s = self.kernel_size, self.stride
         planes = X.reshape(n, self.input_channels, self.input_height, self.input_width)
         # (N, C, H-k+1, W-k+1, k, k) view, strided down to (N, C, out_height, out_width, k, k)
-        windows = sliding_window_view(planes, (k, k), axis=(2, 3))[:, :, ::s, ::s]
+        # numpy 2.2's stub types axis as one int; the function takes a tuple (numpy's docs)
+        windows = sliding_window_view(planes, (k, k), axis=(2, 3))[:, :, ::s, ::s]  # pyright: ignore[reportCallIssue, reportArgumentType]
         # the reshape of the transposed view is the one materializing copy
         return windows.transpose(0, 2, 3, 1, 4, 5).reshape(n, self.positions, self.fan_in)
 

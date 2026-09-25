@@ -9,6 +9,6 @@ class XORTarget:
     def __init__(self, bounds: list[tuple[float, float]]) -> None:
         self.input_bounds = bounds
 
-    def classify_state(self, state: tuple[float, float]) -> float:
+    def classify_state(self, state: tuple[float, ...]) -> float:
         x, y = state
         return 1.0 if (x > 0) != (y > 0) else 0.0

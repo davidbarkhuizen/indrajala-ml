@@ -16,6 +16,8 @@ maturin_version="1.15.0"
 # Pinned for the same reason, and because ruff's default rule set changes between releases:
 # local and CI lint against the same rules. Bump deliberately, fixing whatever the new rules report.
 ruff_version="0.16.9"
+# Pinned for the same reason: a pyright release can add or change checks.
+pyright_version="1.1.414"
 
 clean () {
 
@@ -70,11 +72,11 @@ install_python_modules () {
     echo "... installed python modules"
 }
 
-install_ruff () {
+install_lint_tools () {
 
-    echo "installing ruff ..."
-    python -m pip install "ruff==$ruff_version"
-    echo "... installed ruff"
+    echo "installing ruff and pyright ..."
+    python -m pip install "ruff==$ruff_version" "pyright==$pyright_version"
+    echo "... installed ruff and pyright"
 }
 
 install_maturin () {
@@ -132,17 +134,20 @@ install_rust_wheel () {
 
 setup () {
 
-    # Both flags are for CI:
+    # The flags are for CI:
     # --no-os-packages: python3-tk isn't used there (apt installs it into the system python,
     #   not setup-python's), so CI skips apt.
     # --rust-wheel-dir <dir>: install rust/ from a cached wheel (see install_rust_wheel)
     #   instead of `maturin develop`.
+    # --no-data: skip fetching the datasets (the lint job, which runs no tests).
     local os_packages=true
     local rust_wheel_dir=""
+    local data=true
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --no-os-packages) os_packages=false; shift ;;
             --rust-wheel-dir) rust_wheel_dir="$2"; shift 2 ;;
+            --no-data) data=false; shift ;;
             *) usage; exit 1 ;;
         esac
     done
@@ -156,13 +161,15 @@ setup () {
     install_and_upgrade_pip
     install_python_modules
     install_maturin
-    install_ruff
+    install_lint_tools
     if [ -n "$rust_wheel_dir" ]; then
         install_rust_wheel "$rust_wheel_dir"
     else
         build_rust
     fi
-    fetch_data
+    if [ "$data" = true ]; then
+        fetch_data
+    fi
     deactivate_venv
 }
 
@@ -186,10 +193,12 @@ run_tests () {
 
 lint () {
 
-    # the checks CI's lint job runs; `ruff check --fix . && ruff format .` applies the fixable ones
+    # the checks CI's lint job runs; `ruff check --fix . && ruff format .` applies the fixable ones.
+    # pyright reads the installed indrajala_math_rust's type stub, so rust/ must be built.
     activate_venv
     ruff check .
     ruff format --check .
+    pyright
     deactivate_venv
 }
 
@@ -201,7 +210,7 @@ demo () {
 }
 
 usage () {
-    echo "usage: invoke [ clean | setup [--no-os-packages] [--rust-wheel-dir <dir>] | build-rust | fetch-data | test [pytest-path ...] | lint | demo [demo-number] ]"
+    echo "usage: invoke [ clean | setup [--no-os-packages] [--rust-wheel-dir <dir>] [--no-data] | build-rust | fetch-data | test [pytest-path ...] | lint | demo [demo-number] ]"
 }
 
 case "$option" in

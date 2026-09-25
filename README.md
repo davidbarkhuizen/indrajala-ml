@@ -29,7 +29,7 @@ installs on the first build (a distro `cargo` ignores the pin).
 ```
 ./cli setup          # submodule, .venv, pip deps, release build of rust/, fetch MNIST
 ./cli test           # pytest tests/ and rust/tests/ (or: ./cli test <path> ...)
-./cli lint           # ruff check and ruff format --check
+./cli lint           # ruff check, ruff format --check, pyright
 ./cli demo           # interactive demo menu
 ./cli demo <n>       # run demo n directly
 ./cli build-rust     # rebuild rust/ after changing it
@@ -65,12 +65,19 @@ the submodule moves.
 
 ## Linting
 
-`./cli lint` runs `ruff check` and `ruff format --check`; `ruff check --fix . && ruff format .`
-(in the venv) applies the fixable findings. Ruff is pinned in `./cli` (`ruff_version`), because
-its default rule set changes between releases; `pyproject.toml`'s `[tool.ruff]` sets the line
-length (120), excludes `rust/` and holds the per-file ignores. Zed runs the same pinned ruff:
-`.zed/settings.json` points its ruff language server at `.venv/bin/ruff`. The crate lints its own
-Rust with `cargo fmt` and `cargo clippy` (see `rust/README.md`).
+`./cli lint` runs `ruff check`, `ruff format --check` and `pyright`; `ruff check --fix . && ruff
+format .` (in the venv) applies ruff's fixable findings. Both tools are pinned in `./cli`
+(`ruff_version`, `pyright_version`), because their rule sets change between releases:
+
+- `pyproject.toml`'s `[tool.ruff]` sets the line length (120), excludes `rust/` and holds the
+  per-file ignores;
+- `[tool.pyright]` type-checks `indrajala_ml/`, `tests/` and `scripts/` in standard mode. It reads
+  the crate's type stub from the installed `indrajala_math_rust`, so `rust/` must be built.
+
+A `# pyright: ignore[rule]` names its rule and says why (e.g. a numpy stub narrower than the
+function). Zed runs the same pinned tools: `.zed/settings.json` points its ruff and pyright
+language servers into `.venv/bin`. The crate lints its own Rust and Python tests (see
+`rust/README.md`).
 
 ## Layout
 

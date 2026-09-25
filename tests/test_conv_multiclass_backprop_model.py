@@ -1,10 +1,11 @@
 import random
 
 import pytest
-from helpers import assert_save_and_load_round_trip, assert_snapshot_restore_round_trip
+from helpers import assert_save_and_load_round_trip, assert_snapshot_restore_round_trip, conv_layer, conv_layers_only
 
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.model.backprop_layer import BackpropLayer
+from indrajala_ml.model.backprop_network_base import as_dense_layers
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import (
     ConvMultiClassBackpropClassifierNetwork,
@@ -61,10 +62,10 @@ def test_randomize_randomizes_conv_kernels_and_every_dense_layer():
     network = _small_network()
     network.randomize()
 
-    for kernel in network.conv_layers[0].kernels:
+    for kernel in conv_layer(network, 0).kernels:
         assert len(set(kernel.weights)) > 1
 
-    for layer in network.hidden_layers[1:] + [network.output_layer]:
+    for layer in as_dense_layers(network.hidden_layers[1:] + [network.output_layer]):
         for node in layer.nodes:
             assert len(set(node.input_node_weights)) > 1
 
@@ -77,8 +78,8 @@ def test_randomized_classmethod_uses_this_classs_own_constructor_signature():
         input_height=8, input_width=8, conv_specs=[ConvSpec(3, 4)], dense_layer_sizes=[16], class_count=10
     )
 
-    assert network.conv_layers[0].kernel_size == 3
-    assert len(set(network.conv_layers[0].kernels[0].weights)) > 1  # actually randomized, not left at zero
+    assert conv_layer(network, 0).kernel_size == 3
+    assert len(set(conv_layer(network, 0).kernels[0].weights)) > 1  # actually randomized, not left at zero
 
 
 def test_forward_and_backward_run_without_error_and_move_every_weight():
@@ -87,10 +88,10 @@ def test_forward_and_backward_run_without_error_and_move_every_weight():
     network = _small_network()
     network.randomize()
 
-    conv_weights_before = [list(k.weights) for k in network.conv_layers[0].kernels]
+    conv_weights_before = [list(k.weights) for k in conv_layer(network, 0).kernels]
     dense_weights_before = [
         [list(node.input_node_weights) for node in layer.nodes]
-        for layer in network.hidden_layers[1:] + [network.output_layer]
+        for layer in as_dense_layers(network.hidden_layers[1:] + [network.output_layer])
     ]
 
     state = tuple(random.uniform(0.0, 1.0) for _ in range(64))
@@ -98,10 +99,12 @@ def test_forward_and_backward_run_without_error_and_move_every_weight():
 
     assert any(
         after != before
-        for kernel, before in zip(network.conv_layers[0].kernels, conv_weights_before)
+        for kernel, before in zip(conv_layer(network, 0).kernels, conv_weights_before)
         for after, before in [(kernel.weights, before)]
     )
-    for layer, before_layer in zip(network.hidden_layers[1:] + [network.output_layer], dense_weights_before):
+    for layer, before_layer in zip(
+        as_dense_layers(network.hidden_layers[1:] + [network.output_layer]), dense_weights_before
+    ):
         for node, before in zip(layer.nodes, before_layer):
             assert node.input_node_weights != before
 
@@ -143,7 +146,9 @@ def test_snapshot_and_restore_round_trip_through_the_conv_layer_too():
 
     snapshot = network.snapshot()
     assert len(snapshot) == len(network.trainable_layers)  # one entry per layer, conv included
-    assert len(snapshot[0]) == network.conv_specs[0].channel_count  # the conv layer's own entry: one per kernel
+    spec = network.conv_specs[0]
+    assert isinstance(spec, ConvSpec)
+    assert len(snapshot[0]) == spec.channel_count  # the conv layer's own entry: one per kernel
 
     state = tuple(random.uniform(0.0, 1.0) for _ in range(64))
     assert_snapshot_restore_round_trip(
@@ -214,7 +219,7 @@ def test_empty_conv_specs_are_rejected():
 def test_two_conv_layers_chain_shape_and_channels():
 
     network = _two_conv_layer_network()
-    first, second = network.conv_layers
+    first, second = conv_layers_only(network)
 
     # 8x8 -> k3 s1 -> 6x6x3 -> k2 s2 -> 3x3x4
     assert (first.out_height, first.out_width, first.channel_count) == (6, 6, 3)
@@ -241,10 +246,10 @@ def test_randomize_draws_one_rng_sequence_per_layer_in_forward_order():
     two_layer = _two_conv_layer_network()
     two_layer.randomize()
 
-    assert [k.weights for k in two_layer.conv_layers[0].kernels] == [
-        k.weights for k in one_layer.conv_layers[0].kernels
+    assert [k.weights for k in conv_layer(two_layer, 0).kernels] == [
+        k.weights for k in conv_layer(one_layer, 0).kernels
     ]
-    for kernel in two_layer.conv_layers[1].kernels:
+    for kernel in conv_layer(two_layer, 1).kernels:
         assert len(set(kernel.weights)) > 1
 
 
@@ -253,12 +258,12 @@ def test_learn_moves_every_kernel_in_every_conv_layer():
     random.seed(0)
     network = _two_conv_layer_network()
     network.randomize()
-    before = [[list(k.weights) for k in layer.kernels] for layer in network.conv_layers]
+    before = [[list(k.weights) for k in layer.kernels] for layer in conv_layers_only(network)]
 
     state = tuple(random.uniform(0.0, 1.0) for _ in range(64))
     network.learn(learning_rate=0.1, state=state, category=3)
 
-    for layer, layer_before in zip(network.conv_layers, before):
+    for layer, layer_before in zip(conv_layers_only(network), before):
         assert any(kernel.weights != kernel_before for kernel, kernel_before in zip(layer.kernels, layer_before))
 
 
@@ -285,7 +290,7 @@ def test_network_gradient_check_from_output_loss_back_to_the_first_conv_layer():
     assert any(unit.delta != 0.0 for unit in network.conv_layers[0].nodes)
 
     epsilon = 1e-6
-    for layer in network.conv_layers:
+    for layer in conv_layers_only(network):
         for kernel in layer.kernels:
             for i in range(len(kernel.weights)):
                 original = kernel.weights[i]
@@ -337,6 +342,7 @@ def test_pool_spec_builds_a_max_pool_layer_in_the_chain():
 
     network = _pooled_network()
     _first, pool, last = network.conv_layers
+    assert isinstance(last, ConvLayer)
 
     assert isinstance(pool, MaxPoolLayer)
     assert (pool.out_height, pool.out_width, pool.channel_count) == (3, 3, 4)
@@ -361,7 +367,7 @@ def test_pooling_does_not_shift_any_conv_layers_random_draws():
     pooled = _pooled_network()
     pooled.randomize()
 
-    assert [k.weights for k in pooled.conv_layers[0].kernels] == [k.weights for k in unpooled.conv_layers[0].kernels]
+    assert [k.weights for k in conv_layer(pooled, 0).kernels] == [k.weights for k in conv_layer(unpooled, 0).kernels]
 
 
 def test_network_gradient_check_through_a_pooling_layer():
@@ -383,6 +389,7 @@ def test_network_gradient_check_through_a_pooling_layer():
     network._accumulate_gradients()
 
     first, _pool, last = network.conv_layers
+    assert isinstance(first, ConvLayer) and isinstance(last, ConvLayer)
     assert any(unit.delta != 0.0 for unit in first.nodes)
 
     epsilon = 1e-6

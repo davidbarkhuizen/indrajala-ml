@@ -5,10 +5,12 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.adam_layer import make_adam_layer_cls
+from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
     BinaryCrossEntropyBackpropClassifierNetwork,
     CrossEntropyOutputLayer,
 )
+from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -26,6 +28,20 @@ from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
+
+
+def conv_layer(network: ConvMultiClassBackpropClassifierNetwork, index: int) -> ConvLayer:
+    """network.conv_layers[index], checked to be a conv (not pool) layer."""
+    layer = network.conv_layers[index]
+    assert isinstance(layer, ConvLayer), f"conv_layers[{index}] is a {type(layer).__name__}"
+    return layer
+
+
+def conv_layers_only(network: ConvMultiClassBackpropClassifierNetwork) -> list[ConvLayer]:
+    """network.conv_layers, checked to hold no pool layer."""
+    layers = [layer for layer in network.conv_layers if isinstance(layer, ConvLayer)]
+    assert len(layers) == len(network.conv_layers), "expected only conv layers"
+    return layers
 
 
 def assert_save_and_load_round_trip(network, load_fn, tmp_path, filename: str, states):
@@ -455,13 +471,13 @@ def matching_conv_array_backprop_networks(
     array_network = array_network_cls(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
 
     for node_layer, array_layer in zip(node_network.trainable_layers, array_network.layers):
-        if hasattr(node_layer, "kernels"):
+        if isinstance(node_layer, ConvLayer):
             for kernel in node_layer.kernels:
                 kernel.weights = [rng.uniform(-1.0, 1.0) for _ in range(array_layer.fan_in)]
                 kernel.bias = rng.uniform(-0.5, 0.5)
             array_layer.W = wrap([kernel.weights for kernel in node_layer.kernels])
             array_layer.b = wrap([kernel.bias for kernel in node_layer.kernels])
-        elif hasattr(array_layer, "W"):
+        elif isinstance(node_layer, BackpropLayer):  # a pool layer has no weights
             for node in node_layer.nodes:
                 node.update_input_weights([rng.uniform(-1.0, 1.0) for _ in range(array_layer.input_size)])
                 node.bias = rng.uniform(-1.0, 1.0)

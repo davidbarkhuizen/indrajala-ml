@@ -47,6 +47,8 @@ def bounding_box(grid: list[list[float]]) -> tuple[int, int, int, int] | None:
 
     if min_row is None:
         return None
+    # the four are set together, by the first positive pixel
+    assert min_col is not None and max_row is not None and max_col is not None
 
     return min_row, min_col, max_row, max_col
 

@@ -7,7 +7,13 @@ from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode, sigmoid
 
 
-def make_dropout_node_cls(drop_probability: float) -> type[BackpropNode]:
+class TrainingModeNode(BackpropNode):
+    """A node whose forward pass differs in training: the base of make_dropout_node_cls's nodes."""
+
+    training: bool
+
+
+def make_dropout_node_cls(drop_probability: float) -> type[TrainingModeNode]:
     """
     A BackpropNode subclass that zeroes its activation with probability drop_probability on each
     training forward pass (Srivastava et al., 2014), and does nothing at inference. self.training is
@@ -21,7 +27,7 @@ def make_dropout_node_cls(drop_probability: float) -> type[BackpropNode]:
     assert 0.0 <= drop_probability < 1.0, f"drop_probability must be in [0.0, 1.0); got {drop_probability}"
     keep_probability = 1.0 - drop_probability
 
-    class DropoutNode(BackpropNode):
+    class DropoutNode(TrainingModeNode):
         def __init__(
             self,
             input_nodes: Sequence[BackpropNode],
@@ -82,6 +88,7 @@ def make_dropout_layer_cls(drop_probability: float) -> type[BackpropLayer]:
 
         def set_training_mode(self, training: bool) -> None:
             for node in self.nodes:
+                assert isinstance(node, TrainingModeNode)
                 node.training = training
 
     return DropoutLayer

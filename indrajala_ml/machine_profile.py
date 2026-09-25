@@ -29,9 +29,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-try:
+if sys.version_info >= (3, 11):
     import tomllib
-except ImportError:  # Python 3.10
+else:
     import tomli as tomllib
 
 SCHEMA_VERSION = 1
@@ -414,7 +414,7 @@ def _flatten(prefix, value):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])  # None under -OO
     commands = parser.add_subparsers(dest="command", required=True)
     profile_parser = commands.add_parser("profile", help="capture this machine's profile")
     profile_parser.add_argument("--out", help="write the JSON here instead of stdout")

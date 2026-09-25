@@ -85,6 +85,7 @@ def main() -> None:
     figure = new_figure(f"XOR-style target: training data (true label) vs. best student's hyperplanes ({best_label})")
     axes = new_axes(figure, bounds)
     plot_training_data(axes, training_data)
+    assert best_student is not None  # configs is non-empty, and every disagreement beats inf
     plot_linear_classifier_network(axes, best_student, color="purple", x_bounds=bounds[0])
     pyplot.show()
 

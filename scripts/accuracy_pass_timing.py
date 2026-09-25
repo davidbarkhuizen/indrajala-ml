@@ -34,6 +34,8 @@ import random
 import statistics
 import sys
 import time
+from collections.abc import Callable
+from typing import TypeVar
 
 import numpy as np
 from process_runs import interleaved_runs, run_json_worker
@@ -65,6 +67,8 @@ CONV_CLASSES = {
     "rust": ConvRustArrayMultiClassBackpropClassifierNetwork,
 }
 IN_PROCESS_RUNS = 3
+
+T = TypeVar("T")
 
 
 def _network(name: str, backend: str):
@@ -101,13 +105,13 @@ def _forward_chunks(network, prepared, chunk: int, backend: str, argmax: bool) -
     return predictions
 
 
-def _timed(fn) -> tuple[float, object]:
+def _timed(fn: Callable[[], T]) -> tuple[float, T]:
     start = time.perf_counter()
     result = fn()
     return time.perf_counter() - start, result
 
 
-def _median_of_runs(fn) -> tuple[float, object]:
+def _median_of_runs(fn: Callable[[], T]) -> tuple[float, T]:
     runs = [_timed(fn) for _ in range(IN_PROCESS_RUNS)]
     return statistics.median(seconds for seconds, _ in runs), runs[0][1]
 
