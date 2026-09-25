@@ -2,8 +2,9 @@
 
 **Status: stages 1 and 2 done. At momentum 0.0 the rule holds to B = 128 with warmup and fails
 at B = 512, where no rate reaches the band. Stage 3 (momentum conv, planned in detail below) is
-under way: 3a and 3b (the update rules in the literature's form) and 3c (the conv networks honor
-hyperparameters) are done, 3d (the pure-Python momentum conv reference) is next.**
+under way: 3a and 3b (the update rules in the literature's form), 3c (the conv networks honor
+hyperparameters) and 3d (the pure-Python momentum conv reference) are done, 3e (numpy and Rust
+momentum conv) is next.**
 
 A measured study and a demo: does the linear learning-rate scaling rule (Goyal et al. 2017:
 multiply the rate by the factor the batch grows, with warmup) hold for the conv network on full
@@ -182,7 +183,7 @@ So the plan goes to stage 3.
 At momentum 0.0 the conv network plateaus below the band at B = 512 (stage 2), so momentum is the
 remaining lever. Dense needed momentum 0.9 to reach B = 512. Momentum conv is also worth having in
 its own right: the README lists `Momentum` and `Conv` as features of all three implementations,
-and no implementation combines them yet.
+and only the pure-Python implementation (3d) combines them so far.
 
 Each sub-stage is one PR; 3a and 3b are each a crate PR first, then the parent PR that moves `rust/`.
 
@@ -286,7 +287,14 @@ Each fails on the old wiring.
   `dense_layer_cls`), and `ConvLayer` its kernels from `_kernel_cls`, as `BackpropLayer` does
   with `_node_cls`.
 
-#### 3d: the pure-Python momentum conv reference
+#### 3d: the pure-Python momentum conv reference (done)
+
+Done (parent PR below, no crate change). `make_momentum_kernel_cls` and
+`make_momentum_conv_layer_cls` are in `momentum_conv_layer.py`. `MomentumConvKernel` joins the
+bit-for-bit eq. (9) check in `tests/test_update_rule_forms.py` on the conv shape. The golden run is
+bit-identical, since no existing class changed. The new tests catch each of these mutations: the
+velocity not carried (weights or bias), the conv or output hook left unset, `momentum` not saved or
+not loaded, and the rate folded into the velocity.
 
 - `MomentumConvKernel`: `ConvKernel` with a velocity, zero-initialized, and 3b's eq. (9) update:
   `u = m * u + accum / B; w = w - lr * u`, positions summed and examples averaged as `ConvKernel`
