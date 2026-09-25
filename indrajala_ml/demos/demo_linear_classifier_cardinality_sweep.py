@@ -45,12 +45,9 @@ def main() -> None:
         disagreement = [x[1] for x in convergence_series]
         results.append((f"cardinality={cardinality}", color, n, disagreement))
 
-        # measured fresh against the actual final student, not convergence_series[-1][1] -
-        # that's the raw last training iteration's disagreement, sampled before
-        # train_linear_classifier_network's pocket-tracking (possibly) rolled student back to
-        # an earlier, better epoch, so it can silently disagree with student's real final
-        # performance (verified: seed 19, cardinality=4 printed 0.250 there while the actual
-        # final student was really at 0.017 - a 15x discrepancy in the wrong direction)
+        # measured on the final (pocketed) student, not convergence_series[-1][1], which is the
+        # last training step's before the rollback to the best epoch (seed 19, cardinality=4:
+        # 0.250 there, 0.017 for the final student)
         final_disagreement = class_balanced_disagreement_rate(reference, student, per_class_sample_count=300)
 
         new_state, reference_category, student_category = compare_on_random_point(reference, student)

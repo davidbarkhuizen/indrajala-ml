@@ -11,14 +11,10 @@ from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClass
 
 MODEL_PATH = "data/digits/trained_model.json"
 
-# Captures a digit the same way the reference work behind the bundled training data did (see
-# digit_capture.downsample_to_target_grid): the user paints a binary CAPTURE_GRID_SIZE x
-# CAPTURE_GRID_SIZE bitmap by mouse (mirroring NIST's own thresholded pen-on-paper scan) - each
-# stroke stamped CAPTURE_BRUSH_RADIUS cells wide (see digit_capture.paint_brush_stroke), since a
-# single-cell-wide mouse line comes out far fainter after downsampling than any real training
-# stroke - which is then genuinely block-counted down to the GRID_SIZE x GRID_SIZE, 0-16-graded
-# shape the model was actually trained on. See indrajala_ml/demos/capture_app.py for the shared
-# capture UI this config drives.
+# Captures a digit as the UCI digits were preprocessed (digit_capture.downsample_to_target_grid):
+# a binary CAPTURE_GRID_SIZE-square bitmap painted with a CAPTURE_BRUSH_RADIUS brush (like NIST's
+# thresholded scan) is block-counted down to the GRID_SIZE-square 0-16 grid the model trained on.
+# The UI is capture_app.py's.
 CONFIG = CaptureConfig(
     capture_grid_size=CAPTURE_GRID_SIZE,
     capture_tile_size=10,

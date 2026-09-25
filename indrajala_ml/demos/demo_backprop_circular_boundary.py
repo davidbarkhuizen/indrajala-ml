@@ -12,12 +12,8 @@ from indrajala_ml.train import random_alternating_training_data, train_linear_cl
 
 class CircleTarget:
     """
-    A circular positive region - unlike targets.py's XORTarget (two straight-edged
-    quadrants), this boundary is genuinely curved, not just a union of half-planes arranged
-    awkwardly. A LinearClassifierNetwork's positive region (see
-    geometry.reference_positive_region_polygon) is always a polygon - an intersection of
-    straight half-planes - so it can only ever facet a circle with more and more short edges,
-    never actually curve; a BackpropClassifierNetwork's sigmoid boundary can.
+    A circular positive region. A LinearClassifierNetwork's region is always a polygon, so it can
+    only facet a circle; a BackpropClassifierNetwork's sigmoid boundary can curve.
     """
 
     def __init__(self, bounds: list[tuple[float, float]], radius: float = 4.0) -> None:

@@ -15,10 +15,8 @@ from indrajala_ml.train import random_alternating_training_data, train_linear_cl
 
 class StripesTarget:
     """
-    Vertical stripes, alternating class every cell_size units of x (y is irrelevant) - unlike
-    targets.py's XORTarget (2 regions), this target's number of regions
-    scales with how wide input_bounds is relative to cell_size, so it's a convenient dial for
-    "how hard is this problem" independent of any classifier's architecture.
+    Vertical stripes, alternating class every cell_size units of x. The number of regions grows with
+    input_bounds' width relative to cell_size, a dial for difficulty independent of architecture.
     """
 
     def __init__(self, bounds: list[tuple[float, float]], cell_size: float = 2.0) -> None:
@@ -32,9 +30,8 @@ class StripesTarget:
 
 def main() -> None:
 
-    # [8] and [4, 4] share the same total node count, as do [4] and [8, 8]'s first layer vs
-    # second - lets the printed results speak to depth vs width at a matched budget, rather
-    # than just "more capacity wins"
+    # [8] and [4, 4] have the same node count, so the results compare depth and width at a
+    # matched budget
     architectures: list[list[int]] = [[4], [8], [4, 4], [8, 8]]
     colors = ["yellow", "cyan", "magenta", "orange"]
 
