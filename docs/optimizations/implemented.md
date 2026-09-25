@@ -38,9 +38,9 @@ keep the pipes busy. All three matmul kernels are built on that:
 
 - **`tiled_row_range`** (`rust/src/linalg.rs`) holds 16-column output tiles (4 AVX2
   accumulators) in registers across all of `k` (or a slab of it), for `matmul_2d`,
-  `matmul_narrow`, `matmul_long_k` and vector @ matrix. `matmul_2d` runs it in row blocks of about 16 KB of `a` (so a block of `a` and `b`'s
-  `k x 16` panel share L1); `matmul_narrow` in blocks of 4 rows, for conv's narrow products
-  (`cols @ W.T` with only `C*k*k` or `O` columns). Replacing the old load/FMA/store loops (crate
+  `matmul_narrow`, `matmul_long_k` and vector @ matrix. `matmul_2d` runs it in row blocks of
+  about 16 KB of `a` (so a block of `a` and `b`'s `k x 16` panel share L1); `matmul_narrow` in
+  blocks of 4 rows, for conv's narrow products (`cols @ W.T` with only `C*k*k` or `O` columns). Replacing the old load/FMA/store loops (crate
   #11, #12, #14) cut conv forward 13-64%, downstream 4-56%, accumulate 16-43%, and unthreaded
   dense batch downstream/accumulate to 0.1-0.6x their time.
 - **Its 16-wide tiles cover 2 rows at once** (crate #26): 8 independent FMA chains instead of 4,
@@ -140,7 +140,7 @@ kernel walks each window's rows as slices and counts the slot alongside; 2x2 win
 and strict `>`, so the first maximal slot wins with its sign of zero, bit for bit as before.
 
 Why: the old scan computed `slot / k`, `slot % k` and a full input index for every slot, with `k`
-known only at run time. Walking row slices removes that (16 → 9 µs a call in the stage 0 probe),
+known only at run time. Walking row slices removes that (16 → 9 µs a call in a probe),
 but what is left is the loops with a run-time trip count, not the branches (a select-based
 general kernel was no faster), so only the fixed-size body gets near the 0.9 µs floor. At
 26x26x8: 16.6-17.2 → 4.1-4.2 µs single, 504-525 → 112-114 at N = 32, 9.2 → 5.7-5.8 ms at N = 512

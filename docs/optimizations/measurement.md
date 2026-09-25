@@ -71,8 +71,8 @@ From the quick survey to the decisive measurement:
   second of a pair once read 26-27 against 41-43 µs whichever setting ran second): rotate the
   order.
 - **`--rust-threads 1` hides what training's threading does.** Past 8M flops training threads
-  the op over output rows. conv-conv's second-conv accumulate (8 rows) lost 40% to 2-row blocks
-  on one thread and nothing at default threads, where each thread already has 2 rows. Time a
+  the op. 4-row blocks in `matmul_narrow` took 40% off conv-conv's second-conv accumulate (8 rows)
+  on one thread and nothing when threaded over rows, where each thread already had 2 rows. Time a
   kernel change at the thread count training uses too.
 - **Isolated loops flatter threading.** Back-to-back calls keep every core clocked up; in
   training the cores idle between calls and each threaded call pays the cold clock.

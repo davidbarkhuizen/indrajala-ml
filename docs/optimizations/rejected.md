@@ -46,8 +46,10 @@ what would reopen it, if anything. Crate branches named here are kept in `rust/`
 - **Splitting over `k`** (a cross-thread reduction changes the summation order), **threading
   pooling or elementwise ops** (too little work per call), and **releasing the GIL** (the
   trainers are single-threaded Python; there is nothing to overlap with).
-- **Splitting by columns** so each thread reads only its panel of `b`: nothing pointed at `b`
-  traffic, and a register-only probe showed the same worker slowdown.
+- **Splitting `matmul_2d` and `matmul_nt` by columns** so each thread reads only its panel of
+  `b`: nothing pointed at `b` traffic, and a register-only probe showed the same worker slowdown.
+  (`matmul_long_k` does split by columns, because there the shared input is `cols` past the L3;
+  see [Implemented](implemented.md#register-tiling-keep-outputs-in-registers-across-all-of-k).)
 
 ## Allocation
 
