@@ -1,6 +1,5 @@
 import random
 
-import numpy as np
 import pytest
 
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
@@ -46,7 +45,7 @@ def test_predict_probabilities_matches_across_a_random_sweep(backend):
         state = tuple(rng.uniform(-10.0, 10.0) for _ in range(DIMENSION))
         expected = node_network.predict_probabilities(state)
         actual = array_network.predict_probabilities(state)
-        np.testing.assert_allclose(actual, expected, rtol=1e-9, atol=1e-12)
+        assert actual == pytest.approx(expected, rel=1e-9, abs=1e-12)
 
 
 def test_classify_state_matches_across_a_random_sweep(backend):
