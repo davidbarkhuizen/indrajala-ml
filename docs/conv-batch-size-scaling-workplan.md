@@ -3,8 +3,8 @@
 **Status: stages 1 and 2 done. At momentum 0.0 the rule holds to B = 128 with warmup and fails
 at B = 512, where no rate reaches the band. Stage 3 (momentum conv, planned in detail below) is
 under way: 3a and 3b (the update rules in the literature's form), 3c (the conv networks honor
-hyperparameters) and 3d (the pure-Python momentum conv reference) are done, 3e (numpy and Rust
-momentum conv) is next.**
+hyperparameters), 3d (the pure-Python momentum conv reference) and 3e (numpy and Rust momentum
+conv) are done, 3f (momentum in the study) is next.**
 
 A measured study and a demo: does the linear learning-rate scaling rule (Goyal et al. 2017:
 multiply the rate by the factor the batch grows, with warmup) hold for the conv network on full
@@ -61,10 +61,8 @@ read the numbers as rough:
   `scripts/batch_size_scaling_sweep.py` runs the sweeps through `run_parameter_sweep`.
   `scripts/batch_size_timing.py` does the timing.
 - **Networks:** `ConvRustArrayMultiClassBackpropClassifierNetwork` and its numpy sibling, both
-  `ArrayConvShape` over each backend's plain multiclass network. **Neither has momentum.**
-  `MomentumRustArrayLayer` updates through `pa.layer_momentum_apply_accumulated_gradient`, which
-  takes a `(W, b)` pair of any shape. A conv `W` is `(channel_count, fan_in)`, so a momentum conv
-  layer may need no crate change. That is unverified.
+  `ArrayConvShape` over each backend's plain multiclass network, and their momentum siblings
+  `MomentumConv…` (3e), whose conv layers update through the dense layers' fused momentum op.
 - **Architecture:** the conv demo's `[ConvSpec(3, 8)]` with dense `[32]`. conv-pool-conv only for
   timing (see Stages).
 - **Profiling:** `scripts/epoch_op_profile.py` profiles the conv demo's 2000-row subset only.
@@ -183,7 +181,7 @@ So the plan goes to stage 3.
 At momentum 0.0 the conv network plateaus below the band at B = 512 (stage 2), so momentum is the
 remaining lever. Dense needed momentum 0.9 to reach B = 512. Momentum conv is also worth having in
 its own right: the README lists `Momentum` and `Conv` as features of all three implementations,
-and only the pure-Python implementation (3d) combines them so far.
+and 3d and 3e combine them in each.
 
 Each sub-stage is one PR; 3a and 3b are each a crate PR first, then the parent PR that moves `rust/`.
 
@@ -310,7 +308,15 @@ not loaded, and the rate folded into the velocity.
   update, and the gradients are covered by the existing conv checks.
 - The velocity is not saved, as for every momentum network (`snapshot()` covers W and b).
 
-#### 3e: numpy and Rust momentum conv
+#### 3e: numpy and Rust momentum conv (done)
+
+Done (parent PR below, no crate change: the fused momentum op took the conv shapes as they are).
+The golden run is bit-identical: `MomentumArrayLayer`'s update moved unchanged into
+`momentum_update`, which the numpy conv layer shares. Over the parity runs at momentum 0.9 and
+rate 0.5, both backends stay within 1.3e-14 of 3d's reference. The new tests catch each of these
+mutations: momentum dropped or a velocity not carried in either conv layer, a conv, dense or output
+hook left unset, `hyperparameters` unset on either network (momentum not saved), the rate folded
+into the velocity (eq. (10)), and `g * (1 / B)` in place of `g / B`.
 
 - **Layers:** `MomentumConvArrayLayer(ConvArrayLayer)` and
   `MomentumConvRustArrayLayer(ConvRustArrayLayer)`, with `hyperparameters = ("momentum",)` and a
@@ -332,7 +338,8 @@ not loaded, and the rate folded into the velocity.
   - the layer against its formula on hand-set gradients (as `test_momentum_array_layer.py`), and
     the fused op on conv shapes;
   - save/load round trips, including a model saved by either backend loading into the other, with
-    `momentum` in the envelope.
+    `momentum` in the envelope. (The pure-Python network's snapshot is per kernel and per node, so
+    its files don't load into the array networks, or theirs into it, as for plain conv.)
 
 #### 3f: momentum in the study, and the reruns
 

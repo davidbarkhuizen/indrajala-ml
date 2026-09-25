@@ -117,9 +117,9 @@ is the subclass that sets the Rust backend and layer classes. Only the layers ar
 per backend.
 
 Each implementation has variants for the same set of features, named by a prefix on the class:
-`ReLU`, `Softmax`, `CrossEntropy`, `L2`, `Momentum`, `Adam`, `Dropout`, `Ensemble`. Convolution
-and max pooling (`Conv…`, `MaxPool…`) exist in all three implementations; momentum conv
-(`MomentumConv…`) is pure Python only so far. The numpy classes are the reference the Rust
+`ReLU`, `Softmax`, `CrossEntropy`, `L2`, `Momentum`, `Adam`, `Dropout`, `Ensemble`. Convolution,
+max pooling and momentum conv (`Conv…`, `MaxPool…`, `MomentumConv…`) exist in all three
+implementations. The numpy classes are the reference the Rust
 classes are tested against (`tests/test_*fused_layer_ops.py`, `tests/test_numerical_parity.py`).
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,

@@ -29,7 +29,9 @@ from indrajala_ml.model.l2_array_layer import L2ArrayLayer
 from indrajala_ml.model.l2_regularization_layer import make_l2_node_cls
 from indrajala_ml.model.l2_rust_array_layer import L2RustArrayLayer
 from indrajala_ml.model.momentum_array_layer import MomentumArrayLayer
+from indrajala_ml.model.momentum_conv_array_layer import MomentumConvArrayLayer
 from indrajala_ml.model.momentum_conv_layer import make_momentum_kernel_cls
+from indrajala_ml.model.momentum_conv_rust_array_layer import MomentumConvRustArrayLayer
 from indrajala_ml.model.momentum_layer import make_momentum_node_cls
 from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
@@ -211,9 +213,9 @@ def _momentum_kernels(momentum: float, W: Matrix, b: list[float]) -> Step:
     )
 
 
-def _momentum_layer(layer_cls: type[MomentumArrayLayer] | type[MomentumRustArrayLayer], to_array: Wrap) -> Start:
+def _momentum_layer(make_layer: Callable[[float], ArrayLayers], to_array: Wrap) -> Start:
     def start(momentum: float, W: Matrix, b: list[float]) -> Step:
-        layer = layer_cls(*DENSE_SHAPE, momentum)
+        layer = make_layer(momentum)
         layer.W, layer.b = to_array(W), to_array(b)
         return lambda grad_W, grad_b, learning_rate, batch_size: _step_layer(
             layer, to_array, grad_W, grad_b, learning_rate, batch_size
@@ -226,8 +228,22 @@ def _momentum_layer(layer_cls: type[MomentumArrayLayer] | type[MomentumRustArray
 MOMENTUM_IMPLEMENTATIONS: list[tuple[str, tuple[int, int], Start]] = [
     ("MomentumBackpropNode", DENSE_SHAPE, _momentum_nodes),
     ("MomentumConvKernel", CONV_SHAPE, _momentum_kernels),
-    ("MomentumArrayLayer", DENSE_SHAPE, _momentum_layer(MomentumArrayLayer, np.array)),
-    ("MomentumRustArrayLayer", DENSE_SHAPE, _momentum_layer(MomentumRustArrayLayer, pa.Array)),
+    ("MomentumArrayLayer", DENSE_SHAPE, _momentum_layer(lambda m: MomentumArrayLayer(*DENSE_SHAPE, m), np.array)),
+    (
+        "MomentumConvArrayLayer",
+        CONV_SHAPE,
+        _momentum_layer(lambda m: MomentumConvArrayLayer(5, 5, 2, 3, 3, momentum=m), np.array),
+    ),
+    (
+        "MomentumRustArrayLayer",
+        DENSE_SHAPE,
+        _momentum_layer(lambda m: MomentumRustArrayLayer(*DENSE_SHAPE, m), pa.Array),
+    ),
+    (
+        "MomentumConvRustArrayLayer",
+        CONV_SHAPE,
+        _momentum_layer(lambda m: MomentumConvRustArrayLayer(5, 5, 2, 3, 3, momentum=m), pa.Array),
+    ),
 ]
 
 

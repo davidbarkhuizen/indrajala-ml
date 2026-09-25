@@ -176,8 +176,9 @@ class ArrayConvShape(_ConvShapeBase[A]):
     builds self.layers directly. Everything that only walks self.layers through the per-layer hooks
     (the forward pass, learn*, the multiclass shape's outputs and targets) is inherited. Overridden
     is what assumes a dense W in every layer: randomize, snapshot/restore (an empty entry for a pool
-    layer) and save/load (the pure-Python conv network's envelope, so a model saved by any of the
-    three loads into the others), with the network's hyperparameters in it.
+    layer) and save/load (the pure-Python conv network's envelope with one (W, b) entry per layer,
+    so a model saved by either backend loads into the other, though not into the pure-Python
+    network), with the network's hyperparameters in it.
 
     The conv and dense layers are built through _new_layer, so a sibling's layer classes take the
     network's hyperparameters as the dense networks' do.
