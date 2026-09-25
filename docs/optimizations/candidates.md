@@ -55,11 +55,9 @@ an epoch at best.
 
 Plan (stage 0 first, one PR each, gate before any kernel work):
 
-- **Stage 0 tooling.** `demo_layer_op_timing.py`'s `CONV_SHAPES` hard-codes one input channel and
-  stride 1 (`conv_cases` builds `CONV_LAYERS[backend](side, side, 1, CONV_KERNEL_SIZE,
-  CONV_CHANNELS)`). Give each shape an input-channel count and a stride (the layer constructors
-  already take `input_channels` and `stride`), and add the second-conv shapes 13x13x8,
-  26x26x8 stride 2 and 26x26x8. `scripts/focused_benchmark.py` picks the cases up.
+- **Stage 0 tooling (done).** `demo_layer_op_timing.py`'s `CONV_SHAPES` carry an input-channel
+  count and a stride, and include the second-conv shapes 13x13x8, 26x26x8/2 (stride 2) and
+  26x26x8 (`--shape 26x26x8,` selects the stride-1 one in `scripts/focused_benchmark.py`).
 - **Stage 0a, 2-row blocks on the demo's shapes.** `focused_benchmark.py --shape <second-conv
   shapes> --op accumulate --batch-sizes 32 512 --rust-threads 1 --passes 2`: batched against 32
   single calls. Then a probe build with `rows_per_block = 2` (and 4) in `matmul_narrow`, timed the

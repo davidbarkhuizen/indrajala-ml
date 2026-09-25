@@ -29,10 +29,15 @@ DENSE_SHAPES = [
     ("dense 30 x 784", 30, 784),
     ("dense 10 x 30", 10, 30),
 ]
-# (label, side): a ConvSpec(3, 8) layer on MNIST 28x28 and on UCI digits 8x8
+# (label, side, input_channels, stride): a ConvSpec(3, 8) layer on MNIST 28x28 and on UCI digits
+# 8x8, then the second ConvSpec(3, 8) layer of conv-pool-conv (13x13x8 in), conv-conv-stride2
+# (26x26x8 in, stride 2) and conv-conv (26x26x8 in) on MNIST
 CONV_SHAPES = [
-    ("conv 28x28, 8 ch", 28),
-    ("conv 8x8, 8 ch", 8),
+    ("conv 28x28, 8 ch", 28, 1, 1),
+    ("conv 8x8, 8 ch", 8, 1, 1),
+    ("conv 13x13x8, 8 ch", 13, 8, 1),
+    ("conv 26x26x8/2, 8 ch", 26, 8, 2),
+    ("conv 26x26x8, 8 ch", 26, 8, 1),
 ]
 CONV_KERNEL_SIZE = 3
 CONV_CHANNELS = 8
@@ -154,15 +159,16 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[in
     return cases
 
 
-def conv_cases(label: str, side: int, batch_sizes: Sequence[int]) -> list[Case]:
+def conv_cases(label: str, side: int, input_channels: int, stride: int, batch_sizes: Sequence[int]) -> list[Case]:
     """
-    ConvSpec(3, 8) on one side x side input channel: forward, downstream and accumulate_gradient,
-    single-example and batched. The single-example ops include each backend's N = 1 wrapping.
+    ConvSpec(3, 8) on a side x side x input_channels input at the given stride: forward, downstream
+    and accumulate_gradient, single-example and batched. The single-example ops include each
+    backend's N = 1 wrapping.
     """
 
     def build_layer(backend: str, batch: int) -> tuple[Any, FloatArray, FloatArray]:
         rng = np.random.default_rng(SEED)
-        layer: Any = CONV_LAYERS[backend](side, side, 1, CONV_KERNEL_SIZE, CONV_CHANNELS)
+        layer: Any = CONV_LAYERS[backend](side, side, input_channels, CONV_KERNEL_SIZE, CONV_CHANNELS, stride)
         layer.W = _backend_array(backend, rng.uniform(-0.3, 0.3, size=(layer.channel_count, layer.fan_in)))
         channel_count: int = layer.channel_count
         layer.b = _backend_array(backend, rng.uniform(-0.3, 0.3, size=channel_count))
@@ -254,8 +260,8 @@ def all_cases(batch_sizes: Sequence[int] = BATCH_SIZES) -> list[Case]:
     cases: list[Case] = []
     for label, size, input_size in DENSE_SHAPES:
         cases += dense_cases(label, size, input_size, batch_sizes)
-    for label, side in CONV_SHAPES:
-        cases += conv_cases(label, side, batch_sizes)
+    for label, side, input_channels, stride in CONV_SHAPES:
+        cases += conv_cases(label, side, input_channels, stride, batch_sizes)
     for label, side in POOL_SHAPES:
         cases += pool_cases(label, side, batch_sizes)
     return cases
