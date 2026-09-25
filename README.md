@@ -22,7 +22,9 @@ pinned submodule commit to the latest upstream `main`: `git submodule update --r
 
 ## Usage
 
-Requires Python >= 3.10 and a Debian/Ubuntu host (`setup` apt-installs `python3-tk` and `cargo`).
+Requires Python >= 3.10, a Debian/Ubuntu host (`setup` apt-installs `python3-tk`) and
+[rustup](https://rustup.rs): `rust/rust-toolchain.toml` pins the Rust toolchain, which rustup
+installs on the first build (a distro `cargo` ignores the pin).
 
 ```
 ./cli setup          # submodule, .venv, pip deps, release build of rust/, fetch MNIST
@@ -55,8 +57,8 @@ git submodule update --init   # populate rust/
 ```
 
 CI (`.github/workflows/ci.yml`) runs `./cli setup --no-os-packages --rust-wheel-dir .rust-wheel`
-then `./cli test <suite>` on every push and PR, one parallel job per suite. It skips apt (the
-runner image already has cargo, and CI's python is not apt's), and caches `.venv`, MNIST and the
+then `./cli test <suite>` on every push and PR, one parallel job per suite. It skips apt (CI's
+python is not apt's), and caches `.venv`, MNIST and the
 crate's release wheel, keyed on the `rust/` submodule commit, so the crate only compiles when
 the submodule moves.
 

@@ -5,7 +5,9 @@ set -euo pipefail
 option="${1:-}"
 
 venv_root=".venv"
-os_packages="python3-tk cargo"
+# Not cargo: rust/'s rust-toolchain.toml pins the Rust toolchain, which only rustup honours
+# (require_rustup).
+os_packages="python3-tk"
 rust_crate_root="rust"
 # Pinned here, not in requirements.txt (a pip-compile lock of the package's own dependencies):
 # the build tool for rust/, so CI's cached venv and wheel and a local setup all build with the
@@ -79,8 +81,17 @@ fetch_data () {
     echo "... fetched datasets"
 }
 
+require_rustup () {
+
+    if ! command -v rustup >/dev/null 2>&1; then
+        echo "rustup not found: install it from https://rustup.rs (rust/rust-toolchain.toml pins the toolchain)" >&2
+        exit 1
+    fi
+}
+
 build_rust () {
 
+    require_rustup
     echo "building $rust_crate_root ..."
     # --release, not a plain debug build: a debug build of this crate measures 65-427x slower
     # than numpy on the same forward pass a release build only measures 2-10x slower on.
@@ -97,6 +108,7 @@ install_rust_wheel () {
     # hold an older build of it.
     local wheel_dir="$1"
     if ! ls "$wheel_dir"/*.whl >/dev/null 2>&1; then
+        require_rustup
         echo "building $rust_crate_root wheel into $wheel_dir ..."
         local wheel_out
         wheel_out="$(realpath -m "$wheel_dir")"
@@ -111,9 +123,8 @@ install_rust_wheel () {
 setup () {
 
     # Both flags are for CI:
-    # --no-os-packages: neither apt package is used there (python3-tk installs into the system
-    #   python, not setup-python's, and the runner image's rustup cargo precedes apt's on PATH),
-    #   and skipping them saves ~17 s per job.
+    # --no-os-packages: python3-tk isn't used there (apt installs it into the system python,
+    #   not setup-python's), so CI skips apt.
     # --rust-wheel-dir <dir>: install rust/ from a cached wheel (see install_rust_wheel)
     #   instead of `maturin develop`.
     local os_packages=true

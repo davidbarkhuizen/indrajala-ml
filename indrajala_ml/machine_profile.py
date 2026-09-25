@@ -339,7 +339,8 @@ def capture():
                     "version": platform.python_version(),
                 },
                 "numpy": _numpy_software(),
-                "rustc": run_command(["rustc", "--version"]),
+                # run in the crate, so rustup reports rust-toolchain.toml's pinned toolchain
+                "rustc": run_command(["rustc", "--version"], cwd=RUST_ROOT),
                 "crate_release_profile": parse_release_profile(cargo_toml) if cargo_toml else None,
                 "thread_env": {name: os.environ.get(name) for name in THREAD_ENV_VARS},
             },
