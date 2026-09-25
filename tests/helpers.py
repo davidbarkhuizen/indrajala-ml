@@ -480,7 +480,7 @@ class DropoutMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNet
     """
     Test-only per-node multiclass dropout network, the reference for the dropout array networks:
     make_dropout_layer_cls hidden layers and a sigmoid output layer. It is a reference at eval
-    only, where dropout does nothing: training draws masks from unrelated RNGs.
+    only, where dropout does nothing: its training masks come from Python's random, not np.random.
     """
 
     def __init__(

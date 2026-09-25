@@ -1,10 +1,8 @@
 from typing import Any
-from unittest.mock import patch
 
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
@@ -42,18 +40,17 @@ def _next_layer(backend: Backend) -> Any:
     return next_layer
 
 
+# seeds whose first draw keeps (0.5488... >= 0.5) or drops (0.4170... < 0.5) the one unit
+KEEP_SEED, DROP_SEED = 0, 1
+
+
 def _forward_with_outcome(layer: DropoutArrayLayer | DropoutRustArrayLayer, backend: Backend, kept: bool) -> Any:
-    # a training forward pass whose one unit is kept or dropped. numpy's mask comes from
-    # np.random.random, which is patched; the Rust mask comes from the crate's own RNG, which has
-    # no seam, so it is drawn until the outcome comes up (certain within 200 draws at 0.5)
-    if backend is NUMPY:
-        with patch("numpy.random.random", return_value=np.array([0.9 if kept else 0.1])):
-            return layer.forward(backend.owned(X))
-    for _ in range(200):
-        result = layer.forward(backend.owned(X))
-        if layer._mask.tolist()[0] == (1.0 if kept else 0.0):
-            return result
-    pytest.fail(f"never drew a {'kept' if kept else 'dropped'} outcome in 200 draws")
+    # a training forward pass whose one unit is kept or dropped: both backends draw numpy's
+    # stream, so one seed gives the same outcome on each
+    backend.seed(KEEP_SEED if kept else DROP_SEED)
+    result = layer.forward(backend.owned(X))
+    assert layer._mask.tolist() == [1.0 if kept else 0.0]
+    return result
 
 
 def test_forward_at_eval_mode_matches_a_plain_sigmoid_no_rescale(backend: Backend):
@@ -94,11 +91,11 @@ def test_forward_in_training_mode_when_dropped_is_exactly_zero(backend: Backend)
 
 def test_forward_and_hidden_delta_in_training_mode_are_internally_consistent_across_many_draws(backend: Backend):
 
-    # no two backends' masks can be compared draw for draw, so this checks each draw against the
-    # mask the layer returns: a kept unit is base / keep_probability, a dropped one exactly 0.0.
-    # 200 draws at 0.5 make both outcomes certain
+    # each draw against the mask the layer returns: a kept unit is base / keep_probability, a
+    # dropped one exactly 0.0. 200 draws at 0.5 from a fixed seed include both outcomes
     layer = _dropout_layer(backend, drop_probability=0.5)
     layer.set_training_mode(True)
+    backend.seed(0)
 
     saw_kept = False
     saw_dropped = False
