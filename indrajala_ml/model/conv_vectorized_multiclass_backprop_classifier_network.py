@@ -1,120 +1,18 @@
 from __future__ import annotations
 
-import numpy as np
-
-from indrajala_ml.model.array_layer import ArrayLayer, fan_in_aware_random_layer
-from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
+from indrajala_ml.model.array_network_shapes import ArrayConvShape
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
-from indrajala_ml.model.conv_front_end import (
-    build_conv_array_network_layers,
-    load_conv_model_json,
-    save_conv_array_model_json,
-)
-from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
-from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
 
 
-class ConvVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
+class ConvVectorizedMultiClassBackpropClassifierNetwork(ArrayConvShape, VectorizedMultiClassBackpropClassifierNetwork):
     """
-    The numpy sibling of ConvMultiClassBackpropClassifierNetwork: a convolutional front end of
-    ConvArrayLayers and MaxPoolArrayLayers (one ConvSpec or PoolSpec each, in order), then one or
-    more sigmoid dense ArrayLayers, then a one-vs-rest sigmoid output ArrayLayer.
-
-    Like the pure-Python conv class, this doesn't call super().__init__(): ArrayNetworkBase's
-    constructor builds every layer from a flat layer_sizes list, which can't express conv
-    hyperparameters. It builds self.layers/self.output_layer directly instead, and everything
-    else - predict_probabilities/classify_state/the one-hot targets from
-    VectorizedMultiClassBackpropClassifierNetwork, _forward/learn/learn_batch from
-    ArrayNetworkBase - is inherited unchanged. Those only iterate self.layers through the
-    per-layer hooks (forward*/compute_*_delta*/downstream*/accumulate_gradient*/
-    apply_accumulated_gradient) the conv and pool array layers implement.
-
-    What differs from the dense array classes is anything assuming every layer has a dense
-    (size, previous_size) W: randomize (conv layers draw from their kernel fan-in, pool layers
-    draw nothing), snapshot/restore (an empty entry for a pool layer, mirroring MaxPoolLayer's
-    own [] snapshot), and save/load (the pure-Python conv class's JSON envelope keys).
+    The numpy sibling of ConvMultiClassBackpropClassifierNetwork: ArrayConvShape on the numpy
+    backend, with ConvArrayLayers and MaxPoolArrayLayers in front of ArrayLayers.
     """
 
-    def __init__(
-        self,
-        input_height: int,
-        input_width: int,
-        conv_specs: list[ConvSpec | PoolSpec],
-        dense_layer_sizes: list[int],
-        class_count: int,
-    ) -> None:
-
-        validate_class_count(class_count)
-        validate_layer_sizes(dense_layer_sizes, label="dense_layer_sizes", noun="dense hidden layer")
-
-        self.class_count = class_count
-        self.dimension = input_height * input_width
-        self.input_height = input_height
-        self.input_width = input_width
-        self.conv_specs = list(conv_specs)
-        self.dense_layer_sizes = dense_layer_sizes
-
-        self.conv_layers, dense_layers, self.output_layer = build_conv_array_network_layers(
-            input_height,
-            input_width,
-            self.conv_specs,
-            dense_layer_sizes,
-            class_count,
-            conv_cls=ConvArrayLayer,
-            pool_cls=MaxPoolArrayLayer,
-            dense_cls=ArrayLayer,
-        )
-        self.layers = self.conv_layers + dense_layers + [self.output_layer]
-
-    def randomize(self) -> None:
-        # forward order, as ConvMultiClassBackpropClassifierNetwork.randomize: each conv layer
-        # scoped to its kernel fan-in (fan_in_aware_random_layer's (size, previous_size) shape is
-        # exactly a conv W's (channel_count, input_channels * kernel_size**2)), pool layers draw
-        # nothing, and the dense tail's fan-in starts from the last conv/pool layer's flattened
-        # output size
-        for layer in self.conv_layers:
-            if isinstance(layer, ConvArrayLayer):
-                layer.W, layer.b = fan_in_aware_random_layer(layer.channel_count, layer.fan_in)
-
-        previous_size = self.conv_layers[-1].size
-        for layer in self.layers[len(self.conv_layers) :]:
-            layer.W, layer.b = fan_in_aware_random_layer(layer.size, previous_size)
-            previous_size = layer.size
-
-    @classmethod
-    def randomized(
-        cls,
-        input_height: int,
-        input_width: int,
-        conv_specs: list[ConvSpec | PoolSpec],
-        dense_layer_sizes: list[int],
-        class_count: int,
-    ) -> "ConvVectorizedMultiClassBackpropClassifierNetwork":
-        network = cls(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-        network.randomize()
-        return network
-
-    def snapshot(self) -> list[tuple]:
-        return [
-            () if isinstance(layer, MaxPoolArrayLayer) else (layer.W.copy(), layer.b.copy()) for layer in self.layers
-        ]
-
-    def restore(self, snapshot: list[tuple]) -> None:
-        for layer, entry in zip(self.layers, snapshot):
-            if isinstance(layer, MaxPoolArrayLayer):
-                assert len(entry) == 0, f"a MaxPoolArrayLayer has no state to restore; got {entry!r}"
-                continue
-            W, b = entry
-            layer.W = np.array(W, dtype=np.float64).copy()
-            layer.b = np.array(b, dtype=np.float64).copy()
-
-    def save(self, path: str) -> None:
-        save_conv_array_model_json(path, self)
-
-    @classmethod
-    def load(cls, path: str) -> "ConvVectorizedMultiClassBackpropClassifierNetwork":
-        return load_conv_model_json(cls, path)
+    conv_layer_cls = ConvArrayLayer
+    pool_layer_cls = MaxPoolArrayLayer

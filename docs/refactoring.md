@@ -32,19 +32,14 @@ calls `layer.sgd_step`: numpy's layers make the unfused `accumulate_gradient` an
 single-output shapes are mixins (`array_network_shapes.py`), so each concrete name is the shape
 over one backend's base: `VectorizedMultiClassBackpropClassifierNetwork(ArrayMultiClassShape,
 ArrayNetworkBase)`, `RustArrayMultiClassBackpropClassifierNetwork(ArrayMultiClassShape,
-RustArrayNetworkBase)`, and likewise `ArraySingleOutputShape` for the single-output pair.
-
-**The duplication left.**
-
-- the ensemble pair `EnsembleArrayBackpropClassifierNetwork` /
-  `EnsembleRustArrayBackpropClassifierNetwork`;
-- the conv pair's `randomize`, `snapshot` and `restore`.
+RustArrayNetworkBase)`, and likewise `ArraySingleOutputShape` for the single-output pair. The
+conv pair is `ArrayConvShape` over each backend's plain multiclass network, differing only in
+its conv and pool layer classes and Rust's row-by-row `classify_rows` (batched Rust conv
+inference was measured slower, `docs/optimizations/rejected.md`). The ensemble pair is
+`ArrayEnsembleBase` (`array_ensemble_base.py`), differing only in `classifier_cls`.
 
 **Stages** (one PR each):
 
-3. The ensemble pair, and the conv pair's `randomize`, `snapshot` and `restore`. Only the conv
-   pair's `classify_rows` stays per backend, because batched Rust conv inference was measured
-   slower (`docs/optimizations/rejected.md`).
 4. Update the docstrings that still describe the numpy and Rust networks as separate.
 
 ## 2. Hyperparameters declared once
