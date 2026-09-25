@@ -1,6 +1,7 @@
 # Workplan: batch-size scaling for the conv network
 
-**Status: stage 1 done (`lr_32` = 2); stage 2 next.**
+**Status: stages 1 and 2 done. At momentum 0.0 the rule holds to B = 128 with warmup and fails
+at B = 512. Stage 3 (momentum conv) is next, if it's worth building.**
 
 A measured study and a demo: does the linear learning-rate scaling rule (Goyal et al. 2017:
 multiply the rate by the factor the batch grows, with warmup) hold for the conv network on full
@@ -118,14 +119,44 @@ Result: full MNIST, Rust, momentum 0.0, 3 seeds, 2 epochs, final test accuracy:
   should switch to prepared rows, or report the conversion separately (a scratch probe:
   0.10 s of 1.58 s for 8192 rows at B = 32).
 
-### Stage 2: does B = 512 train at momentum 0.0?
+### Stage 2 (done): does B = 512 train at momentum 0.0? No.
 
-The go/no-go question. At B = 128 and 512, run the scaled rate (`lr_32 * B / 32`) with no warmup
-and with a one-epoch warmup, plus the unscaled rate as the control. 3 seeds, 3 epochs.
+The go/no-go question. At B = 128 and 512, the scaled rate (`lr_32 * B / 32`) with no warmup and
+with a one-epoch warmup, plus the unscaled rate as the control. 3 seeds, 3 epochs:
 
-- **If the scaled rate with warmup reaches the batch-32 band at B = 512:** go to stage 4.
-- **If it diverges, or holds only to B = 128 as dense did at momentum 0.0:** record that and go to
-  stage 3.
+    python scripts/batch_size_scaling_sweep.py scaling --architecture conv --lr32 0.0=2 \
+        --batch-sizes 32 128 512 --warmups 0 1 --epochs 3 --seeds 3
+
+Result: full MNIST, Rust, momentum 0.0, `lr_32` = 2. The batch-32 band (no warmup, epoch 3) is
+97.16% ± 0.61%, seeds 96.45% - 97.53%.
+
+| B | rate | value | warmup epochs (steps) | total steps | epoch 1 | epoch 2 | epoch 3 | in band |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 32 | scaled | 2 | 0 (0) | 5625 | 95.45% ± 0.28% | 96.82% ± 0.39% | 97.16% ± 0.61% | yes |
+| 32 | scaled | 2 | 1 (1875) | 5625 | 91.72% ± 1.52% | 96.47% ± 0.26% | 96.98% ± 0.33% | yes |
+| 128 | scaled | 8 | 0 (0) | 1407 | 87.67% ± 7.94% | 94.90% ± 0.73% | 96.23% ± 0.33% | no |
+| 128 | unscaled | 2 | 0 (0) | 1407 | 91.46% ± 0.66% | 92.89% ± 0.99% | 94.80% ± 0.34% | no |
+| **128** | **scaled** | **8** | **1 (469)** | 1407 | 92.21% ± 0.39% | 96.13% ± 0.16% | **96.63% ± 0.72%** | **yes** |
+| 128 | unscaled | 2 | 1 (469) | 1407 | 88.86% ± 1.06% | 92.11% ± 0.61% | 93.65% ± 0.62% | no |
+| 512 | scaled | 32 | 0 (0) | 354 | 10.00% ± 0.38% | 10.00% ± 0.38% | 10.00% ± 0.38% | no |
+| 512 | unscaled | 2 | 0 (0) | 354 | 80.06% ± 5.57% | 86.88% ± 2.15% | 90.26% ± 2.64% | no |
+| 512 | scaled | 32 | 1 (118) | 354 | 11.08% ± 1.14% | 10.64% ± 0.63% | 13.94% ± 6.19% | no |
+| 512 | unscaled | 2 | 1 (118) | 354 | 69.59% ± 1.83% | 85.25% ± 2.30% | 90.69% ± 0.72% | no |
+
+- **The rule holds to B = 128, with a one-epoch warmup only.** Without warmup the scaled rate 8
+  reaches 96.23% but misses the band, and one seed fell to 78.6% in epoch 1. This matches dense
+  at momentum 0.0.
+- **At B = 512 the scaled rate 32 stays at chance, with or without warmup.** It is 2-4x the rate
+  that already diverges at B = 32 (16). As for dense, the larger batch did not lift that ceiling.
+  One warmup seed reached 21.1% in epoch 3, so the rate is not fully dead after the ramp, but it
+  is far from training.
+- **The unscaled control at B = 512 reaches about 90.5%, 6.5 points below the band.** It is still
+  climbing, and it has 16x fewer steps than B = 32.
+- **Untested:** a rate between 8 and 32 at B = 512, such as 8 (the largest stable batch-32 rate)
+  with warmup. That tests a rate ceiling, not the linear rule.
+- Warmup costs little at B = 32 (96.98% against 97.16%, within the spread).
+
+So the plan goes to stage 3.
 
 ### Stage 3 (only if stage 2 fails): momentum conv
 

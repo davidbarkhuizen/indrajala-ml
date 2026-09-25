@@ -5,6 +5,8 @@ on full MNIST with the Rust backend.
     python scripts/batch_size_scaling_sweep.py baseline --out baseline.json
     python scripts/batch_size_scaling_sweep.py scaling --lr32 0.0=3.0 --lr32 0.9=0.5 --out scaling.json
     python scripts/batch_size_scaling_sweep.py baseline --architecture conv --epochs 2 --seeds 3
+    python scripts/batch_size_scaling_sweep.py scaling --architecture conv --lr32 0.0=2 \
+        --batch-sizes 32 128 512 --warmups 0 1 --epochs 3 --seeds 3
 
 `baseline` (stage 1) sweeps the batch-32 rate at momentum 0.0 and 0.9 (conv: at 0.0 only, since
 no conv network has momentum). `scaling` (stage 2) runs every batch size x rate (scaled,
@@ -180,6 +182,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--limit", type=int, help="use only the first LIMIT train and test rows (smoke runs)")
     parser.add_argument("--epochs", type=int, default=EPOCHS)
     parser.add_argument("--seeds", type=int, default=len(SEEDS))
+    parser.add_argument("--batch-sizes", type=int, nargs="+", default=BATCH_SIZES, help="scaling; include 32 for the band")
+    parser.add_argument("--warmups", type=float, nargs="+", default=WARMUP_EPOCHS, help="warmup epochs (scaling)")
     args = parser.parse_args(argv)
 
     context = {
@@ -198,7 +202,9 @@ def main(argv: list[str] | None = None) -> None:
         lr32 = _parse_lr32(args.lr32)
         if not lr32:
             sys.exit("scaling needs --lr32 momentum=rate for each momentum")
-        results = scaling(context, seeds, lr32, BATCH_SIZES, WARMUP_EPOCHS)
+        if bss.BASE_BATCH_SIZE not in args.batch_sizes or 0.0 not in args.warmups:
+            sys.exit(f"scaling needs batch size {bss.BASE_BATCH_SIZE} and warmup 0 for the batch-32 band")
+        results = scaling(context, seeds, lr32, args.batch_sizes, args.warmups)
 
     if args.out:
         with open(args.out, "w") as f:
