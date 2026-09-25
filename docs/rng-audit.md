@@ -172,7 +172,8 @@ produce `limit`.
 
 In order:
 
-1. **Make the crate's RNG a seedable MT19937 that reproduces `np.random` bit for bit.** Port
+1. **Make the crate's RNG a seedable MT19937 that reproduces `np.random` bit for bit.** Planned in
+   [rng-numpy-parity-workplan.md](rng-numpy-parity-workplan.md). Port
    `init_genrand`, the twist and tempering, and numpy's `random_double` into `random.rs` (about 60
    lines, no dependency, in keeping with the crate's hand-built posture). Expose a module-level
    `seed(int)` that mirrors `np.random.seed`, which the repo's code already calls, and have
