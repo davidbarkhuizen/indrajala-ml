@@ -21,7 +21,7 @@ def main() -> None:
         "the full 60000-example MNIST training set, same architecture/hyperparameters, "
         "pure-Python MultiClassBackpropClassifierNetwork vs. its numpy-array-backed "
         "VectorizedMultiClassBackpropClassifierNetwork sibling (already parity-checked "
-        "step-by-step in tests/test_vectorized_multiclass_backprop_model.py, and "
+        "step-by-step in tests/test_array_multiclass_backprop_model.py, and "
         "accuracy-trajectory-checked at UCI digits scale in "
         "demo_vectorized_uci_digit_recognition.py)."
     )

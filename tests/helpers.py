@@ -135,8 +135,7 @@ def matching_array_backprop_networks(
     bounds: float = 10.0,
 ):
     """
-    Shared by test_vectorized_multiclass_backprop_model.py's and
-    test_rust_array_multiclass_backprop_model.py's own _matching_networks: builds a
+    Used by test_array_multiclass_backprop_model.py's _matching_networks: builds a
     MultiClassBackpropClassifierNetwork and an array-backed sibling
     (VectorizedMultiClassBackpropClassifierNetwork / RustArrayMultiClassBackpropClassifierNetwork,
     passed as array_network_cls) with identical injected weights. Neither array backend's RNG
@@ -677,9 +676,7 @@ def assert_array_network_save_load_round_trip(network, load_fn, tmp_path, filena
     Array-backed analogue of assert_save_and_load_round_trip above: a numpy/pa.Array snapshot
     element doesn't support a plain == equality check the way a node network's snapshot() does
     (it's elementwise, not a single bool), so this checks the JSON envelope's scalar fields plus
-    predict_probabilities via pytest.approx instead of snapshot() equality. Shared by both
-    test_vectorized_multiclass_backprop_model.py's and
-    test_rust_array_multiclass_backprop_model.py's own test_save_load_round_trips_weights_and_predictions.
+    predict_probabilities via pytest.approx instead of snapshot() equality.
     """
     path = str(tmp_path / filename)
     network.save(path)

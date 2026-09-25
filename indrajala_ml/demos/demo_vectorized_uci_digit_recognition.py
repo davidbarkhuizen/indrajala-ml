@@ -25,7 +25,7 @@ def main() -> None:
         "demo_uci_digit_recognition.py trains, here trained by "
         "VectorizedMultiClassBackpropClassifierNetwork, a numpy-array-backed sibling, "
         "parity-checked step-by-step against the pure-Python MultiClassBackpropClassifierNetwork "
-        "in tests/test_vectorized_multiclass_backprop_model.py. This demo trains both, at the "
+        "in tests/test_array_multiclass_backprop_model.py. This demo trains both, at the "
         "same seed and hyperparameters, and reports the actual measured accuracy trajectory and "
         "wall-clock cost of each."
     )

@@ -22,7 +22,7 @@ Rules for every stage:
 
 ## 1. Test files parameterized by backend
 
-**The duplication.** 21 numpy/Rust pairs of test files (`test_*_array_layer.py` /
+**The duplication.** 20 numpy/Rust pairs of test files (`test_*_array_layer.py` /
 `test_*_rust_array_layer.py`, `test_*_vectorized_multiclass_backprop_model.py` /
 `test_*_rust_array_multiclass_backprop_model.py`, and so on) differ in:
 
@@ -32,21 +32,18 @@ Rules for every stage:
 - a few genuinely backend-specific tests, such as the Rust fused-op checks and the numpy
   overflow sweep.
 
-The pairs total about 6,500 lines.
+**Target shape.** The template is `tests/test_array_multiclass_backprop_model.py`, which
+replaced the plain dense pair:
 
-**Target shape.**
+- One file per feature, named without the backend (`test_array_*` or `test_<feature>_array_*`).
+- The `backend` fixture (`tests/conftest.py`) runs a test once per backend, as `test_x[numpy]`
+  and `test_x[rust]`. It is the production backend object (`array_backend.py`): `backend.name`
+  picks the class from the file's `{"numpy": ..., "rust": ...}` map, and `backend.owned` wraps
+  nested lists in that backend's arrays.
+- Closeness is checked with `np.testing.assert_allclose`, which takes either backend's lists.
+- Backend-specific tests stay in the merged file, run on their backend only.
+- Comments and docstrings are trimmed as the files are merged.
 
-- One file per feature, with a `backend` fixture parameterized over `numpy` and `rust`.
-- The fixture supplies the network or layer class, `wrap`, and an `assert_close(actual,
-  expected, rtol, atol)` that converts through `.tolist()`.
-- Backend-specific tests stay in the merged file, marked by backend.
-- Test IDs change, from `test_x` to `test_x[numpy]` / `test_x[rust]`; the test count must not
-  drop.
-
-**Stages:** one PR per two to four features, starting with the plain dense pair
-(`test_vectorized_multiclass_backprop_model.py` / `test_rust_array_multiclass_backprop_model.py`)
-as the template. Each PR compares the collected test list before and after
-(`pytest --collect-only -q`): every old test maps to a parameterized one.
-
-The numpy and Rust networks already share `ArrayNetworkBase`, so the fixture's `wrap` can be the
-backend object's `vector`/`matrix` (`indrajala_ml/model/array_backend.py`).
+**Stages:** one PR per two to four features. Each PR compares the collected test list before and
+after (`pytest --collect-only -q`): every old test maps to a parameterized one, and the count
+doesn't drop.
