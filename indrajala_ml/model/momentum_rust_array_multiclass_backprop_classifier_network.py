@@ -8,12 +8,9 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 
 class MomentumRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust-matmul-backed counterpart to MomentumVectorizedMultiClassBackpropClassifierNetwork.
-    Both hidden layers and the output layer are built from MomentumRustArrayLayer with momentum already bound via a
-    closure - the same pattern MomentumVectorizedMultiClassBackpropClassifierNetwork uses.
-
-    momentum is a required constructor argument, no default, the same posture
-    MomentumVectorizedMultiClassBackpropClassifierNetwork already has.
+    MomentumVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network,
+    with MomentumRustArrayLayer in place of MomentumArrayLayer (hidden and output layers, momentum
+    bound via a closure). momentum is required, as there.
     """
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int, momentum: float) -> None:

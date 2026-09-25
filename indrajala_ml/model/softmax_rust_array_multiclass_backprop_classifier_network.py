@@ -8,9 +8,9 @@ from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
 
 class SoftmaxRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
     """
-    The Rust-matmul-backed counterpart to SoftmaxVectorizedMultiClassBackpropClassifierNetwork.
-    Hidden layers are built from plain RustArrayLayer (sigmoid); only the output layer is a SoftmaxRustArrayLayer -
-    the same split SoftmaxVectorizedMultiClassBackpropClassifierNetwork uses.
+    SoftmaxVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the same network,
+    with SoftmaxRustArrayLayer in place of SoftmaxArrayLayer. Hidden layers stay plain
+    RustArrayLayer (sigmoid); only the output layer is softmax.
 
     No hyperparameter and no extra constructor parameter, so nothing beyond this one
     class-attribute override is needed - __init__/randomized/save/load are all inherited

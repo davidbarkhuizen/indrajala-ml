@@ -39,9 +39,11 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
     geometric targets - it's fixed internally to [(0.0, 1.0)] * dimension, the same convention
     demo_mnist_ensemble_recognition.py's own MNIST training already uses.
 
-    ConvVectorizedMultiClassBackpropClassifierNetwork is the numpy sibling, parity-tested against
-    this class step by step (tests/test_conv_vectorized_multiclass_backprop_model.py). Both
-    chain their front end through conv_front_end.build_conv_front_end.
+    ConvVectorizedMultiClassBackpropClassifierNetwork and
+    ConvRustArrayMultiClassBackpropClassifierNetwork are the array-backed siblings (ArrayConvShape
+    on each backend), parity-tested against this class step by step
+    (tests/test_conv_vectorized_multiclass_backprop_model.py). All three chain their front end
+    through conv_front_end.build_conv_front_end.
     """
 
     def __init__(

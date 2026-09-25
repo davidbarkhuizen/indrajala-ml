@@ -87,8 +87,8 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes) -> list[Cas
     a fresh seeded generator, so both backends time identical inputs. 'hidden_delta' times the
     layer *below* this one (size input_size) calling compute_hidden_delta with this layer as
     next_layer, since that is where this layer's W is read. 'sgd step' is this layer's share of
-    one single-example learn() step: sgd_step where the layer has one (the Rust layers), else
-    accumulate_gradient then apply_accumulated_gradient (numpy's ArrayNetworkBase.learn).
+    one single-example learn() step, sgd_step: fused on Rust, accumulate_gradient then
+    apply_accumulated_gradient on numpy.
     """
 
     def single(op: str) -> Callable[[str], Callable[[], object]]:
@@ -110,15 +110,7 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes) -> list[Cas
                 return lambda: layer.accumulate_gradient(x)
             if op == "apply_accumulated_gradient":
                 return lambda: layer.apply_accumulated_gradient(LEARNING_RATE, 1)
-
-            if hasattr(layer, "sgd_step"):
-                return lambda: layer.sgd_step(x, LEARNING_RATE)
-
-            def sgd_step():
-                layer.accumulate_gradient(x)
-                layer.apply_accumulated_gradient(LEARNING_RATE, 1)
-
-            return sgd_step
+            return lambda: layer.sgd_step(x, LEARNING_RATE)
 
         return build
 

@@ -69,16 +69,14 @@ def save_array_model_json(
     extra: dict | None = None,
 ) -> None:
     """
-    The array-backed counterpart to save_model_json above - shared by every
-    ArrayLayer/RustArrayLayer-backed sibling network's own save()
-    (VectorizedMultiClassBackpropClassifierNetwork, RustArrayMultiClassBackpropClassifierNetwork,
-    and their Adam counterparts): none of them has an input_bounds/StateLayer notion to save
-    (see VectorizedMultiClassBackpropClassifierNetwork.save's own docstring for why this can't
-    just be save_model_json), but every one needs the same layer_sizes/dimension/class_count/
-    snapshot shape, plus room for a sibling-specific extra dict (e.g. Adam's own
+    The array-backed counterpart to save_model_json above - the envelope ArrayMultiClassShape.save
+    writes for every multiclass array network, numpy and Rust: none of them has an
+    input_bounds/StateLayer notion to save (see the comment in ArrayMultiClassShape.save for why
+    this can't just be save_model_json), but every one needs the same layer_sizes/dimension/
+    class_count/snapshot shape, plus room for a sibling-specific extra dict (e.g. Adam's own
     beta1/beta2/epsilon) merged in on top - snapshot is taken as the raw (W, b) array-pair list
-    self.snapshot() already returns and converted to JSON-serializable lists here, once, rather
-    than at each of the 4 call sites.
+    self.snapshot() already returns, from either backend, and converted to JSON-serializable
+    lists here.
     """
 
     state = {
@@ -95,9 +93,8 @@ def save_array_model_json(
 def load_array_model_json(path: str) -> dict:
     """
     The load-side counterpart to save_array_model_json - reads the envelope back as-is; the
-    caller reconstructs snapshot arrays with its own backend-specific array constructor
-    (numpy's np.array or indrajala_math_rust.Array), since this module has no array-backend
-    dependency of its own.
+    caller's restore() converts the snapshot's nested lists through its backend
+    (array_backend.py), since this module has no array-backend dependency of its own.
     """
 
     return load_json(path)
@@ -112,8 +109,8 @@ def save_single_output_array_model_json(
     extra: dict | None = None,
 ) -> None:
     """
-    The single-output counterpart to save_array_model_json above - shared by
-    ArrayBackpropClassifierNetwork/RustArrayBackpropClassifierNetwork's own save(): neither has a
+    The single-output counterpart to save_array_model_json above - the envelope
+    ArraySingleOutputShape.save writes, on either backend: a single-output network has no
     class_count notion at all (each is one independent binary sub-network, not a multiclass
     output layer), on top of save_array_model_json's own already-missing input_bounds/StateLayer
     notion - so this drops that field rather than passing a meaningless class_count=1 through

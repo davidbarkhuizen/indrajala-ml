@@ -34,7 +34,7 @@ class ConvArrayLayer:
     ArrayNetworkBase drives (forward*/compute_*_delta*/downstream*/accumulate_gradient*/
     apply_accumulated_gradient).
 
-    Layouts, fixed so a Rust layer can mirror them later:
+    Layouts, which ConvRustArrayLayer shares (its im2col flattened to (N*P, C*k*k)):
 
     - activations are flat at the layer boundary, (N, C*H*W) channel-major (flat index
       c*H*W + r*W + col) - ConvLayer's own .nodes ordering, so a dense layer after the conv front

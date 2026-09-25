@@ -6,9 +6,8 @@ from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayB
 
 class CrossEntropyRustArrayBackpropClassifierNetwork(RustArrayBackpropClassifierNetwork):
     """
-    The Rust-array-core-backed sibling of CrossEntropyArrayBackpropClassifierNetwork. Built
-    unconditionally alongside every other Rust-backed sibling in this codebase, not gated behind
-    a numpy-stage wall-clock verdict.
+    CrossEntropyArrayBackpropClassifierNetwork on the Rust backend: the same network, with
+    CrossEntropyRustArrayLayer in place of CrossEntropyArrayLayer.
 
     No hyperparameter and no extra constructor parameter, so nothing beyond this one
     class-attribute override is needed - __init__/randomized/save/load/restore (including its

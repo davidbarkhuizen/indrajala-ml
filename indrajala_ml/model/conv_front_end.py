@@ -18,14 +18,14 @@ def build_conv_front_end(
 ) -> list:
     """
     Chains a convolutional front end through conv_specs - the one loop shared by
-    ConvMultiClassBackpropClassifierNetwork (pure Python) and
-    ConvVectorizedMultiClassBackpropClassifierNetwork (numpy), which differ only in which layer
-    classes they build. The first layer reads the single-channel input image; each later one
-    reads the previous layer's out_height x out_width x channel_count output.
+    ConvMultiClassBackpropClassifierNetwork (pure Python) and, through
+    build_conv_array_network_layers, the numpy and Rust conv networks, which differ only in which
+    layer classes they build. The first layer reads the single-channel input image; each later
+    one reads the previous layer's out_height x out_width x channel_count output.
 
     make_conv(spec, previous, height, width, channels) / make_pool(spec, previous, height,
     width, channels) build one layer; previous is the preceding layer (input_layer for the
-    first), for the pure-Python layers' node wiring - the numpy layers ignore it. Every built
+    first), for the pure-Python layers' node wiring - the array layers ignore it. Every built
     layer must expose out_height/out_width/channel_count.
     """
     assert any(isinstance(spec, ConvSpec) for spec in conv_specs), "conv_specs must contain at least one ConvSpec"

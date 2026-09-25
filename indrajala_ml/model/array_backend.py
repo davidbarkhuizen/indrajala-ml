@@ -11,9 +11,9 @@ from indrajala_ml.model.rust_array_layer import fan_in_aware_random_rust_layer
 
 class NumpyBackend:
     """
-    The array operations ArrayNetworkBase needs from numpy. The two backends differ only in these
-    (docs/refactoring.md, item 1); everything else the network does goes through its layers,
-    whose methods have the same names on both backends.
+    The array operations ArrayNetworkBase needs from numpy. The two backends' networks differ
+    only in these; everything else the network does goes through its layers, whose methods have
+    the same names on both backends.
     """
 
     name = "numpy"
