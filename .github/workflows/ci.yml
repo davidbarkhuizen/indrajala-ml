@@ -63,6 +63,13 @@ jobs:
 
       # Only on a wheel-cache miss (a submodule bump): rust/target's dependency builds, keyed by
       # rust-cache on the toolchain, Cargo.lock and Cargo.toml; the crate itself always recompiles.
+      # rust/rust-toolchain.toml's pinned toolchain, installed before rust-cache so the cache is
+      # keyed on it rather than the runner image's stable.
+      - name: Install pinned Rust toolchain
+        if: steps.rust-wheel.outputs.cache-hit != 'true'
+        working-directory: rust
+        run: rustup toolchain install
+
       - name: Cache crate dependency builds
         if: steps.rust-wheel.outputs.cache-hit != 'true'
         uses: Swatinem/rust-cache@v2
