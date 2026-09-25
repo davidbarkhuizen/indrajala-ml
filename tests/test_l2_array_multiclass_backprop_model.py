@@ -1,8 +1,8 @@
-from indrajala_ml.model.l2_vectorized_multiclass_backprop_classifier_network import (
-    L2VectorizedMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network import (
     L2RustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.l2_vectorized_multiclass_backprop_classifier_network import (
+    L2VectorizedMultiClassBackpropClassifierNetwork,
 )
 from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_tests
 from tests.helpers import matching_l2_array_backprop_networks

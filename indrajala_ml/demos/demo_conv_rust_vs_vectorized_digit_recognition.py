@@ -3,9 +3,9 @@ import pstats
 import random
 import statistics
 
+import indrajala_math_rust as pa
 import numpy as np
 
-import indrajala_math_rust as pa
 from indrajala_ml.demos.timing import timed_call, timed_train
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.mnist_data import load_mnist_dataset

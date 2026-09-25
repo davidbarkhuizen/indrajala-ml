@@ -1,11 +1,11 @@
 import statistics
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
-
-import numpy as np
 
 import indrajala_math_rust as pa
+import numpy as np
+
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
@@ -235,7 +235,9 @@ def pool_cases(label: str, side: int, batch_sizes) -> list[Case]:
 
     cases = [Case(label, op, None, single(op)) for op in ["forward", "downstream"]]
     cases += [
-        Case(label, op, batch, batched(op, batch)) for op in ["forward_batch", "downstream_batch"] for batch in batch_sizes
+        Case(label, op, batch, batched(op, batch))
+        for op in ["forward_batch", "downstream_batch"]
+        for batch in batch_sizes
     ]
     return cases
 

@@ -44,7 +44,6 @@ def test_learn_batch_accumulates_over_every_example_before_updating_weights():
 
     # after only the first example of a 3-example batch, weights must be untouched - unlike
     # calling learn() three times in a row, which would update after each one
-    learning_rate = 0.1
     batch = [((3.0, -4.0), 1.0), ((1.0, 2.0), 0.0), ((-5.0, 5.0), 1.0)]
 
     via_batch = BackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0))

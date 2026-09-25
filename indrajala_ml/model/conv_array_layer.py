@@ -16,8 +16,7 @@ def validate_conv_arguments(
     assert channel_count >= 1, f"channel_count must be at least 1; got {channel_count}"
     assert stride >= 1, f"stride must be at least 1; got {stride}"
     assert kernel_size <= input_height and kernel_size <= input_width, (
-        f"kernel_size ({kernel_size}) must fit within input_height x input_width "
-        f"({input_height}x{input_width})"
+        f"kernel_size ({kernel_size}) must fit within input_height x input_width ({input_height}x{input_width})"
     )
 
 
@@ -123,9 +122,7 @@ class ConvArrayLayer:
         dcols = D.transpose(0, 2, 1) @ self.W  # (N, P, C*k*k)
         # -> (N, C, k, k, out_height, out_width), so dcols[:, :, kr, kc] lines up with the input
         # positions kernel offset (kr, kc) reads
-        dcols = dcols.reshape(n, self.out_height, self.out_width, self.input_channels, k, k).transpose(
-            0, 3, 4, 5, 1, 2
-        )
+        dcols = dcols.reshape(n, self.out_height, self.out_width, self.input_channels, k, k).transpose(0, 3, 4, 5, 1, 2)
         dX = np.zeros((n, self.input_channels, self.input_height, self.input_width))
         row_span = s * (self.out_height - 1) + 1
         col_span = s * (self.out_width - 1) + 1

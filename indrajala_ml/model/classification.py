@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 
 def argmax_first_occurrence(values: Sequence[float]) -> int:

@@ -13,6 +13,9 @@ rust_crate_root="rust"
 # the build tool for rust/, so CI's cached venv and wheel and a local setup all build with the
 # same maturin. Bump deliberately, then rebuild and re-run both test suites.
 maturin_version="1.15.0"
+# Pinned for the same reason, and because ruff's default rule set changes between releases:
+# local and CI lint against the same rules. Bump deliberately, fixing whatever the new rules report.
+ruff_version="0.16.9"
 
 clean () {
 
@@ -65,6 +68,13 @@ install_python_modules () {
     echo "installing python modules ..."
     python -m pip install -r requirements.txt
     echo "... installed python modules"
+}
+
+install_ruff () {
+
+    echo "installing ruff ..."
+    python -m pip install "ruff==$ruff_version"
+    echo "... installed ruff"
 }
 
 install_maturin () {
@@ -146,6 +156,7 @@ setup () {
     install_and_upgrade_pip
     install_python_modules
     install_maturin
+    install_ruff
     if [ -n "$rust_wheel_dir" ]; then
         install_rust_wheel "$rust_wheel_dir"
     else
@@ -173,6 +184,15 @@ run_tests () {
     deactivate_venv
 }
 
+lint () {
+
+    # the checks CI's lint job runs; `ruff check --fix . && ruff format .` applies the fixable ones
+    activate_venv
+    ruff check .
+    ruff format --check .
+    deactivate_venv
+}
+
 demo () {
 
     activate_venv
@@ -181,7 +201,7 @@ demo () {
 }
 
 usage () {
-    echo "usage: invoke [ clean | setup [--no-os-packages] [--rust-wheel-dir <dir>] | build-rust | fetch-data | test [pytest-path ...] | demo [demo-number] ]"
+    echo "usage: invoke [ clean | setup [--no-os-packages] [--rust-wheel-dir <dir>] | build-rust | fetch-data | test [pytest-path ...] | lint | demo [demo-number] ]"
 }
 
 case "$option" in
@@ -211,6 +231,10 @@ case "$option" in
         shift
         clean
         run_tests "$@"
+    ;;
+
+    lint)
+        lint
     ;;
 
     demo)

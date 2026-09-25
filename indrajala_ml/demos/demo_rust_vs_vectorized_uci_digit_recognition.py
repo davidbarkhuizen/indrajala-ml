@@ -105,9 +105,7 @@ def main() -> None:
 
     new_confusion_matrix_figure("Rust digit recognition: confusion matrix (test set)", matrix)
 
-    sample_predictions_figure(
-        "Rust digit recognition: sample test predictions", test_data, rust_student.classify_state
-    )
+    sample_predictions_figure("Rust digit recognition: sample test predictions", test_data, rust_student.classify_state)
 
     pyplot.show()
 

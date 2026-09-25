@@ -9,7 +9,7 @@ interleaved_runs spreads the repeats of every cell across processes in a rotatin
 import json
 import subprocess
 import sys
-from typing import Callable, Hashable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 
 
 def run_json_worker(command: Sequence[str], env: Mapping[str, str] | None = None) -> dict:

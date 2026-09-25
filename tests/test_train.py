@@ -1,6 +1,7 @@
 import random
 
 import pytest
+from helpers import classifier_with_tiny_bounded_region, unreachable_class_classifier
 
 from indrajala_ml.geometry import is_positive_region_bounded, square_bounds
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
@@ -11,13 +12,9 @@ from indrajala_ml.train import (
     train_linear_classifier_network,
 )
 
-from helpers import classifier_with_tiny_bounded_region, unreachable_class_classifier
-
 
 def _training_accuracy(student, training_data):
-    return sum(1 for state, category in training_data if student.classify_state(state) == category) / len(
-        training_data
-    )
+    return sum(1 for state, category in training_data if student.classify_state(state) == category) / len(training_data)
 
 
 def test_generation_of_random_test_data_from_reference_classifier():
@@ -139,7 +136,7 @@ def test_train_linear_classifier_network_pocket_tracking_is_a_no_op_when_it_conv
     random.seed(6)
 
     bounds = square_bounds(10.0)
-    reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 400)
+    _reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 400)
     student = LinearClassifierNetwork.randomized(1, 2, bounds)
 
     result = train_linear_classifier_network(student, training_data, learning_rate=0.25, epochs=5)
@@ -160,7 +157,7 @@ def test_train_linear_classifier_network_diagnostic_reports_converged():
     random.seed(0)
 
     bounds = square_bounds(10.0)
-    reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 400)
+    _reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 400)
     student = LinearClassifierNetwork.randomized(1, 2, bounds)
 
     # the same setup as the "still improving" case above, just given enough epochs to
@@ -190,7 +187,7 @@ def test_train_linear_classifier_network_calls_a_schedule_with_increasing_step_i
     random.seed(0)
 
     bounds = square_bounds(10.0)
-    reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 5)
+    _reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 5)
     student = LinearClassifierNetwork.randomized(1, 2, bounds)
 
     calls: list[int] = []

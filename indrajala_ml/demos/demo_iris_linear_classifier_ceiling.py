@@ -43,9 +43,7 @@ def main() -> None:
 
     # versicolor vs virginica: not linearly separable. Swept across cardinality and gate, as in
     # demo_xor_linear_classifier_ceiling.py, so it isn't one architecture's failure
-    vv_data = [
-        (state, 1.0 if label == VIRGINICA_LABEL else 0.0) for state, label in dataset if label != SETOSA_LABEL
-    ]
+    vv_data = [(state, 1.0 if label == VIRGINICA_LABEL else 0.0) for state, label in dataset if label != SETOSA_LABEL]
 
     configs: list[tuple[int, int, str]] = [
         (1, 1, "cardinality=1"),

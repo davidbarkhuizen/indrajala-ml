@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.bounds import validate_batch, validate_input_bounds, validate_layer_sizes

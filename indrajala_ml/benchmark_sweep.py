@@ -2,7 +2,8 @@ import multiprocessing
 import os
 import statistics
 import time
-from typing import Any, Callable, Hashable
+from collections.abc import Callable, Hashable
+from typing import Any
 
 _worker_fn: Callable[[Any, Hashable, int], Any] | None = None
 _shared_context: Any = None

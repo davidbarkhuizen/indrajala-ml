@@ -10,7 +10,6 @@ import random
 
 import numpy as np
 import pytest
-
 from indrajala_math_rust import Array, layer_momentum_apply_accumulated_gradient
 
 from indrajala_ml.model.momentum_array_layer import MomentumArrayLayer
@@ -66,8 +65,15 @@ def test_layer_momentum_apply_accumulated_gradient_matches_momentum_array_layer_
         layer.apply_accumulated_gradient(learning_rate, batch_size)
 
         w, b, velocity_w, velocity_b = layer_momentum_apply_accumulated_gradient(
-            w, b, Array(grad_w_data), Array(grad_b_data), velocity_w, velocity_b,
-            MOMENTUM, learning_rate, batch_size,
+            w,
+            b,
+            Array(grad_w_data),
+            Array(grad_b_data),
+            velocity_w,
+            velocity_b,
+            MOMENTUM,
+            learning_rate,
+            batch_size,
         )
 
         _assert_same_bits(w, layer.W)
@@ -88,6 +94,4 @@ def test_rejects_mismatched_shapes():
     b = Array.zeros(2)
     wrong_shape_velocity_w = Array.zeros((3, 2))
     with pytest.raises(ValueError):
-        layer_momentum_apply_accumulated_gradient(
-            w, b, w, b, wrong_shape_velocity_w, b, MOMENTUM, 0.1, 1
-        )
+        layer_momentum_apply_accumulated_gradient(w, b, w, b, wrong_shape_velocity_w, b, MOMENTUM, 0.1, 1)

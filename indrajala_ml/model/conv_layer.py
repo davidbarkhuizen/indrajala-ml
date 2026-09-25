@@ -58,8 +58,7 @@ class ConvLayer:
         assert channel_count >= 1, f"channel_count must be at least 1; got {channel_count}"
         assert stride >= 1, f"stride must be at least 1; got {stride}"
         assert kernel_size <= input_height and kernel_size <= input_width, (
-            f"kernel_size ({kernel_size}) must fit within input_height x input_width "
-            f"({input_height}x{input_width})"
+            f"kernel_size ({kernel_size}) must fit within input_height x input_width ({input_height}x{input_width})"
         )
 
         self.input_layer = input_layer

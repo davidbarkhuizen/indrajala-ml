@@ -15,7 +15,6 @@ import random
 
 import numpy as np
 import pytest
-
 from indrajala_math_rust import Array, argmax, decode_mnist_pixels, exp, outer, sum_axis0, uniform
 
 from indrajala_ml.mnist_data import RECORD_SIZE, load_mnist_dataset_as_array

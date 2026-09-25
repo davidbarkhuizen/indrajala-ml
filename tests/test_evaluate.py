@@ -1,6 +1,7 @@
 import random
 
 import pytest
+from helpers import classifier_with_tiny_bounded_region, unreachable_class_classifier
 
 from indrajala_ml.evaluate import (
     class_balanced_disagreement_rate,
@@ -11,8 +12,6 @@ from indrajala_ml.evaluate import (
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.train import reachable_reference_and_training_data
-
-from helpers import classifier_with_tiny_bounded_region, unreachable_class_classifier
 
 
 def test_sample_class_balanced_states_succeeds_within_a_tight_budget_for_a_tiny_region():

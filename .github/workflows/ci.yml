@@ -6,6 +6,25 @@ on:
   pull_request:
 
 jobs:
+  # ruff only, at ./cli's pinned version (ruff_version), in a bare venv: no submodule, crate or
+  # dataset, so it reports in seconds, independently of the test jobs.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install ruff
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install "ruff==$(sed -n 's/^ruff_version="\(.*\)"$/\1/p' cli)"
+
+      - name: Lint
+        run: ./cli lint
+
   test:
     # One job per pytest suite, run in parallel: each job pays its own setup, but the short
     # rust/tests/ job finishes inside the long tests/ one instead of adding to it.

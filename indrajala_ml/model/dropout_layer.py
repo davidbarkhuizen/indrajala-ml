@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode, sigmoid
@@ -55,7 +55,7 @@ def make_dropout_node_cls(drop_probability: float) -> type[BackpropNode]:
                 "feeding the output layer isn't what this sibling builds."
             )
 
-        def compute_hidden_delta(self, next_layer_nodes: Sequence["BackpropNode"], own_index: int) -> None:
+        def compute_hidden_delta(self, next_layer_nodes: Sequence[BackpropNode], own_index: int) -> None:
             if not self._kept:
                 # a dropped unit contributed nothing, so it gets no delta and no update
                 self.delta = 0.0

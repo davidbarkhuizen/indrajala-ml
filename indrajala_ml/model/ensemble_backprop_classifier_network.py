@@ -35,7 +35,9 @@ class EnsembleBackpropClassifierNetwork:
             classifier.restore(classifier_snapshot)
 
     def save(self, path: str) -> None:
-        assert len({classifier.dimension for classifier in self.classifiers}) == 1, "every classifier must share a dimension"
+        assert len({classifier.dimension for classifier in self.classifiers}) == 1, (
+            "every classifier must share a dimension"
+        )
         first = self.classifiers[0]
         save_model_json(
             path,
@@ -47,7 +49,7 @@ class EnsembleBackpropClassifierNetwork:
         )
 
     @classmethod
-    def load(cls, path: str) -> "EnsembleBackpropClassifierNetwork":
+    def load(cls, path: str) -> EnsembleBackpropClassifierNetwork:
         state = load_model_json(path)
 
         classifiers = [

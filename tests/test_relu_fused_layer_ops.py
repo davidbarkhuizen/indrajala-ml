@@ -10,7 +10,6 @@ import random
 
 import numpy as np
 import pytest
-
 from indrajala_math_rust import (
     Array,
     layer_relu_forward,
@@ -105,9 +104,7 @@ def test_layer_relu_hidden_delta_batch_matches_relu_array_layer_compute_hidden_d
     next_layer.delta_batch = np.array(next_delta_batch_data)
     this_layer.compute_hidden_delta_batch(next_layer)
 
-    actual = layer_relu_hidden_delta_batch(
-        Array(next_w_data), Array(next_delta_batch_data), Array(a_batch_data)
-    )
+    actual = layer_relu_hidden_delta_batch(Array(next_w_data), Array(next_delta_batch_data), Array(a_batch_data))
     assert _to_numpy(actual) == pytest.approx(this_layer.delta_batch)
 
 

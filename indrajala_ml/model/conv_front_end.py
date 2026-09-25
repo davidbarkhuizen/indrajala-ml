@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict
-from typing import Callable
 
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec

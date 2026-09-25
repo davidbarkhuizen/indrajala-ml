@@ -56,7 +56,6 @@ def test_accumulate_then_apply_accumulated_gradients_matches_per_node_split():
         assert node.bias == pytest.approx(0.1 - 0.1 * (0.1 / 2))
 
 
-
 def test_downstream_sum_is_the_dense_delta_times_weight_sum():
 
     layer = _layer(2, 3, (1.0, 2.0, 3.0))
@@ -90,6 +89,7 @@ def test_compute_hidden_deltas_matches_calling_compute_hidden_delta_on_every_nod
     hidden.compute_hidden_deltas(next_layer)
 
     assert [node.delta for node in hidden.nodes] == expected
+
 
 def test_snapshot_state_and_restore_state_round_trip():
 

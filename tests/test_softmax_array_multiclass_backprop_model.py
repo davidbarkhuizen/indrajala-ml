@@ -1,8 +1,8 @@
-from indrajala_ml.model.softmax_vectorized_multiclass_backprop_classifier_network import (
-    SoftmaxVectorizedMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_network import (
     SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.softmax_vectorized_multiclass_backprop_classifier_network import (
+    SoftmaxVectorizedMultiClassBackpropClassifierNetwork,
 )
 from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_tests
 from tests.helpers import matching_softmax_array_backprop_networks

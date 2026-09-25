@@ -12,8 +12,8 @@ each test's usual name and id (test_x[numpy], test_x[rust]):
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 import pytest
 

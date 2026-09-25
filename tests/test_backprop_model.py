@@ -1,6 +1,6 @@
 import pytest
-
 from helpers import assert_randomize_breaks_symmetry, assert_snapshot_restore_round_trip, wire_fixed_single_hidden_node
+
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 

@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from random import shuffle
-from typing import Callable
 
 from indrajala_ml.evaluate import class_balanced_disagreement_rate, sample_class_balanced_states
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork

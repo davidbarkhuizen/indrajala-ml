@@ -16,8 +16,8 @@ def test_split_train_test_sizes_and_no_overlap():
     assert len(train) + len(test) == len(dataset)
     assert len(test) == round(len(dataset) * 0.2)
 
-    train_states = set(state for state, _ in train)
-    test_states = set(state for state, _ in test)
+    train_states = {state for state, _ in train}
+    test_states = {state for state, _ in test}
     assert train_states.isdisjoint(test_states)
 
 

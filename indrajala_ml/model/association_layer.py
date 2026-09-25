@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.association_node import AssociationNode
 from indrajala_ml.model.state_layer import StateLayer

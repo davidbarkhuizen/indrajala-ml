@@ -49,9 +49,7 @@ class DropoutArrayLayer(ArrayLayer):
         self.Z = X @ self.W.T + self.b
         base = sigmoid(self.Z)
         if self.training:
-            self._mask_batch = (
-                np.random.random((batch_size, self.size)) >= self._drop_probability
-            ).astype(np.float64)
+            self._mask_batch = (np.random.random((batch_size, self.size)) >= self._drop_probability).astype(np.float64)
             self.A = base * self._mask_batch / self._keep_probability
         else:
             self._mask_batch = np.ones((batch_size, self.size))
@@ -60,13 +58,13 @@ class DropoutArrayLayer(ArrayLayer):
         self._was_training = self.training
         return self.A
 
-    def compute_hidden_delta(self, next_layer: "ArrayLayer") -> None:
+    def compute_hidden_delta(self, next_layer: ArrayLayer) -> None:
         downstream = next_layer.downstream()
         sigmoid_derivative = self._base_activation * (1.0 - self._base_activation)
         scale = (self._mask / self._keep_probability) if self._was_training else 1.0
         self.delta = downstream * sigmoid_derivative * scale
 
-    def compute_hidden_delta_batch(self, next_layer: "ArrayLayer") -> None:
+    def compute_hidden_delta_batch(self, next_layer: ArrayLayer) -> None:
         downstream = next_layer.downstream_batch()
         sigmoid_derivative = self._base_activation_batch * (1.0 - self._base_activation_batch)
         scale = (self._mask_batch / self._keep_probability) if self._was_training else 1.0

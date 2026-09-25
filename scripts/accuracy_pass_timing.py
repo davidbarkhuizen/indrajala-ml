@@ -36,6 +36,7 @@ import sys
 import time
 
 import numpy as np
+from process_runs import interleaved_runs, run_json_worker
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import ARCHITECTURES
@@ -48,23 +49,21 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
 from indrajala_ml.prepared_dataset import prepared_mnist
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
 
-from process_runs import interleaved_runs, run_json_worker
-
 BACKENDS = ["numpy", "rust"]
 NETWORKS = ["dense", *ARCHITECTURES]
 CHUNKS = [32, 512]
 MEASURES = (
-    ["per row"]
-    + [f"forward {c}" for c in CHUNKS]
-    + [f"batched {c}" for c in CHUNKS]
-    + ["epoch B=32", "epoch single"]
+    ["per row"] + [f"forward {c}" for c in CHUNKS] + [f"batched {c}" for c in CHUNKS] + ["epoch B=32", "epoch single"]
 )
 LEARNING_RATE = 0.5
 BATCH_SIZE = 32
 SEED = 0
 CONV_DENSE_LAYER_SIZES = [32]
 CONV_TRAIN_LIMIT = 2000
-CONV_CLASSES = {"numpy": ConvVectorizedMultiClassBackpropClassifierNetwork, "rust": ConvRustArrayMultiClassBackpropClassifierNetwork}
+CONV_CLASSES = {
+    "numpy": ConvVectorizedMultiClassBackpropClassifierNetwork,
+    "rust": ConvRustArrayMultiClassBackpropClassifierNetwork,
+}
 IN_PROCESS_RUNS = 3
 
 
@@ -73,7 +72,9 @@ def _network(name: str, backend: str):
         return bss.initial_network(backend, 0.0, SEED)
     np.random.seed(SEED)
     conv_specs = ARCHITECTURES[name]
-    snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(28, 28, conv_specs, CONV_DENSE_LAYER_SIZES, 10).snapshot()
+    snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(
+        28, 28, conv_specs, CONV_DENSE_LAYER_SIZES, 10
+    ).snapshot()
     network = CONV_CLASSES[backend](28, 28, conv_specs, CONV_DENSE_LAYER_SIZES, 10)
     network.restore(snapshot)
     return network
@@ -115,7 +116,9 @@ def _epoch(name: str, backend: str, prepared, single: bool) -> float:
     network = _network(name, backend)
     random.seed(SEED)
     if single:
-        return _timed(lambda: train_linear_classifier_network(network, prepared, learning_rate=LEARNING_RATE, epochs=1))[0]
+        return _timed(
+            lambda: train_linear_classifier_network(network, prepared, learning_rate=LEARNING_RATE, epochs=1)
+        )[0]
     return _timed(
         lambda: train_backprop_network_mini_batch(network, prepared, BATCH_SIZE, learning_rate=LEARNING_RATE, epochs=1)
     )[0]
@@ -129,7 +132,9 @@ def measure(name: str, backend: str) -> dict:
     result = {}
     result["per row"], reference = _median_of_runs(lambda: _per_row(network, prepared))
     for chunk in CHUNKS:
-        result[f"forward {chunk}"], _ = _median_of_runs(lambda: _forward_chunks(network, prepared, chunk, backend, False))
+        result[f"forward {chunk}"], _ = _median_of_runs(
+            lambda: _forward_chunks(network, prepared, chunk, backend, False)
+        )
         result[f"batched {chunk}"], predictions = _median_of_runs(
             lambda: _forward_chunks(network, prepared, chunk, backend, True)
         )
@@ -154,7 +159,9 @@ def time_all(networks: list[str], repeats: int) -> dict:
 
 def report(runs: dict) -> None:
     repeats = len(next(iter(runs.values())))
-    medians = {cell: {m: statistics.median(run[m] for run in cell_runs) for m in MEASURES} for cell, cell_runs in runs.items()}
+    medians = {
+        cell: {m: statistics.median(run[m] for run in cell_runs) for m in MEASURES} for cell, cell_runs in runs.items()
+    }
 
     print(f"median of {repeats} processes (each measure the median of {IN_PROCESS_RUNS} runs), seconds\n")
     print("| network / backend | " + " | ".join(MEASURES) + " |")
@@ -165,7 +172,9 @@ def report(runs: dict) -> None:
     # a one-epoch run has two passes, its worst case; over a long run there is about one pass per
     # epoch, so the long-run share is one pass's saving against an epoch without one of its passes
     print("\nthe saving from batching, as a share of an epoch, and mismatched rows\n")
-    print("| network / backend | chunk | saved per pass | one-epoch B=32 | one-epoch single | long-run B=32 | long-run single | mismatches |")
+    print(
+        "| network / backend | chunk | saved per pass | one-epoch B=32 | one-epoch single | long-run B=32 | long-run single | mismatches |"
+    )
     print("|---|---|---|---|---|---|---|---|")
     for cell, median in medians.items():
         for chunk in CHUNKS:
@@ -173,7 +182,11 @@ def report(runs: dict) -> None:
             shares = [2 * saved / median[epoch] for epoch in ("epoch B=32", "epoch single")]
             shares += [saved / (median[epoch] - median["per row"]) for epoch in ("epoch B=32", "epoch single")]
             mismatches = max(run[f"mismatches {chunk}"] for run in runs[cell])
-            print(f"| {cell} | {chunk} | {saved:.3f} | " + " | ".join(f"{share:.0%}" for share in shares) + f" | {mismatches} |")
+            print(
+                f"| {cell} | {chunk} | {saved:.3f} | "
+                + " | ".join(f"{share:.0%}" for share in shares)
+                + f" | {mismatches} |"
+            )
 
 
 def main(argv: list[str] | None = None) -> None:

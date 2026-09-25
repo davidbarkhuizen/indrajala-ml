@@ -35,6 +35,7 @@ import sys
 import time
 
 import numpy as np
+from process_runs import interleaved_runs, run_json_worker
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml import train
@@ -47,8 +48,6 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
-
-from process_runs import interleaved_runs, run_json_worker
 
 # indrajala_ml is a namespace package, so with an old checkout first on PYTHONPATH the new
 # prepared_dataset module can still be imported from this one; the trainers themselves tell
@@ -67,14 +66,19 @@ CONV_SPECS = [ConvSpec(3, 8)]
 CONV_DENSE_LAYER_SIZES = [32]
 CONV_TRAIN_LIMIT = 2000
 EPOCHS = 1  # --epochs
-CONV_CLASSES = {"numpy": ConvVectorizedMultiClassBackpropClassifierNetwork, "rust": ConvRustArrayMultiClassBackpropClassifierNetwork}
+CONV_CLASSES = {
+    "numpy": ConvVectorizedMultiClassBackpropClassifierNetwork,
+    "rust": ConvRustArrayMultiClassBackpropClassifierNetwork,
+}
 
 
 def _network(config: str, backend: str):
     if config.startswith("dense"):
         return bss.initial_network(backend, 0.0, SEED)
     np.random.seed(SEED)
-    snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(28, 28, CONV_SPECS, CONV_DENSE_LAYER_SIZES, 10).snapshot()
+    snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(
+        28, 28, CONV_SPECS, CONV_DENSE_LAYER_SIZES, 10
+    ).snapshot()
     network = CONV_CLASSES[backend](28, 28, CONV_SPECS, CONV_DENSE_LAYER_SIZES, 10)
     network.restore(snapshot)
     return network

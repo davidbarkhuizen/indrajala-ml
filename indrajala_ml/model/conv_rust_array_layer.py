@@ -53,22 +53,22 @@ class ConvRustArrayLayer:
         self._grad_W = pa.Array.zeros((channel_count, self.fan_in))
         self._grad_b = pa.Array.zeros(channel_count)
 
-    def forward_batch(self, X: "pa.Array") -> "pa.Array":
+    def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A, self._cols = pa.conv_forward_batch(self.W, X, self.b, self.geometry)
         return self.A
 
-    def forward(self, x: "pa.Array") -> "pa.Array":
+    def forward(self, x: pa.Array) -> pa.Array:
         self.a, self._cols = pa.conv_forward_batch(self.W, x, self.b, self.geometry)
         return self.a
 
-    def compute_output_delta(self, reference: "pa.Array") -> None:
+    def compute_output_delta(self, reference: pa.Array) -> None:
         raise NotImplementedError(
             "ConvRustArrayLayer is a hidden layer, not an output one - see ConvUnit's identical "
             "guard: an unbounded ReLU activation isn't suited to any of this codebase's "
             "output-layer contracts."
         )
 
-    def compute_output_delta_batch(self, reference_batch: "pa.Array") -> None:
+    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
         self.compute_output_delta(reference_batch)
 
     def compute_hidden_delta_batch(self, next_layer) -> None:
@@ -78,19 +78,19 @@ class ConvRustArrayLayer:
     def compute_hidden_delta(self, next_layer) -> None:
         self.delta = pa.array_relu_mask(next_layer.downstream(), self.a)
 
-    def downstream_batch(self) -> "pa.Array":
+    def downstream_batch(self) -> pa.Array:
         return pa.conv_downstream_batch(self.W, self.delta_batch, self.geometry)
 
-    def downstream(self) -> "pa.Array":
+    def downstream(self) -> pa.Array:
         return pa.conv_downstream_batch(self.W, self.delta, self.geometry)
 
-    def accumulate_gradient_batch(self, _input_activation_batch: "pa.Array") -> None:
+    def accumulate_gradient_batch(self, _input_activation_batch: pa.Array) -> None:
         # reads the im2col columns forward cached, as ConvArrayLayer._accumulate does
         self._grad_W, self._grad_b = pa.conv_accumulate_gradient_batch(
             self.delta_batch, self._cols, self._grad_W, self._grad_b, self.geometry
         )
 
-    def accumulate_gradient(self, _input_activation: "pa.Array") -> None:
+    def accumulate_gradient(self, _input_activation: pa.Array) -> None:
         self._grad_W, self._grad_b = pa.conv_accumulate_gradient_batch(
             self.delta, self._cols, self._grad_W, self._grad_b, self.geometry
         )
@@ -101,7 +101,7 @@ class ConvRustArrayLayer:
         )
         self._reset_gradient_accum()
 
-    def sgd_step(self, input_activation: "pa.Array", learning_rate: float) -> None:
+    def sgd_step(self, input_activation: pa.Array, learning_rate: float) -> None:
         # the conv gradient sums over output positions, so there's no fused dense step for it
         unfused_sgd_step(self, input_activation, learning_rate)
 

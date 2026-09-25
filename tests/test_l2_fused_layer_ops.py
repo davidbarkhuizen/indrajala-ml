@@ -9,7 +9,6 @@ import random
 
 import numpy as np
 import pytest
-
 from indrajala_math_rust import Array, layer_l2_apply_accumulated_gradient
 
 from indrajala_ml.model.l2_array_layer import L2ArrayLayer
@@ -52,8 +51,13 @@ def test_layer_l2_apply_accumulated_gradient_matches_l2_array_layer_exactly(seed
     layer.apply_accumulated_gradient(learning_rate, batch_size)
 
     new_w, new_b = layer_l2_apply_accumulated_gradient(
-        Array(w_data), Array(b_data), Array(grad_w_data), Array(grad_b_data),
-        L2_LAMBDA, learning_rate, batch_size,
+        Array(w_data),
+        Array(b_data),
+        Array(grad_w_data),
+        Array(grad_b_data),
+        L2_LAMBDA,
+        learning_rate,
+        batch_size,
     )
     assert _to_numpy(new_w).tobytes() == layer.W.tobytes()
     assert _to_numpy(new_b).tobytes() == layer.b.tobytes()

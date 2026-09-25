@@ -38,13 +38,12 @@ import time
 
 import indrajala_math_rust as pa
 import numpy as np
+from process_runs import interleaved_runs, run_json_worker
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import _rust_op_name
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.train import _training_accuracy, train_backprop_network_mini_batch
-
-from process_runs import interleaved_runs, run_json_worker
 
 BACKENDS = ["numpy", "rust"]
 BATCH_SIZES = [32, 128, 512, 1024]
@@ -134,10 +133,14 @@ def time_all(batch_sizes: list[int], repeats: int) -> dict:
     cells = [(backend, batch_size) for batch_size in batch_sizes for backend in BACKENDS]
     runs = interleaved_runs(cells, repeats, lambda cell: _run_worker(*cell))
 
-    medians = {cell: {m: statistics.median(run[m] for run in cell_runs) for m in MEASURES} for cell, cell_runs in runs.items()}
+    medians = {
+        cell: {m: statistics.median(run[m] for run in cell_runs) for m in MEASURES} for cell, cell_runs in runs.items()
+    }
 
     print(f"median of {repeats}, seconds per epoch (one process per measurement)\n")
-    print("| B | backend | epoch | steps | accuracy pass | batch conversion | row conversion | steps % of epoch | accuracy passes % of epoch |")
+    print(
+        "| B | backend | epoch | steps | accuracy pass | batch conversion | row conversion | steps % of epoch | accuracy passes % of epoch |"
+    )
     print("|---|---|---|---|---|---|---|---|---|")
     for batch_size in batch_sizes:
         for backend in BACKENDS:
@@ -182,7 +185,9 @@ def main(argv: list[str] | None = None) -> None:
         for batch_size in args.batch_sizes or PROFILE_BATCH_SIZES:
             steps, total, ops = profile(batch_size, train_data)
             op_total = sum(seconds for _op, seconds, _calls in ops)
-            print(f"\n### B = {batch_size}: step loop {steps:.2f} s unprofiled, {total:.2f} s profiled, Rust ops {op_total:.2f} s\n")
+            print(
+                f"\n### B = {batch_size}: step loop {steps:.2f} s unprofiled, {total:.2f} s profiled, Rust ops {op_total:.2f} s\n"
+            )
             print("| op | s | calls | ms / call | % of profiled |")
             print("|---|---|---|---|---|")
             for op, seconds, calls in ops:

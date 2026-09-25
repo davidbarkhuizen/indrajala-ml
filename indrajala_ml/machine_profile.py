@@ -55,7 +55,7 @@ def read_text(path):
 def run_command(args, cwd=None):
     """The command's stripped stdout, or None if it can't be run or fails."""
     try:
-        result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=10)
+        result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=10, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     if result.returncode != 0:
@@ -131,8 +131,7 @@ def summarize_caches(entries):
         described = (level, cache_type, parse_size_kib(entry["size"]), parse_cpu_list(shared))
         summary[described] = summary.get(described, 0) + 1
     return [
-        {"level": level, "type": cache_type, "size_kib": size, "shared_by_logical_cpus": shared,
-         "instances": instances}
+        {"level": level, "type": cache_type, "size_kib": size, "shared_by_logical_cpus": shared, "instances": instances}
         for (level, cache_type, size, shared), instances in sorted(summary.items())
     ]
 
@@ -234,8 +233,7 @@ def _cache_entries():
     entries = []
     for cpu in _cpu_dirs():
         for index in sorted(cpu.glob("cache/index*")):
-            files = {name: read_text(index / name) for name in
-                     ("level", "type", "size", "shared_cpu_list")}
+            files = {name: read_text(index / name) for name in ("level", "type", "size", "shared_cpu_list")}
             if all(value is not None for value in files.values()):
                 entries.append(files)
     return entries
@@ -263,8 +261,7 @@ def _cpu_mhz_now():
 def _power_supplies():
     supplies = {}
     for supply in sorted(Path("/sys/class/power_supply").glob("*")):
-        supplies[supply.name] = {name: read_text(supply / name) for name in
-                                 ("type", "online", "capacity")}
+        supplies[supply.name] = {name: read_text(supply / name) for name in ("type", "online", "capacity")}
     return supplies
 
 
@@ -347,7 +344,9 @@ def capture():
         },
         "state": {
             "captured_at": datetime.datetime.now(datetime.timezone.utc)
-            .replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z"),
             "hostname": socket.gethostname(),
             "load_average": [round(value, 2) for value in load] if load else None,
             "memory_available_mib": meminfo.get("MemAvailable"),
@@ -419,11 +418,9 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="command", required=True)
     profile_parser = commands.add_parser("profile", help="capture this machine's profile")
     profile_parser.add_argument("--out", help="write the JSON here instead of stdout")
-    compare_parser = commands.add_parser(
-        "compare", help="compare two profiles' identities; exit 1 if they differ")
+    compare_parser = commands.add_parser("compare", help="compare two profiles' identities; exit 1 if they differ")
     compare_parser.add_argument("reference", help="the reference profile (JSON)")
-    compare_parser.add_argument(
-        "current", nargs="?", help="the profile to check (default: capture one now)")
+    compare_parser.add_argument("current", nargs="?", help="the profile to check (default: capture one now)")
     args = parser.parse_args(argv)
 
     if args.command == "profile":

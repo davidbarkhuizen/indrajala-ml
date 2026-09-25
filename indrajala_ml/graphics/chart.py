@@ -1,5 +1,5 @@
 import math
-from typing import Callable
+from collections.abc import Callable
 
 from matplotlib import lines, pyplot
 from matplotlib.axes import Axes
@@ -88,7 +88,7 @@ def plot_training_data(axes: Axes, training_data: list[tuple[tuple[float, float]
     categories: list[tuple[int, list[tuple[float, float]]]] = []
 
     # sorted, so 0.0 gets the first marker and color and 1.0 the second
-    for category_value in sorted(set(output_value for (_, output_value) in training_data)):
+    for category_value in sorted({output_value for (_, output_value) in training_data}):
         categories.append(
             (category_value, [xy for (xy, output_value) in training_data if output_value == category_value])
         )
@@ -153,9 +153,7 @@ def plot_confusion_matrix(axes: Axes, matrix: list[list[int]], class_labels: lis
             axes.text(predicted_label, true_label, str(count), ha="center", va="center", color=text_color)
 
 
-def new_confusion_matrix_figure(
-    title: str, matrix: list[list[int]], class_labels: list[str] | None = None
-) -> Figure:
+def new_confusion_matrix_figure(title: str, matrix: list[list[int]], class_labels: list[str] | None = None) -> Figure:
     """
     A new figure and axes with plot_confusion_matrix drawn on it, as every recognition demo shows.
     """

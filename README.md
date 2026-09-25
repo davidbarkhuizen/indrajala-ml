@@ -29,6 +29,7 @@ installs on the first build (a distro `cargo` ignores the pin).
 ```
 ./cli setup          # submodule, .venv, pip deps, release build of rust/, fetch MNIST
 ./cli test           # pytest tests/ and rust/tests/ (or: ./cli test <path> ...)
+./cli lint           # ruff check and ruff format --check
 ./cli demo           # interactive demo menu
 ./cli demo <n>       # run demo n directly
 ./cli build-rust     # rebuild rust/ after changing it
@@ -41,8 +42,8 @@ installs on the first build (a distro `cargo` ignores the pin).
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
-| `tests/` | ~2250 | this package: models, training, data loaders, Rust-vs-numpy parity |
-| `rust/tests/` | ~1200 | the submodule's own `indrajala_math_rust` API, checked against numpy |
+| `tests/` | ~3070 | this package: models, training, data loaders, Rust-vs-numpy parity |
+| `rust/tests/` | ~1560 | the submodule's own `indrajala_math_rust` API, checked against numpy |
 
 Both need the submodule checked out **and** built into `.venv`: `tests/` imports
 `indrajala_math_rust` directly, and `rust/tests/` only exists once the submodule is initialised.
@@ -57,10 +58,18 @@ git submodule update --init   # populate rust/
 ```
 
 CI (`.github/workflows/ci.yml`) runs `./cli setup --no-os-packages --rust-wheel-dir .rust-wheel`
-then `./cli test <suite>` on every push and PR, one parallel job per suite. It skips apt (CI's
-python is not apt's), and caches `.venv`, MNIST and the
+then `./cli test <suite>` on every push and PR, one parallel job per suite, plus a `lint` job
+(`./cli lint`). It skips apt (CI's python is not apt's), and caches `.venv`, MNIST and the
 crate's release wheel, keyed on the `rust/` submodule commit, so the crate only compiles when
 the submodule moves.
+
+## Linting
+
+`./cli lint` runs `ruff check` and `ruff format --check`; `ruff check --fix . && ruff format .`
+(in the venv) applies the fixable findings. Ruff is pinned in `./cli` (`ruff_version`), because
+its default rule set changes between releases; `pyproject.toml`'s `[tool.ruff]` sets the line
+length (120), excludes `rust/` and holds the per-file ignores. The crate lints its own Rust with
+`cargo fmt` and `cargo clippy` (see `rust/README.md`).
 
 ## Layout
 

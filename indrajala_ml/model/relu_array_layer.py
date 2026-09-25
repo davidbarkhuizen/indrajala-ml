@@ -34,11 +34,11 @@ class ReLUArrayLayer(ArrayLayer):
             "activation isn't suited to any of this codebase's output-layer contracts."
         )
 
-    def compute_hidden_delta(self, next_layer: "ArrayLayer") -> None:
+    def compute_hidden_delta(self, next_layer: ArrayLayer) -> None:
         downstream = next_layer.downstream()
         # derivative 1 where a > 0 (z > 0), else 0
         self.delta = downstream * (self.a > 0.0)
 
-    def compute_hidden_delta_batch(self, next_layer: "ArrayLayer") -> None:
+    def compute_hidden_delta_batch(self, next_layer: ArrayLayer) -> None:
         downstream = next_layer.downstream_batch()
         self.delta_batch = downstream * (self.A > 0.0)

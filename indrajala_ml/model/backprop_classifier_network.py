@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.bounds import half_widths as _half_widths

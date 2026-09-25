@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from indrajala_ml.model.base_node import AbstractNode
 
@@ -83,8 +83,7 @@ class MaxPoolLayer:
             f"count ({len(input_layer.nodes)})"
         )
         assert pool_size <= input_height and pool_size <= input_width, (
-            f"pool_size ({pool_size}) must fit within input_height x input_width "
-            f"({input_height}x{input_width})"
+            f"pool_size ({pool_size}) must fit within input_height x input_width ({input_height}x{input_width})"
         )
 
         self.input_layer = input_layer

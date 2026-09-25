@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
@@ -22,7 +22,7 @@ def relu_delta(downstream: float, activation: float) -> float:
     return downstream if activation > 0.0 else 0.0
 
 
-def relu_hidden_delta(next_layer_nodes: Sequence["BackpropNode"], own_index: int, activation: float) -> float:
+def relu_hidden_delta(next_layer_nodes: Sequence[BackpropNode], own_index: int, activation: float) -> float:
     downstream = sum(node.delta * node.input_node_weights[own_index] for node in next_layer_nodes)
     return relu_delta(downstream, activation)
 
@@ -44,7 +44,7 @@ class ReLUNode(BackpropNode):
             "isn't suited to any of this codebase's output-layer contracts."
         )
 
-    def compute_hidden_delta(self, next_layer_nodes: Sequence["BackpropNode"], own_index: int) -> None:
+    def compute_hidden_delta(self, next_layer_nodes: Sequence[BackpropNode], own_index: int) -> None:
         self.delta = relu_hidden_delta(next_layer_nodes, own_index, self.value())
 
 

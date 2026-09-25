@@ -1,6 +1,10 @@
 import pytest
+from helpers import (
+    assert_randomize_breaks_symmetry,
+    assert_save_and_load_round_trip,
+    assert_snapshot_restore_round_trip,
+)
 
-from helpers import assert_randomize_breaks_symmetry, assert_save_and_load_round_trip, assert_snapshot_restore_round_trip
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 
@@ -73,9 +77,7 @@ def test_randomize_scales_weight_range_with_fan_in():
     narrow = MultiClassBackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0), 3)
     wide = MultiClassBackpropClassifierNetwork.randomized([400], 2, square_bounds(10.0), 3)
 
-    narrow_output_range = max(
-        abs(w) for node in narrow.output_layer.nodes for w in node.input_node_weights
-    )
+    narrow_output_range = max(abs(w) for node in narrow.output_layer.nodes for w in node.input_node_weights)
     wide_output_range = max(abs(w) for node in wide.output_layer.nodes for w in node.input_node_weights)
 
     assert wide_output_range < narrow_output_range

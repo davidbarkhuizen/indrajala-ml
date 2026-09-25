@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.array_layer import ArrayLayer

@@ -81,14 +81,14 @@ class ArrayLayer:
         # downstream() for every row: (batch_size, size) @ (size, input_size)
         return self.delta_batch @ self.W
 
-    def compute_hidden_delta(self, next_layer: "ArrayLayer") -> None:
+    def compute_hidden_delta(self, next_layer: ArrayLayer) -> None:
         downstream = next_layer.downstream()
         self.delta = downstream * self.a * (1.0 - self.a)
 
     def compute_output_delta_batch(self, reference_batch: np.ndarray) -> None:
         self.delta_batch = (self.A - reference_batch) * self.A * (1.0 - self.A)
 
-    def compute_hidden_delta_batch(self, next_layer: "ArrayLayer") -> None:
+    def compute_hidden_delta_batch(self, next_layer: ArrayLayer) -> None:
         downstream = next_layer.downstream_batch()
         self.delta_batch = downstream * self.A * (1.0 - self.A)
 

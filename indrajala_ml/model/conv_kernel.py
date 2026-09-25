@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_network_base import fan_in_aware_weights_and_bias
 
@@ -33,7 +33,9 @@ class ConvKernel:
 
         fan_in = kernel_size * kernel_size * in_channels
         self.weights: list[float] = weights if weights is not None else [0.0 for _ in range(fan_in)]
-        assert len(self.weights) == fan_in, f"expected {fan_in} weights (kernel_size**2 * in_channels); got {len(self.weights)}"
+        assert len(self.weights) == fan_in, (
+            f"expected {fan_in} weights (kernel_size**2 * in_channels); got {len(self.weights)}"
+        )
 
         self.bias: float = bias
 

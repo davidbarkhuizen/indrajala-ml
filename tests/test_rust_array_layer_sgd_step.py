@@ -11,10 +11,10 @@ import pkgutil
 import random
 import struct
 
+import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-import indrajala_math_rust as pa
 import indrajala_ml.model
 from indrajala_ml.model.adam_rust_array_layer import AdamRustArrayLayer
 from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
@@ -79,9 +79,7 @@ NETWORK_FACTORIES = {
     "momentum": lambda: MomentumRustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3, 0.9),
     "adam": lambda: AdamRustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3),
     "l2": lambda: L2RustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3, 0.01),
-    "conv": lambda: ConvRustArrayMultiClassBackpropClassifierNetwork(
-        6, 6, [ConvSpec(3, 2), PoolSpec(2)], [4], 3
-    ),
+    "conv": lambda: ConvRustArrayMultiClassBackpropClassifierNetwork(6, 6, [ConvSpec(3, 2), PoolSpec(2)], [4], 3),
 }
 
 

@@ -1,7 +1,8 @@
 import sys
 import tkinter as tk
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Protocol
 
 from indrajala_ml.digit_capture import intensity_to_color, pixel_to_tile
 

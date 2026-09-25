@@ -203,7 +203,15 @@ def _rust_multiclass():
 
 def test_the_rust_row_argmax_breaks_ties_as_pa_argmax_does():
     nan = float("nan")
-    rows = [[1.0, 3.0, 3.0], [2.0, 2.0, 2.0], [-0.0, 0.0, -1.0], [0.0, -0.0, 0.0], [nan, 1.0, 2.0], [1.0, nan, 2.0], [0.2, 0.1, nan]]
+    rows = [
+        [1.0, 3.0, 3.0],
+        [2.0, 2.0, 2.0],
+        [-0.0, 0.0, -1.0],
+        [0.0, -0.0, 0.0],
+        [nan, 1.0, 2.0],
+        [1.0, nan, 2.0],
+        [0.2, 0.1, nan],
+    ]
     expected = [pa.argmax(pa.Array(row)) for row in rows]
     assert _rust_multiclass()._classify_output_batch(pa.Array(rows)) == expected
 

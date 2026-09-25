@@ -104,7 +104,11 @@ def test_train_and_evaluate_is_reproducible_for_a_seed(mnist_subset):
 
 def test_train_and_evaluate_trains_the_conv_network(mnist_subset):
     train_data, test_data = mnist_subset
-    first = bss.train_and_evaluate("rust", train_data, test_data, 64, 0.5, 1.0, 0.0, epochs=2, seed=0, architecture="conv")
-    second = bss.train_and_evaluate("rust", train_data, test_data, 64, 0.5, 1.0, 0.0, epochs=2, seed=0, architecture="conv")
+    first = bss.train_and_evaluate(
+        "rust", train_data, test_data, 64, 0.5, 1.0, 0.0, epochs=2, seed=0, architecture="conv"
+    )
+    second = bss.train_and_evaluate(
+        "rust", train_data, test_data, 64, 0.5, 1.0, 0.0, epochs=2, seed=0, architecture="conv"
+    )
     assert first["steps"] == 2 * 4
     assert first["test_accuracies"] == second["test_accuracies"]
