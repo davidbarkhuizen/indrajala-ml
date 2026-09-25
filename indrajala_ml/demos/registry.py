@@ -284,8 +284,9 @@ DEMOS: list[DemoInfo] = [
             "downstream, hidden delta, gradient accumulate/apply, and a whole single-example SGD step) "
             "for both backends at the shapes the conv and dense demos use: the 32 x 5408 dense layer "
             "after a ConvSpec(3, 8) layer on 28x28 input, the dense production network 784 -> 30 -> 10, "
-            "and a ConvSpec(3, 8) layer on 28x28 and 8x8 input, at batch sizes 1, 32 and 512. Each cell "
-            "is the median over 5 interleaved loops of microseconds per call, with the Rust/numpy ratio. "
+            "a ConvSpec(3, 8) layer on 28x28 and 8x8 input, and the second conv layer of conv -> pool -> "
+            "conv (13x13x8 in), of the stride-2 network (26x26x8 in, stride 2) and of conv -> conv "
+            "(26x26x8 in), at batch sizes 1, 32 and 512. Each cell is the median over 5 interleaved loops of microseconds per call, with the Rust/numpy ratio. "
             "The before/after reference for the recommended optimizations. Takes a minute or two."
         ),
     ),
