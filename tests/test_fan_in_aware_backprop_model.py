@@ -9,9 +9,7 @@ from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwa
 
 def test_predict_probability_is_identical_to_the_default_init_sibling():
 
-    # randomize() only changes how weights start out, not the forward pass - hand-set weights
-    # must produce exactly the same prediction as BackpropClassifierNetwork's own hand-computed
-    # forward-pass test (test_backprop_model.py::test_predict_probability_matches_a_hand_computed_forward_pass)
+    # only initialization differs: test_backprop_model.py's hand-derived a_o
     network = FanInAwareBackpropClassifierNetwork([1], 1, [(-10.0, 10.0)])
     wire_fixed_single_hidden_node(network)
 
@@ -26,10 +24,7 @@ def test_randomize_breaks_symmetry_between_nodes_in_the_same_layer():
 
 def test_randomize_scales_weight_range_with_fan_in():
 
-    # limit = 1/sqrt(fan_in) - a wider first layer (larger fan-in for the output layer) should
-    # produce a visibly narrower output-layer weight range than a narrow one - the same property
-    # test_multiclass_backprop_model.py checks for MultiClassBackpropClassifierNetwork, which
-    # shares this exact scheme via randomize_fan_in_aware
+    # limit = 1/sqrt(fan_in): a wider hidden layer gives the output layer a narrower range
     narrow = FanInAwareBackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0))
     wide = FanInAwareBackpropClassifierNetwork.randomized([400], 2, square_bounds(10.0))
 
@@ -41,8 +36,7 @@ def test_randomize_scales_weight_range_with_fan_in():
 
 def test_randomize_weight_magnitude_matches_the_fan_in_formula():
 
-    # every weight must lie within [-limit, limit] where limit=1/sqrt(dimension) for the first
-    # hidden layer - a direct check of the formula itself, not just its qualitative effect
+    # first hidden layer: every weight and bias within 1/sqrt(dimension)
     dimension = 64
     network = FanInAwareBackpropClassifierNetwork.randomized([8], dimension, square_bounds(10.0, dimension))
 

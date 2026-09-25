@@ -17,8 +17,7 @@ def _momentum_node(momentum: float, weight: float, bias: float):
 
 def test_first_apply_gradient_matches_plain_sgd_since_there_is_no_prior_delta():
 
-    # with no previous step, the momentum term (momentum * 0.0) contributes nothing - the very
-    # first update must be bit-identical to BackpropNode.apply_gradient's own plain SGD step
+    # with no previous step, the momentum term is momentum * 0.0
     momentum_node = _momentum_node(0.9, weight=0.5, bias=0.1)
     plain_node = BackpropNode(input_nodes=[StateNode(1.0)])
     plain_node.update_input_weights([0.5])
@@ -35,11 +34,7 @@ def test_first_apply_gradient_matches_plain_sgd_since_there_is_no_prior_delta():
 
 def test_second_apply_gradient_adds_the_momentum_term_by_hand():
 
-    # two consecutive steps with the same delta, so the momentum term's actual contribution is
-    # exercised (the first step alone can't distinguish momentum from plain SGD - see the test
-    # above). weight=0.5, bias=0.1, x=1.0, delta=0.2 (held constant across both steps),
-    # learning_rate=0.1, momentum=0.9 - computed independently (not re-derived from the
-    # implementation under test):
+    # hand-derived, x=1.0, delta=0.2 both steps, learning_rate=0.1, momentum=0.9:
     #   step 1: delta_w = 0.1*0.2*1.0 + 0.9*0.0 = 0.02 -> weight = 0.5 - 0.02 = 0.48
     #           bias_delta = 0.1*0.2 + 0.9*0.0 = 0.02 -> bias = 0.1 - 0.02 = 0.08
     #   step 2: delta_w = 0.1*0.2*1.0 + 0.9*0.02 = 0.038 -> weight = 0.48 - 0.038 = 0.442
@@ -59,8 +54,6 @@ def test_second_apply_gradient_adds_the_momentum_term_by_hand():
 
 def test_zero_momentum_is_bit_identical_to_plain_sgd_across_many_steps():
 
-    # momentum=0.0 should behave exactly like BackpropNode regardless of how many steps run,
-    # since the momentum term always contributes momentum * anything = 0.0
     momentum_node = _momentum_node(0.0, weight=0.5, bias=0.1)
     plain_node = BackpropNode(input_nodes=[StateNode(1.0)])
     plain_node.update_input_weights([0.5])

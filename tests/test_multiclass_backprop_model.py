@@ -6,8 +6,7 @@ from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClass
 
 
 def _fixed_network() -> MultiClassBackpropClassifierNetwork:
-    # dimension=1, one hidden node, 2 output classes - small enough to hand-derive the whole
-    # forward+backward pass exactly (see the comment on the learn() test below)
+    # 1 input, 1 hidden node, 2 classes: small enough to derive by hand
     network = MultiClassBackpropClassifierNetwork([1], 1, [(-10.0, 10.0)], 2)
     hidden_node = network.hidden_layers[0].nodes[0]
     output_node_0, output_node_1 = network.output_layer.nodes
@@ -22,10 +21,9 @@ def _fixed_network() -> MultiClassBackpropClassifierNetwork:
 
 def test_predict_probabilities_matches_a_hand_computed_forward_pass():
 
-    # z_h = 0.5*2.0 + 0.1 = 1.1, a_h = sigmoid(1.1) = 0.7502601055951177
-    # z_o0 = 0.8*a_h - 0.2, a_o0 = sigmoid(z_o0) = 0.5987376536170401
-    # z_o1 = -0.3*a_h + 0.4, a_o1 = sigmoid(z_o1) = 0.5436193278499907
-    # (independently computed, not re-derived from the implementation under test)
+    # hand-derived: z_h = 1.1, a_h = sigmoid(1.1) = 0.7502601055951177
+    #   z_o0 = 0.8*a_h - 0.2, a_o0 = sigmoid(z_o0) = 0.5987376536170401
+    #   z_o1 = -0.3*a_h + 0.4, a_o1 = sigmoid(z_o1) = 0.5436193278499907
     network = _fixed_network()
 
     probabilities = network.predict_probabilities((2.0,))
@@ -44,16 +42,11 @@ def test_classify_state_returns_the_argmax_class_index():
 
 def test_learn_matches_the_one_vs_rest_update_rule_by_hand():
 
-    # pins the forward+backward arithmetic against independently hand-derived expected values.
-    # One-hot target for category=1: output node 0's reference is 0.0, output node 1's is 1.0.
+    # hand-derived, x=2.0, category=1 (one-hot target (0, 1)), learning_rate=0.1:
     #   delta_o0 = (a_o0 - 0.0) * a_o0 * (1 - a_o0)
     #   delta_o1 = (a_o1 - 1.0) * a_o1 * (1 - a_o1)
     #   delta_h = (delta_o0*w_o0 + delta_o1*w_o1) * a_h * (1 - a_h)
-    #   w -= learning_rate * delta * <that weight's input value>; b -= learning_rate * delta
-    # state x=2.0, category=1, learning_rate=0.1 - computed independently (not re-derived from
-    # the implementation under test): new_w_h=0.49441465949423663, new_b_h=0.09720732974711832,
-    # new_w_o0=0.7892077150303392, new_b_o0=-0.21438472456309046,
-    # new_w_o1=-0.29150504211018, new_b_o1=0.4113226837285739
+    #   w -= learning_rate * delta * <the weight's input>; b -= learning_rate * delta
     network = _fixed_network()
     hidden_node = network.hidden_layers[0].nodes[0]
     output_node_0, output_node_1 = network.output_layer.nodes
@@ -76,8 +69,7 @@ def test_randomize_breaks_symmetry_between_nodes_in_the_same_layer():
 
 def test_randomize_scales_weight_range_with_fan_in():
 
-    # limit = 1/sqrt(fan_in) - a wider first layer (larger fan-in for the output layer) should
-    # produce a visibly narrower output-layer weight range than a narrow one
+    # limit = 1/sqrt(fan_in): a wider hidden layer gives the output layer a narrower range
     narrow = MultiClassBackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0), 3)
     wide = MultiClassBackpropClassifierNetwork.randomized([400], 2, square_bounds(10.0), 3)
 

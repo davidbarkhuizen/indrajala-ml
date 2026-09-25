@@ -5,9 +5,7 @@ from indrajala_ml.model.state_layer import StateLayer
 
 
 def _fixed_layer() -> tuple[StateLayer, SoftmaxOutputLayer]:
-    # 1D input, 3 output nodes with weights [1.0, 0.0, -1.0] and bias 0.0 (the default), state
-    # x=1.0 -> z = [1.0*1.0+0.0, 0.0*1.0+0.0, -1.0*1.0+0.0] = [1.0, 0.0, -1.0] - small enough to
-    # hand-compute the whole softmax exactly (see the comment on the forward-pass test below)
+    # x=1.0, weights [1.0, 0.0, -1.0], biases 0: z = [1.0, 0.0, -1.0]
     input_layer = StateLayer(1, [(-10.0, 10.0)])
     input_layer.update_state((1.0,))
 
@@ -20,10 +18,8 @@ def _fixed_layer() -> tuple[StateLayer, SoftmaxOutputLayer]:
 
 def test_forward_matches_a_hand_computed_softmax():
 
-    # softmax([1.0, 0.0, -1.0]): e^1=2.718281828459045, e^0=1.0, e^-1=0.36787944117144233,
-    # sum=4.086161269630487 -> a = [0.6652409557748219, 0.24472847105479767,
-    # 0.09003057317038046] (independently computed via the textbook formula directly - not the
-    # max-subtracted form the implementation under test uses - not re-derived from it)
+    # hand-derived with the textbook formula (not the implementation's max-subtracted form):
+    # e^1 + e^0 + e^-1 = 4.086161269630487
     _, layer = _fixed_layer()
 
     layer.forward()
@@ -39,9 +35,7 @@ def test_forward_matches_a_hand_computed_softmax():
 
 def test_compute_output_delta_matches_a_hand_computed_softmax_cross_entropy_delta():
 
-    # softmax + cross-entropy's delta is activation - one_hot_target - for target class 0
-    # ([1.0, 0.0, 0.0]), that's [0.6652409557748219-1.0, 0.24472847105479767-0.0,
-    # 0.09003057317038046-0.0] = [-0.3347590442251781, 0.24472847105479767, 0.09003057317038046]
+    # softmax + cross-entropy: delta = activation - one_hot_target, target class 0
     _, layer = _fixed_layer()
     layer.forward()
 
@@ -58,9 +52,7 @@ def test_compute_output_delta_matches_a_hand_computed_softmax_cross_entropy_delt
 
 def test_forward_is_invariant_to_a_constant_shift_in_every_z():
 
-    # the numerically-stable max-subtraction trick must leave the result unchanged - shifting
-    # every node's z by the same constant (here, by giving every node the same extra bias)
-    # should produce bit-identical activations to the unshifted case
+    # with max subtraction, shifting every z (here via the biases) changes nothing, bit for bit
     _, shifted_layer = _fixed_layer()
     for node in shifted_layer.nodes:
         node.bias = node.bias + 1000.0
@@ -77,9 +69,7 @@ def test_forward_is_invariant_to_a_constant_shift_in_every_z():
 
 def test_forward_does_not_overflow_for_a_very_large_z():
 
-    # without the max-subtraction, exp(z) for a large z would overflow the same way
-    # backprop_node.sigmoid's unguarded exp(-z) could - confirm the guard actually works, not
-    # just that it looks right
+    # without max subtraction, exp(10_000) overflows
     _, layer = _fixed_layer()
     layer.nodes[0].bias = 10_000.0
 
