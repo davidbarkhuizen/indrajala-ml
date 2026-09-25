@@ -103,8 +103,7 @@ def _rows(cls: type[Any], count: int = 20) -> list[Example[float]] | list[Exampl
 
 
 def _twin_networks(cls: type[Any]) -> tuple[Any, Any]:
-    # two networks with identical starting weights, built through snapshot/restore so the Rust
-    # classes (whose randomize can't be seeded) are covered too
+    # two networks with identical starting weights, built through snapshot/restore
     first = CONSTRUCTORS[cls.__name__](cls)
     first.randomize()
     second = CONSTRUCTORS[cls.__name__](cls)

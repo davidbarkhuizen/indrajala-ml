@@ -213,7 +213,8 @@ class ArrayNetworkBase(Generic[A]):
         return network
 
     def randomize(self) -> None:
-        # fan-in-aware (limit = 1/sqrt(fan_in)), drawn from the backend's RNG
+        # fan-in-aware (limit = 1/sqrt(fan_in)), drawn from the backend's RNG: after
+        # backend.seed(s), numpy and Rust draw the same weights
         previous_size = self.dimension
         for layer in as_weighted_array_layers(self.layers):
             layer.W, layer.b = self.backend.random_layer(layer.size, previous_size)
