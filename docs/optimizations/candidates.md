@@ -13,17 +13,16 @@ to [Rejected](rejected.md), with the reason in either case.
 
 ### 1. Conv accumulate with a large `cols`
 
-`D @ cols` (`(O, N*P) @ (N*P, C*k*k)`) through `matmul_narrow`. `matmul_narrow` passes
-`rows_per_block = 1` (a row of `D` is `N*P` doubles, past `matmul_2d`'s 16 KB rule), so
-`tiled_row_range`'s 2-row tiles (crate #26) never run. Each of the `O` output rows makes one pass
-over all of `k` per column tile (16-wide, then 4-wide, then scalar), and each pass reads that
-tile's columns from every row of `cols`.
+`D @ cols` (`(O, N*P) @ (N*P, C*k*k)`) through `matmul_narrow`. Each pair of the `O` output rows
+makes one pass over all of `k` per 16-wide column tile, and each row one pass per 4-wide tile and
+scalar column; each pass reads that tile's columns from every row of `cols`.
 
 Two fixes, both bit-identical (every output stays one FMA chain in increasing `k`):
 
-- **2-row blocks** (`rows_per_block` >= 2 from `matmul_narrow`): halves the 16-wide tile passes
-  wherever `C*k*k` >= 16. Works whether or not `cols` fits in a cache, but not where training
-  threads the op over rows (each thread already has 2 of the 8).
+- **2-row blocks** (`rows_per_block` >= 2 from `matmul_narrow`, done in crate #35; before it one
+  row per block, so the 2-row tiles never ran): halves the 16-wide tile passes wherever `C*k*k`
+  >= 16. Works whether or not `cols` fits in a cache, but not where training threads the op over
+  rows (each thread already has 2 of the 8).
 - **`k`-blocking**: a slab of `cols` rows (about 256 rows of 72 doubles, 147 KB, fits L2) serves
   every output row and column tile before the next slab; partial chains are stored to `out` and
   reloaded between slabs (a stored double is exact, so the chain's value is unchanged). Pays only
@@ -73,12 +72,10 @@ No demo trains conv at N = 512: the conv batch-size-scaling study (findings in
 `batch_size_scaling.py`) found no trained B = 512 conv workload.
 
 **Decision.** Both fixes fail the proposed gate (>= 1.3x its single calls and >= 3% of a trained
-mini-batch 32 epoch) on the saving; the owner chose to implement both. Plan, one PR each:
+mini-batch 32 epoch) on the saving; the owner chose to implement both.
 
-- **2-row blocks.** `matmul_narrow` with `rows_per_block` > 1 for the accumulate (4 measured
-  best; decide whether forward and downstream, with tall `a`, take it too). Crate PR, then a
-  parent PR bumping `rust/` with the epoch profile against the old build (builds alternated).
-- **`k`-blocking with column-split threading.** Slabs of `cols` rows sized to L2, partial chains
+- **2-row blocks: done** (`matmul_narrow` passes 4-row blocks, see [Implemented](implemented.md)).
+- **Next, `k`-blocking with column-split threading.** Slabs of `cols` rows sized to L2, partial chains
   stored and reloaded; threads over column tiles, not rows, so `cols` is streamed about once.
   Crate test comparing it bitwise against the unblocked kernel; measured on conv-conv at default
   threads, in the network. The candidate then moves to Implemented or Rejected.

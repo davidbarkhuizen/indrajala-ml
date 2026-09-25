@@ -61,7 +61,8 @@ numbers are threaded and partly warm-clock numbers.
 Conv ops at 28x28, `ConvSpec(3, 8)`, one thread, against 32 or 512 single-example calls:
 `forward_batch` 920-1010 µs at N = 32 and 15.0-15.7 ms at N = 512 (single calls 26-29 µs);
 downstream 1.2-1.3x and accumulate 1.1-1.2x their single calls at N = 32, accumulate 3.8-4.0x at
-N = 512.
+N = 512. The second-conv accumulate (13x13x8, 26x26x8/2, 26x26x8 in) is in candidate 1 of
+[Candidates](candidates.md).
 
 Max-pool ops, PoolSpec(2) on 26x26x8 (the conv-pool-conv MNIST layer), ReLU-like input, one
 thread each: forward 4.1-4.2 µs single against numpy's 95, 112-114 at batch 32 against 1570-1630;
@@ -81,10 +82,12 @@ current shares are in parentheses, the rest is not re-profiled
   `downstream_batch` 6.5-7%.
 - **Conv, single-example** (0.80 s): `layer_sgd_step` 20%, `conv_forward_batch` 20%,
   `layer_forward` 19%, dense `downstream` (5-7% now), conv accumulate 7%.
-- **Conv-pool-conv** (0.67-0.71 s single-example, 0.76-0.79 s mini-batch 32, current build):
-  `conv_forward_batch` 47% / 45%, `conv_accumulate_gradient_batch` 11% / 17% (profiled before
-  the one-pass pool downstream took about 4% off each run), `max_pool_forward_batch` 3% / 4%,
-  `max_pool_downstream_batch` 1.7% / 2.3%.
+- **Second-conv networks** (single-example / mini-batch 32, current build, profiled totals):
+  conv-pool-conv (0.71-0.77 / 0.79-0.81 s) `conv_forward_batch` 48-49% / 45-46%,
+  `conv_accumulate_gradient_batch` 10-11% / 16-17%, `conv_downstream_batch` 5% / 9-10%,
+  `max_pool_forward_batch` 4% mini-batch; conv-conv-stride2 (0.71-0.75 / 0.85-0.87 s) forward 53%
+  / 48-49%, accumulate 11% / 17-18%, downstream 6% / 14-16%; conv-conv (2.24-2.30 / 2.67-2.74 s)
+  forward 48-50% / 45-47%, downstream 8-9% / 20%, accumulate 8% / 17-18%.
 - **About a quarter of a one-epoch conv run is the accuracy passes**, not training: the trainers
   run n + 1 per-row passes for n epochs (Rust conv keeps the per-row pass). Stakes quoted as a
   share of an epoch are shares of this timed one-epoch run, which overstates the passes for

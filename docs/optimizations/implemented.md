@@ -37,17 +37,23 @@ keep the pipes busy. All three matmul kernels are built on that:
 - **`tiled_row_range`** (`rust/src/linalg.rs`) holds 16-column output tiles (4 AVX2
   accumulators) in registers across all of `k`, for `matmul_2d`, `matmul_narrow` and vector @
   matrix. `matmul_2d` runs it in row blocks of about 16 KB of `a` (so a block of `a` and `b`'s
-  `k x 16` panel share L1); `matmul_narrow` one row at a time, for conv's narrow products
+  `k x 16` panel share L1); `matmul_narrow` in blocks of 4 rows, for conv's narrow products
   (`cols @ W.T` with only `C*k*k` or `O` columns). Replacing the old load/FMA/store loops (crate
   #11, #12, #14) cut conv forward 13-64%, downstream 4-56%, accumulate 16-43%, and unthreaded
   dense batch downstream/accumulate to 0.1-0.6x their time.
 - **Its 16-wide tiles cover 2 rows at once** (crate #26): 8 independent FMA chains instead of 4,
   and each `b` row of the tile loaded once for both rows; a block's leftover row runs the 1-row
   tile. Dense batch 32 `downstream_batch` went 551-677 → 445-476 µs at 32 x 5408 and accumulate
-  81-89 → 67-70 µs at 30 x 784; one-thread 30 x 784 accumulate at batch 512 0.63-0.70x. Only
-  `matmul_2d` gains: `matmul_narrow` and vector @ matrix pass one-row blocks. In the conv
-  mini-batch 32 epoch profile, dense downstream went 45-60 → 41-44 ms and accumulate 64-83 →
-  62-63 ms. A 3-row tile won only at `k` = 128 in the probe.
+  81-89 → 67-70 µs at 30 x 784; one-thread 30 x 784 accumulate at batch 512 0.63-0.70x. In the
+  conv mini-batch 32 epoch profile, dense downstream went 45-60 → 41-44 ms and accumulate 64-83 →
+  62-63 ms. A 3-row tile won only at `k` = 128 in the probe. Vector @ matrix passes one-row blocks.
+- **`matmul_narrow` passes 4-row blocks** (crate #35), so the conv accumulate (8 rows of
+  `N*P`, where `matmul_2d`'s 16 KB rule gives one) reaches the 2-row tiles. On one thread at
+  N = 32 the second-conv accumulate went about 40% faster (13x13x8 568-671 → 364-370 µs), 4 rows
+  ahead of 2 and 8; the downstream 10-15% faster in places. In the epoch profile (builds
+  alternated) the accumulate saved 0.6-2.0% of each second-conv network's epoch and the
+  downstream up to 1.3%; nothing where training threads the accumulate (conv-conv mini-batch 32,
+  10.6M flops: each thread already has 2 rows).
 - **Vector @ matrix goes through the same kernel as a one-row product** (crate #20), not its own
   `axpy_row` loop, which made 32 load/FMA/store passes over a 43 KB output row: single-example
   dense `downstream` at 32 x 5408 went 44-48 → 26 µs (numpy 29).
