@@ -17,10 +17,9 @@ def _l2_node(l2_lambda: float, weight: float, bias: float):
 
 def test_apply_gradient_adds_the_l2_penalty_to_the_weight_by_hand():
 
-    # weight=0.5, bias=0.1, x=1.0, delta=0.2, learning_rate=0.1, l2_lambda=0.1 - computed
-    # independently (not re-derived from the implementation under test):
+    # hand-derived, x=1.0, delta=0.2, learning_rate=0.1, l2_lambda=0.1:
     #   new_weight = 0.5 - 0.1*(0.2*1.0 + 0.1*0.5) = 0.5 - 0.1*0.25 = 0.475
-    #   new_bias = 0.1 - 0.1*0.2 = 0.08 (unaffected by l2_lambda - see the test below)
+    #   new_bias = 0.1 - 0.1*0.2 = 0.08 (biases aren't regularized)
     node = _l2_node(0.1, weight=0.5, bias=0.1)
 
     node.delta = 0.2
@@ -32,8 +31,6 @@ def test_apply_gradient_adds_the_l2_penalty_to_the_weight_by_hand():
 
 def test_bias_is_never_regularized():
 
-    # same delta/learning_rate, two very different l2_lambda values - the bias update must be
-    # identical either way, since L2 only ever penalizes weights
     small_l2 = _l2_node(0.001, weight=0.5, bias=0.1)
     large_l2 = _l2_node(50.0, weight=0.5, bias=0.1)
 
@@ -67,8 +64,7 @@ def test_l2_lambda_zero_matches_plain_sgd_exactly():
 
 def test_a_large_enough_weight_shrinks_even_with_zero_delta():
 
-    # the defining behavior of weight decay: even with no error signal at all (delta=0), a
-    # nonzero weight still shrinks toward zero purely from the l2_lambda*weight penalty term
+    # weight decay: with delta=0, the l2_lambda*weight term alone shrinks the weight
     node = _l2_node(0.5, weight=10.0, bias=0.0)
 
     node.delta = 0.0

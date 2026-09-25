@@ -17,10 +17,8 @@ def _adam_node(weight: float, bias: float):
 
 def test_two_apply_gradient_steps_match_hand_derived_moment_accumulation():
 
-    # two consecutive steps with the same delta (so m/v actually accumulate, not just reflect a
-    # single fresh gradient), weight=0.5, bias=0.1, x=1.0, delta=0.2 (held constant across both
-    # steps), learning_rate=0.1, beta1=0.9/beta2=0.999/epsilon=1e-8 - computed independently
-    # (not re-derived from the implementation under test), starting m=v=0 for both parameters:
+    # hand-derived, two steps so m and v accumulate: x=1.0, delta=0.2 both steps,
+    # learning_rate=0.1, m=v=0 at the start:
     #   step 1: g=0.2, m=0.1*0.2=0.02, v=0.001*0.04=0.00004, bias_correction1=0.1,
     #           bias_correction2=0.001, m_hat=0.2, v_hat=0.04, sqrt(v_hat)=0.2 ->
     #           update = 0.1*0.2/(0.2+1e-8) ~= 0.1 -> w=0.4000000049999997, b=4.999999733690252e-09
@@ -43,10 +41,7 @@ def test_two_apply_gradient_steps_match_hand_derived_moment_accumulation():
 
 def test_step_count_increments_once_per_apply_call():
 
-    # t (the per-node step counter driving bias correction) must advance exactly once per
-    # apply_accumulated_gradient call, whether reached via apply_gradient (batch_size=1) or
-    # directly - see adam_layer.make_adam_node_cls's own docstring for why this needs no shared/
-    # global counter
+    # t, the per-node step count behind bias correction
     node = _adam_node(weight=0.5, bias=0.1)
     assert node._t == 0
 

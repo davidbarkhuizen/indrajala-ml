@@ -6,10 +6,7 @@ from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
 from indrajala_ml.model.state_layer import StateLayer
 
-# the same fixture point every other activation-function/sibling test in this codebase uses
-# (test_backprop_model.py, test_relu_layer.py, test_momentum_backprop_model.py, ...): weight=0.5,
-# bias=0.1, x=2.0 -> z=1.1, a_h=sigmoid(1.1)=0.7502601055951177 - directly comparable across
-# every sibling's own fixture, not re-derived here
+# the shared fixture point: weight=0.5, bias=0.1, x=2.0 -> z=1.1, a=sigmoid(1.1)
 Z = 1.1
 BASE_ACTIVATION = 0.7502601055951177
 
@@ -73,10 +70,8 @@ def test_set_training_mode_false_reverts_to_eval_behavior():
 
 def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative():
 
-    # the derivative factor must be base*(1-base) (the *pre*-scaling activation), not
-    # value()*(1-value()) the way
-    # BackpropNode.compute_hidden_delta's own a*(1-a) would - see the hand-derivation in
-    # dropout_layer.py's own compute_hidden_delta docstring
+    # base*(1-base) on the unscaled activation, not value()*(1-value()); see
+    # compute_hidden_delta in dropout_layer.py
     layer, node = _dropout_node(drop_probability=0.5)
     layer.set_training_mode(True)
     with patch("random.random", return_value=0.9):  # kept
@@ -95,8 +90,7 @@ def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative():
 
 def test_compute_hidden_delta_is_zero_when_the_unit_was_dropped():
 
-    # matches ReLUNode's own dead-unit precedent: zero delta, zero gradient, incoming weights
-    # untouched this step, regardless of how large the downstream error is
+    # like a dead ReLU unit: no gradient reaches its incoming weights
     layer, node = _dropout_node(drop_probability=0.5)
     layer.set_training_mode(True)
     with patch("random.random", return_value=0.1):  # dropped

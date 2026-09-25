@@ -7,8 +7,7 @@ from indrajala_ml.model.l2_regularized_backprop_classifier_network import L2Regu
 
 
 def _fixed_network(l2_lambda: float = 0.1) -> L2RegularizedBackpropClassifierNetwork:
-    # same dimension=1, one hidden node, one output node, and same starting weights as
-    # test_backprop_model.py's own hand-computed fixture
+    # test_backprop_model.py's fixture
     network = L2RegularizedBackpropClassifierNetwork([1], 1, [(-10.0, 10.0)], l2_lambda)
     wire_fixed_single_hidden_node(network)
     return network
@@ -16,8 +15,7 @@ def _fixed_network(l2_lambda: float = 0.1) -> L2RegularizedBackpropClassifierNet
 
 def test_predict_probability_is_identical_to_the_plain_sgd_sibling():
 
-    # L2 only changes apply_gradient - the forward pass is untouched, so this must match
-    # test_backprop_model.py's own hand-computed forward-pass test exactly
+    # L2 changes only apply_gradient: test_backprop_model.py's hand-derived a_o
     network = _fixed_network()
 
     assert network.predict_probability((2.0,)) == pytest.approx(0.5987376536170401)
@@ -25,18 +23,9 @@ def test_predict_probability_is_identical_to_the_plain_sgd_sibling():
 
 def test_learn_matches_the_l2_regularized_update_rule_by_hand():
 
-    # pins the backward-pass arithmetic against independently hand-derived expected values - the
-    # direct L2-regularized counterpart of
-    # test_backprop_model.py::test_learn_matches_the_backprop_update_rule_by_hand, same starting
-    # weights/state/learning_rate/category, so the two update rules' actual numeric divergence is
-    # directly comparable. a_h=0.7502601055951177, a_o=0.5987376536170401 (same forward pass as
-    # the plain-SGD sibling), delta_o=-0.09640363012729687, delta_h=-0.014450509251916271
-    # (same deltas too - L2 doesn't change the backward pass, only the weight update). state
-    # x=2.0, category y=1.0, learning_rate=0.1, l2_lambda=0.1 - computed independently (not
-    # re-derived from the implementation under test): new_w_h=0.49789010185038324,
-    # new_b_h=0.10144505092519163 (identical to the plain-SGD sibling's own bias - never
-    # regularized), new_w_o=0.7992327797719059, new_b_o=-0.19035963698727032 (also identical to
-    # the plain-SGD sibling's own bias)
+    # hand-derived with test_backprop_model.py's inputs and l2_lambda=0.1: the same deltas, the
+    # weights decay by learning_rate * l2_lambda * w, and biases (never regularized) match plain
+    # SGD's
     network = _fixed_network(l2_lambda=0.1)
     hidden_node = network.hidden_layers[0].nodes[0]
     output_node = network.output_layer.nodes[0]
