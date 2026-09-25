@@ -1,5 +1,5 @@
 """
-The bit-identical gate for structural refactoring (docs/refactoring.md): trains every array
+The bit-identical gate for structural refactoring (README.md, Refactoring): trains every array
 network, numpy and Rust, from fixed injected weights and records every value it produces, so a
 refactoring stage can show that training is unchanged exactly, not within a tolerance.
 
