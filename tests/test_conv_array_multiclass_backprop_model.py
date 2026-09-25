@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
+from indrajala_ml.model.array_layer import ArrayLayer
+from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
@@ -13,73 +15,139 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.multiclass_evaluate import accuracy
 from indrajala_ml.train import train_linear_classifier_network
 from tests.helpers import (
-    assert_array_network_snapshots_match,
+    assert_conv_array_network_weights_match,
     copy_conv_network_weights_into_array_network,
+    matching_conv_array_backprop_networks,
     matching_conv_numpy_rust_networks,
 )
-from tests.test_conv_vectorized_multiclass_backprop_model import ARCHITECTURES, CLASS_COUNT, _digits_rows
 
+CLASS_COUNT = 10
+
+NETWORK_CLS = {
+    "numpy": ConvVectorizedMultiClassBackpropClassifierNetwork,
+    "rust": ConvRustArrayMultiClassBackpropClassifierNetwork,
+}
+LAYER_CLS = {
+    "numpy": (ConvArrayLayer, MaxPoolArrayLayer, ArrayLayer),
+    "rust": (ConvRustArrayLayer, MaxPoolRustArrayLayer, RustArrayLayer),
+}
+
+# every architecture the step-by-step parity gates below run over, on 8x8 inputs
+ARCHITECTURES = {
+    "one_conv": ([ConvSpec(3, 4)], [8]),
+    "conv_conv_stride_2": ([ConvSpec(3, 3), ConvSpec(2, 4, stride=2)], [8]),  # multi-channel 2nd layer
+    "conv_pool_conv": ([ConvSpec(3, 4), PoolSpec(2), ConvSpec(2, 6)], [8]),
+    "conv_overlapping_pool": ([ConvSpec(3, 3), PoolSpec(2, stride=1)], [8, 6]),
+    "conv_conv_conv": ([ConvSpec(2, 2), ConvSpec(3, 3), ConvSpec(2, 2, stride=2)], [8]),
+}
 POOLED = [ConvSpec(3, 4), PoolSpec(2), ConvSpec(2, 6)]
 OVERLAPPING_POOL_STRIDED = [ConvSpec(3, 4), PoolSpec(2, stride=1), ConvSpec(2, 6, stride=2)]
 
+# over these runs both backends stay within 1.4e-15 of the pure-Python network in weights and
+# 3.3e-16 in probabilities
+WEIGHT_ATOL = 1e-13
+PROBABILITY_ATOL = 1e-14
 
-def _matching_networks(rng: random.Random, architecture: str):
+
+@pytest.fixture
+def network_cls(backend):
+    return NETWORK_CLS[backend.name]
+
+
+def _digits_rows() -> list[tuple[tuple[float, ...], int]]:
+    # real UCI digits: [0, 1] pixels with many exact zeros, so ReLU zeros and pooling ties
+    # actually occur in the parity runs rather than only in the layer-level tie tests
+    return load_digits_dataset()[:120]
+
+
+def _matching_networks(rng: random.Random, architecture: str, backend):
     conv_specs, dense_layer_sizes = ARCHITECTURES[architecture]
-    return matching_conv_numpy_rust_networks(rng, 8, 8, conv_specs, dense_layer_sizes, CLASS_COUNT)
+    return matching_conv_array_backprop_networks(
+        rng, 8, 8, conv_specs, dense_layer_sizes, CLASS_COUNT, NETWORK_CLS[backend.name], backend.owned
+    )
+
+
+def _as_lists(snapshot):
+    return [[array.tolist() for array in entry] for entry in snapshot]
 
 
 @pytest.mark.parametrize("architecture", ARCHITECTURES)
-def test_predict_probabilities_and_classify_state_match_the_numpy_network(architecture):
+def test_predict_probabilities_and_classify_state_match_across_a_sweep(backend, architecture):
 
     rng = random.Random(0)
-    numpy_network, rust_network = _matching_networks(rng, architecture)
+    node_network, array_network = _matching_networks(rng, architecture, backend)
 
     states = [state for state, _label in _digits_rows()[:30]]
     states += [tuple(rng.uniform(0.0, 1.0) for _ in range(64)) for _ in range(20)]
     for state in states:
-        expected = numpy_network.predict_probabilities(state)
-        np.testing.assert_allclose(rust_network.predict_probabilities(state), expected, rtol=1e-12, atol=1e-14)
-        assert rust_network.classify_state(state) == numpy_network.classify_state(state)
+        np.testing.assert_allclose(
+            array_network.predict_probabilities(state),
+            node_network.predict_probabilities(state),
+            rtol=0,
+            atol=PROBABILITY_ATOL,
+        )
+        assert array_network.classify_state(state) == node_network.classify_state(state)
 
 
 @pytest.mark.parametrize("architecture", ARCHITECTURES)
-def test_learn_matches_the_numpy_network_after_every_step(architecture):
+def test_learn_matches_after_every_step_not_just_at_the_end(backend, architecture):
 
-    # one silently-wrong intermediate step fails loudly instead of being averaged away
     rng = random.Random(1)
-    numpy_network, rust_network = _matching_networks(rng, architecture)
+    node_network, array_network = _matching_networks(rng, architecture, backend)
 
     for state, label in _digits_rows()[:60]:
-        numpy_network.learn(0.5, state, label)
-        rust_network.learn(0.5, state, label)
-        assert_array_network_snapshots_match(numpy_network, rust_network)
+        node_network.learn(0.5, state, label)
+        array_network.learn(0.5, state, label)
+        assert_conv_array_network_weights_match(node_network, array_network, rtol=0, atol=WEIGHT_ATOL)
 
 
 @pytest.mark.parametrize("architecture", ARCHITECTURES)
-def test_learn_batch_matches_the_numpy_network_after_every_batch(architecture):
+def test_learn_batch_matches_after_every_batch_not_just_at_the_end(backend, architecture):
 
     rng = random.Random(2)
-    numpy_network, rust_network = _matching_networks(rng, architecture)
+    node_network, array_network = _matching_networks(rng, architecture, backend)
     rows = _digits_rows()
 
     for start in range(0, len(rows), 8):
         batch = rows[start : start + 8]
-        numpy_network.learn_batch(0.5, batch)
-        rust_network.learn_batch(0.5, batch)
-        assert_array_network_snapshots_match(numpy_network, rust_network)
+        node_network.learn_batch(0.5, batch)
+        array_network.learn_batch(0.5, batch)
+        assert_conv_array_network_weights_match(node_network, array_network, rtol=0, atol=WEIGHT_ATOL)
 
 
-def test_reproduces_the_pinned_pure_python_uci_digits_result():
+def test_the_parity_runs_really_exercise_relu_zeros_and_pooling_ties(backend):
+
+    # guards the claim the parity tests above rest on: on real digits rows, some conv outputs
+    # are exactly zero and some pooling windows hold a tied maximum. These network-level runs
+    # would still pass with last-occurrence tie-breaking (a tie after a ReLU is between exact
+    # zeros, whose gradient the mask zeroes), so first-occurrence parity is pinned at the layer
+    # level (tests/test_max_pool_array_layer.py)
+    rng = random.Random(0)
+    _node_network, array_network = _matching_networks(rng, "conv_pool_conv", backend)
+    X = backend.owned([list(state) for state, _label in _digits_rows()])
+    conv, pool = array_network.layers[0], array_network.layers[1]
+    array_network.layers[2].forward_batch(pool.forward_batch(conv.forward_batch(X)))
+
+    A = np.array(conv.A.tolist())
+    assert np.any(A == 0.0)
+    windows = A.reshape(len(A), 4, 3, 2, 3, 2).transpose(0, 1, 2, 4, 3, 5)
+    window_values = windows.reshape(len(A), 4, 3, 3, 4)
+    tied = (window_values == window_values.max(axis=-1, keepdims=True)).sum(axis=-1) > 1
+    assert np.any(tied)
+
+
+def test_reproduces_the_pinned_pure_python_uci_digits_result(network_cls):
 
     # test_conv_multiclass_backprop_model.py pins best_training_accuracy 0.9875 at epoch index 10
-    # and test accuracy 0.925 for the pure-Python network, and the numpy network reproduces it.
-    # Same seeded initial weights, same training call, Rust network only.
+    # and test accuracy 0.925 for the pure-Python network. Same seeded initial weights (through a
+    # numpy network, whose snapshot restores into either backend), same training call
     random.seed(0)
 
     dataset = load_digits_dataset()
@@ -91,7 +159,7 @@ def test_reproduces_the_pinned_pure_python_uci_digits_result():
     )
     bridge = ConvVectorizedMultiClassBackpropClassifierNetwork(8, 8, [ConvSpec(3, 4)], [16], class_count=10)
     copy_conv_network_weights_into_array_network(reference, bridge)
-    student = ConvRustArrayMultiClassBackpropClassifierNetwork(8, 8, [ConvSpec(3, 4)], [16], class_count=10)
+    student = network_cls(8, 8, [ConvSpec(3, 4)], [16], class_count=10)
     student.restore(bridge.snapshot())
 
     result = train_linear_classifier_network(student, train_data, learning_rate=0.5, epochs=15)
@@ -106,22 +174,22 @@ def test_reproduces_the_pinned_pure_python_uci_digits_result():
     assert accuracy(student, test_data) == 0.925
 
 
-def test_construction_shape_chains_conv_and_pool_layers():
+def test_construction_shape_chains_conv_and_pool_layers(backend, network_cls):
 
-    network = ConvRustArrayMultiClassBackpropClassifierNetwork(8, 8, POOLED, [8], class_count=10)
+    conv_cls, pool_cls, dense_cls = LAYER_CLS[backend.name]
+    network = network_cls(8, 8, POOLED, [8], class_count=10)
     first, pool, last = network.conv_layers
 
     assert network.dimension == 64
-    assert isinstance(first, ConvRustArrayLayer) and isinstance(pool, MaxPoolRustArrayLayer)
-    assert isinstance(last, ConvRustArrayLayer)
+    assert isinstance(first, conv_cls) and isinstance(pool, pool_cls) and isinstance(last, conv_cls)
     assert (first.out_height, first.out_width, first.channel_count) == (6, 6, 4)
     assert (pool.out_height, pool.out_width, pool.channel_count) == (3, 3, 4)
     assert (last.input_channels, last.out_height, last.out_width, last.channel_count) == (4, 2, 2, 6)
-    assert last.W.shape == (6, 2 * 2 * 4)
+    assert np.array(last.W.tolist()).shape == (6, 2 * 2 * 4)
 
     dense, output = network.layers[3:]
-    assert isinstance(dense, RustArrayLayer) and dense.W.shape == (8, 2 * 2 * 6)
-    assert output is network.output_layer and output.W.shape == (10, 8)
+    assert isinstance(dense, dense_cls) and np.array(dense.W.tolist()).shape == (8, 2 * 2 * 6)
+    assert output is network.output_layer and np.array(output.W.tolist()).shape == (10, 8)
     assert network.layers == network.conv_layers + [dense, output]
 
 
@@ -136,15 +204,15 @@ def test_construction_shape_chains_conv_and_pool_layers():
         (8, 8, [ConvSpec(9, 4)], [8], 10),  # kernel larger than the input
     ],
 )
-def test_construction_rejects_invalid_arguments(arguments):
+def test_construction_rejects_invalid_arguments(network_cls, arguments):
 
     with pytest.raises(AssertionError):
-        ConvRustArrayMultiClassBackpropClassifierNetwork(*arguments)
+        network_cls(*arguments)
 
 
-def test_randomized_breaks_symmetry_and_builds_a_usable_network():
+def test_randomized_breaks_symmetry_and_builds_a_usable_network(network_cls):
 
-    network = ConvRustArrayMultiClassBackpropClassifierNetwork.randomized(8, 8, POOLED, [8], class_count=10)
+    network = network_cls.randomized(8, 8, POOLED, [8], class_count=10)
     first, _pool, last = network.conv_layers
 
     for layer in (first, last):
@@ -163,45 +231,42 @@ def test_randomized_breaks_symmetry_and_builds_a_usable_network():
     assert 0 <= network.classify_state(state) < 10
 
 
-def test_snapshot_has_an_empty_pool_entry_and_restore_round_trips():
+def test_snapshot_has_an_empty_pool_entry_and_restore_round_trips(network_cls):
 
-    def as_lists(snapshot):
-        return [[array.tolist() for array in entry] for entry in snapshot]
-
-    network = ConvRustArrayMultiClassBackpropClassifierNetwork.randomized(8, 8, POOLED, [8], class_count=10)
+    network = network_cls.randomized(8, 8, POOLED, [8], class_count=10)
     before = network.snapshot()
-    before_lists = as_lists(before)
+    before_lists = _as_lists(before)
     assert before[1] == ()
 
-    # Whole-snapshot comparisons, not the first conv layer's W alone: pa.uniform can't be seeded,
-    # and ~0.5% of initialisations leave that one layer exactly unchanged by a single example's
-    # step (measured over 2000). The output layer's bias always moves (its gradient is p - one_hot).
+    # whole-snapshot comparisons: pa.uniform can't be seeded, and ~0.5% of initialisations leave
+    # the first conv layer's W alone unchanged by one example's step (measured over 2000); the
+    # output bias always moves (its gradient is p - one_hot)
     for state, label in _digits_rows()[:5]:
         network.learn(0.5, state, label)
-    assert as_lists(network.snapshot()) != before_lists
+    assert _as_lists(network.snapshot()) != before_lists
 
     network.restore(before)
-    assert as_lists(network.snapshot()) == before_lists
+    assert _as_lists(network.snapshot()) == before_lists
     # restore copies: training afterwards leaves the snapshot itself untouched
     network.learn(0.5, *_digits_rows()[0])
-    assert as_lists(network.snapshot()) != before_lists
-    assert as_lists(before) == before_lists
+    assert _as_lists(network.snapshot()) != before_lists
+    assert _as_lists(before) == before_lists
 
     with pytest.raises(AssertionError):
         network.restore([before[0], before[0], *before[2:]])
 
 
 @pytest.mark.parametrize("conv_specs", [[ConvSpec(3, 4)], OVERLAPPING_POOL_STRIDED])
-def test_save_load_round_trips_specs_weights_and_predictions(tmp_path, conv_specs):
+def test_save_load_round_trips_specs_weights_and_predictions(network_cls, tmp_path, conv_specs):
 
-    network = ConvRustArrayMultiClassBackpropClassifierNetwork.randomized(8, 8, conv_specs, [8], class_count=10)
-    path = str(tmp_path / "conv_rust_array_model.json")
+    network = network_cls.randomized(8, 8, conv_specs, [8], class_count=10)
+    path = str(tmp_path / "conv_model.json")
     network.save(path)
-    loaded = ConvRustArrayMultiClassBackpropClassifierNetwork.load(path)
+    loaded = network_cls.load(path)
 
     assert loaded.conv_specs == network.conv_specs
     assert (loaded.input_height, loaded.input_width, loaded.dense_layer_sizes, loaded.class_count) == (8, 8, [8], 10)
-    assert_array_network_snapshots_match(network, loaded, rtol=0, atol=0)
+    assert _as_lists(loaded.snapshot()) == _as_lists(network.snapshot())
     for state, _label in _digits_rows()[:10]:
         assert loaded.predict_probabilities(state) == network.predict_probabilities(state)
 
@@ -227,8 +292,7 @@ def test_a_model_saved_by_either_backend_loads_into_the_other_with_the_same_pred
 
     assert isinstance(other, loaded) and other.conv_specs == saved.conv_specs
     # weights round-trip exactly through JSON; predictions agree to the backends' reduction order
-    for entry_saved, entry_other in zip(saved.snapshot(), other.snapshot()):
-        assert [array.tolist() for array in entry_other] == [array.tolist() for array in entry_saved]
+    assert _as_lists(other.snapshot()) == _as_lists(saved.snapshot())
     for state, _label in _digits_rows()[20:60]:
         np.testing.assert_allclose(
             other.predict_probabilities(state), saved.predict_probabilities(state), rtol=1e-12, atol=1e-14

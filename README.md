@@ -111,7 +111,7 @@ are timed. Accuracy comparisons of pure-Python models are fine.
 
 - [docs/optimizations.md](docs/optimizations.md): Rust against numpy, what has been optimized and
   rejected, the candidates left, and how to measure a change.
-- [docs/refactoring.md](docs/refactoring.md): structural duplication still in the code, with a
-  staged plan for each item.
+- [docs/refactoring.md](docs/refactoring.md): the rules a structural refactoring follows (a
+  bit-identical golden training run, no hot-path slowdown), and any duplication still planned.
 - [docs/conv-batch-size-scaling-workplan.md](docs/conv-batch-size-scaling-workplan.md): the
   planned study of batch-size scaling for the conv network.
