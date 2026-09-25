@@ -41,6 +41,22 @@ def test_initial_network_is_identical_across_backends(momentum):
         assert np.array_equal(numpy_b, np.array(rust_b.tolist()))
 
 
+def test_initial_conv_network_is_identical_across_backends():
+    numpy_weights = bss.initial_network("numpy", 0.0, seed=7, architecture="conv").snapshot()
+    rust_weights = bss.initial_network("rust", 0.0, seed=7, architecture="conv").snapshot()
+    assert len(numpy_weights) == 3  # the conv layer, the dense 32, the output layer
+    for (numpy_W, numpy_b), (rust_W, rust_b) in zip(numpy_weights, rust_weights):
+        assert np.array_equal(numpy_W, np.array(rust_W.tolist()))
+        assert np.array_equal(numpy_b, np.array(rust_b.tolist()))
+
+
+def test_initial_network_rejects_conv_momentum_and_unknown_architectures():
+    with pytest.raises(ValueError, match="no momentum"):
+        bss.initial_network("rust", 0.9, seed=0, architecture="conv")
+    with pytest.raises(ValueError, match="unknown architecture"):
+        bss.initial_network("rust", 0.0, seed=0, architecture="lstm")
+
+
 def test_initial_network_differs_between_seeds():
     first = bss.initial_network("numpy", 0.0, seed=0).snapshot()
     second = bss.initial_network("numpy", 0.0, seed=1).snapshot()
@@ -83,4 +99,12 @@ def test_train_and_evaluate_is_reproducible_for_a_seed(mnist_subset):
     train_data, test_data = mnist_subset
     first = bss.train_and_evaluate("rust", train_data, test_data, 32, 2.0, 0.25, 0.9, epochs=2, seed=5)
     second = bss.train_and_evaluate("rust", train_data, test_data, 32, 2.0, 0.25, 0.9, epochs=2, seed=5)
+    assert first["test_accuracies"] == second["test_accuracies"]
+
+
+def test_train_and_evaluate_trains_the_conv_network(mnist_subset):
+    train_data, test_data = mnist_subset
+    first = bss.train_and_evaluate("rust", train_data, test_data, 64, 0.5, 1.0, 0.0, epochs=2, seed=0, architecture="conv")
+    second = bss.train_and_evaluate("rust", train_data, test_data, 64, 0.5, 1.0, 0.0, epochs=2, seed=0, architecture="conv")
+    assert first["steps"] == 2 * 4
     assert first["test_accuracies"] == second["test_accuracies"]

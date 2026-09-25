@@ -1,6 +1,6 @@
 # Workplan: batch-size scaling for the conv network
 
-**Status: not started.**
+**Status: stage 1 done (`lr_32` = 2); stage 2 next.**
 
 A measured study and a demo: does the linear learning-rate scaling rule (Goyal et al. 2017:
 multiply the rate by the factor the batch grows, with warmup) hold for the conv network on full
@@ -86,14 +86,37 @@ read the numbers as rough:
 
 Each stage is one PR. The accuracy runs use the Rust backend.
 
-### Stage 1: conv in the study code, and the batch-32 baseline
+### Stage 1 (done): conv in the study code, and the batch-32 baseline
 
-Give `batch_size_scaling.py` an architecture parameter (dense or conv), keeping the dense path
-bit-identical. The conv path uses `initial_network`'s scheme: numpy draws from the seed, and the
-weights are restored into the Rust network. Then sweep the batch-32 rate for conv at momentum 0.0
-over a doubling ladder, about 0.125 to 8, for 3 seeds and 2 epochs. Pick `lr_32` as the dense
-study did: the best rate whose seeds are all stable (every final test accuracy 20% or more).
-Record every rate tried.
+`batch_size_scaling.py` takes `architecture="dense"` or `"conv"`. The dense path is unchanged.
+The conv path draws the weights with numpy from the seed and restores them into the Rust network.
+The sweep script takes `--architecture conv`, which sweeps momentum 0.0 only:
+
+    python scripts/batch_size_scaling_sweep.py baseline --architecture conv --epochs 2 --seeds 3
+
+Result: full MNIST, Rust, momentum 0.0, 3 seeds, 2 epochs, final test accuracy:
+
+| rate | epoch 1 | epoch 2 | worst seed | stable |
+| --- | --- | --- | --- | --- |
+| 0.125 | 89.92% ± 0.48% | 91.71% ± 0.39% | 91.33% | yes |
+| 0.25 | 91.46% ± 0.35% | 92.56% ± 0.38% | 92.20% | yes |
+| 0.5 | 92.10% ± 0.38% | 93.26% ± 0.18% | 93.14% | yes |
+| 1 | 92.64% ± 0.38% | 95.62% ± 0.39% | 95.23% | yes |
+| **2** | 95.45% ± 0.28% | **96.82% ± 0.39%** | 96.39% | yes |
+| 4 | 95.55% ± 0.29% | 96.17% ± 0.61% | 95.73% | yes |
+| 8 | 83.97% ± 8.41% | 89.56% ± 4.08% | 86.37% | yes |
+| 16 | 10.08% ± 0.25% | 10.25% ± 0.13% | 10.10% | no |
+
+- **`lr_32` = 2** (band 96.39% - 97.14%). It is the best rate whose seeds all finish at 20% or
+  more. The conv demo's 0.5 reaches only 93.26%.
+- **The stability edge is between 8 and 16, as it is for dense at momentum 0.0.** 8 is erratic:
+  one seed fell between epochs, from 91.0% to 88.2%. 16 stays at chance on every seed. So stage
+  2's scaled rates (8 at B = 128, 32 at B = 512) reach and pass the rate that diverges at B = 32.
+  Whether warmup or the larger batch lifts that ceiling is the stage 2 question.
+- **The tuple conversion is about 6% of the step loop.** `train_epoch` still calls `learn_batch`
+  on tuples. The conversion can't change accuracy, so the loop is unchanged. Stage 4's timing
+  should switch to prepared rows, or report the conversion separately (a scratch probe:
+  0.10 s of 1.58 s for 8192 rows at B = 32).
 
 ### Stage 2: does B = 512 train at momentum 0.0?
 
