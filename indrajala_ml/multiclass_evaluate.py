@@ -1,6 +1,11 @@
+from collections.abc import Sequence
+
+from indrajala_ml.model.classifier_protocols import Example, StateClassifier
+
+
 def confusion_matrix(
-    classifier,
-    test_data: list[tuple[tuple[float, ...], int]],
+    classifier: StateClassifier[int],
+    test_data: Sequence[Example[int]],
     class_count: int,
 ) -> list[list[int]]:
     """
@@ -16,7 +21,7 @@ def confusion_matrix(
     return matrix
 
 
-def accuracy(classifier, test_data: list[tuple[tuple[float, ...], int]]) -> float:
+def accuracy(classifier: StateClassifier[int], test_data: Sequence[Example[int]]) -> float:
     """
     The fraction of test_data the classifier labels correctly: train.py's _training_accuracy, for a
     held-out test set.

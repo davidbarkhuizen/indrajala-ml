@@ -71,10 +71,9 @@ format .` (in the venv) applies ruff's fixable findings. Both tools are pinned i
 
 - `pyproject.toml`'s `[tool.ruff]` sets the line length (120), excludes `rust/` and holds the
   per-file ignores;
-- `[tool.pyright]` type-checks `indrajala_ml/`, `tests/` and `scripts/` in standard mode, and the
-  package paths listed in `strict` in strict mode (the rest of the package joins as it is brought
-  up to it). It reads the crate's type stub from the installed `indrajala_math_rust`, so `rust/`
-  must be built.
+- `[tool.pyright]` type-checks `indrajala_ml/` in strict mode and `tests/` and `scripts/` in
+  standard mode. It reads the crate's type stub from the installed `indrajala_math_rust`, so
+  `rust/` must be built.
 
 A `# pyright: ignore[rule]` names its rule and says why (e.g. a numpy stub narrower than the
 function). Zed runs the same pinned tools: `.zed/settings.json` points its ruff and pyright

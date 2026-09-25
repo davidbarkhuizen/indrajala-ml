@@ -1,3 +1,6 @@
+# pyright: reportUnknownMemberType=false
+# (matplotlib 3.8's annotations leave **kwargs untyped, so every Axes/Figure method reads as
+# partially unknown; this module's own values are still checked where they're declared)
 import math
 from collections.abc import Callable, Sequence
 
@@ -7,6 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib.legend import Legend
 
 from indrajala_ml.geometry import reference_positive_region_polygon
+from indrajala_ml.model.classifier_protocols import StateClassifier
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 
 
@@ -103,7 +107,7 @@ def plot_training_data(axes: Axes, training_data: Sequence[tuple[tuple[float, ..
 
 def plot_classifier_probability_heatmap(
     axes: Axes,
-    classifier,
+    classifier: StateClassifier[float],
     bounds: list[tuple[float, float]],
     resolution: int = 150,
 ) -> None:
@@ -113,7 +117,9 @@ def plot_classifier_probability_heatmap(
     when there is one, else classify_state's 0/1.
     """
 
-    predict = getattr(classifier, "predict_probability", classifier.classify_state)
+    predict: Callable[[tuple[float, ...]], float] = getattr(
+        classifier, "predict_probability", classifier.classify_state
+    )
 
     (x_min, x_max), (y_min, y_max) = bounds
     x_step = (x_max - x_min) / float(resolution)
@@ -268,7 +274,7 @@ def new_figure(label: str) -> Figure:
     return figure
 
 
-def new_axes(figure: Figure, bounds: list[tuple[float, float]] | None = None, scaled=True) -> Axes:
+def new_axes(figure: Figure, bounds: list[tuple[float, float]] | None = None, scaled: bool = True) -> Axes:
 
     axes = figure.add_subplot(111)
     axes.set_facecolor("xkcd:black")

@@ -1,12 +1,15 @@
+# pyright: reportConstantRedefinition=false
+# (matrices are named as in the literature, X, which strict mode takes for constants)
 import statistics
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import indrajala_math_rust as pa
 import numpy as np
 
-from indrajala_ml.model.array_layer import ArrayLayer
+from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
@@ -70,18 +73,22 @@ class Row:
         return self.rust_us / self.numpy_us
 
 
-def _backend_array(backend: str, values: np.ndarray):
+# The cases pick their backend by name at runtime, so a backend's arrays and layers are typed Any
+# here, the one place the name is resolved.
+
+
+def _backend_array(backend: str, values: FloatArray) -> Any:
     return values.copy() if backend == "numpy" else pa.Array(values.tolist())
 
 
-def _dense_layer(backend: str, size: int, input_size: int, rng: np.random.Generator):
+def _dense_layer(backend: str, size: int, input_size: int, rng: np.random.Generator) -> Any:
     layer = DENSE_LAYERS[backend](size, input_size)
     layer.W = _backend_array(backend, rng.uniform(-0.3, 0.3, size=(size, input_size)))
     layer.b = _backend_array(backend, rng.uniform(-0.3, 0.3, size=size))
     return layer
 
 
-def dense_cases(label: str, size: int, input_size: int, batch_sizes) -> list[Case]:
+def dense_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[int]) -> list[Case]:
     """
     Every ArrayLayer method at one (size, input_size) shape. Each build draws the same values from
     a fresh seeded generator, so both backends time identical inputs. 'hidden_delta' times the
@@ -147,17 +154,18 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes) -> list[Cas
     return cases
 
 
-def conv_cases(label: str, side: int, batch_sizes) -> list[Case]:
+def conv_cases(label: str, side: int, batch_sizes: Sequence[int]) -> list[Case]:
     """
     ConvSpec(3, 8) on one side x side input channel: forward, downstream and accumulate_gradient,
     single-example and batched. The single-example ops include each backend's N = 1 wrapping.
     """
 
-    def build_layer(backend: str, batch: int):
+    def build_layer(backend: str, batch: int) -> tuple[Any, FloatArray, FloatArray]:
         rng = np.random.default_rng(SEED)
-        layer = CONV_LAYERS[backend](side, side, 1, CONV_KERNEL_SIZE, CONV_CHANNELS)
+        layer: Any = CONV_LAYERS[backend](side, side, 1, CONV_KERNEL_SIZE, CONV_CHANNELS)
         layer.W = _backend_array(backend, rng.uniform(-0.3, 0.3, size=(layer.channel_count, layer.fan_in)))
-        layer.b = _backend_array(backend, rng.uniform(-0.3, 0.3, size=layer.channel_count))
+        channel_count: int = layer.channel_count
+        layer.b = _backend_array(backend, rng.uniform(-0.3, 0.3, size=channel_count))
         X = rng.uniform(0.0, 1.0, size=(batch, layer.input_size))
         delta = rng.uniform(-0.1, 0.1, size=(batch, layer.size))
         return layer, X, delta
@@ -199,16 +207,16 @@ def conv_cases(label: str, side: int, batch_sizes) -> list[Case]:
     return cases
 
 
-def pool_cases(label: str, side: int, batch_sizes) -> list[Case]:
+def pool_cases(label: str, side: int, batch_sizes: Sequence[int]) -> list[Case]:
     """
     PoolSpec(2) on a side x side, 8-channel input: forward and downstream, single-example and
     batched. The input is ReLU-like (about half exact zeros), as after a conv layer, so windows
     tie as they do in training.
     """
 
-    def build_layer(backend: str, batch: int):
+    def build_layer(backend: str, batch: int) -> tuple[Any, FloatArray, FloatArray]:
         rng = np.random.default_rng(SEED)
-        layer = POOL_LAYERS[backend](side, side, CONV_CHANNELS, POOL_SIZE)
+        layer: Any = POOL_LAYERS[backend](side, side, CONV_CHANNELS, POOL_SIZE)
         X = np.maximum(rng.uniform(-1.0, 1.0, size=(batch, layer.input_size)), 0.0)
         delta = rng.uniform(-0.1, 0.1, size=(batch, layer.size))
         return layer, X, delta
@@ -242,8 +250,8 @@ def pool_cases(label: str, side: int, batch_sizes) -> list[Case]:
     return cases
 
 
-def all_cases(batch_sizes=BATCH_SIZES) -> list[Case]:
-    cases = []
+def all_cases(batch_sizes: Sequence[int] = BATCH_SIZES) -> list[Case]:
+    cases: list[Case] = []
     for label, size, input_size in DENSE_SHAPES:
         cases += dense_cases(label, size, input_size, batch_sizes)
     for label, side in CONV_SHAPES:

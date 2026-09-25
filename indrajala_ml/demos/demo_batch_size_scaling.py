@@ -1,5 +1,8 @@
+from typing import Any
+
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.mnist_data import load_mnist_dataset
+from indrajala_ml.model.classifier_protocols import Example
 
 # a reduced version of the batch-size-scaling study's sweep (indrajala_ml/batch_size_scaling.py):
 # momentum 0.9, whose batch-32 rate the baseline sweep picked, with the 1-epoch warmup under which
@@ -13,9 +16,15 @@ SEEDS = [0, 1, 2]
 EPOCHS = 3
 
 
-def run(train_data: list, test_data: list, batch_sizes: list[int], seeds: list[int], epochs: int) -> dict:
+# (batch_size, warmup_epochs) -> one train_and_evaluate result per seed
+RunResults = dict[tuple[int, float], list[dict[str, Any]]]
+
+
+def run(
+    train_data: list[Example[int]], test_data: list[Example[int]], batch_sizes: list[int], seeds: list[int], epochs: int
+) -> RunResults:
     """{(batch_size, warmup_epochs): [train_and_evaluate result per seed]}, Rust, runs in series."""
-    results = {}
+    results: RunResults = {}
     for batch_size in batch_sizes:
         rate = bss.scaled_learning_rate(BASE_RATE, batch_size)
         for warmup in WARMUP_EPOCHS:
@@ -26,8 +35,8 @@ def run(train_data: list, test_data: list, batch_sizes: list[int], seeds: list[i
     return results
 
 
-def format_rows(results: dict, train_size: int) -> list[str]:
-    rows = []
+def format_rows(results: RunResults, train_size: int) -> list[str]:
+    rows: list[str] = []
     for (batch_size, warmup), runs in results.items():
         finals = [run["test_accuracies"][-1] for run in runs]
         step_seconds = sorted(seconds for run in runs for seconds in run["step_seconds"])

@@ -1,3 +1,5 @@
+# pyright: reportUnknownMemberType=false
+# (matplotlib's untyped **kwargs, as in graphics/chart.py)
 import math
 
 import matplotlib

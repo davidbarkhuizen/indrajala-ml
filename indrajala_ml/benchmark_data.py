@@ -1,11 +1,15 @@
 import random
 
 import numpy as np
+import numpy.typing as npt
 
 from indrajala_ml.ensemble_train import select_balanced_indices
 from indrajala_ml.mnist_data import load_mnist_labels, load_mnist_records_at_indices
 
 MNIST_DIGIT_COUNT = 10
+
+# a split's categories: float 1.0/0.0 for one digit, int class indices for several
+LabelArray = npt.NDArray[np.float64 | np.int64]
 
 
 class BenchmarkProxy:
@@ -19,7 +23,13 @@ class BenchmarkProxy:
     digits list, not its value.
     """
 
-    def __init__(self, train_x: np.ndarray, train_y: np.ndarray, test_x: np.ndarray, test_y: np.ndarray) -> None:
+    def __init__(
+        self,
+        train_x: npt.NDArray[np.float64],
+        train_y: LabelArray,
+        test_x: npt.NDArray[np.float64],
+        test_y: LabelArray,
+    ) -> None:
         self.train_x = train_x
         self.train_y = train_y
         self.test_x = test_x
@@ -53,7 +63,7 @@ def build_mnist_digit_proxy(
 
     if len(digits) == 1:
         index_category_pairs = _binary_index_category_pairs(labels, digits[0], examples_per_class, rng)
-        category_dtype = np.float64
+        category_dtype: type[np.float64 | np.int64] = np.float64
     else:
         index_category_pairs = _multiclass_index_category_pairs(labels, digits, examples_per_class, rng)
         category_dtype = np.int64
@@ -127,7 +137,9 @@ def _stratified_split(
     return train_pairs, test_pairs
 
 
-def _decode_split(path: str, pairs: list[tuple[int, float]], category_dtype: type) -> tuple[np.ndarray, np.ndarray]:
+def _decode_split(
+    path: str, pairs: list[tuple[int, float]], category_dtype: type[np.float64] | type[np.int64]
+) -> tuple[npt.NDArray[np.float64], LabelArray]:
     # records come back in the order of the indices, so they zip against the recoded categories
     # (the proxy replaces the raw MNIST labels)
     indices = [index for index, _ in pairs]
@@ -135,5 +147,5 @@ def _decode_split(path: str, pairs: list[tuple[int, float]], category_dtype: typ
     records = load_mnist_records_at_indices(path, indices)
 
     x = np.array([state for state, _ in records], dtype=np.float64)
-    y = np.array(categories, dtype=category_dtype)
+    y: LabelArray = np.array(categories, dtype=category_dtype)
     return x, y

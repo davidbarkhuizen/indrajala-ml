@@ -4,7 +4,7 @@ import os
 import pickle
 import random
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, cast
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.classifier_protocols import BinaryClassifier, BinaryClassifierClass
@@ -95,7 +95,8 @@ def _picklable_snapshot(snapshot: object) -> object:
     if to_list is not None:
         return to_list()
     if isinstance(snapshot, (list, tuple)):
-        return type(snapshot)(_picklable_snapshot(item) for item in snapshot)
+        sequence = cast("list[object] | tuple[object, ...]", snapshot)
+        return type(sequence)(_picklable_snapshot(item) for item in sequence)
     return snapshot
 
 
@@ -265,7 +266,7 @@ def _assemble_ensemble_from_results(
 
     results = sorted(results, key=lambda result: result[0])
 
-    classifiers = []
+    classifiers: list[ClassifierT] = []
     diagnostics: dict[int, TrainingDiagnostic] = {}
     for label, snapshot, diagnostic in results:
         student = classifier_cls(layer_sizes, dimension, input_bounds)
@@ -438,7 +439,7 @@ def train_ensemble_serial_from_indices(
 
     rng = random.Random(seed)
 
-    results = []
+    results: list[tuple[int, object, TrainingDiagnostic]] = []
     for label in range(class_count):
         index_category_pairs = select_balanced_indices(labels, label, class_count, rng)
         job_seed = rng.randrange(2**31) if seed is not None else None
