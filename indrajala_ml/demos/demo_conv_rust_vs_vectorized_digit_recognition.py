@@ -37,6 +37,7 @@ ARCHITECTURES: dict[str, list[ConvSpec | PoolSpec]] = {
     "conv": [ConvSpec(3, 8)],
     "conv-pool-conv": [ConvSpec(3, 8), PoolSpec(2), ConvSpec(3, 8)],
     "conv-conv-stride2": [ConvSpec(3, 8), ConvSpec(3, 8, stride=2)],
+    "conv-conv": [ConvSpec(3, 8), ConvSpec(3, 8)],
 }
 TRAINERS = ["single-example", f"mini-batch ({BATCH_SIZE})"]
 BACKENDS = {

@@ -22,8 +22,8 @@ tile's columns from every row of `cols`.
 Two fixes, both bit-identical (every output stays one FMA chain in increasing `k`):
 
 - **2-row blocks** (`rows_per_block` >= 2 from `matmul_narrow`): halves the 16-wide tile passes
-  wherever `C*k*k` >= 16. Untested for the conv shapes (the `matmul_narrow` doc comment says so).
-  Works whether or not `cols` fits in a cache.
+  wherever `C*k*k` >= 16. Works whether or not `cols` fits in a cache, but not where training
+  threads the op over rows (each thread already has 2 of the 8).
 - **`k`-blocking**: a slab of `cols` rows (about 256 rows of 72 doubles, 147 KB, fits L2) serves
   every output row and column tile before the next slab; partial chains are stored to `out` and
   reloaded between slabs (a stored double is exact, so the chain's value is unchanged). Pays only
@@ -37,47 +37,57 @@ Where `cols` is large, per layer (MNIST 28x28, `ConvSpec(3, 8)` layers, 8 output
 | first conv (every demo network) | 676 | 9 | 2 x 4-wide + 1 scalar | 49 KB | 1.56 MB | 25 MB |
 | conv-pool-conv, second conv (13x13x8 in) | 121 | 72 | 4 x 16-wide + 2 x 4-wide | 70 KB | 2.23 MB | 36 MB |
 | conv-conv-stride2, second conv (26x26x8 in, stride 2) | 144 | 72 | same | 83 KB | 2.65 MB | 42 MB |
-| conv-conv (not trained yet), second conv (26x26x8 in) | 576 | 72 | same | 332 KB | 10.6 MB | 170 MB |
+| conv-conv, second conv (26x26x8 in) | 576 | 72 | same | 332 KB | 10.6 MB | 170 MB |
 
-Measured so far: first conv at N = 512, one thread, 57-58 ms against 14-15 ms for 512 single
-calls (3.8-4.0x), about 600 MB streamed per call; at N = 32, 1.1-1.2x its single calls, about
-1-1.5% of the epoch. The second-conv accumulate has never been timed on its own; conv accumulate
-(both layers) is 11% / 17% of the conv-pool-conv single-example / mini-batch 32 epoch.
+**Stage 0 (measured).** Rust accumulate, `focused_benchmark.py --op accumulate --rust-threads 1`,
+batched against its single calls (`demo_layer_op_timing`'s shapes; ranges over 2 passes):
 
-**Stake in trained configurations is unmeasured.** No demo trains conv at N = 512: the conv
-batch-size-scaling study (findings in `batch_size_scaling.py`) found no trained B = 512 conv
-workload (the linear rule fails at momentum 0.0 and 0.9, the best capped rate stays 2.5 points
-below the batch-32 band); a scratch probe put the threaded stake at about 7-12% of a B = 512
-step. At B = 32 the demo's second-conv `cols` (2.2-2.7 MB) fits the L3, so only 2-row blocks
-can pay there; the smallest trained workload past the L3 is a conv-conv network (second conv
-`cols` 10.6 MB at B = 32), one line in the conv demo's `ARCHITECTURES`. Expect a few percent of
-an epoch at best.
+| layer | single µs | N = 32 µs | vs 32 singles | N = 512 ms | vs 512 singles |
+| --- | --- | --- | --- | --- | --- |
+| first conv 28x28 | 27-28 | 1032-1080 | 1.15-1.24x | 61.8-62.0 | 4.3-4.5x |
+| second conv 13x13x8 | 11.6-11.7 | 618-676 | 1.65-1.81x | 46.4-46.8 | 7.8x |
+| second conv 26x26x8/2 | 13.3-14.0 | 740-769 | 1.65-1.80x | 57.4-61.3 | 8.2-8.6x |
+| second conv 26x26x8 | 67-68 | 9973-10479 | 4.6-4.8x | 223-226 | 6.5x |
 
-Plan (stage 0 first, one PR each, gate before any kernel work):
+Inside the network (each call timed in a real MNIST mini-batch 32 epoch) the second conv runs
+slower than isolated: 950 µs a call at 13x13x8 (2.6x its single calls), and 5.3 ms at 26x26x8
+(2.5x), where the product (10.6M flops) is past the 8M threading threshold and splits its 8 rows
+over threads. Accumulate (both layers) is 17-18% of the Rust mini-batch 32 epoch in all three
+networks and 10-12% single-example (`epoch_op_profile.py`, profiled totals).
 
-- **Stage 0 tooling (done).** `demo_layer_op_timing.py`'s `CONV_SHAPES` carry an input-channel
-  count and a stride, and include the second-conv shapes 13x13x8, 26x26x8/2 (stride 2) and
-  26x26x8 (`--shape 26x26x8,` selects the stride-1 one in `scripts/focused_benchmark.py`).
-- **Stage 0a, 2-row blocks on the demo's shapes.** `focused_benchmark.py --shape <second-conv
-  shapes> --op accumulate --batch-sizes 32 512 --rust-threads 1 --passes 2`: batched against 32
-  single calls. Then a probe build with `rows_per_block = 2` (and 4) in `matmul_narrow`, timed the
-  same way (commit crate changes before switching builds). Refresh the conv-pool-conv and
-  conv-conv-stride2 epoch shares with `scripts/epoch_op_profile.py` (the 17% predates the one-pass
-  pool downstream; stride2 was never profiled).
-- **Stage 0b, `k`-blocking past the L3.** Add `"conv-conv": [ConvSpec(3, 8), ConvSpec(3, 8)]` to
-  the conv demo's `ARCHITECTURES`, check it trains (accuracy against the other architectures),
-  time its second-conv accumulate batched against 32 single calls, and profile its epoch.
-- **Gate** (proposed): implement a fix only if its op is >= 1.3x its single calls and the
-  projected saving is >= 3% of a trained mini-batch 32 epoch. Otherwise record the measured
-  numbers here and keep this candidate for large-batch use only.
-- **Implementation.** 2-row blocks first, measured alone; then `k`-blocking if 0b passed. Crate
-  PR with the bitwise test, parent PR bumping `rust/` with end-to-end demo ratios and epoch times
-  (separate processes); the candidate moves to Implemented or Rejected.
+- **2-row blocks** (probe: `rows_per_block` from an env var in the accumulate, bit-identical at
+  1, 2, 4 and 8; 4 best, 8 no better): about 40% off the isolated second-conv accumulate at N = 32
+  and 512 (13x13x8 364-370 µs, 26x26x8/2 475-476, 26x26x8 5968-6158 on one thread), 20-30% off
+  its single calls, nothing on the first conv. In the network: 13x13x8 950 → 750 µs a call, about
+  13 ms of a 0.77 s mini-batch epoch (1.6%) and 0.7% single-example; conv-conv single-example
+  about 40 ms of 2.0 s (1.8%). Threaded conv-conv (default threads) gains nothing (5.3-5.5 ms at 1
+  and 4): each thread gets 2 rows. Below the gate's 3%.
+- **`k`-blocking** would bring conv-conv's threaded 5.3 ms toward its single calls' 2.1 ms: at most
+  about 0.2 s of its 2.37 s mini-batch epoch (8.5%), a ceiling, not a projection. Row threading
+  makes every thread stream all of `cols`, so it needs the threads split over columns instead.
+- **conv-conv trains on UCI digits** (single-example 0.85-0.86) but not reliably on MNIST at the
+  demo's lr 0.5 (numpy collapsed to 0.11, Rust reached 0.52, 1-ULP control 15%); it trains at
+  lr 0.2 (0.74). It is in the conv demo's `ARCHITECTURES` as the workload past the L3.
+
+No demo trains conv at N = 512: the conv batch-size-scaling study (findings in
+`batch_size_scaling.py`) found no trained B = 512 conv workload.
+
+**Decision.** Both fixes fail the proposed gate (>= 1.3x its single calls and >= 3% of a trained
+mini-batch 32 epoch) on the saving; the owner chose to implement both. Plan, one PR each:
+
+- **2-row blocks.** `matmul_narrow` with `rows_per_block` > 1 for the accumulate (4 measured
+  best; decide whether forward and downstream, with tall `a`, take it too). Crate PR, then a
+  parent PR bumping `rust/` with the epoch profile against the old build (builds alternated).
+- **`k`-blocking with column-split threading.** Slabs of `cols` rows sized to L2, partial chains
+  stored and reloaded; threads over column tiles, not rows, so `cols` is streamed about once.
+  Crate test comparing it bitwise against the unblocked kernel; measured on conv-conv at default
+  threads, in the network. The candidate then moves to Implemented or Rejected.
 
 ## Deferred: threading past the threshold
 
-Only the batch-size-scaling study trains products above 8M flops (dense 30 x 784 at B ≥ 512),
-where the Rust ops are 0.4 s of a 2 s step loop. Revisit only for a large-batch use case:
+Only the batch-size-scaling study (dense 30 x 784 at B ≥ 512, where the Rust ops are 0.4 s of a
+2 s step loop) and conv-conv's second-conv accumulate at B = 32 (candidate 1) run products above
+8M flops. Revisit only for a large-batch use case:
 
 - **A persistent pool**, removing the 60-200 µs spawn cost. Whether warm workers also avoid the
   cold clock is untested; they would idle between calls in training unless they spin. rayon
