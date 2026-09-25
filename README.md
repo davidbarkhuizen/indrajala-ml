@@ -119,13 +119,16 @@ gradient summed over a batch of `B` examples, so `g / B` is the mean gradient.
 | SGD | `w - lr * (g / B)` | Goyal et al. 2017, eq. (2) |
 | L2 weight decay (`L2…`) | `w - lr * (g / B + λ * w)`; the bias is plain SGD | Goyal et al. 2017, eq. (8) |
 | Adam (`Adam…`) | Algorithm 1, on `g / B` | Kingma & Ba 2014 |
-| momentum (`Momentum…`) | `v = lr * g / B + m * v; w - v` (Rust groups `(lr / B) * g`) | Rumelhart et al. 1986; Goyal et al. 2017, eq. (10) |
+| momentum (`Momentum…`) | `u = m * u + g / B; w - lr * u` | Goyal et al. 2017, eq. (9) |
 
-Momentum is due to move to Goyal et al.'s eq. (9), `u = m * u + g / B; w - lr * u`, which needs no
-correction when the rate changes (stage 3b of the conv workplan).
-`tests/test_update_rule_forms.py` checks each implementation of SGD and weight decay against its
-form bit for bit. A new rule cites its source here, and where the literature has competing forms
-(as for momentum), the choice is made explicitly.
+For momentum the literature has competing forms. Rumelhart et al. 1986's, Goyal et al.'s eq. (10),
+folds the rate into the velocity, `v = lr * g / B + m * v; w - v`, and so needs a correction
+whenever the rate changes, as in warmup. Eq. (9) needs none, and at a constant rate the two are
+equivalent. `tests/test_update_rule_forms.py` checks each implementation of SGD, weight decay and
+momentum against its form bit for bit. A new rule cites its source here, and where the literature
+has competing forms (as for momentum), the choice is made explicitly. Consistency comes before
+speed: every rule divides, `g / B`, and none multiplies by a precomputed `1 / B` or `lr / B`, which
+rounds differently when `B` isn't a power of two.
 
 ## Refactoring
 

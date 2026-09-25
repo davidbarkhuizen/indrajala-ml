@@ -29,7 +29,7 @@ def _array_layer_like(backprop_layer, backend):
 
 def test_accumulate_then_apply_at_batch_size_one_matches_momentum_backprop_node_at_every_step(backend):
 
-    # compared after every step: the previous-delta state only shows a mistake across repeated steps
+    # compared after every step: the velocity only shows a mistake across repeated steps
     rng = random.Random(31)
     dimension = 5
     size = 4
@@ -106,9 +106,8 @@ def test_accumulate_across_a_batch_then_apply_matches_momentum_backprop_node_at_
         assert np.allclose(array_layer.b.tolist(), expected_b, rtol=1e-9, atol=1e-12)
 
 
-def test_previous_delta_carries_zero_on_the_first_step(layer_cls, backend):
+def test_velocity_starts_at_zero_so_the_first_step_is_plain_sgd(layer_cls, backend):
 
-    # the previous delta starts at zero, so the first step is plain SGD
     array_layer = layer_cls(2, 2, momentum=0.9)
     array_layer.W = backend.owned([[1.0, 2.0], [3.0, 4.0]])
     array_layer.b = backend.owned([5.0, 6.0])

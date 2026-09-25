@@ -2,10 +2,11 @@
 The update rules follow the literature's form and grouping, in all three implementations, so
 their results are comparable with the literature and with each other (README, Update rules).
 Goyal et al. 2017 (the paper the batch-size-scaling study tests) write minibatch SGD as eq. (2),
-w - lr * (g / B), and weight decay as eq. (8), w - lr * (g / B + lambda * w), with g summed over
-the batch. Every apply_accumulated_gradient that implements one of them is checked against the
-formula in Python floats, bit for bit: the groupings differ by an ULP at non-power-of-two batch
-sizes (6, and 96, the last partial batch of a 60000-row epoch at B = 128 and 512).
+w - lr * (g / B), weight decay as eq. (8), w - lr * (g / B + lambda * w), and momentum as eq. (9),
+u = m * u + g / B; w - lr * u, with g summed over the batch. Every apply_accumulated_gradient that
+implements one of them is checked against the formula in Python floats, bit for bit: the groupings
+differ by an ULP at non-power-of-two batch sizes (6, and 96, the last partial batch of a 60000-row
+epoch at B = 128 and 512).
 """
 
 import random
@@ -23,6 +24,9 @@ from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.l2_array_layer import L2ArrayLayer
 from indrajala_ml.model.l2_regularization_layer import make_l2_node_cls
 from indrajala_ml.model.l2_rust_array_layer import L2RustArrayLayer
+from indrajala_ml.model.momentum_array_layer import MomentumArrayLayer
+from indrajala_ml.model.momentum_layer import make_momentum_node_cls
+from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_node import StateNode
 
@@ -44,20 +48,22 @@ def _weight_decay(w, g, batch_size):
     return w - LEARNING_RATE * (g / batch_size + L2_LAMBDA * w)
 
 
-def _nodes(node_cls, W, b, grad_W, grad_b):
-    nodes = []
-    for weights, bias, accum, bias_accum in zip(W, b, grad_W, grad_b):
-        node = node_cls(input_nodes=[StateNode() for _ in weights], input_node_weights=list(weights), bias=bias)
+def _nodes(node_cls, W, b):
+    return [
+        node_cls(input_nodes=[StateNode() for _ in weights], input_node_weights=list(weights), bias=bias)
+        for weights, bias in zip(W, b)
+    ]
+
+
+def _step_nodes(nodes, grad_W, grad_b, learning_rate, batch_size):
+    for node, accum, bias_accum in zip(nodes, grad_W, grad_b):
         node._weight_gradient_accum, node._bias_gradient_accum = list(accum), bias_accum
-        nodes.append(node)
-    return nodes
+        node.apply_accumulated_gradient(learning_rate, batch_size)
+    return [node.input_node_weights for node in nodes], [node.bias for node in nodes]
 
 
 def _apply_nodes(node_cls, W, b, grad_W, grad_b, batch_size):
-    nodes = _nodes(node_cls, W, b, grad_W, grad_b)
-    for node in nodes:
-        node.apply_accumulated_gradient(LEARNING_RATE, batch_size)
-    return [node.input_node_weights for node in nodes], [node.bias for node in nodes]
+    return _step_nodes(_nodes(node_cls, W, b), grad_W, grad_b, LEARNING_RATE, batch_size)
 
 
 def _apply_kernels(W, b, grad_W, grad_b, batch_size):
@@ -70,10 +76,15 @@ def _apply_kernels(W, b, grad_W, grad_b, batch_size):
     return [kernel.weights for kernel in kernels], [kernel.bias for kernel in kernels]
 
 
-def _apply_layer(layer, to_array, W, b, grad_W, grad_b, batch_size):
-    layer.W, layer.b, layer._grad_W, layer._grad_b = to_array(W), to_array(b), to_array(grad_W), to_array(grad_b)
-    layer.apply_accumulated_gradient(LEARNING_RATE, batch_size)
+def _step_layer(layer, to_array, grad_W, grad_b, learning_rate, batch_size):
+    layer._grad_W, layer._grad_b = to_array(grad_W), to_array(grad_b)
+    layer.apply_accumulated_gradient(learning_rate, batch_size)
     return layer.W.tolist(), layer.b.tolist()
+
+
+def _apply_layer(layer, to_array, W, b, grad_W, grad_b, batch_size):
+    layer.W, layer.b = to_array(W), to_array(b)
+    return _step_layer(layer, to_array, grad_W, grad_b, LEARNING_RATE, batch_size)
 
 
 def _numpy(layer):
@@ -133,3 +144,67 @@ def test_apply_accumulated_gradient_is_the_papers_form_exactly(name, weight_rule
     expected_b = [_sgd(v, g, batch_size) for v, g in zip(b, grad_b)]
     assert [_bits(row) for row in new_W] == [_bits(row) for row in expected_W]
     assert _bits(new_b) == _bits(expected_b)
+
+
+MOMENTA = [0.0, 0.9]
+# the rate changes between steps, as in warmup: there eq. (9) differs from Rumelhart et al.'s
+# eq. (10), v = lr * g / B + m * v; w - v, which folds the rate into the velocity
+MOMENTUM_LEARNING_RATES = [0.05, 0.1, 0.4]
+
+
+def _momentum_nodes(momentum, W, b):
+    nodes = _nodes(make_momentum_node_cls(momentum), W, b)
+    return lambda *args: _step_nodes(nodes, *args)
+
+
+def _momentum_layer(layer_cls, to_array):
+    def start(momentum, W, b):
+        layer = layer_cls(*DENSE_SHAPE, momentum)
+        layer.W, layer.b = to_array(W), to_array(b)
+        return lambda *args: _step_layer(layer, to_array, *args)
+
+    return start
+
+
+# (name, start(momentum, W, b) -> step(grad_W, grad_b, learning_rate, batch_size))
+MOMENTUM_IMPLEMENTATIONS = [
+    ("MomentumBackpropNode", _momentum_nodes),
+    ("MomentumArrayLayer", _momentum_layer(MomentumArrayLayer, np.array)),
+    ("MomentumRustArrayLayer", _momentum_layer(MomentumRustArrayLayer, pa.Array)),
+]
+
+
+def _momentum(w, u, g, momentum, learning_rate, batch_size):
+    u = momentum * u + g / batch_size
+    return w - learning_rate * u, u
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("batch_size", BATCH_SIZES)
+@pytest.mark.parametrize("momentum", MOMENTA)
+@pytest.mark.parametrize("name, start", MOMENTUM_IMPLEMENTATIONS, ids=[i[0] for i in MOMENTUM_IMPLEMENTATIONS])
+def test_momentum_is_the_papers_form_exactly(name, start, momentum, batch_size, seed):
+    # eq. (9) for W and b alike, over several steps: the velocity only shows a mistake across
+    # repeated steps. At momentum 0.0 this is exactly SGD's w - lr * (g / B)
+    rng = random.Random(seed)
+    rows, cols = DENSE_SHAPE
+    scale = LEARNING_RATE / batch_size
+    W = [[scale * rng.uniform(-3.0, 3.0) for _ in range(cols)] for _ in range(rows)]
+    b = [scale * rng.uniform(-3.0, 3.0) for _ in range(rows)]
+    step = start(momentum, W, b)
+    u_W, u_b = [[0.0] * cols for _ in range(rows)], [0.0] * rows
+
+    for learning_rate in MOMENTUM_LEARNING_RATES:
+        grad_W = [[rng.uniform(-3.0, 3.0) for _ in range(cols)] for _ in range(rows)]
+        grad_b = [rng.uniform(-3.0, 3.0) for _ in range(rows)]
+        new_W, new_b = step(grad_W, grad_b, learning_rate, batch_size)
+
+        stepped_W = [
+            [_momentum(w, u, g, momentum, learning_rate, batch_size) for w, u, g in zip(*row)]
+            for row in zip(W, u_W, grad_W)
+        ]
+        W, u_W = [[w for w, _ in row] for row in stepped_W], [[u for _, u in row] for row in stepped_W]
+        stepped_b = [_momentum(v, u, g, momentum, learning_rate, batch_size) for v, u, g in zip(b, u_b, grad_b)]
+        b, u_b = [v for v, _ in stepped_b], [u for _, u in stepped_b]
+        assert [_bits(row) for row in new_W] == [_bits(row) for row in W]
+        assert _bits(new_b) == _bits(b)

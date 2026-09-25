@@ -107,7 +107,7 @@ def test_layer_sgd_step_is_bit_identical_to_accumulate_then_apply(name, seed):
     x = _random_layer_state(fused, np.random.default_rng(seed))
     _random_layer_state(unfused, np.random.default_rng(seed))
 
-    # two steps, so a stateful update (momentum's previous delta, Adam's m/v/t) is exercised
+    # two steps, so a stateful update (momentum's velocity, Adam's m/v/t) is exercised
     for learning_rate in (0.5, 0.1):
         fused.sgd_step(x, learning_rate)
         unfused_sgd_step(unfused, x, learning_rate)

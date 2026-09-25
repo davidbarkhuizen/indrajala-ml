@@ -10,7 +10,7 @@ class MomentumVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClass
     """
     The momentum sibling of VectorizedMultiClassBackpropClassifierNetwork: hidden and output layers
     are MomentumArrayLayers, which read momentum (required) from the network. snapshot()/restore()
-    cover only W/b, not the layers' previous deltas.
+    cover only W/b, not the layers' velocities.
     """
 
     hidden_layer_cls = output_layer_cls = MomentumArrayLayer

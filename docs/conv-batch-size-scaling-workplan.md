@@ -196,7 +196,7 @@ between our own backends. The reference is Goyal et al. 2017, the paper this stu
 | --- | --- | --- | --- |
 | SGD, eq. (2) | `w - lr * (g / B)` | as the paper (3a) | as the paper (3a) |
 | weight decay, eq. (8), "λw added to the aggregated gradients" | `w - lr * (g / B + λ * w)` | as the paper (3a) | as the paper (3a) |
-| momentum, eq. (9), the "reference implementation" | `u = m * u + g / B; w - lr * u` | eq. (10): `v = (lr * g) / B + m * v; w - v` | eq. (10), `(lr / B) * g` |
+| momentum, eq. (9), the "reference implementation" | `u = m * u + g / B; w - lr * u` | as the paper (3b) | as the paper (3b) |
 
 `g` is the gradient summed over the batch, so `g / B` is the paper's mean gradient. Adam already
 follows Kingma & Ba's Algorithm 1 (`g / B` first) in all three, and `layer_sgd_step` is B = 1,
@@ -208,9 +208,9 @@ where the groupings agree.
   chaotic sensitivity turns an ULP into different end-of-run results.
 - **The momentum difference is a different rule, not a rounding.** Eq. (10) folds the rate into
   the velocity. The paper: for a fixed rate the two are equivalent, but when the rate changes (as in
-  warmup) eq. (10) needs a "momentum correction" of `lr_{t+1} / lr_t`, which our code doesn't
+  warmup) eq. (10) needs a "momentum correction" of `lr_{t+1} / lr_t`, which our code didn't
   apply. So the dense study's momentum 0.9 cells with warmup (including the finding that B = 512
-  holds) are not the paper's algorithm.
+  holds) were not the paper's algorithm, and are pending a rerun on eq. (9).
 
 The README's "Update rules" section records the forms and their sources, as the rule for any
 future optimizer.
@@ -239,7 +239,16 @@ within noise: over two before/after rounds, Rust's B = 32 epochs moved +1.7% (de
 - **Out of scope:** the reduction order of matmuls and gradient accumulation. OpenBLAS's blocking
   isn't reproducible, and the 1-ULP control covers it.
 
-#### 3b: momentum as the paper's eq. (9)
+#### 3b: momentum as the paper's eq. (9) (done)
+
+Done (crate #31, parent PR below). `tests/test_update_rule_forms.py` checks all three momentum
+implementations against eq. (9) bit for bit, over three steps with a changing rate, at momenta 0.0
+and 0.9. On the old form, every case at 0.9 fails, and at 0.0 the cases at batch sizes 6 and 96 fail
+(there eq. (10) at momentum 0 is SGD in the old grouping). A hand-computed test doubles the rate on
+step 2, where the two forms give 0.404 and 0.422. The golden run's prediction held: only the numpy
+and Rust momentum networks changed. The fused op costs 2-6% more per call (a division and a
+multiply per element), once per layer per batch. The dense study's momentum findings with warmup
+are marked pending a rerun, in place.
 
 - **Change:** every momentum layer keeps a velocity `u` (was the previous delta), zero-initialized:
   `u = m * u + g / B; w = w - lr * u`, the same for `b`. That covers `make_momentum_node_cls`,

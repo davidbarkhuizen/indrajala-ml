@@ -299,7 +299,8 @@ DEMOS: list[DemoInfo] = [
             "2017) from the batch-32 rate, momentum 0.9, with and without a one-epoch linear warmup. Three "
             "seeds, three epochs each. Reports final test accuracy (mean, min, max over seeds) and the "
             "median step-loop seconds per epoch. A reduced version of the batch-size-scaling study: without "
-            "warmup the scaled rate diverges from batch 128 up; with warmup it holds to about batch 512. "
+            "warmup the scaled rate diverges from batch 128 up; with warmup it held to about batch 512 before "
+            "momentum moved to Goyal et al.'s eq. (9), pending a rerun. "
             "Takes a few minutes."
         ),
     ),

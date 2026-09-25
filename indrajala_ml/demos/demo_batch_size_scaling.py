@@ -3,7 +3,8 @@ from indrajala_ml.mnist_data import load_mnist_dataset
 
 # a reduced version of the batch-size-scaling study's sweep (indrajala_ml/batch_size_scaling.py):
 # momentum 0.9, whose batch-32 rate the baseline sweep picked, with the 1-epoch warmup under which
-# the rule held furthest there
+# the rule held furthest there (measured with eq. (10) momentum; with warmup, pending a rerun on
+# eq. (9), README, Update rules)
 BATCH_SIZES = [32, 128, 512, 1024]
 BASE_RATE = 0.25
 MOMENTUM = 0.9
@@ -47,7 +48,8 @@ def main() -> None:
         f"a linear warmup over the first epoch. {len(SEEDS)} seeds, {EPOCHS} epochs each; every batch size "
         "sees the same data per epoch, so larger batches take fewer steps. Test accuracy after the last "
         "epoch, and the median seconds per epoch spent in the learn_batch calls. Without warmup the scaled "
-        "rate diverges from batch 128 up; with it, the rule holds to about batch 512. Takes a few minutes."
+        "rate diverges from batch 128 up; with it, the rule held to about batch 512 before momentum moved to "
+        "Goyal et al.'s eq. (9), pending a rerun. Takes a few minutes."
     )
     print()
 
