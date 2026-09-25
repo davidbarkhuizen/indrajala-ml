@@ -356,17 +356,9 @@ def matching_relu_array_backprop_networks(
 
 class DropoutMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
-    Test-only per-node dropout reference: MultiClassBackpropClassifierNetwork with its
-    hidden_layer_cls extension point set to make_dropout_layer_cls(drop_probability)'s layer
-    class - the output layer stays the default plain BackpropLayer (sigmoid), matching
-    DropoutNode's hidden-layer-only convention. No genuine per-node
-    DropoutMultiClassBackpropClassifierNetwork sibling exists in this codebase
-    (DropoutBackpropClassifierNetwork is scoped to the single-output case only), so this exists
-    purely to give DropoutVectorizedMultiClassBackpropClassifierNetwork/
-    DropoutRustArrayMultiClassBackpropClassifierNetwork an eval-mode parity reference (dropout is
-    a deterministic no-op at eval mode - training defaults to False on both sides, and neither
-    predict_probabilities nor classify_state ever toggles it on). A genuine training-time
-    comparison isn't achievable across two independent RNG streams.
+    Test-only per-node multiclass dropout network, the reference for the dropout array networks:
+    make_dropout_layer_cls hidden layers and a sigmoid output layer. It is a reference at eval
+    only, where dropout does nothing: training draws masks from unrelated RNGs.
     """
 
     def __init__(
@@ -392,11 +384,8 @@ def matching_dropout_array_backprop_networks(
     bounds: float = 10.0,
 ):
     """
-    The dropout-sibling analogue of matching_array_backprop_networks above - see
-    matching_adam_array_backprop_networks's own docstring for the general shape this follows.
-    Only meaningful for eval-mode comparisons (predict_probabilities/classify_state): see
-    DropoutMultiClassBackpropClassifierNetwork's own docstring for why a training-mode/learn()
-    comparison isn't attempted here.
+    matching_array_backprop_networks for the dropout networks, with drop_probability; for
+    eval-mode comparisons only (see DropoutMultiClassBackpropClassifierNetwork).
     """
     node_network = DropoutMultiClassBackpropClassifierNetwork(
         layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count, drop_probability
