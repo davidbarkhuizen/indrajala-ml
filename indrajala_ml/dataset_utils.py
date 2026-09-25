@@ -7,11 +7,8 @@ def split_train_test(
     seed: int | None = None,
 ) -> tuple[list[tuple[tuple[float, ...], int]], list[tuple[tuple[float, ...], int]]]:
     """
-    Shuffles a copy of data and splits it into (train, test) - nothing in train.py does this
-    today, since every existing synthetic target (LinearClassifierNetwork, XORTarget, etc.) is
-    continuously re-sampleable rather than a fixed, finite dataset like the real ones this
-    function is for (UCI digits, Iris). Shared by every bundled-dataset loader (digits_data.py,
-    iris_data.py) rather than each defining its own copy.
+    Shuffles a copy of data and splits it into (train, test), for the fixed datasets (UCI digits,
+    Iris); the synthetic targets are resampled instead.
     """
 
     assert 0.0 < test_fraction < 1.0, f"test_fraction must be strictly between 0 and 1; got {test_fraction}"

@@ -10,17 +10,13 @@ MNIST_DIGIT_COUNT = 10
 
 class BenchmarkProxy:
     """
-    A fixed, class-balanced MNIST-digit proxy dataset for a benchmarking sweep. Built once and
-    reused across every seed in a sweep (never resampled per seed), which is why this is a plain
-    data holder, not something build_mnist_digit_proxy's caller reconstructs per run.
+    A fixed, class-balanced MNIST-digit proxy dataset for a sweep, built once and shared by every
+    seed.
 
-    train_x/test_x are (n, 784) float64 arrays of [0.0, 1.0]-normalized pixels, matching
-    mnist_data.load_mnist_dataset_as_array's own convention. train_y/test_y's dtype depends on
-    how many digits were requested: a binary one-vs-rest (single-digit) proxy uses float 1.0/0.0
-    categories, matching BackpropClassifierNetwork's single-output binary target convention; a
-    genuine multiclass (two-or-more-digit) proxy uses int categories in [0, len(digits)),
-    matching MultiClassBackpropClassifierNetwork's `category: int` convention - the category is
-    the requested digit's *position* in the digits list, not the MNIST digit value itself.
+    train_x/test_x are (n, 784) float64 pixels in [0.0, 1.0], as load_mnist_dataset_as_array. With
+    one digit, train_y/test_y are float 1.0/0.0 (that digit or not), the single-output networks'
+    target; with several, int categories in [0, len(digits)), each the digit's position in the
+    digits list, not its value.
     """
 
     def __init__(self, train_x: np.ndarray, train_y: np.ndarray, test_x: np.ndarray, test_y: np.ndarray) -> None:
@@ -38,19 +34,13 @@ def build_mnist_digit_proxy(
     seed: int | None = None,
 ) -> BenchmarkProxy:
     """
-    Builds a fixed MNIST-digit proxy dataset - `examples_per_class` balanced examples per
-    requested digit, decoded only for the examples actually selected (never the full
-    60000/10000-record file), split into a stratified train/test pair that preserves per-class
-    balance in both halves.
+    A fixed MNIST-digit proxy: examples_per_class balanced examples per requested digit, decoding
+    only the selected records, split into train and test halves that keep each class's balance.
 
-    len(digits) == 1 is the binary "digit vs. every other digit" framing, built directly on
-    ensemble_train.select_balanced_indices's
-    already-tested stratified selection (the one requested digit vs. a genuinely stratified
-    sample of every other digit) - digits[0] is the target (category 1.0), every other digit is
-    implicitly the "rest" (category 0.0). len(digits) > 1 is a genuine N-way multiclass proxy
-    over exactly the listed digits, no "everything else" bucket - select_balanced_indices doesn't
-    generalize to this case, so _multiclass_index_category_pairs does its own, simpler, per-digit
-    stratified sampling instead.
+    One digit is the binary "this digit vs every other" task, sampled by
+    ensemble_train.select_balanced_indices (digits[0] is 1.0, a stratified sample of the rest 0.0).
+    Several digits are an N-way task over exactly those digits, sampled per digit by
+    _multiclass_index_category_pairs.
     """
 
     assert len(digits) >= 1, f"digits needs at least one target digit; got {digits}"
@@ -138,10 +128,8 @@ def _stratified_split(
 
 
 def _decode_split(path: str, pairs: list[tuple[int, float]], category_dtype: type) -> tuple[np.ndarray, np.ndarray]:
-    # load_mnist_records_at_indices decodes in the same order as the indices it's given (a plain
-    # sequential loop, not parallelized) - safe to zip against pairs's own recoded categories
-    # rather than the raw MNIST digit label load_mnist_records_at_indices itself returns, which
-    # this proxy's whole point is to recode away from.
+    # records come back in the order of the indices, so they zip against the recoded categories
+    # (the proxy replaces the raw MNIST labels)
     indices = [index for index, _ in pairs]
     categories = [category for _, category in pairs]
     records = load_mnist_records_at_indices(path, indices)

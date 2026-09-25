@@ -45,31 +45,17 @@ def reference_positive_region_polygon(
     classifier: LinearClassifierNetwork, huge: float | None = None
 ) -> list[tuple[float, float]]:
     """
-    The classifier's positive region is the intersection of its hidden nodes' half-planes,
-    which may be bounded (closed, e.g. a triangle or other convex polygon) or unbounded
-    (e.g. any single half-plane, or several whose intersection still extends to infinity).
+    The classifier's positive region, the intersection of its hidden nodes' half-planes, as polygon
+    vertices when bounded; an empty list when unbounded or empty.
 
-    Returns the region's polygon vertices when it's bounded; an empty list when it's
-    unbounded or empty.
+    Only for an AND-combined classifier (required_active == cardinality): otherwise the region is a
+    union of such intersections, and the polygon would be wrong, so it raises. Only for dimension
+    == 2: the clipping reads each node's first two weights, so a higher-dimensional region (e.g. an
+    infinite prism) could be reported bounded.
 
-    Only valid for an AND-combined classifier (required_active == cardinality) - the
-    intersection-of-half-planes computed here is only actually the classifier's positive
-    region under AND. For any other required_active (e.g. OR, or a general k-of-n gate),
-    the true positive region is a union of such intersections, which this function does not
-    compute; calling it on one would silently return a wrong polygon, so it's rejected
-    outright instead.
-
-    Also only valid for dimension == 2 - the polygon-clipping below only ever reads each
-    hidden node's first two weights, so a classifier with more dimensions would otherwise be
-    silently projected onto the first two and could report a completely wrong answer (e.g. a
-    genuinely unbounded higher-dimensional region, like an infinite prism, reported as
-    bounded because the dimensions extending it to infinity were never even looked at).
-
-    huge defaults to a value derived from classifier.input_bounds (large enough that the
-    initial clipping square's corners can never coincide with a real, bounded region's
-    vertices) rather than a fixed constant - a fixed "large enough" absolute constant would
-    itself be wrong at a large enough input_bounds scale, incorrectly reporting a genuinely
-    bounded but large region as unbounded once its vertices approach that fixed constant.
+    huge defaults to a value derived from input_bounds, so the starting square's corners never
+    coincide with a real vertex at any bounds scale; a fixed constant would misreport a large
+    bounded region as unbounded.
     """
 
     assert classifier.dimension == 2, (
@@ -110,22 +96,16 @@ def positive_region_bounding_box(
     classifier: LinearClassifierNetwork, margin_fraction: float = 0.1
 ) -> list[tuple[float, float]] | None:
     """
-    A tight axis-aligned box around classifier's positive region, expanded by
-    margin_fraction on each side and clipped to classifier.input_bounds - or None when the
-    region isn't computable this way (dimension != 2, a non-AND combination - see
-    reference_positive_region_polygon) or isn't bounded, or when clipping to input_bounds
-    leaves nothing (the region doesn't actually overlap input_bounds).
+    A tight axis-aligned box around the classifier's positive region, expanded by margin_fraction
+    each side and clipped to input_bounds, or None when the region isn't computable
+    (reference_positive_region_polygon), isn't bounded, or doesn't overlap input_bounds.
 
-    The positive region can be a tiny fraction of input_bounds - verified empirically: often
-    under 1% of the bounding box's area at cardinality 4, as low as 0.02% - so sampling
-    positive-class points uniformly from this tight box instead of the whole input_bounds
-    (see evaluate.sample_class_balanced_states) turns what can be a near-unreachable rate of
-    positive draws into a near-certain one.
+    The region is often under 1% of input_bounds at cardinality 4 (as low as 0.02%), so sampling
+    positive points from this box (evaluate.sample_class_balanced_states) makes near-unreachable
+    draws near-certain.
 
-    classifier only needs the same duck-typed input_bounds/classify_state interface
-    train.py/evaluate.py's other functions require - dimension/required_active/cardinality
-    (LinearClassifierNetwork-specific) are optional, and their absence is treated the same as
-    not being a 2D AND-combined classifier: this function just returns None.
+    classifier needs only input_bounds and classify_state; without LinearClassifierNetwork's
+    dimension/required_active/cardinality this returns None.
     """
 
     if not all(hasattr(classifier, attribute) for attribute in ("dimension", "required_active", "cardinality")):

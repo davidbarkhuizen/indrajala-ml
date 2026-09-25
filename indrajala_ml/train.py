@@ -13,10 +13,8 @@ def random_alternating_training_data(
 
     k: int = size // 2
 
-    # see evaluate.sample_class_balanced_states - draws positive-class states from a tight
-    # box around classifier's own positive region when one is computable, rather than
-    # rejection-sampling classifier.input_bounds in full, since that region can be a tiny,
-    # near-unreachable fraction of input_bounds at higher cardinality
+    # positive states come from a tight box around the positive region when computable (see
+    # evaluate.sample_class_balanced_states)
     positive_states, negative_states = sample_class_balanced_states(classifier, k, max_attempts)
 
     mixed = [(state, 1.0) for state in positive_states] + [(state, 0.0) for state in negative_states]
@@ -34,12 +32,9 @@ def reachable_reference_and_training_data(
     is_valid: Callable[[LinearClassifierNetwork], bool] | None = None,
 ) -> tuple[LinearClassifierNetwork, list[tuple[tuple[float, ...], float]]]:
 
-    # higher cardinality shrinks the reference's positive region (intersection of more
-    # half-planes), so some random reference classifiers make one class unreachable within
-    # these bounds - regenerate the reference rather than failing on one unlucky draw.
-    # is_valid, when given, is checked before the (more expensive) reachability sampling
-    # below, so a caller can reject a candidate on cheap criteria (e.g. "region must be
-    # bounded") without paying for training-data generation on a rejected candidate
+    # higher cardinality shrinks the positive region, so a random reference can make one class
+    # unreachable: draw again. is_valid (cheap, e.g. "region must be bounded") runs before the
+    # reachability sampling
     for _ in range(regeneration_attempts):
         reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds)
         if is_valid is not None and not is_valid(reference):
@@ -82,9 +77,8 @@ def _training_accuracy(
 
 class TrainingDiagnostic:
     """
-    Summarizes how a train_linear_classifier_network() run's training-data accuracy
-    trajectory behaved, since there's no guarantee it converges and eyeballing a chart is
-    otherwise the only way to tell converged from plateaued from still improving.
+    Whether a training run's training-accuracy trajectory converged, plateaued or was still
+    improving; nothing guarantees convergence.
     """
 
     def __init__(
@@ -114,18 +108,14 @@ class TrainingDiagnostic:
 
     @property
     def status_label(self) -> str:
-        # the same "converged"/"plateaued"/"still improving" tri-state label every demo prints
-        # after training - one place so the wording (and the tri-state logic itself) can't drift
-        # between demos
+        # the label every demo prints after training
         return "converged" if self.converged else "plateaued" if self.plateaued else "still improving"
 
 
 class ConvergenceSeries(list):
     """
-    Exactly the list of (iteration, disagreement_rate) pairs train_linear_classifier_network
-    has always returned - every existing use (indexing, iterating, len(), list
-    comprehensions) keeps working unchanged - plus a `.diagnostic` (a TrainingDiagnostic) for
-    callers that want to know whether training converged, plateaued, or was still improving.
+    The list of (iteration, disagreement_rate) pairs train_linear_classifier_network returns, plus
+    .diagnostic, a TrainingDiagnostic.
     """
 
     diagnostic: TrainingDiagnostic
@@ -141,31 +131,21 @@ def train_linear_classifier_network(
     """
     Trains student in place over training_data for the given number of epochs.
 
-    training_data is a list of (state, category) tuples, or a PreparedDataset for an array
-    network student. An array network trains from a PreparedDataset either way: one is prepared
-    from the tuples once per run when not passed in (see _prepared_for).
+    training_data is a list of (state, category) tuples, or a PreparedDataset for an array network,
+    which is prepared from the tuples once per run when not passed in (see _prepared_for).
 
-    learning_rate is either a plain float (every existing caller) or a schedule function from
-    the current iteration index to a rate (e.g. lr_schedule.linear_warmup) - resolved once per
-    learn() call, using the same iterations counter this function already tracks for its
-    convergence series. Iterations (not epoch_index) is the right step index: a schedule targets
-    per-step instability, and batch_size already determines how many steps an epoch contains.
+    learning_rate is a float or a schedule from the iteration index to a rate (e.g.
+    lr_schedule.linear_warmup), read once per learn() call. Iterations, not epochs, since a schedule
+    targets per-step instability.
 
-    There's no guarantee this converges - training accuracy can
-    oscillate rather than settle, especially once the target isn't exactly representable at
-    student's cardinality/required_active. So rather than leaving student wherever the last
-    epoch happened to land, it's left at whichever epoch's end had the best training-data
-    accuracy seen (a pocket-algorithm-style "keep the best, not the latest" snapshot) - a
-    strict improvement when training does converge (the best epoch is then the last one, so
-    this is a no-op), and a real difference when it doesn't. See the returned
-    ConvergenceSeries's .diagnostic for whether this run converged, plateaued, or was still
-    improving.
+    Training accuracy can oscillate rather than settle, especially when the target isn't
+    representable at student's cardinality/required_active, so student is left at the epoch end
+    with the best training accuracy (a pocket snapshot), which is the last epoch when training
+    converges. The returned ConvergenceSeries's .diagnostic says whether it converged, plateaued or
+    was still improving.
 
-    The returned series itself holds the disagreement-rate series against
-    reference_classifier, sampled before training and after every single learning step, when
-    reference_classifier is given (used for plotting a convergence curve) - this reflects the
-    raw, unrolled-back trajectory actually taken during training, not the final pocketed
-    student.
+    With reference_classifier, the series holds the disagreement rate against it before training and
+    after every step, for plotting: the trajectory actually taken, not the pocketed student.
     """
 
     assert len(training_data) >= 1, "training_data must not be empty"
@@ -215,9 +195,7 @@ def train_linear_classifier_network(
 
 
 def _chunk_into_batches(data: list, batch_size: int) -> list[list]:
-    # a final undersized batch (len(data) doesn't evenly divide batch_size) is kept, not
-    # dropped - learn_batch already averages by its own len(batch), so no training data goes
-    # unused just because it didn't land on an exact batch boundary
+    # a final short batch is kept: learn_batch averages by len(batch)
     assert batch_size >= 1, f"batch_size must be at least 1; got {batch_size}"
     return [data[i : i + batch_size] for i in range(0, len(data), batch_size)]
 
@@ -232,32 +210,17 @@ def train_backprop_network_mini_batch(
     reshuffle_each_epoch: bool = True,
 ) -> ConvergenceSeries:
     """
-    The mini-batch-shaped sibling of train_linear_classifier_network, for gradient-based
-    students only: calls student.learn_batch, which LinearClassifierNetwork/AssociationNode's
-    discrete minimum-disturbance update rule has no equivalent of, hence the separate function
-    rather than a branch inside that one. Like that function, actually duck-typed
-    across every learn_batch-supporting sibling (MultiClassBackpropClassifierNetwork included,
-    not just BackpropClassifierNetwork itself), despite the type hint naming only the most
-    common case - the same looseness train_linear_classifier_network's own hint already has.
+    train_linear_classifier_network with mini-batches, for gradient-based students (any network with
+    learn_batch; the linear classifier's minimum-disturbance rule has none).
 
-    learning_rate accepts the same float-or-schedule-function widening as
-    train_linear_classifier_network above, resolved once per learn_batch call against
-    iterations - here counting batches, not examples (see this function's own "iterations"
-    note below), the per-step index a schedule like linear_warmup ramps against.
+    learning_rate is a float or a schedule, read once per learn_batch against iterations, which here
+    count batches.
 
-    Reshuffles training_data at the start of every epoch by default (unlike
-    train_linear_classifier_network's fixed per-example order across epochs) - standard
-    mini-batch SGD practice, so the same batch composition doesn't recur identically every
-    epoch; pass reshuffle_each_epoch=False for a fixed batch composition instead. The final
-    batch of an epoch is kept even when batch_size doesn't evenly divide len(training_data),
-    per _chunk_into_batches above.
+    Reshuffles training_data every epoch by default (reshuffle_each_epoch=False keeps the batches
+    fixed). A final short batch is kept. training_data may be a PreparedDataset.
 
-    training_data takes a PreparedDataset too, as train_linear_classifier_network's does.
-
-    Otherwise mirrors train_linear_classifier_network exactly: the same "keep the best epoch,
-    not the latest" pocket snapshot (see that function's own docstring), and the same
-    TrainingDiagnostic/ConvergenceSeries contract - "iterations" here counts batches (one
-    learn_batch call each), the batch-shaped analogue of one learn() call there.
+    Otherwise as train_linear_classifier_network: the pocket snapshot of the best epoch, and the
+    TrainingDiagnostic/ConvergenceSeries return.
     """
 
     assert len(training_data) >= 1, "training_data must not be empty"

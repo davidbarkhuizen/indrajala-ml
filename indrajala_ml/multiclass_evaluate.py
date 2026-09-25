@@ -4,10 +4,7 @@ def confusion_matrix(
     class_count: int,
 ) -> list[list[int]]:
     """
-    matrix[true_label][predicted_label] = count. evaluate.py's disagreement/sampling functions
-    don't generalize here - they're two-class- and geometry-specific, built to rejection-sample
-    a continuously-sampleable target, whereas digit data is a fixed, finite, already-labeled
-    set you iterate over directly.
+    matrix[true_label][predicted_label] = count, over a fixed labeled test set.
     """
 
     matrix = [[0] * class_count for _ in range(class_count)]
@@ -21,9 +18,8 @@ def confusion_matrix(
 
 def accuracy(classifier, test_data: list[tuple[tuple[float, ...], int]]) -> float:
     """
-    A public equivalent of train.py's private _training_accuracy - that one is private to
-    train.py's own training loop; this runs standalone against a held-out test set once
-    training has finished.
+    The fraction of test_data the classifier labels correctly: train.py's _training_accuracy, for a
+    held-out test set.
     """
 
     assert len(test_data) >= 1, "test_data must not be empty"

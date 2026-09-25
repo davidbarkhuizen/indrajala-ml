@@ -5,12 +5,10 @@ __all__ = ["load_digits_dataset", "split_train_test"]
 
 def load_digits_dataset(path: str = "data/digits/digits.csv") -> list[tuple[tuple[float, ...], int]]:
     """
-    Parses data/digits/digits.csv - 1797 lines, 65 comma-separated integers each (64 pixel
-    values 0-16, then a label 0-9), no header, extracted once (offline) from the UCI ML
-    hand-written digits dataset. Normalizes each pixel to [0.0, 1.0] (divide by 16.0, the
-    known max) - StateLayer/BackpropNode have no built-in normalization, and unnormalized
-    0-16 inputs would defeat MultiClassBackpropClassifierNetwork.randomize()'s fan-in-aware
-    weight scaling, which assumes roughly unit-scale inputs.
+    Parses data/digits/digits.csv: 1797 lines of 65 integers (64 pixels 0-16, then the label 0-9),
+    no header, extracted offline from the UCI hand-written digits. Pixels are divided by 16 into
+    [0.0, 1.0]: the networks don't normalize, and fan-in-aware initialization assumes unit-scale
+    inputs.
     """
 
     dataset: list[tuple[tuple[float, ...], int]] = []
