@@ -103,8 +103,8 @@ class ArrayLayer:
         self._grad_b += self.delta_batch.sum(axis=0)
 
     def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
-        self.W -= learning_rate * self._grad_W / batch_size
-        self.b -= learning_rate * self._grad_b / batch_size
+        self.W -= learning_rate * (self._grad_W / batch_size)
+        self.b -= learning_rate * (self._grad_b / batch_size)
         self._reset_gradient_accum()
 
     def sgd_step(self, input_activation: np.ndarray, learning_rate: float) -> None:

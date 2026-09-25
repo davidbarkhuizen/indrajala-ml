@@ -2,7 +2,7 @@
 
 **Status: stages 1 and 2 done. At momentum 0.0 the rule holds to B = 128 with warmup and fails
 at B = 512, where no rate reaches the band. Stage 3 (momentum conv, planned in detail below) is
-next, starting with 3a: the update rules in the literature's form.**
+under way: 3a (SGD and weight decay in the literature's form) is done, 3b (momentum) is next.**
 
 A measured study and a demo: does the linear learning-rate scaling rule (Goyal et al. 2017:
 multiply the rate by the factor the batch grows, with warmup) hold for the conv network on full
@@ -192,10 +192,10 @@ forms, in all three implementations. Otherwise results aren't comparable with th
 between our own backends. The reference is Goyal et al. 2017, the paper this study tests (section
 2 and section 3):
 
-| rule | the paper's form | pure Python and numpy today | Rust today (`fused.rs`) |
+| rule | the paper's form | pure Python and numpy | Rust (`fused.rs`) |
 | --- | --- | --- | --- |
-| SGD, eq. (2) | `w - lr * (g / B)` | `w - (lr * g) / B` | `w - (lr / B) * g` |
-| weight decay, eq. (8), "λw added to the aggregated gradients" | `w - lr * (g / B + λ * w)` | as the paper | `w - (lr / B) * g - lr * λ * w` |
+| SGD, eq. (2) | `w - lr * (g / B)` | as the paper (3a) | as the paper (3a) |
+| weight decay, eq. (8), "λw added to the aggregated gradients" | `w - lr * (g / B + λ * w)` | as the paper (3a) | as the paper (3a) |
 | momentum, eq. (9), the "reference implementation" | `u = m * u + g / B; w - lr * u` | eq. (10): `v = (lr * g) / B + m * v; w - v` | eq. (10), `(lr / B) * g` |
 
 `g` is the gradient summed over the batch, so `g / B` is the paper's mean gradient. Adam already
@@ -203,7 +203,7 @@ follows Kingma & Ba's Algorithm 1 (`g / B` first) in all three, and `layer_sgd_s
 where the groupings agree.
 
 - **The grouping differences are about an ULP each,** and vanish when B is a power of two
-  (dividing by it is exact). But the last, partial batch of an epoch isn't one (60000 / 128 and
+  (dividing by it is exact), except for subnormal gradients. But the last, partial batch of an epoch isn't one (60000 / 128 and
   60000 / 512 both leave 96 rows), nor are the tests' batch sizes such as 6. Conv training's
   chaotic sensitivity turns an ULP into different end-of-run results.
 - **The momentum difference is a different rule, not a rounding.** Eq. (10) folds the rate into
@@ -212,10 +212,17 @@ where the groupings agree.
   apply. So the dense study's momentum 0.9 cells with warmup (including the finding that B = 512
   holds) are not the paper's algorithm.
 
-A new "Update rules" section in the README records the forms and their sources, as the rule for
-any future optimizer.
+The README's "Update rules" section records the forms and their sources, as the rule for any
+future optimizer.
 
-#### 3a: SGD and weight decay in the paper's grouping
+#### 3a: SGD and weight decay in the paper's grouping (done)
+
+Done (crate #30, parent PR below). `tests/test_update_rule_forms.py` checks all nine SGD and weight
+decay implementations against the paper's formula bit for bit, and each fails on its old form.
+The golden run's prediction held: only the Rust L2 network changed. The step loop's timing is
+within noise: over two before/after rounds, Rust's B = 32 epochs moved +1.7% (dense) and -2%
+(conv), while the same unchanged build varied up to 10% between rounds.
+
 
 - **Change:** `w - lr * (g / B)` in `BackpropNode`, `ConvKernel`, `ArrayLayer`, `ConvArrayLayer`
   and `layer_apply_accumulated_gradient`. The Rust L2 op takes numpy's `lr * (g / B + λ * w)`.

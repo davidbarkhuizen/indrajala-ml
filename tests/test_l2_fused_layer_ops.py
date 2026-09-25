@@ -36,8 +36,9 @@ def _random_matrix(rng, rows, cols):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-@pytest.mark.parametrize("batch_size", [1, 6])
-def test_layer_l2_apply_accumulated_gradient_matches_l2_array_layer(seed, batch_size):
+@pytest.mark.parametrize("batch_size", [1, 6, 96, 4, 128, 512])
+def test_layer_l2_apply_accumulated_gradient_matches_l2_array_layer_exactly(seed, batch_size):
+    # bit for bit: both are w - lr * (g / B + l2_lambda * w) (test_update_rule_forms.py)
     rng = random.Random(seed)
     w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
     b_data = _random_vector(rng, HIDDEN_SIZE)
@@ -54,12 +55,12 @@ def test_layer_l2_apply_accumulated_gradient_matches_l2_array_layer(seed, batch_
         Array(w_data), Array(b_data), Array(grad_w_data), Array(grad_b_data),
         L2_LAMBDA, learning_rate, batch_size,
     )
-    assert _to_numpy(new_w) == pytest.approx(layer.W)
-    assert _to_numpy(new_b) == pytest.approx(layer.b)
+    assert _to_numpy(new_w).tobytes() == layer.W.tobytes()
+    assert _to_numpy(new_b).tobytes() == layer.b.tobytes()
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_l2_apply_accumulated_gradient_matches_across_several_steps(seed):
+def test_layer_l2_apply_accumulated_gradient_matches_exactly_across_several_steps(seed):
     rng = random.Random(seed)
     layer = L2ArrayLayer(HIDDEN_SIZE, INPUT_SIZE, L2_LAMBDA)
     layer.W = np.array(_random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE))
@@ -81,8 +82,8 @@ def test_layer_l2_apply_accumulated_gradient_matches_across_several_steps(seed):
             w, b, Array(grad_w_data), Array(grad_b_data), L2_LAMBDA, learning_rate, 1
         )
 
-        assert _to_numpy(w) == pytest.approx(layer.W)
-        assert _to_numpy(b) == pytest.approx(layer.b)
+        assert _to_numpy(w).tobytes() == layer.W.tobytes()
+        assert _to_numpy(b).tobytes() == layer.b.tobytes()
 
 
 def test_rejects_batch_size_zero():

@@ -206,8 +206,9 @@ def test_layer_accumulate_gradient_batch_matches_array_layer(seed):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-@pytest.mark.parametrize("batch_size", [1, 6])
-def test_layer_apply_accumulated_gradient_matches_array_layer(seed, batch_size):
+@pytest.mark.parametrize("batch_size", [1, 6, 96, 4, 128, 512])
+def test_layer_apply_accumulated_gradient_matches_array_layer_exactly(seed, batch_size):
+    # bit for bit: both are w - lr * (g / B) (test_update_rule_forms.py)
     rng = random.Random(seed)
     w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
     b_data = _random_vector(rng, HIDDEN_SIZE)
@@ -224,8 +225,8 @@ def test_layer_apply_accumulated_gradient_matches_array_layer(seed, batch_size):
         Array(w_data), Array(b_data), Array(grad_w_data), Array(grad_b_data),
         learning_rate, batch_size,
     )
-    assert _to_numpy(new_w) == pytest.approx(layer.W)
-    assert _to_numpy(new_b) == pytest.approx(layer.b)
+    assert _to_numpy(new_w).tobytes() == layer.W.tobytes()
+    assert _to_numpy(new_b).tobytes() == layer.b.tobytes()
 
 
 def test_sigmoid_still_matches_the_reference_sigmoid_directly():

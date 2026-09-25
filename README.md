@@ -107,6 +107,26 @@ hand-computed examples, and the reference the array implementations are checked 
 never used for performance (speed/timing) measurement; only the numpy and Rust implementations
 are timed. Accuracy comparisons of pure-Python models are fine.
 
+## Update rules
+
+Every update rule follows a published form, with the source's arithmetic grouping, in all three
+implementations. Otherwise results aren't comparable with the literature, or between our own
+backends: a different grouping changes the last bit, and training amplifies that. `g` is the
+gradient summed over a batch of `B` examples, so `g / B` is the mean gradient.
+
+| Rule | Form | Source |
+| --- | --- | --- |
+| SGD | `w - lr * (g / B)` | Goyal et al. 2017, eq. (2) |
+| L2 weight decay (`L2…`) | `w - lr * (g / B + λ * w)`; the bias is plain SGD | Goyal et al. 2017, eq. (8) |
+| Adam (`Adam…`) | Algorithm 1, on `g / B` | Kingma & Ba 2014 |
+| momentum (`Momentum…`) | `v = lr * g / B + m * v; w - v` (Rust groups `(lr / B) * g`) | Rumelhart et al. 1986; Goyal et al. 2017, eq. (10) |
+
+Momentum is due to move to Goyal et al.'s eq. (9), `u = m * u + g / B; w - lr * u`, which needs no
+correction when the rate changes (stage 3b of the conv workplan).
+`tests/test_update_rule_forms.py` checks each implementation of SGD and weight decay against its
+form bit for bit. A new rule cites its source here, and where the literature has competing forms
+(as for momentum), the choice is made explicitly.
+
 ## Refactoring
 
 A structural refactoring changes structure only, never numerics. Every stage keeps every parity
