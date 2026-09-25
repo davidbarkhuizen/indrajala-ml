@@ -11,8 +11,7 @@ to [Rejected](rejected.md), with the reason in either case.
 
 ## Ranked
 
-None ranked. The last one, the conv accumulate with a large `cols`, is in
-[Implemented](implemented.md); the leads below each need a stage 0 first.
+None ranked: each lead below needs a stage 0 first.
 
 ## Deferred: threading past the threshold
 
@@ -37,8 +36,8 @@ lead that measures a stake worth having joins the ranking.
   (1.56 MB at N = 32) that inference never reads, which is why Rust conv's accuracy pass stays
   per row. The dense tail doesn't gain from batching either, so the stake is the pooled and
   strided networks' 0.023-0.028 s per pass, and only if it makes the pass a win there. Stage 0:
-  a probe forward that skips `cols`, timed batched against per row on all three demo
-  architectures (`scripts/accuracy_pass_timing.py`).
+  a probe forward that skips `cols`, timed batched against per row on every demo
+  architecture (`scripts/accuracy_pass_timing.py`).
 - **Batch-sized zero-fills that are fully overwritten.** `matmul_narrow`'s output (conv
   downstream's `dcols`, the accumulate's product), `deltas_by_position`, `deltas_by_channel`,
   `matmul_2d`'s output and `max_pool_forward_batch`'s `a` and `argmax` (the call's floor with both

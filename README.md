@@ -98,7 +98,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
 | `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
 | `scripts/` (the rest) | benchmark, profiling and sweep tools (see `docs/optimizations/measurement.md`), and the refactoring golden run |
-| `docs/` | optimization docs, study work plans, machine profiles |
+| `docs/` | optimization docs, the PyPI release workplan, the primitives roadmap, machine profiles |
 
 ## Models
 
@@ -119,8 +119,8 @@ per backend.
 Each implementation has variants for the same set of features, named by a prefix on the class:
 `ReLU`, `Softmax`, `CrossEntropy`, `L2`, `Momentum`, `Adam`, `Dropout`, `Ensemble`. Convolution,
 max pooling and momentum conv (`Conv…`, `MaxPool…`, `MomentumConv…`) exist in all three
-implementations. The numpy classes are the reference the Rust
-classes are tested against (`tests/test_*fused_layer_ops.py`, `tests/test_numerical_parity.py`).
+implementations. The numpy classes are the reference the Rust classes are tested against
+(`tests/test_*fused_layer_ops.py`, `tests/test_numerical_parity.py`).
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,
 hand-computed examples, and the reference the array implementations are checked against. It is

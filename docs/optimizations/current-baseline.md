@@ -13,18 +13,19 @@ Rust / numpy wall-clock ratio (below 1 means Rust is faster), from
 
 | architecture | UCI digits, single | UCI digits, mini-batch | MNIST subset, single | MNIST subset, mini-batch |
 | --- | --- | --- | --- | --- |
-| conv | 0.17 | 0.65 | 0.19 | 0.52 |
-| conv-pool-conv | 0.11 | 0.48 | 0.28 | 0.46 |
-| conv-conv-stride2 | 0.14 | 0.51 | 0.37 | 0.49 |
+| conv | 0.18 | 0.64 | 0.18 | 0.49 |
+| conv-pool-conv | 0.11 | 0.46 | 0.27 | 0.41 |
+| conv-conv-stride2 | 0.15 | 0.53 | 0.35 | 0.48 |
+| conv-conv | 0.17 | 0.53 | 0.36 | 0.44 |
 
 Dense MNIST 784 -> 30 -> 10, one 60000-example epoch: about 0.21 single-example and 0.54
 mini-batch 32.
 
 Caveats:
 
-- **The conv table is one demo run** (each cell the median of 5) on the current build, after the
-  2-row register tiles (crate #26). The UCI mini-batch runs take 0.06-0.12 s in all, so fixed
-  per-run costs dominate their ratios; read them as noisy. The dense ratios are current.
+- **The conv table is one demo run** (each cell the median of 5) on the current build. The UCI
+  mini-batch runs take 0.05-0.18 s in all, so fixed per-run costs dominate their ratios; read
+  them as noisy.
 - **numpy runs with OpenBLAS's default threading, which slows its own training** (its MNIST conv
   mini-batch 32 epoch: 1.22-1.32 s at `OPENBLAS_NUM_THREADS=1` against 1.39-1.56 s by default).
   Against single-threaded numpy that cell would be nearer 0.55-0.6 (estimated, not measured side
@@ -72,22 +73,19 @@ downstream 0.9-1.1.
 
 ## Where a Rust epoch spends its time
 
-cProfile of Rust time by op over one MNIST-subset epoch (2000 rows). Profiled before
-single-example downstream through the tiled kernel and the per-example conv forward; those ops'
-current shares are in parentheses, the rest is not re-profiled
-(`scripts/epoch_op_profile.py` refreshes it):
+cProfile of Rust time by op over one MNIST-subset epoch (2000 rows), current build,
+`scripts/epoch_op_profile.py` (3 processes each; profiled totals, single-example / mini-batch 32):
 
-- **Conv, mini-batch 32** (0.63-0.64 s, current build): `conv_forward_batch` 28-29%,
-  `conv_accumulate_gradient_batch` 12%, dense `accumulate_gradient_batch` 10%, `forward_batch` 7%,
-  `downstream_batch` 6.5-7%.
-- **Conv, single-example** (0.80 s): `layer_sgd_step` 20%, `conv_forward_batch` 20%,
-  `layer_forward` 19%, dense `downstream` (5-7% now), conv accumulate 7%.
-- **Second-conv networks** (single-example / mini-batch 32, current build, profiled totals):
-  conv-pool-conv (0.71-0.77 / 0.79-0.81 s) `conv_forward_batch` 48-49% / 45-46%,
-  `conv_accumulate_gradient_batch` 10-11% / 16-17%, `conv_downstream_batch` 5% / 9-10%,
-  `max_pool_forward_batch` 4% mini-batch; conv-conv-stride2 (0.71-0.75 / 0.85-0.87 s) forward 53%
-  / 48-49%, accumulate 11% / 17-18%, downstream 6% / 14-16%; conv-conv (2.24-2.30 / 2.67-2.74 s)
-  forward 48-50% / 45-47%, downstream 8-9% / 20%, accumulate 8% / 17-18%.
+- **Conv** (0.70-0.71 / 0.56-0.61 s): single-example `layer_sgd_step` 22-23%,
+  `conv_forward_batch` 21-22%, `layer_forward` 21-22%, conv accumulate 7%, dense `downstream` 7%;
+  mini-batch `conv_forward_batch` 25-30%, `layer_forward` (the accuracy pass) 14-17%, conv
+  accumulate 11-12%, dense `accumulate_gradient_batch` 9-10%, `forward_batch` 8-9%,
+  `downstream_batch` 7%.
+- **Second-conv networks**: conv-pool-conv (0.69-0.77 / 0.73-0.78 s) `conv_forward_batch` 45-54%
+  / 46-52%, `conv_accumulate_gradient_batch` 9-11% / 13-15%, `conv_downstream_batch` 5-6% / 8-9%,
+  `max_pool_forward_batch` 4% mini-batch; conv-conv-stride2 (0.70-0.71 / 0.78-0.81 s) forward
+  53-55% / 49-53%, accumulate 10-11% / 14-15%, downstream 6% / 14-16%; conv-conv (1.93-2.03 /
+  2.29-2.32 s) forward 50-55% / 51-52%, downstream 9% / 21-22%, accumulate 7-8% / 10%.
 - **About a quarter of a one-epoch conv run is the accuracy passes**, not training: the trainers
   run n + 1 per-row passes for n epochs (Rust conv keeps the per-row pass). Stakes quoted as a
   share of an epoch are shares of this timed one-epoch run, which overstates the passes for
