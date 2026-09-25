@@ -1,41 +1,48 @@
 import random
 
 import numpy as np
+import pytest
 
 from indrajala_ml.model.l2_array_layer import L2ArrayLayer
+from indrajala_ml.model.l2_rust_array_layer import L2RustArrayLayer
 from indrajala_ml.model.l2_regularization_layer import make_l2_layer_cls
 from indrajala_ml.model.state_layer import StateLayer
 
 L2_LAMBDA = 0.05
 
+LAYER_CLS = {"numpy": L2ArrayLayer, "rust": L2RustArrayLayer}
 
-def _snapshot_to_l2_array_layer(backprop_layer) -> L2ArrayLayer:
-    array_layer = L2ArrayLayer(backprop_layer.size, len(backprop_layer.input_layer.nodes), L2_LAMBDA)
+
+@pytest.fixture
+def layer_cls(backend):
+    return LAYER_CLS[backend.name]
+
+
+def _array_layer_like(backprop_layer, backend):
+    input_size = len(backprop_layer.input_layer.nodes)
+    array_layer = LAYER_CLS[backend.name](backprop_layer.size, input_size, L2_LAMBDA)
     snapshot = backprop_layer.snapshot_state()
-    array_layer.W = np.array([weights for weights, _bias in snapshot])
-    array_layer.b = np.array([bias for _weights, bias in snapshot])
+    array_layer.W = backend.owned([weights for weights, _bias in snapshot])
+    array_layer.b = backend.owned([bias for _weights, bias in snapshot])
     return array_layer
 
 
-def test_accumulate_then_apply_at_batch_size_one_matches_l2_backprop_node_at_every_step():
+def test_accumulate_then_apply_at_batch_size_one_matches_l2_backprop_node_at_every_step(backend):
 
-    # mirrors test_adam_array_layer.py's own
-    # test_accumulate_then_apply_at_batch_size_one_matches_adam_backprop_node_at_every_step -
-    # L2 needs no persistent state between steps, but checking after every one of several steps
-    # (not just once) still catches a mistake that only shows up once W itself has moved away
-    # from its starting value (the penalty term is a function of the *current* weight).
+    # compared after every step: the penalty depends on the current W, so a mistake can show
+    # only once W has moved
     rng = random.Random(21)
     dimension = 5
     size = 4
-    l2_layer_cls = make_l2_layer_cls(L2_LAMBDA)
+    node_layer_cls = make_l2_layer_cls(L2_LAMBDA)
 
     state_layer = StateLayer(dimension, [(-10.0, 10.0)] * dimension)
-    backprop_layer = l2_layer_cls(size=size, input_layer=state_layer)
+    backprop_layer = node_layer_cls(size=size, input_layer=state_layer)
     for node in backprop_layer.nodes:
         node.update_input_weights([rng.uniform(-3.0, 3.0) for _ in range(dimension)])
         node.bias = rng.uniform(-3.0, 3.0)
 
-    array_layer = _snapshot_to_l2_array_layer(backprop_layer)
+    array_layer = _array_layer_like(backprop_layer, backend)
     learning_rate = rng.uniform(0.001, 1.0)
 
     for _ in range(10):
@@ -48,31 +55,31 @@ def test_accumulate_then_apply_at_batch_size_one_matches_l2_backprop_node_at_eve
             node.accumulate_gradient()
             node.apply_accumulated_gradient(learning_rate, batch_size=1)
 
-        array_layer.delta = np.array(deltas)
-        array_layer.accumulate_gradient(np.array(x))
+        array_layer.delta = backend.owned(deltas)
+        array_layer.accumulate_gradient(backend.owned(x))
         array_layer.apply_accumulated_gradient(learning_rate, batch_size=1)
 
         expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
         expected_b = np.array([node.bias for node in backprop_layer.nodes])
-        assert np.allclose(array_layer.W, expected_W, rtol=1e-9, atol=1e-12)
-        assert np.allclose(array_layer.b, expected_b, rtol=1e-9, atol=1e-12)
+        assert np.allclose(array_layer.W.tolist(), expected_W, rtol=1e-9, atol=1e-12)
+        assert np.allclose(array_layer.b.tolist(), expected_b, rtol=1e-9, atol=1e-12)
 
 
-def test_accumulate_across_a_batch_then_apply_matches_l2_backprop_node_at_every_batch():
+def test_accumulate_across_a_batch_then_apply_matches_l2_backprop_node_at_every_batch(backend):
 
     rng = random.Random(22)
     dimension = 4
     size = 3
     batch_size = 6
-    l2_layer_cls = make_l2_layer_cls(L2_LAMBDA)
+    node_layer_cls = make_l2_layer_cls(L2_LAMBDA)
 
     state_layer = StateLayer(dimension, [(-10.0, 10.0)] * dimension)
-    backprop_layer = l2_layer_cls(size=size, input_layer=state_layer)
+    backprop_layer = node_layer_cls(size=size, input_layer=state_layer)
     for node in backprop_layer.nodes:
         node.update_input_weights([rng.uniform(-3.0, 3.0) for _ in range(dimension)])
         node.bias = rng.uniform(-3.0, 3.0)
 
-    array_layer = _snapshot_to_l2_array_layer(backprop_layer)
+    array_layer = _array_layer_like(backprop_layer, backend)
     learning_rate = rng.uniform(0.001, 1.0)
 
     for _ in range(5):
@@ -87,8 +94,8 @@ def test_accumulate_across_a_batch_then_apply_matches_l2_backprop_node_at_every_
                 node.delta = delta
                 node.accumulate_gradient()
 
-            array_layer.delta = np.array(deltas)
-            array_layer.accumulate_gradient(np.array(x))
+            array_layer.delta = backend.owned(deltas)
+            array_layer.accumulate_gradient(backend.owned(x))
 
         for node in backprop_layer.nodes:
             node.apply_accumulated_gradient(learning_rate, batch_size)
@@ -96,33 +103,32 @@ def test_accumulate_across_a_batch_then_apply_matches_l2_backprop_node_at_every_
 
         expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
         expected_b = np.array([node.bias for node in backprop_layer.nodes])
-        assert np.allclose(array_layer.W, expected_W, rtol=1e-9, atol=1e-12)
-        assert np.allclose(array_layer.b, expected_b, rtol=1e-9, atol=1e-12)
+        assert np.allclose(array_layer.W.tolist(), expected_W, rtol=1e-9, atol=1e-12)
+        assert np.allclose(array_layer.b.tolist(), expected_b, rtol=1e-9, atol=1e-12)
 
 
-def test_apply_accumulated_gradient_resets_the_accumulator():
+def test_bias_is_never_regularized(layer_cls, backend):
 
-    array_layer = L2ArrayLayer(3, 2, L2_LAMBDA)
-    array_layer.delta = np.array([0.1, 0.2, 0.3])
-    array_layer.accumulate_gradient(np.array([1.0, 2.0]))
-    array_layer.apply_accumulated_gradient(0.1, batch_size=1)
-
-    assert np.allclose(array_layer._grad_W, np.zeros((3, 2)))
-    assert np.allclose(array_layer._grad_b, np.zeros(3))
-
-
-def test_bias_is_never_regularized():
-
-    # l2_lambda should only ever appear in the W update - a nonzero bias gradient with a zeroed
-    # weight gradient should move the bias exactly as much as the base ArrayLayer would (no l2
-    # term at all), confirming the penalty is W-only, matching make_l2_node_cls's own comment.
-    array_layer = L2ArrayLayer(2, 2, l2_lambda=0.5)
-    array_layer.W = np.array([[1.0, 2.0], [3.0, 4.0]])
-    array_layer.b = np.array([5.0, 6.0])
-    array_layer.delta = np.array([0.0, 0.0])
-    array_layer.accumulate_gradient(np.array([0.0, 0.0]))
-    array_layer._grad_b = np.array([2.0, 4.0])
+    # with a zero weight gradient and a nonzero bias gradient, the bias moves by plain SGD: the
+    # penalty applies to W only
+    array_layer = layer_cls(2, 2, l2_lambda=0.5)
+    array_layer.W = backend.owned([[1.0, 2.0], [3.0, 4.0]])
+    array_layer.b = backend.owned([5.0, 6.0])
+    array_layer.delta = backend.owned([0.0, 0.0])
+    array_layer.accumulate_gradient(backend.owned([0.0, 0.0]))
+    array_layer._grad_b = backend.owned([2.0, 4.0])
 
     array_layer.apply_accumulated_gradient(learning_rate=0.1, batch_size=1)
 
-    assert np.allclose(array_layer.b, np.array([5.0 - 0.1 * 2.0, 6.0 - 0.1 * 4.0]))
+    assert np.allclose(array_layer.b.tolist(), [5.0 - 0.1 * 2.0, 6.0 - 0.1 * 4.0])
+
+
+def test_apply_accumulated_gradient_resets_the_accumulator(layer_cls, backend):
+
+    array_layer = layer_cls(3, 2, L2_LAMBDA)
+    array_layer.delta = backend.owned([0.1, 0.2, 0.3])
+    array_layer.accumulate_gradient(backend.owned([1.0, 2.0]))
+    array_layer.apply_accumulated_gradient(0.1, batch_size=1)
+
+    assert np.allclose(array_layer._grad_W.tolist(), np.zeros((3, 2)))
+    assert np.allclose(array_layer._grad_b.tolist(), np.zeros(3))

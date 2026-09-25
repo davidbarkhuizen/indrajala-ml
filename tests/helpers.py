@@ -202,15 +202,10 @@ def matching_cross_entropy_array_backprop_networks(
 
 class AdamMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
-    Test-only per-node Adam reference: MultiClassBackpropClassifierNetwork with its
-    hidden_layer_cls/output_layer_cls extension points (BackpropNetworkBase) set to
-    make_adam_layer_cls's node class, the exact same construction
-    AdamBackpropClassifierNetwork uses for the single-output case. Not a new production class,
-    since this codebase has no per-node multi-class Adam sibling to build against otherwise. Gives
-    every array-based Adam sibling (AdamVectorizedMultiClassBackpropClassifierNetwork,
-    AdamRustArrayMultiClassBackpropClassifierNetwork) a genuine parity reference instead of a
-    hand-derived fixture, shared here rather than duplicated per test module, since both
-    siblings need the identical reference.
+    Test-only per-node multiclass Adam network, the parity reference for the Adam array networks:
+    MultiClassBackpropClassifierNetwork with make_adam_layer_cls hidden and output layers, as
+    AdamBackpropClassifierNetwork builds the single-output one. There is no production per-node
+    multiclass Adam network.
     """
 
     def __init__(
@@ -242,11 +237,9 @@ def matching_adam_array_backprop_networks(
     bounds: float = 10.0,
 ):
     """
-    The Adam-sibling analogue of matching_array_backprop_networks above: builds an
-    AdamMultiClassBackpropClassifierNetwork per-node reference and an Adam array-backed sibling
-    (AdamVectorizedMultiClassBackpropClassifierNetwork / AdamRustArrayMultiClassBackpropClassifierNetwork,
-    passed as array_network_cls) with identical injected weights - kept separate from the non-Adam
-    helper since the reference class and constructor signature both differ (beta1/beta2/epsilon).
+    matching_array_backprop_networks for the Adam networks: an
+    AdamMultiClassBackpropClassifierNetwork and array_network_cls with the same beta1/beta2/epsilon
+    and identical injected weights.
     """
     node_network = AdamMultiClassBackpropClassifierNetwork(
         layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count, beta1, beta2, epsilon
@@ -259,10 +252,8 @@ def matching_adam_array_backprop_networks(
 
 class L2MultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
-    Test-only per-node L2 reference: MultiClassBackpropClassifierNetwork with its
-    hidden_layer_cls/output_layer_cls extension points set to make_l2_layer_cls's node class -
-    the same construction L2RegularizedBackpropClassifierNetwork uses for the single-output
-    case. Gives L2VectorizedMultiClassBackpropClassifierNetwork a genuine parity reference.
+    Test-only per-node multiclass L2 network, the parity reference for the L2 array networks:
+    MultiClassBackpropClassifierNetwork with make_l2_layer_cls hidden and output layers.
     """
 
     def __init__(
@@ -290,8 +281,7 @@ def matching_l2_array_backprop_networks(
     bounds: float = 10.0,
 ):
     """
-    The L2-sibling analogue of matching_array_backprop_networks above - see
-    matching_adam_array_backprop_networks's own docstring for the general shape this follows.
+    matching_array_backprop_networks for the L2 networks, with l2_lambda.
     """
     node_network = L2MultiClassBackpropClassifierNetwork(
         layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count, l2_lambda
@@ -304,10 +294,9 @@ def matching_l2_array_backprop_networks(
 
 class MomentumMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
-    Test-only per-node momentum reference: MultiClassBackpropClassifierNetwork with its
-    hidden_layer_cls/output_layer_cls extension points set to make_momentum_layer_cls's node
-    class - the same construction MomentumBackpropClassifierNetwork uses for the single-output
-    case. Gives MomentumVectorizedMultiClassBackpropClassifierNetwork a genuine parity reference.
+    Test-only per-node multiclass momentum network, the parity reference for the momentum array
+    networks: MultiClassBackpropClassifierNetwork with make_momentum_layer_cls hidden and output
+    layers.
     """
 
     def __init__(
@@ -335,8 +324,7 @@ def matching_momentum_array_backprop_networks(
     bounds: float = 10.0,
 ):
     """
-    The momentum-sibling analogue of matching_array_backprop_networks above - see
-    matching_adam_array_backprop_networks's own docstring for the general shape this follows.
+    matching_array_backprop_networks for the momentum networks, with momentum.
     """
     node_network = MomentumMultiClassBackpropClassifierNetwork(
         layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count, momentum
@@ -619,16 +607,17 @@ def assert_array_network_weights_match(node_network, array_network, rtol=1e-9, a
 
 
 def assert_array_network_snapshot_restore_round_trip(
-    array_network_cls, layer_sizes: list[int], dimension: int, class_count: int
+    array_network_cls, layer_sizes: list[int], dimension: int, class_count: int, *hyperparameters
 ) -> None:
     """
-    Shared by both array-backed siblings' own test_snapshot_restore_round_trips_weights - same
-    .tolist()-based equality reasoning as assert_array_network_weights_match above.
+    A randomized array network's snapshot restored into a fresh one gives the same weights,
+    compared through .tolist(). hyperparameters are the constructor's further arguments (e.g.
+    momentum).
     """
-    network = array_network_cls.randomized(layer_sizes, dimension, class_count)
+    network = array_network_cls.randomized(layer_sizes, dimension, class_count, *hyperparameters)
     snapshot = network.snapshot()
 
-    other = array_network_cls(layer_sizes, dimension, class_count)
+    other = array_network_cls(layer_sizes, dimension, class_count, *hyperparameters)
     other.restore(snapshot)
 
     for (W1, b1), (W2, b2) in zip(network.snapshot(), other.snapshot()):
