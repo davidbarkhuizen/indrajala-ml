@@ -7,8 +7,8 @@ numpy's legacy np.random (MT19937) and its PCG64 Generator, for statistical qual
 
 `quality` draws 10M uniforms from each generator and reports a 4096-bin chi-square (as a
 Wilson-Hilferty z), a Kolmogorov-Smirnov p, the lag-1 correlation (as z = r * sqrt(n)), and the
-correlation between the first draws of consecutive small calls (the crate reseeds every call), then
-bernoulli_mask's keep rate (as z) at three drop probabilities. --repeats reruns the crate's KS and
+correlation between the first draws of consecutive small calls (the position carries across calls),
+then bernoulli_mask's keep rate (as z) at three drop probabilities. --repeats reruns the crate's KS and
 lag-1 on 2M draws, since one borderline p is expected by chance somewhere in a table this size.
 
 `time` runs every (backend, repeat) in its own process, rotating the order, and reports the median

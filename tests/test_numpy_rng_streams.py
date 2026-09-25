@@ -2,12 +2,13 @@
 numpy's random streams are reproducible from outside numpy, bit for bit (docs/rng-audit.md). A
 pure-Python MT19937, seeded as np.random.seed(int) seeds it, reproduces the legacy stream that
 randomize() (np.random.uniform) and DropoutArrayLayer (np.random.random >= p) draw from, and the
-PCG64 Generator's floats are the crate's own (raw >> 11) * 2^-53. np.random.seed's three paths
-(docs/rng-numpy-parity-workplan.md, "Seeding, exactly") are pinned too: init_genrand for anything
-operator.index takes (after squeeze), init_by_array for other sequences, and the rejections. The
-reference here is the oracle a seedable Rust generator is checked against.
+PCG64 Generator's floats are (raw >> 11) * 2^-53. np.random.seed's three paths (docs/rng-audit.md,
+"Seeding") are pinned too: init_genrand for anything operator.index takes (after squeeze),
+init_by_array for other sequences, and the rejections. This is the algorithm the crate's MT19937
+ports; rust/tests/test_random_numpy_parity.py checks the crate against np.random directly.
 """
 
+import random
 from collections.abc import Sequence
 from typing import Any, cast
 
@@ -93,7 +94,7 @@ def test_mersenne_twister_reproduces_the_legacy_stream_randomize_and_dropout_dra
     assert np.array_equal(mask, mask_reference)
 
 
-def test_pcg64_generator_floats_are_the_crates_top_53_bits_formula():
+def test_pcg64_generator_floats_are_the_top_53_bits_of_each_raw_word():
     generator = np.random.default_rng(7)
     raw = np.random.default_rng(7).bit_generator.random_raw(1000)
     unit = (raw >> np.uint64(11)).astype(np.float64) * 2.0**-53
@@ -170,3 +171,22 @@ def test_seed_none_sets_word_0_but_keeps_the_previous_position(doubles_drawn: in
     _name, key, position, *_ = _legacy_state()
     assert key[0] == 0x80000000
     assert position == position_before
+
+
+def _words(seed: int) -> list[int]:
+    # CPython seeds random with init_by_array over |seed|'s 32-bit words, low word first
+    value, words = abs(seed), list[int]()
+    while True:
+        words.append(value & MASK_32)
+        value >>= 32
+        if not value:
+            return words
+
+
+@pytest.mark.parametrize("seed", [0, 1, 42, 2**32 - 1, 2**40 + 3, -7])
+def test_stdlib_random_is_np_random_seeded_with_the_seeds_words(seed: int):
+    # the same MT19937, init_by_array and two-draw double: random.seed(s) and
+    # np.random.seed(_words(s)) give one stream, so only the seeding differs
+    random.seed(seed)
+    np.random.seed(_words(seed))
+    assert [random.random() for _ in range(700)] == np.random.random(700).tolist()

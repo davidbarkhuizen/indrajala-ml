@@ -174,10 +174,8 @@ test passing, and:
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, then attention.
-- [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, the crate's against
-  numpy's, and the path to seedable, numpy-identical Rust draws.
-- [docs/rng-numpy-parity-workplan.md](docs/rng-numpy-parity-workplan.md): replacing the crate's
-  RNG with a seedable, bit-identical copy of numpy's legacy `np.random`.
+- [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's
+  reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and the open RNG work.
 
 ## License
 
