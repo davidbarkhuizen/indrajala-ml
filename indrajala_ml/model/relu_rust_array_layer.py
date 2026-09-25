@@ -7,15 +7,8 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class ReLURustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to ReLUArrayLayer. Same forward/backward formulas (`max(0, z)`, a boolean-mask
-    derivative), but each as a single fused Rust call (`layer_relu_forward`/
-    `layer_relu_forward_batch`/`layer_relu_hidden_delta`/`layer_relu_hidden_delta_batch`,
-    `fused.rs`, built on the Rust core's `array_relu`/`array_relu_mask` primitives) instead of a
-    numpy expression - mirroring how `RustArrayLayer` itself relates to `ArrayLayer`.
-    `apply_accumulated_gradient` is inherited unchanged from `RustArrayLayer`.
-
-    Hidden-layer-only, matching `ReLUArrayLayer`'s own convention: `compute_output_delta`/
-    `compute_output_delta_batch` raise `NotImplementedError`.
+    ReLUArrayLayer on the Rust backend: forward* and compute_hidden_delta* are each one fused call
+    (layer_relu_*). Hidden only: compute_output_delta* raise.
     """
 
     def forward(self, x: "pa.Array") -> "pa.Array":

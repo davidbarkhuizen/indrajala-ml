@@ -8,23 +8,13 @@ from indrajala_ml.model.backprop_node import BackpropNode
 
 def make_adam_node_cls(beta1: float, beta2: float, epsilon: float) -> type[BackpropNode]:
     """
-    Returns a BackpropNode subclass whose apply_accumulated_gradient implements Adam (Kingma &
-    Ba, 2014): a per-parameter adaptive learning rate driven by bias-corrected running estimates
-    of each weight's own gradient mean (m) and (uncentered) variance (v), rather than momentum's
-    single shared velocity term. Each parameter (every input weight, plus the bias) gets its own
-    m/v pair, zero-initialized, plus a per-node step counter t incremented once per
-    apply_accumulated_gradient call.
+    A BackpropNode subclass whose apply_accumulated_gradient is Adam (Kingma & Ba, 2014): a
+    per-parameter adaptive learning rate from bias-corrected running estimates of the gradient mean
+    (m) and uncentered variance (v). Every weight and the bias get their own zero-initialized m/v,
+    and each node counts its own steps t.
 
-    t is safely per-node, not shared across the network: every trainable node gets exactly one
-    apply_accumulated_gradient call per learn()/learn_batch() invocation - the network never
-    calls it for some nodes and not others on a given iteration - so a per-node counter stays
-    numerically identical to a hypothetical global one, the same reasoning that already lets
-    MomentumBackpropNode's velocity live per-node with no shared state (see make_momentum_node_cls).
-
-    beta1/beta2/epsilon default to Kingma & Ba's own published values in
-    AdamBackpropClassifierNetwork, unlike momentum's own coefficient (which this codebase's
-    measurements found no safe default for) - these are closer to fixed algorithmic constants in
-    virtually all real-world Adam usage, not a knob this project has an opinion on.
+    A per-node t equals a global one: every trainable node gets exactly one
+    apply_accumulated_gradient call per learn()/learn_batch().
     """
 
     class AdamBackpropNode(BackpropNode):
@@ -73,10 +63,8 @@ def make_adam_node_cls(beta1: float, beta2: float, epsilon: float) -> type[Backp
 
 def make_adam_layer_cls(beta1: float, beta2: float, epsilon: float) -> type[BackpropLayer]:
     """
-    The layer-level counterpart to make_adam_node_cls - a BackpropLayer whose nodes are all
-    AdamBackpropNodes at the given coefficients. Used for both hidden and output layers, the same
-    way make_momentum_layer_cls is: Adam modifies the weight-update rule itself, which every
-    trainable layer shares, not the activation or loss.
+    A BackpropLayer of make_adam_node_cls nodes. Used for hidden and output layers alike: Adam
+    changes the weight update, which every trainable layer shares.
     """
 
     class AdamLayer(BackpropLayer):

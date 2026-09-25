@@ -10,16 +10,9 @@ class AbstractNode(ABC):
 
 class WeightedInputNode(AbstractNode):
     """
-    Shared machinery behind AssociationNode and BackpropNode: both are a node with weighted
-    inputs and an additive offset, summed by z() into a single pre-activation value, with an
-    independently update-able weight vector. What z() means once computed - a hard step
-    (AssociationNode) vs a sigmoid activation (BackpropNode) - is exactly what differs between
-    the two, so value() stays abstract here.
-
-    The offset itself is stored as _offset, not exposed directly - each subclass exposes it
-    under its own name (threshold vs bias) via a property, since the two names carry real
-    meaning (a hard cutoff vs an additive term into a smooth activation), not just cosmetic
-    variation.
+    What AssociationNode and BackpropNode share: weighted inputs plus an offset, summed by z(), and
+    an updatable weight vector. value() (a hard step or a sigmoid) is the subclass's. The offset is
+    stored as _offset and exposed by each subclass under its own name, threshold or bias.
     """
 
     def __init__(

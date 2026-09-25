@@ -7,15 +7,9 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class CrossEntropyRustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to CrossEntropyArrayLayer.
-    Needs no new Rust primitive at all: `SoftmaxArrayLayer.compute_output_delta`'s own formula
-    (`self.a - reference`) is algebraically identical to what cross-entropy needs, and its
-    existing Rust-fused counterpart, `pa.layer_softmax_output_delta` (`fused.rs`), is already
-    shape-agnostic (`require_same_shape` + elementwise subtract, no softmax-specific math) -
-    checked directly against the Rust source, not assumed. `forward`/`forward_batch`/
-    `compute_hidden_delta`/`compute_hidden_delta_batch`/`apply_accumulated_gradient` are all
-    inherited unchanged from `RustArrayLayer`, the same "single sigmoid output needs nothing from
-    any sibling" reasoning `CrossEntropyArrayLayer`'s own docstring gives.
+    CrossEntropyArrayLayer on the Rust backend. Its delta, activation - target, is what
+    pa.layer_softmax_output_delta computes: that op is an elementwise subtract with no
+    softmax-specific maths, so no new Rust op is needed.
     """
 
     def compute_output_delta(self, reference: "pa.Array") -> None:

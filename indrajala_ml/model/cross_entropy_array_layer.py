@@ -7,22 +7,11 @@ from indrajala_ml.model.array_layer import ArrayLayer
 
 class CrossEntropyArrayLayer(ArrayLayer):
     """
-    The array-based counterpart to binary_cross_entropy_backprop_classifier_network.CrossEntropyOutputNode:
-    binary cross-entropy loss's delta simplifies to activation - target, with no extra
-    sigmoid-derivative (a*(1-a)) factor - the same simplification SoftmaxArrayLayer's own delta
-    uses for the multi-class case (see that class's own compute_output_delta).
+    A sigmoid output layer with binary cross-entropy loss: the delta is activation - target, without
+    the a*(1-a) factor (CrossEntropyOutputNode over arrays). Every other method is ArrayLayer's.
 
-    forward/forward_batch/compute_hidden_delta/compute_hidden_delta_batch/
-    apply_accumulated_gradient are all inherited unchanged from ArrayLayer - unlike
-    SoftmaxArrayLayer, a single sigmoid-activated output needs nothing from any sibling node, the
-    same point CrossEntropyOutputNode's own docstring makes ("a single output node's activation
-    needs nothing from any sibling - forward() is inherited completely unchanged").
-
-    No size restriction (unlike SoftmaxArrayLayer's own size >= 2): cross-entropy's delta is
-    independent per node, so this works equally as a single-node output (the literal array
-    counterpart of CrossEntropyOutputLayer) or as a class_count-wide output layer (an independent
-    per-node cross-entropy delta at each output - a one-vs-rest-with-cross-entropy-loss variant,
-    distinct from softmax's jointly-normalized one).
+    The delta is per node, so any size works: one node (as CrossEntropyOutputLayer) or class_count
+    (one-vs-rest with cross-entropy, unlike softmax's joint normalization).
     """
 
     def compute_output_delta(self, reference: np.ndarray) -> None:

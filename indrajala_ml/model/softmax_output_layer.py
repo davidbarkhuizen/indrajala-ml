@@ -10,14 +10,8 @@ from indrajala_ml.model.state_layer import StateLayer
 
 class SoftmaxOutputNode(BackpropNode):
     """
-    An output node whose activation is fixed jointly with every sibling in its layer via
-    softmax, not computed independently from its own z() alone the way every other BackpropNode
-    is - see SoftmaxOutputLayer.forward(), which computes every node's z(), normalizes them
-    together, and pushes each node's share in via activate(). forward() is therefore
-    deliberately unusable on its own here (unlike every other BackpropNode): calling it would
-    silently compute a per-node sigmoid instead of the jointly-normalized softmax value
-    everything else on this node (snapshot/restore-compatible weights, apply_gradient) assumes -
-    raising catches that mistake immediately instead of computing a wrong answer quietly.
+    An output node whose activation SoftmaxOutputLayer.forward() computes jointly with its layer and
+    sets through activate(). forward() raises: a per-node sigmoid would be silently wrong.
     """
 
     def forward(self) -> float:
@@ -30,20 +24,15 @@ class SoftmaxOutputNode(BackpropNode):
         self._activation = value
 
     def compute_output_delta(self, reference_value: float) -> None:
-        # softmax + cross-entropy loss's output delta simplifies to exactly this - no extra
-        # sigmoid-derivative factor the way BackpropNode.compute_output_delta's a*(1-a) term
-        # needs, since softmax's own Jacobian cancels against cross-entropy's derivative in the
-        # standard derivation
+        # softmax with cross-entropy: the softmax Jacobian cancels against the loss's
+        # derivative, leaving no a*(1-a) factor
         self.delta = self.value() - reference_value
 
 
 class SoftmaxOutputLayer(BackpropLayer):
     """
-    An output layer whose activations are computed jointly via softmax
-    (a_i = e^z_i / sum_j e^z_j across every node in this layer), rather than each node's own
-    independent sigmoid(z()) the way BackpropLayer.forward() computes it - the layer-level
-    coordination softmax needs is exactly why this overrides forward() instead of leaving
-    SoftmaxOutputNode's own per-node forward() to do the work (it can't - see its own docstring).
+    An output layer with softmax activations, a_i = e^z_i / sum_j e^z_j over the layer, computed in
+    forward(), since no node can compute its own.
     """
 
     _node_cls = SoftmaxOutputNode
@@ -56,12 +45,8 @@ class SoftmaxOutputLayer(BackpropLayer):
         nodes: Sequence[SoftmaxOutputNode] = self.nodes  # type: ignore[assignment]
         z_values = [node.z() for node in nodes]
 
-        # standard numerically-stable softmax: subtract the max before exponentiating, so the
-        # largest exponent evaluated is e^0=1 rather than e^z_max - which could otherwise
-        # overflow the same way backprop_node.sigmoid's unguarded exp(-z) could (see that
-        # function's docstring) - mathematically identical to the textbook formula, since
-        # subtracting a constant from every z before exponentiating and normalizing leaves the
-        # final ratios unchanged (e^(z-c) / sum(e^(z_j-c)) = e^z / sum(e^z_j) for any c)
+        # subtract the max before exponentiating so no exponent overflows; the ratios are
+        # unchanged, since e^(z-c) / sum(e^(z_j-c)) = e^z / sum(e^z_j)
         max_z = max(z_values)
         exp_values = [math.exp(z - max_z) for z in z_values]
         total = sum(exp_values)

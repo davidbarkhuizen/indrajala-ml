@@ -5,7 +5,7 @@ from indrajala_ml.model.state_node import StateNode
 
 class StateLayer:
     """
-    sense layer
+    The input layer: one StateNode per input dimension, set by update_state().
     """
 
     def __init__(self, dimension: int, bounds: Sequence[tuple[float, float]]) -> None:

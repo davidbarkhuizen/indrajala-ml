@@ -8,13 +8,8 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 
 class L2RustArrayLayer(RustArrayLayer):
     """
-    The Rust-matmul-backed counterpart to L2ArrayLayer. Same L2 (weight decay) update rule, but
-    `apply_accumulated_gradient` is a single fused Rust call
-    (`layer_l2_apply_accumulated_gradient`, `fused.rs`) instead of a numpy expression - mirroring
-    how `RustArrayLayer` itself relates to `ArrayLayer`.
-
-    l2_lambda is a required constructor argument, no default, the same posture L2ArrayLayer
-    already has.
+    L2ArrayLayer on the Rust backend, applied by one fused call
+    (layer_l2_apply_accumulated_gradient). l2_lambda is required.
     """
 
     hyperparameters = ("l2_lambda",)

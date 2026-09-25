@@ -6,20 +6,14 @@ from indrajala_ml.model.model_io import load_json, save_json
 
 class ArrayEnsembleBase:
     """
-    An ensemble of single-output array networks, for either backend: the array-backed mirror of
-    EnsembleBackpropClassifierNetwork, with the same "assemble already-constructed classifiers,
-    don't build them" composition (see that class's docstring for why).
-    EnsembleArrayBackpropClassifierNetwork and EnsembleRustArrayBackpropClassifierNetwork are this
-    class over ArraySingleOutputShape's numpy and Rust networks, and differ only in
-    classifier_cls, the class load() builds.
+    An ensemble of single-output array networks, for either backend, assembled from already-built
+    classifiers as EnsembleBackpropClassifierNetwork is. EnsembleArrayBackpropClassifierNetwork and
+    EnsembleRustArrayBackpropClassifierNetwork differ only in classifier_cls, the class load()
+    builds.
 
-    Unlike its sub-networks (no class_count notion at all), an ensemble has a real class_count -
-    the number of assembled sub-networks. save()/load() use the bare save_json/load_json
-    primitives (model_io.py), not save_array_model_json: that helper's snapshot handling assumes
-    a flat per-layer (W, b) list (one network's snapshot), but an ensemble's snapshot is nested
-    one level deeper (one such list per classifier) - the same "envelope shape doesn't fit the
-    fixed layout" case save_json's docstring names ConvMultiClassBackpropClassifierNetwork.save
-    as an example of.
+    class_count is the number of sub-networks. save()/load() use save_json/load_json directly: the
+    snapshot nests one network's (W, b) list per classifier, which save_array_model_json's flat
+    layout can't hold.
     """
 
     # the single-output network load() builds, one per class

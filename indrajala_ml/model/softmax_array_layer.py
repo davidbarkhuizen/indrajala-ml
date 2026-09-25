@@ -7,18 +7,10 @@ from indrajala_ml.model.array_layer import ArrayLayer
 
 class SoftmaxArrayLayer(ArrayLayer):
     """
-    The array-based counterpart to softmax_output_layer.SoftmaxOutputNode/SoftmaxOutputLayer:
-    joint softmax normalization across the whole output vector instead of an independent per-node
-    sigmoid, as whole-array numpy ops instead of a per-node Python loop.
-
-    Output-layer-only, matching SoftmaxOutputLayer's own `assert size >= 2` convention (a
-    single-node softmax has nothing to normalize against) - unlike ReLU's own hidden-layer-only
-    array sibling, this overrides forward/forward_batch and compute_output_delta/
-    compute_output_delta_batch, not compute_hidden_delta: softmax's cross-node coupling only
-    affects the forward pass, so whatever layer feeds this one still calls the inherited,
-    unmodified compute_hidden_delta/compute_hidden_delta_batch, which only ever calls
-    next_layer.downstream()/downstream_batch() (next_layer.W/next_layer.delta), never reads
-    next_layer.a directly.
+    Softmax output layer over arrays, as SoftmaxOutputNode/SoftmaxOutputLayer: activations
+    normalized jointly across the layer. Output only, size >= 2. Softmax couples the nodes in the
+    forward pass only, so this overrides forward* and compute_output_delta*; the layer before it
+    uses the inherited downstream().
     """
 
     def __init__(self, size: int, input_size: int) -> None:
@@ -27,7 +19,7 @@ class SoftmaxArrayLayer(ArrayLayer):
 
     def forward(self, x: np.ndarray) -> np.ndarray:
         self.z = self.W @ x + self.b
-        shifted = self.z - np.max(self.z)  # same numerically-stable shift as SoftmaxOutputLayer.forward
+        shifted = self.z - np.max(self.z)  # the stable shift of SoftmaxOutputLayer.forward
         exp_values = np.exp(shifted)
         self.a = exp_values / exp_values.sum()
         return self.a
@@ -40,7 +32,7 @@ class SoftmaxArrayLayer(ArrayLayer):
         return self.A
 
     def compute_output_delta(self, reference: np.ndarray) -> None:
-        self.delta = self.a - reference  # SoftmaxOutputNode's own simplification, no a*(1-a) term
+        self.delta = self.a - reference  # no a*(1-a) term, as SoftmaxOutputNode
 
     def compute_output_delta_batch(self, reference_batch: np.ndarray) -> None:
         self.delta_batch = self.A - reference_batch

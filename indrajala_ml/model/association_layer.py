@@ -8,7 +8,7 @@ from indrajala_ml.model.state_layer import StateLayer
 
 class AssociationLayer:
     """
-    association layers
+    A layer of AssociationNodes, each fully connected to the input layer.
     """
 
     def __init__(self, size: int, input_layer: StateLayer | AssociationLayer) -> None:

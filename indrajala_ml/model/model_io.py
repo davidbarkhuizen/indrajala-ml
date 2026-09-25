@@ -3,16 +3,17 @@ import json
 
 def save_json(path: str, state: dict) -> None:
     """
-    Bare open/json.dump wrapping, shared by every save() in this codebase whose envelope shape
-    doesn't fit save_model_json's fixed layer_sizes/class_count fields (e.g.
-    ConvMultiClassBackpropClassifierNetwork.save, which has conv hyperparameters instead).
+    Writes state as JSON: for a save() whose envelope isn't save_model_json's (the conv networks,
+    the array ensembles).
     """
     with open(path, "w") as f:
         json.dump(state, f)
 
 
 def load_json(path: str) -> dict:
-    """The load-side counterpart to save_json - bare open/json.load, no envelope assumptions."""
+    """
+    Reads a JSON file, with no envelope assumptions.
+    """
     with open(path) as f:
         return json.load(f)
 
@@ -27,11 +28,8 @@ def save_model_json(
     snapshot: object,
 ) -> None:
     """
-    The shared JSON envelope behind MultiClassBackpropClassifierNetwork.save and
-    EnsembleBackpropClassifierNetwork.save - both need exactly enough to reconstruct a
-    network's shape (layer_sizes, dimension, input_bounds, class_count) plus its trained
-    weights (snapshot); only what goes into snapshot and how many networks get built from this
-    envelope differs between the two.
+    The envelope of the pure-Python multiclass network and ensemble: layer_sizes, dimension,
+    input_bounds and class_count, which rebuild the network's shape, plus snapshot.
     """
 
     save_json(
@@ -48,10 +46,8 @@ def save_model_json(
 
 def load_model_json(path: str) -> dict:
     """
-    The load-side counterpart to save_model_json: reads the envelope back, with input_bounds
-    already restored to tuples (JSON only has arrays, so a saved (lo, hi) tuple round-trips as a
-    2-element list otherwise) - everything else in the envelope is returned as-is for the caller
-    to reconstruct its own network shape(s) from.
+    Reads save_model_json's envelope, with input_bounds turned back into tuples (JSON saves them as
+    lists).
     """
 
     state = load_json(path)
@@ -69,14 +65,10 @@ def save_array_model_json(
     extra: dict | None = None,
 ) -> None:
     """
-    The array-backed counterpart to save_model_json above - the envelope ArrayMultiClassShape.save
-    writes for every multiclass array network, numpy and Rust: none of them has an
-    input_bounds/StateLayer notion to save (see the comment in ArrayMultiClassShape.save for why
-    this can't just be save_model_json), but every one needs the same layer_sizes/dimension/
-    class_count/snapshot shape, plus room for a sibling-specific extra dict (e.g. Adam's own
-    beta1/beta2/epsilon) merged in on top - snapshot is taken as the raw (W, b) array-pair list
-    self.snapshot() already returns, from either backend, and converted to JSON-serializable
-    lists here.
+    The envelope of every multiclass array network, numpy and Rust: layer_sizes, dimension,
+    class_count and the snapshot, with extra (a sibling's hyperparameters, e.g. Adam's
+    beta1/beta2/epsilon) merged in. The array networks have no input_bounds. snapshot is the
+    network's (W, b) list, converted to lists here.
     """
 
     state = {
@@ -92,9 +84,8 @@ def save_array_model_json(
 
 def load_array_model_json(path: str) -> dict:
     """
-    The load-side counterpart to save_array_model_json - reads the envelope back as-is; the
-    caller's restore() converts the snapshot's nested lists through its backend
-    (array_backend.py), since this module has no array-backend dependency of its own.
+    Reads save_array_model_json's envelope; the network's restore() converts the snapshot through
+    its backend.
     """
 
     return load_json(path)
@@ -109,12 +100,8 @@ def save_single_output_array_model_json(
     extra: dict | None = None,
 ) -> None:
     """
-    The single-output counterpart to save_array_model_json above - the envelope
-    ArraySingleOutputShape.save writes, on either backend: a single-output network has no
-    class_count notion at all (each is one independent binary sub-network, not a multiclass
-    output layer), on top of save_array_model_json's own already-missing input_bounds/StateLayer
-    notion - so this drops that field rather than passing a meaningless class_count=1 through
-    save_array_model_json.
+    save_array_model_json without class_count, for the single-output array networks (ensemble
+    sub-networks).
     """
 
     state = {
@@ -128,6 +115,8 @@ def save_single_output_array_model_json(
 
 
 def load_single_output_array_model_json(path: str) -> dict:
-    """The load-side counterpart to save_single_output_array_model_json - reads the envelope back as-is."""
+    """
+    Reads save_single_output_array_model_json's envelope.
+    """
 
     return load_json(path)

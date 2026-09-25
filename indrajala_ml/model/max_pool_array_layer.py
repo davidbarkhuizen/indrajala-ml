@@ -7,8 +7,8 @@ from numpy.lib.stride_tricks import sliding_window_view
 def validate_pool_arguments(
     input_height: int, input_width: int, input_channels: int, pool_size: int, stride: int
 ) -> None:
-    # the same assertions as MaxPoolLayer's own constructor (minus the input_layer node-count
-    # check - there's no input_layer object here), shared with MaxPoolRustArrayLayer
+    # MaxPoolLayer's constructor checks, less the input_layer node count; shared with
+    # MaxPoolRustArrayLayer
     assert pool_size >= 1, f"pool_size must be at least 1; got {pool_size}"
     assert stride >= 1, f"stride must be at least 1; got {stride}"
     assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
@@ -20,17 +20,15 @@ def validate_pool_arguments(
 
 class MaxPoolArrayLayer:
     """
-    The numpy counterpart to MaxPoolLayer (max_pool_layer.py): max pooling over input_channels
-    channel-major planes, each channel pooled independently (channel_count == input_channels),
-    activations flat and channel-major at the layer boundary exactly as ConvArrayLayer's are.
+    MaxPoolLayer (max_pool_layer.py) over numpy arrays: each of input_channels channel-major planes
+    pooled separately (channel_count == input_channels), with ConvArrayLayer's flat channel-major
+    activations.
 
-    Window slots are numbered row-major (pr, pc), matching MaxPoolLayer._window_indices, and
-    np.argmax returns the first maximal slot, matching PoolUnit's values.index(max) - so exact
-    ties (routine after a ReLU layer: all-zero windows) pick the same winner in both
-    implementations.
+    Window slots are numbered row-major (pr, pc), and np.argmax takes the first maximal slot, as
+    PoolUnit does, so exact ties (all-zero windows after a ReLU) pick the same winner.
 
-    Weight-free: the gradient hooks are no-ops and there is no W/b. The single-example path is
-    an N = 1 wrapper over the batch path, as in ConvArrayLayer.
+    No weights: the gradient methods are no-ops. The single-example methods are N = 1 wrappers over
+    the batch ones.
     """
 
     def __init__(
