@@ -29,6 +29,28 @@ momentum (Goyal et al.'s eq. (10), without the momentum correction a changing ra
 momentum layers now follow eq. (9) (README, Update rules), which differs from it only while the rate
 changes. The cells without warmup change only by rounding.
 
+The conv network ([ConvSpec(3, 8)], dense 32) was tested the same way. The rule fails at B = 512
+at both momenta. Findings, 3 epochs, 3 seeds, Rust. The full tables for stages 1 and 2, and
+the plan for the stages not run, are in the study's workplan, deleted after the gate:
+git show 4e2eda7:docs/conv-batch-size-scaling-workplan.md. The momentum 0.9 tables are in
+PR #454:
+
+- Best batch-32 rates (stage 1): 2 at momentum 0.0 and 0.25 at momentum 0.9 (0.125 close
+  behind). Their 3-epoch bands are 97.16% +- 0.61% and 96.99% +- 0.70%. In effective rate
+  (lr / (1 - m)) the stability edges are close: erratic from 8 at 0.0 and from 5 at 0.9, and at
+  chance by 16 and 20.
+- With a 1-epoch warmup the rule holds to B = 128 at both momenta (96.63% +- 0.72% at 0.0,
+  96.63% +- 0.53% at 0.9). Without warmup it fails there: 96.23% at 0.0, chance at 0.9.
+- At B = 512 the scaled rate stays at chance at both momenta, with or without warmup. Dense
+  reached B = 512 at momentum 0.9 (pending its rerun, above); conv doesn't.
+- The best B = 512 cell at momentum 0.0 is a capped rate: 16 with a 1-epoch warmup,
+  94.63% +- 1.02%, 2.5 points below the band and still climbing. The stable rate grows about 2x
+  for the 16x batch (24 is erratic). At momentum 0.9 capping doesn't help: with a 1-epoch
+  warmup, 0.25 (unscaled) reaches 87.12% +- 4.70%, and 0.5, 1 and 2 reach 79.59%, 50.38% and
+  16.26%. So momentum 0.9 does worse than 0.0 at B = 512.
+- The unscaled rate at momentum 0.9 is unstable without warmup from B = 128 up (epoch 1: 45.64%
+  at B = 128, 9.95% at B = 512), as for dense.
+
 The timing findings are in docs/optimizations/ (current-baseline.md and candidates.md).
 
 The study runs its own epoch loop rather than train_backprop_network_mini_batch. The loop is the
@@ -55,6 +77,12 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 )
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
+    MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
+    MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_network import (
     MomentumRustArrayMultiClassBackpropClassifierNetwork,
@@ -134,21 +162,31 @@ def initial_network(backend: str, momentum: float, seed: int, architecture: str 
 
 
 def _initial_conv_network(backend: str, momentum: float, seed: int):
-    # no conv network has momentum (the workplan's stage 3 would add one)
-    if momentum:
-        raise ValueError("the conv networks have no momentum")
     np.random.seed(seed)
     snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(
         SIDE, SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT
     ).snapshot()
 
     if backend == "numpy":
-        network_cls = ConvVectorizedMultiClassBackpropClassifierNetwork
+        if momentum:
+            network = MomentumConvVectorizedMultiClassBackpropClassifierNetwork(
+                SIDE, SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT, momentum
+            )
+        else:
+            network = ConvVectorizedMultiClassBackpropClassifierNetwork(
+                SIDE, SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT
+            )
     elif backend == "rust":
-        network_cls = ConvRustArrayMultiClassBackpropClassifierNetwork
+        if momentum:
+            network = MomentumConvRustArrayMultiClassBackpropClassifierNetwork(
+                SIDE, SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT, momentum
+            )
+        else:
+            network = ConvRustArrayMultiClassBackpropClassifierNetwork(
+                SIDE, SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT
+            )
     else:
         raise ValueError(f"unknown backend {backend!r}")
-    network = network_cls(SIDE, SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT)
     network.restore(snapshot)
     return network
 
