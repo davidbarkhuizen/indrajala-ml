@@ -174,6 +174,8 @@ test passing, and:
   planned study of batch-size scaling for the conv network.
 - [docs/pypi-release-workplan.md](docs/pypi-release-workplan.md): publishing the Rust crate to
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
+- [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
+  primitives: composable layers, batch norm, residual connections, then attention.
 
 ## License
 
