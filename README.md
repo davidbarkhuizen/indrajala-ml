@@ -78,7 +78,7 @@ the submodule moves.
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
 | `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
 | `scripts/` (the rest) | benchmark, profiling and sweep tools (see `docs/optimizations/measurement.md`), and the refactoring golden run |
-| `docs/` | optimization docs, refactoring and study work plans, machine profiles |
+| `docs/` | optimization docs, study work plans, machine profiles |
 
 ## Models
 
@@ -107,11 +107,25 @@ hand-computed examples, and the reference the array implementations are checked 
 never used for performance (speed/timing) measurement; only the numpy and Rust implementations
 are timed. Accuracy comparisons of pure-Python models are fine.
 
+## Refactoring
+
+A structural refactoring changes structure only, never numerics. Every stage keeps every parity
+test passing, and:
+
+- **Training stays bit-identical.** Before the first stage, record a golden run on `main` with
+  `python scripts/golden_training_run.py record data/refactoring/golden_run.json` (ignored by
+  git: numpy's BLAS makes the file valid only on the machine that recorded it). Each stage must
+  pass `... check data/refactoring/golden_run.json`, the same bits, not within a tolerance. It
+  catches a 1-ULP change to the learning rate.
+- **No hot-path slowdown.** A stage that touches `learn*` or `classify_rows` is timed before and
+  after, numpy and Rust in separate processes (`scripts/prepared_dataset_timing.py time`), with
+  both builds committed first. It must be within run-to-run noise.
+- **Public names stay.** Demos, `demos/registry.py`, `ensemble_train.py` and the tests construct
+  the concrete classes by name, and saved model files must still load.
+
 ## Docs
 
 - [docs/optimizations.md](docs/optimizations.md): Rust against numpy, what has been optimized and
   rejected, the candidates left, and how to measure a change.
-- [docs/refactoring.md](docs/refactoring.md): the rules a structural refactoring follows (a
-  bit-identical golden training run, no hot-path slowdown), and any duplication still planned.
 - [docs/conv-batch-size-scaling-workplan.md](docs/conv-batch-size-scaling-workplan.md): the
   planned study of batch-size scaling for the conv network.
