@@ -20,18 +20,6 @@ class L2RustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackprop
         )
         super().__init__(layer_sizes, dimension, class_count)
 
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        class_count: int,
-        l2_lambda: float,
-    ) -> "L2RustArrayMultiClassBackpropClassifierNetwork":
-        network = cls(layer_sizes, dimension, class_count, l2_lambda)
-        network.randomize()
-        return network
-
     def _extra_state(self) -> dict:
         return {"l2_lambda": self.l2_lambda}
 

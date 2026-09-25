@@ -127,19 +127,6 @@ class ConvMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
                 node.bias = bias
             previous_size = layer.size
 
-    @classmethod
-    def randomized(
-        cls,
-        input_height: int,
-        input_width: int,
-        conv_specs: list[ConvSpec | PoolSpec],
-        dense_layer_sizes: list[int],
-        class_count: int,
-    ) -> "ConvMultiClassBackpropClassifierNetwork":
-        network = cls(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-        network.randomize()
-        return network
-
     def save(self, path: str) -> None:
         # self.snapshot() (inherited unchanged from BackpropNetworkBase) already works here, conv
         # layers included, because ConvLayer implements snapshot_state() itself - the per-layer

@@ -26,15 +26,15 @@ Rules for every stage:
 **The duplication.** Every network with a hyperparameter spells each name out several times:
 
 - in `__init__`, which stores it and also closes over it in a layer-class lambda;
-- in a `randomized` override that exists only to pass it through (19 files define `randomized`);
 - in `_extra_state` and `_extra_init_kwargs`, which round-trip it through `save` and `load`.
 
 This covers momentum, L2, Adam and dropout, in the numpy, Rust and per-node families.
 
+`randomized` is already shared: `ArrayNetworkBase` and `BackpropNetworkBase` each define it once,
+forwarding `*args` and `**kwargs` to the constructor.
+
 **Target shape.**
 
-- `randomized` is defined once per base, as `cls(*args, **kwargs)` followed by `randomize()`.
-  That covers the conv networks and the per-node `BackpropNetworkBase` family too.
 - A class attribute `hyperparameters = ("beta1", "beta2", "epsilon")` lets the base class
   generate `_extra_state` and `_extra_init_kwargs`.
 - A class method `layer_cls_for(**hyperparameters)` replaces each lambda assignment.
@@ -43,11 +43,9 @@ This covers momentum, L2, Adam and dropout, in the numpy, Rust and per-node fami
 
 **Stages:**
 
-1. The shared `randomized`, deleting every override whose body is only a pass-through. Callers
-   pass hyperparameters positionally in places, so the shared version forwards `*args` and
-   `**kwargs` unchanged.
-2. `hyperparameters` generating `_extra_state` and `_extra_init_kwargs`, on the array families.
+1. `hyperparameters` generating `_extra_state` and `_extra_init_kwargs`, on the array families.
    A saved-file round-trip test per sibling already exists and gates this stage.
+2. `layer_cls_for` replacing the lambda assignments in `__init__`.
 
 ## 2. Test files parameterized by backend
 

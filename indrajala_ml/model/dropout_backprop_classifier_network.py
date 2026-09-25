@@ -32,15 +32,3 @@ class DropoutBackpropClassifierNetwork(BackpropClassifierNetwork):
     ) -> None:
         self.hidden_layer_cls = make_dropout_layer_cls(drop_probability)
         super().__init__(layer_sizes, dimension, input_bounds)
-
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]],
-        drop_probability: float,
-    ) -> "DropoutBackpropClassifierNetwork":
-        network = cls(layer_sizes, dimension, input_bounds, drop_probability)
-        network.randomize()
-        return network

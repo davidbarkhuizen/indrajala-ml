@@ -60,6 +60,15 @@ class BackpropNetworkBase:
         # weights/bias are actually trained, in forward order
         self.trainable_layers: list[BackpropLayer] = self.hidden_layers + [self.output_layer]
 
+    @classmethod
+    def randomized(cls, *args, **kwargs):
+        # every subclass's randomized signature is its __init__ signature, so one pass-through
+        # serves them all, positional or keyword, defaults included; randomize() itself stays
+        # per subclass (see the class docstring)
+        network = cls(*args, **kwargs)
+        network.randomize()
+        return network
+
     def update_state_layer(self, state: tuple[float, ...]) -> None:
         self.input_layer.update_state(state)
 

@@ -58,12 +58,6 @@ class ArrayMultiClassShape:
             target_batch[row, category] = 1.0
         return target_batch
 
-    @classmethod
-    def randomized(cls, layer_sizes: list[int], dimension: int, class_count: int):
-        network = cls(layer_sizes, dimension, class_count)
-        network.randomize()
-        return network
-
     def _extra_state(self) -> dict:
         # override point for a sibling with its own hyperparameter to round-trip through
         # save/load (e.g. {"l2_lambda": self.l2_lambda}) - empty for the plain classes and every
@@ -145,17 +139,6 @@ class ArraySingleOutputShape:
 
     def _target_batch_array(self, categories: Sequence[float]):
         return self.backend.matrix([[category] for category in categories])
-
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]] | None = None,
-    ):
-        network = cls(layer_sizes, dimension, input_bounds)
-        network.randomize()
-        return network
 
     def _extra_state(self) -> dict:
         # override point for a sibling with its own hyperparameter to round-trip through
@@ -260,19 +243,6 @@ class ArrayConvShape:
         for layer in self.layers[len(self.conv_layers) :]:
             layer.W, layer.b = self.backend.random_layer(layer.size, previous_size)
             previous_size = layer.size
-
-    @classmethod
-    def randomized(
-        cls,
-        input_height: int,
-        input_width: int,
-        conv_specs: list[ConvSpec | PoolSpec],
-        dense_layer_sizes: list[int],
-        class_count: int,
-    ):
-        network = cls(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-        network.randomize()
-        return network
 
     def snapshot(self) -> list[tuple]:
         return [

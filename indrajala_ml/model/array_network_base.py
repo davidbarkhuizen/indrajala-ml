@@ -182,6 +182,14 @@ class ArrayNetworkBase:
             layer.accumulate_gradient_batch(input_activation_batch)
             layer.apply_accumulated_gradient(learning_rate, batch_size)
 
+    @classmethod
+    def randomized(cls, *args, **kwargs):
+        # every sibling's randomized signature is its __init__ signature, so one pass-through
+        # serves them all, positional or keyword, defaults included
+        network = cls(*args, **kwargs)
+        network.randomize()
+        return network
+
     def randomize(self) -> None:
         # the same fan-in-aware scheme (limit = 1/sqrt(fan_in)) every array-based sibling in
         # this codebase would otherwise have to reimplement independently, drawn from the

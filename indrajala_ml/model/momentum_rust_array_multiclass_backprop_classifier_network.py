@@ -20,18 +20,6 @@ class MomentumRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBa
         )
         super().__init__(layer_sizes, dimension, class_count)
 
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        class_count: int,
-        momentum: float,
-    ) -> "MomentumRustArrayMultiClassBackpropClassifierNetwork":
-        network = cls(layer_sizes, dimension, class_count, momentum)
-        network.randomize()
-        return network
-
     def _extra_state(self) -> dict:
         return {"momentum": self.momentum}
 

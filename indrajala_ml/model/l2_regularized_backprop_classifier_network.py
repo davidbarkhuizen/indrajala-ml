@@ -40,15 +40,3 @@ class L2RegularizedBackpropClassifierNetwork(BackpropClassifierNetwork):
         self.hidden_layer_cls = layer_cls
         self.output_layer_cls = layer_cls
         super().__init__(layer_sizes, dimension, input_bounds)
-
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]],
-        l2_lambda: float,
-    ) -> "L2RegularizedBackpropClassifierNetwork":
-        network = cls(layer_sizes, dimension, input_bounds, l2_lambda)
-        network.randomize()
-        return network
