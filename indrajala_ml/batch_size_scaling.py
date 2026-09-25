@@ -42,6 +42,13 @@ import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.lr_schedule import linear_warmup
+from indrajala_ml.model.conv_layer import ConvSpec
+from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
+    ConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
+    ConvVectorizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_network import (
     MomentumRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -56,9 +63,13 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 )
 from indrajala_ml.multiclass_evaluate import accuracy
 
-DIMENSION = 28 * 28
+SIDE = 28
+DIMENSION = SIDE * SIDE
 CLASS_COUNT = 10
 LAYER_SIZES = [30]  # the architecture every MNIST demo uses
+CONV_SPECS = [ConvSpec(3, 8)]  # the conv demo's (demo_conv_rust_vs_vectorized_digit_recognition)
+CONV_DENSE_LAYER_SIZES = [32]
+ARCHITECTURES = ["dense", "conv"]
 BASE_BATCH_SIZE = 32
 TRAIN_PATH = "data/mnist/mnist-train.bin"
 TEST_PATH = "data/mnist/mnist-test.bin"
@@ -80,12 +91,17 @@ def learning_rate_schedule(rate: float, warmup_step_count: int) -> float | Calla
     return linear_warmup(rate, warmup_step_count) if warmup_step_count > 0 else rate
 
 
-def initial_network(backend: str, momentum: float, seed: int):
+def initial_network(backend: str, momentum: float, seed: int, architecture: str = "dense"):
     """
     A fresh network whose weights are drawn by numpy from `seed`, so every backend, rate, batch
     size and momentum sees the same starting weights for a given seed (the Rust RNG isn't
     comparable to numpy's).
     """
+    if architecture == "conv":
+        return _initial_conv_network(backend, momentum, seed)
+    if architecture != "dense":
+        raise ValueError(f"unknown architecture {architecture!r}")
+
     np.random.seed(seed)
     snapshot = VectorizedMultiClassBackpropClassifierNetwork.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT).snapshot()
 
@@ -103,6 +119,26 @@ def initial_network(backend: str, momentum: float, seed: int):
         network.restore([(pa.Array(W.tolist()), pa.Array(b.tolist())) for W, b in snapshot])
     else:
         raise ValueError(f"unknown backend {backend!r}")
+    return network
+
+
+def _initial_conv_network(backend: str, momentum: float, seed: int):
+    # no conv network has momentum (the workplan's stage 3 would add one)
+    if momentum:
+        raise ValueError("the conv networks have no momentum")
+    np.random.seed(seed)
+    snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(
+        SIDE, SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT
+    ).snapshot()
+
+    if backend == "numpy":
+        network_cls = ConvVectorizedMultiClassBackpropClassifierNetwork
+    elif backend == "rust":
+        network_cls = ConvRustArrayMultiClassBackpropClassifierNetwork
+    else:
+        raise ValueError(f"unknown backend {backend!r}")
+    network = network_cls(SIDE, SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT)
+    network.restore(snapshot)
     return network
 
 
@@ -135,11 +171,12 @@ def train_and_evaluate(
     momentum: float,
     epochs: int,
     seed: int,
+    architecture: str = "dense",
 ) -> dict:
     """
     One run: test accuracy after every epoch, steps per epoch and step-loop seconds per epoch.
     """
-    network = initial_network(backend, momentum, seed)
+    network = initial_network(backend, momentum, seed, architecture)
     random.seed(seed)  # the shuffle order
     schedule = learning_rate_schedule(rate, warmup_steps(warmup_epochs, len(train_data), batch_size))
 

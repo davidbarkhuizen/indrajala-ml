@@ -4,11 +4,13 @@ on full MNIST with the Rust backend.
 
     python scripts/batch_size_scaling_sweep.py baseline --out baseline.json
     python scripts/batch_size_scaling_sweep.py scaling --lr32 0.0=3.0 --lr32 0.9=0.5 --out scaling.json
+    python scripts/batch_size_scaling_sweep.py baseline --architecture conv --epochs 2 --seeds 3
 
-`baseline` (stage 1) sweeps the batch-32 rate at momentum 0.0 and 0.9. `scaling` (stage 2) runs
-every batch size x rate (scaled, unscaled) x warmup x momentum cell, with each momentum's own
-batch-32 rate from stage 1. Both print per-epoch test accuracy (mean ± sd over seeds) and write
-every run's raw result to --out as JSON.
+`baseline` (stage 1) sweeps the batch-32 rate at momentum 0.0 and 0.9 (conv: at 0.0 only, since
+no conv network has momentum). `scaling` (stage 2) runs every batch size x rate (scaled,
+unscaled) x warmup x momentum cell, with each momentum's own batch-32 rate from stage 1. Both
+print per-epoch test accuracy (mean ± sd over seeds) and write every run's raw result to --out as
+JSON.
 
 Each worker loads the dataset itself, once per process (about 0.5 GB each), rather than having
 it pickled through the pool.
@@ -23,8 +25,11 @@ from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.mnist_data import load_mnist_dataset
 
-BASELINE_RATES = [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
-MOMENTA = [0.0, 0.9]
+BASELINE_RATES = {
+    "dense": [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
+    "conv": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
+}
+MOMENTA = {"dense": [0.0, 0.9], "conv": [0.0]}
 BATCH_SIZES = [32, 128, 512, 1024]
 WARMUP_EPOCHS = [0.0, 0.25, 1.0]
 SEEDS = [0, 1, 2, 3, 4]
@@ -51,7 +56,16 @@ def run_config(context: dict, config: tuple, seed: int) -> dict:
     batch_size, rate, warmup_epochs, momentum = config
     train_data, test_data = _load(context)
     return bss.train_and_evaluate(
-        "rust", train_data, test_data, batch_size, rate, warmup_epochs, momentum, context["epochs"], seed
+        "rust",
+        train_data,
+        test_data,
+        batch_size,
+        rate,
+        warmup_epochs,
+        momentum,
+        context["epochs"],
+        seed,
+        context["architecture"],
     )
 
 
@@ -160,6 +174,7 @@ def _parse_lr32(values: list[str]) -> dict[float, float]:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("stage", choices=["baseline", "scaling"])
+    parser.add_argument("--architecture", choices=bss.ARCHITECTURES, default="dense")
     parser.add_argument("--lr32", action="append", default=[], help="momentum=rate, once per momentum (scaling)")
     parser.add_argument("--out", help="write every run's raw result here as JSON")
     parser.add_argument("--limit", type=int, help="use only the first LIMIT train and test rows (smoke runs)")
@@ -173,11 +188,12 @@ def main(argv: list[str] | None = None) -> None:
         "limit": args.limit,
         "epochs": args.epochs,
         "train_size": args.limit or 60000,
+        "architecture": args.architecture,
     }
     seeds = SEEDS[: args.seeds]
 
     if args.stage == "baseline":
-        results = baseline(context, seeds, BASELINE_RATES, MOMENTA)
+        results = baseline(context, seeds, BASELINE_RATES[args.architecture], MOMENTA[args.architecture])
     else:
         lr32 = _parse_lr32(args.lr32)
         if not lr32:
