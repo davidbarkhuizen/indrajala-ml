@@ -42,15 +42,3 @@ class MomentumBackpropClassifierNetwork(BackpropClassifierNetwork):
         self.hidden_layer_cls = layer_cls
         self.output_layer_cls = layer_cls
         super().__init__(layer_sizes, dimension, input_bounds)
-
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]],
-        momentum: float,
-    ) -> "MomentumBackpropClassifierNetwork":
-        network = cls(layer_sizes, dimension, input_bounds, momentum)
-        network.randomize()
-        return network

@@ -41,17 +41,3 @@ class AdamBackpropClassifierNetwork(BackpropClassifierNetwork):
         self.hidden_layer_cls = layer_cls
         self.output_layer_cls = layer_cls
         super().__init__(layer_sizes, dimension, input_bounds)
-
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]],
-        beta1: float = DEFAULT_BETA1,
-        beta2: float = DEFAULT_BETA2,
-        epsilon: float = DEFAULT_EPSILON,
-    ) -> "AdamBackpropClassifierNetwork":
-        network = cls(layer_sizes, dimension, input_bounds, beta1, beta2, epsilon)
-        network.randomize()
-        return network

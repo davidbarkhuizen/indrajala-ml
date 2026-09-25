@@ -37,18 +37,6 @@ class DropoutVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassB
         for layer in self.hidden_layers:
             layer.set_training_mode(training)
 
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        class_count: int,
-        drop_probability: float,
-    ) -> "DropoutVectorizedMultiClassBackpropClassifierNetwork":
-        network = cls(layer_sizes, dimension, class_count, drop_probability)
-        network.randomize()
-        return network
-
     def _extra_state(self) -> dict:
         return {"drop_probability": self.drop_probability}
 

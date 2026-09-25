@@ -77,14 +77,3 @@ class BackpropClassifierNetwork(BackpropNetworkBase):
             for node in layer.nodes:
                 node.update_input_weights([random.uniform(-1.0, 1.0) for _ in node.input_nodes])
                 node.bias = random.uniform(-1.0, 1.0)
-
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]],
-    ) -> "BackpropClassifierNetwork":
-        network = cls(layer_sizes, dimension, input_bounds)
-        network.randomize()
-        return network

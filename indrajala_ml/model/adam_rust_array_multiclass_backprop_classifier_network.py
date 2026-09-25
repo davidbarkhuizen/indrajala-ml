@@ -34,20 +34,6 @@ class AdamRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpr
         )
         super().__init__(layer_sizes, dimension, class_count)
 
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        class_count: int,
-        beta1: float = DEFAULT_BETA1,
-        beta2: float = DEFAULT_BETA2,
-        epsilon: float = DEFAULT_EPSILON,
-    ) -> "AdamRustArrayMultiClassBackpropClassifierNetwork":
-        network = cls(layer_sizes, dimension, class_count, beta1, beta2, epsilon)
-        network.randomize()
-        return network
-
     def _extra_state(self) -> dict:
         return {"beta1": self.beta1, "beta2": self.beta2, "epsilon": self.epsilon}
 

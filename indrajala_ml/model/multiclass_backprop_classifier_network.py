@@ -64,18 +64,6 @@ class MultiClassBackpropClassifierNetwork(BackpropNetworkBase):
         # randomize_fan_in_aware's own docstring for the scheme itself and its validation.
         randomize_fan_in_aware(self)
 
-    @classmethod
-    def randomized(
-        cls,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]],
-        class_count: int,
-    ) -> "MultiClassBackpropClassifierNetwork":
-        network = cls(layer_sizes, dimension, input_bounds, class_count)
-        network.randomize()
-        return network
-
     def save(self, path: str) -> None:
         save_model_json(
             path,
