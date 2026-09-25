@@ -10,6 +10,8 @@ import importlib
 import pkgutil
 import random
 import struct
+from collections.abc import Callable
+from typing import Any, cast
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -55,6 +57,7 @@ from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
 from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_network import (
     SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
 )
+from tests.helpers import all_subclasses
 
 SIZE, INPUT_SIZE = 7, 11
 
@@ -83,13 +86,13 @@ NETWORK_FACTORIES = {
 }
 
 
-def _bits(nested):
+def _bits(nested: Any) -> Any:
     if isinstance(nested, list):
-        return [_bits(item) for item in nested]
+        return [_bits(item) for item in cast("list[Any]", nested)]
     return struct.pack("<d", nested)
 
 
-def _random_layer_state(layer, rng: np.random.Generator):
+def _random_layer_state(layer: RustArrayLayer, rng: np.random.Generator) -> pa.Array:
     layer.W = pa.Array(rng.uniform(-1.0, 1.0, (SIZE, INPUT_SIZE)).tolist())
     layer.b = pa.Array(rng.uniform(-1.0, 1.0, SIZE).tolist())
     layer.delta = pa.Array(rng.uniform(-1.0, 1.0, SIZE).tolist())
@@ -100,7 +103,7 @@ def _random_layer_state(layer, rng: np.random.Generator):
 
 @pytest.mark.parametrize("name", LAYER_FACTORIES)
 @pytest.mark.parametrize("seed", range(10))
-def test_layer_sgd_step_is_bit_identical_to_accumulate_then_apply(name, seed):
+def test_layer_sgd_step_is_bit_identical_to_accumulate_then_apply(name: str, seed: int):
     fused, unfused = LAYER_FACTORIES[name](), LAYER_FACTORIES[name]()
     x = _random_layer_state(fused, np.random.default_rng(seed))
     _random_layer_state(unfused, np.random.default_rng(seed))
@@ -117,14 +120,15 @@ def test_layer_sgd_step_is_bit_identical_to_accumulate_then_apply(name, seed):
     assert fused._grad_b.tolist() == unfused._grad_b.tolist() == [0.0] * SIZE
 
 
-def _sample(network, rng: random.Random):
+# a network of any of NETWORK_FACTORIES' classes
+def _sample(network: Any, rng: random.Random) -> tuple[tuple[float, ...], float | int]:
     state = tuple(rng.uniform(0.0, 1.0) for _ in range(network.dimension))
     category = 1.0 if isinstance(network, RustArrayBackpropClassifierNetwork) else rng.randrange(3)
     return state, category
 
 
 @pytest.mark.parametrize("name", NETWORK_FACTORIES)
-def test_learn_is_bit_identical_to_the_unfused_step_after_every_step(name):
+def test_learn_is_bit_identical_to_the_unfused_step_after_every_step(name: str):
     # the reference network's layers run the pre-sgd_step loop: accumulate_gradient then
     # apply_accumulated_gradient(learning_rate, 1). Dropout networks are left out only because
     # their masks come from an unseeded RNG; DropoutRustArrayLayer is covered at the layer level.
@@ -132,7 +136,7 @@ def test_learn_is_bit_identical_to_the_unfused_step_after_every_step(name):
     fused.randomize()
     unfused.restore(fused.snapshot())
     for layer in _all_layers(unfused):
-        layer.sgd_step = lambda x, learning_rate, layer=layer: unfused_sgd_step(layer, x, learning_rate)
+        layer.sgd_step = _unfused_sgd_step(layer)
 
     rng = random.Random(0)
     for _step in range(10):
@@ -145,14 +149,12 @@ def test_learn_is_bit_identical_to_the_unfused_step_after_every_step(name):
                 assert _bits(fused_layer.b.tolist()) == _bits(unfused_layer.b.tolist())
 
 
-def _all_layers(network):
+def _unfused_sgd_step(layer: RustArrayLayer) -> Callable[[pa.Array, float], None]:
+    return lambda x, learning_rate: unfused_sgd_step(layer, x, learning_rate)
+
+
+def _all_layers(network: Any) -> list[Any]:
     return getattr(network, "conv_layers", []) + list(network.layers)
-
-
-def _all_subclasses(cls):
-    for subclass in cls.__subclasses__():
-        yield subclass
-        yield from _all_subclasses(subclass)
 
 
 def test_every_subclass_that_changes_the_update_overrides_sgd_step():
@@ -160,7 +162,7 @@ def test_every_subclass_that_changes_the_update_overrides_sgd_step():
     # one and inherits that fused sgd_step would silently train with plain SGD instead.
     for module in pkgutil.iter_modules(indrajala_ml.model.__path__):
         importlib.import_module(f"indrajala_ml.model.{module.name}")
-    subclasses = list(_all_subclasses(RustArrayLayer))
+    subclasses = list(all_subclasses(RustArrayLayer))
     assert {MomentumRustArrayLayer, AdamRustArrayLayer, L2RustArrayLayer} <= set(subclasses)
 
     for subclass in subclasses:

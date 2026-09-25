@@ -1,4 +1,5 @@
 import random
+from typing import cast
 
 import numpy as np
 import pytest
@@ -6,11 +7,12 @@ import pytest
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.array_layer import FloatArray
+from indrajala_ml.model.classifier_protocols import Example
 from indrajala_ml.train import train_backprop_network_mini_batch
 
 
 @pytest.fixture(scope="module")
-def mnist_subset():
+def mnist_subset() -> tuple[list[Example[int]], list[Example[int]]]:
     return load_mnist_dataset(bss.TRAIN_PATH, limit=200), load_mnist_dataset(bss.TEST_PATH, limit=100)
 
 
@@ -37,11 +39,11 @@ def test_learning_rate_schedule_is_constant_without_warmup_and_ramps_with_it():
 def _numpy(array: object) -> FloatArray:
     # a numpy network's snapshot entry (bss.initial_network's type spans both backends)
     assert isinstance(array, np.ndarray)
-    return array
+    return cast(FloatArray, array)
 
 
 @pytest.mark.parametrize("momentum", [0.0, 0.9])
-def test_initial_network_is_identical_across_backends(momentum):
+def test_initial_network_is_identical_across_backends(momentum: float):
     numpy_weights = bss.initial_network("numpy", momentum, seed=7).snapshot()
     rust_weights = bss.initial_network("rust", momentum, seed=7).snapshot()
     for (numpy_W, numpy_b), (rust_W, rust_b) in zip(numpy_weights, rust_weights):
@@ -71,7 +73,7 @@ def test_initial_network_differs_between_seeds():
     assert not np.array_equal(_numpy(first[0][0]), _numpy(second[0][0]))
 
 
-def test_train_epoch_takes_the_same_steps_as_the_trainer(mnist_subset):
+def test_train_epoch_takes_the_same_steps_as_the_trainer(mnist_subset: tuple[list[Example[int]], list[Example[int]]]):
     # the study's loop is the trainer's minus the pocket snapshot: from the same weights and
     # shuffle seed, one improving epoch leaves both networks with identical weights (the pocket
     # keeps the last epoch when it is the best)
@@ -94,7 +96,7 @@ def test_train_epoch_takes_the_same_steps_as_the_trainer(mnist_subset):
         assert np.array_equal(_numpy(trainer_b), _numpy(study_b))
 
 
-def test_train_and_evaluate_reports_every_epoch(mnist_subset):
+def test_train_and_evaluate_reports_every_epoch(mnist_subset: tuple[list[Example[int]], list[Example[int]]]):
     train_data, test_data = mnist_subset
     result = bss.train_and_evaluate("rust", train_data, test_data, 64, 2.0, 1.0, 0.0, epochs=3, seed=0)
     assert len(result["test_accuracies"]) == 3
@@ -103,14 +105,14 @@ def test_train_and_evaluate_reports_every_epoch(mnist_subset):
     assert len(result["step_seconds"]) == 3
 
 
-def test_train_and_evaluate_is_reproducible_for_a_seed(mnist_subset):
+def test_train_and_evaluate_is_reproducible_for_a_seed(mnist_subset: tuple[list[Example[int]], list[Example[int]]]):
     train_data, test_data = mnist_subset
     first = bss.train_and_evaluate("rust", train_data, test_data, 32, 2.0, 0.25, 0.9, epochs=2, seed=5)
     second = bss.train_and_evaluate("rust", train_data, test_data, 32, 2.0, 0.25, 0.9, epochs=2, seed=5)
     assert first["test_accuracies"] == second["test_accuracies"]
 
 
-def test_train_and_evaluate_trains_the_conv_network(mnist_subset):
+def test_train_and_evaluate_trains_the_conv_network(mnist_subset: tuple[list[Example[int]], list[Example[int]]]):
     train_data, test_data = mnist_subset
     first = bss.train_and_evaluate(
         "rust", train_data, test_data, 64, 0.5, 1.0, 0.0, epochs=2, seed=0, architecture="conv"

@@ -18,27 +18,21 @@ import pytest
 from indrajala_math_rust import Array, argmax, decode_mnist_pixels, exp, outer, sum_axis0, uniform
 
 from indrajala_ml.mnist_data import RECORD_SIZE, load_mnist_dataset_as_array
+from tests.helpers import approx, rust_to_numpy
 
 MNIST_TEST_PATH = "data/mnist/mnist-test.bin"
 
 SEEDS = range(50)
 
 
-def _to_numpy(arr):
-    if len(arr.shape) == 1:
-        return np.array([arr[i] for i in range(arr.shape[0])])
-    rows, cols = arr.shape
-    return np.array([[arr[r, c] for c in range(cols)] for r in range(rows)])
-
-
 @pytest.mark.parametrize("seed", SEEDS)
-def test_full_subset_sweep_against_numpy(seed):
+def test_full_subset_sweep_against_numpy(seed: int):
     rng = random.Random(seed)
 
-    def random_vector(n):
+    def random_vector(n: int):
         return [rng.uniform(-4.0, 4.0) for _ in range(n)]
 
-    def random_matrix(rows, cols):
+    def random_matrix(rows: int, cols: int):
         return [random_vector(cols) for _ in range(rows)]
 
     # construction, zeros, shape
@@ -48,12 +42,12 @@ def test_full_subset_sweep_against_numpy(seed):
     np_v, np_m = np.array(vector_data), np.array(matrix_data)
     assert v.shape == np_v.shape
     assert m.shape == np_m.shape
-    assert _to_numpy(Array.zeros(6)) == pytest.approx(np.zeros(6))
-    assert _to_numpy(Array.zeros((3, 3))) == pytest.approx(np.zeros((3, 3)))
+    assert rust_to_numpy(Array.zeros(6)) == approx(np.zeros(6))
+    assert rust_to_numpy(Array.zeros((3, 3))) == approx(np.zeros((3, 3)))
 
     # transpose
-    assert _to_numpy(m.T) == pytest.approx(np_m.T)
-    assert _to_numpy(v.T) == pytest.approx(np_v.T)
+    assert rust_to_numpy(m.T) == approx(np_m.T)
+    assert rust_to_numpy(v.T) == approx(np_v.T)
 
     # single-element read/write, both index shapes
     v_copy = v.copy()
@@ -64,47 +58,47 @@ def test_full_subset_sweep_against_numpy(seed):
     assert m_copy[1, 3] == 99.0 and m[1, 3] != 99.0
 
     # slicing
-    assert _to_numpy(m[:, :-1]) == pytest.approx(np_m[:, :-1])
+    assert rust_to_numpy(m[:, :-1]) == approx(np_m[:, :-1])
 
     # elementwise + - * /, same-shape and broadcast, and scalar operands
     other_vector = Array(random_vector(6))
-    np_other_vector = _to_numpy(other_vector)
-    assert _to_numpy(v + other_vector) == pytest.approx(np_v + np_other_vector)
-    assert _to_numpy(v - other_vector) == pytest.approx(np_v - np_other_vector)
-    assert _to_numpy(v * other_vector) == pytest.approx(np_v * np_other_vector)
-    assert _to_numpy(v / other_vector) == pytest.approx(np_v / np_other_vector)
+    np_other_vector = rust_to_numpy(other_vector)
+    assert rust_to_numpy(v + other_vector) == approx(np_v + np_other_vector)
+    assert rust_to_numpy(v - other_vector) == approx(np_v - np_other_vector)
+    assert rust_to_numpy(v * other_vector) == approx(np_v * np_other_vector)
+    assert rust_to_numpy(v / other_vector) == approx(np_v / np_other_vector)
 
     row_vector = Array(random_vector(5))
-    np_row_vector = _to_numpy(row_vector)
-    assert _to_numpy(m + row_vector) == pytest.approx(np_m + np_row_vector)
+    np_row_vector = rust_to_numpy(row_vector)
+    assert rust_to_numpy(m + row_vector) == approx(np_m + np_row_vector)
 
-    assert _to_numpy(0.5 * v) == pytest.approx(0.5 * np_v)
-    assert _to_numpy(v / 4) == pytest.approx(np_v / 4)
-    assert _to_numpy(1.0 - v) == pytest.approx(1.0 - np_v)
+    assert rust_to_numpy(0.5 * v) == approx(0.5 * np_v)
+    assert rust_to_numpy(v / 4) == approx(np_v / 4)
+    assert rust_to_numpy(1.0 - v) == approx(1.0 - np_v)
 
     # in-place accumulate
     accum = Array.zeros(6)
     accum += v
-    assert _to_numpy(accum) == pytest.approx(np_v)
+    assert rust_to_numpy(accum) == approx(np_v)
     accum -= other_vector
-    assert _to_numpy(accum) == pytest.approx(np_v - np_other_vector)
+    assert rust_to_numpy(accum) == approx(np_v - np_other_vector)
 
     # exp
-    assert _to_numpy(exp(v)) == pytest.approx(np.exp(np_v))
+    assert rust_to_numpy(exp(v)) == approx(np.exp(np_v))
 
     # matmul: matrix@vector, vector@matrix, matrix@matrix
     square_ish = Array(random_matrix(5, 6))
-    np_square_ish = _to_numpy(square_ish)
-    assert _to_numpy(square_ish @ v) == pytest.approx(np_square_ish @ np_v)
-    assert _to_numpy(v @ square_ish.T) == pytest.approx(np_v @ np_square_ish.T)
+    np_square_ish = rust_to_numpy(square_ish)
+    assert rust_to_numpy(square_ish @ v) == approx(np_square_ish @ np_v)
+    assert rust_to_numpy(v @ square_ish.T) == approx(np_v @ np_square_ish.T)
     other_matrix = Array(random_matrix(4, 3))
-    assert _to_numpy(m.T @ other_matrix) == pytest.approx(np_m.T @ _to_numpy(other_matrix))
+    assert rust_to_numpy(m.T @ other_matrix) == approx(np_m.T @ rust_to_numpy(other_matrix))
 
     # outer
-    assert _to_numpy(outer(v, other_vector)) == pytest.approx(np.outer(np_v, np_other_vector))
+    assert rust_to_numpy(outer(v, other_vector)) == approx(np.outer(np_v, np_other_vector))
 
     # sum_axis0
-    assert _to_numpy(sum_axis0(m)) == pytest.approx(np_m.sum(axis=0))
+    assert rust_to_numpy(sum_axis0(m)) == approx(np_m.sum(axis=0))
 
     # argmax
     assert argmax(v) == int(np.argmax(np_v))
@@ -117,7 +111,7 @@ def test_full_subset_sweep_against_numpy(seed):
     # reshape
     flat = Array(random_vector(12))
     reshaped = flat.reshape((3, 4))
-    assert _to_numpy(reshaped) == pytest.approx(np.array(flat.tolist()).reshape(3, 4))
+    assert rust_to_numpy(reshaped) == approx(np.array(flat.tolist()).reshape(3, 4))
 
 
 def test_uniform_is_excluded_from_bit_identical_parity_by_design():
@@ -134,4 +128,4 @@ def test_mnist_decode_matches_the_real_reference_implementation():
         raw = f.read(RECORD_SIZE * 20)
     actual = decode_mnist_pixels(raw, RECORD_SIZE)
     expected = load_mnist_dataset_as_array(MNIST_TEST_PATH, limit=20)
-    assert _to_numpy(actual) == pytest.approx(expected, abs=1e-15)
+    assert rust_to_numpy(actual) == approx(expected, abs=1e-15)

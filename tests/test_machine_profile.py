@@ -60,12 +60,12 @@ LSPCI = (
 )
 
 
-def cache_entry(level, cache_type, size, shared):
+def cache_entry(level: int, cache_type: str, size: str, shared: str) -> dict[str, str]:
     return {"level": f"{level}\n", "type": f"{cache_type}\n", "size": f"{size}\n", "shared_cpu_list": f"{shared}\n"}
 
 
 @pytest.fixture(scope="module")
-def reference():
+def reference() -> mp.JSONObject:
     return json.loads(REFERENCE_PATH.read_text())
 
 
@@ -77,7 +77,7 @@ def test_capture_validates_on_this_machine():
     mp.validate(mp.capture())
 
 
-def test_reference_profile_validates(reference):
+def test_reference_profile_validates(reference: mp.JSONObject):
 
     mp.validate(reference)
 
@@ -87,7 +87,7 @@ def test_schema_is_a_valid_draft_2020_12_schema():
     jsonschema.Draft202012Validator.check_schema(mp.load_schema())
 
 
-def test_schema_rejects_a_missing_required_key(reference):
+def test_schema_rejects_a_missing_required_key(reference: mp.JSONObject):
 
     profile = copy.deepcopy(reference)
     del profile["identity"]["cpu"]["isa"]
@@ -95,7 +95,7 @@ def test_schema_rejects_a_missing_required_key(reference):
         mp.validate(profile)
 
 
-def test_schema_rejects_an_unknown_key(reference):
+def test_schema_rejects_an_unknown_key(reference: mp.JSONObject):
 
     profile = copy.deepcopy(reference)
     profile["identity"]["os"]["colour"] = "blue"
@@ -103,7 +103,7 @@ def test_schema_rejects_an_unknown_key(reference):
         mp.validate(profile)
 
 
-def test_schema_rejects_a_wrong_schema_version(reference):
+def test_schema_rejects_a_wrong_schema_version(reference: mp.JSONObject):
 
     profile = copy.deepcopy(reference)
     profile["schema_version"] = 2
@@ -153,7 +153,7 @@ def test_parse_size_kib():
 def test_summarize_caches_per_core_l2_against_shared_l3():
 
     # four logical CPUs, two cores: each CPU lists its core's L2 and the one shared L3
-    entries = []
+    entries: list[dict[str, str]] = []
     for cpu in range(4):
         core_cpus = "0-1" if cpu < 2 else "2-3"
         entries.append(cache_entry(2, "Unified", "512K", core_cpus))
@@ -269,7 +269,7 @@ def test_parse_release_profile():
 # --- compare ---
 
 
-def test_identical_identities_give_no_differences(reference):
+def test_identical_identities_give_no_differences(reference: mp.JSONObject):
 
     assert mp.compare(reference, copy.deepcopy(reference)) == []
 
@@ -283,7 +283,7 @@ def test_identical_identities_give_no_differences(reference):
         (["software", "thread_env", "OPENBLAS_NUM_THREADS"], "1"),
     ],
 )
-def test_a_changed_identity_field_reports_exactly_its_path(reference, path, value):
+def test_a_changed_identity_field_reports_exactly_its_path(reference: mp.JSONObject, path: list[str], value: object):
 
     current = copy.deepcopy(reference)
     parent = current["identity"]
@@ -295,7 +295,7 @@ def test_a_changed_identity_field_reports_exactly_its_path(reference, path, valu
     assert mp.compare(reference, current) == [mp.Difference("identity." + ".".join(path), old, value)]
 
 
-def test_a_changed_cache_inside_the_list_reports_its_index(reference):
+def test_a_changed_cache_inside_the_list_reports_its_index(reference: mp.JSONObject):
 
     current = copy.deepcopy(reference)
     current["identity"]["cpu"]["caches"][2]["size_kib"] = 1024
@@ -303,7 +303,7 @@ def test_a_changed_cache_inside_the_list_reports_its_index(reference):
     assert [d.path for d in mp.compare(reference, current)] == ["identity.cpu.caches[2].size_kib"]
 
 
-def test_an_extra_gpu_is_reported(reference):
+def test_an_extra_gpu_is_reported(reference: mp.JSONObject):
 
     current = copy.deepcopy(reference)
     current["identity"]["gpus"].append({"class": "3D controller", "vendor": "NVIDIA Corporation", "device": "GA107M"})
@@ -314,7 +314,7 @@ def test_an_extra_gpu_is_reported(reference):
     assert differences[0].current == current["identity"]["gpus"]
 
 
-def test_state_changes_are_never_reported(reference):
+def test_state_changes_are_never_reported(reference: mp.JSONObject):
 
     current = copy.deepcopy(reference)
     current["state"] = {
@@ -333,11 +333,11 @@ def test_state_changes_are_never_reported(reference):
 # --- CLI ---
 
 
-def run_script(*args):
+def run_script(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run([sys.executable, str(SCRIPT_PATH), *args], capture_output=True, text=True, check=False)
 
 
-def test_cli_profile_then_compare_against_itself_and_an_edited_copy(tmp_path):
+def test_cli_profile_then_compare_against_itself_and_an_edited_copy(tmp_path: Path):
 
     out = tmp_path / "profile.json"
     assert run_script("profile", "--out", str(out)).returncode == 0

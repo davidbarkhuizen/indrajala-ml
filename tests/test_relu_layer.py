@@ -3,6 +3,7 @@ import pytest
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import approx
 
 
 def _relu_node(weight: float, bias: float, x: float):
@@ -22,7 +23,7 @@ def test_forward_relu_positive_branch_passes_z_through():
     # z = 0.5*2.0 + 0.1 = 1.1 (positive) -> relu(1.1) = 1.1
     node = _relu_node(0.5, 0.1, 2.0)
 
-    assert node.value() == pytest.approx(1.1)
+    assert node.value() == approx(1.1)
 
 
 def test_forward_relu_negative_branch_is_zero():
@@ -51,7 +52,7 @@ def test_compute_hidden_delta_propagates_downstream_when_active():
 
     node.compute_hidden_delta([next_node], own_index=0)
 
-    assert node.delta == pytest.approx(-0.5 * 0.8)
+    assert node.delta == approx(-0.5 * 0.8)
 
 
 def test_compute_hidden_delta_is_zero_when_the_unit_is_dead():

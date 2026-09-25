@@ -1,8 +1,11 @@
-import pytest
-from helpers import assert_randomize_breaks_symmetry, assert_snapshot_restore_round_trip, wire_fixed_single_hidden_node
-
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.momentum_backprop_classifier_network import MomentumBackpropClassifierNetwork
+from tests.helpers import (
+    approx,
+    assert_randomize_breaks_symmetry,
+    assert_snapshot_restore_round_trip,
+    wire_fixed_single_hidden_node,
+)
 
 
 def _fixed_network(momentum: float = 0.9) -> MomentumBackpropClassifierNetwork:
@@ -21,10 +24,10 @@ def test_first_learn_step_matches_the_plain_sgd_sibling_exactly():
 
     network.learn(0.1, (2.0,), 1.0)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.5028901018503833)
-    assert hidden_node.bias == pytest.approx(0.10144505092519163)
-    assert output_node.input_node_weights[0] == pytest.approx(0.8072327797719059)
-    assert output_node.bias == pytest.approx(-0.19035963698727032)
+    assert hidden_node.input_node_weights[0] == approx(0.5028901018503833)
+    assert hidden_node.bias == approx(0.10144505092519163)
+    assert output_node.input_node_weights[0] == approx(0.8072327797719059)
+    assert output_node.bias == approx(-0.19035963698727032)
 
 
 def test_second_learn_step_shows_the_momentum_contribution_by_hand():
@@ -40,10 +43,10 @@ def test_second_learn_step_shows_the_momentum_contribution_by_hand():
     network.learn(0.1, (2.0,), 1.0)
     network.learn(0.1, (2.0,), 1.0)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.5083594576090832)
-    assert hidden_node.bias == pytest.approx(0.10417972880454159)
-    assert output_node.input_node_weights[0] == pytest.approx(0.8208947966338368)
-    assert output_node.bias == pytest.approx(-0.17216707012974347)
+    assert hidden_node.input_node_weights[0] == approx(0.5083594576090832)
+    assert hidden_node.bias == approx(0.10417972880454159)
+    assert output_node.input_node_weights[0] == approx(0.8208947966338368)
+    assert output_node.bias == approx(-0.17216707012974347)
 
 
 def test_momentum_zero_matches_the_plain_sgd_sibling_across_many_steps():

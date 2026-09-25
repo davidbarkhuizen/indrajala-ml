@@ -25,6 +25,7 @@ from indrajala_math_rust import (
 )
 
 from indrajala_ml.model.array_layer import ArrayLayer, sigmoid
+from tests.helpers import approx, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)
 INPUT_SIZE = 8
@@ -33,76 +34,61 @@ NEXT_SIZE = 4
 BATCH_SIZE = 6
 
 
-def _to_numpy(arr):
-    if len(arr.shape) == 1:
-        return np.array([arr[i] for i in range(arr.shape[0])])
-    rows, cols = arr.shape
-    return np.array([[arr[r, c] for c in range(cols)] for r in range(rows)])
-
-
-def _random_vector(rng, n):
-    return [rng.uniform(-3.0, 3.0) for _ in range(n)]
-
-
-def _random_matrix(rng, rows, cols):
-    return [_random_vector(rng, cols) for _ in range(rows)]
-
-
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_forward_matches_array_layer_forward(seed):
+def test_layer_forward_matches_array_layer_forward(seed: int):
     rng = random.Random(seed)
-    w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    b_data = _random_vector(rng, HIDDEN_SIZE)
-    x_data = _random_vector(rng, INPUT_SIZE)
+    w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    b_data = random_vector(rng, HIDDEN_SIZE)
+    x_data = random_vector(rng, INPUT_SIZE)
 
     layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     layer.W, layer.b = np.array(w_data), np.array(b_data)
     expected = layer.forward(np.array(x_data))
 
     actual = layer_forward(Array(w_data), Array(x_data), Array(b_data))
-    assert _to_numpy(actual) == pytest.approx(expected)
+    assert rust_to_numpy(actual) == approx(expected)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_forward_batch_matches_array_layer_forward_batch(seed):
+def test_layer_forward_batch_matches_array_layer_forward_batch(seed: int):
     rng = random.Random(seed)
-    w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    b_data = _random_vector(rng, HIDDEN_SIZE)
-    x_data = _random_matrix(rng, BATCH_SIZE, INPUT_SIZE)
+    w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    b_data = random_vector(rng, HIDDEN_SIZE)
+    x_data = random_matrix(rng, BATCH_SIZE, INPUT_SIZE)
 
     layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     layer.W, layer.b = np.array(w_data), np.array(b_data)
     expected = layer.forward_batch(np.array(x_data))
 
     actual = layer_forward_batch(Array(w_data), Array(x_data), Array(b_data))
-    assert _to_numpy(actual) == pytest.approx(expected)
+    assert rust_to_numpy(actual) == approx(expected)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_output_delta_matches_array_layer_single_and_batch(seed):
+def test_layer_output_delta_matches_array_layer_single_and_batch(seed: int):
     rng = random.Random(seed)
 
     a_data = [rng.uniform(0.01, 0.99) for _ in range(HIDDEN_SIZE)]
-    reference_data = _random_vector(rng, HIDDEN_SIZE)
+    reference_data = random_vector(rng, HIDDEN_SIZE)
     layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     layer.a = np.array(a_data)
     layer.compute_output_delta(np.array(reference_data))
     actual = layer_output_delta(Array(a_data), Array(reference_data))
-    assert _to_numpy(actual) == pytest.approx(layer.delta)
+    assert rust_to_numpy(actual) == approx(layer.delta)
 
     a_batch_data = [[rng.uniform(0.01, 0.99) for _ in range(HIDDEN_SIZE)] for _ in range(BATCH_SIZE)]
-    reference_batch_data = _random_matrix(rng, BATCH_SIZE, HIDDEN_SIZE)
+    reference_batch_data = random_matrix(rng, BATCH_SIZE, HIDDEN_SIZE)
     layer.A = np.array(a_batch_data)
     layer.compute_output_delta_batch(np.array(reference_batch_data))
     actual_batch = layer_output_delta(Array(a_batch_data), Array(reference_batch_data))
-    assert _to_numpy(actual_batch) == pytest.approx(layer.delta_batch)
+    assert rust_to_numpy(actual_batch) == approx(layer.delta_batch)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_hidden_delta_matches_array_layer_compute_hidden_delta(seed):
+def test_layer_hidden_delta_matches_array_layer_compute_hidden_delta(seed: int):
     rng = random.Random(seed)
-    next_w_data = _random_matrix(rng, NEXT_SIZE, HIDDEN_SIZE)
-    next_delta_data = _random_vector(rng, NEXT_SIZE)
+    next_w_data = random_matrix(rng, NEXT_SIZE, HIDDEN_SIZE)
+    next_delta_data = random_vector(rng, NEXT_SIZE)
     a_data = [rng.uniform(0.01, 0.99) for _ in range(HIDDEN_SIZE)]
 
     this_layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
@@ -113,14 +99,14 @@ def test_layer_hidden_delta_matches_array_layer_compute_hidden_delta(seed):
     this_layer.compute_hidden_delta(next_layer)
 
     actual = layer_hidden_delta(Array(next_w_data), Array(next_delta_data), Array(a_data))
-    assert _to_numpy(actual) == pytest.approx(this_layer.delta)
+    assert rust_to_numpy(actual) == approx(this_layer.delta)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_hidden_delta_batch_matches_array_layer_compute_hidden_delta_batch(seed):
+def test_layer_hidden_delta_batch_matches_array_layer_compute_hidden_delta_batch(seed: int):
     rng = random.Random(seed)
-    next_w_data = _random_matrix(rng, NEXT_SIZE, HIDDEN_SIZE)
-    next_delta_batch_data = _random_matrix(rng, BATCH_SIZE, NEXT_SIZE)
+    next_w_data = random_matrix(rng, NEXT_SIZE, HIDDEN_SIZE)
+    next_delta_batch_data = random_matrix(rng, BATCH_SIZE, NEXT_SIZE)
     a_batch_data = [[rng.uniform(0.01, 0.99) for _ in range(HIDDEN_SIZE)] for _ in range(BATCH_SIZE)]
 
     this_layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
@@ -131,16 +117,16 @@ def test_layer_hidden_delta_batch_matches_array_layer_compute_hidden_delta_batch
     this_layer.compute_hidden_delta_batch(next_layer)
 
     actual = layer_hidden_delta_batch(Array(next_w_data), Array(next_delta_batch_data), Array(a_batch_data))
-    assert _to_numpy(actual) == pytest.approx(this_layer.delta_batch)
+    assert rust_to_numpy(actual) == approx(this_layer.delta_batch)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_accumulate_gradient_matches_array_layer(seed):
+def test_layer_accumulate_gradient_matches_array_layer(seed: int):
     rng = random.Random(seed)
-    delta_data = _random_vector(rng, HIDDEN_SIZE)
-    input_activation_data = _random_vector(rng, INPUT_SIZE)
-    grad_w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    grad_b_data = _random_vector(rng, HIDDEN_SIZE)
+    delta_data = random_vector(rng, HIDDEN_SIZE)
+    input_activation_data = random_vector(rng, INPUT_SIZE)
+    grad_w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    grad_b_data = random_vector(rng, HIDDEN_SIZE)
 
     layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     layer.delta = np.array(delta_data)
@@ -151,13 +137,13 @@ def test_layer_accumulate_gradient_matches_array_layer(seed):
     new_grad_w, new_grad_b = layer_accumulate_gradient(
         Array(delta_data), Array(input_activation_data), Array(grad_w_data), Array(grad_b_data)
     )
-    assert _to_numpy(new_grad_w) == pytest.approx(layer._grad_W)
-    assert _to_numpy(new_grad_b) == pytest.approx(layer._grad_b)
+    assert rust_to_numpy(new_grad_w) == approx(layer._grad_W)
+    assert rust_to_numpy(new_grad_b) == approx(layer._grad_b)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("size, input_size", [(HIDDEN_SIZE, INPUT_SIZE), (32, 5408), (30, 784)])
-def test_layer_accumulate_gradient_is_bit_identical_to_grad_w_plus_outer(seed, size, input_size):
+def test_layer_accumulate_gradient_is_bit_identical_to_grad_w_plus_outer(seed: int, size: int, input_size: int):
     # the one-pass fused op keeps the separate product and sum (two roundings), so it matches
     # both the crate's own outer + add composition and ArrayLayer.accumulate_gradient exactly
     rng = np.random.default_rng(seed)
@@ -179,12 +165,12 @@ def test_layer_accumulate_gradient_is_bit_identical_to_grad_w_plus_outer(seed, s
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_accumulate_gradient_batch_matches_array_layer(seed):
+def test_layer_accumulate_gradient_batch_matches_array_layer(seed: int):
     rng = random.Random(seed)
-    delta_batch_data = _random_matrix(rng, BATCH_SIZE, HIDDEN_SIZE)
-    input_activation_batch_data = _random_matrix(rng, BATCH_SIZE, INPUT_SIZE)
-    grad_w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    grad_b_data = _random_vector(rng, HIDDEN_SIZE)
+    delta_batch_data = random_matrix(rng, BATCH_SIZE, HIDDEN_SIZE)
+    input_activation_batch_data = random_matrix(rng, BATCH_SIZE, INPUT_SIZE)
+    grad_w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    grad_b_data = random_vector(rng, HIDDEN_SIZE)
 
     layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     layer.delta_batch = np.array(delta_batch_data)
@@ -198,19 +184,19 @@ def test_layer_accumulate_gradient_batch_matches_array_layer(seed):
         Array(grad_w_data),
         Array(grad_b_data),
     )
-    assert _to_numpy(new_grad_w) == pytest.approx(layer._grad_W)
-    assert _to_numpy(new_grad_b) == pytest.approx(layer._grad_b)
+    assert rust_to_numpy(new_grad_w) == approx(layer._grad_W)
+    assert rust_to_numpy(new_grad_b) == approx(layer._grad_b)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("batch_size", [1, 6, 96, 4, 128, 512])
-def test_layer_apply_accumulated_gradient_matches_array_layer_exactly(seed, batch_size):
+def test_layer_apply_accumulated_gradient_matches_array_layer_exactly(seed: int, batch_size: int):
     # bit for bit: both are w - lr * (g / B) (test_update_rule_forms.py)
     rng = random.Random(seed)
-    w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    b_data = _random_vector(rng, HIDDEN_SIZE)
-    grad_w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    grad_b_data = _random_vector(rng, HIDDEN_SIZE)
+    w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    b_data = random_vector(rng, HIDDEN_SIZE)
+    grad_w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    grad_b_data = random_vector(rng, HIDDEN_SIZE)
     learning_rate = rng.uniform(0.01, 1.0)
 
     layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
@@ -226,8 +212,8 @@ def test_layer_apply_accumulated_gradient_matches_array_layer_exactly(seed, batc
         learning_rate,
         batch_size,
     )
-    assert _to_numpy(new_w).tobytes() == layer.W.tobytes()
-    assert _to_numpy(new_b).tobytes() == layer.b.tobytes()
+    assert rust_to_numpy(new_w).tobytes() == layer.W.tobytes()
+    assert rust_to_numpy(new_b).tobytes() == layer.b.tobytes()
 
 
 def test_sigmoid_still_matches_the_reference_sigmoid_directly():
@@ -235,10 +221,10 @@ def test_sigmoid_still_matches_the_reference_sigmoid_directly():
     # matches array_layer.sigmoid's overflow behavior at the same boundary already checked for
     # exp() itself.
     rng = random.Random(0)
-    x_data = _random_vector(rng, INPUT_SIZE)
+    x_data = random_vector(rng, INPUT_SIZE)
     w_data = [[1000.0] * INPUT_SIZE for _ in range(HIDDEN_SIZE)]
     b_data = [0.0] * HIDDEN_SIZE
 
     actual = layer_forward(Array(w_data), Array(x_data), Array(b_data))
     expected = sigmoid(np.array(w_data) @ np.array(x_data) + np.array(b_data))
-    assert _to_numpy(actual) == pytest.approx(expected)
+    assert rust_to_numpy(actual) == approx(expected)

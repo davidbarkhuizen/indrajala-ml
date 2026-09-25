@@ -5,10 +5,11 @@ import pytest
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import approx
 
 
 def _pool_with_state(
-    values: list[float], channels: int, height: int, width: int, pool_size: int, stride=None
+    values: list[float], channels: int, height: int, width: int, pool_size: int, stride: int | None = None
 ) -> MaxPoolLayer:
     size = channels * height * width
     input_layer = StateLayer(size, [(-100.0, 100.0)] * size)
@@ -94,7 +95,7 @@ def test_overlapping_windows_send_every_winning_delta_to_a_shared_argmax():
     for unit in layer.nodes:
         unit.delta = 1.5
 
-    assert layer.downstream_sum(4) == pytest.approx(4 * 1.5)
+    assert layer.downstream_sum(4) == approx(4 * 1.5)
     assert all(layer.downstream_sum(i) == 0.0 for i in range(9) if i != 4)
 
 
@@ -114,7 +115,7 @@ def test_weight_free_hooks_are_no_ops():
 
 
 @pytest.mark.parametrize("pool_stride", [None, 1])
-def test_gradient_check_through_conv_pool_conv(pool_stride):
+def test_gradient_check_through_conv_pool_conv(pool_stride: int | None):
 
     # finite differences through conv -> max pool -> conv, loss = sum of the last layer's
     # activations: the first conv layer's gradients have to flow back through the second conv
@@ -168,6 +169,4 @@ def test_gradient_check_through_conv_pool_conv(pool_stride):
                 kernel.weights[i] = original - epsilon
                 loss_minus = total_loss()
                 kernel.weights[i] = original
-                assert kernel._weight_gradient_accum[i] == pytest.approx(
-                    (loss_plus - loss_minus) / (2 * epsilon), abs=1e-5
-                )
+                assert kernel._weight_gradient_accum[i] == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-5)

@@ -30,6 +30,7 @@ from indrajala_math_rust import (
 )
 
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
+from tests.helpers import approx, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)
 INPUT_SIZE = 8
@@ -40,27 +41,12 @@ DROP_PROBABILITY = 0.4
 KEEP_PROBABILITY = 1.0 - DROP_PROBABILITY
 
 
-def _to_numpy(arr):
-    if len(arr.shape) == 1:
-        return np.array([arr[i] for i in range(arr.shape[0])])
-    rows, cols = arr.shape
-    return np.array([[arr[r, c] for c in range(cols)] for r in range(rows)])
-
-
-def _random_vector(rng, n):
-    return [rng.uniform(-3.0, 3.0) for _ in range(n)]
-
-
-def _random_matrix(rng, rows, cols):
-    return [_random_vector(rng, cols) for _ in range(rows)]
-
-
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_dropout_forward_at_eval_mode_matches_dropout_array_layer_forward(seed):
+def test_layer_dropout_forward_at_eval_mode_matches_dropout_array_layer_forward(seed: int):
     rng = random.Random(seed)
-    w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    b_data = _random_vector(rng, HIDDEN_SIZE)
-    x_data = _random_vector(rng, INPUT_SIZE)
+    w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    b_data = random_vector(rng, HIDDEN_SIZE)
+    x_data = random_vector(rng, INPUT_SIZE)
 
     layer = DropoutArrayLayer(HIDDEN_SIZE, INPUT_SIZE, DROP_PROBABILITY)
     layer.W, layer.b = np.array(w_data), np.array(b_data)
@@ -69,17 +55,17 @@ def test_layer_dropout_forward_at_eval_mode_matches_dropout_array_layer_forward(
     a, mask, base_activation = layer_dropout_forward(
         Array(w_data), Array(x_data), Array(b_data), DROP_PROBABILITY, False
     )
-    assert _to_numpy(a) == pytest.approx(expected)
-    assert _to_numpy(mask).tolist() == [1.0] * HIDDEN_SIZE
-    assert _to_numpy(base_activation) == pytest.approx(expected)
+    assert rust_to_numpy(a) == approx(expected)
+    assert rust_to_numpy(mask).tolist() == [1.0] * HIDDEN_SIZE
+    assert rust_to_numpy(base_activation) == approx(expected)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_dropout_forward_batch_at_eval_mode_matches_dropout_array_layer_forward_batch(seed):
+def test_layer_dropout_forward_batch_at_eval_mode_matches_dropout_array_layer_forward_batch(seed: int):
     rng = random.Random(seed)
-    w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    b_data = _random_vector(rng, HIDDEN_SIZE)
-    x_data = _random_matrix(rng, BATCH_SIZE, INPUT_SIZE)
+    w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    b_data = random_vector(rng, HIDDEN_SIZE)
+    x_data = random_matrix(rng, BATCH_SIZE, INPUT_SIZE)
 
     layer = DropoutArrayLayer(HIDDEN_SIZE, INPUT_SIZE, DROP_PROBABILITY)
     layer.W, layer.b = np.array(w_data), np.array(b_data)
@@ -88,16 +74,16 @@ def test_layer_dropout_forward_batch_at_eval_mode_matches_dropout_array_layer_fo
     a, mask, base_activation = layer_dropout_forward_batch(
         Array(w_data), Array(x_data), Array(b_data), DROP_PROBABILITY, False
     )
-    assert _to_numpy(a) == pytest.approx(expected)
-    assert _to_numpy(base_activation) == pytest.approx(expected)
+    assert rust_to_numpy(a) == approx(expected)
+    assert rust_to_numpy(base_activation) == approx(expected)
     assert mask.shape == (BATCH_SIZE, HIDDEN_SIZE)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_dropout_hidden_delta_at_eval_mode_matches_dropout_array_layer_compute_hidden_delta(seed):
+def test_layer_dropout_hidden_delta_at_eval_mode_matches_dropout_array_layer_compute_hidden_delta(seed: int):
     rng = random.Random(seed)
-    next_w_data = _random_matrix(rng, NEXT_SIZE, HIDDEN_SIZE)
-    next_delta_data = _random_vector(rng, NEXT_SIZE)
+    next_w_data = random_matrix(rng, NEXT_SIZE, HIDDEN_SIZE)
+    next_delta_data = random_vector(rng, NEXT_SIZE)
     a_data = [rng.uniform(0.01, 0.99) for _ in range(HIDDEN_SIZE)]
 
     this_layer = DropoutArrayLayer(HIDDEN_SIZE, INPUT_SIZE, DROP_PROBABILITY)
@@ -117,14 +103,16 @@ def test_layer_dropout_hidden_delta_at_eval_mode_matches_dropout_array_layer_com
         KEEP_PROBABILITY,
         False,
     )
-    assert _to_numpy(actual) == pytest.approx(this_layer.delta)
+    assert rust_to_numpy(actual) == approx(this_layer.delta)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_dropout_hidden_delta_batch_at_eval_mode_matches_dropout_array_layer_compute_hidden_delta_batch(seed):
+def test_layer_dropout_hidden_delta_batch_at_eval_mode_matches_dropout_array_layer_compute_hidden_delta_batch(
+    seed: int,
+):
     rng = random.Random(seed)
-    next_w_data = _random_matrix(rng, NEXT_SIZE, HIDDEN_SIZE)
-    next_delta_batch_data = _random_matrix(rng, BATCH_SIZE, NEXT_SIZE)
+    next_w_data = random_matrix(rng, NEXT_SIZE, HIDDEN_SIZE)
+    next_delta_batch_data = random_matrix(rng, BATCH_SIZE, NEXT_SIZE)
     a_batch_data = [[rng.uniform(0.01, 0.99) for _ in range(HIDDEN_SIZE)] for _ in range(BATCH_SIZE)]
     ones_batch = [[1.0] * HIDDEN_SIZE for _ in range(BATCH_SIZE)]
 
@@ -145,36 +133,36 @@ def test_layer_dropout_hidden_delta_batch_at_eval_mode_matches_dropout_array_lay
         KEEP_PROBABILITY,
         False,
     )
-    assert _to_numpy(actual) == pytest.approx(this_layer.delta_batch)
+    assert rust_to_numpy(actual) == approx(this_layer.delta_batch)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_dropout_forward_in_training_mode_is_internally_consistent_with_the_hand_derived_formula(seed):
+def test_layer_dropout_forward_in_training_mode_is_internally_consistent_with_the_hand_derived_formula(seed: int):
     rng = random.Random(seed)
-    w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    b_data = _random_vector(rng, HIDDEN_SIZE)
-    x_data = _random_vector(rng, INPUT_SIZE)
+    w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    b_data = random_vector(rng, HIDDEN_SIZE)
+    x_data = random_vector(rng, INPUT_SIZE)
 
     a, mask, base_activation = layer_dropout_forward(
         Array(w_data), Array(x_data), Array(b_data), DROP_PROBABILITY, True
     )
-    a_values = _to_numpy(a)
-    mask_values = _to_numpy(mask)
-    base_values = _to_numpy(base_activation)
+    a_values = rust_to_numpy(a)
+    mask_values = rust_to_numpy(mask)
+    base_values = rust_to_numpy(base_activation)
 
     for kept, base, actual in zip(mask_values, base_values, a_values):
         assert kept in (0.0, 1.0)
         if kept == 1.0:
-            assert actual == pytest.approx(base / KEEP_PROBABILITY)
+            assert actual == approx(base / KEEP_PROBABILITY)
         else:
             assert actual == 0.0
 
 
 def test_layer_dropout_forward_batch_in_training_mode_draws_an_independent_mask_per_row():
     rng = random.Random(0)
-    w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    b_data = _random_vector(rng, HIDDEN_SIZE)
-    x_data = _random_matrix(rng, 30, INPUT_SIZE)
+    w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    b_data = random_vector(rng, HIDDEN_SIZE)
+    x_data = random_matrix(rng, 30, INPUT_SIZE)
 
     _a, mask, _base = layer_dropout_forward_batch(Array(w_data), Array(x_data), Array(b_data), 0.5, True)
     rows = [tuple(mask[r, c] for c in range(HIDDEN_SIZE)) for r in range(30)]
@@ -197,9 +185,9 @@ def test_layer_dropout_hidden_delta_in_training_mode_uses_the_returned_mask_and_
     expected_kept = (-0.5 * 0.8) * sigmoid_derivative / KEEP_PROBABILITY
     expected_eval = (-0.5 * 0.8) * sigmoid_derivative  # eval-mode ignores mask entirely
 
-    assert kept[0] == pytest.approx(expected_kept)
+    assert kept[0] == approx(expected_kept)
     assert dropped[0] == 0.0
-    assert eval_mode[0] == pytest.approx(expected_eval)
+    assert eval_mode[0] == approx(expected_eval)
 
 
 def test_layer_dropout_hidden_delta_rejects_mismatched_shapes():

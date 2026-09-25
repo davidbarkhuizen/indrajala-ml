@@ -2,6 +2,7 @@ import pytest
 
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import approx
 
 
 def _fixed_layer() -> tuple[StateLayer, SoftmaxOutputLayer]:
@@ -26,11 +27,11 @@ def test_forward_matches_a_hand_computed_softmax():
 
     activations = [node.value() for node in layer.nodes]
     assert activations == [
-        pytest.approx(0.6652409557748219),
-        pytest.approx(0.24472847105479767),
-        pytest.approx(0.09003057317038046),
+        approx(0.6652409557748219),
+        approx(0.24472847105479767),
+        approx(0.09003057317038046),
     ]
-    assert sum(activations) == pytest.approx(1.0)
+    assert sum(activations) == approx(1.0)
 
 
 def test_compute_output_delta_matches_a_hand_computed_softmax_cross_entropy_delta():
@@ -44,9 +45,9 @@ def test_compute_output_delta_matches_a_hand_computed_softmax_cross_entropy_delt
 
     deltas = [node.delta for node in layer.nodes]
     assert deltas == [
-        pytest.approx(-0.3347590442251781),
-        pytest.approx(0.24472847105479767),
-        pytest.approx(0.09003057317038046),
+        approx(-0.3347590442251781),
+        approx(0.24472847105479767),
+        approx(0.09003057317038046),
     ]
 
 
@@ -76,10 +77,10 @@ def test_forward_does_not_overflow_for_a_very_large_z():
     layer.forward()
 
     activations = [node.value() for node in layer.nodes]
-    assert activations[0] == pytest.approx(1.0)
-    assert activations[1] == pytest.approx(0.0)
-    assert activations[2] == pytest.approx(0.0)
-    assert sum(activations) == pytest.approx(1.0)
+    assert activations[0] == approx(1.0)
+    assert activations[1] == approx(0.0)
+    assert activations[2] == approx(0.0)
+    assert sum(activations) == approx(1.0)
 
 
 def test_node_forward_raises_since_activation_must_be_computed_jointly_by_the_layer():

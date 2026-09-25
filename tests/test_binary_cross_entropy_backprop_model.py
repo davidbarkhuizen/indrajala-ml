@@ -1,9 +1,12 @@
-import pytest
-from helpers import assert_randomize_breaks_symmetry, assert_snapshot_restore_round_trip, wire_fixed_single_hidden_node
-
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
     BinaryCrossEntropyBackpropClassifierNetwork,
+)
+from tests.helpers import (
+    approx,
+    assert_randomize_breaks_symmetry,
+    assert_snapshot_restore_round_trip,
+    wire_fixed_single_hidden_node,
 )
 
 
@@ -20,7 +23,7 @@ def test_predict_probability_is_identical_to_the_quadratic_loss_sibling():
     # test_backprop_model.py's hand-derived a_o
     network = _fixed_network()
 
-    assert network.predict_probability((2.0,)) == pytest.approx(0.5987376536170401)
+    assert network.predict_probability((2.0,)) == approx(0.5987376536170401)
 
 
 def test_learn_matches_the_binary_cross_entropy_update_rule_by_hand():
@@ -35,10 +38,10 @@ def test_learn_matches_the_binary_cross_entropy_update_rule_by_hand():
 
     network.learn(0.1, (2.0,), 1.0)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.5120295164013969)
-    assert hidden_node.bias == pytest.approx(0.10601475820069846)
-    assert output_node.input_node_weights[0] == pytest.approx(0.8301051130368624)
-    assert output_node.bias == pytest.approx(-0.15987376536170403)
+    assert hidden_node.input_node_weights[0] == approx(0.5120295164013969)
+    assert hidden_node.bias == approx(0.10601475820069846)
+    assert output_node.input_node_weights[0] == approx(0.8301051130368624)
+    assert output_node.bias == approx(-0.15987376536170403)
 
 
 def test_randomize_breaks_symmetry_between_nodes_in_the_same_layer():

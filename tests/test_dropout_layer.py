@@ -5,6 +5,7 @@ import pytest
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import approx
 
 # the shared fixture point: weight=0.5, bias=0.1, x=2.0 -> z=1.1, a=sigmoid(1.1)
 Z = 1.1
@@ -29,7 +30,7 @@ def test_forward_at_eval_mode_matches_a_plain_sigmoid_no_rescale():
 
     node.forward()
 
-    assert node.value() == pytest.approx(BASE_ACTIVATION)
+    assert node.value() == approx(BASE_ACTIVATION)
 
 
 def test_forward_in_training_mode_when_kept_rescales_by_one_over_keep_probability():
@@ -40,7 +41,7 @@ def test_forward_in_training_mode_when_kept_rescales_by_one_over_keep_probabilit
     with patch("random.random", return_value=0.9):  # 0.9 >= 0.5 -> kept
         node.forward()
 
-    assert node.value() == pytest.approx(BASE_ACTIVATION / 0.5)
+    assert node.value() == approx(BASE_ACTIVATION / 0.5)
 
 
 def test_forward_in_training_mode_when_dropped_is_exactly_zero():
@@ -65,7 +66,7 @@ def test_set_training_mode_false_reverts_to_eval_behavior():
     layer.set_training_mode(False)
     node.forward()
 
-    assert node.value() == pytest.approx(BASE_ACTIVATION)
+    assert node.value() == approx(BASE_ACTIVATION)
 
 
 def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative():
@@ -85,7 +86,7 @@ def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative():
 
     sigmoid_derivative = BASE_ACTIVATION * (1.0 - BASE_ACTIVATION)
     expected = (-0.5 * 0.8) * sigmoid_derivative / 0.5
-    assert node.delta == pytest.approx(expected)
+    assert node.delta == approx(expected)
 
 
 def test_compute_hidden_delta_is_zero_when_the_unit_was_dropped():
@@ -118,7 +119,7 @@ def test_compute_hidden_delta_at_eval_mode_uses_no_rescale():
 
     sigmoid_derivative = BASE_ACTIVATION * (1.0 - BASE_ACTIVATION)
     expected = (-0.5 * 0.8) * sigmoid_derivative
-    assert node.delta == pytest.approx(expected)
+    assert node.delta == approx(expected)
 
 
 def test_compute_output_delta_raises_since_dropout_is_hidden_layer_only():
@@ -138,7 +139,7 @@ def test_drop_probability_of_zero_never_drops():
     with patch("random.random", return_value=0.0):  # 0.0 >= 0.0 -> kept
         node.forward()
 
-    assert node.value() == pytest.approx(BASE_ACTIVATION)  # keep_probability=1.0, no rescale
+    assert node.value() == approx(BASE_ACTIVATION)  # keep_probability=1.0, no rescale
 
 
 def test_drop_probability_of_one_is_rejected():

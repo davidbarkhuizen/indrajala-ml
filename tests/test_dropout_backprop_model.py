@@ -1,11 +1,16 @@
 from unittest.mock import patch
 
 import pytest
-from helpers import assert_randomize_breaks_symmetry, assert_snapshot_restore_round_trip, wire_fixed_single_hidden_node
 
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.dropout_backprop_classifier_network import DropoutBackpropClassifierNetwork
 from indrajala_ml.model.dropout_layer import TrainingModeNode
+from tests.helpers import (
+    approx,
+    assert_randomize_breaks_symmetry,
+    assert_snapshot_restore_round_trip,
+    wire_fixed_single_hidden_node,
+)
 
 
 def _fixed_network(drop_probability: float = 0.5) -> DropoutBackpropClassifierNetwork:
@@ -20,7 +25,7 @@ def test_predict_probability_at_eval_mode_matches_the_plain_sigmoid_baseline_exa
     # test_backprop_model.py's hand-derived a_o: dropout is a no-op at inference
     network = _fixed_network()
 
-    assert network.predict_probability((2.0,)) == pytest.approx(0.5987376536170401)
+    assert network.predict_probability((2.0,)) == approx(0.5987376536170401)
 
 
 def test_predict_probability_is_deterministic_run_to_run_no_stochasticity_at_inference():
@@ -47,10 +52,10 @@ def test_learn_when_the_hidden_unit_is_kept_matches_the_inverted_dropout_update_
     with patch("random.random", return_value=0.9):
         network.learn(0.1, (2.0,), 1.0)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.5031688497566075)
-    assert hidden_node.bias == pytest.approx(0.10158442487830373)
-    assert output_node.input_node_weights[0] == pytest.approx(0.807930375331499)
-    assert output_node.bias == pytest.approx(-0.19471491601888619)
+    assert hidden_node.input_node_weights[0] == approx(0.5031688497566075)
+    assert hidden_node.bias == approx(0.10158442487830373)
+    assert output_node.input_node_weights[0] == approx(0.807930375331499)
+    assert output_node.bias == approx(-0.19471491601888619)
 
 
 def test_learn_when_the_hidden_unit_is_dropped_leaves_its_incoming_weights_unchanged():
@@ -67,7 +72,7 @@ def test_learn_when_the_hidden_unit_is_dropped_leaves_its_incoming_weights_uncha
     assert hidden_node.input_node_weights[0] == 0.5
     assert hidden_node.bias == 0.1
     assert output_node.input_node_weights[0] == 0.8
-    assert output_node.bias == pytest.approx(-0.18639069734247535)
+    assert output_node.bias == approx(-0.18639069734247535)
 
 
 def test_predict_probability_between_learn_calls_is_unaffected_by_training_mode():

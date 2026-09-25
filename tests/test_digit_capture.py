@@ -12,6 +12,7 @@ from indrajala_ml.digit_capture import (
     pixel_to_tile,
     tile_grid_to_state,
 )
+from tests.helpers import approx
 
 
 def test_tile_grid_to_state_flattens_row_major():
@@ -112,8 +113,8 @@ def test_downsample_to_target_grid_counts_a_single_on_pixel_within_its_block():
 
     target_grid = downsample_to_target_grid(capture_grid)
 
-    assert target_grid[0][0] == pytest.approx(1 / 16)
-    assert sum(sum(row) for row in target_grid) == pytest.approx(1 / 16)
+    assert target_grid[0][0] == approx(1 / 16)
+    assert sum(sum(row) for row in target_grid) == approx(1 / 16)
 
 
 def test_downsample_to_target_grid_a_fully_lit_block_is_exactly_full_intensity():
@@ -142,9 +143,9 @@ def test_downsample_to_target_grid_blocks_do_not_overlap():
 
     target_grid = downsample_to_target_grid(capture_grid)
 
-    assert target_grid[0][0] == pytest.approx(1 / 16)
-    assert target_grid[0][1] == pytest.approx(1 / 16)
-    assert sum(sum(row) for row in target_grid) == pytest.approx(2 / 16)
+    assert target_grid[0][0] == approx(1 / 16)
+    assert target_grid[0][1] == approx(1 / 16)
+    assert sum(sum(row) for row in target_grid) == approx(2 / 16)
 
 
 def test_downsample_to_target_grid_rejects_wrong_size_input():

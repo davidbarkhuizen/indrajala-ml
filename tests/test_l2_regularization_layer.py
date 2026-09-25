@@ -1,9 +1,8 @@
-import pytest
-
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.l2_regularization_layer import make_l2_layer_cls, make_l2_node_cls
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.state_node import StateNode
+from tests.helpers import approx
 
 
 def _l2_node(l2_lambda: float, weight: float, bias: float):
@@ -25,8 +24,8 @@ def test_apply_gradient_adds_the_l2_penalty_to_the_weight_by_hand():
     node.delta = 0.2
     node.apply_gradient(0.1)
 
-    assert node.input_node_weights[0] == pytest.approx(0.475)
-    assert node.bias == pytest.approx(0.08)
+    assert node.input_node_weights[0] == approx(0.475)
+    assert node.bias == approx(0.08)
 
 
 def test_bias_is_never_regularized():
@@ -39,8 +38,8 @@ def test_bias_is_never_regularized():
     small_l2.apply_gradient(0.1)
     large_l2.apply_gradient(0.1)
 
-    assert small_l2.bias == pytest.approx(0.08)
-    assert large_l2.bias == pytest.approx(0.08)
+    assert small_l2.bias == approx(0.08)
+    assert large_l2.bias == approx(0.08)
     assert small_l2.bias == large_l2.bias
     # but the weights must differ, since the penalty *does* apply there
     assert small_l2.input_node_weights[0] != large_l2.input_node_weights[0]
@@ -58,8 +57,8 @@ def test_l2_lambda_zero_matches_plain_sgd_exactly():
     l2_node.apply_gradient(0.1)
     plain_node.apply_gradient(0.1)
 
-    assert l2_node.input_node_weights[0] == pytest.approx(plain_node.input_node_weights[0])
-    assert l2_node.bias == pytest.approx(plain_node.bias)
+    assert l2_node.input_node_weights[0] == approx(plain_node.input_node_weights[0])
+    assert l2_node.bias == approx(plain_node.bias)
 
 
 def test_a_large_enough_weight_shrinks_even_with_zero_delta():
@@ -71,7 +70,7 @@ def test_a_large_enough_weight_shrinks_even_with_zero_delta():
     node.apply_gradient(0.1)
 
     # new_weight = 10.0 - 0.1*(0.0 + 0.5*10.0) = 10.0 - 0.5 = 9.5
-    assert node.input_node_weights[0] == pytest.approx(9.5)
+    assert node.input_node_weights[0] == approx(9.5)
     assert node.bias == 0.0
 
 

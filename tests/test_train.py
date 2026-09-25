@@ -1,9 +1,10 @@
 import random
+from collections.abc import Sequence
 
 import pytest
-from helpers import classifier_with_tiny_bounded_region, unreachable_class_classifier
 
 from indrajala_ml.geometry import is_positive_region_bounded, square_bounds
+from indrajala_ml.model.classifier_protocols import Example, StateClassifier
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.targets import XORTarget
 from indrajala_ml.train import (
@@ -11,9 +12,10 @@ from indrajala_ml.train import (
     reachable_reference_and_training_data,
     train_linear_classifier_network,
 )
+from tests.helpers import approx, classifier_with_tiny_bounded_region, unreachable_class_classifier
 
 
-def _training_accuracy(student, training_data):
+def _training_accuracy(student: StateClassifier[float], training_data: Sequence[Example[float]]) -> float:
     return sum(1 for state, category in training_data if student.classify_state(state) == category) / len(training_data)
 
 
@@ -115,15 +117,15 @@ def test_train_linear_classifier_network_keeps_the_best_epoch_not_the_last():
     student = LinearClassifierNetwork.randomized(3, 2, bounds, required_active=2)
     result = train_linear_classifier_network(student, training_data, learning_rate=0.25, epochs=10)
 
-    assert _training_accuracy(student, training_data) == pytest.approx(0.845)
+    assert _training_accuracy(student, training_data) == approx(0.845)
 
     # best epoch index 3, last 9: a plateau
     diagnostic = result.diagnostic
     assert diagnostic.epoch_training_accuracies == [
-        pytest.approx(a) for a in [0.623, 0.710, 0.807, 0.845, 0.830, 0.816, 0.801, 0.843, 0.827, 0.829]
+        approx(a) for a in [0.623, 0.710, 0.807, 0.845, 0.830, 0.816, 0.801, 0.843, 0.827, 0.829]
     ]
     assert diagnostic.best_epoch_index == 3
-    assert diagnostic.best_training_accuracy == pytest.approx(0.845)
+    assert diagnostic.best_training_accuracy == approx(0.845)
     assert diagnostic.plateaued is True
     assert diagnostic.converged is False
     assert diagnostic.still_improving is False

@@ -3,22 +3,25 @@ import random
 import numpy as np
 import pytest
 
+from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.l2_array_layer import L2ArrayLayer
 from indrajala_ml.model.l2_regularization_layer import make_l2_layer_cls
 from indrajala_ml.model.l2_rust_array_layer import L2RustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import Backend
 
 L2_LAMBDA = 0.05
 
-LAYER_CLS = {"numpy": L2ArrayLayer, "rust": L2RustArrayLayer}
+LayerCls = type[L2ArrayLayer] | type[L2RustArrayLayer]
+LAYER_CLS: dict[str, LayerCls] = {"numpy": L2ArrayLayer, "rust": L2RustArrayLayer}
 
 
 @pytest.fixture
-def layer_cls(backend):
+def layer_cls(backend: Backend) -> LayerCls:
     return LAYER_CLS[backend.name]
 
 
-def _array_layer_like(backprop_layer, backend):
+def _array_layer_like(backprop_layer: BackpropLayer, backend: Backend):
     input_size = len(backprop_layer.input_layer.nodes)
     array_layer = LAYER_CLS[backend.name](backprop_layer.size, input_size, L2_LAMBDA)
     snapshot = backprop_layer.snapshot_state()
@@ -27,7 +30,7 @@ def _array_layer_like(backprop_layer, backend):
     return array_layer
 
 
-def test_accumulate_then_apply_at_batch_size_one_matches_l2_backprop_node_at_every_step(backend):
+def test_accumulate_then_apply_at_batch_size_one_matches_l2_backprop_node_at_every_step(backend: Backend):
 
     # compared after every step: the penalty depends on the current W, so a mistake can show
     # only once W has moved
@@ -65,7 +68,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_l2_backprop_node_at_eve
         assert np.allclose(array_layer.b.tolist(), expected_b, rtol=1e-9, atol=1e-12)
 
 
-def test_accumulate_across_a_batch_then_apply_matches_l2_backprop_node_at_every_batch(backend):
+def test_accumulate_across_a_batch_then_apply_matches_l2_backprop_node_at_every_batch(backend: Backend):
 
     rng = random.Random(22)
     dimension = 4
@@ -107,7 +110,7 @@ def test_accumulate_across_a_batch_then_apply_matches_l2_backprop_node_at_every_
         assert np.allclose(array_layer.b.tolist(), expected_b, rtol=1e-9, atol=1e-12)
 
 
-def test_bias_is_never_regularized(layer_cls, backend):
+def test_bias_is_never_regularized(layer_cls: LayerCls, backend: Backend):
 
     # with a zero weight gradient and a nonzero bias gradient, the bias moves by plain SGD: the
     # penalty applies to W only
@@ -123,7 +126,7 @@ def test_bias_is_never_regularized(layer_cls, backend):
     assert np.allclose(array_layer.b.tolist(), [5.0 - 0.1 * 2.0, 6.0 - 0.1 * 4.0])
 
 
-def test_apply_accumulated_gradient_resets_the_accumulator(layer_cls, backend):
+def test_apply_accumulated_gradient_resets_the_accumulator(layer_cls: LayerCls, backend: Backend):
 
     array_layer = layer_cls(3, 2, L2_LAMBDA)
     array_layer.delta = backend.owned([0.1, 0.2, 0.3])

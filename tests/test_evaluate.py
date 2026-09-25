@@ -1,7 +1,6 @@
 import random
 
 import pytest
-from helpers import classifier_with_tiny_bounded_region, unreachable_class_classifier
 
 from indrajala_ml.evaluate import (
     class_balanced_disagreement_rate,
@@ -12,6 +11,7 @@ from indrajala_ml.evaluate import (
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.train import reachable_reference_and_training_data
+from tests.helpers import approx, classifier_with_tiny_bounded_region, unreachable_class_classifier
 
 
 def test_sample_class_balanced_states_succeeds_within_a_tight_budget_for_a_tiny_region():
@@ -106,5 +106,5 @@ def test_smoothed_series_is_a_trailing_moving_average():
     assert len(smoothed) == len(values)
     assert smoothed[0] == 0.0
     assert smoothed[1] == 0.5
-    assert smoothed[2] == pytest.approx(1 / 3)
-    assert smoothed[3] == pytest.approx(2 / 3)
+    assert smoothed[2] == approx(1 / 3)
+    assert smoothed[3] == approx(2 / 3)

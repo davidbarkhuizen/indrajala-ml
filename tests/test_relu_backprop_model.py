@@ -1,8 +1,11 @@
-import pytest
-from helpers import assert_randomize_breaks_symmetry, assert_snapshot_restore_round_trip, wire_fixed_single_hidden_node
-
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.relu_backprop_classifier_network import ReLUBackpropClassifierNetwork
+from tests.helpers import (
+    approx,
+    assert_randomize_breaks_symmetry,
+    assert_snapshot_restore_round_trip,
+    wire_fixed_single_hidden_node,
+)
 
 
 def _fixed_network(x: float = 2.0) -> ReLUBackpropClassifierNetwork:
@@ -18,7 +21,7 @@ def test_predict_probability_matches_a_hand_computed_forward_pass():
     #   z_o = 0.8*1.1 - 0.2 = 0.6800000000000002, a_o = sigmoid(z_o) = 0.6637386974043528
     network = _fixed_network()
 
-    assert network.predict_probability((2.0,)) == pytest.approx(0.6637386974043528)
+    assert network.predict_probability((2.0,)) == approx(0.6637386974043528)
 
 
 def test_learn_matches_the_relu_hidden_backprop_update_rule_by_hand():
@@ -33,10 +36,10 @@ def test_learn_matches_the_relu_hidden_backprop_update_rule_by_hand():
 
     network.learn(0.1, (2.0,), 1.0)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.5120080061962698)
-    assert hidden_node.bias == pytest.approx(0.10600400309813493)
-    assert output_node.input_node_weights[0] == pytest.approx(0.8082555042599355)
-    assert output_node.bias == pytest.approx(-0.19249499612733137)
+    assert hidden_node.input_node_weights[0] == approx(0.5120080061962698)
+    assert hidden_node.bias == approx(0.10600400309813493)
+    assert output_node.input_node_weights[0] == approx(0.8082555042599355)
+    assert output_node.bias == approx(-0.19249499612733137)
 
 
 def test_learn_leaves_a_dead_units_incoming_weights_unchanged():
@@ -49,14 +52,14 @@ def test_learn_leaves_a_dead_units_incoming_weights_unchanged():
     hidden_node = network.hidden_layers[0].nodes[0]
     output_node = network.output_layer.nodes[0]
 
-    assert network.predict_probability((-10.0,)) == pytest.approx(0.45016600268752216)
+    assert network.predict_probability((-10.0,)) == approx(0.45016600268752216)
 
     network.learn(0.1, (-10.0,), 1.0)
 
     assert hidden_node.input_node_weights[0] == 0.5
     assert hidden_node.bias == 0.1
     assert output_node.input_node_weights[0] == 0.8
-    assert output_node.bias == pytest.approx(-0.18639069734247535)
+    assert output_node.bias == approx(-0.18639069734247535)
 
 
 def test_randomize_breaks_symmetry_between_nodes_in_the_same_layer():

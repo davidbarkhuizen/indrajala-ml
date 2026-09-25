@@ -1,9 +1,12 @@
-import pytest
-from helpers import assert_randomize_breaks_symmetry, assert_snapshot_restore_round_trip, wire_fixed_single_hidden_node
-
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.l2_regularized_backprop_classifier_network import L2RegularizedBackpropClassifierNetwork
+from tests.helpers import (
+    approx,
+    assert_randomize_breaks_symmetry,
+    assert_snapshot_restore_round_trip,
+    wire_fixed_single_hidden_node,
+)
 
 
 def _fixed_network(l2_lambda: float = 0.1) -> L2RegularizedBackpropClassifierNetwork:
@@ -18,7 +21,7 @@ def test_predict_probability_is_identical_to_the_plain_sgd_sibling():
     # L2 changes only apply_gradient: test_backprop_model.py's hand-derived a_o
     network = _fixed_network()
 
-    assert network.predict_probability((2.0,)) == pytest.approx(0.5987376536170401)
+    assert network.predict_probability((2.0,)) == approx(0.5987376536170401)
 
 
 def test_learn_matches_the_l2_regularized_update_rule_by_hand():
@@ -32,10 +35,10 @@ def test_learn_matches_the_l2_regularized_update_rule_by_hand():
 
     network.learn(0.1, (2.0,), 1.0)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.49789010185038324)
-    assert hidden_node.bias == pytest.approx(0.10144505092519163)
-    assert output_node.input_node_weights[0] == pytest.approx(0.7992327797719059)
-    assert output_node.bias == pytest.approx(-0.19035963698727032)
+    assert hidden_node.input_node_weights[0] == approx(0.49789010185038324)
+    assert hidden_node.bias == approx(0.10144505092519163)
+    assert output_node.input_node_weights[0] == approx(0.7992327797719059)
+    assert output_node.bias == approx(-0.19035963698727032)
 
 
 def test_l2_lambda_zero_matches_the_plain_sgd_sibling_bit_for_bit():
@@ -51,10 +54,10 @@ def test_l2_lambda_zero_matches_the_plain_sgd_sibling_bit_for_bit():
     l2_output = l2_network.output_layer.nodes[0]
     plain_hidden = plain_network.hidden_layers[0].nodes[0]
     plain_output = plain_network.output_layer.nodes[0]
-    assert l2_hidden.input_node_weights[0] == pytest.approx(plain_hidden.input_node_weights[0])
-    assert l2_hidden.bias == pytest.approx(plain_hidden.bias)
-    assert l2_output.input_node_weights[0] == pytest.approx(plain_output.input_node_weights[0])
-    assert l2_output.bias == pytest.approx(plain_output.bias)
+    assert l2_hidden.input_node_weights[0] == approx(plain_hidden.input_node_weights[0])
+    assert l2_hidden.bias == approx(plain_hidden.bias)
+    assert l2_output.input_node_weights[0] == approx(plain_output.input_node_weights[0])
+    assert l2_output.bias == approx(plain_output.bias)
 
 
 def test_randomize_breaks_symmetry_between_nodes_in_the_same_layer():

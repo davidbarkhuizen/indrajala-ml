@@ -1,5 +1,4 @@
 import pytest
-from helpers import classifier_with_bounded_square_region
 
 from indrajala_ml.geometry import (
     is_positive_region_bounded,
@@ -8,6 +7,7 @@ from indrajala_ml.geometry import (
     square_bounds,
 )
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from tests.helpers import classifier_with_bounded_square_region
 
 
 def test_square_bounds():
@@ -146,10 +146,10 @@ def test_positive_region_bounding_box_none_for_a_duck_typed_target_without_geome
     # targets need only input_bounds and classify_state (e.g. targets.py's XORTarget); without
     # the linear classifier's geometry, fall back to None, not AttributeError
     class BoundsOnly:
-        def __init__(self, bounds):
+        def __init__(self, bounds: list[tuple[float, float]]):
             self.input_bounds = bounds
 
-        def classify_state(self, state):
+        def classify_state(self, state: tuple[float, ...]) -> float:
             return 1.0
 
     assert positive_region_bounding_box(BoundsOnly(square_bounds(10.0))) is None

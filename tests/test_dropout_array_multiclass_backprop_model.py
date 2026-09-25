@@ -14,9 +14,13 @@ from tests.array_network_contract import (
     ArrayNetworkSpec,
     multiclass_network_tests,
 )
-from tests.helpers import matching_dropout_array_backprop_networks
+from tests.helpers import Backend, matching_dropout_array_backprop_networks
 
 DROP_PROBABILITY = 0.5
+NetworkCls = (
+    type[DropoutVectorizedMultiClassBackpropClassifierNetwork]
+    | type[DropoutRustArrayMultiClassBackpropClassifierNetwork]
+)
 
 # dropout does nothing at inference, the only state in which the backends' masks (from unrelated
 # RNGs) can be compared with the per-node reference
@@ -37,11 +41,11 @@ globals().update(multiclass_network_tests(SPEC))
 
 
 @pytest.fixture
-def network_cls(backend):
+def network_cls(backend: Backend) -> NetworkCls:
     return SPEC.network_cls[backend.name]
 
 
-def test_predict_probabilities_is_deterministic_run_to_run_no_stochasticity_at_inference(network_cls):
+def test_predict_probabilities_is_deterministic_run_to_run_no_stochasticity_at_inference(network_cls: NetworkCls):
 
     network = network_cls.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT, DROP_PROBABILITY)
     state = tuple(0.1 * i for i in range(DIMENSION))
@@ -51,7 +55,7 @@ def test_predict_probabilities_is_deterministic_run_to_run_no_stochasticity_at_i
     assert len(set(predictions)) == 1
 
 
-def test_predict_probabilities_between_learn_calls_is_unaffected_by_training_mode(network_cls):
+def test_predict_probabilities_between_learn_calls_is_unaffected_by_training_mode(network_cls: NetworkCls):
 
     # learn() switches training on for its forward pass only; a prediction after it is at eval
     network = network_cls.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT, DROP_PROBABILITY)
@@ -65,7 +69,7 @@ def test_predict_probabilities_between_learn_calls_is_unaffected_by_training_mod
     assert all(0.0 <= p <= 1.0 for p in probabilities)
 
 
-def test_learn_batch_draws_an_independent_mask_per_example_and_leaves_training_mode_off(network_cls):
+def test_learn_batch_draws_an_independent_mask_per_example_and_leaves_training_mode_off(network_cls: NetworkCls):
 
     network = network_cls.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT, DROP_PROBABILITY)
     batch = [(tuple(0.1 * i + 0.01 * j for i in range(DIMENSION)), j % CLASS_COUNT) for j in range(6)]
@@ -78,7 +82,7 @@ def test_learn_batch_draws_an_independent_mask_per_example_and_leaves_training_m
         assert (len(rows), len(rows[0])) == (len(batch), layer.size)
 
 
-def test_learn_moves_the_weights(network_cls):
+def test_learn_moves_the_weights(network_cls: NetworkCls):
 
     network = network_cls.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT, DROP_PROBABILITY)
     before = network.snapshot()
@@ -91,7 +95,7 @@ def test_learn_moves_the_weights(network_cls):
     assert any(not np.allclose(W1.tolist(), W2.tolist()) for (W1, _b1), (W2, _b2) in zip(before, after))
 
 
-def test_drop_probability_is_a_required_constructor_argument(network_cls):
+def test_drop_probability_is_a_required_constructor_argument(network_cls: NetworkCls):
 
     with pytest.raises(TypeError):
         network_cls(LAYER_SIZES, DIMENSION, CLASS_COUNT)  # type: ignore[call-arg]

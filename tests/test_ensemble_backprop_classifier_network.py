@@ -1,8 +1,10 @@
+from pathlib import Path
+
 import pytest
-from helpers import assert_save_and_load_round_trip, assert_snapshot_restore_round_trip
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
+from tests.helpers import approx, assert_save_and_load_round_trip, assert_snapshot_restore_round_trip
 
 
 def _fixed_classifier(output_weight: float, output_bias: float) -> BackpropClassifierNetwork:
@@ -35,9 +37,9 @@ def test_predict_probabilities_matches_each_sub_networks_own_output():
 
     probabilities = ensemble.predict_probabilities((2.0,))
 
-    assert probabilities[0] == pytest.approx(0.5987376536170401)
-    assert probabilities[1] == pytest.approx(0.5436193278499907)
-    assert probabilities[2] == pytest.approx(0.8176520510294325)
+    assert probabilities[0] == approx(0.5987376536170401)
+    assert probabilities[1] == approx(0.5436193278499907)
+    assert probabilities[2] == approx(0.8176520510294325)
 
 
 def test_classify_state_returns_the_argmax_across_sub_networks():
@@ -63,7 +65,7 @@ def test_snapshot_and_restore_round_trip():
     assert_snapshot_restore_round_trip(ensemble, step)
 
 
-def test_save_and_load_round_trip(tmp_path):
+def test_save_and_load_round_trip(tmp_path: Path):
 
     ensemble = EnsembleBackpropClassifierNetwork(
         [BackpropClassifierNetwork.randomized([3], 2, [(-10.0, 10.0), (-10.0, 10.0)]) for _ in range(3)]

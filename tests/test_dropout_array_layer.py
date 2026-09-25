@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import patch
 
 import numpy as np
@@ -8,8 +9,10 @@ from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from tests.helpers import Backend, approx
 
-LAYER_CLS = {"numpy": DropoutArrayLayer, "rust": DropoutRustArrayLayer}
+LayerCls = type[DropoutArrayLayer] | type[DropoutRustArrayLayer]
+LAYER_CLS: dict[str, LayerCls] = {"numpy": DropoutArrayLayer, "rust": DropoutRustArrayLayer}
 BASE_LAYER_CLS = {"numpy": ArrayLayer, "rust": RustArrayLayer}
 
 # test_dropout_layer.py's DropoutNode fixture: z = 1.1, base = sigmoid(1.1)
@@ -20,25 +23,26 @@ BASE_ACTIVATION = 0.7502601055951177
 
 
 @pytest.fixture
-def layer_cls(backend):
+def layer_cls(backend: Backend) -> LayerCls:
     return LAYER_CLS[backend.name]
 
 
-def _dropout_layer(backend, drop_probability: float = 0.5):
+def _dropout_layer(backend: Backend, drop_probability: float = 0.5):
     layer = LAYER_CLS[backend.name](1, 1, drop_probability)
     layer.W = backend.owned(W)
     layer.b = backend.owned(B)
     return layer
 
 
-def _next_layer(backend):
+# Any: paired with a layer of the same backend, which a union can't express
+def _next_layer(backend: Backend) -> Any:
     next_layer = BASE_LAYER_CLS[backend.name](1, 1)
     next_layer.W = backend.owned([[0.8]])
     next_layer.delta = backend.owned([-0.5])
     return next_layer
 
 
-def _forward_with_outcome(layer, backend, kept: bool):
+def _forward_with_outcome(layer: DropoutArrayLayer | DropoutRustArrayLayer, backend: Backend, kept: bool) -> Any:
     # a training forward pass whose one unit is kept or dropped. numpy's mask comes from
     # np.random.random, which is patched; the Rust mask comes from the crate's own RNG, which has
     # no seam, so it is drawn until the outcome comes up (certain within 200 draws at 0.5)
@@ -52,7 +56,7 @@ def _forward_with_outcome(layer, backend, kept: bool):
     pytest.fail(f"never drew a {'kept' if kept else 'dropped'} outcome in 200 draws")
 
 
-def test_forward_at_eval_mode_matches_a_plain_sigmoid_no_rescale(backend):
+def test_forward_at_eval_mode_matches_a_plain_sigmoid_no_rescale(backend: Backend):
 
     # training defaults to False
     layer = _dropout_layer(backend)
@@ -68,7 +72,7 @@ def test_forward_at_eval_mode_matches_a_plain_sigmoid_no_rescale(backend):
     assert np.allclose(result.tolist(), [BASE_ACTIVATION])
 
 
-def test_forward_in_training_mode_when_kept_rescales_by_one_over_keep_probability(backend):
+def test_forward_in_training_mode_when_kept_rescales_by_one_over_keep_probability(backend: Backend):
 
     layer = _dropout_layer(backend, drop_probability=0.5)
     layer.set_training_mode(True)
@@ -78,7 +82,7 @@ def test_forward_in_training_mode_when_kept_rescales_by_one_over_keep_probabilit
     assert np.allclose(result.tolist(), [BASE_ACTIVATION / 0.5])
 
 
-def test_forward_in_training_mode_when_dropped_is_exactly_zero(backend):
+def test_forward_in_training_mode_when_dropped_is_exactly_zero(backend: Backend):
 
     layer = _dropout_layer(backend, drop_probability=0.5)
     layer.set_training_mode(True)
@@ -88,7 +92,7 @@ def test_forward_in_training_mode_when_dropped_is_exactly_zero(backend):
     assert result.tolist()[0] == 0.0
 
 
-def test_forward_and_hidden_delta_in_training_mode_are_internally_consistent_across_many_draws(backend):
+def test_forward_and_hidden_delta_in_training_mode_are_internally_consistent_across_many_draws(backend: Backend):
 
     # no two backends' masks can be compared draw for draw, so this checks each draw against the
     # mask the layer returns: a kept unit is base / keep_probability, a dropped one exactly 0.0.
@@ -104,16 +108,16 @@ def test_forward_and_hidden_delta_in_training_mode_are_internally_consistent_acr
         assert mask_value in (0.0, 1.0)
         if mask_value == 1.0:
             saw_kept = True
-            assert result[0] == pytest.approx(BASE_ACTIVATION / 0.5)
+            assert result[0] == approx(BASE_ACTIVATION / 0.5)
         else:
             saw_dropped = True
             assert result[0] == 0.0
-        assert layer._base_activation.tolist()[0] == pytest.approx(BASE_ACTIVATION)
+        assert layer._base_activation.tolist()[0] == approx(BASE_ACTIVATION)
 
     assert saw_kept and saw_dropped
 
 
-def test_set_training_mode_false_reverts_to_eval_behavior(backend):
+def test_set_training_mode_false_reverts_to_eval_behavior(backend: Backend):
 
     layer = _dropout_layer(backend)
     layer.set_training_mode(True)
@@ -126,7 +130,7 @@ def test_set_training_mode_false_reverts_to_eval_behavior(backend):
     assert np.allclose(result.tolist(), [BASE_ACTIVATION])
 
 
-def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative(backend):
+def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative(backend: Backend):
 
     # the derivative is base*(1-base) on the activation before the rescale, not a*(1-a)
     layer = _dropout_layer(backend, drop_probability=0.5)
@@ -140,7 +144,7 @@ def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative(bac
     assert np.allclose(layer.delta.tolist(), [expected])
 
 
-def test_compute_hidden_delta_is_zero_when_the_unit_was_dropped(backend):
+def test_compute_hidden_delta_is_zero_when_the_unit_was_dropped(backend: Backend):
 
     layer = _dropout_layer(backend, drop_probability=0.5)
     layer.set_training_mode(True)
@@ -151,7 +155,7 @@ def test_compute_hidden_delta_is_zero_when_the_unit_was_dropped(backend):
     assert layer.delta.tolist()[0] == 0.0
 
 
-def test_compute_hidden_delta_at_eval_mode_uses_no_rescale(backend):
+def test_compute_hidden_delta_at_eval_mode_uses_no_rescale(backend: Backend):
 
     layer = _dropout_layer(backend)
     layer.forward(backend.owned(X))
@@ -163,7 +167,9 @@ def test_compute_hidden_delta_at_eval_mode_uses_no_rescale(backend):
     assert np.allclose(layer.delta.tolist(), [expected])
 
 
-def test_forward_batch_draws_an_independent_mask_per_row_not_one_shared_per_batch(layer_cls, backend):
+def test_forward_batch_draws_an_independent_mask_per_row_not_one_shared_per_batch(
+    layer_cls: LayerCls, backend: Backend
+):
 
     layer = layer_cls(4, 3, drop_probability=0.5)
     layer.W = backend.owned(np.random.default_rng(0).uniform(-1.0, 1.0, size=(4, 3)).tolist())
@@ -178,7 +184,7 @@ def test_forward_batch_draws_an_independent_mask_per_row_not_one_shared_per_batc
     assert len({tuple(row) for row in rows}) > 1
 
 
-def test_forward_batch_at_eval_mode_matches_forward_per_row_stacked(layer_cls, backend):
+def test_forward_batch_at_eval_mode_matches_forward_per_row_stacked(layer_cls: LayerCls, backend: Backend):
 
     layer = layer_cls(3, 2, drop_probability=0.5)
     layer.W = backend.owned([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
@@ -192,13 +198,17 @@ def test_forward_batch_at_eval_mode_matches_forward_per_row_stacked(layer_cls, b
     assert np.allclose(result.tolist(), expected_rows)
 
 
-def test_compute_hidden_delta_batch_at_eval_mode_matches_per_row_single_example_results(layer_cls, backend):
+def test_compute_hidden_delta_batch_at_eval_mode_matches_per_row_single_example_results(
+    layer_cls: LayerCls, backend: Backend
+):
 
     layer = layer_cls(3, 2, drop_probability=0.5)
     layer.W = backend.owned([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
     layer.b = backend.owned([0.1, 0.2, 0.3])
 
-    next_layer = BASE_LAYER_CLS[backend.name](2, 3)
+    next_layer: Any = BASE_LAYER_CLS[backend.name](
+        2, 3
+    )  # Any: paired with a layer of the same backend, which a union can't express
     next_layer.W = backend.owned([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
     delta_rows = [[0.1, -0.2], [0.3, 0.4], [-0.5, 0.1]]
     next_layer.delta_batch = backend.owned(delta_rows)
@@ -206,7 +216,7 @@ def test_compute_hidden_delta_batch_at_eval_mode_matches_per_row_single_example_
     x_rows = [[1.0, -1.0], [0.5, 0.5], [-2.0, 3.0]]
     layer.forward_batch(backend.owned(x_rows))
 
-    expected_rows = []
+    expected_rows: list[list[float]] = []
     for row_index in range(3):
         row_layer = layer_cls(3, 2, drop_probability=0.5)
         row_layer.W = layer.W
@@ -221,7 +231,7 @@ def test_compute_hidden_delta_batch_at_eval_mode_matches_per_row_single_example_
     assert np.allclose(layer.delta_batch.tolist(), expected_rows)
 
 
-def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(backend):
+def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(backend: Backend):
 
     layer = _dropout_layer(backend)
     layer.W = backend.owned([[1.0]])
@@ -234,7 +244,7 @@ def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(back
     assert np.allclose(layer.b.tolist(), [4.9])
 
 
-def test_drop_probability_of_one_is_rejected(layer_cls):
+def test_drop_probability_of_one_is_rejected(layer_cls: LayerCls):
 
     with pytest.raises(AssertionError):
         layer_cls(1, 1, drop_probability=1.0)

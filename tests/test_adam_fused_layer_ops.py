@@ -13,6 +13,7 @@ import pytest
 from indrajala_math_rust import Array, layer_adam_apply_accumulated_gradient
 
 from indrajala_ml.model.adam_array_layer import AdamArrayLayer
+from tests.helpers import approx, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)
 INPUT_SIZE = 8
@@ -20,29 +21,14 @@ HIDDEN_SIZE = 5
 BETA1, BETA2, EPSILON = 0.9, 0.999, 1e-8
 
 
-def _to_numpy(arr):
-    if len(arr.shape) == 1:
-        return np.array([arr[i] for i in range(arr.shape[0])])
-    rows, cols = arr.shape
-    return np.array([[arr[r, c] for c in range(cols)] for r in range(rows)])
-
-
-def _random_vector(rng, n):
-    return [rng.uniform(-3.0, 3.0) for _ in range(n)]
-
-
-def _random_matrix(rng, rows, cols):
-    return [_random_vector(rng, cols) for _ in range(rows)]
-
-
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("batch_size", [1, 6])
-def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_at_step_one(seed, batch_size):
+def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_at_step_one(seed: int, batch_size: int):
     rng = random.Random(seed)
-    w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    b_data = _random_vector(rng, HIDDEN_SIZE)
-    grad_w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-    grad_b_data = _random_vector(rng, HIDDEN_SIZE)
+    w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    b_data = random_vector(rng, HIDDEN_SIZE)
+    grad_w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+    grad_b_data = random_vector(rng, HIDDEN_SIZE)
     learning_rate = rng.uniform(0.001, 1.0)
 
     layer = AdamArrayLayer(HIDDEN_SIZE, INPUT_SIZE, BETA1, BETA2, EPSILON)
@@ -66,23 +52,23 @@ def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_at_step_
         learning_rate,
         batch_size,
     )
-    assert _to_numpy(new_w) == pytest.approx(layer.W)
-    assert _to_numpy(new_b) == pytest.approx(layer.b)
-    assert _to_numpy(new_m_w) == pytest.approx(layer._m_W)
-    assert _to_numpy(new_v_w) == pytest.approx(layer._v_W)
-    assert _to_numpy(new_m_b) == pytest.approx(layer._m_b)
-    assert _to_numpy(new_v_b) == pytest.approx(layer._v_b)
+    assert rust_to_numpy(new_w) == approx(layer.W)
+    assert rust_to_numpy(new_b) == approx(layer.b)
+    assert rust_to_numpy(new_m_w) == approx(layer._m_W)
+    assert rust_to_numpy(new_v_w) == approx(layer._v_W)
+    assert rust_to_numpy(new_m_b) == approx(layer._m_b)
+    assert rust_to_numpy(new_v_b) == approx(layer._v_b)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_across_several_steps(seed):
+def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_across_several_steps(seed: int):
     # m/v/t only actually exercise their accumulation logic across repeated steps, unlike a
     # stateless update where a single comparison at t=1 would do - mirrors
     # test_adam_array_layer.py's own reasoning for using a multi-step sweep, not just one call.
     rng = random.Random(seed)
     layer = AdamArrayLayer(HIDDEN_SIZE, INPUT_SIZE, BETA1, BETA2, EPSILON)
-    layer.W = np.array(_random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE))
-    layer.b = np.array(_random_vector(rng, HIDDEN_SIZE))
+    layer.W = np.array(random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE))
+    layer.b = np.array(random_vector(rng, HIDDEN_SIZE))
     learning_rate = rng.uniform(0.001, 1.0)
 
     m_w = Array.zeros((HIDDEN_SIZE, INPUT_SIZE))
@@ -93,8 +79,8 @@ def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_across_s
     b = Array(layer.b.tolist())
 
     for t in range(1, 6):
-        grad_w_data = _random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
-        grad_b_data = _random_vector(rng, HIDDEN_SIZE)
+        grad_w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
+        grad_b_data = random_vector(rng, HIDDEN_SIZE)
 
         layer._grad_W = np.array(grad_w_data)
         layer._grad_b = np.array(grad_b_data)
@@ -117,8 +103,8 @@ def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_across_s
             1,
         )
 
-        assert _to_numpy(w) == pytest.approx(layer.W)
-        assert _to_numpy(b) == pytest.approx(layer.b)
+        assert rust_to_numpy(w) == approx(layer.W)
+        assert rust_to_numpy(b) == approx(layer.b)
         assert layer._t == t
 
 

@@ -5,6 +5,7 @@ import pytest
 
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.state_layer import StateLayer
+from tests.helpers import approx
 
 
 def _layer_with_state(
@@ -72,7 +73,7 @@ def test_forward_matches_a_hand_computed_small_example():
 
     layer.forward()
 
-    assert [unit.value() for unit in layer.nodes] == pytest.approx([1.0, 2.0, 4.0, 5.0])
+    assert [unit.value() for unit in layer.nodes] == approx([1.0, 2.0, 4.0, 5.0])
 
 
 def test_receptive_field_wiring_via_a_single_hot_pixel():
@@ -95,7 +96,7 @@ def test_receptive_field_wiring_via_a_single_hot_pixel():
         for col in range(3):
             unit = layer.nodes[row * 3 + col]
             expected = 1.0 if (row, col) in expected_nonzero else 0.0
-            assert unit.value() == pytest.approx(expected), f"position ({row},{col})"
+            assert unit.value() == approx(expected), f"position ({row},{col})"
 
 
 def _multichannel_layer_with_state(
@@ -147,11 +148,11 @@ def test_multichannel_forward_matches_a_hand_computed_small_example():
 
     layer.forward()
 
-    assert [unit.value() for unit in layer.nodes] == pytest.approx([51.0, 62.0, 84.0, 95.0])
+    assert [unit.value() for unit in layer.nodes] == approx([51.0, 62.0, 84.0, 95.0])
 
 
 @pytest.mark.parametrize("hot_channel", [0, 1, 2])
-def test_multichannel_receptive_field_wiring_via_a_single_hot_pixel(hot_channel):
+def test_multichannel_receptive_field_wiring_via_a_single_hot_pixel(hot_channel: int):
 
     # each input channel's kernel slice is a distinct constant (1, 2, 3), so the single-channel
     # test's positions must carry the hot channel's constant; a wrong channel offset changes it
@@ -169,7 +170,7 @@ def test_multichannel_receptive_field_wiring_via_a_single_hot_pixel(hot_channel)
     for row in range(3):
         for col in range(3):
             expected = float(hot_channel + 1) if (row, col) in expected_nonzero else 0.0
-            assert layer.nodes[row * 3 + col].value() == pytest.approx(expected), f"position ({row},{col})"
+            assert layer.nodes[row * 3 + col].value() == approx(expected), f"position ({row},{col})"
 
 
 def test_a_conv_layer_feeds_the_next_directly_as_channel_major_input():
@@ -202,9 +203,9 @@ def test_apply_gradients_matches_a_hand_computed_single_example():
     layer.apply_gradients(learning_rate=0.1)
 
     expected_weight_0 = 1.0 - 0.1 * (0.1 * 1 + 0.1 * 2 + 0.1 * 4 + 0.1 * 5)
-    assert layer.kernels[0].weights[0] == pytest.approx(expected_weight_0)
+    assert layer.kernels[0].weights[0] == approx(expected_weight_0)
     expected_bias = 0.0 - 0.1 * (0.1 * 4)  # 4 positions, delta=0.1 each, summed then batch_size=1
-    assert layer.kernels[0].bias == pytest.approx(expected_bias)
+    assert layer.kernels[0].bias == approx(expected_bias)
 
 
 def test_apply_accumulated_gradients_applies_once_per_kernel_not_once_per_unit():
@@ -221,18 +222,18 @@ def test_apply_accumulated_gradients_applies_once_per_kernel_not_once_per_unit()
     expected_accum_per_weight = 0.5 * 1.0 * positions_per_channel  # every input value is 1.0
 
     for kernel in layer.kernels:
-        assert kernel._weight_gradient_accum == pytest.approx([expected_accum_per_weight] * len(kernel.weights))
+        assert kernel._weight_gradient_accum == approx([expected_accum_per_weight] * len(kernel.weights))
 
     layer.apply_accumulated_gradients(learning_rate=0.1, batch_size=2)
 
     expected_weight = 0.0 - 0.1 * (expected_accum_per_weight / 2)
     for kernel in layer.kernels:
-        assert kernel.weights == pytest.approx([expected_weight] * len(kernel.weights))
+        assert kernel.weights == approx([expected_weight] * len(kernel.weights))
         # accumulator reset - a second apply with nothing newly accumulated must be a no-op
     weights_after_first_apply = [list(k.weights) for k in layer.kernels]
     layer.apply_accumulated_gradients(learning_rate=0.1, batch_size=2)
     for kernel, before in zip(layer.kernels, weights_after_first_apply):
-        assert kernel.weights == pytest.approx(before)
+        assert kernel.weights == approx(before)
 
 
 def test_snapshot_state_and_restore_state_round_trip():
@@ -302,7 +303,7 @@ def test_gradient_check_against_a_numerically_perturbed_loss():
             kernel.weights[i] = original
 
             numerical_gradient = (loss_plus - loss_minus) / (2 * epsilon)
-            assert kernel._weight_gradient_accum[i] == pytest.approx(numerical_gradient, abs=1e-4)
+            assert kernel._weight_gradient_accum[i] == approx(numerical_gradient, abs=1e-4)
 
         original_bias = kernel.bias
         kernel.bias = original_bias + epsilon
@@ -312,7 +313,7 @@ def test_gradient_check_against_a_numerically_perturbed_loss():
         kernel.bias = original_bias
 
         numerical_gradient = (loss_plus - loss_minus) / (2 * epsilon)
-        assert kernel._bias_gradient_accum == pytest.approx(numerical_gradient, abs=1e-4)
+        assert kernel._bias_gradient_accum == approx(numerical_gradient, abs=1e-4)
 
 
 def _stacked_conv_layers(height: int, width: int, stride: int) -> tuple[StateLayer, ConvLayer, ConvLayer]:
@@ -334,7 +335,7 @@ def _stacked_conv_layers(height: int, width: int, stride: int) -> tuple[StateLay
 
 
 @pytest.mark.parametrize("stride", [1, 2])
-def test_downstream_sum_matches_a_brute_force_scan_over_every_unit(stride):
+def test_downstream_sum_matches_a_brute_force_scan_over_every_unit(stride: int):
 
     # the reverse map is an optimization: it must equal a scan summing delta * weight over every
     # receptive-field slot that reads the input node
@@ -352,7 +353,7 @@ def test_downstream_sum_matches_a_brute_force_scan_over_every_unit(stride):
             for weight_index, node in enumerate(unit.input_nodes)
             if node is upstream
         )
-        assert second.downstream_sum(own_index) == pytest.approx(brute_force, abs=1e-12)
+        assert second.downstream_sum(own_index) == approx(brute_force, abs=1e-12)
 
 
 def test_downstream_sum_is_zero_for_an_input_no_receptive_field_reads():
@@ -370,7 +371,7 @@ def test_downstream_sum_is_zero_for_an_input_no_receptive_field_reads():
 
 
 @pytest.mark.parametrize("stride", [1, 2])
-def test_gradient_check_through_two_stacked_conv_layers(stride):
+def test_gradient_check_through_two_stacked_conv_layers(stride: int):
 
     # loss L = sum of the second conv layer's activations, so first-layer gradients flow back
     # through compute_hidden_deltas/downstream_sum
@@ -403,7 +404,7 @@ def test_gradient_check_through_two_stacked_conv_layers(stride):
                 weights[i] = original - epsilon
                 loss_minus = total_loss()
                 weights[i] = original
-                assert analytic == pytest.approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-4)
+                assert analytic == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-4)
 
             original_bias = kernel.bias
             kernel.bias = original_bias + epsilon
@@ -411,4 +412,4 @@ def test_gradient_check_through_two_stacked_conv_layers(stride):
             kernel.bias = original_bias - epsilon
             loss_minus = total_loss()
             kernel.bias = original_bias
-            assert kernel._bias_gradient_accum == pytest.approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-4)
+            assert kernel._bias_gradient_accum == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-4)

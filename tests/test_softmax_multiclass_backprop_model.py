@@ -1,13 +1,14 @@
-import pytest
-from helpers import (
-    assert_randomize_breaks_symmetry,
-    assert_save_and_load_round_trip,
-    assert_snapshot_restore_round_trip,
-)
+from pathlib import Path
 
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
+)
+from tests.helpers import (
+    approx,
+    assert_randomize_breaks_symmetry,
+    assert_save_and_load_round_trip,
+    assert_snapshot_restore_round_trip,
 )
 
 
@@ -34,9 +35,9 @@ def test_predict_probabilities_matches_a_hand_computed_softmax_forward_pass():
 
     probabilities = network.predict_probabilities((2.0,))
 
-    assert probabilities[0] == pytest.approx(0.5560845207454033)
-    assert probabilities[1] == pytest.approx(0.4439154792545967)
-    assert sum(probabilities) == pytest.approx(1.0)
+    assert probabilities[0] == approx(0.5560845207454033)
+    assert probabilities[1] == approx(0.4439154792545967)
+    assert sum(probabilities) == approx(1.0)
 
 
 def test_classify_state_returns_the_argmax_class_index():
@@ -59,12 +60,12 @@ def test_learn_matches_the_softmax_cross_entropy_update_rule_by_hand():
 
     network.learn(0.1, (2.0,), 1)
 
-    assert hidden_node.input_node_weights[0] == pytest.approx(0.47707743227253246)
-    assert hidden_node.bias == pytest.approx(0.08853871613626624)
-    assert output_node_0.input_node_weights[0] == pytest.approx(0.7582791968745743)
-    assert output_node_0.bias == pytest.approx(-0.25560845207454036)
-    assert output_node_1.input_node_weights[0] == pytest.approx(-0.25827919687457435)
-    assert output_node_1.bias == pytest.approx(0.45560845207454037)
+    assert hidden_node.input_node_weights[0] == approx(0.47707743227253246)
+    assert hidden_node.bias == approx(0.08853871613626624)
+    assert output_node_0.input_node_weights[0] == approx(0.7582791968745743)
+    assert output_node_0.bias == approx(-0.25560845207454036)
+    assert output_node_1.input_node_weights[0] == approx(-0.25827919687457435)
+    assert output_node_1.bias == approx(0.45560845207454037)
 
 
 def test_randomize_breaks_symmetry_between_nodes_in_the_same_layer():
@@ -79,7 +80,7 @@ def test_snapshot_and_restore_round_trip():
     assert_snapshot_restore_round_trip(network, lambda: network.learn(0.1, (1.0, -2.0), 2))
 
 
-def test_save_and_load_round_trip(tmp_path):
+def test_save_and_load_round_trip(tmp_path: Path):
 
     network = SoftmaxMultiClassBackpropClassifierNetwork.randomized([3, 2], 2, square_bounds(10.0), 4)
     for _ in range(5):
@@ -95,4 +96,4 @@ def test_save_and_load_round_trip(tmp_path):
     assert loaded.input_bounds == network.input_bounds
 
     # the loaded output layer is still softmax
-    assert sum(loaded.predict_probabilities((1.0, -2.0))) == pytest.approx(1.0)
+    assert sum(loaded.predict_probabilities((1.0, -2.0))) == approx(1.0)

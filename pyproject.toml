@@ -36,9 +36,11 @@ extend-exclude = ["rust"]  # the crate's own repo (submodule)
 "indrajala_ml/demos/demo_conv_rust_vs_vectorized_digit_recognition.py" = ["B023"]
 "scripts/accuracy_pass_timing.py" = ["B023"]
 
-# pinned in ./cli (pyright_version); `./cli lint` runs it. Strict for the package, standard for
-# tests/ and scripts/.
+# pinned in ./cli (pyright_version); `./cli lint` runs it. Strict everywhere. The tests read
+# internals (a layer's _grad_W, a trainer's _training_accuracy) on purpose, so tests/ allows
+# private names; an execution environment's root is its import root, so extraPaths keeps the repo
+# root importable (tests.helpers, indrajala_ml).
 [tool.pyright]
 include = ["indrajala_ml", "tests", "scripts"]
-typeCheckingMode = "standard"
-strict = ["indrajala_ml", "scripts"]
+typeCheckingMode = "strict"
+executionEnvironments = [{ root = "tests", extraPaths = ["."], reportPrivateUsage = false }]
