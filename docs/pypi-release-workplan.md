@@ -148,12 +148,13 @@ Done when both repos are on pyo3 0.29, the golden run is bit-identical, and the 
 
 ### Stage 2: abi3 or one wheel per interpreter, measured
 
-With `abi3-py310`, one wheel per platform covers every CPython from 3.10 on, including versions
-released later. Without it, each release needs a wheel per interpreter (3.10-3.14, about 5 per
-platform), and a new CPython needs a new release. abi3 restricts pyo3 to the stable C API, and
-some of its fast paths (such as unchecked tuple and list access) then go through slower calls.
+With `abi3-py314`, one wheel per platform covers every CPython from 3.14 on (the crate's
+`requires-python` floor), including versions released later. Without it, each release needs a
+wheel per supported interpreter (only 3.14 today), and each new CPython needs a new release.
+abi3 restricts pyo3 to the stable C API, and some of its fast paths (such as unchecked tuple and
+list access) then go through slower calls.
 
-1. On a branch, add `abi3-py310` to pyo3's features. Build it and check that everything still
+1. On a branch, add `abi3-py314` to pyo3's features. Build it and check that everything still
    compiles. Two pyclasses and no buffer protocol are expected to be fine.
 2. Time abi3 against non-abi3 with the stage 1 protocol and cases.
 3. Decide from the measurement. Adopt abi3 if nothing on a hot path regresses above noise, and
@@ -189,11 +190,11 @@ by `ci.yml` (push and PR to `main`) and later by `release.yml` (tags).
    Plus an **sdist** job (`maturin sdist`). manylinux_2_28 rather than 2014: if numpy's own wheels for current Pythons need
    glibc 2.28, a lower tag gains no user who could also install numpy for the tests. Check
    numpy's tags when the stage is built, and pick the lowest tag both support.
-3. **Test** (matrix: every platform × Python 3.10 and 3.14, or × every supported interpreter if
-   stage 2 chose per-interpreter wheels). This runs on the platform's own runner, or in an Alpine
-   container for musl. Download the wheel, install it into a clean venv with `pytest numpy mypy`,
-   and run `pytest tests/` and stubtest from outside the checkout. This is the step that runs the
-   aarch64 scalar fallback against the numpy references.
+3. **Test** (matrix: every platform × Python 3.14 and the newest CPython, or × every supported
+   interpreter if stage 2 chose per-interpreter wheels). This runs on the platform's own runner,
+   or in an Alpine container for musl. Download the wheel, install it into a clean venv with
+   `pytest numpy mypy`, and run `pytest tests/` and stubtest from outside the checkout. This is
+   the step that runs the aarch64 scalar fallback against the numpy references.
 4. **sdist test** (Linux): `pip install` the sdist with rustup present, then run the tests. This
    proves the sdist builds with the pinned toolchain.
 5. **A package check**: `twine check --strict` over every wheel and the sdist. Also check that the
@@ -275,7 +276,7 @@ Done when `pip install indrajala-math-rust` works on every shipped platform and 
 
 ## After this plan
 
-- **Free-threaded wheels** (3.13t/3.14t): pyo3 supports them with `#[pymodule(gil_used = false)]`,
+- **Free-threaded wheels** (3.14t): pyo3 supports them with `#[pymodule(gil_used = false)]`,
   but abi3 doesn't cover them. So they are extra wheels, and `Array`'s interior mutability needs
   review for thread safety first.
 - A **benchmark wheel matrix**: time the published wheels on each platform's runner. Only for a
