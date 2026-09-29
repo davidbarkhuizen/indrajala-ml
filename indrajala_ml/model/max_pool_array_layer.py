@@ -113,13 +113,11 @@ class MaxPoolArrayLayer:
     def downstream(self) -> FloatArray:
         return self._downstream(self.delta[np.newaxis, :], self.argmax[np.newaxis])[0]
 
-    # weight-free: every gradient hook below is a deliberate no-op
+    # weight-free: every gradient hook below is a deliberate no-op, and with no W the optimizer
+    # skips the layer
 
     def accumulate_gradient_batch(self, _input_activation_batch: FloatArray) -> None:
         pass
 
     def accumulate_gradient(self, _input_activation: FloatArray) -> None:
-        pass
-
-    def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
         pass

@@ -103,14 +103,6 @@ class ConvRustArrayLayer:
             self.delta, self._cols, self.grad_W, self.grad_b, self.geometry
         )
 
-    def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
-        # as ConvArrayLayer.apply_accumulated_gradient. The conv gradient sums over output
-        # positions, so the optimizer's fused single-example SGD step doesn't apply to it.
-        self.W, self.b = pa.layer_apply_accumulated_gradient(
-            self.W, self.b, self.grad_W, self.grad_b, learning_rate, batch_size
-        )
-        self.reset_gradient_accum()
-
     def reset_gradient_accum(self) -> None:
         self.grad_W = pa.Array.zeros((self.channel_count, self.fan_in))
         self.grad_b = pa.Array.zeros(self.channel_count)

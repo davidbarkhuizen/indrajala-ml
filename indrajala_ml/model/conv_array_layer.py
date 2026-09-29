@@ -32,8 +32,8 @@ class ConvArrayLayer:
 
     Not an ArrayLayer: size is the flattened output count (channel_count * out_height * out_width),
     while W is (channel_count, input_channels * kernel_size**2). It implements the methods
-    ArrayNetworkBase calls (forward*, compute_*_delta*, downstream*, accumulate_gradient*,
-    apply_accumulated_gradient).
+    ArrayNetworkBase calls (forward*, compute_*_delta*, downstream*, accumulate_gradient*), and
+    the network's optimizer (optimizers.py) steps W and b as a dense layer's.
 
     Layouts, shared with ConvRustArrayLayer (whose im2col is flattened to (N*P, C*k*k)):
 
@@ -150,8 +150,8 @@ class ConvArrayLayer:
         return self._downstream(self.delta[np.newaxis, :])[0]
 
     def _accumulate(self, delta_batch: FloatArray) -> None:
-        # reads the im2col columns forward cached. Positions and batch rows are both summed;
-        # apply_accumulated_gradient averages by batch_size only, as ConvKernel does
+        # reads the im2col columns forward cached. Positions and batch rows are both summed; the
+        # optimizer averages by batch_size only, as the pure-Python optimizer does for ConvKernel
         n = delta_batch.shape[0]
         D = delta_batch.reshape(n, self.channel_count, self.positions)
         self.grad_W += np.einsum("nop,npk->ok", D, self._cols)
@@ -162,13 +162,6 @@ class ConvArrayLayer:
 
     def accumulate_gradient(self, _input_activation: FloatArray) -> None:
         self._accumulate(self.delta[np.newaxis, :])
-
-    def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
-        # the network's optimizer calls this in place of its own rule until stage 3 of
-        # docs/composable-layers-workplan.md
-        self.W -= learning_rate * (self.grad_W / batch_size)
-        self.b -= learning_rate * (self.grad_b / batch_size)
-        self.reset_gradient_accum()
 
     def reset_gradient_accum(self) -> None:
         self.grad_W = np.zeros((self.channel_count, self.fan_in))

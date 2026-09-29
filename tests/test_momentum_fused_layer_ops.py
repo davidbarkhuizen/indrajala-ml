@@ -3,8 +3,8 @@
 rule, checked against the numpy optimizer's Momentum rule
 (`indrajala_ml.model.optimizers.NumpyOptimizer`) - the production reference this function
 matches - the same treatment `test_adam_fused_layer_ops.py`/
-`test_l2_fused_layer_ops.py` give their own fused ops. The conv layers call the same op on a conv
-W, (channel_count, fan_in), so it is also checked against `MomentumConvArrayLayer`.
+`test_l2_fused_layer_ops.py` give their own fused ops. The optimizer calls the same op on a conv
+W, (channel_count, fan_in), so it is also checked against the numpy optimizer on a conv layer.
 """
 
 import random
@@ -16,7 +16,7 @@ import pytest
 from indrajala_math_rust import Array, layer_momentum_apply_accumulated_gradient
 
 from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
-from indrajala_ml.model.momentum_conv_array_layer import MomentumConvArrayLayer
+from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.update_rules import Momentum
 from tests.helpers import LayerOptimizer, random_matrix, random_vector, rust_to_numpy
 
@@ -37,9 +37,11 @@ def _dense() -> Stepped:
 
 
 def _conv() -> Stepped:
-    # over 5 x 5 x 2 inputs with three 3 x 3 kernels: W (3, 18), stepped by its own update
-    layer = MomentumConvArrayLayer(5, 5, 2, 3, 3, momentum=MOMENTUM)
-    return layer, layer.apply_accumulated_gradient, lambda: [layer._velocity_W, layer._velocity_b]
+    # over 5 x 5 x 2 inputs with three 3 x 3 kernels: W (3, 18), stepped by the optimizer's
+    # Momentum rule
+    layer = ConvArrayLayer(5, 5, 2, 3, 3)
+    optimizer = LayerOptimizer(layer, Momentum(MOMENTUM))
+    return layer, optimizer.apply, lambda: optimizer.state
 
 
 LAYERS = {"dense": _dense, "conv": _conv}

@@ -12,6 +12,7 @@ from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
+from indrajala_ml.model.update_rules import SGD
 from tests.helpers import Backend, approx, fixed_downstream, to_numpy
 
 LayerCls = type[MaxPoolArrayLayer] | type[MaxPoolRustArrayLayer]
@@ -190,8 +191,12 @@ def test_hidden_delta_is_the_downstream_gradient_itself_and_gradient_hooks_are_n
 
     layer.accumulate_gradient_batch(backend.owned(X.tolist()))
     layer.accumulate_gradient(backend.owned(X[0].tolist()))
-    layer.apply_accumulated_gradient(0.1, batch_size=2)
+    # no weights, so the optimizer leaves the layer alone
     assert not hasattr(layer, "W") and not hasattr(layer, "b")
+    optimizer = backend.optimizer(SGD())
+    optimizer.begin_step()
+    optimizer.apply(0, layer, 0.1, batch_size=2)
+    optimizer.step_single(0, layer, backend.owned(X[0].tolist()), 0.1)
 
     with pytest.raises(NotImplementedError):
         layer.compute_output_delta(backend.owned([0.0] * 4))
