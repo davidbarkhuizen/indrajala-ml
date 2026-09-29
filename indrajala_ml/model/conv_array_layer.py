@@ -7,7 +7,7 @@ from typing import ClassVar
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
-from indrajala_ml.model.array_layer import FloatArray, unfused_sgd_step
+from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 
 
@@ -80,8 +80,8 @@ class ConvArrayLayer:
         self.W: FloatArray = np.zeros((channel_count, self.fan_in))
         self.b: FloatArray = np.zeros(channel_count)
 
-        self._grad_W: FloatArray = np.zeros((channel_count, self.fan_in))
-        self._grad_b: FloatArray = np.zeros(channel_count)
+        self.grad_W: FloatArray = np.zeros((channel_count, self.fan_in))
+        self.grad_b: FloatArray = np.zeros(channel_count)
 
     def _im2col(self, X: FloatArray) -> FloatArray:
         n = X.shape[0]
@@ -154,8 +154,8 @@ class ConvArrayLayer:
         # apply_accumulated_gradient averages by batch_size only, as ConvKernel does
         n = delta_batch.shape[0]
         D = delta_batch.reshape(n, self.channel_count, self.positions)
-        self._grad_W += np.einsum("nop,npk->ok", D, self._cols)
-        self._grad_b += D.sum(axis=(0, 2))
+        self.grad_W += np.einsum("nop,npk->ok", D, self._cols)
+        self.grad_b += D.sum(axis=(0, 2))
 
     def accumulate_gradient_batch(self, _input_activation_batch: FloatArray) -> None:
         self._accumulate(self.delta_batch)
@@ -164,13 +164,12 @@ class ConvArrayLayer:
         self._accumulate(self.delta[np.newaxis, :])
 
     def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
-        self.W -= learning_rate * (self._grad_W / batch_size)
-        self.b -= learning_rate * (self._grad_b / batch_size)
-        self._reset_gradient_accum()
+        # the network's optimizer calls this in place of its own rule until stage 3 of
+        # docs/composable-layers-workplan.md
+        self.W -= learning_rate * (self.grad_W / batch_size)
+        self.b -= learning_rate * (self.grad_b / batch_size)
+        self.reset_gradient_accum()
 
-    def sgd_step(self, input_activation: FloatArray, learning_rate: float) -> None:
-        unfused_sgd_step(self, input_activation, learning_rate)
-
-    def _reset_gradient_accum(self) -> None:
-        self._grad_W = np.zeros((self.channel_count, self.fan_in))
-        self._grad_b = np.zeros(self.channel_count)
+    def reset_gradient_accum(self) -> None:
+        self.grad_W = np.zeros((self.channel_count, self.fan_in))
+        self.grad_b = np.zeros(self.channel_count)

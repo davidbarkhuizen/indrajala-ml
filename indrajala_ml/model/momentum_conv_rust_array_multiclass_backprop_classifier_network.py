@@ -8,18 +8,17 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 )
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.momentum_conv_rust_array_layer import MomentumConvRustArrayLayer
-from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
+from indrajala_ml.model.update_rules import Momentum
 
 
 class MomentumConvRustArrayMultiClassBackpropClassifierNetwork(ConvRustArrayMultiClassBackpropClassifierNetwork):
     """
     MomentumConvVectorizedMultiClassBackpropClassifierNetwork on the Rust backend, with
-    MomentumConvRustArrayLayer for the conv layers and MomentumRustArrayLayer for the dense and
-    output layers.
+    MomentumConvRustArrayLayer for the conv layers and the optimizer's Momentum rule for the dense
+    and output layers.
     """
 
     conv_layer_cls = MomentumConvRustArrayLayer
-    hidden_layer_cls = output_layer_cls = MomentumRustArrayLayer
     hyperparameters = ("momentum",)
 
     def __init__(
@@ -33,3 +32,6 @@ class MomentumConvRustArrayMultiClassBackpropClassifierNetwork(ConvRustArrayMult
     ) -> None:
         self.momentum = momentum
         super().__init__(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
+
+    def _update_rule(self) -> Momentum:
+        return Momentum(self.momentum)

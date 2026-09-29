@@ -7,7 +7,7 @@ from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.backprop_node import sigmoid as node_sigmoid
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import approx, set_random_node_weights
+from tests.helpers import LayerOptimizer, approx, set_random_node_weights
 
 
 def test_sigmoid_matches_node_sigmoid_across_a_random_sweep_including_the_overflow_boundary():
@@ -207,7 +207,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_backprop_node_across_a_
             node.accumulate_gradient()
             node.apply_accumulated_gradient(learning_rate, batch_size=1)
         array_layer.accumulate_gradient(np.array(x))
-        array_layer.apply_accumulated_gradient(learning_rate, batch_size=1)
+        LayerOptimizer(array_layer).apply(learning_rate, batch_size=1)
 
         expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
         expected_b = np.array([node.bias for node in backprop_layer.nodes])
@@ -249,7 +249,7 @@ def test_accumulate_across_a_batch_then_apply_matches_backprop_node_across_a_ran
 
     for node in backprop_layer.nodes:
         node.apply_accumulated_gradient(learning_rate, batch_size)
-    array_layer.apply_accumulated_gradient(learning_rate, batch_size)
+    LayerOptimizer(array_layer).apply(learning_rate, batch_size)
 
     expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
     expected_b = np.array([node.bias for node in backprop_layer.nodes])
@@ -263,13 +263,13 @@ def test_apply_accumulated_gradient_resets_the_accumulator():
     array_layer = ArrayLayer(2, 3)
     array_layer.delta = np.array([0.2, -0.1])
     array_layer.accumulate_gradient(np.array([1.0, 1.0, 1.0]))
-    array_layer.apply_accumulated_gradient(0.1, batch_size=1)
+    LayerOptimizer(array_layer).apply(0.1, batch_size=1)
 
     weights_after_first_apply = array_layer.W.copy()
     bias_after_first_apply = array_layer.b.copy()
 
     # a second apply with nothing accumulated in between must be a no-op
-    array_layer.apply_accumulated_gradient(0.1, batch_size=1)
+    LayerOptimizer(array_layer).apply(0.1, batch_size=1)
 
     assert np.array_equal(array_layer.W, weights_after_first_apply)
     assert np.array_equal(array_layer.b, bias_after_first_apply)
@@ -295,8 +295,8 @@ def test_accumulate_gradient_batch_matches_looping_accumulate_gradient_over_ever
     one_shot.delta_batch = delta_batch
     one_shot.accumulate_gradient_batch(X)
 
-    assert np.allclose(one_shot._grad_W, looped._grad_W, rtol=1e-9, atol=1e-12)
-    assert np.allclose(one_shot._grad_b, looped._grad_b, rtol=1e-9, atol=1e-12)
+    assert np.allclose(one_shot.grad_W, looped.grad_W, rtol=1e-9, atol=1e-12)
+    assert np.allclose(one_shot.grad_b, looped.grad_b, rtol=1e-9, atol=1e-12)
 
 
 def test_downstream_matches_the_hand_written_transpose_matmul_single_and_batch():

@@ -83,9 +83,9 @@ def test_conv_accumulate_gradient_batch_matches_conv_array_layer_accumulate_grad
     layer.forward_batch(X)
     layer.delta_batch = rng.uniform(-1.0, 1.0, size=(BATCH_SIZE, layer.size))
     # non-zero starting accumulators, so the op is checked as an accumulate and not an assign
-    layer._grad_W = rng.uniform(-1.0, 1.0, size=layer._grad_W.shape)
-    layer._grad_b = rng.uniform(-1.0, 1.0, size=layer._grad_b.shape)
-    grad_W0, grad_b0 = layer._grad_W.copy(), layer._grad_b.copy()
+    layer.grad_W = rng.uniform(-1.0, 1.0, size=layer.grad_W.shape)
+    layer.grad_b = rng.uniform(-1.0, 1.0, size=layer.grad_b.shape)
+    grad_W0, grad_b0 = layer.grad_W.copy(), layer.grad_b.copy()
     layer.accumulate_gradient_batch(X)
 
     _A, cols = _rust_forward(layer, X)
@@ -97,8 +97,8 @@ def test_conv_accumulate_gradient_batch_matches_conv_array_layer_accumulate_grad
         _geometry(layer),
     )
 
-    np.testing.assert_allclose(to_numpy(grad_W), layer._grad_W, rtol=RTOL, atol=1e-13)
-    np.testing.assert_allclose(to_numpy(grad_b), layer._grad_b, rtol=RTOL, atol=1e-13)
+    np.testing.assert_allclose(to_numpy(grad_W), layer.grad_W, rtol=RTOL, atol=1e-13)
+    np.testing.assert_allclose(to_numpy(grad_b), layer.grad_b, rtol=RTOL, atol=1e-13)
 
 
 def test_layer_downstream_matches_array_layer_downstream():

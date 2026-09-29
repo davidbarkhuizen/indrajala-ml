@@ -8,7 +8,7 @@ from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
 class MomentumConvRustArrayLayer(ConvRustArrayLayer):
     """
     MomentumConvArrayLayer on the Rust backend: the same update and velocity state, applied by
-    MomentumRustArrayLayer's fused call (layer_momentum_apply_accumulated_gradient), which takes a
+    the Rust optimizer's Momentum call (layer_momentum_apply_accumulated_gradient), which takes a
     (W, b) pair of any matching shapes, so a conv (channel_count, fan_in) W too. momentum is
     required.
     """
@@ -40,12 +40,12 @@ class MomentumConvRustArrayLayer(ConvRustArrayLayer):
         ) = pa.layer_momentum_apply_accumulated_gradient(
             self.W,
             self.b,
-            self._grad_W,
-            self._grad_b,
+            self.grad_W,
+            self.grad_b,
             self._velocity_W,
             self._velocity_b,
             self._momentum,
             learning_rate,
             batch_size,
         )
-        self._reset_gradient_accum()
+        self.reset_gradient_accum()

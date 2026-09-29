@@ -14,25 +14,20 @@ import numpy as np
 import pytest
 
 import indrajala_ml.model
-from indrajala_ml.model.adam_rust_array_layer import AdamRustArrayLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.l2_rust_array_layer import L2RustArrayLayer
-from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
 from tests.helpers import all_subclasses
 
+# the momentum, Adam and L2 networks use RustArrayLayer itself: their update is the optimizer's
 LAYER_CLASSES: dict[str, Callable[[int, int], RustArrayLayer]] = {
     "plain": lambda size, input_size: RustArrayLayer(size, input_size),
     "relu": lambda size, input_size: ReLURustArrayLayer(size, input_size),
     "softmax": lambda size, input_size: SoftmaxRustArrayLayer(size, input_size),
     "cross-entropy": lambda size, input_size: CrossEntropyRustArrayLayer(size, input_size),
     "dropout": lambda size, input_size: DropoutRustArrayLayer(size, input_size, 0.5),
-    "momentum": lambda size, input_size: MomentumRustArrayLayer(size, input_size, 0.9),
-    "adam": lambda size, input_size: AdamRustArrayLayer(size, input_size, 0.9, 0.999, 1e-8),
-    "l2": lambda size, input_size: L2RustArrayLayer(size, input_size, 0.01),
 }
 
 # (size, input_size): a small layer, the dense production layers (784 -> 30 -> 10), and the conv

@@ -7,8 +7,6 @@ from typing import ClassVar
 import numpy as np
 import numpy.typing as npt
 
-from indrajala_ml.model.array_protocols import ArrayNetworkLayer, BackendArray
-
 # the numpy backend's array: every numpy layer's weights, activations and gradients
 FloatArray = npt.NDArray[np.float64]
 
@@ -22,15 +20,6 @@ def sigmoid(z: FloatArray) -> FloatArray:
 
     with np.errstate(over="ignore"):
         return 1.0 / (1.0 + np.exp(-z))
-
-
-def unfused_sgd_step[A: BackendArray](layer: ArrayNetworkLayer[A], input_activation: A, learning_rate: float) -> None:
-    """
-    accumulate_gradient then apply_accumulated_gradient at batch_size=1: the sgd_step of every numpy
-    layer, and of the Rust layers with no fused step (momentum, Adam, L2, conv).
-    """
-    layer.accumulate_gradient(input_activation)
-    layer.apply_accumulated_gradient(learning_rate, batch_size=1)
 
 
 def fan_in_aware_random_layer(size: int, previous_size: int) -> tuple[FloatArray, FloatArray]:
@@ -48,11 +37,12 @@ class ArrayLayer:
     """
     One sigmoid layer's weights and activations as arrays, not `size` BackpropNodes, with
     single-example (forward, delta, ...) and batch (forward_batch, delta_batch, ...) methods.
+    The network's optimizer (optimizers.py) steps W and b from the accumulated gradients.
     """
 
     # the constructor keyword arguments after (size, input_size) that a subclass takes (e.g.
-    # MomentumArrayLayer's momentum); ArrayNetworkBase passes them from the network's attributes
-    # of the same names
+    # DropoutArrayLayer's dropout_rate); ArrayNetworkBase passes them from the network's
+    # attributes of the same names
     hyperparameters: ClassVar[tuple[str, ...]] = ()
 
     def __init__(self, size: int, input_size: int) -> None:
@@ -62,10 +52,10 @@ class ArrayLayer:
         self.W: FloatArray = np.zeros((size, input_size))
         self.b: FloatArray = np.zeros(size)
 
-        # accumulated by accumulate_gradient*(), consumed and reset by
-        # apply_accumulated_gradient()
-        self._grad_W: FloatArray = np.zeros((size, input_size))
-        self._grad_b: FloatArray = np.zeros(size)
+        # accumulated by accumulate_gradient*(), consumed by the network's optimizer, which then
+        # calls reset_gradient_accum()
+        self.grad_W: FloatArray = np.zeros((size, input_size))
+        self.grad_b: FloatArray = np.zeros(size)
 
     def forward(self, x: FloatArray) -> FloatArray:
         self.z = self.W @ x + self.b
@@ -104,23 +94,14 @@ class ArrayLayer:
 
     def accumulate_gradient(self, input_activation: FloatArray) -> None:
         # one example's gradient; callable once per example before any weight is written
-        self._grad_W += np.outer(self.delta, input_activation)
-        self._grad_b += self.delta
+        self.grad_W += np.outer(self.delta, input_activation)
+        self.grad_b += self.delta
 
     def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
         # the sum of every row's outer product, in one matrix multiply
-        self._grad_W += self.delta_batch.T @ input_activation_batch
-        self._grad_b += self.delta_batch.sum(axis=0)
+        self.grad_W += self.delta_batch.T @ input_activation_batch
+        self.grad_b += self.delta_batch.sum(axis=0)
 
-    def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
-        self.W -= learning_rate * (self._grad_W / batch_size)
-        self.b -= learning_rate * (self._grad_b / batch_size)
-        self._reset_gradient_accum()
-
-    def sgd_step(self, input_activation: FloatArray, learning_rate: float) -> None:
-        # the single-example step ArrayNetworkBase._learn_input calls; RustArrayLayer fuses it
-        unfused_sgd_step(self, input_activation, learning_rate)
-
-    def _reset_gradient_accum(self) -> None:
-        self._grad_W = np.zeros((self.size, self.input_size))
-        self._grad_b = np.zeros(self.size)
+    def reset_gradient_accum(self) -> None:
+        self.grad_W = np.zeros((self.size, self.input_size))
+        self.grad_b = np.zeros(self.size)

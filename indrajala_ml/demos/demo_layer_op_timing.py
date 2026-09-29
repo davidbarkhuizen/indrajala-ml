@@ -9,12 +9,14 @@ from typing import Any
 import indrajala_math_rust as pa
 import numpy as np
 
+from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.update_rules import SGD
 
 CALLS = 300
 LOOPS = 5
@@ -98,9 +100,9 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[in
     Every ArrayLayer method at one (size, input_size) shape. Each build draws the same values from
     a fresh seeded generator, so both backends time identical inputs. 'hidden_delta' times the
     layer *below* this one (size input_size) calling compute_hidden_delta with this layer as
-    next_layer, since that is where this layer's W is read. 'sgd step' is this layer's share of
-    one single-example learn() step, sgd_step: fused on Rust, accumulate_gradient then
-    apply_accumulated_gradient on numpy.
+    next_layer, since that is where this layer's W is read. 'apply_accumulated_gradient' is the
+    SGD optimizer's apply on this layer, and 'sgd step' its step_single, the layer's share of one
+    single-example learn() step: fused on Rust, accumulate_gradient then apply on numpy.
     """
 
     def single(op: str) -> Callable[[str], Callable[[], object]]:
@@ -120,9 +122,10 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[in
                 return lambda: below.compute_hidden_delta(layer)
             if op == "accumulate_gradient":
                 return lambda: layer.accumulate_gradient(x)
+            optimizer = (NUMPY if backend == "numpy" else RUST).optimizer(SGD())
             if op == "apply_accumulated_gradient":
-                return lambda: layer.apply_accumulated_gradient(LEARNING_RATE, 1)
-            return lambda: layer.sgd_step(x, LEARNING_RATE)
+                return lambda: optimizer.apply(0, layer, LEARNING_RATE, 1)
+            return lambda: optimizer.step_single(0, layer, x, LEARNING_RATE)
 
         return build
 

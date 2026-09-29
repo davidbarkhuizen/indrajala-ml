@@ -36,8 +36,8 @@ class RustArrayLayer:
         self.W = pa.Array.zeros((size, input_size))
         self.b = pa.Array.zeros(size)
 
-        self._grad_W = pa.Array.zeros((size, input_size))
-        self._grad_b = pa.Array.zeros(size)
+        self.grad_W = pa.Array.zeros((size, input_size))
+        self.grad_b = pa.Array.zeros(size)
 
     def forward(self, x: pa.Array) -> pa.Array:
         self.a = pa.layer_forward(self.W, x, self.b)
@@ -70,30 +70,13 @@ class RustArrayLayer:
         self.delta_batch = pa.layer_hidden_delta_batch(next_layer.W, next_layer.delta_batch, self.A)
 
     def accumulate_gradient(self, input_activation: pa.Array) -> None:
-        self._grad_W, self._grad_b = pa.layer_accumulate_gradient(
-            self.delta, input_activation, self._grad_W, self._grad_b
-        )
+        self.grad_W, self.grad_b = pa.layer_accumulate_gradient(self.delta, input_activation, self.grad_W, self.grad_b)
 
     def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
-        self._grad_W, self._grad_b = pa.layer_accumulate_gradient_batch(
-            self.delta_batch, input_activation_batch, self._grad_W, self._grad_b
+        self.grad_W, self.grad_b = pa.layer_accumulate_gradient_batch(
+            self.delta_batch, input_activation_batch, self.grad_W, self.grad_b
         )
 
-    def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
-        self.W, self.b = pa.layer_apply_accumulated_gradient(
-            self.W, self.b, self._grad_W, self._grad_b, learning_rate, batch_size
-        )
-        self._reset_gradient_accum()
-
-    def sgd_step(self, input_activation: pa.Array, learning_rate: float) -> None:
-        # accumulate_gradient then apply_accumulated_gradient(learning_rate, batch_size=1) as one
-        # fused call, bit-identical to that pair. It relies on the accumulators being fresh
-        # zeros, which they always are in ArrayNetworkBase._learn_input, its only caller: apply
-        # resets them after every step. The accumulators aren't touched, so they stay zero. A
-        # subclass that overrides accumulate_gradient or apply_accumulated_gradient must also
-        # override this (tests/test_rust_array_layer_sgd_step.py checks it).
-        self.W, self.b = pa.layer_sgd_step(self.W, self.b, self.delta, input_activation, learning_rate)
-
-    def _reset_gradient_accum(self) -> None:
-        self._grad_W = pa.Array.zeros((self.size, self.input_size))
-        self._grad_b = pa.Array.zeros(self.size)
+    def reset_gradient_accum(self) -> None:
+        self.grad_W = pa.Array.zeros((self.size, self.input_size))
+        self.grad_b = pa.Array.zeros(self.size)

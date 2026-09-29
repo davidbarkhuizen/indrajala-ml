@@ -123,6 +123,3 @@ class MaxPoolArrayLayer:
 
     def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
         pass
-
-    def sgd_step(self, _input_activation: FloatArray, learning_rate: float) -> None:
-        pass

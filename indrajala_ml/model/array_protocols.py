@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Protocol, Self, runtime_checkable
 
+from indrajala_ml.model.update_rules import UpdateRule
+
 
 class BackendArray(Protocol):
     """What the networks do to a backend's array directly: numpy's ndarray and indrajala_math_rust.Array."""
@@ -45,18 +47,35 @@ class ArrayNetworkLayer[A: BackendArray](Protocol):
 
     def accumulate_gradient_batch(self, input_activation_batch: A, /) -> None: ...
 
-    def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None: ...
-
-    def sgd_step(self, input_activation: A, learning_rate: float, /) -> None: ...
-
 
 @runtime_checkable
 class WeightedArrayLayer[A: BackendArray](ArrayNetworkLayer[A], Protocol):
-    """A layer with weights: a dense layer (all of a dense network's) or a conv layer."""
+    """
+    A layer with weights: a dense layer (all of a dense network's) or a conv layer. The network's
+    optimizer (optimizers.py) steps W and b from the accumulated gradients, then resets them.
+    """
 
     size: int
     W: A
     b: A
+    grad_W: A
+    grad_b: A
+
+    def reset_gradient_accum(self) -> None: ...
+
+
+class ArrayOptimizer[A: BackendArray](Protocol):
+    """What ArrayNetworkBase drives to update its layers (optimizers.py)."""
+
+    rule: UpdateRule
+
+    def begin_step(self) -> None: ...
+
+    def apply(self, index: int, layer: ArrayNetworkLayer[A], learning_rate: float, batch_size: int) -> None: ...
+
+    def step_single(
+        self, index: int, layer: ArrayNetworkLayer[A], input_activation: A, learning_rate: float
+    ) -> None: ...
 
 
 class HyperparameterLayerClass[LayerT](Protocol):
@@ -75,6 +94,9 @@ class ArrayBackend[A: BackendArray](Protocol):
     def name(self) -> str: ...
 
     def seed(self, seed: int | None = None) -> None: ...
+
+    # a new optimizer applying rule on this backend's arrays
+    def optimizer(self, rule: UpdateRule) -> ArrayOptimizer[A]: ...
 
     def random_layer(self, size: int, previous_size: int) -> tuple[A, A]: ...
 

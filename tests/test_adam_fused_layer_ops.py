@@ -1,8 +1,8 @@
 """
 `layer_adam_apply_accumulated_gradient` is one fused Rust call for the whole Adam (Kingma & Ba,
 2014) update rule per parameter, checked
-against `indrajala_ml.model.adam_array_layer.AdamArrayLayer` - the actual production reference
-this function replaces - the same treatment `test_fused_layer_ops.py` gives every non-Adam fused
+against the numpy optimizer's Adam rule (`indrajala_ml.model.optimizers.NumpyOptimizer`) - the
+production reference this function matches - the same treatment `test_fused_layer_ops.py` gives every non-Adam fused
 op.
 """
 
@@ -12,8 +12,9 @@ import numpy as np
 import pytest
 from indrajala_math_rust import Array, layer_adam_apply_accumulated_gradient
 
-from indrajala_ml.model.adam_array_layer import AdamArrayLayer
-from tests.helpers import approx, random_matrix, random_vector, rust_to_numpy
+from indrajala_ml.model.array_layer import ArrayLayer
+from indrajala_ml.model.update_rules import Adam
+from tests.helpers import LayerOptimizer, approx, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)
 INPUT_SIZE = 8
@@ -31,10 +32,12 @@ def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_at_step_
     grad_b_data = random_vector(rng, HIDDEN_SIZE)
     learning_rate = rng.uniform(0.001, 1.0)
 
-    layer = AdamArrayLayer(HIDDEN_SIZE, INPUT_SIZE, BETA1, BETA2, EPSILON)
+    layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     layer.W, layer.b = np.array(w_data), np.array(b_data)
-    layer._grad_W, layer._grad_b = np.array(grad_w_data), np.array(grad_b_data)
-    layer.apply_accumulated_gradient(learning_rate, batch_size)
+    layer.grad_W, layer.grad_b = np.array(grad_w_data), np.array(grad_b_data)
+    optimizer = LayerOptimizer(layer, Adam(BETA1, BETA2, EPSILON))
+    optimizer.apply(learning_rate, batch_size)
+    m_W, v_W, m_b, v_b = optimizer.state
 
     new_w, new_b, new_m_w, new_v_w, new_m_b, new_v_b = layer_adam_apply_accumulated_gradient(
         Array(w_data),
@@ -54,10 +57,10 @@ def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_at_step_
     )
     assert rust_to_numpy(new_w) == approx(layer.W)
     assert rust_to_numpy(new_b) == approx(layer.b)
-    assert rust_to_numpy(new_m_w) == approx(layer._m_W)
-    assert rust_to_numpy(new_v_w) == approx(layer._v_W)
-    assert rust_to_numpy(new_m_b) == approx(layer._m_b)
-    assert rust_to_numpy(new_v_b) == approx(layer._v_b)
+    assert rust_to_numpy(new_m_w) == approx(m_W)
+    assert rust_to_numpy(new_v_w) == approx(v_W)
+    assert rust_to_numpy(new_m_b) == approx(m_b)
+    assert rust_to_numpy(new_v_b) == approx(v_b)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -66,7 +69,8 @@ def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_across_s
     # stateless update where a single comparison at t=1 would do - mirrors
     # test_adam_array_layer.py's own reasoning for using a multi-step sweep, not just one call.
     rng = random.Random(seed)
-    layer = AdamArrayLayer(HIDDEN_SIZE, INPUT_SIZE, BETA1, BETA2, EPSILON)
+    layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
+    optimizer = LayerOptimizer(layer, Adam(BETA1, BETA2, EPSILON))
     layer.W = np.array(random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE))
     layer.b = np.array(random_vector(rng, HIDDEN_SIZE))
     learning_rate = rng.uniform(0.001, 1.0)
@@ -82,9 +86,9 @@ def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_across_s
         grad_w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
         grad_b_data = random_vector(rng, HIDDEN_SIZE)
 
-        layer._grad_W = np.array(grad_w_data)
-        layer._grad_b = np.array(grad_b_data)
-        layer.apply_accumulated_gradient(learning_rate, batch_size=1)
+        layer.grad_W = np.array(grad_w_data)
+        layer.grad_b = np.array(grad_b_data)
+        optimizer.apply(learning_rate, batch_size=1)
 
         w, b, m_w, v_w, m_b, v_b = layer_adam_apply_accumulated_gradient(
             w,
@@ -105,7 +109,7 @@ def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_across_s
 
         assert rust_to_numpy(w) == approx(layer.W)
         assert rust_to_numpy(b) == approx(layer.b)
-        assert layer._t == t
+        assert optimizer.optimizer.t == t
 
 
 def test_rejects_batch_size_zero():

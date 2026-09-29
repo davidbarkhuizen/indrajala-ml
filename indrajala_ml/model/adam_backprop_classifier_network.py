@@ -2,12 +2,7 @@ from __future__ import annotations
 
 from indrajala_ml.model.adam_layer import make_adam_layer_cls
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-
-# Kingma & Ba (2014)'s published defaults. Unlike momentum's coefficient these have defaults:
-# in practice they are near-fixed constants, not a tuned knob.
-DEFAULT_BETA1 = 0.9
-DEFAULT_BETA2 = 0.999
-DEFAULT_EPSILON = 1e-8
+from indrajala_ml.model.update_rules import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON
 
 
 class AdamBackpropClassifierNetwork(BackpropClassifierNetwork):

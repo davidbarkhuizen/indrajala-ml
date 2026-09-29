@@ -9,7 +9,7 @@ from indrajala_ml.model.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import Backend, approx, set_random_node_weights
+from tests.helpers import Backend, LayerOptimizer, approx, set_random_node_weights
 
 LayerCls = type[SoftmaxArrayLayer] | type[SoftmaxRustArrayLayer]
 LAYER_CLS: dict[str, LayerCls] = {"numpy": SoftmaxArrayLayer, "rust": SoftmaxRustArrayLayer}
@@ -167,14 +167,14 @@ def test_compute_hidden_delta_is_inherited_unchanged_from_array_layer(layer_cls:
     assert layer_cls.compute_hidden_delta_batch is base.compute_hidden_delta_batch
 
 
-def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(layer_cls: LayerCls, backend: Backend):
+def test_the_weight_update_is_array_layers(layer_cls: LayerCls, backend: Backend):
 
     array_layer = layer_cls(2, 2)
     array_layer.W = backend.owned([[1.0, 2.0], [3.0, 4.0]])
     array_layer.b = backend.owned([5.0, 6.0])
     array_layer.delta = backend.owned([1.0, 1.0])
     array_layer.accumulate_gradient(backend.owned([1.0, 1.0]))
-    array_layer.apply_accumulated_gradient(learning_rate=0.1, batch_size=1)
+    LayerOptimizer(array_layer).apply(learning_rate=0.1, batch_size=1)
 
     assert np.allclose(array_layer.W.tolist(), [[0.9, 1.9], [2.9, 3.9]])
     assert np.allclose(array_layer.b.tolist(), [4.9, 5.9])

@@ -1,9 +1,10 @@
 """
-RustArrayLayer.sgd_step: one fused call (pa.layer_sgd_step) in place of accumulate_gradient then
-apply_accumulated_gradient at batch_size=1, which is what RustArrayNetworkBase.learn called before.
-Checked exactly (tolist() ==, not approx), at the layer and at the network level, against that
-unfused pair. Layers whose update isn't plain SGD keep the unfused pair; the last test makes sure
-every such subclass says so explicitly.
+RustOptimizer.step_single: under SGD, one fused call (pa.layer_sgd_step) in place of
+accumulate_gradient then the optimizer's apply at batch_size=1, which is what a Rust network's
+learn() called before the step was fused. Checked exactly (bit for bit, not approx), at the layer
+and at the network level, against that unfused pair, for every rule. The fused call is used iff
+the rule is SGD and the layer is dense: the other rules, and the conv layers' own update, keep
+the unfused pair.
 """
 
 import importlib
@@ -18,11 +19,10 @@ import numpy as np
 import pytest
 
 import indrajala_ml.model
-from indrajala_ml.model.adam_rust_array_layer import AdamRustArrayLayer
 from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
     AdamRustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.array_layer import unfused_sgd_step
+from indrajala_ml.model.array_backend import RUST
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -35,15 +35,17 @@ from indrajala_ml.model.cross_entropy_rust_array_multiclass_backprop_classifier_
     CrossEntropyRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.l2_rust_array_layer import L2RustArrayLayer
 from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network import (
     L2RustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
+from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
+    MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_network import (
     MomentumRustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.optimizers import RustOptimizer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.relu_rust_array_multiclass_backprop_classifier_network import (
     ReLURustArrayMultiClassBackpropClassifierNetwork,
@@ -57,6 +59,7 @@ from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
 from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_network import (
     SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from tests.helpers import all_subclasses
 
 SIZE, INPUT_SIZE = 7, 11
@@ -67,22 +70,36 @@ LAYER_FACTORIES = {
     "softmax": lambda: SoftmaxRustArrayLayer(SIZE, INPUT_SIZE),
     "cross-entropy": lambda: CrossEntropyRustArrayLayer(SIZE, INPUT_SIZE),
     "dropout": lambda: DropoutRustArrayLayer(SIZE, INPUT_SIZE, 0.5),
-    "momentum": lambda: MomentumRustArrayLayer(SIZE, INPUT_SIZE, 0.9),
-    "adam": lambda: AdamRustArrayLayer(SIZE, INPUT_SIZE, 0.9, 0.999, 1e-8),
-    "l2": lambda: L2RustArrayLayer(SIZE, INPUT_SIZE, 0.01),
 }
 
-NETWORK_FACTORIES = {
-    "plain": lambda: RustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3),
-    "binary": lambda: RustArrayBackpropClassifierNetwork([5], 6),
-    "relu": lambda: ReLURustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3),
-    "softmax": lambda: SoftmaxRustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3),
-    "cross-entropy": lambda: CrossEntropyRustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3),
-    "cross-entropy binary": lambda: CrossEntropyRustArrayBackpropClassifierNetwork([5], 6),
-    "momentum": lambda: MomentumRustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3, 0.9),
-    "adam": lambda: AdamRustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3),
-    "l2": lambda: L2RustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3, 0.01),
-    "conv": lambda: ConvRustArrayMultiClassBackpropClassifierNetwork(6, 6, [ConvSpec(3, 2), PoolSpec(2)], [4], 3),
+RULES: dict[str, UpdateRule] = {
+    "sgd": SGD(),
+    "momentum": Momentum(0.9),
+    "adam": Adam(0.9, 0.999, 1e-8),
+    "weight decay": WeightDecay(0.01),
+}
+
+# (network factory, its rule's name)
+NETWORK_FACTORIES: dict[str, tuple[Callable[[], Any], str]] = {
+    "plain": (lambda: RustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3), "sgd"),
+    "binary": (lambda: RustArrayBackpropClassifierNetwork([5], 6), "sgd"),
+    "relu": (lambda: ReLURustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3), "sgd"),
+    "softmax": (lambda: SoftmaxRustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3), "sgd"),
+    "cross-entropy": (lambda: CrossEntropyRustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3), "sgd"),
+    "cross-entropy binary": (lambda: CrossEntropyRustArrayBackpropClassifierNetwork([5], 6), "sgd"),
+    "momentum": (lambda: MomentumRustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3, 0.9), "momentum"),
+    "adam": (lambda: AdamRustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3), "adam"),
+    "l2": (lambda: L2RustArrayMultiClassBackpropClassifierNetwork([5, 4], 6, 3, 0.01), "weight decay"),
+    "conv": (
+        lambda: ConvRustArrayMultiClassBackpropClassifierNetwork(6, 6, [ConvSpec(3, 2), PoolSpec(2)], [4], 3),
+        "sgd",
+    ),
+    "momentum conv": (
+        lambda: MomentumConvRustArrayMultiClassBackpropClassifierNetwork(
+            6, 6, [ConvSpec(3, 2), PoolSpec(2)], [4], 3, 0.9
+        ),
+        "momentum",
+    ),
 }
 
 
@@ -101,23 +118,37 @@ def _random_layer_state(layer: RustArrayLayer, rng: np.random.Generator) -> pa.A
     return pa.Array(x.tolist())
 
 
+def _unfused_step_single(optimizer: RustOptimizer) -> Callable[[int, Any, pa.Array, float], None]:
+    # the step before it was fused: accumulate, then apply at batch_size=1
+    def step_single(index: int, layer: Any, input_activation: pa.Array, learning_rate: float) -> None:
+        layer.accumulate_gradient(input_activation)
+        optimizer.apply(index, layer, learning_rate, 1)
+
+    return step_single
+
+
+@pytest.mark.parametrize("rule_name", RULES)
 @pytest.mark.parametrize("name", LAYER_FACTORIES)
 @pytest.mark.parametrize("seed", range(10))
-def test_layer_sgd_step_is_bit_identical_to_accumulate_then_apply(name: str, seed: int):
+def test_step_single_is_bit_identical_to_accumulate_then_apply(name: str, rule_name: str, seed: int):
     fused, unfused = LAYER_FACTORIES[name](), LAYER_FACTORIES[name]()
     x = _random_layer_state(fused, np.random.default_rng(seed))
     _random_layer_state(unfused, np.random.default_rng(seed))
+    fused_optimizer, unfused_optimizer = RustOptimizer(RULES[rule_name]), RustOptimizer(RULES[rule_name])
+    unfused_step_single = _unfused_step_single(unfused_optimizer)
 
-    # two steps, so a stateful update (momentum's velocity, Adam's m/v/t) is exercised
+    # two steps, so a stateful rule (momentum's velocity, Adam's m/v/t) is exercised
     for learning_rate in (0.5, 0.1):
-        fused.sgd_step(x, learning_rate)
-        unfused_sgd_step(unfused, x, learning_rate)
+        fused_optimizer.begin_step()
+        fused_optimizer.step_single(0, fused, x, learning_rate)
+        unfused_optimizer.begin_step()
+        unfused_step_single(0, unfused, x, learning_rate)
 
     assert _bits(fused.W.tolist()) == _bits(unfused.W.tolist())
     assert _bits(fused.b.tolist()) == _bits(unfused.b.tolist())
     # accumulators stay fresh zeros either way, ready for the next step
-    assert fused._grad_W.tolist() == unfused._grad_W.tolist() == [[0.0] * INPUT_SIZE] * SIZE
-    assert fused._grad_b.tolist() == unfused._grad_b.tolist() == [0.0] * SIZE
+    assert fused.grad_W.tolist() == unfused.grad_W.tolist() == [[0.0] * INPUT_SIZE] * SIZE
+    assert fused.grad_b.tolist() == unfused.grad_b.tolist() == [0.0] * SIZE
 
 
 # a network of any of NETWORK_FACTORIES' classes
@@ -129,46 +160,63 @@ def _sample(network: Any, rng: random.Random) -> tuple[tuple[float, ...], float 
 
 @pytest.mark.parametrize("name", NETWORK_FACTORIES)
 def test_learn_is_bit_identical_to_the_unfused_step_after_every_step(name: str):
-    # the reference network's layers run the pre-sgd_step loop: accumulate_gradient then
-    # apply_accumulated_gradient(learning_rate, 1). Dropout networks are left out only because
-    # their masks come from an unseeded RNG; DropoutRustArrayLayer is covered at the layer level.
-    fused, unfused = NETWORK_FACTORIES[name](), NETWORK_FACTORIES[name]()
+    # the reference network's optimizer runs the unfused step. Dropout networks are left out only
+    # because their masks come from an unseeded RNG; DropoutRustArrayLayer is covered at the layer
+    # level.
+    factory, _rule_name = NETWORK_FACTORIES[name]
+    fused, unfused = factory(), factory()
     fused.randomize()
     unfused.restore(fused.snapshot())
-    for layer in _all_layers(unfused):
-        layer.sgd_step = _unfused_sgd_step(layer)
+    unfused.optimizer.step_single = _unfused_step_single(unfused.optimizer)
 
     rng = random.Random(0)
     for _step in range(10):
         state, category = _sample(fused, rng)
         fused.learn(0.5, state, category)
         unfused.learn(0.5, state, category)
-        for fused_layer, unfused_layer in zip(_all_layers(fused), _all_layers(unfused)):
+        for fused_layer, unfused_layer in zip(fused.layers, unfused.layers):
             if hasattr(fused_layer, "W"):
                 assert _bits(fused_layer.W.tolist()) == _bits(unfused_layer.W.tolist())
                 assert _bits(fused_layer.b.tolist()) == _bits(unfused_layer.b.tolist())
 
 
-def _unfused_sgd_step(layer: RustArrayLayer) -> Callable[[pa.Array, float], None]:
-    return lambda x, learning_rate: unfused_sgd_step(layer, x, learning_rate)
+@pytest.mark.parametrize("name", NETWORK_FACTORIES)
+def test_the_fused_step_is_used_iff_the_rule_is_sgd(name: str, monkeypatch: pytest.MonkeyPatch):
+    # one fused call per dense layer per learn() under SGD, none under any other rule; conv layers
+    # keep their own update, so they never take it
+    factory, rule_name = NETWORK_FACTORIES[name]
+    network = factory()
+    network.randomize()
+    assert network.optimizer.rule == RULES[rule_name]
+
+    calls: list[None] = []
+    layer_sgd_step = pa.layer_sgd_step
+
+    def counting_layer_sgd_step(*args: Any) -> Any:
+        calls.append(None)
+        return layer_sgd_step(*args)
+
+    monkeypatch.setattr(pa, "layer_sgd_step", counting_layer_sgd_step)
+    network.learn(0.5, *_sample(network, random.Random(0)))
+
+    dense_layers = [layer for layer in network.layers if isinstance(layer, RustArrayLayer)]
+    assert len(calls) == (len(dense_layers) if rule_name == "sgd" else 0)
 
 
-def _all_layers(network: Any) -> list[Any]:
-    return getattr(network, "conv_layers", []) + list(network.layers)
+def test_every_network_has_its_backends_optimizer():
+    for factory, rule_name in NETWORK_FACTORIES.values():
+        network = factory()
+        assert type(network.optimizer) is type(RUST.optimizer(SGD())) and network.optimizer.rule == RULES[rule_name]
 
 
-def test_every_subclass_that_changes_the_update_overrides_sgd_step():
-    # RustArrayLayer.sgd_step fuses plain-SGD accumulate + apply. A subclass that changes either
-    # one and inherits that fused sgd_step would silently train with plain SGD instead.
+def test_no_dense_rust_layer_changes_accumulate_gradient():
+    # the fused step computes RustArrayLayer.accumulate_gradient's plain outer product. A dense
+    # subclass that changed it would train silently wrong under SGD, unless RustOptimizer.step_single
+    # stopped fusing for it.
     for module in pkgutil.iter_modules(indrajala_ml.model.__path__):
         importlib.import_module(f"indrajala_ml.model.{module.name}")
     subclasses = list(all_subclasses(RustArrayLayer))
-    assert {MomentumRustArrayLayer, AdamRustArrayLayer, L2RustArrayLayer} <= set(subclasses)
+    assert {ReLURustArrayLayer, SoftmaxRustArrayLayer, DropoutRustArrayLayer} <= set(subclasses)
 
     for subclass in subclasses:
-        changes_update = (
-            subclass.accumulate_gradient is not RustArrayLayer.accumulate_gradient
-            or subclass.apply_accumulated_gradient is not RustArrayLayer.apply_accumulated_gradient
-        )
-        if changes_update:
-            assert subclass.sgd_step is not RustArrayLayer.sgd_step, subclass.__name__
+        assert subclass.accumulate_gradient is RustArrayLayer.accumulate_gradient, subclass.__name__

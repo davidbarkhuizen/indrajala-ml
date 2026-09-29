@@ -25,7 +25,7 @@ from indrajala_math_rust import (
 )
 
 from indrajala_ml.model.array_layer import ArrayLayer, sigmoid
-from tests.helpers import approx, random_matrix, random_vector, rust_to_numpy
+from tests.helpers import LayerOptimizer, approx, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)
 INPUT_SIZE = 8
@@ -130,15 +130,15 @@ def test_layer_accumulate_gradient_matches_array_layer(seed: int):
 
     layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     layer.delta = np.array(delta_data)
-    layer._grad_W = np.array(grad_w_data)
-    layer._grad_b = np.array(grad_b_data)
+    layer.grad_W = np.array(grad_w_data)
+    layer.grad_b = np.array(grad_b_data)
     layer.accumulate_gradient(np.array(input_activation_data))
 
     new_grad_w, new_grad_b = layer_accumulate_gradient(
         Array(delta_data), Array(input_activation_data), Array(grad_w_data), Array(grad_b_data)
     )
-    assert rust_to_numpy(new_grad_w) == approx(layer._grad_W)
-    assert rust_to_numpy(new_grad_b) == approx(layer._grad_b)
+    assert rust_to_numpy(new_grad_w) == approx(layer.grad_W)
+    assert rust_to_numpy(new_grad_b) == approx(layer.grad_b)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -158,10 +158,10 @@ def test_layer_accumulate_gradient_is_bit_identical_to_grad_w_plus_outer(seed: i
     assert new_grad_w.tolist() == (grad_w + outer(delta, x)).tolist()
     layer = ArrayLayer(size, input_size)
     layer.delta = delta_data
-    layer._grad_W = grad_w_data.copy()
+    layer.grad_W = grad_w_data.copy()
     layer.accumulate_gradient(x_data)
-    assert new_grad_w.tolist() == layer._grad_W.tolist()
-    assert new_grad_b.tolist() == layer._grad_b.tolist()
+    assert new_grad_w.tolist() == layer.grad_W.tolist()
+    assert new_grad_b.tolist() == layer.grad_b.tolist()
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -174,8 +174,8 @@ def test_layer_accumulate_gradient_batch_matches_array_layer(seed: int):
 
     layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     layer.delta_batch = np.array(delta_batch_data)
-    layer._grad_W = np.array(grad_w_data)
-    layer._grad_b = np.array(grad_b_data)
+    layer.grad_W = np.array(grad_w_data)
+    layer.grad_b = np.array(grad_b_data)
     layer.accumulate_gradient_batch(np.array(input_activation_batch_data))
 
     new_grad_w, new_grad_b = layer_accumulate_gradient_batch(
@@ -184,8 +184,8 @@ def test_layer_accumulate_gradient_batch_matches_array_layer(seed: int):
         Array(grad_w_data),
         Array(grad_b_data),
     )
-    assert rust_to_numpy(new_grad_w) == approx(layer._grad_W)
-    assert rust_to_numpy(new_grad_b) == approx(layer._grad_b)
+    assert rust_to_numpy(new_grad_w) == approx(layer.grad_W)
+    assert rust_to_numpy(new_grad_b) == approx(layer.grad_b)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -201,8 +201,8 @@ def test_layer_apply_accumulated_gradient_matches_array_layer_exactly(seed: int,
 
     layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     layer.W, layer.b = np.array(w_data), np.array(b_data)
-    layer._grad_W, layer._grad_b = np.array(grad_w_data), np.array(grad_b_data)
-    layer.apply_accumulated_gradient(learning_rate, batch_size)
+    layer.grad_W, layer.grad_b = np.array(grad_w_data), np.array(grad_b_data)
+    LayerOptimizer(layer).apply(learning_rate, batch_size)
 
     new_w, new_b = layer_apply_accumulated_gradient(
         Array(w_data),
