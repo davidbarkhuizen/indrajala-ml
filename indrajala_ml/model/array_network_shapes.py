@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Generic
-
-from typing_extensions import Self
+from typing import TYPE_CHECKING, Any, Generic, Self
 
 from indrajala_ml.model.array_network_base import as_weighted_array_layers
 from indrajala_ml.model.array_protocols import A, WeightedArrayLayer

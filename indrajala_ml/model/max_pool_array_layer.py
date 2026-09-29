@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import cast
-
 import numpy as np
 import numpy.typing as npt
 from numpy.lib.stride_tricks import sliding_window_view
@@ -68,8 +66,7 @@ class MaxPoolArrayLayer:
         n = X.shape[0]
         p, s = self.pool_size, self.stride
         planes = X.reshape(n, self.input_channels, self.input_height, self.input_width)
-        # numpy 2.2's stub types axis as one int; the function takes a tuple (numpy's docs)
-        windows = cast(FloatArray, sliding_window_view(planes, (p, p), axis=(2, 3)))[:, :, ::s, ::s]  # pyright: ignore[reportCallIssue, reportArgumentType]
+        windows = sliding_window_view(planes, (p, p), axis=(2, 3))[:, :, ::s, ::s]
         slots = windows.reshape(n, self.input_channels, self.out_height, self.out_width, p * p)
         self.argmax_batch: IndexArray = slots.argmax(axis=-1)  # (N, C, out_height, out_width)
         self.A = np.take_along_axis(slots, self.argmax_batch[..., np.newaxis], axis=-1).reshape(n, self.size)

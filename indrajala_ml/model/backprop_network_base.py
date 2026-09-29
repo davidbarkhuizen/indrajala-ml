@@ -3,9 +3,7 @@ from __future__ import annotations
 import math
 import random
 from collections.abc import Sequence
-from typing import Any, Generic, cast
-
-from typing_extensions import Self, TypeVar
+from typing import Any, Generic, Self, TypeVar, cast
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.bounds import validate_batch, validate_input_bounds, validate_layer_sizes

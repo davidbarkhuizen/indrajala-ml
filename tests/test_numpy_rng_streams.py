@@ -29,7 +29,7 @@ class MersenneTwister:
         self.index = 624
 
     @classmethod
-    def from_key(cls, key: Sequence[int]) -> "MersenneTwister":
+    def from_key(cls, key: Sequence[int]) -> MersenneTwister:
         """init_by_array (mt19937ar.c), numpy's seeding for a sequence seed."""
         mt = cls(19650218)
         state = mt.state

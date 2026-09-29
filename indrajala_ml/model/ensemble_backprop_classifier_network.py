@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Generic
-
-from typing_extensions import TypeVar
+from typing import Generic, TypeVar
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.classification import argmax_first_occurrence

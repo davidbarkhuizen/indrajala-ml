@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Generic, Protocol, cast
-
-from typing_extensions import Self
+from typing import Any, Generic, Protocol, Self, cast
 
 from indrajala_ml.model.array_protocols import (
     A,

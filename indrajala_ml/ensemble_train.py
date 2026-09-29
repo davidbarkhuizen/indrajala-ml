@@ -212,7 +212,7 @@ def _available_memory_bytes() -> int | None:
             for line in f:
                 if line.startswith("MemAvailable:"):
                     return int(line.split()[1]) * 1024
-    except (OSError, ValueError, IndexError):
+    except OSError, ValueError, IndexError:
         pass
 
     return None

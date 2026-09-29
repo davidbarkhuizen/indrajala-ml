@@ -7,9 +7,7 @@ them for its own A without inheriting from them.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Protocol, TypeVar, runtime_checkable
-
-from typing_extensions import Self
+from typing import Any, Protocol, Self, TypeVar, runtime_checkable
 
 
 class BackendArray(Protocol):

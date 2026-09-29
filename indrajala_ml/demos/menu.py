@@ -24,7 +24,7 @@ def _read_selection() -> int | None:
     while True:
         try:
             raw = input("select a demo by number, or 'q' to quit: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
+        except EOFError, KeyboardInterrupt:
             print()
             return None
 

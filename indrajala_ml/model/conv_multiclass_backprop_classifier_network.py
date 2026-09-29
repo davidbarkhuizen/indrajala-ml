@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-
-from typing_extensions import Self
+from typing import Self
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import fan_in_aware_weights_and_bias
