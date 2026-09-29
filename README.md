@@ -174,6 +174,8 @@ test passing, and:
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, then attention.
+- [docs/composable-layers-workplan.md](docs/composable-layers-workplan.md): networks built from
+  layer specs and one update rule, in all three implementations (roadmap step 1).
 - [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's
   reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and the open RNG work.
 
