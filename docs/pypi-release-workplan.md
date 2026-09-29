@@ -1,7 +1,7 @@
 # Workplan: publish indrajala-math-rust to PyPI
 
-**Status: planned. Nothing is built yet. Stage 0 comes first, and it needs the repo owner's PyPI
-and GitHub accounts.**
+**Status: stage 1 (pyo3 0.29) is done. Stage 0 still needs the repo owner's PyPI and GitHub
+accounts; stages 2-6 are planned.**
 
 The goal is to publish the Rust crate (the `rust/` submodule,
 [indrajala-math-rust](https://github.com/davidbarkhuizen/indrajala-math-rust)) on PyPI as
@@ -28,15 +28,15 @@ own platform.
 ## Where things are now
 
 - `rust/Cargo.toml`: version 0.1.0, `license = "MIT"`, `crate-type = ["cdylib"]` (a Python module
-  only, so crates.io is out of scope), and `pyo3 = "0.20"` with `extension-module` and
-  `multiple-pymethods`. `[lints.rust]` allows `non_local_definitions` only for pyo3 0.20's
-  expansions.
-- `rust/pyproject.toml`: name, version, `license = "MIT"`, `requires-python = ">=3.9"`. It has no
+  only, so crates.io is out of scope), and `pyo3 = "0.29"` with `extension-module` and
+  `multiple-pymethods`. The module declares `gil_used = true` (not audited for free-threaded
+  Python), and both pyclasses opt out of the by-value `FromPyObject` (`skip_from_py_object`).
+- `rust/pyproject.toml`: name, version, `license = "MIT"`, `requires-python = ">=3.10"`. It has no
   description, authors, URLs or classifiers.
-- pyo3 0.20 supports CPython up to 3.12. Today the latest pyo3 is 0.29.2 (2026-08-28) and the
-  latest CPython is 3.14. Python 3.9 reached end of life in October 2025.
-- Of the 9 source files, 2 use `#[pyclass]` (`Array`, `ConvGeometry`). The pyo3 API appears in
-  all 9, about 176 lines, most of them in `fused.rs` and `lib.rs`.
+- pyo3 0.29.2 is the latest release (2026-08-05) and builds for CPython 3.8 up to 3.14, the
+  latest. Python 3.9 reached end of life in October 2025.
+- Of the 9 source files, 2 use `#[pyclass]` (`Array`, `ConvGeometry`). Every function borrows
+  its arrays (`&RustArray`), so no call copies an array at the boundary.
 - The AVX2/FMA code is gated with `#[cfg(target_arch = "x86_64")]` and picked at runtime with
   `is_x86_feature_detected!`. A portable x86_64 wheel still uses AVX2 where the CPU has it, and
   aarch64 compiles only the scalar path.
@@ -68,8 +68,10 @@ own platform.
 ## Pitfalls to design around
 
 - **Timing baselines.** Every Rust number in docs/optimizations/ comes from a local
-  `maturin build --release` on the Ryzen machine, with pyo3 0.20 and without abi3. Stages 1 and 2
-  change what the build does at the Python boundary. Stage 3 changes where the published wheel is
+  `maturin build --release` on the Ryzen machine, without abi3, most of them with pyo3 0.20.
+  Stage 1 (pyo3 0.29) measured faster `Array` methods at the boundary and no change inside conv
+  epochs (see [optimizations/implemented.md](optimizations/implemented.md#the-python-boundary-pyo3-029)).
+  Stages 1 and 2 change what the build does at the Python boundary. Stage 3 changes where the published wheel is
   built (a manylinux container). Each stage measures its own change. None assumes it is free.
 - **The golden run is bit-exact.** The pyo3 upgrade and abi3 don't touch the kernels, so
   `scripts/golden_training_run.py check` must pass bit-identical. A difference means the change
@@ -109,6 +111,12 @@ before merge.
 Done when both pending publishers are listed and both environments exist.
 
 ### Stage 1: upgrade pyo3 from 0.20 to 0.29
+
+**Done** in crate #39, one commit per step (0.21, 0.22, 0.23, 0.26, 0.27, 0.28, 0.29), with every
+gate below passed: the golden run bit-identical, the stub unchanged, and the timing in
+[optimizations/implemented.md](optimizations/implemented.md#the-python-boundary-pyo3-029). Two
+choices were made on the way: `#[pymodule(gil_used = true)]`, because 0.28 flips the default to
+declaring free-threaded support, and `skip_from_py_object` on both pyclasses. The plan as written:
 
 The latest Python an unupgraded crate can build for is 3.12. Upgrade in steps, one commit per
 step on one branch, with the crate tests green at each step:
