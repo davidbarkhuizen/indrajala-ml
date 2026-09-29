@@ -3,7 +3,6 @@ import random
 import numpy as np
 import pytest
 
-from indrajala_ml.model.adam_layer import make_adam_layer_cls
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
@@ -14,7 +13,7 @@ from tests.helpers import Backend, LayerOptimizer
 BETA1, BETA2, EPSILON = 0.9, 0.999, 1e-8
 ADAM = Adam(BETA1, BETA2, EPSILON)
 
-# the layers the optimizer's Adam rule steps (optimizers.py), as AdamBackpropNode steps itself
+# the layers the optimizer's Adam rule steps (optimizers.py), as the pure-Python optimizer steps a BackpropLayer
 LayerCls = type[ArrayLayer] | type[RustArrayLayer]
 LAYER_CLS: dict[str, LayerCls] = {"numpy": ArrayLayer, "rust": RustArrayLayer}
 
@@ -33,22 +32,22 @@ def _array_layer_like(backprop_layer: BackpropLayer, backend: Backend):
     return array_layer
 
 
-def test_accumulate_then_apply_at_batch_size_one_matches_adam_backprop_node_at_every_step(backend: Backend):
+def test_accumulate_then_apply_at_batch_size_one_matches_the_pure_python_adam_optimizer_at_every_step(backend: Backend):
 
     # compared after every step: the m/v/t state only shows a mistake across repeated steps
     rng = random.Random(11)
     dimension = 5
     size = 4
-    node_layer_cls = make_adam_layer_cls(BETA1, BETA2, EPSILON)
 
     state_layer = StateLayer(dimension, [(-10.0, 10.0)] * dimension)
-    backprop_layer = node_layer_cls(size=size, input_layer=state_layer)
+    backprop_layer = BackpropLayer(size=size, input_layer=state_layer)
     for node in backprop_layer.nodes:
         node.update_input_weights([rng.uniform(-3.0, 3.0) for _ in range(dimension)])
         node.bias = rng.uniform(-3.0, 3.0)
 
     array_layer = _array_layer_like(backprop_layer, backend)
     optimizer = LayerOptimizer(array_layer, ADAM)
+    node_optimizer = LayerOptimizer(backprop_layer, ADAM)
     learning_rate = rng.uniform(0.001, 1.0)
 
     for _ in range(10):
@@ -59,7 +58,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_adam_backprop_node_at_e
         for node, delta in zip(backprop_layer.nodes, deltas):
             node.delta = delta
             node.accumulate_gradient()
-            node.apply_accumulated_gradient(learning_rate, batch_size=1)
+        node_optimizer.apply(learning_rate, batch_size=1)
 
         array_layer.delta = backend.owned(deltas)
         array_layer.accumulate_gradient(backend.owned(x))
@@ -71,22 +70,22 @@ def test_accumulate_then_apply_at_batch_size_one_matches_adam_backprop_node_at_e
         assert np.allclose(array_layer.b.tolist(), expected_b, rtol=1e-9, atol=1e-12)
 
 
-def test_accumulate_across_a_batch_then_apply_matches_adam_backprop_node_at_every_batch(backend: Backend):
+def test_accumulate_across_a_batch_then_apply_matches_the_pure_python_adam_optimizer_at_every_batch(backend: Backend):
 
     rng = random.Random(12)
     dimension = 4
     size = 3
     batch_size = 6
-    node_layer_cls = make_adam_layer_cls(BETA1, BETA2, EPSILON)
 
     state_layer = StateLayer(dimension, [(-10.0, 10.0)] * dimension)
-    backprop_layer = node_layer_cls(size=size, input_layer=state_layer)
+    backprop_layer = BackpropLayer(size=size, input_layer=state_layer)
     for node in backprop_layer.nodes:
         node.update_input_weights([rng.uniform(-3.0, 3.0) for _ in range(dimension)])
         node.bias = rng.uniform(-3.0, 3.0)
 
     array_layer = _array_layer_like(backprop_layer, backend)
     optimizer = LayerOptimizer(array_layer, ADAM)
+    node_optimizer = LayerOptimizer(backprop_layer, ADAM)
     learning_rate = rng.uniform(0.001, 1.0)
 
     for _ in range(5):
@@ -104,8 +103,7 @@ def test_accumulate_across_a_batch_then_apply_matches_adam_backprop_node_at_ever
             array_layer.delta = backend.owned(deltas)
             array_layer.accumulate_gradient(backend.owned(x))
 
-        for node in backprop_layer.nodes:
-            node.apply_accumulated_gradient(learning_rate, batch_size)
+        node_optimizer.apply(learning_rate, batch_size)
         optimizer.apply(learning_rate, batch_size)
 
         expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])

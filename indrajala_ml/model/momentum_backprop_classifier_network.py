@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.momentum_layer import make_momentum_layer_cls
+from indrajala_ml.model.update_rules import Momentum
 
 
 class MomentumBackpropClassifierNetwork(BackpropClassifierNetwork):
     """
-    A momentum sibling of BackpropClassifierNetwork: momentum as Goyal et al. 2017's eq. (9) in
-    every trainable layer's update (see make_momentum_node_cls). Both hidden_layer_cls and output_layer_cls are momentum layers, set as
-    instance attributes in __init__ before BackpropNetworkBase.__init__ runs.
+    A momentum sibling of BackpropClassifierNetwork: its optimizer applies the Momentum rule,
+    Goyal et al. 2017's eq. (9), to every trainable layer. It replaces Rumelhart, Hinton &
+    Williams (1986)'s generalized delta rule, Δw(n) = η·δ·a + α·Δw(n-1) (the paper's eq. (10)),
+    which folds the rate into the velocity and so needs a correction when the rate changes. At a
+    constant rate the two are equivalent.
 
     momentum is required: no measurement here supports a default. Rumelhart et al.'s 0.9 hurt
     across a 10x learning-rate sweep on a fixed XOR scenario (best 92.50% against 97.80% without
@@ -24,7 +26,8 @@ class MomentumBackpropClassifierNetwork(BackpropClassifierNetwork):
         input_bounds: list[tuple[float, float]],
         momentum: float,
     ) -> None:
-        layer_cls = make_momentum_layer_cls(momentum)
-        self.hidden_layer_cls = layer_cls
-        self.output_layer_cls = layer_cls
+        self.momentum = momentum
         super().__init__(layer_sizes, dimension, input_bounds)
+
+    def _update_rule(self) -> Momentum:
+        return Momentum(self.momentum)

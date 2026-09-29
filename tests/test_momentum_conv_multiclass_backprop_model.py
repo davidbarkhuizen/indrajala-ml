@@ -2,7 +2,9 @@ import json
 import random
 from pathlib import Path
 
+from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.classifier_protocols import State
+from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import (
     ConvMultiClassBackpropClassifierNetwork,
@@ -11,6 +13,7 @@ from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
     MomentumConvMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.update_rules import Momentum
 from tests.helpers import assert_save_and_load_round_trip
 
 # pooling (overlapping), stride, a multi-channel second conv layer and two dense layers
@@ -36,19 +39,21 @@ def _rows(count: int) -> list[tuple[State, int]]:
     return [(tuple(rng.uniform(0.0, 1.0) for _ in range(64)), rng.randrange(CLASS_COUNT)) for _ in range(count)]
 
 
-def test_the_hooks_build_momentum_kernels_and_dense_layers_and_leave_pooling_alone():
+def test_the_optimizer_applies_momentum_to_plain_layers_and_pooling_is_left_alone():
 
     network = MomentumConvMultiClassBackpropClassifierNetwork(
         8, 8, CONV_SPECS, DENSE_LAYER_SIZES, CLASS_COUNT, momentum=0.9
     )
     first, pool, last = network.conv_layers
 
+    assert network.optimizer.rule == Momentum(0.9)
     for layer in (first, last):
-        assert isinstance(layer, ConvLayer)
-        assert all(type(kernel).__name__ == "MomentumConvKernel" for kernel in layer.kernels)
+        assert type(layer) is ConvLayer
+        assert all(type(kernel) is ConvKernel for kernel in layer.kernels)
     assert type(pool) is MaxPoolLayer
+    assert pool.weight_sets() == []
     for layer in [*network.hidden_layers[3:], network.output_layer]:
-        assert all(type(node).__name__ == "MomentumBackpropNode" for node in layer.nodes)
+        assert all(type(node) is BackpropNode for node in layer.nodes)
 
 
 def test_zero_momentum_is_bit_identical_to_the_plain_conv_network_through_learn():

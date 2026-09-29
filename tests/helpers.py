@@ -7,7 +7,6 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-from indrajala_ml.model.adam_layer import make_adam_layer_cls
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
@@ -32,17 +31,16 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
 )
 from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
-from indrajala_ml.model.l2_regularization_layer import make_l2_layer_cls
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.momentum_layer import make_momentum_layer_cls
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
+from indrajala_ml.model.python_optimizer import PythonOptimizer
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
 # conftest's `backend` fixture: either array backend, NUMPY or RUST
 Backend = ArrayBackend[Any]
@@ -124,29 +122,58 @@ def rust_to_numpy(array: pa.Array) -> FloatArray:
     return np.array([[array[r, c] for c in range(cols)] for r in range(rows)])
 
 
+class WeightSets:
+    """
+    A stand-in pure-Python layer over loose BackpropNodes or ConvKernels, so LayerOptimizer can
+    step them as a network steps a layer's.
+    """
+
+    def __init__(self, *weight_sets: Any) -> None:
+        self._weight_sets = list(weight_sets)
+
+    def weight_sets(self) -> list[Any]:
+        return self._weight_sets
+
+
 class LayerOptimizer:
     """
-    One layer updated as an array network updates it: by its backend's optimizer (optimizers.py),
-    with the layer at index 0 and one begin_step per update, so a layer-level test can drive an
-    update rule on its own.
+    One layer updated as a network updates it: by the pure-Python optimizer (python_optimizer.py)
+    for a pure-Python layer or WeightSets, else by its backend's optimizer (optimizers.py), with
+    the layer at index 0 and one begin_step per update, so a layer-level test can drive an update
+    rule on its own.
     """
 
     def __init__(self, layer: Any, rule: UpdateRule | None = None) -> None:
         # rule None: SGD
         self.layer = layer
-        self.optimizer: Any = (RUST if isinstance(layer.W, pa.Array) else NUMPY).optimizer(rule or SGD())
+        if hasattr(layer, "weight_sets"):
+            self.optimizer: Any = PythonOptimizer(rule or SGD())
+        else:
+            self.optimizer = (RUST if isinstance(layer.W, pa.Array) else NUMPY).optimizer(rule or SGD())
 
     def apply(self, learning_rate: float, batch_size: int) -> None:
         self.optimizer.begin_step()
         self.optimizer.apply(0, self.layer, learning_rate, batch_size)
 
     def step_single(self, input_activation: Any, learning_rate: float) -> None:
+        # an array layer's single-example step
         self.optimizer.begin_step()
         self.optimizer.step_single(0, self.layer, input_activation, learning_rate)
 
+    def apply_single(self, *nodes: Any) -> Callable[[float], None]:
+        # a pure-Python single-example step over nodes: each accumulates its delta, then one apply
+        # at batch_size=1, as BackpropNetworkBase._apply_gradients steps a layer
+        def step(learning_rate: float) -> None:
+            for node in nodes:
+                node.accumulate_gradient()
+            self.apply(learning_rate, 1)
+
+        return step
+
     @property
     def state(self) -> list[Any]:
-        # the rule's state for the layer: momentum's [velocity_W, velocity_b], Adam's [m_W, v_W, m_b, v_b]
+        # the rule's state for the layer: an array layer's momentum [velocity_W, velocity_b] or
+        # Adam [m_W, v_W, m_b, v_b]; per pure-Python weight set, its (weight lists, bias values)
         return self.optimizer._state[0]
 
 
@@ -332,9 +359,8 @@ def matching_cross_entropy_array_backprop_networks[ArrayNetworkT: ArrayNetworkBa
 class AdamMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
     Test-only per-node multiclass Adam network, the parity reference for the Adam array networks:
-    MultiClassBackpropClassifierNetwork with make_adam_layer_cls hidden and output layers, as
-    AdamBackpropClassifierNetwork builds the single-output one. There is no production per-node
-    multiclass Adam network.
+    MultiClassBackpropClassifierNetwork under the Adam rule, as AdamBackpropClassifierNetwork is the
+    single-output one. There is no production per-node multiclass Adam network.
     """
 
     def __init__(
@@ -347,10 +373,11 @@ class AdamMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         beta2: float,
         epsilon: float,
     ) -> None:
-        layer_cls = make_adam_layer_cls(beta1, beta2, epsilon)
-        self.hidden_layer_cls = layer_cls
-        self.output_layer_cls = layer_cls
+        self.rule = Adam(beta1, beta2, epsilon)
         super().__init__(layer_sizes, dimension, input_bounds, class_count)
+
+    def _update_rule(self) -> Adam:
+        return self.rule
 
 
 def matching_adam_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
@@ -382,7 +409,7 @@ def matching_adam_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
 class L2MultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
     Test-only per-node multiclass L2 network, the parity reference for the L2 array networks:
-    MultiClassBackpropClassifierNetwork with make_l2_layer_cls hidden and output layers.
+    MultiClassBackpropClassifierNetwork under the WeightDecay rule.
     """
 
     def __init__(
@@ -393,10 +420,11 @@ class L2MultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork)
         class_count: int,
         l2_lambda: float,
     ) -> None:
-        layer_cls = make_l2_layer_cls(l2_lambda)
-        self.hidden_layer_cls = layer_cls
-        self.output_layer_cls = layer_cls
+        self.rule = WeightDecay(l2_lambda)
         super().__init__(layer_sizes, dimension, input_bounds, class_count)
+
+    def _update_rule(self) -> WeightDecay:
+        return self.rule
 
 
 def matching_l2_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
@@ -424,8 +452,7 @@ def matching_l2_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
 class MomentumMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
     """
     Test-only per-node multiclass momentum network, the parity reference for the momentum array
-    networks: MultiClassBackpropClassifierNetwork with make_momentum_layer_cls hidden and output
-    layers.
+    networks: MultiClassBackpropClassifierNetwork under the Momentum rule.
     """
 
     def __init__(
@@ -436,10 +463,11 @@ class MomentumMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNe
         class_count: int,
         momentum: float,
     ) -> None:
-        layer_cls = make_momentum_layer_cls(momentum)
-        self.hidden_layer_cls = layer_cls
-        self.output_layer_cls = layer_cls
+        self.rule = Momentum(momentum)
         super().__init__(layer_sizes, dimension, input_bounds, class_count)
+
+    def _update_rule(self) -> Momentum:
+        return self.rule
 
 
 def matching_momentum_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](

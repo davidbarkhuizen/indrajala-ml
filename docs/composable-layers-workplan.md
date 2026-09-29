@@ -1,6 +1,6 @@
 # Workplan: composable layers and optimizers
 
-**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-1 done; stage 2 next.**
+**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-2 done; stage 3 next.**
 
 This is step 1 of [primitives-roadmap.md](primitives-roadmap.md). Stages 1-4 are structural
 refactoring: they change structure only, never numerics, under the README's Refactoring rules. At
@@ -347,8 +347,9 @@ Done when the golden run is bit-identical, the resume tests pass by bits, and th
 
 ### Stage 6: remove the scaffolding and update the docs
 
-1. Delete the update-only layer subclasses and the four rule factories (D1). Move their tests
-   onto the optimizers, and update the registry walks' expected sets.
+1. Delete the update-only layer subclasses (D1). Move their tests onto the optimizers, and update
+   the registry walks' expected sets. The four pure-Python rule factories already went in stage
+   2, with their tests.
 2. README: the Models section describes specs, rules, the optimizer and presets, and the
    class-prefix table becomes a preset table. Mark step 1 done in `primitives-roadmap.md`.
 3. List the new combinations the plan made possible but didn't enable (below).

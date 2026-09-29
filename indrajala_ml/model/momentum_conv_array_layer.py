@@ -9,8 +9,8 @@ from indrajala_ml.model.optimizers import momentum_update
 class MomentumConvArrayLayer(ConvArrayLayer):
     """
     ConvArrayLayer with the Momentum rule's update (optimizers.momentum_update), Goyal et al.
-    2017's eq. (9), as make_momentum_kernel_cls: a velocity shaped as W (channel_count, fan_in) and
-    as b (channel_count,), zero-initialized. g is ConvArrayLayer's accumulator, summed over
+    2017's eq. (9), as the pure-Python optimizer applies it to a ConvKernel: a velocity shaped as
+    W (channel_count, fan_in) and as b (channel_count,), zero-initialized. g is ConvArrayLayer's accumulator, summed over
     positions and examples, so g / B averages examples only. momentum is required. The network's
     optimizer calls this layer's own update until stage 3 of docs/composable-layers-workplan.md.
     """

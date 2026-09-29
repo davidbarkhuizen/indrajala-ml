@@ -203,9 +203,8 @@ def test_accumulate_then_apply_at_batch_size_one_matches_backprop_node_across_a_
         array_layer = _snapshot_to_array_layer(backprop_layer)
         array_layer.delta = np.array([node.delta for node in backprop_layer.nodes])
 
-        for node in backprop_layer.nodes:
-            node.accumulate_gradient()
-            node.apply_accumulated_gradient(learning_rate, batch_size=1)
+        backprop_layer.accumulate_gradients()
+        LayerOptimizer(backprop_layer).apply(learning_rate, batch_size=1)
         array_layer.accumulate_gradient(np.array(x))
         LayerOptimizer(array_layer).apply(learning_rate, batch_size=1)
 
@@ -247,8 +246,7 @@ def test_accumulate_across_a_batch_then_apply_matches_backprop_node_across_a_ran
         array_layer.delta = np.array(deltas)
         array_layer.accumulate_gradient(np.array(x))
 
-    for node in backprop_layer.nodes:
-        node.apply_accumulated_gradient(learning_rate, batch_size)
+    LayerOptimizer(backprop_layer).apply(learning_rate, batch_size)
     LayerOptimizer(array_layer).apply(learning_rate, batch_size)
 
     expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
