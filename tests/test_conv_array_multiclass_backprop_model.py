@@ -19,12 +19,15 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.update_rules import SGD
 from indrajala_ml.multiclass_evaluate import accuracy
 from indrajala_ml.train import train_linear_classifier_network
+from tests.array_network_contract import SEQUENTIAL_CLS, assert_sequential_matches_preset
 from tests.helpers import (
     Backend,
     assert_conv_array_network_weights_match,
@@ -332,3 +335,16 @@ def test_a_plain_conv_network_saves_the_envelope_without_extra_keys(network_cls:
         "class_count",
         "snapshot",
     }
+
+
+@pytest.mark.parametrize("architecture", ARCHITECTURES)
+def test_the_sequential_network_of_its_layer_specs_matches_it_by_bits(backend: Backend, architecture: str):
+    conv_specs, dense_layer_sizes = ARCHITECTURES[architecture]
+    preset = NETWORK_CLS[backend.name](8, 8, conv_specs, dense_layer_sizes, CLASS_COUNT)
+    specs = [*conv_specs, *(Dense(size) for size in dense_layer_sizes), Dense(CLASS_COUNT, output=True)]
+    sequential = SEQUENTIAL_CLS["multiclass"][backend.name]((8, 8, 1), specs, SGD())
+
+    def example(rng: random.Random) -> tuple[tuple[float, ...], int]:
+        return tuple(rng.random() for _ in range(64)), rng.randrange(CLASS_COUNT)
+
+    assert_sequential_matches_preset(preset, sequential, backend, example, 0.5)

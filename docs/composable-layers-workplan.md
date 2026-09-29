@@ -1,6 +1,6 @@
 # Workplan: composable layers and optimizers
 
-**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-2 done; stage 3 in progress (3.1-3.3 done, with the presets' specs from 3.4; `SequentialArrayNetwork` and 3.5 next).**
+**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-3 done; stage 4 next.**
 
 This is step 1 of [primitives-roadmap.md](primitives-roadmap.md). Stages 1-4 are structural
 refactoring: they change structure only, never numerics, under the README's Refactoring rules. At

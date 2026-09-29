@@ -43,9 +43,19 @@ def test_legacy_file_loads(name: str) -> None:
     assert outputs(loaded, fixture.predict, states) == expected_outputs
 
 
+# no legacy envelope describes their layer specs, so they save in format 2 only (stage 5 of
+# docs/composable-layers-workplan.md), whose fixtures come with it
+SAVED_IN_FORMAT_2_ONLY = {
+    "SequentialVectorizedMultiClassBackpropClassifierNetwork",
+    "SequentialRustArrayMultiClassBackpropClassifierNetwork",
+    "SequentialArrayBackpropClassifierNetwork",
+    "SequentialRustArrayBackpropClassifierNetwork",
+}
+
+
 def test_every_saveable_class_has_a_fixture() -> None:
     # the networks, not the shape mixins and bases that define save for them
     saveable = {name for name, cls in MODEL_CLASSES.items() if name.endswith("Network") and hasattr(cls, "save")}
-    assert saveable == set(FIXTURES)
+    assert saveable - SAVED_IN_FORMAT_2_ONLY == set(FIXTURES)
     for name in FIXTURES:
         assert (FIXTURE_DIR / f"{name}.json").exists(), name

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Self, cast
+from typing import TYPE_CHECKING, NoReturn, Self, cast
 
+from indrajala_ml.model.array_layer_builder import InputShape
 from indrajala_ml.model.array_protocols import BackendArray
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.conv_front_end import ArrayFrontEndLayer, load_conv_model_json, save_conv_array_model_json
 from indrajala_ml.model.conv_layer import ConvSpec
+from indrajala_ml.model.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.model_io import (
     load_array_model_json,
@@ -14,6 +17,7 @@ from indrajala_ml.model.model_io import (
     save_array_model_json,
     save_single_output_array_model_json,
 )
+from indrajala_ml.model.update_rules import UpdateRule
 
 if TYPE_CHECKING:
     from indrajala_ml.model.array_network_base import ArrayNetworkBase
@@ -154,11 +158,14 @@ class ArraySingleOutputShape[A: BackendArray](_ShapeBase[A]):
         return network
 
 
-# as _ShapeBase: the conv shape's host is a backend's multiclass network
+# as _ShapeBase: the conv and sequential shapes' host is a backend's multiclass or single-output
+# network
 if TYPE_CHECKING:
     _ConvShapeBase = ArrayMultiClassShape
+    _SingleOutputHostBase = ArraySingleOutputShape
 else:
     _ConvShapeBase = _ShapeBase
+    _SingleOutputHostBase = _ShapeBase
 
 
 class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
@@ -212,3 +219,74 @@ class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
     @classmethod
     def load(cls, path: str) -> Self:
         return load_conv_model_json(cls, path, cls._extra_init_kwargs)
+
+
+def _sequential_save_not_yet(network: object) -> NoReturn:
+    raise NotImplementedError(
+        f"a {type(network).__name__} saves in format 2, which records its layer specs "
+        "(docs/composable-layers-workplan.md, stage 5); no legacy envelope can describe them"
+    )
+
+
+class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
+    """
+    A multiclass network of any accepted layer specs (layer_specs.py) and update rule, over the
+    multiclass shape's argmax classification and one-hot targets: the generic counterpart of the
+    presets, which build the same layers from their own constructor arguments. class_count is the
+    output layer's size.
+
+    A mixin, listed before the backend's plain multiclass network, as ArrayConvShape. It has no
+    save/load until format 2 (stage 5 of docs/composable-layers-workplan.md).
+    """
+
+    def __init__(self, input_shape: InputShape, layers: Sequence[LayerSpec], update_rule: UpdateRule) -> None:
+        output = layers[-1] if layers else None
+        assert isinstance(output, Dense), f"the last layer must be the output layer, a Dense; got {output!r}"
+        validate_class_count(output.size)
+
+        self.class_count = output.size
+        self.input_shape = input_shape
+        self.dimension = math.prod(input_shape)
+        self.layer_specs = list(layers)
+        self.update_rule = update_rule
+
+        # past the multiclass shape's __init__, whose flat layer_sizes can't describe these layers,
+        # to the backend's base
+        super(ArrayMultiClassShape, self).__init__(self.layer_specs, input_shape)
+
+    def _update_rule(self) -> UpdateRule:
+        return self.update_rule
+
+    def save(self, path: str) -> None:
+        _sequential_save_not_yet(self)
+
+    @classmethod
+    def load(cls, path: str) -> Self:
+        _sequential_save_not_yet(cls)
+
+
+class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
+    """SequentialMultiClassShape over the single-output shape: its output layer has one node."""
+
+    def __init__(self, input_shape: InputShape, layers: Sequence[LayerSpec], update_rule: UpdateRule) -> None:
+        output = layers[-1] if layers else None
+        assert isinstance(output, Dense) and output.size == 1, (
+            f"a single-output network's last layer is a one-node Dense; got {output!r}"
+        )
+
+        self.input_shape = input_shape
+        self.dimension = math.prod(input_shape)
+        self.layer_specs = list(layers)
+        self.update_rule = update_rule
+
+        super(ArraySingleOutputShape, self).__init__(self.layer_specs, input_shape)
+
+    def _update_rule(self) -> UpdateRule:
+        return self.update_rule
+
+    def save(self, path: str) -> None:
+        _sequential_save_not_yet(self)
+
+    @classmethod
+    def load(cls, path: str) -> Self:
+        _sequential_save_not_yet(cls)
