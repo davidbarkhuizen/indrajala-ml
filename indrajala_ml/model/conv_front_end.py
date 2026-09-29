@@ -2,14 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import asdict
-from typing import Any, ClassVar, Protocol
+from typing import Any, Protocol
 
-from indrajala_ml.model.array_protocols import (
-    ArrayNetworkLayer,
-    BackendArray,
-    HyperparameterLayerClass,
-    WeightedArrayLayer,
-)
+from indrajala_ml.model.array_protocols import ArrayNetworkLayer, BackendArray
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.model_io import load_json, save_json
@@ -35,25 +30,6 @@ class ArrayFrontEndLayer[A: BackendArray](ArrayNetworkLayer[A], FrontEndLayer, P
     def size(self) -> int: ...
 
 
-class ArrayConvLayer[A: BackendArray](ArrayFrontEndLayer[A], Protocol):
-    """A numpy or Rust conv layer: its kernels as W, (channel_count, fan_in)."""
-
-    hyperparameters: ClassVar[tuple[str, ...]]
-
-    W: A
-    b: A
-
-    @property
-    def fan_in(self) -> int: ...
-
-
-class NewLayer(Protocol):
-    """ArrayNetworkBase._new_layer: builds layer_cls from the given arguments and the network's
-    values of layer_cls.hyperparameters."""
-
-    def __call__[LayerT](self, layer_cls: HyperparameterLayerClass[LayerT], /, *args: Any, **kwargs: Any) -> LayerT: ...
-
-
 def build_conv_front_end[FrontEndLayerT: FrontEndLayer](
     input_height: int,
     input_width: int,
@@ -63,8 +39,8 @@ def build_conv_front_end[FrontEndLayerT: FrontEndLayer](
     input_layer: object = None,
 ) -> list[FrontEndLayerT]:
     """
-    Chains a conv front end through conv_specs, for the pure-Python conv network and (through
-    build_conv_array_network_layers) the numpy and Rust ones. The first layer reads the
+    Chains a conv front end through conv_specs, for the pure-Python conv network (the numpy and
+    Rust ones build theirs from layer specs, array_layer_builder.py). The first layer reads the
     single-channel image; each later one the previous layer's out_height x out_width x
     channel_count output.
 
@@ -95,55 +71,6 @@ def spec_to_json(spec: ConvSpec | PoolSpec) -> dict[str, Any]:
 def spec_from_json(spec: dict[str, Any]) -> ConvSpec | PoolSpec:
     fields = {key: value for key, value in spec.items() if key != "type"}
     return PoolSpec(**fields) if spec["type"] == "pool" else ConvSpec(**fields)
-
-
-def build_conv_array_network_layers[A: BackendArray](
-    input_height: int,
-    input_width: int,
-    conv_specs: Sequence[ConvSpec | PoolSpec],
-    dense_layer_sizes: list[int],
-    class_count: int,
-    conv_cls: HyperparameterLayerClass[ArrayConvLayer[A]],
-    pool_cls: Callable[..., ArrayFrontEndLayer[A]],
-    hidden_cls: HyperparameterLayerClass[WeightedArrayLayer[A]],
-    output_cls: HyperparameterLayerClass[WeightedArrayLayer[A]],
-    new_layer: NewLayer,
-) -> tuple[list[ArrayFrontEndLayer[A]], list[WeightedArrayLayer[A]], WeightedArrayLayer[A]]:
-    """
-    The numpy or Rust conv network's layers: the front end, the dense hidden layers and the output
-    layer. The dense tail's fan-in is the front end's flattened output. The conv and dense layers
-    are built through new_layer (the network's _new_layer), so they take the network's
-    hyperparameters; pool layers have none.
-    """
-    conv_layers = build_conv_front_end(
-        input_height,
-        input_width,
-        conv_specs,
-        make_conv=lambda spec, _previous, height, width, channels: new_layer(
-            conv_cls,
-            input_height=height,
-            input_width=width,
-            input_channels=channels,
-            kernel_size=spec.kernel_size,
-            channel_count=spec.channel_count,
-            stride=spec.stride,
-        ),
-        make_pool=lambda spec, _previous, height, width, channels: pool_cls(
-            input_height=height,
-            input_width=width,
-            input_channels=channels,
-            pool_size=spec.pool_size,
-            stride=spec.stride,
-        ),
-    )
-
-    dense_layers: list[WeightedArrayLayer[A]] = []
-    previous_size = conv_layers[-1].size
-    for size in dense_layer_sizes:
-        dense_layers.append(new_layer(hidden_cls, size, previous_size))
-        previous_size = size
-
-    return conv_layers, dense_layers, new_layer(output_cls, class_count, previous_size)
 
 
 class ConvNetworkShape(Protocol):

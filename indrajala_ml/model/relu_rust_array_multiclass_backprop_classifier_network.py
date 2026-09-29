@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
+from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -12,4 +12,5 @@ class ReLURustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpr
     layers and a sigmoid RustArrayLayer output.
     """
 
-    hidden_layer_cls = ReLURustArrayLayer
+    def _hidden_spec(self, size: int) -> Dense:
+        return Dense(size, activation="relu")

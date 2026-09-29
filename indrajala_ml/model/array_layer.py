@@ -2,8 +2,6 @@
 # (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
-from typing import ClassVar
-
 import numpy as np
 import numpy.typing as npt
 
@@ -39,11 +37,6 @@ class ArrayLayer:
     single-example (forward, delta, ...) and batch (forward_batch, delta_batch, ...) methods.
     The network's optimizer (optimizers.py) steps W and b from the accumulated gradients.
     """
-
-    # the constructor keyword arguments after (size, input_size) that a subclass takes (e.g.
-    # DropoutArrayLayer's dropout_rate); ArrayNetworkBase passes them from the network's
-    # attributes of the same names
-    hyperparameters: ClassVar[tuple[str, ...]] = ()
 
     def __init__(self, size: int, input_size: int) -> None:
         self.size = size

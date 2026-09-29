@@ -2,8 +2,6 @@
 # (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
-from typing import ClassVar
-
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
@@ -45,10 +43,6 @@ class ConvArrayLayer:
 
     The single-example methods are N = 1 wrappers over the batch ones.
     """
-
-    # the constructor keyword arguments after the shape arguments that a subclass takes (as
-    # ArrayLayer.hyperparameters); ArrayNetworkBase._new_layer passes them from the network
-    hyperparameters: ClassVar[tuple[str, ...]] = ()
 
     def __init__(
         self,
