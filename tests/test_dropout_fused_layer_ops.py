@@ -31,7 +31,7 @@ from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
-from tests.helpers import approx, random_matrix, random_vector, rust_to_numpy
+from tests.helpers import LayerOptimizer, approx, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)
 INPUT_SIZE = 8
@@ -188,7 +188,7 @@ def _learn_batch_step(layer: Any, next_layer: Any, X: Any) -> None:
     layer.forward_batch(X)
     layer.compute_hidden_delta_batch(next_layer)
     layer.accumulate_gradient_batch(X)
-    layer.apply_accumulated_gradient(0.5, BATCH_SIZE)
+    LayerOptimizer(layer).apply(0.5, BATCH_SIZE)
 
 
 @pytest.mark.parametrize("seed", SEEDS)

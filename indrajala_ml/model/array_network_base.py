@@ -8,11 +8,13 @@ from typing import Any, Protocol, Self, cast
 from indrajala_ml.model.array_protocols import (
     ArrayBackend,
     ArrayNetworkLayer,
+    ArrayOptimizer,
     BackendArray,
     HyperparameterLayerClass,
     WeightedArrayLayer,
 )
 from indrajala_ml.model.bounds import validate_batch, validate_layer_sizes
+from indrajala_ml.model.update_rules import SGD, UpdateRule
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
 
@@ -37,14 +39,15 @@ class ArrayNetworkBase[A: BackendArray]:
     layer assembly, the forward pass, learn/learn_batch and their prepared-dataset forms,
     classify_rows, fan-in-aware randomize, and snapshot/restore.
 
-    A sibling differs only in its layer classes (hidden_layer_cls/output_layer_cls) and their
-    hyperparameters; every hand-derived formula lives in the layer class (e.g.
-    MomentumArrayLayer.apply_accumulated_gradient). What differs between the multiclass and
+    A sibling differs only in its layer classes (hidden_layer_cls/output_layer_cls), its update
+    rule (_update_rule) and their hyperparameters. The forward and backward formulas live in the
+    layer classes, the weight updates in the network's optimizer (optimizers.py), which holds the
+    rule's state (momentum's velocities, Adam's m, v and t). What differs between the multiclass and
     single-output networks (classify_state, targets, class_count, save/load) is in the shape mixins
     in array_network_shapes.py, listed before the backend's base.
     """
 
-    # the layer classes a sibling overrides for different per-layer math (e.g. MomentumArrayLayer);
+    # the layer classes a sibling overrides for different per-layer math (e.g. ReLUArrayLayer);
     # a layer class's hyperparameters come from the network's attributes of the same names
     # (_new_layer). Set by the backend's base.
     hidden_layer_cls: DenseArrayLayerClass[A]
@@ -74,6 +77,15 @@ class ArrayNetworkBase[A: BackendArray]:
 
         self.output_layer = self._new_layer(self.output_layer_cls, output_size, previous_size)
         self.layers.append(self.output_layer)
+
+        self.optimizer = self._new_optimizer()
+
+    def _update_rule(self) -> UpdateRule:
+        # plain SGD; the momentum, Adam and L2 siblings return their rule, from their hyperparameters
+        return SGD()
+
+    def _new_optimizer(self) -> ArrayOptimizer[A]:
+        return self.backend.optimizer(self._update_rule())
 
     def _new_layer[LayerT](self, layer_cls: HyperparameterLayerClass[LayerT], *args: Any, **kwargs: Any) -> LayerT:
         # dense and conv layers alike; a hyperparameter-bearing sibling stores its hyperparameters
@@ -164,10 +176,12 @@ class ArrayNetworkBase[A: BackendArray]:
         for i in reversed(range(len(self.layers) - 1)):
             self.layers[i].compute_hidden_delta(self.layers[i + 1])
 
-        # sgd_step is accumulate_gradient then apply_accumulated_gradient at batch_size=1, which
-        # RustArrayLayer fuses into one call where the layer's update is plain SGD
-        for layer, input_activation in zip(self.layers, activations):
-            layer.sgd_step(input_activation, learning_rate)
+        # step_single is accumulate_gradient then apply at batch_size=1, which the Rust optimizer
+        # fuses into one call for plain SGD
+        optimizer = self.optimizer
+        optimizer.begin_step()
+        for index, (layer, input_activation) in enumerate(zip(self.layers, activations)):
+            optimizer.step_single(index, layer, input_activation, learning_rate)
 
     def learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], object]]) -> None:
         validate_batch(batch)
@@ -197,9 +211,11 @@ class ArrayNetworkBase[A: BackendArray]:
         for i in reversed(range(len(self.layers) - 1)):
             self.layers[i].compute_hidden_delta_batch(self.layers[i + 1])
 
-        for layer, input_activation_batch in zip(self.layers, activations):
+        optimizer = self.optimizer
+        optimizer.begin_step()
+        for index, (layer, input_activation_batch) in enumerate(zip(self.layers, activations)):
             layer.accumulate_gradient_batch(input_activation_batch)
-            layer.apply_accumulated_gradient(learning_rate, batch_size)
+            optimizer.apply(index, layer, learning_rate, batch_size)
 
     @classmethod
     def randomized(cls, *args: Any, **kwargs: Any) -> Self:

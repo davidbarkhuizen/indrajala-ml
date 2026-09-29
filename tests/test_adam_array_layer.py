@@ -3,17 +3,20 @@ import random
 import numpy as np
 import pytest
 
-from indrajala_ml.model.adam_array_layer import AdamArrayLayer
 from indrajala_ml.model.adam_layer import make_adam_layer_cls
-from indrajala_ml.model.adam_rust_array_layer import AdamRustArrayLayer
+from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.backprop_layer import BackpropLayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import Backend
+from indrajala_ml.model.update_rules import Adam
+from tests.helpers import Backend, LayerOptimizer
 
 BETA1, BETA2, EPSILON = 0.9, 0.999, 1e-8
+ADAM = Adam(BETA1, BETA2, EPSILON)
 
-LayerCls = type[AdamArrayLayer] | type[AdamRustArrayLayer]
-LAYER_CLS: dict[str, LayerCls] = {"numpy": AdamArrayLayer, "rust": AdamRustArrayLayer}
+# the layers the optimizer's Adam rule steps (optimizers.py), as AdamBackpropNode steps itself
+LayerCls = type[ArrayLayer] | type[RustArrayLayer]
+LAYER_CLS: dict[str, LayerCls] = {"numpy": ArrayLayer, "rust": RustArrayLayer}
 
 
 @pytest.fixture
@@ -23,7 +26,7 @@ def layer_cls(backend: Backend) -> LayerCls:
 
 def _array_layer_like(backprop_layer: BackpropLayer, backend: Backend):
     input_size = len(backprop_layer.input_layer.nodes)
-    array_layer = LAYER_CLS[backend.name](backprop_layer.size, input_size, BETA1, BETA2, EPSILON)
+    array_layer = LAYER_CLS[backend.name](backprop_layer.size, input_size)
     snapshot = backprop_layer.snapshot_state()
     array_layer.W = backend.owned([weights for weights, _bias in snapshot])
     array_layer.b = backend.owned([bias for _weights, bias in snapshot])
@@ -45,6 +48,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_adam_backprop_node_at_e
         node.bias = rng.uniform(-3.0, 3.0)
 
     array_layer = _array_layer_like(backprop_layer, backend)
+    optimizer = LayerOptimizer(array_layer, ADAM)
     learning_rate = rng.uniform(0.001, 1.0)
 
     for _ in range(10):
@@ -59,7 +63,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_adam_backprop_node_at_e
 
         array_layer.delta = backend.owned(deltas)
         array_layer.accumulate_gradient(backend.owned(x))
-        array_layer.apply_accumulated_gradient(learning_rate, batch_size=1)
+        optimizer.apply(learning_rate, batch_size=1)
 
         expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
         expected_b = np.array([node.bias for node in backprop_layer.nodes])
@@ -82,6 +86,7 @@ def test_accumulate_across_a_batch_then_apply_matches_adam_backprop_node_at_ever
         node.bias = rng.uniform(-3.0, 3.0)
 
     array_layer = _array_layer_like(backprop_layer, backend)
+    optimizer = LayerOptimizer(array_layer, ADAM)
     learning_rate = rng.uniform(0.001, 1.0)
 
     for _ in range(5):
@@ -101,7 +106,7 @@ def test_accumulate_across_a_batch_then_apply_matches_adam_backprop_node_at_ever
 
         for node in backprop_layer.nodes:
             node.apply_accumulated_gradient(learning_rate, batch_size)
-        array_layer.apply_accumulated_gradient(learning_rate, batch_size)
+        optimizer.apply(learning_rate, batch_size)
 
         expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
         expected_b = np.array([node.bias for node in backprop_layer.nodes])
@@ -109,28 +114,29 @@ def test_accumulate_across_a_batch_then_apply_matches_adam_backprop_node_at_ever
         assert np.allclose(array_layer.b.tolist(), expected_b, rtol=1e-9, atol=1e-12)
 
 
-def test_step_count_increments_once_per_apply_call(layer_cls: LayerCls, backend: Backend):
+def test_step_count_increments_once_per_update(layer_cls: LayerCls, backend: Backend):
 
-    array_layer = layer_cls(3, 2, BETA1, BETA2, EPSILON)
-    assert array_layer._t == 0
-
-    array_layer.delta = backend.owned([0.1, 0.2, 0.3])
-    array_layer.accumulate_gradient(backend.owned([1.0, 2.0]))
-    array_layer.apply_accumulated_gradient(0.1, batch_size=1)
-    assert array_layer._t == 1
+    array_layer = layer_cls(3, 2)
+    optimizer = LayerOptimizer(array_layer, ADAM)
+    assert optimizer.optimizer.t == 0
 
     array_layer.delta = backend.owned([0.1, 0.2, 0.3])
     array_layer.accumulate_gradient(backend.owned([1.0, 2.0]))
-    array_layer.apply_accumulated_gradient(0.1, batch_size=1)
-    assert array_layer._t == 2
+    optimizer.apply(0.1, batch_size=1)
+    assert optimizer.optimizer.t == 1
+
+    array_layer.delta = backend.owned([0.1, 0.2, 0.3])
+    array_layer.accumulate_gradient(backend.owned([1.0, 2.0]))
+    optimizer.apply(0.1, batch_size=1)
+    assert optimizer.optimizer.t == 2
 
 
 def test_apply_accumulated_gradient_resets_the_accumulator(layer_cls: LayerCls, backend: Backend):
 
-    array_layer = layer_cls(3, 2, BETA1, BETA2, EPSILON)
+    array_layer = layer_cls(3, 2)
     array_layer.delta = backend.owned([0.1, 0.2, 0.3])
     array_layer.accumulate_gradient(backend.owned([1.0, 2.0]))
-    array_layer.apply_accumulated_gradient(0.1, batch_size=1)
+    LayerOptimizer(array_layer, ADAM).apply(0.1, batch_size=1)
 
-    assert np.allclose(array_layer._grad_W.tolist(), np.zeros((3, 2)))
-    assert np.allclose(array_layer._grad_b.tolist(), np.zeros(3))
+    assert np.allclose(array_layer.grad_W.tolist(), np.zeros((3, 2)))
+    assert np.allclose(array_layer.grad_b.tolist(), np.zeros(3))

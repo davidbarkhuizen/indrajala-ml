@@ -9,7 +9,7 @@ from indrajala_ml.model.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import Backend, set_random_node_weights
+from tests.helpers import Backend, LayerOptimizer, set_random_node_weights
 
 LayerCls = type[ReLUArrayLayer] | type[ReLURustArrayLayer]
 LAYER_CLS: dict[str, LayerCls] = {"numpy": ReLUArrayLayer, "rust": ReLURustArrayLayer}
@@ -175,7 +175,7 @@ def test_compute_output_delta_batch_raises_not_implemented(layer_cls: LayerCls, 
         array_layer.compute_output_delta_batch(backend.owned([[0.0, 1.0]]))
 
 
-def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(layer_cls: LayerCls, backend: Backend):
+def test_the_weight_update_is_array_layers(layer_cls: LayerCls, backend: Backend):
 
     # ReLU changes the forward and backward formulas, not the weight update
     array_layer = layer_cls(2, 2)
@@ -183,7 +183,7 @@ def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(laye
     array_layer.b = backend.owned([5.0, 6.0])
     array_layer.delta = backend.owned([1.0, 1.0])
     array_layer.accumulate_gradient(backend.owned([1.0, 1.0]))
-    array_layer.apply_accumulated_gradient(learning_rate=0.1, batch_size=1)
+    LayerOptimizer(array_layer).apply(learning_rate=0.1, batch_size=1)
 
     assert np.allclose(array_layer.W.tolist(), [[0.9, 1.9], [2.9, 3.9]])
     assert np.allclose(array_layer.b.tolist(), [4.9, 5.9])

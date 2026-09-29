@@ -1,33 +1,48 @@
 """
 `layer_momentum_apply_accumulated_gradient` is one fused Rust call for the whole momentum update
-rule, checked against
-`indrajala_ml.model.momentum_array_layer.MomentumArrayLayer` - the actual production reference
-this function replaces - the same treatment `test_adam_fused_layer_ops.py`/
+rule, checked against the numpy optimizer's Momentum rule
+(`indrajala_ml.model.optimizers.NumpyOptimizer`) - the production reference this function
+matches - the same treatment `test_adam_fused_layer_ops.py`/
 `test_l2_fused_layer_ops.py` give their own fused ops. The conv layers call the same op on a conv
 W, (channel_count, fan_in), so it is also checked against `MomentumConvArrayLayer`.
 """
 
 import random
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 import pytest
 from indrajala_math_rust import Array, layer_momentum_apply_accumulated_gradient
 
-from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.momentum_array_layer import MomentumArrayLayer
+from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.momentum_conv_array_layer import MomentumConvArrayLayer
-from tests.helpers import random_matrix, random_vector, rust_to_numpy
+from indrajala_ml.model.update_rules import Momentum
+from tests.helpers import LayerOptimizer, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)
 INPUT_SIZE = 8
 HIDDEN_SIZE = 5
 MOMENTUM = 0.5
 
-# a dense layer, and a conv layer over 5 x 5 x 2 inputs with three 3 x 3 kernels: W (3, 18)
-LAYERS = {
-    "dense": lambda: MomentumArrayLayer(HIDDEN_SIZE, INPUT_SIZE, MOMENTUM),
-    "conv": lambda: MomentumConvArrayLayer(5, 5, 2, 3, 3, momentum=MOMENTUM),
-}
+# a layer, its apply(learning_rate, batch_size), and its velocities [W, b] after an apply
+Stepped = tuple[Any, Callable[[float, int], None], Callable[[], list[FloatArray]]]
+
+
+def _dense() -> Stepped:
+    # stepped by the optimizer's Momentum rule
+    layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
+    optimizer = LayerOptimizer(layer, Momentum(MOMENTUM))
+    return layer, optimizer.apply, lambda: optimizer.state
+
+
+def _conv() -> Stepped:
+    # over 5 x 5 x 2 inputs with three 3 x 3 kernels: W (3, 18), stepped by its own update
+    layer = MomentumConvArrayLayer(5, 5, 2, 3, 3, momentum=MOMENTUM)
+    return layer, layer.apply_accumulated_gradient, lambda: [layer._velocity_W, layer._velocity_b]
+
+
+LAYERS = {"dense": _dense, "conv": _conv}
 
 
 def _assert_same_bits(arr: Array, expected: FloatArray):
@@ -44,7 +59,7 @@ def test_layer_momentum_apply_accumulated_gradient_matches_the_numpy_layer_exact
     # eq. (9)). The rate changes between steps, as in warmup, where eq. (9) and eq. (10) differ;
     # the velocity only shows a mistake across repeated steps
     rng = random.Random(seed)
-    layer = LAYERS[layer_kind]()
+    layer, apply, velocities = LAYERS[layer_kind]()
     rows, cols = layer.W.shape
     layer.W = np.array(random_matrix(rng, rows, cols))
     layer.b = np.array(random_vector(rng, rows))
@@ -59,9 +74,9 @@ def test_layer_momentum_apply_accumulated_gradient_matches_the_numpy_layer_exact
         grad_b_data = random_vector(rng, rows)
         learning_rate = rng.uniform(0.001, 1.0)
 
-        layer._grad_W = np.array(grad_w_data)
-        layer._grad_b = np.array(grad_b_data)
-        layer.apply_accumulated_gradient(learning_rate, batch_size)
+        layer.grad_W = np.array(grad_w_data)
+        layer.grad_b = np.array(grad_b_data)
+        apply(learning_rate, batch_size)
 
         w, b, velocity_w, velocity_b = layer_momentum_apply_accumulated_gradient(
             w,
@@ -77,8 +92,9 @@ def test_layer_momentum_apply_accumulated_gradient_matches_the_numpy_layer_exact
 
         _assert_same_bits(w, layer.W)
         _assert_same_bits(b, layer.b)
-        _assert_same_bits(velocity_w, layer._velocity_W)
-        _assert_same_bits(velocity_b, layer._velocity_b)
+        expected_velocity_w, expected_velocity_b = velocities()
+        _assert_same_bits(velocity_w, expected_velocity_w)
+        _assert_same_bits(velocity_b, expected_velocity_b)
 
 
 def test_rejects_batch_size_zero():

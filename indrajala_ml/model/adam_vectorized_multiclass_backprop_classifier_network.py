@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from indrajala_ml.model.adam_array_layer import AdamArrayLayer
-from indrajala_ml.model.adam_backprop_classifier_network import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON
+from indrajala_ml.model.update_rules import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON, Adam
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
@@ -9,15 +8,14 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 
 class AdamVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
     """
-    The Adam sibling of VectorizedMultiClassBackpropClassifierNetwork: hidden and output layers are
-    AdamArrayLayers, which read beta1/beta2/epsilon from the network. They default to Kingma & Ba's
-    published values, as in AdamBackpropClassifierNetwork.
+    The Adam sibling of VectorizedMultiClassBackpropClassifierNetwork: its optimizer applies the
+    Adam rule, with beta1/beta2/epsilon defaulting to Kingma & Ba's published values, as in
+    AdamBackpropClassifierNetwork.
 
     snapshot()/restore() cover only W/b, not Adam's m/v/t, as every network's do; resuming training
     with m/v/t intact would need an extended envelope.
     """
 
-    hidden_layer_cls = output_layer_cls = AdamArrayLayer
     hyperparameters = ("beta1", "beta2", "epsilon")
 
     def __init__(
@@ -33,3 +31,6 @@ class AdamVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBack
         self.beta2 = beta2
         self.epsilon = epsilon
         super().__init__(layer_sizes, dimension, class_count)
+
+    def _update_rule(self) -> Adam:
+        return Adam(self.beta1, self.beta2, self.epsilon)

@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.adam_layer import make_adam_layer_cls
+from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.array_network_shapes import ArrayMultiClassShape, ArraySingleOutputShape
@@ -41,6 +42,7 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.update_rules import SGD, UpdateRule
 
 # conftest's `backend` fixture: either array backend, NUMPY or RUST
 Backend = ArrayBackend[Any]
@@ -120,6 +122,32 @@ def rust_to_numpy(array: pa.Array) -> FloatArray:
         return np.array([array[i] for i in range(array.shape[0])])
     rows, cols = array.shape
     return np.array([[array[r, c] for c in range(cols)] for r in range(rows)])
+
+
+class LayerOptimizer:
+    """
+    One layer updated as an array network updates it: by its backend's optimizer (optimizers.py),
+    with the layer at index 0 and one begin_step per update, so a layer-level test can drive an
+    update rule on its own.
+    """
+
+    def __init__(self, layer: Any, rule: UpdateRule | None = None) -> None:
+        # rule None: SGD
+        self.layer = layer
+        self.optimizer: Any = (RUST if isinstance(layer.W, pa.Array) else NUMPY).optimizer(rule or SGD())
+
+    def apply(self, learning_rate: float, batch_size: int) -> None:
+        self.optimizer.begin_step()
+        self.optimizer.apply(0, self.layer, learning_rate, batch_size)
+
+    def step_single(self, input_activation: Any, learning_rate: float) -> None:
+        self.optimizer.begin_step()
+        self.optimizer.step_single(0, self.layer, input_activation, learning_rate)
+
+    @property
+    def state(self) -> list[Any]:
+        # the rule's state for the layer: momentum's [velocity_W, velocity_b], Adam's [m_W, v_W, m_b, v_b]
+        return self.optimizer._state[0]
 
 
 def weighted(layer: object) -> WeightedArrayLayer[Any]:

@@ -7,21 +7,20 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.momentum_array_layer import MomentumArrayLayer
 from indrajala_ml.model.momentum_conv_array_layer import MomentumConvArrayLayer
+from indrajala_ml.model.update_rules import Momentum
 
 
 class MomentumConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMultiClassBackpropClassifierNetwork):
     """
     The momentum sibling of ConvVectorizedMultiClassBackpropClassifierNetwork, and the numpy
-    counterpart of MomentumConvMultiClassBackpropClassifierNetwork: MomentumConvArrayLayers, then
-    MomentumArrayLayers for the dense and output layers, which read momentum (required) from the
-    network. Pool layers have no weights, so they are unchanged. momentum is saved in the conv
-    envelope; the velocities are not, as for every momentum network.
+    counterpart of MomentumConvMultiClassBackpropClassifierNetwork: MomentumConvArrayLayers, which
+    read momentum (required) from the network, and the optimizer's Momentum rule for the dense and
+    output layers. Pool layers have no weights, so they are unchanged. momentum is saved in the
+    conv envelope; the velocities are not, as for every momentum network.
     """
 
     conv_layer_cls = MomentumConvArrayLayer
-    hidden_layer_cls = output_layer_cls = MomentumArrayLayer
     hyperparameters = ("momentum",)
 
     def __init__(
@@ -35,3 +34,6 @@ class MomentumConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMu
     ) -> None:
         self.momentum = momentum
         super().__init__(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
+
+    def _update_rule(self) -> Momentum:
+        return Momentum(self.momentum)

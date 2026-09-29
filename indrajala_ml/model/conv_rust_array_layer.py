@@ -6,7 +6,6 @@ from typing import ClassVar
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.array_layer import unfused_sgd_step
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.conv_array_layer import validate_conv_arguments
 
@@ -59,8 +58,8 @@ class ConvRustArrayLayer:
         self.W = pa.Array.zeros((channel_count, self.fan_in))
         self.b = pa.Array.zeros(channel_count)
 
-        self._grad_W = pa.Array.zeros((channel_count, self.fan_in))
-        self._grad_b = pa.Array.zeros(channel_count)
+        self.grad_W = pa.Array.zeros((channel_count, self.fan_in))
+        self.grad_b = pa.Array.zeros(channel_count)
 
     def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A, self._cols = pa.conv_forward_batch(self.W, X, self.b, self.geometry)
@@ -95,25 +94,23 @@ class ConvRustArrayLayer:
 
     def accumulate_gradient_batch(self, _input_activation_batch: pa.Array) -> None:
         # reads the im2col columns forward cached, as ConvArrayLayer._accumulate does
-        self._grad_W, self._grad_b = pa.conv_accumulate_gradient_batch(
-            self.delta_batch, self._cols, self._grad_W, self._grad_b, self.geometry
+        self.grad_W, self.grad_b = pa.conv_accumulate_gradient_batch(
+            self.delta_batch, self._cols, self.grad_W, self.grad_b, self.geometry
         )
 
     def accumulate_gradient(self, _input_activation: pa.Array) -> None:
-        self._grad_W, self._grad_b = pa.conv_accumulate_gradient_batch(
-            self.delta, self._cols, self._grad_W, self._grad_b, self.geometry
+        self.grad_W, self.grad_b = pa.conv_accumulate_gradient_batch(
+            self.delta, self._cols, self.grad_W, self.grad_b, self.geometry
         )
 
     def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
+        # as ConvArrayLayer.apply_accumulated_gradient. The conv gradient sums over output
+        # positions, so the optimizer's fused single-example SGD step doesn't apply to it.
         self.W, self.b = pa.layer_apply_accumulated_gradient(
-            self.W, self.b, self._grad_W, self._grad_b, learning_rate, batch_size
+            self.W, self.b, self.grad_W, self.grad_b, learning_rate, batch_size
         )
-        self._reset_gradient_accum()
+        self.reset_gradient_accum()
 
-    def sgd_step(self, input_activation: pa.Array, learning_rate: float) -> None:
-        # the conv gradient sums over output positions, so there's no fused dense step for it
-        unfused_sgd_step(self, input_activation, learning_rate)
-
-    def _reset_gradient_accum(self) -> None:
-        self._grad_W = pa.Array.zeros((self.channel_count, self.fan_in))
-        self._grad_b = pa.Array.zeros(self.channel_count)
+    def reset_gradient_accum(self) -> None:
+        self.grad_W = pa.Array.zeros((self.channel_count, self.fan_in))
+        self.grad_b = pa.Array.zeros(self.channel_count)

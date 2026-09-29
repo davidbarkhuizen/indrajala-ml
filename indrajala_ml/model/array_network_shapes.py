@@ -220,6 +220,7 @@ class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
             new_layer=self._new_layer,
         )
         self.layers = [*self.conv_layers, *dense_layers, self.output_layer]
+        self.optimizer = self._new_optimizer()
 
     def randomize(self) -> None:
         # forward order, as ConvMultiClassBackpropClassifierNetwork.randomize: conv layers from

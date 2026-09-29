@@ -3,17 +3,19 @@ import random
 import numpy as np
 import pytest
 
+from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.momentum_array_layer import MomentumArrayLayer
 from indrajala_ml.model.momentum_layer import make_momentum_layer_cls
-from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import Backend
+from indrajala_ml.model.update_rules import Momentum
+from tests.helpers import Backend, LayerOptimizer
 
 MOMENTUM = 0.5
 
-LayerCls = type[MomentumArrayLayer] | type[MomentumRustArrayLayer]
-LAYER_CLS: dict[str, LayerCls] = {"numpy": MomentumArrayLayer, "rust": MomentumRustArrayLayer}
+# the layers the optimizer's Momentum rule steps (optimizers.py), as MomentumBackpropNode steps itself
+LayerCls = type[ArrayLayer] | type[RustArrayLayer]
+LAYER_CLS: dict[str, LayerCls] = {"numpy": ArrayLayer, "rust": RustArrayLayer}
 
 
 @pytest.fixture
@@ -23,7 +25,7 @@ def layer_cls(backend: Backend) -> LayerCls:
 
 def _array_layer_like(backprop_layer: BackpropLayer, backend: Backend):
     input_size = len(backprop_layer.input_layer.nodes)
-    array_layer = LAYER_CLS[backend.name](backprop_layer.size, input_size, MOMENTUM)
+    array_layer = LAYER_CLS[backend.name](backprop_layer.size, input_size)
     snapshot = backprop_layer.snapshot_state()
     array_layer.W = backend.owned([weights for weights, _bias in snapshot])
     array_layer.b = backend.owned([bias for _weights, bias in snapshot])
@@ -45,6 +47,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_momentum_backprop_node_
         node.bias = rng.uniform(-3.0, 3.0)
 
     array_layer = _array_layer_like(backprop_layer, backend)
+    optimizer = LayerOptimizer(array_layer, Momentum(MOMENTUM))
     learning_rate = rng.uniform(0.001, 1.0)
 
     for _ in range(10):
@@ -59,7 +62,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_momentum_backprop_node_
 
         array_layer.delta = backend.owned(deltas)
         array_layer.accumulate_gradient(backend.owned(x))
-        array_layer.apply_accumulated_gradient(learning_rate, batch_size=1)
+        optimizer.apply(learning_rate, batch_size=1)
 
         expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
         expected_b = np.array([node.bias for node in backprop_layer.nodes])
@@ -82,6 +85,7 @@ def test_accumulate_across_a_batch_then_apply_matches_momentum_backprop_node_at_
         node.bias = rng.uniform(-3.0, 3.0)
 
     array_layer = _array_layer_like(backprop_layer, backend)
+    optimizer = LayerOptimizer(array_layer, Momentum(MOMENTUM))
     learning_rate = rng.uniform(0.001, 1.0)
 
     for _ in range(5):
@@ -101,7 +105,7 @@ def test_accumulate_across_a_batch_then_apply_matches_momentum_backprop_node_at_
 
         for node in backprop_layer.nodes:
             node.apply_accumulated_gradient(learning_rate, batch_size)
-        array_layer.apply_accumulated_gradient(learning_rate, batch_size)
+        optimizer.apply(learning_rate, batch_size)
 
         expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
         expected_b = np.array([node.bias for node in backprop_layer.nodes])
@@ -111,13 +115,13 @@ def test_accumulate_across_a_batch_then_apply_matches_momentum_backprop_node_at_
 
 def test_velocity_starts_at_zero_so_the_first_step_is_plain_sgd(layer_cls: LayerCls, backend: Backend):
 
-    array_layer = layer_cls(2, 2, momentum=0.9)
+    array_layer = layer_cls(2, 2)
     array_layer.W = backend.owned([[1.0, 2.0], [3.0, 4.0]])
     array_layer.b = backend.owned([5.0, 6.0])
-    array_layer._grad_W = backend.owned([[1.0, 1.0], [1.0, 1.0]])
-    array_layer._grad_b = backend.owned([1.0, 1.0])
+    array_layer.grad_W = backend.owned([[1.0, 1.0], [1.0, 1.0]])
+    array_layer.grad_b = backend.owned([1.0, 1.0])
 
-    array_layer.apply_accumulated_gradient(learning_rate=0.1, batch_size=1)
+    LayerOptimizer(array_layer, Momentum(0.9)).apply(learning_rate=0.1, batch_size=1)
 
     assert np.allclose(array_layer.W.tolist(), [[0.9, 1.9], [2.9, 3.9]])
     assert np.allclose(array_layer.b.tolist(), [4.9, 5.9])
@@ -125,10 +129,10 @@ def test_velocity_starts_at_zero_so_the_first_step_is_plain_sgd(layer_cls: Layer
 
 def test_apply_accumulated_gradient_resets_the_accumulator(layer_cls: LayerCls, backend: Backend):
 
-    array_layer = layer_cls(3, 2, MOMENTUM)
+    array_layer = layer_cls(3, 2)
     array_layer.delta = backend.owned([0.1, 0.2, 0.3])
     array_layer.accumulate_gradient(backend.owned([1.0, 2.0]))
-    array_layer.apply_accumulated_gradient(0.1, batch_size=1)
+    LayerOptimizer(array_layer, Momentum(MOMENTUM)).apply(0.1, batch_size=1)
 
-    assert np.allclose(array_layer._grad_W.tolist(), np.zeros((3, 2)))
-    assert np.allclose(array_layer._grad_b.tolist(), np.zeros(3))
+    assert np.allclose(array_layer.grad_W.tolist(), np.zeros((3, 2)))
+    assert np.allclose(array_layer.grad_b.tolist(), np.zeros(3))

@@ -3,17 +3,19 @@ import random
 import numpy as np
 import pytest
 
+from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.l2_array_layer import L2ArrayLayer
 from indrajala_ml.model.l2_regularization_layer import make_l2_layer_cls
-from indrajala_ml.model.l2_rust_array_layer import L2RustArrayLayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import Backend
+from indrajala_ml.model.update_rules import WeightDecay
+from tests.helpers import Backend, LayerOptimizer
 
 L2_LAMBDA = 0.05
 
-LayerCls = type[L2ArrayLayer] | type[L2RustArrayLayer]
-LAYER_CLS: dict[str, LayerCls] = {"numpy": L2ArrayLayer, "rust": L2RustArrayLayer}
+# the layers the optimizer's WeightDecay rule steps (optimizers.py), as the L2 node steps itself
+LayerCls = type[ArrayLayer] | type[RustArrayLayer]
+LAYER_CLS: dict[str, LayerCls] = {"numpy": ArrayLayer, "rust": RustArrayLayer}
 
 
 @pytest.fixture
@@ -23,7 +25,7 @@ def layer_cls(backend: Backend) -> LayerCls:
 
 def _array_layer_like(backprop_layer: BackpropLayer, backend: Backend):
     input_size = len(backprop_layer.input_layer.nodes)
-    array_layer = LAYER_CLS[backend.name](backprop_layer.size, input_size, L2_LAMBDA)
+    array_layer = LAYER_CLS[backend.name](backprop_layer.size, input_size)
     snapshot = backprop_layer.snapshot_state()
     array_layer.W = backend.owned([weights for weights, _bias in snapshot])
     array_layer.b = backend.owned([bias for _weights, bias in snapshot])
@@ -46,6 +48,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_l2_backprop_node_at_eve
         node.bias = rng.uniform(-3.0, 3.0)
 
     array_layer = _array_layer_like(backprop_layer, backend)
+    optimizer = LayerOptimizer(array_layer, WeightDecay(L2_LAMBDA))
     learning_rate = rng.uniform(0.001, 1.0)
 
     for _ in range(10):
@@ -60,7 +63,7 @@ def test_accumulate_then_apply_at_batch_size_one_matches_l2_backprop_node_at_eve
 
         array_layer.delta = backend.owned(deltas)
         array_layer.accumulate_gradient(backend.owned(x))
-        array_layer.apply_accumulated_gradient(learning_rate, batch_size=1)
+        optimizer.apply(learning_rate, batch_size=1)
 
         expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
         expected_b = np.array([node.bias for node in backprop_layer.nodes])
@@ -83,6 +86,7 @@ def test_accumulate_across_a_batch_then_apply_matches_l2_backprop_node_at_every_
         node.bias = rng.uniform(-3.0, 3.0)
 
     array_layer = _array_layer_like(backprop_layer, backend)
+    optimizer = LayerOptimizer(array_layer, WeightDecay(L2_LAMBDA))
     learning_rate = rng.uniform(0.001, 1.0)
 
     for _ in range(5):
@@ -102,7 +106,7 @@ def test_accumulate_across_a_batch_then_apply_matches_l2_backprop_node_at_every_
 
         for node in backprop_layer.nodes:
             node.apply_accumulated_gradient(learning_rate, batch_size)
-        array_layer.apply_accumulated_gradient(learning_rate, batch_size)
+        optimizer.apply(learning_rate, batch_size)
 
         expected_W = np.array([node.input_node_weights for node in backprop_layer.nodes])
         expected_b = np.array([node.bias for node in backprop_layer.nodes])
@@ -114,24 +118,24 @@ def test_bias_is_never_regularized(layer_cls: LayerCls, backend: Backend):
 
     # with a zero weight gradient and a nonzero bias gradient, the bias moves by plain SGD: the
     # penalty applies to W only
-    array_layer = layer_cls(2, 2, l2_lambda=0.5)
+    array_layer = layer_cls(2, 2)
     array_layer.W = backend.owned([[1.0, 2.0], [3.0, 4.0]])
     array_layer.b = backend.owned([5.0, 6.0])
     array_layer.delta = backend.owned([0.0, 0.0])
     array_layer.accumulate_gradient(backend.owned([0.0, 0.0]))
-    array_layer._grad_b = backend.owned([2.0, 4.0])
+    array_layer.grad_b = backend.owned([2.0, 4.0])
 
-    array_layer.apply_accumulated_gradient(learning_rate=0.1, batch_size=1)
+    LayerOptimizer(array_layer, WeightDecay(0.5)).apply(learning_rate=0.1, batch_size=1)
 
     assert np.allclose(array_layer.b.tolist(), [5.0 - 0.1 * 2.0, 6.0 - 0.1 * 4.0])
 
 
 def test_apply_accumulated_gradient_resets_the_accumulator(layer_cls: LayerCls, backend: Backend):
 
-    array_layer = layer_cls(3, 2, L2_LAMBDA)
+    array_layer = layer_cls(3, 2)
     array_layer.delta = backend.owned([0.1, 0.2, 0.3])
     array_layer.accumulate_gradient(backend.owned([1.0, 2.0]))
-    array_layer.apply_accumulated_gradient(0.1, batch_size=1)
+    LayerOptimizer(array_layer, WeightDecay(L2_LAMBDA)).apply(0.1, batch_size=1)
 
-    assert np.allclose(array_layer._grad_W.tolist(), np.zeros((3, 2)))
-    assert np.allclose(array_layer._grad_b.tolist(), np.zeros(3))
+    assert np.allclose(array_layer.grad_W.tolist(), np.zeros((3, 2)))
+    assert np.allclose(array_layer.grad_b.tolist(), np.zeros(3))

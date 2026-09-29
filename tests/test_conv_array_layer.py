@@ -189,7 +189,7 @@ def test_gradient_accumulation_matches_conv_kernel_accumulators_over_a_batch(
     array_layer.forward_batch(backend.owned(X.tolist()))
     array_layer.delta_batch = backend.owned(delta_batch.tolist())
     array_layer.accumulate_gradient_batch(backend.owned(X.tolist()))
-    grad_W, grad_b = to_numpy(array_layer._grad_W), to_numpy(array_layer._grad_b)
+    grad_W, grad_b = to_numpy(array_layer.grad_W), to_numpy(array_layer.grad_b)
 
     for x, deltas in zip(X, delta_batch):
         _python_forward(conv_layer, state_layer, x)
@@ -208,8 +208,8 @@ def test_gradient_accumulation_matches_conv_kernel_accumulators_over_a_batch(
         single.forward(backend.owned(x.tolist()))
         single.delta = backend.owned(deltas.tolist())
         single.accumulate_gradient(backend.owned(x.tolist()))
-    np.testing.assert_allclose(to_numpy(single._grad_W), grad_W, rtol=0, atol=ATOL)
-    np.testing.assert_allclose(to_numpy(single._grad_b), grad_b, rtol=0, atol=ATOL)
+    np.testing.assert_allclose(to_numpy(single.grad_W), grad_W, rtol=0, atol=ATOL)
+    np.testing.assert_allclose(to_numpy(single.grad_b), grad_b, rtol=0, atol=ATOL)
 
     # applying divides by batch_size and resets, as ConvKernel.apply_accumulated_gradient does
     W_before, b_before = to_numpy(array_layer.W), to_numpy(array_layer.b)
@@ -219,8 +219,8 @@ def test_gradient_accumulation_matches_conv_kernel_accumulators_over_a_batch(
     np.testing.assert_allclose(to_numpy(array_layer.b), b_before - 0.1 * grad_b / 5, rtol=0, atol=1e-15)
     for c, kernel in enumerate(conv_layer.kernels):
         np.testing.assert_allclose(to_numpy(array_layer.W)[c], kernel.weights, rtol=0, atol=ATOL)
-    assert not to_numpy(array_layer._grad_W).any() and not to_numpy(array_layer._grad_b).any()
-    assert to_numpy(array_layer._grad_W).shape == (array_layer.channel_count, array_layer.fan_in)
+    assert not to_numpy(array_layer.grad_W).any() and not to_numpy(array_layer.grad_b).any()
+    assert to_numpy(array_layer.grad_W).shape == (array_layer.channel_count, array_layer.fan_in)
 
 
 def test_relu_derivative_is_zero_at_exactly_z_equals_zero(backend: Backend, layer_cls: LayerCls):
@@ -298,7 +298,7 @@ def test_finite_difference_gradients_on_the_layer_alone(backend: Backend, layer_
     layer.forward_batch(backend.owned(X.tolist()))
     layer.compute_hidden_delta_batch(fixed_downstream(backend, G))
     layer.accumulate_gradient_batch(backend.owned(X.tolist()))
-    grad_W, grad_b = to_numpy(layer._grad_W), to_numpy(layer._grad_b)
+    grad_W, grad_b = to_numpy(layer.grad_W), to_numpy(layer.grad_b)
     input_gradient = to_numpy(layer.downstream_batch())
 
     eps = 1e-6

@@ -7,7 +7,7 @@ from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
-from tests.helpers import Backend, approx
+from tests.helpers import Backend, LayerOptimizer, approx
 
 LayerCls = type[DropoutArrayLayer] | type[DropoutRustArrayLayer]
 LAYER_CLS: dict[str, LayerCls] = {"numpy": DropoutArrayLayer, "rust": DropoutRustArrayLayer}
@@ -228,14 +228,14 @@ def test_compute_hidden_delta_batch_at_eval_mode_matches_per_row_single_example_
     assert np.allclose(layer.delta_batch.tolist(), expected_rows)
 
 
-def test_apply_accumulated_gradient_is_inherited_unchanged_from_array_layer(backend: Backend):
+def test_the_weight_update_is_array_layers(backend: Backend):
 
     layer = _dropout_layer(backend)
     layer.W = backend.owned([[1.0]])
     layer.b = backend.owned([5.0])
     layer.delta = backend.owned([1.0])
     layer.accumulate_gradient(backend.owned([1.0]))
-    layer.apply_accumulated_gradient(learning_rate=0.1, batch_size=1)
+    LayerOptimizer(layer).apply(learning_rate=0.1, batch_size=1)
 
     assert np.allclose(layer.W.tolist(), [[0.9]])
     assert np.allclose(layer.b.tolist(), [4.9])

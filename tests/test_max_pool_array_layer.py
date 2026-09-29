@@ -252,10 +252,10 @@ def test_finite_difference_gradients_through_conv_pool_conv(
     conv2.accumulate_gradient_batch(None)
     input_gradient = to_numpy(conv1.downstream_batch())
     analytic = [
-        to_numpy(conv1._grad_W),
-        to_numpy(conv1._grad_b),
-        to_numpy(conv2._grad_W),
-        to_numpy(conv2._grad_b),
+        to_numpy(conv1.grad_W),
+        to_numpy(conv1.grad_b),
+        to_numpy(conv2.grad_W),
+        to_numpy(conv2.grad_b),
         input_gradient,
     ]
 

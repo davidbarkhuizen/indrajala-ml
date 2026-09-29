@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.digits_data import load_digits_dataset
+from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -18,7 +19,6 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
-from indrajala_ml.model.momentum_array_layer import MomentumArrayLayer
 from indrajala_ml.model.momentum_conv_array_layer import MomentumConvArrayLayer
 from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
     MomentumConvMultiClassBackpropClassifierNetwork,
@@ -30,7 +30,8 @@ from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_
 from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
     MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.momentum_rust_array_layer import MomentumRustArrayLayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.update_rules import Momentum
 from tests.helpers import (
     Backend,
     assert_conv_array_network_weights_match,
@@ -59,8 +60,8 @@ PLAIN_NETWORK_CLS = {
 }
 # (conv, pool, dense) layer classes
 LAYER_CLS = {
-    "numpy": (MomentumConvArrayLayer, MaxPoolArrayLayer, MomentumArrayLayer),
-    "rust": (MomentumConvRustArrayLayer, MaxPoolRustArrayLayer, MomentumRustArrayLayer),
+    "numpy": (MomentumConvArrayLayer, MaxPoolArrayLayer, ArrayLayer),
+    "rust": (MomentumConvRustArrayLayer, MaxPoolRustArrayLayer, RustArrayLayer),
 }
 
 
@@ -189,7 +190,7 @@ def test_zero_momentum_is_bit_identical_to_the_plain_conv_network_through_learn_
         assert _as_lists(network.snapshot()) == _as_lists(plain.snapshot())
 
 
-def test_the_conv_and_dense_layers_are_the_momentum_classes_and_take_momentum(backend: Backend):
+def test_the_conv_layers_take_momentum_and_the_optimizer_steps_the_dense_layers_by_it(backend: Backend):
 
     conv_cls, pool_cls, dense_cls = LAYER_CLS[backend.name]
     network = NETWORK_CLS[backend.name](8, 8, OVERLAPPING_POOL_STRIDED, [8, 6], CLASS_COUNT, momentum=0.7)
@@ -199,7 +200,8 @@ def test_the_conv_and_dense_layers_are_the_momentum_classes_and_take_momentum(ba
         assert type(layer) is conv_cls and layer._momentum == 0.7
     assert type(pool) is pool_cls
     for layer in network.layers[3:]:
-        assert type(layer) is dense_cls and layer._momentum == 0.7
+        assert type(layer) is dense_cls
+    assert network.optimizer.rule == Momentum(0.7)
 
 
 def test_save_and_load_round_trip_keeps_momentum(backend: Backend, tmp_path: Path):

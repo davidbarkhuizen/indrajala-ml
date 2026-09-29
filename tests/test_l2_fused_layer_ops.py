@@ -1,8 +1,8 @@
 """
 `layer_l2_apply_accumulated_gradient` is one fused Rust call for the whole L2 (weight decay)
-update rule, checked against
-`indrajala_ml.model.l2_array_layer.L2ArrayLayer` - the actual production reference this
-function replaces - the same treatment `test_adam_fused_layer_ops.py` gives Adam's own fused op.
+update rule, checked against the numpy optimizer's WeightDecay rule
+(`indrajala_ml.model.optimizers.NumpyOptimizer`) - the production reference this function
+matches - the same treatment `test_adam_fused_layer_ops.py` gives Adam's own fused op.
 """
 
 import random
@@ -11,8 +11,9 @@ import numpy as np
 import pytest
 from indrajala_math_rust import Array, layer_l2_apply_accumulated_gradient
 
-from indrajala_ml.model.l2_array_layer import L2ArrayLayer
-from tests.helpers import random_matrix, random_vector, rust_to_numpy
+from indrajala_ml.model.array_layer import ArrayLayer
+from indrajala_ml.model.update_rules import WeightDecay
+from tests.helpers import LayerOptimizer, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)
 INPUT_SIZE = 8
@@ -31,10 +32,10 @@ def test_layer_l2_apply_accumulated_gradient_matches_l2_array_layer_exactly(seed
     grad_b_data = random_vector(rng, HIDDEN_SIZE)
     learning_rate = rng.uniform(0.001, 1.0)
 
-    layer = L2ArrayLayer(HIDDEN_SIZE, INPUT_SIZE, L2_LAMBDA)
+    layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     layer.W, layer.b = np.array(w_data), np.array(b_data)
-    layer._grad_W, layer._grad_b = np.array(grad_w_data), np.array(grad_b_data)
-    layer.apply_accumulated_gradient(learning_rate, batch_size)
+    layer.grad_W, layer.grad_b = np.array(grad_w_data), np.array(grad_b_data)
+    LayerOptimizer(layer, WeightDecay(L2_LAMBDA)).apply(learning_rate, batch_size)
 
     new_w, new_b = layer_l2_apply_accumulated_gradient(
         Array(w_data),
@@ -52,7 +53,8 @@ def test_layer_l2_apply_accumulated_gradient_matches_l2_array_layer_exactly(seed
 @pytest.mark.parametrize("seed", SEEDS)
 def test_layer_l2_apply_accumulated_gradient_matches_exactly_across_several_steps(seed: int):
     rng = random.Random(seed)
-    layer = L2ArrayLayer(HIDDEN_SIZE, INPUT_SIZE, L2_LAMBDA)
+    layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
+    optimizer = LayerOptimizer(layer, WeightDecay(L2_LAMBDA))
     layer.W = np.array(random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE))
     layer.b = np.array(random_vector(rng, HIDDEN_SIZE))
     learning_rate = rng.uniform(0.001, 1.0)
@@ -64,9 +66,9 @@ def test_layer_l2_apply_accumulated_gradient_matches_exactly_across_several_step
         grad_w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
         grad_b_data = random_vector(rng, HIDDEN_SIZE)
 
-        layer._grad_W = np.array(grad_w_data)
-        layer._grad_b = np.array(grad_b_data)
-        layer.apply_accumulated_gradient(learning_rate, batch_size=1)
+        layer.grad_W = np.array(grad_w_data)
+        layer.grad_b = np.array(grad_b_data)
+        optimizer.apply(learning_rate, batch_size=1)
 
         w, b = layer_l2_apply_accumulated_gradient(
             w, b, Array(grad_w_data), Array(grad_b_data), L2_LAMBDA, learning_rate, 1
