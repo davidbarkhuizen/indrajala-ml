@@ -1,12 +1,10 @@
 from collections.abc import Callable, Sequence
 from random import shuffle
-from typing import TypeVar
 
 from indrajala_ml.evaluate import class_balanced_disagreement_rate, sample_class_balanced_states
 from indrajala_ml.model.classifier_protocols import (
     BatchTrainableClassifier,
     Example,
-    L,
     PreparedTrainableClassifier,
     StateClassifier,
     TargetClassifier,
@@ -56,7 +54,7 @@ def reachable_reference_and_training_data(
     raise RuntimeError(f"no workable cardinality={cardinality} reference classifier found within these bounds")
 
 
-def _prepared_for(
+def _prepared_for[L](
     student: TrainableClassifier[L], training_data: Sequence[Example[L]] | PreparedDataset
 ) -> PreparedDataset | None:
     # the array networks train from one backend matrix (docs/optimizations/implemented.md),
@@ -72,7 +70,7 @@ def _prepared_for(
     return None
 
 
-def _training_accuracy(
+def _training_accuracy[L](
     student: StateClassifier[L],
     training_data: Sequence[Example[L]] | PreparedDataset,
     prepared: PreparedDataset | None = None,
@@ -135,7 +133,7 @@ class ConvergenceSeries(list[tuple[int, float]]):
     diagnostic: TrainingDiagnostic
 
 
-def train_linear_classifier_network(
+def train_linear_classifier_network[L](
     student: TrainableClassifier[L],
     training_data: Sequence[Example[L]] | PreparedDataset,
     learning_rate: float | Callable[[int], float] = 0.25,
@@ -219,16 +217,13 @@ def _rate(learning_rate: float | Callable[[int], float], iterations: int) -> flo
     return learning_rate(iterations) if callable(learning_rate) else learning_rate
 
 
-T = TypeVar("T")
-
-
-def _chunk_into_batches(data: list[T], batch_size: int) -> list[list[T]]:
+def _chunk_into_batches[T](data: list[T], batch_size: int) -> list[list[T]]:
     # a final short batch is kept: learn_batch averages by len(batch)
     assert batch_size >= 1, f"batch_size must be at least 1; got {batch_size}"
     return [data[i : i + batch_size] for i in range(0, len(data), batch_size)]
 
 
-def train_backprop_network_mini_batch(
+def train_backprop_network_mini_batch[L](
     student: BatchTrainableClassifier[L],
     training_data: Sequence[Example[L]] | PreparedDataset,
     batch_size: int,
@@ -272,7 +267,7 @@ def train_backprop_network_mini_batch(
 
     # the prepared path shuffles row indices in place of the tuples: shuffle draws depend only
     # on the list's length, so a seed gives the same permutation, and the same batches, either way
-    def epoch_order(examples: Sequence[T]) -> list[T]:
+    def epoch_order[T](examples: Sequence[T]) -> list[T]:
         epoch_data = list(examples)
         if reshuffle_each_epoch:
             shuffle(epoch_data)

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Generic, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from indrajala_ml.model.array_network_base import as_weighted_array_layers
-from indrajala_ml.model.array_protocols import A, WeightedArrayLayer
+from indrajala_ml.model.array_protocols import BackendArray, WeightedArrayLayer
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.conv_front_end import (
     ArrayConvLayer,
@@ -27,13 +27,16 @@ if TYPE_CHECKING:
 
     # For the type checker only, each mixin subclasses what it's mixed into, so the attributes
     # and methods its host supplies (backend, layers, _forward, snapshot, ...) resolve; at
-    # runtime each is a plain Generic class ahead of the backend's base in the MRO.
+    # runtime each is a plain generic class ahead of the backend's base in the MRO. (The runtime
+    # base can't be Generic itself: a class with type parameters already derives from it.)
     _ShapeBase = ArrayNetworkBase
 else:
-    _ShapeBase = Generic
+
+    class _ShapeBase[A]:
+        pass
 
 
-class ArrayMultiClassShape(_ShapeBase[A]):
+class ArrayMultiClassShape[A: BackendArray](_ShapeBase[A]):
     """
     The multiclass shape over ArrayNetworkBase, for either backend: argmax classify_state,
     predict_probabilities, one-hot targets, and the save/load envelope with class_count.
@@ -96,7 +99,7 @@ class ArrayMultiClassShape(_ShapeBase[A]):
         return network
 
 
-class ArraySingleOutputShape(_ShapeBase[A]):
+class ArraySingleOutputShape[A: BackendArray](_ShapeBase[A]):
     """
     The single-output shape over ArrayNetworkBase, for either backend: 0.5-threshold classify_state,
     predict_probability, a scalar target, and the save/load envelope without class_count. It hosts
@@ -156,10 +159,10 @@ class ArraySingleOutputShape(_ShapeBase[A]):
 if TYPE_CHECKING:
     _ConvShapeBase = ArrayMultiClassShape
 else:
-    _ConvShapeBase = Generic
+    _ConvShapeBase = _ShapeBase
 
 
-class ArrayConvShape(_ConvShapeBase[A]):
+class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
     """
     The convolutional shape over the multiclass shape, for either backend: a front end of conv and
     max-pool layers (one ConvSpec or PoolSpec each, in order), one or more sigmoid dense layers, and

@@ -3,19 +3,17 @@ from __future__ import annotations
 import math
 import random
 from collections.abc import Sequence
-from typing import Any, Generic, Self, TypeVar, cast
+from typing import Any, Self, cast
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.bounds import validate_batch, validate_input_bounds, validate_layer_sizes
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.state_layer import StateLayer
 
-# the hidden layers' type: dense layers, except in the conv network, whose front end puts conv and
-# pool layers first (ConvMultiClassBackpropClassifierNetwork)
-LayerT = TypeVar("LayerT", bound=TrainableLayer, default=BackpropLayer)
 
-
-class BackpropNetworkBase(Generic[LayerT]):
+# LayerT, the hidden layers' type: dense layers, except in the conv network, whose front end puts
+# conv and pool layers first (ConvMultiClassBackpropClassifierNetwork)
+class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
     """
     What BackpropClassifierNetwork and MultiClassBackpropClassifierNetwork share: layer assembly
     (input -> hidden layer(s) -> output layer), the forward pass, applying gradients, the hidden

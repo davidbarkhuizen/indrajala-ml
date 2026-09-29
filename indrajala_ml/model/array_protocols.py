@@ -7,7 +7,7 @@ them for its own A without inheriting from them.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Protocol, Self, TypeVar, runtime_checkable
+from typing import Any, Protocol, Self, runtime_checkable
 
 
 class BackendArray(Protocol):
@@ -20,11 +20,7 @@ class BackendArray(Protocol):
     def __setitem__(self, index: Any, value: float, /) -> None: ...
 
 
-# the backend's array type: FloatArray (numpy) or indrajala_math_rust.Array (Rust)
-A = TypeVar("A", bound=BackendArray)
-
-
-class ArrayNetworkLayer(Protocol[A]):
+class ArrayNetworkLayer[A: BackendArray](Protocol):
     """What ArrayNetworkBase drives layer by layer: dense, conv and max-pool layers alike."""
 
     def forward(self, x: A, /) -> A: ...
@@ -55,7 +51,7 @@ class ArrayNetworkLayer(Protocol[A]):
 
 
 @runtime_checkable
-class WeightedArrayLayer(ArrayNetworkLayer[A], Protocol[A]):
+class WeightedArrayLayer[A: BackendArray](ArrayNetworkLayer[A], Protocol):
     """A layer with weights: a dense layer (all of a dense network's) or a conv layer."""
 
     size: int
@@ -63,20 +59,16 @@ class WeightedArrayLayer(ArrayNetworkLayer[A], Protocol[A]):
     b: A
 
 
-LayerT = TypeVar("LayerT")
-LayerT_co = TypeVar("LayerT_co", covariant=True)
-
-
-class HyperparameterLayerClass(Protocol[LayerT_co]):
+class HyperparameterLayerClass[LayerT](Protocol):
     """A layer class as ArrayNetworkBase._new_layer builds it: its shape arguments, then its
     hyperparameters, from the network's attributes of the same names."""
 
     hyperparameters: tuple[str, ...]
 
-    def __call__(self, *args: Any, **kwargs: Any) -> LayerT_co: ...
+    def __call__(self, *args: Any, **kwargs: Any) -> LayerT: ...
 
 
-class ArrayBackend(Protocol[A]):
+class ArrayBackend[A: BackendArray](Protocol):
     """The array operations ArrayNetworkBase needs from a backend (array_backend.py)."""
 
     @property

@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-from typing import Generic, TypeVar
-
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.classification import argmax_first_occurrence
 from indrajala_ml.model.classifier_protocols import BinaryClassifier
 from indrajala_ml.model.model_io import load_model_json, save_model_json
 
-# the sub-networks' class: any single-output network, BackpropClassifierNetwork unless the
-# trainer is given another classifier_cls (ensemble_train.py)
-ClassifierT = TypeVar("ClassifierT", bound=BinaryClassifier, default=BackpropClassifierNetwork)
 
-
-class EnsembleBackpropClassifierNetwork(Generic[ClassifierT]):
+# ClassifierT, the sub-networks' class: any single-output network, BackpropClassifierNetwork unless
+# the trainer is given another classifier_cls (ensemble_train.py)
+class EnsembleBackpropClassifierNetwork[ClassifierT: BinaryClassifier = BackpropClassifierNetwork]:
     """
     A multiclass classifier made of class_count independent BackpropClassifierNetworks, one per
     class, each trained on its own "is this class C?" problem with no shared state. Unlike

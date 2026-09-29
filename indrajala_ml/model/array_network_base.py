@@ -3,25 +3,24 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Generic, Protocol, Self, cast
+from typing import Any, Protocol, Self, cast
 
 from indrajala_ml.model.array_protocols import (
-    A,
     ArrayBackend,
     ArrayNetworkLayer,
+    BackendArray,
     HyperparameterLayerClass,
-    LayerT,
     WeightedArrayLayer,
 )
 from indrajala_ml.model.bounds import validate_batch, validate_layer_sizes
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
 
-class DenseArrayLayerClass(HyperparameterLayerClass[WeightedArrayLayer[A]], Protocol[A]):
+class DenseArrayLayerClass[A: BackendArray](HyperparameterLayerClass[WeightedArrayLayer[A]], Protocol):
     """A dense layer class: (size, input_size, *its hyperparameters)."""
 
 
-def as_weighted_array_layers(layers: Sequence[ArrayNetworkLayer[A]]) -> list[WeightedArrayLayer[A]]:
+def as_weighted_array_layers[A: BackendArray](layers: Sequence[ArrayNetworkLayer[A]]) -> list[WeightedArrayLayer[A]]:
     """
     layers, checked to all have weights (W, b, size): a dense network's, whose randomize and
     snapshot/restore read them (the conv networks, with weightless pool layers, override both).
@@ -31,7 +30,7 @@ def as_weighted_array_layers(layers: Sequence[ArrayNetworkLayer[A]]) -> list[Wei
     return dense
 
 
-class ArrayNetworkBase(Generic[A]):
+class ArrayNetworkBase[A: BackendArray]:
     """
     What every array-backed network shares, numpy and Rust (NumpyArrayNetworkBase and
     RustArrayNetworkBase set the backend, A being its array type):
@@ -76,7 +75,7 @@ class ArrayNetworkBase(Generic[A]):
         self.output_layer = self._new_layer(self.output_layer_cls, output_size, previous_size)
         self.layers.append(self.output_layer)
 
-    def _new_layer(self, layer_cls: HyperparameterLayerClass[LayerT], *args: Any, **kwargs: Any) -> LayerT:
+    def _new_layer[LayerT](self, layer_cls: HyperparameterLayerClass[LayerT], *args: Any, **kwargs: Any) -> LayerT:
         # dense and conv layers alike; a hyperparameter-bearing sibling stores its hyperparameters
         # before super().__init__()
         return layer_cls(*args, **kwargs, **{name: getattr(self, name) for name in layer_cls.hyperparameters})

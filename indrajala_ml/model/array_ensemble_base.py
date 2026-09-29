@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar, Generic, Self, TypeVar, cast
+from typing import Any, ClassVar, Self, cast
 
 from indrajala_ml.model.array_network_shapes import ArraySingleOutputShape
 from indrajala_ml.model.classification import argmax_first_occurrence
 from indrajala_ml.model.model_io import load_json, save_json
 
-# the sub-networks' class: a single-output array network on either backend
-ClassifierT = TypeVar("ClassifierT", bound=ArraySingleOutputShape[Any])
 
-
-class ArrayEnsembleBase(Generic[ClassifierT]):
+class ArrayEnsembleBase[ClassifierT: ArraySingleOutputShape[Any]]:
     """
     An ensemble of single-output array networks, for either backend, assembled from already-built
     classifiers as EnsembleBackpropClassifierNetwork is. EnsembleArrayBackpropClassifierNetwork and

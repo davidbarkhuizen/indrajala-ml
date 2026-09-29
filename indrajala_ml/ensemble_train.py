@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.classifier_protocols import BinaryClassifier, BinaryClassifierClass
-from indrajala_ml.model.ensemble_backprop_classifier_network import ClassifierT, EnsembleBackpropClassifierNetwork
+from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
 from indrajala_ml.seeding import seed_everything
 from indrajala_ml.train import TrainingDiagnostic, train_linear_classifier_network
 
@@ -101,7 +101,7 @@ def _picklable_snapshot(snapshot: object) -> object:
     return snapshot
 
 
-def _train_classifier_on_binary_dataset(
+def _train_classifier_on_binary_dataset[ClassifierT: BinaryClassifier](
     label: int,
     binary_dataset: list[tuple[tuple[float, ...], float]],
     layer_sizes: list[int],
@@ -253,7 +253,7 @@ def _select_worker_count(
     return max(1, min(limits))
 
 
-def _assemble_ensemble_from_results(
+def _assemble_ensemble_from_results[ClassifierT: BinaryClassifier](
     results: list[tuple[int, object, TrainingDiagnostic]],
     layer_sizes: list[int],
     dimension: int,
@@ -279,7 +279,7 @@ def _assemble_ensemble_from_results(
     return EnsembleBackpropClassifierNetwork(classifiers), diagnostics
 
 
-def _collect_ensemble_results(
+def _collect_ensemble_results[ClassifierT: BinaryClassifier](
     pool: multiprocessing.pool.Pool,
     worker_fn: Callable[..., tuple[int, object, TrainingDiagnostic]],
     jobs: Iterable[Any],
@@ -297,7 +297,7 @@ def _collect_ensemble_results(
     return _assemble_ensemble_from_results(results, layer_sizes, dimension, input_bounds, classifier_cls)
 
 
-def train_ensemble_parallel(
+def train_ensemble_parallel[ClassifierT: BinaryClassifier = BackpropClassifierNetwork](
     dataset: list[tuple[tuple[float, ...], int]],
     class_count: int,
     layer_sizes: list[int],
@@ -359,7 +359,7 @@ def train_ensemble_parallel(
         )
 
 
-def train_ensemble_parallel_from_indices(
+def train_ensemble_parallel_from_indices[ClassifierT: BinaryClassifier = BackpropClassifierNetwork](
     path: str,
     record_loader: RecordLoader,
     labels: list[int],
@@ -420,7 +420,7 @@ def train_ensemble_parallel_from_indices(
         )
 
 
-def train_ensemble_serial_from_indices(
+def train_ensemble_serial_from_indices[ClassifierT: BinaryClassifier = BackpropClassifierNetwork](
     path: str,
     record_loader: RecordLoader,
     labels: list[int],

@@ -1,7 +1,7 @@
 import random
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import Any, Protocol, TypeVar, cast
+from typing import Any, Protocol, cast
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -46,10 +46,6 @@ from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
 Backend = ArrayBackend[Any]
 # a backend's array constructor on nested lists: np.array (numpy) or pa.Array (Rust)
 Wrap = Callable[[Any], Any]
-# the array network a matching_* helper builds, of whichever class the caller passes
-ArrayNetworkT = TypeVar("ArrayNetworkT", bound=ArrayNetworkBase[Any])
-MultiClassT = TypeVar("MultiClassT", bound=ArrayMultiClassShape[Any])
-SingleOutputT = TypeVar("SingleOutputT", bound=ArraySingleOutputShape[Any])
 
 
 class _Snapshottable(Protocol):
@@ -66,9 +62,6 @@ class _SavableMultiClass(Protocol):
     def classify_state(self, state: State) -> int: ...
 
     def predict_probabilities(self, state: State) -> list[float]: ...
-
-
-SavableT = TypeVar("SavableT", bound=_SavableMultiClass)
 
 
 def approx(expected: object, rel: float | None = None, abs: float | None = None) -> object:
@@ -97,10 +90,7 @@ def fixed_downstream(backend: Backend, gradient_batch: FloatArray) -> Any:
     return FixedDownstream(backend.owned(gradient_batch.tolist()), backend.owned(gradient_batch[0].tolist()))
 
 
-ClassT = TypeVar("ClassT")
-
-
-def all_subclasses(cls: type[ClassT]) -> Iterator[type[ClassT]]:
+def all_subclasses[ClassT](cls: type[ClassT]) -> Iterator[type[ClassT]]:
     """
     Every subclass of cls in indrajala_ml, at any depth (only those of modules imported so far):
     not the test files' own, so a test's sibling classes don't join a walk over the real ones.
@@ -152,7 +142,7 @@ def conv_layers_only(network: ConvMultiClassBackpropClassifierNetwork) -> list[C
     return layers
 
 
-def assert_save_and_load_round_trip(
+def assert_save_and_load_round_trip[SavableT: _SavableMultiClass](
     network: SavableT, load_fn: Callable[[str], SavableT], tmp_path: Path, filename: str, states: Iterable[State]
 ) -> SavableT:
     """
@@ -250,7 +240,7 @@ def inject_matching_weights(
         previous_size = len(weights)
 
 
-def matching_array_backprop_networks(
+def matching_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
     rng: random.Random,
     array_network_cls: Callable[..., ArrayNetworkT],
     wrap: Wrap,
@@ -273,7 +263,7 @@ def matching_array_backprop_networks(
     return node_network, array_network
 
 
-def matching_single_output_array_backprop_networks(
+def matching_single_output_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
     rng: random.Random,
     array_network_cls: Callable[..., ArrayNetworkT],
     wrap: Wrap,
@@ -292,7 +282,7 @@ def matching_single_output_array_backprop_networks(
     return node_network, array_network
 
 
-def matching_cross_entropy_array_backprop_networks(
+def matching_cross_entropy_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
     rng: random.Random,
     array_network_cls: Callable[..., ArrayNetworkT],
     wrap: Wrap,
@@ -335,7 +325,7 @@ class AdamMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
         super().__init__(layer_sizes, dimension, input_bounds, class_count)
 
 
-def matching_adam_array_backprop_networks(
+def matching_adam_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
     rng: random.Random,
     array_network_cls: Callable[..., ArrayNetworkT],
     wrap: Wrap,
@@ -381,7 +371,7 @@ class L2MultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork)
         super().__init__(layer_sizes, dimension, input_bounds, class_count)
 
 
-def matching_l2_array_backprop_networks(
+def matching_l2_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
     rng: random.Random,
     array_network_cls: Callable[..., ArrayNetworkT],
     wrap: Wrap,
@@ -424,7 +414,7 @@ class MomentumMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNe
         super().__init__(layer_sizes, dimension, input_bounds, class_count)
 
 
-def matching_momentum_array_backprop_networks(
+def matching_momentum_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
     rng: random.Random,
     array_network_cls: Callable[..., ArrayNetworkT],
     wrap: Wrap,
@@ -455,7 +445,7 @@ class ReLUMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwor
     hidden_layer_cls = ReLULayer
 
 
-def matching_relu_array_backprop_networks(
+def matching_relu_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
     rng: random.Random,
     array_network_cls: Callable[..., ArrayNetworkT],
     wrap: Wrap,
@@ -495,7 +485,7 @@ class DropoutMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNet
         super().__init__(layer_sizes, dimension, input_bounds, class_count)
 
 
-def matching_dropout_array_backprop_networks(
+def matching_dropout_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
     rng: random.Random,
     array_network_cls: Callable[..., ArrayNetworkT],
     wrap: Wrap,
@@ -518,7 +508,7 @@ def matching_dropout_array_backprop_networks(
     return node_network, array_network
 
 
-def matching_softmax_array_backprop_networks(
+def matching_softmax_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
     rng: random.Random,
     array_network_cls: Callable[..., ArrayNetworkT],
     wrap: Wrap,
@@ -549,7 +539,7 @@ class CrossEntropyMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifi
     output_layer_cls = CrossEntropyOutputLayer
 
 
-def matching_cross_entropy_multiclass_array_backprop_networks(
+def matching_cross_entropy_multiclass_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
     rng: random.Random,
     array_network_cls: Callable[..., ArrayNetworkT],
     wrap: Wrap,
@@ -737,7 +727,7 @@ def assert_single_output_array_network_snapshot_restore_round_trip(
         assert b1.tolist() == b2.tolist()
 
 
-def assert_single_output_array_network_save_load_round_trip(
+def assert_single_output_array_network_save_load_round_trip[SingleOutputT: ArraySingleOutputShape[Any]](
     network: SingleOutputT, load_fn: Callable[[str], SingleOutputT], tmp_path: Path, filename: str, state: State
 ) -> SingleOutputT:
     """
@@ -755,7 +745,7 @@ def assert_single_output_array_network_save_load_round_trip(
     return loaded
 
 
-def assert_array_network_save_load_round_trip(
+def assert_array_network_save_load_round_trip[MultiClassT: ArrayMultiClassShape[Any]](
     network: MultiClassT, load_fn: Callable[[str], MultiClassT], tmp_path: Path, filename: str, state: State
 ) -> MultiClassT:
     """

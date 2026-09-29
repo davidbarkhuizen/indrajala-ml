@@ -29,7 +29,7 @@ import random
 import sys
 import tempfile
 from collections.abc import Sequence
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -109,7 +109,6 @@ from indrajala_ml.seeding import seed_everything
 # A network is typed Any here: the script drives every array network class, dense, conv,
 # single-output and ensemble, of both backends, through the methods they share by name. Recorded
 # values (nested lists and dicts of float.hex strings and labels) are JSON, typed Any as json's are.
-L = TypeVar("L")
 
 SEED = 0
 LEARNING_RATE = 0.1
@@ -175,7 +174,7 @@ def _bits(value: Any) -> Any:
     return value
 
 
-def _rows(dimension: int, labels: Sequence[L]) -> list[Example[L]]:
+def _rows[L](dimension: int, labels: Sequence[L]) -> list[Example[L]]:
     rng = random.Random(f"{SEED} rows {dimension}")
     return [(tuple(rng.uniform(0.0, 1.0) for _ in range(dimension)), labels[i % len(labels)]) for i in range(ROW_COUNT)]
 

@@ -1,10 +1,10 @@
 import random
 from collections.abc import Sequence
 
-from indrajala_ml.model.classifier_protocols import Example, L
+from indrajala_ml.model.classifier_protocols import Example
 
 
-def split_train_test(
+def split_train_test[L](
     data: Sequence[Example[L]],
     test_fraction: float = 0.2,
     seed: int | None = None,

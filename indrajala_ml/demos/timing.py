@@ -1,16 +1,12 @@
 import time
 from collections.abc import Callable, Sequence
-from typing import ParamSpec, TypeVar
 
-from indrajala_ml.model.classifier_protocols import Example, L, TrainableClassifier
+from indrajala_ml.model.classifier_protocols import Example, TrainableClassifier
 from indrajala_ml.prepared_dataset import PreparedDataset
 from indrajala_ml.train import ConvergenceSeries, train_linear_classifier_network
 
-P = ParamSpec("P")
-T = TypeVar("T")
 
-
-def timed_call(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> tuple[T, float]:
+def timed_call[**P, T](fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> tuple[T, float]:
     """
     (result, elapsed_seconds) for one call, so every demo times the same span.
     """
@@ -20,7 +16,7 @@ def timed_call(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> tuple[T
     return result, elapsed
 
 
-def timed_train(
+def timed_train[L](
     student: TrainableClassifier[L],
     train_data: Sequence[Example[L]] | PreparedDataset,
     learning_rate: float,

@@ -31,9 +31,6 @@ line-length = 120
 extend-exclude = ["rust"]  # the crate's own repo (submodule)
 
 [tool.ruff.lint]
-# UP046/UP047 (PEP 695 type-parameter syntax), newly flagged by the 3.14 target: adopting it is a
-# code change of its own (variance inference, TypeVar defaults), done in the next PR.
-ignore = ["UP046", "UP047"]
 
 [tool.ruff.lint.per-file-ignores]
 # B023: the timing closures are called inside the loop iteration that defines them.
