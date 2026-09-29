@@ -1,7 +1,6 @@
 # Workplan: publish indrajala-math-rust to PyPI
 
-**Status: stage 1 (pyo3 0.29) is done. Stage 0 still needs the repo owner's PyPI and GitHub
-accounts; stages 2-6 are planned.**
+**Status: stage 0 needs the repo owner's PyPI and GitHub accounts; stages 1-5 are planned.**
 
 The goal is to publish the Rust crate (the `rust/` submodule,
 [indrajala-math-rust](https://github.com/davidbarkhuizen/indrajala-math-rust)) on PyPI as
@@ -21,9 +20,9 @@ own platform.
   or run the crate. On aarch64 the scalar matmul fallback is the only path, so the ~1,560 op tests
   there run the fallback for real. Today it is tested only indirectly, through the parity claims
   about the AVX2 path. Windows and macOS find anything in the build or tests that assumes Linux.
-- **Each decision is measured and recorded.** The pyo3 upgrade and the abi3 choice could both
-  change per-call overhead, so each one is timed against the current build before it is adopted
-  (the rules in [optimizations/measurement.md](optimizations/measurement.md)).
+- **Each decision is measured and recorded.** The abi3 choice and the manylinux build could
+  change per-call overhead, so each is timed against the current build before it is adopted (the
+  rules in [optimizations/measurement.md](optimizations/measurement.md)).
 
 ## Where things are now
 
@@ -33,8 +32,6 @@ own platform.
   Python), and both pyclasses opt out of the by-value `FromPyObject` (`skip_from_py_object`).
 - `rust/pyproject.toml`: name, version, `license = "MIT"`, `requires-python = ">=3.14"`. It has no
   description, authors, URLs or classifiers.
-- pyo3 0.29.2 is the latest release (2026-08-05) and builds for CPython 3.8 up to 3.14, the
-  latest. Python 3.9 reached end of life in October 2025.
 - Of the 9 source files, 2 use `#[pyclass]` (`Array`, `ConvGeometry`). Every function borrows
   its arrays (`&RustArray`), so no call copies an array at the boundary.
 - The AVX2/FMA code is gated with `#[cfg(target_arch = "x86_64")]` and picked at runtime with
@@ -68,12 +65,10 @@ own platform.
 ## Pitfalls to design around
 
 - **Timing baselines.** Every Rust number in docs/optimizations/ comes from a local
-  `maturin build --release` on the Ryzen machine, without abi3, most of them with pyo3 0.20.
-  Stage 1 (pyo3 0.29) measured faster `Array` methods at the boundary and no change inside conv
-  epochs (see [optimizations/implemented.md](optimizations/implemented.md#the-python-boundary-pyo3-029)).
-  Stages 1 and 2 change what the build does at the Python boundary. Stage 3 changes where the published wheel is
-  built (a manylinux container). Each stage measures its own change. None assumes it is free.
-- **The golden run is bit-exact.** The pyo3 upgrade and abi3 don't touch the kernels, so
+  `maturin build --release` on the Ryzen machine, without abi3. Stage 1 changes what the build
+  does at the Python boundary, and stage 2 changes where the published wheel is built (a
+  manylinux container). Each stage measures its own change. None assumes it is free.
+- **The golden run is bit-exact.** abi3 doesn't touch the kernels, so
   `scripts/golden_training_run.py check` must pass bit-identical. A difference means the change
   reached arithmetic, and it must be explained, not accepted within a tolerance.
 - **Old against new timing:** commit each build first and alternate the builds, as
@@ -83,13 +78,9 @@ own platform.
   GitHub URLs.
 - **The sdist must build.** It needs `rust-toolchain.toml`, `Cargo.lock`, the stub and LICENSE.
   Without `rust-toolchain.toml`, an sdist install silently uses whatever toolchain the user has.
-- **The runner labels are GitHub's to change.** Before stage 3, check that each one exists: an
+- **The runner labels are GitHub's to change.** Before stage 2, check that each one exists: an
   Intel macOS runner, `windows-11-arm`, `ubuntu-24.04-arm`. A platform with no native runner is
   dropped under the untested-wheel rule.
-- **pyo3 renames things between versions:** the Bound API (0.21), `IntoPyObject` (0.23), the
-  removal of the GIL-refs API, and `allow_threads`/`with_gil` renamed to `detach`/`attach`.
-  Follow each version's migration guide in order. Don't jump straight to 0.29 and fix the
-  compile errors blind.
 
 ## Stages
 
@@ -110,43 +101,7 @@ before merge.
 
 Done when both pending publishers are listed and both environments exist.
 
-### Stage 1: upgrade pyo3 from 0.20 to 0.29
-
-**Done** in crate #39, one commit per step (0.21, 0.22, 0.23, 0.26, 0.27, 0.28, 0.29), with every
-gate below passed: the golden run bit-identical, the stub unchanged, and the timing in
-[optimizations/implemented.md](optimizations/implemented.md#the-python-boundary-pyo3-029). Two
-choices were made on the way: `#[pymodule(gil_used = true)]`, because 0.28 flips the default to
-declaring free-threaded support, and `skip_from_py_object` on both pyclasses. The plan as written:
-
-The latest Python an unupgraded crate can build for is 3.12. Upgrade in steps, one commit per
-step on one branch, with the crate tests green at each step:
-
-1. 0.20 → 0.21: the Bound API. Move `&PyAny`/`&PyList`/`&PyTuple` arguments and returns to
-   `Bound<'py, T>`, keeping the `gil-refs` feature only for as long as the step needs it.
-2. 0.21 → 0.23: `IntoPyObject` replaces `IntoPy`/`ToPyObject`. Drop `gil-refs`.
-3. 0.23 → 0.29, one minor version at a time or in larger jumps where the guide shows nothing
-   relevant: the `allow_threads` → `detach` rename, `#[pyclass]` changes, and whatever else each
-   guide lists for the APIs this crate uses.
-4. Remove the `non_local_definitions` allow from `[lints.rust]` if clippy stays clean without it.
-5. Raise `requires-python` to `>=3.10`, or to pyo3 0.29's minimum if that is higher. This matches
-   indrajala-ml, and 3.9 is past end of life.
-
-Gates:
-
-- The crate: clippy `-D warnings`, the 1,560 tests, stubtest and pyright. The stub shouldn't
-  change, and if stubtest reports a difference, the Python API changed by accident.
-- indrajala-ml: `./cli test`, and `golden_training_run.py check` against a golden file recorded
-  on `main` before the branch. It must be bit-identical.
-- Timing, old build against new, alternated and committed first:
-  `focused_benchmark.py --backend rust` over the single-example dense ops and the smallest shapes
-  (the Python boundary is the largest share of the call there), and `epoch_op_profile.py` for
-  conv. Record the result in `docs/optimizations/implemented.md` either way: a speedup, a null or
-  a regression. A regression above noise on a hot per-call path blocks the merge until it is
-  explained. Rust was adopted unconditionally, so it doesn't reverse that decision.
-
-Done when both repos are on pyo3 0.29, the golden run is bit-identical, and the timing is recorded.
-
-### Stage 2: abi3 or one wheel per interpreter, measured
+### Stage 1: abi3 or one wheel per interpreter, measured
 
 With `abi3-py314`, one wheel per platform covers every CPython from 3.14 on (the crate's
 `requires-python` floor), including versions released later. Without it, each release needs a
@@ -156,7 +111,10 @@ list access) then go through slower calls.
 
 1. On a branch, add `abi3-py314` to pyo3's features. Build it and check that everything still
    compiles. Two pyclasses and no buffer protocol are expected to be fine.
-2. Time abi3 against non-abi3 with the stage 1 protocol and cases.
+2. Time abi3 against non-abi3, both builds committed and alternated
+   ([optimizations/measurement.md](optimizations/measurement.md#protocols)):
+   `focused_benchmark.py --backend rust` over the single-example dense ops at the smallest shapes
+   (where the Python boundary is the largest share of a call), and `epoch_op_profile.py` for conv.
 3. Decide from the measurement. Adopt abi3 if nothing on a hot path regresses above noise, and
    use one wheel per interpreter otherwise. Record the decision and its numbers in
    `implemented.md` or `rejected.md`.
@@ -166,7 +124,7 @@ Cargo.toml says. So the choice holds everywhere, not only for the published whee
 
 Done when the decision is merged and recorded with its numbers.
 
-### Stage 3: multi-platform build and test on every push and PR
+### Stage 2: multi-platform build and test on every push and PR
 
 Restructure the crate CI into a reusable workflow (`build-test.yml`, `on: workflow_call`), called
 by `ci.yml` (push and PR to `main`) and later by `release.yml` (tags).
@@ -191,7 +149,7 @@ by `ci.yml` (push and PR to `main`) and later by `release.yml` (tags).
    glibc 2.28, a lower tag gains no user who could also install numpy for the tests. Check
    numpy's tags when the stage is built, and pick the lowest tag both support.
 3. **Test** (matrix: every platform × Python 3.14 and the newest CPython, or × every supported
-   interpreter if stage 2 chose per-interpreter wheels). This runs on the platform's own runner,
+   interpreter if stage 1 chose per-interpreter wheels). This runs on the platform's own runner,
    or in an Alpine container for musl. Download the wheel, install it into a clean venv with
    `pytest numpy mypy`, and run `pytest tests/` and stubtest from outside the checkout. This is
    the step that runs the aarch64 scalar fallback against the numpy references.
@@ -213,7 +171,7 @@ Also, before merging, and recorded in the PR:
 
 Done when every push and PR runs the full matrix green, and the wheel comparison is recorded.
 
-### Stage 4: package metadata and the PyPI README
+### Stage 3: package metadata and the PyPI README
 
 1. `rust/pyproject.toml`: `dynamic = ["version"]`, `description`, `readme = "README.md"`,
    `authors`, `keywords`, `[project.urls]` (Homepage, Repository, Issues), classifiers
@@ -231,9 +189,9 @@ Done when every push and PR runs the full matrix green, and the wheel comparison
 4. Run a `maturin sdist` and list its contents to check that the files above are included.
    Build one wheel locally and read its `METADATA`.
 
-Done when `twine check --strict` passes and the README renders on TestPyPI in stage 6.
+Done when `twine check --strict` passes and the README renders on TestPyPI in stage 5.
 
-### Stage 5: the release workflow
+### Stage 4: the release workflow
 
 `release.yml`, `on: push: tags: ['v*', 'testpypi-v*']`:
 
@@ -256,9 +214,9 @@ Also: a `Releasing` section in the crate README: bump the version in Cargo.toml 
 tag `testpypi-v<version>` on `main`, check it, then tag `v<version>` and approve the `pypi`
 environment.
 
-Done when the workflow is merged. It is exercised in stage 6.
+Done when the workflow is merged. It is exercised in stage 5.
 
-### Stage 6: the first release, 0.1.0
+### Stage 5: the first release, 0.1.0
 
 1. Tag `testpypi-v0.1.0`. Check the whole run, the TestPyPI page (the README renders, the
    metadata and classifiers are right, one file per platform) and the verify matrix.
@@ -288,5 +246,5 @@ Done when `pip install indrajala-math-rust` works on every shipped platform and 
 - crates.io (a cdylib is of no use there).
 - Linux i686, armv7, ppc64le and s390x, and any platform without a native GitHub runner to test on.
 - Making indrajala-ml depend on the PyPI package, or publishing indrajala-ml itself.
-- Any kernel change. Stages 1-3 time the build changes but don't optimize.
+- Any kernel change. Stages 1-2 time the build changes but don't optimize.
 - API stability promises before 1.0.

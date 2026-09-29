@@ -9,10 +9,6 @@ fix are established. Stakes are shares of the epochs in [Current baseline](curre
 When a candidate is implemented it moves to [Implemented](implemented.md); when it fails it moves
 to [Rejected](rejected.md), with the reason in either case.
 
-## Ranked
-
-None ranked: each lead below needs a stage 0 first.
-
 ## Deferred: threading past the threshold
 
 Only the batch-size-scaling study (dense 30 x 784 at B ≥ 512, where the Rust ops are 0.4 s of a
@@ -32,7 +28,7 @@ large-batch use case, or once the effect on unthreaded ops is understood:
 ## Leads
 
 A possible gain whose stake nobody has measured. Each names the stage 0 that would measure it; a
-lead that measures a stake worth having joins the ranking.
+lead that measures a stake worth having becomes a ranked candidate here.
 
 - **Batched conv evaluation without `cols`.** The batched conv forward writes a whole-batch `cols`
   (1.56 MB at N = 32) that inference never reads, which is why Rust conv's accuracy pass stays
