@@ -577,8 +577,9 @@ def matching_conv_array_backprop_networks(
     conv_specs: Sequence[ConvSpec | PoolSpec],
     dense_layer_sizes: list[int],
     class_count: int,
-    array_network_cls: type[ConvVectorizedMultiClassBackpropClassifierNetwork]
-    | type[ConvRustArrayMultiClassBackpropClassifierNetwork] = ConvVectorizedMultiClassBackpropClassifierNetwork,
+    array_network_cls: type[
+        ConvVectorizedMultiClassBackpropClassifierNetwork | ConvRustArrayMultiClassBackpropClassifierNetwork
+    ] = ConvVectorizedMultiClassBackpropClassifierNetwork,
     wrap: Wrap = np.array,
 ) -> tuple[
     ConvMultiClassBackpropClassifierNetwork,

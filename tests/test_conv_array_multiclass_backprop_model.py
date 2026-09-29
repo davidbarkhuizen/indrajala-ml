@@ -390,7 +390,7 @@ def _scale(layer: object) -> float:
     return layer.scale
 
 
-SCALED_NETWORK_CLS: dict[str, type[_ScaledConvVectorizedNetwork] | type[_ScaledConvRustNetwork]] = {
+SCALED_NETWORK_CLS: dict[str, type[_ScaledConvVectorizedNetwork | _ScaledConvRustNetwork]] = {
     "numpy": _ScaledConvVectorizedNetwork,
     "rust": _ScaledConvRustNetwork,
 }

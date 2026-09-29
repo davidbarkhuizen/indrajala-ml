@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar, Generic, TypeVar, cast
-
-from typing_extensions import Self
+from typing import Any, ClassVar, Generic, Self, TypeVar, cast
 
 from indrajala_ml.model.array_network_shapes import ArraySingleOutputShape
 from indrajala_ml.model.classification import argmax_first_occurrence

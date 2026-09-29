@@ -138,7 +138,7 @@ def _stratified_split(
 
 
 def _decode_split(
-    path: str, pairs: list[tuple[int, float]], category_dtype: type[np.float64] | type[np.int64]
+    path: str, pairs: list[tuple[int, float]], category_dtype: type[np.float64 | np.int64]
 ) -> tuple[npt.NDArray[np.float64], LabelArray]:
     # records come back in the order of the indices, so they zip against the recoded categories
     # (the proxy replaces the raw MNIST labels)

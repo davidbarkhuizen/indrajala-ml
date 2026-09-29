@@ -22,7 +22,7 @@ pinned submodule commit to the latest upstream `main`: `git submodule update --r
 
 ## Usage
 
-Requires Python >= 3.10, a Debian/Ubuntu host (`setup` apt-installs `python3-tk`) and
+Requires Python >= 3.14, a Debian/Ubuntu host (`setup` apt-installs `python3-tk`) and
 [rustup](https://rustup.rs): `rust/rust-toolchain.toml` pins the Rust toolchain, which rustup
 installs on the first build (a distro `cargo` ignores the pin).
 

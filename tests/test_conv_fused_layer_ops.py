@@ -21,7 +21,7 @@ RTOL = 1e-12
 ATOL = 1e-14
 
 
-def _geometry(layer: ConvArrayLayer) -> "pa.ConvGeometry":
+def _geometry(layer: ConvArrayLayer) -> pa.ConvGeometry:
     return pa.ConvGeometry(layer.input_height, layer.input_width, layer.input_channels, layer.kernel_size, layer.stride)
 
 

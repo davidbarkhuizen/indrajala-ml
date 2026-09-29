@@ -19,7 +19,7 @@ from tests.test_max_pool_array_layer import SHAPES, PoolShape, _tie_heavy_inputs
 BATCH_SIZE = 5
 
 
-def _geometry(layer: MaxPoolArrayLayer) -> "pa.ConvGeometry":
+def _geometry(layer: MaxPoolArrayLayer) -> pa.ConvGeometry:
     return pa.ConvGeometry(layer.input_height, layer.input_width, layer.input_channels, layer.pool_size, layer.stride)
 
 

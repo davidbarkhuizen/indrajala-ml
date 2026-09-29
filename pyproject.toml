@@ -8,15 +8,13 @@ version = "0.1.0"
 description = "A from-scratch, hand-derived implementation of Rosenblatt's perceptron/MADALINE and backprop classifier networks."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
     "matplotlib",
     "pytest",
     "pyarrow",
     "jsonschema",  # validates machine profiles (indrajala_ml/machine_profile.py)
-    "tomli; python_version < '3.11'",  # reads rust/Cargo.toml (machine_profile.py)
     "numpy>=1.20",  # numpy.lib.stride_tricks.sliding_window_view (conv_array_layer.py)
-    "typing_extensions>=4.4",  # TypeVar defaults (backprop_network_base.LayerT)
 ]
 
 [tool.setuptools.packages.find]
@@ -31,6 +29,11 @@ indrajala_ml = ["machine_profile.schema.json"]
 [tool.ruff]
 line-length = 120
 extend-exclude = ["rust"]  # the crate's own repo (submodule)
+
+[tool.ruff.lint]
+# UP046/UP047 (PEP 695 type-parameter syntax), newly flagged by the 3.14 target: adopting it is a
+# code change of its own (variance inference, TypeVar defaults), done in the next PR.
+ignore = ["UP046", "UP047"]
 
 [tool.ruff.lint.per-file-ignores]
 # B023: the timing closures are called inside the loop iteration that defines them.

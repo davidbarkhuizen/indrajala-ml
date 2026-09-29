@@ -26,15 +26,11 @@ import shlex
 import socket
 import subprocess
 import sys
+import tomllib
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 SCHEMA_VERSION = 1
 SCHEMA_PATH = Path(__file__).with_name("machine_profile.schema.json")
@@ -61,7 +57,7 @@ def run_command(args: Sequence[str], cwd: str | Path | None = None) -> str | Non
     """The command's stripped stdout, or None if it can't be run or fails."""
     try:
         result = subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=10, check=False)
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     if result.returncode != 0:
         return None
@@ -349,7 +345,7 @@ def capture() -> JSONObject:
             },
         },
         "state": {
-            "captured_at": datetime.datetime.now(datetime.timezone.utc)
+            "captured_at": datetime.datetime.now(datetime.UTC)
             .replace(microsecond=0)
             .isoformat()
             .replace("+00:00", "Z"),

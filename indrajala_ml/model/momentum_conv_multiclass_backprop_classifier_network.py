@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-
-from typing_extensions import Self
+from typing import Self
 
 from indrajala_ml.model.conv_front_end import load_conv_model_json, save_conv_model_json
 from indrajala_ml.model.conv_layer import ConvSpec

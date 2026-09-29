@@ -31,7 +31,7 @@ own platform.
   only, so crates.io is out of scope), and `pyo3 = "0.29"` with `extension-module` and
   `multiple-pymethods`. The module declares `gil_used = true` (not audited for free-threaded
   Python), and both pyclasses opt out of the by-value `FromPyObject` (`skip_from_py_object`).
-- `rust/pyproject.toml`: name, version, `license = "MIT"`, `requires-python = ">=3.10"`. It has no
+- `rust/pyproject.toml`: name, version, `license = "MIT"`, `requires-python = ">=3.14"`. It has no
   description, authors, URLs or classifiers.
 - pyo3 0.29.2 is the latest release (2026-08-05) and builds for CPython 3.8 up to 3.14, the
   latest. Python 3.9 reached end of life in October 2025.
@@ -43,7 +43,7 @@ own platform.
 - `indrajala_math_rust.pyi` and `py.typed` are already in the wheel. stubtest and pyright already
   check the stub in CI.
 - The crate CI (`rust/.github/workflows/ci.yml`) has one Linux job: rustfmt, clippy, ruff,
-  `maturin develop --release`, stubtest, pyright and pytest, on Python 3.11.
+  `maturin develop --release`, stubtest, pyright and pytest, on Python 3.14.
 - indrajala-ml builds the crate from the submodule with `./cli build-rust` and pins maturin 1.15.0
   there. That stays as it is (see Out of scope).
 
