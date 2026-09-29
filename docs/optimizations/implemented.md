@@ -187,9 +187,12 @@ Why the threshold is high:
   5.54M-12.04M threads the same calls in the demos; 8M is where the ladder shows the gain. A
   32-rows-per-thread floor on top made the conv mini-batch 512 epoch 21% slower, so there is none.
 
-So at batch 32 only conv-conv's second-conv accumulate (10.6M flops) is threaded, over column
-chunks; the batch-512 conv ops and the dense products at B ≥ 512 are too, and pay (+11-15% when
-forced unthreaded).
+So at batch 32 conv-conv's second-conv accumulate (10.6M flops) is threaded, over column chunks,
+and in conv-conv16 its second conv's downstream product and accumulate (21.2M) and the dense
+tail's three products (9.4M); the batch-512 conv ops and the dense products at B ≥ 512 are too,
+and pay there (+11-15% when forced unthreaded). At batch 32 they don't: conv-conv16 mini-batch 32
+runs 2.83-2.99 s threaded against 2.81-2.90 on one thread (see
+[Candidates](candidates.md#open-questions)).
 
 ## The dataset as one backend array
 
