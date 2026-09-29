@@ -231,3 +231,22 @@ the batched forward still writes a whole-batch `cols` that inference never reads
 `load_mnist_dataset` reuses 256 float objects instead of boxing 47 million (#365). Training-set
 load 1.9 GB → 0.45 GB and 5.1 → 2.4 s, identical values; without it 4 sweep workers don't fit in
 5 GB. It also makes Rust row conversion about 12% cheaper (the floats are already shared).
+
+## The Python boundary: pyo3 0.29
+
+pyo3 0.20 → 0.29 (crate #39, needed for Python 3.13+) changed only the binding code, and the
+golden run stayed bit-identical. pyo3's conversions got cheaper along the way (the Bound API,
+`IntoPyObject`), so the `Array` methods pay less at the boundary. Release builds alternated O N N
+O O N N O, per-run medians, one process per case (Python 3.10, numpy 2.2.6):
+
+- **`Array` methods: new/old 0.59-0.92.** The ranges don't overlap where it matters: `a[i, j]`
+  204-255 → 149-160 ns, `a * 0.5` 383-408 → 293-325 ns, `a.tolist()` at 10 x 30 5.4-7.0 →
+  3.8-4.2 µs, `Array.from_rows` at 10 x 30 3.2-4.0 → 1.9-2.1 µs, `.shape` 129-169 → 112-124 ns.
+- **Fused dense ops** at 10 x 30 and 30 x 784 (single-example and batch 1): 0.80-1.01, the same
+  direction but within noise.
+- **Conv epochs** (`epoch_op_profile.py`, both trainers): null. A first pass read 1.03-1.12 per
+  op with overlapping ranges; the same run with the order reversed read 0.93-1.04.
+
+The module keeps `gil_used = true` (0.28 would otherwise declare free-threaded support), and both
+pyclasses opt out of the by-value `FromPyObject` (`skip_from_py_object`), so an accidental copy of
+an array at the boundary is a compile error.
