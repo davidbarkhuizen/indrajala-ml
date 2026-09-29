@@ -24,9 +24,11 @@ from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
     DropoutRustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
+from indrajala_ml.model.update_rules import Adam, Momentum
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset, prepared_mnist
 from indrajala_ml.train import _training_accuracy
 from tests.helpers import all_subclasses
@@ -52,6 +54,14 @@ _BASES: set[type[Any]] = {NumpyArrayNetworkBase, RustArrayNetworkBase}
 NETWORK_CLASSES: list[type[Any]] = sorted(
     {cls for cls in all_subclasses(ArrayNetworkBase) if cls not in _BASES}, key=_class_name
 )
+
+# the sequential networks' layers: kinds and rules no preset combines
+SEQUENTIAL_MULTICLASS = [
+    Dense(5, activation="relu"),
+    Dense(4),
+    Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+]
+SEQUENTIAL_SINGLE_OUTPUT = [Dense(5, activation="relu"), Dense(1, output=True, loss="cross_entropy")]
 
 # how to build each class; a class missing here fails test_every_class_has_a_constructor.
 # The dropout classes reseed their backend's RNG before each step (_seed_step), so both twins
@@ -85,6 +95,14 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "SoftmaxRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "RustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
     "CrossEntropyRustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
+    "SequentialVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(
+        (DIMENSION,), SEQUENTIAL_MULTICLASS, Momentum(0.9)
+    ),
+    "SequentialRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
+        (DIMENSION,), SEQUENTIAL_MULTICLASS, Momentum(0.9)
+    ),
+    "SequentialArrayBackpropClassifierNetwork": lambda cls: cls((DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT, Adam()),
+    "SequentialRustArrayBackpropClassifierNetwork": lambda cls: cls((DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT, Adam()),
 }
 
 

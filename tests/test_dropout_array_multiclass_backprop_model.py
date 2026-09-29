@@ -11,9 +11,11 @@ from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_networ
 from indrajala_ml.model.dropout_vectorized_multiclass_backprop_classifier_network import (
     DropoutVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.update_rules import SGD, UpdateRule
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
@@ -32,15 +34,25 @@ NetworkCls = (
     | type[DropoutRustArrayMultiClassBackpropClassifierNetwork]
 )
 
+
 # dropout does nothing at inference, the only state in which the array networks can be compared
 # with the per-node reference, whose masks come from Python's random (numpy and Rust are compared
 # with each other in training below)
+def _equivalent(sizes: list[int], output: int, drop_probability: float) -> tuple[list[LayerSpec], UpdateRule]:
+    # this network as layer specs and an update rule
+    return (
+        [*(Dense(size, dropout=drop_probability) for size in sizes), Dense(output, output=True)],
+        SGD(),
+    )
+
+
 SPEC = ArrayNetworkSpec(
     network_cls={
         "numpy": DropoutVectorizedMultiClassBackpropClassifierNetwork,
         "rust": DropoutRustArrayMultiClassBackpropClassifierNetwork,
     },
     matching=matching_dropout_array_backprop_networks,
+    equivalent=_equivalent,
     hyperparameters={"drop_probability": DROP_PROBABILITY},
     parity_in_training=False,
     saved_hyperparameters_test="drop_probability",

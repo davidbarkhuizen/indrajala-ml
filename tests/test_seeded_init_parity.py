@@ -21,9 +21,11 @@ import indrajala_ml.model
 from indrajala_ml.model.array_backend import NumpyBackend, RustBackend
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.conv_layer import ConvSpec
+from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
+from indrajala_ml.model.update_rules import SGD
 from tests.helpers import all_subclasses
 
 for _module in pkgutil.iter_modules(indrajala_ml.model.__path__):
@@ -49,6 +51,15 @@ CONV: dict[str, tuple[Any, ...]] = {
     "MomentumConvVectorizedMultiClassBackpropClassifierNetwork": (0.9,),
 }
 SINGLE_OUTPUT = ["ArrayBackpropClassifierNetwork", "CrossEntropyArrayBackpropClassifierNetwork"]
+# (numpy class name, its constructor's arguments): a conv front end, then every dense kind
+SEQUENTIAL: dict[str, tuple[Any, ...]] = {
+    "SequentialVectorizedMultiClassBackpropClassifierNetwork": (
+        (SIDE, SIDE, 1),
+        [*CONV_SPECS, Dense(5, activation="relu"), Dense(4, dropout=0.3), Dense(CLASS_COUNT, output=True)],
+        SGD(),
+    ),
+    "SequentialArrayBackpropClassifierNetwork": ((9,), [Dense(4), Dense(1, output=True)], SGD()),
+}
 
 
 def _classes(base: type[Any]) -> dict[str, type[Any]]:
@@ -66,7 +77,7 @@ def rust_counterpart(numpy_name: str) -> type[Any]:
 
 
 def test_every_array_network_class_is_covered():
-    covered = {*MULTICLASS, *CONV, *SINGLE_OUTPUT}
+    covered = {*MULTICLASS, *CONV, *SINGLE_OUTPUT, *SEQUENTIAL}
     assert covered == set(NUMPY_CLASSES)
     assert {rust_counterpart(name) for name in covered} == set(RUST_CLASSES.values())
     assert set(NUMPY_CLASSES.values()) | set(RUST_CLASSES.values()) == set(all_subclasses(ArrayNetworkBase)) - {
@@ -110,6 +121,12 @@ def test_conv_randomized_is_identical_after_the_same_seed(numpy_name: str, seed:
 @pytest.mark.parametrize("numpy_name", SINGLE_OUTPUT)
 def test_single_output_randomized_is_identical_after_the_same_seed(numpy_name: str, seed: int):
     assert_seeded_randomized_identical(lambda cls: cls.randomized([4], 9), numpy_name, seed)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("numpy_name", SEQUENTIAL)
+def test_sequential_randomized_is_identical_after_the_same_seed(numpy_name: str, seed: int):
+    assert_seeded_randomized_identical(lambda cls: cls.randomized(*SEQUENTIAL[numpy_name]), numpy_name, seed)
 
 
 @pytest.mark.parametrize("fan_in", [2921, 5579])

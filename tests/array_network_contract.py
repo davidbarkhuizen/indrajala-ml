@@ -3,6 +3,11 @@ The tests every array network shares, numpy and Rust: parity with its per-node r
 (predictions, and every step of learn and learn_batch), randomized, snapshot and save/load round
 trips, and argument validation.
 
+Each network is also checked against its equivalent: a sequential network
+(sequential_array_network.py) of the layer specs and update rule the test file declares, built
+generically, which must match it by bits at every step (stage 3 of
+docs/composable-layers-workplan.md).
+
 A test file declares an ArrayNetworkSpec and adds the generated tests to its module, which keeps
 each test's usual name and id (test_x[numpy], test_x[rust]):
 
@@ -17,8 +22,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
+from indrajala_ml.model.layer_specs import LayerSpec
+from indrajala_ml.model.sequential_array_network import (
+    SequentialArrayBackpropClassifierNetwork,
+    SequentialRustArrayBackpropClassifierNetwork,
+    SequentialRustArrayMultiClassBackpropClassifierNetwork,
+    SequentialVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.update_rules import UpdateRule
 from tests.helpers import (
     Backend,
     approx,
@@ -45,6 +59,9 @@ class ArrayNetworkSpec:
     # a matching_*_array_backprop_networks helper: builds the per-node reference and the array
     # network with identical weights
     matching: Callable[..., tuple[Any, Any]]
+    # the network as layer specs and an update rule, written out independently of its class:
+    # equivalent(layer_sizes, output_size, *hyperparameters) -> (specs, rule)
+    equivalent: Callable[..., tuple[list[LayerSpec], UpdateRule]]
     # multiclass only (single-output networks have none of the fields from here to the end):
     # the constructor's hyperparameters after class_count, in order (e.g. {"momentum": 0.5})
     hyperparameters: dict[str, float] = field(default_factory=dict[str, float])
@@ -60,6 +77,64 @@ class ArrayNetworkSpec:
     saved_hyperparameters: dict[str, float] = field(default_factory=dict[str, float])
     # hyperparameter values the constructor must reject
     invalid_hyperparameters: dict[str, float] = field(default_factory=dict[str, float])
+
+
+SEQUENTIAL_CLS = {
+    "multiclass": {
+        "numpy": SequentialVectorizedMultiClassBackpropClassifierNetwork,
+        "rust": SequentialRustArrayMultiClassBackpropClassifierNetwork,
+    },
+    "single_output": {
+        "numpy": SequentialArrayBackpropClassifierNetwork,
+        "rust": SequentialRustArrayBackpropClassifierNetwork,
+    },
+}
+
+
+def snapshot_bits(network: Any) -> list[list[bytes]]:
+    return [[np.asarray(array.tolist(), dtype=np.float64).tobytes() for array in entry] for entry in network.snapshot()]
+
+
+def assert_sequential_matches_preset(
+    preset: Any,
+    sequential: Any,
+    backend: Backend,
+    examples: Callable[[random.Random], tuple[tuple[float, ...], Any]],
+    learning_rate: float,
+    steps: int = 10,
+    batches: int = 5,
+) -> None:
+    """
+    sequential, a generically built network, is preset by bits: the same layer classes, then,
+    from preset's randomized weights, the same weights after every learn and learn_batch step and
+    the same outputs. The backend's RNG is reseeded before each step on both, so dropout draws the
+    same masks.
+    """
+    assert [type(layer) for layer in sequential.layers] == [type(layer) for layer in preset.layers]
+    assert sequential.optimizer.rule == preset.optimizer.rule
+
+    backend.seed(0)
+    preset.randomize()
+    sequential.restore(preset.snapshot())
+    assert snapshot_bits(sequential) == snapshot_bits(preset)
+
+    rng = random.Random(4)
+    for step in range(steps):
+        state, category = examples(rng)
+        for network in (preset, sequential):
+            backend.seed(step)
+            network.learn(learning_rate, state, category)
+        assert snapshot_bits(sequential) == snapshot_bits(preset), f"after learn step {step}"
+
+    for step in range(batches):
+        batch = [examples(rng) for _ in range(8)]
+        for network in (preset, sequential):
+            backend.seed(steps + step)
+            network.learn_batch(learning_rate, batch)
+        assert snapshot_bits(sequential) == snapshot_bits(preset), f"after learn_batch step {step}"
+
+    state, _category = examples(rng)
+    assert sequential.classify_state(state) == preset.classify_state(state)
 
 
 def _test_registry() -> tuple[dict[str, TestFunction], Callable[[str], Callable[[TestFunction], TestFunction]]]:
@@ -208,6 +283,19 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, TestFunction]:
         with pytest.raises(AssertionError):
             network.learn_batch(0.1, [])
 
+    @test("test_the_sequential_network_of_its_layer_specs_matches_it_by_bits")
+    def _(backend: Backend) -> None:
+        preset = spec.network_cls[backend.name](LAYER_SIZES, DIMENSION, CLASS_COUNT, *hyperparameters)
+        specs, rule = spec.equivalent(LAYER_SIZES, CLASS_COUNT, *hyperparameters)
+        sequential: Any = SEQUENTIAL_CLS["multiclass"][backend.name]((DIMENSION,), specs, rule)
+
+        def example(rng: random.Random) -> tuple[tuple[float, ...], int]:
+            return tuple(rng.uniform(-10.0, 10.0) for _ in range(DIMENSION)), rng.randrange(CLASS_COUNT)
+
+        assert_sequential_matches_preset(preset, sequential, backend, example, spec.learning_rate)
+        state = tuple(0.1 * i for i in range(DIMENSION))
+        assert sequential.predict_probabilities(state) == preset.predict_probabilities(state)
+
     return tests
 
 
@@ -318,5 +406,18 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, TestFunctio
         network = randomized(backend)
         with pytest.raises(AssertionError):
             network.learn_batch(0.1, [])
+
+    @test("test_the_sequential_network_of_its_layer_specs_matches_it_by_bits")
+    def _(backend: Backend) -> None:
+        preset = spec.network_cls[backend.name](LAYER_SIZES, DIMENSION)
+        specs, rule = spec.equivalent(LAYER_SIZES, 1)
+        sequential: Any = SEQUENTIAL_CLS["single_output"][backend.name]((DIMENSION,), specs, rule)
+
+        def example(rng: random.Random) -> tuple[tuple[float, ...], float]:
+            return tuple(rng.uniform(-10.0, 10.0) for _ in range(DIMENSION)), float(rng.randrange(2))
+
+        assert_sequential_matches_preset(preset, sequential, backend, example, spec.learning_rate)
+        state = tuple(0.1 * i for i in range(DIMENSION))
+        assert sequential.predict_probability(state) == preset.predict_probability(state)
 
     return tests
