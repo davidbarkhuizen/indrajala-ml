@@ -104,10 +104,9 @@ dtype. numpy values are read through `.dtype.kind` and `.itemsize`: kinds `b`, `
 accepted, except 8-byte `u`. Buffers are read through `memoryview.format`. The three `ValueError`
 messages match numpy's word for word. numpy's cast `TypeError` messages aren't reproduced.
 
-numpy versions differ on one seed. numpy 2.2 still takes `np.bool_` as an index, with a
-deprecation warning, while later versions reject it: its `squeeze` gives a 0-d array, which fails
-as "Seed array must be 1-d". `pa.seed` follows `operator.index`, so it matches whichever numpy is
-installed.
+numpy versions differ on `np.bool_`: older ones take it as an index, with a deprecation warning,
+and current ones reject it ("Seed array must be 1-d"). `pa.seed` follows `operator.index`, so it
+matches whichever numpy is installed.
 
 The position after `seed(None)` isn't observable without `get_state`, which the crate doesn't
 provide. A probe build that exposed `(pos, key[0])` confirmed each case against numpy's
@@ -149,9 +148,7 @@ The crate runs MT19937 slightly faster than numpy's legacy path, and avoids nump
 overhead at batch 1. The RNG is not a hot path. A 784 x 128 init happens once per network, and
 the dropout mask is a small part of a training step. One Rust dropout epoch (784-128-10, batch 32,
 p = 0.5, 8192 random rows, `learn_batch` on tuple batches, 9 processes) takes a median of 381 ms
-(374-385). When the crate replaced its xorshift128+ generator (about 3 ns a draw) with this one
-(crate #38, on Python 3.10 and numpy 2.2.6, timed by a different epoch driver), its dropout epoch
-went from 200 ms to 206 ms, within the old build's 193-226 ms spread.
+(374-385).
 
 ## Open findings
 
@@ -171,7 +168,7 @@ Rust never fuses `low + range * u` into an FMA. numpy's C might, depending on th
 flags. GCC in ISO C mode doesn't contract, but clang contracts within an expression by default,
 and arm64 has FMA in its baseline. Linux x86_64 wheels target a baseline without FMA, so today's
 CI can't show a difference. The PyPI plan's multi-platform CI
-([pypi-release-workplan.md](pypi-release-workplan.md), stage 3) runs the parity tests on arm64
+([pypi-release-workplan.md](pypi-release-workplan.md), stage 2) runs the parity tests on arm64
 and macOS and will catch it. If a numpy build contracts, record it and decide then. Don't
 pre-emptively add `mul_add`.
 

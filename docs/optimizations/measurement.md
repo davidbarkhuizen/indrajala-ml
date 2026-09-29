@@ -102,8 +102,6 @@ From the quick survey to the decisive measurement:
 - **The conv demo's mini-batch runs barely train** (about 10% accuracy in 1-2 epochs at lr 0.5):
   their timings are valid, their accuracy columns are not. conv-conv's single-example MNIST run is
   unstable at lr 0.5 too (numpy collapsed to 0.11 where Rust reached 0.52; it trains at 0.2).
-- **Rust dense-MNIST epoch times from before #365 aren't comparable** with later ones: the shared
-  pixel floats made row conversion 12% cheaper.
 
 ## Judging correctness
 
