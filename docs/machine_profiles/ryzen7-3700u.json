@@ -55,8 +55,8 @@
       }
     },
     "memory": {
-      "total_mib": 5871,
-      "swap_total_mib": 2047
+      "total_mib": 5353,
+      "swap_total_mib": 4095
     },
     "gpus": [
       {
@@ -67,24 +67,24 @@
     ],
     "os": {
       "system": "Linux",
-      "kernel_release": "6.8.0-138-generic",
-      "distribution": "Ubuntu 22.04.5 LTS",
-      "perf_event_paranoid": 4
+      "kernel_release": "7.0.0-34-generic",
+      "distribution": "Ubuntu 26.04.1 LTS",
+      "perf_event_paranoid": 2
     },
     "software": {
       "python": {
         "implementation": "CPython",
-        "version": "3.10.12"
+        "version": "3.14.4"
       },
       "numpy": {
-        "version": "2.2.6",
+        "version": "2.5.3",
         "blas": {
           "name": "scipy-openblas",
-          "version": "0.3.29",
-          "configuration": "OpenBLAS 0.3.29  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=64"
+          "version": "0.3.34.106.0",
+          "configuration": "OpenBLAS 0.3.34.106.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Haswell MAX_THREADS=64"
         }
       },
-      "rustc": "rustc 1.75.0 (82e1608df 2023-12-21) (built from a source tarball)",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
       "crate_release_profile": "default",
       "thread_env": {
         "OPENBLAS_NUM_THREADS": null,
@@ -95,26 +95,26 @@
     }
   },
   "state": {
-    "captured_at": "2026-09-24T10:08:33Z",
-    "hostname": "stone",
+    "captured_at": "2026-09-29T12:00:50Z",
+    "hostname": "pyramidon",
     "load_average": [
-      0.05,
-      0.19,
-      0.48
+      0.33,
+      0.66,
+      0.76
     ],
-    "memory_available_mib": 4292,
+    "memory_available_mib": 3180,
     "cpu_mhz_now": {
-      "min": 1400,
-      "max": 3992
+      "min": 1382,
+      "max": 3892
     },
     "power": {
       "on_ac": true,
       "battery_percent": 100
     },
     "commits": {
-      "repo": "673d6646a671708d08b7d91fab9a1ebf9f7565ca",
-      "repo_dirty": true,
-      "rust": "c34fc0da0cd457468229fb0f7fbae9b0d9770eb6"
+      "repo": "c4d92f40cdf8557d189ee8fce06e6c0e0cafbe08",
+      "repo_dirty": false,
+      "rust": "638ff13aa0d4dc64ba76cbbd0efb4b0d0258dba0"
     }
   }
 }
