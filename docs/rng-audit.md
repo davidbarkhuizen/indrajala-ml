@@ -16,7 +16,7 @@ what is still open. The measurements and checks come from these harnesses:
 - `scripts/rng_audit.py quality | time`: statistical checks, and per-draw timing with one process
   per backend.
 
-Measured on an AMD Ryzen 7 3700U, numpy 2.2.6. The crate's CI runs the parity tests against the
+Measured on an AMD Ryzen 7 3700U, Python 3.14, numpy 2.5.3. The crate's CI runs the parity tests against the
 latest numpy.
 
 ## Where randomness comes from
@@ -57,7 +57,7 @@ stream of `np.random.seed(words)` and `pa.seed(words)`, not of `np.random.seed(s
 
 The crate is a copy of `np.random`, not a view of numpy's state. The two states are separate:
 `pa.seed(s)` never touches numpy's, and one seed gives the same stream in each. Borrowing numpy's
-state through `get_state`/`set_state` costs about 115 µs per round trip, against about 12 µs for a
+state through `get_state`/`set_state` costs about 95 µs per round trip, against about 12 µs for a
 batch-32 dropout mask, and it would make the crate depend on numpy's internals.
 
 `random(shape)`, `uniform(low, high, shape)` and `bernoulli_mask(p, shape)` fill in C order. The
@@ -119,13 +119,16 @@ provide. A probe build that exposed `(pos, key[0])` confirmed each case against 
 
 | Generator | chi-square z (4096 bins) | KS p | lag-1 z | call-to-call z |
 |---|---:|---:|---:|---:|
-| crate | +0.18 | 0.246 | +0.39 | -0.90 |
-| numpy legacy | +0.45 | 0.505 | -0.26 | +0.31 |
-| numpy PCG64 | +1.13 | 0.559 | +0.08 | +0.81 |
+| crate | -0.79 | 0.922 | -0.44 | -0.23 |
+| numpy legacy | +0.71 | 0.909 | +0.88 | +0.49 |
+| numpy PCG64 | -0.83 | 0.055 | -0.21 | +0.23 |
 
-`bernoulli_mask`'s keep rate over 2M draws: z = -1.07, +0.78 and +0.72 at drop probabilities 0.1,
-0.5 and 0.9. Over 20 repeats on 2M draws, the crate's KS p-values spread over [0.09, 1.00], and its
-lag-1 z has mean -0.33 and sd 1.20, as independent draws should. Every statistic is within chance.
+`bernoulli_mask`'s keep rate over 2M draws: z = -0.82, -1.51 and +0.65 at drop probabilities 0.1,
+0.5 and 0.9. Over three runs of 20 repeats on 2M draws, the crate's lag-1 z has mean +0.30, -0.35
+and +0.25 and sd 0.96, 0.97 and 0.78, as independent draws should. Its 60 KS p-values spread over
+[0.00, 1.00] with five below 0.015 (two print as 0.00), a little more than the one expected; the
+crate's stream is numpy legacy's bit for bit, so that is chance or the KS harness, not the
+generator. Every other statistic is within chance.
 The crate and numpy legacy are the same algorithm, so their rows differ only by their entropy
 seeds.
 
@@ -135,18 +138,20 @@ seeds.
 
 | Case | crate | numpy legacy | numpy PCG64 |
 |---|---:|---:|---:|
-| uniform (128, 64) | 5.80 | 6.42 | 4.12 |
-| uniform (784, 128) | 5.75 | 6.13 | 3.84 |
-| uniform (1000, 1000) | 5.82 | 6.27 | 4.24 |
-| mask (1, 128) | 7.86 | 27.12 | 25.86 |
-| mask (32, 128) | 5.33 | 6.51 | 4.87 |
-| mask (512, 128) | 5.21 | 5.88 | 4.12 |
+| uniform (128, 64) | 6.19 | 6.92 | 4.63 |
+| uniform (784, 128) | 6.19 | 6.63 | 4.32 |
+| uniform (1000, 1000) | 6.33 | 6.85 | 4.49 |
+| mask (1, 128) | 7.69 | 28.14 | 27.37 |
+| mask (32, 128) | 5.71 | 6.80 | 4.94 |
+| mask (512, 128) | 5.63 | 6.10 | 4.18 |
 
 The crate runs MT19937 slightly faster than numpy's legacy path, and avoids numpy's per-call
 overhead at batch 1. The RNG is not a hot path. A 784 x 128 init happens once per network, and
 the dropout mask is a small part of a training step. One Rust dropout epoch (784-128-10, batch 32,
-p = 0.5, 8192 rows) takes a median of 206 ms. The xorshift128+ generator the crate used before
-drew at about 3 ns, and the same epoch took 200 ms, within that build's 193-226 ms spread.
+p = 0.5, 8192 random rows, `learn_batch` on tuple batches, 9 processes) takes a median of 381 ms
+(374-385). When the crate replaced its xorshift128+ generator (about 3 ns a draw) with this one
+(crate #38, on Python 3.10 and numpy 2.2.6, timed by a different epoch driver), its dropout epoch
+went from 200 ms to 206 ms, within the old build's 193-226 ms spread.
 
 ## Open findings
 
