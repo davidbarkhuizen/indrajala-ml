@@ -1,7 +1,8 @@
 """
-The bit-identical gate for structural refactoring (README.md, Refactoring): trains every array
-network, numpy and Rust, from fixed injected weights and records every value it produces, so a
-refactoring stage can show that training is unchanged exactly, not within a tolerance.
+The bit-identical gate for structural refactoring (README.md, Refactoring): trains the networks of
+all three implementations, pure Python, numpy and Rust, from fixed injected weights and records
+every value it produces, so a refactoring stage can show that training is unchanged exactly, not
+within a tolerance.
 
     python scripts/golden_training_run.py record golden.json   # on main, before the first stage
     python scripts/golden_training_run.py check golden.json    # after each stage
@@ -12,6 +13,15 @@ learn_batch_rows in turn, its snapshot recorded after each. At the end it record
 classify_row, classify_state and predict_probabilities (predict_probability for single-output
 networks) over the whole dataset, and the snapshot and predictions after a save/load round trip.
 The ensembles are assembled from injected single-output classifiers and trained through them.
+
+The pure-Python networks have no prepared-dataset paths, so they train with learn and learn_batch
+only, over the same rows, and record classify_state and predict_* only. The pure-Python
+single-output networks have no save, so they record no round trip. They are slow, so they train
+at the same small shapes as the rest.
+
+The conv networks run in two configurations: CONV_SPECS (a conv, then a pool), and
+STRIDED_CONV_SPECS (a strided conv, then a second conv, no pool), so a conv layer reads a conv
+layer's output.
 
 Floats are recorded as float.hex, so check compares bits. check reports the first differing
 value of every network that differs. numpy's products go through BLAS, so a golden file is only
@@ -34,6 +44,7 @@ from typing import Any, cast
 import indrajala_math_rust as pa
 import numpy as np
 
+from indrajala_ml.model.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
 from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
     AdamRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -41,8 +52,13 @@ from indrajala_ml.model.adam_vectorized_multiclass_backprop_classifier_network i
     AdamVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
+from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
+    BinaryCrossEntropyBackpropClassifierNetwork,
+)
 from indrajala_ml.model.classifier_protocols import Example
 from indrajala_ml.model.conv_layer import ConvSpec
+from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -61,6 +77,7 @@ from indrajala_ml.model.cross_entropy_rust_array_multiclass_backprop_classifier_
 from indrajala_ml.model.cross_entropy_vectorized_multiclass_backprop_classifier_network import (
     CrossEntropyVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.dropout_backprop_classifier_network import DropoutBackpropClassifierNetwork
 from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
     DropoutRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -68,9 +85,12 @@ from indrajala_ml.model.dropout_vectorized_multiclass_backprop_classifier_networ
     DropoutVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.ensemble_array_backprop_classifier_network import EnsembleArrayBackpropClassifierNetwork
+from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
 from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
     EnsembleRustArrayBackpropClassifierNetwork,
 )
+from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
+from indrajala_ml.model.l2_regularized_backprop_classifier_network import L2RegularizedBackpropClassifierNetwork
 from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network import (
     L2RustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -78,12 +98,24 @@ from indrajala_ml.model.l2_vectorized_multiclass_backprop_classifier_network imp
     L2VectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.momentum_backprop_classifier_network import MomentumBackpropClassifierNetwork
+from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
+    MomentumConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
+    MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
+    MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_network import (
     MomentumRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.momentum_vectorized_multiclass_backprop_classifier_network import (
     MomentumVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
+from indrajala_ml.model.relu_backprop_classifier_network import ReLUBackpropClassifierNetwork
 from indrajala_ml.model.relu_rust_array_multiclass_backprop_classifier_network import (
     ReLURustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -93,6 +125,9 @@ from indrajala_ml.model.relu_vectorized_multiclass_backprop_classifier_network i
 from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
+    SoftmaxMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_network import (
     SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
@@ -106,8 +141,8 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 from indrajala_ml.prepared_dataset import PreparedDataset
 from indrajala_ml.seeding import seed_everything
 
-# A network is typed Any here: the script drives every array network class, dense, conv,
-# single-output and ensemble, of both backends, through the methods they share by name. Recorded
+# A network is typed Any here: the script drives the network classes, dense, conv, single-output
+# and ensemble, of all three implementations, through the methods they share by name. Recorded
 # values (nested lists and dicts of float.hex strings and labels) are JSON, typed Any as json's are.
 
 SEED = 0
@@ -119,12 +154,16 @@ DIMENSION = 5
 CLASS_COUNT = 3
 CONV_HEIGHT = CONV_WIDTH = 6
 CONV_SPECS = [ConvSpec(3, 2), PoolSpec(2)]
+STRIDED_CONV_SPECS = [ConvSpec(3, 2, stride=2), ConvSpec(2, 2)]
 CONV_DENSE_LAYER_SIZES = [4]
 ENSEMBLE_SIZE = 3
+# the pure-Python networks' input_bounds: the rows' range
+INPUT_BOUNDS = [(0.0, 1.0)] * DIMENSION
 
 WRAP = {"numpy": np.array, "rust": pa.Array}
 
-# each name starts with its backend; a dense network is (class, hyperparameters after class_count)
+# each name starts with its implementation, "python", "numpy" or "rust"; a dense array network is
+# (class, hyperparameters after class_count)
 DENSE_NETWORKS = {
     "numpy plain": (VectorizedMultiClassBackpropClassifierNetwork, ()),
     "numpy momentum": (MomentumVectorizedMultiClassBackpropClassifierNetwork, (0.9,)),
@@ -143,9 +182,15 @@ DENSE_NETWORKS = {
     "rust dropout": (DropoutRustArrayMultiClassBackpropClassifierNetwork, (0.3,)),
     "rust cross-entropy": (CrossEntropyRustArrayMultiClassBackpropClassifierNetwork, ()),
 }
+# a conv network is (class, hyperparameters after class_count); each runs in both configurations,
+# the strided one under its name plus " strided"
 CONV_NETWORKS = {
-    "numpy conv": ConvVectorizedMultiClassBackpropClassifierNetwork,
-    "rust conv": ConvRustArrayMultiClassBackpropClassifierNetwork,
+    "numpy conv": (ConvVectorizedMultiClassBackpropClassifierNetwork, ()),
+    "rust conv": (ConvRustArrayMultiClassBackpropClassifierNetwork, ()),
+    "numpy momentum conv": (MomentumConvVectorizedMultiClassBackpropClassifierNetwork, (0.9,)),
+    "rust momentum conv": (MomentumConvRustArrayMultiClassBackpropClassifierNetwork, (0.9,)),
+    "python conv": (ConvMultiClassBackpropClassifierNetwork, ()),
+    "python momentum conv": (MomentumConvMultiClassBackpropClassifierNetwork, (0.9,)),
 }
 SINGLE_OUTPUT_NETWORKS = {
     "numpy single-output": ArrayBackpropClassifierNetwork,
@@ -156,6 +201,23 @@ SINGLE_OUTPUT_NETWORKS = {
 ENSEMBLES = {
     "numpy ensemble": (EnsembleArrayBackpropClassifierNetwork, ArrayBackpropClassifierNetwork),
     "rust ensemble": (EnsembleRustArrayBackpropClassifierNetwork, RustArrayBackpropClassifierNetwork),
+    "python ensemble": (EnsembleBackpropClassifierNetwork, BackpropClassifierNetwork),
+}
+# the pure-Python dense networks: (class, hyperparameters after class_count, or after input_bounds
+# for a single-output one)
+PYTHON_MULTICLASS_NETWORKS = {
+    "python multiclass": (MultiClassBackpropClassifierNetwork, ()),
+    "python softmax": (SoftmaxMultiClassBackpropClassifierNetwork, ()),
+}
+PYTHON_SINGLE_OUTPUT_NETWORKS = {
+    "python single-output": (BackpropClassifierNetwork, ()),
+    "python fan-in-aware": (FanInAwareBackpropClassifierNetwork, ()),
+    "python momentum": (MomentumBackpropClassifierNetwork, (0.9,)),
+    "python l2": (L2RegularizedBackpropClassifierNetwork, (0.01,)),
+    "python adam": (AdamBackpropClassifierNetwork, ()),
+    "python relu": (ReLUBackpropClassifierNetwork, ()),
+    "python dropout": (DropoutBackpropClassifierNetwork, (0.3,)),
+    "python cross-entropy": (BinaryCrossEntropyBackpropClassifierNetwork, ()),
 }
 
 
@@ -182,10 +244,16 @@ def _rows[L](dimension: int, labels: Sequence[L]) -> list[Example[L]]:
 def _random_like(rng: random.Random, value: Any) -> Any:
     if isinstance(value, list):
         return [_random_like(rng, item) for item in cast("list[Any]", value)]
+    if isinstance(value, tuple):
+        return tuple(_random_like(rng, item) for item in cast("tuple[Any, ...]", value))
     return rng.uniform(-1.0, 1.0)
 
 
 def _inject(network: Any, backend: str, rng: random.Random) -> None:
+    if backend == "python":
+        # per layer, a (weights, bias) per node or kernel; a pool layer's empty list stays empty
+        network.restore(_random_like(rng, network.snapshot()))
+        return
     # every layer's W and b drawn in the shape the network's own snapshot has; a pool layer's
     # empty entry stays empty
     snapshot: list[tuple[Any, ...]] = []
@@ -198,9 +266,22 @@ def _inject(network: Any, backend: str, rng: random.Random) -> None:
     network.restore(snapshot)
 
 
-def _train(network: Any, rows: Sequence[Example[Any]]) -> tuple[dict[str, Any], PreparedDataset]:
-    prepared: PreparedDataset = network.prepare_dataset(rows)
+def _train(network: Any, rows: Sequence[Example[Any]], backend: str) -> tuple[dict[str, Any], PreparedDataset | None]:
     checkpoints: dict[str, Any] = {}
+    if backend == "python":
+        # no prepared-dataset paths: learn and learn_batch over the rows the array networks'
+        # four paths see, in the same order
+        for state, category in rows[:6]:
+            network.learn(LEARNING_RATE, state, category)
+        checkpoints["learn"] = _bits(network.snapshot())
+        for batch in BATCHES:
+            network.learn_batch(LEARNING_RATE, [rows[i] for i in batch])
+        for batch in BATCHES:
+            network.learn_batch(LEARNING_RATE, [rows[i + 4] for i in batch])
+        checkpoints["learn_batch"] = _bits(network.snapshot())
+        return checkpoints, None
+
+    prepared: PreparedDataset = network.prepare_dataset(rows)
     for state, category in rows[:3]:
         network.learn(LEARNING_RATE, state, category)
     checkpoints["learn"] = _bits(network.snapshot())
@@ -216,8 +297,15 @@ def _train(network: Any, rows: Sequence[Example[Any]]) -> tuple[dict[str, Any], 
     return checkpoints, prepared
 
 
-def _predictions(network: Any, rows: Sequence[Example[Any]], prepared: PreparedDataset, predict: str) -> dict[str, Any]:
+def _predictions(
+    network: Any, rows: Sequence[Example[Any]], prepared: PreparedDataset | None, predict: str
+) -> dict[str, Any]:
     states = [state for state, _category in rows]
+    if prepared is None:  # a pure-Python network, which has no classify_rows or classify_row
+        return {
+            "classify_state": _bits([network.classify_state(state) for state in states]),
+            predict: _bits([getattr(network, predict)(state) for state in states]),
+        }
     return {
         "classify_rows": _bits(network.classify_rows(prepared)),
         "classify_row": _bits([network.classify_row(prepared, i) for i in range(len(rows))]),
@@ -241,12 +329,14 @@ def _round_trip(network: Any, rows: Sequence[Example[Any]], predict: str) -> dic
 def _run_network(name: str, network: Any, rows: Sequence[Example[Any]], predict: str) -> dict[str, Any]:
     _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
     seed_everything(SEED)
-    checkpoints, prepared = _train(network, rows)
-    return {
+    checkpoints, prepared = _train(network, rows, _backend(name))
+    result = {
         "snapshots": checkpoints,
         "predictions": _predictions(network, rows, prepared, predict),
-        "loaded": _round_trip(network, rows, predict),
     }
+    if hasattr(network, "save"):  # not the pure-Python single-output networks
+        result["loaded"] = _round_trip(network, rows, predict)
+    return result
 
 
 def _run_ensemble(name: str, ensemble_cls: Any, classifier_cls: Any) -> dict[str, Any]:
@@ -254,10 +344,11 @@ def _run_ensemble(name: str, ensemble_cls: Any, classifier_cls: Any) -> dict[str
     classifiers: list[Any] = []
     snapshots: dict[str, Any] = {}
     for class_index in range(ENSEMBLE_SIZE):
-        classifier = classifier_cls(LAYER_SIZES, DIMENSION)
+        # the array classifiers accept input_bounds and ignore it, as ensemble_train.py relies on
+        classifier = classifier_cls(LAYER_SIZES, DIMENSION, INPUT_BOUNDS)
         _inject(classifier, _backend(name), rng)
         rows = _rows(DIMENSION, [1.0 if i == class_index else 0.0 for i in range(ENSEMBLE_SIZE)])
-        snapshots[f"classifier {class_index}"], _prepared = _train(classifier, rows)
+        snapshots[f"classifier {class_index}"], _prepared = _train(classifier, rows, _backend(name))
         classifiers.append(classifier)
     ensemble = ensemble_cls(classifiers)
 
@@ -288,15 +379,26 @@ def run_all() -> dict[str, Any]:
         results[name] = _run_network(name, network, multiclass_rows, "predict_probabilities")
 
     conv_rows = _rows(CONV_HEIGHT * CONV_WIDTH, list(range(CLASS_COUNT)))
-    for name, network_cls in CONV_NETWORKS.items():
-        network = network_cls(CONV_HEIGHT, CONV_WIDTH, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT)
-        results[name] = _run_network(name, network, conv_rows, "predict_probabilities")
+    for conv_name, (network_cls, hyperparameters) in CONV_NETWORKS.items():
+        for name, conv_specs in ((conv_name, CONV_SPECS), (f"{conv_name} strided", STRIDED_CONV_SPECS)):
+            network = network_cls(
+                CONV_HEIGHT, CONV_WIDTH, conv_specs, CONV_DENSE_LAYER_SIZES, CLASS_COUNT, *hyperparameters
+            )
+            results[name] = _run_network(name, network, conv_rows, "predict_probabilities")
 
     single_output_rows = _rows(DIMENSION, [0.0, 1.0])
     for name, network_cls in SINGLE_OUTPUT_NETWORKS.items():
         results[name] = _run_network(
             name, network_cls(LAYER_SIZES, DIMENSION), single_output_rows, "predict_probability"
         )
+
+    for name, (network_cls, hyperparameters) in PYTHON_MULTICLASS_NETWORKS.items():
+        network = network_cls(LAYER_SIZES, DIMENSION, INPUT_BOUNDS, CLASS_COUNT, *hyperparameters)
+        results[name] = _run_network(name, network, multiclass_rows, "predict_probabilities")
+
+    for name, (network_cls, hyperparameters) in PYTHON_SINGLE_OUTPUT_NETWORKS.items():
+        network = network_cls(LAYER_SIZES, DIMENSION, INPUT_BOUNDS, *hyperparameters)
+        results[name] = _run_network(name, network, single_output_rows, "predict_probability")
 
     for name, (ensemble_cls, classifier_cls) in ENSEMBLES.items():
         results[name] = _run_ensemble(name, ensemble_cls, classifier_cls)
