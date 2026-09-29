@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
-from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
+from indrajala_ml.model.layer_specs import Dense
 
 
 class CrossEntropyArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
@@ -10,4 +10,5 @@ class CrossEntropyArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork)
     BinaryCrossEntropyBackpropClassifierNetwork.
     """
 
-    output_layer_cls = CrossEntropyArrayLayer
+    def _output_spec(self, size: int) -> Dense:
+        return Dense(size, output=True, loss="cross_entropy")

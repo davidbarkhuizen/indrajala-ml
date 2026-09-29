@@ -2,8 +2,6 @@
 # (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
-from typing import ClassVar
-
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
@@ -22,10 +20,6 @@ class ConvRustArrayLayer:
     Single-example calls pass 1D arrays straight to the batch ops, which take a vector as N = 1:
     pa.Array.reshape copies, unlike numpy's x[np.newaxis].
     """
-
-    # the constructor keyword arguments after the shape arguments that a subclass takes (as
-    # ArrayLayer.hyperparameters); ArrayNetworkBase._new_layer passes them from the network
-    hyperparameters: ClassVar[tuple[str, ...]] = ()
 
     def __init__(
         self,

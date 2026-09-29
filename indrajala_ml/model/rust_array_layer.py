@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from typing import ClassVar
 
 import indrajala_math_rust as pa
 
@@ -25,9 +24,6 @@ class RustArrayLayer:
     (fused.rs). indrajala_math_rust.Array has no in-place arithmetic beyond +=/-=, so each method
     rebinds W, b and the gradients to the call's result instead of mutating them.
     """
-
-    # as ArrayLayer.hyperparameters
-    hyperparameters: ClassVar[tuple[str, ...]] = ()
 
     def __init__(self, size: int, input_size: int) -> None:
         self.size = size

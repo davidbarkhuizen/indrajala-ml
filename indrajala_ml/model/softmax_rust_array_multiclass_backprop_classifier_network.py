@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
 
 
 class SoftmaxRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):
@@ -12,4 +12,5 @@ class SoftmaxRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBac
     SoftmaxRustArrayLayer output.
     """
 
-    output_layer_cls = SoftmaxRustArrayLayer
+    def _output_spec(self, size: int) -> Dense:
+        return Dense(size, output=True, activation="softmax", loss="cross_entropy")

@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Self, cast
 
-from indrajala_ml.model.array_network_base import as_weighted_array_layers
-from indrajala_ml.model.array_protocols import BackendArray, WeightedArrayLayer
+from indrajala_ml.model.array_protocols import BackendArray
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
-from indrajala_ml.model.conv_front_end import (
-    ArrayConvLayer,
-    ArrayFrontEndLayer,
-    build_conv_array_network_layers,
-    load_conv_model_json,
-    save_conv_array_model_json,
-)
+from indrajala_ml.model.conv_front_end import ArrayFrontEndLayer, load_conv_model_json, save_conv_array_model_json
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.model_io import (
@@ -48,8 +41,11 @@ class ArrayMultiClassShape[A: BackendArray](_ShapeBase[A]):
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int) -> None:
         validate_class_count(class_count)
+        validate_layer_sizes(layer_sizes)
         self.class_count = class_count
-        super().__init__(layer_sizes, dimension, class_count)
+        self.layer_sizes = layer_sizes
+        self.dimension = dimension
+        super().__init__(self._dense_specs(layer_sizes, class_count), (dimension,))
 
     def predict_probabilities(self, state: tuple[float, ...]) -> list[float]:
         return self._forward(state).tolist()
@@ -117,7 +113,10 @@ class ArraySingleOutputShape[A: BackendArray](_ShapeBase[A]):
     ) -> None:
         # input_bounds is accepted and ignored: ensemble_train.py constructs every classifier_cls
         # as classifier_cls(layer_sizes, dimension, input_bounds)
-        super().__init__(layer_sizes, dimension, 1)
+        validate_layer_sizes(layer_sizes)
+        self.layer_sizes = layer_sizes
+        self.dimension = dimension
+        super().__init__(self._dense_specs(layer_sizes, 1), (dimension,))
 
     def predict_probability(self, state: tuple[float, ...]) -> float:
         return self._forward(state).tolist()[0]
@@ -165,28 +164,19 @@ else:
 class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
     """
     The convolutional shape over the multiclass shape, for either backend: a front end of conv and
-    max-pool layers (one ConvSpec or PoolSpec each, in order), one or more sigmoid dense layers, and
-    a one-vs-rest sigmoid output layer.
+    max-pool layers (one ConvSpec or PoolSpec each, in order), one or more dense hidden layers, and
+    the output layer, on a single-channel input_height x input_width image.
 
     A mixin, listed before the backend's plain multiclass network, which supplies self.backend,
-    hidden_layer_cls and output_layer_cls (the dense layer classes). ConvVectorizedMultiClassBackpropClassifierNetwork and
-    ConvRustArrayMultiClassBackpropClassifierNetwork are this shape on numpy and on Rust, and set
-    conv_layer_cls and pool_layer_cls.
+    the targets and the classification. ConvVectorizedMultiClassBackpropClassifierNetwork and
+    ConvRustArrayMultiClassBackpropClassifierNetwork are this shape on numpy and on Rust.
 
-    __init__ doesn't call super().__init__(), whose flat layer_sizes can't describe conv layers; it
-    builds self.layers directly. Everything that only walks self.layers through the per-layer hooks
-    (the forward pass, learn*, the multiclass shape's outputs and targets) is inherited. Overridden
-    is what assumes a dense W in every layer: randomize, snapshot/restore (an empty entry for a pool
-    layer) and save/load (the pure-Python conv network's envelope with one (W, b) entry per layer,
-    so a model saved by either backend loads into the other, though not into the pure-Python
-    network), with the network's hyperparameters in it.
-
-    The conv and dense layers are built through _new_layer, so a sibling's layer classes take the
-    network's hyperparameters as the dense networks' do.
+    __init__ builds the layers from its own arguments, not the multiclass shape's flat
+    layer_sizes: the conv specs, then _dense_specs. Its save/load is the pure-Python conv
+    network's envelope with one (W, b) entry per layer (an empty one for a pool layer), so a model
+    saved by either backend loads into the other, though not into the pure-Python network, with
+    the network's hyperparameters in it.
     """
-
-    conv_layer_cls: type[ArrayConvLayer[A]]
-    pool_layer_cls: type[ArrayFrontEndLayer[A]]
 
     def __init__(
         self,
@@ -199,6 +189,7 @@ class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
 
         validate_class_count(class_count)
         validate_layer_sizes(dense_layer_sizes, label="dense_layer_sizes", noun="dense hidden layer")
+        assert any(isinstance(spec, ConvSpec) for spec in conv_specs), "conv_specs must contain at least one ConvSpec"
 
         self.class_count = class_count
         self.dimension = input_height * input_width
@@ -207,54 +198,13 @@ class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
         self.conv_specs = list(conv_specs)
         self.dense_layer_sizes = dense_layer_sizes
 
-        self.conv_layers, dense_layers, self.output_layer = build_conv_array_network_layers(
-            input_height,
-            input_width,
-            self.conv_specs,
-            dense_layer_sizes,
-            class_count,
-            conv_cls=self.conv_layer_cls,
-            pool_cls=self.pool_layer_cls,
-            hidden_cls=self.hidden_layer_cls,
-            output_cls=self.output_layer_cls,
-            new_layer=self._new_layer,
+        # past the multiclass shape's __init__, whose flat layer_sizes can't describe conv layers,
+        # to the backend's base
+        super(ArrayMultiClassShape, self).__init__(
+            [*self.conv_specs, *self._dense_specs(dense_layer_sizes, class_count)],
+            (input_height, input_width, 1),
         )
-        self.layers = [*self.conv_layers, *dense_layers, self.output_layer]
-        self.optimizer = self._new_optimizer()
-
-    def randomize(self) -> None:
-        # forward order, as ConvMultiClassBackpropClassifierNetwork.randomize: conv layers from
-        # their kernel fan-in (a conv W is (channel_count, fan_in)), pool layers draw nothing,
-        # and the dense tail starts from the front end's flattened output size.
-        for layer in self.conv_layers:
-            if isinstance(layer, self.conv_layer_cls):
-                layer.W, layer.b = self.backend.random_layer(layer.channel_count, layer.fan_in)
-
-        previous_size = self.conv_layers[-1].size
-        for layer in as_weighted_array_layers(self.layers[len(self.conv_layers) :]):
-            layer.W, layer.b = self.backend.random_layer(layer.size, previous_size)
-            previous_size = layer.size
-
-    def snapshot(self) -> list[tuple[A, ...]]:
-        entries: list[tuple[A, ...]] = []
-        for layer in self.layers:
-            if isinstance(layer, self.pool_layer_cls):
-                entries.append(())
-            else:
-                assert isinstance(layer, WeightedArrayLayer)  # conv and dense layers have W, b
-                entries.append((layer.W.copy(), layer.b.copy()))
-        return entries
-
-    def restore(self, snapshot: Sequence[tuple[Any, ...]]) -> None:
-        # accepts either backend's snapshot, or a loaded file's lists
-        for layer, entry in zip(self.layers, snapshot):
-            if isinstance(layer, self.pool_layer_cls):
-                assert len(entry) == 0, f"a {type(layer).__name__} has no state to restore; got {entry!r}"
-                continue
-            assert isinstance(layer, WeightedArrayLayer)
-            W, b = entry
-            layer.W = self.backend.owned(W)
-            layer.b = self.backend.owned(b)
+        self.conv_layers = cast("list[ArrayFrontEndLayer[A]]", self.layers[: len(self.conv_specs)])
 
     def save(self, path: str) -> None:
         save_conv_array_model_json(path, self, extra=self._extra_state())

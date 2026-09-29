@@ -19,6 +19,9 @@ class BackendArray(Protocol):
 
     def tolist(self) -> Any: ...
 
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+
     def __setitem__(self, index: Any, value: float, /) -> None: ...
 
 
@@ -64,6 +67,13 @@ class WeightedArrayLayer[A: BackendArray](ArrayNetworkLayer[A], Protocol):
     def reset_gradient_accum(self) -> None: ...
 
 
+@runtime_checkable
+class TrainingModeLayer(Protocol):
+    """A layer that behaves differently in training (dropout): learn* switches it on and off."""
+
+    def set_training_mode(self, training: bool, /) -> None: ...
+
+
 class ArrayOptimizer[A: BackendArray](Protocol):
     """What ArrayNetworkBase drives to update its layers (optimizers.py)."""
 
@@ -76,15 +86,6 @@ class ArrayOptimizer[A: BackendArray](Protocol):
     def step_single(
         self, index: int, layer: ArrayNetworkLayer[A], input_activation: A, learning_rate: float
     ) -> None: ...
-
-
-class HyperparameterLayerClass[LayerT](Protocol):
-    """A layer class as ArrayNetworkBase._new_layer builds it: its shape arguments, then its
-    hyperparameters, from the network's attributes of the same names."""
-
-    hyperparameters: tuple[str, ...]
-
-    def __call__(self, *args: Any, **kwargs: Any) -> LayerT: ...
 
 
 class ArrayBackend[A: BackendArray](Protocol):

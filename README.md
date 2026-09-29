@@ -113,8 +113,9 @@ minimum-disturbance rule. Backprop networks come in three implementations of the
 
 The numpy and Rust networks are one implementation: `ArrayNetworkBase` calls the few array
 operations that differ through a backend object (`array_backend.py`), and `RustArrayNetworkBase`
-is the subclass that sets the Rust backend and layer classes. Only the layers are written once
-per backend.
+is the subclass that sets the Rust backend. A network's layers are layer specs
+(`layer_specs.py`), which `array_layer_builder.py` maps to each backend's layer classes. Only the
+layers are written once per backend.
 
 Each implementation has variants for the same set of features, named by a prefix on the class:
 `ReLU`, `Softmax`, `CrossEntropy`, `L2`, `Momentum`, `Adam`, `Dropout`, `Ensemble`. Convolution,

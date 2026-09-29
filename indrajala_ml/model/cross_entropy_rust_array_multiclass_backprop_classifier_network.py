@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
+from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -12,4 +12,5 @@ class CrossEntropyRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiCla
     CrossEntropyRustArrayLayer output.
     """
 
-    output_layer_cls = CrossEntropyRustArrayLayer
+    def _output_spec(self, size: int) -> Dense:
+        return Dense(size, output=True, loss="cross_entropy")
