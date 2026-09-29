@@ -213,7 +213,7 @@ def test_gradient_accumulation_matches_conv_kernel_accumulators_over_a_batch(
 
     # applying divides by batch_size and resets, as the pure-Python optimizer steps a ConvKernel
     W_before, b_before = to_numpy(array_layer.W), to_numpy(array_layer.b)
-    array_layer.apply_accumulated_gradient(0.1, batch_size=5)
+    LayerOptimizer(array_layer).apply(0.1, batch_size=5)
     LayerOptimizer(conv_layer).apply(0.1, batch_size=5)
     np.testing.assert_allclose(to_numpy(array_layer.W), W_before - 0.1 * grad_W / 5, rtol=0, atol=1e-15)
     np.testing.assert_allclose(to_numpy(array_layer.b), b_before - 0.1 * grad_b / 5, rtol=0, atol=1e-15)

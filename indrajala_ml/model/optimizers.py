@@ -8,14 +8,14 @@ for the whole network. The layers keep their weights and gradient accumulators; 
 here, with the source's grouping (README, Update rules).
 
 ArrayNetworkBase calls begin_step() once per learn* call, then per layer in forward order either
-apply() after accumulating a batch or step_single() for one example. A layer that still has its
-own apply_accumulated_gradient (the conv and pool layers, until stage 3 of the workplan) is left
-to it.
+apply() after accumulating a batch or step_single() for one example. A dense or conv layer is
+stepped alike: every rule's formula, and every fused Rust op, takes W and b of any matching shapes.
+A layer without W (a pool layer) has nothing to step.
 """
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import cast
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -40,8 +40,7 @@ def momentum_update(
     """
     Goyal et al. 2017's eq. (9) for one layer's (W, b), whatever their shape: u = m * u + g / B,
     then w - lr * u. Steps W and b in place and returns the new velocities. The numpy counterpart
-    of the fused layer_momentum_apply_accumulated_gradient, shared by the optimizer and
-    MomentumConvArrayLayer.
+    of the fused layer_momentum_apply_accumulated_gradient.
     """
     velocity_W = momentum * velocity_W + grad_W / batch_size
     velocity_b = momentum * velocity_b + grad_b / batch_size
@@ -72,10 +71,8 @@ class NumpyOptimizer:
         self.t += 1
 
     def apply(self, index: int, layer: ArrayNetworkLayer[FloatArray], learning_rate: float, batch_size: int) -> None:
-        own_update: Any = getattr(layer, "apply_accumulated_gradient", None)
-        if own_update is not None:
-            own_update(learning_rate, batch_size)
-            return
+        if not hasattr(layer, "W"):
+            return  # a pool layer: no weights
         weighted = cast("WeightedArrayLayer[FloatArray]", layer)
         self._apply_rule(index, weighted, learning_rate, batch_size)
         weighted.reset_gradient_accum()
@@ -187,10 +184,8 @@ class RustOptimizer:
         self.t += 1
 
     def apply(self, index: int, layer: ArrayNetworkLayer[pa.Array], learning_rate: float, batch_size: int) -> None:
-        own_update: Any = getattr(layer, "apply_accumulated_gradient", None)
-        if own_update is not None:
-            own_update(learning_rate, batch_size)
-            return
+        if not hasattr(layer, "W"):
+            return  # a pool layer: no weights
         weighted = cast("WeightedArrayLayer[pa.Array]", layer)
         self._apply_rule(index, weighted, learning_rate, batch_size)
         weighted.reset_gradient_accum()
@@ -198,13 +193,13 @@ class RustOptimizer:
     def step_single(
         self, index: int, layer: ArrayNetworkLayer[pa.Array], input_activation: pa.Array, learning_rate: float
     ) -> None:
-        if self._fused_sgd_step and not hasattr(layer, "apply_accumulated_gradient"):
+        if self._fused_sgd_step and isinstance(layer, RustArrayLayer):
             # accumulate then apply at batch_size=1 as one fused call, bit-identical to that pair
             # (tests/test_rust_array_layer_sgd_step.py). It relies on the accumulators being fresh
             # zeros, which they always are here: apply resets them after every step, and this
-            # doesn't touch them.
-            dense = cast(RustArrayLayer, layer)
-            dense.W, dense.b = pa.layer_sgd_step(dense.W, dense.b, dense.delta, input_activation, learning_rate)
+            # doesn't touch them. Dense layers only: a conv gradient sums over output positions,
+            # which layer_sgd_step's outer product doesn't.
+            layer.W, layer.b = pa.layer_sgd_step(layer.W, layer.b, layer.delta, input_activation, learning_rate)
             return
         layer.accumulate_gradient(input_activation)
         self.apply(index, layer, learning_rate, 1)

@@ -6,9 +6,9 @@ their results are comparable with the literature and with each other (README, Up
 Goyal et al. 2017 (the paper the batch-size-scaling study tests) write minibatch SGD as eq. (2),
 w - lr * (g / B), weight decay as eq. (8), w - lr * (g / B + lambda * w), and momentum as eq. (9),
 u = m * u + g / B; w - lr * u, with g summed over the batch. Every update that implements one of
-them - the pure-Python optimizer's rule (python_optimizer.py) on nodes and on kernels, an array
-optimizer's rule (optimizers.py) on a dense layer, and a conv array layer's own update until
-stage 3 of docs/composable-layers-workplan.md - is checked against the formula in Python floats, bit for bit: the groupings
+them - the pure-Python optimizer's rule (python_optimizer.py) on nodes and on kernels, and an
+array optimizer's rule (optimizers.py) on a dense and on a conv layer - is checked against the
+formula in Python floats, bit for bit: the groupings
 differ by an ULP at non-power-of-two batch sizes (6, and 96, the last partial batch of a 60000-row
 epoch at B = 128 and 512).
 """
@@ -26,8 +26,6 @@ from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
-from indrajala_ml.model.momentum_conv_array_layer import MomentumConvArrayLayer
-from indrajala_ml.model.momentum_conv_rust_array_layer import MomentumConvRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_node import StateNode
 from indrajala_ml.model.update_rules import SGD, Momentum, UpdateRule, WeightDecay
@@ -100,12 +98,8 @@ def _python_apply(make: Callable[[Matrix, list[float]], WeightSetList], rule: Up
 LayerApply = Callable[[float, int], None]
 
 
-def _updater(layer: ArrayLayers, rule: UpdateRule | None) -> LayerApply:
-    # the backend's optimizer applying rule to a dense layer, or, for rule None, a conv layer's own
-    # update, which it keeps until stage 3
-    if rule is None:
-        assert isinstance(layer, ConvArrayLayer | ConvRustArrayLayer)
-        return layer.apply_accumulated_gradient
+def _updater(layer: ArrayLayers, rule: UpdateRule) -> LayerApply:
+    # the backend's optimizer applying rule to the layer
     return LayerOptimizer(layer, rule).apply
 
 
@@ -125,7 +119,7 @@ def _step_layer(
 
 def _apply_layer(
     layer: ArrayLayers,
-    rule: UpdateRule | None,
+    rule: UpdateRule,
     to_array: Wrap,
     W: Matrix,
     b: list[float],
@@ -137,7 +131,7 @@ def _apply_layer(
     return _step_layer(layer, _updater(layer, rule), to_array, grad_W, grad_b, LEARNING_RATE, batch_size)
 
 
-def _fresh_layer(make_layer: Callable[[], ArrayLayers], to_array: Wrap, rule: UpdateRule | None = None) -> Apply:
+def _fresh_layer(make_layer: Callable[[], ArrayLayers], to_array: Wrap, rule: UpdateRule) -> Apply:
     # a new layer and optimizer for every call, so no state carries over between parametrized runs
     return lambda W, b, grad_W, grad_b, batch_size: _apply_layer(
         make_layer(), rule, to_array, W, b, grad_W, grad_b, batch_size
@@ -149,9 +143,14 @@ IMPLEMENTATIONS: list[tuple[str, Callable[[float, float, int], float], tuple[int
     ("PythonOptimizer SGD nodes", _sgd, DENSE_SHAPE, _python_apply(_nodes, SGD())),
     ("PythonOptimizer SGD kernels", _sgd, CONV_SHAPE, _python_apply(_kernels, SGD())),
     ("NumpyOptimizer SGD", _sgd, DENSE_SHAPE, _fresh_layer(lambda: ArrayLayer(*DENSE_SHAPE), np.array, SGD())),
-    ("ConvArrayLayer", _sgd, CONV_SHAPE, _fresh_layer(lambda: ConvArrayLayer(5, 5, 2, 3, 3), np.array)),
+    ("NumpyOptimizer SGD conv", _sgd, CONV_SHAPE, _fresh_layer(lambda: ConvArrayLayer(5, 5, 2, 3, 3), np.array, SGD())),
     ("RustOptimizer SGD", _sgd, DENSE_SHAPE, _fresh_layer(lambda: RustArrayLayer(*DENSE_SHAPE), pa.Array, SGD())),
-    ("ConvRustArrayLayer", _sgd, CONV_SHAPE, _fresh_layer(lambda: ConvRustArrayLayer(5, 5, 2, 3, 3), pa.Array)),
+    (
+        "RustOptimizer SGD conv",
+        _sgd,
+        CONV_SHAPE,
+        _fresh_layer(lambda: ConvRustArrayLayer(5, 5, 2, 3, 3), pa.Array, SGD()),
+    ),
     (
         "PythonOptimizer WeightDecay nodes",
         _weight_decay,
@@ -217,13 +216,12 @@ def _python_start(make: Callable[[Matrix, list[float]], WeightSetList]) -> Start
     return lambda momentum, W, b: _python_step(make(W, b), Momentum(momentum))
 
 
-def _momentum_layer(make_layer: Callable[[float], ArrayLayers], to_array: Wrap, optimizer: bool) -> Start:
-    # optimizer: stepped by the backend's optimizer under Momentum (a dense layer), else by the
-    # layer's own update (a conv layer, until stage 3)
+def _momentum_layer(make_layer: Callable[[], ArrayLayers], to_array: Wrap) -> Start:
+    # stepped by the backend's optimizer under Momentum
     def start(momentum: float, W: Matrix, b: list[float]) -> Step:
-        layer = make_layer(momentum)
+        layer = make_layer()
         layer.W, layer.b = to_array(W), to_array(b)
-        apply = _updater(layer, Momentum(momentum) if optimizer else None)
+        apply = _updater(layer, Momentum(momentum))
         return lambda grad_W, grad_b, learning_rate, batch_size: _step_layer(
             layer, apply, to_array, grad_W, grad_b, learning_rate, batch_size
         )
@@ -235,25 +233,13 @@ def _momentum_layer(make_layer: Callable[[float], ArrayLayers], to_array: Wrap, 
 MOMENTUM_IMPLEMENTATIONS: list[tuple[str, tuple[int, int], Start]] = [
     ("PythonOptimizer Momentum nodes", DENSE_SHAPE, _python_start(_nodes)),
     ("PythonOptimizer Momentum kernels", CONV_SHAPE, _python_start(_kernels)),
+    ("NumpyOptimizer Momentum", DENSE_SHAPE, _momentum_layer(lambda: ArrayLayer(*DENSE_SHAPE), np.array)),
+    ("NumpyOptimizer Momentum conv", CONV_SHAPE, _momentum_layer(lambda: ConvArrayLayer(5, 5, 2, 3, 3), np.array)),
+    ("RustOptimizer Momentum", DENSE_SHAPE, _momentum_layer(lambda: RustArrayLayer(*DENSE_SHAPE), pa.Array)),
     (
-        "NumpyOptimizer Momentum",
-        DENSE_SHAPE,
-        _momentum_layer(lambda _m: ArrayLayer(*DENSE_SHAPE), np.array, optimizer=True),
-    ),
-    (
-        "MomentumConvArrayLayer",
+        "RustOptimizer Momentum conv",
         CONV_SHAPE,
-        _momentum_layer(lambda m: MomentumConvArrayLayer(5, 5, 2, 3, 3, momentum=m), np.array, optimizer=False),
-    ),
-    (
-        "RustOptimizer Momentum",
-        DENSE_SHAPE,
-        _momentum_layer(lambda _m: RustArrayLayer(*DENSE_SHAPE), pa.Array, optimizer=True),
-    ),
-    (
-        "MomentumConvRustArrayLayer",
-        CONV_SHAPE,
-        _momentum_layer(lambda m: MomentumConvRustArrayLayer(5, 5, 2, 3, 3, momentum=m), pa.Array, optimizer=False),
+        _momentum_layer(lambda: ConvRustArrayLayer(5, 5, 2, 3, 3), pa.Array),
     ),
 ]
 

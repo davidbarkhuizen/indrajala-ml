@@ -3,8 +3,8 @@ RustOptimizer.step_single: under SGD, one fused call (pa.layer_sgd_step) in plac
 accumulate_gradient then the optimizer's apply at batch_size=1, which is what a Rust network's
 learn() called before the step was fused. Checked exactly (bit for bit, not approx), at the layer
 and at the network level, against that unfused pair, for every rule. The fused call is used iff
-the rule is SGD and the layer is dense: the other rules, and the conv layers' own update, keep
-the unfused pair.
+the rule is SGD and the layer is dense: the other rules, and the conv layers (whose gradient sums
+over output positions), keep the unfused pair.
 """
 
 import importlib
@@ -183,7 +183,7 @@ def test_learn_is_bit_identical_to_the_unfused_step_after_every_step(name: str):
 @pytest.mark.parametrize("name", NETWORK_FACTORIES)
 def test_the_fused_step_is_used_iff_the_rule_is_sgd(name: str, monkeypatch: pytest.MonkeyPatch):
     # one fused call per dense layer per learn() under SGD, none under any other rule; conv layers
-    # keep their own update, so they never take it
+    # never take it
     factory, rule_name = NETWORK_FACTORIES[name]
     network = factory()
     network.randomize()
