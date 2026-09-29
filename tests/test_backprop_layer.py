@@ -1,8 +1,10 @@
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.backprop_layer import BackpropLayer
+from indrajala_ml.model.python_optimizer import PythonOptimizer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import approx
+from indrajala_ml.model.update_rules import SGD
+from tests.helpers import LayerOptimizer, approx
 
 
 def _layer(size: int, dimension: int, state: tuple[float, ...]) -> BackpropLayer:
@@ -11,7 +13,7 @@ def _layer(size: int, dimension: int, state: tuple[float, ...]) -> BackpropLayer
     return BackpropLayer(size=size, input_layer=input_layer)
 
 
-def test_apply_gradients_matches_calling_apply_gradient_on_every_node_by_hand():
+def test_step_single_matches_the_sgd_formula_on_every_node_by_hand():
 
     layer = _layer(3, 2, (2.0, -3.0))
     for i, node in enumerate(layer.nodes):
@@ -27,14 +29,16 @@ def test_apply_gradients_matches_calling_apply_gradient_on_every_node_by_hand():
         for node in layer.nodes
     ]
 
-    layer.apply_gradients(0.1)
+    optimizer = PythonOptimizer(SGD())
+    optimizer.begin_step()
+    optimizer.step_single(0, layer, 0.1)
 
     for node, (expected_weights, expected_bias) in zip(layer.nodes, expected):
         assert node.input_node_weights == approx(expected_weights)
         assert node.bias == approx(expected_bias)
 
 
-def test_accumulate_then_apply_accumulated_gradients_matches_per_node_split():
+def test_accumulate_then_apply_matches_per_node_split():
 
     layer = _layer(2, 1, (2.0,))
     for node in layer.nodes:
@@ -46,7 +50,7 @@ def test_accumulate_then_apply_accumulated_gradients_matches_per_node_split():
             node.delta = delta
         layer.accumulate_gradients()
 
-    layer.apply_accumulated_gradients(0.1, batch_size=2)
+    LayerOptimizer(layer).apply(0.1, batch_size=2)
 
     # accum for weight = 0.2*2.0 + (-0.1)*2.0 = 0.2 -> weight -= 0.1 * (0.2/2)
     # accum for bias = 0.2 + (-0.1) = 0.1 -> bias -= 0.1 * (0.1/2)
@@ -119,22 +123,18 @@ class _CallCountingLayer:
     def __init__(self, nodes: list[object]):
         self.nodes = nodes
         self.accumulate_calls = 0
-        self.apply_accumulated_calls = 0
-        self.apply_gradients_calls = 0
+        self.weight_sets_calls = 0
         self.snapshot_calls = 0
         self.restore_calls = 0
-        self.last_apply_args: tuple[float, int] | None = None
         self.last_restored: object = None
 
     def accumulate_gradients(self):
         self.accumulate_calls += 1
 
-    def apply_accumulated_gradients(self, learning_rate: float, batch_size: int):
-        self.apply_accumulated_calls += 1
-        self.last_apply_args = (learning_rate, batch_size)
-
-    def apply_gradients(self, learning_rate: float):
-        self.apply_gradients_calls += 1
+    def weight_sets(self) -> list[object]:
+        # read once per optimizer step; none, so the optimizer steps nothing
+        self.weight_sets_calls += 1
+        return []
 
     def snapshot_state(self):
         self.snapshot_calls += 1
@@ -158,13 +158,15 @@ def test_network_level_methods_dispatch_once_per_layer_not_once_per_node():
     assert fake_output.accumulate_calls == 1
 
     network._apply_accumulated_gradients(0.1, batch_size=3)
-    assert fake_hidden.apply_accumulated_calls == 1
-    assert fake_hidden.last_apply_args == (0.1, 3)
-    assert fake_output.apply_accumulated_calls == 1
+    assert fake_hidden.weight_sets_calls == 1
+    assert fake_output.weight_sets_calls == 1
 
+    # the single-example step accumulates, then applies, once per layer
     network._apply_gradients(0.1)
-    assert fake_hidden.apply_gradients_calls == 1
-    assert fake_output.apply_gradients_calls == 1
+    assert fake_hidden.accumulate_calls == 2
+    assert fake_hidden.weight_sets_calls == 2
+    assert fake_output.accumulate_calls == 2
+    assert fake_output.weight_sets_calls == 2
 
     snapshot = network.snapshot()
     assert fake_hidden.snapshot_calls == 1

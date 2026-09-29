@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from indrajala_ml.model.base_node import AbstractNode
-from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer, WeightSet
 
 
 @dataclass(frozen=True)
@@ -128,7 +128,7 @@ class MaxPoolLayer:
     def downstream_sum(self, own_index: int) -> float:
         return sum(unit.delta for unit, slot in self._fan_out[own_index] if unit.argmax_slot == slot)
 
-    # weight-free: every gradient/persistence hook below is a deliberate no-op
+    # weight-free: every gradient/persistence hook below is a deliberate no-op, or empty
 
     def set_training_mode(self, training: bool) -> None:
         pass
@@ -136,11 +136,8 @@ class MaxPoolLayer:
     def accumulate_gradients(self) -> None:
         pass
 
-    def apply_accumulated_gradients(self, learning_rate: float, batch_size: int) -> None:
-        pass
-
-    def apply_gradients(self, learning_rate: float) -> None:
-        pass
+    def weight_sets(self) -> Sequence[WeightSet]:
+        return []
 
     def snapshot_state(self) -> list[tuple[list[float], float]]:
         return []

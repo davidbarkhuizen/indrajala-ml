@@ -6,9 +6,9 @@ their results are comparable with the literature and with each other (README, Up
 Goyal et al. 2017 (the paper the batch-size-scaling study tests) write minibatch SGD as eq. (2),
 w - lr * (g / B), weight decay as eq. (8), w - lr * (g / B + lambda * w), and momentum as eq. (9),
 u = m * u + g / B; w - lr * u, with g summed over the batch. Every update that implements one of
-them - a pure-Python node's or kernel's apply_accumulated_gradient, an array optimizer's rule
-(optimizers.py) on a dense layer, and a conv array layer's own update until stage 3 of
-docs/composable-layers-workplan.md - is checked against the formula in Python floats, bit for bit: the groupings
+them - the pure-Python optimizer's rule (python_optimizer.py) on nodes and on kernels, an array
+optimizer's rule (optimizers.py) on a dense layer, and a conv array layer's own update until
+stage 3 of docs/composable-layers-workplan.md - is checked against the formula in Python floats, bit for bit: the groupings
 differ by an ULP at non-power-of-two batch sizes (6, and 96, the last partial batch of a 60000-row
 epoch at B = 128 and 512).
 """
@@ -16,7 +16,6 @@ epoch at B = 128 and 512).
 import random
 import struct
 from collections.abc import Callable, Sequence
-from functools import partial
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -27,15 +26,12 @@ from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
-from indrajala_ml.model.l2_regularization_layer import make_l2_node_cls
 from indrajala_ml.model.momentum_conv_array_layer import MomentumConvArrayLayer
-from indrajala_ml.model.momentum_conv_layer import make_momentum_kernel_cls
 from indrajala_ml.model.momentum_conv_rust_array_layer import MomentumConvRustArrayLayer
-from indrajala_ml.model.momentum_layer import make_momentum_node_cls
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_node import StateNode
 from indrajala_ml.model.update_rules import SGD, Momentum, UpdateRule, WeightDecay
-from tests.helpers import LayerOptimizer, Wrap
+from tests.helpers import LayerOptimizer, WeightSets, Wrap
 
 BATCH_SIZES = [1, 6, 96, 4, 128, 512]
 SEEDS = range(5)
@@ -66,44 +62,38 @@ def _weight_decay(w: float, g: float, batch_size: int) -> float:
     return w - LEARNING_RATE * (g / batch_size + L2_LAMBDA * w)
 
 
-def _nodes(node_cls: type[BackpropNode], W: Matrix, b: list[float]) -> list[BackpropNode]:
+def _nodes(W: Matrix, b: list[float]) -> list[BackpropNode]:
     return [
-        node_cls(input_nodes=[StateNode() for _ in weights], input_node_weights=list(weights), bias=bias)
+        BackpropNode(input_nodes=[StateNode() for _ in weights], input_node_weights=list(weights), bias=bias)
         for weights, bias in zip(W, b)
     ]
 
 
-def _step_nodes(
-    nodes: list[BackpropNode], grad_W: Matrix, grad_b: list[float], learning_rate: float, batch_size: int
-) -> Weights:
-    for node, accum, bias_accum in zip(nodes, grad_W, grad_b):
-        node._weight_gradient_accum, node._bias_gradient_accum = list(accum), bias_accum
-        node.apply_accumulated_gradient(learning_rate, batch_size)
-    return [node.input_node_weights for node in nodes], [node.bias for node in nodes]
-
-
-def _apply_nodes(
-    node_cls: type[BackpropNode], W: Matrix, b: list[float], grad_W: Matrix, grad_b: list[float], batch_size: int
-) -> Weights:
-    return _step_nodes(_nodes(node_cls, W, b), grad_W, grad_b, LEARNING_RATE, batch_size)
-
-
-def _kernels(kernel_cls: type[ConvKernel], W: Matrix, b: list[float]) -> list[ConvKernel]:
+def _kernels(W: Matrix, b: list[float]) -> list[ConvKernel]:
     # CONV_SHAPE's kernels: 3 x 3 over 2 input channels
-    return [kernel_cls(kernel_size=3, in_channels=2, weights=list(weights), bias=bias) for weights, bias in zip(W, b)]
+    return [ConvKernel(kernel_size=3, in_channels=2, weights=list(weights), bias=bias) for weights, bias in zip(W, b)]
 
 
-def _step_kernels(
-    kernels: list[ConvKernel], grad_W: Matrix, grad_b: list[float], learning_rate: float, batch_size: int
-) -> Weights:
-    for kernel, accum, bias_accum in zip(kernels, grad_W, grad_b):
-        kernel._weight_gradient_accum, kernel._bias_gradient_accum = list(accum), bias_accum
-        kernel.apply_accumulated_gradient(learning_rate, batch_size)
-    return [kernel.weights for kernel in kernels], [kernel.bias for kernel in kernels]
+WeightSetList = list[BackpropNode] | list[ConvKernel]
 
 
-def _apply_kernels(W: Matrix, b: list[float], grad_W: Matrix, grad_b: list[float], batch_size: int) -> Weights:
-    return _step_kernels(_kernels(ConvKernel, W, b), grad_W, grad_b, LEARNING_RATE, batch_size)
+def _python_step(weight_sets: WeightSetList, rule: UpdateRule) -> Step:
+    # the pure-Python optimizer stepping weight_sets as one layer's, its state kept across steps
+    optimizer = LayerOptimizer(WeightSets(*weight_sets), rule)
+
+    def step(grad_W: Matrix, grad_b: list[float], learning_rate: float, batch_size: int) -> Weights:
+        for weight_set, accum, bias_accum in zip(weight_sets, grad_W, grad_b):
+            weight_set.weight_gradient_accum, weight_set.bias_gradient_accum = list(accum), bias_accum
+        optimizer.apply(learning_rate, batch_size)
+        return [weight_set.weights for weight_set in weight_sets], [weight_set.bias for weight_set in weight_sets]
+
+    return step
+
+
+def _python_apply(make: Callable[[Matrix, list[float]], WeightSetList], rule: UpdateRule) -> Apply:
+    return lambda W, b, grad_W, grad_b, batch_size: _python_step(make(W, b), rule)(
+        grad_W, grad_b, LEARNING_RATE, batch_size
+    )
 
 
 # a layer's update: apply(learning_rate, batch_size)
@@ -156,13 +146,18 @@ def _fresh_layer(make_layer: Callable[[], ArrayLayers], to_array: Wrap, rule: Up
 
 # (name, the formula it follows, the weights' shape, apply(W, b, grad_W, grad_b, batch_size))
 IMPLEMENTATIONS: list[tuple[str, Callable[[float, float, int], float], tuple[int, int], Apply]] = [
-    ("BackpropNode", _sgd, DENSE_SHAPE, partial(_apply_nodes, BackpropNode)),
-    ("ConvKernel", _sgd, CONV_SHAPE, _apply_kernels),
+    ("PythonOptimizer SGD nodes", _sgd, DENSE_SHAPE, _python_apply(_nodes, SGD())),
+    ("PythonOptimizer SGD kernels", _sgd, CONV_SHAPE, _python_apply(_kernels, SGD())),
     ("NumpyOptimizer SGD", _sgd, DENSE_SHAPE, _fresh_layer(lambda: ArrayLayer(*DENSE_SHAPE), np.array, SGD())),
     ("ConvArrayLayer", _sgd, CONV_SHAPE, _fresh_layer(lambda: ConvArrayLayer(5, 5, 2, 3, 3), np.array)),
     ("RustOptimizer SGD", _sgd, DENSE_SHAPE, _fresh_layer(lambda: RustArrayLayer(*DENSE_SHAPE), pa.Array, SGD())),
     ("ConvRustArrayLayer", _sgd, CONV_SHAPE, _fresh_layer(lambda: ConvRustArrayLayer(5, 5, 2, 3, 3), pa.Array)),
-    ("L2RegularizedBackpropNode", _weight_decay, DENSE_SHAPE, partial(_apply_nodes, make_l2_node_cls(L2_LAMBDA))),
+    (
+        "PythonOptimizer WeightDecay nodes",
+        _weight_decay,
+        DENSE_SHAPE,
+        _python_apply(_nodes, WeightDecay(L2_LAMBDA)),
+    ),
     (
         "NumpyOptimizer WeightDecay",
         _weight_decay,
@@ -218,18 +213,8 @@ MOMENTA = [0.0, 0.9]
 MOMENTUM_LEARNING_RATES = [0.05, 0.1, 0.4]
 
 
-def _momentum_nodes(momentum: float, W: Matrix, b: list[float]) -> Step:
-    nodes = _nodes(make_momentum_node_cls(momentum), W, b)
-    return lambda grad_W, grad_b, learning_rate, batch_size: _step_nodes(
-        nodes, grad_W, grad_b, learning_rate, batch_size
-    )
-
-
-def _momentum_kernels(momentum: float, W: Matrix, b: list[float]) -> Step:
-    kernels = _kernels(make_momentum_kernel_cls(momentum), W, b)
-    return lambda grad_W, grad_b, learning_rate, batch_size: _step_kernels(
-        kernels, grad_W, grad_b, learning_rate, batch_size
-    )
+def _python_start(make: Callable[[Matrix, list[float]], WeightSetList]) -> Start:
+    return lambda momentum, W, b: _python_step(make(W, b), Momentum(momentum))
 
 
 def _momentum_layer(make_layer: Callable[[float], ArrayLayers], to_array: Wrap, optimizer: bool) -> Start:
@@ -248,8 +233,8 @@ def _momentum_layer(make_layer: Callable[[float], ArrayLayers], to_array: Wrap, 
 
 # (name, the weights' shape, start(momentum, W, b) -> step(grad_W, grad_b, learning_rate, batch_size))
 MOMENTUM_IMPLEMENTATIONS: list[tuple[str, tuple[int, int], Start]] = [
-    ("MomentumBackpropNode", DENSE_SHAPE, _momentum_nodes),
-    ("MomentumConvKernel", CONV_SHAPE, _momentum_kernels),
+    ("PythonOptimizer Momentum nodes", DENSE_SHAPE, _python_start(_nodes)),
+    ("PythonOptimizer Momentum kernels", CONV_SHAPE, _python_start(_kernels)),
     (
         "NumpyOptimizer Momentum",
         DENSE_SHAPE,

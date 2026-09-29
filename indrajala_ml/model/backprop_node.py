@@ -42,10 +42,10 @@ class BackpropNode(WeightedInputNode):
         # populated by compute_output_delta()/compute_hidden_delta() during the backward pass
         self.delta: float
 
-        # accumulated by accumulate_gradient() over a mini-batch, consumed and reset by
-        # apply_accumulated_gradient()
-        self._weight_gradient_accum: list[float] = [0.0 for _ in self.input_nodes]
-        self._bias_gradient_accum: float = 0.0
+        # accumulated by accumulate_gradient() over a mini-batch, consumed and reset by the
+        # network's optimizer (python_optimizer.py)
+        self.weight_gradient_accum: list[float] = [0.0 for _ in self.input_nodes]
+        self.bias_gradient_accum: float = 0.0
 
     @property
     def bias(self) -> float:
@@ -54,6 +54,14 @@ class BackpropNode(WeightedInputNode):
     @bias.setter
     def bias(self, value: float) -> None:
         self._offset = value
+
+    # the WeightSet surface (layer_protocols.py), shared with ConvKernel
+    @property
+    def weights(self) -> Sequence[float]:
+        return self.input_node_weights
+
+    def set_weights(self, weights: list[float]) -> None:
+        self.update_input_weights(weights)
 
     def forward(self) -> float:
         # the only place the activation is computed; value() reads the cache
@@ -76,25 +84,9 @@ class BackpropNode(WeightedInputNode):
 
     def accumulate_gradient(self) -> None:
         for i, node in enumerate(self.input_nodes):
-            self._weight_gradient_accum[i] += self.delta * node.value()
-        self._bias_gradient_accum += self.delta
+            self.weight_gradient_accum[i] += self.delta * node.value()
+        self.bias_gradient_accum += self.delta
 
-    def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
-        self.update_input_weights(
-            [
-                weight - learning_rate * (accum / batch_size)
-                for weight, accum in zip(self.input_node_weights, self._weight_gradient_accum)
-            ]
-        )
-        self.bias = self.bias - learning_rate * (self._bias_gradient_accum / batch_size)
-        self._reset_gradient_accum()
-
-    def _reset_gradient_accum(self) -> None:
-        self._weight_gradient_accum = [0.0 for _ in self.input_nodes]
-        self._bias_gradient_accum = 0.0
-
-    def apply_gradient(self, learning_rate: float) -> None:
-        # accumulate + apply at batch_size=1, through the overridable pair, so a subclass
-        # (MomentumBackpropNode, L2RegularizedBackpropNode) needn't override this
-        self.accumulate_gradient()
-        self.apply_accumulated_gradient(learning_rate, 1)
+    def reset_gradient_accum(self) -> None:
+        self.weight_gradient_accum = [0.0 for _ in self.input_nodes]
+        self.bias_gradient_accum = 0.0

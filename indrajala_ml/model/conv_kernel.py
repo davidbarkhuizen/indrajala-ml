@@ -13,8 +13,8 @@ class ConvKernel:
     share.
 
     accumulate_gradient() is called once per contributing position (every unit of the channel, for
-    every example) and apply_accumulated_gradient() once per kernel, dividing by batch_size only:
-    positions are summed, examples averaged.
+    every example), and the network's optimizer (python_optimizer.py) steps the kernel once,
+    dividing by batch_size only: positions are summed, examples averaged.
     """
 
     def __init__(
@@ -39,8 +39,8 @@ class ConvKernel:
 
         self.bias: float = bias
 
-        self._weight_gradient_accum: list[float] = [0.0 for _ in range(fan_in)]
-        self._bias_gradient_accum: float = 0.0
+        self.weight_gradient_accum: list[float] = [0.0 for _ in range(fan_in)]
+        self.bias_gradient_accum: float = 0.0
 
     def randomize_fan_in_aware(self) -> None:
         # a kernel's fan-in is its receptive field, kernel_size**2 * in_channels
@@ -49,17 +49,14 @@ class ConvKernel:
     def accumulate_gradient(self, delta: float, receptive_field_values: Sequence[float]) -> None:
         assert len(receptive_field_values) == len(self.weights)
         for i, value in enumerate(receptive_field_values):
-            self._weight_gradient_accum[i] += delta * value
-        self._bias_gradient_accum += delta
+            self.weight_gradient_accum[i] += delta * value
+        self.bias_gradient_accum += delta
 
-    def apply_accumulated_gradient(self, learning_rate: float, batch_size: int) -> None:
-        self.weights = [
-            weight - learning_rate * (accum / batch_size)
-            for weight, accum in zip(self.weights, self._weight_gradient_accum)
-        ]
-        self.bias = self.bias - learning_rate * (self._bias_gradient_accum / batch_size)
-        self._reset_gradient_accum()
+    # set_weights and reset_gradient_accum: the WeightSet surface (layer_protocols.py), shared with
+    # BackpropNode
+    def set_weights(self, weights: list[float]) -> None:
+        self.weights = weights
 
-    def _reset_gradient_accum(self) -> None:
-        self._weight_gradient_accum = [0.0 for _ in self.weights]
-        self._bias_gradient_accum = 0.0
+    def reset_gradient_accum(self) -> None:
+        self.weight_gradient_accum = [0.0 for _ in self.weights]
+        self.bias_gradient_accum = 0.0

@@ -47,17 +47,12 @@ class BackpropLayer:
 
     # the network calls these per layer, not per node, so a layer whose weights aren't one set
     # per node (ConvLayer's shared kernels) can override them
-    def apply_gradients(self, learning_rate: float) -> None:
-        for node in self.nodes:
-            node.apply_gradient(learning_rate)
-
     def accumulate_gradients(self) -> None:
         for node in self.nodes:
             node.accumulate_gradient()
 
-    def apply_accumulated_gradients(self, learning_rate: float, batch_size: int) -> None:
-        for node in self.nodes:
-            node.apply_accumulated_gradient(learning_rate, batch_size)
+    def weight_sets(self) -> Sequence[BackpropNode]:
+        return self.nodes
 
     def snapshot_state(self) -> list[tuple[list[float], float]]:
         return [(list(node.input_node_weights), node.bias) for node in self.nodes]

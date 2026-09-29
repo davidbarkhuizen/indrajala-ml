@@ -72,8 +72,8 @@ def test_accumulate_gradient_delegates_into_the_shared_kernel():
     unit.accumulate_gradient()
 
     # accum_w = delta * receptive_field_value, per weight; accum_b = delta
-    assert unit.kernel._weight_gradient_accum == approx([0.3 * 2.0, 0.3 * -3.0])
-    assert unit.kernel._bias_gradient_accum == approx(0.3)
+    assert unit.kernel.weight_gradient_accum == approx([0.3 * 2.0, 0.3 * -3.0])
+    assert unit.kernel.bias_gradient_accum == approx(0.3)
 
 
 def test_accumulate_gradient_from_two_units_sharing_one_kernel_sums_into_it():
@@ -89,5 +89,5 @@ def test_accumulate_gradient_from_two_units_sharing_one_kernel_sums_into_it():
     unit_a.accumulate_gradient()
     unit_b.accumulate_gradient()
 
-    assert kernel._weight_gradient_accum == approx([0.2 * 2.0 + 0.4 * 3.0])
-    assert kernel._bias_gradient_accum == approx(0.2 + 0.4)
+    assert kernel.weight_gradient_accum == approx([0.2 * 2.0 + 0.4 * 3.0])
+    assert kernel.bias_gradient_accum == approx(0.2 + 0.4)

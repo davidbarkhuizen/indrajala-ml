@@ -1,10 +1,14 @@
 import random
 
+import pytest
+
+from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
-from indrajala_ml.model.l2_regularization_layer import make_l2_node_cls
-from indrajala_ml.model.momentum_layer import make_momentum_node_cls
+from indrajala_ml.model.python_optimizer import PythonOptimizer
+from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.state_node import StateNode
-from tests.helpers import approx
+from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from tests.helpers import LayerOptimizer, WeightSets, approx
 
 
 def _plain_node(weight: float, bias: float, x: float) -> BackpropNode:
@@ -29,39 +33,15 @@ def test_accumulate_then_apply_at_batch_size_one_matches_the_direct_formula():
         node = _plain_node(weight, bias, x)
         node.delta = delta
         node.accumulate_gradient()
-        node.apply_accumulated_gradient(learning_rate, batch_size=1)
+        LayerOptimizer(WeightSets(node)).apply(learning_rate, batch_size=1)
 
         assert node.input_node_weights[0] == approx(weight - learning_rate * delta * x)
         assert node.bias == approx(bias - learning_rate * delta)
 
 
-def test_accumulate_then_apply_at_batch_size_one_is_bit_identical_to_apply_gradient():
-
-    rng = random.Random(1)
-
-    for _ in range(200):
-        weight = rng.uniform(-5.0, 5.0)
-        bias = rng.uniform(-5.0, 5.0)
-        x = rng.uniform(-5.0, 5.0)
-        delta = rng.uniform(-5.0, 5.0)
-        learning_rate = rng.uniform(0.001, 1.0)
-
-        via_split = _plain_node(weight, bias, x)
-        via_split.delta = delta
-        via_split.accumulate_gradient()
-        via_split.apply_accumulated_gradient(learning_rate, batch_size=1)
-
-        via_apply_gradient = _plain_node(weight, bias, x)
-        via_apply_gradient.delta = delta
-        via_apply_gradient.apply_gradient(learning_rate)
-
-        assert via_split.input_node_weights[0] == via_apply_gradient.input_node_weights[0]
-        assert via_split.bias == via_apply_gradient.bias
-
-
 def test_accumulate_gradient_sums_across_multiple_examples_before_any_weight_write():
 
-    # two examples with different x: no weight moves until apply_accumulated_gradient
+    # two examples with different x: no weight moves until the optimizer applies them
     x_node = StateNode(1.0)
     node = BackpropNode(input_nodes=[x_node])
     node.update_input_weights([0.5])
@@ -78,28 +58,29 @@ def test_accumulate_gradient_sums_across_multiple_examples_before_any_weight_wri
     node.accumulate_gradient()
 
     # accum_w = 0.2*1.0 + (-0.1)*2.0 = 0.0, accum_b = 0.2 + (-0.1) = 0.1
-    node.apply_accumulated_gradient(0.1, batch_size=2)
+    LayerOptimizer(WeightSets(node)).apply(0.1, batch_size=2)
     assert node.input_node_weights[0] == approx(0.5 - 0.1 * (0.0 / 2))
     assert node.bias == approx(0.1 - 0.1 * (0.1 / 2))
 
 
-def test_apply_accumulated_gradient_resets_the_accumulator():
+def test_apply_resets_the_accumulator():
 
     x_node = StateNode(1.0)
     node = BackpropNode(input_nodes=[x_node])
     node.update_input_weights([0.5])
     node.bias = 0.1
 
+    optimizer = LayerOptimizer(WeightSets(node))
     node.delta = 0.2
     node.accumulate_gradient()
-    node.apply_accumulated_gradient(0.1, batch_size=1)
+    optimizer.apply(0.1, batch_size=1)
 
     weight_after_first_apply = node.input_node_weights[0]
     bias_after_first_apply = node.bias
 
     # a second apply with nothing accumulated in between must be a no-op (accumulator reset to
     # zero, not left over from the batch just applied)
-    node.apply_accumulated_gradient(0.1, batch_size=1)
+    optimizer.apply(0.1, batch_size=1)
     assert node.input_node_weights[0] == approx(weight_after_first_apply)
     assert node.bias == approx(bias_after_first_apply)
 
@@ -119,7 +100,7 @@ def _accumulate_batch(node: BackpropNode, examples: list[tuple[float, float]]) -
         node.accumulate_gradient()
 
 
-def test_momentum_apply_accumulated_gradient_matches_hand_computed_batch_values():
+def test_momentum_apply_matches_hand_computed_batch_values():
 
     # hand-derived, learning_rate=0.1, momentum=0.9, batch_size=2, _batch_examples() (averaged
     # gradient 0.3 for weight and bias):
@@ -127,62 +108,64 @@ def test_momentum_apply_accumulated_gradient_matches_hand_computed_batch_values(
     #            bias_delta = 0.1*0.3 + 0.9*0.0 = 0.03 -> bias = 0.1-0.03 = 0.07
     #   batch 2 (same examples again): delta_w = 0.1*0.3 + 0.9*0.03 = 0.057 -> weight = 0.413
     #            bias_delta = 0.1*0.3 + 0.9*0.03 = 0.057 -> bias = 0.013
-    node_cls = make_momentum_node_cls(0.9)
-    node = node_cls(input_nodes=[StateNode(0.0)])
-    node.update_input_weights([0.5])
-    node.bias = 0.1
+    node = _plain_node(0.5, 0.1, 0.0)
+    optimizer = LayerOptimizer(WeightSets(node), Momentum(0.9))
 
     _accumulate_batch(node, _batch_examples())
-    node.apply_accumulated_gradient(0.1, batch_size=2)
+    optimizer.apply(0.1, batch_size=2)
     assert node.input_node_weights[0] == approx(0.47)
     assert node.bias == approx(0.07)
 
     _accumulate_batch(node, _batch_examples())
-    node.apply_accumulated_gradient(0.1, batch_size=2)
+    optimizer.apply(0.1, batch_size=2)
     assert node.input_node_weights[0] == approx(0.413)
     assert node.bias == approx(0.013)
 
 
-def test_l2_apply_accumulated_gradient_matches_hand_computed_batch_values():
+def test_l2_apply_matches_hand_computed_batch_values():
 
     # hand-derived, learning_rate=0.1, l2_lambda=0.1, the same averaged gradient 0.3:
     #   weight = 0.5 - 0.1*(0.3 + 0.1*0.5) = 0.5 - 0.1*0.35 = 0.465
     #   bias = 0.1 - 0.1*0.3 = 0.07 (never regularized)
-    node_cls = make_l2_node_cls(0.1)
-    node = node_cls(input_nodes=[StateNode(0.0)])
-    node.update_input_weights([0.5])
-    node.bias = 0.1
+    node = _plain_node(0.5, 0.1, 0.0)
 
     _accumulate_batch(node, _batch_examples())
-    node.apply_accumulated_gradient(0.1, batch_size=2)
+    LayerOptimizer(WeightSets(node), WeightDecay(0.1)).apply(0.1, batch_size=2)
     assert node.input_node_weights[0] == approx(0.465)
     assert node.bias == approx(0.07)
 
 
-def test_momentum_and_l2_batch_size_one_still_match_apply_gradient_exactly():
+@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), WeightDecay(0.1), Adam()], ids=type)
+def test_step_single_is_bit_identical_to_accumulate_then_apply_at_batch_size_one(rule: UpdateRule):
 
-    # the batch_size=1 check for the two subclasses that override apply_accumulated_gradient
-    for node_cls in (make_momentum_node_cls(0.9), make_l2_node_cls(0.1)):
-        rng = random.Random(hash(node_cls.__name__) & 0xFFFF)
-        for _ in range(50):
-            weight = rng.uniform(-5.0, 5.0)
-            bias = rng.uniform(-5.0, 5.0)
-            x = rng.uniform(-5.0, 5.0)
-            delta = rng.uniform(-5.0, 5.0)
-            learning_rate = rng.uniform(0.001, 1.0)
+    # the single-example path (learn) and a one-example batch (learn_batch) through every rule
+    rng = random.Random(repr(rule))
+    for _ in range(50):
+        x = rng.uniform(-5.0, 5.0)
+        weight = rng.uniform(-5.0, 5.0)
+        bias = rng.uniform(-5.0, 5.0)
+        delta = rng.uniform(-5.0, 5.0)
+        learning_rate = rng.uniform(0.001, 1.0)
 
-            via_split = node_cls(input_nodes=[StateNode(x)])
-            via_split.update_input_weights([weight])
-            via_split.bias = bias
-            via_split.delta = delta
-            via_split.accumulate_gradient()
-            via_split.apply_accumulated_gradient(learning_rate, batch_size=1)
+        layers: list[BackpropLayer] = []
+        for _path in range(2):
+            input_layer = StateLayer(1, [(-5.0, 5.0)])
+            input_layer.update_state((x,))
+            layer = BackpropLayer(size=1, input_layer=input_layer)
+            layer.nodes[0].update_input_weights([weight])
+            layer.nodes[0].bias = bias
+            layer.nodes[0].delta = delta
+            layers.append(layer)
+        via_step_single, via_split = layers
 
-            via_apply_gradient = node_cls(input_nodes=[StateNode(x)])
-            via_apply_gradient.update_input_weights([weight])
-            via_apply_gradient.bias = bias
-            via_apply_gradient.delta = delta
-            via_apply_gradient.apply_gradient(learning_rate)
+        optimizer = PythonOptimizer(rule)
+        optimizer.begin_step()
+        optimizer.step_single(0, via_step_single, learning_rate)
 
-            assert via_split.input_node_weights[0] == via_apply_gradient.input_node_weights[0]
-            assert via_split.bias == via_apply_gradient.bias
+        optimizer = PythonOptimizer(rule)
+        optimizer.begin_step()
+        via_split.accumulate_gradients()
+        optimizer.apply(0, via_split, learning_rate, 1)
+
+        assert via_step_single.nodes[0].input_node_weights[0] == via_split.nodes[0].input_node_weights[0]
+        assert via_step_single.nodes[0].bias == via_split.nodes[0].bias

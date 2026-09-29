@@ -10,6 +10,7 @@ from indrajala_ml.model.conv_front_end import build_conv_front_end, load_conv_mo
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
+from indrajala_ml.model.python_optimizer import PythonOptimizer
 from indrajala_ml.model.state_layer import StateLayer
 
 
@@ -24,17 +25,18 @@ class ConvMultiClassBackpropClassifierNetwork(
 
     __init__ doesn't call super().__init__(), whose flat layer_sizes and single hidden_layer_cls
     can't describe conv layers; it builds input_layer/hidden_layers/output_layer/trainable_layers
-    directly, in the shape BackpropNetworkBase's methods expect. Those, and learn/learn_batch/
-    _backward/classify_state/predict_probabilities, are inherited: they go through per-layer hooks
-    (compute_hidden_deltas, downstream_sum, the gradient and snapshot methods) that ConvLayer
-    implements.
+    directly, in the shape BackpropNetworkBase's methods expect, and its optimizer. Those, and
+    learn/learn_batch/_backward/classify_state/predict_probabilities, are inherited: they go
+    through per-layer hooks (compute_hidden_deltas, downstream_sum, the gradient and snapshot
+    methods, weight_sets) that ConvLayer implements.
 
     Inputs are normalized pixels, so input_bounds is fixed at [(0.0, 1.0)] * dimension, not a
     parameter.
 
     The layer classes are hooks, as BackpropNetworkBase's: conv_layer_cls for the conv layers and
-    the inherited hidden_layer_cls/output_layer_cls for the dense tail. A sibling sets them for a
-    different update, as MomentumBackpropClassifierNetwork does.
+    the inherited hidden_layer_cls/output_layer_cls for the dense tail. The update is the
+    optimizer's: a sibling overrides _update_rule, as MomentumConvMultiClassBackpropClassifierNetwork
+    does.
 
     The numpy and Rust networks (ArrayConvShape) are parity-tested against this one step by step
     (tests/test_conv_array_multiclass_backprop_model.py); all three build their front end
@@ -100,6 +102,8 @@ class ConvMultiClassBackpropClassifierNetwork(
 
         self.hidden_layers = [*self.conv_layers, *dense_layers]
         self.trainable_layers = [*self.hidden_layers, self.output_layer]
+
+        self.optimizer = PythonOptimizer(self._update_rule())
 
     def randomize(self) -> None:
         # conv layers first, in forward order, each from its kernel fan-in

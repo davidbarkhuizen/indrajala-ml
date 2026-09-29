@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from indrajala_ml.model.conv_kernel import ConvKernel
@@ -121,13 +122,8 @@ class ConvLayer:
         for unit in self.nodes:
             unit.accumulate_gradient()
 
-    def apply_accumulated_gradients(self, learning_rate: float, batch_size: int) -> None:
-        for kernel in self.kernels:
-            kernel.apply_accumulated_gradient(learning_rate, batch_size)
-
-    def apply_gradients(self, learning_rate: float) -> None:
-        self.accumulate_gradients()
-        self.apply_accumulated_gradients(learning_rate, batch_size=1)
+    def weight_sets(self) -> Sequence[ConvKernel]:
+        return self.kernels
 
     def snapshot_state(self) -> list[tuple[list[float], float]]:
         return [(list(kernel.weights), kernel.bias) for kernel in self.kernels]

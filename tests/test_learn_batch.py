@@ -86,7 +86,7 @@ def test_learn_batch_rejects_an_empty_batch():
 
 def test_learn_batch_is_inherited_unchanged_by_momentum_sibling():
 
-    # inherited learn_batch must reach the momentum node's apply_accumulated_gradient
+    # inherited learn_batch must reach the network's optimizer under the Momentum rule
     learning_rate = 0.1
     batch = [((3.0, -4.0), 1.0), ((1.0, 2.0), 0.0)]
 

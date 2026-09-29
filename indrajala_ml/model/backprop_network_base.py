@@ -8,7 +8,9 @@ from typing import Any, Self, cast
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.bounds import validate_batch, validate_input_bounds, validate_layer_sizes
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.python_optimizer import PythonOptimizer
 from indrajala_ml.model.state_layer import StateLayer
+from indrajala_ml.model.update_rules import SGD, UpdateRule
 
 
 # LayerT, the hidden layers' type: dense layers, except in the conv network, whose front end puts
@@ -16,9 +18,10 @@ from indrajala_ml.model.state_layer import StateLayer
 class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
     """
     What BackpropClassifierNetwork and MultiClassBackpropClassifierNetwork share: layer assembly
-    (input -> hidden layer(s) -> output layer), the forward pass, applying gradients, the hidden
-    layers' backward pass, and snapshot/restore. The subclasses differ in the output layer's size,
-    the predict_*/classify_state contract, and randomize().
+    (input -> hidden layer(s) -> output layer), the forward pass, the optimizer (_update_rule,
+    python_optimizer.py) applying the gradients, the hidden layers' backward pass, and
+    snapshot/restore. The subclasses differ in the output layer's size, the
+    predict_*/classify_state contract, and randomize().
     """
 
     # the layer classes a sibling overrides for different per-node math (e.g. SoftmaxOutputLayer,
@@ -58,6 +61,12 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
         # every layer with trained weights, in forward order: the backward pass and
         # snapshot/restore walk it
         self.trainable_layers: list[LayerT | BackpropLayer] = [*self.hidden_layers, self.output_layer]
+
+        self.optimizer = PythonOptimizer(self._update_rule())
+
+    def _update_rule(self) -> UpdateRule:
+        # plain SGD; the momentum, Adam and L2 siblings return their rule, from their hyperparameters
+        return SGD()
 
     @classmethod
     def randomized(cls, *args: Any, **kwargs: Any) -> Self:
@@ -114,16 +123,20 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
             self._set_training_mode(False)
 
     def _apply_gradients(self, learning_rate: float) -> None:
-        for layer in self.trainable_layers:
-            layer.apply_gradients(learning_rate)
+        optimizer = self.optimizer
+        optimizer.begin_step()
+        for index, layer in enumerate(self.trainable_layers):
+            optimizer.step_single(index, layer, learning_rate)
 
     def _accumulate_gradients(self) -> None:
         for layer in self.trainable_layers:
             layer.accumulate_gradients()
 
     def _apply_accumulated_gradients(self, learning_rate: float, batch_size: int) -> None:
-        for layer in self.trainable_layers:
-            layer.apply_accumulated_gradients(learning_rate, batch_size)
+        optimizer = self.optimizer
+        optimizer.begin_step()
+        for index, layer in enumerate(self.trainable_layers):
+            optimizer.apply(index, layer, learning_rate, batch_size)
 
     def snapshot(self) -> list[list[tuple[list[float], float]]]:
         return [layer.snapshot_state() for layer in self.trainable_layers]

@@ -8,7 +8,7 @@ from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import Backend, approx, fixed_downstream, to_numpy
+from tests.helpers import Backend, LayerOptimizer, approx, fixed_downstream, to_numpy
 
 LayerCls = type[ConvArrayLayer] | type[ConvRustArrayLayer]
 LAYER_CLS: dict[str, LayerCls] = {"numpy": ConvArrayLayer, "rust": ConvRustArrayLayer}
@@ -198,8 +198,8 @@ def test_gradient_accumulation_matches_conv_kernel_accumulators_over_a_batch(
         conv_layer.accumulate_gradients()
 
     for c, kernel in enumerate(conv_layer.kernels):
-        np.testing.assert_allclose(grad_W[c], kernel._weight_gradient_accum, rtol=0, atol=ATOL)
-        assert grad_b[c] == approx(kernel._bias_gradient_accum, rel=0, abs=ATOL)
+        np.testing.assert_allclose(grad_W[c], kernel.weight_gradient_accum, rtol=0, atol=ATOL)
+        assert grad_b[c] == approx(kernel.bias_gradient_accum, rel=0, abs=ATOL)
 
     # the single-example path, looped over the same batch, accumulates the same totals
     single: Any = layer_cls(*shape)  # Any: given array_layer's arrays, of the same backend, which a union can't express
@@ -211,10 +211,10 @@ def test_gradient_accumulation_matches_conv_kernel_accumulators_over_a_batch(
     np.testing.assert_allclose(to_numpy(single.grad_W), grad_W, rtol=0, atol=ATOL)
     np.testing.assert_allclose(to_numpy(single.grad_b), grad_b, rtol=0, atol=ATOL)
 
-    # applying divides by batch_size and resets, as ConvKernel.apply_accumulated_gradient does
+    # applying divides by batch_size and resets, as the pure-Python optimizer steps a ConvKernel
     W_before, b_before = to_numpy(array_layer.W), to_numpy(array_layer.b)
     array_layer.apply_accumulated_gradient(0.1, batch_size=5)
-    conv_layer.apply_accumulated_gradients(0.1, batch_size=5)
+    LayerOptimizer(conv_layer).apply(0.1, batch_size=5)
     np.testing.assert_allclose(to_numpy(array_layer.W), W_before - 0.1 * grad_W / 5, rtol=0, atol=1e-15)
     np.testing.assert_allclose(to_numpy(array_layer.b), b_before - 0.1 * grad_b / 5, rtol=0, atol=1e-15)
     for c, kernel in enumerate(conv_layer.kernels):

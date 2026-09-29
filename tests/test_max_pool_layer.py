@@ -99,7 +99,7 @@ def test_overlapping_windows_send_every_winning_delta_to_a_shared_argmax():
     assert all(layer.downstream_sum(i) == 0.0 for i in range(9) if i != 4)
 
 
-def test_weight_free_hooks_are_no_ops():
+def test_weight_free_hooks_are_no_ops_or_empty():
 
     layer = _pool_with_state([0.0] * 16, channels=1, height=4, width=4, pool_size=2)
 
@@ -107,8 +107,7 @@ def test_weight_free_hooks_are_no_ops():
     layer.restore_state([])
     layer.randomize_fan_in_aware()
     layer.accumulate_gradients()
-    layer.apply_accumulated_gradients(0.1, batch_size=4)
-    layer.apply_gradients(0.1)
+    assert layer.weight_sets() == []
     layer.set_training_mode(True)
     with pytest.raises(AssertionError):
         layer.restore_state([([1.0], 0.0)])
@@ -169,4 +168,4 @@ def test_gradient_check_through_conv_pool_conv(pool_stride: int | None):
                 kernel.weights[i] = original - epsilon
                 loss_minus = total_loss()
                 kernel.weights[i] = original
-                assert kernel._weight_gradient_accum[i] == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-5)
+                assert kernel.weight_gradient_accum[i] == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-5)

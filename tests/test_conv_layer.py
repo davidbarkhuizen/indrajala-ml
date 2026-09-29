@@ -5,7 +5,7 @@ import pytest
 
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import approx
+from tests.helpers import LayerOptimizer, approx
 
 
 def _layer_with_state(
@@ -188,7 +188,7 @@ def test_a_conv_layer_feeds_the_next_directly_as_channel_major_input():
         assert unit.input_nodes[1] is first.nodes[4 + position]
 
 
-def test_apply_gradients_matches_a_hand_computed_single_example():
+def test_a_single_example_step_matches_a_hand_computed_example():
 
     layer = _layer_with_state([1, 2, 3, 4, 5, 6, 7, 8, 9], height=3, width=3, kernel_size=2)
     layer.kernels[0].weights = [1.0, 0.0, 0.0, 0.0]
@@ -200,7 +200,8 @@ def test_apply_gradients_matches_a_hand_computed_single_example():
 
     # accum[i] = sum over positions of delta * window[i]; windows [1,2,4,5], [2,3,5,6],
     # [4,5,7,8], [5,6,8,9], so index 0 sums 1+2+4+5 = 12
-    layer.apply_gradients(learning_rate=0.1)
+    layer.accumulate_gradients()
+    LayerOptimizer(layer).apply(learning_rate=0.1, batch_size=1)
 
     expected_weight_0 = 1.0 - 0.1 * (0.1 * 1 + 0.1 * 2 + 0.1 * 4 + 0.1 * 5)
     assert layer.kernels[0].weights[0] == approx(expected_weight_0)
@@ -208,7 +209,7 @@ def test_apply_gradients_matches_a_hand_computed_single_example():
     assert layer.kernels[0].bias == approx(expected_bias)
 
 
-def test_apply_accumulated_gradients_applies_once_per_kernel_not_once_per_unit():
+def test_apply_steps_once_per_kernel_not_once_per_unit():
 
     # several units share each kernel; the kernel must move once, by the summed gradient over
     # batch_size
@@ -222,16 +223,17 @@ def test_apply_accumulated_gradients_applies_once_per_kernel_not_once_per_unit()
     expected_accum_per_weight = 0.5 * 1.0 * positions_per_channel  # every input value is 1.0
 
     for kernel in layer.kernels:
-        assert kernel._weight_gradient_accum == approx([expected_accum_per_weight] * len(kernel.weights))
+        assert kernel.weight_gradient_accum == approx([expected_accum_per_weight] * len(kernel.weights))
 
-    layer.apply_accumulated_gradients(learning_rate=0.1, batch_size=2)
+    optimizer = LayerOptimizer(layer)
+    optimizer.apply(learning_rate=0.1, batch_size=2)
 
     expected_weight = 0.0 - 0.1 * (expected_accum_per_weight / 2)
     for kernel in layer.kernels:
         assert kernel.weights == approx([expected_weight] * len(kernel.weights))
         # accumulator reset - a second apply with nothing newly accumulated must be a no-op
     weights_after_first_apply = [list(k.weights) for k in layer.kernels]
-    layer.apply_accumulated_gradients(learning_rate=0.1, batch_size=2)
+    optimizer.apply(learning_rate=0.1, batch_size=2)
     for kernel, before in zip(layer.kernels, weights_after_first_apply):
         assert kernel.weights == approx(before)
 
@@ -303,7 +305,7 @@ def test_gradient_check_against_a_numerically_perturbed_loss():
             kernel.weights[i] = original
 
             numerical_gradient = (loss_plus - loss_minus) / (2 * epsilon)
-            assert kernel._weight_gradient_accum[i] == approx(numerical_gradient, abs=1e-4)
+            assert kernel.weight_gradient_accum[i] == approx(numerical_gradient, abs=1e-4)
 
         original_bias = kernel.bias
         kernel.bias = original_bias + epsilon
@@ -313,7 +315,7 @@ def test_gradient_check_against_a_numerically_perturbed_loss():
         kernel.bias = original_bias
 
         numerical_gradient = (loss_plus - loss_minus) / (2 * epsilon)
-        assert kernel._bias_gradient_accum == approx(numerical_gradient, abs=1e-4)
+        assert kernel.bias_gradient_accum == approx(numerical_gradient, abs=1e-4)
 
 
 def _stacked_conv_layers(height: int, width: int, stride: int) -> tuple[StateLayer, ConvLayer, ConvLayer]:
@@ -396,7 +398,7 @@ def test_gradient_check_through_two_stacked_conv_layers(stride: int):
     epsilon = 1e-5
     for layer in (first, second):
         for kernel in layer.kernels:
-            parameters = [(kernel.weights, i, kernel._weight_gradient_accum[i]) for i in range(len(kernel.weights))]
+            parameters = [(kernel.weights, i, kernel.weight_gradient_accum[i]) for i in range(len(kernel.weights))]
             for weights, i, analytic in parameters:
                 original = weights[i]
                 weights[i] = original + epsilon
@@ -412,4 +414,4 @@ def test_gradient_check_through_two_stacked_conv_layers(stride: int):
             kernel.bias = original_bias - epsilon
             loss_minus = total_loss()
             kernel.bias = original_bias
-            assert kernel._bias_gradient_accum == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-4)
+            assert kernel.bias_gradient_accum == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-4)

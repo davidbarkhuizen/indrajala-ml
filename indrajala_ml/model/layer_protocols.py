@@ -18,6 +18,31 @@ class InputLayer(Protocol):
     def nodes(self) -> Sequence[AbstractNode]: ...
 
 
+class WeightSet(Protocol):
+    """
+    One BackpropNode's or ConvKernel's trained weights and bias, with their gradients accumulated
+    over a batch: what the pure-Python optimizer (python_optimizer.py) steps. weights is read-only
+    here, since a node rebinds its weights through set_weights.
+    """
+
+    weight_gradient_accum: list[float]
+    bias_gradient_accum: float
+
+    # a property, which a node's bias is and a kernel's plain attribute satisfies
+    @property
+    def bias(self) -> float: ...
+
+    @bias.setter
+    def bias(self, value: float) -> None: ...
+
+    @property
+    def weights(self) -> Sequence[float]: ...
+
+    def set_weights(self, weights: list[float]) -> None: ...
+
+    def reset_gradient_accum(self) -> None: ...
+
+
 class TrainableLayer(InputLayer, Protocol):
     """What BackpropNetworkBase drives layer by layer: the forward and backward passes and training."""
 
@@ -31,11 +56,10 @@ class TrainableLayer(InputLayer, Protocol):
 
     def downstream_sum(self, own_index: int) -> float: ...
 
-    def apply_gradients(self, learning_rate: float) -> None: ...
-
     def accumulate_gradients(self) -> None: ...
 
-    def apply_accumulated_gradients(self, learning_rate: float, batch_size: int) -> None: ...
+    # what the optimizer steps: a dense layer's nodes, a conv layer's kernels, none for a pool layer
+    def weight_sets(self) -> Sequence[WeightSet]: ...
 
     # a dense or conv layer's (weights, bias) per node or kernel; empty for a pool layer
     def snapshot_state(self) -> list[Any]: ...

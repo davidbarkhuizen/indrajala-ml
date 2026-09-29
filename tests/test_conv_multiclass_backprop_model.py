@@ -351,7 +351,7 @@ def test_network_gradient_check_from_output_loss_back_to_the_first_conv_layer():
                 kernel.weights[i] = original - epsilon
                 loss_minus = loss()
                 kernel.weights[i] = original
-                assert kernel._weight_gradient_accum[i] == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
+                assert kernel.weight_gradient_accum[i] == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
 
             original_bias = kernel.bias
             kernel.bias = original_bias + epsilon
@@ -359,7 +359,7 @@ def test_network_gradient_check_from_output_loss_back_to_the_first_conv_layer():
             kernel.bias = original_bias - epsilon
             loss_minus = loss()
             kernel.bias = original_bias
-            assert kernel._bias_gradient_accum == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
+            assert kernel.bias_gradient_accum == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
 
 
 def test_two_conv_layer_save_and_load_round_trip(tmp_path: Path):
@@ -452,7 +452,7 @@ def test_network_gradient_check_through_a_pooling_layer():
                 kernel.weights[i] = original - epsilon
                 loss_minus = loss()
                 kernel.weights[i] = original
-                assert kernel._weight_gradient_accum[i] == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
+                assert kernel.weight_gradient_accum[i] == approx((loss_plus - loss_minus) / (2 * epsilon), abs=1e-7)
 
 
 def test_pooled_snapshot_has_an_empty_pool_entry_and_save_load_round_trips(tmp_path: Path):

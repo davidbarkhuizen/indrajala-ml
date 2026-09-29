@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.l2_regularization_layer import make_l2_layer_cls
+from indrajala_ml.model.update_rules import WeightDecay
 
 
 class L2RegularizedBackpropClassifierNetwork(BackpropClassifierNetwork):
     """
-    An L2 (weight decay) sibling of BackpropClassifierNetwork: l2_lambda * weight is added to every
-    weight's gradient (see make_l2_layer_cls); biases aren't regularized. Both hidden_layer_cls and
-    output_layer_cls are L2 layers, set in __init__. l2_lambda is required.
+    An L2 (weight decay) sibling of BackpropClassifierNetwork: its optimizer applies the
+    WeightDecay rule, adding l2_lambda * weight to every weight's gradient; biases aren't
+    regularized. l2_lambda is required.
 
     Measured on a small fixed proxy dataset a network can overfit (not the XOR target the other
     siblings used): 0.0001 and 0.001 made training and held-out accuracy slightly worse than none;
@@ -25,7 +25,8 @@ class L2RegularizedBackpropClassifierNetwork(BackpropClassifierNetwork):
         input_bounds: list[tuple[float, float]],
         l2_lambda: float,
     ) -> None:
-        layer_cls = make_l2_layer_cls(l2_lambda)
-        self.hidden_layer_cls = layer_cls
-        self.output_layer_cls = layer_cls
+        self.l2_lambda = l2_lambda
         super().__init__(layer_sizes, dimension, input_bounds)
+
+    def _update_rule(self) -> WeightDecay:
+        return WeightDecay(self.l2_lambda)
