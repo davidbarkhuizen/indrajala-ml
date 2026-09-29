@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import asdict
-from typing import Any, ClassVar, Protocol, TypeVar
+from typing import Any, ClassVar, Protocol
 
 from indrajala_ml.model.array_protocols import (
-    A,
     ArrayNetworkLayer,
+    BackendArray,
     HyperparameterLayerClass,
-    LayerT,
     WeightedArrayLayer,
 )
 from indrajala_ml.model.conv_layer import ConvSpec
@@ -29,14 +28,14 @@ class FrontEndLayer(Protocol):
     def channel_count(self) -> int: ...
 
 
-class ArrayFrontEndLayer(ArrayNetworkLayer[A], FrontEndLayer, Protocol[A]):
+class ArrayFrontEndLayer[A: BackendArray](ArrayNetworkLayer[A], FrontEndLayer, Protocol):
     """A numpy or Rust conv or pool layer."""
 
     @property
     def size(self) -> int: ...
 
 
-class ArrayConvLayer(ArrayFrontEndLayer[A], Protocol[A]):
+class ArrayConvLayer[A: BackendArray](ArrayFrontEndLayer[A], Protocol):
     """A numpy or Rust conv layer: its kernels as W, (channel_count, fan_in)."""
 
     hyperparameters: ClassVar[tuple[str, ...]]
@@ -52,13 +51,10 @@ class NewLayer(Protocol):
     """ArrayNetworkBase._new_layer: builds layer_cls from the given arguments and the network's
     values of layer_cls.hyperparameters."""
 
-    def __call__(self, layer_cls: HyperparameterLayerClass[LayerT], /, *args: Any, **kwargs: Any) -> LayerT: ...
+    def __call__[LayerT](self, layer_cls: HyperparameterLayerClass[LayerT], /, *args: Any, **kwargs: Any) -> LayerT: ...
 
 
-FrontEndLayerT = TypeVar("FrontEndLayerT", bound=FrontEndLayer)
-
-
-def build_conv_front_end(
+def build_conv_front_end[FrontEndLayerT: FrontEndLayer](
     input_height: int,
     input_width: int,
     conv_specs: Sequence[ConvSpec | PoolSpec],
@@ -101,7 +97,7 @@ def spec_from_json(spec: dict[str, Any]) -> ConvSpec | PoolSpec:
     return PoolSpec(**fields) if spec["type"] == "pool" else ConvSpec(**fields)
 
 
-def build_conv_array_network_layers(
+def build_conv_array_network_layers[A: BackendArray](
     input_height: int,
     input_width: int,
     conv_specs: Sequence[ConvSpec | PoolSpec],
@@ -201,10 +197,7 @@ class _RestorableNetwork(Protocol):
     def restore(self, snapshot: Any) -> None: ...
 
 
-NetworkT = TypeVar("NetworkT", bound=_RestorableNetwork)
-
-
-def load_conv_model_json(
+def load_conv_model_json[NetworkT: _RestorableNetwork](
     cls: Callable[..., NetworkT],
     path: str,
     extra_init_kwargs: Callable[[dict[str, Any]], dict[str, Any]] = lambda _state: {},

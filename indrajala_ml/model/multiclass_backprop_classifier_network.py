@@ -3,18 +3,19 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Self
 
+from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import (
     BackpropNetworkBase,
-    LayerT,
     as_dense_layers,
     randomize_fan_in_aware,
 )
 from indrajala_ml.model.bounds import validate_class_count
 from indrajala_ml.model.classification import argmax_first_occurrence
+from indrajala_ml.model.layer_protocols import TrainableLayer
 from indrajala_ml.model.model_io import load_model_json, save_model_json
 
 
-class MultiClassBackpropClassifierNetwork(BackpropNetworkBase[LayerT]):
+class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](BackpropNetworkBase[LayerT]):
     """
     A one-vs-rest multiclass sibling of BackpropClassifierNetwork, from the same BackpropNode and
     BackpropLayer blocks. A separate class because classify_state returns a class index, not a

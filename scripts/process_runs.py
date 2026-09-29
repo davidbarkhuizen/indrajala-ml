@@ -10,9 +10,7 @@ import json
 import subprocess
 import sys
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from typing import Any, TypeVar
-
-CellT = TypeVar("CellT", bound=Hashable)
+from typing import Any
 
 
 def run_json_worker(command: Sequence[str], env: Mapping[str, str] | None = None) -> dict[str, Any]:
@@ -21,7 +19,7 @@ def run_json_worker(command: Sequence[str], env: Mapping[str, str] | None = None
     return json.loads(output.strip().splitlines()[-1])
 
 
-def interleaved_runs(
+def interleaved_runs[CellT: Hashable](
     cells: Sequence[CellT], repeats: int, run_cell: Callable[[CellT], dict[str, Any]]
 ) -> dict[CellT, list[dict[str, Any]]]:
     """

@@ -7,7 +7,7 @@ from typing import ClassVar
 import numpy as np
 import numpy.typing as npt
 
-from indrajala_ml.model.array_protocols import A, ArrayNetworkLayer
+from indrajala_ml.model.array_protocols import ArrayNetworkLayer, BackendArray
 
 # the numpy backend's array: every numpy layer's weights, activations and gradients
 FloatArray = npt.NDArray[np.float64]
@@ -24,7 +24,7 @@ def sigmoid(z: FloatArray) -> FloatArray:
         return 1.0 / (1.0 + np.exp(-z))
 
 
-def unfused_sgd_step(layer: ArrayNetworkLayer[A], input_activation: A, learning_rate: float) -> None:
+def unfused_sgd_step[A: BackendArray](layer: ArrayNetworkLayer[A], input_activation: A, learning_rate: float) -> None:
     """
     accumulate_gradient then apply_accumulated_gradient at batch_size=1: the sgd_step of every numpy
     layer, and of the Rust layers with no fused step (momentum, Adam, L2, conv).

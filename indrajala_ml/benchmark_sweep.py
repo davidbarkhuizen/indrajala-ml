@@ -3,10 +3,7 @@ import os
 import statistics
 import time
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from typing import Any, TypeVar
-
-ConfigT = TypeVar("ConfigT", bound=Hashable)
-ResultT = TypeVar("ResultT")
+from typing import Any
 
 # set once per worker process by _init_worker; typed loosely, since one process runs one sweep
 _worker_fn: Callable[..., Any] | None = None
@@ -27,7 +24,7 @@ def _run_one_job(job: tuple[Hashable, int]) -> Any:
     return _worker_fn(_shared_context, config, seed)
 
 
-def run_parameter_sweep(
+def run_parameter_sweep[ConfigT: Hashable, ResultT](
     configs: Sequence[ConfigT],
     seeds: Sequence[int],
     worker_fn: Callable[[Any, ConfigT, int], ResultT],
@@ -69,7 +66,7 @@ def run_parameter_sweep(
     return results
 
 
-def estimate_sweep_wallclock(
+def estimate_sweep_wallclock[ConfigT: Hashable](
     worker_fn: Callable[[Any, ConfigT, int], object],
     sample_config: ConfigT,
     sample_seed: int,

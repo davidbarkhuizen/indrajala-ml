@@ -10,30 +10,27 @@ data agree on it.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from indrajala_ml.prepared_dataset import PreparedDataset
 
-L = TypeVar("L")
-L_co = TypeVar("L_co", covariant=True)
-
 State = tuple[float, ...]
-Example = tuple[State, L]
+type Example[L] = tuple[State, L]
 
 
-class StateClassifier(Protocol[L_co]):
-    def classify_state(self, state: State) -> L_co: ...
+class StateClassifier[L](Protocol):
+    def classify_state(self, state: State) -> L: ...
 
 
-class TargetClassifier(StateClassifier[L_co], Protocol[L_co]):
+class TargetClassifier[L](StateClassifier[L], Protocol):
     """A reference to sample and score against: a LinearClassifierNetwork, or a targets.py target."""
 
     @property
     def input_bounds(self) -> list[tuple[float, float]]: ...
 
 
-class TrainableClassifier(StateClassifier[L], Protocol[L]):
+class TrainableClassifier[L](StateClassifier[L], Protocol):
     """A student train_linear_classifier_network can train: learn one example, and pocket snapshots."""
 
     def learn(self, learning_rate: float, state: State, category: L) -> None: ...
@@ -44,14 +41,14 @@ class TrainableClassifier(StateClassifier[L], Protocol[L]):
     def restore(self, snapshot: Any) -> None: ...
 
 
-class BatchTrainableClassifier(TrainableClassifier[L], Protocol[L]):
+class BatchTrainableClassifier[L](TrainableClassifier[L], Protocol):
     """A student train_backprop_network_mini_batch can train: a gradient-based network."""
 
     def learn_batch(self, learning_rate: float, batch: Sequence[Example[L]]) -> None: ...
 
 
 @runtime_checkable
-class PreparedTrainableClassifier(BatchTrainableClassifier[L], Protocol[L]):
+class PreparedTrainableClassifier[L](BatchTrainableClassifier[L], Protocol):
     """An array network, which trains from rows of one backend matrix (a PreparedDataset)."""
 
     def prepare_dataset(self, rows: Sequence[Example[L]]) -> PreparedDataset: ...
@@ -69,10 +66,7 @@ class BinaryClassifier(TrainableClassifier[float], Protocol):
     def predict_probability(self, state: State) -> float: ...
 
 
-BinaryClassifierT_co = TypeVar("BinaryClassifierT_co", bound=BinaryClassifier, covariant=True)
-
-
-class BinaryClassifierClass(Protocol[BinaryClassifierT_co]):
+class BinaryClassifierClass[ClassifierT: BinaryClassifier](Protocol):
     """
     A BinaryClassifier class as the ensemble trainers take it: BackpropClassifierNetwork's
     constructor and randomized() signature.
@@ -80,8 +74,8 @@ class BinaryClassifierClass(Protocol[BinaryClassifierT_co]):
 
     def __call__(
         self, layer_sizes: list[int], dimension: int, input_bounds: list[tuple[float, float]]
-    ) -> BinaryClassifierT_co: ...
+    ) -> ClassifierT: ...
 
     def randomized(
         self, layer_sizes: list[int], dimension: int, input_bounds: list[tuple[float, float]]
-    ) -> BinaryClassifierT_co: ...
+    ) -> ClassifierT: ...
