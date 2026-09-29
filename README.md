@@ -159,12 +159,15 @@ test passing, and:
   `python scripts/golden_training_run.py record data/refactoring/golden_run.json` (ignored by
   git: numpy's BLAS makes the file valid only on the machine that recorded it). Each stage must
   pass `... check data/refactoring/golden_run.json`, the same bits, not within a tolerance. It
-  catches a 1-ULP change to the learning rate.
+  catches a 1-ULP change to the learning rate. It trains the networks of all three
+  implementations, pure Python included.
 - **No hot-path slowdown.** A stage that touches `learn*` or `classify_rows` is timed before and
   after, numpy and Rust in separate processes (`scripts/prepared_dataset_timing.py time`), with
   both builds committed first. It must be within run-to-run noise.
 - **Public names stay.** Demos, `demos/registry.py`, `ensemble_train.py` and the tests construct
-  the concrete classes by name, and saved model files must still load.
+  the concrete classes by name, and saved model files must still load:
+  `tests/test_legacy_saved_models.py` loads a committed file for every class that has `save`
+  (`tests/fixtures/saved_models/`, written once by `python -m tests.saved_model_fixtures`).
 
 ## Docs
 
