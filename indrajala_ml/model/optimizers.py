@@ -76,7 +76,7 @@ class NumpyOptimizer:
         if own_update is not None:
             own_update(learning_rate, batch_size)
             return
-        weighted = cast(WeightedArrayLayer[FloatArray], layer)
+        weighted = cast("WeightedArrayLayer[FloatArray]", layer)
         self._apply_rule(index, weighted, learning_rate, batch_size)
         weighted.reset_gradient_accum()
 
@@ -191,7 +191,7 @@ class RustOptimizer:
         if own_update is not None:
             own_update(learning_rate, batch_size)
             return
-        weighted = cast(WeightedArrayLayer[pa.Array], layer)
+        weighted = cast("WeightedArrayLayer[pa.Array]", layer)
         self._apply_rule(index, weighted, learning_rate, batch_size)
         weighted.reset_gradient_accum()
 
