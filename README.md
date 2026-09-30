@@ -239,6 +239,93 @@ has competing forms (as for momentum), the choice is made explicitly. Consistenc
 speed: every rule divides, `g / B`, and none multiplies by a precomputed `1 / B` or `lr / B`, which
 rounds differently when `B` isn't a power of two.
 
+## Batch normalization
+
+Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)); no implementation builds
+a `BatchNorm` spec yet. This section fixes the forms all three implementations will be held to.
+
+A norm layer follows a linear layer without a bias and carries the activation, as the paper places
+it: "We add the BN transform immediately before the nonlinearity, by normalizing x = Wu + b. […]
+Note that, since we normalize Wu+b, the bias b can be ignored since its effect will be canceled by
+the subsequent mean subtraction (the role of the bias is subsumed by β in Alg. 1)" (Ioffe &
+Szegedy 2015, § 3.2). A dense norm layer normalizes each feature over the batch. A conv norm layer
+normalizes each channel over the batch and every position, so `m` is `B * P`.
+
+**Training** normalizes with the batch's statistics, Algorithm 1 of Ioffe & Szegedy 2015:
+
+| Step | Algorithm 1 |
+| --- | --- |
+| mini-batch mean | `μ_B ← (1/m) Σ_{i=1..m} x_i` |
+| mini-batch variance | `σ²_B ← (1/m) Σ_{i=1..m} (x_i − μ_B)²` |
+| normalize | `x̂_i ← (x_i − μ_B) / sqrt(σ²_B + ε)` |
+| scale and shift | `y_i ← γ x̂_i + β ≡ BN_γ,β(x_i)` |
+
+The backward pass is the paper's § 3 chain rule, "before simplification", term by term:
+
+| Gradient | § 3 |
+| --- | --- |
+| `∂ℓ/∂x̂_i` | `∂ℓ/∂y_i · γ` |
+| `∂ℓ/∂σ²_B` | `Σ_{i=1..m} ∂ℓ/∂x̂_i · (x_i − μ_B) · (−1/2)(σ²_B + ε)^(−3/2)` |
+| `∂ℓ/∂μ_B` | `(Σ_{i=1..m} ∂ℓ/∂x̂_i · −1/sqrt(σ²_B + ε)) + ∂ℓ/∂σ²_B · (Σ_{i=1..m} −2(x_i − μ_B)) / m` |
+| `∂ℓ/∂x_i` | `∂ℓ/∂x̂_i · 1/sqrt(σ²_B + ε) + ∂ℓ/∂σ²_B · 2(x_i − μ_B)/m + ∂ℓ/∂μ_B · 1/m` |
+| `∂ℓ/∂γ` | `Σ_{i=1..m} ∂ℓ/∂y_i · x̂_i` |
+| `∂ℓ/∂β` | `Σ_{i=1..m} ∂ℓ/∂y_i` |
+
+**Inference** normalizes with population statistics. Algorithm 2 (step 10) averages over
+training batches: `E[x] ← E_B[μ_B]`, `Var[x] ← m/(m−1) · E_B[σ²_B]`, the unbiased variance. We
+keep moving averages instead, as the paper notes one can ("Using moving averages instead, we can
+track the accuracy of a model as it trains", § 3.1) and as Goyal et al. 2017 do: "As in [12], we
+compute the BN statistics using running average (with momentum 0.9)" (§ 5.1). Each training
+forward pass updates them with the batch's statistics, at `running_rate` 0.1, their momentum 0.9,
+as PyTorch's default, whose `ε` of 1e-5 we take too. Inference normalizes as training does, with the running averages in place
+of `μ_B` and `σ²_B`, not with Algorithm 2 step 11's folded form
+`y = γ/sqrt(Var[x]+ε) · x + (β − γE[x]/sqrt(Var[x]+ε))`, which rounds differently.
+
+**Weight decay** doesn't apply to `γ` or `β`: "We use a weight decay λ of 0.0001 and following
+[16] we do not apply weight decay on the learnable BN coefficients (namely, γ and β in [19])"
+(Goyal et al. 2017, § 5.1). Under `WeightDecay` both step with plain SGD, as a bias does.
+
+The exact expressions, per feature or channel, with `x_1..x_m` in row order (a conv channel's
+values example by example, then position by position). Every implementation computes these, in
+this grouping, left to right, with no fused multiply-add and no multiplication by a precomputed
+reciprocal (as the Update rules above divide by `B`):
+
+```text
+training forward
+  mu      = sum(x_i) / m
+  d_i     = x_i - mu
+  var     = sum(d_i * d_i) / m
+  std     = sqrt(var + eps)
+  xhat_i  = d_i / std
+  y_i     = gamma * xhat_i + beta                      then the activation
+  running_mean = (1 - rate) * running_mean + rate * mu
+  running_var  = (1 - rate) * running_var + rate * (m / (m - 1) * var)
+
+inference forward
+  xhat_i  = (x_i - running_mean) / sqrt(running_var + eps)
+  y_i     = gamma * xhat_i + beta                      then the activation
+
+backward, from delta_i = dl/dy_i (the activation's derivative already applied)
+  inv_std  = 1 / std
+  inv_std3 = inv_std * inv_std * inv_std               (var + eps)^(-3/2)
+  dxhat_i  = delta_i * gamma
+  dvar     = sum(dxhat_i * d_i * -0.5 * inv_std3)
+  dmu      = sum(dxhat_i * -inv_std) + dvar * sum(-2 * d_i) / m
+  dx_i     = dxhat_i * inv_std + dvar * (2 * d_i) / m + dmu / m
+  grad_gamma += sum(delta_i * xhat_i)
+  grad_beta  += sum(delta_i)
+```
+
+`sum` is a left fold from `0.0` in that row order, the crate's order (`sum_axis0`, and the conv
+`grad_b` sum). numpy's own reductions follow it only in some layouts
+(`tests/test_summation_order.py`): `X.sum(axis=0)` does across two or more features, but sums a
+single feature pairwise from 8 rows, and `D.sum(axis=(0, 2))` over a conv channel doesn't. The
+numpy layers sum with `np.cumsum` along the summed axis, which does at every shape. Only
+`+ − × ÷` and `sqrt` appear, each correctly rounded in IEEE 754, so every implementation that
+follows these forms computes the same bits. There's no `pow`, since `(var + eps)^(-3/2)` through a library `pow` could
+differ between Python, numpy and Rust. `tests/gradient_check.py` checks each implementation's
+backward pass against finite differences of the whole batch's loss.
+
 ## Refactoring
 
 A structural refactoring changes structure only, never numerics. Every stage keeps every parity
