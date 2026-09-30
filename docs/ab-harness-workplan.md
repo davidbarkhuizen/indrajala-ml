@@ -1,6 +1,6 @@
 # Workplan: the A/B harness and a stand-alone measurement guide
 
-**Status: proposed (2026-09-30). Decisions D1-D7 open; no stage started.**
+**Status: planned (2026-09-30). Decisions D1-D7 settled by the owner (2026-09-30); no stage started.**
 
 This plan adds `scripts/ab.py`, one tool that runs a timing A/B between two commits by this repo's
 protocol and reports it. Every A/B so far has been hand-built instead. It also rewrites the
@@ -71,28 +71,28 @@ Counts are from `main` at de59a75.
   from temporary directories that are cleared at reboot. Each PR body has the table published from
   its data.
 
-## Decisions (proposed)
+## Decisions (settled)
 
-Each is to be settled with the owner before this plan's PR opens.
+The owner settled D1-D7 on 2026-09-30, each as recommended.
 
-- **D1: where the tool lives.** Recommended: `scripts/ab.py` in this repo, with tests in
-  `tests/test_ab.py`. It is versioned with the scripts whose output it parses and tested in CI.
-  Crate A/Bs are run from here too, since all timing is done through the Python API.
-  Alternatively, a separate tools repo, like `upgrade-tools`, is untested and drifts from the
-  scripts.
-- **D2: both sides are commits, each in a detached worktree.** Recommended: `--old` (default
-  `main`) and `--new` (default `HEAD`) resolve to commits. Each gets a detached worktree under
+- **D1: the tool lives in this repo.** `scripts/ab.py`, with tests in `tests/test_ab.py`. It is
+  versioned with the scripts whose output it parses and tested in CI. Crate A/Bs are run from
+  here too, since all timing is done through the Python API. A separate tools repo, like
+  `upgrade-tools`, would be untested and drift from the scripts.
+- **D2: both sides are commits, each in a detached worktree.** `--old` (default `main`) and
+  `--new` (default `HEAD`) resolve to commits. Each gets a detached worktree under
   `~/code/ab-worktrees/<sha7>`, created once and reused. The working checkout is never timed, so
   "commit both builds" is enforced and the checkout stays free for other work. `run` refuses if the
   checkout has uncommitted changes under `indrajala_ml/`, `scripts/` or `rust/` and `--new` is
-  `HEAD`, since that usually means a change that wasn't committed yet. Alternatively, the new side
-  could be the working checkout, as in past A/Bs.
-- **D3: how the crate is switched.** Recommended: one wheel per crate commit, built once and
-  cached, installed with `pip install --no-deps --target` into a site directory for that commit.
-  Each pass puts that directory on `PYTHONPATH` after its tree. The venv is never touched, so a
-  failed run leaves nothing to restore. Each pass checks the `.so` hash it imported.
-  Alternatively, reinstall into the venv each pass, as `alternate.sh` did.
-- **D4: the report's rules.** Recommended, read from the protocol:
+  `HEAD`, since that usually means a change that wasn't committed yet.
+- **D3: the crate is switched by cached wheels in target directories.** One wheel per crate
+  commit, built once and cached, installed with `pip install --no-deps --target` into a site
+  directory for that commit. Each pass puts that directory on `PYTHONPATH` after its tree. The
+  venv is never touched, so a failed run leaves nothing to restore. Each pass checks the `.so`
+  hash it imported. Reinstalling into the venv each pass, as `alternate.sh` did, was rejected: a
+  run that dies partway can leave the venv on the wrong build.
+- **D4: the report gives a verdict per row, and a pass is shifted at 5%.** Its rules, read from
+  the protocol:
   - **The pooled table** has, per (case, metric), old and new medians, the min-max over all runs,
     Δ median, and each pass's own median. This is #480's table.
   - **A verdict per row.** *Consistent* means every per-pass median of one side lies beyond every
@@ -105,22 +105,24 @@ Each is to be settled with the owner before this plan's PR opens.
     step.
   - **Shifted passes.** A pass is shifted when its rows, the control included, sit 5% or more from
     the pooled medians in the same direction (the ratio of pass median to pooled median, taken as
-    the median over rows). #480's passes 1 and 5 were 5-15% fast. When shifted passes are
-    unbalanced between the sides, the report names the `extend` order that balances them.
-  - The report advises; the claim in a PR remains its author's. Settle the 5% threshold, and
-    whether the report prints verdicts or only flags.
-- **D5: where runs are kept.** Recommended: `~/code/ab-runs/<YYYY-MM-DD>-<name>/`, outside every
-  repo, which persists across sessions and reboots. The name defaults to `<branch>-<bench>`. A run
-  holds `manifest.json` and each pass's raw output and log, so `report` can be re-run later, and a
-  past run can become a test fixture. Alternatively, a git-ignored `ab-runs/` in the repo.
-- **D6: where the guide lives.** Recommended: move `docs/optimizations/measurement.md` to
-  `docs/measurement.md` and rewrite it as the stand-alone guide. `optimizations.md` keeps a link.
-  Every timing PR and workplan uses it, so it isn't an optimizations sub-page. The move updates 14
-  doc links and 4 script docstrings. Alternatively, rewrite it in place and change no links.
-- **D7: agent instructions.** Recommended: a short `CLAUDE.md` at the repo root (there is none
-  today), about 15 lines. It points to the guide and states the A/B rule and the output rules below
-  ([The agent side](#the-agent-side)). Claude Code loads it in every session in this repo.
-  Alternatively, the guide alone, with the agent's own memory notes.
+    the median over rows). #480's passes 1 and 5 were 5-15% fast, while the other passes of most
+    rows agreed within about 2%. When shifted passes are unbalanced between the sides, the report
+    names the `extend` order that balances them.
+  - The report advises; the claim in a PR remains its author's.
+- **D5: runs are kept in `~/code/ab-runs/<YYYY-MM-DD>-<name>/`,** outside every repo, which
+  persists across sessions and reboots. The name defaults to `<branch>-<bench>`. A run holds
+  `manifest.json` and each pass's raw output and log, so `report` can be re-run later, and a past
+  run can become a test fixture. The wheel cache (D3) is `~/code/ab-runs/wheels/`. A git-ignored
+  directory in the repo was rejected: each worktree would have its own, and `git clean -fdx` would
+  delete the history.
+- **D6: the guide moves to `docs/measurement.md`.** `docs/optimizations/measurement.md` is
+  rewritten there as the stand-alone guide, and `optimizations.md` keeps a link. Every timing PR
+  and workplan uses it, so it isn't an optimizations sub-page. The move updates 14 doc links and
+  4 script docstrings.
+- **D7: a `CLAUDE.md` at the repo root** (there is none today), about 15 lines. It points to the
+  guide and states the A/B rule and the output rules below ([The agent
+  side](#the-agent-side)). Claude Code loads it in every session in this repo, so the rules don't
+  depend on an agent's memory notes or on reading the guide first.
 
 ## The design
 
@@ -209,7 +211,7 @@ a scratch file.
 
 ### The agent side
 
-These rules go in the guide, and in `CLAUDE.md` if D7 is settled that way:
+These rules go in the guide and in `CLAUDE.md` (D7):
 
 - **Launch in the background and don't poll.** Start `ab.py run` as a background command, and let
   its exit be the signal. Use `status` only when the owner asks. Don't schedule wake-ups for runs
@@ -305,7 +307,7 @@ table and the A/B protocol in the measurement doc. Stage 4 rewrites the doc as t
 
 ### Stage 4: the stand-alone measurement guide
 
-The guide is written to the tool as built, with D6 and D7 as settled. Its contents:
+The guide is written to the tool as built, at `docs/measurement.md` (D6). Its contents:
 
 1. **What to measure, and when not to.** Pure Python is never timed. A PR that changes no
    `learn*` or `classify_rows` path needs no A/B, as #481-#483 said.
@@ -324,7 +326,7 @@ The guide is written to the tool as built, with D6 and D7 as settled. Its conten
 7. **Gotchas.** The current list, plus the namespace package, `data/`, and pass shifts.
 8. **Judging correctness.** Unchanged.
 9. **Rules for a timing claim in a PR, and for an optimization PR.** Unchanged in substance.
-10. **For agents.** The rules in [The agent side](#the-agent-side), or a pointer to `CLAUDE.md`.
+10. **For agents.** The rules in [The agent side](#the-agent-side), which `CLAUDE.md` repeats.
 
 The stage also:
 - updates every link to the old path;
