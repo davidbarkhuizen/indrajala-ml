@@ -1,6 +1,7 @@
 # Workplan: composable layers and optimizers
 
-**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-5 done; stage 6 next.**
+**Status: done (2026-09-30). Decisions D1-D5 settled by the owner (2026-09-29); stages 0-6 merged
+(#476-#484 and the stage 6 PR).**
 
 This is step 1 of [primitives-roadmap.md](primitives-roadmap.md). Stages 1-4 are structural
 refactoring: they change structure only, never numerics, under the README's Refactoring rules. At
@@ -368,9 +369,23 @@ Done when no class exists only to carry an update rule.
 
 ## After this plan
 
-- **New combinations** are behaviour changes, not refactoring, so each is its own PR with
-  hand-computed tests and parity tests in all three implementations: Adam and L2 for conv
-  (numerics that exist, applied to conv weights), and ReLU hidden layers under every rule.
+- **New combinations.** The Sequential networks build every spec list `validate_layer_specs`
+  accepts under every rule, in all three implementations. These combinations have no preset:
+  - `Adam` and `WeightDecay` with conv layers (numerics that exist, applied to conv weights);
+  - ReLU hidden layers under `Momentum`, `Adam` or `WeightDecay`, and in a conv network;
+  - dropout under a rule other than `SGD`, and in a conv network;
+  - softmax or cross-entropy output layers after conv, or under a rule other than `SGD`;
+  - on pure Python, the multiclass dense presets that exist only as numpy and Rust (cross-entropy,
+    ReLU, dropout, momentum, Adam, weight decay), and on numpy and Rust, the one-output presets
+    that exist only in pure Python (ReLU, dropout, momentum, Adam, weight decay).
+
+  One of them, conv then pool, ReLU, dropout and a softmax output under `Adam`, is trained against
+  its pure-Python reference (`tests/test_sequential_array_network.py`). Giving any other one a
+  preset, or using it in a demo, is a behaviour change, not refactoring: its own PR, with
+  hand-computed tests and parity tests in all three implementations.
+- **Still refused by the specs:** dropout on a ReLU layer (the dropout op is fused with the
+  sigmoid), a conv or pool layer after a dense one (the fused hidden delta reads the next layer's
+  `W`), and one rule per layer.
 - **Weight decay with momentum or Adam** needs a published form chosen and cited first (README,
   Update rules).
 - **Batch normalization** (roadmap step 2) gets its own workplan. It will need the split hidden

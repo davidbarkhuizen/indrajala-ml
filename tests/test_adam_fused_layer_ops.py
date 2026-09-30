@@ -24,7 +24,7 @@ BETA1, BETA2, EPSILON = 0.9, 0.999, 1e-8
 
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("batch_size", [1, 6])
-def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_at_step_one(seed: int, batch_size: int):
+def test_layer_adam_apply_accumulated_gradient_matches_the_numpy_adam_optimizer_at_step_one(seed: int, batch_size: int):
     rng = random.Random(seed)
     w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
     b_data = random_vector(rng, HIDDEN_SIZE)
@@ -64,10 +64,10 @@ def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_at_step_
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_layer_adam_apply_accumulated_gradient_matches_adam_array_layer_across_several_steps(seed: int):
+def test_layer_adam_apply_accumulated_gradient_matches_the_numpy_adam_optimizer_across_several_steps(seed: int):
     # m/v/t only actually exercise their accumulation logic across repeated steps, unlike a
     # stateless update where a single comparison at t=1 would do - mirrors
-    # test_adam_array_layer.py's own reasoning for using a multi-step sweep, not just one call.
+    # test_array_optimizer_adam.py's own reasoning for using a multi-step sweep, not just one call.
     rng = random.Random(seed)
     layer = ArrayLayer(HIDDEN_SIZE, INPUT_SIZE)
     optimizer = LayerOptimizer(layer, Adam(BETA1, BETA2, EPSILON))

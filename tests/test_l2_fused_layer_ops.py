@@ -23,7 +23,9 @@ L2_LAMBDA = 0.05
 
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("batch_size", [1, 6, 96, 4, 128, 512])
-def test_layer_l2_apply_accumulated_gradient_matches_l2_array_layer_exactly(seed: int, batch_size: int):
+def test_layer_l2_apply_accumulated_gradient_matches_the_numpy_weight_decay_optimizer_exactly(
+    seed: int, batch_size: int
+):
     # bit for bit: both are w - lr * (g / B + l2_lambda * w) (test_update_rule_forms.py)
     rng = random.Random(seed)
     w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
