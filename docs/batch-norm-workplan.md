@@ -4,8 +4,8 @@
 
 This is step 2 of [primitives-roadmap.md](primitives-roadmap.md). It adds one new layer kind,
 batch normalization (Ioffe & Szegedy 2015), for dense and conv networks, under every update rule,
-in all three implementations. It builds on the composable layers of step 1
-([composable-layers-workplan.md](composable-layers-workplan.md)): a batch-norm network is a
+in all three implementations. It builds on the composable layers of step 1 (done; its open
+items are in [next-steps.md](next-steps.md)): a batch-norm network is a
 Sequential network with a `BatchNorm` spec in its list. No existing network, preset or save file
 changes. This is a feature, not refactoring: the golden run must stay bit-identical, because
 nothing it covers changes.
@@ -31,7 +31,7 @@ Counts are from `main` at 4fc6be9.
   implementations build. Conv and pool come before every dense layer.
 - **Activations are fused into their layer.** A dense layer is sigmoid, ReLU or dropout-sigmoid,
   and a conv layer is always ReLU (`conv_forward_batch` applies it as it writes `A`). No layer is
-  linear. Separate activation layers are out of scope (composable-layers workplan, Out of scope).
+  linear. Separate activation layers are out of scope ([next-steps.md](next-steps.md), From composable layers).
 - **Hidden deltas.**
   - numpy: every hidden delta is already split. It calls `next_layer.downstream*()`, then applies
     its own derivative.
@@ -274,8 +274,8 @@ Split it by implementation if the diff passes about 1,500 lines.
    train M more, equal to N + M steps by bits, per rule and implementation. The running averages
    resume too.
 2. Format-2 fixtures for a batch-norm network per implementation.
-3. README: the batch-norm section, the preset table's note, and the "After this plan" list of the
-   composable-layers workplan.
+3. README: the batch-norm section, the preset table's note, and the composable-layers list in
+   [next-steps.md](next-steps.md).
 
 ### Stage 6: ghost batches (D6)
 
@@ -296,5 +296,5 @@ Split it by implementation if the diff passes about 1,500 lines.
 
 - Layer norm, group norm and instance norm. They normalize within an example, a different layer.
 - Synchronized statistics across workers or processes.
-- Separate activation layers (the composable-layers workplan's Out of scope still holds).
+- Separate activation layers (still out of scope, [next-steps.md](next-steps.md)).
 - Any change to an existing network's numerics, or to the crate's existing ops.

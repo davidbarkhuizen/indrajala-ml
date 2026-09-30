@@ -180,7 +180,7 @@ arguments. It equals, by bits, the Sequential network of the same specs and rule
 An empty cell has no preset, but the Sequential network of that implementation builds the
 combination, so each array preset has a pure-Python parity reference. Combinations the Sequential
 networks build that no preset has, and those still out of reach, are listed in
-[docs/composable-layers-workplan.md](docs/composable-layers-workplan.md), After this plan.
+[docs/next-steps.md](docs/next-steps.md), From composable layers.
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,
 hand-computed examples, and the reference the array implementations are checked against. It is
@@ -266,8 +266,10 @@ test passing, and:
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, then attention.
-- [docs/composable-layers-workplan.md](docs/composable-layers-workplan.md): networks built from
-  layer specs and one update rule, in all three implementations (roadmap step 1).
+- [docs/batch-norm-workplan.md](docs/batch-norm-workplan.md): batch normalization for dense and
+  conv networks, in all three implementations (roadmap step 2).
+- [docs/next-steps.md](docs/next-steps.md): the work left over from completed workplans, and how
+  to read those workplans in git history.
 - [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's
   reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and the open RNG work.
 

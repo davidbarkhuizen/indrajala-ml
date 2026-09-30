@@ -1,7 +1,7 @@
 """
-Format 2, every network's save file (docs/composable-layers-workplan.md, D4 and Format 2): the
-layer specs, the update rule, the weights and the optimizer's state, so a loaded network resumes
-training by bits.
+Format 2, every network's save file (the composable-layers workplan, D4 and Format 2): the layer
+specs, the update rule, the weights and the optimizer's state, so a loaded network resumes training
+by bits.
 
     {
       "format": 2,

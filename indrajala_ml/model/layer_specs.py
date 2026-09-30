@@ -1,5 +1,5 @@
 """
-A network's layers as backend-free data (docs/composable-layers-workplan.md, The design): a list of
+A network's layers as backend-free data (the composable-layers workplan, The design): a list of
 layer specs, in forward order, that each implementation's builder maps to its own layer classes
 (array_layer_builder.py for numpy and Rust, python_layer_builder.py for pure Python). Conv and Pool
 are today's ConvSpec and PoolSpec, so the conv networks' conv_specs are already specs.

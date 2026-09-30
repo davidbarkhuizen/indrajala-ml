@@ -1,11 +1,11 @@
 # pyright: reportConstantRedefinition=false
 # (matrices are named as in the literature, W, which strict mode takes for constants)
 """
-The optimizers of the array networks, one per network (docs/composable-layers-workplan.md, D5):
-an update rule (update_rules.py) applied to each weighted layer's (W, b, grad_W, grad_b), with
-the rule's state per layer, keyed by the layer's index in network.layers, and one step count t
-for the whole network. The layers keep their weights and gradient accumulators; the formulas are
-here, with the source's grouping (README, Update rules).
+The optimizers of the array networks, one per network (the composable-layers workplan, D5): an
+update rule (update_rules.py) applied to each weighted layer's (W, b, grad_W, grad_b), with the
+rule's state per layer, keyed by the layer's index in network.layers, and one step count t for the
+whole network. The layers keep their weights and gradient accumulators; the formulas are here, with
+the source's grouping (README, Update rules).
 
 ArrayNetworkBase calls begin_step() once per learn* call, then per layer in forward order either
 apply() after accumulating a batch or step_single() for one example. A dense or conv layer is

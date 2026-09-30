@@ -1,8 +1,8 @@
 """
-Format 2 (model/format2.py, docs/composable-layers-workplan.md, stage 5): a saved and loaded
-network resumes training by bits, for every rule in all three implementations and for every
-saveable class; numpy files load into Rust and Rust files into numpy; a network refuses a file
-that isn't its own, naming the difference; and load_network builds what a file describes.
+Format 2 (model/format2.py, the composable-layers workplan, stage 5): a saved and loaded network
+resumes training by bits, for every rule in all three implementations and for every saveable class;
+numpy files load into Rust and Rust files into numpy; a network refuses a file that isn't its own,
+naming the difference; and load_network builds what a file describes.
 """
 
 import json

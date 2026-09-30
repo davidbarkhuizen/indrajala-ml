@@ -1,6 +1,6 @@
 """
 Timing A/Bs between two commits, run and reported by the protocol in
-docs/measurement.md (docs/ab-harness-workplan.md has the design):
+docs/measurement.md (the A/B harness workplan in docs/next-steps.md has the design):
 
     python scripts/ab.py run --bench prepared_dataset_timing [--old main] [--new HEAD] [--order ONNONO]
                              [--name NAME] [--control-backend numpy] [--script-from new]

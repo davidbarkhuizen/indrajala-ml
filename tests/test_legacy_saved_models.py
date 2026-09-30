@@ -1,9 +1,9 @@
 """
-Every legacy save envelope keeps loading (docs/composable-layers-workplan.md, stage 0), and so
-does every format-2 fixture (stage 5): each class loads its committed fixture
-(tests/saved_model_fixtures.py), and the loaded network holds the saved weights and
-hyperparameters and predicts what the saved network did, by bits. A legacy file loads with fresh
-optimizer state, and a format-2 file with the saved state, by bits.
+Every legacy save envelope keeps loading (the composable-layers workplan, stage 0), and so does
+every format-2 fixture (stage 5): each class loads its committed fixture
+(tests/saved_model_fixtures.py), and the loaded network holds the saved weights and hyperparameters
+and predicts what the saved network did, by bits. A legacy file loads with fresh optimizer state,
+and a format-2 file with the saved state, by bits.
 
 The pure-Python and Rust predictions are compared with the ones stored beside the file. numpy's
 go through BLAS, which can round differently on another machine (as the golden run's files), so a

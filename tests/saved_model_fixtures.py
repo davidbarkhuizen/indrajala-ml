@@ -2,7 +2,7 @@
 The save fixtures: one small saved file per network class that has save(), which
 tests/test_legacy_saved_models.py loads.
 
-- The legacy fixtures (docs/composable-layers-workplan.md, stage 0) were written by the code before
+- The legacy fixtures (the composable-layers workplan, stage 0) were written by the code before
   format 2, so every legacy envelope is pinned and keeps loading after the save format changed.
 - The format-2 fixtures (stage 5) are of the classes with no legacy envelope, the Sequential and
   the pure-Python single-output networks. Each is written after two training steps, so it pins a
