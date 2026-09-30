@@ -1,6 +1,6 @@
 # Workplan: the A/B harness and a stand-alone measurement guide
 
-**Status: planned (2026-09-30). Decisions D1-D7 settled by the owner (2026-09-30); no stage started.**
+**Status: in progress. Decisions D1-D7 settled by the owner (2026-09-30), D4's verdict revised in stage 1; stage 1 done.**
 
 This plan adds `scripts/ab.py`, one tool that runs a timing A/B between two commits by this repo's
 protocol and reports it. Every A/B so far has been hand-built instead. It also rewrites the
@@ -96,9 +96,14 @@ The owner settled D1-D7 on 2026-09-30, each as recommended.
   - **The pooled table** has, per (case, metric), old and new medians, the min-max over all runs,
     Δ median, and each pass's own median. This is #480's table.
   - **A verdict per row.** *Consistent* means every per-pass median of one side lies beyond every
-    per-pass median of the other, with at least 2 passes a side, and the report gives Δ.
-    Otherwise the row is *within noise*, and the report gives |Δ|. This is "two passes agree",
-    made exact.
+    per-pass median of the other, with at least 2 passes a side, **and the gap between the sides
+    is wider than each side's own spread of per-pass medians**; the report gives Δ. Otherwise the
+    row is *within noise*, and the report gives |Δ| and counts the rows that are separated but
+    inside their spread. This is "two passes agree", made exact.
+  - **Revised in stage 1 (owner, 2026-09-30).** Separation alone happens by chance 1 time in 3 at 2
+    passes a side (2 of the 6 orderings), 1 in 10 at 3. On the archived A/Bs it flagged 13 of 24
+    rows of #479 (no change) and 9 of 24 of #480's first four passes; the rule above flags 3 and 0,
+    and none of #480's six passes. The default order became `ONNONO`, 3 passes a side.
   - **Controls.** Each benchmark names its control rows (`prepare`, or the other backend when
     `--control-backend` is given). If a control row is not within noise, the report says so
     first: the A/B can't resolve a change at this level, and `epoch_op_profile.py` is the next
@@ -130,7 +135,7 @@ The owner settled D1-D7 on 2026-09-30, each as recommended.
 
 ```
 python scripts/ab.py run --bench prepared_dataset_timing [--old main] [--new HEAD]
-                         [--order ONNO] [--name stage-3b] [--control-backend numpy]
+                         [--order ONNONO] [--name stage-3b] [--control-backend numpy]
                          [--allow-profile-change] [-- <benchmark arguments>]
 python scripts/ab.py status [RUN]
 python scripts/ab.py extend [RUN] [--order NO]
@@ -156,7 +161,7 @@ the [probe contract](#benchmarks-adapters-and-the-probe-contract).
 3. **Smoke.** Run each side once with the benchmark's smallest settings (its adapter's
    `smoke_args`, e.g. one config and one repeat). This catches an import, path or data mistake in
    about a minute, not after the first 40-minute pass.
-4. **Passes.** Run the passes in `--order` (default `ONNO`); each one:
+4. **Passes.** Run the passes in `--order` (default `ONNONO`); each one:
    - runs in its own process tree with the run directory as the working directory;
    - sets `PYTHONPATH=<tree>[:<crate site>]` in the environment, so the benchmark's worker
      processes inherit it;
@@ -277,9 +282,20 @@ table and the A/B protocol in the measurement doc. Stage 4 rewrites the doc as t
   - provenance: a pass whose tree lacks the module aborts;
   - `run` and `extend` end to end on a toy probe in a temporary repo;
   - the output bounds: `--brief` stays within its line limit on every fixture.
-- **Gate:** an A/A on the benchmark machine (`--old main --new main`, `ONNO`, `--repeats 5`), with
+- **Gate:** an A/A on the benchmark machine (`--old main --new main`, `ONNONO`, `--repeats 5`), with
   the browser and editor closed. The brief report must call every row within noise, with no
   control finding. The PR quotes that brief report verbatim, with its line count.
+
+- **As built** (differences from the design above):
+  - the machine check runs from the checkout, not the new worktree: worktrees have no `rust/`
+    submodule, so `machine_profile.py` there reads the crate's release profile as null, and the
+    crate both sides import is the venv's, built from the checkout's `rust/`;
+  - `--skip-profile` (tests and toy probes; the report says "skipped"), `--repo` (the tests' toy
+    repository), and `AB_RUNS_ROOT` / `AB_WORKTREES_ROOT` to move the two directories;
+  - `extend --note` records why passes were added; by default, the shifted passes they balance;
+  - the run check refuses uncommitted changes to tracked files only, so scratch probes in
+    `scripts/` don't block a run;
+  - a probe row may carry `"control": true`.
 
 ### Stage 2: the other benchmarks' adapters
 

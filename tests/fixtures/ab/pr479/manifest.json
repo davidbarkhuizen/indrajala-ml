@@ -1,0 +1,51 @@
+{
+ "version": 1,
+ "name": "pr479",
+ "created": "2026-09-29T00:00:00+02:00",
+ "state": "done",
+ "pid": 0,
+ "bench": "prepared_dataset_timing",
+ "args": [
+  "--repeats",
+  "5"
+ ],
+ "script_from": "new",
+ "control_backend": null,
+ "order": "ONNO",
+ "old": {
+  "ref": "0f85c93",
+  "commit": "0f85c934b2f86fe24cf092a1e4485eb4d372f603"
+ },
+ "new": {
+  "ref": "501f6b1",
+  "commit": "501f6b1765b1c350124938df36ce42818803ee12"
+ },
+ "extension": null,
+ "passes": [
+  {
+   "number": 1,
+   "side": "old",
+   "stem": "pass-01-old",
+   "status": "ok"
+  },
+  {
+   "number": 2,
+   "side": "new",
+   "stem": "pass-02-new",
+   "status": "ok"
+  },
+  {
+   "number": 3,
+   "side": "new",
+   "stem": "pass-03-new",
+   "status": "ok"
+  },
+  {
+   "number": 4,
+   "side": "old",
+   "stem": "pass-04-old",
+   "status": "ok"
+  }
+ ],
+ "extends": []
+}

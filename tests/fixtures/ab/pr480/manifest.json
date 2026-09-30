@@ -1,0 +1,69 @@
+{
+ "version": 1,
+ "name": "pr480",
+ "created": "2026-09-29T00:00:00+02:00",
+ "state": "done",
+ "pid": 0,
+ "bench": "prepared_dataset_timing",
+ "args": [
+  "--repeats",
+  "5"
+ ],
+ "script_from": "new",
+ "control_backend": null,
+ "order": "ONNO",
+ "old": {
+  "ref": "501f6b1",
+  "commit": "501f6b1765b1c350124938df36ce42818803ee12"
+ },
+ "new": {
+  "ref": "7df5e03",
+  "commit": "7df5e03168697499afd12fa7fe47b0dd37610f32"
+ },
+ "extension": null,
+ "passes": [
+  {
+   "number": 1,
+   "side": "old",
+   "stem": "pass-01-old",
+   "status": "ok"
+  },
+  {
+   "number": 2,
+   "side": "new",
+   "stem": "pass-02-new",
+   "status": "ok"
+  },
+  {
+   "number": 3,
+   "side": "new",
+   "stem": "pass-03-new",
+   "status": "ok"
+  },
+  {
+   "number": 4,
+   "side": "old",
+   "stem": "pass-04-old",
+   "status": "ok"
+  },
+  {
+   "number": 5,
+   "side": "new",
+   "stem": "pass-05-new",
+   "status": "ok"
+  },
+  {
+   "number": 6,
+   "side": "old",
+   "stem": "pass-06-old",
+   "status": "ok"
+  }
+ ],
+ "extends": [
+  {
+   "order": "NO",
+   "first_pass": 5,
+   "note": "balances pass 1, whose control column (prepare) ran fast in every config"
+  }
+ ]
+}
