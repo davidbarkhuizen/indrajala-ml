@@ -1,12 +1,12 @@
 """
-The optimizer of the pure-Python networks, one per network (docs/composable-layers-workplan.md,
-D5): an update rule (update_rules.py) applied to each weight set (layer_protocols.WeightSet: a
-BackpropNode or ConvKernel) of a layer, with the rule's state per weight set, keyed by the layer's
-index in trainable_layers and the weight set's index in the layer, and one step count t for the
-whole network. The nodes and kernels keep their weights and gradient accumulators; the per-weight
-formulas are here, in Python floats with the source's grouping (README, Update rules), as the
-array optimizers' (optimizers.py) are on arrays. A module of its own so the pure-Python networks
-import neither numpy nor the Rust extension.
+The optimizer of the pure-Python networks, one per network (the composable-layers workplan, D5): an
+update rule (update_rules.py) applied to each weight set (layer_protocols.WeightSet: a BackpropNode
+or ConvKernel) of a layer, with the rule's state per weight set, keyed by the layer's index in
+trainable_layers and the weight set's index in the layer, and one step count t for the whole
+network. The nodes and kernels keep their weights and gradient accumulators; the per-weight formulas
+are here, in Python floats with the source's grouping (README, Update rules), as the array
+optimizers' (optimizers.py) are on arrays. A module of its own so the pure-Python networks import
+neither numpy nor the Rust extension.
 
 BackpropNetworkBase calls begin_step() once per learn* call, then per layer in forward order
 either apply() after accumulating a batch or step_single() for one example. state() and

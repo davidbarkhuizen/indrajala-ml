@@ -1,8 +1,8 @@
 """
-A network's checkpoint (docs/composable-layers-workplan.md, stage 5): its weights, as snapshot()
-gives them, and its optimizer's state, as the optimizer's state() gives it. Restoring one puts the
-network back where training was, the optimizer included, so training on from it takes the same
-steps as training on from the moment it was taken. train.py's pocket restores the best epoch's.
+A network's checkpoint (the composable-layers workplan, stage 5): its weights, as snapshot() gives
+them, and its optimizer's state, as the optimizer's state() gives it. Restoring one puts the network
+back where training was, the optimizer included, so training on from it takes the same steps as
+training on from the moment it was taken. train.py's pocket restores the best epoch's.
 
 Backend-free, so the pure-Python networks import it too. A checkpoint holds copies: later steps
 don't move it, and restoring it doesn't alias it.

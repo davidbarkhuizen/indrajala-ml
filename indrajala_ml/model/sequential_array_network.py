@@ -1,6 +1,6 @@
 """
-Array networks of any accepted layer specs and update rule (docs/composable-layers-workplan.md,
-The design): SequentialArrayNetwork builds one for a shape and backend, as one of the four classes
+Array networks of any accepted layer specs and update rule (the composable-layers workplan, The
+design): SequentialArrayNetwork builds one for a shape and backend, as one of the four classes
 below, which the registry walks cover as they do the presets.
 
     network = SequentialArrayNetwork(

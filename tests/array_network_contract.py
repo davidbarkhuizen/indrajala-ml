@@ -3,11 +3,11 @@ The tests every array network shares, numpy and Rust: parity with its pure-Pytho
 (predictions, and every step of learn and learn_batch), randomized, snapshot and save/load round
 trips, and argument validation.
 
-Both the reference and the bit-level check come from the network's equivalent, the layer specs
-and update rule the test file declares: the reference is the pure-Python sequential network of
-them (sequential_backprop_network.py), and the array sequential network of them
+Both the reference and the bit-level check come from the network's equivalent, the layer specs and
+update rule the test file declares: the reference is the pure-Python sequential network of them
+(sequential_backprop_network.py), and the array sequential network of them
 (sequential_array_network.py), built generically, must match the network by bits at every step
-(stages 3 and 4 of docs/composable-layers-workplan.md).
+(stages 3 and 4 of the composable-layers workplan).
 
 A test file declares an ArrayNetworkSpec and adds the generated tests to its module, which keeps
 each test's usual name and id (test_x[numpy], test_x[rust]):

@@ -1,6 +1,6 @@
 """
 The update rules an optimizer applies (optimizers.py), as frozen dataclasses holding only their
-hyperparameters (docs/composable-layers-workplan.md, D2). Each follows a published form with the
+hyperparameters (the composable-layers workplan, D2). Each follows a published form with the
 source's arithmetic grouping (README, Update rules). g is the gradient summed over a batch of B
 examples.
 """

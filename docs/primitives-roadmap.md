@@ -15,7 +15,7 @@ connection, no recurrence and no attention.
 ## The order
 
 1. **Composable layers and optimizers** (a refactor, before the next primitive): done
-   (2026-09-30), workplan in [composable-layers-workplan.md](composable-layers-workplan.md).
+   (2026-09-30); its open items are in [next-steps.md](next-steps.md).
 2. **Batch normalization**, then the conv batch-size study with it.
 3. **Residual connections.**
 4. **Layer normalization and single-head self-attention**, as a patch model on MNIST.
@@ -34,8 +34,8 @@ would multiply the class count again.
 
 A planned step should make the optimizer and the normalization composable (for example, a
 network built from a layer spec with an optimizer object) instead of adding subclasses. This is
-a design decision for the owner, and it has its own workplan
-([composable-layers-workplan.md](composable-layers-workplan.md)): the save format, the registry
+a design decision for the owner, and it had its own workplan
+(retired, [next-steps.md](next-steps.md)): the save format, the registry
 walks in the tests and the golden run all depend on the class structure.
 
 ## 2. Batch normalization next

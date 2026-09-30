@@ -1,8 +1,8 @@
 """
-load_network(path): whatever a format-2 file (format2.py) describes, built from its specs and
-rule, never from a class named in it (docs/composable-layers-workplan.md, Format 2). A network is
-the Sequential network of the file's implementation and shape, bit-identical to the preset that
-may have saved it. An ensemble is its implementation's ensemble class, of such sub-networks.
+load_network(path): whatever a format-2 file (format2.py) describes, built from its specs and rule,
+never from a class named in it (the composable-layers workplan, Format 2). A network is the
+Sequential network of the file's implementation and shape, bit-identical to the preset that may have
+saved it. An ensemble is its implementation's ensemble class, of such sub-networks.
 
 A module of its own, beside the networks: it imports all three implementations, which the
 pure-Python networks mustn't.
