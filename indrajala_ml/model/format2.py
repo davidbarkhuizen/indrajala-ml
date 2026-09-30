@@ -103,11 +103,14 @@ def _lists(value: Any) -> Any:
 
 
 def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
-    if isinstance(spec, BatchNorm) or (isinstance(spec, Dense) and spec.activation == "linear"):
+    if isinstance(spec, BatchNorm) or (isinstance(spec, Dense | ConvSpec) and spec.activation == "linear"):
         raise NotImplementedError(
             f"saving batch norm ({spec!r}) is stage 5 of docs/batch-norm-workplan.md; not built yet"
         )
-    kind = "dense" if isinstance(spec, Dense) else "conv" if isinstance(spec, ConvSpec) else "pool"
+    if isinstance(spec, ConvSpec):
+        # a ReLU conv layer's entry, as before ConvSpec had an activation
+        return {"kind": "conv", **{key: value for key, value in asdict(spec).items() if key != "activation"}}
+    kind = "dense" if isinstance(spec, Dense) else "pool"
     return {"kind": kind, **asdict(spec)}
 
 

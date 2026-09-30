@@ -21,7 +21,7 @@ from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.test_layer_specs import BATCH_NORM, INVALID, KINDS, LINEAR, OUTPUT, VALID
+from tests.test_layer_specs import BATCH_NORM, CONV_BATCH_NORM, INVALID, KINDS, LINEAR, OUTPUT, VALID
 
 # ArrayLayerClasses' field names (KINDS), as the pure-Python classes; a dropout layer's class is
 # made per drop probability (make_dropout_layer_cls), so it's checked by its nodes instead
@@ -50,6 +50,12 @@ def test_every_accepted_combination_builds(specs: list[LayerSpec]):
 @pytest.mark.parametrize("specs", BATCH_NORM.values(), ids=BATCH_NORM.keys())
 def test_every_batch_norm_pair_builds(specs: list[LayerSpec]):
     assert len(_build(specs, (8, 8, 1))) == len(specs)
+
+
+@pytest.mark.parametrize("specs", CONV_BATCH_NORM.values(), ids=CONV_BATCH_NORM.keys())
+def test_conv_batch_norm_is_refused_until_stage_4b(specs: list[LayerSpec]):
+    with pytest.raises(NotImplementedError, match="stage 4b"):
+        _build(specs, (8, 8, 1))
 
 
 @pytest.mark.parametrize("specs", INVALID.values(), ids=INVALID.keys())

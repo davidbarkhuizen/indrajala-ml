@@ -13,6 +13,7 @@ from tests.helpers import Backend
 
 OUTPUT = Dense(3, output=True)
 LINEAR = Dense(5, activation="linear")
+LINEAR_CONV = Conv(3, 2, activation="linear")
 
 VALID: dict[str, list[LayerSpec]] = {
     "output only": [OUTPUT],
@@ -59,6 +60,14 @@ INVALID: dict[str, list[LayerSpec]] = {
     "zero epsilon": [LINEAR, BatchNorm(epsilon=0.0), OUTPUT],
     "zero running rate": [LINEAR, BatchNorm(running_rate=0.0), OUTPUT],
     "running rate over 1": [LINEAR, BatchNorm(running_rate=1.5), OUTPUT],
+    "linear conv without batch norm": [LINEAR_CONV, Dense(5), OUTPUT],
+    "linear conv before pool": [LINEAR_CONV, Pool(2), BatchNorm("relu"), OUTPUT],
+    "linear conv last in the front end": [Conv(3, 2), LINEAR_CONV, OUTPUT],
+    "sigmoid batch norm after conv": [LINEAR_CONV, BatchNorm(), OUTPUT],
+    "batch norm after pool": [LINEAR_CONV, BatchNorm("relu"), Pool(2), BatchNorm("relu"), OUTPUT],
+    "conv batch norm twice": [LINEAR_CONV, BatchNorm("relu"), BatchNorm("relu"), OUTPUT],
+    "sigmoid conv": [Conv(3, 2, activation=cast(Any, "sigmoid")), OUTPUT],
+    "conv batch norm zero epsilon": [LINEAR_CONV, BatchNorm("relu", epsilon=0.0), OUTPUT],
 }
 
 # batch norm's pairs (the batch-norm workplan, D1): accepted, and built by numpy (stage 1), pure
@@ -71,6 +80,16 @@ BATCH_NORM: dict[str, list[LayerSpec]] = {
     "after a front end": [Conv(3, 2), Pool(2), LINEAR, BatchNorm(), OUTPUT],
     "softmax output": [LINEAR, BatchNorm(), Dense(3, output=True, activation="softmax", loss="cross_entropy")],
     "rate of 1": [LINEAR, BatchNorm(running_rate=1.0), OUTPUT],
+}
+
+# conv batch norm's pairs: accepted, and built by numpy (stage 4a); pure Python (4b) and Rust (4c)
+# refuse them, naming their stage
+CONV_BATCH_NORM: dict[str, list[LayerSpec]] = {
+    "conv": [LINEAR_CONV, BatchNorm("relu"), OUTPUT],
+    "conv pool": [LINEAR_CONV, BatchNorm("relu"), Pool(2), OUTPUT],
+    "after a relu conv": [Conv(2, 2), Conv(2, 3, stride=2, activation="linear"), BatchNorm("relu"), OUTPUT],
+    "two conv pairs": [LINEAR_CONV, BatchNorm("relu"), Conv(2, 3, activation="linear"), BatchNorm("relu"), OUTPUT],
+    "conv and dense pairs": [LINEAR_CONV, BatchNorm("relu"), LINEAR, BatchNorm(), OUTPUT],
 }
 
 
@@ -91,6 +110,25 @@ def test_a_combination_some_implementation_cant_build_is_rejected(specs: list[La
 def test_batch_norm_pairs_are_accepted(specs: list[LayerSpec], backend: Backend):
     validate_layer_specs(specs)
     build_array_layers(specs, (8, 8, 1), backend.name)
+
+
+@pytest.mark.parametrize("specs", CONV_BATCH_NORM.values(), ids=CONV_BATCH_NORM.keys())
+def test_conv_batch_norm_pairs_are_accepted_and_built_by_numpy(specs: list[LayerSpec]):
+    validate_layer_specs(specs)
+    build_array_layers(specs, (8, 8, 1), "numpy")
+    with pytest.raises(NotImplementedError, match="stage 4c"):
+        build_array_layers(specs, (8, 8, 1), "rust")
+
+
+def test_a_conv_batch_norm_layer_normalizes_each_channel_over_every_position():
+    linear, norm, _output = cast(
+        "list[Any]", build_array_layers([LINEAR_CONV, BatchNorm("relu", 1e-3, 0.2), OUTPUT], (8, 8, 1), "numpy")
+    )
+
+    assert type(linear) is LAYER_CLASSES["numpy"].linear_conv
+    assert linear.W.shape == (2, 9) and linear.parameters() == (linear.W,)
+    assert (norm.size, norm.positions, norm.gamma.shape) == (2 * 6 * 6, 6 * 6, (2,))
+    assert (norm.activation, norm.epsilon, norm.running_rate) == ("relu", 1e-3, 0.2)
 
 
 # each spec kind, as a network's only hidden layer (or its output layer), and the field of

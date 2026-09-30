@@ -1,10 +1,11 @@
 # pyright: reportConstantRedefinition=false
 # (matrices are named as in the literature, X, A, which strict mode takes for constants)
 """
-Batch normalization of a dense linear layer, each feature over the batch, fused with its
-activation (the batch-norm workplan, D1). Every expression is the README's (Batch normalization),
-in its grouping, and every sum over the batch is a left fold in row order, the crate's, through
-np.cumsum: X.sum(axis=0) sums a single feature pairwise (tests/test_summation_order.py).
+Batch normalization of a linear layer, fused with its activation (the batch-norm workplan, D1): a
+dense layer's each feature over the batch, a conv layer's each channel over the batch and every
+position. Every expression is the README's (Batch normalization), in its grouping, and every sum
+over the batch is a left fold in row order, the crate's, through np.cumsum: X.sum(axis=0) sums a
+single feature pairwise (tests/test_summation_order.py).
 """
 
 from __future__ import annotations
@@ -32,13 +33,28 @@ class BatchNormArrayLayer:
 
     training is set by set_training_mode. The backward pass reads _was_training, training as
     forward_batch saw it, since the network switches training off before the backward pass.
+
+    After a conv layer, positions is its out_height * out_width, and the size features are
+    size // positions channels in the conv layer's channel-major layout. The statistics are
+    computed on the (N * positions, channels) view, whose rows are the README's order: example by
+    example, then position by position. The activations and deltas stay channel-major.
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (False, False)
 
-    def __init__(self, size: int, activation: Literal["sigmoid", "relu"], epsilon: float, running_rate: float) -> None:
+    def __init__(
+        self,
+        size: int,
+        activation: Literal["sigmoid", "relu"],
+        epsilon: float,
+        running_rate: float,
+        positions: int = 1,
+    ) -> None:
+        assert positions >= 1 and size % positions == 0, f"{size} values aren't {positions} positions per channel"
         self.size = size
         self.input_size = size
+        self.positions = positions
+        features = size // positions
         self.activation = activation
         self.epsilon = epsilon
         self.running_rate = running_rate
@@ -46,13 +62,13 @@ class BatchNormArrayLayer:
         self._was_training = False
 
         # D5's initialization: nothing drawn
-        self.gamma: FloatArray = np.ones(size)
-        self.beta: FloatArray = np.zeros(size)
-        self.running_mean: FloatArray = np.zeros(size)
-        self.running_var: FloatArray = np.ones(size)
+        self.gamma: FloatArray = np.ones(features)
+        self.beta: FloatArray = np.zeros(features)
+        self.running_mean: FloatArray = np.zeros(features)
+        self.running_var: FloatArray = np.ones(features)
 
-        self.grad_gamma: FloatArray = np.zeros(size)
-        self.grad_beta: FloatArray = np.zeros(size)
+        self.grad_gamma: FloatArray = np.zeros(features)
+        self.grad_beta: FloatArray = np.zeros(features)
 
     def parameters(self) -> tuple[FloatArray, ...]:
         return self.gamma, self.beta
@@ -72,18 +88,32 @@ class BatchNormArrayLayer:
     def set_training_mode(self, training: bool) -> None:
         self.training = training
 
+    def _rows(self, X: FloatArray) -> FloatArray:
+        # channel-major (N, C * P) as (N * P, C); a dense layer's X as it is
+        if self.positions == 1:
+            return X
+        n = X.shape[0]
+        return X.reshape(n, -1, self.positions).transpose(0, 2, 1).reshape(n * self.positions, -1)
+
+    def _flat(self, R: FloatArray) -> FloatArray:
+        # _rows' inverse
+        if self.positions == 1:
+            return R
+        n = R.shape[0] // self.positions
+        return R.reshape(n, self.positions, -1).transpose(0, 2, 1).reshape(n, self.size)
+
     def _activate(self, Y: FloatArray) -> FloatArray:
         return sigmoid(Y) if self.activation == "sigmoid" else np.maximum(0.0, Y)
 
     def _inference(self, X: FloatArray) -> FloatArray:
-        xhat = (X - self.running_mean) / np.sqrt(self.running_var + self.epsilon)
-        return self._activate(self.gamma * xhat + self.beta)
+        xhat = (self._rows(X) - self.running_mean) / np.sqrt(self.running_var + self.epsilon)
+        return self._flat(self._activate(self.gamma * xhat + self.beta))
 
     def forward(self, x: FloatArray) -> FloatArray:
         # classify_state's single-example forward pass: inference only
         if self.training:
             refuse_single_example(self)
-        self.a = self._inference(x)
+        self.a = self._inference(x[np.newaxis, :])[0]
         return self.a
 
     def forward_batch(self, X: FloatArray) -> FloatArray:
@@ -92,16 +122,17 @@ class BatchNormArrayLayer:
             self.A = self._inference(X)
             return self.A
 
-        m = X.shape[0]
-        if m < 2:
+        if X.shape[0] < 2:
             refuse_single_example(self)
-        mu = sum_rows(X) / m
-        d = X - mu
+        R = self._rows(X)
+        m = R.shape[0]
+        mu = sum_rows(R) / m
+        d = R - mu
         ss = sum_rows(d * d)
         var = ss / m
         std = np.sqrt(var + self.epsilon)
         self._xhat = d / std
-        self.A = self._activate(self.gamma * self._xhat + self.beta)
+        self.A = self._flat(self._activate(self.gamma * self._xhat + self.beta))
 
         rate = self.running_rate
         self.running_mean = (1 - rate) * self.running_mean + rate * mu
@@ -135,20 +166,21 @@ class BatchNormArrayLayer:
     def downstream_batch(self) -> FloatArray:
         # dl/dx, the linear layer's delta: the paper's § 3 chain rule, term by term
         m, d = self._m, self._d
-        dxhat = self.delta_batch * self.gamma
+        dxhat = self._rows(self.delta_batch) * self.gamma
         inv_std = 1 / self._std
         inv_std3 = inv_std / (self._var + self.epsilon)
         dvar = sum_rows(dxhat * d * -0.5 * inv_std3)
         dmu = sum_rows(dxhat * -inv_std) + dvar * sum_rows(-2 * d) / m
-        return dxhat * inv_std + dvar * (2 * d) / m + dmu / m
+        return self._flat(dxhat * inv_std + dvar * (2 * d) / m + dmu / m)
 
     def accumulate_gradient(self, input_activation: FloatArray) -> None:
         refuse_single_example(self)
 
     def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
-        self.grad_gamma += sum_rows(self.delta_batch * self._xhat)
-        self.grad_beta += sum_rows(self.delta_batch)
+        delta = self._rows(self.delta_batch)
+        self.grad_gamma += sum_rows(delta * self._xhat)
+        self.grad_beta += sum_rows(delta)
 
     def reset_gradient_accum(self) -> None:
-        self.grad_gamma = np.zeros(self.size)
-        self.grad_beta = np.zeros(self.size)
+        self.grad_gamma = np.zeros(self.gamma.shape)
+        self.grad_beta = np.zeros(self.beta.shape)

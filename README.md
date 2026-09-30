@@ -242,9 +242,10 @@ rounds differently when `B` isn't a power of two.
 ## Batch normalization
 
 Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)): numpy, pure Python and
-Rust build dense batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`. Conv batch
-norm and saving it are later stages, and refuse it until then. This section fixes the forms
-all three implementations are held to.
+Rust build dense batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`, and numpy
+builds conv batch norm, `Conv(kernel_size, channel_count, activation="linear"), BatchNorm("relu")`.
+Conv batch norm in pure Python and Rust, and saving batch norm, are later stages, and refuse it
+until then. This section fixes the forms all three implementations are held to.
 
 A pure-Python network with batch norm trains a batch layer by layer (`layer_major.py`): forward
 through each layer for the whole batch, then backward. The other layers run their per-example code
