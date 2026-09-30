@@ -50,6 +50,10 @@ From the quick survey to the decisive measurement:
   side, separation alone happens 1 time in 3 by chance. A pass whose rows and controls all sit 5% or
   more from its side's pooled medians is *shifted*; balance it with the `ab.py extend --order` the
   report names, never by dropping it.
+- **A crate change:** `ab.py run --bench prepared_dataset_timing --old-crate <old> --new-crate <new>
+  --control-backend numpy` (or a Rust-only benchmark), after committing it in the crate repository. Each
+  crate commit is built once into a cached release wheel, installed with `pip --target` outside the
+  venv, and checked by hash every pass. The hand protocol below remains for a quick look.
 - **Old against new build:** commit the crate change first, then alternate builds (old, new, new,
   old, ...), switching with `git checkout main -- <changed files>` and back, not a stash, and
   `./cli build-rust` (about 6 s) each time. Medians of 5 or more; run multi-minute runs in the

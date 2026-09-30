@@ -1,6 +1,6 @@
 # Workplan: the A/B harness and a stand-alone measurement guide
 
-**Status: in progress. Decisions D1-D7 settled by the owner (2026-09-30), D4's verdict revised in stage 1; stages 1-2 done.**
+**Status: in progress. Decisions D1-D7 settled by the owner (2026-09-30), D4's verdict revised in stage 1; stages 1-3 done.**
 
 This plan adds `scripts/ab.py`, one tool that runs a timing A/B between two commits by this repo's
 protocol and reports it. Every A/B so far has been hand-built instead. It also rewrites the
@@ -332,6 +332,17 @@ table and the A/B protocol in the measurement doc. Stage 4 rewrites the doc as t
 - **Gate:** a crate A/B of two commits whose diff doesn't touch `src/` (crate `750d83a` against its
   parent, #41: a test reference only). The report calls every row within noise and shows the
   hashes.
+
+- **As built:**
+  - wheels are built from a `git archive` of the crate commit, not a worktree, so there is no crate
+    worktree to clean; the crate repository is fetched once when the commit is missing;
+  - builds share one cargo target directory, `~/code/ab-runs/wheels/target/`, so a second crate's
+    build is incremental; `clean --wheels` keeps it;
+  - maturin is the venv's (`./cli`'s pin), building for the venv's interpreter;
+  - a crate A/B is any run whose sides' crate commits differ, so `--old main --new main
+    --old-crate X --new-crate Y` is a crate-only A/B;
+  - the brief report's header and the protocol paragraph give each side's crate commit and
+    extension hash.
 
 ### Stage 4: the stand-alone measurement guide
 
