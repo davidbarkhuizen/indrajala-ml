@@ -18,13 +18,10 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import Dense
+from indrajala_ml.model.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
-from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
-    MomentumConvMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
     MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -32,12 +29,12 @@ from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_
     MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
-from indrajala_ml.model.update_rules import Momentum
+from indrajala_ml.model.update_rules import SGD, Momentum
 from tests.array_network_contract import SEQUENTIAL_CLS, assert_sequential_matches_preset
 from tests.helpers import (
     Backend,
     assert_conv_array_network_weights_match,
-    matching_conv_array_backprop_networks,
+    conv_reference,
     matching_conv_numpy_rust_networks,
 )
 from tests.test_conv_array_multiclass_backprop_model import ARCHITECTURES, OVERLAPPING_POOL_STRIDED, WEIGHT_ATOL
@@ -81,27 +78,20 @@ def _as_lists(snapshot: Sequence[tuple[Any, ...]]) -> list[list[Any]]:
     return [[array.tolist() for array in entry] for entry in snapshot]
 
 
-def _with_reference(
-    architecture: str, backend: Backend, momentum: float
-) -> tuple[MomentumConvMultiClassBackpropClassifierNetwork, Any]:
-    # 3d's pure-Python momentum conv network and this backend's, with the same injected weights
+def _specs(architecture: str) -> list[LayerSpec]:
+    # the architecture as layer specs, which its pure-Python reference and sequential network share
     conv_specs, dense_layer_sizes = ARCHITECTURES[architecture]
-    node_network, array_network = matching_conv_array_backprop_networks(
-        random.Random(1),
-        8,
-        8,
-        conv_specs,
-        dense_layer_sizes,
-        CLASS_COUNT,
-        PLAIN_NETWORK_CLS[backend.name],
-        backend.owned,
-    )
-    reference = MomentumConvMultiClassBackpropClassifierNetwork(
-        8, 8, conv_specs, dense_layer_sizes, CLASS_COUNT, momentum=momentum
-    )
-    reference.restore(node_network.snapshot())
+    return [*conv_specs, *(Dense(size) for size in dense_layer_sizes), Dense(CLASS_COUNT, output=True)]
+
+
+def _with_reference(architecture: str, backend: Backend, momentum: float) -> tuple[Any, Any]:
+    # the pure-Python network of the same specs under Momentum, and this backend's momentum conv
+    # network, with the same injected weights
+    conv_specs, dense_layer_sizes = ARCHITECTURES[architecture]
     network = NETWORK_CLS[backend.name](8, 8, conv_specs, dense_layer_sizes, CLASS_COUNT, momentum=momentum)
-    network.restore(array_network.snapshot())
+    reference = conv_reference(
+        random.Random(1), network, (8, 8, 1), _specs(architecture), Momentum(momentum), backend.owned
+    )
     return reference, network
 
 
@@ -156,16 +146,9 @@ def test_numpy_and_rust_match_after_every_batch(architecture: str):
 
 def _zero_momentum_and_plain(backend: Backend) -> tuple[Any, Any]:
     conv_specs, dense_layer_sizes = ARCHITECTURES["conv_pool_conv"]
-    _node_network, plain = matching_conv_array_backprop_networks(
-        random.Random(3),
-        8,
-        8,
-        conv_specs,
-        dense_layer_sizes,
-        CLASS_COUNT,
-        PLAIN_NETWORK_CLS[backend.name],
-        backend.owned,
-    )
+    plain = PLAIN_NETWORK_CLS[backend.name](8, 8, conv_specs, dense_layer_sizes, CLASS_COUNT)
+    # the reference is discarded: this is only its weight injection into plain
+    conv_reference(random.Random(3), plain, (8, 8, 1), _specs("conv_pool_conv"), SGD(), backend.owned)
     network = NETWORK_CLS[backend.name](8, 8, conv_specs, dense_layer_sizes, CLASS_COUNT, momentum=0.0)
     network.restore(plain.snapshot())
     return plain, network
@@ -266,8 +249,7 @@ def test_momentum_is_required(backend: Backend):
 def test_the_sequential_network_of_its_layer_specs_matches_it_by_bits(backend: Backend, architecture: str):
     conv_specs, dense_layer_sizes = ARCHITECTURES[architecture]
     preset = NETWORK_CLS[backend.name](8, 8, conv_specs, dense_layer_sizes, CLASS_COUNT, momentum=MOMENTUM)
-    specs = [*conv_specs, *(Dense(size) for size in dense_layer_sizes), Dense(CLASS_COUNT, output=True)]
-    sequential = SEQUENTIAL_CLS["multiclass"][backend.name]((8, 8, 1), specs, Momentum(MOMENTUM))
+    sequential = SEQUENTIAL_CLS["multiclass"][backend.name]((8, 8, 1), _specs(architecture), Momentum(MOMENTUM))
 
     def example(rng: random.Random) -> tuple[tuple[float, ...], int]:
         return tuple(rng.random() for _ in range(64)), rng.randrange(CLASS_COUNT)

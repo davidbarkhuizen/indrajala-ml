@@ -50,6 +50,7 @@ SAVED_IN_FORMAT_2_ONLY = {
     "SequentialRustArrayMultiClassBackpropClassifierNetwork",
     "SequentialArrayBackpropClassifierNetwork",
     "SequentialRustArrayBackpropClassifierNetwork",
+    "SequentialMultiClassBackpropClassifierNetwork",
 }
 
 

@@ -26,7 +26,7 @@ from tests.array_network_contract import (
     ArrayNetworkSpec,
     multiclass_network_tests,
 )
-from tests.helpers import Backend, matching_dropout_array_backprop_networks
+from tests.helpers import Backend
 
 DROP_PROBABILITY = 0.5
 NetworkCls = (
@@ -51,7 +51,6 @@ SPEC = ArrayNetworkSpec(
         "numpy": DropoutVectorizedMultiClassBackpropClassifierNetwork,
         "rust": DropoutRustArrayMultiClassBackpropClassifierNetwork,
     },
-    matching=matching_dropout_array_backprop_networks,
     equivalent=_equivalent,
     hyperparameters={"drop_probability": DROP_PROBABILITY},
     parity_in_training=False,

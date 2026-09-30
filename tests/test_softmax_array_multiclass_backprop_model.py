@@ -7,7 +7,6 @@ from indrajala_ml.model.softmax_vectorized_multiclass_backprop_classifier_networ
 )
 from indrajala_ml.model.update_rules import SGD, UpdateRule
 from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_tests
-from tests.helpers import matching_softmax_array_backprop_networks
 
 
 def _equivalent(sizes: list[int], output: int) -> tuple[list[LayerSpec], UpdateRule]:
@@ -23,7 +22,6 @@ SPEC = ArrayNetworkSpec(
         "numpy": SoftmaxVectorizedMultiClassBackpropClassifierNetwork,
         "rust": SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
     },
-    matching=matching_softmax_array_backprop_networks,
     equivalent=_equivalent,
     learning_rate=0.01,
     probabilities_sum_to_one=True,

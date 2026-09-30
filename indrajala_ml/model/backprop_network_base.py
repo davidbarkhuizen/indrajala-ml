@@ -1,68 +1,69 @@
 from __future__ import annotations
 
 import math
-import random
 from collections.abc import Sequence
 from typing import Any, Self, cast
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.bounds import validate_batch, validate_input_bounds, validate_layer_sizes
-from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.bounds import validate_batch, validate_input_bounds
+from indrajala_ml.model.layer_protocols import TrainableLayer
+from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
+from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.python_optimizer import PythonOptimizer
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.update_rules import SGD, UpdateRule
 
 
-# LayerT, the hidden layers' type: dense layers, except in the conv network, whose front end puts
-# conv and pool layers first (ConvMultiClassBackpropClassifierNetwork)
+# LayerT, the hidden layers' type: dense layers, except in a network whose specs put conv and pool
+# layers first (ConvMultiClassBackpropClassifierNetwork, the sequential networks)
 class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
     """
-    What BackpropClassifierNetwork and MultiClassBackpropClassifierNetwork share: layer assembly
-    (input -> hidden layer(s) -> output layer), the forward pass, the optimizer (_update_rule,
+    What every pure-Python network shares: layers built from layer specs (layer_specs.py,
+    python_layer_builder.py) behind a StateLayer, the forward pass, the optimizer (_update_rule,
     python_optimizer.py) applying the gradients, the hidden layers' backward pass, and
     snapshot/restore. The subclasses differ in the output layer's size, the
     predict_*/classify_state contract, and randomize().
-    """
 
-    # the layer classes a sibling overrides for different per-node math (e.g. SoftmaxOutputLayer,
-    # ReLULayer)
-    output_layer_cls: type[BackpropLayer] = BackpropLayer
-    hidden_layer_cls: type[BackpropLayer] = BackpropLayer
+    A sibling differs in its layer specs (_hidden_spec/_output_spec, as ArrayNetworkBase's), its
+    update rule (_update_rule) and their hyperparameters.
+    """
 
     def __init__(
         self,
-        layer_sizes: list[int],
-        dimension: int,
+        specs: Sequence[LayerSpec],
+        input_shape: InputShape,
         input_bounds: list[tuple[float, float]],
-        output_size: int,
     ) -> None:
 
-        validate_layer_sizes(layer_sizes)
+        self.dimension = math.prod(input_shape)
 
-        self.dimension = dimension
-
-        validate_input_bounds(dimension, input_bounds)
+        validate_input_bounds(self.dimension, input_bounds)
         self.input_bounds = input_bounds
 
-        self.input_layer = StateLayer(dimension, input_bounds)
+        self.input_layer = StateLayer(self.dimension, input_bounds)
 
-        dense_layers: list[BackpropLayer] = []
-        previous_layer: InputLayer = self.input_layer
-        for size in layer_sizes:
-            layer = self.hidden_layer_cls(size=size, input_layer=previous_layer)
-            dense_layers.append(layer)
-            previous_layer = layer
-        # LayerT is BackpropLayer for every network built here; the conv network, the one other
-        # LayerT, builds its layers in its own __init__
-        self.hidden_layers: list[LayerT] = cast("list[LayerT]", dense_layers)
-
-        self.output_layer = self.output_layer_cls(size=output_size, input_layer=previous_layer)
-
-        # every layer with trained weights, in forward order: the backward pass and
-        # snapshot/restore walk it
-        self.trainable_layers: list[LayerT | BackpropLayer] = [*self.hidden_layers, self.output_layer]
+        # every layer with trained weights (and any pool layer), in forward order: the forward and
+        # backward passes and snapshot/restore walk it
+        self.trainable_layers: list[TrainableLayer] = build_python_layers(specs, input_shape, self.input_layer)
+        # LayerT is what the specs build before the output layer: dense layers, unless conv and
+        # pool layers come first
+        self.hidden_layers = cast("list[LayerT]", self.trainable_layers[:-1])
+        output_layer = self.trainable_layers[-1]
+        assert isinstance(output_layer, BackpropLayer)  # validate_layer_specs: a Dense
+        self.output_layer = output_layer
 
         self.optimizer = PythonOptimizer(self._update_rule())
+
+    def _hidden_spec(self, size: int) -> Dense:
+        # a dense hidden layer; the ReLU and dropout siblings return theirs
+        return Dense(size)
+
+    def _output_spec(self, size: int) -> Dense:
+        # the output layer; the softmax and cross-entropy siblings return theirs
+        return Dense(size, output=True)
+
+    def _dense_specs(self, layer_sizes: Sequence[int], output_size: int) -> list[LayerSpec]:
+        return [*(self._hidden_spec(size) for size in layer_sizes), self._output_spec(output_size)]
 
     def _update_rule(self) -> UpdateRule:
         # plain SGD; the momentum, Adam and L2 siblings return their rule, from their hyperparameters
@@ -146,23 +147,11 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
             layer.restore_state(layer_snapshot)
 
 
-def fan_in_aware_weights_and_bias(fan_in: int) -> tuple[list[float], float]:
-    """
-    fan_in weights and a bias drawn uniformly from [-limit, limit], limit = 1/sqrt(fan_in): the
-    formula every fan-in-aware initialization uses (randomize_fan_in_aware,
-    ConvKernel.randomize_fan_in_aware, the conv network's dense tail).
-    """
-    limit = 1.0 / math.sqrt(fan_in)
-    weights = [random.uniform(-limit, limit) for _ in range(fan_in)]
-    bias = random.uniform(-limit, limit)
-    return weights, bias
-
-
 def as_dense_layers(layers: Sequence[TrainableLayer]) -> list[BackpropLayer]:
     """
     layers, checked to be dense (BackpropLayer and its siblings), for what only a dense network
-    does: the conv network overrides randomize and save, whose dense forms read every layer's
-    size and node weights.
+    does: the multiclass save envelope reads every layer's size, and BackpropClassifierNetwork's
+    bounds-width randomize its node weights.
     """
     dense = [layer for layer in layers if isinstance(layer, BackpropLayer)]
     assert len(dense) == len(layers), f"expected only dense layers; got {[type(layer).__name__ for layer in layers]}"
@@ -173,8 +162,12 @@ def randomize_fan_in_aware(network: BackpropNetworkBase[Any]) -> None:
     """
     Fan-in-aware initialization, limit = 1/sqrt(fan_in) per layer, so a layer's weighted input sum
     doesn't saturate every sigmoid once fan-in reaches the tens or hundreds. On UCI digits: 99.5%
-    training and 96.9% test accuracy. Used by MultiClassBackpropClassifierNetwork and
-    FanInAwareBackpropClassifierNetwork.
+    training and 96.9% test accuracy. Used by MultiClassBackpropClassifierNetwork (and so the conv
+    network), FanInAwareBackpropClassifierNetwork and the sequential networks.
+
+    Every layer in forward order: a dense layer's nodes from its input layer's size, a conv
+    layer's kernels from their receptive field, and a pool layer draws nothing, so adding pooling
+    never shifts a later layer's draws.
 
     Unlike BackpropClassifierNetwork.randomize()'s bounds-width scaling (tuned for 1-2D geometric
     problems) it works at any dimension: the ensemble's 784-pixel MNIST sub-networks reach 6.6
@@ -182,10 +175,5 @@ def randomize_fan_in_aware(network: BackpropNetworkBase[Any]) -> None:
     saturated at initialization.
     """
 
-    previous_size = network.dimension
-    for layer in as_dense_layers(network.trainable_layers):
-        for node in layer.nodes:
-            weights, bias = fan_in_aware_weights_and_bias(previous_size)
-            node.update_input_weights(weights)
-            node.bias = bias
-        previous_size = layer.size
+    for layer in network.trainable_layers:
+        layer.randomize_fan_in_aware()

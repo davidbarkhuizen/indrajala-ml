@@ -1,7 +1,7 @@
 import random
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Literal, Protocol, cast
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -14,10 +14,6 @@ from indrajala_ml.model.array_network_shapes import ArrayMultiClassShape, ArrayS
 from indrajala_ml.model.array_protocols import ArrayBackend, BackendArray, WeightedArrayLayer
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
-from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
-    BinaryCrossEntropyBackpropClassifierNetwork,
-    CrossEntropyOutputLayer,
-)
 from indrajala_ml.model.classifier_protocols import State
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
@@ -29,18 +25,16 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
-from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
+from indrajala_ml.model.layer_specs import InputShape, LayerSpec
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.model.python_optimizer import PythonOptimizer
-from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
-from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
-    SoftmaxMultiClassBackpropClassifierNetwork,
+from indrajala_ml.model.sequential_backprop_network import (
+    SequentialBackpropClassifierNetwork,
+    SequentialMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.update_rules import SGD, UpdateRule
 
 # conftest's `backend` fixture: either array backend, NUMPY or RUST
 Backend = ArrayBackend[Any]
@@ -295,353 +289,59 @@ def inject_matching_weights(
         previous_size = len(weights)
 
 
-def matching_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
+REFERENCE_CLS = {
+    "multiclass": SequentialMultiClassBackpropClassifierNetwork,
+    "single_output": SequentialBackpropClassifierNetwork,
+}
+
+
+def reference_network(
+    input_shape: InputShape,
+    specs: Sequence[LayerSpec],
+    rule: UpdateRule,
+    shape: Literal["multiclass", "single_output"] = "multiclass",
+) -> Any:
+    """
+    The pure-Python network of specs and rule (sequential_backprop_network.py): the parity
+    reference for an array network built from the same specs and rule, preset or sequential.
+    """
+    return REFERENCE_CLS[shape](input_shape, specs, rule)
+
+
+def dense_reference(
     rng: random.Random,
-    array_network_cls: Callable[..., ArrayNetworkT],
+    array_network: ArrayNetworkBase[Any],
+    specs: Sequence[LayerSpec],
+    rule: UpdateRule,
     wrap: Wrap,
-    layer_sizes: list[int],
     dimension: int,
-    class_count: int,
-    bounds: float = 10.0,
-) -> tuple[MultiClassBackpropClassifierNetwork, ArrayNetworkT]:
+    shape: Literal["multiclass", "single_output"] = "multiclass",
+) -> BackpropNetworkBase[Any]:
     """
-    A MultiClassBackpropClassifierNetwork and an array_network_cls network with identical
-    injected weights (the backends' RNGs aren't comparable with Python's random, so randomize()
-    isn't used).
+    reference_network for array_network, a dense network of specs and rule, over a flat input,
+    with identical injected weights (inject_matching_weights; the backends' RNGs aren't comparable
+    with Python's random, so randomize() isn't used).
     """
-    node_network = MultiClassBackpropClassifierNetwork(
-        layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count
-    )
-    array_network = array_network_cls(layer_sizes, dimension, class_count)
-
-    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
-    return node_network, array_network
+    reference = reference_network((dimension,), specs, rule, shape)
+    inject_matching_weights(rng, reference, array_network, wrap, dimension)
+    return reference
 
 
-def matching_single_output_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
+def conv_reference(
     rng: random.Random,
-    array_network_cls: Callable[..., ArrayNetworkT],
+    array_network: ArrayNetworkBase[Any],
+    input_shape: InputShape,
+    specs: Sequence[LayerSpec],
+    rule: UpdateRule,
     wrap: Wrap,
-    layer_sizes: list[int],
-    dimension: int,
-    bounds: float = 10.0,
-) -> tuple[FanInAwareBackpropClassifierNetwork, ArrayNetworkT]:
+) -> SequentialMultiClassBackpropClassifierNetwork:
     """
-    matching_array_backprop_networks for the single-output array networks: the reference is
-    FanInAwareBackpropClassifierNetwork, whose initialization matches theirs.
+    reference_network for array_network, a conv network (numpy or Rust, with `wrap` its backend's
+    array constructor) of specs and rule, with identical injected weights, conv kernels included (a
+    conv W's row c is kernel c's weights). Pool layers have none.
     """
-    node_network = FanInAwareBackpropClassifierNetwork(layer_sizes, dimension, [(-bounds, bounds)] * dimension)
-    array_network = array_network_cls(layer_sizes, dimension)
-
-    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
-    return node_network, array_network
-
-
-def matching_cross_entropy_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
-    rng: random.Random,
-    array_network_cls: Callable[..., ArrayNetworkT],
-    wrap: Wrap,
-    layer_sizes: list[int],
-    dimension: int,
-    bounds: float = 10.0,
-) -> tuple[BinaryCrossEntropyBackpropClassifierNetwork, ArrayNetworkT]:
-    """
-    matching_array_backprop_networks for the single-output cross-entropy networks, against
-    BinaryCrossEntropyBackpropClassifierNetwork.
-    """
-    node_network = BinaryCrossEntropyBackpropClassifierNetwork(layer_sizes, dimension, [(-bounds, bounds)] * dimension)
-    array_network = array_network_cls(layer_sizes, dimension)
-
-    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
-    return node_network, array_network
-
-
-class AdamMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
-    """
-    Test-only per-node multiclass Adam network, the parity reference for the Adam array networks:
-    MultiClassBackpropClassifierNetwork under the Adam rule, as AdamBackpropClassifierNetwork is the
-    single-output one. There is no production per-node multiclass Adam network.
-    """
-
-    def __init__(
-        self,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]],
-        class_count: int,
-        beta1: float,
-        beta2: float,
-        epsilon: float,
-    ) -> None:
-        self.rule = Adam(beta1, beta2, epsilon)
-        super().__init__(layer_sizes, dimension, input_bounds, class_count)
-
-    def _update_rule(self) -> Adam:
-        return self.rule
-
-
-def matching_adam_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
-    rng: random.Random,
-    array_network_cls: Callable[..., ArrayNetworkT],
-    wrap: Wrap,
-    layer_sizes: list[int],
-    dimension: int,
-    class_count: int,
-    beta1: float,
-    beta2: float,
-    epsilon: float,
-    bounds: float = 10.0,
-) -> tuple[AdamMultiClassBackpropClassifierNetwork, ArrayNetworkT]:
-    """
-    matching_array_backprop_networks for the Adam networks: an
-    AdamMultiClassBackpropClassifierNetwork and array_network_cls with the same beta1/beta2/epsilon
-    and identical injected weights.
-    """
-    node_network = AdamMultiClassBackpropClassifierNetwork(
-        layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count, beta1, beta2, epsilon
-    )
-    array_network = array_network_cls(layer_sizes, dimension, class_count, beta1, beta2, epsilon)
-
-    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
-    return node_network, array_network
-
-
-class L2MultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
-    """
-    Test-only per-node multiclass L2 network, the parity reference for the L2 array networks:
-    MultiClassBackpropClassifierNetwork under the WeightDecay rule.
-    """
-
-    def __init__(
-        self,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]],
-        class_count: int,
-        l2_lambda: float,
-    ) -> None:
-        self.rule = WeightDecay(l2_lambda)
-        super().__init__(layer_sizes, dimension, input_bounds, class_count)
-
-    def _update_rule(self) -> WeightDecay:
-        return self.rule
-
-
-def matching_l2_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
-    rng: random.Random,
-    array_network_cls: Callable[..., ArrayNetworkT],
-    wrap: Wrap,
-    layer_sizes: list[int],
-    dimension: int,
-    class_count: int,
-    l2_lambda: float,
-    bounds: float = 10.0,
-) -> tuple[L2MultiClassBackpropClassifierNetwork, ArrayNetworkT]:
-    """
-    matching_array_backprop_networks for the L2 networks, with l2_lambda.
-    """
-    node_network = L2MultiClassBackpropClassifierNetwork(
-        layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count, l2_lambda
-    )
-    array_network = array_network_cls(layer_sizes, dimension, class_count, l2_lambda)
-
-    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
-    return node_network, array_network
-
-
-class MomentumMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
-    """
-    Test-only per-node multiclass momentum network, the parity reference for the momentum array
-    networks: MultiClassBackpropClassifierNetwork under the Momentum rule.
-    """
-
-    def __init__(
-        self,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]],
-        class_count: int,
-        momentum: float,
-    ) -> None:
-        self.rule = Momentum(momentum)
-        super().__init__(layer_sizes, dimension, input_bounds, class_count)
-
-    def _update_rule(self) -> Momentum:
-        return self.rule
-
-
-def matching_momentum_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
-    rng: random.Random,
-    array_network_cls: Callable[..., ArrayNetworkT],
-    wrap: Wrap,
-    layer_sizes: list[int],
-    dimension: int,
-    class_count: int,
-    momentum: float,
-    bounds: float = 10.0,
-) -> tuple[MomentumMultiClassBackpropClassifierNetwork, ArrayNetworkT]:
-    """
-    matching_array_backprop_networks for the momentum networks, with momentum.
-    """
-    node_network = MomentumMultiClassBackpropClassifierNetwork(
-        layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count, momentum
-    )
-    array_network = array_network_cls(layer_sizes, dimension, class_count, momentum)
-
-    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
-    return node_network, array_network
-
-
-class ReLUMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
-    """
-    Test-only per-node multiclass ReLU network, the parity reference for the ReLU array networks:
-    ReLULayer hidden layers and a sigmoid output layer.
-    """
-
-    hidden_layer_cls = ReLULayer
-
-
-def matching_relu_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
-    rng: random.Random,
-    array_network_cls: Callable[..., ArrayNetworkT],
-    wrap: Wrap,
-    layer_sizes: list[int],
-    dimension: int,
-    class_count: int,
-    bounds: float = 10.0,
-) -> tuple[ReLUMultiClassBackpropClassifierNetwork, ArrayNetworkT]:
-    """
-    matching_array_backprop_networks for the ReLU networks.
-    """
-    node_network = ReLUMultiClassBackpropClassifierNetwork(
-        layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count
-    )
-    array_network = array_network_cls(layer_sizes, dimension, class_count)
-
-    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
-    return node_network, array_network
-
-
-class DropoutMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
-    """
-    Test-only per-node multiclass dropout network, the reference for the dropout array networks:
-    make_dropout_layer_cls hidden layers and a sigmoid output layer. It is a reference at eval
-    only, where dropout does nothing: its training masks come from Python's random, not np.random.
-    """
-
-    def __init__(
-        self,
-        layer_sizes: list[int],
-        dimension: int,
-        input_bounds: list[tuple[float, float]],
-        class_count: int,
-        drop_probability: float,
-    ) -> None:
-        self.hidden_layer_cls = make_dropout_layer_cls(drop_probability)
-        super().__init__(layer_sizes, dimension, input_bounds, class_count)
-
-
-def matching_dropout_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
-    rng: random.Random,
-    array_network_cls: Callable[..., ArrayNetworkT],
-    wrap: Wrap,
-    layer_sizes: list[int],
-    dimension: int,
-    class_count: int,
-    drop_probability: float,
-    bounds: float = 10.0,
-) -> tuple[DropoutMultiClassBackpropClassifierNetwork, ArrayNetworkT]:
-    """
-    matching_array_backprop_networks for the dropout networks, with drop_probability; for
-    eval-mode comparisons only (see DropoutMultiClassBackpropClassifierNetwork).
-    """
-    node_network = DropoutMultiClassBackpropClassifierNetwork(
-        layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count, drop_probability
-    )
-    array_network = array_network_cls(layer_sizes, dimension, class_count, drop_probability)
-
-    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
-    return node_network, array_network
-
-
-def matching_softmax_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
-    rng: random.Random,
-    array_network_cls: Callable[..., ArrayNetworkT],
-    wrap: Wrap,
-    layer_sizes: list[int],
-    dimension: int,
-    class_count: int,
-    bounds: float = 10.0,
-) -> tuple[SoftmaxMultiClassBackpropClassifierNetwork, ArrayNetworkT]:
-    """
-    matching_array_backprop_networks for the softmax networks, against the production
-    SoftmaxMultiClassBackpropClassifierNetwork.
-    """
-    node_network = SoftmaxMultiClassBackpropClassifierNetwork(
-        layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count
-    )
-    array_network = array_network_cls(layer_sizes, dimension, class_count)
-
-    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
-    return node_network, array_network
-
-
-class CrossEntropyMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
-    """
-    Test-only per-node multiclass cross-entropy network, the parity reference for the multiclass
-    cross-entropy array networks: sigmoid hidden layers and a CrossEntropyOutputLayer output.
-    """
-
-    output_layer_cls = CrossEntropyOutputLayer
-
-
-def matching_cross_entropy_multiclass_array_backprop_networks[ArrayNetworkT: ArrayNetworkBase[Any]](
-    rng: random.Random,
-    array_network_cls: Callable[..., ArrayNetworkT],
-    wrap: Wrap,
-    layer_sizes: list[int],
-    dimension: int,
-    class_count: int,
-    bounds: float = 10.0,
-) -> tuple[CrossEntropyMultiClassBackpropClassifierNetwork, ArrayNetworkT]:
-    """
-    matching_array_backprop_networks for the multiclass cross-entropy networks.
-    """
-    node_network = CrossEntropyMultiClassBackpropClassifierNetwork(
-        layer_sizes, dimension, [(-bounds, bounds)] * dimension, class_count
-    )
-    array_network = array_network_cls(layer_sizes, dimension, class_count)
-
-    inject_matching_weights(rng, node_network, array_network, wrap, dimension)
-    return node_network, array_network
-
-
-def matching_conv_array_backprop_networks(
-    rng: random.Random,
-    input_height: int,
-    input_width: int,
-    conv_specs: Sequence[ConvSpec | PoolSpec],
-    dense_layer_sizes: list[int],
-    class_count: int,
-    array_network_cls: type[
-        ConvVectorizedMultiClassBackpropClassifierNetwork | ConvRustArrayMultiClassBackpropClassifierNetwork
-    ] = ConvVectorizedMultiClassBackpropClassifierNetwork,
-    wrap: Wrap = np.array,
-) -> tuple[
-    ConvMultiClassBackpropClassifierNetwork,
-    ConvVectorizedMultiClassBackpropClassifierNetwork | ConvRustArrayMultiClassBackpropClassifierNetwork,
-]:
-    """
-    A ConvMultiClassBackpropClassifierNetwork and an array conv network (array_network_cls,
-    numpy or Rust, with `wrap` its backend's array constructor) with identical injected weights,
-    conv kernels included (a conv W's row c is kernel c's weights). Pool layers have none.
-    """
-    node_network = ConvMultiClassBackpropClassifierNetwork(
-        input_height, input_width, conv_specs, dense_layer_sizes, class_count
-    )
-    array_network = array_network_cls(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-
-    for node_layer, array_layer in zip(node_network.trainable_layers, array_network.layers):
+    reference = reference_network(input_shape, specs, rule)
+    for node_layer, array_layer in zip(reference.trainable_layers, array_network.layers):
         if isinstance(node_layer, ConvLayer):
             assert isinstance(array_layer, (ConvArrayLayer, ConvRustArrayLayer))
             for kernel in node_layer.kernels:
@@ -656,8 +356,7 @@ def matching_conv_array_backprop_networks(
                 node.bias = rng.uniform(-1.0, 1.0)
             array_layer.W = wrap([list(node.input_node_weights) for node in node_layer.nodes])
             array_layer.b = wrap([node.bias for node in node_layer.nodes])
-
-    return node_network, array_network
+    return reference
 
 
 def copy_conv_network_weights_into_array_network(
@@ -678,7 +377,7 @@ def copy_conv_network_weights_into_array_network(
 
 
 def assert_conv_array_network_weights_match(
-    node_network: ConvMultiClassBackpropClassifierNetwork,
+    node_network: BackpropNetworkBase[Any],
     array_network: ArrayNetworkBase[Any],
     rtol: float = 1e-9,
     atol: float = 1e-9,

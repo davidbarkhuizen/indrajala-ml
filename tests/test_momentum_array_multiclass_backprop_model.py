@@ -7,7 +7,6 @@ from indrajala_ml.model.momentum_vectorized_multiclass_backprop_classifier_netwo
 )
 from indrajala_ml.model.update_rules import Momentum, UpdateRule
 from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_tests
-from tests.helpers import matching_momentum_array_backprop_networks
 
 
 def _equivalent(sizes: list[int], output: int, momentum: float) -> tuple[list[LayerSpec], UpdateRule]:
@@ -23,7 +22,6 @@ SPEC = ArrayNetworkSpec(
         "numpy": MomentumVectorizedMultiClassBackpropClassifierNetwork,
         "rust": MomentumRustArrayMultiClassBackpropClassifierNetwork,
     },
-    matching=matching_momentum_array_backprop_networks,
     equivalent=_equivalent,
     hyperparameters={"momentum": 0.5},
     saved_hyperparameters_test="momentum_coefficient",

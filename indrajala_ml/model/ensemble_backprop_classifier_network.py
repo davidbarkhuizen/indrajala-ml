@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
+
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.backprop_network_base import as_dense_layers
 from indrajala_ml.model.classification import argmax_first_occurrence
 from indrajala_ml.model.classifier_protocols import BinaryClassifier
 from indrajala_ml.model.model_io import load_model_json, save_model_json
@@ -39,13 +42,15 @@ class EnsembleBackpropClassifierNetwork[ClassifierT: BinaryClassifier = Backprop
 
     def save(self, path: str) -> None:
         # the pure-Python envelope; EnsembleArrayBackpropClassifierNetwork saves array classifiers
-        classifiers = [c for c in self.classifiers if isinstance(c, BackpropClassifierNetwork)]
+        classifiers: list[BackpropClassifierNetwork[Any]] = [
+            c for c in self.classifiers if isinstance(c, BackpropClassifierNetwork)
+        ]
         assert len(classifiers) == len(self.classifiers), "save needs BackpropClassifierNetwork classifiers"
         assert len({classifier.dimension for classifier in classifiers}) == 1, "every classifier must share a dimension"
         first = classifiers[0]
         save_model_json(
             path,
-            layer_sizes=[layer.size for layer in first.hidden_layers],
+            layer_sizes=[layer.size for layer in as_dense_layers(first.hidden_layers)],
             dimension=first.dimension,
             input_bounds=first.input_bounds,
             class_count=self.class_count,

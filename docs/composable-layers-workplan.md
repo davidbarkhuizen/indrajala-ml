@@ -1,6 +1,6 @@
 # Workplan: composable layers and optimizers
 
-**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-3 done; stage 4 next.**
+**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-4 done; stage 5 next.**
 
 This is step 1 of [primitives-roadmap.md](primitives-roadmap.md). Stages 1-4 are structural
 refactoring: they change structure only, never numerics, under the README's Refactoring rules. At

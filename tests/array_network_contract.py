@@ -1,12 +1,13 @@
 """
-The tests every array network shares, numpy and Rust: parity with its per-node reference network
+The tests every array network shares, numpy and Rust: parity with its pure-Python reference network
 (predictions, and every step of learn and learn_batch), randomized, snapshot and save/load round
 trips, and argument validation.
 
-Each network is also checked against its equivalent: a sequential network
-(sequential_array_network.py) of the layer specs and update rule the test file declares, built
-generically, which must match it by bits at every step (stage 3 of
-docs/composable-layers-workplan.md).
+Both the reference and the bit-level check come from the network's equivalent, the layer specs
+and update rule the test file declares: the reference is the pure-Python sequential network of
+them (sequential_backprop_network.py), and the array sequential network of them
+(sequential_array_network.py), built generically, must match the network by bits at every step
+(stages 3 and 4 of docs/composable-layers-workplan.md).
 
 A test file declares an ArrayNetworkSpec and adds the generated tests to its module, which keeps
 each test's usual name and id (test_x[numpy], test_x[rust]):
@@ -41,13 +42,14 @@ from tests.helpers import (
     assert_array_network_weights_match,
     assert_single_output_array_network_save_load_round_trip,
     assert_single_output_array_network_snapshot_restore_round_trip,
+    dense_reference,
 )
 
 DIMENSION = 6
 LAYER_SIZES = [5]
 CLASS_COUNT = 3
 
-# a network class, per-node or array, is Any here: the specs cover every array network class, whose
+# a network class, pure-Python or array, is Any here: the specs cover every array network class, whose
 # constructors take different hyperparameters
 TestFunction = Callable[..., None]
 
@@ -56,11 +58,9 @@ TestFunction = Callable[..., None]
 class ArrayNetworkSpec:
     # backend name -> network class
     network_cls: dict[str, Any]
-    # a matching_*_array_backprop_networks helper: builds the per-node reference and the array
-    # network with identical weights
-    matching: Callable[..., tuple[Any, Any]]
     # the network as layer specs and an update rule, written out independently of its class:
-    # equivalent(layer_sizes, output_size, *hyperparameters) -> (specs, rule)
+    # equivalent(layer_sizes, output_size, *hyperparameters) -> (specs, rule). Its pure-Python
+    # reference and its sequential counterpart are both built from them
     equivalent: Callable[..., tuple[list[LayerSpec], UpdateRule]]
     # multiclass only (single-output networks have none of the fields from here to the end):
     # the constructor's hyperparameters after class_count, in order (e.g. {"momentum": 0.5})
@@ -68,8 +68,9 @@ class ArrayNetworkSpec:
     learning_rate: float = 0.1
     learn_steps: int = 30
     learn_batches: int = 15
-    # False when training can't be compared with the reference (the per-node dropout reference
-    # draws its masks from Python's random): predictions are compared at eval only, and there are no learn tests
+    # False when training can't be compared with the reference (the pure-Python dropout layers
+    # draw their masks from Python's random): predictions are compared at eval only, and there are
+    # no learn tests
     parity_in_training: bool = True
     probabilities_sum_to_one: bool = False
     # the save/load round-trip test for the hyperparameters: its name suffix and the values saved
@@ -157,9 +158,9 @@ def multiclass_network_tests(spec: ArrayNetworkSpec) -> dict[str, TestFunction]:
     tests, test = _test_registry()
 
     def matching_networks(rng: random.Random, backend: Backend) -> tuple[Any, Any]:
-        return spec.matching(
-            rng, spec.network_cls[backend.name], backend.owned, LAYER_SIZES, DIMENSION, CLASS_COUNT, *hyperparameters
-        )
+        array_network = spec.network_cls[backend.name](LAYER_SIZES, DIMENSION, CLASS_COUNT, *hyperparameters)
+        specs, rule = spec.equivalent(LAYER_SIZES, CLASS_COUNT, *hyperparameters)
+        return dense_reference(rng, array_network, specs, rule, backend.owned, DIMENSION), array_network
 
     def randomized(backend: Backend) -> Any:
         return spec.network_cls[backend.name].randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT, *hyperparameters)
@@ -303,7 +304,10 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, TestFunctio
     tests, test = _test_registry()
 
     def matching_networks(rng: random.Random, backend: Backend) -> tuple[Any, Any]:
-        return spec.matching(rng, spec.network_cls[backend.name], backend.owned, LAYER_SIZES, DIMENSION)
+        array_network = spec.network_cls[backend.name](LAYER_SIZES, DIMENSION)
+        specs, rule = spec.equivalent(LAYER_SIZES, 1)
+        reference = dense_reference(rng, array_network, specs, rule, backend.owned, DIMENSION, "single_output")
+        return reference, array_network
 
     def randomized(backend: Backend) -> Any:
         return spec.network_cls[backend.name].randomized(LAYER_SIZES, DIMENSION)

@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
-from indrajala_ml.model.state_layer import StateLayer
+from indrajala_ml.model.layer_protocols import InputLayer
 
 
 class SoftmaxOutputNode(BackpropNode):
@@ -37,7 +37,7 @@ class SoftmaxOutputLayer(BackpropLayer):
 
     _node_cls = SoftmaxOutputNode
 
-    def __init__(self, size: int, input_layer: StateLayer | BackpropLayer) -> None:
+    def __init__(self, size: int, input_layer: InputLayer) -> None:
         assert size >= 2, f"a softmax layer needs at least 2 nodes to normalize over; got size={size}"
         super().__init__(size, input_layer)
 

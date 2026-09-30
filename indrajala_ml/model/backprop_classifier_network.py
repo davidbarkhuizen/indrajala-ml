@@ -3,11 +3,14 @@ from __future__ import annotations
 import random
 from collections.abc import Sequence
 
-from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
+from indrajala_ml.model.backprop_layer import BackpropLayer
+from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, as_dense_layers
 from indrajala_ml.model.bounds import half_widths as _half_widths
+from indrajala_ml.model.bounds import validate_layer_sizes
+from indrajala_ml.model.layer_protocols import TrainableLayer
 
 
-class BackpropClassifierNetwork(BackpropNetworkBase):
+class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](BackpropNetworkBase[LayerT]):
     """
     A sigmoid network of any depth trained by gradient descent: input -> hidden layer(s) -> one
     trainable output node. Separate from LinearClassifierNetwork, not a retrofit: AssociationNode's
@@ -23,7 +26,8 @@ class BackpropClassifierNetwork(BackpropNetworkBase):
         dimension: int,
         input_bounds: list[tuple[float, float]],
     ) -> None:
-        super().__init__(layer_sizes, dimension, input_bounds, output_size=1)
+        validate_layer_sizes(layer_sizes)
+        super().__init__(self._dense_specs(layer_sizes, 1), (dimension,), input_bounds)
 
     def _forward(self, state: tuple[float, ...]) -> float:
         return self._forward_outputs(state)[0]
@@ -60,14 +64,15 @@ class BackpropClassifierNetwork(BackpropNetworkBase):
         # sigmoid outputs in (0, 1), so a fixed range suffices. Every node draws independently:
         # identical starting weights would get identical gradients forever, collapsing the
         # layer to one effective unit.
+        first, *later = as_dense_layers(self.trainable_layers)
         half_widths = self.half_widths()
-        for node in self.hidden_layers[0].nodes:
+        for node in first.nodes:
             node.update_input_weights(
                 [random.uniform(-2.0 / half_width, 2.0 / half_width) for half_width in half_widths]
             )
             node.bias = random.uniform(-1.0, 1.0)
 
-        for layer in self.trainable_layers[1:]:
+        for layer in later:
             for node in layer.nodes:
                 node.update_input_weights([random.uniform(-1.0, 1.0) for _ in node.input_nodes])
                 node.bias = random.uniform(-1.0, 1.0)

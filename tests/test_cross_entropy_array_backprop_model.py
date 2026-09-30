@@ -7,7 +7,6 @@ from indrajala_ml.model.cross_entropy_rust_array_backprop_classifier_network imp
 from indrajala_ml.model.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.update_rules import SGD, UpdateRule
 from tests.array_network_contract import ArrayNetworkSpec, single_output_network_tests
-from tests.helpers import matching_cross_entropy_array_backprop_networks
 
 
 def _equivalent(sizes: list[int], output: int) -> tuple[list[LayerSpec], UpdateRule]:
@@ -23,7 +22,6 @@ SPEC = ArrayNetworkSpec(
         "numpy": CrossEntropyArrayBackpropClassifierNetwork,
         "rust": CrossEntropyRustArrayBackpropClassifierNetwork,
     },
-    matching=matching_cross_entropy_array_backprop_networks,
     equivalent=_equivalent,
     learning_rate=0.1,
     learn_steps=100,

@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, NoReturn, Self, cast
+from typing import TYPE_CHECKING, Self, cast
 
-from indrajala_ml.model.array_layer_builder import InputShape
 from indrajala_ml.model.array_protocols import BackendArray
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.conv_front_end import ArrayFrontEndLayer, load_conv_model_json, save_conv_array_model_json
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec, sequential_save_not_yet
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.model_io import (
     load_array_model_json,
@@ -221,13 +220,6 @@ class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
         return load_conv_model_json(cls, path, cls._extra_init_kwargs)
 
 
-def _sequential_save_not_yet(network: object) -> NoReturn:
-    raise NotImplementedError(
-        f"a {type(network).__name__} saves in format 2, which records its layer specs "
-        "(docs/composable-layers-workplan.md, stage 5); no legacy envelope can describe them"
-    )
-
-
 class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
     """
     A multiclass network of any accepted layer specs (layer_specs.py) and update rule, over the
@@ -258,11 +250,11 @@ class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
         return self.update_rule
 
     def save(self, path: str) -> None:
-        _sequential_save_not_yet(self)
+        sequential_save_not_yet(self)
 
     @classmethod
     def load(cls, path: str) -> Self:
-        _sequential_save_not_yet(cls)
+        sequential_save_not_yet(cls)
 
 
 class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
@@ -285,8 +277,8 @@ class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
         return self.update_rule
 
     def save(self, path: str) -> None:
-        _sequential_save_not_yet(self)
+        sequential_save_not_yet(self)
 
     @classmethod
     def load(cls, path: str) -> Self:
-        _sequential_save_not_yet(cls)
+        sequential_save_not_yet(cls)

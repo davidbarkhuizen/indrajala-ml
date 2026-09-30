@@ -30,40 +30,6 @@ class ArrayFrontEndLayer[A: BackendArray](ArrayNetworkLayer[A], FrontEndLayer, P
     def size(self) -> int: ...
 
 
-def build_conv_front_end[FrontEndLayerT: FrontEndLayer](
-    input_height: int,
-    input_width: int,
-    conv_specs: Sequence[ConvSpec | PoolSpec],
-    make_conv: Callable[[ConvSpec, Any, int, int, int], FrontEndLayerT],
-    make_pool: Callable[[PoolSpec, Any, int, int, int], FrontEndLayerT],
-    input_layer: object = None,
-) -> list[FrontEndLayerT]:
-    """
-    Chains a conv front end through conv_specs, for the pure-Python conv network (the numpy and
-    Rust ones build theirs from layer specs, array_layer_builder.py). The first layer reads the
-    single-channel image; each later one the previous layer's out_height x out_width x
-    channel_count output.
-
-    make_conv / make_pool(spec, previous, height, width, channels) build one layer. previous is the
-    preceding layer (input_layer for the first), which the pure-Python layers wire nodes to and the
-    array layers ignore. Every layer must expose out_height/out_width/channel_count.
-    """
-    assert any(isinstance(spec, ConvSpec) for spec in conv_specs), "conv_specs must contain at least one ConvSpec"
-
-    layers: list[FrontEndLayerT] = []
-    previous = input_layer
-    height, width, channels = input_height, input_width, 1
-    for spec in conv_specs:
-        if isinstance(spec, PoolSpec):
-            layer = make_pool(spec, previous, height, width, channels)
-        else:
-            layer = make_conv(spec, previous, height, width, channels)
-        layers.append(layer)
-        previous = layer
-        height, width, channels = layer.out_height, layer.out_width, layer.channel_count
-    return layers
-
-
 def spec_to_json(spec: ConvSpec | PoolSpec) -> dict[str, Any]:
     return {"type": "pool" if isinstance(spec, PoolSpec) else "conv", **asdict(spec)}
 

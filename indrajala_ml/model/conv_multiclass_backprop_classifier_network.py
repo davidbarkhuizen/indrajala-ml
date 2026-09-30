@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Self
+from typing import Self, cast
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.backprop_network_base import fan_in_aware_weights_and_bias
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
-from indrajala_ml.model.conv_front_end import build_conv_front_end, load_conv_model_json, save_conv_model_json
+from indrajala_ml.model.conv_front_end import load_conv_model_json, save_conv_model_json
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
-from indrajala_ml.model.python_optimizer import PythonOptimizer
-from indrajala_ml.model.state_layer import StateLayer
 
 
 class ConvMultiClassBackpropClassifierNetwork(
@@ -23,27 +20,23 @@ class ConvMultiClassBackpropClassifierNetwork(
     image, each later one the previous layer's channels), then one or more dense hidden layers and a
     one-vs-rest output layer. conv_specs/conv_layers name the whole front end, pooling included.
 
-    __init__ doesn't call super().__init__(), whose flat layer_sizes and single hidden_layer_cls
-    can't describe conv layers; it builds input_layer/hidden_layers/output_layer/trainable_layers
-    directly, in the shape BackpropNetworkBase's methods expect, and its optimizer. Those, and
-    learn/learn_batch/_backward/classify_state/predict_probabilities, are inherited: they go
-    through per-layer hooks (compute_hidden_deltas, downstream_sum, the gradient and snapshot
-    methods, weight_sets) that ConvLayer implements.
+    Its layer specs are conv_specs followed by the dense specs (_dense_specs), built by
+    BackpropNetworkBase over a (input_height, input_width, 1) input, past the multiclass network's
+    __init__, whose flat layer_sizes can't describe conv layers. learn/learn_batch/_backward/
+    classify_state/predict_probabilities and the fan-in-aware randomize are inherited: they go
+    through per-layer hooks (compute_hidden_deltas, downstream_sum, the gradient, randomize and
+    snapshot methods, weight_sets) that ConvLayer and MaxPoolLayer implement.
 
     Inputs are normalized pixels, so input_bounds is fixed at [(0.0, 1.0)] * dimension, not a
     parameter.
 
-    The layer classes are hooks, as BackpropNetworkBase's: conv_layer_cls for the conv layers and
-    the inherited hidden_layer_cls/output_layer_cls for the dense tail. The update is the
-    optimizer's: a sibling overrides _update_rule, as MomentumConvMultiClassBackpropClassifierNetwork
-    does.
+    The update is the optimizer's: a sibling overrides _update_rule, as
+    MomentumConvMultiClassBackpropClassifierNetwork does.
 
     The numpy and Rust networks (ArrayConvShape) are parity-tested against this one step by step
-    (tests/test_conv_array_multiclass_backprop_model.py); all three build their front end
-    through conv_front_end.build_conv_front_end.
+    (tests/test_conv_array_multiclass_backprop_model.py); all three build their layers from the
+    same specs (python_layer_builder.py, array_layer_builder.py).
     """
-
-    conv_layer_cls: type[ConvLayer] = ConvLayer
 
     def __init__(
         self,
@@ -56,72 +49,22 @@ class ConvMultiClassBackpropClassifierNetwork(
 
         validate_class_count(class_count)
         validate_layer_sizes(dense_layer_sizes, label="dense_layer_sizes", noun="dense hidden layer")
+        assert any(isinstance(spec, ConvSpec) for spec in conv_specs), "conv_specs must contain at least one ConvSpec"
 
         self.class_count = class_count
-        self.dimension = input_height * input_width
         self.input_height = input_height
         self.input_width = input_width
         self.conv_specs = list(conv_specs)
         self.dense_layer_sizes = dense_layer_sizes
 
-        self.input_bounds = [(0.0, 1.0)] * self.dimension
-        self.input_layer = StateLayer(self.dimension, self.input_bounds)
-
-        self.conv_layers: list[ConvLayer | MaxPoolLayer] = build_conv_front_end(
-            input_height,
-            input_width,
-            self.conv_specs,
-            make_conv=lambda spec, previous, height, width, channels: self.conv_layer_cls(
-                input_layer=previous,
-                input_height=height,
-                input_width=width,
-                kernel_size=spec.kernel_size,
-                channel_count=spec.channel_count,
-                stride=spec.stride,
-                input_channels=channels,
-            ),
-            make_pool=lambda spec, previous, height, width, channels: MaxPoolLayer(
-                input_layer=previous,
-                input_height=height,
-                input_width=width,
-                input_channels=channels,
-                pool_size=spec.pool_size,
-                stride=spec.stride,
-            ),
-            input_layer=self.input_layer,
+        dimension = input_height * input_width
+        # past the multiclass network's __init__ to BackpropNetworkBase's
+        super(MultiClassBackpropClassifierNetwork, self).__init__(
+            [*self.conv_specs, *self._dense_specs(dense_layer_sizes, class_count)],
+            (input_height, input_width, 1),
+            [(0.0, 1.0)] * dimension,
         )
-
-        dense_layers: list[BackpropLayer] = []
-        previous_layer: ConvLayer | MaxPoolLayer | BackpropLayer = self.conv_layers[-1]
-        for size in dense_layer_sizes:
-            layer = self.hidden_layer_cls(size=size, input_layer=previous_layer)
-            dense_layers.append(layer)
-            previous_layer = layer
-
-        self.output_layer = self.output_layer_cls(size=class_count, input_layer=previous_layer)
-
-        self.hidden_layers = [*self.conv_layers, *dense_layers]
-        self.trainable_layers = [*self.hidden_layers, self.output_layer]
-
-        self.optimizer = PythonOptimizer(self._update_rule())
-
-    def randomize(self) -> None:
-        # conv layers first, in forward order, each from its kernel fan-in
-        # (kernel_size**2 * input_channels); a MaxPoolLayer draws nothing, so adding pooling
-        # never shifts a conv layer's draws
-        for conv_layer in self.conv_layers:
-            conv_layer.randomize_fan_in_aware()
-
-        # the dense tail, not randomize_fan_in_aware(network), which assumes every trainable
-        # layer is dense; the first dense layer's fan-in is the front end's flattened output
-        previous_size = len(self.conv_layers[-1].nodes)
-        for layer in self.hidden_layers[len(self.conv_layers) :] + [self.output_layer]:
-            assert isinstance(layer, BackpropLayer)  # everything after the front end is dense
-            for node in layer.nodes:
-                weights, bias = fan_in_aware_weights_and_bias(previous_size)
-                node.update_input_weights(weights)
-                node.bias = bias
-            previous_size = layer.size
+        self.conv_layers = cast("list[ConvLayer | MaxPoolLayer]", self.hidden_layers[: len(self.conv_specs)])
 
     def save(self, path: str) -> None:
         # the inherited snapshot() covers conv layers through their snapshot_state()
