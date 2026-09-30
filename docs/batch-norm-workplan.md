@@ -1,6 +1,6 @@
 # Workplan: batch normalization
 
-**Status: stages 0-2 done (2026-09-30); stage 3 next. Decisions D1-D8 settled by the owner (2026-09-30).**
+**Status: stages 0-3 done (2026-09-30); stage 4 next. Decisions D1-D8 settled by the owner (2026-09-30).**
 
 This is step 2 of [primitives-roadmap.md](primitives-roadmap.md). It adds one new layer kind,
 batch normalization (Ioffe & Szegedy 2015), for dense and conv networks, under every update rule,
@@ -259,6 +259,12 @@ did.
    Each op mirrors the numpy formula. Crate tests check them against their reference formulas.
 2. Bump `rust/`, then add `LinearRustArrayLayer` and `BatchNormRustArrayLayer`.
 3. Tests: bit-identity with numpy for every op and for whole training runs under every rule.
+   - Done: every batch-norm op is numpy's by bits given the same inputs. Whole runs are not, and
+     can't be: the linear layer's `X @ W.T` is BLAS in numpy and the crate's FMA chains in Rust,
+     as for every dense layer, and Adam's `1 - beta**t` rounds differently (`powi`). Measured
+     after 50 steps: at most 4.4e-12 relative, and the same networks without batch norm 1.2e-12.
+   - The optimizer steps a pair of parameters per fused call: a linear layer's W takes an empty
+     array in b's place, so no crate op was needed for it.
 
 ### Stage 4: conv batch norm (per channel) in all three implementations
 

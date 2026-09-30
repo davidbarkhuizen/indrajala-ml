@@ -241,9 +241,9 @@ rounds differently when `B` isn't a power of two.
 
 ## Batch normalization
 
-Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)): numpy and pure Python
-build dense batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`. Rust, conv
-batch norm and saving it are later stages, and refuse it until then. This section fixes the forms
+Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)): numpy, pure Python and
+Rust build dense batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`. Conv batch
+norm and saving it are later stages, and refuse it until then. This section fixes the forms
 all three implementations are held to.
 
 A pure-Python network with batch norm trains a batch layer by layer (`layer_major.py`): forward
@@ -332,9 +332,10 @@ backward, from delta_i = dl/dy_i (the activation's derivative already applied)
 single feature pairwise from 8 rows, and `D.sum(axis=(0, 2))` over a conv channel doesn't. The
 numpy layers sum with `np.cumsum` along the summed axis, which does at every shape. The
 pure-Python layer sums with an explicit loop: the builtin `sum` adds floats with compensated
-summation since Python 3.12. Given the same inputs, the pure-Python and numpy layers compute the same
-bits (`tests/test_batch_norm_python_network.py`). Whole networks agree within the pure-Python parity
-tolerance only, since their dense layers' sums differ, with or without batch norm. Only
+summation since Python 3.12. Given the same inputs, the pure-Python, numpy and Rust layers compute the same
+bits (`tests/test_batch_norm_python_network.py`, `tests/test_batch_norm_rust_network.py`). Whole
+networks agree within their dense layers' rounding only, which differs with or without batch norm:
+the pure-Python parity tolerance, and between numpy and Rust, BLAS's products against the crate's. Only
 `+ − × ÷` and `sqrt` appear, each correctly rounded in IEEE 754, so every implementation that
 follows these forms computes the same bits. There's no `pow`, since `(var + eps)^(-3/2)` through a library `pow` could
 differ between Python, numpy and Rust. `tests/gradient_check.py` checks each implementation's

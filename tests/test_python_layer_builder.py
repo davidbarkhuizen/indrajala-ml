@@ -21,7 +21,7 @@ from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.test_layer_specs import BATCH_NORM, INVALID, KINDS, LINEAR, NUMPY_KINDS, OUTPUT, VALID
+from tests.test_layer_specs import BATCH_NORM, INVALID, KINDS, LINEAR, OUTPUT, VALID
 
 # ArrayLayerClasses' field names (KINDS), as the pure-Python classes; a dropout layer's class is
 # made per drop probability (make_dropout_layer_cls), so it's checked by its nodes instead
@@ -58,11 +58,7 @@ def test_a_rejected_combination_doesnt_build(specs: list[LayerSpec]):
         _build(specs, (8, 8, 1))
 
 
-@pytest.mark.parametrize(
-    "specs, index, kind",
-    [kind[1:] for kind in KINDS + NUMPY_KINDS],
-    ids=[kind[0] for kind in KINDS + NUMPY_KINDS],
-)
+@pytest.mark.parametrize("specs, index, kind", [kind[1:] for kind in KINDS], ids=[kind[0] for kind in KINDS])
 def test_each_spec_kind_builds_its_pure_python_layer_class(specs: list[LayerSpec], index: int, kind: str):
     layer = _build(specs, (8, 8, 1))[index]
     if kind == "dropout":
