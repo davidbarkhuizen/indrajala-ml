@@ -22,7 +22,7 @@ own platform.
   about the AVX2 path. Windows and macOS find anything in the build or tests that assumes Linux.
 - **Each decision is measured and recorded.** The abi3 choice and the manylinux build could
   change per-call overhead, so each is timed against the current build before it is adopted (the
-  rules in [optimizations/measurement.md](optimizations/measurement.md)).
+  rules in [measurement.md](measurement.md)).
 
 ## Where things are now
 
@@ -72,7 +72,7 @@ own platform.
   `scripts/golden_training_run.py check` must pass bit-identical. A difference means the change
   reached arithmetic, and it must be explained, not accepted within a tolerance.
 - **Old against new timing:** commit each build first and alternate the builds, as
-  [optimizations/measurement.md](optimizations/measurement.md)'s protocols say (a stash once made
+  [measurement.md](measurement.md)'s protocols say (a stash once made
   both builds `main`).
 - **Relative links in the README break on PyPI.** The README maturin uploads needs absolute
   GitHub URLs.
@@ -112,7 +112,7 @@ list access) then go through slower calls.
 1. On a branch, add `abi3-py314` to pyo3's features. Build it and check that everything still
    compiles. Two pyclasses and no buffer protocol are expected to be fine.
 2. Time abi3 against non-abi3, both builds committed and alternated
-   ([optimizations/measurement.md](optimizations/measurement.md#protocols)):
+   ([measurement.md](measurement.md#6-protocols)):
    `focused_benchmark.py --backend rust` over the single-example dense ops at the smallest shapes
    (where the Python boundary is the largest share of a call), and `epoch_op_profile.py` for conv.
 3. Decide from the measurement. Adopt abi3 if nothing on a hot path regresses above noise, and

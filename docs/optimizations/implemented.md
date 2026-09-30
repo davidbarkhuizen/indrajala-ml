@@ -5,14 +5,14 @@ Part of the optimization docs; the index is [../optimizations.md](../optimizatio
 What the code does for speed, and why each choice is right for this workload. Each item names
 the mechanism it exploits, the evidence, and where it lives. Crate PR numbers (`crate #N`) are
 `indrajala-math-rust`'s (`rust/`); plain `#N` are this repo's. Numbers are µs per call on the
-benchmark machine (see [Measurement](measurement.md#the-machine)) unless marked otherwise.
+benchmark machine (see [Measurement](../measurement.md#2-preparing-the-machine)) unless marked otherwise.
 
 ## The constraint every kernel keeps: one fixed summation order
 
 Every Rust result is bit-identical between the scalar and AVX2+FMA paths and at every thread
 count, so a training run doesn't depend on the machine. That matters because training is
 chaotically sensitive to rounding (a 1-ULP change to one weight moves end-of-run accuracy as
-much as a real change; see [Measurement](measurement.md#judging-correctness)), so bit-identity is
+much as a real change; see [Measurement](../measurement.md#8-judging-correctness)), so bit-identity is
 the only way an optimization can be proven not to change results. Each kernel has one order:
 
 - **Matrix @ vector and `matmul_nt` (`X @ W.T`, every forward):** `dot_product`'s grouping. Lane
@@ -128,7 +128,7 @@ buffers sit in L1/L2 and cost nothing; at N = 32 each fill and each strided pass
 the batch op cost 1.5-2.1x its single calls. Per example, the 48 KB slab of `cols` and the 43 KB
 product stay hot, and nothing is zero-filled. Just dropping the fills was not enough: the strided
 scatter then paid for fetching `A`'s lines itself (see [the first-touch
-gotcha](measurement.md#gotchas)); writing `A` in order is what made it pay. N = 32: 1351-1694 →
+gotcha](../measurement.md#7-gotchas)); writing `A` in order is what made it pay. N = 32: 1351-1694 →
 920-1010 µs; N = 512: 34-40 → 15-16 ms. The per-example product doesn't thread; at N = 512
 threading had given nothing.
 
@@ -158,7 +158,7 @@ loop, which fixes numpy's summation order.
 
 Why: the old op swept every window once per slot (`k * k` passes) after a separate validation
 pass. At 26x26x8: 22.8-24.4 → 5.7-6.3 µs single, 1211-1276 → 166-177 or 373-394 µs at N = 32 (two
-modes between processes; see [Measurement](measurement.md#gotchas)), 26-28 → 9.7-12.9 ms at
+modes between processes; see [Measurement](../measurement.md#7-gotchas)), 26-28 → 9.7-12.9 ms at
 N = 512. In the conv-pool-conv epoch the op went from 41-45 to 11.5-12.2 ms single-example and
 48-53 to 17.2-18.4 ms at mini-batch 32, about 4% of each run. A plain store measured the same as
 the add, and the offset table the same as a division or faster.

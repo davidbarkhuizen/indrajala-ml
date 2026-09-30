@@ -79,5 +79,5 @@ Unexplained effects a candidate's stage 0 may need settled:
 - **The Rust dense step loop slows with batch size at equal flops**: B = 32 → 512 added 0.88 s, of
   which batch conversion (since removed) was 0.33 s; the Rust ops stayed flat.
 - **How much the conv demo's in-process interleaving slows Rust** (see
-  [Measurement](measurement.md#gotchas)), and the end-to-end ratio against single-threaded numpy,
+  [Measurement](../measurement.md#7-gotchas)), and the end-to-end ratio against single-threaded numpy,
   estimated at 0.55-0.6 for MNIST conv mini-batch 32 but not measured side by side.

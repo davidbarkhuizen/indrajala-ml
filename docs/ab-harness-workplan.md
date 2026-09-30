@@ -1,6 +1,6 @@
 # Workplan: the A/B harness and a stand-alone measurement guide
 
-**Status: in progress. Decisions D1-D7 settled by the owner (2026-09-30), D4's verdict revised in stage 1; stages 1-3 done.**
+**Status: done (2026-09-30), stages 1-4 (#488-#491). Decisions D1-D7 settled by the owner (2026-09-30), D4's verdict revised in stage 1.**
 
 This plan adds `scripts/ab.py`, one tool that runs a timing A/B between two commits by this repo's
 protocol and reports it. Every A/B so far has been hand-built instead. It also rewrites the
@@ -27,7 +27,7 @@ golden run is unaffected.
   finished passes, plus `sleep` loops and fallback wake-ups. It also read 40-130K characters of raw
   logs and JSON, where the decision needed about ten table rows. Each check is a full turn that
   re-reads the whole conversation.
-- **The rules are applied by hand.** [measurement.md](optimizations/measurement.md) sets them:
+- **The rules are applied by hand.** [measurement.md](measurement.md) sets them:
   - alternate the builds, commit both sides first, and run one process per measurement;
   - read the other backend, or `prepare`, as the control;
   - treat changes under about 20% as noise unless the passes agree;
@@ -376,6 +376,12 @@ The stage also:
   - `./cli lint`, since ruff also formats Python blocks in Markdown;
   - a grep that finds no link to the old path;
   - the owner reads the guide as a newcomer would.
+
+- **As built:** the guide is [measurement.md](measurement.md), numbered 1-10 as above so its
+  anchors are stable; `optimizations.md` links to it. `CLAUDE.md` is 18 lines. The scripts whose
+  docstrings described old/new by hand (`prepared_dataset_timing.py`, `epoch_op_profile.py`,
+  `op_call_timing.py`) point to `ab.py`; `machine_profile.py` and `focused_benchmark.py` point to
+  the new path. The workplan's own history still names the old path, as text, not a link.
 
 ## After this plan
 
