@@ -25,7 +25,7 @@ import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.array_protocols import ArrayNetworkLayer, TrainedArrayLayer, WeightedArrayLayer
+from indrajala_ml.model.array_protocols import ArrayNetworkLayer, TrainedArrayLayer
 from indrajala_ml.model.checkpoint import OptimizerState
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
@@ -163,12 +163,25 @@ def _rust_zeros(like: pa.Array) -> pa.Array:
     return pa.Array.zeros(shape[0] if len(shape) == 1 else (shape[0], shape[1]))
 
 
+# a bias-free layer's missing second parameter: the fused ops step each parameter of their pair on
+# its own, and step an empty array to an empty array
+_EMPTY = pa.Array.zeros(0)
+
+
+def _pair(arrays: tuple[pa.Array, ...] | list[pa.Array]) -> tuple[pa.Array, pa.Array]:
+    # a layer's parameters (or gradients, or one of the rule's state arrays) as the fused ops'
+    # (W, b) pair: (W, b), (gamma, beta), or a linear layer's (W, empty)
+    return (arrays[0], arrays[1]) if len(arrays) == 2 else (arrays[0], _EMPTY)
+
+
 class RustOptimizer:
     """
-    NumpyOptimizer on the Rust backend: each rule is one fused call per layer (fused.rs), taking W
-    and b together, and the layer's W and b are rebound to its result. For SGD the single-example
-    step is one fused call too (step_single). Every Rust layer is a dense or conv layer's (W, b):
-    the Rust builder doesn't build batch norm yet (the batch-norm workplan, stage 3).
+    NumpyOptimizer on the Rust backend: each rule is one fused call per layer (fused.rs), taking a
+    pair of parameters, and the layer's parameters are rebound to its result. The pair is a dense
+    or conv layer's (W, b), a batch-norm layer's (gamma, beta), or a linear layer's W with an empty
+    array in b's place: every fused op checks each parameter against its own gradient and state
+    only. The state is per parameter, as NumpyOptimizer's. For SGD the single-example step is one
+    fused call too (step_single).
     """
 
     def __init__(self, rule: UpdateRule) -> None:
@@ -203,11 +216,12 @@ class RustOptimizer:
         }
 
     def apply(self, index: int, layer: ArrayNetworkLayer[pa.Array], learning_rate: float, batch_size: int) -> None:
-        if not hasattr(layer, "W"):
-            return  # a pool layer: no weights
-        weighted = cast("WeightedArrayLayer[pa.Array]", layer)
-        self._apply_rule(index, weighted, learning_rate, batch_size)
-        weighted.reset_gradient_accum()
+        if not hasattr(layer, "parameters"):
+            return  # a pool layer: nothing trained
+        trained = cast("TrainedArrayLayer[pa.Array]", layer)
+        parameters = self._apply_rule(index, trained, learning_rate, batch_size)
+        trained.set_parameters(parameters[: len(trained.decayed)])
+        trained.reset_gradient_accum()
 
     def step_single(
         self, index: int, layer: ArrayNetworkLayer[pa.Array], input_activation: pa.Array, learning_rate: float
@@ -223,67 +237,66 @@ class RustOptimizer:
         layer.accumulate_gradient(input_activation)
         self.apply(index, layer, learning_rate, 1)
 
-    def _zeros(self, index: int, layer: WeightedArrayLayer[pa.Array], count: int) -> list[pa.Array]:
+    def _zeros(self, index: int, layer: TrainedArrayLayer[pa.Array], count: int) -> list[pa.Array]:
         # as NumpyOptimizer._zeros
         state = self._state.get(index)
         if state is None:
-            state = self._state[index] = [_rust_zeros(layer.W) for _ in range(count)] + [
-                _rust_zeros(layer.b) for _ in range(count)
+            state = self._state[index] = [
+                _rust_zeros(parameter) for parameter in layer.parameters() for _ in range(count)
             ]
         return state
 
     def _apply_sgd(
-        self, _index: int, layer: WeightedArrayLayer[pa.Array], learning_rate: float, batch_size: int
-    ) -> None:
-        layer.W, layer.b = pa.layer_apply_accumulated_gradient(
-            layer.W, layer.b, layer.grad_W, layer.grad_b, learning_rate, batch_size
+        self, _index: int, layer: TrainedArrayLayer[pa.Array], learning_rate: float, batch_size: int
+    ) -> tuple[pa.Array, pa.Array]:
+        return pa.layer_apply_accumulated_gradient(
+            *_pair(layer.parameters()), *_pair(layer.gradients()), learning_rate, batch_size
         )
 
     def _apply_weight_decay(
-        self, _index: int, layer: WeightedArrayLayer[pa.Array], learning_rate: float, batch_size: int
-    ) -> None:
-        layer.W, layer.b = pa.layer_l2_apply_accumulated_gradient(
-            layer.W,
-            layer.b,
-            layer.grad_W,
-            layer.grad_b,
+        self, index: int, layer: TrainedArrayLayer[pa.Array], learning_rate: float, batch_size: int
+    ) -> tuple[pa.Array, pa.Array]:
+        if not layer.decayed[0]:
+            # gamma and beta: plain SGD, as NumpyOptimizer steps a parameter that isn't decayed
+            return self._apply_sgd(index, layer, learning_rate, batch_size)
+        return pa.layer_l2_apply_accumulated_gradient(
+            *_pair(layer.parameters()),
+            *_pair(layer.gradients()),
             cast(WeightDecay, self.rule).l2_lambda,
             learning_rate,
             batch_size,
         )
 
     def _apply_momentum(
-        self, index: int, layer: WeightedArrayLayer[pa.Array], learning_rate: float, batch_size: int
-    ) -> None:
-        # state: velocity_W, velocity_b
+        self, index: int, layer: TrainedArrayLayer[pa.Array], learning_rate: float, batch_size: int
+    ) -> tuple[pa.Array, pa.Array]:
+        # state: a velocity per parameter
         state = self._zeros(index, layer, 1)
-        layer.W, layer.b, state[0], state[1] = pa.layer_momentum_apply_accumulated_gradient(
-            layer.W,
-            layer.b,
-            layer.grad_W,
-            layer.grad_b,
-            state[0],
-            state[1],
+        w, b, velocity_w, velocity_b = pa.layer_momentum_apply_accumulated_gradient(
+            *_pair(layer.parameters()),
+            *_pair(layer.gradients()),
+            *_pair(state),
             cast(Momentum, self.rule).momentum,
             learning_rate,
             batch_size,
         )
+        state[:] = [velocity_w, velocity_b][: len(state)]
+        return w, b
 
     def _apply_adam(
-        self, index: int, layer: WeightedArrayLayer[pa.Array], learning_rate: float, batch_size: int
-    ) -> None:
+        self, index: int, layer: TrainedArrayLayer[pa.Array], learning_rate: float, batch_size: int
+    ) -> tuple[pa.Array, pa.Array]:
         rule = cast(Adam, self.rule)
-        # state: m_W, v_W, m_b, v_b
+        # state: m, then v, per parameter
         state = self._zeros(index, layer, 2)
-        layer.W, layer.b, state[0], state[1], state[2], state[3] = pa.layer_adam_apply_accumulated_gradient(
-            layer.W,
-            layer.b,
-            layer.grad_W,
-            layer.grad_b,
-            state[0],
-            state[1],
-            state[2],
-            state[3],
+        m_w, v_w, m_b, v_b = state if len(state) == 4 else (*state, _EMPTY, _EMPTY)
+        w, b, m_w, v_w, m_b, v_b = pa.layer_adam_apply_accumulated_gradient(
+            *_pair(layer.parameters()),
+            *_pair(layer.gradients()),
+            m_w,
+            v_w,
+            m_b,
+            v_b,
             self.t,
             rule.beta1,
             rule.beta2,
@@ -291,3 +304,5 @@ class RustOptimizer:
             learning_rate,
             batch_size,
         )
+        state[:] = [m_w, v_w, m_b, v_b][: len(state)]
+        return w, b
