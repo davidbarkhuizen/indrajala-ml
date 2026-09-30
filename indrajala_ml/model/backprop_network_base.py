@@ -6,10 +6,11 @@ from typing import Any, Self, cast
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.bounds import validate_batch, validate_input_bounds
+from indrajala_ml.model.checkpoint import Checkpoint
 from indrajala_ml.model.layer_protocols import TrainableLayer
 from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
 from indrajala_ml.model.python_layer_builder import build_python_layers
-from indrajala_ml.model.python_optimizer import PythonOptimizer
+from indrajala_ml.model.python_optimizer import PythonOptimizer, WeightSetState
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.update_rules import SGD, UpdateRule
 
@@ -145,6 +146,16 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
     def restore(self, snapshot: list[list[tuple[list[float], float]]]) -> None:
         for layer, layer_snapshot in zip(self.trainable_layers, snapshot):
             layer.restore_state(layer_snapshot)
+
+    def checkpoint(self) -> Checkpoint[list[list[tuple[list[float], float]]], list[WeightSetState]]:
+        # the weights and the optimizer's state (checkpoint.py)
+        return Checkpoint(self.snapshot(), self.optimizer.state())
+
+    def restore_checkpoint(
+        self, checkpoint: Checkpoint[list[list[tuple[list[float], float]]], list[WeightSetState]]
+    ) -> None:
+        self.restore(checkpoint.weights)
+        self.optimizer.load_state(checkpoint.optimizer)
 
 
 def as_dense_layers(layers: Sequence[TrainableLayer]) -> list[BackpropLayer]:

@@ -152,8 +152,9 @@ def train_linear_classifier_network[L](
 
     Training accuracy can oscillate rather than settle, especially when the target isn't
     representable at student's cardinality/required_active, so student is left at the epoch end
-    with the best training accuracy (a pocket snapshot), which is the last epoch when training
-    converges. The returned ConvergenceSeries's .diagnostic says whether it converged, plateaued or
+    with the best training accuracy (a pocket checkpoint: the weights and the optimizer's state,
+    model/checkpoint.py, so training on from there resumes from that epoch), which is the last
+    epoch when training converges. The returned ConvergenceSeries's .diagnostic says whether it converged, plateaued or
     was still improving.
 
     With reference_classifier, the series holds the disagreement rate against it before training and
@@ -170,7 +171,7 @@ def train_linear_classifier_network[L](
 
     prepared = _prepared_for(student, training_data)
 
-    best_snapshot = student.snapshot()
+    best_checkpoint = student.checkpoint()
     best_training_accuracy = _training_accuracy(student, training_data, prepared)
     best_epoch_index = -1  # -1: the untrained starting point was never beaten
     epoch_training_accuracies: list[float] = []
@@ -204,9 +205,9 @@ def train_linear_classifier_network[L](
         if training_accuracy > best_training_accuracy:
             best_training_accuracy = training_accuracy
             best_epoch_index = epoch_index
-            best_snapshot = student.snapshot()
+            best_checkpoint = student.checkpoint()
 
-    student.restore(best_snapshot)
+    student.restore_checkpoint(best_checkpoint)
 
     result = ConvergenceSeries(convergence)
     result.diagnostic = TrainingDiagnostic(epoch_training_accuracies, best_epoch_index, best_training_accuracy)
@@ -242,7 +243,7 @@ def train_backprop_network_mini_batch[L](
     Reshuffles training_data every epoch by default (reshuffle_each_epoch=False keeps the batches
     fixed). A final short batch is kept. training_data may be a PreparedDataset.
 
-    Otherwise as train_linear_classifier_network: the pocket snapshot of the best epoch, and the
+    Otherwise as train_linear_classifier_network: the pocket checkpoint of the best epoch, and the
     TrainingDiagnostic/ConvergenceSeries return.
     """
 
@@ -256,7 +257,7 @@ def train_backprop_network_mini_batch[L](
 
     prepared = _prepared_for(student, training_data)
 
-    best_snapshot = student.snapshot()
+    best_checkpoint = student.checkpoint()
     best_training_accuracy = _training_accuracy(student, training_data, prepared)
     best_epoch_index = -1  # -1: the untrained starting point was never beaten
     epoch_training_accuracies: list[float] = []
@@ -296,9 +297,9 @@ def train_backprop_network_mini_batch[L](
         if training_accuracy > best_training_accuracy:
             best_training_accuracy = training_accuracy
             best_epoch_index = epoch_index
-            best_snapshot = student.snapshot()
+            best_checkpoint = student.checkpoint()
 
-    student.restore(best_snapshot)
+    student.restore_checkpoint(best_checkpoint)
 
     result = ConvergenceSeries(convergence)
     result.diagnostic = TrainingDiagnostic(epoch_training_accuracies, best_epoch_index, best_training_accuracy)

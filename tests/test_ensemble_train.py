@@ -328,7 +328,7 @@ def test_train_ensemble_parallel_accepts_array_backed_classifier_cls():
 
 def test_train_ensemble_parallel_accepts_rust_array_backed_classifier_cls():
 
-    # indrajala_math_rust.Array can't be pickled: _picklable_snapshot sends plain lists back
+    # indrajala_math_rust.Array can't be pickled: _picklable_checkpoint sends plain lists back
     # from the worker, and the Rust network's restore() accepts them
     dataset = _synthetic_multiclass_dataset()
     bounds = square_bounds(10.0)
@@ -440,6 +440,10 @@ def test_train_ensemble_serial_from_indices_matches_the_parallel_path(tmp_path: 
     parallel_ensemble, _ = _train_synthetic_from_indices(path, labels, bounds, epochs=3, seed=7)
 
     assert serial_ensemble.snapshot() == parallel_ensemble.snapshot()
+    # the optimizers' state crosses the Pool boundary in the checkpoint, with the weights
+    serial_steps = [classifier.optimizer.t for classifier in serial_ensemble.classifiers]
+    assert [classifier.optimizer.t for classifier in parallel_ensemble.classifiers] == serial_steps
+    assert all(t > 0 for t in serial_steps)
 
 
 def test_train_ensemble_serial_from_indices_accepts_array_and_rust_backed_classifier_cls(tmp_path: Path):

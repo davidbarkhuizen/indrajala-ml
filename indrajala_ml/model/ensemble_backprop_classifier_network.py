@@ -40,6 +40,13 @@ class EnsembleBackpropClassifierNetwork[ClassifierT: BinaryClassifier = Backprop
         for classifier, classifier_snapshot in zip(self.classifiers, snapshot):
             classifier.restore(classifier_snapshot)
 
+    def checkpoint(self) -> list[Any]:
+        return [classifier.checkpoint() for classifier in self.classifiers]
+
+    def restore_checkpoint(self, checkpoint: list[Any]) -> None:
+        for classifier, classifier_checkpoint in zip(self.classifiers, checkpoint):
+            classifier.restore_checkpoint(classifier_checkpoint)
+
     def save(self, path: str) -> None:
         # the pure-Python envelope; EnsembleArrayBackpropClassifierNetwork saves array classifiers
         classifiers: list[BackpropClassifierNetwork[Any]] = [

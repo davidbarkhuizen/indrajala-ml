@@ -45,10 +45,10 @@ class _TupleRecorder:
     def classify_state(self, state: State) -> int:
         return 0
 
-    def snapshot(self) -> None:
+    def checkpoint(self) -> None:
         return None
 
-    def restore(self, snapshot: object) -> None:
+    def restore_checkpoint(self, checkpoint: object) -> None:
         pass
 
 

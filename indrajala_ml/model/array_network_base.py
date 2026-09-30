@@ -15,6 +15,7 @@ from indrajala_ml.model.array_protocols import (
     WeightedArrayLayer,
 )
 from indrajala_ml.model.bounds import validate_batch
+from indrajala_ml.model.checkpoint import Checkpoint
 from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
 from indrajala_ml.model.update_rules import SGD, UpdateRule
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
@@ -25,8 +26,8 @@ class ArrayNetworkBase[A: BackendArray]:
     What every array-backed network shares, numpy and Rust (NumpyArrayNetworkBase and
     RustArrayNetworkBase set the backend, A being its array type): layers built from layer specs
     (layer_specs.py, array_layer_builder.py), the forward pass, learn/learn_batch and their
-    prepared-dataset forms, classify_rows, fan-in-aware randomize, and snapshot/restore, all over
-    self.layers whatever their kinds.
+    prepared-dataset forms, classify_rows, fan-in-aware randomize, snapshot/restore and
+    checkpoint/restore_checkpoint, all over self.layers whatever their kinds.
 
     A sibling differs only in its layer specs (_hidden_spec/_output_spec), its update rule
     (_update_rule) and their hyperparameters. The forward and backward formulas live in the layer
@@ -239,3 +240,12 @@ class ArrayNetworkBase[A: BackendArray]:
             W, b = entry
             layer.W = self.backend.owned(W)
             layer.b = self.backend.owned(b)
+
+    def checkpoint(self) -> Checkpoint[list[tuple[A, ...]], list[A]]:
+        # the weights and the optimizer's state (checkpoint.py)
+        return Checkpoint(self.snapshot(), self.optimizer.state())
+
+    def restore_checkpoint(self, checkpoint: Checkpoint[Any, Any]) -> None:
+        # as restore, this backend's arrays or nested lists
+        self.restore(checkpoint.weights)
+        self.optimizer.load_state(checkpoint.optimizer)
