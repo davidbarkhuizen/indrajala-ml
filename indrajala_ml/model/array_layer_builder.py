@@ -17,7 +17,7 @@ from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLay
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
 from indrajala_ml.model.conv_front_end import ArrayFrontEndLayer
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
+from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer, LinearConvRustArrayLayer
 from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
@@ -51,7 +51,7 @@ class ArrayLayerClasses:
     # batch norm's pair (the batch-norm workplan): a bias-free linear layer, then the norm layer
     linear: LayerClass
     batch_norm: LayerClass
-    linear_conv: FrontEndLayerClass | None  # None where conv batch norm isn't built yet
+    linear_conv: FrontEndLayerClass
 
 
 LAYER_CLASSES = {
@@ -77,17 +77,9 @@ LAYER_CLASSES = {
         pool=MaxPoolRustArrayLayer,
         linear=LinearRustArrayLayer,
         batch_norm=BatchNormRustArrayLayer,
-        linear_conv=None,
+        linear_conv=LinearConvRustArrayLayer,
     ),
 }
-
-
-def _linear_conv_class(classes: ArrayLayerClasses, backend_name: str) -> FrontEndLayerClass:
-    if classes.linear_conv is None:
-        raise NotImplementedError(
-            f"conv batch norm on the {backend_name} backend is stage 4c of docs/batch-norm-workplan.md; not built yet"
-        )
-    return classes.linear_conv
 
 
 def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> ArrayNetworkLayer[Any]:
@@ -130,7 +122,7 @@ def build_array_layers(
         assert len(shape) == 3, f"a conv or pool layer needs a (height, width, channels) input; got {shape}"
         height, width, channels = shape
         if isinstance(spec, ConvSpec):
-            conv = classes.conv if spec.activation == "relu" else _linear_conv_class(classes, backend_name)
+            conv = classes.conv if spec.activation == "relu" else classes.linear_conv
             layer = conv(height, width, channels, spec.kernel_size, spec.channel_count, spec.stride)
         else:
             layer = classes.pool(height, width, channels, spec.pool_size, spec.stride)

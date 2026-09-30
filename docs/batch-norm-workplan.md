@@ -1,6 +1,6 @@
 # Workplan: batch normalization
 
-**Status: stages 0-3, 4a (numpy) and 4b (pure Python) done (2026-09-30); stage 4c next. Decisions D1-D8 settled by the owner (2026-09-30).**
+**Status: stages 0-4 done (2026-09-30); stage 5 next. Decisions D1-D8 settled by the owner (2026-09-30).**
 
 This is step 2 of [primitives-roadmap.md](primitives-roadmap.md). It adds one new layer kind,
 batch normalization (Ioffe & Szegedy 2015), for dense and conv networks, under every update rule,
@@ -288,6 +288,14 @@ Split as 4a numpy, 4b pure Python, 4c Rust (a crate PR, then the bump), each one
   parameters and its lists in the README's order, and a `BatchNormPosition` per value is the layer's
   node. The layer-major path needed no change. Given the same inputs the layer is numpy's by bits;
   whole networks agree within the pure-Python parity tolerance (at most 1.1e-12 relative, 20 steps).
+- 4c, done: the crate's `batch_norm_*` ops take `positions` and index the channel-major layout in
+  place, in the `(N * P, C)` view's row order, so they are numpy's by bits given the same inputs;
+  `conv_linear_forward_batch` and `conv_linear_accumulate_gradient_batch` are the conv ops without
+  the bias (and the ReLU). `LinearConvRustArrayLayer` shares its geometry, W and downstream with
+  `ConvRustArrayLayer`. A ReLU batch-norm layer's hidden delta masks the next layer's downstream,
+  which may be a pool or conv layer's. Whole networks after 50 steps: at most 3.5e-12 relative
+  from numpy, and the same conv networks without batch norm 3.4e-13; subtracting the mean turns
+  the products' rounding difference into a larger relative one, as for dense batch norm.
 
 ### Stage 5: format 2, load_network and the docs
 

@@ -66,14 +66,17 @@ def crate_exp(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class _Next:
-    """A next dense layer: the Rust layer's fused hidden delta reads its W and delta_batch, and numpy's
-    its downstream, delta_batch @ W, taken here from the crate so both see the same values."""
+    """A next dense layer: the Rust layer's fused sigmoid hidden delta reads its W and delta_batch,
+    and a ReLU's and numpy's its downstream, delta_batch @ W, taken here from the crate so both see
+    the same values, as a Rust array for the Rust layer."""
 
-    def __init__(self, W: Any, delta_batch: Any) -> None:
+    def __init__(self, W: Any, delta_batch: Any, rust: bool = False) -> None:
         self.W, self.delta_batch = _rust(W), _rust(delta_batch)
+        self.rust = rust
 
     def downstream_batch(self) -> Any:
-        return _numpy(pa.layer_downstream_batch(self.W, self.delta_batch))
+        downstream = pa.layer_downstream_batch(self.W, self.delta_batch)
+        return downstream if self.rust else _numpy(downstream)
 
     @staticmethod
     def fixed(downstream: pa.Array) -> Any:
@@ -94,18 +97,18 @@ def test_the_layer_is_numpys_by_bits(activation: Any, batch_size: int):
     rng = np.random.default_rng(batch_size)
     X = rng.uniform(-3.0, 3.0, (batch_size, 4))
     gamma, beta = rng.uniform(0.5, 2.0, 4), rng.uniform(-1.0, 1.0, 4)
-    next_layer = _Next(rng.uniform(-1.0, 1.0, (3, 4)), rng.uniform(-1.0, 1.0, (batch_size, 3)))
+    next_W, next_delta = rng.uniform(-1.0, 1.0, (3, 4)), rng.uniform(-1.0, 1.0, (batch_size, 3))
     array = BatchNormArrayLayer(4, activation, EPSILON, RATE)
     rust = BatchNormRustArrayLayer(4, activation, EPSILON, RATE)
     array.gamma, array.beta = gamma.copy(), beta.copy()
     rust.gamma, rust.beta = _rust(gamma), _rust(beta)
 
     values: list[list[Any]] = []
-    layers: list[tuple[Any, Any]] = [(array, X), (rust, _rust(X))]
-    for layer, inputs in layers:
+    layers: list[tuple[Any, Any, bool]] = [(array, X, False), (rust, _rust(X), True)]
+    for layer, inputs, is_rust in layers:
         layer.set_training_mode(True)
         activations = layer.forward_batch(inputs)
-        layer.compute_hidden_delta_batch(next_layer)
+        layer.compute_hidden_delta_batch(_Next(next_W, next_delta, is_rust))
         dx = layer.downstream_batch()
         layer.accumulate_gradient_batch(inputs)
         values.append([activations, dx, layer.grad_gamma, layer.grad_beta, layer.running_mean, layer.running_var])
