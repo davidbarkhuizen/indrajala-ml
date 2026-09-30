@@ -1,6 +1,6 @@
 # Workplan: the A/B harness and a stand-alone measurement guide
 
-**Status: in progress. Decisions D1-D7 settled by the owner (2026-09-30), D4's verdict revised in stage 1; stage 1 done.**
+**Status: in progress. Decisions D1-D7 settled by the owner (2026-09-30), D4's verdict revised in stage 1; stages 1-2 done.**
 
 This plan adds `scripts/ab.py`, one tool that runs a timing A/B between two commits by this repo's
 protocol and reports it. Every A/B so far has been hand-built instead. It also rewrites the
@@ -308,6 +308,18 @@ table and the A/B protocol in the measurement doc. Stage 4 rewrites the doc as t
   `summarize.py` produced (the epoch_op_profile and focused_benchmark rows), and the boundary probe
   goes through the probe contract.
 - **Gate:** one short real run per adapter on the machine, as an A/A, with every row within noise.
+
+- **As built:**
+  - rows per adapter: `focused_benchmark` gives µs per call per (shape op batch, malloc, backend),
+    each of its `--passes` a run; `epoch_op_profile` gives seconds per `<config> <op>` and the
+    profiled total; `accuracy_pass_timing` leaves out the mismatch counts (not timings);
+    `op_call_timing` gives the whole run's seconds and µs per call per argument shapes;
+    `batch_size_timing` gives each measure per `B=<size> / <backend>`;
+  - controls: the two-backend scripts take `--control-backend`; the brief report says which
+    benchmarks are Rust only;
+  - the pyo3 fixtures are the archive trimmed to the fields read, and the boundary probe's lines
+    were rewritten to the probe contract (`per call`, ns). `summarize.py` dropped a run's op under
+    5 ms, so the epoch test compares the ops at or above it in every run.
 
 ### Stage 3: crate A/Bs
 

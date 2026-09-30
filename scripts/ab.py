@@ -104,6 +104,7 @@ class Adapter(Protocol):
 
     name: str
     default_args: tuple[str, ...]
+    no_control: str  # the brief report's line when no row is a control
 
     def smoke_args(self, args: list[str]) -> list[str]: ...
 
@@ -117,6 +118,7 @@ class Adapter(Protocol):
 class PreparedDatasetTiming:
     name: str = "prepared_dataset_timing"
     default_args: tuple[str, ...] = ("--repeats", "5")
+    no_control: str = "controls: none"
 
     def smoke_args(self, args: list[str]) -> list[str]:
         return ["--configs", "conv B=32", "--repeats", "1"]
@@ -139,6 +141,7 @@ class CommandProbe:
 
     name: str = "cmd"
     default_args: tuple[str, ...] = ()
+    no_control: str = 'controls: none (a probe row can carry "control": true)'
 
     def smoke_args(self, args: list[str]) -> list[str]:
         return args
@@ -163,7 +166,144 @@ class CommandProbe:
         return rows
 
 
-ADAPTERS: dict[str, Adapter] = {adapter.name: adapter for adapter in (PreparedDatasetTiming(), CommandProbe())}
+class FocusedBenchmark:
+    """Per-op µs per call (the median over its loops); a case is shape, op, batch, backend and a
+    raised malloc setting, and each of the script's --passes is a run."""
+
+    name: str = "focused_benchmark"
+    default_args: tuple[str, ...] = ()
+    no_control: str = "controls: none (--control-backend reads the other backend's rows as controls)"
+
+    def smoke_args(self, args: list[str]) -> list[str]:
+        return ["--shape", "dense 10 x 30", "--op", "forward", "--batch-sizes", "32", "--passes", "1", "--loops", "1"]
+
+    def command(self, script_tree: Path, args: list[str], out: Path) -> list[str]:
+        return [str(script_tree / "scripts/focused_benchmark.py"), *args, "--json", str(out)]
+
+    def rows(self, out: Path, stdout: Path, control_backend: str | None) -> list[Row]:
+        rows: list[Row] = []
+        for result in json.loads(out.read_text())["results"]:
+            case = f"{result['shape']} {result['op']}" + (f" b{result['batch']}" if result["batch"] else "")
+            case += " (malloc raised)" if result["malloc"] == "raised" else ""
+            case += f" / {result['backend']}"
+            rows.append(Row(case, "per call", result["median_us"], "µs", _is_backend(case, control_backend)))
+        return rows
+
+
+class EpochOpProfile:
+    """Rust seconds per crate op in a profiled conv-demo training run (Rust only: no control)."""
+
+    name: str = "epoch_op_profile"
+    default_args: tuple[str, ...] = ()
+    no_control: str = "controls: none (Rust only; read the profiled total's share)"
+
+    def smoke_args(self, args: list[str]) -> list[str]:
+        return ["--architectures", "conv", "--trainers", "mini-batch (32)", "--repeats", "1"]
+
+    def command(self, script_tree: Path, args: list[str], out: Path) -> list[str]:
+        return [str(script_tree / "scripts/epoch_op_profile.py"), *args, "--out", str(out)]
+
+    def rows(self, out: Path, stdout: Path, control_backend: str | None) -> list[Row]:
+        rows: list[Row] = []
+        for config, runs in json.loads(out.read_text())["runs"].items():
+            for run in runs:
+                rows.append(Row(f"{config} (profiled total)", "seconds in the run", run["total"], "s"))
+                rows += [
+                    Row(f"{config} {op}", "seconds in the run", seconds, "s") for op, (seconds, _) in run["ops"].items()
+                ]
+        return rows
+
+
+class AccuracyPassTiming:
+    """Accuracy-pass and epoch seconds per network and backend (the mismatch counts are not timed)."""
+
+    name: str = "accuracy_pass_timing"
+    default_args: tuple[str, ...] = ("--repeats", "5")
+    no_control: str = "controls: none (--control-backend reads the other backend's rows as controls)"
+
+    def smoke_args(self, args: list[str]) -> list[str]:
+        return ["--networks", "conv", "--repeats", "1"]
+
+    def command(self, script_tree: Path, args: list[str], out: Path) -> list[str]:
+        return [str(script_tree / "scripts/accuracy_pass_timing.py"), "time", *args, "--out", str(out)]
+
+    def rows(self, out: Path, stdout: Path, control_backend: str | None) -> list[Row]:
+        runs: dict[str, list[dict[str, float]]] = json.loads(out.read_text())
+        return [
+            Row(case, metric, value, "s", _is_backend(case, control_backend))
+            for case, case_runs in runs.items()
+            for run in case_runs
+            for metric, value in run.items()
+            if not metric.startswith("mismatches")
+        ]
+
+
+class OpCallTiming:
+    """µs per call of chosen crate functions inside a Rust training run, by argument shapes, and the
+    run's seconds (Rust only: no control)."""
+
+    name: str = "op_call_timing"
+    default_args: tuple[str, ...] = ()
+    no_control: str = "controls: none (Rust only; the whole run's seconds are the context)"
+
+    def smoke_args(self, args: list[str]) -> list[str]:
+        return ["--architectures", "conv", "--repeats", "1"]
+
+    def command(self, script_tree: Path, args: list[str], out: Path) -> list[str]:
+        return [str(script_tree / "scripts/op_call_timing.py"), *args, "--json", str(out)]
+
+    def rows(self, out: Path, stdout: Path, control_backend: str | None) -> list[Row]:
+        rows: list[Row] = []
+        for cell, runs in json.loads(out.read_text())["runs"].items():
+            for run in runs:
+                rows.append(Row(cell, "whole run", run["run_s"], "s"))
+                for op, by_shapes in run.items():
+                    if op != "run_s":
+                        rows += [
+                            Row(f"{cell} / {op} {shapes}", "per call", stats["median_us"], "µs")
+                            for shapes, stats in by_shapes.items()
+                        ]
+        return rows
+
+
+class BatchSizeTiming:
+    """Dense full-MNIST epoch parts per batch size and backend (`time` mode)."""
+
+    name: str = "batch_size_timing"
+    default_args: tuple[str, ...] = ("--repeats", "5")
+    no_control: str = "controls: none (--control-backend reads the other backend's rows as controls)"
+
+    def smoke_args(self, args: list[str]) -> list[str]:
+        return ["--batch-sizes", "1024", "--repeats", "1"]
+
+    def command(self, script_tree: Path, args: list[str], out: Path) -> list[str]:
+        return [str(script_tree / "scripts/batch_size_timing.py"), "time", *args, "--out", str(out)]
+
+    def rows(self, out: Path, stdout: Path, control_backend: str | None) -> list[Row]:
+        rows: list[Row] = []
+        for key, runs in json.loads(out.read_text()).items():
+            backend, batch_size = key.split()
+            case = f"B={batch_size} / {backend}"
+            rows += [
+                Row(case, metric, value, "s", _is_backend(case, control_backend))
+                for run in runs
+                for metric, value in run.items()
+            ]
+        return rows
+
+
+ADAPTERS: dict[str, Adapter] = {
+    adapter.name: adapter
+    for adapter in (
+        PreparedDatasetTiming(),
+        FocusedBenchmark(),
+        EpochOpProfile(),
+        AccuracyPassTiming(),
+        OpCallTiming(),
+        BatchSizeTiming(),
+        CommandProbe(),
+    )
+}
 
 
 def _is_backend(case: str, backend: str | None) -> bool:
@@ -814,7 +954,7 @@ def brief_report(data: ReportData) -> list[str]:
     elif controls:
         lines.append(f"controls: {len(controls)} rows, all within noise")
     else:
-        lines.append("controls: none")
+        lines.append(ADAPTERS[manifest["bench"]].no_control)
     if data.shifted:
         balance = balancing_order(data.shifted)
         described = ", ".join(f"pass {s.number} ({s.side}, {s.direction})" for s in data.shifted)
