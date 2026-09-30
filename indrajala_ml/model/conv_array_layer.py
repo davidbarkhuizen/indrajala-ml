@@ -6,6 +6,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 from indrajala_ml.model.array_layer import FloatArray
+from indrajala_ml.model.array_parameters import WeightAndBias
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 
 
@@ -23,7 +24,7 @@ def validate_conv_arguments(
     )
 
 
-class ConvArrayLayer:
+class ConvArrayLayer(WeightAndBias[FloatArray]):
     """
     ConvLayer (conv_layer.py) over numpy arrays: a ReLU convolutional hidden layer, 'valid'
     padding, with the kernels as one matrix and a batch's receptive fields as one im2col array.

@@ -43,7 +43,7 @@ from typing import Any, ClassVar, Protocol, cast
 
 from indrajala_ml.model.checkpoint import OptimizerState
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
+from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
@@ -103,6 +103,10 @@ def _lists(value: Any) -> Any:
 
 
 def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
+    if isinstance(spec, BatchNorm) or (isinstance(spec, Dense) and spec.activation == "linear"):
+        raise NotImplementedError(
+            f"saving batch norm ({spec!r}) is stage 5 of docs/batch-norm-workplan.md; not built yet"
+        )
     kind = "dense" if isinstance(spec, Dense) else "conv" if isinstance(spec, ConvSpec) else "pool"
     return {"kind": kind, **asdict(spec)}
 

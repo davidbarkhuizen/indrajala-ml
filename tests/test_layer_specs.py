@@ -3,15 +3,16 @@ Layer specs (layer_specs.py) and their numpy and Rust builder (array_layer_build
 lists are accepted, the layer class each spec kind maps to, and the shapes the builder chains.
 """
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from indrajala_ml.model.array_layer_builder import LAYER_CLASSES, build_array_layers
-from indrajala_ml.model.layer_specs import Conv, Dense, LayerSpec, Pool, validate_layer_specs
+from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool, validate_layer_specs
 from tests.helpers import Backend
 
 OUTPUT = Dense(3, output=True)
+LINEAR = Dense(5, activation="linear")
 
 VALID: dict[str, list[LayerSpec]] = {
     "output only": [OUTPUT],
@@ -43,6 +44,33 @@ INVALID: dict[str, list[LayerSpec]] = {
     "dropout output": [Dense(3, output=True, dropout=0.3)],
     "relu output": [Dense(3, output=True, activation="relu")],
     "softmax squared": [Dense(3, output=True, activation="softmax")],
+    "linear without batch norm": [LINEAR, OUTPUT],
+    "linear before sigmoid": [LINEAR, Dense(4), OUTPUT],
+    "batch norm first": [BatchNorm(), OUTPUT],
+    "batch norm after sigmoid": [Dense(5), BatchNorm(), OUTPUT],
+    "batch norm after relu": [Dense(5, activation="relu"), BatchNorm(), OUTPUT],
+    "batch norm after conv": [Conv(3, 2), BatchNorm("relu"), OUTPUT],
+    "batch norm twice": [LINEAR, BatchNorm(), BatchNorm(), OUTPUT],
+    "batch norm last": [LINEAR, BatchNorm()],
+    "softmax batch norm": [LINEAR, BatchNorm(cast(Any, "softmax")), OUTPUT],
+    "linear batch norm": [LINEAR, BatchNorm(cast(Any, "linear")), OUTPUT],
+    "linear dropout": [Dense(5, activation="linear", dropout=0.3), BatchNorm(), OUTPUT],
+    "linear output": [Dense(3, output=True, activation="linear")],
+    "zero epsilon": [LINEAR, BatchNorm(epsilon=0.0), OUTPUT],
+    "zero running rate": [LINEAR, BatchNorm(running_rate=0.0), OUTPUT],
+    "running rate over 1": [LINEAR, BatchNorm(running_rate=1.5), OUTPUT],
+}
+
+# batch norm's pairs (the batch-norm workplan, D1): accepted, and built by numpy (stage 1); Rust
+# and pure Python refuse them until their stages
+BATCH_NORM: dict[str, list[LayerSpec]] = {
+    "sigmoid": [LINEAR, BatchNorm(), OUTPUT],
+    "relu": [LINEAR, BatchNorm("relu"), OUTPUT],
+    "two pairs": [LINEAR, BatchNorm(), Dense(4, activation="linear"), BatchNorm("relu"), OUTPUT],
+    "between dense layers": [Dense(6), LINEAR, BatchNorm(), Dense(4, activation="relu"), OUTPUT],
+    "after a front end": [Conv(3, 2), Pool(2), LINEAR, BatchNorm(), OUTPUT],
+    "softmax output": [LINEAR, BatchNorm(), Dense(3, output=True, activation="softmax", loss="cross_entropy")],
+    "rate of 1": [LINEAR, BatchNorm(running_rate=1.0), OUTPUT],
 }
 
 
@@ -59,6 +87,17 @@ def test_a_combination_some_implementation_cant_build_is_rejected(specs: list[La
         build_array_layers(specs, (8, 8, 1), backend.name)
 
 
+@pytest.mark.parametrize("specs", BATCH_NORM.values(), ids=BATCH_NORM.keys())
+def test_batch_norm_pairs_are_accepted(specs: list[LayerSpec]):
+    validate_layer_specs(specs)
+    build_array_layers(specs, (8, 8, 1), "numpy")
+
+
+def test_rust_refuses_batch_norm_until_stage_3():
+    with pytest.raises(NotImplementedError, match="stage 3"):
+        build_array_layers(BATCH_NORM["sigmoid"], (4,), "rust")
+
+
 # each spec kind, as a network's only hidden layer (or its output layer), and the field of
 # ArrayLayerClasses it builds
 KINDS: list[tuple[str, list[LayerSpec], int, str]] = [
@@ -71,6 +110,28 @@ KINDS: list[tuple[str, list[LayerSpec], int, str]] = [
     ("conv", [Conv(3, 2), OUTPUT], 0, "conv"),
     ("pool", [Conv(3, 2), Pool(2), OUTPUT], 1, "pool"),
 ]
+
+NUMPY_KINDS: list[tuple[str, list[LayerSpec], int, str]] = [
+    ("linear", BATCH_NORM["sigmoid"], 0, "linear"),
+    ("batch norm", BATCH_NORM["sigmoid"], 1, "batch_norm"),
+]
+
+
+@pytest.mark.parametrize(
+    "specs, index, kind", [kind[1:] for kind in NUMPY_KINDS], ids=[kind[0] for kind in NUMPY_KINDS]
+)
+def test_each_batch_norm_spec_kind_builds_numpys_layer_class(specs: list[LayerSpec], index: int, kind: str):
+    layer = build_array_layers(specs, (8, 8, 1), "numpy")[index]
+    assert type(layer) is getattr(LAYER_CLASSES["numpy"], kind)
+
+
+def test_a_batch_norm_layer_normalizes_the_linear_layers_features_with_its_specs_constants():
+    linear, norm, _output = cast(
+        "list[Any]", build_array_layers([LINEAR, BatchNorm("relu", 1e-3, 0.2), OUTPUT], (7,), "numpy")
+    )
+
+    assert linear.W.shape == (5, 7) and linear.parameters() == (linear.W,)
+    assert (norm.size, norm.activation, norm.epsilon, norm.running_rate) == (5, "relu", 1e-3, 0.2)
 
 
 @pytest.mark.parametrize("specs, index, kind", [kind[1:] for kind in KINDS], ids=[kind[0] for kind in KINDS])

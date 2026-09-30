@@ -81,8 +81,8 @@ class _RecordingOptimizer:
     """
 
     def __init__(self, python: bool) -> None:
-        # a pure-Python network's layers all have weight_sets(); an array layer has grad_W, or
-        # nothing to train (a pool layer)
+        # a pure-Python network's layers all have weight_sets(); an array layer has gradients(),
+        # or nothing to train (a pool layer)
         self.python = python
         self.gradients: dict[int, Any] = {}
 
@@ -98,8 +98,10 @@ class _RecordingOptimizer:
             ]
             for weight_set in layer.weight_sets():
                 weight_set.reset_gradient_accum()
-        elif hasattr(layer, "grad_W"):
-            self.gradients[index] = [layer.grad_W.tolist(), layer.grad_b.tolist()]
+        elif hasattr(layer, "gradients"):
+            # TrainedArrayLayer: (grad_W, grad_b), a linear layer's (grad_W,), batch norm's
+            # (grad_gamma, grad_beta)
+            self.gradients[index] = [gradient.tolist() for gradient in layer.gradients()]
             layer.reset_gradient_accum()
         else:
             self.gradients[index] = []  # a pool layer

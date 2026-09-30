@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import numpy.typing as npt
 
+from indrajala_ml.model.array_parameters import WeightAndBias
+
 # the numpy backend's array: every numpy layer's weights, activations and gradients
 FloatArray = npt.NDArray[np.float64]
 
@@ -25,13 +27,19 @@ def fan_in_aware_random_layer(size: int, previous_size: int) -> tuple[FloatArray
     A layer's (W, b) drawn uniformly from [-limit, limit], limit = 1/sqrt(fan_in): the numpy
     backend's random_layer.
     """
+    W = fan_in_aware_random_weights(size, previous_size)
     limit = 1.0 / np.sqrt(previous_size)
-    W = np.random.uniform(-limit, limit, size=(size, previous_size))
     b = np.random.uniform(-limit, limit, size=(size,))
     return W, b
 
 
-class ArrayLayer:
+def fan_in_aware_random_weights(size: int, previous_size: int) -> FloatArray:
+    """fan_in_aware_random_layer's W alone: the numpy backend's random_weights."""
+    limit = 1.0 / np.sqrt(previous_size)
+    return np.random.uniform(-limit, limit, size=(size, previous_size))
+
+
+class ArrayLayer(WeightAndBias[FloatArray]):
     """
     One sigmoid layer's weights and activations as arrays, not `size` BackpropNodes, with
     single-example (forward, delta, ...) and batch (forward_batch, delta_batch, ...) methods.

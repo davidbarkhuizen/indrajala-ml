@@ -69,8 +69,57 @@ class WeightedArrayLayer[A: BackendArray](ArrayNetworkLayer[A], Protocol):
 
 
 @runtime_checkable
+class TrainedArrayLayer[A: BackendArray](ArrayNetworkLayer[A], Protocol):
+    """
+    A layer with trained parameters, which the network's optimizer steps through one accessor
+    (the batch-norm workplan, The optimizer): a dense or conv layer's (W, b), a linear layer's (W,)
+    and a batch-norm layer's (gamma, beta), each with its gradient in the same order.
+    """
+
+    # per parameter, whether WeightDecay decays it: a weight matrix's is; a bias, gamma and beta
+    # step with plain SGD (README, Update rules and Batch normalization)
+    decayed: tuple[bool, ...]
+
+    def parameters(self) -> tuple[A, ...]: ...
+
+    def gradients(self) -> tuple[A, ...]: ...
+
+    # rebinds the parameters, in parameters() order (restore, and the Rust optimizer's results)
+    def set_parameters(self, parameters: Sequence[A], /) -> None: ...
+
+    def reset_gradient_accum(self) -> None: ...
+
+
+@runtime_checkable
+class RunningStateLayer[A: BackendArray](Protocol):
+    """
+    A layer with state that a training forward pass moves but no optimizer steps: batch norm's
+    running averages. snapshot() carries it after the layer's parameters.
+    """
+
+    def running_state(self) -> tuple[A, ...]: ...
+
+    def set_running_state(self, state: Sequence[A], /) -> None: ...
+
+
+@runtime_checkable
+class BiasFreeArrayLayer[A: BackendArray](Protocol):
+    """
+    A linear layer before a batch-norm layer: W without b (the batch-norm workplan, D2). A
+    WeightedArrayLayer has these attributes too, so check for it first.
+    """
+
+    size: int
+    W: A
+    grad_W: A
+
+
+@runtime_checkable
 class TrainingModeLayer(Protocol):
-    """A layer that behaves differently in training (dropout): learn* switches it on and off."""
+    """
+    A layer that behaves differently in training (dropout, batch norm): learn* switches it on and
+    off.
+    """
 
     def set_training_mode(self, training: bool, /) -> None: ...
 
@@ -106,6 +155,9 @@ class ArrayBackend[A: BackendArray](Protocol):
     def optimizer(self, rule: UpdateRule) -> ArrayOptimizer[A]: ...
 
     def random_layer(self, size: int, previous_size: int) -> tuple[A, A]: ...
+
+    # random_layer's W alone, for a layer without a bias
+    def random_weights(self, size: int, previous_size: int) -> A: ...
 
     def vector(self, state: Sequence[float]) -> A: ...
 

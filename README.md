@@ -241,8 +241,10 @@ rounds differently when `B` isn't a power of two.
 
 ## Batch normalization
 
-Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)); no implementation builds
-a `BatchNorm` spec yet. This section fixes the forms all three implementations will be held to.
+Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)): numpy builds dense
+batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`. Rust, pure Python, conv
+batch norm and saving it are later stages, and refuse it until then. This section fixes the forms
+all three implementations are held to.
 
 A norm layer follows a linear layer without a bias and carries the activation, as the paper places
 it: "We add the BN transform immediately before the nonlinearity, by normalizing x = Wu + b. […]
@@ -287,19 +289,22 @@ of `μ_B` and `σ²_B`, not with Algorithm 2 step 11's folded form
 
 The exact expressions, per feature or channel, with `x_1..x_m` in row order (a conv channel's
 values example by example, then position by position). Every implementation computes these, in
-this grouping, left to right, with no fused multiply-add and no multiplication by a precomputed
-reciprocal (as the Update rules above divide by `B`):
+this grouping, left to right, with no fused multiply-add and no power function, only IEEE 754's
+correctly rounded operations. The forward pass divides rather than multiplying by a precomputed
+reciprocal, as the Update rules above divide by `B`; the backward pass follows § 3's factors of
+`1/sqrt(σ²_B + ε)`:
 
 ```text
 training forward
   mu      = sum(x_i) / m
   d_i     = x_i - mu
-  var     = sum(d_i * d_i) / m
+  ss      = sum(d_i * d_i)
+  var     = ss / m
   std     = sqrt(var + eps)
   xhat_i  = d_i / std
   y_i     = gamma * xhat_i + beta                      then the activation
   running_mean = (1 - rate) * running_mean + rate * mu
-  running_var  = (1 - rate) * running_var + rate * (m / (m - 1) * var)
+  running_var  = (1 - rate) * running_var + rate * (ss / (m - 1))       unbiased
 
 inference forward
   xhat_i  = (x_i - running_mean) / sqrt(running_var + eps)
@@ -307,7 +312,7 @@ inference forward
 
 backward, from delta_i = dl/dy_i (the activation's derivative already applied)
   inv_std  = 1 / std
-  inv_std3 = inv_std * inv_std * inv_std               (var + eps)^(-3/2)
+  inv_std3 = inv_std / (var + eps)                    (var + eps)^(-3/2)
   dxhat_i  = delta_i * gamma
   dvar     = sum(dxhat_i * d_i * -0.5 * inv_std3)
   dmu      = sum(dxhat_i * -inv_std) + dvar * sum(-2 * d_i) / m

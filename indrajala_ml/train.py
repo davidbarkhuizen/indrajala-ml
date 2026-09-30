@@ -218,10 +218,21 @@ def _rate(learning_rate: float | Callable[[int], float], iterations: int) -> flo
     return learning_rate(iterations) if callable(learning_rate) else learning_rate
 
 
-def _chunk_into_batches[T](data: list[T], batch_size: int) -> list[list[T]]:
-    # a final short batch is kept: learn_batch averages by len(batch)
+def _chunk_into_batches[T](data: list[T], batch_size: int, drop_single: bool = False) -> list[list[T]]:
+    # a final short batch is kept: learn_batch averages by len(batch). drop_single drops it when
+    # it has one example, which a network with batch norm refuses (the batch-norm workplan, D4)
     assert batch_size >= 1, f"batch_size must be at least 1; got {batch_size}"
-    return [data[i : i + batch_size] for i in range(0, len(data), batch_size)]
+    assert not drop_single or batch_size >= 2, f"batch norm needs batches of 2 or more; got batch_size={batch_size}"
+    batches = [data[i : i + batch_size] for i in range(0, len(data), batch_size)]
+    if drop_single and len(batches[-1]) == 1:
+        batches.pop()
+    return batches
+
+
+def _has_batch_norm(student: object) -> bool:
+    # an array network's batch_norm_index (array_network_base.py); a network without one has no
+    # batch norm
+    return getattr(student, "batch_norm_index", None) is not None
 
 
 def train_backprop_network_mini_batch[L](
@@ -241,13 +252,16 @@ def train_backprop_network_mini_batch[L](
     count batches.
 
     Reshuffles training_data every epoch by default (reshuffle_each_epoch=False keeps the batches
-    fixed). A final short batch is kept. training_data may be a PreparedDataset.
+    fixed). A final short batch is kept, except that a final batch of one is dropped for a network
+    with batch norm, which can't train on one example (the batch-norm workplan, D4). training_data
+    may be a PreparedDataset.
 
     Otherwise as train_linear_classifier_network: the pocket checkpoint of the best epoch, and the
     TrainingDiagnostic/ConvergenceSeries return.
     """
 
     assert len(training_data) >= 1, "training_data must not be empty"
+    drop_single = _has_batch_norm(student)
 
     iterations: int = 0
     convergence: list[tuple[int, float]] = []
@@ -278,13 +292,13 @@ def train_backprop_network_mini_batch[L](
         nonlocal iterations
         if prepared is not None:
             assert isinstance(student, PreparedTrainableClassifier)  # _prepared_for's contract
-            for indices in _chunk_into_batches(epoch_order(range(len(prepared))), batch_size):
+            for indices in _chunk_into_batches(epoch_order(range(len(prepared))), batch_size, drop_single):
                 student.learn_batch_rows(_rate(learning_rate, iterations), prepared, indices)
                 iterations += 1
                 record_disagreement()
         else:
             assert not isinstance(training_data, PreparedDataset)  # a PreparedDataset always has prepared
-            for batch in _chunk_into_batches(epoch_order(training_data), batch_size):
+            for batch in _chunk_into_batches(epoch_order(training_data), batch_size, drop_single):
                 student.learn_batch(_rate(learning_rate, iterations), batch)
                 iterations += 1
                 record_disagreement()

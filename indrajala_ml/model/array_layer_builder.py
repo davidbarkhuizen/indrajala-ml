@@ -12,6 +12,7 @@ from typing import Any
 
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
+from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_front_end import ArrayFrontEndLayer
 from indrajala_ml.model.conv_layer import ConvSpec
@@ -20,7 +21,8 @@ from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec, validate_layer_specs
+from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec, validate_layer_specs
+from indrajala_ml.model.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.relu_array_layer import ReLUArrayLayer
@@ -44,6 +46,9 @@ class ArrayLayerClasses:
     cross_entropy: LayerClass  # sigmoid output, cross-entropy
     conv: FrontEndLayerClass
     pool: FrontEndLayerClass
+    # batch norm's pair (the batch-norm workplan): None until the backend builds it
+    linear: LayerClass | None
+    batch_norm: LayerClass | None
 
 
 LAYER_CLASSES = {
@@ -55,6 +60,8 @@ LAYER_CLASSES = {
         cross_entropy=CrossEntropyArrayLayer,
         conv=ConvArrayLayer,
         pool=MaxPoolArrayLayer,
+        linear=LinearArrayLayer,
+        batch_norm=BatchNormArrayLayer,
     ),
     "rust": ArrayLayerClasses(
         sigmoid=RustArrayLayer,
@@ -64,11 +71,23 @@ LAYER_CLASSES = {
         cross_entropy=CrossEntropyRustArrayLayer,
         conv=ConvRustArrayLayer,
         pool=MaxPoolRustArrayLayer,
+        linear=None,
+        batch_norm=None,
     ),
 }
 
 
-def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> ArrayNetworkLayer[Any]:
+def _batch_norm_class(classes: ArrayLayerClasses, backend_name: str, cls: LayerClass | None) -> LayerClass:
+    if cls is None:
+        raise NotImplementedError(
+            f"batch norm on the {backend_name} backend is stage 3 of docs/batch-norm-workplan.md; not built yet"
+        )
+    return cls
+
+
+def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int, backend_name: str) -> ArrayNetworkLayer[Any]:
+    if spec.activation == "linear":
+        return _batch_norm_class(classes, backend_name, classes.linear)(spec.size, input_size)
     if spec.dropout is not None:
         return classes.dropout(spec.size, input_size, spec.dropout)
     if spec.activation == "relu":
@@ -91,8 +110,13 @@ def build_array_layers(
     shape: InputShape = input_shape
     for spec in specs:
         if isinstance(spec, Dense):
-            layers.append(_dense_layer(classes, spec, math.prod(shape)))
+            layers.append(_dense_layer(classes, spec, math.prod(shape), backend_name))
             shape = (spec.size,)
+            continue
+        if isinstance(spec, BatchNorm):
+            # after a dense linear layer (validate_layer_specs), normalizing its features
+            cls = _batch_norm_class(classes, backend_name, classes.batch_norm)
+            layers.append(cls(math.prod(shape), spec.activation, spec.epsilon, spec.running_rate))
             continue
 
         assert len(shape) == 3, f"a conv or pool layer needs a (height, width, channels) input; got {shape}"
