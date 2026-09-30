@@ -6,6 +6,8 @@ import math
 
 import indrajala_math_rust as pa
 
+from indrajala_ml.model.array_parameters import WeightAndBias
+
 
 def fan_in_aware_random_rust_layer(size: int, previous_size: int) -> tuple[pa.Array, pa.Array]:
     """
@@ -15,10 +17,16 @@ def fan_in_aware_random_rust_layer(size: int, previous_size: int) -> tuple[pa.Ar
     np.random.seed(s). math.sqrt, not ** 0.5: ** 0.5 is 1 ULP off np.sqrt at some fan-ins.
     """
     limit = 1.0 / math.sqrt(previous_size)
-    return pa.uniform(-limit, limit, (size, previous_size)), pa.uniform(-limit, limit, size)
+    return fan_in_aware_random_rust_weights(size, previous_size), pa.uniform(-limit, limit, size)
 
 
-class RustArrayLayer:
+def fan_in_aware_random_rust_weights(size: int, previous_size: int) -> pa.Array:
+    """fan_in_aware_random_rust_layer's W alone: the Rust backend's random_weights."""
+    limit = 1.0 / math.sqrt(previous_size)
+    return pa.uniform(-limit, limit, (size, previous_size))
+
+
+class RustArrayLayer(WeightAndBias[pa.Array]):
     """
     ArrayLayer on the Rust backend, with the same methods and formulas, each one fused Rust call
     (fused.rs). indrajala_math_rust.Array has no in-place arithmetic beyond +=/-=, so each method

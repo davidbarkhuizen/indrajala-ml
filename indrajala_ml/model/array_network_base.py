@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar, Self, cast
+from typing import Any, ClassVar, NoReturn, Self, cast
 
 from indrajala_ml.model.array_layer_builder import build_array_layers
 from indrajala_ml.model.array_protocols import (
@@ -11,6 +11,9 @@ from indrajala_ml.model.array_protocols import (
     ArrayNetworkLayer,
     ArrayOptimizer,
     BackendArray,
+    BiasFreeArrayLayer,
+    RunningStateLayer,
+    TrainedArrayLayer,
     TrainingModeLayer,
     WeightedArrayLayer,
 )
@@ -25,7 +28,7 @@ from indrajala_ml.model.format2 import (
     preset_init_kwargs,
     restore_file,
 )
-from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
+from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec
 from indrajala_ml.model.model_io import load_json, save_json
 from indrajala_ml.model.update_rules import SGD, UpdateRule
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
@@ -68,8 +71,11 @@ class ArrayNetworkBase[A: BackendArray]:
         self.layer_specs = list(specs)
         self.layers = cast("list[ArrayNetworkLayer[A]]", build_array_layers(specs, input_shape, self.backend.name))
         self.output_layer = cast("WeightedArrayLayer[A]", self.layers[-1])
-        # the dropout layers, which _set_training_mode switches
+        # the dropout and batch-norm layers, which _set_training_mode switches
         self._training_mode_layers = [layer for layer in self.layers if isinstance(layer, TrainingModeLayer)]
+        # the index of the first batch-norm layer, if any: such a network refuses a one-example
+        # training step (the batch-norm workplan, D4)
+        self.batch_norm_index = next((i for i, spec in enumerate(specs) if isinstance(spec, BatchNorm)), None)
         self.optimizer = self._new_optimizer()
 
     def _hidden_spec(self, size: int) -> Dense:
@@ -159,7 +165,16 @@ class ArrayNetworkBase[A: BackendArray]:
             learning_rate, self.backend.row(self._prepared_states(prepared), index), prepared.labels[index]
         )
 
+    def _refuse_single_example(self, batch_norm_index: int) -> NoReturn:
+        raise ValueError(
+            f"layer {batch_norm_index}, {self.layer_specs[batch_norm_index]!r}, can't train on one example: it "
+            "would normalize every value to 0 and pass no gradient back. Train on batches of 2 or more (the "
+            "batch-norm workplan, D4)"
+        )
+
     def _learn_input(self, learning_rate: float, x: A, category: Any) -> None:
+        if self.batch_norm_index is not None:
+            self._refuse_single_example(self.batch_norm_index)
         activations = [x]
         self._set_training_mode(True)
         try:
@@ -194,6 +209,8 @@ class ArrayNetworkBase[A: BackendArray]:
 
     def _learn_batch_input(self, learning_rate: float, X: A, categories: Sequence[Any]) -> None:
         batch_size = len(categories)
+        if batch_size == 1 and self.batch_norm_index is not None:
+            self._refuse_single_example(self.batch_norm_index)
 
         activations = [X]
         self._set_training_mode(True)
@@ -228,11 +245,16 @@ class ArrayNetworkBase[A: BackendArray]:
         # fan-in-aware (limit = 1/sqrt(fan_in)), drawn from the backend's RNG: after
         # backend.seed(s), numpy and Rust draw the same weights. W then b per layer, in forward
         # order; a W is (rows, fan_in), a dense layer's (size, input_size) and a conv layer's
-        # (channel_count, input_channels * kernel_size**2). A pool layer draws nothing.
+        # (channel_count, input_channels * kernel_size**2). A linear layer draws its W only, and a
+        # pool or batch-norm layer draws nothing.
         for layer in self.layers:
             if isinstance(layer, WeightedArrayLayer):
                 rows, fan_in = layer.W.shape
                 layer.W, layer.b = self.backend.random_layer(rows, fan_in)
+            elif isinstance(layer, BiasFreeArrayLayer):
+                linear = cast("BiasFreeArrayLayer[A]", layer)
+                rows, fan_in = linear.W.shape
+                linear.W = self.backend.random_weights(rows, fan_in)
 
     @classmethod
     def _extra_init_kwargs(cls, state: dict[str, Any]) -> dict[str, Any]:
@@ -240,21 +262,24 @@ class ArrayNetworkBase[A: BackendArray]:
         return {name: state[name] for name in cls.hyperparameters}
 
     def snapshot(self) -> list[tuple[A, ...]]:
-        # (W, b) per layer, () for a pool layer
-        return [
-            (layer.W.copy(), layer.b.copy()) if isinstance(layer, WeightedArrayLayer) else () for layer in self.layers
-        ]
+        # per layer, its parameters then its running state: (W, b) for a dense or conv layer, (W,)
+        # for a linear one, (gamma, beta, running_mean, running_var) for a batch-norm one, and ()
+        # for a pool layer
+        return [tuple(array.copy() for array in _layer_state(layer)) for layer in self.layers]
 
     def restore(self, snapshot: Sequence[tuple[Any, ...]]) -> None:
         # accepts this backend's arrays or nested lists (a loaded file, or a snapshot pickled
         # across a worker boundary)
         for layer, entry in zip(self.layers, snapshot):
-            if not isinstance(layer, WeightedArrayLayer):
-                assert len(entry) == 0, f"a {type(layer).__name__} has no state to restore; got {entry!r}"
-                continue
-            W, b = entry
-            layer.W = self.backend.owned(W)
-            layer.b = self.backend.owned(b)
+            expected = len(_layer_state(layer))
+            assert len(entry) == expected, f"a {type(layer).__name__} restores {expected} arrays; got {entry!r}"
+            arrays = [self.backend.owned(values) for values in entry]
+            if isinstance(layer, TrainedArrayLayer):
+                count = len(layer.parameters())
+                layer.set_parameters(arrays[:count])
+                arrays = arrays[count:]
+            if isinstance(layer, RunningStateLayer):
+                cast("RunningStateLayer[A]", layer).set_running_state(arrays)
 
     @property
     def implementation(self) -> str:
@@ -296,3 +321,9 @@ class ArrayNetworkBase[A: BackendArray]:
         # as restore, this backend's arrays or nested lists
         self.restore(checkpoint.weights)
         self.optimizer.load_state(checkpoint.optimizer)
+
+
+def _layer_state[A: BackendArray](layer: ArrayNetworkLayer[A]) -> tuple[A, ...]:
+    # what snapshot() keeps of a layer: its parameters, then its running state
+    parameters = layer.parameters() if isinstance(layer, TrainedArrayLayer) else ()
+    return parameters + (layer.running_state() if isinstance(layer, RunningStateLayer) else ())

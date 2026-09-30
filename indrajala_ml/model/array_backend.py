@@ -6,9 +6,9 @@ from typing import Any
 import indrajala_math_rust as pa
 import numpy as np
 
-from indrajala_ml.model.array_layer import FloatArray, fan_in_aware_random_layer
+from indrajala_ml.model.array_layer import FloatArray, fan_in_aware_random_layer, fan_in_aware_random_weights
 from indrajala_ml.model.optimizers import NumpyOptimizer, RustOptimizer
-from indrajala_ml.model.rust_array_layer import fan_in_aware_random_rust_layer
+from indrajala_ml.model.rust_array_layer import fan_in_aware_random_rust_layer, fan_in_aware_random_rust_weights
 
 
 class NumpyBackend:
@@ -22,6 +22,7 @@ class NumpyBackend:
     # seeds the RNG random_layer draws from: np.random here, the crate's own state on Rust
     seed = staticmethod(np.random.seed)
     random_layer = staticmethod(fan_in_aware_random_layer)
+    random_weights = staticmethod(fan_in_aware_random_weights)
     optimizer = staticmethod(NumpyOptimizer)
 
     @staticmethod
@@ -69,6 +70,7 @@ class RustBackend:
     name = "rust"
     seed = staticmethod(pa.seed)
     random_layer = staticmethod(fan_in_aware_random_rust_layer)
+    random_weights = staticmethod(fan_in_aware_random_rust_weights)
     optimizer = staticmethod(RustOptimizer)
 
     @staticmethod

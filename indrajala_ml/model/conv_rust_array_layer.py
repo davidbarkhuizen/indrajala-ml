@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import indrajala_math_rust as pa
 
+from indrajala_ml.model.array_parameters import WeightAndBias
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.conv_array_layer import validate_conv_arguments
 
 
-class ConvRustArrayLayer:
+class ConvRustArrayLayer(WeightAndBias[pa.Array]):
     """
     ConvArrayLayer on the Rust backend: the same ReLU conv layer and layouts, each method one fused
     call (conv.rs). Conv tensors cross as matrices, since indrajala_math_rust.Array is 1D/2D only.

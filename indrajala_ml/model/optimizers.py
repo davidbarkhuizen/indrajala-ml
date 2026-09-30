@@ -2,15 +2,16 @@
 # (matrices are named as in the literature, W, which strict mode takes for constants)
 """
 The optimizers of the array networks, one per network (the composable-layers workplan, D5): an
-update rule (update_rules.py) applied to each weighted layer's (W, b, grad_W, grad_b), with the
+update rule (update_rules.py) applied to each trained layer's parameters and gradients, with the
 rule's state per layer, keyed by the layer's index in network.layers, and one step count t for the
 whole network. The layers keep their weights and gradient accumulators; the formulas are here, with
 the source's grouping (README, Update rules).
 
 ArrayNetworkBase calls begin_step() once per learn* call, then per layer in forward order either
-apply() after accumulating a batch or step_single() for one example. A dense or conv layer is
-stepped alike: every rule's formula, and every fused Rust op, takes W and b of any matching shapes.
-A layer without W (a pool layer) has nothing to step.
+apply() after accumulating a batch or step_single() for one example. Every layer is stepped alike:
+the numpy optimizer steps each of its parameters (array_protocols.TrainedArrayLayer), and every
+rule's formula, and every fused Rust op, takes arrays of any matching shapes. A pool layer has
+nothing to step.
 
 state() and load_state() copy t and the state out and back in (checkpoint.py), so a network's
 checkpoint resumes training by bits.
@@ -24,42 +25,43 @@ import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.array_protocols import ArrayNetworkLayer, WeightedArrayLayer
+from indrajala_ml.model.array_protocols import ArrayNetworkLayer, TrainedArrayLayer, WeightedArrayLayer
 from indrajala_ml.model.checkpoint import OptimizerState
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
 
 def momentum_update(
-    W: FloatArray,
-    b: FloatArray,
-    grad_W: FloatArray,
-    grad_b: FloatArray,
-    velocity_W: FloatArray,
-    velocity_b: FloatArray,
+    parameter: FloatArray,
+    gradient: FloatArray,
+    velocity: FloatArray,
     momentum: float,
     learning_rate: float,
     batch_size: int,
-) -> tuple[FloatArray, FloatArray]:
+) -> FloatArray:
     """
-    Goyal et al. 2017's eq. (9) for one layer's (W, b), whatever their shape: u = m * u + g / B,
-    then w - lr * u. Steps W and b in place and returns the new velocities. The numpy counterpart
-    of the fused layer_momentum_apply_accumulated_gradient.
+    Goyal et al. 2017's eq. (9) for one parameter, whatever its shape: u = m * u + g / B, then
+    w - lr * u. Steps the parameter in place and returns the new velocity. The numpy counterpart
+    of the fused layer_momentum_apply_accumulated_gradient, which takes W and b together.
     """
-    velocity_W = momentum * velocity_W + grad_W / batch_size
-    velocity_b = momentum * velocity_b + grad_b / batch_size
-    W -= learning_rate * velocity_W
-    b -= learning_rate * velocity_b
-    return velocity_W, velocity_b
+    velocity = momentum * velocity + gradient / batch_size
+    parameter -= learning_rate * velocity
+    return velocity
 
 
 class NumpyOptimizer:
-    """The optimizer of the numpy networks: each rule's formulas on numpy arrays, W and b stepped in place."""
+    """
+    The optimizer of the numpy networks: each rule's formulas on numpy arrays, each of a layer's
+    parameters (TrainedArrayLayer.parameters(): W and b, a linear layer's W, or batch norm's gamma
+    and beta) stepped in place, one after another. Each rule's formula is elementwise, so a
+    parameter's step doesn't depend on the others'.
+    """
 
     def __init__(self, rule: UpdateRule) -> None:
         self.rule = rule
         self.t = 0
-        # per layer index: the rule's state arrays (momentum's velocities, Adam's m and v)
+        # per layer index: the rule's state arrays, per parameter in parameters() order
+        # (momentum's velocity; Adam's m, then v)
         self._state: dict[int, list[FloatArray]] = {}
         match rule:
             case SGD():
@@ -87,11 +89,11 @@ class NumpyOptimizer:
         }
 
     def apply(self, index: int, layer: ArrayNetworkLayer[FloatArray], learning_rate: float, batch_size: int) -> None:
-        if not hasattr(layer, "W"):
-            return  # a pool layer: no weights
-        weighted = cast("WeightedArrayLayer[FloatArray]", layer)
-        self._apply_rule(index, weighted, learning_rate, batch_size)
-        weighted.reset_gradient_accum()
+        if not hasattr(layer, "parameters"):
+            return  # a pool layer: nothing trained
+        trained = cast("TrainedArrayLayer[FloatArray]", layer)
+        self._apply_rule(index, trained, learning_rate, batch_size)
+        trained.reset_gradient_accum()
 
     def step_single(
         self, index: int, layer: ArrayNetworkLayer[FloatArray], input_activation: FloatArray, learning_rate: float
@@ -100,73 +102,60 @@ class NumpyOptimizer:
         layer.accumulate_gradient(input_activation)
         self.apply(index, layer, learning_rate, 1)
 
-    def _zeros(self, index: int, layer: WeightedArrayLayer[FloatArray], count: int) -> list[FloatArray]:
-        # count zero arrays shaped as W, then as many shaped as b: the rule's state for a layer,
-        # made on the layer's first step
+    def _zeros(self, index: int, layer: TrainedArrayLayer[FloatArray], count: int) -> list[FloatArray]:
+        # count zero arrays shaped as each parameter, parameter by parameter: the rule's state for
+        # a layer, made on the layer's first step
         state = self._state.get(index)
         if state is None:
-            state = self._state[index] = [np.zeros(layer.W.shape) for _ in range(count)] + [
-                np.zeros(layer.b.shape) for _ in range(count)
+            state = self._state[index] = [
+                np.zeros(parameter.shape) for parameter in layer.parameters() for _ in range(count)
             ]
         return state
 
     def _apply_sgd(
-        self, _index: int, layer: WeightedArrayLayer[FloatArray], learning_rate: float, batch_size: int
+        self, _index: int, layer: TrainedArrayLayer[FloatArray], learning_rate: float, batch_size: int
     ) -> None:
-        layer.W -= learning_rate * (layer.grad_W / batch_size)
-        layer.b -= learning_rate * (layer.grad_b / batch_size)
+        for parameter, gradient in zip(layer.parameters(), layer.gradients()):
+            parameter -= learning_rate * (gradient / batch_size)
 
     def _apply_weight_decay(
-        self, _index: int, layer: WeightedArrayLayer[FloatArray], learning_rate: float, batch_size: int
+        self, _index: int, layer: TrainedArrayLayer[FloatArray], learning_rate: float, batch_size: int
     ) -> None:
         l2_lambda = cast(WeightDecay, self.rule).l2_lambda
-        layer.W -= learning_rate * (layer.grad_W / batch_size + l2_lambda * layer.W)
-        layer.b -= learning_rate * (layer.grad_b / batch_size)  # bias unregularized
+        for parameter, gradient, decayed in zip(layer.parameters(), layer.gradients(), layer.decayed):
+            if decayed:
+                parameter -= learning_rate * (gradient / batch_size + l2_lambda * parameter)
+            else:
+                parameter -= learning_rate * (gradient / batch_size)  # a bias, gamma or beta
 
     def _apply_momentum(
-        self, index: int, layer: WeightedArrayLayer[FloatArray], learning_rate: float, batch_size: int
+        self, index: int, layer: TrainedArrayLayer[FloatArray], learning_rate: float, batch_size: int
     ) -> None:
-        # state: velocity_W, velocity_b
+        momentum = cast(Momentum, self.rule).momentum
+        # state: a velocity per parameter
         state = self._zeros(index, layer, 1)
-        state[0], state[1] = momentum_update(
-            layer.W,
-            layer.b,
-            layer.grad_W,
-            layer.grad_b,
-            state[0],
-            state[1],
-            cast(Momentum, self.rule).momentum,
-            learning_rate,
-            batch_size,
-        )
+        for i, (parameter, gradient) in enumerate(zip(layer.parameters(), layer.gradients())):
+            state[i] = momentum_update(parameter, gradient, state[i], momentum, learning_rate, batch_size)
 
     def _apply_adam(
-        self, index: int, layer: WeightedArrayLayer[FloatArray], learning_rate: float, batch_size: int
+        self, index: int, layer: TrainedArrayLayer[FloatArray], learning_rate: float, batch_size: int
     ) -> None:
         rule = cast(Adam, self.rule)
         beta1, beta2, epsilon = rule.beta1, rule.beta2, rule.epsilon
-        # state: m_W, v_W, m_b, v_b
+        # state: m, then v, per parameter
         state = self._zeros(index, layer, 2)
-        m_W, v_W, m_b, v_b = state
 
         bias_correction1 = 1 - beta1**self.t
         bias_correction2 = 1 - beta2**self.t
 
-        g_W = layer.grad_W / batch_size
-        m_W = beta1 * m_W + (1 - beta1) * g_W
-        v_W = beta2 * v_W + (1 - beta2) * g_W * g_W
-        m_hat_W = m_W / bias_correction1
-        v_hat_W = v_W / bias_correction2
-        layer.W -= learning_rate * m_hat_W / (np.sqrt(v_hat_W) + epsilon)
-
-        g_b = layer.grad_b / batch_size
-        m_b = beta1 * m_b + (1 - beta1) * g_b
-        v_b = beta2 * v_b + (1 - beta2) * g_b * g_b
-        m_hat_b = m_b / bias_correction1
-        v_hat_b = v_b / bias_correction2
-        layer.b -= learning_rate * m_hat_b / (np.sqrt(v_hat_b) + epsilon)
-
-        state[:] = [m_W, v_W, m_b, v_b]
+        for i, (parameter, gradient) in enumerate(zip(layer.parameters(), layer.gradients())):
+            g = gradient / batch_size
+            m = beta1 * state[2 * i] + (1 - beta1) * g
+            v = beta2 * state[2 * i + 1] + (1 - beta2) * g * g
+            m_hat = m / bias_correction1
+            v_hat = v / bias_correction2
+            parameter -= learning_rate * m_hat / (np.sqrt(v_hat) + epsilon)
+            state[2 * i], state[2 * i + 1] = m, v
 
 
 def _rust_zeros(like: pa.Array) -> pa.Array:
@@ -178,7 +167,8 @@ class RustOptimizer:
     """
     NumpyOptimizer on the Rust backend: each rule is one fused call per layer (fused.rs), taking W
     and b together, and the layer's W and b are rebound to its result. For SGD the single-example
-    step is one fused call too (step_single).
+    step is one fused call too (step_single). Every Rust layer is a dense or conv layer's (W, b):
+    the Rust builder doesn't build batch norm yet (the batch-norm workplan, stage 3).
     """
 
     def __init__(self, rule: UpdateRule) -> None:

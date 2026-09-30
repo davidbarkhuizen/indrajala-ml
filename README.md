@@ -241,8 +241,10 @@ rounds differently when `B` isn't a power of two.
 
 ## Batch normalization
 
-Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)); no implementation builds
-a `BatchNorm` spec yet. This section fixes the forms all three implementations will be held to.
+Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)): numpy builds dense
+batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`. Rust, pure Python, conv
+batch norm and saving it are later stages, and refuse it until then. This section fixes the forms
+all three implementations are held to.
 
 A norm layer follows a linear layer without a bias and carries the activation, as the paper places
 it: "We add the BN transform immediately before the nonlinearity, by normalizing x = Wu + b. […]
