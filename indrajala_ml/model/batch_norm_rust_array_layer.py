@@ -7,7 +7,7 @@ from typing import Any, ClassVar, Literal
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.layer_specs import refuse_single_example
+from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
 
 
 class BatchNormRustArrayLayer:
@@ -29,6 +29,9 @@ class BatchNormRustArrayLayer:
 
     training is set by set_training_mode. The backward pass reads _was_training, training as
     forward_batch saw it, since the network switches training off before the backward pass.
+
+    With a group_size, the ops normalize each ghost group (layer_specs.ghost_groups, D6) as a
+    batch of its own; _var and _std are then per group per channel, group-major.
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (False, False)
@@ -40,6 +43,7 @@ class BatchNormRustArrayLayer:
         epsilon: float,
         running_rate: float,
         positions: int = 1,
+        group_size: int | None = None,
     ) -> None:
         assert positions >= 1 and size % positions == 0, f"{size} values aren't {positions} positions per channel"
         assert positions == 1 or activation == "relu", "only ReLU follows a conv layer (validate_layer_specs)"
@@ -50,6 +54,7 @@ class BatchNormRustArrayLayer:
         self.activation = activation
         self.epsilon = epsilon
         self.running_rate = running_rate
+        self.group_size = group_size
         self.training = False
         self._was_training = False
 
@@ -100,6 +105,8 @@ class BatchNormRustArrayLayer:
 
         if X.shape[0] < 2:
             refuse_single_example(self)
+        # the ops refuse a last group of one too, but this is every implementation's message
+        ghost_groups(X.shape[0], self.group_size)
         (
             self.A,
             self._xhat,
@@ -118,6 +125,7 @@ class BatchNormRustArrayLayer:
             self.running_rate,
             self.activation,
             self.positions,
+            self.group_size,
         )
         return self.A
 
@@ -144,7 +152,7 @@ class BatchNormRustArrayLayer:
     def downstream_batch(self) -> pa.Array:
         # dl/dx, the linear layer's delta: the paper's § 3 chain rule, term by term
         return pa.batch_norm_downstream_batch(
-            self.delta_batch, self.gamma, self._d, self._var, self._std, self.epsilon, self.positions
+            self.delta_batch, self.gamma, self._d, self._var, self._std, self.epsilon, self.positions, self.group_size
         )
 
     def accumulate_gradient(self, input_activation: pa.Array) -> None:

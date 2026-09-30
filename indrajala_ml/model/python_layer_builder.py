@@ -59,7 +59,9 @@ def build_python_layers(
             # after its linear layer (validate_layer_specs), whose shape it keeps: a conv layer's
             # channels are normalized over every position
             positions = shape[0] * shape[1] if len(shape) == 3 else 1
-            layer = BatchNormLayer(previous, spec.activation, spec.epsilon, spec.running_rate, positions)
+            layer = BatchNormLayer(
+                previous, spec.activation, spec.epsilon, spec.running_rate, positions, spec.group_size
+            )
         else:
             assert len(shape) == 3, f"a conv or pool layer needs a (height, width, channels) input; got {shape}"
             height, width, channels = shape

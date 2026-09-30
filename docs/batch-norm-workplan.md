@@ -1,6 +1,6 @@
 # Workplan: batch normalization
 
-**Status: stages 0-5 done (2026-09-30); stage 6 next. Decisions D1-D8 settled by the owner (2026-09-30).**
+**Status: done (2026-09-30), stages 0-6. Decisions D1-D8 settled by the owner (2026-09-30), and the remainder group (Pitfalls) with stage 6.**
 
 This is step 2 of [primitives-roadmap.md](primitives-roadmap.md). It adds one new layer kind,
 batch normalization (Ioffe & Szegedy 2015), for dense and conv networks, under every update rule,
@@ -198,8 +198,8 @@ network = SequentialArrayNetwork(
   checks that classifying leaves them bit-identical.
 - **Training mode reaches the backward pass.** `_set_training_mode(False)` runs before the
   backward pass, so the layer records `_was_training`, as dropout does.
-- **Ghost groups (D6)** must divide the batch or handle a remainder group. Recommended: the last
-  group is the remainder, refused if it has one row (D4's reason).
+- **Ghost groups (D6)** must divide the batch or handle a remainder group. Settled by the owner
+  (2026-09-30): the last group is the remainder, refused if it has one row (D4's reason).
 - **The golden run and the timing.** No existing network changes, so the golden run stays
   bit-identical at every stage. The optimizer's parameter accessor changes `apply` for every
   network, so the stage that adds it is timed within noise
@@ -322,6 +322,19 @@ and `load_network`, and loads numpy and Rust files into each other. The fixtures
 2. Tests: one group equals plain batch norm by bits; hand-computed groups of 2 in a batch of 4;
    the remainder group.
 3. README: ghost groups in the batch-norm section. Mark roadmap step 2 done.
+
+Done: `BatchNorm(group_size=None)`, 2 or more (`validate_layer_specs`). `layer_specs.ghost_groups`
+splits a batch into `(first, end)` example ranges and refuses a last group of one. The numpy and
+pure-Python layers normalize each group as a batch of their own, and the crate's
+`batch_norm_forward_batch` and `batch_norm_downstream_batch` take `group_size` (crate #45), their
+`var` and `std` per group per channel. The gradients of `γ` and `β` stay one fold over the batch.
+A network refuses a batch that leaves a group of one before its forward pass, naming the layer,
+and `train_backprop_network_mini_batch` refuses such a batch size before training. Format 2 writes
+`group_size` only when set, so earlier files and fixtures are unchanged.
+`tests/test_batch_norm_ghost_groups.py` checks the three workplan cases, each group against a plain
+layer run on it alone, the pure-Python and Rust layers against numpy's by bits, gradient checks in
+every implementation, and the refusals; `tests/test_format2.py` resumes a ghost-group network by
+bits.
 
 ## After this plan
 

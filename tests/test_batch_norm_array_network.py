@@ -134,7 +134,8 @@ def test_the_backward_pass_is_the_simplified_chain_rule_by_hand():
 
     dxhat = layer.delta_batch * layer.gamma
     xhat, m = layer._xhat, 3
-    simplified = (m * dxhat - dxhat.sum(axis=0) - xhat * (dxhat * xhat).sum(axis=0)) / (m * layer._std)
+    ((_m, _d, _var, std),) = layer._stats
+    simplified = (m * dxhat - dxhat.sum(axis=0) - xhat * (dxhat * xhat).sum(axis=0)) / (m * std)
     assert dx == pytest.approx(simplified, rel=1e-12, abs=1e-15)
     # so the gradient into the linear layer sums to 0 over the batch
     assert dx.sum(axis=0) == pytest.approx([0.0, 0.0], abs=1e-15)

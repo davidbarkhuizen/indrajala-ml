@@ -16,7 +16,7 @@ connection, no recurrence and no attention.
 
 1. **Composable layers and optimizers** (a refactor, before the next primitive): done
    (2026-09-30); its open items are in [next-steps.md](next-steps.md).
-2. **Batch normalization**, then the conv batch-size study with it.
+2. **Batch normalization**: done (2026-09-30); the conv batch-size study with it is next.
 3. **Residual connections.**
 4. **Layer normalization and single-head self-attention**, as a patch model on MNIST.
 5. **Multi-head attention and a full transformer block.**
@@ -40,7 +40,9 @@ walks in the tests and the golden run all depend on the class structure.
 
 ## 2. Batch normalization next
 
-Planned in [batch-norm-workplan.md](batch-norm-workplan.md) (decisions settled 2026-09-30).
+**Done (2026-09-30).** Dense and conv batch norm, with ghost groups, in all three implementations
+([batch-norm-workplan.md](batch-norm-workplan.md); README, Batch normalization). The study rerun is
+the workplan's After this plan. The rest of this section is the case as it was made.
 
 - **It serves the open question.** The conv batch-size study hit a ceiling on the stable rate:
   the linear rule fails at B = 512 at momentum 0.0 and 0.9 (findings in `batch_size_scaling.py`).

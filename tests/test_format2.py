@@ -19,7 +19,7 @@ from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBack
 from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
     EnsembleRustArrayBackpropClassifierNetwork,
 )
-from indrajala_ml.model.format2 import layer_to_json
+from indrajala_ml.model.format2 import layer_from_json, layer_to_json
 from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, InputShape, LayerSpec, Pool
 from indrajala_ml.model.load_network import load_network
 from indrajala_ml.model.sequential_array_network import (
@@ -124,6 +124,11 @@ CONV_BATCH_NORM: tuple[InputShape, list[LayerSpec]] = (
     (6, 6, 1),
     [Conv(2, 3, activation="linear"), BatchNorm("relu"), Pool(2), Dense(3, output=True)],
 )
+# ghost groups of 2 in _train_batches' batches of 4 (D6)
+GHOST_BATCH_NORM: tuple[InputShape, list[LayerSpec]] = (
+    (4,),
+    [Dense(5, activation="linear"), BatchNorm(group_size=2), Dense(3, output=True)],
+)
 
 
 def _train_batches(network: Any, rows: list[tuple[tuple[float, ...], int]]) -> None:
@@ -134,7 +139,9 @@ def _train_batches(network: Any, rows: list[tuple[tuple[float, ...], int]]) -> N
 
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("architecture", [DENSE_BATCH_NORM, CONV_BATCH_NORM], ids=["dense", "conv"])
+@pytest.mark.parametrize(
+    "architecture", [DENSE_BATCH_NORM, CONV_BATCH_NORM, GHOST_BATCH_NORM], ids=["dense", "conv", "ghost"]
+)
 @pytest.mark.parametrize("loader", ["class", "load_network"])
 def test_a_loaded_batch_norm_network_resumes_training_by_bits(
     implementation: str,
@@ -194,6 +201,16 @@ def test_a_batch_norm_file_holds_the_workplans_entries(implementation: str, tmp_
         assert [len(values) for values in norm] == [3] * 4
         assert set(state[0]) == {"velocity_W"} and set(state[3]) == {"velocity_W"}
         assert set(state[1]) == {"velocity_gamma", "velocity_beta"}
+
+
+def test_a_batch_norm_entry_holds_a_group_size_only_when_it_has_one():
+    # no "group_size" without ghost groups: files saved before BatchNorm had one are what such a
+    # network saves now, and they load with the default
+    plain = {"kind": "batch_norm", "activation": "relu", "epsilon": 1e-5, "running_rate": 0.1}
+    assert layer_to_json(BatchNorm("relu")) == plain
+    assert layer_to_json(BatchNorm("relu", group_size=32)) == {**plain, "group_size": 32}
+    assert layer_from_json(plain) == BatchNorm("relu")
+    assert layer_from_json({**plain, "group_size": 32}) == BatchNorm("relu", group_size=32)
 
 
 def test_a_relu_conv_entry_is_unchanged():

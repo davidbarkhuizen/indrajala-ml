@@ -10,6 +10,7 @@ from indrajala_ml.model.classifier_protocols import (
     TargetClassifier,
     TrainableClassifier,
 )
+from indrajala_ml.model.layer_specs import refuse_single_example_groups
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.prepared_dataset import PreparedDataset
 
@@ -235,6 +236,19 @@ def _has_batch_norm(student: object) -> bool:
     return getattr(student, "batch_norm_index", None) is not None
 
 
+def _refuse_single_example_groups(student: object, examples: int, batch_size: int) -> None:
+    # every batch is batch_size examples but the final short one: refuse before training a batch
+    # size that would leave a ghost group of one example in either, which learn_batch refuses
+    # (the batch-norm workplan, D6), rather than at the end of the first epoch
+    specs = getattr(student, "layer_specs", None)
+    if specs is None:
+        return
+    remainder = examples % batch_size
+    sizes = [min(batch_size, examples)] + ([remainder] if remainder > 1 else [])
+    for size in sizes:
+        refuse_single_example_groups(specs, size)
+
+
 def train_backprop_network_mini_batch[L](
     student: BatchTrainableClassifier[L],
     training_data: Sequence[Example[L]] | PreparedDataset,
@@ -253,8 +267,9 @@ def train_backprop_network_mini_batch[L](
 
     Reshuffles training_data every epoch by default (reshuffle_each_epoch=False keeps the batches
     fixed). A final short batch is kept, except that a final batch of one is dropped for a network
-    with batch norm, which can't train on one example (the batch-norm workplan, D4). training_data
-    may be a PreparedDataset.
+    with batch norm, which can't train on one example (the batch-norm workplan, D4), and a batch
+    size that leaves a batch norm's ghost group one example is refused before training (D6).
+    training_data may be a PreparedDataset.
 
     Otherwise as train_linear_classifier_network: the pocket checkpoint of the best epoch, and the
     TrainingDiagnostic/ConvergenceSeries return.
@@ -262,6 +277,8 @@ def train_backprop_network_mini_batch[L](
 
     assert len(training_data) >= 1, "training_data must not be empty"
     drop_single = _has_batch_norm(student)
+    if drop_single:
+        _refuse_single_example_groups(student, len(training_data), batch_size)
 
     iterations: int = 0
     convergence: list[tuple[int, float]] = []

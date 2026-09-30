@@ -55,11 +55,17 @@ class BatchNorm:
     normalizes with the batch's statistics and moves the running averages toward them at
     running_rate; in inference it normalizes with the running averages. epsilon is added to the
     variance. The defaults are PyTorch's.
+
+    With a group_size (ghost batch norm, Hoffer et al. 2017; the batch-norm workplan, D6), a
+    training batch is normalized in groups of group_size examples, in row order, each with its own
+    statistics, and each group moves the running averages in turn. The last group is the
+    remainder, and a batch that leaves it one example is refused (ghost_groups).
     """
 
     activation: Literal["sigmoid", "relu"] = "sigmoid"
     epsilon: float = 1e-5
     running_rate: float = 0.1
+    group_size: int | None = None
 
 
 LayerSpec = Dense | ConvSpec | PoolSpec | BatchNorm
@@ -83,6 +89,33 @@ def refuse_single_example_network(specs: Sequence[LayerSpec], batch_norm_index: 
     )
 
 
+def ghost_groups(rows: int, group_size: int | None) -> list[tuple[int, int]]:
+    """A training batch of rows examples as its ghost groups (D6), (first, end) example ranges: runs
+    of group_size in row order, the last the remainder, or the whole batch without a group_size.
+    Refuses a last group of one example, which would normalize to 0 (D4's reason)."""
+    size = rows if group_size is None else group_size
+    ranges = [(first, min(first + size, rows)) for first in range(0, rows, size)]
+    if rows > 1 and ranges[-1][1] - ranges[-1][0] == 1:
+        raise ValueError(_single_example_group(rows, size))
+    return ranges
+
+
+def _single_example_group(rows: int, group_size: int) -> str:
+    return (
+        f"a batch of {rows} in groups of {group_size} leaves a last group of one example, which batch norm "
+        "normalizes to 0 (the batch-norm workplan, D6): use a batch size whose remainder isn't 1"
+    )
+
+
+def refuse_single_example_groups(specs: Sequence[LayerSpec], batch_size: int) -> None:
+    """A network's refusal of a training batch of batch_size, 2 or more, that leaves some BatchNorm
+    a last ghost group of one example (D6), naming the layer."""
+    for i, spec in enumerate(specs):
+        group_size = spec.group_size if isinstance(spec, BatchNorm) else None
+        if group_size is not None and batch_size > group_size and batch_size % group_size == 1:
+            raise ValueError(f"layer {i}, {spec!r}: {_single_example_group(batch_size, group_size)}")
+
+
 def batch_norm_index(specs: Sequence[LayerSpec]) -> int | None:
     """The index of the first BatchNorm in specs, if any: such a network refuses a one-example
     training step (D4)."""
@@ -104,6 +137,7 @@ def _check_batch_norm(spec: BatchNorm, before: LayerSpec | None) -> None:
     assert spec.activation in ("sigmoid", "relu"), f"a BatchNorm is sigmoid or ReLU; got {spec!r}"
     assert spec.epsilon > 0.0, f"epsilon must be positive; got {spec!r}"
     assert 0.0 < spec.running_rate <= 1.0, f"running_rate must be in (0.0, 1.0]; got {spec!r}"
+    assert spec.group_size is None or spec.group_size >= 2, f"group_size must be 2 or more; got {spec!r}"
 
 
 def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:

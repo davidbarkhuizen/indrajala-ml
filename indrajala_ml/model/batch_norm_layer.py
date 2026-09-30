@@ -22,7 +22,7 @@ from typing import Any, ClassVar, Literal
 from indrajala_ml.model.backprop_node import sigmoid
 from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.layer_protocols import InputLayer
-from indrajala_ml.model.layer_specs import refuse_single_example
+from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
 from indrajala_ml.model.relu_layer import relu_activation
 
 
@@ -38,9 +38,9 @@ class BatchNormNode(AbstractNode):
     """
     One feature or channel: gamma and beta (the WeightSet the optimizer steps, as [gamma] and a
     bias beta), the running averages, and over a training batch its lists of d = x - mu, x-hat, the
-    activations, the deltas and dl/dx, with the batch's variance and std. As a dense layer's node,
-    value(), delta and dx are the selected example's (BatchNormLayer.select_example), or the
-    inference forward pass's.
+    activations, the deltas and dl/dx, with each ghost group's variance and std (one group
+    without a group_size). As a dense layer's node, value(), delta and dx are the selected
+    example's (BatchNormLayer.select_example), or the inference forward pass's.
     """
 
     # gamma and beta are not decayed (D7); beta steps as a bias
@@ -70,8 +70,8 @@ class BatchNormNode(AbstractNode):
         self.activations: list[float] = []
         self.deltas: list[float] = []
         self.dxs: list[float] = []
-        self.var = 0.0
-        self.std = 0.0
+        self.vars: list[float] = []
+        self.stds: list[float] = []
 
     @property
     def channel(self) -> BatchNormNode:
@@ -141,6 +141,10 @@ class BatchNormLayer:
     After a conv layer, positions is its out_height * out_width: the input layer's nodes are
     size // positions channels, channel-major, each with its BatchNormNode in channels, and the
     layer's nodes are BatchNormPositions. After a dense layer, the nodes are the channels.
+
+    With a group_size, a training batch's ghost groups (layer_specs.ghost_groups, D6) are each
+    normalized as a batch of their own, and move the running averages in turn; the gradients of
+    gamma and beta still sum over the whole batch.
     """
 
     def __init__(
@@ -150,6 +154,7 @@ class BatchNormLayer:
         epsilon: float,
         running_rate: float,
         positions: int = 1,
+        group_size: int | None = None,
     ) -> None:
         self.input_layer = input_layer
         self.size = len(input_layer.nodes)
@@ -160,6 +165,8 @@ class BatchNormLayer:
         self.activation = activation
         self.epsilon = epsilon
         self.running_rate = running_rate
+        self.group_size = group_size
+        self._groups: list[tuple[int, int]] = []
         self.training = False
         self._was_training = False
         self.nodes: list[BatchNormNode] | list[BatchNormPosition]
@@ -196,23 +203,30 @@ class BatchNormLayer:
         self._was_training = True
         if len(inputs) < 2:
             refuse_single_example(self)
+        self._groups = ghost_groups(len(inputs), self.group_size)
         epsilon, rate, positions = self.epsilon, self.running_rate, self.positions
         for c, node in enumerate(self.channels):
-            x = [row[c * positions + p] for row in inputs for p in range(positions)]
-            m = len(x)
-            mu = _fold(x) / m
-            d = [x_i - mu for x_i in x]
-            ss = _fold([d_i * d_i for d_i in d])
-            var = ss / m
-            std = math.sqrt(var + epsilon)
-            xhat = [d_i / std for d_i in d]
-            gamma, beta = node.gamma, node.beta
-            node.activations = [self._activate(gamma * xhat_i + beta) for xhat_i in xhat]
+            values = [row[c * positions + p] for row in inputs for p in range(positions)]
+            node.d, node.xhat, node.activations, node.vars, node.stds = [], [], [], [], []
+            for first, end in self._groups:
+                x = values[first * positions : end * positions]
+                m = len(x)
+                mu = _fold(x) / m
+                d = [x_i - mu for x_i in x]
+                ss = _fold([d_i * d_i for d_i in d])
+                var = ss / m
+                std = math.sqrt(var + epsilon)
+                xhat = [d_i / std for d_i in d]
+                gamma, beta = node.gamma, node.beta
+                node.activations += [self._activate(gamma * xhat_i + beta) for xhat_i in xhat]
 
-            node.running_mean = (1 - rate) * node.running_mean + rate * mu
-            node.running_var = (1 - rate) * node.running_var + rate * (ss / (m - 1))
+                node.running_mean = (1 - rate) * node.running_mean + rate * mu
+                node.running_var = (1 - rate) * node.running_var + rate * (ss / (m - 1))
 
-            node.d, node.xhat, node.var, node.std = d, xhat, var, std
+                node.d += d
+                node.xhat += xhat
+                node.vars.append(var)
+                node.stds.append(std)
             node.deltas, node.dxs = [], []
 
     def select_example(self, example: int) -> None:
@@ -236,20 +250,24 @@ class BatchNormLayer:
         assert self._was_training, "the backward pass needs a training forward pass's batch statistics"
         epsilon, positions = self.epsilon, self.positions
         for c, node in enumerate(self.channels):
-            m = len(node.d)
             ds = [row[c * positions + p] for row in downstream for p in range(positions)]
             if self.activation == "sigmoid":
                 deltas = [ds_i * a * (1.0 - a) for ds_i, a in zip(ds, node.activations)]
             else:
                 deltas = [ds_i * (1.0 if a > 0.0 else 0.0) for ds_i, a in zip(ds, node.activations)]
-            gamma, d = node.gamma, node.d
-            dxhat = [delta_i * gamma for delta_i in deltas]
-            inv_std = 1 / node.std
-            inv_std3 = inv_std / (node.var + epsilon)
-            dvar = _fold([dxhat_i * d_i * -0.5 * inv_std3 for dxhat_i, d_i in zip(dxhat, d)])
-            dmu = _fold([dxhat_i * -inv_std for dxhat_i in dxhat]) + dvar * _fold([-2 * d_i for d_i in d]) / m
+            gamma = node.gamma
+            dxs: list[float] = []
+            for (first, end), var, std in zip(self._groups, node.vars, node.stds):
+                d = node.d[first * positions : end * positions]
+                m = len(d)
+                dxhat = [delta_i * gamma for delta_i in deltas[first * positions : end * positions]]
+                inv_std = 1 / std
+                inv_std3 = inv_std / (var + epsilon)
+                dvar = _fold([dxhat_i * d_i * -0.5 * inv_std3 for dxhat_i, d_i in zip(dxhat, d)])
+                dmu = _fold([dxhat_i * -inv_std for dxhat_i in dxhat]) + dvar * _fold([-2 * d_i for d_i in d]) / m
+                dxs += [dxhat_i * inv_std + dvar * (2 * d_i) / m + dmu / m for dxhat_i, d_i in zip(dxhat, d)]
             node.deltas = deltas
-            node.dxs = [dxhat_i * inv_std + dvar * (2 * d_i) / m + dmu / m for dxhat_i, d_i in zip(dxhat, d)]
+            node.dxs = dxs
 
     def downstream_sum(self, own_index: int) -> float:
         # dl/dx of the selected example: the linear layer's delta

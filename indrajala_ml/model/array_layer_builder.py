@@ -115,7 +115,9 @@ def build_array_layers(
             # layer's channels over every position; the shape stays its linear layer's
             positions = shape[0] * shape[1] if len(shape) == 3 else 1
             layers.append(
-                classes.batch_norm(math.prod(shape), spec.activation, spec.epsilon, spec.running_rate, positions)
+                classes.batch_norm(
+                    math.prod(shape), spec.activation, spec.epsilon, spec.running_rate, positions, spec.group_size
+                )
             )
             continue
 
