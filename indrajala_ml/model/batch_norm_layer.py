@@ -1,13 +1,16 @@
 """
-Pure-Python batch normalization of a dense linear layer, each feature over the batch, fused with
-its activation (the batch-norm workplan, D1 and D3), the counterpart of batch_norm_array_layer.py.
+Pure-Python batch normalization of a linear layer, fused with its activation (the batch-norm
+workplan, D1 and D3), the counterpart of batch_norm_array_layer.py: a dense layer's each feature
+over the batch, a conv layer's each channel over the batch and every position.
 Every expression is the README's (Batch normalization), per scalar, in its grouping, and every sum
 over the batch is a left fold from 0.0 in example order (_fold), not the builtin sum, which adds
 floats with compensated summation since Python 3.12.
 
-A BatchNormNode holds its feature's per-example lists and statistics over a training batch. The
-layer-major batch path (layer_major.py) drives the layer through forward_batch, backward_batch and
-select_example; the example-major path only classifies through it.
+A BatchNormNode holds its feature's or channel's parameters, and its lists and statistics over a
+training batch, in the README's order: example by example, then position by position. After a dense
+layer it is also the layer's node for its feature; after a conv layer each position has a
+BatchNormPosition. The layer-major batch path (layer_major.py) drives the layer through
+forward_batch, backward_batch and select_example; the example-major path only classifies through it.
 """
 
 from __future__ import annotations
@@ -33,10 +36,11 @@ def _fold(values: Sequence[float]) -> float:
 
 class BatchNormNode(AbstractNode):
     """
-    One feature: gamma and beta (the WeightSet the optimizer steps, as [gamma] and a bias beta),
-    the running averages, and over a training batch its lists of d = x - mu, x-hat, the activations,
-    the deltas and dl/dx, with the batch's variance and std. value(), delta and dx are the selected
-    example's (BatchNormLayer.select_example), or the inference forward pass's.
+    One feature or channel: gamma and beta (the WeightSet the optimizer steps, as [gamma] and a
+    bias beta), the running averages, and over a training batch its lists of d = x - mu, x-hat, the
+    activations, the deltas and dl/dx, with the batch's variance and std. As a dense layer's node,
+    value(), delta and dx are the selected example's (BatchNormLayer.select_example), or the
+    inference forward pass's.
     """
 
     # gamma and beta are not decayed (D7); beta steps as a bias
@@ -69,6 +73,11 @@ class BatchNormNode(AbstractNode):
         self.var = 0.0
         self.std = 0.0
 
+    @property
+    def channel(self) -> BatchNormNode:
+        # a dense layer's node is its own feature's parameters
+        return self
+
     def value(self) -> float:
         return self._activation
 
@@ -97,6 +106,28 @@ class BatchNormNode(AbstractNode):
         self.bias_gradient_accum = 0.0
 
 
+class BatchNormPosition(AbstractNode):
+    """
+    One position of a conv layer's channel: value(), delta and dx of the selected example
+    (BatchNormLayer.select_example), or the inference forward pass's, from its channel's lists.
+    """
+
+    def __init__(self, input_node: AbstractNode, channel: BatchNormNode) -> None:
+        self.input_node = input_node
+        self.channel = channel
+
+        # set by a forward pass or select_example; no default, as in BackpropNode
+        self._activation: float
+        self.delta: float
+        self.dx: float
+
+    def value(self) -> float:
+        return self._activation
+
+    def activate(self, value: float) -> None:
+        self._activation = value
+
+
 class BatchNormLayer:
     """
     y = gamma * xhat + beta, then the activation, per feature of the linear layer before it, xhat
@@ -106,19 +137,40 @@ class BatchNormLayer:
 
     training is set by set_training_mode. The backward pass reads _was_training, training as
     forward_batch saw it, as BatchNormArrayLayer's.
+
+    After a conv layer, positions is its out_height * out_width: the input layer's nodes are
+    size // positions channels, channel-major, each with its BatchNormNode in channels, and the
+    layer's nodes are BatchNormPositions. After a dense layer, the nodes are the channels.
     """
 
     def __init__(
-        self, input_layer: InputLayer, activation: Literal["sigmoid", "relu"], epsilon: float, running_rate: float
+        self,
+        input_layer: InputLayer,
+        activation: Literal["sigmoid", "relu"],
+        epsilon: float,
+        running_rate: float,
+        positions: int = 1,
     ) -> None:
         self.input_layer = input_layer
         self.size = len(input_layer.nodes)
+        assert positions >= 1 and self.size % positions == 0, (
+            f"{self.size} values aren't {positions} positions per channel"
+        )
+        self.positions = positions
         self.activation = activation
         self.epsilon = epsilon
         self.running_rate = running_rate
         self.training = False
         self._was_training = False
-        self.nodes: list[BatchNormNode] = [BatchNormNode(node) for node in input_layer.nodes]
+        self.nodes: list[BatchNormNode] | list[BatchNormPosition]
+        if positions == 1:
+            self.channels = self.nodes = [BatchNormNode(node) for node in input_layer.nodes]
+        else:
+            # a channel's parameters don't read one input node: its positions do
+            self.channels = [BatchNormNode(input_layer.nodes[c * positions]) for c in range(self.size // positions)]
+            self.nodes = [
+                BatchNormPosition(node, self.channels[i // positions]) for i, node in enumerate(input_layer.nodes)
+            ]
 
     def _activate(self, y: float) -> float:
         return sigmoid(y) if self.activation == "sigmoid" else relu_activation(y)
@@ -132,20 +184,22 @@ class BatchNormLayer:
             refuse_single_example(self)
         epsilon = self.epsilon
         for node in self.nodes:
-            xhat = (node.input_node.value() - node.running_mean) / math.sqrt(node.running_var + epsilon)
-            node.activate(self._activate(node.gamma * xhat + node.beta))
+            channel = node.channel
+            xhat = (node.input_node.value() - channel.running_mean) / math.sqrt(channel.running_var + epsilon)
+            node.activate(self._activate(channel.gamma * xhat + channel.beta))
 
     def forward_batch(self, inputs: Sequence[Sequence[float]]) -> None:
-        # inputs[e][j]: the linear layer's z for example e, feature j. A training forward pass: the
-        # layer-major path runs only in learn_batch
+        # inputs[e][i]: the linear layer's z for example e, value i (feature i, or channel
+        # i // positions at position i % positions). A training forward pass: the layer-major path
+        # runs only in learn_batch
         assert self.training, "forward_batch is the training forward pass"
         self._was_training = True
-        m = len(inputs)
-        if m < 2:
+        if len(inputs) < 2:
             refuse_single_example(self)
-        epsilon, rate = self.epsilon, self.running_rate
-        for j, node in enumerate(self.nodes):
-            x = [row[j] for row in inputs]
+        epsilon, rate, positions = self.epsilon, self.running_rate, self.positions
+        for c, node in enumerate(self.channels):
+            x = [row[c * positions + p] for row in inputs for p in range(positions)]
+            m = len(x)
             mu = _fold(x) / m
             d = [x_i - mu for x_i in x]
             ss = _fold([d_i * d_i for d_i in d])
@@ -163,27 +217,31 @@ class BatchNormLayer:
 
     def select_example(self, example: int) -> None:
         # the nodes' value(), delta and dx become example's, for the layers either side
-        for node in self.nodes:
-            node.activate(node.activations[example])
-            if node.dxs:
-                node.delta = node.deltas[example]
-                node.dx = node.dxs[example]
+        positions = self.positions
+        for i, node in enumerate(self.nodes):
+            channel = node.channel
+            k = example * positions + i % positions
+            node.activate(channel.activations[k])
+            if channel.dxs:
+                node.delta = channel.deltas[k]
+                node.dx = channel.dxs[k]
 
     def compute_hidden_deltas(self, next_layer: Any) -> None:
         refuse_single_example(self)
 
     def backward_batch(self, downstream: Sequence[Sequence[float]]) -> None:
-        # downstream[e][j], the next layer's downstream sum: dl/dy is it times the activation's
+        # downstream[e][i], the next layer's downstream sum: dl/dy is it times the activation's
         # derivative, as BatchNormArrayLayer.compute_hidden_delta_batch's; then dl/dx by the paper's
         # § 3 chain rule, term by term
         assert self._was_training, "the backward pass needs a training forward pass's batch statistics"
-        epsilon = self.epsilon
-        for j, node in enumerate(self.nodes):
+        epsilon, positions = self.epsilon, self.positions
+        for c, node in enumerate(self.channels):
             m = len(node.d)
+            ds = [row[c * positions + p] for row in downstream for p in range(positions)]
             if self.activation == "sigmoid":
-                deltas = [row[j] * a * (1.0 - a) for row, a in zip(downstream, node.activations)]
+                deltas = [ds_i * a * (1.0 - a) for ds_i, a in zip(ds, node.activations)]
             else:
-                deltas = [row[j] * (1.0 if a > 0.0 else 0.0) for row, a in zip(downstream, node.activations)]
+                deltas = [ds_i * (1.0 if a > 0.0 else 0.0) for ds_i, a in zip(ds, node.activations)]
             gamma, d = node.gamma, node.d
             dxhat = [delta_i * gamma for delta_i in deltas]
             inv_std = 1 / node.std
@@ -199,23 +257,23 @@ class BatchNormLayer:
 
     def accumulate_gradients(self) -> None:
         # over the whole batch at once
-        for node in self.nodes:
+        for node in self.channels:
             node.weight_gradient_accum[0] += _fold(
                 [delta_i * xhat_i for delta_i, xhat_i in zip(node.deltas, node.xhat)]
             )
             node.bias_gradient_accum += _fold(node.deltas)
 
     def weight_sets(self) -> Sequence[BatchNormNode]:
-        return self.nodes
+        return self.channels
 
     def randomize_fan_in_aware(self) -> None:
         # D5: nothing drawn, so no other layer's draws shift
         pass
 
     def snapshot_state(self) -> list[tuple[list[float], float, float, float]]:
-        return [([node.gamma], node.beta, node.running_mean, node.running_var) for node in self.nodes]
+        return [([node.gamma], node.beta, node.running_mean, node.running_var) for node in self.channels]
 
     def restore_state(self, layer_snapshot: Sequence[Sequence[Any]]) -> None:
-        for node, (weights, beta, running_mean, running_var) in zip(self.nodes, layer_snapshot):
+        for node, (weights, beta, running_mean, running_var) in zip(self.channels, layer_snapshot):
             (node.gamma,) = weights
             node.beta, node.running_mean, node.running_var = beta, running_mean, running_var

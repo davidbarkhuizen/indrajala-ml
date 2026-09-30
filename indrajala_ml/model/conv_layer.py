@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import ClassVar, Literal
 
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_unit import ConvUnit
@@ -42,6 +42,10 @@ class ConvLayer:
     .nodes is channel-major: every (row, col) position for kernel 0, then kernel 1, and so on.
     """
 
+    # the kernel and unit classes; LinearConvLayer's have no bias and no activation
+    _kernel_cls: ClassVar[type[ConvKernel]] = ConvKernel
+    _unit_cls: ClassVar[type[ConvUnit]] = ConvUnit
+
     def __init__(
         self,
         input_layer: InputLayer,
@@ -78,7 +82,7 @@ class ConvLayer:
         self.out_width = (input_width - kernel_size) // stride + 1
 
         self.kernels: list[ConvKernel] = [
-            ConvKernel(kernel_size=kernel_size, in_channels=input_channels) for _ in range(channel_count)
+            self._kernel_cls(kernel_size=kernel_size, in_channels=input_channels) for _ in range(channel_count)
         ]
 
         self.nodes: list[ConvUnit] = []
@@ -87,7 +91,7 @@ class ConvLayer:
             for row in range(self.out_height):
                 for col in range(self.out_width):
                     indices = self._receptive_field_indices(row, col)
-                    unit = ConvUnit(input_nodes=[input_layer.nodes[i] for i in indices], kernel=kernel)
+                    unit = self._unit_cls(input_nodes=[input_layer.nodes[i] for i in indices], kernel=kernel)
                     self.nodes.append(unit)
                     for weight_index, input_index in enumerate(indices):
                         self._fan_out[input_index].append((unit, weight_index))

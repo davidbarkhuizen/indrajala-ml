@@ -22,6 +22,7 @@ from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.layer_major import LayerMajorBatch
 from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
+from indrajala_ml.model.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.linear_layer import LinearLayer
 from indrajala_ml.model.relu_layer import relu_activation
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
@@ -62,7 +63,7 @@ class _InputLayer:
 
 def _layer(activation: Any = "sigmoid") -> BatchNormLayer:
     layer = BatchNormLayer(_InputLayer(2), activation, EPSILON, RATE)
-    for node, gamma, beta in zip(layer.nodes, GAMMA.tolist(), BETA.tolist()):
+    for node, gamma, beta in zip(layer.channels, GAMMA.tolist(), BETA.tolist()):
         node.gamma, node.beta = gamma, beta
     layer.set_training_mode(True)
     return layer
@@ -82,7 +83,7 @@ def test_every_expression_is_the_readmes_by_bits(activation: str):
     layer.backward_batch(DOWNSTREAM)
     layer.accumulate_gradients()
 
-    for feature, node in enumerate(layer.nodes):
+    for feature, node in enumerate(layer.channels):
         downstream = [row[feature] for row in DOWNSTREAM]
         if activation == "sigmoid":
             delta = [ds * a * (1.0 - a) for ds, a in zip(downstream, node.activations)]
@@ -108,13 +109,13 @@ def test_the_forward_pass_normalizes_each_feature_over_the_batch_by_hand():
     # as the numpy test's: feature 0 has mean 7/3 and biased variance 14/9, feature 1 mean 1/2
     # and variance 25/6
     for node, (mean, variance), gamma, beta, column in zip(
-        layer.nodes, [(7 / 3, 14 / 9), (1 / 2, 25 / 6)], GAMMA, BETA, X.T.tolist()
+        layer.channels, [(7 / 3, 14 / 9), (1 / 2, 25 / 6)], GAMMA, BETA, X.T.tolist()
     ):
         xhat = [(x - mean) / math.sqrt(variance + EPSILON) for x in column]
         assert node.xhat == pytest.approx(xhat, rel=1e-14)
         assert node.activations == pytest.approx([sigmoid(gamma * v + beta) for v in xhat], rel=1e-14)
-    assert [node.running_mean for node in layer.nodes] == pytest.approx([0.1 * 7 / 3, 0.1 * 1 / 2], rel=1e-14)
-    assert [node.running_var for node in layer.nodes] == pytest.approx(
+    assert [node.running_mean for node in layer.channels] == pytest.approx([0.1 * 7 / 3, 0.1 * 1 / 2], rel=1e-14)
+    assert [node.running_var for node in layer.channels] == pytest.approx(
         [0.9 + 0.1 * 1.5 * 14 / 9, 0.9 + 0.1 * 1.5 * 25 / 6], rel=1e-14
     )
 
@@ -150,10 +151,10 @@ def test_the_layer_is_numpys_by_bits(activation: Any, batch_size: int):
     downstream = [[rng.uniform(-1.0, 1.0) for _ in range(4)] for _ in range(batch_size)]
     python = BatchNormLayer(_InputLayer(4), activation, EPSILON, RATE)
     array = BatchNormArrayLayer(4, activation, EPSILON, RATE)
-    for node in python.nodes:
+    for node in python.channels:
         node.gamma, node.beta = rng.uniform(0.5, 2.0), rng.uniform(-1.0, 1.0)
-    array.gamma = np.array([node.gamma for node in python.nodes])
-    array.beta = np.array([node.beta for node in python.nodes])
+    array.gamma = np.array([node.gamma for node in python.channels])
+    array.beta = np.array([node.beta for node in python.channels])
     for layer in (python, array):
         layer.set_training_mode(True)
 
@@ -168,18 +169,18 @@ def test_the_layer_is_numpys_by_bits(activation: Any, batch_size: int):
     def columns(values: Any) -> list[list[float]]:
         return np.asarray(values).T.tolist()
 
-    assert _bits([node.activations for node in python.nodes]) == _bits(columns(activations))
-    assert _bits([node.dxs for node in python.nodes]) == _bits(columns(dx))
-    assert _bits([node.weight_gradient_accum[0] for node in python.nodes]) == _bits(array.grad_gamma.tolist())
-    assert _bits([node.bias_gradient_accum for node in python.nodes]) == _bits(array.grad_beta.tolist())
-    assert _bits([node.running_mean for node in python.nodes]) == _bits(array.running_mean.tolist())
-    assert _bits([node.running_var for node in python.nodes]) == _bits(array.running_var.tolist())
+    assert _bits([node.activations for node in python.channels]) == _bits(columns(activations))
+    assert _bits([node.dxs for node in python.channels]) == _bits(columns(dx))
+    assert _bits([node.weight_gradient_accum[0] for node in python.channels]) == _bits(array.grad_gamma.tolist())
+    assert _bits([node.bias_gradient_accum for node in python.channels]) == _bits(array.grad_beta.tolist())
+    assert _bits([node.running_mean for node in python.channels]) == _bits(array.running_mean.tolist())
+    assert _bits([node.running_var for node in python.channels]) == _bits(array.running_var.tolist())
 
 
 def test_inference_normalizes_with_the_running_averages():
     inputs = StateLayer(2, [(0.0, 1.0)] * 2)
     layer = BatchNormLayer(inputs, "sigmoid", EPSILON, RATE)
-    for node, gamma, beta, mean, var in zip(layer.nodes, GAMMA, BETA, [0.5, -1.0], [2.0, 0.25]):
+    for node, gamma, beta, mean, var in zip(layer.channels, GAMMA, BETA, [0.5, -1.0], [2.0, 0.25]):
         node.gamma, node.beta, node.running_mean, node.running_var = gamma, beta, mean, var
 
     inputs.update_state((2.0, 0.5))
@@ -190,7 +191,7 @@ def test_inference_normalizes_with_the_running_averages():
         for x, gamma, beta, mean, var in zip((2.0, 0.5), GAMMA, BETA, [0.5, -1.0], [2.0, 0.25])
     ]
     assert _bits([node.value() for node in layer.nodes]) == _bits(expected)
-    assert [(node.running_mean, node.running_var) for node in layer.nodes] == [(0.5, 2.0), (-1.0, 0.25)]
+    assert [(node.running_mean, node.running_var) for node in layer.channels] == [(0.5, 2.0), (-1.0, 0.25)]
 
 
 def test_a_layer_refuses_one_example_in_training():
@@ -381,7 +382,7 @@ def test_classifying_normalizes_with_the_running_averages():
         z = [sum([x * w for x, w in zip(state, node.input_node_weights)]) for node in linear.nodes]
         y = [
             sigmoid(node.gamma * ((z_j - node.running_mean) / math.sqrt(node.running_var + EPSILON)) + node.beta)
-            for z_j, node in zip(z, norm.nodes)
+            for z_j, node in zip(z, norm.channels)
         ]
         expected = [
             sigmoid(sum([a * w for a, w in zip(y, node.input_node_weights)]) + node.bias) for node in output.nodes
@@ -394,13 +395,13 @@ def test_a_training_step_is_the_rules_step_on_gamma_and_beta():
     norm = network.trainable_layers[1]
     rows = _rows(6)
     network.learn_batch(0.5, rows)
-    before = [(node.gamma, node.beta) for node in norm.nodes]
+    before = [(node.gamma, node.beta) for node in norm.channels]
 
     network.learn_batch(0.5, rows)
 
     # per feature: [gamma]'s velocity, then beta's
     velocities = network.optimizer.state().layers[1]
-    for node, (gamma, beta), (weight_state, bias_state) in zip(norm.nodes, before, velocities):
+    for node, (gamma, beta), (weight_state, bias_state) in zip(norm.channels, before, velocities):
         assert node.gamma == gamma - 0.5 * weight_state[0][0]
         assert node.beta == beta - 0.5 * bias_state[0]
 
@@ -468,7 +469,7 @@ def test_snapshot_carries_the_running_averages_and_restore_returns_them():
 
     assert [len(entry) for entry in snapshot] == [5, 5, 3]
     assert [len(node) for node in snapshot[0]] == [1] * 5
-    assert snapshot[1] == [([node.gamma], node.beta, node.running_mean, node.running_var) for node in norm.nodes]
+    assert snapshot[1] == [([node.gamma], node.beta, node.running_mean, node.running_var) for node in norm.channels]
 
     network.learn_batch(0.5, _rows(6, seed=5))
     network.restore([[list(node) for node in entry] for entry in snapshot])  # as nested lists
@@ -513,7 +514,7 @@ def _as_array_snapshot(python: Any) -> list[tuple[list[Any], ...]]:
         if isinstance(layer, BatchNormLayer):
             gamma, beta, mean, var = zip(*entry)
             snapshot.append(([g for (g,) in gamma], list(beta), list(mean), list(var)))
-        elif isinstance(layer, LinearLayer):
+        elif isinstance(layer, LinearLayer | LinearConvLayer):
             snapshot.append(([weights for (weights,) in entry],))
         else:
             snapshot.append(tuple(list(values) for values in zip(*entry)))
