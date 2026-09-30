@@ -1,0 +1,51 @@
+{
+ "version": 1,
+ "name": "pr477-ab2",
+ "created": "2026-09-29T00:00:00+02:00",
+ "state": "done",
+ "pid": 0,
+ "bench": "prepared_dataset_timing",
+ "args": [
+  "--repeats",
+  "5"
+ ],
+ "script_from": "new",
+ "control_backend": null,
+ "order": "ONNO",
+ "old": {
+  "ref": "0afa901",
+  "commit": "0afa90188b189c399a07724c77b275c620dd2836"
+ },
+ "new": {
+  "ref": "5c85b3e",
+  "commit": "5c85b3e91e721f9ab17455ba535c08ff2682a618"
+ },
+ "extension": null,
+ "passes": [
+  {
+   "number": 1,
+   "side": "old",
+   "stem": "pass-01-old",
+   "status": "ok"
+  },
+  {
+   "number": 2,
+   "side": "new",
+   "stem": "pass-02-new",
+   "status": "ok"
+  },
+  {
+   "number": 3,
+   "side": "new",
+   "stem": "pass-03-new",
+   "status": "ok"
+  },
+  {
+   "number": 4,
+   "side": "old",
+   "stem": "pass-04-old",
+   "status": "ok"
+  }
+ ],
+ "extends": []
+}
