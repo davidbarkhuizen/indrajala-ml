@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.backprop_network_base import as_dense_layers
 from indrajala_ml.model.classification import argmax_first_occurrence
 from indrajala_ml.model.classifier_protocols import BinaryClassifier
-from indrajala_ml.model.model_io import load_model_json, save_model_json
+from indrajala_ml.model.format2 import PYTHON, ensemble_classifiers, ensemble_to_json, is_format2
+from indrajala_ml.model.model_io import load_json, save_json
 
 
 # ClassifierT, the sub-networks' class: any single-output network, BackpropClassifierNetwork unless
@@ -48,31 +48,30 @@ class EnsembleBackpropClassifierNetwork[ClassifierT: BinaryClassifier = Backprop
             classifier.restore_checkpoint(classifier_checkpoint)
 
     def save(self, path: str) -> None:
-        # the pure-Python envelope; EnsembleArrayBackpropClassifierNetwork saves array classifiers
+        # format 2 (format2.py), one pure-Python file per sub-network;
+        # EnsembleArrayBackpropClassifierNetwork saves array classifiers
         classifiers: list[BackpropClassifierNetwork[Any]] = [
             c for c in self.classifiers if isinstance(c, BackpropClassifierNetwork)
         ]
         assert len(classifiers) == len(self.classifiers), "save needs BackpropClassifierNetwork classifiers"
-        assert len({classifier.dimension for classifier in classifiers}) == 1, "every classifier must share a dimension"
-        first = classifiers[0]
-        save_model_json(
-            path,
-            layer_sizes=[layer.size for layer in as_dense_layers(first.hidden_layers)],
-            dimension=first.dimension,
-            input_bounds=first.input_bounds,
-            class_count=self.class_count,
-            snapshot=self.snapshot(),
-        )
+        save_json(path, ensemble_to_json(PYTHON, list(classifiers)))
 
     @classmethod
     def load(
         cls: type[EnsembleBackpropClassifierNetwork[BackpropClassifierNetwork]], path: str
     ) -> EnsembleBackpropClassifierNetwork[BackpropClassifierNetwork]:
-        # the pure-Python envelope (save), so pure-Python sub-networks
-        state = load_model_json(path)
+        # pure-Python sub-networks, as BackpropClassifierNetwork: from format 2, which refuses a
+        # sub-network whose specs or rule aren't its own, or from the legacy envelope, with fresh
+        # optimizer state
+        state = load_json(path)
+        if is_format2(state):
+            return cls(
+                [BackpropClassifierNetwork.from_format2(classifier) for classifier in ensemble_classifiers(state)]
+            )
 
+        input_bounds = [tuple(bound) for bound in state["input_bounds"]]
         classifiers = [
-            BackpropClassifierNetwork(state["layer_sizes"], state["dimension"], state["input_bounds"])
+            BackpropClassifierNetwork(state["layer_sizes"], state["dimension"], input_bounds)
             for _ in range(state["class_count"])
         ]
         ensemble = cls(classifiers)

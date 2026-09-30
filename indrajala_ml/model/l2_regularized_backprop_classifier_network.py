@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.update_rules import WeightDecay
 
@@ -17,6 +19,8 @@ class L2RegularizedBackpropClassifierNetwork(BackpropClassifierNetwork):
     0.003). No coefficient beat the unregularized held-out accuracy, plausibly because these small
     networks don't overfit enough for a weight penalty to help.
     """
+
+    hyperparameters: ClassVar[tuple[str, ...]] = ("l2_lambda",)
 
     def __init__(
         self,

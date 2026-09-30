@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Self
+from typing import Any, ClassVar, Self
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.backprop_network_base import (
-    BackpropNetworkBase,
-    as_dense_layers,
-    randomize_fan_in_aware,
-)
+from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, randomize_fan_in_aware
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.classification import argmax_first_occurrence
 from indrajala_ml.model.layer_protocols import TrainableLayer
-from indrajala_ml.model.model_io import load_model_json, save_model_json
 
 
 class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](BackpropNetworkBase[LayerT]):
@@ -25,6 +20,9 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
     (the per-node output delta needs no change); the predicted class is the most active node.
     """
 
+    format2_shape: ClassVar[str] = "multiclass"
+    preset_arguments: ClassVar[tuple[str, ...] | None] = ("layer_sizes", "dimension", "input_bounds", "class_count")
+
     def __init__(
         self,
         layer_sizes: list[int],
@@ -36,6 +34,7 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
         validate_class_count(class_count)
         validate_layer_sizes(layer_sizes)
         self.class_count = class_count
+        self.layer_sizes = layer_sizes
 
         super().__init__(self._dense_specs(layer_sizes, class_count), (dimension,), input_bounds)
 
@@ -72,19 +71,10 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
         # once fan-in reaches the tens (64 for 8x8 digit images)
         randomize_fan_in_aware(self)
 
-    def save(self, path: str) -> None:
-        save_model_json(
-            path,
-            layer_sizes=[layer.size for layer in as_dense_layers(self.hidden_layers)],
-            dimension=self.dimension,
-            input_bounds=self.input_bounds,
-            class_count=self.class_count,
-            snapshot=self.snapshot(),
-        )
-
     @classmethod
-    def load(cls, path: str) -> Self:
-        state = load_model_json(path)
-        network = cls(state["layer_sizes"], state["dimension"], state["input_bounds"], state["class_count"])
+    def _load_legacy(cls, state: dict[str, Any]) -> Self:
+        # the legacy envelope: layer_sizes, dimension, input_bounds (lists in JSON) and class_count
+        input_bounds = [tuple(bound) for bound in state["input_bounds"]]
+        network = cls(state["layer_sizes"], state["dimension"], input_bounds, state["class_count"])
         network.restore(state["snapshot"])
         return network

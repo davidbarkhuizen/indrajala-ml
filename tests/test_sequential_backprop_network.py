@@ -9,7 +9,6 @@ draws. That makes the sequential network a faithful parity reference for the arr
 
 import random
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -208,14 +207,6 @@ def test_a_single_output_network_needs_one_output_node():
 def test_the_specs_are_validated():
     with pytest.raises(AssertionError, match="dropout"):
         SequentialMultiClassBackpropClassifierNetwork((4,), [Dense(5, activation="relu", dropout=0.2), OUTPUT], SGD())
-
-
-def test_the_multiclass_network_saves_in_format_2_only(tmp_path: Path):
-    network = SequentialMultiClassBackpropClassifierNetwork((4,), [Dense(5), OUTPUT], SGD())
-    with pytest.raises(NotImplementedError, match="format 2"):
-        network.save(str(tmp_path / "model.json"))
-    with pytest.raises(NotImplementedError, match="format 2"):
-        SequentialMultiClassBackpropClassifierNetwork.load(str(tmp_path / "model.json"))
 
 
 def test_multiclass_learn_drops_out_in_its_forward_pass_only():

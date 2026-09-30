@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.layer_specs import Dense
 
@@ -14,6 +16,8 @@ class DropoutBackpropClassifierNetwork(BackpropClassifierNetwork):
 
     drop_probability is required, like momentum and l2_lambda (unlike Adam's defaults).
     """
+
+    hyperparameters: ClassVar[tuple[str, ...]] = ("drop_probability",)
 
     def __init__(
         self,

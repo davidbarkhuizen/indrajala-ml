@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.update_rules import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON, Adam
 
@@ -13,6 +15,8 @@ class AdamBackpropClassifierNetwork(BackpropClassifierNetwork):
 
     Single-output only, like the other weight-update siblings of the per-node family.
     """
+
+    hyperparameters: ClassVar[tuple[str, ...]] = ("beta1", "beta2", "epsilon")
 
     def __init__(
         self,

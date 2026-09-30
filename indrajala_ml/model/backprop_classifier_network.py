@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Sequence
+from typing import ClassVar
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, as_dense_layers
@@ -20,6 +21,9 @@ class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](Backprop
     restriction can't express, and demo_xor_backprop_convergence.py this class learning it.
     """
 
+    format2_shape: ClassVar[str] = "single_output"
+    preset_arguments: ClassVar[tuple[str, ...] | None] = ("layer_sizes", "dimension", "input_bounds")
+
     def __init__(
         self,
         layer_sizes: list[int],
@@ -27,6 +31,7 @@ class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](Backprop
         input_bounds: list[tuple[float, float]],
     ) -> None:
         validate_layer_sizes(layer_sizes)
+        self.layer_sizes = layer_sizes
         super().__init__(self._dense_specs(layer_sizes, 1), (dimension,), input_bounds)
 
     def _forward(self, state: tuple[float, ...]) -> float:

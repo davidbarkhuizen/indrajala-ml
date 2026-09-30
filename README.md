@@ -129,6 +129,35 @@ hand-computed examples, and the reference the array implementations are checked 
 never used for performance (speed/timing) measurement; only the numpy and Rust implementations
 are timed. Accuracy comparisons of pure-Python models are fine.
 
+## Saving and loading
+
+Every backprop network and ensemble saves one format, format 2 (`indrajala_ml/model/format2.py`):
+a JSON file with the layer specs, the update rule, the weights and the optimizer's state
+(momentum's velocities, Adam's `m`, `v` and step count `t`). A loaded network resumes training
+where it stopped. Training on after `save` and `load` takes the same steps, by bits, as training
+on without them (`tests/test_format2.py`). Dropout's masks and the epoch shuffle come from global
+RNG state, which isn't saved.
+
+```python
+from indrajala_ml.model.load_network import load_network
+
+network.save("model.json")
+network = AdamVectorizedMultiClassBackpropClassifierNetwork.load("model.json")  # its own class
+network = load_network("model.json")  # the Sequential network the file describes
+```
+
+- A preset (every named class) records its class and constructor arguments. Its `load` rebuilds
+  it from them, and refuses a file whose layers, update rule, shape or input aren't its own, naming
+  the difference.
+- `load_network` builds the Sequential network of the file's specs, rule and implementation, never
+  a class named in the file. It gives the same results, by bits, as the preset that saved the file.
+- numpy files load into Rust networks and Rust files into numpy ones. Pure-Python files hold one
+  weight list per node and load into pure Python only.
+- An ensemble's file nests one format-2 file per sub-network.
+- `load` still reads each class's legacy file, written before format 2, with fresh optimizer
+  state (`tests/test_legacy_saved_models.py`). Files saved in format 2 don't load on older versions
+  of this package.
+
 ## Update rules
 
 Every update rule follows a published form, with the source's arithmetic grouping, in all three

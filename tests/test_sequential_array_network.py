@@ -7,7 +7,6 @@ and the conv tests).
 """
 
 import random
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -69,20 +68,6 @@ def test_the_specs_are_validated(backend: Backend):
         SequentialArrayNetwork(
             (4,), [Dense(5, activation="relu", dropout=0.2), *MULTICLASS[1:]], SGD(), backend=backend
         )
-
-
-def test_it_saves_in_format_2_only(backend: Backend, tmp_path: Path):
-    network = SequentialArrayNetwork((4,), MULTICLASS, SGD(), backend=backend)
-    with pytest.raises(NotImplementedError, match="format 2"):
-        network.save(str(tmp_path / "model.json"))
-    for cls in (
-        SequentialVectorizedMultiClassBackpropClassifierNetwork,
-        SequentialRustArrayMultiClassBackpropClassifierNetwork,
-        SequentialArrayBackpropClassifierNetwork,
-        SequentialRustArrayBackpropClassifierNetwork,
-    ):
-        with pytest.raises(NotImplementedError, match="format 2"):
-            cls.load(str(tmp_path / "model.json"))
 
 
 def _no_preset_layers(drop_probability: float) -> list[LayerSpec]:

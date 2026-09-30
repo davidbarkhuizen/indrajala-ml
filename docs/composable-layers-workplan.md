@@ -1,6 +1,6 @@
 # Workplan: composable layers and optimizers
 
-**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-4 and 5.1 done; stage 5.2-5.4 next.**
+**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-5 done; stage 6 next.**
 
 This is step 1 of [primitives-roadmap.md](primitives-roadmap.md). Stages 1-4 are structural
 refactoring: they change structure only, never numerics, under the README's Refactoring rules. At
@@ -202,6 +202,15 @@ class MomentumConvRustArrayMultiClassBackpropClassifierNetwork(...):
   spec and rule are its own, and fails with the difference otherwise. `load_network(path)` builds
   whatever a format-2 file describes.
 - The ensembles' envelopes hold format-2 sub-networks.
+- Settled by the owner before stage 5.2 (2026-09-30):
+  - The pure-Python single-output networks, which had no save, save and load format 2 too.
+  - A preset's file records `"preset": {"class": ..., "arguments": {...}}`, its constructor
+    arguments with its hyperparameters. Its `load` builds the class from them, then refuses the
+    file if the network's specs or rule differ from the file's. A Sequential network's file has no
+    preset.
+  - `load_network(path)` always builds the Sequential network of the file's specs, rule and
+    implementation (an ensemble file: its implementation's ensemble of them), never a class named
+    in the file.
 - Resuming is exact for the optimizer: train N steps, save, load and train M more equals N + M
   steps without the save, by bits. Dropout's masks and the epoch shuffle come from global RNG
   state that isn't the network's (docs/rng-audit.md, Three global states), so the resume tests

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.update_rules import Momentum
 
@@ -18,6 +20,8 @@ class MomentumBackpropClassifierNetwork(BackpropClassifierNetwork):
     momentum: a null. Per-example SGD's noisy gradients are the leading untested explanation;
     momentum is more often validated with mini-batches.
     """
+
+    hyperparameters: ClassVar[tuple[str, ...]] = ("momentum",)
 
     def __init__(
         self,

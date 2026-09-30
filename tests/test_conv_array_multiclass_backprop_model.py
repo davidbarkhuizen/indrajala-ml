@@ -328,18 +328,20 @@ def test_a_model_saved_by_either_backend_loads_into_the_other_with_the_same_pred
         assert other.classify_state(state) == saved.classify_state(state)
 
 
-def test_a_plain_conv_network_saves_the_envelope_without_extra_keys(network_cls: NetworkCls, tmp_path: Path):
+def test_a_plain_conv_network_saves_its_arguments_without_extra_keys(network_cls: NetworkCls, tmp_path: Path):
 
     path = str(tmp_path / "conv_model.json")
     network_cls.randomized(8, 8, POOLED, [8], class_count=10).save(path)
 
-    assert set(json.loads(Path(path).read_text())) == {
+    # format 2 (format2.py), whose preset holds the constructor arguments and no hyperparameters
+    saved = json.loads(Path(path).read_text())
+    assert saved["format"] == 2
+    assert set(saved["preset"]["arguments"]) == {
         "input_height",
         "input_width",
-        "conv_layers",
+        "conv_specs",
         "dense_layer_sizes",
         "class_count",
-        "snapshot",
     }
 
 

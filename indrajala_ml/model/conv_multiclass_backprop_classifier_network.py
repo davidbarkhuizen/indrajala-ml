@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Self, cast
+from typing import Any, ClassVar, Self, cast
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
-from indrajala_ml.model.conv_front_end import load_conv_model_json, save_conv_model_json
+from indrajala_ml.model.conv_front_end import load_conv_model_state
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
@@ -38,6 +38,14 @@ class ConvMultiClassBackpropClassifierNetwork(
     same specs (python_layer_builder.py, array_layer_builder.py).
     """
 
+    preset_arguments: ClassVar[tuple[str, ...] | None] = (
+        "input_height",
+        "input_width",
+        "conv_specs",
+        "dense_layer_sizes",
+        "class_count",
+    )
+
     def __init__(
         self,
         input_height: int,
@@ -66,10 +74,6 @@ class ConvMultiClassBackpropClassifierNetwork(
         )
         self.conv_layers = cast("list[ConvLayer | MaxPoolLayer]", self.hidden_layers[: len(self.conv_specs)])
 
-    def save(self, path: str) -> None:
-        # the inherited snapshot() covers conv layers through their snapshot_state()
-        save_conv_model_json(path, self, self.snapshot())
-
     @classmethod
-    def load(cls, path: str) -> Self:
-        return load_conv_model_json(cls, path)
+    def _load_legacy(cls, state: dict[str, Any]) -> Self:
+        return load_conv_model_state(cls, state, {name: state[name] for name in cls.hyperparameters})
