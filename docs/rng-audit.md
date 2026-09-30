@@ -8,16 +8,17 @@ what is still open. The measurements and checks come from these harnesses:
   every draw function, the fused dropout masks, every seeding path and numpy's rejections.
 - `tests/test_seeded_init_parity.py`: seeded `randomized()` gives bit-identical numpy and Rust
   networks, for every array network class.
-- `tests/test_dropout_fused_layer_ops.py` and `tests/test_dropout_array_multiclass_backprop_model.py`:
-  seeded training-mode dropout, with identical masks at the layer and the network level.
+- `tests/test_dropout_fused_layer_ops.py` and
+  `tests/test_dropout_array_multiclass_backprop_model.py`: seeded training-mode dropout, with
+  identical masks at the layer and the network level.
 - `tests/test_numpy_rng_streams.py`: a pure-Python MT19937 that reproduces `np.random`'s stream and
   seeding. It is the algorithm the crate ports, checked against numpy without the crate. It also
   pins how the stdlib `random`'s stream relates to numpy's.
 - `scripts/rng_audit.py quality | time`: statistical checks, and per-draw timing with one process
   per backend.
 
-Measured on an AMD Ryzen 7 3700U, Python 3.14, numpy 2.5.3. The crate's CI runs the parity tests against the
-latest numpy.
+Measured on an AMD Ryzen 7 3700U, Python 3.14, numpy 2.5.3. The crate's CI runs the parity tests
+against the latest numpy.
 
 ## Where randomness comes from
 
@@ -73,9 +74,9 @@ accepts, and the same exception type for every seed it rejects. numpy's three pa
 
 1. **Anything `operator.index` accepts runs `init_genrand(s)`.** That covers Python ints, bools and
    numpy integer scalars. numpy first calls `.squeeze()` when the seed has one, so `np.array([5])`
-   and `np.array([[5]])` seed exactly like `5`. `np.array([5], dtype=np.uint64)` also squeezes to
-   an index. A Python list `[5]` has no `squeeze`, so it takes path 2 and gives a different stream
-   from `5`. An int outside `[0, 2^32 - 1]` raises `ValueError("Seed must be between 0 and 2**32 - 1")`.
+   and `np.array([[5]])` seed exactly like `5`. `np.array([5], dtype=np.uint64)` also squeezes to an
+   index. A Python list `[5]` has no `squeeze`, so it takes path 2 and gives a different stream from
+   `5`. An int outside `[0, 2^32 - 1]` raises `ValueError("Seed must be between 0 and 2**32 - 1")`.
 2. **Any other sequence runs `init_by_array(key)`.** That covers lists, tuples, ranges, 1-D
    arrays and buffers such as `array.array`, `bytearray` and `memoryview`. numpy takes
    `np.asarray(seed)`, then checks it in this order: non-empty (`ValueError("Seed must be
@@ -127,9 +128,8 @@ provide. A probe build that exposed `(pos, key[0])` confirmed each case against 
 and +0.25 and sd 0.96, 0.97 and 0.78, as independent draws should. Its 60 KS p-values spread over
 [0.00, 1.00] with five below 0.015 (two print as 0.00), a little more than the one expected; the
 crate's stream is numpy legacy's bit for bit, so that is chance or the KS harness, not the
-generator. Every other statistic is within chance.
-The crate and numpy legacy are the same algorithm, so their rows differ only by their entropy
-seeds.
+generator. Every other statistic is within chance. The crate and numpy legacy are the same
+algorithm, so their rows differ only by their entropy seeds.
 
 ### Speed
 
