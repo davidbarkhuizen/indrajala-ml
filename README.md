@@ -333,11 +333,15 @@ single feature pairwise from 8 rows, and `D.sum(axis=(0, 2))` over a conv channe
 numpy layers sum with `np.cumsum` along the summed axis, which does at every shape. The
 pure-Python layer sums with an explicit loop: the builtin `sum` adds floats with compensated
 summation since Python 3.12. Given the same inputs, the pure-Python, numpy and Rust layers compute the same
-bits (`tests/test_batch_norm_python_network.py`, `tests/test_batch_norm_rust_network.py`). Whole
+bits, except for a sigmoid's `exp` (`tests/test_batch_norm_python_network.py`,
+`tests/test_batch_norm_rust_network.py`). Whole
 networks agree within their dense layers' rounding only, which differs with or without batch norm:
 the pure-Python parity tolerance, and between numpy and Rust, BLAS's products against the crate's. Only
 `+ − × ÷` and `sqrt` appear, each correctly rounded in IEEE 754, so every implementation that
-follows these forms computes the same bits. There's no `pow`, since `(var + eps)^(-3/2)` through a library `pow` could
+follows these forms computes the same bits. The sigmoid's `exp` is the exception: it isn't correctly
+rounded, and numpy's `np.exp` picks its implementation by CPU, so it can differ from `math.exp` and
+Rust's `f64::exp` in the last bit. The tests give the numpy layer the other implementation's `exp`,
+and compare everything else by bits. There's no `pow`, since `(var + eps)^(-3/2)` through a library `pow` could
 differ between Python, numpy and Rust. `tests/gradient_check.py` checks each implementation's
 backward pass against finite differences of the whole batch's loss.
 

@@ -13,8 +13,9 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
+from indrajala_ml.model import batch_norm_array_layer
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.array_layer import sigmoid
+from indrajala_ml.model.array_layer import FloatArray, sigmoid
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.layer_specs import Dense
@@ -52,6 +53,18 @@ def _network(name: str = "sigmoid", rule: UpdateRule | None = None, seed: int = 
 # the layers
 
 
+@pytest.fixture
+def crate_exp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The numpy layer's sigmoid with the crate's exp. exp isn't correctly rounded: np.exp picks
+    its implementation by CPU, and can differ from Rust's f64::exp in the last bit, which every
+    later value then carries. Everything but exp is compared by bits."""
+
+    def sigmoid_with_crate_exp(z: FloatArray) -> FloatArray:
+        return 1.0 / (1.0 + _numpy(pa.exp(_rust(-z))))
+
+    monkeypatch.setattr(batch_norm_array_layer, "sigmoid", sigmoid_with_crate_exp)
+
+
 class _Next:
     """A next dense layer: the Rust layer's fused hidden delta reads its W and delta_batch, and numpy's
     its downstream, delta_batch @ W, taken here from the crate so both see the same values."""
@@ -72,6 +85,7 @@ class _Next:
         return Fixed()
 
 
+@pytest.mark.usefixtures("crate_exp")
 @pytest.mark.parametrize("activation", ["sigmoid", "relu"])
 @pytest.mark.parametrize("batch_size", [2, 3, 8, 33])
 def test_the_layer_is_numpys_by_bits(activation: Any, batch_size: int):
@@ -103,6 +117,7 @@ def test_the_layer_is_numpys_by_bits(activation: Any, batch_size: int):
     np.testing.assert_array_equal(_numpy(rust.delta_batch), array.delta_batch)
 
 
+@pytest.mark.usefixtures("crate_exp")
 @pytest.mark.parametrize("activation", ["sigmoid", "relu"])
 def test_inference_is_numpys_by_bits_for_a_batch_and_one_example(activation: Any):
     rng = np.random.default_rng(5)
