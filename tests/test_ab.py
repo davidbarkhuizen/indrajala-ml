@@ -289,3 +289,119 @@ def test_clean_removes_unreferenced_worktrees(toy_repo: Path, capsys: pytest.Cap
     assert _run(toy_repo, "clean", "--worktrees") == 0
     assert capsys.readouterr().out == "removed 1 worktrees (stray), kept 2\n"
     assert not stray.exists()
+
+
+# ---- stage 2: the other benchmarks, against the pyo3 upgrade's summarize.py tables
+
+
+def _summary(title: str) -> dict[str, list[str]]:
+    """{case: [old min-max, new min-max, new/old]} from one table of pyo3-summary.md."""
+    lines = (FIXTURES / "pyo3-summary.md").read_text().splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith(f"### {title}")) + 4
+    table: dict[str, list[str]] = {}
+    for line in lines[start:]:
+        if not line.startswith("|"):
+            break
+        cells = _cells(line)
+        table[cells[0]] = cells[1:]
+    return table
+
+
+def _as_summary(row: ab.RowStats) -> list[str]:
+    def spread(runs: list[float]) -> str:
+        return f"{min(runs):.4g}-{max(runs):.4g}"
+
+    return [spread(row.old_runs), spread(row.new_runs), f"{row.new_median / row.old_median:.2f}"]
+
+
+@pytest.mark.parametrize(
+    ("run", "title", "suffix"),
+    [
+        ("pyo3-probe", "Array methods", ""),
+        ("pyo3-focused", "Fused dense ops", " / rust"),
+    ],
+)
+def test_report_reproduces_the_pyo3_summary(run: str, title: str, suffix: str) -> None:
+    expected = _summary(title)
+    rows = {row.case: row for row in ab.report_data(FIXTURES / run).rows}
+    assert len(rows) == len(expected)
+    assert {case: _as_summary(rows[case + suffix]) for case in expected} == expected
+
+
+def test_epoch_op_profile_reproduces_the_pyo3_summary() -> None:
+    # summarize.py dropped a run's op under 5 ms, so only ops at or above it in every run compare
+    expected = _summary("Conv epoch")
+    rows = {row.case: row for row in ab.report_data(FIXTURES / "pyo3-epoch").rows}
+    compared = [case for case in expected if min(rows[case].old_runs + rows[case].new_runs) >= 0.005]
+    assert len(compared) >= 10
+    assert {case: _as_summary(rows[case]) for case in compared} == {case: expected[case] for case in compared}
+
+
+def test_the_boundary_probe_goes_through_the_probe_contract() -> None:
+    data = ab.report_data(FIXTURES / "pyo3-probe")
+    assert {row.unit for row in data.rows} == {"ns"} and len(data.rows) == 17
+    consistent = {row.case for row in data.rows if row.consistent}
+    assert "Array.from_rows(10x30)" in consistent  # new/old 0.59, the largest gain
+    assert len(ab.brief_report(data)) <= ab.BRIEF_LINES
+
+
+def test_rust_only_benchmarks_say_there_is_no_control() -> None:
+    brief = ab.brief_report(ab.report_data(FIXTURES / "pyo3-epoch"))
+    assert brief[2] == ab.EpochOpProfile.no_control
+
+
+def _write(path: Path, data: object) -> Path:
+    path.write_text(json.dumps(data))
+    return path
+
+
+def test_focused_benchmark_rows(tmp_path: Path) -> None:
+    result = {"shape": "dense 10 x 30", "op": "forward_batch", "batch": 32, "backend": "numpy", "median_us": 2.0}
+    out = _write(tmp_path / "f.json", {"results": [result | {"malloc": "default"}, result | {"malloc": "raised"}]})
+    rows = ab.FocusedBenchmark().rows(out, tmp_path / "none", "numpy")
+    assert [(r.case, r.metric, r.unit, r.control) for r in rows] == [
+        ("dense 10 x 30 forward_batch b32 / numpy", "per call", "µs", True),
+        ("dense 10 x 30 forward_batch b32 (malloc raised) / numpy", "per call", "µs", True),
+    ]
+
+
+def test_accuracy_pass_timing_rows_leave_out_mismatch_counts(tmp_path: Path) -> None:
+    out = _write(tmp_path / "a.json", {"conv / rust": [{"per row": 1.0, "batched 32": 0.5, "mismatches 32": 0}]})
+    rows = ab.AccuracyPassTiming().rows(out, tmp_path / "none", "numpy")
+    assert [(r.case, r.metric, r.control) for r in rows] == [
+        ("conv / rust", "per row", False),
+        ("conv / rust", "batched 32", False),
+    ]
+
+
+def test_op_call_timing_rows(tmp_path: Path) -> None:
+    run = {"run_s": 3.0, "conv_accumulate_gradient_batch": {"(32, 4608) (18432, 72)": {"calls": 63, "median_us": 90.0}}}
+    out = _write(tmp_path / "o.json", {"runs": {"conv / mini-batch (32) / 0:0": [run]}})
+    rows = ab.OpCallTiming().rows(out, tmp_path / "none", None)
+    assert [(r.case, r.metric, r.value, r.unit) for r in rows] == [
+        ("conv / mini-batch (32) / 0:0", "whole run", 3.0, "s"),
+        (
+            "conv / mini-batch (32) / 0:0 / conv_accumulate_gradient_batch (32, 4608) (18432, 72)",
+            "per call",
+            90.0,
+            "µs",
+        ),
+    ]
+
+
+def test_batch_size_timing_rows(tmp_path: Path) -> None:
+    out = _write(tmp_path / "b.json", {"rust 512": [{"epoch": 1.0, "steps": 0.5}]})
+    rows = ab.BatchSizeTiming().rows(out, tmp_path / "none", "rust")
+    assert [(r.case, r.metric, r.control) for r in rows] == [
+        ("B=512 / rust", "epoch", True),
+        ("B=512 / rust", "steps", True),
+    ]
+
+
+def test_every_adapter_names_its_script_and_output(tmp_path: Path) -> None:
+    for adapter in ab.ADAPTERS.values():
+        if adapter.name == "cmd":
+            continue
+        command = adapter.command(ab.REPO, list(adapter.default_args), tmp_path / "out.json")
+        assert Path(command[0]) == ab.REPO / f"scripts/{adapter.name}.py" and Path(command[0]).is_file()
+        assert command[-1] == str(tmp_path / "out.json")

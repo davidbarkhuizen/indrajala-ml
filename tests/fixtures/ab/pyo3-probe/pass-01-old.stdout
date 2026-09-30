@@ -1,0 +1,17 @@
+{"case": "shape (getter, tuple out)", "metric": "per call", "value": 128.93284606629862, "unit": "ns"}
+{"case": "a[i, j] (index in, float out)", "metric": "per call", "value": 203.68413544691322, "unit": "ns"}
+{"case": "a[:, :-1] (slices in, Array out)", "metric": "per call", "value": 358.2133483170935, "unit": "ns"}
+{"case": "a[i, j] = x", "metric": "per call", "value": 206.33580022355602, "unit": "ns"}
+{"case": "a + b (Array operand)", "metric": "per call", "value": 315.5639494156759, "unit": "ns"}
+{"case": "a + v (broadcast)", "metric": "per call", "value": 705.363861097652, "unit": "ns"}
+{"case": "a * 0.5 (scalar operand)", "metric": "per call", "value": 383.0763704026907, "unit": "ns"}
+{"case": "0.5 * a (reflected)", "metric": "per call", "value": 435.3618470176457, "unit": "ns"}
+{"case": "a += b (in place)", "metric": "per call", "value": 290.4057159192064, "unit": "ns"}
+{"case": "a.tolist() 10x30", "metric": "per call", "value": 5884.321289784111, "unit": "ns"}
+{"case": "v.tolist() 30", "metric": "per call", "value": 511.3471375217671, "unit": "ns"}
+{"case": "Array(nested 10x30)", "metric": "per call", "value": 5034.420654581595, "unit": "ns"}
+{"case": "Array.from_rows(10x30)", "metric": "per call", "value": 3206.226807606072, "unit": "ns"}
+{"case": "Array.zeros((10, 30))", "metric": "per call", "value": 364.1523285136117, "unit": "ns"}
+{"case": "layer_forward 10x30 (&RustArray args)", "metric": "per call", "value": 1267.558105588762, "unit": "ns"}
+{"case": "seed(0) (int seed)", "metric": "per call", "value": 2453.904906829507, "unit": "ns"}
+{"case": "seed([1, 2, 3]) (sequence seed)", "metric": "per call", "value": 9563.209715679477, "unit": "ns"}

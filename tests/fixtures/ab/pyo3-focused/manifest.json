@@ -1,0 +1,83 @@
+{
+ "version": 1,
+ "name": "pyo3-focused",
+ "created": "2026-09-29T00:00:00+02:00",
+ "state": "done",
+ "pid": 0,
+ "bench": "focused_benchmark",
+ "args": [
+  "--backend",
+  "rust",
+  "--shape",
+  "dense 10 x 30",
+  "--shape",
+  "dense 30 x 784",
+  "--batch-sizes",
+  "1",
+  "--passes",
+  "1"
+ ],
+ "script_from": "new",
+ "control_backend": null,
+ "order": "ONNOONNO",
+ "old": {
+  "ref": "pyo3 0.20",
+  "commit": "25a3a03000000000000000000000000000000000"
+ },
+ "new": {
+  "ref": "pyo3 0.29",
+  "commit": "a6419a6000000000000000000000000000000000"
+ },
+ "extension": null,
+ "passes": [
+  {
+   "number": 1,
+   "side": "old",
+   "stem": "pass-01-old",
+   "status": "ok"
+  },
+  {
+   "number": 2,
+   "side": "new",
+   "stem": "pass-02-new",
+   "status": "ok"
+  },
+  {
+   "number": 3,
+   "side": "new",
+   "stem": "pass-03-new",
+   "status": "ok"
+  },
+  {
+   "number": 4,
+   "side": "old",
+   "stem": "pass-04-old",
+   "status": "ok"
+  },
+  {
+   "number": 5,
+   "side": "old",
+   "stem": "pass-05-old",
+   "status": "ok"
+  },
+  {
+   "number": 6,
+   "side": "new",
+   "stem": "pass-06-new",
+   "status": "ok"
+  },
+  {
+   "number": 7,
+   "side": "new",
+   "stem": "pass-07-new",
+   "status": "ok"
+  },
+  {
+   "number": 8,
+   "side": "old",
+   "stem": "pass-08-old",
+   "status": "ok"
+  }
+ ],
+ "extends": []
+}

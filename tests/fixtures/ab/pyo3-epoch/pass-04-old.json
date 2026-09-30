@@ -1,0 +1,356 @@
+{
+ "runs": {
+  "conv / single-example": [
+   {
+    "epochs": 1,
+    "total": 0.7580835539999997,
+    "ops": {
+     "conv_forward_batch": [
+      0.168908736,
+      6000
+     ],
+     "layer_sgd_step": [
+      0.16110454200000002,
+      4000
+     ],
+     "layer_forward": [
+      0.159049235,
+      12000
+     ],
+     "layer_downstream": [
+      0.055714834000000005,
+      2000
+     ],
+     "conv_accumulate_gradient_batch": [
+      0.055528979000000006,
+      2000
+     ],
+     "Array.row": [
+      0.006968445,
+      6000
+     ],
+     "array_relu_mask": [
+      0.005805116000000001,
+      2000
+     ],
+     "layer_hidden_delta": [
+      0.002038789,
+      2000
+     ],
+     "layer_apply_accumulated_gradient": [
+      0.001700195,
+      2000
+     ],
+     "argmax": [
+      0.0012269730000000001,
+      4000
+     ],
+     "layer_output_delta": [
+      0.001043088,
+      2000
+     ],
+     "Array.copy": [
+      0.0006668560000000001,
+      18
+     ]
+    }
+   },
+   {
+    "epochs": 1,
+    "total": 0.7686879720000003,
+    "ops": {
+     "layer_sgd_step": [
+      0.169618543,
+      4000
+     ],
+     "conv_forward_batch": [
+      0.168151763,
+      6000
+     ],
+     "layer_forward": [
+      0.165248741,
+      12000
+     ],
+     "layer_downstream": [
+      0.056518488000000006,
+      2000
+     ],
+     "conv_accumulate_gradient_batch": [
+      0.056458033000000005,
+      2000
+     ],
+     "Array.row": [
+      0.007015254,
+      6000
+     ],
+     "array_relu_mask": [
+      0.006427367000000001,
+      2000
+     ],
+     "layer_apply_accumulated_gradient": [
+      0.0015313610000000002,
+      2000
+     ],
+     "layer_hidden_delta": [
+      0.001476323,
+      2000
+     ],
+     "argmax": [
+      0.001099835,
+      4000
+     ],
+     "layer_output_delta": [
+      0.001007735,
+      2000
+     ],
+     "Array.copy": [
+      0.000675672,
+      18
+     ]
+    }
+   },
+   {
+    "epochs": 1,
+    "total": 0.7980264120000001,
+    "ops": {
+     "layer_sgd_step": [
+      0.181271506,
+      4000
+     ],
+     "conv_forward_batch": [
+      0.172877372,
+      6000
+     ],
+     "layer_forward": [
+      0.16863482400000002,
+      12000
+     ],
+     "layer_downstream": [
+      0.058986377000000006,
+      2000
+     ],
+     "conv_accumulate_gradient_batch": [
+      0.058437049000000005,
+      2000
+     ],
+     "Array.row": [
+      0.007140325,
+      6000
+     ],
+     "array_relu_mask": [
+      0.0061189420000000005,
+      2000
+     ],
+     "layer_apply_accumulated_gradient": [
+      0.002105032,
+      2000
+     ],
+     "layer_hidden_delta": [
+      0.001724391,
+      2000
+     ],
+     "argmax": [
+      0.001087328,
+      4000
+     ],
+     "layer_output_delta": [
+      0.0009875790000000001,
+      2000
+     ],
+     "Array.copy": [
+      0.000645354,
+      18
+     ]
+    }
+   }
+  ],
+  "conv / mini-batch (32)": [
+   {
+    "epochs": 1,
+    "total": 0.6005562029999996,
+    "ops": {
+     "conv_forward_batch": [
+      0.16803609500000002,
+      4063
+     ],
+     "layer_forward": [
+      0.094262862,
+      8000
+     ],
+     "conv_accumulate_gradient_batch": [
+      0.069047342,
+      63
+     ],
+     "layer_accumulate_gradient_batch": [
+      0.057063621,
+      126
+     ],
+     "layer_forward_batch": [
+      0.047503706,
+      126
+     ],
+     "layer_downstream_batch": [
+      0.041598996,
+      63
+     ],
+     "array_relu_mask": [
+      0.020019154,
+      63
+     ],
+     "layer_apply_accumulated_gradient": [
+      0.013948365,
+      189
+     ],
+     "Array.row": [
+      0.0043120730000000005,
+      4000
+     ],
+     "Array.take_rows": [
+      0.0034276550000000004,
+      63
+     ],
+     "argmax": [
+      0.001137572,
+      4000
+     ],
+     "Array.copy": [
+      0.0007048750000000001,
+      18
+     ],
+     "layer_hidden_delta_batch": [
+      0.000247257,
+      63
+     ],
+     "layer_output_delta": [
+      8.546600000000001e-05,
+      63
+     ]
+    }
+   },
+   {
+    "epochs": 1,
+    "total": 0.6108966570000005,
+    "ops": {
+     "conv_forward_batch": [
+      0.171805814,
+      4063
+     ],
+     "layer_forward": [
+      0.10058874400000001,
+      8000
+     ],
+     "conv_accumulate_gradient_batch": [
+      0.070383638,
+      63
+     ],
+     "layer_accumulate_gradient_batch": [
+      0.058478609,
+      126
+     ],
+     "layer_forward_batch": [
+      0.047384007000000006,
+      126
+     ],
+     "layer_downstream_batch": [
+      0.04254861,
+      63
+     ],
+     "array_relu_mask": [
+      0.018451948000000003,
+      63
+     ],
+     "layer_apply_accumulated_gradient": [
+      0.012629802,
+      189
+     ],
+     "Array.row": [
+      0.004264071,
+      4000
+     ],
+     "Array.take_rows": [
+      0.0035511370000000002,
+      63
+     ],
+     "argmax": [
+      0.00107562,
+      4000
+     ],
+     "Array.copy": [
+      0.000641479,
+      18
+     ],
+     "layer_hidden_delta_batch": [
+      0.000271096,
+      63
+     ],
+     "layer_output_delta": [
+      0.000109006,
+      63
+     ]
+    }
+   },
+   {
+    "epochs": 1,
+    "total": 0.6048609640000007,
+    "ops": {
+     "conv_forward_batch": [
+      0.17115465200000002,
+      4063
+     ],
+     "layer_forward": [
+      0.096092201,
+      8000
+     ],
+     "conv_accumulate_gradient_batch": [
+      0.06953840800000001,
+      63
+     ],
+     "layer_accumulate_gradient_batch": [
+      0.055461333,
+      126
+     ],
+     "layer_forward_batch": [
+      0.048327681000000004,
+      126
+     ],
+     "layer_downstream_batch": [
+      0.042332389000000005,
+      63
+     ],
+     "array_relu_mask": [
+      0.019607899,
+      63
+     ],
+     "layer_apply_accumulated_gradient": [
+      0.013346706000000002,
+      189
+     ],
+     "Array.row": [
+      0.004173246,
+      4000
+     ],
+     "Array.take_rows": [
+      0.003448108,
+      63
+     ],
+     "argmax": [
+      0.000992387,
+      4000
+     ],
+     "Array.copy": [
+      0.0006952400000000001,
+      18
+     ],
+     "layer_hidden_delta_batch": [
+      0.000264861,
+      63
+     ],
+     "layer_output_delta": [
+      9.0405e-05,
+      63
+     ]
+    }
+   }
+  ]
+ }
+}
