@@ -396,8 +396,6 @@ test passing, and:
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, then attention.
-- [docs/batch-norm-workplan.md](docs/batch-norm-workplan.md): batch normalization for dense and
-  conv networks, in all three implementations (roadmap step 2).
 - [docs/next-steps.md](docs/next-steps.md): the work left over from completed workplans, and how
   to read those workplans in git history.
 - [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's

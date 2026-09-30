@@ -41,8 +41,8 @@ walks in the tests and the golden run all depend on the class structure.
 ## 2. Batch normalization next
 
 **Done (2026-09-30).** Dense and conv batch norm, with ghost groups, in all three implementations
-([batch-norm-workplan.md](batch-norm-workplan.md); README, Batch normalization). The study rerun is
-the workplan's After this plan. The rest of this section is the case as it was made.
+(README, Batch normalization; the retired workplan, [next-steps.md](next-steps.md)). The study
+rerun is in next-steps.md, From batch norm. The rest of this section is the case as it was made.
 
 - **It serves the open question.** The conv batch-size study hit a ceiling on the stable rate:
   the linear rule fails at B = 512 at momentum 0.0 and 0.9 (findings in `batch_size_scaling.py`).

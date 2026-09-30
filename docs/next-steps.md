@@ -1,10 +1,9 @@
 # Next steps: work left over from completed workplans
 
 A workplan is deleted once its last stage merges. Whatever it left open (its "After this plan"
-list, and the parts of its "Out of scope" that still bind later work) moves here. Workplans still
-in progress keep their own lists: [batch-norm-workplan.md](batch-norm-workplan.md) and
-[pypi-release-workplan.md](pypi-release-workplan.md). The order of the next ML primitives is in
-[primitives-roadmap.md](primitives-roadmap.md).
+list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order
+of the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
 
@@ -15,9 +14,10 @@ docs cite them by section:
 | --- | --- | --- | --- |
 | Composable layers and optimizers (roadmap step 1) | #475 | #476-#485 | `git show 3a5d179:docs/composable-layers-workplan.md` |
 | The A/B harness and a stand-alone measurement guide | #487 | #488-#491 | `git show 3a5d179:docs/ab-harness-workplan.md` |
+| Batch normalization (roadmap step 2) | #486 | #493-#503 | `git show 189921c:docs/batch-norm-workplan.md` |
 
-What they built is documented in the README (Models, Saving and loading, Update rules) and
-[measurement.md](measurement.md).
+What they built is documented in the README (Models, Saving and loading, Update rules, Batch
+normalization) and [measurement.md](measurement.md).
 
 ## From composable layers
 
@@ -30,7 +30,7 @@ What they built is documented in the README (Models, Saving and loading, Update 
   - on pure Python, the multiclass dense presets that exist only as numpy and Rust (cross-entropy,
     ReLU, dropout, momentum, Adam, weight decay), and on numpy and Rust, the one-output presets
     that exist only in pure Python (ReLU, dropout, momentum, Adam, weight decay);
-  - batch norm, dense and conv, under every rule ([batch-norm-workplan.md](batch-norm-workplan.md)).
+  - batch norm, dense and conv, under every rule (README, Batch normalization).
 
   One of them, conv then pool, ReLU, dropout and a softmax output under `Adam`, is trained against
   its pure-Python reference (`tests/test_sequential_array_network.py`). Giving any other one a
@@ -49,6 +49,20 @@ Still out of scope, for later workplans too (batch norm's included):
 - Separate activation layers, which would add a crossing per layer on Rust. Activations stay fused.
 - Parameter groups, per-layer learning rates, and schedulers beyond today's `lr_schedule.py`.
 - Deleting or renaming any network class (the workplan's D1).
+
+## From batch norm
+
+- **The study rerun.** Rerun the conv batch-size cells that failed (B = 512, momentum 0.0 and
+  0.9) with batch norm, and with ghost groups of 32. That is an experiment with its own plan, and
+  the next step in [primitives-roadmap.md](primitives-roadmap.md).
+- **Batch norm under dropout or after pool**, if a use appears. Neither passes
+  `validate_layer_specs` today.
+- **Folding batch norm into the preceding weights** for inference: a speed change, measured.
+
+Still out of scope:
+
+- Layer norm, group norm and instance norm. They normalize within an example, a different layer.
+- Synchronized statistics across workers or processes.
 
 ## From the A/B harness
 
