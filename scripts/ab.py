@@ -486,6 +486,9 @@ def _wheel_dir(crate: str) -> Path:
     return _wheels_root() / crate
 
 
+BUILT: list[str] = []  # crate commits built by this process, for the machine line
+
+
 def ensure_wheel(crate: str) -> Path:
     """The cached release wheel of crate commit `crate`, built once from a `git archive` of the
     crate repository (fetched first if the commit is missing) with the toolchain it pins."""
@@ -493,6 +496,7 @@ def ensure_wheel(crate: str) -> Path:
     wheels = sorted(wheel_dir.glob("*.whl"))
     if wheels:
         return wheels[-1]
+    BUILT.append(crate)
     wheel_dir.mkdir(parents=True, exist_ok=True)
     if subprocess.run(["git", "-C", str(CRATE_REPO), "cat-file", "-e", f"{crate}^{{commit}}"], check=False).returncode:
         _git(CRATE_REPO, "fetch", "--quiet", "origin")
@@ -775,6 +779,7 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
                 site, sha = ensure_site(crate)
                 manifest[side]["site"], manifest[side]["extension_sha"] = str(site), sha
         manifest["preflight"] = _preflight(run_dir, manifest, args.skip_profile, args.allow_profile_change)
+        manifest["preflight"]["after_builds"] = list(BUILT)
         _write_json(run_dir / "manifest.json", manifest)
         print(
             f"started {run_dir.name}: old {commits['old'][:7]} new {commits['new'][:7]}, "
@@ -1083,6 +1088,8 @@ def _machine_line(manifest: dict[str, Any]) -> str:
     line = f"profile: {', '.join(profiles)}"
     if loads:
         line += f"; max 1-min load {max(loads):.2f}" + (" (HIGH)" if max(loads) > HIGH_LOAD else "")
+        if any(c.get("after_builds") for c in checks):
+            line += " (measured just after this run's crate builds)"
     return line + f"; busy processes: {', '.join(busy[:4]) or 'none'}"
 
 

@@ -513,3 +513,11 @@ def test_clean_removes_unreferenced_wheels(
     assert _run(toy_repo, "clean", "--wheels") == 0
     assert capsys.readouterr().out == "removed 1 wheels (fffffff), kept 2\n"
     assert (ab.RUNS_ROOT / "wheels/target").is_dir() and ab._wheel_dir(old).is_dir()
+
+
+def test_the_machine_line_says_when_load_follows_crate_builds() -> None:
+    manifest = {"preflight": {"profile": "identity matches", "load": [2.3, 1.6, 1.7], "after_builds": ["a" * 40]}}
+    line = ab._machine_line(manifest | {"extends": [], "passes": []})
+    assert line.startswith(
+        "profile: identity matches; max 1-min load 2.30 (HIGH) (measured just after this run's crate builds)"
+    )
