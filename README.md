@@ -42,8 +42,8 @@ installs on the first build (a distro `cargo` ignores the pin).
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
-| `tests/` | ~3070 | this package: models, training, data loaders, Rust-vs-numpy parity |
-| `rust/tests/` | ~1560 | the submodule's own `indrajala_math_rust` API, checked against numpy |
+| `tests/` | ~5350 | this package: models, training, data loaders, Rust-vs-numpy parity |
+| `rust/tests/` | ~2000 | the submodule's own `indrajala_math_rust` API, checked against numpy |
 
 Both need the submodule checked out **and** built into `.venv`: `tests/` imports
 `indrajala_math_rust` directly, and `rust/tests/` only exists once the submodule is initialised.
@@ -98,7 +98,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
 | `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
 | `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs) and the refactoring golden run; see `docs/measurement.md` |
-| `docs/` | optimization docs, the PyPI release workplan, the primitives roadmap, the RNG audit, machine profiles |
+| `docs/` | the measurement guide, optimization docs, next steps, the PyPI release workplan, the primitives roadmap, the RNG audit, machine profiles |
 
 ## Models
 
@@ -283,14 +283,14 @@ The backward pass is the paper's § 3 chain rule, "before simplification", term 
 | `∂ℓ/∂γ` | `Σ_{i=1..m} ∂ℓ/∂y_i · x̂_i` |
 | `∂ℓ/∂β` | `Σ_{i=1..m} ∂ℓ/∂y_i` |
 
-**Inference** normalizes with population statistics. Algorithm 2 (step 10) averages over
-training batches: `E[x] ← E_B[μ_B]`, `Var[x] ← m/(m−1) · E_B[σ²_B]`, the unbiased variance. We
-keep moving averages instead, as the paper notes one can ("Using moving averages instead, we can
-track the accuracy of a model as it trains", § 3.1) and as Goyal et al. 2017 do: "As in [12], we
-compute the BN statistics using running average (with momentum 0.9)" (§ 5.1). Each training
-forward pass updates them with the batch's statistics, at `running_rate` 0.1, their momentum 0.9,
-as PyTorch's default, whose `ε` of 1e-5 we take too. Inference normalizes as training does, with the running averages in place
-of `μ_B` and `σ²_B`, not with Algorithm 2 step 11's folded form
+**Inference** normalizes with population statistics. Algorithm 2 (step 10) averages over training
+batches: `E[x] ← E_B[μ_B]`, `Var[x] ← m/(m−1) · E_B[σ²_B]`, the unbiased variance. We keep moving
+averages instead, as the paper notes one can ("Using moving averages instead, we can track the
+accuracy of a model as it trains", § 3.1) and as Goyal et al. 2017 do: "As in [12], we compute the
+BN statistics using running average (with momentum 0.9)" (§ 5.1). Each training forward pass updates
+them with the batch's statistics, at `running_rate` 0.1, their momentum 0.9, as PyTorch's default,
+whose `ε` of 1e-5 we take too. Inference normalizes as training does, with the running averages in
+place of `μ_B` and `σ²_B`, not with Algorithm 2 step 11's folded form
 `y = γ/sqrt(Var[x]+ε) · x + (β − γE[x]/sqrt(Var[x]+ε))`, which rounds differently.
 
 **Weight decay** doesn't apply to `γ` or `β`: "We use a weight decay λ of 0.0001 and following
@@ -352,22 +352,22 @@ With ghost groups the training forward and backward expressions apply to each gr
 `sum` is a left fold from `0.0` in that row order, the crate's order (`sum_axis0`, and the conv
 `grad_b` sum). numpy's own reductions follow it only in some layouts
 (`tests/test_summation_order.py`): `X.sum(axis=0)` does across two or more features, but sums a
-single feature pairwise from 8 rows, and `D.sum(axis=(0, 2))` over a conv channel doesn't. The
-numpy layers sum with `np.cumsum` along the summed axis, which does at every shape. The
-pure-Python layer sums with an explicit loop: the builtin `sum` adds floats with compensated
-summation since Python 3.12. Given the same inputs, the pure-Python, numpy and Rust layers compute the same
-bits, except for a sigmoid's `exp` (`tests/test_batch_norm_python_network.py`,
+single feature pairwise from 8 rows, and `D.sum(axis=(0, 2))` over a conv channel doesn't. The numpy
+layers sum with `np.cumsum` along the summed axis, which does at every shape. The pure-Python layer
+sums with an explicit loop: the builtin `sum` adds floats with compensated summation since Python
+3.12. Given the same inputs, the pure-Python, numpy and Rust layers compute the same bits, except
+for a sigmoid's `exp` (`tests/test_batch_norm_python_network.py`,
 `tests/test_batch_norm_rust_network.py`, their conv counterparts, and
-`tests/test_batch_norm_ghost_groups.py`). Whole
-networks agree within their dense and conv layers' rounding only, which differs with or without batch norm:
-the pure-Python parity tolerance, and between numpy and Rust, BLAS's products against the crate's. Only
-`+ − × ÷` and `sqrt` appear, each correctly rounded in IEEE 754, so every implementation that
-follows these forms computes the same bits. The sigmoid's `exp` is the exception: it isn't correctly
-rounded, and numpy's `np.exp` picks its implementation by CPU, so it can differ from `math.exp` and
-Rust's `f64::exp` in the last bit. The tests give the numpy layer the other implementation's `exp`,
-and compare everything else by bits. There's no `pow`, since `(var + eps)^(-3/2)` through a library `pow` could
-differ between Python, numpy and Rust. `tests/gradient_check.py` checks each implementation's
-backward pass against finite differences of the whole batch's loss.
+`tests/test_batch_norm_ghost_groups.py`). Whole networks agree within their dense and conv layers'
+rounding only, which differs with or without batch norm: the pure-Python parity tolerance, and
+between numpy and Rust, BLAS's products against the crate's. Only `+ − × ÷` and `sqrt` appear, each
+correctly rounded in IEEE 754, so every implementation that follows these forms computes the same
+bits. The sigmoid's `exp` is the exception: it isn't correctly rounded, and numpy's `np.exp` picks
+its implementation by CPU, so it can differ from `math.exp` and Rust's `f64::exp` in the last bit.
+The tests give the numpy layer the other implementation's `exp`, and compare everything else by
+bits. There's no `pow`, since `(var + eps)^(-3/2)` through a library `pow` could differ between
+Python, numpy and Rust. `tests/gradient_check.py` checks each implementation's backward pass against
+finite differences of the whole batch's loss.
 
 ## Refactoring
 
@@ -380,9 +380,8 @@ test passing, and:
   pass `... check data/refactoring/golden_run.json`, the same bits, not within a tolerance. It
   catches a 1-ULP change to the learning rate. It trains the networks of all three
   implementations, pure Python included.
-- **No hot-path slowdown.** A stage that touches `learn*` or `classify_rows` is timed before and
-  after, numpy and Rust in separate processes (`scripts/prepared_dataset_timing.py time`), with
-  both builds committed first. It must be within run-to-run noise.
+- **No hot-path slowdown.** A stage that touches `learn*` or `classify_rows` is timed old against
+  new with `scripts/ab.py` ([docs/measurement.md](docs/measurement.md)). It must be within noise.
 - **Public names stay.** Demos, `demos/registry.py`, `ensemble_train.py` and the tests construct
   the concrete classes by name, and saved model files must still load:
   `tests/test_legacy_saved_models.py` loads a committed file for every class that has `save`
@@ -390,6 +389,8 @@ test passing, and:
 
 ## Docs
 
+- [docs/measurement.md](docs/measurement.md): how to time a change: the machine, the tools, A/Bs
+  with `scripts/ab.py`, and the rules for a timing claim in a PR.
 - [docs/optimizations.md](docs/optimizations.md): Rust against numpy, what has been optimized and
   rejected, the candidates left, and how to measure a change.
 - [docs/pypi-release-workplan.md](docs/pypi-release-workplan.md): publishing the Rust crate to

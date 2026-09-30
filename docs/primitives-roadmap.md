@@ -8,9 +8,10 @@ transformers.
 ## What exists
 
 Dense backprop, the perceptron and MADALINE, ReLU, softmax with cross-entropy, conv and max
-pooling, momentum, Adam, L2, dropout, ensembles and linear warmup (README, Models). Each is in
-all three implementations (pure Python, numpy, Rust). There is no normalization, no residual
-connection, no recurrence and no attention.
+pooling, momentum, Adam, L2, dropout, ensembles, linear warmup and batch norm with ghost groups
+(README, Models and Batch normalization), built from composable layer specs and update rules. Each
+is in all three implementations (pure Python, numpy, Rust). There is no residual connection, no
+layer norm, no recurrence and no attention.
 
 ## The order
 
@@ -21,41 +22,15 @@ connection, no recurrence and no attention.
 4. **Layer normalization and single-head self-attention**, as a patch model on MNIST.
 5. **Multi-head attention and a full transformer block.**
 
-## 1. Composable layers and optimizers first
+## 1 and 2. Done
 
-**Done (2026-09-30).** A network is a list of layer specs and one update rule, stepped by one
-optimizer per network, in all three implementations (README, Models). The named classes are
-presets of that. The rest of this section is the case as it was made.
+Composable layers and optimizers, then batch normalization, both done (2026-09-30); their retired
+workplans and the work they left open are in [next-steps.md](next-steps.md). The case made for
+each is in this file's history: `git show 058087a:docs/primitives-roadmap.md`.
 
-Every feature so far is a sibling class per backend: `Momentum…`, `Conv…`, `MomentumConv…`.
-Combining two features costs planned stages: momentum with conv took three PRs (#448, #451,
-#452). Batch norm crossed with {dense, conv} × {SGD, momentum, Adam} × three implementations
-would multiply the class count again.
-
-A planned step should make the optimizer and the normalization composable (for example, a
-network built from a layer spec with an optimizer object) instead of adding subclasses. This is
-a design decision for the owner, and it had its own workplan
-(retired, [next-steps.md](next-steps.md)): the save format, the registry
-walks in the tests and the golden run all depend on the class structure.
-
-## 2. Batch normalization next
-
-**Done (2026-09-30).** Dense and conv batch norm, with ghost groups, in all three implementations
-(README, Batch normalization; the retired workplan, [next-steps.md](next-steps.md)). The study
-rerun is in next-steps.md, From batch norm. The rest of this section is the case as it was made.
-
-- **It serves the open question.** The conv batch-size study hit a ceiling on the stable rate:
-  the linear rule fails at B = 512 at momentum 0.0 and 0.9 (findings in `batch_size_scaling.py`).
-  Batch normalization is the literature's standard way to raise it (Ioffe & Szegedy 2015). It is
-  also part of the setup the study tests: Goyal et al. 2017 train ResNet-50, which uses it, and
-  their section 2.3 fixes its statistics at 32 examples per worker whatever the total batch.
-  Without it, the study is not comparable with the paper's full setup.
-- **It tests the parity rules.** It is the first layer whose forward pass depends on the rest of
-  the batch. It behaves differently in training (batch statistics) and inference (running
-  averages), and its backward pass is a known source of errors. Hand-computed tests and gradient
-  checks in all three implementations should catch those errors.
-- **It fits the current design.** It is a per-layer primitive like dropout or ReLU, with numpy
-  and Rust ops, plus the per-channel variant for conv.
+Next is the conv batch-size study rerun (next-steps.md, From batch norm), before residual
+connections: the linear rule failed at B = 512 at momentum 0.0 and 0.9, and batch norm with ghost
+groups of 32 is Goyal et al. 2017's full setup.
 
 ## 3. Residual connections
 

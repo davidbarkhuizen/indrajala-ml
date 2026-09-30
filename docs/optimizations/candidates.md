@@ -73,11 +73,10 @@ Unexplained effects a candidate's stage 0 may need settled:
   s against 2.81-2.90). conv-conv shows it too (first-conv accumulate 1096 against 930 µs). Clock
   (the all-core boost is lower), L3 eviction and scheduling are untested causes. Any batch-32
   threading candidate has to answer it first.
-
 - **numpy's layer op is faster than its own bare product** on one thread: `downstream_batch` at
   32 x 5408, batch 32, 573-578 µs against 850-897 for `delta_batch @ W` of the same shapes.
 - **The Rust dense step loop slows with batch size at equal flops**: B = 32 → 512 added 0.88 s, of
   which batch conversion (since removed) was 0.33 s; the Rust ops stayed flat.
 - **How much the conv demo's in-process interleaving slows Rust** (see
-  [Measurement](../measurement.md#7-gotchas)), and the end-to-end ratio against single-threaded numpy,
-  estimated at 0.55-0.6 for MNIST conv mini-batch 32 but not measured side by side.
+  [Measurement](../measurement.md#7-gotchas)), and the end-to-end ratio against single-threaded
+  numpy, estimated at 0.55-0.6 for MNIST conv mini-batch 32 but not measured side by side.
