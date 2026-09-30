@@ -97,7 +97,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
 | `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
-| `scripts/` (the rest) | benchmark, profiling and sweep tools (see `docs/optimizations/measurement.md`), and the refactoring golden run |
+| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs) and the refactoring golden run; see `docs/measurement.md` |
 | `docs/` | optimization docs, the PyPI release workplan, the primitives roadmap, the RNG audit, machine profiles |
 
 ## Models

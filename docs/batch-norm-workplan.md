@@ -203,7 +203,7 @@ network = SequentialArrayNetwork(
 - **The golden run and the timing.** No existing network changes, so the golden run stays
   bit-identical at every stage. The optimizer's parameter accessor changes `apply` for every
   network, so the stage that adds it is timed within noise
-  ([optimizations/measurement.md](optimizations/measurement.md)). The new layers have no baseline
+  ([measurement.md](measurement.md)). The new layers have no baseline
   to be timed against, so their timings are recorded, not compared.
 - **Registry walks.** `test_rust_array_layer_forward_batch.py` and
   `test_rust_array_layer_sgd_step.py` walk `RustArrayLayer` subclasses, and `test_prepared_dataset.py`

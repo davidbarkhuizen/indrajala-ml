@@ -17,8 +17,8 @@ This is the op in place: the calls see the cache and clock state training leaves
 back-to-back benchmark loop doesn't), and training's own thread count unless `--rust-threads`
 pins one. `--kernel-overrides R:K` runs every cell under `set_kernel_overrides(R, K)` (0:0 is the
 default kernels; `matmul_narrow`'s rows per block and `matmul_long_k`'s slab rows), so one build
-compares kernel settings. For old/new builds, run it once per build with that build first on
-PYTHONPATH, alternating the builds, as docs/optimizations/measurement.md describes.
+compares kernel settings. Run old against new builds through scripts/ab.py (`--bench
+op_call_timing`), as docs/measurement.md describes.
 """
 
 import argparse

@@ -18,8 +18,9 @@ in batch ops.
   they aren't proposed again.
 - [Candidates](optimizations/candidates.md): future optimizations, ranked by stake, with plans;
   deferred work, unmeasured leads and open questions.
-- [Measurement](optimizations/measurement.md): the machine, the benchmark tools, protocols,
-  gotchas, and the rules for an optimization PR.
+- [Measurement](measurement.md): the stand-alone measurement guide, for every timing PR: the
+  machine, the tools, A/Bs with `scripts/ab.py` and their reports, protocols, gotchas, and the
+  rules for a timing claim and for an optimization PR.
 
 These describe the current state, not its history: a change updates them in place (a number is
 replaced, an item moves between Candidates, Implemented and Rejected), and the measurements

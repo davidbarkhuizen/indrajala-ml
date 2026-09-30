@@ -4,7 +4,7 @@ Part of the optimization docs; the index is [../optimizations.md](../optimizatio
 
 Where Rust stands against numpy on the current code: the numbers candidates are ranked against.
 Current values only; a change that moves one replaces it here (the old value stays in its PR).
-How each number is measured is in [Measurement](measurement.md).
+How each number is measured is in [Measurement](../measurement.md).
 
 ## End to end
 
@@ -33,7 +33,7 @@ Caveats:
   `OPENBLAS_NUM_THREADS=1` against 1.18-1.19 s by default, and Rust's 0.55-0.58 s. Against
   single-threaded numpy that cell is 0.58-0.60.
 - **The demo interleaves numpy and Rust in one process**, which can only slow Rust (see
-  [Measurement](measurement.md#gotchas)); unmeasured.
+  [Measurement](../measurement.md#7-gotchas)); unmeasured.
 
 ## Per op
 

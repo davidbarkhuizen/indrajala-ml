@@ -6,10 +6,11 @@ trainers the demos use, before and after the dataset became one backend array (#
 
 Every (config, backend, repeat) runs in its own process, never two backends in one, rotating the
 order each repeat, and the medians are reported. The script only uses interfaces that exist on
-both sides of the change, so the "before" numbers come from running this same file with an older
-checkout first on PYTHONPATH (the output starts with the trainers module it imported):
+both sides of the change, so old against new runs this same file on each side: scripts/ab.py
+(`--bench prepared_dataset_timing`, docs/measurement.md) runs it with each side's worktree on
+PYTHONPATH (the output starts with the trainers module it imported):
 
-    PYTHONPATH=/path/to/old/checkout python scripts/prepared_dataset_timing.py time
+    python scripts/ab.py run --bench prepared_dataset_timing [--old main] [--new HEAD]
 
 --epochs trains each run for more epochs (one accuracy pass per epoch, plus one before), as a
 longer run does; the batched accuracy pass's A/B used it. Configs, each one epoch by default,

@@ -239,7 +239,7 @@ class MomentumConvRustArrayMultiClassBackpropClassifierNetwork(...):
   boundary. The optimizer adds a method call and a state-table lookup per layer per step. Each
   stage that touches `learn*` is timed with `scripts/prepared_dataset_timing.py time`, numpy and
   Rust in separate processes, both builds committed and alternated
-  ([optimizations/measurement.md](optimizations/measurement.md)). It must be within run-to-run
+  ([measurement.md](measurement.md)). It must be within run-to-run
   noise. If it isn't, the state is held as a list indexed like `layers` instead of a dict, and the
   SGD path skips the table.
 - **The ensembles pickle** classes and snapshots across `multiprocessing.Pool`
