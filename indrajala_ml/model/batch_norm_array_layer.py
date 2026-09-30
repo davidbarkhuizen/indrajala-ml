@@ -97,16 +97,17 @@ class BatchNormArrayLayer:
             refuse_single_example(self)
         mu = sum_rows(X) / m
         d = X - mu
-        var = sum_rows(d * d) / m
+        ss = sum_rows(d * d)
+        var = ss / m
         std = np.sqrt(var + self.epsilon)
         self._xhat = d / std
         self.A = self._activate(self.gamma * self._xhat + self.beta)
 
         rate = self.running_rate
         self.running_mean = (1 - rate) * self.running_mean + rate * mu
-        self.running_var = (1 - rate) * self.running_var + rate * (m / (m - 1) * var)
+        self.running_var = (1 - rate) * self.running_var + rate * (ss / (m - 1))
 
-        self._m, self._d, self._std = m, d, std
+        self._m, self._d, self._var, self._std = m, d, var, std
         return self.A
 
     def compute_output_delta(self, reference: FloatArray) -> None:
@@ -136,7 +137,7 @@ class BatchNormArrayLayer:
         m, d = self._m, self._d
         dxhat = self.delta_batch * self.gamma
         inv_std = 1 / self._std
-        inv_std3 = inv_std * inv_std * inv_std
+        inv_std3 = inv_std / (self._var + self.epsilon)
         dvar = sum_rows(dxhat * d * -0.5 * inv_std3)
         dmu = sum_rows(dxhat * -inv_std) + dvar * sum_rows(-2 * d) / m
         return dxhat * inv_std + dvar * (2 * d) / m + dmu / m

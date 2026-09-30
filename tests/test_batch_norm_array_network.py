@@ -52,13 +52,14 @@ def _reference(x: list[float], gamma: float, beta: float, delta: list[float]) ->
     m = len(x)
     mu = _sum(x) / m
     d = [x_i - mu for x_i in x]
-    var = _sum([d_i * d_i for d_i in d]) / m
+    ss = _sum([d_i * d_i for d_i in d])
+    var = ss / m
     std = math.sqrt(var + EPSILON)
     xhat = [d_i / std for d_i in d]
     y = [gamma * xhat_i + beta for xhat_i in xhat]
 
     inv_std = 1 / std
-    inv_std3 = inv_std * inv_std * inv_std
+    inv_std3 = inv_std / (var + EPSILON)
     dxhat = [delta_i * gamma for delta_i in delta]
     dvar = _sum([dxhat_i * d_i * -0.5 * inv_std3 for dxhat_i, d_i in zip(dxhat, d)])
     dmu = _sum([dxhat_i * -inv_std for dxhat_i in dxhat]) + dvar * _sum([-2 * d_i for d_i in d]) / m
@@ -72,7 +73,7 @@ def _reference(x: list[float], gamma: float, beta: float, delta: list[float]) ->
         "grad_gamma": _sum([delta_i * xhat_i for delta_i, xhat_i in zip(delta, xhat)]),
         "grad_beta": _sum(delta),
         "running_mean": (1 - RATE) * 0.0 + RATE * mu,
-        "running_var": (1 - RATE) * 1.0 + RATE * (m / (m - 1) * var),
+        "running_var": (1 - RATE) * 1.0 + RATE * (ss / (m - 1)),
     }
 
 
