@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Self, cast
 
-from indrajala_ml.model.array_layer_builder import InputShape, build_array_layers
+from indrajala_ml.model.array_layer_builder import build_array_layers
 from indrajala_ml.model.array_protocols import (
     ArrayBackend,
     ArrayNetworkLayer,
@@ -15,7 +15,7 @@ from indrajala_ml.model.array_protocols import (
     WeightedArrayLayer,
 )
 from indrajala_ml.model.bounds import validate_batch
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
 from indrajala_ml.model.update_rules import SGD, UpdateRule
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 

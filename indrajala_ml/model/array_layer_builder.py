@@ -20,7 +20,7 @@ from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.layer_specs import Dense, LayerSpec, validate_layer_specs
+from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec, validate_layer_specs
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.relu_array_layer import ReLUArrayLayer
@@ -28,10 +28,6 @@ from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
-
-# (dimension,) for a flat input, or (height, width, channels) for an image, whose flat layout is
-# channel-major (conv_array_layer.py)
-InputShape = tuple[int] | tuple[int, int, int]
 
 LayerClass = Callable[..., ArrayNetworkLayer[Any]]
 FrontEndLayerClass = Callable[..., ArrayFrontEndLayer[Any]]

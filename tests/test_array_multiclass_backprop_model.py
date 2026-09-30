@@ -7,7 +7,6 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
     VectorizedMultiClassBackpropClassifierNetwork,
 )
 from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_tests
-from tests.helpers import matching_array_backprop_networks
 
 
 def _equivalent(sizes: list[int], output: int) -> tuple[list[LayerSpec], UpdateRule]:
@@ -20,7 +19,6 @@ SPEC = ArrayNetworkSpec(
         "numpy": VectorizedMultiClassBackpropClassifierNetwork,
         "rust": RustArrayMultiClassBackpropClassifierNetwork,
     },
-    matching=matching_array_backprop_networks,
     equivalent=_equivalent,
     learning_rate=0.3,
     learn_steps=100,

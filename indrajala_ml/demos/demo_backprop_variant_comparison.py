@@ -13,7 +13,7 @@ from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.graphics.chart import new_axes, new_figure, plot_labeled_series
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
+from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, as_dense_layers
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
     BinaryCrossEntropyBackpropClassifierNetwork,
 )
@@ -45,7 +45,7 @@ def _xavier_glorot_randomize(network: BackpropNetworkBase) -> None:
     """
 
     previous_size = network.dimension
-    for layer in network.trainable_layers:
+    for layer in as_dense_layers(network.trainable_layers):
         limit = math.sqrt(6.0 / (previous_size + layer.size))
         for node in layer.nodes:
             node.update_input_weights([random.uniform(-limit, limit) for _ in range(previous_size)])

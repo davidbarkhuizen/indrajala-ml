@@ -9,7 +9,7 @@ from indrajala_ml.model.backprop_network_base import (
     as_dense_layers,
     randomize_fan_in_aware,
 )
-from indrajala_ml.model.bounds import validate_class_count
+from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.classification import argmax_first_occurrence
 from indrajala_ml.model.layer_protocols import TrainableLayer
 from indrajala_ml.model.model_io import load_model_json, save_model_json
@@ -34,9 +34,10 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
     ) -> None:
 
         validate_class_count(class_count)
+        validate_layer_sizes(layer_sizes)
         self.class_count = class_count
 
-        super().__init__(layer_sizes, dimension, input_bounds, output_size=class_count)
+        super().__init__(self._dense_specs(layer_sizes, class_count), (dimension,), input_bounds)
 
     def _forward(self, state: tuple[float, ...]) -> list[float]:
         return self._forward_outputs(state)
@@ -48,7 +49,13 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
         return argmax_first_occurrence(self.predict_probabilities(state))
 
     def learn(self, learning_rate: float, state: tuple[float, ...], category: int) -> None:
-        self._forward(state)
+        # training mode for the forward pass only, as BackpropClassifierNetwork.learn: a no-op
+        # but for dropout layers, which only a sequential network's specs put here
+        self._set_training_mode(True)
+        try:
+            self._forward(state)
+        finally:
+            self._set_training_mode(False)
         self._backward(category)
         self._apply_gradients(learning_rate)
 

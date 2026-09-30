@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.relu_layer import ReLULayer
+from indrajala_ml.model.layer_specs import Dense
 
 
 class ReLUBackpropClassifierNetwork(BackpropClassifierNetwork):
     """
-    BackpropClassifierNetwork with ReLU hidden layers (hidden_layer_cls = ReLULayer). The output
-    stays sigmoid with quadratic loss (see ReLUNode for why ReLU is hidden-only), and randomize() is
-    unchanged, so a measurement against the sigmoid network tests ReLU alone.
+    BackpropClassifierNetwork with ReLU hidden layers (ReLULayer). The output stays sigmoid with
+    quadratic loss (see ReLUNode for why ReLU is hidden-only), and randomize() is unchanged, so a
+    measurement against the sigmoid network tests ReLU alone.
 
     At the demos' learning_rate=1.0 it trained to 74.03% mean training accuracy on a fixed XOR
     scenario, against 97.80% (10 seeds). Not dead units (1 of 8): ReLU's undamped gradient needs a
@@ -17,4 +17,5 @@ class ReLUBackpropClassifierNetwork(BackpropClassifierNetwork):
     learning rate wherever it's used.
     """
 
-    hidden_layer_cls = ReLULayer
+    def _hidden_spec(self, size: int) -> Dense:
+        return Dense(size, activation="relu")

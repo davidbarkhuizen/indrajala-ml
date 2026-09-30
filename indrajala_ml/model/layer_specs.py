@@ -1,8 +1,8 @@
 """
 A network's layers as backend-free data (docs/composable-layers-workplan.md, The design): a list of
 layer specs, in forward order, that each implementation's builder maps to its own layer classes
-(array_layer_builder.py for numpy and Rust). Conv and Pool are today's ConvSpec and PoolSpec, so
-the conv networks' conv_specs are already specs.
+(array_layer_builder.py for numpy and Rust, python_layer_builder.py for pure Python). Conv and Pool
+are today's ConvSpec and PoolSpec, so the conv networks' conv_specs are already specs.
 
 Activations are part of a Dense spec, not layers of their own: each stays fused into its layer, as
 every Rust op is. validate_layer_specs accepts only the combinations every implementation builds,
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, NoReturn
 
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
@@ -42,6 +42,18 @@ class Dense:
 
 
 LayerSpec = Dense | ConvSpec | PoolSpec
+
+# a network's input: (dimension,) for a flat input, or (height, width, channels) for an image, whose
+# flat layout is channel-major (conv_layer.py, conv_array_layer.py)
+InputShape = tuple[int] | tuple[int, int, int]
+
+
+def sequential_save_not_yet(network: object) -> NoReturn:
+    """save and load of every sequential network, until format 2."""
+    raise NotImplementedError(
+        f"a {type(network).__name__} saves in format 2, which records its layer specs "
+        "(docs/composable-layers-workplan.md, stage 5); no legacy envelope can describe them"
+    )
 
 
 def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:

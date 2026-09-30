@@ -7,7 +7,6 @@ from indrajala_ml.model.adam_vectorized_multiclass_backprop_classifier_network i
 from indrajala_ml.model.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.update_rules import Adam, UpdateRule
 from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_tests
-from tests.helpers import matching_adam_array_backprop_networks
 
 
 def _equivalent(
@@ -25,7 +24,6 @@ SPEC = ArrayNetworkSpec(
         "numpy": AdamVectorizedMultiClassBackpropClassifierNetwork,
         "rust": AdamRustArrayMultiClassBackpropClassifierNetwork,
     },
-    matching=matching_adam_array_backprop_networks,
     equivalent=_equivalent,
     hyperparameters={"beta1": 0.9, "beta2": 0.999, "epsilon": 1e-8},
     saved_hyperparameters_test="adam_hyperparameters",

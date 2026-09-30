@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.array_layer import ArrayLayer
-from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import CrossEntropyOutputLayer
 from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
+from indrajala_ml.model.cross_entropy_output_layer import CrossEntropyOutputLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer

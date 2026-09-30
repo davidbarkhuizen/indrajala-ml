@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_node import BackpropNode
+from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights_and_bias
 from indrajala_ml.model.layer_protocols import InputLayer
 
 
@@ -53,6 +54,14 @@ class BackpropLayer:
 
     def weight_sets(self) -> Sequence[BackpropNode]:
         return self.nodes
+
+    def randomize_fan_in_aware(self) -> None:
+        # per node, weights then bias, from the input layer's size, as ConvKernel's per kernel
+        fan_in = len(self.input_layer.nodes)
+        for node in self.nodes:
+            weights, bias = fan_in_aware_weights_and_bias(fan_in)
+            node.update_input_weights(weights)
+            node.bias = bias
 
     def snapshot_state(self) -> list[tuple[list[float], float]]:
         return [(list(node.input_node_weights), node.bias) for node in self.nodes]

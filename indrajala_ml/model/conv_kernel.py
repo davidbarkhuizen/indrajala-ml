@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from indrajala_ml.model.backprop_network_base import fan_in_aware_weights_and_bias
+from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights_and_bias
 
 
 class ConvKernel:

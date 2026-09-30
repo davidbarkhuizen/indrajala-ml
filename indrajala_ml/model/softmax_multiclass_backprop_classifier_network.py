@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
-from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 
 
 class SoftmaxMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
@@ -14,9 +14,10 @@ class SoftmaxMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNet
     - The delta (activation - target) stays proportional to the error; quadratic loss's gradient
       vanishes on a confidently wrong, saturated sigmoid.
 
-    Only output_layer_cls differs: softmax couples the nodes in the forward pass only, and its
+    Only the output layer's spec differs (SoftmaxOutputLayer): softmax couples the nodes in the forward pass only, and its
     cross-entropy delta is per node (SoftmaxOutputNode.compute_output_delta). The one-vs-rest
     network stays in use by demos and saved models.
     """
 
-    output_layer_cls = SoftmaxOutputLayer
+    def _output_spec(self, size: int) -> Dense:
+        return Dense(size, output=True, activation="softmax", loss="cross_entropy")
