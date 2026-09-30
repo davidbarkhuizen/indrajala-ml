@@ -489,6 +489,37 @@ def _wheel_dir(crate: str) -> Path:
 BUILT: list[str] = []  # crate commits built by this process, for the machine line
 
 
+def extract_crate(crate: str, source: Path) -> None:
+    """Crate commit `crate`'s files in a fresh `source` directory, stamped with the extraction time.
+
+    `git archive` stamps every file with the commit time, and cargo decides freshness in the shared
+    target directory by modification time: a commit made before the last build there looked up to
+    date and wasn't compiled, so its wheel held the previous commit's extension (the stage 4c A/B)."""
+    shutil.rmtree(source, ignore_errors=True)
+    source.mkdir(parents=True)
+    archive = subprocess.run(["git", "-C", str(CRATE_REPO), "archive", crate], check=False, capture_output=True)
+    if archive.returncode:
+        raise AbError(f"crate {crate[:7]}: git archive failed", archive.stderr.decode().splitlines())
+    subprocess.run(["tar", "-x", "--touch", "-C", str(source)], input=archive.stdout, check=True)
+
+
+CRATE_BUILD_INPUTS = ("src", "build.rs", "Cargo.toml", "Cargo.lock", "pyproject.toml", "rust-toolchain.toml")
+
+
+def check_crate_builds(crates: dict[str, str], shas: dict[str, str]) -> None:
+    """Raises when the sides' crate commits differ in what the extension is built from but their
+    extensions are the same file: one side's build is stale, and the A/B would time one crate twice."""
+    if shas["old"] != shas["new"]:
+        return
+    changed = _git(CRATE_REPO, "diff", "--name-only", crates["old"], crates["new"], "--", *CRATE_BUILD_INPUTS)
+    if changed:
+        stale = " and ".join(str(_wheel_dir(crates[side])) for side in ("old", "new"))
+        raise AbError(
+            f"crates {crates['old'][:7]} and {crates['new'][:7]} differ in {', '.join(changed.splitlines())} "
+            f"but built the same extension ({shas['old'][:12]}): a stale build; remove {stale} and run again"
+        )
+
+
 def ensure_wheel(crate: str) -> Path:
     """The cached release wheel of crate commit `crate`, built once from a `git archive` of the
     crate repository (fetched first if the commit is missing) with the toolchain it pins."""
@@ -501,12 +532,7 @@ def ensure_wheel(crate: str) -> Path:
     if subprocess.run(["git", "-C", str(CRATE_REPO), "cat-file", "-e", f"{crate}^{{commit}}"], check=False).returncode:
         _git(CRATE_REPO, "fetch", "--quiet", "origin")
     source = wheel_dir / "src"
-    shutil.rmtree(source, ignore_errors=True)
-    source.mkdir()
-    archive = subprocess.run(["git", "-C", str(CRATE_REPO), "archive", crate], check=False, capture_output=True)
-    if archive.returncode:
-        raise AbError(f"crate {crate[:7]}: git archive failed", archive.stderr.decode().splitlines())
-    subprocess.run(["tar", "-x", "-C", str(source)], input=archive.stdout, check=True)
+    extract_crate(crate, source)
     env = _pass_env(source)
     env.pop("PYTHONPATH")
     env["CARGO_TARGET_DIR"] = str(_wheels_root() / "target")  # shared, so later builds are incremental
@@ -778,6 +804,10 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
                     raise AbError(f"the {side} side has no crate commit (no rust/ submodule; give --{side}-crate)")
                 site, sha = ensure_site(crate)
                 manifest[side]["site"], manifest[side]["extension_sha"] = str(site), sha
+            check_crate_builds(
+                {side: manifest[side]["crate"] for side in ("old", "new")},
+                {side: manifest[side]["extension_sha"] for side in ("old", "new")},
+            )
         manifest["preflight"] = _preflight(run_dir, manifest, args.skip_profile, args.allow_profile_change)
         manifest["preflight"]["after_builds"] = list(BUILT)
         _write_json(run_dir / "manifest.json", manifest)
