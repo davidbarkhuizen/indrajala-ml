@@ -9,7 +9,8 @@ array optimizers' (optimizers.py) are on arrays. A module of its own so the pure
 import neither numpy nor the Rust extension.
 
 BackpropNetworkBase calls begin_step() once per learn* call, then per layer in forward order
-either apply() after accumulating a batch or step_single() for one example.
+either apply() after accumulating a batch or step_single() for one example. state() and
+load_state() copy t and the state out and back in (checkpoint.py).
 """
 
 from __future__ import annotations
@@ -18,12 +19,21 @@ import math
 from collections.abc import Sequence
 from typing import cast
 
+from indrajala_ml.model.checkpoint import OptimizerState
 from indrajala_ml.model.layer_protocols import TrainableLayer, WeightSet
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
 # one weight set's state: lists shaped as its weights (momentum's velocities; Adam's m, then v),
 # and the bias's values in the same order
 WeightSetState = tuple[list[list[float]], list[float]]
+
+
+def _copy_layers(layers: dict[int, list[WeightSetState]]) -> dict[int, list[WeightSetState]]:
+    # deep: _apply_momentum and _apply_adam step the bias's state in place
+    return {
+        index: [([list(values) for values in weight_state], list(bias_state)) for weight_state, bias_state in sets]
+        for index, sets in layers.items()
+    }
 
 
 class PythonOptimizer:
@@ -46,6 +56,13 @@ class PythonOptimizer:
 
     def begin_step(self) -> None:
         self.t += 1
+
+    def state(self) -> OptimizerState[list[WeightSetState]]:
+        return OptimizerState(self.t, _copy_layers(self._state))
+
+    def load_state(self, state: OptimizerState[list[WeightSetState]]) -> None:
+        self.t = state.t
+        self._state = _copy_layers(state.layers)
 
     def apply(self, index: int, layer: TrainableLayer, learning_rate: float, batch_size: int) -> None:
         weight_sets = layer.weight_sets()

@@ -106,3 +106,10 @@ class LinearClassifierNetwork:
         for node, (weights, threshold) in zip(self.hidden_layer.nodes, snapshot):
             node.update_input_weights(weights)
             node.threshold = threshold
+
+    # no optimizer, so a checkpoint (checkpoint.py) is the snapshot
+    def checkpoint(self) -> list[tuple[list[float], float]]:
+        return self.snapshot()
+
+    def restore_checkpoint(self, checkpoint: list[tuple[list[float], float]]) -> None:
+        self.restore(checkpoint)

@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Protocol, Self, runtime_checkable
 
+from indrajala_ml.model.checkpoint import OptimizerState
 from indrajala_ml.model.update_rules import UpdateRule
 
 
@@ -80,6 +81,11 @@ class ArrayOptimizer[A: BackendArray](Protocol):
     rule: UpdateRule
 
     def begin_step(self) -> None: ...
+
+    # copies of t and the rule's state, and their inverse (checkpoint.py)
+    def state(self) -> OptimizerState[list[A]]: ...
+
+    def load_state(self, state: OptimizerState[Any], /) -> None: ...
 
     def apply(self, index: int, layer: ArrayNetworkLayer[A], learning_rate: float, batch_size: int) -> None: ...
 

@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any, ClassVar, Self, cast
 
 from indrajala_ml.model.array_network_shapes import ArraySingleOutputShape
+from indrajala_ml.model.checkpoint import Checkpoint
 from indrajala_ml.model.classification import argmax_first_occurrence
 from indrajala_ml.model.model_io import load_json, save_json
 
@@ -41,6 +42,13 @@ class ArrayEnsembleBase[ClassifierT: ArraySingleOutputShape[Any]]:
     def restore(self, snapshot: Sequence[Sequence[tuple[Any, ...]]]) -> None:
         for classifier, classifier_snapshot in zip(self.classifiers, snapshot):
             classifier.restore(classifier_snapshot)
+
+    def checkpoint(self) -> list[Checkpoint[Any, Any]]:
+        return [classifier.checkpoint() for classifier in self.classifiers]
+
+    def restore_checkpoint(self, checkpoint: Sequence[Checkpoint[Any, Any]]) -> None:
+        for classifier, classifier_checkpoint in zip(self.classifiers, checkpoint):
+            classifier.restore_checkpoint(classifier_checkpoint)
 
     def save(self, path: str) -> None:
         assert len({classifier.dimension for classifier in self.classifiers}) == 1, (

@@ -1,3 +1,4 @@
+import dataclasses
 import multiprocessing
 import multiprocessing.pool
 import os
@@ -85,20 +86,32 @@ def build_balanced_binary_dataset(
     return [(dataset[index][0], category) for index, category in index_category_pairs]
 
 
-def _picklable_snapshot(snapshot: object) -> object:
+def _picklable_checkpoint(checkpoint: object) -> object:
     """
-    A classifier's snapshot() as nested lists, which cross a multiprocessing.Pool boundary for any
-    backend: indrajala_math_rust.Array doesn't pickle. Recurses through lists and tuples, calling
-    .tolist() on each array leaf (numpy or Rust); per-node snapshots are already lists and pass
-    through. The collecting side's restore() accepts lists.
+    A classifier's checkpoint() as nested lists, which cross a multiprocessing.Pool boundary for
+    any backend: indrajala_math_rust.Array doesn't pickle. Recurses through lists, tuples, dicts
+    and dataclasses (model/checkpoint.py), calling .tolist() on each array leaf (numpy or Rust);
+    per-node weights and state are already lists and pass through. The collecting side's
+    restore_checkpoint() accepts lists.
     """
-    to_list = getattr(snapshot, "tolist", None)
+    to_list = getattr(checkpoint, "tolist", None)
     if to_list is not None:
         return to_list()
-    if isinstance(snapshot, (list, tuple)):
-        sequence = cast("list[object] | tuple[object, ...]", snapshot)
-        return type(sequence)(_picklable_snapshot(item) for item in sequence)
-    return snapshot
+    if isinstance(checkpoint, (list, tuple)):
+        sequence = cast("list[object] | tuple[object, ...]", checkpoint)
+        return type(sequence)(_picklable_checkpoint(item) for item in sequence)
+    if isinstance(checkpoint, dict):
+        mapping = cast("dict[object, object]", checkpoint)
+        return {key: _picklable_checkpoint(value) for key, value in mapping.items()}
+    if dataclasses.is_dataclass(checkpoint) and not isinstance(checkpoint, type):
+        return dataclasses.replace(
+            checkpoint,
+            **{
+                field.name: _picklable_checkpoint(getattr(checkpoint, field.name))
+                for field in dataclasses.fields(checkpoint)
+            },
+        )
+    return checkpoint
 
 
 def _train_classifier_on_binary_dataset[ClassifierT: BinaryClassifier](
@@ -126,7 +139,7 @@ def _train_classifier_on_binary_dataset[ClassifierT: BinaryClassifier](
     student = classifier_cls.randomized(layer_sizes, dimension, input_bounds)
     result = train_linear_classifier_network(student, binary_dataset, learning_rate=learning_rate, epochs=epochs)
 
-    return label, _picklable_snapshot(student.snapshot()), result.diagnostic
+    return label, _picklable_checkpoint(student.checkpoint()), result.diagnostic
 
 
 def _train_one_classifier(
@@ -261,18 +274,19 @@ def _assemble_ensemble_from_results[ClassifierT: BinaryClassifier](
     classifier_cls: BinaryClassifierClass[ClassifierT],
 ) -> tuple[EnsembleBackpropClassifierNetwork[ClassifierT], dict[int, TrainingDiagnostic]]:
     """
-    The tail of every ensemble trainer, parallel or serial: sorts the (label, snapshot, diagnostic)
-    results into label order, rebuilds each classifier_cls from its snapshot (restore() sets the
-    weights, so the class's randomize() doesn't matter) and assembles the ensemble.
+    The tail of every ensemble trainer, parallel or serial: sorts the (label, checkpoint,
+    diagnostic) results into label order, rebuilds each classifier_cls from its checkpoint
+    (restore_checkpoint() sets the weights and the optimizer's state, so the class's randomize()
+    doesn't matter) and assembles the ensemble.
     """
 
     results = sorted(results, key=lambda result: result[0])
 
     classifiers: list[ClassifierT] = []
     diagnostics: dict[int, TrainingDiagnostic] = {}
-    for label, snapshot, diagnostic in results:
+    for label, checkpoint, diagnostic in results:
         student = classifier_cls(layer_sizes, dimension, input_bounds)
-        student.restore(snapshot)
+        student.restore_checkpoint(checkpoint)
         classifiers.append(student)
         diagnostics[label] = diagnostic
 

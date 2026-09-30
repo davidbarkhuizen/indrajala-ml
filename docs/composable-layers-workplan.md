@@ -1,6 +1,6 @@
 # Workplan: composable layers and optimizers
 
-**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-4 done; stage 5 next.**
+**Status: decisions D1-D5 settled by the owner (2026-09-29). Stages 0-4 and 5.1 done; stage 5.2-5.4 next.**
 
 This is step 1 of [primitives-roadmap.md](primitives-roadmap.md). Stages 1-4 are structural
 refactoring: they change structure only, never numerics, under the README's Refactoring rules. At
@@ -328,7 +328,8 @@ Done when the pure-Python golden entries are bit-identical and the fixtures load
 
 ### Stage 5: format 2, with optimizer state (a feature)
 
-This stage changes what files hold, not how anything trains.
+This stage changes what files hold, not how anything trains. It lands as two PRs: item 1, then
+items 2-4.
 
 1. `optimizer.state()` / `load_state()` for all three implementations, and `checkpoint()` /
    `restore_checkpoint()` on every network. `train.py`'s best-epoch restore uses checkpoints.

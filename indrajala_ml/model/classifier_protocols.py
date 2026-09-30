@@ -31,14 +31,15 @@ class TargetClassifier[L](StateClassifier[L], Protocol):
 
 
 class TrainableClassifier[L](StateClassifier[L], Protocol):
-    """A student train_linear_classifier_network can train: learn one example, and pocket snapshots."""
+    """A student train_linear_classifier_network can train: learn one example, and pocket checkpoints."""
 
     def learn(self, learning_rate: float, state: State, category: L) -> None: ...
 
-    # each network's own snapshot type, only ever passed back to the same network's restore
-    def snapshot(self) -> Any: ...
+    # each network's own checkpoint type (checkpoint.py; the snapshot for a network without an
+    # optimizer), only ever passed back to the same network's restore_checkpoint
+    def checkpoint(self) -> Any: ...
 
-    def restore(self, snapshot: Any) -> None: ...
+    def restore_checkpoint(self, checkpoint: Any) -> None: ...
 
 
 class BatchTrainableClassifier[L](TrainableClassifier[L], Protocol):
@@ -64,6 +65,11 @@ class BinaryClassifier(TrainableClassifier[float], Protocol):
     """A single-output network: one of an ensemble's per-class sub-networks."""
 
     def predict_probability(self, state: State) -> float: ...
+
+    # the weights alone, which an ensemble's snapshot/restore gathers from its sub-networks
+    def snapshot(self) -> Any: ...
+
+    def restore(self, snapshot: Any) -> None: ...
 
 
 class BinaryClassifierClass[ClassifierT: BinaryClassifier](Protocol):

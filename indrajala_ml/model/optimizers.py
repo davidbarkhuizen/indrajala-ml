@@ -11,17 +11,21 @@ ArrayNetworkBase calls begin_step() once per learn* call, then per layer in forw
 apply() after accumulating a batch or step_single() for one example. A dense or conv layer is
 stepped alike: every rule's formula, and every fused Rust op, takes W and b of any matching shapes.
 A layer without W (a pool layer) has nothing to step.
+
+state() and load_state() copy t and the state out and back in (checkpoint.py), so a network's
+checkpoint resumes training by bits.
 """
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer, WeightedArrayLayer
+from indrajala_ml.model.checkpoint import OptimizerState
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
@@ -69,6 +73,18 @@ class NumpyOptimizer:
 
     def begin_step(self) -> None:
         self.t += 1
+
+    def state(self) -> OptimizerState[list[FloatArray]]:
+        return OptimizerState(
+            self.t, {index: [array.copy() for array in arrays] for index, arrays in self._state.items()}
+        )
+
+    def load_state(self, state: OptimizerState[Any]) -> None:
+        # numpy arrays or nested lists (a checkpoint pickled across a worker boundary)
+        self.t = state.t
+        self._state = {
+            index: [np.array(values, dtype=np.float64) for values in arrays] for index, arrays in state.layers.items()
+        }
 
     def apply(self, index: int, layer: ArrayNetworkLayer[FloatArray], learning_rate: float, batch_size: int) -> None:
         if not hasattr(layer, "W"):
@@ -182,6 +198,19 @@ class RustOptimizer:
 
     def begin_step(self) -> None:
         self.t += 1
+
+    def state(self) -> OptimizerState[list[pa.Array]]:
+        return OptimizerState(
+            self.t, {index: [array.copy() for array in arrays] for index, arrays in self._state.items()}
+        )
+
+    def load_state(self, state: OptimizerState[Any]) -> None:
+        # Rust arrays or nested lists (a checkpoint pickled across a worker boundary)
+        self.t = state.t
+        self._state = {
+            index: [values.copy() if isinstance(values, pa.Array) else pa.Array(values) for values in arrays]
+            for index, arrays in state.layers.items()
+        }
 
     def apply(self, index: int, layer: ArrayNetworkLayer[pa.Array], learning_rate: float, batch_size: int) -> None:
         if not hasattr(layer, "W"):
