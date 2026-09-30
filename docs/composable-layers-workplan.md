@@ -388,11 +388,10 @@ Done when no class exists only to carry an update rule.
   `W`), and one rule per layer.
 - **Weight decay with momentum or Adam** needs a published form chosen and cited first (README,
   Update rules).
-- **Batch normalization** (roadmap step 2) gets its own workplan. It will need the split hidden
-  delta, because a dense layer followed by a norm layer can't read `W` from the next layer. That
-  means a sigmoid-derivative crate op, bit-identical by the argument above, and a check that the
-  extra crossing is within noise. Its running averages are layer state, not optimizer state, and
-  format 2 saves them with the weights.
+- **Batch normalization** (roadmap step 2) has its own workplan,
+  [batch-norm-workplan.md](batch-norm-workplan.md). Batch norm sits after a linear layer and carries
+  the activation (its D1), so it needs no split hidden delta and no sigmoid-derivative crate op. Its
+  running averages are layer state, not optimizer state, and format 2 saves them with the weights.
 - **Saving RNG state** so a dropout run resumes exactly. This waits on explicit generator objects
   (docs/rng-audit.md, Open work).
 

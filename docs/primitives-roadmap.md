@@ -40,6 +40,8 @@ walks in the tests and the golden run all depend on the class structure.
 
 ## 2. Batch normalization next
 
+Planned in [batch-norm-workplan.md](batch-norm-workplan.md) (decisions settled 2026-09-30).
+
 - **It serves the open question.** The conv batch-size study hit a ceiling on the stable rate:
   the linear rule fails at B = 512 at momentum 0.0 and 0.9 (findings in `batch_size_scaling.py`).
   Batch normalization is the literature's standard way to raise it (Ioffe & Szegedy 2015). It is
