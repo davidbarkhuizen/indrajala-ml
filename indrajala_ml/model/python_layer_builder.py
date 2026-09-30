@@ -11,21 +11,25 @@ import math
 from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
+from indrajala_ml.model.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.cross_entropy_output_layer import CrossEntropyOutputLayer
 from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec, validate_layer_specs
+from indrajala_ml.model.linear_layer import LinearLayer
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 
 
-def _dense_layer(spec: Dense, input_layer: InputLayer) -> BackpropLayer:
+def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
     if spec.dropout is not None:
         return make_dropout_layer_cls(spec.dropout)(size=spec.size, input_layer=input_layer)
     if spec.activation == "relu":
         return ReLULayer(size=spec.size, input_layer=input_layer)
+    if spec.activation == "linear":
+        return LinearLayer(size=spec.size, input_layer=input_layer)
     if spec.activation == "softmax":
         return SoftmaxOutputLayer(size=spec.size, input_layer=input_layer)
     if spec.loss == "cross_entropy":
@@ -39,8 +43,6 @@ def build_python_layers(
     """specs, validated (validate_layer_specs), as pure-Python layers reading input_layer, whose
     nodes are input_shape's flat layout."""
     validate_layer_specs(specs)
-    if any(isinstance(spec, BatchNorm) for spec in specs):
-        raise NotImplementedError("batch norm in pure Python is stage 2 of docs/batch-norm-workplan.md; not built yet")
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
     )
@@ -52,6 +54,9 @@ def build_python_layers(
         if isinstance(spec, Dense):
             layer: TrainableLayer = _dense_layer(spec, previous)
             shape = (spec.size,)
+        elif isinstance(spec, BatchNorm):
+            # after its linear layer (validate_layer_specs), whose shape it keeps
+            layer = BatchNormLayer(previous, spec.activation, spec.epsilon, spec.running_rate)
         else:
             assert len(shape) == 3, f"a conv or pool layer needs a (height, width, channels) input; got {shape}"
             height, width, channels = shape
@@ -66,7 +71,7 @@ def build_python_layers(
                     input_channels=channels,
                 )
             else:
-                assert isinstance(spec, PoolSpec)  # BatchNorm is refused above
+                assert isinstance(spec, PoolSpec)
                 front_end_layer = MaxPoolLayer(
                     input_layer=previous,
                     input_height=height,

@@ -241,10 +241,15 @@ rounds differently when `B` isn't a power of two.
 
 ## Batch normalization
 
-Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)): numpy builds dense
-batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`. Rust, pure Python, conv
+Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)): numpy and pure Python
+build dense batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`. Rust, conv
 batch norm and saving it are later stages, and refuse it until then. This section fixes the forms
 all three implementations are held to.
+
+A pure-Python network with batch norm trains a batch layer by layer (`layer_major.py`): forward
+through each layer for the whole batch, then backward. The other layers run their per-example code
+unchanged, their nodes' per-example state kept for each example in turn. Networks without batch norm
+keep the example-by-example loop.
 
 A norm layer follows a linear layer without a bias and carries the activation, as the paper places
 it: "We add the BN transform immediately before the nonlinearity, by normalizing x = Wu + b. […]
@@ -325,7 +330,11 @@ backward, from delta_i = dl/dy_i (the activation's derivative already applied)
 `grad_b` sum). numpy's own reductions follow it only in some layouts
 (`tests/test_summation_order.py`): `X.sum(axis=0)` does across two or more features, but sums a
 single feature pairwise from 8 rows, and `D.sum(axis=(0, 2))` over a conv channel doesn't. The
-numpy layers sum with `np.cumsum` along the summed axis, which does at every shape. Only
+numpy layers sum with `np.cumsum` along the summed axis, which does at every shape. The
+pure-Python layer sums with an explicit loop: the builtin `sum` adds floats with compensated
+summation since Python 3.12. Given the same inputs, the pure-Python and numpy layers compute the same
+bits (`tests/test_batch_norm_python_network.py`). Whole networks agree within the pure-Python parity
+tolerance only, since their dense layers' sums differ, with or without batch norm. Only
 `+ − × ÷` and `sqrt` appear, each correctly rounded in IEEE 754, so every implementation that
 follows these forms computes the same bits. There's no `pow`, since `(var + eps)^(-3/2)` through a library `pow` could
 differ between Python, numpy and Rust. `tests/gradient_check.py` checks each implementation's

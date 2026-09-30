@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, NoReturn
 
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
@@ -61,6 +61,31 @@ class BatchNorm:
 
 
 LayerSpec = Dense | ConvSpec | PoolSpec | BatchNorm
+
+
+def refuse_single_example(layer: object) -> NoReturn:
+    """A batch-norm layer's, and its linear layer's, refusal of a one-example training step (the
+    batch-norm workplan, D4), in every implementation."""
+    raise ValueError(
+        f"a {type(layer).__name__} trains on batches only: batch norm normalizes a batch of one to 0 "
+        "(the batch-norm workplan, D4)"
+    )
+
+
+def refuse_single_example_network(specs: Sequence[LayerSpec], batch_norm_index: int) -> NoReturn:
+    """A network's refusal of a one-example training step, naming its first batch-norm layer (D4)."""
+    raise ValueError(
+        f"layer {batch_norm_index}, {specs[batch_norm_index]!r}, can't train on one example: it "
+        "would normalize every value to 0 and pass no gradient back. Train on batches of 2 or more (the "
+        "batch-norm workplan, D4)"
+    )
+
+
+def batch_norm_index(specs: Sequence[LayerSpec]) -> int | None:
+    """The index of the first BatchNorm in specs, if any: such a network refuses a one-example
+    training step (D4)."""
+    return next((i for i, spec in enumerate(specs) if isinstance(spec, BatchNorm)), None)
+
 
 # a network's input: (dimension,) for a flat input, or (height, width, channels) for an image, whose
 # flat layout is channel-major (conv_layer.py, conv_array_layer.py)

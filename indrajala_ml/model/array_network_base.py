@@ -28,7 +28,13 @@ from indrajala_ml.model.format2 import (
     preset_init_kwargs,
     restore_file,
 )
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec
+from indrajala_ml.model.layer_specs import (
+    Dense,
+    InputShape,
+    LayerSpec,
+    batch_norm_index,
+    refuse_single_example_network,
+)
 from indrajala_ml.model.model_io import load_json, save_json
 from indrajala_ml.model.update_rules import SGD, UpdateRule
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
@@ -75,7 +81,7 @@ class ArrayNetworkBase[A: BackendArray]:
         self._training_mode_layers = [layer for layer in self.layers if isinstance(layer, TrainingModeLayer)]
         # the index of the first batch-norm layer, if any: such a network refuses a one-example
         # training step (the batch-norm workplan, D4)
-        self.batch_norm_index = next((i for i, spec in enumerate(specs) if isinstance(spec, BatchNorm)), None)
+        self.batch_norm_index = batch_norm_index(specs)
         self.optimizer = self._new_optimizer()
 
     def _hidden_spec(self, size: int) -> Dense:
@@ -166,11 +172,7 @@ class ArrayNetworkBase[A: BackendArray]:
         )
 
     def _refuse_single_example(self, batch_norm_index: int) -> NoReturn:
-        raise ValueError(
-            f"layer {batch_norm_index}, {self.layer_specs[batch_norm_index]!r}, can't train on one example: it "
-            "would normalize every value to 0 and pass no gradient back. Train on batches of 2 or more (the "
-            "batch-norm workplan, D4)"
-        )
+        refuse_single_example_network(self.layer_specs, batch_norm_index)
 
     def _learn_input(self, learning_rate: float, x: A, category: Any) -> None:
         if self.batch_norm_index is not None:

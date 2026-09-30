@@ -15,3 +15,10 @@ def fan_in_aware_weights_and_bias(fan_in: int) -> tuple[list[float], float]:
     weights = [random.uniform(-limit, limit) for _ in range(fan_in)]
     bias = random.uniform(-limit, limit)
     return weights, bias
+
+
+def fan_in_aware_weights(fan_in: int) -> list[float]:
+    """fan_in_aware_weights_and_bias's weights, without drawing a bias: a linear layer's node, which
+    has none (the batch-norm workplan, D2)."""
+    limit = 1.0 / math.sqrt(fan_in)
+    return [random.uniform(-limit, limit) for _ in range(fan_in)]

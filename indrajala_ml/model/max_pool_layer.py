@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import ClassVar
 
 from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer, WeightSet
@@ -24,6 +25,10 @@ class PoolUnit(AbstractNode):
     maximum (the first, on a tie); the unit's delta flows back to that input only, since
     d max(x) / d x_i is 0 for every other slot.
     """
+
+    # as BackpropNode's, and the winning slot: kept per example by the layer-major batch path
+    # (layer_major.py)
+    example_fields: ClassVar[tuple[str, ...]] = ("_activation", "argmax_slot", "delta")
 
     def __init__(self, input_nodes: Sequence[AbstractNode]) -> None:
         self.input_nodes: Sequence[AbstractNode] = input_nodes

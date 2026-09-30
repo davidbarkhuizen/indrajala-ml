@@ -10,16 +10,18 @@ from typing import Any
 import pytest
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
+from indrajala_ml.model.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.cross_entropy_output_layer import CrossEntropyOutputLayer
 from indrajala_ml.model.dropout_layer import TrainingModeNode
-from indrajala_ml.model.layer_specs import Conv, Dense, InputShape, LayerSpec, Pool
+from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, InputShape, LayerSpec, Pool
+from indrajala_ml.model.linear_layer import LinearLayer
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer
 from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.test_layer_specs import INVALID, KINDS, OUTPUT, VALID
+from tests.test_layer_specs import BATCH_NORM, INVALID, KINDS, LINEAR, NUMPY_KINDS, OUTPUT, VALID
 
 # ArrayLayerClasses' field names (KINDS), as the pure-Python classes; a dropout layer's class is
 # made per drop probability (make_dropout_layer_cls), so it's checked by its nodes instead
@@ -30,6 +32,8 @@ PYTHON_CLASSES: dict[str, type[Any]] = {
     "cross_entropy": CrossEntropyOutputLayer,
     "conv": ConvLayer,
     "pool": MaxPoolLayer,
+    "linear": LinearLayer,
+    "batch_norm": BatchNormLayer,
 }
 
 
@@ -43,19 +47,35 @@ def test_every_accepted_combination_builds(specs: list[LayerSpec]):
     assert len(_build(specs, (8, 8, 1))) == len(specs)
 
 
+@pytest.mark.parametrize("specs", BATCH_NORM.values(), ids=BATCH_NORM.keys())
+def test_every_batch_norm_pair_builds(specs: list[LayerSpec]):
+    assert len(_build(specs, (8, 8, 1))) == len(specs)
+
+
 @pytest.mark.parametrize("specs", INVALID.values(), ids=INVALID.keys())
 def test_a_rejected_combination_doesnt_build(specs: list[LayerSpec]):
     with pytest.raises(AssertionError):
         _build(specs, (8, 8, 1))
 
 
-@pytest.mark.parametrize("specs, index, kind", [kind[1:] for kind in KINDS], ids=[kind[0] for kind in KINDS])
+@pytest.mark.parametrize(
+    "specs, index, kind",
+    [kind[1:] for kind in KINDS + NUMPY_KINDS],
+    ids=[kind[0] for kind in KINDS + NUMPY_KINDS],
+)
 def test_each_spec_kind_builds_its_pure_python_layer_class(specs: list[LayerSpec], index: int, kind: str):
     layer = _build(specs, (8, 8, 1))[index]
     if kind == "dropout":
         assert all(isinstance(node, TrainingModeNode) for node in layer.nodes)
     else:
         assert type(layer) is PYTHON_CLASSES[kind]
+
+
+def test_a_batch_norm_layer_normalizes_the_linear_layers_nodes_with_its_specs_constants():
+    linear, norm, _output = _build([LINEAR, BatchNorm("relu", 1e-3, 0.2), OUTPUT], (7,))
+
+    assert [node.input_node for node in norm.nodes] == list(linear.nodes)
+    assert (norm.activation, norm.epsilon, norm.running_rate) == ("relu", 1e-3, 0.2)
 
 
 def test_the_dropout_layer_takes_the_specs_probability():

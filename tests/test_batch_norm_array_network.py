@@ -3,7 +3,8 @@ Dense batch norm in numpy (the batch-norm workplan, stage 1): LinearArrayLayer a
 BatchNormArrayLayer against hand-computed values and a scalar transcription of the README's
 expressions (Batch normalization), gradient checks under every rule, the running averages in
 training and inference, snapshot and checkpoint, the one-example refusal (D4) with train.py's
-final batch of one, weight decay (D7), and the refusals of what later stages build.
+final batch of one, weight decay (D7), and the refusals of what later stages build. The pure-Python
+counterparts are tests/test_batch_norm_python_network.py's, which reuse this module's cases.
 """
 
 import math
@@ -19,7 +20,6 @@ from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.train import _chunk_into_batches, train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
@@ -403,8 +403,3 @@ def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
 def test_saving_batch_norm_is_refused_until_stage_5(tmp_path: Any):
     with pytest.raises(NotImplementedError, match="stage 5"):
         _network().save(str(tmp_path / "model.json"))
-
-
-def test_pure_python_refuses_batch_norm_until_stage_2():
-    with pytest.raises(NotImplementedError, match="stage 2"):
-        SequentialMultiClassBackpropClassifierNetwork(INPUT, NETWORKS["sigmoid"][0], SGD())

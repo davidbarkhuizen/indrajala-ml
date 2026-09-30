@@ -44,6 +44,8 @@ class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](Backprop
         return 1.0 if self.predict_probability(state) > 0.5 else 0.0
 
     def learn(self, learning_rate: float, state: tuple[float, ...], category: float) -> None:
+        # a network with batch norm refuses (D4)
+        self._refuse_single_example()
         self._set_training_mode(True)
         try:
             self._forward(state)
@@ -56,8 +58,11 @@ class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](Backprop
         self._learn_batch(learning_rate, batch)
 
     def _backward(self, reference_value: float) -> None:
-        self.output_layer.nodes[0].compute_output_delta(reference_value)
+        self._output_deltas(reference_value)
         self._backward_hidden_layers()
+
+    def _output_deltas(self, reference_value: float) -> None:
+        self.output_layer.nodes[0].compute_output_delta(reference_value)
 
     def half_widths(self) -> list[float]:
         return _half_widths(self.input_bounds)

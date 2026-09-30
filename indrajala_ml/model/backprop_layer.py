@@ -7,9 +7,10 @@ from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights_and_bias
 from indrajala_ml.model.layer_protocols import InputLayer
 
 
-class BackpropLayer:
+class NodeLayer:
     """
-    A layer of BackpropNodes, each fully connected to the input layer. node.value() only reads a
+    A layer of BackpropNodes (or a subclass's), each fully connected to the input layer: what
+    BackpropLayer and the bias-free LinearLayer (linear_layer.py) share. node.value() only reads a
     cached activation; forward() computes it.
     """
 
@@ -34,12 +35,6 @@ class BackpropLayer:
         # a no-op except in a layer whose forward pass differs in training (DropoutLayer)
         pass
 
-    def compute_hidden_deltas(self, next_layer: BackpropLayer) -> None:
-        # a layer method so ConvLayer, whose units take a precomputed downstream sum, can
-        # override it
-        for own_index, node in enumerate(self.nodes):
-            node.compute_hidden_delta(next_layer.nodes, own_index)
-
     def downstream_sum(self, own_index: int) -> float:
         # sum over this layer's nodes of delta * the weight each applies to the previous layer's
         # own_index-th node, in BackpropNode.compute_hidden_delta's order; ConvLayer overrides it
@@ -54,6 +49,18 @@ class BackpropLayer:
 
     def weight_sets(self) -> Sequence[BackpropNode]:
         return self.nodes
+
+
+class BackpropLayer(NodeLayer):
+    """
+    A layer of BackpropNodes, each with its weights and bias, fully connected to the input layer.
+    """
+
+    def compute_hidden_deltas(self, next_layer: NodeLayer) -> None:
+        # a layer method so ConvLayer, whose units take a precomputed downstream sum, can
+        # override it
+        for own_index, node in enumerate(self.nodes):
+            node.compute_hidden_delta(next_layer.nodes, own_index)
 
     def randomize_fan_in_aware(self) -> None:
         # per node, weights then bias, from the input layer's size, as ConvKernel's per kernel
