@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import ClassVar
 
 from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights_and_bias
 
@@ -16,6 +17,10 @@ class ConvKernel:
     every example), and the network's optimizer (python_optimizer.py) steps the kernel once,
     dividing by batch_size only: positions are summed, examples averaged.
     """
+
+    # the WeightSet flags (layer_protocols.py)
+    weights_decayed: ClassVar[bool] = True
+    has_bias: ClassVar[bool] = True
 
     def __init__(
         self,

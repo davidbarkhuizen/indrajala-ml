@@ -1,8 +1,14 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from typing import ClassVar
 
 
 class AbstractNode(ABC):
+    # the attributes a node's forward and backward passes set per example, which the layer-major
+    # batch path (layer_major.py) keeps one of per example: none for an input node, whose values
+    # the path sets itself
+    example_fields: ClassVar[tuple[str, ...]] = ()
+
     @abstractmethod
     def value(self) -> float:
         raise NotImplementedError()

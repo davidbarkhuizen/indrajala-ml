@@ -61,8 +61,8 @@ INVALID: dict[str, list[LayerSpec]] = {
     "running rate over 1": [LINEAR, BatchNorm(running_rate=1.5), OUTPUT],
 }
 
-# batch norm's pairs (the batch-norm workplan, D1): accepted, and built by numpy (stage 1); Rust
-# and pure Python refuse them until their stages
+# batch norm's pairs (the batch-norm workplan, D1): accepted, and built by numpy (stage 1) and pure
+# Python (stage 2, tests/test_python_layer_builder.py); Rust refuses them until stage 3
 BATCH_NORM: dict[str, list[LayerSpec]] = {
     "sigmoid": [LINEAR, BatchNorm(), OUTPUT],
     "relu": [LINEAR, BatchNorm("relu"), OUTPUT],

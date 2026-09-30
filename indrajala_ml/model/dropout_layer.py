@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Sequence
+from typing import ClassVar
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode, sigmoid
@@ -28,6 +29,15 @@ def make_dropout_node_cls(drop_probability: float) -> type[TrainingModeNode]:
     keep_probability = 1.0 - drop_probability
 
     class DropoutNode(TrainingModeNode):
+        # the mask and the unscaled activation are per example too (layer_major.py)
+        example_fields: ClassVar[tuple[str, ...]] = (
+            "_activation",
+            "delta",
+            "_kept",
+            "_base_activation",
+            "_was_training",
+        )
+
         def __init__(
             self,
             input_nodes: Sequence[BackpropNode],

@@ -24,7 +24,8 @@ from indrajala_ml.model.layer_protocols import TrainableLayer, WeightSet
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
 # one weight set's state: lists shaped as its weights (momentum's velocities; Adam's m, then v),
-# and the bias's values in the same order
+# and the bias's values in the same order, none for a weight set without a bias (a linear layer's
+# node)
 WeightSetState = tuple[list[list[float]], list[float]]
 
 
@@ -81,7 +82,8 @@ class PythonOptimizer:
         state = self._state.get(index)
         if state is None:
             state = self._state[index] = [
-                ([[0.0] * len(weight_set.weights) for _ in range(count)], [0.0] * count) for weight_set in weight_sets
+                ([[0.0] * len(weight_set.weights) for _ in range(count)], [0.0] * count if weight_set.has_bias else [])
+                for weight_set in weight_sets
             ]
         return state
 
@@ -93,13 +95,18 @@ class PythonOptimizer:
                     for weight, accum in zip(weight_set.weights, weight_set.weight_gradient_accum)
                 ]
             )
-            weight_set.bias = weight_set.bias - learning_rate * (weight_set.bias_gradient_accum / batch_size)
+            if weight_set.has_bias:
+                weight_set.bias = weight_set.bias - learning_rate * (weight_set.bias_gradient_accum / batch_size)
 
     def _apply_weight_decay(
         self, _index: int, weight_sets: Sequence[WeightSet], learning_rate: float, batch_size: int
     ) -> None:
         l2_lambda = cast(WeightDecay, self.rule).l2_lambda
         for weight_set in weight_sets:
+            if not weight_set.weights_decayed:
+                # batch norm's gamma, as its beta, steps with plain SGD (D7)
+                self._apply_sgd(_index, [weight_set], learning_rate, batch_size)
+                continue
             # the penalty is added once, to the averaged gradient: the weight doesn't move within
             # a batch, so it is the same for every example
             weight_set.set_weights(
@@ -109,7 +116,8 @@ class PythonOptimizer:
                 ]
             )
             # bias unregularized
-            weight_set.bias = weight_set.bias - learning_rate * (weight_set.bias_gradient_accum / batch_size)
+            if weight_set.has_bias:
+                weight_set.bias = weight_set.bias - learning_rate * (weight_set.bias_gradient_accum / batch_size)
 
     def _apply_momentum(
         self, index: int, weight_sets: Sequence[WeightSet], learning_rate: float, batch_size: int
@@ -124,8 +132,9 @@ class PythonOptimizer:
             weight_set.set_weights(
                 [weight - learning_rate * velocity for weight, velocity in zip(weight_set.weights, weight_state[0])]
             )
-            bias_state[0] = momentum * bias_state[0] + weight_set.bias_gradient_accum / batch_size
-            weight_set.bias = weight_set.bias - learning_rate * bias_state[0]
+            if weight_set.has_bias:
+                bias_state[0] = momentum * bias_state[0] + weight_set.bias_gradient_accum / batch_size
+                weight_set.bias = weight_set.bias - learning_rate * bias_state[0]
 
     def _apply_adam(self, index: int, weight_sets: Sequence[WeightSet], learning_rate: float, batch_size: int) -> None:
         rule = cast(Adam, self.rule)
@@ -153,6 +162,8 @@ class PythonOptimizer:
             weight_state[0] = new_m
             weight_state[1] = new_v
 
+            if not weight_set.has_bias:
+                continue
             g_bias = weight_set.bias_gradient_accum / batch_size
             bias_state[0] = beta1 * bias_state[0] + (1 - beta1) * g_bias
             bias_state[1] = beta2 * bias_state[1] + (1 - beta2) * g_bias * g_bias

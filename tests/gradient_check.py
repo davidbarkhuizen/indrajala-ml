@@ -91,9 +91,12 @@ class _RecordingOptimizer:
 
     def apply(self, index: int, layer: Any, _learning_rate: float, _batch_size: int) -> None:
         if self.python:
-            # a dense layer's nodes or a conv layer's kernels, as snapshot_state; none for pool
+            # a dense layer's nodes, a conv layer's kernels or a batch-norm layer's features ([gamma]
+            # and beta), as snapshot_state, a linear layer's nodes without a bias; none for pool
             self.gradients[index] = [
                 [list(weight_set.weight_gradient_accum), weight_set.bias_gradient_accum]
+                if weight_set.has_bias
+                else [list(weight_set.weight_gradient_accum)]
                 for weight_set in layer.weight_sets()
             ]
             for weight_set in layer.weight_sets():
@@ -135,8 +138,8 @@ def training_outputs(network: Any, states: Sequence[tuple[float, ...]]) -> list[
             for layer in array_network.layers:
                 batch = layer.forward_batch(batch)
             return batch.tolist()
-        # pure Python has no batch forward pass: one example at a time, as _learn_batch runs it
-        return [network._forward_outputs(state) for state in states]
+        # one example at a time, or layer-major for a network with batch norm, as _learn_batch runs it
+        return network._forward_batch_outputs(states)
     finally:
         network._set_training_mode(False)
 

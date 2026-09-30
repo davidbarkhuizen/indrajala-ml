@@ -1,6 +1,6 @@
 # Workplan: batch normalization
 
-**Status: stages 0 and 1 done (2026-09-30); stage 2 next. Decisions D1-D8 settled by the owner (2026-09-30).**
+**Status: stages 0-2 done (2026-09-30); stage 3 next. Decisions D1-D8 settled by the owner (2026-09-30).**
 
 This is step 2 of [primitives-roadmap.md](primitives-roadmap.md). It adds one new layer kind,
 batch normalization (Ioffe & Szegedy 2015), for dense and conv networks, under every update rule,

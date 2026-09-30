@@ -9,18 +9,12 @@ no bias, since the norm layer's mean subtraction cancels one and its beta takes 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar, NoReturn
+from typing import Any, ClassVar
 
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray
-
-
-def refuse_single_example(layer: object) -> NoReturn:
-    raise ValueError(
-        f"a {type(layer).__name__} trains on batches only: batch norm normalizes a batch of one to 0 "
-        "(the batch-norm workplan, D4)"
-    )
+from indrajala_ml.model.layer_specs import refuse_single_example
 
 
 class LinearArrayLayer:

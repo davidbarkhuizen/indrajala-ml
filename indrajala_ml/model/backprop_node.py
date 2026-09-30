@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from typing import ClassVar
 
 from indrajala_ml.model.base_node import AbstractNode, WeightedInputNode
 
@@ -27,6 +28,13 @@ class BackpropNode(WeightedInputNode):
     minimum-disturbance rule. bias plays the role of AssociationNode's threshold, named for being an
     additive term rather than a cutoff.
     """
+
+    # the WeightSet flags (layer_protocols.py)
+    weights_decayed: ClassVar[bool] = True
+    has_bias: ClassVar[bool] = True
+
+    # AbstractNode's, per example
+    example_fields: ClassVar[tuple[str, ...]] = ("_activation", "delta")
 
     def __init__(
         self,

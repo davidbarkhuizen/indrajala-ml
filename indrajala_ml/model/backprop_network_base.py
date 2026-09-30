@@ -17,8 +17,15 @@ from indrajala_ml.model.format2 import (
     preset_init_kwargs,
     restore_file,
 )
+from indrajala_ml.model.layer_major import LayerMajorBatch
 from indrajala_ml.model.layer_protocols import TrainableLayer
-from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
+from indrajala_ml.model.layer_specs import (
+    Dense,
+    InputShape,
+    LayerSpec,
+    batch_norm_index,
+    refuse_single_example_network,
+)
 from indrajala_ml.model.model_io import load_json, save_json
 from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.python_optimizer import PythonOptimizer, WeightSetState
@@ -77,6 +84,9 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
         output_layer = self.trainable_layers[-1]
         assert isinstance(output_layer, BackpropLayer)  # validate_layer_specs: a Dense
         self.output_layer = output_layer
+        # the index of the first batch-norm layer, if any: such a network trains layer-major
+        # (layer_major.py, the batch-norm workplan's D3) and refuses a one-example training step (D4)
+        self.batch_norm_index = batch_norm_index(specs)
 
         self.optimizer = PythonOptimizer(self._update_rule())
 
@@ -114,6 +124,10 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
     def _backward(self, target: Any, /) -> None:
         raise NotImplementedError
 
+    def _output_deltas(self, target: Any, /) -> None:
+        # the output layer's deltas for one example's target, the first half of _backward
+        raise NotImplementedError
+
     def update_state_layer(self, state: tuple[float, ...]) -> None:
         self.input_layer.update_state(state)
 
@@ -134,11 +148,22 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
         for layer in self.trainable_layers:
             layer.set_training_mode(training)
 
+    def _refuse_single_example(self) -> None:
+        # learn's and a one-example learn_batch's check (D4)
+        if self.batch_norm_index is not None:
+            refuse_single_example_network(self.layer_specs, self.batch_norm_index)
+
     def _learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]]) -> None:
         # forward, backward and accumulate per example, then one averaged update. A one-example
         # batch matches learn() bit for bit (tests/test_gradient_accumulation.py). The target is
-        # a float or a class index; _forward/_backward abstract over which.
+        # a float or a class index; _forward/_backward abstract over which. A network with batch
+        # norm trains layer-major instead.
         validate_batch(batch)
+        if self.batch_norm_index is not None:
+            if len(batch) == 1:
+                self._refuse_single_example()
+            self._learn_batch_layer_major(learning_rate, batch)
+            return
         self._set_training_mode(True)
         try:
             for state, target in batch:
@@ -148,6 +173,27 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
             self._apply_accumulated_gradients(learning_rate, len(batch))
         finally:
             self._set_training_mode(False)
+
+    def _learn_batch_layer_major(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]]) -> None:
+        # the batch forward, then backward, layer by layer (layer_major.py), then one averaged update
+        self._set_training_mode(True)
+        try:
+            pass_ = LayerMajorBatch(self.input_layer, self.trainable_layers, [state for state, _target in batch])
+            pass_.forward()
+            pass_.backward(lambda example: self._output_deltas(batch[example][1]))
+            pass_.accumulate_gradients()
+            self._apply_accumulated_gradients(learning_rate, len(batch))
+        finally:
+            self._set_training_mode(False)
+
+    def _forward_batch_outputs(self, states: Sequence[tuple[float, ...]]) -> list[list[float]]:
+        # the output rows of the forward pass learn_batch runs over states, in the training mode
+        # the caller set: per example, or layer-major for a network with batch norm
+        if self.batch_norm_index is None:
+            return [self._forward_outputs(state) for state in states]
+        pass_ = LayerMajorBatch(self.input_layer, self.trainable_layers, states)
+        pass_.forward()
+        return pass_.outputs()
 
     def _apply_gradients(self, learning_rate: float) -> None:
         optimizer = self.optimizer
@@ -165,10 +211,10 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
         for index, layer in enumerate(self.trainable_layers):
             optimizer.apply(index, layer, learning_rate, batch_size)
 
-    def snapshot(self) -> list[list[tuple[list[float], float]]]:
+    def snapshot(self) -> list[list[Any]]:
         return [layer.snapshot_state() for layer in self.trainable_layers]
 
-    def restore(self, snapshot: list[list[tuple[list[float], float]]]) -> None:
+    def restore(self, snapshot: list[list[Any]]) -> None:
         for layer, layer_snapshot in zip(self.trainable_layers, snapshot):
             layer.restore_state(layer_snapshot)
 
@@ -200,13 +246,11 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
     def _load_legacy(cls, state: dict[str, Any]) -> Self:
         raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
 
-    def checkpoint(self) -> Checkpoint[list[list[tuple[list[float], float]]], list[WeightSetState]]:
+    def checkpoint(self) -> Checkpoint[list[list[Any]], list[WeightSetState]]:
         # the weights and the optimizer's state (checkpoint.py)
         return Checkpoint(self.snapshot(), self.optimizer.state())
 
-    def restore_checkpoint(
-        self, checkpoint: Checkpoint[list[list[tuple[list[float], float]]], list[WeightSetState]]
-    ) -> None:
+    def restore_checkpoint(self, checkpoint: Checkpoint[list[list[Any]], list[WeightSetState]]) -> None:
         self.restore(checkpoint.weights)
         self.optimizer.load_state(checkpoint.optimizer)
 

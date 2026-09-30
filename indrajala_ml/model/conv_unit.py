@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import ClassVar
 
 from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.conv_kernel import ConvKernel
@@ -18,6 +19,9 @@ class ConvUnit(AbstractNode):
     ConvLayer.compute_hidden_deltas), since a conv next layer has no node owning a weight at this
     unit's index.
     """
+
+    # as BackpropNode's: kept per example by the layer-major batch path (layer_major.py)
+    example_fields: ClassVar[tuple[str, ...]] = ("_activation", "delta")
 
     def __init__(self, input_nodes: Sequence[AbstractNode], kernel: ConvKernel) -> None:
 

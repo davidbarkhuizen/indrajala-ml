@@ -49,7 +49,9 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
 
     def learn(self, learning_rate: float, state: tuple[float, ...], category: int) -> None:
         # training mode for the forward pass only, as BackpropClassifierNetwork.learn: a no-op
-        # but for dropout layers, which only a sequential network's specs put here
+        # but for dropout layers, which only a sequential network's specs put here. A network with
+        # batch norm refuses (D4).
+        self._refuse_single_example()
         self._set_training_mode(True)
         try:
             self._forward(state)
@@ -62,9 +64,12 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
         self._learn_batch(learning_rate, batch)
 
     def _backward(self, category: int) -> None:
+        self._output_deltas(category)
+        self._backward_hidden_layers()
+
+    def _output_deltas(self, category: int) -> None:
         for i, node in enumerate(self.output_layer.nodes):
             node.compute_output_delta(1.0 if i == category else 0.0)
-        self._backward_hidden_layers()
 
     def randomize(self) -> None:
         # not BackpropClassifierNetwork's bounds-width scaling, which saturates every sigmoid

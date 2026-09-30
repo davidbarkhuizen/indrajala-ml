@@ -230,8 +230,8 @@ def _chunk_into_batches[T](data: list[T], batch_size: int, drop_single: bool = F
 
 
 def _has_batch_norm(student: object) -> bool:
-    # an array network's batch_norm_index (array_network_base.py); a network without one has no
-    # batch norm
+    # a network's batch_norm_index (array_network_base.py, backprop_network_base.py); a network
+    # without one has no batch norm
     return getattr(student, "batch_norm_index", None) is not None
 
 

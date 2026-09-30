@@ -6,7 +6,7 @@ ConvLayer and MaxPoolLayer satisfy them without a common base class.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 from indrajala_ml.model.base_node import AbstractNode
 
@@ -22,8 +22,14 @@ class WeightSet(Protocol):
     """
     One BackpropNode's or ConvKernel's trained weights and bias, with their gradients accumulated
     over a batch: what the pure-Python optimizer (python_optimizer.py) steps. weights is read-only
-    here, since a node rebinds its weights through set_weights.
+    here, since a node rebinds its weights through set_weights. A batch-norm feature's weights are
+    [gamma] and its bias is beta.
     """
+
+    # weight decay applies to the weights (not to batch norm's gamma, the batch-norm workplan's D7),
+    # and there is a bias to step (not a linear layer's node, D2)
+    weights_decayed: ClassVar[bool]
+    has_bias: ClassVar[bool]
 
     weight_gradient_accum: list[float]
     bias_gradient_accum: float
@@ -64,7 +70,9 @@ class TrainableLayer(InputLayer, Protocol):
     # fan_in_aware_weights_and_bias per node or kernel, in order; a pool layer draws nothing
     def randomize_fan_in_aware(self) -> None: ...
 
-    # a dense or conv layer's (weights, bias) per node or kernel; empty for a pool layer
+    # a dense or conv layer's (weights, bias) per node or kernel, a linear layer's (weights,) per node,
+    # a batch-norm layer's ([gamma], beta, running_mean, running_var) per feature; empty for a pool
+    # layer
     def snapshot_state(self) -> list[Any]: ...
 
     def restore_state(self, layer_snapshot: Any) -> None: ...

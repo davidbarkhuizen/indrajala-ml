@@ -15,7 +15,7 @@ from typing import Any, ClassVar, Literal
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray, sigmoid
-from indrajala_ml.model.linear_array_layer import refuse_single_example
+from indrajala_ml.model.layer_specs import refuse_single_example
 
 
 def sum_rows(values: FloatArray) -> FloatArray:
