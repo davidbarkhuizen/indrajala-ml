@@ -122,8 +122,10 @@ The owner settled D1-D8 on 2026-09-30, each as recommended in the draft.
 network = SequentialArrayNetwork(
     input_shape=(28, 28, 1),
     layers=[
-        Conv(3, 8, activation="linear"), BatchNorm(activation="relu"),
-        Dense(32, activation="linear"), BatchNorm(activation="sigmoid"),
+        Conv(3, 8, activation="linear"),
+        BatchNorm(activation="relu"),
+        Dense(32, activation="linear"),
+        BatchNorm(activation="sigmoid"),
         Dense(10, output=True),
     ],
     update_rule=Momentum(0.9),
