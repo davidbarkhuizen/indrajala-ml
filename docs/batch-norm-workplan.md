@@ -259,7 +259,9 @@ did.
    Each op mirrors the numpy formula. Crate tests check them against their reference formulas.
 2. Bump `rust/`, then add `LinearRustArrayLayer` and `BatchNormRustArrayLayer`.
 3. Tests: bit-identity with numpy for every op and for whole training runs under every rule.
-   - Done: every batch-norm op is numpy's by bits given the same inputs. Whole runs are not, and
+   - Done: every batch-norm op is numpy's by bits given the same inputs, except for the sigmoid's
+     `exp`, whose last bit numpy's `np.exp` computes differently on some CPUs (a CI runner showed
+     it, #497). The tests give the numpy layer the crate's `exp`. Whole runs are not, and
      can't be: the linear layer's `X @ W.T` is BLAS in numpy and the crate's FMA chains in Rust,
      as for every dense layer, and Adam's `1 - beta**t` rounds differently (`powi`). Measured
      after 50 steps: at most 4.4e-12 relative, and the same networks without batch norm 1.2e-12.

@@ -14,6 +14,8 @@ from typing import Any
 import numpy as np
 import pytest
 
+from indrajala_ml.model import batch_norm_array_layer
+from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.backprop_node import sigmoid
 from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
@@ -125,6 +127,19 @@ class _Next:
         return self._downstream
 
 
+@pytest.fixture
+def math_exp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The numpy layer's sigmoid, backprop_node's, with math.exp. exp isn't correctly rounded:
+    np.exp picks its implementation by CPU, and can differ from math.exp in the last bit, which
+    every later value then carries. Everything but exp is compared by bits."""
+
+    def sigmoid_with_math_exp(z: FloatArray) -> FloatArray:
+        return np.vectorize(sigmoid, otypes=[np.float64])(z)
+
+    monkeypatch.setattr(batch_norm_array_layer, "sigmoid", sigmoid_with_math_exp)
+
+
+@pytest.mark.usefixtures("math_exp")
 @pytest.mark.parametrize("activation", ["sigmoid", "relu"])
 @pytest.mark.parametrize("batch_size", [2, 3, 8, 33])
 def test_the_layer_is_numpys_by_bits(activation: Any, batch_size: int):
