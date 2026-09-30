@@ -116,7 +116,14 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
         if spec.activation == "relu":
             del fields["activation"]
         return {"kind": "conv", **fields}
-    kind = "dense" if isinstance(spec, Dense) else "batch_norm" if isinstance(spec, BatchNorm) else "pool"
+    if isinstance(spec, BatchNorm):
+        # an entry without ghost groups as before BatchNorm had a group_size, so those files don't
+        # change; load_network's BatchNorm takes the default
+        fields = asdict(spec)
+        if spec.group_size is None:
+            del fields["group_size"]
+        return {"kind": "batch_norm", **fields}
+    kind = "dense" if isinstance(spec, Dense) else "pool"
     return {"kind": kind, **asdict(spec)}
 
 

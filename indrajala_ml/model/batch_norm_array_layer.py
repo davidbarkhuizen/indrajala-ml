@@ -16,7 +16,10 @@ from typing import Any, ClassVar, Literal
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray, sigmoid
-from indrajala_ml.model.layer_specs import refuse_single_example
+from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
+
+# a group's (m, d, var, std): its value count per feature, and what the backward pass reads
+GroupStats = tuple[int, FloatArray, FloatArray, FloatArray]
 
 
 def sum_rows(values: FloatArray) -> FloatArray:
@@ -38,6 +41,10 @@ class BatchNormArrayLayer:
     size // positions channels in the conv layer's channel-major layout. The statistics are
     computed on the (N * positions, channels) view, whose rows are the README's order: example by
     example, then position by position. The activations and deltas stay channel-major.
+
+    With a group_size, a training batch's ghost groups (layer_specs.ghost_groups, D6) are each
+    normalized as a batch of their own, and move the running averages in turn; the gradients of
+    gamma and beta still sum over the whole batch.
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (False, False)
@@ -49,6 +56,7 @@ class BatchNormArrayLayer:
         epsilon: float,
         running_rate: float,
         positions: int = 1,
+        group_size: int | None = None,
     ) -> None:
         assert positions >= 1 and size % positions == 0, f"{size} values aren't {positions} positions per channel"
         self.size = size
@@ -58,6 +66,7 @@ class BatchNormArrayLayer:
         self.activation = activation
         self.epsilon = epsilon
         self.running_rate = running_rate
+        self.group_size = group_size
         self.training = False
         self._was_training = False
 
@@ -124,6 +133,20 @@ class BatchNormArrayLayer:
 
         if X.shape[0] < 2:
             refuse_single_example(self)
+        self._groups = ghost_groups(X.shape[0], self.group_size)
+        # one group is the whole batch, without copies
+        parts = [self._normalize(X[first:end] if len(self._groups) > 1 else X) for first, end in self._groups]
+        self._stats = [stats for _A, _xhat, stats in parts]
+        if len(parts) == 1:
+            self.A, self._xhat, _stats = parts[0]
+        else:
+            self.A = np.concatenate([A for A, _xhat, _stats in parts])
+            self._xhat = np.concatenate([xhat for _A, xhat, _stats in parts])
+        return self.A
+
+    def _normalize(self, X: FloatArray) -> tuple[FloatArray, FloatArray, GroupStats]:
+        # one group's training forward pass, moving the running averages: its activations, its
+        # x-hat as rows, and (m, d, var, std) for the backward pass
         R = self._rows(X)
         m = R.shape[0]
         mu = sum_rows(R) / m
@@ -131,15 +154,13 @@ class BatchNormArrayLayer:
         ss = sum_rows(d * d)
         var = ss / m
         std = np.sqrt(var + self.epsilon)
-        self._xhat = d / std
-        self.A = self._flat(self._activate(self.gamma * self._xhat + self.beta))
+        xhat = d / std
+        A = self._flat(self._activate(self.gamma * xhat + self.beta))
 
         rate = self.running_rate
         self.running_mean = (1 - rate) * self.running_mean + rate * mu
         self.running_var = (1 - rate) * self.running_var + rate * (ss / (m - 1))
-
-        self._m, self._d, self._var, self._std = m, d, var, std
-        return self.A
+        return A, xhat, (m, d, var, std)
 
     def compute_output_delta(self, reference: FloatArray) -> None:
         raise NotImplementedError("a batch-norm layer is hidden")
@@ -164,11 +185,21 @@ class BatchNormArrayLayer:
         refuse_single_example(self)
 
     def downstream_batch(self) -> FloatArray:
-        # dl/dx, the linear layer's delta: the paper's § 3 chain rule, term by term
-        m, d = self._m, self._d
-        dxhat = self._rows(self.delta_batch) * self.gamma
-        inv_std = 1 / self._std
-        inv_std3 = inv_std / (self._var + self.epsilon)
+        # dl/dx, the linear layer's delta: the paper's § 3 chain rule, term by term, per group
+        if len(self._groups) == 1:
+            return self._downstream(self.delta_batch, self._stats[0])
+        return np.concatenate(
+            [
+                self._downstream(self.delta_batch[first:end], stats)
+                for (first, end), stats in zip(self._groups, self._stats)
+            ]
+        )
+
+    def _downstream(self, delta: FloatArray, stats: GroupStats) -> FloatArray:
+        m, d, var, std = stats
+        dxhat = self._rows(delta) * self.gamma
+        inv_std = 1 / std
+        inv_std3 = inv_std / (var + self.epsilon)
         dvar = sum_rows(dxhat * d * -0.5 * inv_std3)
         dmu = sum_rows(dxhat * -inv_std) + dvar * sum_rows(-2 * d) / m
         return self._flat(dxhat * inv_std + dvar * (2 * d) / m + dmu / m)

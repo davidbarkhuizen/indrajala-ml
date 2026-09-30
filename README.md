@@ -247,10 +247,9 @@ rounds differently when `B` isn't a power of two.
 
 numpy, pure Python and Rust build dense batch norm, `Dense(size, activation="linear"),
 BatchNorm(activation)`, and conv batch norm, `Conv(kernel_size, channel_count, activation="linear"),
-BatchNorm("relu")`, in the Sequential networks under every update rule; no preset has it. Format 2
-saves it (Saving and loading). Ghost batches are still being built
-([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)). This section fixes the forms all three
-implementations are held to.
+BatchNorm("relu")`, in the Sequential networks under every update rule, with or without ghost
+groups (`BatchNorm(group_size=32)`); no preset has it. Format 2 saves it (Saving and loading). This
+section fixes the forms all three implementations are held to.
 
 A pure-Python network with batch norm trains a batch layer by layer (`layer_major.py`): forward
 through each layer for the whole batch, then backward. The other layers run their per-example code
@@ -298,6 +297,21 @@ of `μ_B` and `σ²_B`, not with Algorithm 2 step 11's folded form
 [16] we do not apply weight decay on the learnable BN coefficients (namely, γ and β in [19])"
 (Goyal et al. 2017, § 5.1). Under `WeightDecay` both step with plain SGD, as a bias does.
 
+**Ghost groups** fix the statistics' sample size whatever the batch size, as Goyal et al. 2017 do
+per worker: "if the per-worker sample size n is kept fixed and the total minibatch size is kn, it
+can be viewed a minibatch of k samples with each sample B_j independently selected from X^n, so the
+underlying loss function is unchanged"; "In this work, we use n = 32 […]. If n is adjusted, it
+should be viewed as a hyper-parameter of BN, not of distributed training" (§ 2.3). This is Hoffer
+et al. 2017's ghost batch norm. With a `group_size`, a training batch is split in row order into
+groups of `group_size` examples, the last group the remainder. Each group is normalized, forward and
+backward, with its own statistics, as a batch of its own, `m` its examples (times `P` after a conv
+layer), and moves the running averages in turn, so a batch moves them once per group. The
+gradients of `γ` and `β` still sum over the whole batch. A last group of one example is refused,
+for the reason a batch of one is: it normalizes to 0. A network refuses such a batch before its
+forward pass, and `train_backprop_network_mini_batch` refuses before training a batch size that
+leaves one in its full batches or its final short batch. Without a `group_size`, or with one at
+least the batch's size, the batch is one group: plain batch norm, by bits.
+
 The exact expressions, per feature or channel, with `x_1..x_m` in row order (a conv channel's
 values example by example, then position by position). Every implementation computes these, in
 this grouping, left to right, with no fused multiply-add and no power function, only IEEE 754's
@@ -332,6 +346,9 @@ backward, from delta_i = dl/dy_i (the activation's derivative already applied)
   grad_beta  += sum(delta_i)
 ```
 
+With ghost groups the training forward and backward expressions apply to each group's `x_i`, and
+`grad_gamma` and `grad_beta` to the whole batch's.
+
 `sum` is a left fold from `0.0` in that row order, the crate's order (`sum_axis0`, and the conv
 `grad_b` sum). numpy's own reductions follow it only in some layouts
 (`tests/test_summation_order.py`): `X.sum(axis=0)` does across two or more features, but sums a
@@ -340,7 +357,8 @@ numpy layers sum with `np.cumsum` along the summed axis, which does at every sha
 pure-Python layer sums with an explicit loop: the builtin `sum` adds floats with compensated
 summation since Python 3.12. Given the same inputs, the pure-Python, numpy and Rust layers compute the same
 bits, except for a sigmoid's `exp` (`tests/test_batch_norm_python_network.py`,
-`tests/test_batch_norm_rust_network.py`, and their conv counterparts). Whole
+`tests/test_batch_norm_rust_network.py`, their conv counterparts, and
+`tests/test_batch_norm_ghost_groups.py`). Whole
 networks agree within their dense and conv layers' rounding only, which differs with or without batch norm:
 the pure-Python parity tolerance, and between numpy and Rust, BLAS's products against the crate's. Only
 `+ − × ÷` and `sqrt` appear, each correctly rounded in IEEE 754, so every implementation that

@@ -33,6 +33,7 @@ from indrajala_ml.model.layer_specs import (
     InputShape,
     LayerSpec,
     batch_norm_index,
+    refuse_single_example_groups,
     refuse_single_example_network,
 )
 from indrajala_ml.model.model_io import load_json, save_json
@@ -211,8 +212,10 @@ class ArrayNetworkBase[A: BackendArray]:
 
     def _learn_batch_input(self, learning_rate: float, X: A, categories: Sequence[Any]) -> None:
         batch_size = len(categories)
-        if batch_size == 1 and self.batch_norm_index is not None:
-            self._refuse_single_example(self.batch_norm_index)
+        if self.batch_norm_index is not None:
+            if batch_size == 1:
+                self._refuse_single_example(self.batch_norm_index)
+            refuse_single_example_groups(self.layer_specs, batch_size)
 
         activations = [X]
         self._set_training_mode(True)

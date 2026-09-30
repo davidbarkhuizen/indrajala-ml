@@ -24,6 +24,7 @@ from indrajala_ml.model.layer_specs import (
     InputShape,
     LayerSpec,
     batch_norm_index,
+    refuse_single_example_groups,
     refuse_single_example_network,
 )
 from indrajala_ml.model.model_io import load_json, save_json
@@ -162,6 +163,7 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
         if self.batch_norm_index is not None:
             if len(batch) == 1:
                 self._refuse_single_example()
+            refuse_single_example_groups(self.layer_specs, len(batch))
             self._learn_batch_layer_major(learning_rate, batch)
             return
         self._set_training_mode(True)
