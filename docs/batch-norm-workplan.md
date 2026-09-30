@@ -1,6 +1,6 @@
 # Workplan: batch normalization
 
-**Status: stages 0-3 and 4a (numpy) done (2026-09-30); stage 4b next. Decisions D1-D8 settled by the owner (2026-09-30).**
+**Status: stages 0-3, 4a (numpy) and 4b (pure Python) done (2026-09-30); stage 4c next. Decisions D1-D8 settled by the owner (2026-09-30).**
 
 This is step 2 of [primitives-roadmap.md](primitives-roadmap.md). It adds one new layer kind,
 batch normalization (Ioffe & Szegedy 2015), for dense and conv networks, under every update rule,
@@ -283,6 +283,11 @@ Split as 4a numpy, 4b pure Python, 4c Rust (a crate PR, then the bump), each one
   positions)`, which computes the dense layer's expressions on the `(N * P, C)` view of the conv
   layer's channel-major `(N, C * P)`, so its rows are the README's order and `m = N * P`. Format 2
   leaves `activation` out of a ReLU conv entry, so saved files don't change.
+- 4b, done: `LinearConvLayer` (`LinearConvKernel` without a bias, `LinearConvUnit` without the
+  bias and the ReLU), and `BatchNormLayer(..., positions)`: a `BatchNormNode` per channel holds its
+  parameters and its lists in the README's order, and a `BatchNormPosition` per value is the layer's
+  node. The layer-major path needed no change. Given the same inputs the layer is numpy's by bits;
+  whole networks agree within the pure-Python parity tolerance (at most 1.1e-12 relative, 20 steps).
 
 ### Stage 5: format 2, load_network and the docs
 

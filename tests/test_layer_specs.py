@@ -82,8 +82,8 @@ BATCH_NORM: dict[str, list[LayerSpec]] = {
     "rate of 1": [LINEAR, BatchNorm(running_rate=1.0), OUTPUT],
 }
 
-# conv batch norm's pairs: accepted, and built by numpy (stage 4a); pure Python (4b) and Rust (4c)
-# refuse them, naming their stage
+# conv batch norm's pairs: accepted, and built by numpy (stage 4a) and pure Python (4b,
+# tests/test_python_layer_builder.py); Rust refuses them until stage 4c
 CONV_BATCH_NORM: dict[str, list[LayerSpec]] = {
     "conv": [LINEAR_CONV, BatchNorm("relu"), OUTPUT],
     "conv pool": [LINEAR_CONV, BatchNorm("relu"), Pool(2), OUTPUT],

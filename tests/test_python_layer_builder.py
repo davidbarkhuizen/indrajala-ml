@@ -15,6 +15,7 @@ from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.cross_entropy_output_layer import CrossEntropyOutputLayer
 from indrajala_ml.model.dropout_layer import TrainingModeNode
 from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, InputShape, LayerSpec, Pool
+from indrajala_ml.model.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.linear_layer import LinearLayer
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer
 from indrajala_ml.model.python_layer_builder import build_python_layers
@@ -53,9 +54,10 @@ def test_every_batch_norm_pair_builds(specs: list[LayerSpec]):
 
 
 @pytest.mark.parametrize("specs", CONV_BATCH_NORM.values(), ids=CONV_BATCH_NORM.keys())
-def test_conv_batch_norm_is_refused_until_stage_4b(specs: list[LayerSpec]):
-    with pytest.raises(NotImplementedError, match="stage 4b"):
-        _build(specs, (8, 8, 1))
+def test_every_conv_batch_norm_pair_builds(specs: list[LayerSpec]):
+    layers = _build(specs, (8, 8, 1))
+    assert len(layers) == len(specs)
+    assert type(layers[0]) is LinearConvLayer or type(layers[1]) is LinearConvLayer
 
 
 @pytest.mark.parametrize("specs", INVALID.values(), ids=INVALID.keys())

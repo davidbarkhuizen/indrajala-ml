@@ -19,7 +19,6 @@ from indrajala_ml.model.conv_array_layer import ConvArrayLayer, LinearConvArrayL
 from indrajala_ml.model.format2 import layer_to_json
 from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, UpdateRule, WeightDecay
 from tests.gradient_check import check_gradients
 from tests.test_batch_norm_array_network import EPSILON, RATE, RULES, SOFTMAX, _bits, _Next, _reference
@@ -311,11 +310,6 @@ def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
 def test_rust_refuses_conv_batch_norm_until_stage_4c():
     with pytest.raises(NotImplementedError, match="stage 4c"):
         SequentialArrayNetwork(INPUT, NETWORKS["conv"], SGD(), backend=RUST)
-
-
-def test_pure_python_refuses_conv_batch_norm_until_stage_4b():
-    with pytest.raises(NotImplementedError, match="stage 4b"):
-        SequentialMultiClassBackpropClassifierNetwork(INPUT, NETWORKS["conv"], SGD())
 
 
 def test_saving_conv_batch_norm_is_refused_until_stage_5_and_a_relu_conv_entry_is_unchanged(tmp_path: Any):
