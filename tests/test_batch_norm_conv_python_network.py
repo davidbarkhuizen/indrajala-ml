@@ -307,11 +307,6 @@ def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
     assert _bits(network.snapshot()) == trained
 
 
-def test_saving_conv_batch_norm_is_refused_until_stage_5(tmp_path: Any):
-    with pytest.raises(NotImplementedError, match="stage 5"):
-        _network().save(str(tmp_path / "model.json"))
-
-
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
 @pytest.mark.parametrize("name", NETWORKS)
 def test_training_matches_numpy_within_the_parity_tolerance(name: str, rule: UpdateRule):

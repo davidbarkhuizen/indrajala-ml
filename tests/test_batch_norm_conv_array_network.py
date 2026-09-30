@@ -16,7 +16,6 @@ from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
-from indrajala_ml.model.format2 import layer_to_json
 from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, UpdateRule, WeightDecay
@@ -305,9 +304,3 @@ def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
     network.learn_batch(0.1, _rows(5, seed=7))
     network.learn_batch(0.1, _rows(4, seed=8))
     assert _bits(network.snapshot()) == trained
-
-
-def test_saving_conv_batch_norm_is_refused_until_stage_5_and_a_relu_conv_entry_is_unchanged(tmp_path: Any):
-    with pytest.raises(NotImplementedError, match="stage 5"):
-        _network().save(str(tmp_path / "model.json"))
-    assert layer_to_json(Conv(3, 8, stride=2)) == {"kind": "conv", "kernel_size": 3, "channel_count": 8, "stride": 2}

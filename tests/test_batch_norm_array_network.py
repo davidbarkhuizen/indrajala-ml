@@ -398,8 +398,3 @@ def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
     network.learn_batch(0.1, _rows(5, seed=7))
     network.learn_batch(0.1, _rows(4, seed=8))
     assert _bits(network.snapshot()) == trained
-
-
-def test_saving_batch_norm_is_refused_until_stage_5(tmp_path: Any):
-    with pytest.raises(NotImplementedError, match="stage 5"):
-        _network().save(str(tmp_path / "model.json"))
