@@ -103,26 +103,84 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 ## Models
 
 `LinearClassifierNetwork` is Rosenblatt's perceptron / MADALINE, trained with the
-minimum-disturbance rule. Backprop networks come in three implementations of the same maths:
+minimum-disturbance rule. A backprop network is a list of layer specs and one update rule, built
+in any of three implementations of the same maths:
 
-| Implementation | Base | Class prefix |
+```python
+from indrajala_ml.model.array_backend import RUST
+from indrajala_ml.model.layer_specs import Conv, Dense, Pool
+from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.update_rules import Momentum
+
+network = SequentialArrayNetwork(
+    input_shape=(28, 28, 1),
+    layers=[Conv(5, 8), Pool(2), Dense(30), Dense(10, output=True)],
+    update_rule=Momentum(0.9),
+    shape="multiclass",  # or "single_output"
+    backend=RUST,  # or NUMPY
+)
+```
+
+- **Layer specs** (`layer_specs.py`) are backend-free data: `Dense(size, activation, dropout)`
+  (sigmoid or ReLU, dropout on sigmoid only), `Conv(kernel_size, channel_count, stride)`,
+  `Pool(pool_size, stride)`, and the output layer `Dense(size, output=True, activation, loss)`
+  (sigmoid with the squared or cross-entropy loss, or softmax with cross-entropy). Activations are
+  fused into their layer. `validate_layer_specs` refuses a list that some implementation can't
+  build.
+- **Update rules** (`update_rules.py`) are data too: `SGD`, `Momentum`, `Adam` and `WeightDecay`
+  (see Update rules, below).
+- **The optimizer** holds all of a network's update state: `NumpyOptimizer` and `RustOptimizer`
+  (`optimizers.py`), `PythonOptimizer` (`python_optimizer.py`). It keeps momentum's velocities and
+  Adam's moments by layer position, with one step count `t`. `checkpoint()` and format 2 save
+  it. Layers keep their weights and gradients, and no update formula.
+- **Builders** map each spec to an implementation's layer classes: `array_layer_builder.py` for
+  numpy and Rust, `python_layer_builder.py` for pure Python.
+
+| Implementation | Base | Sequential network |
 | --- | --- | --- |
-| pure Python, one object per node | `BackpropNetworkBase` | `Backprop…`, `MultiClassBackprop…` |
-| numpy arrays | `ArrayNetworkBase` | `Array…`, `Vectorized…` |
-| Rust arrays (production backend) | `RustArrayNetworkBase` | `RustArray…` |
+| pure Python, one object per node | `BackpropNetworkBase` | `SequentialMultiClassBackpropClassifierNetwork`, `SequentialBackpropClassifierNetwork` (`sequential_backprop_network.py`) |
+| numpy arrays | `ArrayNetworkBase` | `SequentialArrayNetwork(..., backend=NUMPY)` |
+| Rust arrays (production backend) | `RustArrayNetworkBase` | `SequentialArrayNetwork(..., backend=RUST)` |
 
 The numpy and Rust networks are one implementation: `ArrayNetworkBase` calls the few array
 operations that differ through a backend object (`array_backend.py`), and `RustArrayNetworkBase`
-is the subclass that sets the Rust backend. A network's layers are layer specs
-(`layer_specs.py`), which `array_layer_builder.py` maps to each backend's layer classes, and
-`SequentialArrayNetwork` (`sequential_array_network.py`) builds a network of any accepted specs and
-update rule. Only the layers are written once per backend.
-
-Each implementation has variants for the same set of features, named by a prefix on the class:
-`ReLU`, `Softmax`, `CrossEntropy`, `L2`, `Momentum`, `Adam`, `Dropout`, `Ensemble`. Convolution,
-max pooling and momentum conv (`Conv…`, `MaxPool…`, `MomentumConv…`) exist in all three
-implementations. The numpy classes are the reference the Rust classes are tested against
+is the subclass that sets the Rust backend. Only the layers are written once per backend. The
+numpy classes are the reference the Rust classes are tested against
 (`tests/test_*fused_layer_ops.py`, `tests/test_numerical_parity.py`).
+
+### Presets
+
+A preset is a named class for one fixed combination of specs and rule, with its own constructor
+arguments. It equals, by bits, the Sequential network of the same specs and rule
+(`tests/array_network_contract.py`, `tests/test_sequential_backprop_network.py`). The demos,
+`ensemble_train.py` and saved files use the presets by name.
+
+| Layers and rule | pure Python | numpy | Rust |
+| --- | --- | --- | --- |
+| sigmoid, one output, `SGD` | `BackpropClassifierNetwork` | `ArrayBackpropClassifierNetwork` | `RustArrayBackpropClassifierNetwork` |
+| … cross-entropy loss | `BinaryCrossEntropyBackpropClassifierNetwork` | `CrossEntropyArrayBackpropClassifierNetwork` | `CrossEntropyRustArrayBackpropClassifierNetwork` |
+| … fan-in-aware initialization | `FanInAwareBackpropClassifierNetwork` | | |
+| … ReLU hidden layers | `ReLUBackpropClassifierNetwork` | | |
+| … dropout | `DropoutBackpropClassifierNetwork` | | |
+| … `Momentum` | `MomentumBackpropClassifierNetwork` | | |
+| … `Adam` | `AdamBackpropClassifierNetwork` | | |
+| … `WeightDecay` | `L2RegularizedBackpropClassifierNetwork` | | |
+| one-vs-rest ensemble of one-output networks | `EnsembleBackpropClassifierNetwork` | `EnsembleArrayBackpropClassifierNetwork` | `EnsembleRustArrayBackpropClassifierNetwork` |
+| sigmoid, multiclass, `SGD` | `MultiClassBackpropClassifierNetwork` | `VectorizedMultiClassBackpropClassifierNetwork` | `RustArrayMultiClassBackpropClassifierNetwork` |
+| … cross-entropy loss | | `CrossEntropyVectorizedMultiClassBackpropClassifierNetwork` | `CrossEntropyRustArrayMultiClassBackpropClassifierNetwork` |
+| … softmax output, cross-entropy loss | `SoftmaxMultiClassBackpropClassifierNetwork` | `SoftmaxVectorizedMultiClassBackpropClassifierNetwork` | `SoftmaxRustArrayMultiClassBackpropClassifierNetwork` |
+| … ReLU hidden layers | | `ReLUVectorizedMultiClassBackpropClassifierNetwork` | `ReLURustArrayMultiClassBackpropClassifierNetwork` |
+| … dropout | | `DropoutVectorizedMultiClassBackpropClassifierNetwork` | `DropoutRustArrayMultiClassBackpropClassifierNetwork` |
+| … `Momentum` | | `MomentumVectorizedMultiClassBackpropClassifierNetwork` | `MomentumRustArrayMultiClassBackpropClassifierNetwork` |
+| … `Adam` | | `AdamVectorizedMultiClassBackpropClassifierNetwork` | `AdamRustArrayMultiClassBackpropClassifierNetwork` |
+| … `WeightDecay` | | `L2VectorizedMultiClassBackpropClassifierNetwork` | `L2RustArrayMultiClassBackpropClassifierNetwork` |
+| conv and pool, then sigmoid multiclass, `SGD` | `ConvMultiClassBackpropClassifierNetwork` | `ConvVectorizedMultiClassBackpropClassifierNetwork` | `ConvRustArrayMultiClassBackpropClassifierNetwork` |
+| … `Momentum` | `MomentumConvMultiClassBackpropClassifierNetwork` | `MomentumConvVectorizedMultiClassBackpropClassifierNetwork` | `MomentumConvRustArrayMultiClassBackpropClassifierNetwork` |
+
+An empty cell has no preset, but the Sequential network of that implementation builds the
+combination, so each array preset has a pure-Python parity reference. Combinations the Sequential
+networks build that no preset has, and those still out of reach, are listed in
+[docs/composable-layers-workplan.md](docs/composable-layers-workplan.md), After this plan.
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,
 hand-computed examples, and the reference the array implementations are checked against. It is
@@ -167,10 +225,10 @@ gradient summed over a batch of `B` examples, so `g / B` is the mean gradient.
 
 | Rule | Form | Source |
 | --- | --- | --- |
-| SGD | `w - lr * (g / B)` | Goyal et al. 2017, eq. (2) |
-| L2 weight decay (`L2…`) | `w - lr * (g / B + λ * w)`; the bias is plain SGD | Goyal et al. 2017, eq. (8) |
-| Adam (`Adam…`) | Algorithm 1, on `g / B` | Kingma & Ba 2014 |
-| momentum (`Momentum…`) | `u = m * u + g / B; w - lr * u` | Goyal et al. 2017, eq. (9) |
+| `SGD` | `w - lr * (g / B)` | Goyal et al. 2017, eq. (2) |
+| L2 weight decay (`WeightDecay`) | `w - lr * (g / B + λ * w)`; the bias is plain SGD | Goyal et al. 2017, eq. (8) |
+| `Adam` | Algorithm 1, on `g / B` | Kingma & Ba 2014 |
+| `Momentum` | `u = m * u + g / B; w - lr * u` | Goyal et al. 2017, eq. (9) |
 
 For momentum the literature has competing forms. Rumelhart et al. 1986's, Goyal et al.'s eq. (10),
 folds the rate into the velocity, `v = lr * g / B + m * v; w - v`, and so needs a correction

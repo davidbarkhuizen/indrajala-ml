@@ -14,14 +14,18 @@ connection, no recurrence and no attention.
 
 ## The order
 
-1. **Composable layers and optimizers** (a refactor, before the next primitive): workplan in
-   [composable-layers-workplan.md](composable-layers-workplan.md).
+1. **Composable layers and optimizers** (a refactor, before the next primitive): done
+   (2026-09-30), workplan in [composable-layers-workplan.md](composable-layers-workplan.md).
 2. **Batch normalization**, then the conv batch-size study with it.
 3. **Residual connections.**
 4. **Layer normalization and single-head self-attention**, as a patch model on MNIST.
 5. **Multi-head attention and a full transformer block.**
 
 ## 1. Composable layers and optimizers first
+
+**Done (2026-09-30).** A network is a list of layer specs and one update rule, stepped by one
+optimizer per network, in all three implementations (README, Models). The named classes are
+presets of that. The rest of this section is the case as it was made.
 
 Every feature so far is a sibling class per backend: `Momentum…`, `Conv…`, `MomentumConv…`.
 Combining two features costs planned stages: momentum with conv took three PRs (#448, #451,
