@@ -3,10 +3,13 @@ scripts/ab.py: the report on archived A/Bs (tests/fixtures/ab/, each with the ta
 published), and run/extend end to end on a toy probe in a temporary repository. Nothing is timed.
 """
 
+import base64
+import hashlib
 import json
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -168,6 +171,7 @@ def test_probe_rows_follow_the_contract(tmp_path: Path) -> None:
 # ---- run and extend on a toy repository
 
 PROBE = """\
+import hashlib
 import json
 from indrajala_ml import toy
 for i in range(3):
@@ -405,3 +409,115 @@ def test_every_adapter_names_its_script_and_output(tmp_path: Path) -> None:
         command = adapter.command(ab.REPO, list(adapter.default_args), tmp_path / "out.json")
         assert Path(command[0]) == ab.REPO / f"scripts/{adapter.name}.py" and Path(command[0]).is_file()
         assert command[-1] == str(tmp_path / "out.json")
+
+
+# ---- stage 3: crate A/Bs, on fake extension modules (nothing is built)
+
+
+def _fake_wheel(directory: Path, extension: bytes) -> Path:
+    """A minimal wheel of an indrajala_math_rust package whose "extension" is the given bytes."""
+    info = "indrajala_math_rust-0.1.0.dist-info"
+    files = {
+        "indrajala_math_rust/__init__.py": b"",
+        "indrajala_math_rust/indrajala_math_rust.cpython-314-x86_64-linux-gnu.so": extension,
+        f"{info}/METADATA": b"Metadata-Version: 2.1\nName: indrajala-math-rust\nVersion: 0.1.0\n",
+        f"{info}/WHEEL": b"Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+    }
+    record = [
+        f"{name},sha256={base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b'=').decode()},{len(data)}"
+        for name, data in files.items()
+    ]
+    directory.mkdir(parents=True, exist_ok=True)
+    wheel = directory / "indrajala_math_rust-0.1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for name, data in files.items():
+            archive.writestr(name, data)
+        archive.writestr(f"{info}/RECORD", "\n".join([*record, f"{info}/RECORD,,"]) + "\n")
+    return wheel
+
+
+@pytest.fixture
+def toy_crates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, toy_repo: Path) -> list[str]:
+    """Two commits of a toy crate repository, each with a cached fake wheel."""
+    crate_repo = tmp_path / "crate"
+    crate_repo.mkdir()
+    _git(crate_repo, "init", "-q", "-b", "main")
+    commits: list[str] = []
+    for version in ("1", "2"):
+        (crate_repo / "src.rs").write_text(f"// {version}\n")
+        _git(crate_repo, "add", ".")
+        _git(crate_repo, "commit", "-q", "-m", version)
+        commits.append(
+            subprocess.run(
+                ["git", "-C", str(crate_repo), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+        )
+    monkeypatch.setattr(ab, "CRATE_REPO", crate_repo)
+    for commit in commits:
+        _fake_wheel(ab._wheel_dir(commit), f"extension {commit}".encode())
+    return commits
+
+
+def test_ensure_site_installs_the_wheel_outside_the_venv(toy_crates: list[str]) -> None:
+    site, sha = ab.ensure_site(toy_crates[0])
+    extension = site / "indrajala_math_rust/indrajala_math_rust.cpython-314-x86_64-linux-gnu.so"
+    assert extension.read_bytes() == f"extension {toy_crates[0]}".encode()
+    assert sha == hashlib.sha256(extension.read_bytes()).hexdigest()
+    assert site.is_relative_to(ab.RUNS_ROOT / "wheels")
+    assert ab.ensure_site(toy_crates[0]) == (site, sha)  # cached: installed once
+
+
+def test_provenance_checks_the_sides_extension(toy_repo: Path, toy_crates: list[str], tmp_path: Path) -> None:
+    (old_site, old_sha), (_, new_sha) = ab.ensure_site(toy_crates[0]), ab.ensure_site(toy_crates[1])
+    found = ab.check_provenance(tmp_path, toy_repo, ab._pass_env(toy_repo, str(old_site)), old_sha)
+    assert Path(found["extension"]).is_relative_to(old_site)
+    with pytest.raises(ab.AbError, match="not the side's"):
+        ab.check_provenance(tmp_path, toy_repo, ab._pass_env(toy_repo, str(old_site)), new_sha)
+
+
+def test_resolve_crate_takes_short_refs(toy_crates: list[str]) -> None:
+    assert ab.resolve_crate(toy_crates[0][:7]) == toy_crates[0]
+    with pytest.raises(ab.AbError):
+        ab.resolve_crate("0000000")  # not there, and the toy repository has no origin to fetch
+
+
+def test_crate_ab_end_to_end(toy_repo: Path, toy_crates: list[str], capsys: pytest.CaptureFixture[str]) -> None:
+    old, new = toy_crates
+    args = ["run", "--bench", "cmd", "--old", "HEAD", "--order", "ONNO", "--skip-profile"]
+    assert _run(toy_repo, *args, "--old-crate", old[:7], "--new-crate", new[:7], "--", "scripts/probe.py") == 0
+    manifest = json.loads((ab.find_run(None) / "manifest.json").read_text())
+    assert (manifest["old"]["crate"], manifest["new"]["crate"]) == (old, new)
+    for record in manifest["passes"]:
+        side = manifest[record["side"]]
+        assert Path(record["provenance"]["extension"]).is_relative_to(side["site"])
+        assert record["provenance"]["sha256"] == side["extension_sha"]
+    assert manifest["old"]["extension_sha"] != manifest["new"]["extension_sha"]
+    capsys.readouterr()
+    assert _run(toy_repo, "report", "--brief") == 0
+    header = capsys.readouterr().out.splitlines()[0]
+    assert header.endswith(
+        f"; crate old {old[:7]} (.so {manifest['old']['extension_sha'][:12]}) "
+        f"vs new {new[:7]} (.so {manifest['new']['extension_sha'][:12]})"
+    )
+
+
+def test_clean_removes_unreferenced_wheels(
+    toy_repo: Path, toy_crates: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    old, new = toy_crates
+    args = ["run", "--bench", "cmd", "--old", "HEAD", "--order", "ON", "--skip-profile"]
+    assert _run(toy_repo, *args, "--old-crate", old, "--new-crate", new, "--", "scripts/probe.py") == 0
+    _fake_wheel(ab._wheel_dir("f" * 40), b"stray")
+    (ab.RUNS_ROOT / "wheels/target").mkdir()
+    capsys.readouterr()
+    assert _run(toy_repo, "clean", "--wheels") == 0
+    assert capsys.readouterr().out == "removed 1 wheels (fffffff), kept 2\n"
+    assert (ab.RUNS_ROOT / "wheels/target").is_dir() and ab._wheel_dir(old).is_dir()
+
+
+def test_the_machine_line_says_when_load_follows_crate_builds() -> None:
+    manifest = {"preflight": {"profile": "identity matches", "load": [2.3, 1.6, 1.7], "after_builds": ["a" * 40]}}
+    line = ab._machine_line(manifest | {"extends": [], "passes": []})
+    assert line.startswith(
+        "profile: identity matches; max 1-min load 2.30 (HIGH) (measured just after this run's crate builds)"
+    )

@@ -6,10 +6,12 @@ docs/optimizations/measurement.md (docs/ab-harness-workplan.md has the design):
                              [--name NAME] [--control-backend numpy] [--script-from new]
                              [--allow-profile-change] [-- <benchmark arguments>]
     python scripts/ab.py run --bench cmd [...] -- probe.py [probe arguments]
+    python scripts/ab.py run --bench prepared_dataset_timing --old main --new main --old-crate 638ff13
+                             --new-crate 750d83a --control-backend numpy
     python scripts/ab.py status [RUN]
     python scripts/ab.py extend [RUN] --order NO
     python scripts/ab.py report [RUN] [--brief] [--md FILE]
-    python scripts/ab.py clean --worktrees
+    python scripts/ab.py clean [--worktrees] [--wheels]
 
 Each side is a commit, checked out once as a detached worktree under ~/code/ab-worktrees/<sha7>.
 A run lives in ~/code/ab-runs/<YYYY-MM-DD>-<name>/ (manifest.json, progress.jsonl, and each pass's
@@ -34,15 +36,22 @@ medians in the same direction; the report names the `extend` order that balances
 Benchmarks: prepared_dataset_timing (control: `prepare`, plus the other backend's rows with
 --control-backend), and cmd, a probe that prints one JSON object per line to stdout:
 {"case": ..., "metric": ..., "value": ..., "unit": ...} (optionally "control": true).
-The crate is the venv's on both sides; commits whose rust/ submodules differ are refused.
+Crate A/Bs: when the sides' crate commits differ (each tree's rust/ submodule, or --old-crate /
+--new-crate, which alone make a crate-only A/B), each crate commit is built once into a release
+wheel under ~/code/ab-runs/wheels/<sha>/ (from a `git archive` of ~/code/indrajala-math-rust, with
+the toolchain it pins) and installed with `pip install --target` into a site directory there,
+which goes on PYTHONPATH after the tree; each pass checks the extension's hash. The venv is never
+touched. When they are equal, both sides use the venv's extension.
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
+import shutil
 import statistics
 import subprocess
 import sys
@@ -54,6 +63,7 @@ from typing import Any, Protocol
 REPO = Path(__file__).resolve().parent.parent
 RUNS_ROOT = Path(os.environ.get("AB_RUNS_ROOT", Path.home() / "code/ab-runs"))
 WORKTREES_ROOT = Path(os.environ.get("AB_WORKTREES_ROOT", Path.home() / "code/ab-worktrees"))
+CRATE_REPO = Path(os.environ.get("AB_CRATE_REPO", Path.home() / "code/indrajala-math-rust"))
 CARGO_BIN = Path.home() / ".cargo/bin"
 PROFILE_REFERENCE = "docs/machine_profiles/ryzen7-3700u.json"
 THREAD_VARS = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")
@@ -465,12 +475,109 @@ def _crate_commit(repo: Path, commit: str) -> str | None:
     return listing.split()[2] if listing else None
 
 
+# ---- crate builds (stage 3): one wheel per crate commit, installed into a site directory
+
+
+def _wheels_root() -> Path:
+    return RUNS_ROOT / "wheels"
+
+
+def _wheel_dir(crate: str) -> Path:
+    return _wheels_root() / crate
+
+
+BUILT: list[str] = []  # crate commits built by this process, for the machine line
+
+
+def ensure_wheel(crate: str) -> Path:
+    """The cached release wheel of crate commit `crate`, built once from a `git archive` of the
+    crate repository (fetched first if the commit is missing) with the toolchain it pins."""
+    wheel_dir = _wheel_dir(crate)
+    wheels = sorted(wheel_dir.glob("*.whl"))
+    if wheels:
+        return wheels[-1]
+    BUILT.append(crate)
+    wheel_dir.mkdir(parents=True, exist_ok=True)
+    if subprocess.run(["git", "-C", str(CRATE_REPO), "cat-file", "-e", f"{crate}^{{commit}}"], check=False).returncode:
+        _git(CRATE_REPO, "fetch", "--quiet", "origin")
+    source = wheel_dir / "src"
+    shutil.rmtree(source, ignore_errors=True)
+    source.mkdir()
+    archive = subprocess.run(["git", "-C", str(CRATE_REPO), "archive", crate], check=False, capture_output=True)
+    if archive.returncode:
+        raise AbError(f"crate {crate[:7]}: git archive failed", archive.stderr.decode().splitlines())
+    subprocess.run(["tar", "-x", "-C", str(source)], input=archive.stdout, check=True)
+    env = _pass_env(source)
+    env.pop("PYTHONPATH")
+    env["CARGO_TARGET_DIR"] = str(_wheels_root() / "target")  # shared, so later builds are incremental
+    log = wheel_dir / "build.log"
+    maturin = Path(sys.executable).parent / "maturin"
+    with open(log, "w") as out:
+        command = [str(maturin), "build", "--release", "--interpreter", sys.executable, "--out", str(wheel_dir)]
+        code = subprocess.run(
+            command, check=False, cwd=source, env=env, stdout=out, stderr=subprocess.STDOUT
+        ).returncode
+    shutil.rmtree(source, ignore_errors=True)
+    wheels = sorted(wheel_dir.glob("*.whl"))
+    if code or not wheels:
+        raise AbError(f"crate {crate[:7]}: maturin build failed (log: {log})", _tail(log))
+    return wheels[-1]
+
+
+def ensure_site(crate: str) -> tuple[Path, str]:
+    """(site directory holding crate's extension, the extension's sha256): the cached wheel
+    installed with `pip --target`, never into the venv."""
+    site = _wheel_dir(crate) / "site"
+    if not site.is_dir():
+        wheel = ensure_wheel(crate)
+        tmp = site.with_name("site.tmp")
+        shutil.rmtree(tmp, ignore_errors=True)
+        command = [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--quiet",
+            "--no-deps",
+            "--no-index",
+            "--target",
+            str(tmp),
+            str(wheel),
+        ]
+        result = subprocess.run(command, check=False, capture_output=True, text=True)
+        if result.returncode:
+            raise AbError(f"crate {crate[:7]}: pip install --target failed", result.stderr.splitlines())
+        tmp.rename(site)
+    extensions = sorted((site / "indrajala_math_rust").glob("*.so"))
+    if not extensions:
+        raise AbError(f"crate {crate[:7]}: no extension module in {site}")
+    return site, hashlib.sha256(extensions[0].read_bytes()).hexdigest()
+
+
+def resolve_crate(ref: str) -> str:
+    """A crate commit's full sha from the crate repository, fetching once if it isn't there."""
+    for attempt in range(2):
+        result = subprocess.run(
+            ["git", "-C", str(CRATE_REPO), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+        if attempt == 0:
+            _git(CRATE_REPO, "fetch", "--quiet", "origin")
+    raise AbError(f"crate commit {ref!r} not found in {CRATE_REPO}")
+
+
 # ---- passes
 
 
-def _pass_env(tree: Path) -> dict[str, str]:
+def _pass_env(tree: Path, site: str | None = None) -> dict[str, str]:
+    """The environment of a process on one side: its tree, then its crate's site directory when the
+    crate is switched, on PYTHONPATH (ahead of the venv's own extension)."""
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(tree)
+    env["PYTHONPATH"] = str(tree) + (f"{os.pathsep}{site}" if site else "")
     env["PATH"] = f"{CARGO_BIN}{os.pathsep}{env.get('PATH', '')}"
     return env
 
@@ -487,7 +594,10 @@ def check_provenance(run_dir: Path, tree: Path, env: dict[str, str], extension_s
     if not Path(found["train"]).resolve().is_relative_to(tree.resolve()):
         raise AbError(f"provenance: indrajala_ml.train imported from {found['train']}, not from {tree}")
     if extension_sha is not None and found["sha256"] != extension_sha:
-        raise AbError(f"provenance: crate extension {found['extension']} hash changed during the run")
+        raise AbError(
+            f"provenance: crate extension {found['extension']} has sha256 {str(found['sha256'])[:12]}, "
+            f"not the side's {extension_sha[:12]}"
+        )
     return found
 
 
@@ -497,11 +607,15 @@ def _run_step(
     """Provenance, then the benchmark once on side, writing stem.{json,stdout,stderr}."""
     adapter = ADAPTERS[manifest["bench"]]
     tree = Path(manifest[side]["tree"])
-    env = _pass_env(tree)
-    extension = manifest.get("extension")
-    provenance = check_provenance(run_dir, tree, env, extension["sha256"] if extension else None)
-    if extension is None:
-        manifest["extension"] = {"file": provenance["extension"], "sha256": provenance["sha256"]}
+    site = manifest[side].get("site")
+    env = _pass_env(tree, site)
+    if site:  # a switched crate: the side's own build, from its site directory
+        provenance = check_provenance(run_dir, tree, env, manifest[side]["extension_sha"])
+    else:  # both sides on the venv's extension, which must not change during the run
+        extension = manifest.get("extension")
+        provenance = check_provenance(run_dir, tree, env, extension["sha256"] if extension else None)
+        if extension is None:
+            manifest["extension"] = {"file": provenance["extension"], "sha256": provenance["sha256"]}
     script_tree = Path(manifest[manifest["script_from"]]["tree"])
     command = [sys.executable, *adapter.command(script_tree, args, run_dir / f"{stem}.json")]
     with open(run_dir / f"{stem}.stdout", "w") as out, open(run_dir / f"{stem}.stderr", "w") as err:
@@ -623,9 +737,10 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
     }
     if args.new == "HEAD" and _git(repo, "status", "--porcelain", "--untracked-files=no", "--", *DIRTY_PATHS):
         raise AbError(f"uncommitted changes under {', '.join(DIRTY_PATHS)}: commit them first (--new is HEAD)")
-    crates = {side: _crate_commit(repo, commit) for side, commit in commits.items()}
-    if crates["old"] != crates["new"]:
-        raise AbError("the sides' rust/ submodules differ: crate A/Bs arrive in stage 3 of the workplan")
+    crates: dict[str, str | None] = {}
+    for side, commit in commits.items():
+        ref: str | None = getattr(args, f"{side}_crate")
+        crates[side] = resolve_crate(ref) if ref else _crate_commit(repo, commit)
     bench_args = extra or list(adapter.default_args)
     name = args.name or f"{_git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')}-{adapter.name}"
     run_dir = _new_run_dir(name)
@@ -656,7 +771,15 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
     def work() -> None:
         for side in ("old", "new"):
             manifest[side]["tree"] = str(ensure_worktree(repo, commits[side]))
+        if crates["old"] != crates["new"]:  # switch the crate per pass; the venv is never touched
+            for side in ("old", "new"):
+                crate = crates[side]
+                if crate is None:
+                    raise AbError(f"the {side} side has no crate commit (no rust/ submodule; give --{side}-crate)")
+                site, sha = ensure_site(crate)
+                manifest[side]["site"], manifest[side]["extension_sha"] = str(site), sha
         manifest["preflight"] = _preflight(run_dir, manifest, args.skip_profile, args.allow_profile_change)
+        manifest["preflight"]["after_builds"] = list(BUILT)
         _write_json(run_dir / "manifest.json", manifest)
         print(
             f"started {run_dir.name}: old {commits['old'][:7]} new {commits['new'][:7]}, "
@@ -738,17 +861,42 @@ def cmd_report(args: argparse.Namespace) -> None:
 
 
 def cmd_clean(args: argparse.Namespace) -> None:
-    if not args.worktrees:
-        raise AbError("clean needs --worktrees (--wheels arrives with crate A/Bs, stage 3)")
+    if not (args.worktrees or args.wheels):
+        raise AbError("clean needs --worktrees, --wheels or both")
     repo = Path(args.repo).resolve()
     cutoff = _local_now() - datetime.timedelta(days=CLEAN_DAYS)
     referenced: set[Path] = set()
+    crates: set[str] = set()
     for run_dir in _run_dirs():
         manifest = _manifest(run_dir)
         recent = datetime.datetime.fromisoformat(manifest["created"]) >= cutoff
         alive = manifest["state"] == "running" and _pid_alive(manifest["pid"])
         if recent or alive:
             referenced |= {Path(manifest[side]["tree"]) for side in ("old", "new") if "tree" in manifest[side]}
+            crates |= {manifest[side]["crate"] for side in ("old", "new") if manifest[side].get("site")}
+    if args.wheels:
+        _clean_wheels(crates)
+    if args.worktrees:
+        _clean_worktrees(repo, referenced)
+
+
+def _clean_wheels(crates: set[str]) -> None:
+    """Remove the cached wheels and site directories of crate commits no recent run uses (the
+    shared cargo target directory stays: it only makes the next build incremental)."""
+    removed: list[str] = []
+    kept = 0
+    for wheel_dir in sorted(_wheels_root().iterdir()) if _wheels_root().is_dir() else []:
+        if wheel_dir.name == "target":
+            continue
+        if wheel_dir.name in crates:
+            kept += 1
+            continue
+        shutil.rmtree(wheel_dir)
+        removed.append(wheel_dir.name[:7])
+    print(f"removed {len(removed)} wheels ({', '.join(removed) or 'none'}), kept {kept}")
+
+
+def _clean_worktrees(repo: Path, referenced: set[Path]) -> None:
     removed: list[str] = []
     kept = 0
     for tree in sorted(WORKTREES_ROOT.iterdir()) if WORKTREES_ROOT.is_dir() else []:
@@ -916,10 +1064,16 @@ def _commits_line(manifest: dict[str, Any], data: ReportData) -> str:
     command = (
         " ".join([manifest["bench"], *manifest["args"]]) if manifest["bench"] != "cmd" else " ".join(manifest["args"])
     )
-    return (
+    line = (
         f"{manifest['name']}: old {manifest['old']['commit'][:7]} vs new {manifest['new']['commit'][:7]}, "
         f"passes {order} ({len(data.passes['old'])} old, {len(data.passes['new'])} new), {command}"
     )
+    if manifest["old"].get("site"):
+        line += "; crate " + " vs ".join(
+            f"{side} {manifest[side]['crate'][:7]} (.so {manifest[side]['extension_sha'][:12]})"
+            for side in ("old", "new")
+        )
+    return line
 
 
 def _machine_line(manifest: dict[str, Any]) -> str:
@@ -934,6 +1088,8 @@ def _machine_line(manifest: dict[str, Any]) -> str:
     line = f"profile: {', '.join(profiles)}"
     if loads:
         line += f"; max 1-min load {max(loads):.2f}" + (" (HIGH)" if max(loads) > HIGH_LOAD else "")
+        if any(c.get("after_builds") for c in checks):
+            line += " (measured just after this run's crate builds)"
     return line + f"; busy processes: {', '.join(busy[:4]) or 'none'}"
 
 
@@ -1035,7 +1191,16 @@ def protocol_paragraph(data: ReportData) -> str:
         f"tree, from a neutral working directory with only its side's tree on `PYTHONPATH`. Before each pass a "
         f"probe checked that `indrajala_ml.train` imported from that tree"
     )
-    if extension.get("sha256"):
+    if manifest["old"].get("site"):
+        builds = " and ".join(
+            f"{side} crate `{manifest[side]['crate'][:7]}` (extension sha256 `{manifest[side]['extension_sha'][:12]}`)"
+            for side in ("old", "new")
+        )
+        text += (
+            f" and that the crate extension was that side's release build: {builds}, each a cached wheel "
+            "installed with `pip --target` into a directory on `PYTHONPATH` after the tree, so the venv was never touched"
+        )
+    elif extension.get("sha256"):
         text += f" and that the crate extension was the venv's (sha256 `{extension['sha256'][:12]}`) on both sides"
     text += f". Machine check: {_machine_line(manifest)}."
     if runs:
@@ -1078,6 +1243,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--name", help="default <branch>-<bench>")
     run.add_argument("--control-backend", choices=["numpy", "rust"], help="also read this backend's rows as controls")
     run.add_argument("--script-from", choices=["old", "new"], default="new")
+    run.add_argument("--old-crate", help="crate commit for the old side (default: its tree's rust/ submodule)")
+    run.add_argument("--new-crate", help="crate commit for the new side (default: its tree's rust/ submodule)")
     for command in (run, extend := commands.add_parser("extend", help="add passes to a finished run")):
         command.add_argument("--allow-profile-change", action="store_true")
         command.add_argument("--skip-profile", action="store_true", help="skip the machine check (tests, toy probes)")
@@ -1093,6 +1260,7 @@ def main(argv: list[str] | None = None) -> int:
     report.add_argument("--md", help="write the full tables and the protocol paragraph here")
     clean = commands.add_parser("clean", help="remove worktrees no recent run refers to")
     clean.add_argument("--worktrees", action="store_true")
+    clean.add_argument("--wheels", action="store_true", help="cached crate wheels and their site directories")
 
     args = parser.parse_args(argv)
     if extra and args.command != "run":
