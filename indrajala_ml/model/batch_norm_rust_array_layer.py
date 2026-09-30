@@ -23,7 +23,16 @@ class BatchNormRustArrayLayer:
 
     decayed: ClassVar[tuple[bool, ...]] = (False, False)
 
-    def __init__(self, size: int, activation: Literal["sigmoid", "relu"], epsilon: float, running_rate: float) -> None:
+    def __init__(
+        self,
+        size: int,
+        activation: Literal["sigmoid", "relu"],
+        epsilon: float,
+        running_rate: float,
+        positions: int = 1,
+    ) -> None:
+        # a conv layer's channels (BatchNormArrayLayer's positions) are stage 4c
+        assert positions == 1, "conv batch norm on the rust backend is stage 4c of docs/batch-norm-workplan.md"
         self.size = size
         self.input_size = size
         self.activation = activation

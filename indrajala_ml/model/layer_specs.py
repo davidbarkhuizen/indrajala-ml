@@ -9,7 +9,8 @@ every Rust op is. validate_layer_specs accepts only the combinations every imple
 so every accepted list is parity-testable.
 
 Batch norm (the batch-norm workplan, D1) is a linear layer, then a BatchNorm that carries the
-activation: Dense(30, activation="linear"), BatchNorm(activation="sigmoid").
+activation: Dense(30, activation="linear"), BatchNorm(activation="sigmoid"), or for conv
+Conv(3, 8, activation="linear"), BatchNorm(activation="relu").
 """
 
 from __future__ import annotations
@@ -49,7 +50,8 @@ class Dense:
 class BatchNorm:
     """
     Batch normalization (Ioffe & Szegedy 2015; README, Batch normalization) of the linear layer
-    before it, each feature over the batch, then the activation, sigmoid or ReLU. In training it
+    before it, each feature over the batch (each channel over the batch and every position, after
+    a conv layer), then the activation, sigmoid or ReLU (ReLU only after a conv layer). In training it
     normalizes with the batch's statistics and moves the running averages toward them at
     running_rate; in inference it normalizes with the running averages. epsilon is added to the
     variance. The defaults are PyTorch's.
@@ -92,36 +94,54 @@ def batch_norm_index(specs: Sequence[LayerSpec]) -> int | None:
 InputShape = tuple[int] | tuple[int, int, int]
 
 
+def _check_batch_norm(spec: BatchNorm, before: LayerSpec | None) -> None:
+    linear = isinstance(before, Dense | ConvSpec) and before.activation == "linear"
+    assert linear, (
+        f"a BatchNorm normalizes a linear layer, so one comes right before it; got {before!r} before {spec!r}"
+    )
+    if isinstance(before, ConvSpec):
+        assert spec.activation == "relu", f"a BatchNorm after a conv layer is ReLU; got {spec!r}"
+    assert spec.activation in ("sigmoid", "relu"), f"a BatchNorm is sigmoid or ReLU; got {spec!r}"
+    assert spec.epsilon > 0.0, f"epsilon must be positive; got {spec!r}"
+    assert 0.0 < spec.running_rate <= 1.0, f"running_rate must be in (0.0, 1.0]; got {spec!r}"
+
+
 def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:
     """
     Rejects a spec list that some implementation can't build: a conv or pool layer after a dense
     one (a dense layer's fused hidden delta reads the next layer's W), a front end without a conv
     layer, a softmax hidden layer, dropout on anything but a sigmoid hidden layer (the dropout op
     is fused with the sigmoid), a linear layer without a BatchNorm right after it or a BatchNorm
-    without one right before it, and an output layer that isn't exactly the last layer.
+    without one right before it (a conv one's BatchNorm is ReLU), and an output layer that isn't
+    exactly the last layer.
     """
     assert specs, "a network needs at least one layer"
     *hidden, output = specs
 
-    front_end = [spec for spec in hidden if isinstance(spec, ConvSpec | PoolSpec)]
-    assert hidden[: len(front_end)] == front_end, (
+    # the front end: every layer before the first dense one
+    front_end_length = next((i for i, spec in enumerate(hidden) if isinstance(spec, Dense)), len(hidden))
+    front_end = hidden[:front_end_length]
+    assert not any(isinstance(spec, ConvSpec | PoolSpec) for spec in hidden[front_end_length:]), (
         f"conv and pool layers must all come before the dense layers; got {list(specs)!r}"
     )
+    for i, spec in enumerate(front_end):
+        after = hidden[i + 1] if i + 1 < len(hidden) else output
+        if isinstance(spec, BatchNorm):
+            _check_batch_norm(spec, front_end[i - 1] if i > 0 else None)
+        elif isinstance(spec, ConvSpec):
+            assert spec.activation in ("relu", "linear"), f"a conv layer is ReLU or linear; got {spec!r}"
+            assert (spec.activation == "linear") == isinstance(after, BatchNorm), (
+                f"a linear layer and a BatchNorm come as a pair, the linear layer first; got {spec!r} before {after!r}"
+            )
     assert not front_end or any(isinstance(spec, ConvSpec) for spec in front_end), (
         "a front end of pool layers needs at least one conv layer"
     )
 
-    dense = hidden[len(front_end) :]
+    dense = hidden[front_end_length:]
     for i, spec in enumerate(dense):
         after = dense[i + 1] if i + 1 < len(dense) else output
-        before = dense[i - 1] if i > 0 else None
         if isinstance(spec, BatchNorm):
-            assert isinstance(before, Dense) and before.activation == "linear", (
-                f"a BatchNorm normalizes a linear layer, so one comes right before it; got {before!r} before {spec!r}"
-            )
-            assert spec.activation in ("sigmoid", "relu"), f"a BatchNorm is sigmoid or ReLU; got {spec!r}"
-            assert spec.epsilon > 0.0, f"epsilon must be positive; got {spec!r}"
-            assert 0.0 < spec.running_rate <= 1.0, f"running_rate must be in (0.0, 1.0]; got {spec!r}"
+            _check_batch_norm(spec, dense[i - 1] if i > 0 else None)
             continue
         assert isinstance(spec, Dense), (
             f"conv and pool layers must all come before the dense layers; got {list(specs)!r}"

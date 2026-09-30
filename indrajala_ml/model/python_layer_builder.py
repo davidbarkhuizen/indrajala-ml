@@ -61,6 +61,10 @@ def build_python_layers(
             assert len(shape) == 3, f"a conv or pool layer needs a (height, width, channels) input; got {shape}"
             height, width, channels = shape
             if isinstance(spec, ConvSpec):
+                if spec.activation == "linear":
+                    raise NotImplementedError(
+                        "conv batch norm in pure Python is stage 4b of docs/batch-norm-workplan.md; not built yet"
+                    )
                 front_end_layer: ConvLayer | MaxPoolLayer = ConvLayer(
                     input_layer=previous,
                     input_height=height,

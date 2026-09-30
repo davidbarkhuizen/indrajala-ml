@@ -1,6 +1,6 @@
 # Workplan: batch normalization
 
-**Status: stages 0-3 done (2026-09-30); stage 4 next. Decisions D1-D8 settled by the owner (2026-09-30).**
+**Status: stages 0-3 and 4a (numpy) done (2026-09-30); stage 4b next. Decisions D1-D8 settled by the owner (2026-09-30).**
 
 This is step 2 of [primitives-roadmap.md](primitives-roadmap.md). It adds one new layer kind,
 batch normalization (Ioffe & Szegedy 2015), for dense and conv networks, under every update rule,
@@ -275,6 +275,14 @@ did.
 2. The same tests as stages 1-3: hand-computed, gradient checks, and numpy-Rust bit-identity.
 
 Split it by implementation if the diff passes about 1,500 lines.
+
+Split as 4a numpy, 4b pure Python, 4c Rust (a crate PR, then the bump), each one PR, as stages 1-3.
+
+- 4a, done: `ConvSpec.activation` (`"relu"`, the default, or `"linear"`); `LinearConvArrayLayer`,
+  the conv layer's products without the bias and the ReLU; and `BatchNormArrayLayer(...,
+  positions)`, which computes the dense layer's expressions on the `(N * P, C)` view of the conv
+  layer's channel-major `(N, C * P)`, so its rows are the README's order and `m = N * P`. Format 2
+  leaves `activation` out of a ReLU conv entry, so saved files don't change.
 
 ### Stage 5: format 2, load_network and the docs
 

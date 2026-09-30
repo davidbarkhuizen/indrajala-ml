@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_unit import ConvUnit
@@ -11,12 +12,15 @@ from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 @dataclass(frozen=True)
 class ConvSpec:
     """
-    One ConvLayer's hyperparameters; its input shape comes from the previous layer.
+    One ConvLayer's hyperparameters; its input shape comes from the previous layer. A conv layer is
+    ReLU; a linear one has no bias and no activation, and a BatchNorm follows it (the batch-norm
+    workplan, D1 and D2).
     """
 
     kernel_size: int
     channel_count: int
     stride: int = 1
+    activation: Literal["relu", "linear"] = "relu"
 
 
 class ConvLayer:

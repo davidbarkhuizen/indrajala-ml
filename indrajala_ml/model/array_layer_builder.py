@@ -14,7 +14,7 @@ from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
-from indrajala_ml.model.conv_array_layer import ConvArrayLayer
+from indrajala_ml.model.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
 from indrajala_ml.model.conv_front_end import ArrayFrontEndLayer
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
@@ -51,6 +51,7 @@ class ArrayLayerClasses:
     # batch norm's pair (the batch-norm workplan): a bias-free linear layer, then the norm layer
     linear: LayerClass
     batch_norm: LayerClass
+    linear_conv: FrontEndLayerClass | None  # None where conv batch norm isn't built yet
 
 
 LAYER_CLASSES = {
@@ -64,6 +65,7 @@ LAYER_CLASSES = {
         pool=MaxPoolArrayLayer,
         linear=LinearArrayLayer,
         batch_norm=BatchNormArrayLayer,
+        linear_conv=LinearConvArrayLayer,
     ),
     "rust": ArrayLayerClasses(
         sigmoid=RustArrayLayer,
@@ -75,8 +77,17 @@ LAYER_CLASSES = {
         pool=MaxPoolRustArrayLayer,
         linear=LinearRustArrayLayer,
         batch_norm=BatchNormRustArrayLayer,
+        linear_conv=None,
     ),
 }
+
+
+def _linear_conv_class(classes: ArrayLayerClasses, backend_name: str) -> FrontEndLayerClass:
+    if classes.linear_conv is None:
+        raise NotImplementedError(
+            f"conv batch norm on the {backend_name} backend is stage 4c of docs/batch-norm-workplan.md; not built yet"
+        )
+    return classes.linear_conv
 
 
 def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> ArrayNetworkLayer[Any]:
@@ -108,14 +119,19 @@ def build_array_layers(
             shape = (spec.size,)
             continue
         if isinstance(spec, BatchNorm):
-            # after a dense linear layer (validate_layer_specs), normalizing its features
-            layers.append(classes.batch_norm(math.prod(shape), spec.activation, spec.epsilon, spec.running_rate))
+            # after a linear layer (validate_layer_specs), normalizing its features, or a conv
+            # layer's channels over every position; the shape stays its linear layer's
+            positions = shape[0] * shape[1] if len(shape) == 3 else 1
+            layers.append(
+                classes.batch_norm(math.prod(shape), spec.activation, spec.epsilon, spec.running_rate, positions)
+            )
             continue
 
         assert len(shape) == 3, f"a conv or pool layer needs a (height, width, channels) input; got {shape}"
         height, width, channels = shape
         if isinstance(spec, ConvSpec):
-            layer = classes.conv(height, width, channels, spec.kernel_size, spec.channel_count, spec.stride)
+            conv = classes.conv if spec.activation == "relu" else _linear_conv_class(classes, backend_name)
+            layer = conv(height, width, channels, spec.kernel_size, spec.channel_count, spec.stride)
         else:
             layer = classes.pool(height, width, channels, spec.pool_size, spec.stride)
         layers.append(layer)
