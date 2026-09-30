@@ -29,7 +29,8 @@ What they built is documented in the README (Models, Saving and loading, Update 
   - softmax or cross-entropy output layers after conv, or under a rule other than `SGD`;
   - on pure Python, the multiclass dense presets that exist only as numpy and Rust (cross-entropy,
     ReLU, dropout, momentum, Adam, weight decay), and on numpy and Rust, the one-output presets
-    that exist only in pure Python (ReLU, dropout, momentum, Adam, weight decay).
+    that exist only in pure Python (ReLU, dropout, momentum, Adam, weight decay);
+  - batch norm, dense and conv, under every rule ([batch-norm-workplan.md](batch-norm-workplan.md)).
 
   One of them, conv then pool, ReLU, dropout and a softmax output under `Adam`, is trained against
   its pure-Python reference (`tests/test_sequential_array_network.py`). Giving any other one a

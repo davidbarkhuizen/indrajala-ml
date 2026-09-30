@@ -7,9 +7,11 @@ tests/test_legacy_saved_models.py loads.
 - The format-2 fixtures (stage 5) are of the classes with no legacy envelope, the Sequential and
   the pure-Python single-output networks. Each is written after two training steps, so it pins a
   non-empty optimizer state too.
+- The batch-norm fixtures (the batch-norm workplan, stage 5) are format-2 files of a Sequential
+  network per implementation with a conv and a dense batch-norm pair, named BatchNorm<class name>.
 
-Each fixture is two files in tests/fixtures/saved_models/: <class name>.json, the file the class's
-own save() wrote, and <class name>.expected.json, what the saved network held and predicted:
+Each fixture is two files in tests/fixtures/saved_models/: <name>.json, the file the class's
+own save() wrote, and <name>.expected.json, what the saved network held and predicted:
 its snapshot, its hyperparameters, the states it was run on, and its classify_state and predict_*
 outputs there, and, for a format-2 fixture, its optimizer state. Floats are float.hex, so the test
 compares bits.
@@ -38,7 +40,7 @@ from typing import Any, cast
 import indrajala_ml.model
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
+from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import (
@@ -77,6 +79,16 @@ SEQUENTIAL_MULTICLASS: list[LayerSpec] = [
     Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
 ]
 SEQUENTIAL_SINGLE_OUTPUT: list[LayerSpec] = [Dense(4), Dense(1, output=True, loss="cross_entropy")]
+# a conv and a dense batch-norm pair, an overlapping pool between them, and every BatchNorm field
+# off its default in the dense pair
+BATCH_NORM: list[LayerSpec] = [
+    ConvSpec(2, 2, activation="linear"),
+    BatchNorm("relu"),
+    PoolSpec(2, stride=1),
+    Dense(4, activation="linear"),
+    BatchNorm("sigmoid", epsilon=1e-4, running_rate=0.2),
+    Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+]
 FORMAT_2_TRAINING_STEPS = 2
 
 
@@ -104,6 +116,8 @@ class SavedModelFixture:
     hyperparameters: dict[str, float]
     # written in format 2, after FORMAT_2_TRAINING_STEPS learn_batch steps
     format2: bool = False
+    # the class, when the fixture's name isn't its class's (a batch-norm fixture)
+    class_name: str | None = None
 
 
 def _dense(name: str, implementation: str, hyperparameters: dict[str, float] | None = None) -> SavedModelFixture:
@@ -154,9 +168,13 @@ def _python_single_output(name: str, hyperparameters: dict[str, float] | None = 
     )
 
 
-def _sequential(implementation: str, multiclass: bool, rule: UpdateRule) -> SavedModelFixture:
+def _sequential(
+    implementation: str, multiclass: bool, rule: UpdateRule, class_name: str | None = None
+) -> SavedModelFixture:
     def build() -> Any:
-        if multiclass:
+        if class_name is not None:
+            input_shape, layers = SEQUENTIAL_INPUT, BATCH_NORM
+        elif multiclass:
             input_shape, layers = SEQUENTIAL_INPUT, SEQUENTIAL_MULTICLASS
         else:
             input_shape, layers = (DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT
@@ -169,7 +187,12 @@ def _sequential(implementation: str, multiclass: bool, rule: UpdateRule) -> Save
         )
 
     return SavedModelFixture(
-        implementation, build, "predict_probabilities" if multiclass else "predict_probability", {}, format2=True
+        implementation,
+        build,
+        "predict_probabilities" if multiclass else "predict_probability",
+        {},
+        format2=True,
+        class_name=class_name,
     )
 
 
@@ -255,7 +278,20 @@ FIXTURES: dict[str, SavedModelFixture] = {
     "SequentialArrayBackpropClassifierNetwork": _sequential("numpy", False, Momentum(**MOMENTUM)),
     "SequentialRustArrayBackpropClassifierNetwork": _sequential("rust", False, Momentum(**MOMENTUM)),
     "SequentialBackpropClassifierNetwork": _sequential("python", False, WeightDecay(**L2)),
+    **{
+        f"BatchNorm{name}": _sequential(implementation, True, Adam(**ADAM), name)
+        for name, implementation in (
+            ("SequentialVectorizedMultiClassBackpropClassifierNetwork", "numpy"),
+            ("SequentialRustArrayMultiClassBackpropClassifierNetwork", "rust"),
+            ("SequentialMultiClassBackpropClassifierNetwork", "python"),
+        )
+    },
 }
+
+
+def fixture_class(name: str) -> type[Any]:
+    """The class whose save() wrote fixture name, and whose load() reads it."""
+    return MODEL_CLASSES[FIXTURES[name].class_name or name]
 
 
 def bits(value: Any) -> Any:
@@ -298,6 +334,18 @@ def _random_like(rng: random.Random, value: Any) -> Any:
     return rng.uniform(-1.0, 1.0)
 
 
+def _positive_running_variances(network: Any, snapshot: list[Any]) -> list[Any]:
+    # a batch-norm layer's running variance as |drawn|, so inference takes a real square root: the
+    # last of [gamma, beta, running_mean, running_var] per layer on numpy and Rust, and per channel
+    # in pure Python
+    specs: list[LayerSpec] = network.layer_specs
+    for spec, entry in zip(specs, snapshot):
+        if isinstance(spec, BatchNorm):
+            for values in [entry] if network.implementation != "python" else entry:
+                values[3] = [abs(value) for value in values[3]] if isinstance(values[3], list) else abs(values[3])
+    return snapshot
+
+
 def _write(name: str, fixture: SavedModelFixture) -> None:
     model_path = FIXTURE_DIR / f"{name}.json"
     expected_path = FIXTURE_DIR / f"{name}.expected.json"
@@ -310,7 +358,8 @@ def _write(name: str, fixture: SavedModelFixture) -> None:
     # the snapshot's shape as nested lists (bits), every float redrawn; every restore accepts
     # nested lists: a (weights, bias) per node or kernel in pure Python, a [W, b] per layer on
     # numpy and Rust, [] for a pool layer, one such list per ensemble member
-    network.restore(_random_like(rng, bits(network.snapshot())))
+    drawn = _random_like(rng, bits(network.snapshot()))
+    network.restore(_positive_running_variances(network, drawn) if fixture.class_name is not None else drawn)
     states = [tuple(rng.uniform(0.0, 1.0) for _ in range(network_dimension(network))) for _ in range(STATE_COUNT)]
     if fixture.format2:
         # a non-empty optimizer state to pin; seeded for the dropout masks

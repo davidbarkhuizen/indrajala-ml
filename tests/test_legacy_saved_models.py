@@ -16,7 +16,16 @@ from typing import Any
 
 import pytest
 
-from tests.saved_model_fixtures import FIXTURE_DIR, FIXTURES, MODEL_CLASSES, bits, from_bits, optimizer_bits, outputs
+from tests.saved_model_fixtures import (
+    FIXTURE_DIR,
+    FIXTURES,
+    MODEL_CLASSES,
+    bits,
+    fixture_class,
+    from_bits,
+    optimizer_bits,
+    outputs,
+)
 
 
 def _expected(name: str) -> dict[str, Any]:
@@ -29,7 +38,7 @@ def test_legacy_file_loads(name: str) -> None:
     fixture = FIXTURES[name]
     expected = _expected(name)
 
-    loaded = MODEL_CLASSES[name].load(str(FIXTURE_DIR / f"{name}.json"))
+    loaded = fixture_class(name).load(str(FIXTURE_DIR / f"{name}.json"))
 
     assert bits(loaded.snapshot()) == expected["snapshot"]
     if fixture.format2:
@@ -54,6 +63,6 @@ def test_legacy_file_loads(name: str) -> None:
 def test_every_saveable_class_has_a_fixture() -> None:
     # the networks, not the shape mixins and bases that define save for them
     saveable = {name for name, cls in MODEL_CLASSES.items() if name.endswith("Network") and hasattr(cls, "save")}
-    assert saveable == set(FIXTURES)
+    assert saveable == {fixture.class_name or name for name, fixture in FIXTURES.items()}
     for name in FIXTURES:
         assert (FIXTURE_DIR / f"{name}.json").exists(), name

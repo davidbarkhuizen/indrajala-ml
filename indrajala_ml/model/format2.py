@@ -21,11 +21,18 @@ by bits.
   Sequential network's file has none.
 - input is {"dimension": d} or {"height": h, "width": w, "channels": c}, with "input_bounds" in
   pure Python. class_count is the output layer's size.
-- weights is the network's snapshot() as lists: per layer [W, b] on numpy and Rust, and a
-  [weights, bias] per node or kernel in pure Python; [] for a pool layer.
+- layers holds each spec's fields under its kind: "dense", "conv", "pool" or "batch_norm" (the
+  batch-norm workplan, Format 2). A ReLU conv entry leaves out its activation, as before ConvSpec
+  had one; a linear conv entry has "activation": "linear".
+- weights is the network's snapshot() as lists. On numpy and Rust, per layer: [W, b]; [W] for a
+  linear (bias-free) layer; [gamma, beta, running_mean, running_var] for a batch-norm layer; [] for
+  a pool layer. In pure Python, per node or kernel: [weights, bias]; [weights] for a linear one;
+  [[gamma], beta, running_mean, running_var] per batch-norm channel.
 - optimizer_state holds the step count t and, per layer, the rule's state or null: momentum's
-  velocity, Adam's m and v, per W and b on numpy and Rust (velocity_W, velocity_b), per node or
-  kernel in pure Python (velocity_weights, velocity_bias).
+  velocity, Adam's m and v. On numpy and Rust, per parameter (velocity_W, velocity_b; velocity_W
+  alone for a linear layer; velocity_gamma, velocity_beta for batch norm). In pure Python, per
+  node, kernel or channel (velocity_weights, velocity_bias; no bias entries for a linear one, and a
+  batch-norm channel's gamma is its one weight and its beta its bias).
 
 A numpy file loads into Rust and a Rust file into numpy. A pure-Python file loads into pure Python
 only, as its weights are per node. A network's load refuses a file whose shape, input, layer specs
@@ -103,14 +110,13 @@ def _lists(value: Any) -> Any:
 
 
 def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
-    if isinstance(spec, BatchNorm) or (isinstance(spec, Dense | ConvSpec) and spec.activation == "linear"):
-        raise NotImplementedError(
-            f"saving batch norm ({spec!r}) is stage 5 of docs/batch-norm-workplan.md; not built yet"
-        )
     if isinstance(spec, ConvSpec):
-        # a ReLU conv layer's entry, as before ConvSpec had an activation
-        return {"kind": "conv", **{key: value for key, value in asdict(spec).items() if key != "activation"}}
-    kind = "dense" if isinstance(spec, Dense) else "pool"
+        # a ReLU conv layer's entry as before ConvSpec had an activation, so those files don't change
+        fields = asdict(spec)
+        if spec.activation == "relu":
+            del fields["activation"]
+        return {"kind": "conv", **fields}
+    kind = "dense" if isinstance(spec, Dense) else "batch_norm" if isinstance(spec, BatchNorm) else "pool"
     return {"kind": kind, **asdict(spec)}
 
 
@@ -123,6 +129,8 @@ def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
             return ConvSpec(**fields)
         case "pool":
             return PoolSpec(**fields)
+        case "batch_norm":
+            return BatchNorm(**fields)
         case kind:
             raise ValueError(f"unknown layer kind {kind!r}")
 
@@ -167,31 +175,46 @@ def _state_names(rule: UpdateRule) -> tuple[str, ...]:
             return ()
 
 
+def _parameter_names(spec: LayerSpec) -> tuple[str, ...]:
+    # an array layer's parameters, in its parameters() order
+    match spec:
+        case BatchNorm():
+            return ("gamma", "beta")
+        case Dense() | ConvSpec() if spec.activation == "linear":
+            return ("W",)
+        case _:
+            return ("W", "b")
+
+
 def _optimizer_state_to_json(
-    rule: UpdateRule, python: bool, state: OptimizerState[Any], layer_count: int
+    rule: UpdateRule, python: bool, state: OptimizerState[Any], specs: Sequence[LayerSpec]
 ) -> dict[str, Any]:
     names = _state_names(rule)
-    layers: list[Any] = [None] * layer_count
+    layers: list[Any] = [None] * len(specs)
     for index, layer_state in state.layers.items():
         if python:
-            # per weight set: (a list per name, shaped as its weights; the bias's value per name)
+            # per weight set: (a list per name, shaped as its weights; the bias's value per name,
+            # none for a weight set without a bias)
             layers[index] = [
                 {
                     **{f"{name}_weights": list(weight_state[i]) for i, name in enumerate(names)},
-                    **{f"{name}_bias": bias_state[i] for i, name in enumerate(names)},
+                    **{f"{name}_bias": value for name, value in zip(names, bias_state)},
                 }
                 for weight_state, bias_state in layer_state
             ]
         else:
-            # the arrays shaped as W, one per name, then as many shaped as b
+            # per parameter, an array shaped as it per name
             layers[index] = {
-                **{f"{name}_W": _lists(layer_state[i]) for i, name in enumerate(names)},
-                **{f"{name}_b": _lists(layer_state[len(names) + i]) for i, name in enumerate(names)},
+                f"{name}_{parameter}": _lists(layer_state[p * len(names) + i])
+                for p, parameter in enumerate(_parameter_names(specs[index]))
+                for i, name in enumerate(names)
             }
     return {"t": state.t, "layers": layers}
 
 
-def _optimizer_state_from_json(rule: UpdateRule, python: bool, state: dict[str, Any]) -> OptimizerState[Any]:
+def _optimizer_state_from_json(
+    rule: UpdateRule, python: bool, state: dict[str, Any], specs: Sequence[LayerSpec]
+) -> OptimizerState[Any]:
     names = _state_names(rule)
     layers: dict[int, Any] = {}
     for index, layer_state in enumerate(state["layers"]):
@@ -199,11 +222,16 @@ def _optimizer_state_from_json(rule: UpdateRule, python: bool, state: dict[str, 
             continue
         if python:
             layers[index] = [
-                ([weight_set[f"{name}_weights"] for name in names], [weight_set[f"{name}_bias"] for name in names])
+                (
+                    [weight_set[f"{name}_weights"] for name in names],
+                    [weight_set[f"{name}_bias"] for name in names if f"{name}_bias" in weight_set],
+                )
                 for weight_set in layer_state
             ]
         else:
-            layers[index] = [layer_state[f"{name}_W"] for name in names] + [layer_state[f"{name}_b"] for name in names]
+            layers[index] = [
+                layer_state[f"{name}_{parameter}"] for parameter in _parameter_names(specs[index]) for name in names
+            ]
     return OptimizerState(state["t"], layers)
 
 
@@ -243,9 +271,7 @@ def network_to_json(network: Format2Network) -> dict[str, Any]:
     state["layers"] = [layer_to_json(spec) for spec in network.layer_specs]
     state["update_rule"] = rule_to_json(rule)
     state["weights"] = _lists(network.snapshot())
-    state["optimizer_state"] = _optimizer_state_to_json(
-        rule, python, network.optimizer.state(), len(network.layer_specs)
-    )
+    state["optimizer_state"] = _optimizer_state_to_json(rule, python, network.optimizer.state(), network.layer_specs)
     return state
 
 
@@ -275,6 +301,7 @@ def network_from_json(state: dict[str, Any]) -> NetworkFile:
         raise ValueError(f"unknown implementation {state['implementation']!r}")
     rule = rule_from_json(state["update_rule"])
     python = state["implementation"] == PYTHON
+    layers = [layer_from_json(spec) for spec in state["layers"]]
     shape = state["input"]
     bounds = shape.get("input_bounds")
     return NetworkFile(
@@ -283,10 +310,10 @@ def network_from_json(state: dict[str, Any]) -> NetworkFile:
         preset=state.get("preset"),
         input_shape=_input_shape_from_json(shape),
         input_bounds=None if bounds is None else _argument_from_json("input_bounds", bounds),
-        layers=[layer_from_json(spec) for spec in state["layers"]],
+        layers=layers,
         update_rule=rule,
         weights=state["weights"],
-        optimizer_state=_optimizer_state_from_json(rule, python, state["optimizer_state"]),
+        optimizer_state=_optimizer_state_from_json(rule, python, state["optimizer_state"], layers),
     )
 
 

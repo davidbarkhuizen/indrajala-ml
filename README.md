@@ -180,7 +180,8 @@ arguments. It equals, by bits, the Sequential network of the same specs and rule
 An empty cell has no preset, but the Sequential network of that implementation builds the
 combination, so each array preset has a pure-Python parity reference. Combinations the Sequential
 networks build that no preset has, and those still out of reach, are listed in
-[docs/next-steps.md](docs/next-steps.md), From composable layers.
+[docs/next-steps.md](docs/next-steps.md), From composable layers. Batch norm has no preset: the
+Sequential networks build it (Batch normalization).
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,
 hand-computed examples, and the reference the array implementations are checked against. It is
@@ -212,6 +213,9 @@ network = load_network("model.json")  # the Sequential network the file describe
 - numpy files load into Rust networks and Rust files into numpy ones. Pure-Python files hold one
   weight list per node and load into pure Python only.
 - An ensemble's file nests one format-2 file per sub-network.
+- A batch-norm layer's entry records its spec. Its weights are `γ`, `β` and the running mean and
+  variance, so a loaded network classifies as the saved one did and resumes training by bits; its
+  linear layer's weights are `W` alone. The optimizer's state for it is per `γ` and `β`.
 - `load` still reads each class's legacy file, written before format 2, with fresh optimizer
   state (`tests/test_legacy_saved_models.py`). Files saved in format 2 don't load on older versions
   of this package.
@@ -241,10 +245,12 @@ rounds differently when `B` isn't a power of two.
 
 ## Batch normalization
 
-Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)): numpy, pure Python and
-Rust build dense batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`, and conv
-batch norm, `Conv(kernel_size, channel_count, activation="linear"), BatchNorm("relu")`. Saving batch
-norm is a later stage, and refuses it until then. This section fixes the forms all three implementations are held to.
+numpy, pure Python and Rust build dense batch norm, `Dense(size, activation="linear"),
+BatchNorm(activation)`, and conv batch norm, `Conv(kernel_size, channel_count, activation="linear"),
+BatchNorm("relu")`, in the Sequential networks under every update rule; no preset has it. Format 2
+saves it (Saving and loading). Ghost batches are still being built
+([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)). This section fixes the forms all three
+implementations are held to.
 
 A pure-Python network with batch norm trains a batch layer by layer (`layer_major.py`): forward
 through each layer for the whole batch, then backward. The other layers run their per-example code

@@ -1,6 +1,6 @@
 # Workplan: batch normalization
 
-**Status: stages 0-4 done (2026-09-30); stage 5 next. Decisions D1-D8 settled by the owner (2026-09-30).**
+**Status: stages 0-5 done (2026-09-30); stage 6 next. Decisions D1-D8 settled by the owner (2026-09-30).**
 
 This is step 2 of [primitives-roadmap.md](primitives-roadmap.md). It adds one new layer kind,
 batch normalization (Ioffe & Szegedy 2015), for dense and conv networks, under every update rule,
@@ -305,6 +305,15 @@ Split as 4a numpy, 4b pure Python, 4c Rust (a crate PR, then the bump), each one
 2. Format-2 fixtures for a batch-norm network per implementation.
 3. README: the batch-norm section, the preset table's note, and the composable-layers list in
    [next-steps.md](next-steps.md).
+
+Done: `batch_norm` entries record the spec's fields, and a linear conv entry its `"activation":
+"linear"` (a ReLU conv entry is unchanged). Weights are as above; in pure Python a channel is
+`[[gamma], beta, running_mean, running_var]` and a linear node or kernel `[weights]`. The array
+optimizer state is keyed by parameter (`m_gamma`, `v_beta`, `velocity_W` alone for a linear layer),
+and pure Python's has no bias entries for a linear node. `tests/test_format2.py` resumes dense and
+conv batch-norm networks by bits under every rule in all three implementations, through the class
+and `load_network`, and loads numpy and Rust files into each other. The fixtures are
+`BatchNorm<class>` in `tests/fixtures/saved_models/`, a conv and a dense pair under Adam.
 
 ### Stage 6: ghost batches (D6)
 
