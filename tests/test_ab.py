@@ -6,9 +6,11 @@ published), and run/extend end to end on a toy probe in a temporary repository. 
 import base64
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -479,6 +481,49 @@ def test_resolve_crate_takes_short_refs(toy_crates: list[str]) -> None:
     assert ab.resolve_crate(toy_crates[0][:7]) == toy_crates[0]
     with pytest.raises(ab.AbError):
         ab.resolve_crate("0000000")  # not there, and the toy repository has no origin to fetch
+
+
+def _commit_crate(files: dict[str, str], date: str | None = None) -> str:
+    """A new commit of the toy crate repository writing files, optionally dated date."""
+    env = {**os.environ, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date} if date else None
+    for name, text in files.items():
+        (ab.CRATE_REPO / name).parent.mkdir(parents=True, exist_ok=True)
+        (ab.CRATE_REPO / name).write_text(text)
+    git = ["git", "-C", str(ab.CRATE_REPO), "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run([*git, "add", "."], check=True, capture_output=True)
+    subprocess.run([*git, "commit", "-q", "-m", "change"], check=True, capture_output=True, env=env)
+    return subprocess.run([*git, "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def test_extract_crate_stamps_files_with_the_extraction_time(toy_crates: list[str], tmp_path: Path) -> None:
+    commit = _commit_crate({"src/lib.rs": "// old\n"}, date="2000-01-01T00:00:00")
+    before = time.time()
+    ab.extract_crate(commit, tmp_path / "source")
+    assert (tmp_path / "source/src/lib.rs").read_text() == "// old\n"
+    assert (tmp_path / "source/src/lib.rs").stat().st_mtime >= before - 1  # not the commit's 2000
+
+
+def test_check_crate_builds_refuses_one_extension_for_different_sources(toy_crates: list[str]) -> None:
+    base = _commit_crate({"src/lib.rs": "// 1\n"})
+    rust = _commit_crate({"src/lib.rs": "// 2\n"})
+    tests_only = _commit_crate({"tests/test_ops.py": "# tests\n"})
+    same = {"old": "a" * 64, "new": "a" * 64}
+    with pytest.raises(ab.AbError, match="differ in src/lib.rs but built the same extension"):
+        ab.check_crate_builds({"old": base, "new": rust}, same)
+    ab.check_crate_builds({"old": base, "new": rust}, {"old": "a" * 64, "new": "b" * 64})
+    ab.check_crate_builds({"old": rust, "new": tests_only}, same)  # nothing it's built from changed
+
+
+def test_a_stale_crate_build_aborts_the_run(
+    toy_repo: Path, toy_crates: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    old, new = _commit_crate({"src/lib.rs": "// 1\n"}), _commit_crate({"src/lib.rs": "// 2\n"})
+    for commit in (old, new):
+        _fake_wheel(ab._wheel_dir(commit), b"one extension for both")
+    args = ["run", "--bench", "cmd", "--old", "HEAD", "--order", "ON", "--skip-profile"]
+    assert _run(toy_repo, *args, "--old-crate", old, "--new-crate", new, "--", "scripts/probe.py") == 1
+    assert "a stale build" in capsys.readouterr().err
+    assert json.loads((ab.find_run(None) / "manifest.json").read_text())["passes"] == []
 
 
 def test_crate_ab_end_to_end(toy_repo: Path, toy_crates: list[str], capsys: pytest.CaptureFixture[str]) -> None:

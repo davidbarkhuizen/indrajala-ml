@@ -103,6 +103,13 @@ under `~/code/ab-runs/wheels/<sha>/` and installed with `pip install --target` i
 directory on `PYTHONPATH` after the tree. The venv is never touched, and every pass checks the
 extension's hash. The numpy rows are the control: a crate change can't move them.
 
+The builds share one cargo target directory, so each is incremental. `ab.py` extracts each crate
+commit with fresh modification times, so cargo recompiles whatever changed. It also refuses a run
+whose two crate commits differ in what the extension is built from (`src/`, `Cargo.toml`,
+`Cargo.lock` and the build configuration) but built the same extension. A cached wheel is reused
+for as long as it exists, so a wrong build stays wrong until its `wheels/<sha>/` directory is
+removed ([Gotchas](#7-gotchas)).
+
 **A probe.** A question no script answers yet gets a probe: a script that prints one JSON object
 per line, `{"case": ..., "metric": ..., "value": ..., "unit": ...}`, optionally `"control":
 true`. Other lines are ignored.
@@ -134,7 +141,8 @@ machine check, why any passes were added) and one table per metric.
 `report --brief` prints at most 15 lines:
 
 1. **The header:** commits, pass order, benchmark and arguments, and for a crate A/B each side's
-   crate commit and extension hash.
+   crate commit and extension hash. When the crate's Rust changed, the two hashes must differ;
+   `ab.py` refuses the run otherwise.
 2. **The machine:** the profile check, the pre-flight 1-minute load (flagged above 1.5), and
    processes that were above 10% of a CPU around the passes.
 3. **Controls.** The control rows are `prepare` for `prepared_dataset_timing`, and the other
@@ -257,6 +265,18 @@ What to do next:
   unstable at lr 0.5 too (numpy collapsed to 0.11 where Rust reached 0.52; it trains at 0.2).
 - **Back-to-back runs inherit load.** The pre-flight load of a run started right after another
   counts the previous run's benchmark; `ab.py` flags it.
+- **A crate A/B once timed the old crate on both sides** (stage 4c, 2026-09-30). `git archive`
+  stamps every file with the commit time, and cargo decides freshness in the shared target
+  directory by modification time. The new commit (made 15:41) was built right after the old one
+  (built 15:53), so cargo found its sources older than the last build and compiled nothing
+  (`Finished ... in 0.02s` in its `build.log`, with no `Compiling indrajala_math_rust` line). Both
+  sides got the same extension (`.so dbe73bea6421` twice in the header), the provenance check
+  passed because it compares each pass with its own side's build, and the report said "within
+  noise". Any crate commit older than the target directory's last build was skipped this way;
+  stage 3's A/B compiled because its new commit was newer than that build. `ab.py` now
+  extracts with fresh modification times and refuses same-extension runs
+  ([§4](#4-running-an-ab-with-abpy)).
+  After a bad build, remove its `~/code/ab-runs/wheels/<sha>/` directory before running again.
 - **`pkill -f <pattern>` also matches the invoking shell's own command line.** Stop a stray
   benchmark by PID.
 
@@ -309,6 +329,10 @@ the whole conversation. The repository's `CLAUDE.md` repeats these rules.
   under an hour.
 - **Read the brief report only.** Read `report --brief` and nothing else from the run. Open a raw
   pass file only when the brief report flags something it can't explain.
+- **In a crate A/B, check the header before the verdict.** The two `.so` hashes must differ when
+  the crate's Rust changed. The same hash on both sides means one crate was timed twice, whatever
+  the rows say ([Gotchas](#7-gotchas)). `ab.py` refuses such a run now; the check still costs
+  nothing.
 - **Pass the table on without reading it.** Put `report --md` into the PR body by concatenating
   files.
 - **Keep the machine quiet.** Nothing CPU-heavy runs while an A/B does: no tests, lint or builds.

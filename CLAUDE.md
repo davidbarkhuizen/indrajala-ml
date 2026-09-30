@@ -9,6 +9,8 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
   only when the owner asks, and schedule no wake-ups for runs under an hour.
 - **Read `report --brief` only.** Open a raw pass file only when the brief report flags something
   it can't explain.
+- **In a crate A/B, the header's two `.so` hashes must differ** when the crate's Rust changed; the
+  same hash twice means one crate was timed on both sides (docs/measurement.md, Gotchas).
 - **Put `report --md FILE` into a PR body by concatenating files**, not by reading and retyping it.
 - **Keep the machine quiet during a run:** no tests, lint or builds; reading and writing are fine.
   Ask the owner to close the browser and editor before starting one.
