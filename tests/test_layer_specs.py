@@ -82,8 +82,8 @@ BATCH_NORM: dict[str, list[LayerSpec]] = {
     "rate of 1": [LINEAR, BatchNorm(running_rate=1.0), OUTPUT],
 }
 
-# conv batch norm's pairs: accepted, and built by numpy (stage 4a) and pure Python (4b,
-# tests/test_python_layer_builder.py); Rust refuses them until stage 4c
+# conv batch norm's pairs: accepted, and built by numpy (stage 4a), pure Python (4b,
+# tests/test_python_layer_builder.py) and Rust (4c)
 CONV_BATCH_NORM: dict[str, list[LayerSpec]] = {
     "conv": [LINEAR_CONV, BatchNorm("relu"), OUTPUT],
     "conv pool": [LINEAR_CONV, BatchNorm("relu"), Pool(2), OUTPUT],
@@ -113,19 +113,18 @@ def test_batch_norm_pairs_are_accepted(specs: list[LayerSpec], backend: Backend)
 
 
 @pytest.mark.parametrize("specs", CONV_BATCH_NORM.values(), ids=CONV_BATCH_NORM.keys())
-def test_conv_batch_norm_pairs_are_accepted_and_built_by_numpy(specs: list[LayerSpec]):
+def test_conv_batch_norm_pairs_are_accepted(specs: list[LayerSpec], backend: Backend):
     validate_layer_specs(specs)
-    build_array_layers(specs, (8, 8, 1), "numpy")
-    with pytest.raises(NotImplementedError, match="stage 4c"):
-        build_array_layers(specs, (8, 8, 1), "rust")
+    build_array_layers(specs, (8, 8, 1), backend.name)
 
 
-def test_a_conv_batch_norm_layer_normalizes_each_channel_over_every_position():
+def test_a_conv_batch_norm_layer_normalizes_each_channel_over_every_position(backend: Backend):
     linear, norm, _output = cast(
-        "list[Any]", build_array_layers([LINEAR_CONV, BatchNorm("relu", 1e-3, 0.2), OUTPUT], (8, 8, 1), "numpy")
+        "list[Any]", build_array_layers([LINEAR_CONV, BatchNorm("relu", 1e-3, 0.2), OUTPUT], (8, 8, 1), backend.name)
     )
 
-    assert type(linear) is LAYER_CLASSES["numpy"].linear_conv
+    assert type(linear) is LAYER_CLASSES[backend.name].linear_conv
+    assert type(norm) is LAYER_CLASSES[backend.name].batch_norm
     assert linear.W.shape == (2, 9) and linear.parameters() == (linear.W,)
     assert (norm.size, norm.positions, norm.gamma.shape) == (2 * 6 * 6, 6 * 6, (2,))
     assert (norm.activation, norm.epsilon, norm.running_rate) == ("relu", 1e-3, 0.2)

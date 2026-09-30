@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
+from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
@@ -305,11 +305,6 @@ def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
     network.learn_batch(0.1, _rows(5, seed=7))
     network.learn_batch(0.1, _rows(4, seed=8))
     assert _bits(network.snapshot()) == trained
-
-
-def test_rust_refuses_conv_batch_norm_until_stage_4c():
-    with pytest.raises(NotImplementedError, match="stage 4c"):
-        SequentialArrayNetwork(INPUT, NETWORKS["conv"], SGD(), backend=RUST)
 
 
 def test_saving_conv_batch_norm_is_refused_until_stage_5_and_a_relu_conv_entry_is_unchanged(tmp_path: Any):

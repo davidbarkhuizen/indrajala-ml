@@ -242,10 +242,9 @@ rounds differently when `B` isn't a power of two.
 ## Batch normalization
 
 Being built ([docs/batch-norm-workplan.md](docs/batch-norm-workplan.md)): numpy, pure Python and
-Rust build dense batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`, and numpy
-and pure Python build conv batch norm, `Conv(kernel_size, channel_count, activation="linear"),
-BatchNorm("relu")`. Conv batch norm in Rust, and saving batch norm, are later stages, and refuse it
-until then. This section fixes the forms all three implementations are held to.
+Rust build dense batch norm, `Dense(size, activation="linear"), BatchNorm(activation)`, and conv
+batch norm, `Conv(kernel_size, channel_count, activation="linear"), BatchNorm("relu")`. Saving batch
+norm is a later stage, and refuses it until then. This section fixes the forms all three implementations are held to.
 
 A pure-Python network with batch norm trains a batch layer by layer (`layer_major.py`): forward
 through each layer for the whole batch, then backward. The other layers run their per-example code
@@ -335,8 +334,8 @@ numpy layers sum with `np.cumsum` along the summed axis, which does at every sha
 pure-Python layer sums with an explicit loop: the builtin `sum` adds floats with compensated
 summation since Python 3.12. Given the same inputs, the pure-Python, numpy and Rust layers compute the same
 bits, except for a sigmoid's `exp` (`tests/test_batch_norm_python_network.py`,
-`tests/test_batch_norm_rust_network.py`). Whole
-networks agree within their dense layers' rounding only, which differs with or without batch norm:
+`tests/test_batch_norm_rust_network.py`, and their conv counterparts). Whole
+networks agree within their dense and conv layers' rounding only, which differs with or without batch norm:
 the pure-Python parity tolerance, and between numpy and Rust, BLAS's products against the crate's. Only
 `+ − × ÷` and `sqrt` appear, each correctly rounded in IEEE 754, so every implementation that
 follows these forms computes the same bits. The sigmoid's `exp` is the exception: it isn't correctly
