@@ -6,6 +6,7 @@ from typing import Any, ClassVar, Self, cast
 from indrajala_ml.model.array_network_shapes import ArraySingleOutputShape
 from indrajala_ml.model.checkpoint import Checkpoint
 from indrajala_ml.model.classification import argmax_first_occurrence
+from indrajala_ml.model.format2 import ensemble_classifiers, ensemble_to_json, is_format2
 from indrajala_ml.model.model_io import load_json, save_json
 
 
@@ -16,9 +17,9 @@ class ArrayEnsembleBase[ClassifierT: ArraySingleOutputShape[Any]]:
     EnsembleRustArrayBackpropClassifierNetwork differ only in classifier_cls, the class load()
     builds.
 
-    class_count is the number of sub-networks. save()/load() use save_json/load_json directly: the
-    snapshot nests one network's (W, b) list per classifier, which save_array_model_json's flat
-    layout can't hold.
+    class_count is the number of sub-networks. save() writes format 2 (format2.py), one format-2
+    file per sub-network nested in the ensemble's. load() reads it or the legacy envelope, whose
+    snapshot nests one network's (W, b) list per classifier.
     """
 
     # the single-output network load() builds, one per class; ClassifierT's class (a ClassVar
@@ -51,30 +52,18 @@ class ArrayEnsembleBase[ClassifierT: ArraySingleOutputShape[Any]]:
             classifier.restore_checkpoint(classifier_checkpoint)
 
     def save(self, path: str) -> None:
-        assert len({classifier.dimension for classifier in self.classifiers}) == 1, (
-            "every classifier must share a dimension"
-        )
-        assert len({tuple(classifier.layer_sizes) for classifier in self.classifiers}) == 1, (
-            "every classifier must share layer_sizes"
-        )
-        first = self.classifiers[0]
-        save_json(
-            path,
-            {
-                "layer_sizes": first.layer_sizes,
-                "dimension": first.dimension,
-                "class_count": self.class_count,
-                "snapshot": [
-                    [(W.tolist(), b.tolist()) for W, b in classifier_snapshot]
-                    for classifier_snapshot in self.snapshot()
-                ],
-            },
-        )
+        save_json(path, ensemble_to_json(self.classifiers[0].implementation, self.classifiers))
 
     @classmethod
     def load(cls, path: str) -> Self:
         state = load_json(path)
+        if is_format2(state):
+            # each sub-network as classifier_cls, which refuses one whose specs or rule aren't its
+            # own; numpy and Rust files load into either
+            classifiers = [cls.classifier_cls.from_format2(classifier) for classifier in ensemble_classifiers(state)]
+            return cls(cast("list[ClassifierT]", classifiers))
 
+        # the legacy envelope, whose classifiers load with fresh optimizer state
         classifiers = [
             cls.classifier_cls(state["layer_sizes"], state["dimension"]) for _ in range(state["class_count"])
         ]

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, Self, cast
+from typing import Any, ClassVar, Self, cast
 
 from indrajala_ml.model.array_layer_builder import build_array_layers
 from indrajala_ml.model.array_protocols import (
@@ -16,7 +16,17 @@ from indrajala_ml.model.array_protocols import (
 )
 from indrajala_ml.model.bounds import validate_batch
 from indrajala_ml.model.checkpoint import Checkpoint
+from indrajala_ml.model.format2 import (
+    NetworkFile,
+    check_kind,
+    is_format2,
+    network_from_json,
+    network_to_json,
+    preset_init_kwargs,
+    restore_file,
+)
 from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
+from indrajala_ml.model.model_io import load_json, save_json
 from indrajala_ml.model.update_rules import SGD, UpdateRule
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
@@ -43,11 +53,19 @@ class ArrayNetworkBase[A: BackendArray]:
     backend: ArrayBackend[A]
 
     # the constructor keyword arguments a sibling stores under the same attribute names (e.g.
-    # ("beta1", "beta2", "epsilon")), which its specs and rule read, and the shapes' save/load
-    # round-trip through _extra_state/_extra_init_kwargs
-    hyperparameters: tuple[str, ...] = ()
+    # ("beta1", "beta2", "epsilon")), which its specs and rule read: a preset's format-2 file
+    # records them with its arguments, and a legacy envelope beside its other fields
+    hyperparameters: ClassVar[tuple[str, ...]] = ()
+
+    # the format-2 file's (format2.py) shape, and a preset's constructor arguments beside its
+    # hyperparameters, named as the attributes that hold them: set by the shape mixins. A
+    # Sequential network records no preset (None).
+    format2_shape: ClassVar[str]
+    preset_arguments: ClassVar[tuple[str, ...] | None]
 
     def __init__(self, specs: Sequence[LayerSpec], input_shape: InputShape) -> None:
+        self.input_shape = input_shape
+        self.layer_specs = list(specs)
         self.layers = cast("list[ArrayNetworkLayer[A]]", build_array_layers(specs, input_shape, self.backend.name))
         self.output_layer = cast("WeightedArrayLayer[A]", self.layers[-1])
         # the dropout layers, which _set_training_mode switches
@@ -216,12 +234,9 @@ class ArrayNetworkBase[A: BackendArray]:
                 rows, fan_in = layer.W.shape
                 layer.W, layer.b = self.backend.random_layer(rows, fan_in)
 
-    def _extra_state(self) -> dict[str, Any]:
-        return {name: getattr(self, name) for name in self.hyperparameters}
-
     @classmethod
     def _extra_init_kwargs(cls, state: dict[str, Any]) -> dict[str, Any]:
-        # the inverse of _extra_state: a loaded state dict's hyperparameters, as constructor kwargs
+        # a legacy envelope's hyperparameters, saved beside its other fields, as constructor kwargs
         return {name: state[name] for name in cls.hyperparameters}
 
     def snapshot(self) -> list[tuple[A, ...]]:
@@ -240,6 +255,38 @@ class ArrayNetworkBase[A: BackendArray]:
             W, b = entry
             layer.W = self.backend.owned(W)
             layer.b = self.backend.owned(b)
+
+    @property
+    def implementation(self) -> str:
+        return self.backend.name
+
+    def save(self, path: str) -> None:
+        # format 2 (format2.py): the specs, rule, weights and optimizer state
+        save_json(path, network_to_json(self))
+
+    @classmethod
+    def load(cls, path: str) -> Self:
+        # a format-2 file, or the class's legacy envelope, which loads with fresh optimizer state
+        state = load_json(path)
+        return cls.from_format2(state) if is_format2(state) else cls._load_legacy(state)
+
+    @classmethod
+    def from_format2(cls, state: dict[str, Any]) -> Self:
+        # a numpy or a Rust file: restore converts the file's nested lists through the backend
+        file = network_from_json(state)
+        check_kind(cls, cls.backend.name, cls.format2_shape, file)
+        network = cls._from_file(file)
+        restore_file(network, file)
+        return network
+
+    @classmethod
+    def _from_file(cls, file: NetworkFile) -> Self:
+        # a preset, from the file's preset arguments; a Sequential network builds from its specs
+        return cls(**preset_init_kwargs(cls, file))
+
+    @classmethod
+    def _load_legacy(cls, state: dict[str, Any]) -> Self:
+        raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
 
     def checkpoint(self) -> Checkpoint[list[tuple[A, ...]], list[A]]:
         # the weights and the optimizer's state (checkpoint.py)

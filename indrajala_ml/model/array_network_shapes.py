@@ -2,20 +2,15 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Self, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
 from indrajala_ml.model.array_protocols import BackendArray
 from indrajala_ml.model.bounds import validate_class_count, validate_layer_sizes
-from indrajala_ml.model.conv_front_end import ArrayFrontEndLayer, load_conv_model_json, save_conv_array_model_json
+from indrajala_ml.model.conv_front_end import ArrayFrontEndLayer, load_conv_model_state
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec, sequential_save_not_yet
+from indrajala_ml.model.format2 import NetworkFile
+from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.model_io import (
-    load_array_model_json,
-    load_single_output_array_model_json,
-    save_array_model_json,
-    save_single_output_array_model_json,
-)
 from indrajala_ml.model.update_rules import UpdateRule
 
 if TYPE_CHECKING:
@@ -35,12 +30,16 @@ else:
 class ArrayMultiClassShape[A: BackendArray](_ShapeBase[A]):
     """
     The multiclass shape over ArrayNetworkBase, for either backend: argmax classify_state,
-    predict_probabilities, one-hot targets, and the save/load envelope with class_count.
+    predict_probabilities, one-hot targets, and the legacy save envelope with class_count, which
+    load still reads. Every array network saves in format 2 (ArrayNetworkBase.save, format2.py).
 
     A mixin, listed before the backend's base, which supplies self.backend:
     VectorizedMultiClassBackpropClassifierNetwork and RustArrayMultiClassBackpropClassifierNetwork
     are this shape on numpy and on Rust.
     """
+
+    format2_shape: ClassVar[str] = "multiclass"
+    preset_arguments: ClassVar[tuple[str, ...] | None] = ("layer_sizes", "dimension", "class_count")
 
     def __init__(self, layer_sizes: list[int], dimension: int, class_count: int) -> None:
         validate_class_count(class_count)
@@ -73,20 +72,9 @@ class ArrayMultiClassShape[A: BackendArray](_ShapeBase[A]):
             target_batch[row, category] = 1.0
         return target_batch
 
-    def save(self, path: str) -> None:
-        # not save_model_json, whose envelope carries input_bounds, which the array networks lack
-        save_array_model_json(
-            path,
-            layer_sizes=self.layer_sizes,
-            dimension=self.dimension,
-            class_count=self.class_count,
-            snapshot=self.snapshot(),
-            extra=self._extra_state(),
-        )
-
     @classmethod
-    def load(cls, path: str) -> Self:
-        state = load_array_model_json(path)
+    def _load_legacy(cls, state: dict[str, Any]) -> Self:
+        # the legacy envelope: layer_sizes, dimension, class_count and the hyperparameters
         network = cls(
             state["layer_sizes"],
             state["dimension"],
@@ -101,12 +89,15 @@ class ArrayMultiClassShape[A: BackendArray](_ShapeBase[A]):
 class ArraySingleOutputShape[A: BackendArray](_ShapeBase[A]):
     """
     The single-output shape over ArrayNetworkBase, for either backend: 0.5-threshold classify_state,
-    predict_probability, a scalar target, and the save/load envelope without class_count. It hosts
+    predict_probability, a scalar target, and the legacy envelope without class_count. It hosts
     the ensembles' sub-networks, one binary classifier per class.
 
     A mixin like ArrayMultiClassShape: ArrayBackpropClassifierNetwork and
     RustArrayBackpropClassifierNetwork are this shape on numpy and on Rust.
     """
+
+    format2_shape: ClassVar[str] = "single_output"
+    preset_arguments: ClassVar[tuple[str, ...] | None] = ("layer_sizes", "dimension")
 
     def __init__(
         self,
@@ -139,19 +130,9 @@ class ArraySingleOutputShape[A: BackendArray](_ShapeBase[A]):
     def _target_batch_array(self, categories: Sequence[float]) -> A:
         return self.backend.matrix([[category] for category in categories])
 
-    def save(self, path: str) -> None:
-        # the envelope without class_count
-        save_single_output_array_model_json(
-            path,
-            layer_sizes=self.layer_sizes,
-            dimension=self.dimension,
-            snapshot=self.snapshot(),
-            extra=self._extra_state(),
-        )
-
     @classmethod
-    def load(cls, path: str) -> Self:
-        state = load_single_output_array_model_json(path)
+    def _load_legacy(cls, state: dict[str, Any]) -> Self:
+        # the multiclass shape's legacy envelope without class_count
         network = cls(state["layer_sizes"], state["dimension"], **cls._extra_init_kwargs(state))
         network.restore(state["snapshot"])
         return network
@@ -178,11 +159,19 @@ class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
     ConvRustArrayMultiClassBackpropClassifierNetwork are this shape on numpy and on Rust.
 
     __init__ builds the layers from its own arguments, not the multiclass shape's flat
-    layer_sizes: the conv specs, then _dense_specs. Its save/load is the pure-Python conv
-    network's envelope with one (W, b) entry per layer (an empty one for a pool layer), so a model
-    saved by either backend loads into the other, though not into the pure-Python network, with
-    the network's hyperparameters in it.
+    layer_sizes: the conv specs, then _dense_specs. Its legacy envelope is the pure-Python conv
+    network's with one (W, b) entry per layer (an empty one for a pool layer), so a model saved by
+    either backend loads into the other, though not into the pure-Python network, with the
+    network's hyperparameters in it.
     """
+
+    preset_arguments: ClassVar[tuple[str, ...] | None] = (
+        "input_height",
+        "input_width",
+        "conv_specs",
+        "dense_layer_sizes",
+        "class_count",
+    )
 
     def __init__(
         self,
@@ -212,12 +201,9 @@ class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
         )
         self.conv_layers = cast("list[ArrayFrontEndLayer[A]]", self.layers[: len(self.conv_specs)])
 
-    def save(self, path: str) -> None:
-        save_conv_array_model_json(path, self, extra=self._extra_state())
-
     @classmethod
-    def load(cls, path: str) -> Self:
-        return load_conv_model_json(cls, path, cls._extra_init_kwargs)
+    def _load_legacy(cls, state: dict[str, Any]) -> Self:
+        return load_conv_model_state(cls, state, cls._extra_init_kwargs(state))
 
 
 class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
@@ -228,8 +214,11 @@ class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
     output layer's size.
 
     A mixin, listed before the backend's plain multiclass network, as ArrayConvShape. It has no
-    save/load until format 2 (stage 5 of docs/composable-layers-workplan.md).
+    legacy envelope: it saves in format 2 (format2.py), without a preset, and loads any format-2
+    file of its shape, a preset's included.
     """
+
+    preset_arguments: ClassVar[tuple[str, ...] | None] = None
 
     def __init__(self, input_shape: InputShape, layers: Sequence[LayerSpec], update_rule: UpdateRule) -> None:
         output = layers[-1] if layers else None
@@ -237,28 +226,32 @@ class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
         validate_class_count(output.size)
 
         self.class_count = output.size
-        self.input_shape = input_shape
         self.dimension = math.prod(input_shape)
-        self.layer_specs = list(layers)
+        # read by _update_rule, while the base builds the optimizer
         self.update_rule = update_rule
 
         # past the multiclass shape's __init__, whose flat layer_sizes can't describe these layers,
         # to the backend's base
-        super(ArrayMultiClassShape, self).__init__(self.layer_specs, input_shape)
+        super(ArrayMultiClassShape, self).__init__(layers, input_shape)
 
     def _update_rule(self) -> UpdateRule:
         return self.update_rule
 
-    def save(self, path: str) -> None:
-        sequential_save_not_yet(self)
+    @classmethod
+    def _from_file(cls, file: NetworkFile) -> Self:
+        # any format-2 file of its shape, preset or not, numpy or Rust
+        return cls(file.input_shape, file.layers, file.update_rule)
 
     @classmethod
-    def load(cls, path: str) -> Self:
-        sequential_save_not_yet(cls)
+    def _load_legacy(cls, state: dict[str, Any]) -> Self:
+        # not the preset parent's envelope, which no Sequential network ever wrote
+        raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
 
 
 class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
     """SequentialMultiClassShape over the single-output shape: its output layer has one node."""
+
+    preset_arguments: ClassVar[tuple[str, ...] | None] = None
 
     def __init__(self, input_shape: InputShape, layers: Sequence[LayerSpec], update_rule: UpdateRule) -> None:
         output = layers[-1] if layers else None
@@ -266,19 +259,20 @@ class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
             f"a single-output network's last layer is a one-node Dense; got {output!r}"
         )
 
-        self.input_shape = input_shape
         self.dimension = math.prod(input_shape)
-        self.layer_specs = list(layers)
         self.update_rule = update_rule
 
-        super(ArraySingleOutputShape, self).__init__(self.layer_specs, input_shape)
+        super(ArraySingleOutputShape, self).__init__(layers, input_shape)
 
     def _update_rule(self) -> UpdateRule:
         return self.update_rule
 
-    def save(self, path: str) -> None:
-        sequential_save_not_yet(self)
+    @classmethod
+    def _from_file(cls, file: NetworkFile) -> Self:
+        # any format-2 file of its shape, preset or not, numpy or Rust
+        return cls(file.input_shape, file.layers, file.update_rule)
 
     @classmethod
-    def load(cls, path: str) -> Self:
-        sequential_save_not_yet(cls)
+    def _load_legacy(cls, state: dict[str, Any]) -> Self:
+        # not the preset parent's envelope, which no Sequential network ever wrote
+        raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")

@@ -16,8 +16,8 @@ The ensembles are assembled from injected single-output classifiers and trained 
 
 The pure-Python networks have no prepared-dataset paths, so they train with learn and learn_batch
 only, over the same rows, and record classify_state and predict_* only. The pure-Python
-single-output networks have no save, so they record no round trip. They are slow, so they train
-at the same small shapes as the rest.
+single-output networks record no round trip: they had no save when the golden file was recorded.
+They are slow, so they train at the same small shapes as the rest.
 
 The conv networks run in two configurations: CONV_SPECS (a conv, then a pool), and
 STRIDED_CONV_SPECS (a strided conv, then a second conv, no pool), so a conv layer reads a conv
@@ -334,7 +334,9 @@ def _run_network(name: str, network: Any, rows: Sequence[Example[Any]], predict:
         "snapshots": checkpoints,
         "predictions": _predictions(network, rows, prepared, predict),
     }
-    if hasattr(network, "save"):  # not the pure-Python single-output networks
+    # not the pure-Python single-output networks, which had no save when the golden file was
+    # recorded (format 2 gave them one)
+    if hasattr(network, "save") and name not in PYTHON_SINGLE_OUTPUT_NETWORKS:
         result["loaded"] = _round_trip(network, rows, predict)
     return result
 

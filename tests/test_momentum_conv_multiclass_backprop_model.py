@@ -113,7 +113,9 @@ def test_save_and_load_round_trip_keeps_momentum(tmp_path: Path):
 
     assert loaded.momentum == 0.9
     assert loaded.conv_specs == network.conv_specs
-    assert json.loads((tmp_path / "momentum_conv.json").read_text())["momentum"] == 0.9
+    saved = json.loads((tmp_path / "momentum_conv.json").read_text())
+    assert saved["preset"]["arguments"]["momentum"] == 0.9
+    assert saved["update_rule"] == {"rule": "momentum", "momentum": 0.9}
     # the loaded layers train with the saved momentum: two batches match a fresh 0.9 network's
     reference = MomentumConvMultiClassBackpropClassifierNetwork(
         8, 8, CONV_SPECS, DENSE_LAYER_SIZES, CLASS_COUNT, momentum=0.9

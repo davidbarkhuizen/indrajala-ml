@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, NoReturn
+from typing import Literal
 
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
@@ -46,14 +46,6 @@ LayerSpec = Dense | ConvSpec | PoolSpec
 # a network's input: (dimension,) for a flat input, or (height, width, channels) for an image, whose
 # flat layout is channel-major (conv_layer.py, conv_array_layer.py)
 InputShape = tuple[int] | tuple[int, int, int]
-
-
-def sequential_save_not_yet(network: object) -> NoReturn:
-    """save and load of every sequential network, until format 2."""
-    raise NotImplementedError(
-        f"a {type(network).__name__} saves in format 2, which records its layer specs "
-        "(docs/composable-layers-workplan.md, stage 5); no legacy envelope can describe them"
-    )
 
 
 def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:

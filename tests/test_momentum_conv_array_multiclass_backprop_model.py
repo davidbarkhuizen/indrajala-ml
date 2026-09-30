@@ -197,7 +197,9 @@ def test_save_and_load_round_trip_keeps_momentum(backend: Backend, tmp_path: Pat
     network.save(path)
     loaded = network_cls.load(path)
 
-    assert json.loads(Path(path).read_text())["momentum"] == 0.7
+    saved = json.loads(Path(path).read_text())
+    assert saved["preset"]["arguments"]["momentum"] == 0.7
+    assert saved["update_rule"] == {"rule": "momentum", "momentum": 0.7}
     assert loaded.momentum == 0.7 and loaded.conv_specs == network.conv_specs
     assert _as_lists(loaded.snapshot()) == _as_lists(network.snapshot())
     # the loaded layers train with the saved momentum: two batches match a fresh 0.7 network's

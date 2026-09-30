@@ -2,13 +2,24 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import Any, Self, cast
+from typing import Any, ClassVar, Self, cast
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.bounds import validate_batch, validate_input_bounds
 from indrajala_ml.model.checkpoint import Checkpoint
+from indrajala_ml.model.format2 import (
+    PYTHON,
+    NetworkFile,
+    check_kind,
+    is_format2,
+    network_from_json,
+    network_to_json,
+    preset_init_kwargs,
+    restore_file,
+)
 from indrajala_ml.model.layer_protocols import TrainableLayer
 from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
+from indrajala_ml.model.model_io import load_json, save_json
 from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.python_optimizer import PythonOptimizer, WeightSetState
 from indrajala_ml.model.state_layer import StateLayer
@@ -29,6 +40,18 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
     update rule (_update_rule) and their hyperparameters.
     """
 
+    # the constructor keyword arguments a sibling stores under the same attribute names (e.g.
+    # ("momentum",)), which its specs and rule read, as ArrayNetworkBase's
+    hyperparameters: ClassVar[tuple[str, ...]] = ()
+
+    # the format-2 file's (format2.py) shape, and a preset's constructor arguments beside its
+    # hyperparameters, named as the attributes that hold them. A Sequential network records no
+    # preset (None).
+    format2_shape: ClassVar[str]
+    preset_arguments: ClassVar[tuple[str, ...] | None]
+
+    implementation = PYTHON
+
     def __init__(
         self,
         specs: Sequence[LayerSpec],
@@ -36,6 +59,8 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
         input_bounds: list[tuple[float, float]],
     ) -> None:
 
+        self.input_shape = input_shape
+        self.layer_specs = list(specs)
         self.dimension = math.prod(input_shape)
 
         validate_input_bounds(self.dimension, input_bounds)
@@ -147,6 +172,34 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
         for layer, layer_snapshot in zip(self.trainable_layers, snapshot):
             layer.restore_state(layer_snapshot)
 
+    def save(self, path: str) -> None:
+        # format 2 (format2.py): the specs, rule, weights and optimizer state, per node and kernel
+        save_json(path, network_to_json(self))
+
+    @classmethod
+    def load(cls, path: str) -> Self:
+        # a pure-Python format-2 file, or the class's legacy envelope, which loads with fresh
+        # optimizer state
+        state = load_json(path)
+        return cls.from_format2(state) if is_format2(state) else cls._load_legacy(state)
+
+    @classmethod
+    def from_format2(cls, state: dict[str, Any]) -> Self:
+        file = network_from_json(state)
+        check_kind(cls, PYTHON, cls.format2_shape, file)
+        network = cls._from_file(file)
+        restore_file(network, file)
+        return network
+
+    @classmethod
+    def _from_file(cls, file: NetworkFile) -> Self:
+        # a preset, from the file's preset arguments; a Sequential network builds from its specs
+        return cls(**preset_init_kwargs(cls, file))
+
+    @classmethod
+    def _load_legacy(cls, state: dict[str, Any]) -> Self:
+        raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
+
     def checkpoint(self) -> Checkpoint[list[list[tuple[list[float], float]]], list[WeightSetState]]:
         # the weights and the optimizer's state (checkpoint.py)
         return Checkpoint(self.snapshot(), self.optimizer.state())
@@ -161,8 +214,7 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer]:
 def as_dense_layers(layers: Sequence[TrainableLayer]) -> list[BackpropLayer]:
     """
     layers, checked to be dense (BackpropLayer and its siblings), for what only a dense network
-    does: the multiclass save envelope reads every layer's size, and BackpropClassifierNetwork's
-    bounds-width randomize its node weights.
+    does, such as BackpropClassifierNetwork's bounds-width randomize of its node weights.
     """
     dense = [layer for layer in layers if isinstance(layer, BackpropLayer)]
     assert len(dense) == len(layers), f"expected only dense layers; got {[type(layer).__name__ for layer in layers]}"
