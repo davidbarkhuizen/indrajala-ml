@@ -56,7 +56,7 @@ from typing import Any, ClassVar, Protocol, cast
 
 from indrajala_ml.model.checkpoint import Checkpoint, OptimizerState
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec
+from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec, refuse_residual_until
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import generator_state, set_generator_state
@@ -120,6 +120,7 @@ def _lists(value: Any) -> Any:
 
 
 def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
+    refuse_residual_until([spec], "5", "in format 2")
     if isinstance(spec, ConvSpec):
         # a ReLU conv layer's entry as before ConvSpec had an activation, so those files don't change
         fields = asdict(spec)
@@ -133,8 +134,14 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
         if spec.group_size is None:
             del fields["group_size"]
         return {"kind": "batch_norm", **fields}
-    kind = "dense" if isinstance(spec, Dense) else "pool"
-    return {"kind": kind, **asdict(spec)}
+    if isinstance(spec, Dense):
+        # an entry without an affine bias as before Dense had one (the residual-connections
+        # workplan, D4), so those files don't change; load_network's Dense takes the default
+        fields = asdict(spec)
+        if not spec.bias:
+            del fields["bias"]
+        return {"kind": "dense", **fields}
+    return {"kind": "pool", **asdict(spec)}
 
 
 def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
