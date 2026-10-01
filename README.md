@@ -395,6 +395,8 @@ test passing, and:
   rejected, the candidates left, and how to measure a change.
 - [docs/pypi-release-workplan.md](docs/pypi-release-workplan.md): publishing the Rust crate to
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
+- [docs/dry-workplan.md](docs/dry-workplan.md): removing the code written twice where one copy
+  would do (ensembles, persistence, optimizers, shape walking, tests), without touching numerics.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, then attention.
 - [docs/next-steps.md](docs/next-steps.md): the work left over from completed workplans, and how
