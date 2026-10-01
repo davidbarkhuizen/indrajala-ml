@@ -9,23 +9,10 @@ from indrajala_ml.model.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import Backend, LayerOptimizer, set_random_node_weights
+from tests.helpers import Backend, LayerOptimizer, array_layer_like, set_random_node_weights
 
 LayerCls = type[ReLUArrayLayer] | type[ReLURustArrayLayer]
 LAYER_CLS: dict[str, LayerCls] = {"numpy": ReLUArrayLayer, "rust": ReLURustArrayLayer}
-
-
-@pytest.fixture
-def layer_cls(backend: Backend) -> LayerCls:
-    return LAYER_CLS[backend.name]
-
-
-def _array_layer_like(backprop_layer: BackpropLayer, backend: Backend):
-    array_layer = LAYER_CLS[backend.name](backprop_layer.size, len(backprop_layer.input_layer.nodes))
-    snapshot = backprop_layer.snapshot_state()
-    array_layer.W = backend.owned([weights for weights, _bias in snapshot])
-    array_layer.b = backend.owned([bias for _weights, bias in snapshot])
-    return array_layer
 
 
 def test_forward_matches_relu_node_across_a_random_sweep_including_the_z_equals_zero_boundary(backend: Backend):
@@ -40,7 +27,7 @@ def test_forward_matches_relu_node_across_a_random_sweep_including_the_z_equals_
 
         set_random_node_weights(rng, relu_layer, dimension, 3.0)
 
-        array_layer = _array_layer_like(relu_layer, backend)
+        array_layer = array_layer_like(LAYER_CLS[backend.name], relu_layer, backend)
 
         x = [rng.uniform(-10.0, 10.0) for _ in range(dimension)]
         state_layer.update_state(tuple(x))
@@ -108,7 +95,7 @@ def test_compute_hidden_delta_matches_relu_hidden_delta_across_a_random_sweep(la
         array_hidden = layer_cls(hidden_size, hidden_size)
         array_hidden.a = backend.owned(activations)
         # only W and delta are read; Any: paired with a layer of the same backend, which a union can't express
-        array_next: Any = _array_layer_like(next_layer, backend)
+        array_next: Any = array_layer_like(LAYER_CLS[backend.name], next_layer, backend)
         array_next.delta = backend.owned([node.delta for node in next_layer.nodes])
 
         array_hidden.compute_hidden_delta(array_next)

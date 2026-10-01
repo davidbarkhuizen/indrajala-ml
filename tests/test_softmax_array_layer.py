@@ -9,24 +9,11 @@ from indrajala_ml.model.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import Backend, LayerOptimizer, approx, set_random_node_weights
+from tests.helpers import Backend, LayerOptimizer, approx, array_layer_like, set_random_node_weights
 
 LayerCls = type[SoftmaxArrayLayer] | type[SoftmaxRustArrayLayer]
 LAYER_CLS: dict[str, LayerCls] = {"numpy": SoftmaxArrayLayer, "rust": SoftmaxRustArrayLayer}
 BASE_LAYER_CLS = {"numpy": ArrayLayer, "rust": RustArrayLayer}
-
-
-@pytest.fixture
-def layer_cls(backend: Backend) -> LayerCls:
-    return LAYER_CLS[backend.name]
-
-
-def _array_layer_like(softmax_layer: SoftmaxOutputLayer, backend: Backend):
-    array_layer = LAYER_CLS[backend.name](softmax_layer.size, len(softmax_layer.input_layer.nodes))
-    snapshot = softmax_layer.snapshot_state()
-    array_layer.W = backend.owned([weights for weights, _bias in snapshot])
-    array_layer.b = backend.owned([bias for _weights, bias in snapshot])
-    return array_layer
 
 
 def test_forward_matches_softmax_output_layer_across_a_random_sweep(backend: Backend):
@@ -41,7 +28,7 @@ def test_forward_matches_softmax_output_layer_across_a_random_sweep(backend: Bac
 
         set_random_node_weights(rng, softmax_layer, dimension, 3.0)
 
-        array_layer = _array_layer_like(softmax_layer, backend)
+        array_layer = array_layer_like(LAYER_CLS[backend.name], softmax_layer, backend)
 
         x = [rng.uniform(-10.0, 10.0) for _ in range(dimension)]
         state_layer.update_state(tuple(x))
@@ -64,7 +51,7 @@ def test_forward_matches_softmax_output_layer_for_large_magnitude_z_without_over
         node.bias = bias
     state_layer.update_state((0.0,))
 
-    array_layer = _array_layer_like(softmax_layer, backend)
+    array_layer = array_layer_like(LAYER_CLS[backend.name], softmax_layer, backend)
 
     softmax_layer.forward()
     expected = [node.value() for node in softmax_layer.nodes]
@@ -122,7 +109,7 @@ def test_compute_output_delta_matches_softmax_output_node_across_a_random_sweep(
             node.compute_output_delta(target)
             expected.append(node.delta)
 
-        array_layer = _array_layer_like(softmax_layer, backend)
+        array_layer = array_layer_like(LAYER_CLS[backend.name], softmax_layer, backend)
         array_layer.forward(backend.owned(x))
         array_layer.compute_output_delta(backend.owned([1.0 if i == category else 0.0 for i in range(size)]))
 

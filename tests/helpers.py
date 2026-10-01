@@ -171,6 +171,16 @@ class LayerOptimizer:
         return self.optimizer._state[0]
 
 
+def array_layer_like(layer_cls: Callable[[int, int], Any], layer: BackpropLayer, backend: Backend) -> Any:
+    """A layer_cls array layer on backend with layer's weights and biases: a dense pure-Python layer
+    (a BackpropLayer, ReLU, softmax or cross-entropy one) as its array counterpart."""
+    array_layer = layer_cls(layer.size, len(layer.input_layer.nodes))
+    snapshot = layer.snapshot_state()
+    array_layer.W = backend.owned([weights for weights, _bias in snapshot])
+    array_layer.b = backend.owned([bias for _weights, bias in snapshot])
+    return array_layer
+
+
 def weighted(layer: object) -> WeightedArrayLayer[Any]:
     """An array network's layer, checked to have weights (a dense or conv layer, not a pool layer)."""
     assert isinstance(layer, WeightedArrayLayer), f"a {type(layer).__name__} has no weights"

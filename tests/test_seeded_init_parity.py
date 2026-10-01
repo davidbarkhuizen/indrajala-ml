@@ -26,6 +26,7 @@ from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.update_rules import SGD
+from tests.array_network_contract import snapshot_bits
 from tests.helpers import all_subclasses
 
 for _module in pkgutil.iter_modules(indrajala_ml.model.__path__):
@@ -84,10 +85,6 @@ def test_every_array_network_class_is_covered():
         NumpyArrayNetworkBase,
         RustArrayNetworkBase,
     }
-
-
-def snapshot_bits(network: Any) -> list[list[bytes]]:
-    return [[np.asarray(array.tolist(), dtype=np.float64).tobytes() for array in entry] for entry in network.snapshot()]
 
 
 def assert_seeded_randomized_identical(build: Callable[[type[Any]], Any], numpy_name: str, seed: int) -> None:
