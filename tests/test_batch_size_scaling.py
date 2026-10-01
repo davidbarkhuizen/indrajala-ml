@@ -1,5 +1,5 @@
 import random
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -8,18 +8,21 @@ from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.classifier_protocols import Example
+from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layer_specs import BatchNorm, Dense
 from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
     MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
     MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.update_rules import SGD, Momentum
 from indrajala_ml.train import train_backprop_network_mini_batch
 
 
@@ -165,3 +168,71 @@ def test_train_and_evaluate_trains_the_momentum_conv_network(
     assert runs[0]["steps"] == 2 * 4
     assert runs[0]["test_accuracies"] == runs[1]["test_accuracies"]
     assert runs[0]["test_accuracies"] != runs[2]["test_accuracies"]
+
+
+def _arrays(snapshot: list[tuple[Any, ...]]) -> list[list[Any]]:
+    # a snapshot of either backend (numpy arrays or pa.Arrays) as nested lists, entry by entry
+    return [[array.tolist() for array in entry] for entry in snapshot]
+
+
+@pytest.mark.parametrize("group_size", [None, 32])
+def test_conv_batch_norm_specs_put_batch_norm_on_every_hidden_layer(group_size: int | None):
+    assert bss.conv_batch_norm_specs(group_size) == [
+        ConvSpec(3, 8, activation="linear"),
+        BatchNorm("relu", group_size=group_size),
+        Dense(32, activation="linear"),
+        BatchNorm("sigmoid", group_size=group_size),
+        Dense(10, output=True),
+    ]
+
+
+@pytest.mark.parametrize("group_size", [None, 32])
+@pytest.mark.parametrize("momentum", [0.0, 0.9])
+def test_initial_conv_batch_norm_network_is_identical_across_backends(momentum: float, group_size: int | None):
+    numpy_network: Any = bss.initial_network("numpy", momentum, 7, "conv-bn", group_size)
+    rust_network: Any = bss.initial_network("rust", momentum, 7, "conv-bn", group_size)
+    numpy_weights = numpy_network.snapshot()
+    # linear conv (W,), batch norm (gamma, beta, running mean, running var), linear dense (W,), batch
+    # norm, the output layer (W, b)
+    assert [len(entry) for entry in numpy_weights] == [1, 4, 1, 4, 2]
+    assert _arrays(numpy_weights) == _arrays(rust_network.snapshot())
+    assert numpy_network.update_rule == rust_network.update_rule == (Momentum(momentum) if momentum else SGD())
+
+
+def test_initial_conv_batch_norm_weights_depend_on_the_seed_only():
+    reference = _arrays(bss.initial_network("rust", 0.0, 3, "conv-bn").snapshot())
+    for momentum, group_size in [(0.9, None), (0.0, 32), (0.9, 32)]:
+        assert _arrays(bss.initial_network("rust", momentum, 3, "conv-bn", group_size).snapshot()) == reference
+    assert _arrays(bss.initial_network("rust", 0.0, 4, "conv-bn").snapshot()) != reference
+
+
+def test_initial_network_takes_a_group_size_for_conv_bn_only():
+    with pytest.raises(AssertionError, match="conv-bn only"):
+        bss.initial_network("rust", 0.0, 0, "conv", 32)
+
+
+def test_conv_batch_norm_arms_are_the_same_bits_at_batch_32(
+    mnist_subset: tuple[list[Example[int]], list[Example[int]]],
+):
+    # a ghost group as large as the batch is plain batch norm (D3), so the two arms share the
+    # batch-32 band; the final batch of 8 (200 rows) is one group in both
+    train_data, test_data = mnist_subset
+    plain = bss.train_and_evaluate("rust", train_data, test_data, 32, 2.0, 1.0, 0.9, 2, 0, "conv-bn", None)
+    ghost = bss.train_and_evaluate("rust", train_data, test_data, 32, 2.0, 1.0, 0.9, 2, 0, "conv-bn", 32)
+    assert plain["test_accuracies"] == ghost["test_accuracies"]
+
+
+@pytest.mark.parametrize("batch_size", [128, 512])
+def test_conv_batch_norm_trains_with_the_full_mnist_final_batch(batch_size: int):
+    # 60000 rows leave a final batch of 96 at B = 128 and 512, three ghost groups of 32: no batch
+    # or group of one is refused. Ghost groups change the run against plain batch norm.
+    train_data = load_mnist_dataset(bss.TRAIN_PATH, limit=batch_size + 96)
+    test_data = load_mnist_dataset(bss.TEST_PATH, limit=100)
+    runs = {
+        group_size: bss.train_and_evaluate(
+            "rust", train_data, test_data, batch_size, 2.0, 0.0, 0.0, 1, 0, "conv-bn", group_size
+        )
+        for group_size in (None, 32)
+    }
+    assert runs[None]["steps"] == runs[32]["steps"] == 2
+    assert runs[None]["test_accuracies"] != runs[32]["test_accuracies"]

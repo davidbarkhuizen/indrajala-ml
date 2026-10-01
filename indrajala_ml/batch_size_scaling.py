@@ -51,6 +51,9 @@ PR #454:
 - The unscaled rate at momentum 0.9 is unstable without warmup from B = 128 up (epoch 1: 45.64%
   at B = 128, 9.95% at B = 512), as for dense.
 
+The conv network with batch norm on every hidden layer ("conv-bn", conv_batch_norm_specs), plain
+and with ghost groups of 32, is being tested the same way: docs/conv-batch-norm-scaling-workplan.md.
+
 The timing findings are in docs/optimizations/ (current-baseline.md and candidates.md).
 
 The study runs its own epoch loop rather than train_backprop_network_mini_batch. The loop is the
@@ -70,6 +73,7 @@ import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.lr_schedule import linear_warmup
+from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.classifier_protocols import BatchTrainableClassifier, Example
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
@@ -78,6 +82,7 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
     MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -93,6 +98,8 @@ from indrajala_ml.model.momentum_vectorized_multiclass_backprop_classifier_netwo
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.update_rules import SGD, Momentum, UpdateRule
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
@@ -104,7 +111,7 @@ CLASS_COUNT = 10
 LAYER_SIZES = [30]  # the architecture every MNIST demo uses
 CONV_SPECS = [ConvSpec(3, 8)]  # the conv demo's (demo_conv_rust_vs_vectorized_digit_recognition)
 CONV_DENSE_LAYER_SIZES = [32]
-ARCHITECTURES = ["dense", "conv"]
+ARCHITECTURES = ["dense", "conv", "conv-bn"]
 BASE_BATCH_SIZE = 32
 TRAIN_PATH = "data/mnist/mnist-train.bin"
 TEST_PATH = "data/mnist/mnist-test.bin"
@@ -126,11 +133,34 @@ def learning_rate_schedule(rate: float, warmup_step_count: int) -> float | Calla
     return linear_warmup(rate, warmup_step_count) if warmup_step_count > 0 else rate
 
 
-def initial_network(backend: str, momentum: float, seed: int, architecture: str = "dense"):
+def conv_batch_norm_specs(group_size: int | None) -> list[LayerSpec]:
+    """
+    The conv network with batch norm on every hidden layer (the conv batch-norm workplan, D2): each
+    hidden layer linear, then a BatchNorm carrying its activation, with ghost groups of group_size
+    (D3; None for plain batch norm).
+    """
+    (conv,) = CONV_SPECS
+    (dense_size,) = CONV_DENSE_LAYER_SIZES
+    return [
+        ConvSpec(conv.kernel_size, conv.channel_count, conv.stride, activation="linear"),
+        BatchNorm("relu", group_size=group_size),
+        Dense(dense_size, activation="linear"),
+        BatchNorm("sigmoid", group_size=group_size),
+        Dense(CLASS_COUNT, output=True),
+    ]
+
+
+def initial_network(
+    backend: str, momentum: float, seed: int, architecture: str = "dense", group_size: int | None = None
+):
     """
     A fresh network whose weights are drawn once by numpy from `seed` and restored, so every
-    backend, rate, batch size and momentum sees the same starting weights for a given seed.
+    backend, rate, batch size, momentum and (conv-bn) group size sees the same starting weights
+    for a given seed. group_size is conv-bn's only.
     """
+    if architecture == "conv-bn":
+        return _initial_conv_batch_norm_network(backend, momentum, seed, group_size)
+    assert group_size is None, f"group_size is for conv-bn only; got {group_size} for {architecture!r}"
     if architecture == "conv":
         return _initial_conv_network(backend, momentum, seed)
     if architecture != "dense":
@@ -190,6 +220,21 @@ def _initial_conv_network(backend: str, momentum: float, seed: int):
     return network
 
 
+def _initial_conv_batch_norm_network(backend: str, momentum: float, seed: int, group_size: int | None):
+    if backend not in ("numpy", "rust"):
+        raise ValueError(f"unknown backend {backend!r}")
+    specs = conv_batch_norm_specs(group_size)
+    rule: UpdateRule = Momentum(momentum) if momentum else SGD()
+
+    np.random.seed(seed)
+    drawn = SequentialArrayNetwork((SIDE, SIDE, 1), specs, rule, backend=NUMPY)
+    drawn.randomize()
+
+    network = SequentialArrayNetwork((SIDE, SIDE, 1), specs, rule, backend=NUMPY if backend == "numpy" else RUST)
+    network.restore(drawn.snapshot())
+    return network
+
+
 def train_epoch(
     network: BatchTrainableClassifier[int],
     train_data: Sequence[Example[int]],
@@ -226,11 +271,12 @@ def train_and_evaluate(
     epochs: int,
     seed: int,
     architecture: str = "dense",
+    group_size: int | None = None,
 ) -> dict[str, Any]:
     """
     One run: test accuracy after every epoch, steps per epoch and step-loop seconds per epoch.
     """
-    network = initial_network(backend, momentum, seed, architecture)
+    network = initial_network(backend, momentum, seed, architecture, group_size)
     random.seed(seed)  # the shuffle order
     schedule = learning_rate_schedule(rate, warmup_steps(warmup_epochs, len(train_data), batch_size))
 
