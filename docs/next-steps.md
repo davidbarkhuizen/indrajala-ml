@@ -2,8 +2,7 @@
 
 A workplan is deleted once its last stage merges. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md) and
-[rng-generators-workplan.md](rng-generators-workplan.md). The order
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order
 of the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
@@ -18,9 +17,10 @@ docs cite them by section:
 | Batch normalization (roadmap step 2) | #486 | #493-#503 | `git show 189921c:docs/batch-norm-workplan.md` |
 | Removing duplicated code (DRY) | #506 | #507-#514 | `git show e066333:docs/dry-workplan.md` |
 | The conv batch-size study with batch norm | #516 | #517-#519 | `git show acbc49c:docs/conv-batch-norm-scaling-workplan.md` |
+| Explicit generator objects (RNG generators) | #521 | crate #46, #522-#529 | `git show aaf8bb2:docs/rng-generators-workplan.md` |
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
-normalization) and [measurement.md](measurement.md). The batch-size studies' findings are in
+normalization), [measurement.md](measurement.md) and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/batch_size_scaling.py`'s docstring.
 
 ## From composable layers
@@ -123,3 +123,21 @@ Still out of scope:
 - The crate (the workplan's D1), and scripts and demos (D5): they get their own audit if wanted.
 - The numpy and Rust layer twins' numerics (D3): they share identical methods only; their method
   bodies (a numpy expression against one fused Rust call) stay separate by design.
+
+## From the RNG generators workplan
+
+- **Matching the pure-Python networks with the array networks from one seed.** All three draw
+  from one PCG64 stream family, but the per-node networks draw weights node by node and one
+  dropout draw per node, so the same seed gives other values. Until the draw order matches, the
+  per-node dropout reference is compared with the array networks only at eval
+  ([rng-audit.md](rng-audit.md), Open work).
+- **Run checkpoints beyond one network's mini-batch run** (`indrajala_ml/run_checkpoint.py`):
+  resuming mid-epoch, resuming `train_linear_classifier_network` (it returns no run checkpoint),
+  and resuming an ensemble's run, whose sub-networks train as separate jobs.
+
+Still out of scope:
+
+- Normal draws, integer draws and broadcast `low`/`high`. Nothing uses them.
+- Other bit generators (Philox, SFC64, PCG64DXSM).
+- Changing the crate's legacy MT19937 module functions, which mirror `np.random` (the workplan's
+  D7).

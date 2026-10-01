@@ -1,5 +1,5 @@
 """
-indrajala_ml.pcg64 is numpy's default_rng in pure Python, bit for bit (docs/rng-generators-workplan.md,
+indrajala_ml.pcg64 is numpy's default_rng in pure Python, bit for bit (the RNG generators workplan,
 D5): SeedSequence's pools, generate_state and spawns, PCG64's doubles and uniforms, and numpy's
 bit_generator.state, which moves between numpy, the crate and this module and continues
 identically. rust/tests/test_random_pcg64_parity.py checks the crate's port the same way.

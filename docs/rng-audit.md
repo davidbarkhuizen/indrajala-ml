@@ -3,8 +3,9 @@
 The random number generators this project uses: how the Rust crate's generator
 (`rust/src/random.rs`) reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and
 what is still open. The crate also has a PCG64 `Generator` (`rust/src/generator.rs`) that
-reproduces numpy's `default_rng` bit for bit; nothing uses it yet
-([rng-generators-workplan.md](rng-generators-workplan.md)). The measurements and checks come from these harnesses:
+reproduces numpy's `default_rng` bit for bit, which the Rust networks draw from (the RNG generators
+workplan, retired: [next-steps.md](next-steps.md)). The measurements and checks come from these
+harnesses:
 
 - `rust/tests/test_random_numpy_parity.py`: the crate against `np.random`, bit for bit. It covers
   every draw function, the fused dropout masks, every seeding path and numpy's rejections.
@@ -41,7 +42,7 @@ against the latest numpy.
 | Rust dropout | `layer_dropout_forward*` with `rng` | the network's, as above | as above |
 
 Since the RNG generators workplan's stages 3 and 4, each network owns its generator
-([rng-generators-workplan.md](rng-generators-workplan.md), D8): `randomize()` and its dropout
+(the RNG generators workplan, D8): `randomize()` and its dropout
 layers draw from `network.rng`, one stream between them. An ensemble trainer seeds sub-network
 `i` from `SeedSequence(seed).spawn(class_count)[i]` (`indrajala_ml/pcg64.py`), which every
 implementation's `default_rng` takes. Since stage 5 the shuffles and the sampling helpers draw
@@ -178,7 +179,7 @@ p = 0.5, 8192 random rows, `learn_batch` on tuple batches, 9 processes) takes a 
 
 `random`, `np.random` and the crate's RNG were all global, so every draw shifted every later one:
 a dropout mask drawn during training changed the weights the next `randomize()` got unless the
-code reseeded in between. [rng-generators-workplan.md](rng-generators-workplan.md) replaced them
+code reseeded in between. The RNG generators workplan replaced them
 with explicit generator objects, as numpy's guidance (NEP 19) recommends: each network owns a PCG64
 generator, bit-identical across numpy, the crate and pure Python, and the shuffles and samples draw
 from a passed `random.Random`. Tests and scripts may still seed the globals for their own draws.

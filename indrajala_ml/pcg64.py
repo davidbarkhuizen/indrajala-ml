@@ -3,7 +3,7 @@ numpy's default_rng in pure Python, for the pure-Python networks: Generator(PCG6
 bit for bit, drawing one scalar at a time. numpy draws the same stream and the crate's pa.Generator
 (rust/src/generator.rs) ports the same algorithm, so all three implementations draw from one
 stream family and share one state layout, numpy's bit_generator.state
-(docs/rng-generators-workplan.md, D5). Backend-free: no numpy import.
+(the RNG generators workplan, D5). Backend-free: no numpy import.
 
 - SeedSequence(entropy, spawn_key=()) hashes the entropy (an int of any size, a sequence of ints,
   or 128 bits of OS entropy for None) and the spawn key into a pool of four 32-bit words, and
