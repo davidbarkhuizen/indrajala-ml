@@ -9,6 +9,7 @@ import numpy as np
 from indrajala_ml.model.array_layer import FloatArray, fan_in_aware_random_layer, fan_in_aware_random_weights
 from indrajala_ml.model.optimizers import NumpyOptimizer, RustOptimizer
 from indrajala_ml.model.rust_array_layer import fan_in_aware_random_rust_layer, fan_in_aware_random_rust_weights
+from indrajala_ml.model.update_rules import UpdateRule
 
 
 class NumpyBackend:
@@ -23,7 +24,6 @@ class NumpyBackend:
     seed = staticmethod(np.random.seed)
     random_layer = staticmethod(fan_in_aware_random_layer)
     random_weights = staticmethod(fan_in_aware_random_weights)
-    optimizer = staticmethod(NumpyOptimizer)
 
     @staticmethod
     def vector(state: Sequence[float]) -> FloatArray:
@@ -45,6 +45,9 @@ class NumpyBackend:
     @staticmethod
     def row_range(states: FloatArray, start: int, stop: int) -> FloatArray:
         return states[start:stop]
+
+    def optimizer(self, rule: UpdateRule) -> NumpyOptimizer:
+        return NumpyOptimizer(rule, self)
 
     @staticmethod
     def owned(values: Any) -> FloatArray:
@@ -71,7 +74,6 @@ class RustBackend:
     seed = staticmethod(pa.seed)
     random_layer = staticmethod(fan_in_aware_random_rust_layer)
     random_weights = staticmethod(fan_in_aware_random_rust_weights)
-    optimizer = staticmethod(RustOptimizer)
 
     @staticmethod
     def vector(state: Sequence[float]) -> pa.Array:
@@ -92,6 +94,9 @@ class RustBackend:
     @staticmethod
     def row_range(states: pa.Array, start: int, stop: int) -> pa.Array:
         return states.take_rows(list(range(start, stop)))
+
+    def optimizer(self, rule: UpdateRule) -> RustOptimizer:
+        return RustOptimizer(rule, self)
 
     @staticmethod
     def owned(values: Any) -> pa.Array:

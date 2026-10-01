@@ -21,7 +21,8 @@ from typing import cast
 
 from indrajala_ml.model.checkpoint import OptimizerState
 from indrajala_ml.model.layer_protocols import TrainableLayer, WeightSet
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.optimizer_base import OptimizerBase
+from indrajala_ml.model.update_rules import Adam, Momentum, WeightDecay
 
 # one weight set's state: lists shaped as its weights (momentum's velocities; Adam's m, then v),
 # and the bias's values in the same order, none for a weight set without a bias (a linear layer's
@@ -37,26 +38,11 @@ def _copy_layers(layers: dict[int, list[WeightSetState]]) -> dict[int, list[Weig
     }
 
 
-class PythonOptimizer:
-    """The optimizer of the pure-Python networks: each rule's formulas per weight, in Python floats."""
-
-    def __init__(self, rule: UpdateRule) -> None:
-        self.rule = rule
-        self.t = 0
-        # per layer index: each weight set's state, in the layer's weight_sets() order
-        self._state: dict[int, list[WeightSetState]] = {}
-        match rule:
-            case SGD():
-                self._apply_rule = self._apply_sgd
-            case Momentum():
-                self._apply_rule = self._apply_momentum
-            case Adam():
-                self._apply_rule = self._apply_adam
-            case WeightDecay():
-                self._apply_rule = self._apply_weight_decay
-
-    def begin_step(self) -> None:
-        self.t += 1
+class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], None]):
+    """
+    The optimizer of the pure-Python networks: each rule's formulas per weight, in Python floats.
+    Its state per layer: each weight set's, in the layer's weight_sets() order.
+    """
 
     def state(self) -> OptimizerState[list[WeightSetState]]:
         return OptimizerState(self.t, _copy_layers(self._state))

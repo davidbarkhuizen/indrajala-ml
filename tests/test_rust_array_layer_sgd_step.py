@@ -134,7 +134,7 @@ def test_step_single_is_bit_identical_to_accumulate_then_apply(name: str, rule_n
     fused, unfused = LAYER_FACTORIES[name](), LAYER_FACTORIES[name]()
     x = _random_layer_state(fused, np.random.default_rng(seed))
     _random_layer_state(unfused, np.random.default_rng(seed))
-    fused_optimizer, unfused_optimizer = RustOptimizer(RULES[rule_name]), RustOptimizer(RULES[rule_name])
+    fused_optimizer, unfused_optimizer = RUST.optimizer(RULES[rule_name]), RUST.optimizer(RULES[rule_name])
     unfused_step_single = _unfused_step_single(unfused_optimizer)
 
     # two steps, so a stateful rule (momentum's velocity, Adam's m/v/t) is exercised

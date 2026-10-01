@@ -25,8 +25,9 @@ import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.array_protocols import ArrayNetworkLayer, TrainedArrayLayer
+from indrajala_ml.model.array_protocols import ArrayBackend, ArrayNetworkLayer, BackendArray, TrainedArrayLayer
 from indrajala_ml.model.checkpoint import OptimizerState
+from indrajala_ml.model.optimizer_base import OptimizerBase
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
@@ -49,44 +50,55 @@ def momentum_update(
     return velocity
 
 
-class NumpyOptimizer:
+class ArrayOptimizerBase[A: BackendArray, R](OptimizerBase[list[A], TrainedArrayLayer[A], R]):
+    """
+    What NumpyOptimizer and RustOptimizer share: their state per layer, the rule's state arrays per
+    parameter in parameters() order (momentum's velocity; Adam's m, then v), copied out and in
+    through the backend's arrays.
+    """
+
+    def __init__(self, rule: UpdateRule, backend: ArrayBackend[A]) -> None:
+        super().__init__(rule)
+        # the backend whose arrays the state is made of (array_backend.py, which builds this
+        # optimizer as backend.optimizer(rule))
+        self._backend = backend
+
+    def state(self) -> OptimizerState[list[A]]:
+        return OptimizerState(
+            self.t, {index: [array.copy() for array in arrays] for index, arrays in self._state.items()}
+        )
+
+    def load_state(self, state: OptimizerState[Any]) -> None:
+        # this backend's arrays or nested lists (a checkpoint pickled across a worker boundary)
+        self.t = state.t
+        self._state = {
+            index: [self._backend.owned(values) for values in arrays] for index, arrays in state.layers.items()
+        }
+
+    def _zeros(self, index: int, layer: TrainedArrayLayer[A], count: int) -> list[A]:
+        # count zero arrays shaped as each parameter, parameter by parameter: the rule's state for
+        # a layer, made on the layer's first step
+        state = self._state.get(index)
+        if state is None:
+            state = self._state[index] = [
+                self._backend.zeros(_shape(parameter)) for parameter in layer.parameters() for _ in range(count)
+            ]
+        return state
+
+
+def _shape(array: BackendArray) -> int | tuple[int, int]:
+    # an array's shape as the backends' zeros takes it: every parameter is a vector or a matrix
+    shape = array.shape
+    return shape[0] if len(shape) == 1 else (shape[0], shape[1])
+
+
+class NumpyOptimizer(ArrayOptimizerBase[FloatArray, None]):
     """
     The optimizer of the numpy networks: each rule's formulas on numpy arrays, each of a layer's
     parameters (TrainedArrayLayer.parameters(): W and b, a linear layer's W, or batch norm's gamma
     and beta) stepped in place, one after another. Each rule's formula is elementwise, so a
     parameter's step doesn't depend on the others'.
     """
-
-    def __init__(self, rule: UpdateRule) -> None:
-        self.rule = rule
-        self.t = 0
-        # per layer index: the rule's state arrays, per parameter in parameters() order
-        # (momentum's velocity; Adam's m, then v)
-        self._state: dict[int, list[FloatArray]] = {}
-        match rule:
-            case SGD():
-                self._apply_rule = self._apply_sgd
-            case Momentum():
-                self._apply_rule = self._apply_momentum
-            case Adam():
-                self._apply_rule = self._apply_adam
-            case WeightDecay():
-                self._apply_rule = self._apply_weight_decay
-
-    def begin_step(self) -> None:
-        self.t += 1
-
-    def state(self) -> OptimizerState[list[FloatArray]]:
-        return OptimizerState(
-            self.t, {index: [array.copy() for array in arrays] for index, arrays in self._state.items()}
-        )
-
-    def load_state(self, state: OptimizerState[Any]) -> None:
-        # numpy arrays or nested lists (a checkpoint pickled across a worker boundary)
-        self.t = state.t
-        self._state = {
-            index: [np.array(values, dtype=np.float64) for values in arrays] for index, arrays in state.layers.items()
-        }
 
     def apply(self, index: int, layer: ArrayNetworkLayer[FloatArray], learning_rate: float, batch_size: int) -> None:
         if not hasattr(layer, "parameters"):
@@ -101,16 +113,6 @@ class NumpyOptimizer:
         # accumulate, then apply at batch_size=1
         layer.accumulate_gradient(input_activation)
         self.apply(index, layer, learning_rate, 1)
-
-    def _zeros(self, index: int, layer: TrainedArrayLayer[FloatArray], count: int) -> list[FloatArray]:
-        # count zero arrays shaped as each parameter, parameter by parameter: the rule's state for
-        # a layer, made on the layer's first step
-        state = self._state.get(index)
-        if state is None:
-            state = self._state[index] = [
-                np.zeros(parameter.shape) for parameter in layer.parameters() for _ in range(count)
-            ]
-        return state
 
     def _apply_sgd(
         self, _index: int, layer: TrainedArrayLayer[FloatArray], learning_rate: float, batch_size: int
@@ -158,11 +160,6 @@ class NumpyOptimizer:
             state[2 * i], state[2 * i + 1] = m, v
 
 
-def _rust_zeros(like: pa.Array) -> pa.Array:
-    shape = like.shape
-    return pa.Array.zeros(shape[0] if len(shape) == 1 else (shape[0], shape[1]))
-
-
 # a bias-free layer's missing second parameter: the fused ops step each parameter of their pair on
 # its own, and step an empty array to an empty array
 _EMPTY = pa.Array.zeros(0)
@@ -174,7 +171,7 @@ def _pair(arrays: tuple[pa.Array, ...] | list[pa.Array]) -> tuple[pa.Array, pa.A
     return (arrays[0], arrays[1]) if len(arrays) == 2 else (arrays[0], _EMPTY)
 
 
-class RustOptimizer:
+class RustOptimizer(ArrayOptimizerBase[pa.Array, tuple[pa.Array, pa.Array]]):
     """
     NumpyOptimizer on the Rust backend: each rule is one fused call per layer (fused.rs), taking a
     pair of parameters, and the layer's parameters are rebound to its result. The pair is a dense
@@ -184,36 +181,9 @@ class RustOptimizer:
     fused call too (step_single).
     """
 
-    def __init__(self, rule: UpdateRule) -> None:
-        self.rule = rule
-        self.t = 0
-        self._state: dict[int, list[pa.Array]] = {}
+    def __init__(self, rule: UpdateRule, backend: ArrayBackend[pa.Array]) -> None:
+        super().__init__(rule, backend)
         self._fused_sgd_step = isinstance(rule, SGD)
-        match rule:
-            case SGD():
-                self._apply_rule = self._apply_sgd
-            case Momentum():
-                self._apply_rule = self._apply_momentum
-            case Adam():
-                self._apply_rule = self._apply_adam
-            case WeightDecay():
-                self._apply_rule = self._apply_weight_decay
-
-    def begin_step(self) -> None:
-        self.t += 1
-
-    def state(self) -> OptimizerState[list[pa.Array]]:
-        return OptimizerState(
-            self.t, {index: [array.copy() for array in arrays] for index, arrays in self._state.items()}
-        )
-
-    def load_state(self, state: OptimizerState[Any]) -> None:
-        # Rust arrays or nested lists (a checkpoint pickled across a worker boundary)
-        self.t = state.t
-        self._state = {
-            index: [values.copy() if isinstance(values, pa.Array) else pa.Array(values) for values in arrays]
-            for index, arrays in state.layers.items()
-        }
 
     def apply(self, index: int, layer: ArrayNetworkLayer[pa.Array], learning_rate: float, batch_size: int) -> None:
         if not hasattr(layer, "parameters"):
@@ -236,15 +206,6 @@ class RustOptimizer:
             return
         layer.accumulate_gradient(input_activation)
         self.apply(index, layer, learning_rate, 1)
-
-    def _zeros(self, index: int, layer: TrainedArrayLayer[pa.Array], count: int) -> list[pa.Array]:
-        # as NumpyOptimizer._zeros
-        state = self._state.get(index)
-        if state is None:
-            state = self._state[index] = [
-                _rust_zeros(parameter) for parameter in layer.parameters() for _ in range(count)
-            ]
-        return state
 
     def _apply_sgd(
         self, _index: int, layer: TrainedArrayLayer[pa.Array], learning_rate: float, batch_size: int

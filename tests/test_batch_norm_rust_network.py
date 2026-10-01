@@ -21,7 +21,6 @@ from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLay
 from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.linear_rust_array_layer import LinearRustArrayLayer
-from indrajala_ml.model.optimizers import NumpyOptimizer, RustOptimizer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.train import train_backprop_network_mini_batch
@@ -192,7 +191,7 @@ def test_the_optimizer_steps_a_linear_layer_and_gamma_and_beta_as_numpys_by_bits
     # the fused ops compute each rule's formula in the source's grouping, as NumpyOptimizer does,
     # a parameter at a time: a missing bias is an empty array, stepped to an empty array
     rng = np.random.default_rng(2)
-    numpy_optimizer, rust_optimizer = NumpyOptimizer(rule), RustOptimizer(rule)
+    numpy_optimizer, rust_optimizer = NUMPY.optimizer(rule), RUST.optimizer(rule)
     for _step in range(3):
         numpy_layers, rust_layers = _optimizer_layers(rng)
         for optimizer, layers in ((numpy_optimizer, numpy_layers), (rust_optimizer, rust_layers)):
@@ -212,7 +211,7 @@ def test_adams_step_is_numpys_within_its_bias_corrections_rounding():
     # the fourth step the steps differ by an ULP or so, as they did before this optimizer took
     # pairs, for every layer, with or without batch norm
     rng = np.random.default_rng(4)
-    numpy_optimizer, rust_optimizer = NumpyOptimizer(Adam()), RustOptimizer(Adam())
+    numpy_optimizer, rust_optimizer = NUMPY.optimizer(Adam()), RUST.optimizer(Adam())
     for _step in range(5):
         numpy_layers, rust_layers = _optimizer_layers(rng)
         for optimizer, layers in ((numpy_optimizer, numpy_layers), (rust_optimizer, rust_layers)):
