@@ -14,6 +14,7 @@ from indrajala_ml.model.layer_specs import refuse_single_example_groups
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 from indrajala_ml.prepared_dataset import PreparedDataset
+from indrajala_ml.run_checkpoint import RunCheckpoint
 
 
 def random_alternating_training_data(
@@ -138,10 +139,13 @@ class TrainingDiagnostic:
 class ConvergenceSeries(list[tuple[int, float]]):
     """
     The list of (iteration, disagreement_rate) pairs train_linear_classifier_network returns, plus
-    .diagnostic, a TrainingDiagnostic.
+    .diagnostic, a TrainingDiagnostic. train_backprop_network_mini_batch's also has .run_checkpoint,
+    the run's state at its last epoch, to resume it from (run_checkpoint.py); the linear trainer's
+    is None.
     """
 
     diagnostic: TrainingDiagnostic
+    run_checkpoint: RunCheckpoint | None = None
 
 
 def train_linear_classifier_network[L](
@@ -271,6 +275,7 @@ def train_backprop_network_mini_batch[L](
     reference_classifier: TargetClassifier[float] | None = None,
     reshuffle_each_epoch: bool = True,
     rng: Random | None = None,
+    resume_from: RunCheckpoint | None = None,
 ) -> ConvergenceSeries:
     """
     train_linear_classifier_network with mini-batches, for gradient-based students (any network with
@@ -289,6 +294,13 @@ def train_backprop_network_mini_batch[L](
 
     Otherwise as train_linear_classifier_network: the pocket checkpoint of the best epoch, and the
     TrainingDiagnostic/ConvergenceSeries return.
+
+    The result's .run_checkpoint is the run's state at the last epoch, taken before the pocket
+    restores the best one (run_checkpoint.py). resume_from=, such a checkpoint, trains on from it:
+    student takes its last epoch's checkpoint, rng its shuffle state, and the run its counters, its
+    pocket and its series so far, so epochs counts the whole run, the epochs before included. The
+    same training_data, batch_size, learning_rate, reference_classifier and reshuffle_each_epoch
+    then take the steps the run would have taken had it never stopped, by bits.
     """
 
     assert len(training_data) >= 1, "training_data must not be empty"
@@ -297,18 +309,29 @@ def train_backprop_network_mini_batch[L](
     if drop_single:
         _refuse_single_example_groups(student, len(training_data), batch_size)
 
-    iterations: int = 0
-    convergence: list[tuple[int, float]] = []
-
-    if reference_classifier:
-        convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student, rng=rng)))
-
     prepared = _prepared_for(student, training_data)
 
-    best_checkpoint = student.checkpoint()
-    best_training_accuracy = _training_accuracy(student, training_data, prepared)
-    best_epoch_index = -1  # -1: the untrained starting point was never beaten
-    epoch_training_accuracies: list[float] = []
+    if resume_from is None:
+        first_epoch = 0
+        iterations = 0
+        convergence: list[tuple[int, float]] = []
+        if reference_classifier:
+            convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student, rng=rng)))
+        best_checkpoint = student.checkpoint()
+        best_training_accuracy = _training_accuracy(student, training_data, prepared)
+        best_epoch_index = -1  # -1: the untrained starting point was never beaten
+        epoch_training_accuracies: list[float] = []
+    else:
+        assert epochs >= resume_from.epochs, f"epochs counts the whole run: {epochs} < {resume_from.epochs} done"
+        first_epoch = resume_from.epochs
+        iterations = resume_from.iterations
+        convergence = list(resume_from.convergence)
+        rng.setstate(resume_from.shuffle_state)
+        student.restore_checkpoint(resume_from.network)
+        best_checkpoint = resume_from.best
+        best_training_accuracy = resume_from.best_training_accuracy
+        best_epoch_index = resume_from.best_epoch_index
+        epoch_training_accuracies = list(resume_from.epoch_training_accuracies)
 
     def record_disagreement() -> None:
         if reference_classifier:
@@ -337,7 +360,7 @@ def train_backprop_network_mini_batch[L](
                 iterations += 1
                 record_disagreement()
 
-    for epoch_index in range(epochs):
+    for epoch_index in range(first_epoch, epochs):
         learn_epoch()
 
         training_accuracy = _training_accuracy(student, training_data, prepared)
@@ -347,8 +370,20 @@ def train_backprop_network_mini_batch[L](
             best_epoch_index = epoch_index
             best_checkpoint = student.checkpoint()
 
+    run_checkpoint = RunCheckpoint(
+        network=student.checkpoint(),
+        best=best_checkpoint,
+        epochs=epochs,
+        iterations=iterations,
+        shuffle_state=rng.getstate(),
+        best_epoch_index=best_epoch_index,
+        best_training_accuracy=best_training_accuracy,
+        epoch_training_accuracies=tuple(epoch_training_accuracies),
+        convergence=tuple(convergence),
+    )
     student.restore_checkpoint(best_checkpoint)
 
     result = ConvergenceSeries(convergence)
     result.diagnostic = TrainingDiagnostic(epoch_training_accuracies, best_epoch_index, best_training_accuracy)
+    result.run_checkpoint = run_checkpoint
     return result

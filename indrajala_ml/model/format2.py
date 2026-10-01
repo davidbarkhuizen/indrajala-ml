@@ -54,7 +54,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, ClassVar, Protocol, cast
 
-from indrajala_ml.model.checkpoint import OptimizerState
+from indrajala_ml.model.checkpoint import Checkpoint, OptimizerState
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
@@ -293,6 +293,16 @@ def _input_bounds(network: Format2Network) -> list[tuple[float, float]] | None:
 
 def network_to_json(network: Format2Network) -> dict[str, Any]:
     """network as a format-2 file's contents."""
+    return checkpoint_to_json(
+        network, Checkpoint(network.snapshot(), network.optimizer.state(), generator_state(network.rng))
+    )
+
+
+def checkpoint_to_json(network: Format2Network, checkpoint: Checkpoint[Any, Any]) -> dict[str, Any]:
+    """
+    A format-2 file's contents for network with checkpoint's weights, optimizer state and generator
+    state in place of its own: a checkpoint network took earlier, as a file (run_checkpoint.py).
+    """
     python = network.implementation == PYTHON
     rule = network.optimizer.rule
     state: dict[str, Any] = {"format": FORMAT, "implementation": network.implementation, "shape": network.format2_shape}
@@ -307,9 +317,9 @@ def network_to_json(network: Format2Network) -> dict[str, Any]:
     state["input"] = _input_to_json(network.input_shape, _input_bounds(network))
     state["layers"] = [layer_to_json(spec) for spec in network.layer_specs]
     state["update_rule"] = rule_to_json(rule)
-    state["weights"] = _lists(network.snapshot())
-    state["optimizer_state"] = _optimizer_state_to_json(rule, python, network.optimizer.state(), network.layer_specs)
-    state["rng"] = _rng_to_json(generator_state(network.rng))
+    state["weights"] = _lists(checkpoint.weights)
+    state["optimizer_state"] = _optimizer_state_to_json(rule, python, checkpoint.optimizer, network.layer_specs)
+    state["rng"] = _rng_to_json(checkpoint.rng)
     return state
 
 
@@ -356,6 +366,17 @@ def network_from_json(state: dict[str, Any]) -> NetworkFile:
         optimizer_state=_optimizer_state_from_json(rule, python, state["optimizer_state"], layers),
         rng=_rng_from_json(state["rng"]) if "rng" in state else None,
     )
+
+
+def file_checkpoint(network: Format2Network, file: NetworkFile) -> Checkpoint[Any, Any]:
+    """
+    file's weights, optimizer state and generator state as a checkpoint network restores, after
+    check_loadable. The weights stay lists, which restore_checkpoint converts.
+    """
+    check_loadable(network, file)
+    if file.rng is None:
+        raise ValueError("this file holds no generator state, which a checkpoint needs")
+    return Checkpoint(file.weights, file.optimizer_state, file.rng)
 
 
 def preset_init_kwargs(cls: type[Format2Network], file: NetworkFile) -> dict[str, Any]:

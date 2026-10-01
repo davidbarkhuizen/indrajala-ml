@@ -196,7 +196,7 @@ a JSON file with the layer specs, the update rule, the weights, the optimizer's 
 dropout's masks resume too. A loaded network resumes training where it stopped. Training on after
 `save` and `load` takes the same steps, by bits, as training on without them
 (`tests/test_format2.py`). The trainers' epoch shuffle draws from a `random.Random` passed as
-`rng=`, which the file doesn't hold.
+`rng=`, which the model file doesn't hold. A run file does (below).
 
 ```python
 from indrajala_ml.model.load_network import load_network
@@ -223,6 +223,29 @@ network = load_network("model.json")  # the Sequential network the file describe
 - `load` still reads each class's legacy file, written before format 2, with fresh optimizer
   state (`tests/test_legacy_saved_models.py`). Files saved in format 2 don't load on older versions
   of this package.
+
+A run stopped at an epoch boundary resumes, by bits, from a run file
+(`indrajala_ml/run_checkpoint.py`). `train_backprop_network_mini_batch` returns
+`result.run_checkpoint`, taken before the pocket restores the best epoch. It holds the last
+epoch's network, the pocket's network, accuracy and epoch, the per-epoch accuracies, the
+convergence series, the shuffle generator's state, and the epoch and batch counters, which a
+learning-rate schedule reads. `save_run` writes it as one JSON file, with both networks as format-2
+network entries. The model file stays the pocketed model.
+
+```python
+from indrajala_ml.run_checkpoint import load_run, save_run
+
+result = train_backprop_network_mini_batch(network, data, 32, epochs=10, rng=Random(7))
+network.save("model.json")
+save_run("run.json", result.run_checkpoint, network)
+
+network = load_network("model.json")  # later, in another process
+result = train_backprop_network_mini_batch(network, data, 32, epochs=20, resume_from=load_run("run.json", network))
+```
+
+`epochs` counts the whole run, so the resumed call trains epochs 10 to 19. Given the same data,
+batch size, learning rate and reference classifier, it ends where an uninterrupted 20-epoch run
+ends (`tests/test_run_checkpoint.py`). A run file holds one network's run, not an ensemble's.
 
 ## Update rules
 

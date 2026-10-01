@@ -3,7 +3,8 @@
 **Status: stages 1-6 done (crate #46 and #522: the crate's PCG64 `Generator`; #523: the pure-Python
 port; #524: the numpy and Rust networks own their generators; #525: the pure-Python networks
 do; #526: the trainers' shuffles and the sampling helpers take a `random.Random`; #527: the
-generator's state in checkpoints and format-2 files); stage 7 next.**
+generator's state in checkpoints and format-2 files); stage 7a, run checkpoints, in progress; then
+stage 7b.**
 
 Every random draw the package makes comes from one of three global states: Python's `random`,
 numpy's legacy `np.random` and the crate's MT19937 ([rng-audit.md](rng-audit.md), "Three global
@@ -53,11 +54,16 @@ network, so a saved dropout run resumes exactly (next-steps.md, "Saving RNG stat
 - **D9. No seed means OS entropy.** A network built or randomized without `seed` or `rng` gets a
   fresh entropy-seeded generator, as `default_rng()` does. Its state is still saved, so even an
   unseeded run resumes exactly; only its first run can't be replayed from scratch.
-- **D10. The trainer's run state goes into a run checkpoint and a small file.** The shuffle
-  generator's state and the epoch and batch counters (the learning-rate schedule and warmup read
-  the batch count) form a `RunCheckpoint`. `train_backprop_network_mini_batch` takes
-  `resume_from=`, and a run checkpoint saves to a JSON file beside the network's format-2 file.
-  Model files stay models.
+- **D10. The trainer's run state goes into a run checkpoint and a self-contained run file.** The
+  pocket restores the best epoch at the end of a run, so the model file holds the best epoch's
+  network, not the last's, and a bit-identical resume needs both (owner, 2026-10-01). The trainer
+  returns `result.run_checkpoint`, a `RunCheckpoint` taken before the pocket restore: the last
+  epoch's network checkpoint, the best epoch's, the best accuracy and its epoch index, the
+  per-epoch accuracies, the convergence series, the shuffle generator's `random.Random` state, and
+  the epoch and batch counters (the learning-rate schedule and warmup read the batch count).
+  `train_backprop_network_mini_batch` takes `resume_from=`. `save_run` writes one JSON file that
+  embeds both networks as format-2 network entries. The model file stays the pocketed model. Runs
+  resume at epoch boundaries only, and a run file holds one network, never an ensemble.
 
 ## What "identical" means
 
@@ -203,8 +209,10 @@ stay bit-identical.
 
 ### Stage 7: run checkpoints, and the globals removed
 
-1. `RunCheckpoint` (the network's checkpoint, the shuffle generator's state, the epoch and batch
-   counters), `resume_from=` on `train_backprop_network_mini_batch`, and its JSON file.
+Two PRs: 7a is items 1 and 2, 7b items 3 and 4.
+
+1. `RunCheckpoint` (D10), `resume_from=` on `train_backprop_network_mini_batch`, and its JSON
+   file.
 2. A resume test on all three implementations, with dropout and a warmup schedule: train k
    epochs, save both files, load them in a new process, finish, and match an uninterrupted run bit
    for bit.
