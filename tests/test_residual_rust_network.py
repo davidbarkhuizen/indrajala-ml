@@ -42,24 +42,42 @@ def test_the_layer_before_a_fork_takes_the_skip_ops_bits_and_the_fork_sums_lazil
     assert not hasattr(fork, "delta_batch") and not hasattr(fork, "delta")
 
 
-def _max_relative_gap(layers: list[LayerSpec], shape: Shape, rule: UpdateRule) -> float:
+def _trained(layers: list[LayerSpec], shape: Shape, rule: UpdateRule, steps: int) -> tuple[Any, Any, list[Any]]:
     networks: list[Any] = []
     for backend in (NUMPY, RUST):
         built = SequentialArrayNetwork((INPUT,), [*layers, output(shape)], rule, shape=shape, backend=backend)
         built.rng = backend.default_rng(3)
         built.randomize()
         networks.append(built)
+    before = networks[0].snapshot()
     data = rows(40, shape)
-    for step in range(50):
+    for step in range(steps):
         batch = data[(step * 5) % 40 :][:5]
         for built in networks:
             built.learn_batch(0.3, batch)
+    return networks[0], networks[1], before
 
+
+def _max_relative_gap(layers: list[LayerSpec], shape: Shape, rule: UpdateRule) -> float:
+    expected_network, actual_network, _ = _trained(layers, shape, rule, steps=50)
     gap = 0.0
-    for expected_entry, actual_entry in zip(networks[0].snapshot(), networks[1].snapshot(), strict=True):
+    for expected_entry, actual_entry in zip(expected_network.snapshot(), actual_network.snapshot(), strict=True):
         for expected, actual in zip(expected_entry, actual_entry, strict=True):
             gap = max(gap, float((np.abs(_numpy(actual) - expected) / np.abs(expected)).max()))
     return gap
+
+
+def _max_ulps_after_one_step(layers: list[LayerSpec], shape: Shape, rule: UpdateRule) -> float:
+    # in ulps of the step's operands, the weight before and the step: a weight the step takes
+    # near zero has tiny ulps of its own, which would say nothing about the step
+    expected_network, actual_network, before = _trained(layers, shape, rule, steps=1)
+    ulps = 0.0
+    entries = zip(expected_network.snapshot(), actual_network.snapshot(), before, strict=True)
+    for expected_entry, actual_entry, before_entry in entries:
+        for expected, actual, start in zip(expected_entry, actual_entry, before_entry, strict=True):
+            operands = np.maximum(np.abs(start), np.abs(expected - start))
+            ulps = max(ulps, float((np.abs(_numpy(actual) - expected) / np.spacing(operands)).max()))
+    return ulps
 
 
 # no residual block, the same widths: the dense layers' own gap
@@ -71,16 +89,40 @@ CONTROLS: dict[str, list[LayerSpec]] = {
 }
 
 
+# the rules whose step is linear in the gradient, so a step's ulps are its gradient's. Adam's,
+# lr * g / (|g| + epsilon), has slope lr * epsilon / (|g| + epsilon)**2, which turns a gradient
+# near epsilon's size into a steep step: one ulp of such a gradient was ~1000 of its step (the
+# deep control, g ~ 8e-9, OpenBLAS's Sandybridge kernel). Adam's step from the same gradient is
+# pinned against numpy in tests/test_adam_fused_layer_ops.py
+LINEAR_RULES = [rule for rule in RULES if not isinstance(rule, Adam)]
+
+
+@pytest.mark.parametrize("rule", LINEAR_RULES, ids=lambda rule: type(rule).__name__)
+@pytest.mark.parametrize("shape", ["multiclass", "single_output"])
+@pytest.mark.parametrize("name", [*NETWORKS, *CONTROLS])
+def test_one_step_matches_numpy_to_a_few_ulps(name: str, shape: Shape, rule: UpdateRule):
+    # the fork's and add's sums are one IEEE addition each, the same bits on both; the dense and
+    # affine products aren't (numpy's BLAS against the crate's FMA chains), as without blocks. The
+    # layer before a fork sums the skip's and the body's gradients, which can cancel (parts up to
+    # ~40x their sum, measured), so its products' rounding counts in ulps of the parts. Measured
+    # after one step: residual networks 5 ulps (batch norm before the block), the controls 1;
+    # with OpenBLAS's Sandybridge kernel 6 and 2
+    layers = {**NETWORKS, **CONTROLS}[name]
+    assert _max_ulps_after_one_step(layers, shape, rule) <= 32
+
+
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
 @pytest.mark.parametrize("shape", ["multiclass", "single_output"])
 @pytest.mark.parametrize("name", NETWORKS)
 def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, shape: Shape, rule: UpdateRule):
-    # the fork's and add's sums are one IEEE addition each, the same bits on both; the dense and
-    # affine products aren't (numpy's BLAS against the crate's FMA chains), as without blocks. 50
-    # steps in, the residual networks were at most 2.9e-11 apart relative when measured (Adam,
-    # batch norm in the body), and the controls 9.5e-12 (momentum, batch norm) and 1.0e-12 (Adam,
-    # ReLU): the same kind of gap, from the same products
-    assert _max_relative_gap(NETWORKS[name], shape, rule) < 1e-10
+    # 50 steps in, the per-step rounding has compounded: under Adam, which turns a gradient's
+    # rounding into its step's, a residual block makes the trajectory itself sensitive. numpy
+    # against numpy with the first layer's W nudged by one ulp drifts 7.9e-12 apart (batch norm in
+    # the body), and 2.2e-14 with the same layers and weights and the skip path cut; numpy against
+    # Rust measured 2.9e-11 relative here (Haswell's kernel; Sandybridge's 2.6e-11) and 1.6e-10 on
+    # CI's. The other rules stay under 1.3e-12, the controls' kind of gap
+    bound = 1e-9 if isinstance(rule, Adam) else 1e-10
+    assert _max_relative_gap(NETWORKS[name], shape, rule) < bound
 
 
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
