@@ -17,13 +17,14 @@ from indrajala_ml.model.cross_entropy_output_layer import CrossEntropyOutputLaye
 from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.layer_specs import (
+    Add,
     BatchNorm,
     Dense,
+    Fork,
     InputShape,
     LayerSpec,
     expand_specs,
     image_shape,
-    refuse_residual_until,
     spec_shapes,
     validate_layer_specs,
 )
@@ -31,10 +32,13 @@ from indrajala_ml.model.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.linear_layer import LinearLayer
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.relu_layer import ReLULayer
+from indrajala_ml.model.residual_layer import AddLayer, AffineLayer, ForkLayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 
 
 def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
+    if spec.bias:
+        return AffineLayer(size=spec.size, input_layer=input_layer)
     if spec.dropout is not None:
         return make_dropout_layer_cls(spec.dropout)(size=spec.size, input_layer=input_layer)
     if spec.activation == "relu":
@@ -51,20 +55,32 @@ def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
 def build_python_layers(
     specs: Sequence[LayerSpec], input_shape: InputShape, input_layer: InputLayer
 ) -> list[TrainableLayer]:
-    """specs, validated (validate_layer_specs), as pure-Python layers reading input_layer, whose
-    nodes are input_shape's flat layout."""
+    """
+    specs, validated (validate_layer_specs), as pure-Python layers reading input_layer, whose
+    nodes are input_shape's flat layout: one per expanded spec (expand_specs), each residual block's
+    fork wired to its add and its body's first layer.
+    """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_residual_until(specs, "3", "in pure Python")
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
     )
 
     layers: list[TrainableLayer] = []
     previous = input_layer
+    # each open block's fork, and the fork whose body's first layer comes next
+    forks: list[ForkLayer] = []
+    opened: ForkLayer | None = None
     for spec, shape in zip(expand_specs(specs), shapes, strict=True):
-        if isinstance(spec, Dense):
-            layer: TrainableLayer = _dense_layer(spec, previous)
+        if isinstance(spec, Fork):
+            layer: TrainableLayer = ForkLayer(previous)
+            opened = layer
+            forks.append(layer)
+        elif isinstance(spec, Add):
+            fork = forks.pop()
+            layer = fork.add = AddLayer(previous, fork)
+        elif isinstance(spec, Dense):
+            layer = _dense_layer(spec, previous)
         elif isinstance(spec, BatchNorm):
             layer = BatchNormLayer(
                 previous, spec.activation, spec.epsilon, spec.running_rate, shape.positions, spec.group_size
@@ -92,6 +108,9 @@ def build_python_layers(
                     pool_size=spec.pool_size,
                     stride=spec.stride,
                 )
+        if opened is not None and not isinstance(spec, Fork):
+            opened.body_first = layer
+            opened = None
         layers.append(layer)
         previous = layer
     return layers

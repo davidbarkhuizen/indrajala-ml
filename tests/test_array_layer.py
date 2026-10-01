@@ -117,7 +117,7 @@ def test_compute_hidden_delta_matches_node_compute_hidden_delta_across_a_random_
 
         expected: list[float] = []
         for i, node in enumerate(hidden_layer.nodes):
-            node.compute_hidden_delta(next_layer.nodes, i)
+            node.compute_hidden_delta(next_layer.downstream_sum(i))
             expected.append(node.delta)
 
         array_hidden = ArrayLayer(hidden_size, hidden_size)

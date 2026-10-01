@@ -75,7 +75,7 @@ def make_dropout_node_cls(drop_probability: float) -> type[TrainingModeNode]:
                 "feeding the output layer isn't what this sibling builds."
             )
 
-        def compute_hidden_delta(self, next_layer_nodes: Sequence[BackpropNode], own_index: int) -> None:
+        def compute_hidden_delta(self, downstream: float) -> None:
             if not self._kept:
                 # a dropped unit contributed nothing, so it gets no delta and no update
                 self.delta = 0.0
@@ -83,7 +83,6 @@ def make_dropout_node_cls(drop_probability: float) -> type[TrainingModeNode]:
 
             # d(base * mask/keep_probability)/dz = (mask/keep_probability) * base*(1-base): the
             # sigmoid derivative of the unscaled activation, not of self.value()
-            downstream = sum(node.delta * node.input_node_weights[own_index] for node in next_layer_nodes)
             sigmoid_derivative = self._base_activation * (1.0 - self._base_activation)
             scale = (1.0 / keep_probability) if self._was_training else 1.0
             self.delta = downstream * sigmoid_derivative * scale

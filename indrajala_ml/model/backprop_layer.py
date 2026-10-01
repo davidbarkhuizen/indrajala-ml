@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights_and_bias
-from indrajala_ml.model.layer_protocols import InputLayer
+from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.pcg64 import Pcg64Generator
 
 
@@ -38,8 +38,8 @@ class NodeLayer:
 
     def downstream_sum(self, own_index: int) -> float:
         # sum over this layer's nodes of delta * the weight each applies to the previous layer's
-        # own_index-th node, in BackpropNode.compute_hidden_delta's order; ConvLayer overrides it
-        # with its sparse, kernel-shared form
+        # own_index-th node, in node order: what every node before it reads (compute_hidden_deltas);
+        # ConvLayer overrides it with its sparse, kernel-shared form
         return sum(node.delta * node.input_node_weights[own_index] for node in self.nodes)
 
     # the network calls these per layer, not per node, so a layer whose weights aren't one set
@@ -57,11 +57,11 @@ class BackpropLayer(NodeLayer):
     A layer of BackpropNodes, each with its weights and bias, fully connected to the input layer.
     """
 
-    def compute_hidden_deltas(self, next_layer: NodeLayer) -> None:
-        # a layer method so ConvLayer, whose units take a precomputed downstream sum, can
-        # override it
+    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+        # each node's downstream is the next layer's downstream_sum at its index, whatever that
+        # layer is (a dense layer, or a residual block's fork, residual_layer.py)
         for own_index, node in enumerate(self.nodes):
-            node.compute_hidden_delta(next_layer.nodes, own_index)
+            node.compute_hidden_delta(next_layer.downstream_sum(own_index))
 
     def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
         # per node, weights then bias, from the input layer's size, as ConvKernel's per kernel

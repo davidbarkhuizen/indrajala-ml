@@ -36,7 +36,7 @@ class LinearNode(BackpropNode):
     def compute_output_delta(self, reference_value: float) -> None:
         raise NotImplementedError("a linear layer is hidden, before a batch-norm layer")
 
-    def compute_hidden_delta(self, next_layer_nodes: Sequence[BackpropNode], own_index: int) -> None:
+    def compute_hidden_delta(self, downstream: float) -> None:
         refuse_single_example(self)
 
     def accumulate_gradient(self) -> None:

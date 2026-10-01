@@ -83,7 +83,7 @@ def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative():
     next_node.update_input_weights([0.8])
     next_node.delta = -0.5
 
-    node.compute_hidden_delta([next_node], own_index=0)
+    node.compute_hidden_delta(next_node.delta * next_node.input_node_weights[0])
 
     sigmoid_derivative = BASE_ACTIVATION * (1.0 - BASE_ACTIVATION)
     expected = (-0.5 * 0.8) * sigmoid_derivative / 0.5
@@ -102,7 +102,7 @@ def test_compute_hidden_delta_is_zero_when_the_unit_was_dropped():
     next_node.update_input_weights([0.8])
     next_node.delta = -0.5
 
-    node.compute_hidden_delta([next_node], own_index=0)
+    node.compute_hidden_delta(next_node.delta * next_node.input_node_weights[0])
 
     assert node.delta == 0.0
 
@@ -116,7 +116,7 @@ def test_compute_hidden_delta_at_eval_mode_uses_no_rescale():
     next_node.update_input_weights([0.8])
     next_node.delta = -0.5
 
-    node.compute_hidden_delta([next_node], own_index=0)
+    node.compute_hidden_delta(next_node.delta * next_node.input_node_weights[0])
 
     sigmoid_derivative = BASE_ACTIVATION * (1.0 - BASE_ACTIVATION)
     expected = (-0.5 * 0.8) * sigmoid_derivative

@@ -72,7 +72,7 @@ def test_downstream_sum_is_the_dense_delta_times_weight_sum():
     assert layer.downstream_sum(2) == approx(0.2 * 0.25 + -0.4 * 0.75)
 
 
-def test_compute_hidden_deltas_matches_calling_compute_hidden_delta_on_every_node_by_hand():
+def test_compute_hidden_deltas_matches_the_hand_written_downstream_sum_on_every_node():
 
     hidden = _layer(3, 2, (2.0, -3.0))
     for node in hidden.nodes:
@@ -83,11 +83,12 @@ def test_compute_hidden_deltas_matches_calling_compute_hidden_delta_on_every_nod
         node.update_input_weights([0.5, -0.25, 1.0 + i])
         node.delta = 0.1 * (i + 1)
 
+    # the sum before stage 3 of the residual-connections workplan, inline in compute_hidden_delta
+    expected: list[float] = []
     for own_index, node in enumerate(hidden.nodes):
-        node.compute_hidden_delta(next_layer.nodes, own_index)
-    expected = [node.delta for node in hidden.nodes]
-    for node in hidden.nodes:
-        node.delta = 0.0
+        a = node.value()
+        downstream = sum(next_node.delta * next_node.input_node_weights[own_index] for next_node in next_layer.nodes)
+        expected.append(downstream * a * (1.0 - a))
 
     hidden.compute_hidden_deltas(next_layer)
 
