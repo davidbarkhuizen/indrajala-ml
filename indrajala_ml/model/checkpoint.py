@@ -1,8 +1,9 @@
 """
 A network's checkpoint (the composable-layers workplan, stage 5): its weights, as snapshot() gives
-them, and its optimizer's state, as the optimizer's state() gives it. Restoring one puts the network
-back where training was, the optimizer included, so training on from it takes the same steps as
-training on from the moment it was taken. train.py's pocket restores the best epoch's.
+them, its optimizer's state, as the optimizer's state() gives it, and its generator's state (the RNG
+generators workplan, D3). Restoring one puts the network back where training was, the optimizer and
+the dropout masks' stream included, so training on from it takes the same steps as training on from
+the moment it was taken. train.py's pocket restores the best epoch's.
 
 Backend-free, so the pure-Python networks import it too. A checkpoint holds copies: later steps
 don't move it, and restoring it doesn't alias it.
@@ -11,6 +12,7 @@ don't move it, and restoring it doesn't alias it.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -27,7 +29,11 @@ class OptimizerState[S]:
 
 @dataclass(frozen=True)
 class Checkpoint[W, S]:
-    """A network's weights (its snapshot()) and its optimizer's state."""
+    """
+    A network's weights (its snapshot()), its optimizer's state, and its generator's state as
+    numpy's bit_generator.state dict (pcg64.generator_state).
+    """
 
     weights: W
     optimizer: OptimizerState[S]
+    rng: dict[str, Any]

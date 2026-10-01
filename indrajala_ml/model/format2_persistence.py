@@ -22,6 +22,7 @@ from indrajala_ml.model.format2 import (
     restore_file,
 )
 from indrajala_ml.model.model_io import load_json, save_json
+from indrajala_ml.pcg64 import generator_state, set_generator_state
 
 
 class Format2Persistence[W, S]:
@@ -49,7 +50,7 @@ class Format2Persistence[W, S]:
         return cast("Format2Network", self)
 
     def save(self, path: str) -> None:
-        # format 2 (format2.py): the specs, rule, weights and optimizer state
+        # format 2 (format2.py): the specs, rule, weights, optimizer state and generator state
         save_json(path, network_to_json(self._network()))
 
     @classmethod
@@ -78,10 +79,14 @@ class Format2Persistence[W, S]:
         raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
 
     def checkpoint(self) -> Checkpoint[W, S]:
-        # the weights and the optimizer's state (checkpoint.py)
-        return Checkpoint(self.snapshot(), self._network().optimizer.state())
+        # the weights, the optimizer's state and the generator's (checkpoint.py)
+        network = self._network()
+        return Checkpoint(self.snapshot(), network.optimizer.state(), generator_state(network.rng))
 
     def restore_checkpoint(self, checkpoint: Checkpoint[W, S]) -> None:
         # as restore: on numpy and Rust, this backend's arrays or nested lists
         self.restore(checkpoint.weights)
-        self._network().optimizer.load_state(checkpoint.optimizer)
+        network = self._network()
+        network.optimizer.load_state(checkpoint.optimizer)
+        # in place, so the dropout layers holding the generator draw on from the checkpoint
+        set_generator_state(network.rng, checkpoint.rng)

@@ -3,7 +3,9 @@ Format 2 (model/format2.py, the composable-layers workplan, stage 5): a saved an
 resumes training by bits, for every rule in all three implementations and for every saveable class;
 numpy files load into Rust and Rust files into numpy; a network refuses a file that isn't its own,
 naming the difference; and load_network builds what a file describes. Batch-norm networks (the
-batch-norm workplan, stage 5) resume by bits too, their running averages included.
+batch-norm workplan, stage 5) resume by bits too, their running averages included. A file holds the
+network's generator (the RNG generators workplan, stage 6), so a loaded network draws the masks the
+saved one would have, across numpy and Rust too.
 """
 
 import json
@@ -39,7 +41,18 @@ from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.seeding import seed_everything
 from tests.saved_model_fixtures import CLASS_COUNT, FIXTURE_DIR, FIXTURES, MODEL_CLASSES, bits, fixture_class, outputs
-from tests.test_checkpoint import CONV, DENSE, IMPLEMENTATIONS, RULES, _network, _rows, _state_bits, _train
+from tests.test_checkpoint import (
+    CONV,
+    DENSE,
+    DROPOUT,
+    IMPLEMENTATIONS,
+    RULES,
+    _network,
+    _rows,
+    _seeded,
+    _state_bits,
+    _train,
+)
 
 ENSEMBLES = {name for name in FIXTURES if name.startswith("Ensemble")}
 NETWORKS = sorted(set(FIXTURES) - ENSEMBLES)
@@ -103,7 +116,7 @@ def _trained(name: str) -> Any:
 
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("architecture", [DENSE, CONV], ids=["dense", "conv"])
+@pytest.mark.parametrize("architecture", [DENSE, CONV, DROPOUT], ids=["dense", "conv", "dropout"])
 @pytest.mark.parametrize("loader", ["class", "load_network"])
 def test_a_loaded_network_resumes_training_by_bits(
     implementation: str,
@@ -112,7 +125,7 @@ def test_a_loaded_network_resumes_training_by_bits(
     loader: str,
     tmp_path: Path,
 ):
-    # train N, save, load, train M: N + M steps without the save, by bits
+    # train N, save, load, train M: N + M steps without the save, by bits, the masks included
     input_shape, layers = architecture
     rows = _rows(input_shape, 8, seed=1)
     seed_everything(2)
@@ -258,10 +271,8 @@ def test_every_saveable_network_resumes_training_by_bits(name: str, tmp_path: Pa
     assert _state_bits(loaded) == _state_bits(trained)
 
     examples = _examples(trained, FIXTURES[name].predict, 4, seed=3)
-    _seed_generator(trained, 4)  # the dropout masks
     trained.learn_batch(0.1, examples)
-    _seed_generator(loaded, 4)
-    loaded.learn_batch(0.1, examples)
+    loaded.learn_batch(0.1, examples)  # the dropout masks from the saved generator
     assert _state_bits(loaded) == _state_bits(trained)
 
 
@@ -279,6 +290,10 @@ def test_an_ensemble_saves_its_sub_networks_optimizer_state(name: str, tmp_path:
         _state_bits(classifier) for classifier in ensemble.classifiers
     ]
     assert all(classifier.optimizer.t == 1 for classifier in loaded.classifiers)
+    # one generator per sub-network
+    assert [classifier.checkpoint().rng for classifier in loaded.classifiers] == [
+        classifier.checkpoint().rng for classifier in ensemble.classifiers
+    ]
 
 
 @pytest.mark.parametrize(
@@ -314,6 +329,57 @@ def test_numpy_and_rust_files_load_into_each_other(numpy_name: str, rust_name: s
     pairs = zip(loaded.classifiers, network.classifiers) if saver in ENSEMBLES else [(loaded, network)]
     for loaded_network, saved_network in pairs:
         assert _state_bits(loaded_network) == _state_bits(saved_network)
+
+
+@pytest.mark.parametrize("saved_by", ["numpy", "rust"])
+def test_numpy_and_rust_files_draw_the_same_next_masks(saved_by: str, tmp_path: Path):
+    input_shape, layers = DROPOUT
+    rows = _rows(input_shape, 8, seed=1)
+    network = _seeded(_network(saved_by, input_shape, layers, Adam()), 2)
+    network.randomize()
+    _train(network, rows)
+    loader = SEQUENTIAL["rust" if saved_by == "numpy" else "numpy", "multiclass"]
+
+    loaded = _save_and_load(network, tmp_path, loader.load)
+    network.learn_batch(0.1, rows)
+    loaded.learn_batch(0.1, rows)
+
+    assert loaded.layers[0]._mask_batch.tolist() == network.layers[0]._mask_batch.tolist()
+
+
+@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
+def test_a_file_holds_the_generators_state_as_hex(implementation: str, tmp_path: Path):
+    network = _seeded(_network(implementation, *DROPOUT, Adam()), 2)
+    network.randomize()
+    state = network.checkpoint().rng
+
+    saved = json.loads(Path(_file(network, tmp_path)).read_text())
+
+    assert saved["rng"] == {
+        "bit_generator": "PCG64",
+        "state": hex(state["state"]["state"]),
+        "inc": hex(state["state"]["inc"]),
+        "has_uint32": 0,
+        "uinteger": 0,
+    }
+    assert int(saved["rng"]["state"], 16) >= 2**64  # past a double's precision: why it's a string
+
+
+@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
+def test_a_file_without_a_generator_state_loads_with_a_fresh_one(implementation: str, tmp_path: Path):
+    # a file saved before stage 6: an OS-entropy generator (D9), the weights and optimizer as saved
+    network = _seeded(_network(implementation, *DROPOUT, Adam()), 2)
+    network.randomize()
+    _train(network, _rows(DROPOUT[0], 8, seed=1))
+    path = Path(_file(network, tmp_path))
+    saved = json.loads(path.read_text())
+    del saved["rng"]
+    path.write_text(json.dumps(saved))
+
+    loaded = load_network(str(path))
+
+    assert _state_bits(loaded) == _state_bits(network)
+    assert loaded.checkpoint().rng != network.checkpoint().rng
 
 
 @pytest.mark.parametrize(

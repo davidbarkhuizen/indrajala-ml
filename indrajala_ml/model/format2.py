@@ -1,7 +1,7 @@
 """
 Format 2, every network's save file (the composable-layers workplan, D4 and Format 2): the layer
-specs, the update rule, the weights and the optimizer's state, so a loaded network resumes training
-by bits.
+specs, the update rule, the weights, the optimizer's state and the generator's state, so a loaded
+network resumes training by bits, its dropout masks included.
 
     {
       "format": 2,
@@ -13,7 +13,8 @@ by bits.
       "layers": [{"kind": "dense", "size": 30, ...}, {"kind": "dense", "size": 10, "output": true, ...}],
       "update_rule": {"rule": "adam", "beta1": 0.9, "beta2": 0.999, "epsilon": 1e-08},
       "weights": [[W, b], [W, b]],
-      "optimizer_state": {"t": 120, "layers": [{"m_W": ..., "v_W": ..., "m_b": ..., "v_b": ...}, ...]}
+      "optimizer_state": {"t": 120, "layers": [{"m_W": ..., "v_W": ..., "m_b": ..., "v_b": ...}, ...]},
+      "rng": {"bit_generator": "PCG64", "state": "0x...", "inc": "0x...", "has_uint32": 0, "uinteger": 0}
     }
 
 - implementation is "python", "numpy" or "rust", and shape "multiclass" or "single_output".
@@ -33,6 +34,11 @@ by bits.
   alone for a linear layer; velocity_gamma, velocity_beta for batch norm). In pure Python, per
   node, kernel or channel (velocity_weights, velocity_bias; no bias entries for a linear one, and a
   batch-norm channel's gamma is its one weight and its beta its bias).
+- rng is the network's generator's state (the RNG generators workplan, D3): numpy's
+  bit_generator.state, flattened, with the 128-bit state and inc as hex strings, since JSON readers
+  outside Python lose precision on large integers. It's optional: a file saved before it loads with
+  an OS-entropy generator (D9). All three implementations hold this state, so a numpy file's
+  generator draws on in Rust, and the masks match.
 
 A numpy file loads into Rust and a Rust file into numpy. A pure-Python file loads into pure Python
 only, as its weights are per node. A network's load refuses a file whose shape, input, layer specs
@@ -53,6 +59,7 @@ from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.pcg64 import generator_state, set_generator_state
 
 FORMAT = 2
 PYTHON = "python"
@@ -89,6 +96,9 @@ class Format2Network(Protocol):
 
     @property
     def optimizer(self) -> _Optimizer: ...
+
+    @property
+    def rng(self) -> Any: ...
 
     def snapshot(self) -> Any: ...
 
@@ -242,6 +252,26 @@ def _optimizer_state_from_json(
     return OptimizerState(state["t"], layers)
 
 
+def _rng_to_json(state: dict[str, Any]) -> dict[str, Any]:
+    # numpy's bit_generator.state, flattened, its 128-bit integers as hex strings
+    return {
+        "bit_generator": state["bit_generator"],
+        "state": hex(state["state"]["state"]),
+        "inc": hex(state["state"]["inc"]),
+        "has_uint32": state["has_uint32"],
+        "uinteger": state["uinteger"],
+    }
+
+
+def _rng_from_json(rng: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "bit_generator": rng["bit_generator"],
+        "state": {"state": int(rng["state"], 16), "inc": int(rng["inc"], 16)},
+        "has_uint32": rng["has_uint32"],
+        "uinteger": rng["uinteger"],
+    }
+
+
 def _argument_to_json(name: str, value: Any) -> Any:
     if name == "conv_specs":
         return [layer_to_json(spec) for spec in value]
@@ -279,6 +309,7 @@ def network_to_json(network: Format2Network) -> dict[str, Any]:
     state["update_rule"] = rule_to_json(rule)
     state["weights"] = _lists(network.snapshot())
     state["optimizer_state"] = _optimizer_state_to_json(rule, python, network.optimizer.state(), network.layer_specs)
+    state["rng"] = _rng_to_json(generator_state(network.rng))
     return state
 
 
@@ -295,6 +326,8 @@ class NetworkFile:
     update_rule: UpdateRule
     weights: list[Any]
     optimizer_state: OptimizerState[Any]
+    # the generator's state as numpy's bit_generator.state; None in a file saved before it had one
+    rng: dict[str, Any] | None
 
 
 def network_from_json(state: dict[str, Any]) -> NetworkFile:
@@ -321,6 +354,7 @@ def network_from_json(state: dict[str, Any]) -> NetworkFile:
         update_rule=rule,
         weights=state["weights"],
         optimizer_state=_optimizer_state_from_json(rule, python, state["optimizer_state"], layers),
+        rng=_rng_from_json(state["rng"]) if "rng" in state else None,
     )
 
 
@@ -377,10 +411,15 @@ def check_loadable(network: Format2Network, file: NetworkFile) -> None:
 
 
 def restore_file(network: Format2Network, file: NetworkFile) -> None:
-    """network's weights and optimizer state from file, after check_loadable."""
+    """
+    network's weights, optimizer state and generator state from file, after check_loadable. A file
+    without a generator state leaves network's generator as it is.
+    """
     check_loadable(network, file)
     network.restore(file.weights)
     network.optimizer.load_state(file.optimizer_state)
+    if file.rng is not None:
+        set_generator_state(network.rng, file.rng)
 
 
 def ensemble_to_json(implementation: str, classifiers: Sequence[Format2Network]) -> dict[str, Any]:

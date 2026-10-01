@@ -27,6 +27,8 @@ IMPLEMENTATIONS = ["python", "numpy", "rust"]
 DENSE: tuple[InputShape, list[LayerSpec]] = ((4,), [Dense(5), Dense(3, output=True)])
 # a pool layer between weighted ones: the optimizers key state by layer index, and skip the pool
 CONV: tuple[InputShape, list[LayerSpec]] = ((6, 6, 1), [Conv(2, 3), Pool(2), Dense(3, output=True)])
+# a dropout layer: its masks draw from the network's generator, which a checkpoint holds
+DROPOUT: tuple[InputShape, list[LayerSpec]] = ((4,), [Dense(5, dropout=0.25), Dense(3, output=True)])
 
 
 def _network(implementation: str, input_shape: InputShape, layers: list[LayerSpec], rule: UpdateRule) -> Any:
@@ -81,7 +83,7 @@ def _train(network: Any, rows: list[tuple[tuple[float, ...], int]]) -> None:
 
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("architecture", [DENSE, CONV], ids=["dense", "conv"])
+@pytest.mark.parametrize("architecture", [DENSE, CONV, DROPOUT], ids=["dense", "conv", "dropout"])
 @pytest.mark.parametrize("across_workers", [False, True], ids=["in_memory", "as_lists"])
 def test_a_restored_checkpoint_resumes_training_by_bits(
     implementation: str, rule: UpdateRule, architecture: tuple[InputShape, list[LayerSpec]], across_workers: bool
@@ -97,7 +99,7 @@ def test_a_restored_checkpoint_resumes_training_by_bits(
         checkpoint = pickle.loads(pickle.dumps(_picklable_checkpoint(checkpoint)))
     _train(trained, rows)
 
-    resumed = _seeded(  # other weights, overwritten by the checkpoint
+    resumed = _seeded(  # other weights and another generator, both overwritten by the checkpoint
         _network(implementation, input_shape, layers, rule), 3
     )
     resumed.randomize()
@@ -113,17 +115,39 @@ def test_a_restored_checkpoint_resumes_training_by_bits(
 def test_a_checkpoint_is_a_copy(implementation: str, rule: UpdateRule):
     input_shape, layers = DENSE
     rows = _rows(input_shape, 8, seed=1)
+    input_shape, layers = DROPOUT
+    rows = _rows(input_shape, 8, seed=1)
     network = _seeded(_network(implementation, input_shape, layers, rule), 2)
     network.randomize()
     _train(network, rows)
 
+    def held() -> list[Any]:
+        return [_bits(checkpoint.weights), checkpoint.optimizer.t, _bits(checkpoint.optimizer.layers), checkpoint.rng]
+
     checkpoint = network.checkpoint()
-    taken = [_bits(checkpoint.weights), checkpoint.optimizer.t, _bits(checkpoint.optimizer.layers)]
-    _train(network, rows)  # steps the network's weights and state, not the checkpoint's
+    taken = held()
+    _train(network, rows)  # steps the network's weights, state and generator, not the checkpoint's
     network.restore_checkpoint(checkpoint)
     _train(network, rows)  # nor, after restoring it, the network's steps
 
-    assert [_bits(checkpoint.weights), checkpoint.optimizer.t, _bits(checkpoint.optimizer.layers)] == taken
+    assert held() == taken
+
+
+@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
+def test_restoring_a_checkpoint_rewinds_the_generator_in_place(implementation: str):
+    # the dropout layers hold the network's generator, so it's rewound, not replaced
+    input_shape, layers = DROPOUT
+    network = _seeded(_network(implementation, input_shape, layers, Adam()), 2)
+    generator = network.rng
+    checkpoint = network.checkpoint()
+    first = [generator.random() if implementation == "python" else generator.random(4).tolist() for _ in range(2)]
+
+    network.restore_checkpoint(checkpoint)
+
+    assert network.rng is generator
+    assert [
+        generator.random() if implementation == "python" else generator.random(4).tolist() for _ in range(2)
+    ] == first
 
 
 def test_a_checkpoint_before_the_first_step_restores_fresh_state():

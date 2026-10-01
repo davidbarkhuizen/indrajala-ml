@@ -132,7 +132,7 @@ network = SequentialArrayNetwork(
 - **The optimizer** holds all of a network's update state: `NumpyOptimizer` and `RustOptimizer`
   (`optimizers.py`), `PythonOptimizer` (`python_optimizer.py`). It keeps momentum's velocities and
   Adam's moments by layer position, with one step count `t`. `checkpoint()` and format 2 save
-  it. Layers keep their weights and gradients, and no update formula.
+  it, and the network's generator's state beside it. Layers keep their weights and gradients, and no update formula.
 - **Builders** map each spec to an implementation's layer classes: `array_layer_builder.py` for
   numpy and Rust, `python_layer_builder.py` for pure Python.
 
@@ -191,11 +191,12 @@ are timed. Accuracy comparisons of pure-Python models are fine.
 ## Saving and loading
 
 Every backprop network and ensemble saves one format, format 2 (`indrajala_ml/model/format2.py`):
-a JSON file with the layer specs, the update rule, the weights and the optimizer's state
-(momentum's velocities, Adam's `m`, `v` and step count `t`). A loaded network resumes training
-where it stopped. Training on after `save` and `load` takes the same steps, by bits, as training
-on without them (`tests/test_format2.py`). Dropout's masks and the epoch shuffle come from global
-RNG state, which isn't saved.
+a JSON file with the layer specs, the update rule, the weights, the optimizer's state
+(momentum's velocities, Adam's `m`, `v` and step count `t`) and the network's generator's state, so
+dropout's masks resume too. A loaded network resumes training where it stopped. Training on after
+`save` and `load` takes the same steps, by bits, as training on without them
+(`tests/test_format2.py`). The trainers' epoch shuffle draws from a `random.Random` passed as
+`rng=`, which the file doesn't hold.
 
 ```python
 from indrajala_ml.model.load_network import load_network
@@ -212,7 +213,10 @@ network = load_network("model.json")  # the Sequential network the file describe
   a class named in the file. It gives the same results, by bits, as the preset that saved the file.
 - numpy files load into Rust networks and Rust files into numpy ones. Pure-Python files hold one
   weight list per node and load into pure Python only.
-- An ensemble's file nests one format-2 file per sub-network.
+- An ensemble's file nests one format-2 file per sub-network, each with its own generator.
+- The generator's state is numpy's `bit_generator.state` for PCG64, which all three implementations
+  hold, so a numpy file's masks draw on in Rust. Its 128-bit `state` and `inc` are hex strings. A
+  file saved before the field existed loads with a fresh OS-entropy generator.
 - A batch-norm layer's entry records its spec. Its weights are `γ`, `β` and the running mean and
   variance, so a loaded network classifies as the saved one did and resumes training by bits; its
   linear layer's weights are `W` alone. The optimizer's state for it is per `γ` and `β`.
