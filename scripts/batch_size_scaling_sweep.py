@@ -13,7 +13,7 @@ on full MNIST with the Rust backend.
 `baseline` (stage 1) sweeps the batch-32 rate at momentum 0.0 and 0.9 (or the --momenta given).
 `scaling` (stage 2) runs every batch size x rate (scaled,
 unscaled) x warmup x momentum cell, with each momentum's own batch-32 rate from stage 1.
-conv-bn (the conv batch-norm workplan) takes --group-size for ghost groups; without it, plain batch
+conv-bn (the conv network with batch norm) takes --group-size for ghost groups; without it, plain batch
 norm. One invocation runs one group size. Both print per-epoch test accuracy (mean ± sd over seeds) and write every run's raw result to --out as
 JSON.
 
@@ -35,7 +35,7 @@ from indrajala_ml.model.classifier_protocols import Example
 BASELINE_RATES = {
     "dense": [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
     "conv": [0.03125, 0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
-    # batch norm is known to tolerate higher rates: the conv ladder, extended (the workplan's pitfalls)
+    # batch norm is known to tolerate higher rates: the conv ladder, extended
     "conv-bn": [0.03125, 0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0],
 }
 MOMENTA = [0.0, 0.9]
