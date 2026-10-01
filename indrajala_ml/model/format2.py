@@ -22,18 +22,22 @@ network resumes training by bits, its dropout masks included.
   Sequential network's file has none.
 - input is {"dimension": d} or {"height": h, "width": w, "channels": c}, with "input_bounds" in
   pure Python. class_count is the output layer's size.
-- layers holds each spec's fields under its kind: "dense", "conv", "pool" or "batch_norm" (the
-  batch-norm workplan, Format 2). A ReLU conv entry leaves out its activation, as before ConvSpec
-  had one; a linear conv entry has "activation": "linear".
-- weights is the network's snapshot() as lists. On numpy and Rust, per layer: [W, b]; [W] for a
-  linear (bias-free) layer; [gamma, beta, running_mean, running_var] for a batch-norm layer; [] for
-  a pool layer. In pure Python, per node or kernel: [weights, bias]; [weights] for a linear one;
-  [[gamma], beta, running_mean, running_var] per batch-norm channel.
-- optimizer_state holds the step count t and, per layer, the rule's state or null: momentum's
-  velocity, Adam's m and v. On numpy and Rust, per parameter (velocity_W, velocity_b; velocity_W
-  alone for a linear layer; velocity_gamma, velocity_beta for batch norm). In pure Python, per
-  node, kernel or channel (velocity_weights, velocity_bias; no bias entries for a linear one, and a
-  batch-norm channel's gamma is its one weight and its beta its bias).
+- layers holds each spec's fields under its kind: "dense", "conv", "pool", "batch_norm" (the
+  batch-norm workplan, Format 2) or "residual", {"kind": "residual", "body": [...]} with the body's
+  entries (the residual-connections workplan, stage 5). A ReLU conv entry leaves out its
+  activation, as before ConvSpec had one; a linear conv entry has "activation": "linear". A dense
+  entry has "bias": true only for a residual block's affine layer.
+- weights is the network's snapshot() as lists, one entry per layer, a residual block's flattened
+  into its fork, body and add (layer_specs.expand_specs). On numpy and Rust, per layer: [W, b] (an
+  affine layer's too); [W] for a linear (bias-free) layer; [gamma, beta, running_mean, running_var]
+  for a batch-norm layer; [] for a pool layer, a fork or an add. In pure Python, per node or
+  kernel: [weights, bias]; [weights] for a linear one; [[gamma], beta, running_mean, running_var]
+  per batch-norm channel.
+- optimizer_state holds the step count t and, per layer (expanded, as weights), the rule's state or
+  null: momentum's velocity, Adam's m and v. On numpy and Rust, per parameter (velocity_W,
+  velocity_b; velocity_W alone for a linear layer; velocity_gamma, velocity_beta for batch norm). In
+  pure Python, per node, kernel or channel (velocity_weights, velocity_bias; no bias entries for a
+  linear one, and a batch-norm channel's gamma is its one weight and its beta its bias).
 - rng is the network's generator's state (the RNG generators workplan, D3): numpy's
   bit_generator.state, flattened, with the 128-bit state and inc as hex strings, since JSON readers
   outside Python lose precision on large integers. It's optional: a file saved before it loads with
@@ -56,7 +60,17 @@ from typing import Any, ClassVar, Protocol, cast
 
 from indrajala_ml.model.checkpoint import Checkpoint, OptimizerState
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec, refuse_residual_until
+from indrajala_ml.model.layer_specs import (
+    Add,
+    BatchNorm,
+    Dense,
+    ExpandedSpec,
+    Fork,
+    InputShape,
+    LayerSpec,
+    Residual,
+    expand_specs,
+)
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import generator_state, set_generator_state
@@ -120,7 +134,8 @@ def _lists(value: Any) -> Any:
 
 
 def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
-    refuse_residual_until([spec], "5", "in format 2")
+    if isinstance(spec, Residual):
+        return {"kind": "residual", "body": [layer_to_json(layer) for layer in spec.body]}
     if isinstance(spec, ConvSpec):
         # a ReLU conv layer's entry as before ConvSpec had an activation, so those files don't change
         fields = asdict(spec)
@@ -155,6 +170,8 @@ def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
             return PoolSpec(**fields)
         case "batch_norm":
             return BatchNorm(**fields)
+        case "residual":
+            return Residual(tuple(layer_from_json(layer) for layer in spec["body"]))
         case kind:
             raise ValueError(f"unknown layer kind {kind!r}")
 
@@ -199,11 +216,15 @@ def _state_names(rule: UpdateRule) -> tuple[str, ...]:
             return ()
 
 
-def _parameter_names(spec: LayerSpec) -> tuple[str, ...]:
+def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
     # an array layer's parameters, in its parameters() order
     match spec:
         case BatchNorm():
             return ("gamma", "beta")
+        case Fork() | Add() | PoolSpec():
+            return ()
+        case Dense() if spec.bias:
+            return ("W", "b")
         case Dense() | ConvSpec() if spec.activation == "linear":
             return ("W",)
         case _:
@@ -214,7 +235,8 @@ def _optimizer_state_to_json(
     rule: UpdateRule, python: bool, state: OptimizerState[Any], specs: Sequence[LayerSpec]
 ) -> dict[str, Any]:
     names = _state_names(rule)
-    layers: list[Any] = [None] * len(specs)
+    expanded = expand_specs(specs)
+    layers: list[Any] = [None] * len(expanded)
     for index, layer_state in state.layers.items():
         if python:
             # per weight set: (a list per name, shaped as its weights; the bias's value per name,
@@ -230,7 +252,7 @@ def _optimizer_state_to_json(
             # per parameter, an array shaped as it per name
             layers[index] = {
                 f"{name}_{parameter}": _lists(layer_state[p * len(names) + i])
-                for p, parameter in enumerate(_parameter_names(specs[index]))
+                for p, parameter in enumerate(_parameter_names(expanded[index]))
                 for i, name in enumerate(names)
             }
     return {"t": state.t, "layers": layers}
@@ -240,6 +262,7 @@ def _optimizer_state_from_json(
     rule: UpdateRule, python: bool, state: dict[str, Any], specs: Sequence[LayerSpec]
 ) -> OptimizerState[Any]:
     names = _state_names(rule)
+    expanded = expand_specs(specs)
     layers: dict[int, Any] = {}
     for index, layer_state in enumerate(state["layers"]):
         if layer_state is None:
@@ -254,7 +277,7 @@ def _optimizer_state_from_json(
             ]
         else:
             layers[index] = [
-                layer_state[f"{name}_{parameter}"] for parameter in _parameter_names(specs[index]) for name in names
+                layer_state[f"{name}_{parameter}"] for parameter in _parameter_names(expanded[index]) for name in names
             ]
     return OptimizerState(state["t"], layers)
 

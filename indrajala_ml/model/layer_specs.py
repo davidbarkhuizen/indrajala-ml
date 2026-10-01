@@ -88,6 +88,11 @@ class Residual:
 
     body: tuple[LayerSpec, ...]
 
+    def __post_init__(self) -> None:
+        # a list given as the body is kept as a tuple, so equal blocks compare equal (a loaded
+        # file's against the network's, format2.check_loadable) and the spec stays hashable
+        object.__setattr__(self, "body", tuple(self.body))
+
 
 LayerSpec = Dense | ConvSpec | PoolSpec | BatchNorm | Residual
 
@@ -122,15 +127,6 @@ def expand_specs(specs: Sequence[LayerSpec | Fork | Add]) -> list[ExpandedSpec]:
         else:
             expanded.append(spec)
     return expanded
-
-
-def refuse_residual_until(specs: Sequence[LayerSpec], stage: str, where: str) -> None:
-    """A builder's or writer's refusal of residual blocks before the workplan's stage that builds
-    them there."""
-    if any(isinstance(spec, Fork) or (isinstance(spec, Dense) and spec.bias) for spec in expand_specs(specs)):
-        raise NotImplementedError(
-            f"residual blocks {where} are stage {stage} of docs/residual-connections-workplan.md; not built yet"
-        )
 
 
 def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:

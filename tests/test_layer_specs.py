@@ -9,7 +9,7 @@ from typing import Any, cast
 import pytest
 
 from indrajala_ml.model.array_layer_builder import LAYER_CLASSES, build_array_layers
-from indrajala_ml.model.format2 import layer_to_json
+from indrajala_ml.model.format2 import layer_from_json, layer_to_json
 from indrajala_ml.model.layer_specs import (
     Add,
     BatchNorm,
@@ -372,9 +372,8 @@ def test_the_affine_field_defaults_off_so_existing_dense_specs_are_unchanged():
 
 
 @pytest.mark.parametrize("specs", RESIDUAL.values(), ids=RESIDUAL.keys())
-def test_every_implementation_builds_a_block_and_format_2_doesnt_save_one_yet(specs: list[LayerSpec], backend: Backend):
+def test_every_implementation_builds_a_block_and_format_2_round_trips_it(specs: list[LayerSpec], backend: Backend):
     input_shape = (8, 8, 1) if isinstance(specs[0], Conv) else (5,)
     build_array_layers(specs, input_shape, backend.name)
     build_python_layers(specs, input_shape, StateLayer(math.prod(input_shape), [(0.0, 1.0)] * math.prod(input_shape)))
-    with pytest.raises(NotImplementedError, match="residual-connections-workplan"):
-        [layer_to_json(spec) for spec in specs]
+    assert [layer_from_json(layer_to_json(spec)) for spec in specs] == specs

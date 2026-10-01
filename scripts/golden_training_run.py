@@ -28,6 +28,10 @@ value of every network that differs. numpy's products go through BLAS, so a gold
 valid on the machine that recorded it; record one on main and check against it on the same
 machine.
 
+The residual entries (the residual-connections workplan, stage 5) are Sequential networks of
+RESIDUAL_SPECS, two residual blocks in a row, in all three implementations, added after the rest:
+no earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -53,6 +57,7 @@ from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.adam_vectorized_multiclass_backprop_classifier_network import (
     AdamVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
@@ -99,6 +104,7 @@ from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network imp
 from indrajala_ml.model.l2_vectorized_multiclass_backprop_classifier_network import (
     L2VectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layer_specs import Dense, LayerSpec, Residual
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.momentum_backprop_classifier_network import MomentumBackpropClassifierNetwork
 from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
@@ -128,6 +134,8 @@ from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayB
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
@@ -137,6 +145,7 @@ from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_networ
 from indrajala_ml.model.softmax_vectorized_multiclass_backprop_classifier_network import (
     SoftmaxVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.update_rules import Momentum
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
@@ -221,6 +230,25 @@ PYTHON_SINGLE_OUTPUT_NETWORKS = {
     "python dropout": (DropoutBackpropClassifierNetwork, (0.3,)),
     "python cross-entropy": (BinaryCrossEntropyBackpropClassifierNetwork, ()),
 }
+
+
+# two residual blocks in a row, a sigmoid body and a ReLU one, each ending in its affine layer, under
+# momentum: the Sequential network of each implementation
+RESIDUAL_SPECS: list[LayerSpec] = [
+    Dense(4, activation="relu"),
+    Residual((Dense(3), Dense(4, activation="linear", bias=True))),
+    Residual((Dense(3, activation="relu"), Dense(4, activation="linear", bias=True))),
+    Dense(CLASS_COUNT, output=True),
+]
+RESIDUAL_NETWORKS = ["numpy residual", "rust residual", "python residual"]
+
+
+def _residual_network(name: str) -> Any:
+    rule = Momentum(0.9)
+    if _backend(name) == "python":
+        return SequentialMultiClassBackpropClassifierNetwork((DIMENSION,), RESIDUAL_SPECS, rule, INPUT_BOUNDS)
+    backend = NUMPY if _backend(name) == "numpy" else RUST
+    return SequentialArrayNetwork((DIMENSION,), RESIDUAL_SPECS, rule, backend=backend)
 
 
 def _backend(name: str) -> str:
@@ -406,6 +434,9 @@ def run_all() -> dict[str, Any]:
 
     for name, (ensemble_cls, classifier_cls) in ENSEMBLES.items():
         results[name] = _run_ensemble(name, ensemble_cls, classifier_cls)
+
+    for name in RESIDUAL_NETWORKS:
+        results[name] = _run_network(name, _residual_network(name), multiclass_rows, "predict_probabilities")
     return results
 
 

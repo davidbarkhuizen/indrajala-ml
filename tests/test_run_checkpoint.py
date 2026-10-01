@@ -20,7 +20,7 @@ from indrajala_ml.geometry import square_bounds
 from indrajala_ml.lr_schedule import linear_warmup
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
-from indrajala_ml.model.layer_specs import Dense
+from indrajala_ml.model.layer_specs import Dense, LayerSpec, Residual
 from indrajala_ml.model.load_network import load_network
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialBackpropClassifierNetwork
@@ -37,17 +37,23 @@ from indrajala_ml.train import (
 IMPLEMENTATIONS = ["python", "numpy", "rust"]
 ROOT = Path(__file__).resolve().parent.parent
 
-LAYERS = [Dense(5, dropout=0.25), Dense(1, output=True)]
+LAYERS: list[LayerSpec] = [Dense(5, dropout=0.25), Dense(1, output=True)]
+# a residual block around a dropout layer (the residual-connections workplan, stage 5)
+RESIDUAL_LAYERS: list[LayerSpec] = [
+    Dense(5, activation="relu"),
+    Residual((Dense(4, dropout=0.25), Dense(5, activation="linear", bias=True))),
+    Dense(1, output=True),
+]
 EPOCHS, STOPPED_AFTER, BATCH_SIZE = 6, 3, 5  # 24 rows: four batches of 5 and a short one of 4
 
 
-def _student(implementation: str) -> Any:
+def _student(implementation: str, layers: list[LayerSpec] = LAYERS) -> Any:
     if implementation == "python":
-        network: Any = SequentialBackpropClassifierNetwork((2,), LAYERS, Adam(), square_bounds(10.0))
+        network: Any = SequentialBackpropClassifierNetwork((2,), layers, Adam(), square_bounds(10.0))
         network.rng = default_rng(2)
     else:
         backend = NUMPY if implementation == "numpy" else RUST
-        network = SequentialArrayNetwork((2,), LAYERS, Adam(), shape="single_output", backend=backend)
+        network = SequentialArrayNetwork((2,), layers, Adam(), shape="single_output", backend=backend)
         network.rng = backend.default_rng(2)
     network.randomize()
     return network
@@ -120,12 +126,15 @@ def finish(model_path: str, run_path: str) -> None:
     print(json.dumps(_outcome(student, result)))
 
 
+@pytest.mark.parametrize("layers", [LAYERS, RESIDUAL_LAYERS], ids=["dense", "residual"])
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
-def test_a_run_resumed_in_a_new_process_matches_the_run_in_one_go(implementation: str, tmp_path: Path):
-    in_one_go = _student(implementation)
+def test_a_run_resumed_in_a_new_process_matches_the_run_in_one_go(
+    implementation: str, layers: list[LayerSpec], tmp_path: Path
+):
+    in_one_go = _student(implementation, layers)
     expected = _outcome(in_one_go, _train(in_one_go, EPOCHS, Random(7)))
 
-    stopped = _student(implementation)
+    stopped = _student(implementation, layers)
     result = _train(stopped, STOPPED_AFTER, Random(7))
     assert result.run_checkpoint is not None
     model_path, run_path = str(tmp_path / "model.json"), str(tmp_path / "run.json")
