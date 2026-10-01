@@ -1,9 +1,9 @@
 """
 Dense batch norm in Rust (the batch-norm workplan, stage 3): BatchNormRustArrayLayer and
 LinearRustArrayLayer against numpy's layers by bits, the optimizer's pairs (a linear layer's W, and
-gamma and beta) against NumpyOptimizer by bits, gradient checks under every rule, the running
-averages in training and inference, snapshot and checkpoint, the one-example refusal (D4), weight
-decay (D7), and parity with numpy's networks. Reuses tests/test_batch_norm_array_network.py's cases.
+gamma and beta) against NumpyOptimizer by bits, randomize, and parity with numpy's networks. The
+network-level tests both backends share are tests/test_batch_norm_dense_network.py's. Reuses
+tests/test_batch_norm_array_network.py's cases.
 """
 
 import random
@@ -15,7 +15,7 @@ import pytest
 
 from indrajala_ml.model import batch_norm_array_layer
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.array_layer import FloatArray, sigmoid
+from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.layer_specs import Dense
@@ -24,8 +24,7 @@ from indrajala_ml.model.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.train import train_backprop_network_mini_batch
-from tests.gradient_check import check_gradients
-from tests.test_batch_norm_array_network import EPSILON, INPUT, NETWORKS, RATE, RULES, _rows
+from tests.test_batch_norm_array_network import EPSILON, INPUT, NETWORKS, RATE, RULES, _network, _rows
 
 
 def _numpy(values: Any) -> Any:
@@ -39,14 +38,6 @@ def _rust(values: Any) -> pa.Array:
 def _bits(values: Any) -> list[bytes]:
     # by bits, so -0.0 and 0.0 differ
     return [_numpy(array).tobytes() for entry in values for array in entry]
-
-
-def _network(name: str = "sigmoid", rule: UpdateRule | None = None, seed: int = 3, backend: Any = RUST) -> Any:
-    layers, shape = NETWORKS[name]
-    network = SequentialArrayNetwork(INPUT, layers, SGD() if rule is None else rule, shape=shape, backend=backend)
-    backend.seed(seed)
-    network.randomize()
-    return network
 
 
 # the layers
@@ -227,124 +218,11 @@ def test_adams_step_is_numpys_within_its_bias_corrections_rounding():
 # networks
 
 
-@pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("name", NETWORKS)
-@pytest.mark.parametrize("batch_size", [2, 5])
-def test_every_gradient_matches_its_finite_difference(name: str, rule: UpdateRule, batch_size: int):
-    network = _network(name, rule)
-    rows = _rows(batch_size, NETWORKS[name][1])
-    # moved running averages and a trained step, so gamma and beta aren't at their initial values
-    network.learn_batch(0.5, _rows(6, NETWORKS[name][1], seed=2))
-
-    check_gradients(network, [state for state, _ in rows], [label for _, label in rows])
-
-
 @pytest.mark.parametrize("name", NETWORKS)
 def test_randomize_draws_numpys_weights(name: str):
     # the crate's RNG is numpy's np.random, so the same seed draws the same linear W, and batch norm
     # draws nothing
-    assert _bits(_network(name).snapshot()) == _bits(_network(name, backend=NUMPY).snapshot())
-
-
-def test_the_running_averages_move_in_training_forward_passes_only():
-    network = _network()
-    rows = _rows(6)
-    prepared = network.prepare_dataset(rows)
-    norm = network.layers[1]
-
-    network.learn_batch(0.5, rows)
-    trained = _bits([norm.running_state()])
-    assert trained != _bits([(np.zeros(5), np.ones(5))])
-
-    network.classify_rows(prepared)
-    network.classify_state(rows[0][0])
-    network.classify_row(prepared, 1)
-    assert _bits([norm.running_state()]) == trained
-
-
-def test_classifying_normalizes_with_the_running_averages():
-    network = _network()
-    rows = _rows(6)
-    network.learn_batch(0.5, rows)
-    linear, norm, output = network.layers
-    Z = np.array([state for state, _ in rows]) @ _numpy(linear.W).T
-    xhat = (Z - _numpy(norm.running_mean)) / np.sqrt(_numpy(norm.running_var) + EPSILON)
-    hidden = sigmoid(_numpy(norm.gamma) * xhat + _numpy(norm.beta))
-    expected = sigmoid(hidden @ _numpy(output.W).T + _numpy(output.b))
-
-    assert network.classify_rows(network.prepare_dataset(rows)) == np.argmax(expected, axis=1).tolist()
-    assert [network.classify_state(state) for state, _ in rows] == np.argmax(expected, axis=1).tolist()
-
-
-def test_the_optimizers_state_is_per_parameter():
-    network = _network(rule=Adam())
-    network.learn_batch(0.1, _rows(6))
-    layers = network.optimizer.state().layers
-
-    assert [array.shape for array in layers[0]] == [(5, 4), (5, 4)]  # the linear layer's m and v
-    assert [array.shape for array in layers[1]] == [(5,)] * 4  # gamma's m and v, beta's m and v
-    assert [array.shape for array in layers[2]] == [(3, 5), (3, 5), (3,), (3,)]
-
-
-def test_weight_decay_decays_the_linear_layers_w_and_neither_gamma_nor_beta():
-    rows = _rows(6)
-    sgd, decayed = _network(rule=SGD()), _network(rule=WeightDecay(0.1))
-
-    for network in (sgd, decayed):
-        network.learn_batch(0.5, rows)
-
-    # gamma and beta step with plain SGD (D7), and nothing before them differs
-    assert _bits([decayed.snapshot()[1][:2]]) == _bits([sgd.snapshot()[1][:2]])
-    assert _numpy(decayed.layers[0].W).tobytes() != _numpy(sgd.layers[0].W).tobytes()
-
-
-@pytest.mark.parametrize("method", ["learn", "learn_row", "learn_batch", "learn_batch_rows"])
-def test_a_one_example_training_step_is_refused_naming_the_layer(method: str):
-    network = _network("after a sigmoid layer")
-    rows = _rows(3)
-    before = _bits(network.snapshot())
-
-    with pytest.raises(ValueError, match=r"layer 2, BatchNorm\(activation='relu'.*D4"):
-        match method:
-            case "learn":
-                network.learn(0.5, *rows[0])
-            case "learn_row":
-                network.learn_row(0.5, network.prepare_dataset(rows), 0)
-            case "learn_batch":
-                network.learn_batch(0.5, rows[:1])
-            case _:
-                network.learn_batch_rows(0.5, network.prepare_dataset(rows), [2])
-    assert _bits(network.snapshot()) == before
-
-
-def test_snapshot_carries_the_running_averages_and_restore_returns_them():
-    network = _network()
-    network.learn_batch(0.5, _rows(6))
-    snapshot = network.snapshot()
-
-    assert [len(entry) for entry in snapshot] == [1, 4, 2]
-    norm = network.layers[1]
-    assert _bits([snapshot[1]]) == _bits([norm.parameters() + norm.running_state()])
-
-    network.learn_batch(0.5, _rows(6, seed=5))
-    network.restore([[array.tolist() for array in entry] for entry in snapshot])  # as a loaded file
-    assert _bits(network.snapshot()) == _bits(snapshot)
-
-
-@pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
-def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
-    network = _network("two pairs", rule)
-    network.learn_batch(0.1, _rows(6))
-    checkpoint = network.checkpoint()
-
-    network.learn_batch(0.1, _rows(5, seed=7))
-    network.learn_batch(0.1, _rows(4, seed=8))
-    trained = _bits(network.snapshot())
-
-    network.restore_checkpoint(checkpoint)
-    network.learn_batch(0.1, _rows(5, seed=7))
-    network.learn_batch(0.1, _rows(4, seed=8))
-    assert _bits(network.snapshot()) == trained
+    assert _bits(_network(name, backend=RUST).snapshot()) == _bits(_network(name).snapshot())
 
 
 # parity with numpy
