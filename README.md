@@ -396,6 +396,65 @@ bits. There's no `pow`, since `(var + eps)^(-3/2)` through a library `pow` could
 Python, numpy and Rust. `tests/gradient_check.py` checks each implementation's backward pass against
 finite differences of the whole batch's loss.
 
+## Residual connections
+
+A residual block adds its input to its body's output, `out = x + F(x)`, the pre-activation form of
+He et al. 2016 ("Identity Mappings in Deep Residual Networks", arXiv 1603.05027) and the
+transformer's: nothing follows the add. The identity path carries the gradient past the body
+unchanged. Dense blocks only, with identity shortcuts (the block's output size is its input size),
+for the Sequential networks of all three implementations. This section fixes the forms they are
+held to; [docs/residual-connections-workplan.md](docs/residual-connections-workplan.md) builds them
+stage by stage:
+
+```python
+from indrajala_ml.model.layer_specs import BatchNorm, Dense, Residual
+
+layers = [
+    Dense(64, activation="relu"),
+    Residual((Dense(128, activation="relu"), Dense(64, activation="linear", bias=True))),
+    Residual((Dense(128, activation="linear"), BatchNorm("relu"), Dense(64, activation="linear", bias=True))),
+    Dense(10, activation="softmax", output=True, loss="cross_entropy"),
+]
+```
+
+A body is a valid sequence of dense hidden layers (a linear layer and a `BatchNorm` as a pair,
+dropout on sigmoid only), with no conv, pool or nested block, and ends in an affine layer,
+`Dense(n, activation="linear", bias=True)`, whose `n` is the block's input size. The affine layer
+lets `F` be negative, so the sum isn't pushed one way. `bias=True` is accepted nowhere else.
+
+The builders flatten each block into layers, `Fork`, the body, then `Add` (`expand_specs`). Layer
+indices (snapshots, optimizer state, checkpoints) count these layers. The fork and add have no
+parameters and draw nothing at initialization, so adding a block never shifts a later layer's
+draws; the affine layer draws `W`, then `b`, fan-in-aware, as a dense layer does.
+
+The exact expressions, per example (a batch row by row), with `body_first` the body's first layer
+and `f'` the derivative of the activation of the layer before the fork:
+
+```text
+forward
+  fork    x                                 its input, unchanged and kept
+  affine  y = W h + b                       h: the layer before it, in the body
+  add     out = y + x                       x: the fork's input
+
+backward
+  add     delta = downstream                from the layer after it
+          its downstream: delta             the identity's
+  affine  delta = downstream                the add's delta
+          its downstream, gradients: a dense layer's (W^T delta; delta h^T, delta)
+  fork    delta = body_first.downstream + add.delta
+          its downstream: delta
+  before the fork, sigmoid
+          delta = (fork.delta * a) * (1 - a)
+```
+
+The add and the fork's sum are one IEEE addition each, which is commutative, so their operand order
+can't move bits; no sum here has three terms. The layer before a fork multiplies in numpy's order,
+`(downstream * a) * (1 - a)`, as a sigmoid layer does today; ReLU masks, and dropout scales, as
+they do today. On Rust a dense layer's hidden delta is one fused call that reads the next layer's
+`W` and delta; before a fork it is one fused call with the skip term,
+`(body_first.delta @ body_first.W + add.delta) * f'(a)` (`layer_hidden_delta_skip` and its ReLU
+and dropout forms), which computes the same bits as the crate's unfused downstream, add and mask.
+
 ## Refactoring
 
 A structural refactoring changes structure only, never numerics. Every stage keeps every parity
