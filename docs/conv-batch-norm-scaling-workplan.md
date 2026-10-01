@@ -1,7 +1,7 @@
 # Workplan: the conv batch-size study with batch norm
 
-**Status: stages 1 (#517) and 2 done: `lr_32` is 2 at momentum 0.0 and 0.125 at 0.9. Stage 3 is
-next.**
+**Status: stages 1 (#517), 2 (#518) and 3 done. The rule fails at B = 512 for both arms at both
+momenta, so stage 4 is skipped (D6). Stage 5 is next.**
 
 The conv batch-size study (`indrajala_ml/batch_size_scaling.py`, findings in its docstring) found
 that the linear learning-rate scaling rule (Goyal et al. 2017) fails for the conv network at
@@ -167,6 +167,62 @@ Once per arm:
 
 The B = 32 cells run in both invocations, and must give identical accuracies: a free check of
 stage 1's bit-identity at full scale. Record both arms' tables here, against the old study's.
+
+Result: full MNIST, Rust, 3 seeds, 3 epochs. The batch-32 bands (no warmup, epoch 3) are
+98.05% ± 0.08% (seeds 97.96% - 98.12%) at momentum 0.0 and 98.10% ± 0.17% (97.91% - 98.21%) at
+0.9. Epoch 1 is left out here; it is in the raw output in the PR.
+
+Momentum 0.0:
+
+| B | rate | value | warmup | epoch 2, plain | epoch 3, plain | epoch 2, ghost 32 | epoch 3, ghost 32 | in band (plain, ghost) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 32 | scaled | 2 | 0 | 97.92% ± 0.17% | 98.05% ± 0.08% | 97.92% ± 0.17% | 98.05% ± 0.08% | yes, yes |
+| 32 | scaled | 2 | 1 | 97.81% ± 0.01% | 97.96% ± 0.11% | 97.81% ± 0.01% | 97.96% ± 0.11% | no, no |
+| 128 | scaled | 8 | 0 | 78.36% ± 9.85% | 87.95% ± 9.46% | 84.70% ± 5.86% | 88.01% ± 9.64% | no, no |
+| 128 | unscaled | 2 | 0 | 97.88% ± 0.01% | 97.72% ± 0.43% | 97.83% ± 0.19% | 97.59% ± 0.20% | no, no |
+| 128 | scaled | 8 | 1 | 97.79% ± 0.02% | 97.46% ± 0.51% | 97.74% ± 0.23% | 97.37% ± 0.63% | no, no |
+| 128 | unscaled | 2 | 1 | 97.71% ± 0.09% | 97.92% ± 0.18% | 97.69% ± 0.13% | 97.78% ± 0.06% | no, no |
+| 512 | scaled | 32 | 0 | 9.99% ± 0.36% | 9.99% ± 0.36% | 9.99% ± 0.36% | 9.99% ± 0.36% | no, no |
+| 512 | unscaled | 2 | 0 | 96.70% ± 0.69% | 97.01% ± 0.45% | 96.66% ± 0.47% | 96.94% ± 0.33% | no, no |
+| 512 | scaled | 32 | 1 | 96.62% ± 0.91% | 91.16% ± 5.83% | 97.07% ± 0.29% | 92.75% ± 6.62% | no, no |
+| 512 | unscaled | 2 | 1 | 96.05% ± 1.15% | 96.51% ± 0.66% | 96.27% ± 0.97% | 96.45% ± 0.62% | no, no |
+
+Momentum 0.9:
+
+| B | rate | value | warmup | epoch 2, plain | epoch 3, plain | epoch 2, ghost 32 | epoch 3, ghost 32 | in band (plain, ghost) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 32 | scaled | 0.125 | 0 | 98.00% ± 0.24% | 98.10% ± 0.17% | 98.00% ± 0.24% | 98.10% ± 0.17% | yes, yes |
+| 32 | scaled | 0.125 | 1 | 97.83% ± 0.24% | 98.12% ± 0.07% | 97.83% ± 0.24% | 98.12% ± 0.07% | yes, yes |
+| 128 | scaled | 0.5 | 0 | 62.51% ± 15.47% | 65.44% ± 15.67% | 64.61% ± 15.50% | 65.42% ± 15.60% | no, no |
+| 128 | unscaled | 0.125 | 0 | 97.91% ± 0.25% | 98.06% ± 0.05% | 97.78% ± 0.14% | 98.09% ± 0.12% | yes, yes |
+| 128 | scaled | 0.5 | 1 | 97.75% ± 0.33% | 98.17% ± 0.10% | 97.71% ± 0.33% | 98.13% ± 0.08% | yes, yes |
+| 128 | unscaled | 0.125 | 1 | 97.84% ± 0.12% | 97.90% ± 0.06% | 97.76% ± 0.06% | 97.99% ± 0.10% | no, yes |
+| 512 | scaled | 2 | 0 | 14.21% ± 6.86% | 14.40% ± 6.36% | 14.14% ± 7.09% | 14.08% ± 6.68% | no, no |
+| 512 | unscaled | 0.125 | 0 | 96.72% ± 0.25% | 97.56% ± 0.09% | 96.63% ± 0.23% | 97.52% ± 0.07% | no, no |
+| 512 | scaled | 2 | 1 | 36.72% ± 4.78% | 41.35% ± 9.01% | 37.12% ± 4.95% | 43.35% ± 9.54% | no, no |
+| 512 | unscaled | 0.125 | 1 | 96.69% ± 0.13% | 97.61% ± 0.11% | 96.69% ± 0.15% | 97.57% ± 0.17% | no, no |
+
+- **No B = 512 scaled cell reaches the band, in either arm or at either momentum.** So stage 4
+  doesn't run (D6).
+- **At momentum 0.0, batch norm takes the scaled rate 32 at B = 512 from chance to training, but
+  not stably.** With the 1-epoch warmup every seed reaches 95.9% - 97.6% in epoch 2, then two of
+  three fall in epoch 3 (plain: 89.8% and 86.1%; ghost: 85.2%). The old network stayed at chance
+  (13.94%). Without warmup it is still at chance.
+- **At momentum 0.9 the scaled rate 2 (an effective rate of 20) fails as before:** 14% without
+  warmup, 41-43% with it.
+- **B = 128 holds at momentum 0.9 with warmup (98.17% and 98.13%), and narrowly misses at 0.0**
+  (97.46% and 97.37%, about 0.6 points below a band only 0.16 points wide). The old network held
+  at both, against bands 1.1 and 1.2 points wide. The band criterion is strict when the seeds
+  agree this closely: the B = 32 warmup cell at 0.0 misses at 97.96%, the band's own lower edge.
+- **The unscaled control is now the best B = 512 cell, and it is close.** At momentum 0.9, 0.125
+  reaches 97.61% (plain) and 97.57% (ghost) with warmup, about 0.3 below the band's lower edge
+  and still climbing. The old network's best B = 512 cell was 94.63% (a capped 16 at 0.0).
+- **Plain batch norm and ghost groups of 32 can't be told apart.** Every cell agrees within the
+  seeds' spread. For this network, the statistics' sample size doesn't decide whether the rule
+  holds.
+- **The arms' B = 32 cells are identical to the last digit,** the full-scale check of stage 1's
+  bit-identity.
+- The two sweeps took 1 h 59 min together (11:04 - 13:03).
 
 ### Stage 4: B = 1024, gated (D6)
 
