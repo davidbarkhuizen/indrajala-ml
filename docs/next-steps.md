@@ -18,10 +18,13 @@ docs cite them by section:
 | Removing duplicated code (DRY) | #506 | #507-#514 | `git show e066333:docs/dry-workplan.md` |
 | The conv batch-size study with batch norm | #516 | #517-#519 | `git show acbc49c:docs/conv-batch-norm-scaling-workplan.md` |
 | Explicit generator objects (RNG generators) | #521 | crate #46, #522-#529 | `git show aaf8bb2:docs/rng-generators-workplan.md` |
+| Residual connections (roadmap step 3) | #531 | crate #47, #532-#538 | `git show 365a173:docs/residual-connections-workplan.md` |
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
-normalization), [measurement.md](measurement.md) and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
-`indrajala_ml/batch_size_scaling.py`'s docstring.
+normalization, Residual connections), [measurement.md](measurement.md) and
+[rng-audit.md](rng-audit.md). The batch-size studies' findings are in
+`indrajala_ml/batch_size_scaling.py`'s docstring, the depth study's in
+`scripts/residual_depth_study.py`'s.
 
 ## From composable layers
 
@@ -123,6 +126,24 @@ Still out of scope:
 - The crate (the workplan's D1), and scripts and demos (D5): they get their own audit if wanted.
 - The numpy and Rust layer twins' numerics (D3): they share identical methods only; their method
   bodies (a numpy expression against one fused Rust call) stay separate by design.
+
+## From residual connections
+
+- **Conv residual blocks** (D2). A conv block must keep its shape, and conv is 'valid' padding
+  only (`conv_layer.py`), so it needs 'same' padding (new geometry, im2col and crate ops in all
+  three implementations) and a conv layer with a bias and no activation: a workplan of its own.
+- **Projection shortcuts** (D5): `x W_s + F(x)` when a block changes size (He et al. 2015's
+  option B), a trained shortcut layer with a second gradient sum and its own parity tests.
+- **Zero-initialized block ends** (D7): the body's last layer starting at zero, so each block
+  starts as the identity (Goyal et al. 2017's zero-γ; Zhang et al. 2019, Fixup), as an option.
+- **The depth study's open question**: with batch norm, the plain network's first-layer gradient
+  at initialization grows tenfold from 2 to 16 hidden layers (the residual one's 1.8x), and at 16
+  its seeds' standard deviation is 3 points in the first two epochs. Unexplained.
+
+Still out of scope:
+
+- Nested blocks (D6). The design nests without change; only validation refuses it.
+- An activation after the add, `relu(x + F(x))` (D3), and a standalone activation layer.
 
 ## From the RNG generators workplan
 

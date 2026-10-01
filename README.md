@@ -97,7 +97,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
 | `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
-| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs) and the refactoring golden run; see `docs/measurement.md` |
+| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study and the refactoring golden run; see `docs/measurement.md` |
 | `docs/` | the measurement guide, optimization docs, next steps, the PyPI release workplan, the primitives roadmap, the RNG audit, machine profiles |
 
 ## Models
@@ -124,9 +124,10 @@ network = SequentialArrayNetwork(
 - **Layer specs** (`layer_specs.py`) are backend-free data: `Dense(size, activation, dropout)`
   (sigmoid or ReLU, dropout on sigmoid only), `Conv(kernel_size, channel_count, stride)`,
   `Pool(pool_size, stride)`, and the output layer `Dense(size, output=True, activation, loss)`
-  (sigmoid with the squared or cross-entropy loss, or softmax with cross-entropy). Activations are
-  fused into their layer. `validate_layer_specs` refuses a list that some implementation can't
-  build.
+  (sigmoid with the squared or cross-entropy loss, or softmax with cross-entropy), with
+  `BatchNorm(activation)` after a linear layer (Batch normalization) and `Residual(body)` for a
+  dense residual block (Residual connections). Activations are fused into their layer.
+  `validate_layer_specs` refuses a list that some implementation can't build.
 - **Update rules** (`update_rules.py`) are data too: `SGD`, `Momentum`, `Adam` and `WeightDecay`
   (see Update rules, below).
 - **The optimizer** holds all of a network's update state: `NumpyOptimizer` and `RustOptimizer`
@@ -180,8 +181,8 @@ arguments. It equals, by bits, the Sequential network of the same specs and rule
 An empty cell has no preset, but the Sequential network of that implementation builds the
 combination, so each array preset has a pure-Python parity reference. Combinations the Sequential
 networks build that no preset has, and those still out of reach, are listed in
-[docs/next-steps.md](docs/next-steps.md), From composable layers. Batch norm has no preset: the
-Sequential networks build it (Batch normalization).
+[docs/next-steps.md](docs/next-steps.md), From composable layers. Batch norm and residual blocks
+have no preset: the Sequential networks build them (Batch normalization, Residual connections).
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,
 hand-computed examples, and the reference the array implementations are checked against. It is
@@ -405,9 +406,9 @@ A residual block adds its input to its body's output, `out = x + F(x)`, the pre-
 He et al. 2016 ("Identity Mappings in Deep Residual Networks", arXiv 1603.05027) and the
 transformer's: nothing follows the add. The identity path carries the gradient past the body
 unchanged. Dense blocks only, with identity shortcuts (the block's output size is its input size),
-for the Sequential networks of all three implementations. This section fixes the forms they are
-held to; [docs/residual-connections-workplan.md](docs/residual-connections-workplan.md) builds them
-stage by stage:
+for the Sequential networks of all three implementations, under every update rule, with or
+without batch norm in the body; no preset has them. Format 2 saves them (Saving and loading). This
+section fixes the forms all three implementations are held to:
 
 ```python
 from indrajala_ml.model.layer_specs import BatchNorm, Dense, Residual
@@ -457,6 +458,11 @@ they do today. On Rust a dense layer's hidden delta is one fused call that reads
 `W` and delta; before a fork it is one fused call with the skip term,
 `(body_first.delta @ body_first.W + add.delta) * f'(a)` (`layer_hidden_delta_skip` and its ReLU
 and dropout forms), which computes the same bits as the crate's unfused downstream, add and mask.
+
+`scripts/residual_depth_study.py` trains plain and residual networks of 2 to 16 hidden layers on
+MNIST. Without batch norm the plain network collapses to one class from 8 layers, its first
+layer's gradient vanishing, while the residual one holds 96.9%; with batch norm the plain network
+loses 2 points by 16 layers and the residual one 0.3 (the findings are in its docstring).
 
 ## Refactoring
 
