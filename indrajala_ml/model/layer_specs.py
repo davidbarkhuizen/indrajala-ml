@@ -21,6 +21,7 @@ from typing import Literal, NoReturn
 
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.window_geometry import output_size, pool_stride
 
 Conv = ConvSpec
 Pool = PoolSpec
@@ -125,6 +126,53 @@ def batch_norm_index(specs: Sequence[LayerSpec]) -> int | None:
 # a network's input: (dimension,) for a flat input, or (height, width, channels) for an image, whose
 # flat layout is channel-major (conv_layer.py, conv_array_layer.py)
 InputShape = tuple[int] | tuple[int, int, int]
+ImageShape = tuple[int, int, int]
+
+
+def image_shape(shape: InputShape) -> ImageShape:
+    """shape, which a conv or pool layer reads, as (height, width, channels)."""
+    assert len(shape) == 3, f"a conv or pool layer needs a (height, width, channels) input; got {shape}"
+    return shape
+
+
+@dataclass(frozen=True)
+class SpecShape:
+    """
+    One spec's place in its list's shape walk (spec_shapes): the shape it reads, the shape it gives,
+    and for a BatchNorm its positions, 1 after a dense layer or a conv layer's out_height *
+    out_width (1 for every other spec).
+    """
+
+    input_shape: InputShape
+    output_shape: InputShape
+    positions: int = 1
+
+
+def spec_shapes(specs: Sequence[LayerSpec], input_shape: InputShape) -> list[SpecShape]:
+    """
+    Each of specs' shapes over input_shape, in forward order, each spec's input shape the previous
+    one's output shape: what every builder needs besides the choice of class. A BatchNorm keeps its
+    linear layer's shape (validate_layer_specs). The specs' own arguments are checked by the layers
+    built from them, not here.
+    """
+    shapes: list[SpecShape] = []
+    shape = input_shape
+    for spec in specs:
+        if isinstance(spec, Dense):
+            shapes.append(SpecShape(shape, (spec.size,)))
+        elif isinstance(spec, BatchNorm):
+            positions = shape[0] * shape[1] if len(shape) == 3 else 1
+            shapes.append(SpecShape(shape, shape, positions))
+        else:
+            height, width, channels = image_shape(shape)
+            if isinstance(spec, ConvSpec):
+                window, stride, channels = spec.kernel_size, spec.stride, spec.channel_count
+            else:
+                window, stride = spec.pool_size, pool_stride(spec.pool_size, spec.stride)
+            output = (output_size(height, window, stride), output_size(width, window, stride), channels)
+            shapes.append(SpecShape(shape, output))
+        shape = shapes[-1].output_shape
+    return shapes
 
 
 def _check_batch_norm(spec: BatchNorm, before: LayerSpec | None) -> None:

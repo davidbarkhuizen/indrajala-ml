@@ -7,6 +7,7 @@ from typing import ClassVar, Literal
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_unit import ConvUnit
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.window_geometry import output_size, validate_conv_arguments
 
 
 @dataclass(frozen=True)
@@ -57,17 +58,11 @@ class ConvLayer:
         input_channels: int = 1,
     ) -> None:
 
-        assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
+        validate_conv_arguments(input_height, input_width, input_channels, kernel_size, channel_count, stride)
         assert input_channels * input_height * input_width == len(input_layer.nodes), (
             f"input_channels*input_height*input_width "
             f"({input_channels * input_height * input_width}) must match input_layer's own node "
             f"count ({len(input_layer.nodes)})"
-        )
-        assert kernel_size >= 1, f"kernel_size must be at least 1; got {kernel_size}"
-        assert channel_count >= 1, f"channel_count must be at least 1; got {channel_count}"
-        assert stride >= 1, f"stride must be at least 1; got {stride}"
-        assert kernel_size <= input_height and kernel_size <= input_width, (
-            f"kernel_size ({kernel_size}) must fit within input_height x input_width ({input_height}x{input_width})"
         )
 
         self.input_layer = input_layer
@@ -78,8 +73,8 @@ class ConvLayer:
         self.channel_count = channel_count
         self.stride = stride
 
-        self.out_height = (input_height - kernel_size) // stride + 1
-        self.out_width = (input_width - kernel_size) // stride + 1
+        self.out_height = output_size(input_height, kernel_size, stride)
+        self.out_width = output_size(input_width, kernel_size, stride)
 
         self.kernels: list[ConvKernel] = [
             self._kernel_cls(kernel_size=kernel_size, in_channels=input_channels) for _ in range(channel_count)
