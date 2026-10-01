@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 import indrajala_ml.model
+from indrajala_ml.model.affine_rust_array_layer import AffineRustArrayLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
@@ -28,6 +29,7 @@ LAYER_CLASSES: dict[str, Callable[[int, int], RustArrayLayer]] = {
     "softmax": lambda size, input_size: SoftmaxRustArrayLayer(size, input_size),
     "cross-entropy": lambda size, input_size: CrossEntropyRustArrayLayer(size, input_size),
     "dropout": lambda size, input_size: DropoutRustArrayLayer(size, input_size, 0.5),
+    "affine": lambda size, input_size: AffineRustArrayLayer(size, input_size),
 }
 
 # (size, input_size): a small layer, the dense production layers (784 -> 30 -> 10), and the conv

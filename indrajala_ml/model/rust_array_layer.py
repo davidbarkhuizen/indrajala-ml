@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_parameters import WeightAndBias
+from indrajala_ml.model.residual_rust_array_layer import ForkRustArrayLayer
 
 
 def fan_in_aware_random_rust_layer(rng: pa.Generator, size: int, previous_size: int) -> tuple[pa.Array, pa.Array]:
@@ -56,21 +58,33 @@ class RustArrayLayer(WeightAndBias[pa.Array]):
 
     def downstream(self) -> pa.Array:
         # ArrayLayer.downstream: the gradient sent back to this layer's input, read by a conv or
-        # pool layer before it. The dense hidden-delta methods keep their fused calls, which read
-        # next_layer.W themselves - a dense layer is never followed by a conv or pool layer, and
-        # splitting the fusion would add a boundary crossing to every dense backward step.
+        # pool layer, a residual block's fork or add, or an affine layer before it. The dense
+        # hidden-delta methods keep their fused calls, which read next_layer.W themselves - a dense
+        # layer is never followed by a conv or pool layer, and splitting the fusion would add a
+        # boundary crossing to every dense backward step. Before a residual block's fork they call
+        # the fused skip ops instead, which read the fork's body_first and add (D8).
         return pa.layer_downstream(self.W, self.delta)
 
     def downstream_batch(self) -> pa.Array:
         return pa.layer_downstream_batch(self.W, self.delta_batch)
 
-    def compute_hidden_delta(self, next_layer: RustArrayLayer) -> None:
+    def compute_hidden_delta(self, next_layer: Any) -> None:
+        if isinstance(next_layer, ForkRustArrayLayer):
+            body = next_layer.body_first
+            self.delta = pa.layer_hidden_delta_skip(body.W, body.delta, next_layer.add.delta, self.a)
+            return
         self.delta = pa.layer_hidden_delta(next_layer.W, next_layer.delta, self.a)
 
     def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
         self.delta_batch = pa.layer_output_delta(self.A, reference_batch)
 
-    def compute_hidden_delta_batch(self, next_layer: RustArrayLayer) -> None:
+    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
+        if isinstance(next_layer, ForkRustArrayLayer):
+            body = next_layer.body_first
+            self.delta_batch = pa.layer_hidden_delta_skip_batch(
+                body.W, body.delta_batch, next_layer.add.delta_batch, self.A
+            )
+            return
         self.delta_batch = pa.layer_hidden_delta_batch(next_layer.W, next_layer.delta_batch, self.A)
 
     def accumulate_gradient(self, input_activation: pa.Array) -> None:

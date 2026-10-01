@@ -10,6 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from indrajala_ml.model.affine_rust_array_layer import AffineRustArrayLayer
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
@@ -31,7 +32,6 @@ from indrajala_ml.model.layer_specs import (
     LayerSpec,
     expand_specs,
     image_shape,
-    refuse_residual_until,
     spec_shapes,
     validate_layer_specs,
 )
@@ -42,6 +42,7 @@ from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.residual_array_layer import AddArrayLayer, AffineArrayLayer, ForkArrayLayer
+from indrajala_ml.model.residual_rust_array_layer import AddRustArrayLayer, ForkRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
@@ -66,10 +67,10 @@ class ArrayLayerClasses:
     batch_norm: LayerClass
     linear_conv: FrontEndLayerClass
     # a residual block's (the residual-connections workplan): the affine layer that ends a body,
-    # the fork (size) and the add (its fork); None where not built yet (Rust, stage 4)
-    affine: LayerClass | None = None
-    fork: LayerClass | None = None
-    add: LayerClass | None = None
+    # the fork (size) and the add (its fork)
+    affine: LayerClass
+    fork: LayerClass
+    add: LayerClass
 
 
 LAYER_CLASSES = {
@@ -99,13 +100,15 @@ LAYER_CLASSES = {
         linear=LinearRustArrayLayer,
         batch_norm=BatchNormRustArrayLayer,
         linear_conv=LinearConvRustArrayLayer,
+        affine=AffineRustArrayLayer,
+        fork=ForkRustArrayLayer,
+        add=AddRustArrayLayer,
     ),
 }
 
 
 def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> ArrayNetworkLayer[Any]:
     if spec.bias:
-        assert classes.affine is not None
         return classes.affine(spec.size, input_size)
     if spec.activation == "linear":
         return classes.linear(spec.size, input_size)
@@ -130,8 +133,6 @@ def build_array_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    if backend_name != "numpy":
-        refuse_residual_until(specs, "4", f"on the {backend_name} backend")
     classes = LAYER_CLASSES[backend_name]
 
     layers: list[ArrayNetworkLayer[Any]] = []
@@ -141,13 +142,11 @@ def build_array_layers(
     for spec, shape in zip(expand_specs(specs), shapes, strict=True):
         input_size = math.prod(shape.input_shape)
         if isinstance(spec, Fork):
-            assert classes.fork is not None
             opened = classes.fork(input_size)
             forks.append(opened)
             layers.append(opened)
             continue
         if isinstance(spec, Add):
-            assert classes.add is not None
             fork = forks.pop()
             fork.add = classes.add(fork)
             layers.append(fork.add)

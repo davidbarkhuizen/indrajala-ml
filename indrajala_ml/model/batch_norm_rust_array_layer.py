@@ -8,6 +8,7 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_parameters import GammaAndBeta
 from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
+from indrajala_ml.model.residual_rust_array_layer import ForkRustArrayLayer
 
 
 class BatchNormRustArrayLayer(GammaAndBeta[pa.Array]):
@@ -23,7 +24,7 @@ class BatchNormRustArrayLayer(GammaAndBeta[pa.Array]):
     (validate_layer_specs).
 
     A sigmoid's hidden delta is ArrayLayer's fused call on the next layer's W and delta: only a
-    dense layer follows it. A ReLU's masks the next layer's downstream, which may be a dense, conv
+    dense layer or a residual block's fork follows it (the fused skip op before a fork). A ReLU's masks the next layer's downstream, which may be a dense, conv
     or pool layer's (a conv layer's output can be one position, so positions doesn't tell);
     after a dense layer that is the fused layer_relu_hidden_delta_batch's bits.
 
@@ -124,7 +125,13 @@ class BatchNormRustArrayLayer(GammaAndBeta[pa.Array]):
     def compute_hidden_delta_batch(self, next_layer: Any) -> None:
         # dl/dy: the downstream times the activation's derivative
         assert self._was_training, "the backward pass needs a training forward pass's batch statistics"
-        if self.activation == "sigmoid":
+        if self.activation == "sigmoid" and isinstance(next_layer, ForkRustArrayLayer):
+            # before a residual block: the fused skip op (D8, RustArrayLayer.compute_hidden_delta)
+            body = next_layer.body_first
+            self.delta_batch = pa.layer_hidden_delta_skip_batch(
+                body.W, body.delta_batch, next_layer.add.delta_batch, self.A
+            )
+        elif self.activation == "sigmoid":
             self.delta_batch = pa.layer_hidden_delta_batch(next_layer.W, next_layer.delta_batch, self.A)
         else:
             self.delta_batch = pa.array_relu_mask(next_layer.downstream_batch(), self.A)

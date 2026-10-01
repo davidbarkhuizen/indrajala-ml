@@ -1,6 +1,6 @@
 """
-Residual blocks on the array backends (the residual-connections workplan, stage 2; README, Residual
-connections): the gradient check on residual networks, identity blocks (an affine layer of zeros
+Residual blocks on the array backends (the residual-connections workplan, stages 2 and 4; README,
+Residual connections): the gradient check on residual networks, identity blocks (an affine layer of zeros
 makes a block the identity, by bits, in the forward and the backward pass), learn against a batch
 of one, the block's layers, and the fork's input left as it was.
 """
@@ -11,9 +11,9 @@ from typing import Any, Literal
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY
+from indrajala_ml.model.array_backend import NUMPY, RUST
+from indrajala_ml.model.array_layer_builder import LAYER_CLASSES
 from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerSpec, Residual
-from indrajala_ml.model.residual_array_layer import AddArrayLayer, AffineArrayLayer, ForkArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
 from tests.gradient_check import analytic_gradients, check_gradients
@@ -21,8 +21,7 @@ from tests.gradient_check import analytic_gradients, check_gradients
 INPUT = 4
 
 Shape = Literal["multiclass", "single_output"]
-# the backends built so far: numpy (stage 2); Rust joins at stage 4
-BACKENDS = [NUMPY]
+BACKENDS = [NUMPY, RUST]
 
 
 def affine(size: int = INPUT) -> Dense:
@@ -49,6 +48,8 @@ NETWORKS: dict[str, list[LayerSpec]] = {
         block(Dense(5, activation="linear"), BatchNorm("relu")),
     ],
     "batch norm before the block": [Dense(INPUT, activation="linear"), BatchNorm(), block(Dense(5))],
+    # batch norm's ReLU branch reads the fork's downstream (on Rust, its lazy sum)
+    "relu batch norm before the block": [Dense(INPUT, activation="linear"), BatchNorm("relu"), block(Dense(5))],
     "dropout before the block": [Dense(INPUT, dropout=0.0), block(Dense(5, dropout=0.0))],
 }
 
@@ -93,7 +94,8 @@ def test_a_block_builds_a_fork_its_body_and_an_add_wired_together(backend: Any):
     built = network("sigmoid body", backend=backend)
     dense, fork, body, end, add, out = built.layers
 
-    assert isinstance(fork, ForkArrayLayer) and isinstance(add, AddArrayLayer) and isinstance(end, AffineArrayLayer)
+    classes = LAYER_CLASSES[backend.name]
+    assert (type(fork), type(add), type(end)) == (classes.fork, classes.add, classes.affine)
     assert fork.body_first is body and fork.add is add and add.fork is fork
     assert (fork.size, add.size, end.W.shape, end.b.shape) == (INPUT, INPUT, (INPUT, 5), (INPUT,))
     # the fork and add hold nothing: their snapshot entries are empty
