@@ -50,7 +50,7 @@ def test_compute_hidden_delta_propagates_downstream_when_active():
     next_node.update_input_weights([0.8])
     next_node.delta = -0.5
 
-    node.compute_hidden_delta([next_node], own_index=0)
+    node.compute_hidden_delta(next_node.delta * next_node.input_node_weights[0])
 
     assert node.delta == approx(-0.5 * 0.8)
 
@@ -64,7 +64,7 @@ def test_compute_hidden_delta_is_zero_when_the_unit_is_dead():
     next_node.update_input_weights([0.8])
     next_node.delta = -0.5
 
-    node.compute_hidden_delta([next_node], own_index=0)
+    node.compute_hidden_delta(next_node.delta * next_node.input_node_weights[0])
 
     assert node.delta == 0.0
 

@@ -83,11 +83,10 @@ class BackpropNode(WeightedInputNode):
         a = self.value()
         self.delta = (a - reference_value) * a * (1.0 - a)
 
-    def compute_hidden_delta(self, next_layer_nodes: Sequence[BackpropNode], own_index: int) -> None:
-        # every node in next_layer_nodes has this node at own_index in its input_node_weights,
-        # since a BackpropLayer builds every node from the same input_layer.nodes
+    def compute_hidden_delta(self, downstream: float) -> None:
+        # downstream: the next layer's downstream_sum at this node's index (a dense layer's
+        # sum over its nodes of delta * the weight each applies to this node, NodeLayer.downstream_sum)
         a = self.value()
-        downstream = sum(node.delta * node.input_node_weights[own_index] for node in next_layer_nodes)
         self.delta = downstream * a * (1.0 - a)
 
     def accumulate_gradient(self) -> None:
