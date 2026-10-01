@@ -9,6 +9,9 @@ tests/test_legacy_saved_models.py loads.
   non-empty optimizer state too.
 - The batch-norm fixtures (the batch-norm workplan, stage 5) are format-2 files of a Sequential
   network per implementation with a conv and a dense batch-norm pair, named BatchNorm<class name>.
+- The residual fixtures (the residual-connections workplan, stage 5) are format-2 files of a
+  Sequential network per implementation with two residual blocks, one holding a batch-norm pair,
+  named Residual<class name>.
 
 Each fixture is two files in tests/fixtures/saved_models/: <name>.json, the file the class's
 own save() wrote, and <name>.expected.json, what the saved network held and predicted:
@@ -42,7 +45,7 @@ from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec
+from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec, Residual, expand_specs
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import (
@@ -89,6 +92,14 @@ BATCH_NORM: list[LayerSpec] = [
     PoolSpec(2, stride=1),
     Dense(4, activation="linear"),
     BatchNorm("sigmoid", epsilon=1e-4, running_rate=0.2),
+    Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+]
+# two residual blocks (a ReLU body, and a batch-norm pair's), each ending in its affine layer, between
+# a ReLU layer and a softmax output
+RESIDUAL: list[LayerSpec] = [
+    Dense(4, activation="relu"),
+    Residual((Dense(3, activation="relu"), Dense(4, activation="linear", bias=True))),
+    Residual((Dense(3, activation="linear"), BatchNorm("relu"), Dense(4, activation="linear", bias=True))),
     Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
 ]
 FORMAT_2_TRAINING_STEPS = 2
@@ -171,10 +182,12 @@ def _python_single_output(name: str, hyperparameters: dict[str, float] | None = 
 
 
 def _sequential(
-    implementation: str, multiclass: bool, rule: UpdateRule, class_name: str | None = None
+    implementation: str, multiclass: bool, rule: UpdateRule, class_name: str | None = None, residual: bool = False
 ) -> SavedModelFixture:
     def build() -> Any:
-        if class_name is not None:
+        if residual:
+            input_shape, layers = (DIMENSION,), RESIDUAL
+        elif class_name is not None:
             input_shape, layers = SEQUENTIAL_INPUT, BATCH_NORM
         elif multiclass:
             input_shape, layers = SEQUENTIAL_INPUT, SEQUENTIAL_MULTICLASS
@@ -288,6 +301,14 @@ FIXTURES: dict[str, SavedModelFixture] = {
             ("SequentialMultiClassBackpropClassifierNetwork", "python"),
         )
     },
+    **{
+        f"Residual{name}": _sequential(implementation, True, Adam(**ADAM), name, residual=True)
+        for name, implementation in (
+            ("SequentialVectorizedMultiClassBackpropClassifierNetwork", "numpy"),
+            ("SequentialRustArrayMultiClassBackpropClassifierNetwork", "rust"),
+            ("SequentialMultiClassBackpropClassifierNetwork", "python"),
+        )
+    },
 }
 
 
@@ -339,9 +360,8 @@ def _random_like(rng: random.Random, value: Any) -> Any:
 def _positive_running_variances(network: Any, snapshot: list[Any]) -> list[Any]:
     # a batch-norm layer's running variance as |drawn|, so inference takes a real square root: the
     # last of [gamma, beta, running_mean, running_var] per layer on numpy and Rust, and per channel
-    # in pure Python
-    specs: list[LayerSpec] = network.layer_specs
-    for spec, entry in zip(specs, snapshot):
+    # in pure Python; the snapshot is per expanded layer, a residual block's body's included
+    for spec, entry in zip(expand_specs(network.layer_specs), snapshot, strict=True):
         if isinstance(spec, BatchNorm):
             for values in [entry] if network.implementation != "python" else entry:
                 values[3] = [abs(value) for value in values[3]] if isinstance(values[3], list) else abs(values[3])

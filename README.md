@@ -220,6 +220,9 @@ network = load_network("model.json")  # the Sequential network the file describe
 - A batch-norm layer's entry records its spec. Its weights are `γ`, `β` and the running mean and
   variance, so a loaded network classifies as the saved one did and resumes training by bits; its
   linear layer's weights are `W` alone. The optimizer's state for it is per `γ` and `β`.
+- A residual block's entry is `{"kind": "residual", "body": [...]}`, with its body's entries; its
+  affine layer's entry alone has `"bias": true`. Weights and optimizer state are per layer of the
+  flattened block (`expand_specs`): an affine layer's `W` and `b`, nothing for the fork and add.
 - `load` still reads each class's legacy file, written before format 2, with fresh optimizer
   state (`tests/test_legacy_saved_models.py`). Files saved in format 2 don't load on older versions
   of this package.
