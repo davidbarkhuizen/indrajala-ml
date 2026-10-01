@@ -41,7 +41,7 @@ def run_parameter_sweep[ConfigT: Hashable, ResultT](
     through the Pool initializer, pickled once per worker, rather than left in a module global,
     which only fork (Linux) would carry into workers and spawn (macOS, Windows) would not.
 
-    Each job gets its seed from `seeds` as is; worker_fn seeds random/np.random itself.
+    Each job gets its seed from `seeds` as is; worker_fn seeds its own generators from it.
 
     With report_progress, a "completed/total" line is printed and flushed per finished job: stdout
     redirected to a file is fully buffered, which would hide progress on a long background run.

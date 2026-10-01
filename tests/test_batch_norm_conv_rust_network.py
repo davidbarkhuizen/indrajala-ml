@@ -216,7 +216,6 @@ def test_train_trains_a_conv_batch_norm_network_to_its_numpy_counterparts_accura
     classified: list[list[int]] = []
     for backend in (NUMPY, RUST):
         network = _network("conv pool", Momentum(0.9), backend=backend)
-        random.seed(0)
-        train_backprop_network_mini_batch(network, network.prepare_dataset(rows), 5, epochs=3)
+        train_backprop_network_mini_batch(network, network.prepare_dataset(rows), 5, epochs=3, rng=random.Random(0))
         classified.append(network.classify_rows(network.prepare_dataset(rows)))
     assert classified[1] == classified[0]

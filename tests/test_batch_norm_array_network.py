@@ -276,7 +276,8 @@ def test_train_trains_a_batch_norm_network_on_a_set_that_leaves_one_over(prepare
         learn_batch_rows(learning_rate, data, indices)
 
     network.learn_batch, network.learn_batch_rows = record, record_rows
-    random.seed(0)
-    train_backprop_network_mini_batch(network, network.prepare_dataset(rows) if prepared else rows, 3, epochs=2)
+    train_backprop_network_mini_batch(
+        network, network.prepare_dataset(rows) if prepared else rows, 3, epochs=2, rng=random.Random(0)
+    )
 
     assert sizes == [3, 3, 3, 3]

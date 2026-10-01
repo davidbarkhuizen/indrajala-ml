@@ -202,7 +202,8 @@ What to do next:
   for n epochs) are a large share of a short run: time them apart (`accuracy_pass_timing`).
 - **Kernel changes end to end:** one epoch of MNIST, `ConvSpec(3, 8)`, dense 32, mini-batch 32,
   lr 0.5 on the demo's 2000-row subset, from a snapshot of `randomized(...)` after
-  `np.random.seed(0)` with `random.seed(0)` before each epoch; the same at mini-batch 512; one
+  `np.random.seed(0)` (the network's generator seeded 0 since the RNG generators workplan's stage
+  3) with the shuffle seeded 0 before each epoch; the same at mini-batch 512; one
   dense MNIST epoch at batch 32 and 512. Then the conv demo for the ratio table.
 - **A quick look at a crate change by hand** (not for a PR's numbers): commit it, then alternate
   `./cli build-rust` (about 6 s) between the builds, switching with `git checkout main --

@@ -107,8 +107,7 @@ def _compare_binary_loss_functions() -> list[tuple[str, str, list[int], list[flo
     for name, color, cls, learning_rate in configs:
         # separate data and weight-init seeds, so a config's initial weights don't depend on how
         # many draws generating training_data consumed
-        random.seed(0)
-        training_data = random_alternating_training_data(300, target)
+        training_data = random_alternating_training_data(300, target, rng=random.Random(0))
         student = cls.randomized(XOR_LAYER_SIZES, XOR_DIMENSION, bounds, seed=1000)
         result = train_linear_classifier_network(student, training_data, learning_rate=learning_rate, epochs=XOR_EPOCHS)
         diagnostic = result.diagnostic

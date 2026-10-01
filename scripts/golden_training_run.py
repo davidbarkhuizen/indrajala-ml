@@ -142,7 +142,6 @@ from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import
 )
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.prepared_dataset import PreparedDataset
-from indrajala_ml.seeding import seed_everything
 
 # A network is typed Any here: the script drives the network classes, dense, conv, single-output
 # and ensemble, of all three implementations, through the methods they share by name. Recorded
@@ -331,7 +330,6 @@ def _round_trip(network: Any, rows: Sequence[Example[Any]], predict: str) -> dic
 
 def _run_network(name: str, network: Any, rows: Sequence[Example[Any]], predict: str) -> dict[str, Any]:
     _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
-    seed_everything(SEED)
     network.rng = default_rng(SEED) if _backend(name) == "python" else network.backend.default_rng(SEED)
     checkpoints, prepared = _train(network, rows, _backend(name))
     result = {

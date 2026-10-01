@@ -11,7 +11,6 @@ from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNet
 from indrajala_ml.model.classifier_protocols import BinaryClassifier, BinaryClassifierClass
 from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
 from indrajala_ml.pcg64 import SeedSequence
-from indrajala_ml.seeding import seed_everything
 from indrajala_ml.train import TrainingDiagnostic, train_linear_classifier_network
 
 RecordLoader = Callable[[str, list[int]], list[tuple[tuple[float, ...], int]]]
@@ -133,15 +132,14 @@ def _train_classifier_on_binary_dataset[ClassifierT: BinaryClassifier](
 
     The classifier owns its generator, seeded from network_seed, this class's child of the
     ensemble's SeedSequence, so the sub-networks' streams are independent and one ensemble seed
-    reproduces them all. The trainer's shuffle still draws from the global random, so this
-    process's RNGs are seeded first (seed_everything): forked workers inherit the parent's states,
-    which would give sub-networks identical batch orders. seed=None reseeds from the OS,
-    independent per process but not reproducible.
+    reproduces them all. The trainer's random.Random is seeded from seed, this job's, and from OS
+    entropy when it is None (the RNG generators workplan, D6, D9).
     """
 
-    seed_everything(seed)
     student = classifier_cls.randomized(layer_sizes, dimension, input_bounds, seed=network_seed)
-    result = train_linear_classifier_network(student, binary_dataset, learning_rate=learning_rate, epochs=epochs)
+    result = train_linear_classifier_network(
+        student, binary_dataset, learning_rate=learning_rate, epochs=epochs, rng=random.Random(seed)
+    )
 
     return label, _picklable_checkpoint(student.checkpoint()), result.diagnostic
 

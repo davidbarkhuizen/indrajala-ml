@@ -217,20 +217,20 @@ def test_learn_converges_under_or_combination():
 
     # minimum-disturbance selection needs only an output monotone in the active count, which
     # OR also is. The reference and the student draw from different seeds; the training data
-    # and the disagreement samples from the global random
-    random.seed(0)
+    # and the disagreement samples from one random.Random
+    samples = random.Random(0)
 
     cardinality, dimension, l = 2, 2, 10.0
     bounds = square_bounds(l, dimension)
 
     reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, required_active=1, seed=0)
-    training_data = random_alternating_training_data(400, reference)
+    training_data = random_alternating_training_data(400, reference, rng=samples)
 
     student = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, required_active=1, seed=100)
 
-    disagreement_before = class_balanced_disagreement_rate(reference, student, per_class_sample_count=300)
+    disagreement_before = class_balanced_disagreement_rate(reference, student, per_class_sample_count=300, rng=samples)
     train_linear_classifier_network(student, training_data, learning_rate=0.25, epochs=5)
-    disagreement_after = class_balanced_disagreement_rate(reference, student, per_class_sample_count=300)
+    disagreement_after = class_balanced_disagreement_rate(reference, student, per_class_sample_count=300, rng=samples)
 
     assert disagreement_after < disagreement_before
     assert disagreement_after < 0.2

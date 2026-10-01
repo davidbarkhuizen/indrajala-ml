@@ -8,7 +8,7 @@ against Rust, plus a Rust op profile.
 
 `time` runs every (backend, batch size, repeat) in its own process, never two backends in one,
 rotating the order each repeat, and reports medians. Each process starts from the same weights
-(numpy-drawn from seed 0) with random.seed(0) before each epoch, and measures:
+(numpy-drawn from seed 0) with the shuffle seeded 0 before each epoch, and measures:
 
 - epoch: one epoch of train_backprop_network_mini_batch, the trainer the demos use, including
   its two training-set accuracy passes (before and after the epoch, for the pocket snapshot);
@@ -31,7 +31,6 @@ import argparse
 import cProfile
 import json
 import pstats
-import random
 import statistics
 import sys
 import time
@@ -41,6 +40,7 @@ from typing import Any, cast
 import indrajala_math_rust as pa
 import numpy as np
 from process_runs import interleaved_runs, run_json_worker
+from seeded_weights import seeded_shuffle
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import (
@@ -76,14 +76,15 @@ def measure(backend: str, batch_size: int, train_data: list[Example[int]]) -> di
     to_array = _to_array(backend)
 
     network = bss.initial_network(backend, 0.0, SEED)
-    random.seed(SEED)
+    shuffle = seeded_shuffle(train_backprop_network_mini_batch, SEED)
     start = time.perf_counter()
-    train_backprop_network_mini_batch(network, train_data, batch_size, learning_rate=schedule, epochs=1)
+    train_backprop_network_mini_batch(network, train_data, batch_size, learning_rate=schedule, epochs=1, **shuffle)
     epoch = time.perf_counter() - start
 
     network = bss.initial_network(backend, 0.0, SEED)
-    random.seed(SEED)
-    _steps, steps = bss.train_epoch(network, train_data, batch_size, schedule, first_step=0)
+    _steps, steps = bss.train_epoch(
+        network, train_data, batch_size, schedule, first_step=0, **seeded_shuffle(bss.train_epoch, SEED)
+    )
 
     start = time.perf_counter()
     _training_accuracy(network, train_data)
@@ -114,14 +115,15 @@ def profile(batch_size: int, train_data: list[Example[int]]) -> tuple[float, flo
     schedule = _schedule(len(train_data), batch_size)
 
     network = bss.initial_network("rust", 0.0, SEED)
-    random.seed(SEED)
-    _steps, steps = bss.train_epoch(network, train_data, batch_size, schedule, first_step=0)
+    _steps, steps = bss.train_epoch(
+        network, train_data, batch_size, schedule, first_step=0, **seeded_shuffle(bss.train_epoch, SEED)
+    )
 
     network = bss.initial_network("rust", 0.0, SEED)
-    random.seed(SEED)
+    shuffle = seeded_shuffle(bss.train_epoch, SEED)
     profiler = cProfile.Profile()
     profiler.enable()
-    bss.train_epoch(network, train_data, batch_size, schedule, first_step=0)
+    bss.train_epoch(network, train_data, batch_size, schedule, first_step=0, **shuffle)
     profiler.disable()
 
     stats = pstats.Stats(profiler)
