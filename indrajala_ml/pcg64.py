@@ -233,3 +233,16 @@ def default_rng(seed: int | Iterable[int] | SeedSequenceLike | Pcg64Generator | 
     if isinstance(seed, SeedSequenceLike):
         return Pcg64Generator(seed)
     return Pcg64Generator(SeedSequence(seed))
+
+
+def generator_state(rng: Any) -> dict[str, Any]:
+    """
+    rng's state as numpy's bit_generator.state dict, for numpy's Generator, the crate's and this
+    module's alike: numpy's Generator keeps it on its bit generator, the other two on themselves.
+    """
+    return getattr(rng, "bit_generator", rng).state
+
+
+def set_generator_state(rng: Any, state: dict[str, Any]) -> None:
+    """Sets rng's state, as generator_state gives it, in place: whatever holds rng draws on from it."""
+    getattr(rng, "bit_generator", rng).state = state
