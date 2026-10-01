@@ -8,10 +8,10 @@ transformers.
 ## What exists
 
 Dense backprop, the perceptron and MADALINE, ReLU, softmax with cross-entropy, conv and max
-pooling, momentum, Adam, L2, dropout, ensembles, linear warmup and batch norm with ghost groups
-(README, Models and Batch normalization), built from composable layer specs and update rules. Each
-is in all three implementations (pure Python, numpy, Rust). There is no residual connection, no
-layer norm, no recurrence and no attention.
+pooling, momentum, Adam, L2, dropout, ensembles, linear warmup, batch norm with ghost groups and
+dense residual blocks (README, Models, Batch normalization and Residual connections), built from
+composable layer specs and update rules. Each is in all three implementations (pure Python, numpy,
+Rust). There is no layer norm, no recurrence and no attention.
 
 ## The order
 
@@ -19,11 +19,11 @@ layer norm, no recurrence and no attention.
    (2026-09-30); its open items are in [next-steps.md](next-steps.md).
 2. **Batch normalization**: done (2026-09-30), and the conv batch-size study rerun with it
    (2026-10-01).
-3. **Residual connections.**
+3. **Residual connections**: done (2026-10-01), dense blocks with identity shortcuts.
 4. **Layer normalization and single-head self-attention**, as a patch model on MNIST.
 5. **Multi-head attention and a full transformer block.**
 
-## 1 and 2. Done
+## 1, 2 and 3. Done
 
 Composable layers and optimizers, then batch normalization, both done (2026-09-30); their retired
 workplans and the work they left open are in [next-steps.md](next-steps.md). The case made for
@@ -32,19 +32,20 @@ each is in this file's history: `git show 058087a:docs/primitives-roadmap.md`.
 The conv batch-size study was rerun with batch norm, plain and with ghost groups of 32 (Goyal et
 al. 2017's full setup), on 2026-10-01. Batch norm adds about a point of accuracy, but the linear
 rule still fails at B = 512 at both momenta (`batch_size_scaling.py`'s docstring; open questions
-in next-steps.md). Residual connections are next.
+in next-steps.md).
 
-## 3. Residual connections
-
-A small change once layers compose: the skip adds the block's input to its output. They are
-needed by the attention block (step 4) and by any network deep enough for batch norm to matter.
+Residual connections, dense blocks `out = x + F(x)` with identity shortcuts, were done on
+2026-10-01; the retired workplan and its open work (conv blocks, projection shortcuts) are in
+next-steps.md. The depth study (`scripts/residual_depth_study.py`) found what He et al. 2016
+predict: plain networks get worse with depth and residual ones don't. Layer norm and attention are
+next.
 
 ## 4 and 5. Attention after that, not first
 
 - **A transformer is a composition, not one primitive.** It needs token embeddings, layer norm,
   residual connections, a matrix product between two activation tensors (every current op
   multiplies weights by activations), a softmax over the sequence, masking and positional
-  encodings. Steps 2 and 3 are prerequisites, and layer norm is batch norm over another axis.
+  encodings. Steps 2 and 3 were prerequisites, and layer norm is batch norm over another axis.
 - **There is no sequence dataset.** The first attention model should be a small vision
   transformer on MNIST (Dosovitskiy et al. 2020): 7x7 patches as 16 tokens, one attention block.
   It can be compared against the conv results already measured. Text or other sequence tasks
