@@ -47,8 +47,11 @@ layers draw from `network.rng`, one stream between them. An ensemble trainer see
 implementation's `default_rng` takes. Since stage 5 the shuffles and the sampling helpers draw
 from a `random.Random` passed to them (D6), each ensemble job's seeded from its job seed, so
 nothing in `indrajala_ml` draws from a global state (D4); a test checks the global `random` is
-left untouched. `seed_everything(s)` (`indrajala_ml/seeding.py`) and `backend.seed(s)` seed
-globals nothing draws from any more; stage 7 deletes them.
+left untouched. Stage 6 put the generator's state into checkpoints and format-2 files, and stage
+7 into run files (`indrajala_ml/run_checkpoint.py`), which hold the shuffle generator's state too,
+so a stopped run resumes by bits. Stage 7 also deleted `seed_everything` and `backend.seed`. The
+crate keeps its MT19937 module functions (`pa.seed`, `pa.random`, `pa.uniform`), mirroring
+`np.random` (D7), and nothing in `indrajala_ml` calls them.
 
 From the same seed, numpy and Rust draw the same weights and masks, so a seeded Rust run
 reproduces a seeded numpy run. They agree to the backends' matmul differences, which are about an
@@ -171,18 +174,14 @@ p = 0.5, 8192 random rows, `learn_batch` on tuple batches, 9 processes) takes a 
 
 ## Open findings
 
-### Three global states (medium)
+### Three global states (closed)
 
-`random`, `np.random` and the crate's RNG are all global. `seed_everything` seeds them together,
-but with global state every draw shifts every later one. For example, a dropout mask drawn during
-training changes the weights the next `randomize()` gets unless the code reseeds in between. The
-scripts still seed per call site: `batch_size_scaling`, `accuracy_pass_timing` and the timing
-scripts draw weights once with numpy and restore them into both backends, which is correct and
-simple. numpy's own guidance (NEP 19) is to pass explicit `Generator` objects. That is the larger,
-cleaner version: generator objects in the crate and on the Python side, passed to layers.
-[rng-generators-workplan.md](rng-generators-workplan.md) is that version, in progress: since its
-stages 3 and 4 every network draws from its own generator, and since stage 5 every shuffle and
-sample from a passed `random.Random`.
+`random`, `np.random` and the crate's RNG were all global, so every draw shifted every later one:
+a dropout mask drawn during training changed the weights the next `randomize()` got unless the
+code reseeded in between. [rng-generators-workplan.md](rng-generators-workplan.md) replaced them
+with explicit generator objects, as numpy's guidance (NEP 19) recommends: each network owns a PCG64
+generator, bit-identical across numpy, the crate and pure Python, and the shuffles and samples draw
+from a passed `random.Random`. Tests and scripts may still seed the globals for their own draws.
 
 ### FMA contraction on other platforms (low, latent)
 
@@ -203,13 +202,10 @@ fan-in from 1 to 4999 can produce `limit`.
 
 ## Open work
 
-- Explicit generator objects (numpy's `Generator` style) instead of global state, as above. Planned
-  in [rng-generators-workplan.md](rng-generators-workplan.md), which also covers PCG64 parity.
-- PCG64 and `default_rng` parity. The float formula differs from the legacy stream's, and a port
-  needs a `SeedSequence` port too. It gives up the frozen-stream guarantee that makes the legacy
-  stream a stable target.
 - Matching the pure-Python networks with the array networks from one seed. The streams already
   match when seeded through the words, as above. What's left is draw order: the per-node networks
   draw weights node by node, and their dropout draws one `random.random()` per node. Until that's
   checked, the per-node dropout reference is compared with the array networks only at eval.
-- `get_state`/`set_state`, and broadcast `low`/`high`, aren't provided. The repo doesn't use them.
+- The legacy module functions have no `get_state`/`set_state`, and no draw takes broadcast
+  `low`/`high`. The repo doesn't use them. A generator's state reads and sets through
+  `pcg64.generator_state` and `set_generator_state`.

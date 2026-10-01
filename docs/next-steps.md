@@ -45,9 +45,6 @@ normalization) and [measurement.md](measurement.md). The batch-size studies' fin
   `W`), and one rule per layer.
 - **Weight decay with momentum or Adam** needs a published form chosen and cited first (README,
   Update rules).
-- **Saving RNG state** so a dropout run resumes exactly. This waits on explicit generator objects
-  ([rng-audit.md](rng-audit.md), Open work), planned in
-  [rng-generators-workplan.md](rng-generators-workplan.md).
 
 Still out of scope, for later workplans too (batch norm's included):
 

@@ -164,10 +164,10 @@ def test_randomized_is_identical_at_the_fan_ins_where_power_and_sqrt_differ(fan_
 def test_randomize_draws_from_the_network_generator_and_no_global_state():
     # a network's draws move neither np.random nor the crate's global stream, nor another
     # network's generator
-    NumpyBackend.seed(5)
-    RustBackend.seed(5)
+    np.random.seed(5)
+    pa.seed(5)
     expected = np.random.random(10)
-    NumpyBackend.seed(5)
+    np.random.seed(5)
     first = NUMPY_CLASSES["DropoutVectorizedMultiClassBackpropClassifierNetwork"].randomized([7], 12, 3, 0.3, seed=1)
     rust = rust_counterpart("DropoutVectorizedMultiClassBackpropClassifierNetwork").randomized([7], 12, 3, 0.3, seed=1)
     second = NUMPY_CLASSES["DropoutVectorizedMultiClassBackpropClassifierNetwork"].randomized([7], 12, 3, 0.3, seed=1)
