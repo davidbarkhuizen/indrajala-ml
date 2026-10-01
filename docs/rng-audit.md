@@ -181,7 +181,8 @@ fan-in from 1 to 4999 can produce `limit`.
 
 ## Open work
 
-- Explicit generator objects (numpy's `Generator` style) instead of global state, as above.
+- Explicit generator objects (numpy's `Generator` style) instead of global state, as above. Planned
+  in [rng-generators-workplan.md](rng-generators-workplan.md), which also covers PCG64 parity.
 - PCG64 and `default_rng` parity. The float formula differs from the legacy stream's, and a port
   needs a `SeedSequence` port too. It gives up the frozen-stream guarantee that makes the legacy
   stream a stable target.
