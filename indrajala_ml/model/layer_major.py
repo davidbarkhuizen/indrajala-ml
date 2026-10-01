@@ -7,8 +7,10 @@ BackpropNetworkBase's example-major loop, so its bits don't change.
 Every other layer runs its own per-example code unchanged: a layer's nodes hold one example's
 state at a time (their example_fields: the activation, the delta, dropout's mask, a pool unit's
 winning slot), so this path keeps each layer's per example, one "lane" per example, and loads a
-lane back before the layer or its neighbour reads it. A BatchNormLayer keeps its own per-example
-lists and is selected with select_example instead.
+lane back before the layer or its neighbour reads it. A layer that reads more than its neighbours
+declares the others (a residual block's add reads its fork, and the fork its add: forward_reads and
+backward_reads, residual_layer.py), and their lanes are loaded too. A BatchNormLayer keeps its own
+per-example lists and is selected with select_example instead.
 
 The gradients accumulate per weight in example order, as the example-major loop's do.
 """
@@ -53,6 +55,12 @@ class LayerMajorBatch:
         self.states = states
         # lanes[i][e]: layer i's state for example e; empty for a batch-norm layer, which keeps its own
         self.lanes: list[list[Lane]] = []
+        self._indices = {id(layer): index for index, layer in enumerate(layers)}
+
+    def _reads(self, layer: TrainableLayer, method: str) -> list[int]:
+        # the indices of the layers besides its neighbours that layer's pass reads
+        reads: Callable[[], Sequence[TrainableLayer]] | None = getattr(layer, method, None)
+        return [] if reads is None else [self._indices[id(other)] for other in reads()]
 
     def _select(self, index: int, example: int) -> None:
         # layer index's nodes (the input layer's at -1) take example's values
@@ -78,8 +86,11 @@ class LayerMajorBatch:
                 self.lanes.append([])
                 continue
             lanes: list[Lane] = []
+            reads = self._reads(layer, "forward_reads")
             for example in range(count):
                 self._select(index - 1, example)
+                for other in reads:
+                    self._select(other, example)
                 layer.forward()
                 lanes.append(_capture(layer))
             self.lanes.append(lanes)
@@ -114,8 +125,11 @@ class LayerMajorBatch:
                     downstream.append([next_layer.downstream_sum(j) for j in range(layer.size)])
                 layer.backward_batch(downstream)
                 continue
+            reads = self._reads(layer, "backward_reads")
             for example in range(count):
                 self._select(index + 1, example)
+                for other in reads:
+                    self._select(other, example)
                 self._select(index, example)
                 layer.compute_hidden_deltas(next_layer)
                 self.lanes[index][example] = _capture(layer)
