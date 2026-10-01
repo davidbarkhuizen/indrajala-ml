@@ -1,6 +1,6 @@
 # Workplan: residual connections
 
-**Status: in progress; decisions D1-D10 settled (2026-10-01). Stages 0-4 done; stage 5 in review.**
+**Status: in progress; decisions D1-D10 settled (2026-10-01). Stages 0-5 done; stage 6 in review.**
 
 Roadmap step 3 ([primitives-roadmap.md](primitives-roadmap.md)). A residual block adds its input to
 its body's output, `out = x + F(x)` (He et al. 2016, "Identity Mappings in Deep Residual
