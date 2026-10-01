@@ -30,11 +30,6 @@ SHAPES: list[ConvShape] = [
 ATOL = 1e-13
 
 
-@pytest.fixture
-def layer_cls(backend: Backend) -> LayerCls:
-    return LAYER_CLS[backend.name]
-
-
 def _random_layers(
     rng: np.random.Generator, shape: ConvShape, backend: Backend
 ) -> tuple[ConvArrayLayer | ConvRustArrayLayer, ConvLayer, StateLayer]:

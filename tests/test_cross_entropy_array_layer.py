@@ -1,7 +1,6 @@
 import random
 
 import numpy as np
-import pytest
 
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
@@ -9,24 +8,11 @@ from indrajala_ml.model.cross_entropy_output_layer import CrossEntropyOutputLaye
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_layer import StateLayer
-from tests.helpers import Backend, LayerOptimizer
+from tests.helpers import Backend, LayerOptimizer, array_layer_like
 
 LayerCls = type[CrossEntropyArrayLayer] | type[CrossEntropyRustArrayLayer]
 LAYER_CLS: dict[str, LayerCls] = {"numpy": CrossEntropyArrayLayer, "rust": CrossEntropyRustArrayLayer}
 BASE_LAYER_CLS = {"numpy": ArrayLayer, "rust": RustArrayLayer}
-
-
-@pytest.fixture
-def layer_cls(backend: Backend) -> LayerCls:
-    return LAYER_CLS[backend.name]
-
-
-def _array_layer_like(cross_entropy_layer: CrossEntropyOutputLayer, backend: Backend):
-    array_layer = LAYER_CLS[backend.name](cross_entropy_layer.size, len(cross_entropy_layer.input_layer.nodes))
-    snapshot = cross_entropy_layer.snapshot_state()
-    array_layer.W = backend.owned([weights for weights, _bias in snapshot])
-    array_layer.b = backend.owned([bias for _weights, bias in snapshot])
-    return array_layer
 
 
 def test_compute_output_delta_matches_cross_entropy_output_node_across_a_random_sweep(backend: Backend):
@@ -53,7 +39,7 @@ def test_compute_output_delta_matches_cross_entropy_output_node_across_a_random_
             node.compute_output_delta(target)
             expected.append(node.delta)
 
-        array_layer = _array_layer_like(cross_entropy_layer, backend)
+        array_layer = array_layer_like(LAYER_CLS[backend.name], cross_entropy_layer, backend)
         array_layer.forward(backend.owned(x))
         array_layer.compute_output_delta(backend.owned(targets))
 

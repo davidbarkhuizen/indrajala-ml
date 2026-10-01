@@ -20,11 +20,6 @@ X = [2.0]
 BASE_ACTIVATION = 0.7502601055951177
 
 
-@pytest.fixture
-def layer_cls(backend: Backend) -> LayerCls:
-    return LAYER_CLS[backend.name]
-
-
 def _dropout_layer(backend: Backend, drop_probability: float = 0.5):
     layer = LAYER_CLS[backend.name](1, 1, drop_probability)
     layer.W = backend.owned(W)

@@ -33,11 +33,6 @@ SHAPES: list[PoolShape] = [
 ]
 
 
-@pytest.fixture
-def layer_cls(backend: Backend) -> LayerCls:
-    return LAYER_CLS[backend.name]
-
-
 def _layers(
     shape: PoolShape, backend: Backend
 ) -> tuple[MaxPoolArrayLayer | MaxPoolRustArrayLayer, MaxPoolLayer, StateLayer]:
