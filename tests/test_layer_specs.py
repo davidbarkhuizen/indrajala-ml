@@ -8,7 +8,16 @@ from typing import Any, cast
 import pytest
 
 from indrajala_ml.model.array_layer_builder import LAYER_CLASSES, build_array_layers
-from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool, validate_layer_specs
+from indrajala_ml.model.layer_specs import (
+    BatchNorm,
+    Conv,
+    Dense,
+    LayerSpec,
+    Pool,
+    SpecShape,
+    spec_shapes,
+    validate_layer_specs,
+)
 from tests.helpers import Backend
 
 OUTPUT = Dense(3, output=True)
@@ -182,6 +191,37 @@ def test_each_layer_reads_the_previous_layers_output_shape(backend: Backend):
     assert conv_2.W.shape == (3, 2 * 2 * 2)
     assert dense.W.shape == (5, 3)  # conv_2's 1x1x3 output, flattened
     assert output.W.shape == (3, 5)
+
+
+def test_the_shape_walk_chains_each_specs_output_shape_into_the_next():
+    # test_each_layer_reads_the_previous_layers_output_shape's list, with a conv batch-norm pair
+    specs = [Conv(3, 2, stride=2), Pool(2), Conv(2, 3, activation="linear"), BatchNorm("relu"), Dense(5), OUTPUT]
+    assert spec_shapes(specs, (9, 9, 1)) == [
+        SpecShape((9, 9, 1), (4, 4, 2)),
+        SpecShape((4, 4, 2), (2, 2, 2)),
+        SpecShape((2, 2, 2), (1, 1, 3)),
+        SpecShape((1, 1, 3), (1, 1, 3), positions=1),
+        SpecShape((1, 1, 3), (5,)),
+        SpecShape((5,), (3,)),
+    ]
+    assert spec_shapes([LINEAR_CONV, BatchNorm("relu"), OUTPUT], (8, 8, 1))[1].positions == 6 * 6
+
+
+ACCEPTED = {
+    f"{group} {name}": specs
+    for group, lists in (("valid", VALID), ("batch norm", BATCH_NORM), ("conv batch norm", CONV_BATCH_NORM))
+    for name, specs in lists.items()
+}
+
+
+@pytest.mark.parametrize("specs", ACCEPTED.values(), ids=ACCEPTED.keys())
+def test_the_shape_walk_agrees_with_the_built_layers_own_geometry(specs: list[LayerSpec], backend: Backend):
+    layers: list[Any] = build_array_layers(specs, (8, 8, 1), backend.name)
+    for spec, shape, layer in zip(specs, spec_shapes(specs, (8, 8, 1)), layers, strict=True):
+        if isinstance(spec, Conv | Pool):
+            assert (layer.out_height, layer.out_width, layer.channel_count) == shape.output_shape
+        elif isinstance(spec, BatchNorm):
+            assert layer.positions == shape.positions
 
 
 def test_a_flat_input_feeds_the_first_dense_layer(backend: Backend):

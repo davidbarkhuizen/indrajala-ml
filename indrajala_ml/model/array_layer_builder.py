@@ -22,7 +22,15 @@ from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec, validate_layer_specs
+from indrajala_ml.model.layer_specs import (
+    BatchNorm,
+    Dense,
+    InputShape,
+    LayerSpec,
+    image_shape,
+    spec_shapes,
+    validate_layer_specs,
+)
 from indrajala_ml.model.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
@@ -104,30 +112,21 @@ def build_array_layers(
     classes = LAYER_CLASSES[backend_name]
 
     layers: list[ArrayNetworkLayer[Any]] = []
-    shape: InputShape = input_shape
-    for spec in specs:
+    for spec, shape in zip(specs, spec_shapes(specs, input_shape), strict=True):
+        input_size = math.prod(shape.input_shape)
         if isinstance(spec, Dense):
-            layers.append(_dense_layer(classes, spec, math.prod(shape)))
-            shape = (spec.size,)
-            continue
-        if isinstance(spec, BatchNorm):
-            # after a linear layer (validate_layer_specs), normalizing its features, or a conv
-            # layer's channels over every position; the shape stays its linear layer's
-            positions = shape[0] * shape[1] if len(shape) == 3 else 1
+            layers.append(_dense_layer(classes, spec, input_size))
+        elif isinstance(spec, BatchNorm):
             layers.append(
                 classes.batch_norm(
-                    math.prod(shape), spec.activation, spec.epsilon, spec.running_rate, positions, spec.group_size
+                    input_size, spec.activation, spec.epsilon, spec.running_rate, shape.positions, spec.group_size
                 )
             )
-            continue
-
-        assert len(shape) == 3, f"a conv or pool layer needs a (height, width, channels) input; got {shape}"
-        height, width, channels = shape
-        if isinstance(spec, ConvSpec):
-            conv = classes.conv if spec.activation == "relu" else classes.linear_conv
-            layer = conv(height, width, channels, spec.kernel_size, spec.channel_count, spec.stride)
         else:
-            layer = classes.pool(height, width, channels, spec.pool_size, spec.stride)
-        layers.append(layer)
-        shape = (layer.out_height, layer.out_width, layer.channel_count)
+            height, width, channels = image_shape(shape.input_shape)
+            if isinstance(spec, ConvSpec):
+                conv = classes.conv if spec.activation == "relu" else classes.linear_conv
+                layers.append(conv(height, width, channels, spec.kernel_size, spec.channel_count, spec.stride))
+            else:
+                layers.append(classes.pool(height, width, channels, spec.pool_size, spec.stride))
     return layers

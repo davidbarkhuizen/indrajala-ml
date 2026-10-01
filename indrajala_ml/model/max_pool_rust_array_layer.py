@@ -3,7 +3,7 @@ from __future__ import annotations
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
-from indrajala_ml.model.max_pool_array_layer import validate_pool_arguments
+from indrajala_ml.model.window_geometry import pool_stride, validate_pool_arguments
 
 
 class MaxPoolRustArrayLayer:
@@ -26,7 +26,7 @@ class MaxPoolRustArrayLayer:
         stride: int | None = None,
     ) -> None:
 
-        stride = pool_size if stride is None else stride
+        stride = pool_stride(pool_size, stride)
         validate_pool_arguments(input_height, input_width, input_channels, pool_size, stride)
         self.geometry = pa.ConvGeometry(input_height, input_width, input_channels, pool_size, stride)
 

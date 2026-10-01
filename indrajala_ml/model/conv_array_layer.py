@@ -12,20 +12,7 @@ from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.array_parameters import WeightAndBias
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.layer_specs import refuse_single_example
-
-
-def validate_conv_arguments(
-    input_height: int, input_width: int, input_channels: int, kernel_size: int, channel_count: int, stride: int
-) -> None:
-    # ConvLayer's constructor checks, less the input_layer node count; shared with
-    # ConvRustArrayLayer
-    assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
-    assert kernel_size >= 1, f"kernel_size must be at least 1; got {kernel_size}"
-    assert channel_count >= 1, f"channel_count must be at least 1; got {channel_count}"
-    assert stride >= 1, f"stride must be at least 1; got {stride}"
-    assert kernel_size <= input_height and kernel_size <= input_width, (
-        f"kernel_size ({kernel_size}) must fit within input_height x input_width ({input_height}x{input_width})"
-    )
+from indrajala_ml.model.window_geometry import output_size, validate_conv_arguments
 
 
 class ConvGeometryArrayLayer:
@@ -53,8 +40,8 @@ class ConvGeometryArrayLayer:
         self.channel_count = channel_count
         self.stride = stride
 
-        self.out_height = (input_height - kernel_size) // stride + 1
-        self.out_width = (input_width - kernel_size) // stride + 1
+        self.out_height = output_size(input_height, kernel_size, stride)
+        self.out_width = output_size(input_width, kernel_size, stride)
         self.positions = self.out_height * self.out_width
 
         self.fan_in = input_channels * kernel_size * kernel_size

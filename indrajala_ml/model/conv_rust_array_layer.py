@@ -9,8 +9,8 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_parameters import WeightAndBias
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
-from indrajala_ml.model.conv_array_layer import validate_conv_arguments
 from indrajala_ml.model.layer_specs import refuse_single_example
+from indrajala_ml.model.window_geometry import validate_conv_arguments
 
 
 class ConvGeometryRustArrayLayer:

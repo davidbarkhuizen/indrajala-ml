@@ -16,7 +16,15 @@ from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.cross_entropy_output_layer import CrossEntropyOutputLayer
 from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec, validate_layer_specs
+from indrajala_ml.model.layer_specs import (
+    BatchNorm,
+    Dense,
+    InputShape,
+    LayerSpec,
+    image_shape,
+    spec_shapes,
+    validate_layer_specs,
+)
 from indrajala_ml.model.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.linear_layer import LinearLayer
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
@@ -50,24 +58,18 @@ def build_python_layers(
 
     layers: list[TrainableLayer] = []
     previous = input_layer
-    shape: InputShape = input_shape
-    for spec in specs:
+    for spec, shape in zip(specs, spec_shapes(specs, input_shape), strict=True):
         if isinstance(spec, Dense):
             layer: TrainableLayer = _dense_layer(spec, previous)
-            shape = (spec.size,)
         elif isinstance(spec, BatchNorm):
-            # after its linear layer (validate_layer_specs), whose shape it keeps: a conv layer's
-            # channels are normalized over every position
-            positions = shape[0] * shape[1] if len(shape) == 3 else 1
             layer = BatchNormLayer(
-                previous, spec.activation, spec.epsilon, spec.running_rate, positions, spec.group_size
+                previous, spec.activation, spec.epsilon, spec.running_rate, shape.positions, spec.group_size
             )
         else:
-            assert len(shape) == 3, f"a conv or pool layer needs a (height, width, channels) input; got {shape}"
-            height, width, channels = shape
+            height, width, channels = image_shape(shape.input_shape)
             if isinstance(spec, ConvSpec):
                 conv_cls = LinearConvLayer if spec.activation == "linear" else ConvLayer
-                front_end_layer: ConvLayer | MaxPoolLayer = conv_cls(
+                layer = conv_cls(
                     input_layer=previous,
                     input_height=height,
                     input_width=width,
@@ -78,7 +80,7 @@ def build_python_layers(
                 )
             else:
                 assert isinstance(spec, PoolSpec)
-                front_end_layer = MaxPoolLayer(
+                layer = MaxPoolLayer(
                     input_layer=previous,
                     input_height=height,
                     input_width=width,
@@ -86,8 +88,6 @@ def build_python_layers(
                     pool_size=spec.pool_size,
                     stride=spec.stride,
                 )
-            layer = front_end_layer
-            shape = (front_end_layer.out_height, front_end_layer.out_width, front_end_layer.channel_count)
         layers.append(layer)
         previous = layer
     return layers

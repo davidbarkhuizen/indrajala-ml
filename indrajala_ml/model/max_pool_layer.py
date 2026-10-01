@@ -6,6 +6,7 @@ from typing import ClassVar
 
 from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer, WeightSet
+from indrajala_ml.model.window_geometry import output_size, pool_stride, validate_pool_arguments
 
 
 @dataclass(frozen=True)
@@ -78,18 +79,13 @@ class MaxPoolLayer:
         stride: int | None = None,
     ) -> None:
 
-        stride = pool_size if stride is None else stride
+        stride = pool_stride(pool_size, stride)
 
-        assert pool_size >= 1, f"pool_size must be at least 1; got {pool_size}"
-        assert stride >= 1, f"stride must be at least 1; got {stride}"
-        assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
+        validate_pool_arguments(input_height, input_width, input_channels, pool_size, stride)
         assert input_channels * input_height * input_width == len(input_layer.nodes), (
             f"input_channels*input_height*input_width "
             f"({input_channels * input_height * input_width}) must match input_layer's own node "
             f"count ({len(input_layer.nodes)})"
-        )
-        assert pool_size <= input_height and pool_size <= input_width, (
-            f"pool_size ({pool_size}) must fit within input_height x input_width ({input_height}x{input_width})"
         )
 
         self.input_layer = input_layer
@@ -100,8 +96,8 @@ class MaxPoolLayer:
         self.stride = stride
         self.channel_count = input_channels
 
-        self.out_height = (input_height - pool_size) // stride + 1
-        self.out_width = (input_width - pool_size) // stride + 1
+        self.out_height = output_size(input_height, pool_size, stride)
+        self.out_width = output_size(input_width, pool_size, stride)
 
         self.nodes: list[PoolUnit] = []
         self._fan_out: list[list[tuple[PoolUnit, int]]] = [[] for _ in input_layer.nodes]

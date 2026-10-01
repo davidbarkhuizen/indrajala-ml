@@ -6,22 +6,10 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
+from indrajala_ml.model.window_geometry import output_size, pool_stride, validate_pool_arguments
 
 # each window's winning slot index, as np.argmax returns it
 IndexArray = npt.NDArray[np.intp]
-
-
-def validate_pool_arguments(
-    input_height: int, input_width: int, input_channels: int, pool_size: int, stride: int
-) -> None:
-    # MaxPoolLayer's constructor checks, less the input_layer node count; shared with
-    # MaxPoolRustArrayLayer
-    assert pool_size >= 1, f"pool_size must be at least 1; got {pool_size}"
-    assert stride >= 1, f"stride must be at least 1; got {stride}"
-    assert input_channels >= 1, f"input_channels must be at least 1; got {input_channels}"
-    assert pool_size <= input_height and pool_size <= input_width, (
-        f"pool_size ({pool_size}) must fit within input_height x input_width ({input_height}x{input_width})"
-    )
 
 
 class MaxPoolArrayLayer:
@@ -46,7 +34,7 @@ class MaxPoolArrayLayer:
         stride: int | None = None,
     ) -> None:
 
-        stride = pool_size if stride is None else stride
+        stride = pool_stride(pool_size, stride)
         validate_pool_arguments(input_height, input_width, input_channels, pool_size, stride)
 
         self.input_height = input_height
@@ -56,8 +44,8 @@ class MaxPoolArrayLayer:
         self.stride = stride
         self.channel_count = input_channels
 
-        self.out_height = (input_height - pool_size) // stride + 1
-        self.out_width = (input_width - pool_size) // stride + 1
+        self.out_height = output_size(input_height, pool_size, stride)
+        self.out_width = output_size(input_width, pool_size, stride)
 
         self.input_size = input_channels * input_height * input_width
         self.size = input_channels * self.out_height * self.out_width
