@@ -28,7 +28,8 @@ Composable layers and optimizers, then batch normalization, both done (2026-09-3
 workplans and the work they left open are in [next-steps.md](next-steps.md). The case made for
 each is in this file's history: `git show 058087a:docs/primitives-roadmap.md`.
 
-Next is the conv batch-size study rerun (next-steps.md, From batch norm), before residual
+Next is the conv batch-size study rerun
+([conv-batch-norm-scaling-workplan.md](conv-batch-norm-scaling-workplan.md)), before residual
 connections: the linear rule failed at B = 512 at momentum 0.0 and 0.9, and batch norm with ghost
 groups of 32 is Goyal et al. 2017's full setup.
 
