@@ -18,6 +18,8 @@ reproduces numpy's `default_rng` bit for bit; nothing uses it yet
 - `tests/test_numpy_rng_streams.py`: a pure-Python MT19937 that reproduces `np.random`'s stream and
   seeding. It is the algorithm the crate ports, checked against numpy without the crate. It also
   pins how the stdlib `random`'s stream relates to numpy's.
+- `tests/test_pcg64.py`: `indrajala_ml/pcg64.py`, a pure-Python port of numpy's `default_rng`
+  for the pure-Python networks, against numpy and the crate, bit for bit.
 - `scripts/rng_audit.py quality | time`: statistical checks, and per-draw timing with one process
   per backend.
 
