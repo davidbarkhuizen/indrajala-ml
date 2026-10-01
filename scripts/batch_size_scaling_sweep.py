@@ -7,11 +7,14 @@ on full MNIST with the Rust backend.
     python scripts/batch_size_scaling_sweep.py baseline --architecture conv --momenta 0.9 --epochs 2 --seeds 3
     python scripts/batch_size_scaling_sweep.py scaling --architecture conv --lr32 0.0=2 \
         --batch-sizes 32 128 512 --warmups 0 1 --epochs 3 --seeds 3
+    python scripts/batch_size_scaling_sweep.py scaling --architecture conv-bn --group-size 32 --lr32 0.0=2 \
+        --batch-sizes 32 128 512 --warmups 0 1 --epochs 3 --seeds 3
 
 `baseline` (stage 1) sweeps the batch-32 rate at momentum 0.0 and 0.9 (or the --momenta given).
 `scaling` (stage 2) runs every batch size x rate (scaled,
-unscaled) x warmup x momentum cell, with each momentum's own batch-32 rate from stage 1. Both
-print per-epoch test accuracy (mean ± sd over seeds) and write every run's raw result to --out as
+unscaled) x warmup x momentum cell, with each momentum's own batch-32 rate from stage 1.
+conv-bn (the conv batch-norm workplan) takes --group-size for ghost groups; without it, plain batch
+norm. One invocation runs one group size. Both print per-epoch test accuracy (mean ± sd over seeds) and write every run's raw result to --out as
 JSON.
 
 Each worker loads the dataset itself, once per process (about 0.5 GB each), rather than having
@@ -32,6 +35,8 @@ from indrajala_ml.model.classifier_protocols import Example
 BASELINE_RATES = {
     "dense": [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
     "conv": [0.03125, 0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
+    # batch norm is known to tolerate higher rates: the conv ladder, extended (the workplan's pitfalls)
+    "conv-bn": [0.03125, 0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0],
 }
 MOMENTA = [0.0, 0.9]
 BATCH_SIZES = [32, 128, 512, 1024]
@@ -73,6 +78,7 @@ def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, 
         context["epochs"],
         seed,
         context["architecture"],
+        context["group_size"],
     )
 
 
@@ -191,6 +197,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("stage", choices=["baseline", "scaling"])
     parser.add_argument("--architecture", choices=bss.ARCHITECTURES, default="dense")
+    parser.add_argument("--group-size", type=int, help="conv-bn: ghost groups of this many examples")
     parser.add_argument("--momenta", type=float, nargs="+", default=MOMENTA, help="baseline")
     parser.add_argument("--lr32", action="append", default=[], help="momentum=rate, once per momentum (scaling)")
     parser.add_argument("--out", help="write every run's raw result here as JSON")
@@ -202,6 +209,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--warmups", type=float, nargs="+", default=WARMUP_EPOCHS, help="warmup epochs (scaling)")
     args = parser.parse_args(argv)
+    if args.group_size is not None and args.architecture != "conv-bn":
+        sys.exit("--group-size is for --architecture conv-bn only")
 
     context: dict[str, Any] = {
         "train_path": bss.TRAIN_PATH,
@@ -210,6 +219,7 @@ def main(argv: list[str] | None = None) -> None:
         "epochs": args.epochs,
         "train_size": args.limit or 60000,
         "architecture": args.architecture,
+        "group_size": args.group_size,
     }
     seeds = SEEDS[: args.seeds]
 
