@@ -47,19 +47,6 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
     def classify_state(self, state: tuple[float, ...]) -> int:
         return argmax_first_occurrence(self.predict_probabilities(state))
 
-    def learn(self, learning_rate: float, state: tuple[float, ...], category: int) -> None:
-        # training mode for the forward pass only, as BackpropClassifierNetwork.learn: a no-op
-        # but for dropout layers, which only a sequential network's specs put here. A network with
-        # batch norm refuses (D4).
-        self._refuse_single_example()
-        self._set_training_mode(True)
-        try:
-            self._forward(state)
-        finally:
-            self._set_training_mode(False)
-        self._backward(category)
-        self._apply_gradients(learning_rate)
-
     def learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], int]]) -> None:
         self._learn_batch(learning_rate, batch)
 
