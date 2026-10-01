@@ -1,6 +1,6 @@
 # Workplan: explicit generator objects
 
-**Status: planned. Nothing is built yet.**
+**Status: stage 1 done (crate #46, PCG64 `Generator` and `SeedSequence`); stage 2 next.**
 
 Every random draw the package makes comes from one of three global states: Python's `random`,
 numpy's legacy `np.random` and the crate's MT19937 ([rng-audit.md](rng-audit.md), "Three global
