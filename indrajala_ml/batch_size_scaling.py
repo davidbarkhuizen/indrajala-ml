@@ -51,8 +51,25 @@ PR #454:
 - The unscaled rate at momentum 0.9 is unstable without warmup from B = 128 up (epoch 1: 45.64%
   at B = 128, 9.95% at B = 512), as for dense.
 
-The conv network with batch norm on every hidden layer ("conv-bn", conv_batch_norm_specs), plain
-and with ghost groups of 32, is being tested the same way: docs/conv-batch-norm-scaling-workplan.md.
+The conv network with batch norm on every hidden layer ("conv-bn", conv_batch_norm_specs) was
+tested the same way, with plain batch norm and with ghost groups of 32 (Goyal et al.'s setup). The
+rule still fails at B = 512 at both momenta, in both arms. Findings, 3 epochs, 3 seeds, Rust. The
+tables are in the study's workplan, deleted after it finished:
+git show acbc49c:docs/conv-batch-norm-scaling-workplan.md (#516-#519).
+
+- Best batch-32 rates (re-tuned): 2 at momentum 0.0 and 0.125 at 0.9. Their 3-epoch bands are
+  98.05% +- 0.08% and 98.10% +- 0.17%, about a point above the network without batch norm. The
+  stability edge doesn't move: at momentum 0.0, 8 is erratic and 16 fails, as before.
+- At B = 512 no scaled cell reaches the band. At momentum 0.0 with a 1-epoch warmup, the scaled
+  rate 32 trains (95.9-97.6% after epoch 2, where it stayed at chance without batch norm) but is
+  unstable: two of three seeds fall in epoch 3, to 85-90%. At momentum 0.9 the scaled rate 2 reaches
+  only 41-43%.
+- With warmup the rule holds to B = 128 at momentum 0.9 (98.17% plain, 98.13% ghost) and misses
+  narrowly at 0.0 (97.46% and 97.37%, against a band of 97.96% - 98.12%).
+- The unscaled control is the best B = 512 cell: 0.125 at momentum 0.9 with warmup reaches 97.61%
+  (plain) and 97.57% (ghost), 0.3 points below the band and still climbing.
+- Plain batch norm and ghost groups of 32 agree within the seeds' spread in every cell: for this
+  network the statistics' sample size doesn't decide whether the rule holds.
 
 The timing findings are in docs/optimizations/ (current-baseline.md and candidates.md).
 

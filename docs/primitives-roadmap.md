@@ -17,7 +17,8 @@ layer norm, no recurrence and no attention.
 
 1. **Composable layers and optimizers** (a refactor, before the next primitive): done
    (2026-09-30); its open items are in [next-steps.md](next-steps.md).
-2. **Batch normalization**: done (2026-09-30); the conv batch-size study with it is next.
+2. **Batch normalization**: done (2026-09-30), and the conv batch-size study rerun with it
+   (2026-10-01).
 3. **Residual connections.**
 4. **Layer normalization and single-head self-attention**, as a patch model on MNIST.
 5. **Multi-head attention and a full transformer block.**
@@ -28,10 +29,10 @@ Composable layers and optimizers, then batch normalization, both done (2026-09-3
 workplans and the work they left open are in [next-steps.md](next-steps.md). The case made for
 each is in this file's history: `git show 058087a:docs/primitives-roadmap.md`.
 
-Next is the conv batch-size study rerun
-([conv-batch-norm-scaling-workplan.md](conv-batch-norm-scaling-workplan.md)), before residual
-connections: the linear rule failed at B = 512 at momentum 0.0 and 0.9, and batch norm with ghost
-groups of 32 is Goyal et al. 2017's full setup.
+The conv batch-size study was rerun with batch norm, plain and with ghost groups of 32 (Goyal et
+al. 2017's full setup), on 2026-10-01. Batch norm adds about a point of accuracy, but the linear
+rule still fails at B = 512 at both momenta (`batch_size_scaling.py`'s docstring; open questions
+in next-steps.md). Residual connections are next.
 
 ## 3. Residual connections
 

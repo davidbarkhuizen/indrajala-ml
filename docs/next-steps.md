@@ -2,8 +2,7 @@
 
 A workplan is deleted once its last stage merges. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md) and
-[conv-batch-norm-scaling-workplan.md](conv-batch-norm-scaling-workplan.md). The order
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order
 of the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
@@ -17,9 +16,11 @@ docs cite them by section:
 | The A/B harness and a stand-alone measurement guide | #487 | #488-#491 | `git show 3a5d179:docs/ab-harness-workplan.md` |
 | Batch normalization (roadmap step 2) | #486 | #493-#503 | `git show 189921c:docs/batch-norm-workplan.md` |
 | Removing duplicated code (DRY) | #506 | #507-#514 | `git show e066333:docs/dry-workplan.md` |
+| The conv batch-size study with batch norm | #516 | #517-#519 | `git show acbc49c:docs/conv-batch-norm-scaling-workplan.md` |
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
-normalization) and [measurement.md](measurement.md).
+normalization) and [measurement.md](measurement.md). The batch-size studies' findings are in
+`indrajala_ml/batch_size_scaling.py`'s docstring.
 
 ## From composable layers
 
@@ -54,14 +55,6 @@ Still out of scope, for later workplans too (batch norm's included):
 
 ## From batch norm
 
-- **The study rerun.** Rerun the conv batch-size cells that failed (B = 512, momentum 0.0 and
-  0.9) with batch norm, and with ghost groups of 32: under way in
-  [conv-batch-norm-scaling-workplan.md](conv-batch-norm-scaling-workplan.md).
-- **The dense momentum 0.9 rerun.** The dense batch-size study's momentum 0.9 cells with warmup,
-  including its finding that the rule holds to B = 512, were measured with eq. (10) momentum
-  without the momentum correction, and are pending a rerun on eq. (9) (`batch_size_scaling.py`'s
-  docstring). The sweep script runs it as it is: `scaling --lr32 0.9=0.25` at the dense study's
-  grid. Left out of the conv batch-norm plan (its D5).
 - **Batch norm under dropout or after pool**, if a use appears. Neither passes
   `validate_layer_specs` today.
 - **Folding batch norm into the preceding weights** for inference: a speed change, measured.
@@ -70,6 +63,27 @@ Still out of scope:
 
 - Layer norm, group norm and instance norm. They normalize within an example, a different layer.
 - Synchronized statistics across workers or processes.
+
+## From the conv batch-size study with batch norm
+
+The rule still fails at B = 512 with batch norm, plain or in ghost groups of 32
+(`batch_size_scaling.py`'s docstring). Open questions it leaves, each a scratch probe or a short
+sweep with the existing script:
+
+- **A gentler base rate.** At momentum 0.0 every batch-32 rate from 0.5 to 4 is within the seeds'
+  spread, and the study's rule picked 2. Scaled from 0.5, B = 512 runs at 8, inside the stable
+  range, where scaled from 2 it runs at 32, past the rate that fails at B = 32.
+- **Capped rates at B = 512,** as the old study probed without batch norm (4, 8, 16, 24 with a
+  1-epoch warmup): how far batch norm raises the stable rate at B = 512.
+- **Longer runs at B = 512.** The unscaled control at momentum 0.9 ends 0.3 points below the band
+  after 3 epochs (354 steps) and is still climbing; the scaled rate 32 at 0.0 reaches the band's
+  neighbourhood in epoch 2 and then falls. More epochs would show whether either settles.
+- **The dense momentum 0.9 rerun.** The dense study's momentum 0.9 cells with warmup, including
+  its finding that the rule holds to B = 512, were measured with eq. (10) momentum without the
+  momentum correction, and are pending a rerun on eq. (9) (`batch_size_scaling.py`'s docstring).
+  The sweep script runs it as it is: `scaling --lr32 0.9=0.25` at the dense study's grid.
+
+The old conv plan's timing and demo stages were for a rule that holds, and stay unplanned.
 
 ## From the A/B harness
 
