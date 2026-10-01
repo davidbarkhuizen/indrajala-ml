@@ -3,8 +3,8 @@
 **Status: stages 1-6 done (crate #46 and #522: the crate's PCG64 `Generator`; #523: the pure-Python
 port; #524: the numpy and Rust networks own their generators; #525: the pure-Python networks
 do; #526: the trainers' shuffles and the sampling helpers take a `random.Random`; #527: the
-generator's state in checkpoints and format-2 files); stage 7a, run checkpoints, in progress; then
-stage 7b.**
+generator's state in checkpoints and format-2 files; #528: run checkpoints); stage 7b, the globals
+removed, in progress.**
 
 Every random draw the package makes comes from one of three global states: Python's `random`,
 numpy's legacy `np.random` and the crate's MT19937 ([rng-audit.md](rng-audit.md), "Three global

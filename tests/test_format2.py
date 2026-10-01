@@ -39,7 +39,6 @@ from indrajala_ml.model.sequential_backprop_network import (
 )
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
 from indrajala_ml.pcg64 import default_rng
-from indrajala_ml.seeding import seed_everything
 from tests.saved_model_fixtures import CLASS_COUNT, FIXTURE_DIR, FIXTURES, MODEL_CLASSES, bits, fixture_class, outputs
 from tests.test_checkpoint import (
     CONV,
@@ -104,7 +103,6 @@ def _seed_generator(network: Any, seed: int) -> None:
 def _trained(name: str) -> Any:
     # a fixture's class, randomized and trained two batches, so its optimizer has state
     fixture = FIXTURES[name]
-    seed_everything(1)
     network = fixture.build()
     _seed_generator(network, 1)
     network.randomize()
@@ -128,7 +126,6 @@ def test_a_loaded_network_resumes_training_by_bits(
     # train N, save, load, train M: N + M steps without the save, by bits, the masks included
     input_shape, layers = architecture
     rows = _rows(input_shape, 8, seed=1)
-    seed_everything(2)
     trained = _network(implementation, input_shape, layers, rule)
     _seed_generator(trained, 2)
     trained.randomize()
@@ -181,7 +178,6 @@ def test_a_loaded_batch_norm_network_resumes_training_by_bits(
     # (in the snapshot) included
     input_shape, layers = architecture
     rows = _rows(input_shape, 8, seed=1)
-    seed_everything(2)
     trained = _network(implementation, input_shape, layers, rule)
     _seed_generator(trained, 2)
     trained.randomize()

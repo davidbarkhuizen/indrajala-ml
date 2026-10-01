@@ -30,9 +30,6 @@ class NumpyBackend:
     """
 
     name = "numpy"
-    # seeds np.random, which nothing in the networks draws from any more; the tests still seed
-    # with it until the RNG generators workplan's stage 7 deletes it
-    seed = staticmethod(np.random.seed)
     random_layer = staticmethod(fan_in_aware_random_layer)
     random_weights = staticmethod(fan_in_aware_random_weights)
 
@@ -93,7 +90,6 @@ class RustBackend:
     """NumpyBackend's operations on indrajala_math_rust arrays."""
 
     name = "rust"
-    seed = staticmethod(pa.seed)
     random_layer = staticmethod(fan_in_aware_random_rust_layer)
     random_weights = staticmethod(fan_in_aware_random_rust_weights)
 

@@ -51,7 +51,6 @@ from indrajala_ml.model.sequential_backprop_network import (
 )
 from indrajala_ml.model.update_rules import Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
-from indrajala_ml.seeding import seed_everything
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "saved_models"
 
@@ -367,8 +366,7 @@ def _write(name: str, fixture: SavedModelFixture) -> None:
     if fixture.format2:
         # a non-empty optimizer state to pin; seeded for the dropout masks, which every network
         # draws from its own generator (the files written before the RNG generators workplan's
-        # stage 4 drew pure Python's from random, seeded here)
-        seed_everything(0)
+        # stage 4 drew pure Python's from random, seeded here then)
         _seed_generator(network, 0)
         labels = [
             rng.randrange(CLASS_COUNT) if fixture.predict == "predict_probabilities" else float(rng.randrange(2))
