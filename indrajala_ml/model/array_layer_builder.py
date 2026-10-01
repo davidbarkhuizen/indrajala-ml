@@ -27,13 +27,16 @@ from indrajala_ml.model.layer_specs import (
     Dense,
     InputShape,
     LayerSpec,
+    expand_specs,
     image_shape,
+    refuse_residual_until,
     spec_shapes,
     validate_layer_specs,
 )
 from indrajala_ml.model.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
+from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
@@ -109,10 +112,12 @@ def build_array_layers(
 ) -> list[ArrayNetworkLayer[Any]]:
     """specs, validated (validate_layer_specs), as backend_name's layers over input_shape."""
     validate_layer_specs(specs)
+    shapes = spec_shapes(specs, input_shape)
+    refuse_residual_until(specs, "2" if backend_name == "numpy" else "4", f"on the {backend_name} backend")
     classes = LAYER_CLASSES[backend_name]
 
     layers: list[ArrayNetworkLayer[Any]] = []
-    for spec, shape in zip(specs, spec_shapes(specs, input_shape), strict=True):
+    for spec, shape in zip(expand_specs(specs), shapes, strict=True):
         input_size = math.prod(shape.input_shape)
         if isinstance(spec, Dense):
             layers.append(_dense_layer(classes, spec, input_size))
@@ -128,5 +133,6 @@ def build_array_layers(
                 conv = classes.conv if spec.activation == "relu" else classes.linear_conv
                 layers.append(conv(height, width, channels, spec.kernel_size, spec.channel_count, spec.stride))
             else:
+                assert isinstance(spec, PoolSpec)
                 layers.append(classes.pool(height, width, channels, spec.pool_size, spec.stride))
     return layers

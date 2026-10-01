@@ -3,21 +3,34 @@ Layer specs (layer_specs.py) and their numpy and Rust builder (array_layer_build
 lists are accepted, the layer class each spec kind maps to, and the shapes the builder chains.
 """
 
+import math
 from typing import Any, cast
 
 import pytest
 
 from indrajala_ml.model.array_layer_builder import LAYER_CLASSES, build_array_layers
+from indrajala_ml.model.format2 import layer_to_json
 from indrajala_ml.model.layer_specs import (
+    Add,
     BatchNorm,
     Conv,
     Dense,
+    Fork,
+    InputShape,
     LayerSpec,
     Pool,
+    Residual,
     SpecShape,
+    batch_norm_index,
+    expand_specs,
+    refuse_single_example_groups,
+    refuse_single_example_network,
+    spec_paths,
     spec_shapes,
     validate_layer_specs,
 )
+from indrajala_ml.model.python_layer_builder import build_python_layers
+from indrajala_ml.model.state_layer import StateLayer
 from tests.helpers import Backend
 
 OUTPUT = Dense(3, output=True)
@@ -232,3 +245,140 @@ def test_a_flat_input_feeds_the_first_dense_layer(backend: Backend):
 def test_a_conv_layer_needs_an_image_input(backend: Backend):
     with pytest.raises(AssertionError, match="height, width, channels"):
         build_array_layers([Conv(3, 2), OUTPUT], (64,), backend.name)
+
+
+# residual blocks (the residual-connections workplan, stage 1): dense bodies ending in an affine
+# layer, whose size is the block's input's (D5)
+AFFINE_5 = Dense(5, activation="linear", bias=True)
+BLOCK_5 = Residual((Dense(8, activation="relu"), AFFINE_5))
+
+RESIDUAL: dict[str, list[LayerSpec]] = {
+    "one block": [Dense(5), BLOCK_5, OUTPUT],
+    "affine body": [Dense(5), Residual((AFFINE_5,)), OUTPUT],
+    "two blocks in a row": [Dense(5), BLOCK_5, BLOCK_5, OUTPUT],
+    "sigmoid body": [Dense(5), Residual((Dense(8), Dense(6), AFFINE_5)), OUTPUT],
+    "dropout body": [Dense(5), Residual((Dense(8, dropout=0.3), AFFINE_5)), OUTPUT],
+    "batch norm body": [Dense(5, activation="relu"), Residual((LINEAR, BatchNorm("relu"), AFFINE_5)), OUTPUT],
+    "batch norm before the block": [LINEAR, BatchNorm(), BLOCK_5, OUTPUT],
+    "block first": [BLOCK_5, OUTPUT],
+    "conv front end, then a dense layer": [Conv(3, 2), Dense(5), BLOCK_5, OUTPUT],
+}
+
+RESIDUAL_INVALID: dict[str, list[LayerSpec]] = {
+    "empty body": [Dense(5), Residual(()), OUTPUT],
+    "nested": [Dense(5), Residual((BLOCK_5, AFFINE_5)), OUTPUT],
+    "conv in the body": [Conv(3, 2), Residual((Conv(2, 2), AFFINE_5)), OUTPUT],
+    "pool in the body": [Conv(3, 2), Residual((Pool(2), AFFINE_5)), OUTPUT],
+    "a block among the conv layers": [Conv(3, 2), BLOCK_5, Pool(2), OUTPUT],
+    "body ends sigmoid": [Dense(5), Residual((Dense(8), Dense(5))), OUTPUT],
+    "body ends linear without a bias": [Dense(5), Residual((Dense(8), Dense(5, activation="linear"))), OUTPUT],
+    "body ends affine with dropout": [
+        Dense(5),
+        Residual((Dense(5, activation="linear", bias=True, dropout=0.3),)),
+        OUTPUT,
+    ],
+    "bias on a hidden layer": [Dense(5, bias=True), OUTPUT],
+    "bias on a linear layer outside a block": [Dense(5, activation="linear", bias=True), BatchNorm(), OUTPUT],
+    "bias inside the body, not last": [Dense(5), Residual((Dense(8, bias=True), AFFINE_5)), OUTPUT],
+    "affine, then a batch norm": [Dense(5), Residual((AFFINE_5, BatchNorm(), AFFINE_5)), OUTPUT],
+    "bias on the output layer": [Dense(3, output=True, bias=True)],
+    "linear without its batch norm in the body": [Dense(5), Residual((LINEAR, AFFINE_5)), OUTPUT],
+    "batch norm first in the body": [Dense(5), Residual((BatchNorm(), AFFINE_5)), OUTPUT],
+    "batch norm right after a block": [Dense(5), BLOCK_5, BatchNorm(), OUTPUT],
+    "linear right before a block": [LINEAR, BLOCK_5, OUTPUT],
+    "output layer in the body": [Dense(5), Residual((Dense(3, output=True), AFFINE_5)), OUTPUT],
+    "block last": [Dense(5), BLOCK_5],
+}
+
+
+@pytest.mark.parametrize("specs", RESIDUAL.values(), ids=RESIDUAL.keys())
+def test_residual_blocks_are_accepted(specs: list[LayerSpec]):
+    validate_layer_specs(specs)
+    input_shape = (8, 8, 1) if isinstance(specs[0], Conv) else (5,)
+    spec_shapes(specs, input_shape)
+
+
+@pytest.mark.parametrize("specs", RESIDUAL_INVALID.values(), ids=RESIDUAL_INVALID.keys())
+def test_a_malformed_residual_block_is_rejected(specs: list[LayerSpec]):
+    with pytest.raises(AssertionError):
+        validate_layer_specs(specs)
+
+
+SHAPE_INVALID: dict[str, tuple[list[LayerSpec], InputShape]] = {
+    "size mismatch": ([Dense(6), BLOCK_5, OUTPUT], (4,)),
+    "size mismatch, block first": ([BLOCK_5, OUTPUT], (4,)),
+    "after a conv front end": ([Conv(3, 2), BLOCK_5, OUTPUT], (8, 8, 1)),
+    "on an image input": ([BLOCK_5, OUTPUT], (5, 1, 1)),
+}
+
+
+@pytest.mark.parametrize("specs, input_shape", SHAPE_INVALID.values(), ids=SHAPE_INVALID.keys())
+def test_a_block_whose_input_isnt_its_flat_output_size_is_rejected_by_the_shape_walk(
+    specs: list[LayerSpec], input_shape: InputShape
+):
+    validate_layer_specs(specs)
+    with pytest.raises(AssertionError, match="D2|D5"):
+        spec_shapes(specs, input_shape)
+
+
+def test_a_block_expands_into_a_fork_its_body_and_an_add():
+    specs = [Dense(5), BLOCK_5, BLOCK_5, OUTPUT]
+    expanded = [Dense(5), Fork(), *BLOCK_5.body, Add(), Fork(), *BLOCK_5.body, Add(), OUTPUT]
+
+    assert expand_specs(specs) == expanded
+    assert expand_specs(expanded) == expanded
+    assert spec_paths(specs) == [
+        "layer 0",
+        "layer 1, block fork",
+        "layer 1, block body 0",
+        "layer 1, block body 1",
+        "layer 1, block add",
+        "layer 2, block fork",
+        "layer 2, block body 0",
+        "layer 2, block body 1",
+        "layer 2, block add",
+        "layer 3",
+    ]
+    assert expand_specs([Dense(5), OUTPUT]) == [Dense(5), OUTPUT]
+
+
+def test_the_shape_walk_covers_the_expanded_layers():
+    assert spec_shapes([Dense(5), BLOCK_5, OUTPUT], (7,)) == [
+        SpecShape((7,), (5,)),
+        SpecShape((5,), (5,)),
+        SpecShape((5,), (8,)),
+        SpecShape((8,), (5,)),
+        SpecShape((5,), (5,)),
+        SpecShape((5,), (3,)),
+    ]
+
+
+def test_a_batch_norm_inside_a_body_is_found_at_its_expanded_index():
+    specs = RESIDUAL["batch norm body"]
+    assert batch_norm_index(specs) == 3
+    assert batch_norm_index(RESIDUAL["one block"]) is None
+
+    with pytest.raises(ValueError, match=r"layer 1, block body 1, BatchNorm\("):
+        refuse_single_example_network(specs, 3)
+
+    grouped = [Dense(5), Residual((LINEAR, BatchNorm(group_size=4), AFFINE_5)), OUTPUT]
+    with pytest.raises(ValueError, match="layer 1, block body 1, BatchNorm"):
+        refuse_single_example_groups(grouped, 9)
+    refuse_single_example_groups(grouped, 10)
+
+
+def test_the_affine_field_defaults_off_so_existing_dense_specs_are_unchanged():
+    assert Dense(5, activation="linear") == Dense(5, activation="linear", bias=False)
+
+
+@pytest.mark.parametrize("specs", RESIDUAL.values(), ids=RESIDUAL.keys())
+def test_no_builder_or_writer_builds_a_block_yet(specs: list[LayerSpec], backend: Backend):
+    input_shape = (8, 8, 1) if isinstance(specs[0], Conv) else (5,)
+    with pytest.raises(NotImplementedError, match="residual-connections-workplan"):
+        build_array_layers(specs, input_shape, backend.name)
+    with pytest.raises(NotImplementedError, match="residual-connections-workplan"):
+        build_python_layers(
+            specs, input_shape, StateLayer(math.prod(input_shape), [(0.0, 1.0)] * math.prod(input_shape))
+        )
+    with pytest.raises(NotImplementedError, match="residual-connections-workplan"):
+        [layer_to_json(spec) for spec in specs]

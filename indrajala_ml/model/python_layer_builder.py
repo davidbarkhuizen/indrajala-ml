@@ -21,7 +21,9 @@ from indrajala_ml.model.layer_specs import (
     Dense,
     InputShape,
     LayerSpec,
+    expand_specs,
     image_shape,
+    refuse_residual_until,
     spec_shapes,
     validate_layer_specs,
 )
@@ -52,13 +54,15 @@ def build_python_layers(
     """specs, validated (validate_layer_specs), as pure-Python layers reading input_layer, whose
     nodes are input_shape's flat layout."""
     validate_layer_specs(specs)
+    shapes = spec_shapes(specs, input_shape)
+    refuse_residual_until(specs, "3", "in pure Python")
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
     )
 
     layers: list[TrainableLayer] = []
     previous = input_layer
-    for spec, shape in zip(specs, spec_shapes(specs, input_shape), strict=True):
+    for spec, shape in zip(expand_specs(specs), shapes, strict=True):
         if isinstance(spec, Dense):
             layer: TrainableLayer = _dense_layer(spec, previous)
         elif isinstance(spec, BatchNorm):
