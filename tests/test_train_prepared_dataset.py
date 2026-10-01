@@ -10,7 +10,6 @@ import random
 from collections.abc import Sequence
 from typing import Any, cast
 
-import numpy as np
 import pytest
 
 from indrajala_ml.mnist_data import load_mnist_dataset
@@ -111,8 +110,7 @@ def test_mini_batch_makes_the_same_batches_for_the_same_seed(reshuffle_each_epoc
 
 
 def _numpy_network() -> VectorizedMultiClassBackpropClassifierNetwork:
-    np.random.seed(3)
-    return VectorizedMultiClassBackpropClassifierNetwork.randomized([4], 3, 3)
+    return VectorizedMultiClassBackpropClassifierNetwork.randomized([4], 3, 3, seed=3)
 
 
 def _weights(

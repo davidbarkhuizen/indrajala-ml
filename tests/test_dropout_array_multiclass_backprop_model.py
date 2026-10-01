@@ -4,7 +4,6 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
     DropoutRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -152,10 +151,8 @@ def test_numpy_and_rust_train_alike_when_seeded_alike(pair: str, seed: int):
     rng = random.Random(seed)
     rows = [(tuple(rng.uniform(-1.0, 1.0) for _ in range(12)), rng.randrange(CLASS_COUNT)) for _ in range(48)]
 
-    NUMPY.seed(seed)
-    numpy_network = numpy_cls.randomized([16, 8], 12, CLASS_COUNT, *extra)
-    RUST.seed(seed)
-    rust_network = rust_cls.randomized([16, 8], 12, CLASS_COUNT, *extra)
+    numpy_network = numpy_cls.randomized([16, 8], 12, CLASS_COUNT, *extra, seed=seed)
+    rust_network = rust_cls.randomized([16, 8], 12, CLASS_COUNT, *extra, seed=seed)
 
     for _epoch in range(4):
         for start in range(0, len(rows), 8):

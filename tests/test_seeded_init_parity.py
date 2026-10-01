@@ -1,9 +1,10 @@
 """
-Seeded initialisation is identical across backends: after backend.seed(s), randomized() builds
-bit-identical numpy and Rust networks, for every array network class. The crate's RNG is numpy's
-np.random in a separate state (rust/tests/test_random_numpy_parity.py), and both random_layers
-compute limit = 1/sqrt(fan_in) the same way, so the weights match bit for bit, not within a
-tolerance. 1 / n ** 0.5 is 1 ULP off 1 / np.sqrt(n) at fan-in 5579 (and math.sqrt never is, 1 to
+Seeded initialisation is identical across backends: randomized(..., seed=s) builds bit-identical
+numpy and Rust networks, for every array network class. Each network owns its generator, numpy's
+default_rng on numpy and the crate's Generator on Rust, which is numpy's bit for bit
+(rust/tests/test_random_pcg64_parity.py), and both random_layers compute limit = 1/sqrt(fan_in)
+the same way, so the weights match bit for bit, not within a tolerance. A learn_batch then draws
+the same dropout masks and leaves both generators in the same state. 1 / n ** 0.5 is 1 ULP off 1 / np.sqrt(n) at fan-in 5579 (and math.sqrt never is, 1 to
 99,999), so the Rust limit uses math.sqrt; 2921, whose n ** 0.5 alone differs, is kept as a control.
 """
 
@@ -11,9 +12,11 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+import random
 from collections.abc import Callable
 from typing import Any
 
+import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
@@ -26,6 +29,7 @@ from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.update_rules import SGD
+from indrajala_ml.pcg64 import SeedSequence
 from tests.array_network_contract import snapshot_bits
 from tests.helpers import all_subclasses
 
@@ -87,12 +91,32 @@ def test_every_array_network_class_is_covered():
     }
 
 
-def assert_seeded_randomized_identical(build: Callable[[type[Any]], Any], numpy_name: str, seed: int) -> None:
-    NumpyBackend.seed(seed)
-    numpy_network = build(NUMPY_CLASSES[numpy_name])
-    RustBackend.seed(seed)
-    rust_network = build(rust_counterpart(numpy_name))
+def assert_seeded_randomized_identical(build: Callable[[type[Any], int], Any], numpy_name: str, seed: int) -> None:
+    numpy_network = build(NUMPY_CLASSES[numpy_name], seed)
+    rust_network = build(rust_counterpart(numpy_name), seed)
     assert snapshot_bits(rust_network) == snapshot_bits(numpy_network)
+    assert rust_network.rng.state == numpy_network.rng.bit_generator.state
+
+    # a training step draws the same masks from both generators, and as many draws
+    width = numpy_network.input_shape[0] if len(numpy_network.input_shape) == 1 else SIDE * SIDE
+    rows = _rows(width, numpy_network)
+    numpy_network.learn_batch(0.5, rows)
+    rust_network.learn_batch(0.5, rows)
+    assert _mask_bits(rust_network) == _mask_bits(numpy_network)
+    assert rust_network.rng.state == numpy_network.rng.bit_generator.state
+
+
+def _rows(width: int, network: Any) -> list[tuple[tuple[float, ...], Any]]:
+    rng = random.Random(width)
+    single_output = getattr(network, "class_count", None) is None
+    return [
+        (tuple(rng.uniform(0.0, 1.0) for _ in range(width)), rng.random() if single_output else i % CLASS_COUNT)
+        for i in range(4)
+    ]
+
+
+def _mask_bits(network: Any) -> list[Any]:
+    return [np.array(layer._mask_batch.tolist()).tobytes() for layer in network.layers if hasattr(layer, "_mask_batch")]
 
 
 SEEDS = [0, 1, 42, 2**32 - 1]
@@ -102,7 +126,9 @@ SEEDS = [0, 1, 42, 2**32 - 1]
 @pytest.mark.parametrize("numpy_name", MULTICLASS)
 def test_multiclass_randomized_is_identical_after_the_same_seed(numpy_name: str, seed: int):
     args = MULTICLASS[numpy_name]
-    assert_seeded_randomized_identical(lambda cls: cls.randomized([7, 5], 12, CLASS_COUNT, *args), numpy_name, seed)
+    assert_seeded_randomized_identical(
+        lambda cls, s: cls.randomized([7, 5], 12, CLASS_COUNT, *args, seed=s), numpy_name, seed
+    )
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -110,36 +136,77 @@ def test_multiclass_randomized_is_identical_after_the_same_seed(numpy_name: str,
 def test_conv_randomized_is_identical_after_the_same_seed(numpy_name: str, seed: int):
     args = CONV[numpy_name]
     assert_seeded_randomized_identical(
-        lambda cls: cls.randomized(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, *args), numpy_name, seed
+        lambda cls, s: cls.randomized(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, *args, seed=s), numpy_name, seed
     )
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("numpy_name", SINGLE_OUTPUT)
 def test_single_output_randomized_is_identical_after_the_same_seed(numpy_name: str, seed: int):
-    assert_seeded_randomized_identical(lambda cls: cls.randomized([4], 9), numpy_name, seed)
+    assert_seeded_randomized_identical(lambda cls, s: cls.randomized([4], 9, seed=s), numpy_name, seed)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("numpy_name", SEQUENTIAL)
 def test_sequential_randomized_is_identical_after_the_same_seed(numpy_name: str, seed: int):
-    assert_seeded_randomized_identical(lambda cls: cls.randomized(*SEQUENTIAL[numpy_name]), numpy_name, seed)
+    assert_seeded_randomized_identical(lambda cls, s: cls.randomized(*SEQUENTIAL[numpy_name], seed=s), numpy_name, seed)
 
 
 @pytest.mark.parametrize("fan_in", [2921, 5579])
 def test_randomized_is_identical_at_the_fan_ins_where_power_and_sqrt_differ(fan_in: int):
     assert_seeded_randomized_identical(
-        lambda cls: cls.randomized([2], fan_in, CLASS_COUNT),
+        lambda cls, s: cls.randomized([2], fan_in, CLASS_COUNT, seed=s),
         "VectorizedMultiClassBackpropClassifierNetwork",
         7,
     )
 
 
-def test_backend_seeds_are_separate_states():
-    # seeding one backend never moves the other's stream
+def test_randomize_draws_from_the_network_generator_and_no_global_state():
+    # a network's draws move neither np.random nor the crate's global stream, nor another
+    # network's generator
     NumpyBackend.seed(5)
+    RustBackend.seed(5)
     expected = np.random.random(10)
     NumpyBackend.seed(5)
-    RustBackend.seed(6)
-    RustBackend.random_layer(3, 4)
+    first = NUMPY_CLASSES["DropoutVectorizedMultiClassBackpropClassifierNetwork"].randomized([7], 12, 3, 0.3, seed=1)
+    rust = rust_counterpart("DropoutVectorizedMultiClassBackpropClassifierNetwork").randomized([7], 12, 3, 0.3, seed=1)
+    second = NUMPY_CLASSES["DropoutVectorizedMultiClassBackpropClassifierNetwork"].randomized([7], 12, 3, 0.3, seed=1)
+    first.learn_batch(0.5, _rows(12, first))
+    rust.learn_batch(0.5, _rows(12, rust))
     assert np.random.random(10).tobytes() == expected.tobytes()
+    assert np.array(pa.random(10).tolist()).tobytes() == expected.tobytes()
+    third = NUMPY_CLASSES["DropoutVectorizedMultiClassBackpropClassifierNetwork"].randomized([7], 12, 3, 0.3, seed=1)
+    assert snapshot_bits(second) == snapshot_bits(third)
+    assert second.rng.bit_generator.state == third.rng.bit_generator.state
+
+
+@pytest.mark.parametrize("backend", [NumpyBackend, RustBackend], ids=["numpy", "rust"])
+def test_a_network_without_a_seed_draws_from_os_entropy(backend: Any):
+    name = "VectorizedMultiClassBackpropClassifierNetwork"
+    cls = NUMPY_CLASSES[name] if backend is NumpyBackend else rust_counterpart(name)
+    assert snapshot_bits(cls.randomized([7], 12, 3)) != snapshot_bits(cls.randomized([7], 12, 3))
+
+
+def test_a_spawned_seed_sequence_from_any_implementation_seeds_both_backends_alike():
+    # an ensemble's sub-network seeds (ensemble_train.py): numpy's, the crate's and pcg64's
+    # SeedSequence children with the same entropy and spawn key give the same generator
+    expected = np.random.default_rng(np.random.SeedSequence(9).spawn(3)[2]).bit_generator.state
+    for child in [np.random.SeedSequence(9).spawn(3)[2], pa.SeedSequence(9).spawn(3)[2], SeedSequence(9).spawn(3)[2]]:
+        assert NumpyBackend.default_rng(child).bit_generator.state == expected
+        assert RustBackend.default_rng(child).state == expected
+
+
+def test_randomized_takes_a_generator_and_shares_it():
+    rng = NumpyBackend.default_rng(3)
+    network = NUMPY_CLASSES["DropoutVectorizedMultiClassBackpropClassifierNetwork"].randomized([7], 12, 3, 0.3, rng=rng)
+    assert network.rng is rng
+    assert all(layer.rng is rng for layer in network.layers if hasattr(layer, "set_rng"))
+    seeded = NUMPY_CLASSES["DropoutVectorizedMultiClassBackpropClassifierNetwork"].randomized([7], 12, 3, 0.3, seed=3)
+    assert snapshot_bits(network) == snapshot_bits(seeded)
+
+
+def test_assigning_rng_reaches_the_dropout_layers():
+    network = rust_counterpart("DropoutVectorizedMultiClassBackpropClassifierNetwork")([7, 5], 12, 3, 0.3)
+    rng = RustBackend.default_rng(4)
+    network.rng = rng
+    assert [layer.rng is rng for layer in network.layers if hasattr(layer, "set_rng")] == [True, True]

@@ -40,6 +40,7 @@ from typing import Any
 
 import numpy as np
 from process_runs import interleaved_runs, run_json_worker
+from seeded_weights import seeded_randomized
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import ARCHITECTURES
@@ -83,10 +84,9 @@ Network = VectorizedMultiClassBackpropClassifierNetwork | RustArrayMultiClassBac
 def _network(name: str, backend: str) -> Network:
     if name == "dense":
         return bss.initial_network(backend, 0.0, SEED)
-    np.random.seed(SEED)
     conv_specs = ARCHITECTURES[name]
-    snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(
-        28, 28, conv_specs, CONV_DENSE_LAYER_SIZES, 10
+    snapshot = seeded_randomized(
+        ConvVectorizedMultiClassBackpropClassifierNetwork, SEED, 28, 28, conv_specs, CONV_DENSE_LAYER_SIZES, 10
     ).snapshot()
     network = CONV_CLASSES[backend](28, 28, conv_specs, CONV_DENSE_LAYER_SIZES, 10)
     network.restore(snapshot)

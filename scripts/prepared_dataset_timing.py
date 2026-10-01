@@ -17,7 +17,11 @@ longer run does; the batched accuracy pass's A/B used it. Configs, each one epoc
 from numpy-drawn seed-0 weights with random.seed(0):
 - dense B=32 / dense single: 784 -> 30 -> 10 on full MNIST (60000 rows), learning rate 0.5;
 - conv B=32 / conv single: the conv demo's "conv" network (ConvSpec(3, 8), dense 32) on its
-  2000-row MNIST subset, learning rate 0.5.
+  2000-row MNIST subset, learning rate 0.5;
+- dense dropout B=32 (not run by default; --configs): dense B=32's network and weights with
+  dropout at 0.5 on the hidden layer, its masks drawn from the network's generator seeded 0, or
+  on a tree from before the network owned one, from the seeded globals. Added for the RNG
+  generators workplan's stage 3, which moved the masks onto the network's generator.
 
 Measures (seconds):
 - epoch: the trainer given the tuple list, as every demo calls it, including its two
@@ -38,8 +42,10 @@ import sys
 import time
 from typing import TYPE_CHECKING, Any
 
+import indrajala_math_rust as pa
 import numpy as np
 from process_runs import interleaved_runs, run_json_worker
+from seeded_weights import seeded_randomized
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml import train
@@ -50,6 +56,12 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 )
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
+    DropoutRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.dropout_vectorized_multiclass_backprop_classifier_network import (
+    DropoutVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
 
@@ -74,6 +86,9 @@ AFTER = hasattr(train, "_prepared_for")
 
 BACKENDS = ["numpy", "rust"]
 CONFIGS = ["dense B=32", "dense single", "conv B=32", "conv single"]
+# the configs --configs can name: the default ones, then the opt-in ones
+ALL_CONFIGS = [*CONFIGS, "dense dropout B=32"]
+DROP_PROBABILITY = 0.5
 MEASURES = ["epoch", "prepare", "epoch, loader"]
 LEARNING_RATE = 0.5
 BATCH_SIZE = 32
@@ -86,14 +101,30 @@ CONV_CLASSES = {
     "numpy": ConvVectorizedMultiClassBackpropClassifierNetwork,
     "rust": ConvRustArrayMultiClassBackpropClassifierNetwork,
 }
+DROPOUT_CLASSES = {
+    "numpy": DropoutVectorizedMultiClassBackpropClassifierNetwork,
+    "rust": DropoutRustArrayMultiClassBackpropClassifierNetwork,
+}
+
+
+def _dropout_network(backend: str) -> Any:
+    network = DROPOUT_CLASSES[backend](bss.LAYER_SIZES, bss.DIMENSION, bss.CLASS_COUNT, DROP_PROBABILITY)
+    network.restore(bss.initial_network(backend, 0.0, SEED).snapshot())
+    if hasattr(network, "rng"):
+        network.rng = network.backend.default_rng(SEED)
+    else:  # a tree whose dropout layers draw from the globals
+        np.random.seed(SEED)
+        pa.seed(SEED)
+    return network
 
 
 def _network(config: str, backend: str) -> Network:
+    if config == "dense dropout B=32":
+        return _dropout_network(backend)
     if config.startswith("dense"):
         return bss.initial_network(backend, 0.0, SEED)
-    np.random.seed(SEED)
-    snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(
-        28, 28, CONV_SPECS, CONV_DENSE_LAYER_SIZES, 10
+    snapshot = seeded_randomized(
+        ConvVectorizedMultiClassBackpropClassifierNetwork, SEED, 28, 28, CONV_SPECS, CONV_DENSE_LAYER_SIZES, 10
     ).snapshot()
     network = CONV_CLASSES[backend](28, 28, CONV_SPECS, CONV_DENSE_LAYER_SIZES, 10)
     network.restore(snapshot)
@@ -150,7 +181,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("mode", choices=["time", "worker"])
     parser.add_argument("args", nargs="*", help="worker only: config backend")
-    parser.add_argument("--configs", nargs="+", choices=CONFIGS)
+    parser.add_argument("--configs", nargs="+", choices=ALL_CONFIGS)
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--epochs", type=int, default=1, help="epochs per training run (default 1)")
     parser.add_argument("--out", help="write every run's raw measurements here as JSON")

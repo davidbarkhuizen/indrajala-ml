@@ -35,14 +35,14 @@ def _next_layer(backend: Backend) -> Any:
     return next_layer
 
 
-# seeds whose first draw keeps (0.5488... >= 0.5) or drops (0.4170... < 0.5) the one unit
-KEEP_SEED, DROP_SEED = 0, 1
+# seeds whose generator's first draw keeps (0.6369... >= 0.5) or drops (0.2616... < 0.5) the one unit
+KEEP_SEED, DROP_SEED = 0, 2
 
 
 def _forward_with_outcome(layer: DropoutArrayLayer | DropoutRustArrayLayer, backend: Backend, kept: bool) -> Any:
-    # a training forward pass whose one unit is kept or dropped: both backends draw numpy's
-    # stream, so one seed gives the same outcome on each
-    backend.seed(KEEP_SEED if kept else DROP_SEED)
+    # a training forward pass whose one unit is kept or dropped: both backends' generators are
+    # numpy's default_rng, so one seed gives the same outcome on each
+    layer.set_rng(backend.default_rng(KEEP_SEED if kept else DROP_SEED))
     result = layer.forward(backend.owned(X))
     assert layer._mask.tolist() == [1.0 if kept else 0.0]
     return result
@@ -90,7 +90,7 @@ def test_forward_and_hidden_delta_in_training_mode_are_internally_consistent_acr
     # dropped one exactly 0.0. 200 draws at 0.5 from a fixed seed include both outcomes
     layer = _dropout_layer(backend, drop_probability=0.5)
     layer.set_training_mode(True)
-    backend.seed(0)
+    layer.set_rng(backend.default_rng(0))
 
     saw_kept = False
     saw_dropped = False

@@ -210,7 +210,7 @@ RULES: list[UpdateRule] = [SGD(), Momentum(0.9), Adam(), WeightDecay(0.01)]
 def _network(name: str = "sigmoid", rule: UpdateRule | None = None, seed: int = 3, backend: Any = NUMPY) -> Any:
     layers, shape = NETWORKS[name]
     network = SequentialArrayNetwork(INPUT, layers, SGD() if rule is None else rule, shape=shape, backend=backend)
-    backend.seed(seed)
+    network.rng = backend.default_rng(seed)
     network.randomize()
     return network
 
@@ -226,9 +226,9 @@ def _rows(count: int, shape: str = "multiclass", seed: int = 1) -> list[tuple[tu
 def test_randomize_draws_the_linear_layers_w_only_and_nothing_for_batch_norm():
     network = _network()
     linear, norm, output = network.layers
-    NUMPY.seed(3)
-    W_linear = np.random.uniform(-1 / np.sqrt(4), 1 / np.sqrt(4), (5, 4))
-    W_output = np.random.uniform(-1 / np.sqrt(5), 1 / np.sqrt(5), (3, 5))
+    rng = np.random.default_rng(3)
+    W_linear = rng.uniform(-1 / np.sqrt(4), 1 / np.sqrt(4), (5, 4))
+    W_output = rng.uniform(-1 / np.sqrt(5), 1 / np.sqrt(5), (3, 5))
 
     assert linear.W.tobytes() == W_linear.tobytes() and output.W.tobytes() == W_output.tobytes()
     assert norm.gamma.tolist() == [1.0] * 5 and norm.beta.tolist() == [0.0] * 5

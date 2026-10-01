@@ -35,6 +35,14 @@ def _network(implementation: str, input_shape: InputShape, layers: list[LayerSpe
     return SequentialArrayNetwork(input_shape, layers, rule, backend=NUMPY if implementation == "numpy" else RUST)
 
 
+def _seeded(network: Any, seed: int) -> Any:
+    # an array network's own generator, seeded; a pure-Python one draws from random
+    # (seed_everything) until the RNG generators workplan's stage 4
+    if not isinstance(network, SequentialMultiClassBackpropClassifierNetwork):
+        network.rng = network.backend.default_rng(seed)
+    return network
+
+
 def _rows(input_shape: InputShape, count: int, seed: int) -> list[tuple[tuple[float, ...], int]]:
     rng = random.Random(seed)
     dimension = 1
@@ -81,7 +89,7 @@ def test_a_restored_checkpoint_resumes_training_by_bits(
     rows = _rows(input_shape, 8, seed=1)
 
     seed_everything(2)
-    trained = _network(implementation, input_shape, layers, rule)
+    trained = _seeded(_network(implementation, input_shape, layers, rule), 2)
     trained.randomize()
     _train(trained, rows)
     checkpoint = trained.checkpoint()
@@ -90,7 +98,7 @@ def test_a_restored_checkpoint_resumes_training_by_bits(
     _train(trained, rows)
 
     seed_everything(3)  # other weights, overwritten by the checkpoint
-    resumed = _network(implementation, input_shape, layers, rule)
+    resumed = _seeded(_network(implementation, input_shape, layers, rule), 3)
     resumed.randomize()
     resumed.restore_checkpoint(checkpoint)
     _train(resumed, rows)
@@ -105,7 +113,7 @@ def test_a_checkpoint_is_a_copy(implementation: str, rule: UpdateRule):
     input_shape, layers = DENSE
     rows = _rows(input_shape, 8, seed=1)
     seed_everything(2)
-    network = _network(implementation, input_shape, layers, rule)
+    network = _seeded(_network(implementation, input_shape, layers, rule), 2)
     network.randomize()
     _train(network, rows)
 
@@ -138,7 +146,7 @@ def test_the_pocket_restores_the_best_epochs_optimizer_state():
     batch_size, epochs, batches_per_epoch = 8, 8, 5
 
     def student() -> Any:
-        network = _network("numpy", input_shape, layers, Adam())
+        network = _seeded(_network("numpy", input_shape, layers, Adam()), 11)
         network.randomize()
         return network
 

@@ -5,9 +5,9 @@ indrajala_ml.model.dropout_array_layer.DropoutArrayLayer - the actual production
 functions replace - the same treatment test_relu_fused_layer_ops.py gives ReLUArrayLayer's own
 fused ops.
 
-training=True is checked against the reference too: the crate's RNG is numpy's np.random in a
-separate state, so after np.random.seed(s) and pa.seed(s) both draw the same masks, bit for bit.
-The training-mode tests seed both, then compare forward, forward_batch and a full learn_batch step
+training=True is checked against the reference too: the crate's Generator is numpy's default_rng,
+so from generators seeded alike both layers draw the same masks, bit for bit. The training-mode
+tests give each layer a generator from the same seed, then compare forward, forward_batch and a full learn_batch step
 of DropoutRustArrayLayer with DropoutArrayLayer, masks exactly and values to the training=False
 tests' bar. layer_dropout_hidden_delta is also checked with a forced mask/base_activation pair,
 against the hand-derived chain rule.
@@ -137,8 +137,8 @@ def test_layer_dropout_hidden_delta_batch_at_eval_mode_matches_dropout_array_lay
     assert rust_to_numpy(actual) == approx(this_layer.delta_batch)
 
 
-def _training_layers(rng: random.Random) -> tuple[DropoutArrayLayer, DropoutRustArrayLayer]:
-    # the same weights on both backends, in training mode
+def _training_layers(rng: random.Random, seed: int) -> tuple[DropoutArrayLayer, DropoutRustArrayLayer]:
+    # the same weights on both backends, in training mode, with generators seeded alike
     w_data = random_matrix(rng, HIDDEN_SIZE, INPUT_SIZE)
     b_data = random_vector(rng, HIDDEN_SIZE)
     numpy_layer = DropoutArrayLayer(HIDDEN_SIZE, INPUT_SIZE, DROP_PROBABILITY)
@@ -147,19 +147,15 @@ def _training_layers(rng: random.Random) -> tuple[DropoutArrayLayer, DropoutRust
     rust_layer.W, rust_layer.b = Array(w_data), Array(b_data)
     numpy_layer.set_training_mode(True)
     rust_layer.set_training_mode(True)
+    numpy_layer.set_rng(np.random.default_rng(seed))
+    rust_layer.set_rng(pa.default_rng(seed))
     return numpy_layer, rust_layer
-
-
-def _seed_both(seed: int) -> None:
-    np.random.seed(seed)
-    pa.seed(seed)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_forward_in_training_mode_matches_dropout_array_layer_after_the_same_seed(seed: int):
     rng = random.Random(seed)
-    numpy_layer, rust_layer = _training_layers(rng)
-    _seed_both(seed)
+    numpy_layer, rust_layer = _training_layers(rng, seed)
     for _ in range(5):  # consecutive passes: the position carries across calls
         x_data = random_vector(rng, INPUT_SIZE)
         expected = numpy_layer.forward(np.array(x_data))
@@ -172,8 +168,7 @@ def test_forward_in_training_mode_matches_dropout_array_layer_after_the_same_see
 @pytest.mark.parametrize("seed", SEEDS)
 def test_forward_batch_in_training_mode_matches_dropout_array_layer_after_the_same_seed(seed: int):
     rng = random.Random(seed)
-    numpy_layer, rust_layer = _training_layers(rng)
-    _seed_both(seed)
+    numpy_layer, rust_layer = _training_layers(rng, seed)
     for _ in range(3):
         x_data = random_matrix(rng, BATCH_SIZE, INPUT_SIZE)
         expected = numpy_layer.forward_batch(np.array(x_data))
@@ -195,7 +190,7 @@ def _learn_batch_step(layer: Any, next_layer: Any, X: Any) -> None:
 def test_a_learn_batch_step_in_training_mode_matches_dropout_array_layer_after_the_same_seed(seed: int):
     # forward_batch, hidden delta from a next layer, gradient accumulation and the update
     rng = random.Random(seed)
-    numpy_layer, rust_layer = _training_layers(rng)
+    numpy_layer, rust_layer = _training_layers(rng, seed)
     next_w_data = random_matrix(rng, NEXT_SIZE, HIDDEN_SIZE)
     next_delta_batch_data = random_matrix(rng, BATCH_SIZE, NEXT_SIZE)
     numpy_next = ArrayLayer(NEXT_SIZE, HIDDEN_SIZE)
@@ -203,7 +198,6 @@ def test_a_learn_batch_step_in_training_mode_matches_dropout_array_layer_after_t
     rust_next = RustArrayLayer(NEXT_SIZE, HIDDEN_SIZE)
     rust_next.W, rust_next.delta_batch = Array(next_w_data), Array(next_delta_batch_data)
 
-    _seed_both(seed)
     for _ in range(3):
         x_data = random_matrix(rng, BATCH_SIZE, INPUT_SIZE)
         _learn_batch_step(numpy_layer, numpy_next, np.array(x_data))

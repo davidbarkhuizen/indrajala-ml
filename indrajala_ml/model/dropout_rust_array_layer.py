@@ -8,10 +8,10 @@ from indrajala_ml.model.rust_array_layer import RustArrayLayer
 class DropoutRustArrayLayer(RustArrayLayer):
     """
     DropoutArrayLayer on the Rust backend: forward*, compute_hidden_delta* are each one fused call
-    (layer_dropout_*), drawing the mask with the crate's bernoulli_mask. The crate's RNG is numpy's
-    np.random in a separate state, so after pa.seed(s) the masks are the ones DropoutArrayLayer
-    draws after np.random.seed(s), and parity is exact in training too. drop_probability is
-    required.
+    (layer_dropout_*), drawing the mask from rng, the network's crate Generator. That is numpy's
+    default_rng, so from generators in the same state the masks are the ones DropoutArrayLayer
+    draws, and parity is exact in training too. drop_probability is required; a layer on its own
+    draws from OS entropy.
     """
 
     def __init__(self, size: int, input_size: int, drop_probability: float) -> None:
@@ -20,20 +20,24 @@ class DropoutRustArrayLayer(RustArrayLayer):
         self._drop_probability = drop_probability
         self._keep_probability = 1.0 - drop_probability
         self.training = False
+        self.rng = pa.default_rng()
+
+    def set_rng(self, rng: pa.Generator) -> None:
+        self.rng = rng
 
     def set_training_mode(self, training: bool) -> None:
         self.training = training
 
     def forward(self, x: pa.Array) -> pa.Array:
         self.a, self._mask, self._base_activation = pa.layer_dropout_forward(
-            self.W, x, self.b, self._drop_probability, self.training
+            self.W, x, self.b, self._drop_probability, self.training, self.rng
         )
         self._was_training = self.training
         return self.a
 
     def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A, self._mask_batch, self._base_activation_batch = pa.layer_dropout_forward_batch(
-            self.W, X, self.b, self._drop_probability, self.training
+            self.W, X, self.b, self._drop_probability, self.training, self.rng
         )
         self._was_training = self.training
         return self.A

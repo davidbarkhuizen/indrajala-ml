@@ -64,7 +64,7 @@ SEQUENTIAL_MULTICLASS = [
 SEQUENTIAL_SINGLE_OUTPUT = [Dense(5, activation="relu"), Dense(1, output=True, loss="cross_entropy")]
 
 # how to build each class; a class missing here fails test_every_class_has_a_constructor.
-# The dropout classes reseed their backend's RNG before each step (_seed_step), so both twins
+# Both twins' generators are reseeded before each step (_seed_step), so the dropout classes
 # draw the same masks.
 CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "VectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
@@ -133,10 +133,9 @@ def _weights(network: Any) -> list[list[Any]]:
     return [[array.tolist() for array in entry] for entry in network.snapshot()]
 
 
-def _seed_step(step: int) -> None:
-    # only the dropout classes draw while training: numpy from np.random, Rust from the crate's RNG
-    np.random.seed(step)
-    pa.seed(step)
+def _seed_step(network: Any, step: int) -> None:
+    # only the dropout classes draw while training, from the network's own generator
+    network.rng = network.backend.default_rng(step)
 
 
 def test_every_class_has_a_constructor():
@@ -152,9 +151,9 @@ def test_learn_row_matches_learn_exactly_step_by_step(cls: type[Any]):
 
     for step, index in enumerate([3, 0, 7, 7, 12, 19, 1]):
         state, label = rows[index]
-        _seed_step(step)
+        _seed_step(via_tuples, step)
         via_tuples.learn(0.5, state, label)
-        _seed_step(step)
+        _seed_step(via_rows, step)
         via_rows.learn_row(0.5, prepared, index)
         assert _weights(via_rows) == _weights(via_tuples), f"step {step}"
 
@@ -166,9 +165,9 @@ def test_learn_batch_rows_matches_learn_batch_exactly_step_by_step(cls: type[Any
     prepared = via_rows.prepare_dataset(rows)
 
     for step, indices in enumerate([[5, 0, 8, 13], [19], [5, 5, 2], list(range(20))]):
-        _seed_step(step)
+        _seed_step(via_tuples, step)
         via_tuples.learn_batch(0.5, [rows[i] for i in indices])
-        _seed_step(step)
+        _seed_step(via_rows, step)
         via_rows.learn_batch_rows(0.5, prepared, indices)
         assert _weights(via_rows) == _weights(via_tuples), f"step {step}"
 
@@ -205,28 +204,24 @@ def test_the_prepared_accuracy_pass_matches_the_tuple_one(cls: type[Any]):
 
 
 def test_classify_rows_runs_numpy_dropout_in_inference_mode():
-    # inference draws no mask, so the pass leaves np.random where it was
+    # inference draws no mask, so the pass leaves the network's generator where it was
     cls = next(cls for cls in NETWORK_CLASSES if cls.__name__ == "DropoutVectorizedMultiClassBackpropClassifierNetwork")
     network, _ = _twin_networks(cls)
     prepared = network.prepare_dataset(_rows(cls, CLASSIFY_ROW_COUNT))
-    np.random.seed(7)
+    before = network.rng.bit_generator.state
     network.classify_rows(prepared)
-    after = np.random.random()
-    np.random.seed(7)
-    assert after == np.random.random()
+    assert network.rng.bit_generator.state == before
     assert not network.hidden_layers[0]._was_training
 
 
 def test_classify_rows_runs_rust_dropout_in_inference_mode():
-    # inference draws no mask, so the pass leaves the crate's RNG where it was
+    # inference draws no mask, so the pass leaves the network's generator where it was
     cls = DropoutRustArrayMultiClassBackpropClassifierNetwork
     network, _ = _twin_networks(cls)
     prepared = network.prepare_dataset(_rows(cls, CLASSIFY_ROW_COUNT))
-    pa.seed(7)
+    before = network.rng.state
     network.classify_rows(prepared)
-    after = pa.random(1).tolist()
-    pa.seed(7)
-    assert after == pa.random(1).tolist()
+    assert network.rng.state == before
     assert not network.hidden_layers[0]._was_training
 
 

@@ -34,16 +34,21 @@ against the latest numpy.
 | Pure-Python dropout | `DropoutNode.forward` (`random.random() >= p`) | stdlib `random`, global | `random.seed(s)` |
 | Epoch shuffle, all backends | `train.py`, `epoch_order` (`random.shuffle`) | stdlib `random`, global | `random.seed(s)` |
 | Data splits, sampling, ensemble jobs | `dataset_utils`, `benchmark_data`, `ensemble_train` | `random.Random(seed)` instances | an explicit seed argument |
-| numpy weight init | `fan_in_aware_random_layer` (`np.random.uniform`) | legacy `np.random`, global MT19937 | `np.random.seed(s)`, `NUMPY.seed(s)` |
-| numpy dropout | `DropoutArrayLayer` (`np.random.random(shape) >= p`) | legacy `np.random`, global | as above |
-| Rust weight init | `fan_in_aware_random_rust_layer` (`pa.uniform`) | the crate's MT19937, a global separate from numpy's | `pa.seed(s)`, `RUST.seed(s)` |
-| Rust dropout | `layer_dropout_forward*` and `bernoulli_mask` | the crate's, as above | as above |
+| numpy weight init | `fan_in_aware_random_layer` (`rng.uniform`) | the network's `np.random.default_rng` (PCG64) | `randomized(..., seed=s)` or `rng=`, or `network.rng = ...`; OS entropy otherwise |
+| numpy dropout | `DropoutArrayLayer` (`rng.random(shape) >= p`) | the network's, as above | as above |
+| Rust weight init | `fan_in_aware_random_rust_layer` (`rng.uniform`) | the network's `pa.default_rng` (the crate's PCG64, numpy's bit for bit) | as above |
+| Rust dropout | `layer_dropout_forward*` with `rng` | the network's, as above | as above |
 
-`seed_everything(s)` (`indrajala_ml/seeding.py`) seeds all three global states alike. The
-ensemble workers call it, because a forked worker inherits all three states from its parent.
-`backend.seed(s)` seeds only the state that backend's `random_layer` and dropout draw from.
+Since the RNG generators workplan's stage 3, each array network owns its generator
+([rng-generators-workplan.md](rng-generators-workplan.md), D8): `randomize()` and its dropout
+layers draw from `network.rng`, one stream between them. An ensemble trainer seeds sub-network
+`i` from `SeedSequence(seed).spawn(class_count)[i]` (`indrajala_ml/pcg64.py`), which either
+backend's `default_rng` takes. `seed_everything(s)` (`indrajala_ml/seeding.py`) still seeds the
+three global states alike, for the pure-Python networks and the shuffles; the ensemble workers
+call it, because a forked worker inherits those states from its parent. `backend.seed(s)` seeds
+a global nothing in the array networks draws from any more.
 
-After the same seed, numpy and Rust draw the same weights and masks, so a seeded Rust run
+From the same seed, numpy and Rust draw the same weights and masks, so a seeded Rust run
 reproduces a seeded numpy run. They agree to the backends' matmul differences, which are about an
 ULP. Python's `random` is the same MT19937 with the same two-draw double, but `random.seed(s)`
 runs `init_by_array` over `|s|`'s 32-bit words, low word first. So `random.seed(s)` gives the
@@ -156,8 +161,9 @@ the generator, and each crate row differs from its numpy row only by the entropy
 
 (Rerun 2026-10-01 with the crate's PCG64 column.) The crate runs MT19937 slightly faster than
 numpy's legacy path, and PCG64 about 20% faster than numpy's (one 64-bit step per double against
-MT19937's two 32-bit draws), and avoids numpy's per-call overhead at batch 1. The RNG is not a hot path. A 784 x 128 init happens once per network, and
-the dropout mask is a small part of a training step. One Rust dropout epoch (784-128-10, batch 32,
+MT19937's two 32-bit draws), and avoids numpy's per-call overhead at batch 1. The RNG is not a hot
+path. A 784 x 128 init happens once per network, and the dropout mask is a small part of a
+training step. One Rust dropout epoch (784-128-10, batch 32,
 p = 0.5, 8192 random rows, `learn_batch` on tuple batches, 9 processes) takes a median of 381 ms
 (374-385).
 
@@ -172,6 +178,8 @@ scripts still seed per call site: `batch_size_scaling`, `accuracy_pass_timing` a
 scripts draw weights once with numpy and restore them into both backends, which is correct and
 simple. numpy's own guidance (NEP 19) is to pass explicit `Generator` objects. That is the larger,
 cleaner version: generator objects in the crate and on the Python side, passed to layers.
+[rng-generators-workplan.md](rng-generators-workplan.md) is that version, in progress: since its
+stage 3 the array networks draw from their own generators.
 
 ### FMA contraction on other platforms (low, latent)
 

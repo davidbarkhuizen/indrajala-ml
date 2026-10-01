@@ -89,8 +89,8 @@ def _digits_rows() -> list[tuple[tuple[float, ...], int]]:
 def test_a_combination_no_preset_has_trains(backend: Backend):
     # the combination under Adam: every weight moves, and the network still classifies
     layers = _no_preset_layers(0.2)
-    backend.seed(0)
     network = SequentialArrayNetwork((8, 8, 1), layers, Adam(), backend=backend)
+    network.rng = backend.default_rng(0)
     network.randomize()
     before = [[np.asarray(array.tolist()) for array in entry] for entry in network.snapshot()]
 
