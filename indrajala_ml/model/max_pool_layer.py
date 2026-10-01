@@ -7,6 +7,7 @@ from typing import ClassVar
 from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer, WeightSet
 from indrajala_ml.model.window_geometry import output_size, pool_stride, validate_pool_arguments
+from indrajala_ml.pcg64 import Pcg64Generator
 
 
 @dataclass(frozen=True)
@@ -146,5 +147,5 @@ class MaxPoolLayer:
     def restore_state(self, layer_snapshot: list[tuple[list[float], float]]) -> None:
         assert layer_snapshot == [], f"a MaxPoolLayer has no state to restore; got {layer_snapshot!r}"
 
-    def randomize_fan_in_aware(self) -> None:
+    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
         pass

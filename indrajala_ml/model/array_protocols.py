@@ -115,16 +115,6 @@ class BiasFreeArrayLayer[A: BackendArray](Protocol):
 
 
 @runtime_checkable
-class GeneratorLayer(Protocol):
-    """
-    A layer that draws in training (dropout's masks), from the generator its network owns: the
-    network's rng setter hands it over (the RNG generators workplan, D8).
-    """
-
-    def set_rng(self, rng: Any, /) -> None: ...
-
-
-@runtime_checkable
 class TrainingModeLayer(Protocol):
     """
     A layer that behaves differently in training (dropout, batch norm): learn* switches it on and

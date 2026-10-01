@@ -23,6 +23,7 @@ from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.multiclass_evaluate import accuracy as multiclass_accuracy
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.targets import XORTarget
 from indrajala_ml.train import random_alternating_training_data, train_linear_classifier_network
 
@@ -48,8 +49,8 @@ def _xavier_glorot_randomize(network: BackpropNetworkBase) -> None:
     for layer in as_dense_layers(network.trainable_layers):
         limit = math.sqrt(6.0 / (previous_size + layer.size))
         for node in layer.nodes:
-            node.update_input_weights([random.uniform(-limit, limit) for _ in range(previous_size)])
-            node.bias = random.uniform(-limit, limit)
+            node.update_input_weights([network.rng.uniform(-limit, limit) for _ in range(previous_size)])
+            node.bias = network.rng.uniform(-limit, limit)
         previous_size = layer.size
 
 
@@ -65,9 +66,8 @@ def _compare_multiclass_loss_functions(
         ("one-vs-rest (MSE)", "yellow", MultiClassBackpropClassifierNetwork),
         ("softmax (cross-entropy)", "cyan", SoftmaxMultiClassBackpropClassifierNetwork),
     ]:
-        random.seed(0)
         student = cls.randomized(
-            DIGITS_LAYER_SIZES, DIGITS_DIMENSION, [(0.0, 1.0)] * DIGITS_DIMENSION, DIGITS_CLASS_COUNT
+            DIGITS_LAYER_SIZES, DIGITS_DIMENSION, [(0.0, 1.0)] * DIGITS_DIMENSION, DIGITS_CLASS_COUNT, seed=0
         )
         result = train_linear_classifier_network(
             student, train_data, learning_rate=DIGITS_LEARNING_RATE, epochs=DIGITS_EPOCHS
@@ -109,8 +109,7 @@ def _compare_binary_loss_functions() -> list[tuple[str, str, list[int], list[flo
         # many draws generating training_data consumed
         random.seed(0)
         training_data = random_alternating_training_data(300, target)
-        random.seed(1000)
-        student = cls.randomized(XOR_LAYER_SIZES, XOR_DIMENSION, bounds)
+        student = cls.randomized(XOR_LAYER_SIZES, XOR_DIMENSION, bounds, seed=1000)
         result = train_linear_classifier_network(student, training_data, learning_rate=learning_rate, epochs=XOR_EPOCHS)
         diagnostic = result.diagnostic
         print(
@@ -136,10 +135,10 @@ def _compare_init_schemes(
         ("fan-in-aware (production default)", "yellow", None),
         ("Xavier/Glorot", "magenta", _xavier_glorot_randomize),
     ]:
-        random.seed(0)
         student = MultiClassBackpropClassifierNetwork(
             DIGITS_LAYER_SIZES, DIGITS_DIMENSION, [(0.0, 1.0)] * DIGITS_DIMENSION, DIGITS_CLASS_COUNT
         )
+        student.rng = default_rng(0)
         if randomize_fn is None:
             student.randomize()
         else:

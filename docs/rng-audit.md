@@ -30,8 +30,8 @@ against the latest numpy.
 
 | Use | Code | Generator | Seeded by |
 |---|---|---|---|
-| Pure-Python weight init | `fan_in_aware_weights_and_bias`, `randomize()` of the node networks | stdlib `random`, global MT19937 | `random.seed(s)` |
-| Pure-Python dropout | `DropoutNode.forward` (`random.random() >= p`) | stdlib `random`, global | `random.seed(s)` |
+| Pure-Python weight init | `fan_in_aware_weights_and_bias`, `randomize()` of the node networks and `LinearClassifierNetwork` | the network's `indrajala_ml.pcg64` generator (numpy's `default_rng`, bit for bit) | `randomized(..., seed=s)` or `rng=`, or `network.rng = ...`; OS entropy otherwise |
+| Pure-Python dropout | `DropoutNode.forward` (`rng.random() >= p`) | the network's, as above | as above |
 | Epoch shuffle, all backends | `train.py`, `epoch_order` (`random.shuffle`) | stdlib `random`, global | `random.seed(s)` |
 | Data splits, sampling, ensemble jobs | `dataset_utils`, `benchmark_data`, `ensemble_train` | `random.Random(seed)` instances | an explicit seed argument |
 | numpy weight init | `fan_in_aware_random_layer` (`rng.uniform`) | the network's `np.random.default_rng` (PCG64) | `randomized(..., seed=s)` or `rng=`, or `network.rng = ...`; OS entropy otherwise |
@@ -39,14 +39,14 @@ against the latest numpy.
 | Rust weight init | `fan_in_aware_random_rust_layer` (`rng.uniform`) | the network's `pa.default_rng` (the crate's PCG64, numpy's bit for bit) | as above |
 | Rust dropout | `layer_dropout_forward*` with `rng` | the network's, as above | as above |
 
-Since the RNG generators workplan's stage 3, each array network owns its generator
+Since the RNG generators workplan's stages 3 and 4, each network owns its generator
 ([rng-generators-workplan.md](rng-generators-workplan.md), D8): `randomize()` and its dropout
 layers draw from `network.rng`, one stream between them. An ensemble trainer seeds sub-network
-`i` from `SeedSequence(seed).spawn(class_count)[i]` (`indrajala_ml/pcg64.py`), which either
-backend's `default_rng` takes. `seed_everything(s)` (`indrajala_ml/seeding.py`) still seeds the
-three global states alike, for the pure-Python networks and the shuffles; the ensemble workers
-call it, because a forked worker inherits those states from its parent. `backend.seed(s)` seeds
-a global nothing in the array networks draws from any more.
+`i` from `SeedSequence(seed).spawn(class_count)[i]` (`indrajala_ml/pcg64.py`), which every
+implementation's `default_rng` takes. `seed_everything(s)` (`indrajala_ml/seeding.py`) still seeds
+the three global states alike, for the shuffles and the data helpers; the ensemble workers call
+it, because a forked worker inherits those states from its parent. `backend.seed(s)` seeds a
+global no network draws from any more.
 
 From the same seed, numpy and Rust draw the same weights and masks, so a seeded Rust run
 reproduces a seeded numpy run. They agree to the backends' matmul differences, which are about an
@@ -179,7 +179,7 @@ scripts draw weights once with numpy and restore them into both backends, which 
 simple. numpy's own guidance (NEP 19) is to pass explicit `Generator` objects. That is the larger,
 cleaner version: generator objects in the crate and on the Python side, passed to layers.
 [rng-generators-workplan.md](rng-generators-workplan.md) is that version, in progress: since its
-stage 3 the array networks draw from their own generators.
+stages 3 and 4 every network draws from its own generator.
 
 ### FMA contraction on other platforms (low, latent)
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from collections.abc import Sequence
 from typing import ClassVar
 
@@ -67,11 +66,11 @@ class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](Backprop
         half_widths = self.half_widths()
         for node in first.nodes:
             node.update_input_weights(
-                [random.uniform(-2.0 / half_width, 2.0 / half_width) for half_width in half_widths]
+                [self.rng.uniform(-2.0 / half_width, 2.0 / half_width) for half_width in half_widths]
             )
-            node.bias = random.uniform(-1.0, 1.0)
+            node.bias = self.rng.uniform(-1.0, 1.0)
 
         for layer in later:
             for node in layer.nodes:
-                node.update_input_weights([random.uniform(-1.0, 1.0) for _ in node.input_nodes])
-                node.bias = random.uniform(-1.0, 1.0)
+                node.update_input_weights([self.rng.uniform(-1.0, 1.0) for _ in node.input_nodes])
+                node.bias = self.rng.uniform(-1.0, 1.0)

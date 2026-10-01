@@ -8,23 +8,22 @@ from indrajala_ml.train import random_alternating_training_data, train_linear_cl
 
 def test_train_linear_classifier_network_drives_a_backprop_network_past_the_linear_ceiling_on_xor():
 
-    # measured on Python 3.14: 0.9666666666666667 at epoch 40 of 100 (78 on 3.10: Python 3.12 made
-    # float sum() compensated, which rounds the hidden deltas' sums differently; with 3.10's naive
-    # left-to-right sum patched in, 3.14 reproduces epoch 78), plateaued (the remaining errors sit on
-    # the x=0/y=0 boundary), well past the ~0.845 no LinearClassifierNetwork reaches on this
-    # target (test_train.py)
+    # measured on Python 3.14 from weight seed 0: 0.9666666666666667 at epoch 22 of 100,
+    # plateaued (the remaining errors sit on the x=0/y=0 boundary), well past the ~0.845 no
+    # LinearClassifierNetwork reaches on this target (test_train.py). The training data still
+    # comes from the global random
     random.seed(0)
 
     bounds = square_bounds(10.0)
     target = XORTarget(bounds)
     training_data = random_alternating_training_data(300, target)
 
-    student = BackpropClassifierNetwork.randomized([8], 2, bounds)
+    student = BackpropClassifierNetwork.randomized([8], 2, bounds, seed=0)
     result = train_linear_classifier_network(student, training_data, learning_rate=1.0, epochs=100)
 
     diagnostic = result.diagnostic
     assert diagnostic.best_training_accuracy == 0.9666666666666667
-    assert diagnostic.best_epoch_index == 40
+    assert diagnostic.best_epoch_index == 22
     assert diagnostic.plateaued is True
     assert diagnostic.converged is False
     assert diagnostic.still_improving is False

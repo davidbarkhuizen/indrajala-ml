@@ -5,6 +5,7 @@ import pytest
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer
 from indrajala_ml.model.state_layer import StateLayer
+from indrajala_ml.pcg64 import default_rng
 from tests.helpers import approx
 
 
@@ -105,7 +106,7 @@ def test_weight_free_hooks_are_no_ops_or_empty():
 
     assert layer.snapshot_state() == []
     layer.restore_state([])
-    layer.randomize_fan_in_aware()
+    layer.randomize_fan_in_aware(default_rng(0))
     layer.accumulate_gradients()
     assert layer.weight_sets() == []
     layer.set_training_mode(True)
@@ -139,8 +140,9 @@ def test_gradient_check_through_conv_pool_conv(pool_stride: int | None):
         channel_count=3,
         input_channels=2,
     )
-    first.randomize_fan_in_aware()
-    last.randomize_fan_in_aware()
+    rng = default_rng(0)
+    first.randomize_fan_in_aware(rng)
+    last.randomize_fan_in_aware(rng)
 
     def total_loss() -> float:
         first.forward()

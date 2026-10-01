@@ -5,6 +5,7 @@ import pytest
 
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.state_layer import StateLayer
+from indrajala_ml.pcg64 import default_rng
 from tests.helpers import LayerOptimizer, approx
 
 
@@ -263,9 +264,8 @@ def test_snapshot_state_and_restore_state_round_trip():
 
 def test_randomize_fan_in_aware_randomizes_every_kernel():
 
-    random.seed(0)
     layer = _layer_with_state([0.0] * 9, height=3, width=3, kernel_size=2, channel_count=3)
-    layer.randomize_fan_in_aware()
+    layer.randomize_fan_in_aware(default_rng(0))
 
     for kernel in layer.kernels:
         assert len(set(kernel.weights)) > 1  # not all zero/identical
@@ -283,7 +283,7 @@ def test_gradient_check_against_a_numerically_perturbed_loss():
     input_layer = StateLayer(height * width, [(-10.0, 10.0)] * (height * width))
     input_layer.update_state(tuple(random.uniform(-2.0, 2.0) for _ in range(height * width)))
     layer = ConvLayer(input_layer=input_layer, input_height=height, input_width=width, kernel_size=2, channel_count=2)
-    layer.randomize_fan_in_aware()
+    layer.randomize_fan_in_aware(default_rng(0))
 
     def total_loss() -> float:
         layer.forward()
@@ -331,8 +331,9 @@ def _stacked_conv_layers(height: int, width: int, stride: int) -> tuple[StateLay
         stride=stride,
         input_channels=first.channel_count,
     )
-    first.randomize_fan_in_aware()
-    second.randomize_fan_in_aware()
+    rng = default_rng(0)
+    first.randomize_fan_in_aware(rng)
+    second.randomize_fan_in_aware(rng)
     return input_layer, first, second
 
 

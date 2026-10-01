@@ -82,6 +82,7 @@ class BinaryClassifierClass[ClassifierT: BinaryClassifier](Protocol):
         self, layer_sizes: list[int], dimension: int, input_bounds: list[tuple[float, float]]
     ) -> ClassifierT: ...
 
+    # seed: any seed the network's generator takes (an int, a sequence of ints or a SeedSequence)
     def randomized(
-        self, layer_sizes: list[int], dimension: int, input_bounds: list[tuple[float, float]]
+        self, layer_sizes: list[int], dimension: int, input_bounds: list[tuple[float, float]], *, seed: Any = None
     ) -> ClassifierT: ...

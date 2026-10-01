@@ -5,6 +5,7 @@ import pytest
 from indrajala_ml.evaluate import class_balanced_disagreement_rate
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import (
     random_alternating_training_data,
     reachable_reference_and_training_data,
@@ -78,15 +79,14 @@ def test_randomize_scales_weight_range_with_input_bounds_half_width(monkeypatch:
     # each dimension's weight range is 20 / half_width, so w_i * x_i has a similar magnitude
     # whatever its bounds, asymmetric bounds included; the threshold's range stays fixed
     calls: list[tuple[float, float]] = []
-    original_uniform = random.uniform
+    original_uniform = default_rng(0).uniform
 
     def recording_uniform(a: float, b: float) -> float:
         calls.append((a, b))
         return original_uniform(a, b)
 
-    monkeypatch.setattr(random, "uniform", recording_uniform)
-
     network = LinearClassifierNetwork(1, 2, [(-1000.0, 1000.0), (-0.001, 0.001)])
+    monkeypatch.setattr(network.rng, "uniform", recording_uniform)
     network.randomize()
 
     weight_call_1, weight_call_2, threshold_call = calls[:3]
@@ -216,16 +216,17 @@ def test_required_active_two_of_three_gives_majority_semantics():
 def test_learn_converges_under_or_combination():
 
     # minimum-disturbance selection needs only an output monotone in the active count, which
-    # OR also is
+    # OR also is. The reference and the student draw from different seeds; the training data
+    # and the disagreement samples from the global random
     random.seed(0)
 
     cardinality, dimension, l = 2, 2, 10.0
     bounds = square_bounds(l, dimension)
 
-    reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, required_active=1)
+    reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, required_active=1, seed=0)
     training_data = random_alternating_training_data(400, reference)
 
-    student = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, required_active=1)
+    student = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, required_active=1, seed=100)
 
     disagreement_before = class_balanced_disagreement_rate(reference, student, per_class_sample_count=300)
     train_linear_classifier_network(student, training_data, learning_rate=0.25, epochs=5)

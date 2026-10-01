@@ -1,4 +1,3 @@
-import random
 import statistics
 from typing import Any
 
@@ -35,13 +34,13 @@ CONV_CONFIGS: dict[str, list[ConvSpec | PoolSpec]] = {
 CONFIGS = ["dense"] + list(CONV_CONFIGS)
 
 
-def _build(config: str) -> MultiClassBackpropClassifierNetwork[Any]:
+def _build(config: str, seed: int | None = None) -> MultiClassBackpropClassifierNetwork[Any]:
     if config == "dense":
         return MultiClassBackpropClassifierNetwork.randomized(
-            DENSE_LAYER_SIZES, SIDE * SIDE, [(0.0, 1.0)] * (SIDE * SIDE), CLASS_COUNT
+            DENSE_LAYER_SIZES, SIDE * SIDE, [(0.0, 1.0)] * (SIDE * SIDE), CLASS_COUNT, seed=seed
         )
     return ConvMultiClassBackpropClassifierNetwork.randomized(
-        SIDE, SIDE, CONV_CONFIGS[config], DENSE_LAYER_SIZES, CLASS_COUNT
+        SIDE, SIDE, CONV_CONFIGS[config], DENSE_LAYER_SIZES, CLASS_COUNT, seed=seed
     )
 
 
@@ -54,8 +53,7 @@ def run_one(dataset: list[Example[int]], config: str, seed: int) -> dict[str, fl
     # the split and the weight initialization, and is shared across configs, so results pair up
     # seed-by-seed
     train_data, test_data = split_train_test(dataset, test_fraction=0.2, seed=seed)
-    random.seed(seed)
-    student = _build(config)
+    student = _build(config, seed)
 
     # accuracy only, no wall-clock: the pure-Python implementation is never used for timing
     # (see the README's Models section)

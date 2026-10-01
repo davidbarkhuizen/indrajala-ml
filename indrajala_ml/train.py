@@ -12,6 +12,7 @@ from indrajala_ml.model.classifier_protocols import (
 )
 from indrajala_ml.model.layer_specs import refuse_single_example_groups
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 from indrajala_ml.prepared_dataset import PreparedDataset
 
 
@@ -38,13 +39,16 @@ def reachable_reference_and_training_data(
     regeneration_attempts: int = 20,
     max_attempts: int = 20_000,
     is_valid: Callable[[LinearClassifierNetwork], bool] | None = None,
+    rng: Pcg64Generator | None = None,
 ) -> tuple[LinearClassifierNetwork, list[tuple[tuple[float, ...], float]]]:
 
     # higher cardinality shrinks the positive region, so a random reference can make one class
     # unreachable: draw again. is_valid (cheap, e.g. "region must be bounded") runs before the
-    # reachability sampling
+    # reachability sampling. Every reference draws from rng, OS entropy if None; the training
+    # data from the global random
+    rng = default_rng() if rng is None else rng
     for _ in range(regeneration_attempts):
-        reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds)
+        reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, rng=rng)
         if is_valid is not None and not is_valid(reference):
             continue
         try:

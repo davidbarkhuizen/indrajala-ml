@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-import random
 from collections.abc import Sequence
 from typing import ClassVar
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode, sigmoid
+from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
 
 class TrainingModeNode(BackpropNode):
     """A node whose forward pass differs in training: the base of make_dropout_node_cls's nodes."""
 
     training: bool
+    rng: Pcg64Generator
 
 
 def make_dropout_node_cls(drop_probability: float) -> type[TrainingModeNode]:
@@ -22,7 +23,9 @@ def make_dropout_node_cls(drop_probability: float) -> type[TrainingModeNode]:
     (BackpropNetworkBase._set_training_mode).
 
     Inverted dropout: a kept activation is scaled by 1/keep_probability in training, so its
-    expected contribution matches the full network and inference needs no rescaling.
+    expected contribution matches the full network and inference needs no rescaling. The keep
+    draw comes from rng, the network's generator, which DropoutLayer.set_rng hands to every node;
+    a node on its own draws from OS entropy.
     """
 
     assert 0.0 <= drop_probability < 1.0, f"drop_probability must be in [0.0, 1.0); got {drop_probability}"
@@ -53,12 +56,13 @@ def make_dropout_node_cls(drop_probability: float) -> type[TrainingModeNode]:
             # training as forward() saw it: learn() switches training off before the backward
             # pass, so compute_hidden_delta must not read self.training
             self._was_training = False
+            self.rng: Pcg64Generator = default_rng()
 
         def forward(self) -> float:
             self._base_activation = sigmoid(self.z())
             self._was_training = self.training
             if self.training:
-                self._kept = random.random() >= drop_probability
+                self._kept = self.rng.random() >= drop_probability
                 self._activation = (self._base_activation / keep_probability) if self._kept else 0.0
             else:
                 self._kept = True
@@ -90,7 +94,7 @@ def make_dropout_node_cls(drop_probability: float) -> type[TrainingModeNode]:
 def make_dropout_layer_cls(drop_probability: float) -> type[BackpropLayer]:
     """
     A BackpropLayer of make_dropout_node_cls nodes, whose set_training_mode passes the flag to its
-    nodes.
+    nodes, and set_rng the network's generator.
     """
 
     class DropoutLayer(BackpropLayer):
@@ -100,5 +104,10 @@ def make_dropout_layer_cls(drop_probability: float) -> type[BackpropLayer]:
             for node in self.nodes:
                 assert isinstance(node, TrainingModeNode)
                 node.training = training
+
+        def set_rng(self, rng: Pcg64Generator) -> None:
+            for node in self.nodes:
+                assert isinstance(node, TrainingModeNode)
+                node.rng = rng
 
     return DropoutLayer

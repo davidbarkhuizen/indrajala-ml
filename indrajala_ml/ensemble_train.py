@@ -7,7 +7,6 @@ import random
 from collections.abc import Callable, Iterable
 from typing import Any, cast
 
-from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.classifier_protocols import BinaryClassifier, BinaryClassifierClass
 from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
@@ -132,21 +131,16 @@ def _train_classifier_on_binary_dataset[ClassifierT: BinaryClassifier](
     The training both Pool workers share, given a binary dataset: one class's classifier_cls, with
     no state shared with any other worker.
 
-    An array classifier owns its generator, seeded from network_seed, this class's child of the
+    The classifier owns its generator, seeded from network_seed, this class's child of the
     ensemble's SeedSequence, so the sub-networks' streams are independent and one ensemble seed
-    reproduces them all. The per-node classifiers and the trainer's shuffle still draw from the
-    global random, so this process's RNGs are seeded first (seed_everything): forked workers
-    inherit the parent's states, which would give sub-networks identical initial weights.
-    seed=None reseeds from the OS, independent per process but not reproducible.
+    reproduces them all. The trainer's shuffle still draws from the global random, so this
+    process's RNGs are seeded first (seed_everything): forked workers inherit the parent's states,
+    which would give sub-networks identical batch orders. seed=None reseeds from the OS,
+    independent per process but not reproducible.
     """
 
     seed_everything(seed)
-    if isinstance(classifier_cls, type) and issubclass(classifier_cls, ArrayNetworkBase):
-        # until the RNG generators workplan's stage 4 gives the per-node classifiers a generator too
-        array_cls = cast(Any, classifier_cls)
-        student = cast(ClassifierT, array_cls.randomized(layer_sizes, dimension, input_bounds, seed=network_seed))
-    else:
-        student = classifier_cls.randomized(layer_sizes, dimension, input_bounds)
+    student = classifier_cls.randomized(layer_sizes, dimension, input_bounds, seed=network_seed)
     result = train_linear_classifier_network(student, binary_dataset, learning_rate=learning_rate, epochs=epochs)
 
     return label, _picklable_checkpoint(student.checkpoint()), result.diagnostic

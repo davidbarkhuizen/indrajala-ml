@@ -166,17 +166,16 @@ def test_the_parity_runs_really_exercise_relu_zeros_and_pooling_ties(backend: Ba
 
 def test_reproduces_the_pinned_pure_python_uci_digits_result(network_cls: NetworkCls):
 
-    # test_conv_multiclass_backprop_model.py pins best_training_accuracy 0.9875 at epoch index 10
-    # and test accuracy 0.925 for the pure-Python network. Same seeded initial weights (through a
-    # numpy network, whose snapshot restores into either backend), same training call
-    random.seed(0)
+    # test_conv_multiclass_backprop_model.py pins best_training_accuracy 1.0 at epoch index 13
+    # and test accuracy 0.925 for the pure-Python network from seed 0. Same seeded initial weights
+    # (through a numpy network, whose snapshot restores into either backend), same training call
 
     dataset = load_digits_dataset()
     subset = dataset[:200]
     train_data, test_data = split_train_test(subset, test_fraction=0.2, seed=1)
 
     reference = ConvMultiClassBackpropClassifierNetwork.randomized(
-        input_height=8, input_width=8, conv_specs=[ConvSpec(3, 4)], dense_layer_sizes=[16], class_count=10
+        input_height=8, input_width=8, conv_specs=[ConvSpec(3, 4)], dense_layer_sizes=[16], class_count=10, seed=0
     )
     bridge = ConvVectorizedMultiClassBackpropClassifierNetwork(8, 8, [ConvSpec(3, 4)], [16], class_count=10)
     copy_conv_network_weights_into_array_network(reference, bridge)
@@ -186,10 +185,10 @@ def test_reproduces_the_pinned_pure_python_uci_digits_result(network_cls: Networ
     result = train_linear_classifier_network(student, train_data, learning_rate=0.5, epochs=15)
 
     diagnostic = result.diagnostic
-    assert diagnostic.best_training_accuracy == 0.9875
-    assert diagnostic.best_epoch_index == 10
-    assert diagnostic.plateaued is True
-    assert diagnostic.converged is False
+    assert diagnostic.best_training_accuracy == 1.0
+    assert diagnostic.best_epoch_index == 13
+    assert diagnostic.plateaued is False
+    assert diagnostic.converged is True
     assert diagnostic.still_improving is False
 
     assert accuracy(student, test_data) == 0.925

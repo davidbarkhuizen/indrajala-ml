@@ -15,6 +15,7 @@ import pytest
 
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.ensemble_array_backprop_classifier_network import EnsembleArrayBackpropClassifierNetwork
 from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
 from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
@@ -35,6 +36,7 @@ from indrajala_ml.model.sequential_backprop_network import (
     SequentialMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.seeding import seed_everything
 from tests.saved_model_fixtures import CLASS_COUNT, FIXTURE_DIR, FIXTURES, MODEL_CLASSES, bits, fixture_class, outputs
 from tests.test_checkpoint import CONV, DENSE, IMPLEMENTATIONS, RULES, _network, _rows, _state_bits, _train
@@ -78,11 +80,12 @@ def _examples(network: Any, predict: str, count: int, seed: int) -> list[tuple[t
 
 
 def _seed_generator(network: Any, seed: int) -> None:
-    # an array network's own generator; a pure-Python one draws from random (seed_everything)
-    # until the RNG generators workplan's stage 4
+    # the network's own generator, which its dropout masks draw from
     if isinstance(network, ArrayNetworkBase):
         array_network = cast("ArrayNetworkBase[Any]", network)
         array_network.rng = array_network.backend.default_rng(seed)
+    elif isinstance(network, BackpropNetworkBase):
+        cast("BackpropNetworkBase[Any]", network).rng = default_rng(seed)
 
 
 def _trained(name: str) -> Any:
@@ -255,10 +258,8 @@ def test_every_saveable_network_resumes_training_by_bits(name: str, tmp_path: Pa
     assert _state_bits(loaded) == _state_bits(trained)
 
     examples = _examples(trained, FIXTURES[name].predict, 4, seed=3)
-    seed_everything(4)  # the pure-Python dropout masks
-    _seed_generator(trained, 4)  # the array networks'
+    _seed_generator(trained, 4)  # the dropout masks
     trained.learn_batch(0.1, examples)
-    seed_everything(4)
     _seed_generator(loaded, 4)
     loaded.learn_batch(0.1, examples)
     assert _state_bits(loaded) == _state_bits(trained)

@@ -89,10 +89,10 @@ def test_training_of_cardinality_two_linear_classifier_reduces_disagreement():
     l: float = 10.0
     bounds = square_bounds(l, dimension)
 
-    reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds)
+    reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, seed=1)
     training_data = random_alternating_training_data(400, reference)
 
-    student = LinearClassifierNetwork.randomized(cardinality, dimension, bounds)
+    student = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, seed=101)
 
     disagreement_before = class_balanced_disagreement_rate(reference, student, per_class_sample_count=500)
     train_linear_classifier_network(student, training_data, learning_rate=0.25, epochs=5)

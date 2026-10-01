@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import random
+from typing import Any
 
 from indrajala_ml.model.association_layer import AssociationLayer
 from indrajala_ml.model.bounds import half_widths as _half_widths
 from indrajala_ml.model.bounds import validate_input_bounds
 from indrajala_ml.model.state_layer import StateLayer
+from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
 
 class LinearClassifierNetwork:
@@ -41,6 +42,10 @@ class LinearClassifierNetwork:
         output_node = self.output_layer.nodes[0]
         output_node.update_input_weights([1.0 for _ in self.hidden_layer.nodes])
         output_node.threshold = -float(self.required_active - 1)
+
+        # the generator randomize() draws from: OS entropy until randomized(seed=, rng=) or an
+        # assignment sets it (the RNG generators workplan, D8, D9)
+        self.rng: Pcg64Generator = default_rng()
 
     def update_state_layer(self, x_: tuple[float, ...]) -> None:
         self.input_layer.update_state(x_)
@@ -83,9 +88,9 @@ class LinearClassifierNetwork:
         half_widths = self.half_widths()
         for node in self.hidden_layer.nodes:
             node.update_input_weights(
-                [random.uniform(-20.0 / half_width, 20.0 / half_width) for half_width in half_widths]
+                [self.rng.uniform(-20.0 / half_width, 20.0 / half_width) for half_width in half_widths]
             )
-            node.threshold = random.uniform(-5, 5)
+            node.threshold = self.rng.uniform(-5.0, 5.0)
 
     @classmethod
     def randomized(
@@ -94,8 +99,17 @@ class LinearClassifierNetwork:
         dimension: int,
         input_bounds: list[tuple[float, float]],
         required_active: int | None = None,
+        *,
+        seed: Any = None,
+        rng: Pcg64Generator | None = None,
     ) -> LinearClassifierNetwork:
+        # seed or rng as BackpropNetworkBase.randomized's
+        assert seed is None or rng is None, "randomized takes seed or rng, not both"
         network = cls(cardinality, dimension, input_bounds, required_active)
+        if rng is not None:
+            network.rng = rng
+        elif seed is not None:
+            network.rng = default_rng(seed)
         network.randomize()
         return network
 

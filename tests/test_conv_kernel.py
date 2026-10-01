@@ -1,9 +1,9 @@
 import math
-import random
 
 import pytest
 
 from indrajala_ml.model.conv_kernel import ConvKernel
+from indrajala_ml.pcg64 import default_rng
 from tests.helpers import LayerOptimizer, WeightSets, approx
 
 
@@ -24,9 +24,8 @@ def test_explicit_weights_must_match_fan_in():
 
 def test_randomize_fan_in_aware_draws_within_the_expected_limit():
 
-    random.seed(0)
     kernel = ConvKernel(kernel_size=3, in_channels=1)  # fan_in = 9
-    kernel.randomize_fan_in_aware()
+    kernel.randomize_fan_in_aware(default_rng(0))
 
     limit = 1.0 / math.sqrt(9)
     assert len(kernel.weights) == 9

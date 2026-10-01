@@ -22,6 +22,7 @@ from indrajala_ml.model.sequential_backprop_network import (
     SequentialMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.update_rules import SGD
+from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import GradientMismatch, check_gradients, squared_loss
 
 SOFTMAX = Dense(3, output=True, activation="softmax", loss="cross_entropy")
@@ -52,7 +53,7 @@ def _network(implementation: str, input_shape: InputShape, layers: list[LayerSpe
     if implementation == "python":
         cls = SequentialBackpropClassifierNetwork if single_output else SequentialMultiClassBackpropClassifierNetwork
         network = cls(input_shape, layers, SGD())
-        random.seed(3)
+        network.rng = default_rng(3)
     else:
         backend = NUMPY if implementation == "numpy" else RUST
         shape = "single_output" if single_output else "multiclass"
