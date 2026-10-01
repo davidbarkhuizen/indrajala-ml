@@ -150,6 +150,19 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer](
         if self.batch_norm_index is not None:
             refuse_single_example_network(self.layer_specs, self.batch_norm_index)
 
+    def learn(self, learning_rate: float, state: tuple[float, ...], category: Any) -> None:
+        # one example's step; category is a float or a class index, as _learn_batch's targets.
+        # Training mode for the forward pass only: a no-op but for dropout layers. A network with
+        # batch norm refuses (D4).
+        self._refuse_single_example()
+        self._set_training_mode(True)
+        try:
+            self._forward(state)
+        finally:
+            self._set_training_mode(False)
+        self._backward(category)
+        self._apply_gradients(learning_rate)
+
     def _learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]]) -> None:
         # forward, backward and accumulate per example, then one averaged update. A one-example
         # batch matches learn() bit for bit (tests/test_gradient_accumulation.py). The target is
