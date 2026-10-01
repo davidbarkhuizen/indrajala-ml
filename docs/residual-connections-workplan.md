@@ -1,6 +1,6 @@
 # Workplan: residual connections
 
-**Status: draft. Decisions D1-D10 are open; settle them before the plan's PR.**
+**Status: planned; decisions D1-D10 settled (2026-10-01). No stage started.**
 
 Roadmap step 3 ([primitives-roadmap.md](primitives-roadmap.md)). A residual block adds its input to
 its body's output, `out = x + F(x)` (He et al. 2016, "Identity Mappings in Deep Residual
@@ -20,26 +20,26 @@ parity tests, and a small depth study that shows what they buy.
   or three layers deep. Blocks with `Dense(linear), BatchNorm(relu)` inside them give it networks
   where it should matter.
 
-## Decisions (open)
+## Decisions (settled 2026-10-01)
 
-Each lists the options and a recommendation. They are the owner's to settle.
+Each lists the options considered and the owner's choice.
 
-- **D1. How a block is spelled in the specs.**
-  - (a) *Recommended.* A nested spec, `Residual(body=(Dense(64, "relu"), Dense(32, "linear",
+- **D1. How a block is spelled in the specs. Settled 2026-10-01: (a).**
+  - (a) *Chosen.* A nested spec, `Residual(body=(Dense(64, "relu"), Dense(32, "linear",
     bias=True)))`. A block can't be malformed, and it reads as PyTorch's and Keras's do. The
     builders flatten it into layers (The design, below), so specs and layers are no longer one to
     one: the flattening is one function, `expand_specs`, and messages name the spec path.
   - (b) Flat marker specs, `Fork()` ... `Add()`, one layer each. Specs and layers stay one to one,
     which every builder, `spec_shapes` and every "layer i" message assume today. Brackets can be
     unbalanced, so validation checks them.
-- **D2. Scope: dense blocks only.**
-  - (a) *Recommended.* Dense blocks only. Validation refuses a block among the conv and pool layers.
+- **D2. Scope: dense blocks only. Settled 2026-10-01: (a).**
+  - (a) *Chosen.* Dense blocks only. Validation refuses a block among the conv and pool layers.
   - (b) Conv blocks too. A conv block must keep its shape, and conv here is 'valid' padding only
     (`conv_layer.py`), so it needs 'same' padding (new geometry, im2col and crate ops in all three
     implementations) and a conv layer with a bias and no activation. That is a workplan of its own,
     as large as this one; it goes to next-steps.md under (a).
-- **D3. The block's form: the identity after the add.**
-  - (a) *Recommended.* `out = x + F(x)`, nothing after the add (He et al. 2016's pre-activation form,
+- **D3. The block's form: the identity after the add. Settled 2026-10-01: (a).**
+  - (a) *Chosen.* `out = x + F(x)`, nothing after the add (He et al. 2016's pre-activation form,
     and the transformer's). The body ends in an affine layer (D4), so `F` can be negative and the
     sum isn't pushed one way.
   - (b) `out = relu(x + F(x))` (He et al. 2015, the original ResNet). Activations are fused into
@@ -47,23 +47,24 @@ Each lists the options and a recommendation. They are the owner's to settle.
     longer an identity for the gradient.
   - (c) A body ending in any hidden layer (sigmoid or ReLU), `x + relu(W x + b)`. No new layer
     class, but ReLU's output is never negative, so every block can only increase the activations.
-- **D4. The affine layer at the end of a body: `Dense(n, activation="linear", bias=True)`.**
-  - (a) *Recommended.* A `bias` field on `Dense`, default `False`. Today's `Dense(n, "linear")` is
+- **D4. The affine layer at the end of a body: `Dense(n, activation="linear", bias=True)`.
+  Settled 2026-10-01: (a).**
+  - (a) *Chosen.* A `bias` field on `Dense`, default `False`. Today's `Dense(n, "linear")` is
     bias-free and comes before a `BatchNorm`, and stays so: saved files and validation don't change.
     `bias=True` is accepted only on a linear layer, and only as a body's last layer.
   - (b) A new activation literal, `"identity"` (affine), beside `"linear"` (bias-free).
   - In both, the affine layer is hidden only. It is also the output projection attention needs.
-- **D5. Identity shortcuts only.**
-  - (a) *Recommended.* The block's output size must equal its input size; validation refuses a
+- **D5. Identity shortcuts only. Settled 2026-10-01: (a).**
+  - (a) *Chosen.* The block's output size must equal its input size; validation refuses a
     mismatch. Every block in a transformer is like this.
   - (b) Projection shortcuts too (`x W_s + F(x)` when the sizes differ, He et al. 2015 option B):
     a trained shortcut layer, a second gradient sum, and its own parity tests. Next-steps under (a).
-- **D6. No nested blocks.**
-  - (a) *Recommended.* A body holds no `Residual`. Nothing on the roadmap needs nesting, and the
+- **D6. No nested blocks. Settled 2026-10-01: (a).**
+  - (a) *Chosen.* A body holds no `Residual`. Nothing on the roadmap needs nesting, and the
     refusal is easy to lift later: the design below nests without change.
   - (b) Allow nesting from the start, with tests for it.
-- **D7. Initialization.**
-  - (a) *Recommended.* Fan-in-aware for every weighted layer, as today, W then b in forward order. The
+- **D7. Initialization. Settled 2026-10-01: (a).**
+  - (a) *Chosen.* Fan-in-aware for every weighted layer, as today, W then b in forward order. The
     fork and add layers draw nothing, so adding a block never shifts a later layer's draws (the pool
     layer's rule).
   - (b) The body's last layer starts at zero, so each block starts as the identity (Goyal et al.
@@ -71,27 +72,32 @@ Each lists the options and a recommendation. They are the owner's to settle.
 - **D8. Rust: a dense layer's hidden delta when the next layer is a fork.** Today a Rust dense
   layer's hidden delta is one fused call that reads `next_layer.W` and `next_layer.delta`
   (`rust_array_layer.py`, `relu_rust_array_layer.py`, `dropout_rust_array_layer.py`, the sigmoid
-  branch of `batch_norm_rust_array_layer.py`). A fork has no `W`.
-  - (a) *Recommended.* Unfused ops that take a downstream array: `array_relu_mask` exists (batch norm
-    added it), and the crate gains `array_sigmoid_mask(downstream, a)` and
-    `array_dropout_mask(downstream, base_activation, mask, keep_probability, was_training)`. Before a
-    fork, the layer calls `next_layer.downstream_batch()` and the mask op. One more crossing per
-    block per step. Every other layer keeps its fused call.
-  - (b) Fused ops with the skip term, `layer_hidden_delta_batch_skip(W, delta, skip, a)` and its
-    ReLU and dropout siblings. One crossing fewer per block, three times the ops. Worth it only if
-    (a)'s A/B shows the crossing.
-- **D9. A depth study.**
-  - (a) *Recommended.* A stage that trains plain and residual networks at increasing depth on MNIST
-    and records the results in a script's docstring, as `batch_size_scaling.py` does. Its grid
-    (Stage 6) is a proposal to settle with this decision.
+  branch of `batch_norm_rust_array_layer.py`). A fork has no `W`. **Settled 2026-10-01: (b).**
+  - (a) Unfused ops that take a downstream array: `array_relu_mask` exists (batch norm added it),
+    and the crate gains `array_sigmoid_mask(downstream, a)` and `array_dropout_mask(downstream,
+    base_activation, mask, keep_probability, was_training)`. Before a fork, the layer calls
+    `next_layer.downstream_batch()` and the mask op. One more crossing per block per step.
+  - (b) *Chosen.* Fused ops with the skip term: `layer_hidden_delta_skip(W, delta, skip, a)`,
+    `layer_relu_hidden_delta_skip` and `layer_dropout_hidden_delta_skip`, each single and batch
+    (six ops), computing `(delta @ W + skip) * f'(a)` in one call. Before a fork, the layer reads
+    the body's first layer's `W` and `delta` and the add's delta through the fork (`fork.body_first`,
+    `fork.add`): a body's first layer always has a `W` and a delta (a dense, linear or affine
+    layer). Every layer not before a fork keeps its fused call, so existing networks' arithmetic
+    doesn't change.
+- **D9. A depth study. Settled 2026-10-01: (a), with Stage 6's grid as proposed.**
+  - (a) *Chosen.* A stage that trains plain and residual networks at increasing depth on MNIST
+    and records the results in a script's docstring, as `batch_size_scaling.py` does. Its grid is
+    Stage 6's.
   - (b) No study in this plan; next-steps.
-- **D10. Sequential only, no preset class.** (a) *Recommended:* residual networks are built with
-  `SequentialArrayNetwork` and the pure-Python `Sequential*` networks; no named class, so no new
-  legacy loader or fixture class. (b) A named preset per implementation.
+- **D10. Sequential only, no preset class. Settled 2026-10-01: (a).**
+  - (a) *Chosen.* Residual networks are built with `SequentialArrayNetwork` and the pure-Python
+    `Sequential*` networks; no named class, so no new legacy loader or fixture class. The study
+    builds its specs with a helper in its own script.
+  - (b) A named preset per implementation.
 
 ## The design
 
-Under the recommended decisions.
+Under the settled decisions.
 
 ### Specs
 
@@ -195,7 +201,7 @@ One PR per stage; a crate stage is a crate PR, then a "Bump rust/" PR here. Ever
 
 ### Stage 0: the plan and the README section
 
-This workplan with D1-D10 settled, and the README's "Residual connections" section with the exact
+This workplan (D1-D10 settled), then the README's "Residual connections" section with the exact
 forward and backward expressions. Docs only.
 
 ### Stage 1: specs
@@ -239,12 +245,17 @@ Pure Python is parity-only: no A/B.
 
 ### Stage 4: Rust
 
-1. **Crate PR.** `affine_forward(w, x, b)` and `affine_forward_batch`, `array_sigmoid_mask`,
-   `array_dropout_mask` (D8), each equal to its numpy expression by bits in op tests; the type stub;
-   `cargo fmt` / `clippy`.
+1. **Crate PR.** `affine_forward(w, x, b)` and `affine_forward_batch`; the six skip ops (D8),
+   `layer_hidden_delta_skip`, `layer_relu_hidden_delta_skip` and `layer_dropout_hidden_delta_skip`,
+   single and batch, sharing the existing fused ops' downstream loop with the skip added before the
+   activation's derivative, and tested as those ops are (by bits against the crate's own unfused
+   `layer_downstream*` plus the add and mask). The type stub; `cargo fmt` / `clippy`.
 2. **Bump rust/.** `AffineRustArrayLayer` (a `RustArrayLayer`), `ForkRustArrayLayer`,
-   `AddRustArrayLayer` (the add through `Array.__add__`); the dense, dropout and batch-norm layers
-   take the unfused path when the next layer is a fork.
+   `AddRustArrayLayer` (the add through `Array.__add__`); the sigmoid, ReLU and dropout layers and
+   batch norm's sigmoid branch call the skip ops when the next layer is a fork. The Rust fork
+   computes its summed delta only when `downstream*()` is asked for it (by an add before it, or
+   batch norm's ReLU branch, which already takes a downstream), so a fused predecessor pays no
+   extra crossing.
 3. Parity with numpy after 50 steps; the gradient check and identity-block tests on Rust.
 4. **A/B**: the Rust dense hidden-delta methods change, so `ab.py run --bench
    prepared_dataset_timing`, both `.so` hashes differing in the header. Existing networks never meet
@@ -263,7 +274,7 @@ Pure Python is parity-only: no A/B.
 
 ### Stage 6: the depth study (D9)
 
-A proposal to settle with D9: MNIST, ReLU width 64, depths 2, 4, 8 and 16 hidden layers, plain
+The grid (settled with D9): MNIST, ReLU width 64, depths 2, 4, 8 and 16 hidden layers, plain
 against residual (each block `Dense(64, relu), Dense(64, linear, bias=True)`), with and without
 batch norm in the blocks; SGD with momentum 0.9 at one learning rate tuned on the shallowest plain
 network; 3 seeds, 3 epochs; numpy. Recorded per cell: test accuracy, and the gradient's norm at the
