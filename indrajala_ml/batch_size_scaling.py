@@ -259,14 +259,15 @@ def train_epoch(
     batch_size: int,
     learning_rate: float | Callable[[int], float],
     first_step: int,
+    rng: random.Random | None = None,
 ) -> tuple[int, float]:
     """
-    One epoch of the trainer's loop: reshuffle (from the caller's random state), then one
+    One epoch of the trainer's loop: reshuffle (from rng, seeded from OS entropy if None), then one
     learn_batch per batch. Returns (steps taken, seconds spent in learn_batch calls); the
     shuffle and batch slicing are outside the timed span.
     """
     epoch_data = list(train_data)
-    random.shuffle(epoch_data)
+    (random.Random() if rng is None else rng).shuffle(epoch_data)
     batches = [epoch_data[i : i + batch_size] for i in range(0, len(epoch_data), batch_size)]
 
     step_seconds = 0.0
@@ -295,14 +296,14 @@ def train_and_evaluate(
     One run: test accuracy after every epoch, steps per epoch and step-loop seconds per epoch.
     """
     network = initial_network(backend, momentum, seed, architecture, group_size)
-    random.seed(seed)  # the shuffle order
+    shuffle_rng = random.Random(seed)  # the shuffle order
     schedule = learning_rate_schedule(rate, warmup_steps(warmup_epochs, len(train_data), batch_size))
 
     test_accuracies: list[float] = []
     step_seconds: list[float] = []
     step = 0
     for _ in range(epochs):
-        steps, seconds = train_epoch(network, train_data, batch_size, schedule, step)
+        steps, seconds = train_epoch(network, train_data, batch_size, schedule, step, shuffle_rng)
         step += steps
         step_seconds.append(seconds)
         test_accuracies.append(accuracy(network, test_data))

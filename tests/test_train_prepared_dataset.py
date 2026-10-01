@@ -100,10 +100,10 @@ def test_single_example_visits_the_same_examples_in_the_same_order():
 def test_mini_batch_makes_the_same_batches_for_the_same_seed(reshuffle_each_epoch: bool):
     rows = _rows()
     via_tuples, via_rows = _TupleRecorder(), _RowRecorder()
-    random.seed(11)
-    train_backprop_network_mini_batch(via_tuples, rows, 5, epochs=3, reshuffle_each_epoch=reshuffle_each_epoch)
-    random.seed(11)
-    train_backprop_network_mini_batch(via_rows, rows, 5, epochs=3, reshuffle_each_epoch=reshuffle_each_epoch)
+    for recorder in (via_tuples, via_rows):
+        train_backprop_network_mini_batch(
+            recorder, rows, 5, epochs=3, reshuffle_each_epoch=reshuffle_each_epoch, rng=random.Random(11)
+        )
     assert via_rows.batches == via_tuples.batches
     assert len(via_rows.batches) == 3 * 5  # the final undersized batch of 3 is kept
     assert (via_rows.batches[:5] == [rows[i : i + 5] for i in range(0, 23, 5)]) is not reshuffle_each_epoch
@@ -123,11 +123,11 @@ def test_a_caller_prepared_dataset_trains_exactly_as_the_tuple_list():
     rows = _rows()
     via_tuples, via_prepared = _numpy_network(), _numpy_network()
 
-    random.seed(5)
-    tuple_result = train_backprop_network_mini_batch(via_tuples, rows, 4, learning_rate=0.5, epochs=4)
-    random.seed(5)
+    tuple_result = train_backprop_network_mini_batch(
+        via_tuples, rows, 4, learning_rate=0.5, epochs=4, rng=random.Random(5)
+    )
     prepared_result = train_backprop_network_mini_batch(
-        via_prepared, PreparedDataset.from_rows(rows, "numpy"), 4, learning_rate=0.5, epochs=4
+        via_prepared, PreparedDataset.from_rows(rows, "numpy"), 4, learning_rate=0.5, epochs=4, rng=random.Random(5)
     )
     assert _weights(via_prepared) == _weights(via_tuples)
     assert prepared_result.diagnostic.epoch_training_accuracies == tuple_result.diagnostic.epoch_training_accuracies
@@ -143,10 +143,12 @@ def test_a_loader_prepared_mnist_dataset_trains_exactly_as_the_loaded_tuples():
     second = RustArrayMultiClassBackpropClassifierNetwork([8], 784, 10)
     second.restore(first.snapshot())
 
-    random.seed(2)
-    train_backprop_network_mini_batch(first, load_mnist_dataset(MNIST_TRAIN, limit=64), 16, epochs=2)
-    random.seed(2)
-    train_backprop_network_mini_batch(second, prepared_mnist(MNIST_TRAIN, "rust", limit=64), 16, epochs=2)
+    train_backprop_network_mini_batch(
+        first, load_mnist_dataset(MNIST_TRAIN, limit=64), 16, epochs=2, rng=random.Random(2)
+    )
+    train_backprop_network_mini_batch(
+        second, prepared_mnist(MNIST_TRAIN, "rust", limit=64), 16, epochs=2, rng=random.Random(2)
+    )
     assert _weights(second) == _weights(first)
 
 

@@ -110,13 +110,13 @@ def test_train_epoch_takes_the_same_steps_as_the_trainer(mnist_subset: tuple[lis
     schedule = bss.learning_rate_schedule(2.0, 3)
 
     trainer_network = bss.initial_network("numpy", 0.9, seed=2)  # a seed whose one epoch improves
-    random.seed(11)
-    result = train_backprop_network_mini_batch(trainer_network, train_data, 32, learning_rate=schedule, epochs=1)
+    result = train_backprop_network_mini_batch(
+        trainer_network, train_data, 32, learning_rate=schedule, epochs=1, rng=random.Random(11)
+    )
     assert result.diagnostic.best_epoch_index == 0
 
     study_network = bss.initial_network("numpy", 0.9, seed=2)
-    random.seed(11)
-    steps, step_seconds = bss.train_epoch(study_network, train_data, 32, schedule, first_step=0)
+    steps, step_seconds = bss.train_epoch(study_network, train_data, 32, schedule, first_step=0, rng=random.Random(11))
 
     assert steps == 7  # ceil(200 / 32)
     assert step_seconds > 0.0

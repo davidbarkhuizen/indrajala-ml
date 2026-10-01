@@ -18,7 +18,7 @@ from indrajala_ml.model.layer_specs import Conv, Dense, InputShape, LayerSpec, P
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from indrajala_ml.seeding import seed_everything
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import train_backprop_network_mini_batch
 
 RULES: list[UpdateRule] = [SGD(), Momentum(0.9), Adam(), WeightDecay(0.01)]
@@ -36,9 +36,10 @@ def _network(implementation: str, input_shape: InputShape, layers: list[LayerSpe
 
 
 def _seeded(network: Any, seed: int) -> Any:
-    # an array network's own generator, seeded; a pure-Python one draws from random
-    # (seed_everything) until the RNG generators workplan's stage 4
-    if not isinstance(network, SequentialMultiClassBackpropClassifierNetwork):
+    # the network's own generator, seeded
+    if isinstance(network, SequentialMultiClassBackpropClassifierNetwork):
+        network.rng = default_rng(seed)
+    else:
         network.rng = network.backend.default_rng(seed)
     return network
 
@@ -88,7 +89,6 @@ def test_a_restored_checkpoint_resumes_training_by_bits(
     input_shape, layers = architecture
     rows = _rows(input_shape, 8, seed=1)
 
-    seed_everything(2)
     trained = _seeded(_network(implementation, input_shape, layers, rule), 2)
     trained.randomize()
     _train(trained, rows)
@@ -97,8 +97,9 @@ def test_a_restored_checkpoint_resumes_training_by_bits(
         checkpoint = pickle.loads(pickle.dumps(_picklable_checkpoint(checkpoint)))
     _train(trained, rows)
 
-    seed_everything(3)  # other weights, overwritten by the checkpoint
-    resumed = _seeded(_network(implementation, input_shape, layers, rule), 3)
+    resumed = _seeded(  # other weights, overwritten by the checkpoint
+        _network(implementation, input_shape, layers, rule), 3
+    )
     resumed.randomize()
     resumed.restore_checkpoint(checkpoint)
     _train(resumed, rows)
@@ -112,7 +113,6 @@ def test_a_restored_checkpoint_resumes_training_by_bits(
 def test_a_checkpoint_is_a_copy(implementation: str, rule: UpdateRule):
     input_shape, layers = DENSE
     rows = _rows(input_shape, 8, seed=1)
-    seed_everything(2)
     network = _seeded(_network(implementation, input_shape, layers, rule), 2)
     network.randomize()
     _train(network, rows)
@@ -150,16 +150,18 @@ def test_the_pocket_restores_the_best_epochs_optimizer_state():
         network.randomize()
         return network
 
-    seed_everything(11)
     pocketed = student()
-    result = train_backprop_network_mini_batch(pocketed, rows, batch_size, learning_rate=0.5, epochs=epochs)
+    result = train_backprop_network_mini_batch(
+        pocketed, rows, batch_size, learning_rate=0.5, epochs=epochs, rng=random.Random(11)
+    )
     assert result.diagnostic is not None
     best_epoch_index = result.diagnostic.best_epoch_index
     assert 0 <= best_epoch_index < epochs - 1, f"this case must pocket an earlier epoch; got {best_epoch_index}"
     assert pocketed.optimizer.t == (best_epoch_index + 1) * batches_per_epoch
 
     # the same run stopped after the best epoch: the same draws, so the same state
-    seed_everything(11)
     stopped = student()
-    train_backprop_network_mini_batch(stopped, rows, batch_size, learning_rate=0.5, epochs=best_epoch_index + 1)
+    train_backprop_network_mini_batch(
+        stopped, rows, batch_size, learning_rate=0.5, epochs=best_epoch_index + 1, rng=random.Random(11)
+    )
     assert _state_bits(pocketed) == _state_bits(stopped)

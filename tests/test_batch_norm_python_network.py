@@ -457,8 +457,7 @@ def test_train_drops_a_final_batch_of_one_for_batch_norm():
         learn_batch(learning_rate, batch)
 
     network.learn_batch = record
-    random.seed(0)
-    train_backprop_network_mini_batch(network, _rows(7), 3, epochs=2)
+    train_backprop_network_mini_batch(network, _rows(7), 3, epochs=2, rng=random.Random(0))
 
     assert sizes == [3, 3, 3, 3]
 

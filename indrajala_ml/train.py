@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from random import shuffle
+from random import Random
 
 from indrajala_ml.evaluate import class_balanced_disagreement_rate, sample_class_balanced_states
 from indrajala_ml.model.classifier_protocols import (
@@ -17,17 +17,19 @@ from indrajala_ml.prepared_dataset import PreparedDataset
 
 
 def random_alternating_training_data(
-    size: int, classifier: TargetClassifier[float], max_attempts: int = 100_000
+    size: int, classifier: TargetClassifier[float], max_attempts: int = 100_000, rng: Random | None = None
 ) -> list[tuple[tuple[float, ...], float]]:
 
     k: int = size // 2
 
     # positive states come from a tight box around the positive region when computable (see
-    # evaluate.sample_class_balanced_states)
-    positive_states, negative_states = sample_class_balanced_states(classifier, k, max_attempts)
+    # evaluate.sample_class_balanced_states). The states and the shuffle draw from rng, OS
+    # entropy if None (the RNG generators workplan, D6, D9)
+    rng = Random() if rng is None else rng
+    positive_states, negative_states = sample_class_balanced_states(classifier, k, max_attempts, rng)
 
     mixed = [(state, 1.0) for state in positive_states] + [(state, 0.0) for state in negative_states]
-    shuffle(mixed)
+    rng.shuffle(mixed)
     return mixed
 
 
@@ -40,19 +42,23 @@ def reachable_reference_and_training_data(
     max_attempts: int = 20_000,
     is_valid: Callable[[LinearClassifierNetwork], bool] | None = None,
     rng: Pcg64Generator | None = None,
+    data_rng: Random | None = None,
 ) -> tuple[LinearClassifierNetwork, list[tuple[tuple[float, ...], float]]]:
 
     # higher cardinality shrinks the positive region, so a random reference can make one class
     # unreachable: draw again. is_valid (cheap, e.g. "region must be bounded") runs before the
-    # reachability sampling. Every reference draws from rng, OS entropy if None; the training
-    # data from the global random
+    # reachability sampling. Every reference draws from rng, the training data from data_rng,
+    # each OS entropy if None
     rng = default_rng() if rng is None else rng
+    data_rng = Random() if data_rng is None else data_rng
     for _ in range(regeneration_attempts):
         reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, rng=rng)
         if is_valid is not None and not is_valid(reference):
             continue
         try:
-            return reference, random_alternating_training_data(training_set_size, reference, max_attempts=max_attempts)
+            return reference, random_alternating_training_data(
+                training_set_size, reference, max_attempts=max_attempts, rng=data_rng
+            )
         except RuntimeError:
             continue
 
@@ -144,6 +150,7 @@ def train_linear_classifier_network[L](
     learning_rate: float | Callable[[int], float] = 0.25,
     epochs: int = 1,
     reference_classifier: TargetClassifier[float] | None = None,
+    rng: Random | None = None,
 ) -> ConvergenceSeries:
     """
     Trains student in place over training_data for the given number of epochs.
@@ -163,16 +170,18 @@ def train_linear_classifier_network[L](
     was still improving.
 
     With reference_classifier, the series holds the disagreement rate against it before training and
-    after every step, for plotting: the trajectory actually taken, not the pocketed student.
+    after every step, for plotting: the trajectory actually taken, not the pocketed student. Its
+    samples draw from rng, seeded from OS entropy if None (the RNG generators workplan, D6, D9).
     """
 
     assert len(training_data) >= 1, "training_data must not be empty"
+    rng = Random() if rng is None else rng
 
     iterations: int = 0
     convergence: list[tuple[int, float]] = []
 
     if reference_classifier:
-        convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student)))
+        convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student, rng=rng)))
 
     prepared = _prepared_for(student, training_data)
 
@@ -183,7 +192,7 @@ def train_linear_classifier_network[L](
 
     def record_disagreement() -> None:
         if reference_classifier:
-            convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student)))
+            convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student, rng=rng)))
 
     # one pass over the examples: row indices on the prepared path, (state, category) tuples
     # otherwise; each step's rate is read against the iterations before it
@@ -261,6 +270,7 @@ def train_backprop_network_mini_batch[L](
     epochs: int = 1,
     reference_classifier: TargetClassifier[float] | None = None,
     reshuffle_each_epoch: bool = True,
+    rng: Random | None = None,
 ) -> ConvergenceSeries:
     """
     train_linear_classifier_network with mini-batches, for gradient-based students (any network with
@@ -270,16 +280,19 @@ def train_backprop_network_mini_batch[L](
     count batches.
 
     Reshuffles training_data every epoch by default (reshuffle_each_epoch=False keeps the batches
-    fixed). A final short batch is kept, except that a final batch of one is dropped for a network
-    with batch norm, which can't train on one example (the batch-norm workplan, D4), and a batch
-    size that leaves a batch norm's ghost group one example is refused before training (D6).
-    training_data may be a PreparedDataset.
+    fixed), drawing from rng, seeded from OS entropy if None (the RNG generators workplan, D6, D9);
+    random.Random(s) gives the order random.seed(s) gave before. With reference_classifier, its
+    disagreement samples draw from rng too. A final short batch is kept, except that a final batch
+    of one is dropped for a network with batch norm, which can't train on one example (the
+    batch-norm workplan, D4), and a batch size that leaves a batch norm's ghost group one example
+    is refused before training (D6). training_data may be a PreparedDataset.
 
     Otherwise as train_linear_classifier_network: the pocket checkpoint of the best epoch, and the
     TrainingDiagnostic/ConvergenceSeries return.
     """
 
     assert len(training_data) >= 1, "training_data must not be empty"
+    rng = Random() if rng is None else rng
     drop_single = _has_batch_norm(student)
     if drop_single:
         _refuse_single_example_groups(student, len(training_data), batch_size)
@@ -288,7 +301,7 @@ def train_backprop_network_mini_batch[L](
     convergence: list[tuple[int, float]] = []
 
     if reference_classifier:
-        convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student)))
+        convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student, rng=rng)))
 
     prepared = _prepared_for(student, training_data)
 
@@ -299,14 +312,14 @@ def train_backprop_network_mini_batch[L](
 
     def record_disagreement() -> None:
         if reference_classifier:
-            convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student)))
+            convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student, rng=rng)))
 
     # the prepared path shuffles row indices in place of the tuples: shuffle draws depend only
     # on the list's length, so a seed gives the same permutation, and the same batches, either way
     def epoch_order[T](examples: Sequence[T]) -> list[T]:
         epoch_data = list(examples)
         if reshuffle_each_epoch:
-            shuffle(epoch_data)
+            rng.shuffle(epoch_data)
         return epoch_data
 
     def learn_epoch() -> None:

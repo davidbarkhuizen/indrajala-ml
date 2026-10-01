@@ -114,7 +114,6 @@ def test_train_mini_batch_works_with_multiclass_network_via_duck_typing():
 
     # one point per quadrant, seeded, with enough epochs to converge (pocket tracking means
     # "some weight moved" isn't guaranteed)
-    random.seed(0)  # the batch order
 
     class_count = 3
     training_data = [
@@ -127,6 +126,8 @@ def test_train_mini_batch_works_with_multiclass_network_via_duck_typing():
         [4], 2, square_bounds(10.0), class_count=class_count, seed=0
     )
 
-    result = train_backprop_network_mini_batch(student, training_data, batch_size=2, learning_rate=0.5, epochs=200)
+    result = train_backprop_network_mini_batch(
+        student, training_data, batch_size=2, learning_rate=0.5, epochs=200, rng=random.Random(0)
+    )
 
     assert result.diagnostic.converged

@@ -31,7 +31,6 @@ Each worker also counts the rows whose batched prediction differs from the per-r
 
 import argparse
 import json
-import random
 import statistics
 import sys
 import time
@@ -40,7 +39,7 @@ from typing import Any
 
 import numpy as np
 from process_runs import interleaved_runs, run_json_worker
-from seeded_weights import seeded_randomized
+from seeded_weights import seeded_randomized, seeded_shuffle
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import ARCHITECTURES
@@ -128,13 +127,16 @@ def _median_of_runs[T](fn: Callable[[], T]) -> tuple[float, T]:
 
 def _epoch(name: str, backend: str, prepared: PreparedDataset, single: bool) -> float:
     network = _network(name, backend)
-    random.seed(SEED)
     if single:
+        shuffle = seeded_shuffle(train_linear_classifier_network, SEED)
         return _timed(
-            lambda: train_linear_classifier_network(network, prepared, learning_rate=LEARNING_RATE, epochs=1)
+            lambda: train_linear_classifier_network(network, prepared, learning_rate=LEARNING_RATE, epochs=1, **shuffle)
         )[0]
+    shuffle = seeded_shuffle(train_backprop_network_mini_batch, SEED)
     return _timed(
-        lambda: train_backprop_network_mini_batch(network, prepared, BATCH_SIZE, learning_rate=LEARNING_RATE, epochs=1)
+        lambda: train_backprop_network_mini_batch(
+            network, prepared, BATCH_SIZE, learning_rate=LEARNING_RATE, epochs=1, **shuffle
+        )
     )[0]
 
 

@@ -88,7 +88,6 @@ def train_once(
     """(network, ConvergenceSeries, elapsed seconds) for one timed training run from snapshot."""
     network = BACKENDS[backend](side, side, conv_specs, DENSE_LAYER_SIZES, CLASS_COUNT)
     network.restore(snapshot)
-    random.seed(SEED)  # the mini-batch trainer's shuffle order, identical for every run
     if trainer == TRAINERS[0]:
         result, elapsed = timed_train(network, train_data, learning_rate=LEARNING_RATE, epochs=epochs)
     else:
@@ -99,6 +98,7 @@ def train_once(
             batch_size=BATCH_SIZE,
             learning_rate=LEARNING_RATE,
             epochs=epochs,
+            rng=random.Random(SEED),  # the shuffle order, identical for every run
         )
     return network, result, elapsed
 

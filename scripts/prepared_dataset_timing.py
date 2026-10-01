@@ -14,7 +14,7 @@ PYTHONPATH (the output starts with the trainers module it imported):
 
 --epochs trains each run for more epochs (one accuracy pass per epoch, plus one before), as a
 longer run does; the batched accuracy pass's A/B used it. Configs, each one epoch by default,
-from numpy-drawn seed-0 weights with random.seed(0):
+from numpy-drawn seed-0 weights, the shuffle seeded 0 (seeded_weights.seeded_shuffle):
 - dense B=32 / dense single: 784 -> 30 -> 10 on full MNIST (60000 rows), learning rate 0.5;
 - conv B=32 / conv single: the conv demo's "conv" network (ConvSpec(3, 8), dense 32) on its
   2000-row MNIST subset, learning rate 0.5;
@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import random
 import statistics
 import sys
 import time
@@ -45,7 +44,7 @@ from typing import TYPE_CHECKING, Any
 import indrajala_math_rust as pa
 import numpy as np
 from process_runs import interleaved_runs, run_json_worker
-from seeded_weights import seeded_randomized
+from seeded_weights import seeded_randomized, seeded_shuffle
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml import train
@@ -132,12 +131,15 @@ def _network(config: str, backend: str) -> Network:
 
 
 def _train_epoch(config: str, network: Network, data: list[Example[int]] | PreparedDataset) -> float:
-    random.seed(SEED)
+    trainer = train_linear_classifier_network if config.endswith("single") else train_backprop_network_mini_batch
+    shuffle = seeded_shuffle(trainer, SEED)
     start = time.perf_counter()
     if config.endswith("single"):
-        train_linear_classifier_network(network, data, learning_rate=LEARNING_RATE, epochs=EPOCHS)
+        train_linear_classifier_network(network, data, learning_rate=LEARNING_RATE, epochs=EPOCHS, **shuffle)
     else:
-        train_backprop_network_mini_batch(network, data, BATCH_SIZE, learning_rate=LEARNING_RATE, epochs=EPOCHS)
+        train_backprop_network_mini_batch(
+            network, data, BATCH_SIZE, learning_rate=LEARNING_RATE, epochs=EPOCHS, **shuffle
+        )
     return time.perf_counter() - start
 
 

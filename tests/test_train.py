@@ -4,6 +4,7 @@ from collections.abc import Sequence
 import pytest
 
 from indrajala_ml.geometry import is_positive_region_bounded, square_bounds
+from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.classifier_protocols import Example, StateClassifier
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.pcg64 import default_rng
@@ -11,6 +12,7 @@ from indrajala_ml.targets import XORTarget
 from indrajala_ml.train import (
     random_alternating_training_data,
     reachable_reference_and_training_data,
+    train_backprop_network_mini_batch,
     train_linear_classifier_network,
 )
 from tests.helpers import approx, classifier_with_tiny_bounded_region, unreachable_class_classifier
@@ -108,13 +110,12 @@ def test_reachable_reference_and_training_data_raises_when_no_reference_is_ever_
 def test_train_linear_classifier_network_keeps_the_best_epoch_not_the_last():
 
     # measured per-epoch accuracy without pocket tracking, from weight seed 0: 0.826, 0.745,
-    # 0.870, 0.816, 0.814, 0.850, 0.835, 0.842, 0.808, 0.827, so the best epoch (2) isn't the last.
-    # The training data comes from the global random
-    random.seed(0)
+    # 0.870, 0.816, 0.814, 0.850, 0.835, 0.842, 0.808, 0.827, so the best epoch (2) isn't the last,
+    # on training data from random.Random(0)
 
     # XOR isn't representable by an AND/OR/k-of-n gate over cardinality=3 half-planes
     bounds = square_bounds(10.0)
-    training_data = random_alternating_training_data(1000, XORTarget(bounds))
+    training_data = random_alternating_training_data(1000, XORTarget(bounds), rng=random.Random(0))
 
     student = LinearClassifierNetwork.randomized(3, 2, bounds, required_active=2, seed=0)
     result = train_linear_classifier_network(student, training_data, learning_rate=0.25, epochs=10)
@@ -137,12 +138,11 @@ def test_train_linear_classifier_network_pocket_tracking_is_a_no_op_when_it_conv
 
     # when training does converge, the best epoch and the last epoch coincide, so pocket
     # tracking shouldn't change the well-established convergence behavior at all. The reference
-    # and the student draw from different seeds, so the student doesn't start as the reference;
-    # the training data comes from the global random
-    random.seed(1)
-
+    # and the student draw from different seeds, so the student doesn't start as the reference
     bounds = square_bounds(10.0)
-    _reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 400, rng=default_rng(1))
+    _reference, training_data = reachable_reference_and_training_data(
+        1, 2, bounds, 400, rng=default_rng(1), data_rng=random.Random(1)
+    )
     student = LinearClassifierNetwork.randomized(1, 2, bounds, seed=101)
 
     result = train_linear_classifier_network(student, training_data, learning_rate=0.25, epochs=5)
@@ -160,10 +160,10 @@ def test_train_linear_classifier_network_pocket_tracking_is_a_no_op_when_it_conv
 
 def test_train_linear_classifier_network_diagnostic_reports_converged():
 
-    random.seed(1)
-
     bounds = square_bounds(10.0)
-    _reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 400, rng=default_rng(1))
+    _reference, training_data = reachable_reference_and_training_data(
+        1, 2, bounds, 400, rng=default_rng(1), data_rng=random.Random(1)
+    )
     student = LinearClassifierNetwork.randomized(1, 2, bounds, seed=101)
 
     # the same setup as the "still improving" case above, just given enough epochs to
@@ -190,10 +190,10 @@ def test_train_linear_classifier_network_rejects_empty_training_data():
 
 def test_train_linear_classifier_network_calls_a_schedule_with_increasing_step_indices():
 
-    random.seed(0)
-
     bounds = square_bounds(10.0)
-    _reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 5, rng=default_rng(0))
+    _reference, training_data = reachable_reference_and_training_data(
+        1, 2, bounds, 5, rng=default_rng(0), data_rng=random.Random(0)
+    )
     student = LinearClassifierNetwork.randomized(1, 2, bounds, seed=100)
 
     calls: list[int] = []
@@ -206,3 +206,19 @@ def test_train_linear_classifier_network_calls_a_schedule_with_increasing_step_i
     train_linear_classifier_network(student, training_data, learning_rate=recording_schedule, epochs=epochs)
 
     assert calls == list(range(len(training_data) * epochs))
+
+
+def test_training_and_its_data_leave_the_global_random_untouched():
+    # every draw comes from a passed random.Random or one seeded from OS entropy (the RNG
+    # generators workplan, D4, D6, D9), never the global stream a caller may have seeded
+    random.seed(7)
+    before = random.getstate()
+
+    bounds = square_bounds(10.0)
+    reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 40)
+    linear = LinearClassifierNetwork.randomized(1, 2, bounds)
+    train_linear_classifier_network(linear, training_data, epochs=2, reference_classifier=reference)
+    backprop = BackpropClassifierNetwork.randomized([3], 2, bounds)
+    train_backprop_network_mini_batch(backprop, training_data, 8, epochs=2, reference_classifier=reference)
+
+    assert random.getstate() == before
