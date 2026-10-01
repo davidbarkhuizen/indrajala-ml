@@ -2,7 +2,8 @@
 
 A workplan is deleted once its last stage merges. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md) and
+[rng-generators-workplan.md](rng-generators-workplan.md). The order
 of the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
@@ -45,7 +46,8 @@ normalization) and [measurement.md](measurement.md). The batch-size studies' fin
 - **Weight decay with momentum or Adam** needs a published form chosen and cited first (README,
   Update rules).
 - **Saving RNG state** so a dropout run resumes exactly. This waits on explicit generator objects
-  ([rng-audit.md](rng-audit.md), Open work).
+  ([rng-audit.md](rng-audit.md), Open work), planned in
+  [rng-generators-workplan.md](rng-generators-workplan.md).
 
 Still out of scope, for later workplans too (batch norm's included):
 
