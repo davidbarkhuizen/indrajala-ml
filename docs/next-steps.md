@@ -2,7 +2,8 @@
 
 A workplan is deleted once its last stage merges. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md) and
+[conv-batch-norm-scaling-workplan.md](conv-batch-norm-scaling-workplan.md). The order
 of the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
@@ -54,8 +55,13 @@ Still out of scope, for later workplans too (batch norm's included):
 ## From batch norm
 
 - **The study rerun.** Rerun the conv batch-size cells that failed (B = 512, momentum 0.0 and
-  0.9) with batch norm, and with ghost groups of 32. That is an experiment with its own plan, and
-  the next step in [primitives-roadmap.md](primitives-roadmap.md).
+  0.9) with batch norm, and with ghost groups of 32: under way in
+  [conv-batch-norm-scaling-workplan.md](conv-batch-norm-scaling-workplan.md).
+- **The dense momentum 0.9 rerun.** The dense batch-size study's momentum 0.9 cells with warmup,
+  including its finding that the rule holds to B = 512, were measured with eq. (10) momentum
+  without the momentum correction, and are pending a rerun on eq. (9) (`batch_size_scaling.py`'s
+  docstring). The sweep script runs it as it is: `scaling --lr32 0.9=0.25` at the dense study's
+  grid. Left out of the conv batch-norm plan (its D5).
 - **Batch norm under dropout or after pool**, if a use appears. Neither passes
   `validate_layer_specs` today.
 - **Folding batch norm into the preceding weights** for inference: a speed change, measured.
