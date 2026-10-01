@@ -14,6 +14,7 @@ from indrajala_ml.model.backprop_layer import NodeLayer
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights
 from indrajala_ml.model.layer_specs import refuse_single_example
+from indrajala_ml.pcg64 import Pcg64Generator
 
 
 class LinearNode(BackpropNode):
@@ -57,11 +58,11 @@ class LinearLayer(NodeLayer):
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)
 
-    def randomize_fan_in_aware(self) -> None:
+    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
         # per node, weights only: no bias to draw
         fan_in = len(self.input_layer.nodes)
         for node in self.nodes:
-            node.update_input_weights(fan_in_aware_weights(fan_in))
+            node.update_input_weights(fan_in_aware_weights(rng, fan_in))
 
     def snapshot_state(self) -> list[tuple[list[float]]]:
         return [(list(node.input_node_weights),) for node in self.nodes]

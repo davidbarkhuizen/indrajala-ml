@@ -12,7 +12,6 @@ from indrajala_ml.model.array_protocols import (
     ArrayOptimizer,
     BackendArray,
     BiasFreeArrayLayer,
-    GeneratorLayer,
     RunningStateLayer,
     TrainedArrayLayer,
     TrainingModeLayer,
@@ -20,6 +19,7 @@ from indrajala_ml.model.array_protocols import (
 )
 from indrajala_ml.model.bounds import validate_batch
 from indrajala_ml.model.format2_persistence import Format2Persistence
+from indrajala_ml.model.layer_protocols import GeneratorLayer
 from indrajala_ml.model.layer_specs import (
     Dense,
     InputShape,

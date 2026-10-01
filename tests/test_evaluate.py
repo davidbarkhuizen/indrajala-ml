@@ -51,13 +51,14 @@ def test_class_balanced_disagreement_rate_is_zero_for_identical_classifier():
 
 def test_class_balanced_disagreement_rate_detects_error_the_old_metric_missed():
 
+    # the disagreement samples draw from the global random
     random.seed(1)
 
     cardinality, dimension, l = 4, 2, 10.0
     bounds = square_bounds(l, dimension)
 
-    reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds)
-    student = LinearClassifierNetwork.randomized(cardinality, dimension, bounds)
+    reference = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, seed=3)
+    student = LinearClassifierNetwork.randomized(cardinality, dimension, bounds, seed=103)
 
     assert class_balanced_disagreement_rate(reference, student, per_class_sample_count=200) > 0.3
 

@@ -12,6 +12,7 @@ from indrajala_ml.model.conv_multiclass_backprop_classifier_network import (
 )
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.multiclass_evaluate import accuracy
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import train_linear_classifier_network
 from tests.helpers import (
     approx,
@@ -65,8 +66,8 @@ def test_class_count_and_dense_layer_sizes_are_validated():
 
 def test_randomize_randomizes_conv_kernels_and_every_dense_layer():
 
-    random.seed(0)
     network = _small_network()
+    network.rng = default_rng(0)
     network.randomize()
 
     for kernel in conv_layer(network, 0).kernels:
@@ -80,9 +81,8 @@ def test_randomize_randomizes_conv_kernels_and_every_dense_layer():
 def test_randomized_classmethod_uses_this_classs_own_constructor_signature():
 
     # MultiClassBackpropClassifierNetwork.randomized would call cls() with the wrong signature
-    random.seed(0)
     network = ConvMultiClassBackpropClassifierNetwork.randomized(
-        input_height=8, input_width=8, conv_specs=[ConvSpec(3, 4)], dense_layer_sizes=[16], class_count=10
+        input_height=8, input_width=8, conv_specs=[ConvSpec(3, 4)], dense_layer_sizes=[16], class_count=10, seed=0
     )
 
     assert conv_layer(network, 0).kernel_size == 3
@@ -93,6 +93,7 @@ def test_forward_and_backward_run_without_error_and_move_every_weight():
 
     random.seed(0)
     network = _small_network()
+    network.rng = default_rng(0)
     network.randomize()
 
     conv_weights_before = [list(k.weights) for k in conv_layer(network, 0).kernels]
@@ -122,6 +123,7 @@ def test_learn_batch_also_moves_every_weight():
     # the starting weights
     random.seed(0)
     network = _small_network()
+    network.rng = default_rng(0)
     network.randomize()
     before = network.snapshot()
 
@@ -135,6 +137,7 @@ def test_classify_state_returns_a_valid_class_index():
 
     random.seed(0)
     network = _small_network()
+    network.rng = default_rng(0)
     network.randomize()
 
     state = tuple(random.uniform(0.0, 1.0) for _ in range(64))
@@ -149,6 +152,7 @@ def test_snapshot_and_restore_round_trip_through_the_conv_layer_too():
 
     random.seed(0)
     network = _small_network()
+    network.rng = default_rng(0)
     network.randomize()
 
     snapshot = network.snapshot()
@@ -167,6 +171,7 @@ def test_save_and_load_round_trip(tmp_path: Path):
 
     random.seed(0)
     network = _small_network()
+    network.rng = default_rng(0)
     network.randomize()
 
     state = tuple(random.uniform(0.0, 1.0) for _ in range(64))
@@ -185,23 +190,22 @@ def test_save_and_load_round_trip(tmp_path: Path):
 def test_trains_on_a_real_uci_digits_subset():
 
     # 200 of the 1797 rows, 15 epochs: train_linear_classifier_network drives the conv network,
-    # and backprop through the conv layer really learns. The pinned values are measured
-    random.seed(0)
-
+    # and backprop through the conv layer really learns. The pinned values are measured, from
+    # seed 0
     dataset = load_digits_dataset()
     subset = dataset[:200]
     train_data, test_data = split_train_test(subset, test_fraction=0.2, seed=1)
 
     student = ConvMultiClassBackpropClassifierNetwork.randomized(
-        input_height=8, input_width=8, conv_specs=[ConvSpec(3, 4)], dense_layer_sizes=[16], class_count=10
+        input_height=8, input_width=8, conv_specs=[ConvSpec(3, 4)], dense_layer_sizes=[16], class_count=10, seed=0
     )
     result = train_linear_classifier_network(student, train_data, learning_rate=0.5, epochs=15)
 
     diagnostic = result.diagnostic
-    assert diagnostic.best_training_accuracy == 0.9875
-    assert diagnostic.best_epoch_index == 10
-    assert diagnostic.plateaued is True
-    assert diagnostic.converged is False
+    assert diagnostic.best_training_accuracy == 1.0
+    assert diagnostic.best_epoch_index == 13
+    assert diagnostic.plateaued is False
+    assert diagnostic.converged is True
     assert diagnostic.still_improving is False
 
     assert accuracy(student, test_data) == 0.925
@@ -245,12 +249,11 @@ def test_randomize_draws_one_rng_sequence_per_layer_in_forward_order():
     # the first conv layer's kernels must be drawn first, exactly as a one-conv-layer network
     # would draw them - the property that keeps the pinned single-layer digits result below
     # reproducible when the network grows a second conv layer spec
-    random.seed(0)
     one_layer = ConvMultiClassBackpropClassifierNetwork(8, 8, [ConvSpec(3, 3)], [8], class_count=10)
-    one_layer.conv_layers[0].randomize_fan_in_aware()
+    one_layer.conv_layers[0].randomize_fan_in_aware(default_rng(0))
 
-    random.seed(0)
     two_layer = _two_conv_layer_network()
+    two_layer.rng = default_rng(0)
     two_layer.randomize()
 
     assert [k.weights for k in conv_layer(two_layer, 0).kernels] == [
@@ -264,6 +267,7 @@ def test_learn_moves_every_kernel_in_every_conv_layer():
 
     random.seed(0)
     network = _two_conv_layer_network()
+    network.rng = default_rng(0)
     network.randomize()
     before = [[list(k.weights) for k in layer.kernels] for layer in conv_layers_only(network)]
 
@@ -282,6 +286,7 @@ def test_network_gradient_check_from_output_loss_back_to_the_first_conv_layer():
     # the second conv layer's downstream_sum, and into the first conv layer's kernels
     random.seed(3)
     network = _two_conv_layer_network()
+    network.rng = default_rng(3)
     network.randomize()
     state = tuple(random.uniform(0.0, 1.0) for _ in range(64))
     category = 7
@@ -321,6 +326,7 @@ def test_two_conv_layer_save_and_load_round_trip(tmp_path: Path):
 
     random.seed(0)
     network = _two_conv_layer_network()
+    network.rng = default_rng(0)
     network.randomize()
     state = tuple(random.uniform(0.0, 1.0) for _ in range(64))
 
@@ -364,12 +370,11 @@ def test_conv_specs_of_only_pooling_are_rejected():
 
 def test_pooling_does_not_shift_any_conv_layers_random_draws():
 
-    random.seed(0)
     unpooled = ConvMultiClassBackpropClassifierNetwork(8, 8, [ConvSpec(3, 4)], [8], class_count=10)
-    unpooled.conv_layers[0].randomize_fan_in_aware()
+    unpooled.conv_layers[0].randomize_fan_in_aware(default_rng(0))
 
-    random.seed(0)
     pooled = _pooled_network()
+    pooled.rng = default_rng(0)
     pooled.randomize()
 
     assert [k.weights for k in conv_layer(pooled, 0).kernels] == [k.weights for k in conv_layer(unpooled, 0).kernels]
@@ -381,6 +386,7 @@ def test_network_gradient_check_through_a_pooling_layer():
     # pool between the two conv layers
     random.seed(3)
     network = _pooled_network()
+    network.rng = default_rng(3)
     network.randomize()
     state = tuple(random.uniform(0.0, 1.0) for _ in range(64))
     category = 2
@@ -414,6 +420,7 @@ def test_pooled_snapshot_has_an_empty_pool_entry_and_save_load_round_trips(tmp_p
 
     random.seed(0)
     network = _pooled_network()
+    network.rng = default_rng(0)
     network.randomize()
     assert network.snapshot()[1] == []
 

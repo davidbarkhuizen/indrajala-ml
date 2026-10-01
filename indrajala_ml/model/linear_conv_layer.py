@@ -14,6 +14,7 @@ from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.conv_unit import ConvUnit
 from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights
+from indrajala_ml.pcg64 import Pcg64Generator
 
 
 class LinearConvKernel(ConvKernel):
@@ -24,9 +25,9 @@ class LinearConvKernel(ConvKernel):
 
     has_bias: ClassVar[bool] = False
 
-    def randomize_fan_in_aware(self) -> None:
+    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
         # weights only, as LinearLayer draws
-        self.weights = fan_in_aware_weights(len(self.weights))
+        self.weights = fan_in_aware_weights(rng, len(self.weights))
 
     def accumulate_gradient(self, delta: float, receptive_field_values: Sequence[float]) -> None:
         # ConvKernel's, without the bias

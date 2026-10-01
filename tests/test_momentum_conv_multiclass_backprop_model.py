@@ -25,8 +25,7 @@ CLASS_COUNT = 10
 def _matching_networks(
     momentum: float,
 ) -> tuple[ConvMultiClassBackpropClassifierNetwork, MomentumConvMultiClassBackpropClassifierNetwork]:
-    random.seed(0)
-    plain = ConvMultiClassBackpropClassifierNetwork.randomized(8, 8, CONV_SPECS, DENSE_LAYER_SIZES, CLASS_COUNT)
+    plain = ConvMultiClassBackpropClassifierNetwork.randomized(8, 8, CONV_SPECS, DENSE_LAYER_SIZES, CLASS_COUNT, seed=0)
     momentum_network = MomentumConvMultiClassBackpropClassifierNetwork(
         8, 8, CONV_SPECS, DENSE_LAYER_SIZES, CLASS_COUNT, momentum=momentum
     )
@@ -101,9 +100,8 @@ def test_momentum_first_matches_plain_sgd_and_then_moves_every_trainable_layer_o
 
 def test_save_and_load_round_trip_keeps_momentum(tmp_path: Path):
 
-    random.seed(0)
     network = MomentumConvMultiClassBackpropClassifierNetwork.randomized(
-        8, 8, CONV_SPECS, DENSE_LAYER_SIZES, CLASS_COUNT, momentum=0.9
+        8, 8, CONV_SPECS, DENSE_LAYER_SIZES, CLASS_COUNT, momentum=0.9, seed=0
     )
     states = [state for state, _label in _rows(3)]
 

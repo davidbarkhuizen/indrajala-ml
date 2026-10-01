@@ -8,6 +8,7 @@ from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_unit import ConvUnit
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.window_geometry import output_size, validate_conv_arguments
+from indrajala_ml.pcg64 import Pcg64Generator
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,6 @@ class ConvLayer:
             kernel.weights = list(weights)
             kernel.bias = bias
 
-    def randomize_fan_in_aware(self) -> None:
+    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
         for kernel in self.kernels:
-            kernel.randomize_fan_in_aware()
+            kernel.randomize_fan_in_aware(rng)

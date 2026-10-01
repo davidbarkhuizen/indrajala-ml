@@ -25,6 +25,7 @@ from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.update_rules import SGD, Adam, UpdateRule, WeightDecay
+from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import check_gradients
 from tests.test_batch_norm_array_network import EPSILON, RATE, RULES, _reference
 from tests.test_batch_norm_conv_array_network import BETA, DOWNSTREAM, GAMMA, INPUT, NETWORKS, POSITIONS, X, _rows
@@ -222,19 +223,22 @@ def test_the_linear_conv_layers_delta_is_its_downstream_and_its_gradient_has_no_
 def test_randomize_draws_the_linear_conv_kernels_weights_only_and_nothing_for_batch_norm():
     network = _network()
     linear, norm, *_rest = network.trainable_layers
-    random.seed(3)
+    rng = default_rng(4)
 
     # each kernel draws 9 weights, in kernel order, and no bias
-    assert [kernel.weights for kernel in linear.kernels] == [fan_in_aware_weights(9) for _ in range(2)]
+    assert [kernel.weights for kernel in linear.kernels] == [fan_in_aware_weights(rng, 9) for _ in range(2)]
     assert norm.snapshot_state() == [([1.0], 0.0, 0.0, 1.0)] * 2
 
 
 # networks
 
 
-def _network(name: str = "conv pool", rule: UpdateRule | None = None, seed: int = 3) -> Any:
+def _network(name: str = "conv pool", rule: UpdateRule | None = None, seed: int = 4) -> Any:
+    # not seed 3: it draws "after a relu conv"'s first conv dead on every input (both biases
+    # about -0.4 on inputs in [0, 1)), so batch norm normalizes a constant zero and its ReLU sits
+    # exactly on the kink, where the finite difference sees half the slope
     network = SequentialMultiClassBackpropClassifierNetwork(INPUT, NETWORKS[name], SGD() if rule is None else rule)
-    random.seed(seed)
+    network.rng = default_rng(seed)
     network.randomize()
     return network
 

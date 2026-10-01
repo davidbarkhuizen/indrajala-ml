@@ -37,6 +37,7 @@ from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.pcg64 import default_rng
 
 DIMENSION = 6
 CLASS_COUNT = 3
@@ -158,10 +159,10 @@ def test_every_pure_python_preset_is_the_sequential_network_of_its_specs_by_bits
     ]
     assert sequential.optimizer.rule == preset.optimizer.rule
 
-    random.seed(0)
+    preset.rng = default_rng(0)
     preset.randomize()
     if fan_in_aware:
-        random.seed(0)
+        sequential.rng = default_rng(0)
         sequential.randomize()
     else:
         sequential.restore(preset.snapshot())
@@ -174,18 +175,18 @@ def test_every_pure_python_preset_is_the_sequential_network_of_its_specs_by_bits
         state = tuple(rng.random() for _ in range(sequential.dimension))
         return state, float(rng.randrange(2)) if single_output else rng.randrange(CLASS_COUNT)
 
-    # Python's random is reseeded before each step on both, so dropout draws the same masks
+    # both generators are reseeded before each step, so dropout draws the same masks
     for step in range(6):
         state, target = example()
         for network in (preset, sequential):
-            random.seed(step)
+            network.rng = default_rng(step)
             network.learn(0.3, state, target)
         assert sequential.snapshot() == preset.snapshot(), f"after learn step {step}"
 
     for step in range(4):
         batch = [example() for _ in range(5)]
         for network in (preset, sequential):
-            random.seed(100 + step)
+            network.rng = default_rng(100 + step)
             network.learn_batch(0.3, batch)
         assert sequential.snapshot() == preset.snapshot(), f"after learn_batch step {step}"
 
@@ -212,7 +213,7 @@ def test_the_specs_are_validated():
 def test_multiclass_learn_drops_out_in_its_forward_pass_only():
     # as the single-output learn: a dropout layer trains with masks, and predicts without
     network = SequentialMultiClassBackpropClassifierNetwork((4,), [Dense(50, dropout=0.5), OUTPUT], SGD())
-    random.seed(0)
+    network.rng = default_rng(0)
     network.randomize()
     hidden = network.hidden_layers[0]
 

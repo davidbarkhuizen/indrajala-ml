@@ -6,9 +6,10 @@ ConvLayer and MaxPoolLayer satisfy them without a common base class.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar, Protocol
+from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from indrajala_ml.model.base_node import AbstractNode
+from indrajala_ml.pcg64 import Pcg64Generator
 
 
 class InputLayer(Protocol):
@@ -68,7 +69,7 @@ class TrainableLayer(InputLayer, Protocol):
     def weight_sets(self) -> Sequence[WeightSet]: ...
 
     # fan_in_aware_weights_and_bias per node or kernel, in order; a pool layer draws nothing
-    def randomize_fan_in_aware(self) -> None: ...
+    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None: ...
 
     # a dense or conv layer's (weights, bias) per node or kernel, a linear layer's (weights,) per node,
     # a batch-norm layer's ([gamma], beta, running_mean, running_var) per feature; empty for a pool
@@ -76,3 +77,13 @@ class TrainableLayer(InputLayer, Protocol):
     def snapshot_state(self) -> list[Any]: ...
 
     def restore_state(self, layer_snapshot: Any) -> None: ...
+
+
+@runtime_checkable
+class GeneratorLayer(Protocol):
+    """
+    A layer that draws in training (dropout's masks), pure-Python or array, from the generator its
+    network owns: the network's rng setter hands it over (the RNG generators workplan, D8).
+    """
+
+    def set_rng(self, rng: Any, /) -> None: ...

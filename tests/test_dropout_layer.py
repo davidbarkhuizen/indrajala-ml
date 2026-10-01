@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from indrajala_ml.model.backprop_node import BackpropNode
-from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
+from indrajala_ml.model.dropout_layer import TrainingModeNode, make_dropout_layer_cls
 from indrajala_ml.model.state_layer import StateLayer
 from tests.helpers import approx
 
@@ -18,6 +18,7 @@ def _dropout_node(drop_probability: float, weight: float = 0.5, bias: float = 0.
     layer_cls = make_dropout_layer_cls(drop_probability)
     layer = layer_cls(size=1, input_layer=input_layer)
     node = layer.nodes[0]
+    assert isinstance(node, TrainingModeNode)
     node.update_input_weights([weight])
     node.bias = bias
     return layer, node
@@ -38,7 +39,7 @@ def test_forward_in_training_mode_when_kept_rescales_by_one_over_keep_probabilit
     layer, node = _dropout_node(drop_probability=0.5)
     layer.set_training_mode(True)
 
-    with patch("random.random", return_value=0.9):  # 0.9 >= 0.5 -> kept
+    with patch.object(node.rng, "random", return_value=0.9):  # 0.9 >= 0.5 -> kept
         node.forward()
 
     assert node.value() == approx(BASE_ACTIVATION / 0.5)
@@ -49,7 +50,7 @@ def test_forward_in_training_mode_when_dropped_is_exactly_zero():
     layer, node = _dropout_node(drop_probability=0.5)
     layer.set_training_mode(True)
 
-    with patch("random.random", return_value=0.1):  # 0.1 < 0.5 -> dropped
+    with patch.object(node.rng, "random", return_value=0.1):  # 0.1 < 0.5 -> dropped
         node.forward()
 
     assert node.value() == 0.0
@@ -59,7 +60,7 @@ def test_set_training_mode_false_reverts_to_eval_behavior():
 
     layer, node = _dropout_node(drop_probability=0.5)
     layer.set_training_mode(True)
-    with patch("random.random", return_value=0.1):
+    with patch.object(node.rng, "random", return_value=0.1):
         node.forward()
     assert node.value() == 0.0  # dropped, while still in training mode
 
@@ -75,7 +76,7 @@ def test_compute_hidden_delta_when_kept_uses_the_unscaled_sigmoid_derivative():
     # compute_hidden_delta in dropout_layer.py
     layer, node = _dropout_node(drop_probability=0.5)
     layer.set_training_mode(True)
-    with patch("random.random", return_value=0.9):  # kept
+    with patch.object(node.rng, "random", return_value=0.9):  # kept
         node.forward()
 
     next_node = BackpropNode(input_nodes=[node])
@@ -94,7 +95,7 @@ def test_compute_hidden_delta_is_zero_when_the_unit_was_dropped():
     # like a dead ReLU unit: no gradient reaches its incoming weights
     layer, node = _dropout_node(drop_probability=0.5)
     layer.set_training_mode(True)
-    with patch("random.random", return_value=0.1):  # dropped
+    with patch.object(node.rng, "random", return_value=0.1):  # dropped
         node.forward()
 
     next_node = BackpropNode(input_nodes=[node])
@@ -136,7 +137,7 @@ def test_drop_probability_of_zero_never_drops():
     layer, node = _dropout_node(drop_probability=0.0)
     layer.set_training_mode(True)
 
-    with patch("random.random", return_value=0.0):  # 0.0 >= 0.0 -> kept
+    with patch.object(node.rng, "random", return_value=0.0):  # 0.0 >= 0.0 -> kept
         node.forward()
 
     assert node.value() == approx(BASE_ACTIVATION)  # keep_probability=1.0, no rescale

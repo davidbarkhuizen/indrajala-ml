@@ -1,7 +1,8 @@
 # Workplan: explicit generator objects
 
-**Status: stages 1-3 done (crate #46 and #522: the crate's PCG64 `Generator`; #523: the pure-Python
-port; #524: the numpy and Rust networks own their generators); stage 4 next.**
+**Status: stages 1-4 done (crate #46 and #522: the crate's PCG64 `Generator`; #523: the pure-Python
+port; #524: the numpy and Rust networks own their generators; #525: the pure-Python networks
+do); stage 5 next.**
 
 Every random draw the package makes comes from one of three global states: Python's `random`,
 numpy's legacy `np.random` and the crate's MT19937 ([rng-audit.md](rng-audit.md), "Three global

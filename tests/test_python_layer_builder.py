@@ -4,7 +4,6 @@ checks of the numpy and Rust builder, for the pure-Python layer classes, over th
 """
 
 import math
-import random
 from typing import Any
 
 import pytest
@@ -22,6 +21,7 @@ from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
 from indrajala_ml.model.state_layer import StateLayer
+from indrajala_ml.pcg64 import default_rng
 from tests.test_layer_specs import BATCH_NORM, CONV_BATCH_NORM, INVALID, KINDS, LINEAR, OUTPUT, VALID
 
 # ArrayLayerClasses' field names (KINDS), as the pure-Python classes; a dropout layer's class is
@@ -85,9 +85,9 @@ def test_a_batch_norm_layer_normalizes_the_linear_layers_nodes_with_its_specs_co
 def test_the_dropout_layer_takes_the_specs_probability():
     # every training forward pass drops each node with the spec's probability: at 0.0 none
     # is dropped, at 0.99 about all are
-    random.seed(0)
     for drop_probability, expect_kept in ((0.0, True), (0.99, False)):
         layer = _build([Dense(200, dropout=drop_probability), OUTPUT], (4,))[0]
+        layer.set_rng(default_rng(0))
         layer.set_training_mode(True)
         layer.forward()
         kept = sum(node.value() != 0.0 for node in layer.nodes)

@@ -49,7 +49,7 @@ def test_learn_when_the_hidden_unit_is_kept_matches_the_inverted_dropout_update_
     hidden_node = network.hidden_layers[0].nodes[0]
     output_node = network.output_layer.nodes[0]
 
-    with patch("random.random", return_value=0.9):
+    with patch.object(network.rng, "random", return_value=0.9):
         network.learn(0.1, (2.0,), 1.0)
 
     assert hidden_node.input_node_weights[0] == approx(0.5031688497566075)
@@ -66,7 +66,7 @@ def test_learn_when_the_hidden_unit_is_dropped_leaves_its_incoming_weights_uncha
     hidden_node = network.hidden_layers[0].nodes[0]
     output_node = network.output_layer.nodes[0]
 
-    with patch("random.random", return_value=0.1):
+    with patch.object(network.rng, "random", return_value=0.1):
         network.learn(0.1, (2.0,), 1.0)
 
     assert hidden_node.input_node_weights[0] == 0.5
@@ -80,7 +80,7 @@ def test_predict_probability_between_learn_calls_is_unaffected_by_training_mode(
     # learn() must not leave training mode on for the next prediction
     network = _fixed_network()
 
-    with patch("random.random", return_value=0.1):  # would drop, if this leaked into eval mode
+    with patch.object(network.rng, "random", return_value=0.1):  # would drop, if this leaked into eval mode
         network.learn(0.1, (2.0,), 1.0)
 
     prediction = network.predict_probability((2.0,))
@@ -94,7 +94,7 @@ def test_learn_batch_draws_an_independent_mask_per_example_not_one_shared_per_ba
     network = DropoutBackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0), drop_probability=0.5)
     batch = [((1.0, -1.0), 1.0), ((-1.0, 1.0), 0.0), ((0.5, 0.5), 1.0)]
 
-    with patch("random.random", return_value=0.9) as mock_random:
+    with patch.object(network.rng, "random", return_value=0.9) as mock_random:
         network.learn_batch(0.1, batch)
 
     assert mock_random.call_count == len(batch) * 4  # 4 hidden nodes, one draw each per example

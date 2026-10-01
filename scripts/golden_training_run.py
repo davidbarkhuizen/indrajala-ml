@@ -28,11 +28,10 @@ value of every network that differs. numpy's products go through BLAS, so a gold
 valid on the machine that recorded it; record one on main and check against it on the same
 machine.
 
-Dropout: every network runs after seed_everything(SEED), which the pure-Python dropout network
-draws its masks from, and each array network's own generator is seeded from SEED, so the numpy
-and Rust dropout networks train at the same drop_probability and draw the same masks. The numpy
-and Rust dropout entries were re-recorded when those masks moved from np.random's legacy stream
-to the generator (the RNG generators workplan, stage 3).
+Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
+networks train at the same drop_probability and draw the same masks. The dropout entries were
+re-recorded when their masks moved from the global streams to the network's generator (the RNG
+generators workplan: numpy and Rust in stage 3, pure Python in stage 4).
 """
 
 import argparse
@@ -141,6 +140,7 @@ from indrajala_ml.model.softmax_vectorized_multiclass_backprop_classifier_networ
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.prepared_dataset import PreparedDataset
 from indrajala_ml.seeding import seed_everything
 
@@ -332,8 +332,7 @@ def _round_trip(network: Any, rows: Sequence[Example[Any]], predict: str) -> dic
 def _run_network(name: str, network: Any, rows: Sequence[Example[Any]], predict: str) -> dict[str, Any]:
     _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
     seed_everything(SEED)
-    if _backend(name) != "python":
-        network.rng = network.backend.default_rng(SEED)
+    network.rng = default_rng(SEED) if _backend(name) == "python" else network.backend.default_rng(SEED)
     checkpoints, prepared = _train(network, rows, _backend(name))
     result = {
         "snapshots": checkpoints,

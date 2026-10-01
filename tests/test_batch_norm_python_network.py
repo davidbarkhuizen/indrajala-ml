@@ -32,6 +32,7 @@ from indrajala_ml.model.sequential_backprop_network import (
 )
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
 from tests.test_batch_norm_array_network import (
@@ -228,12 +229,12 @@ def test_the_linear_layer_has_no_bias_and_its_delta_is_the_downstream():
 def test_randomize_draws_the_linear_layers_weights_only_and_nothing_for_batch_norm():
     network = _network()
     linear, norm, output = network.trainable_layers
-    random.seed(3)
+    rng = default_rng(3)
     limit = 1 / math.sqrt(4)
-    linear_weights = [[random.uniform(-limit, limit) for _ in range(4)] for _ in range(5)]
+    linear_weights = [[rng.uniform(-limit, limit) for _ in range(4)] for _ in range(5)]
     limit = 1 / math.sqrt(5)
     output_weights_and_biases = [
-        ([random.uniform(-limit, limit) for _ in range(5)], random.uniform(-limit, limit)) for _ in range(3)
+        ([rng.uniform(-limit, limit) for _ in range(5)], rng.uniform(-limit, limit)) for _ in range(3)
     ]
 
     assert _bits(linear.snapshot_state()) == _bits(linear_weights)
@@ -260,7 +261,7 @@ AFTER_BATCH_NORM_DROPOUT: list[LayerSpec] = [
 def _network(name: str = "sigmoid", rule: UpdateRule | None = None, seed: int = 3) -> Any:
     layers, shape = NETWORKS[name]
     network = CLASSES[shape](INPUT, layers, SGD() if rule is None else rule)
-    random.seed(seed)
+    network.rng = default_rng(seed)
     network.randomize()
     return network
 
@@ -286,7 +287,7 @@ def test_every_gradient_through_a_conv_front_end_matches_its_finite_difference()
     # the conv and pool layers' lanes (layer_major.py) hold each example's activations, deltas and
     # winning slots
     network = SequentialMultiClassBackpropClassifierNetwork(FRONT_END_INPUT, FRONT_END, Momentum(0.9))
-    random.seed(4)
+    network.rng = default_rng(4)
     network.randomize()
     network.learn_batch(0.5, _image_rows(6, seed=2))
     rows = _image_rows(4)
@@ -298,16 +299,17 @@ def test_every_gradient_through_dropout_after_batch_norm_matches_its_finite_diff
     monkeypatch: pytest.MonkeyPatch,
 ):
     # the dropout layer's lanes hold each example's mask: with the same masks in every forward
-    # pass (the same seed before each), the loss is a function of the weights again
+    # pass (the network's generator reseeded before each), the loss is a function of the weights
+    # again
     forward = LayerMajorBatch.forward
 
     def seeded(self: LayerMajorBatch) -> None:
-        random.seed(11)
+        network.rng = default_rng(11)
         forward(self)
 
     monkeypatch.setattr(LayerMajorBatch, "forward", seeded)
     network = SequentialMultiClassBackpropClassifierNetwork(INPUT, AFTER_BATCH_NORM_DROPOUT, SGD())
-    random.seed(5)
+    network.rng = default_rng(5)
     network.randomize()
     rows = _rows(5)
 
@@ -337,7 +339,7 @@ LAYER_MAJOR_CASES: dict[str, tuple[Any, list[LayerSpec], str]] = {
 def test_the_layer_major_path_is_the_example_major_loop_by_bits(name: str, rule: UpdateRule):
     input_shape, specs, shape = LAYER_MAJOR_CASES[name]
     example_major, layer_major = (CLASSES[shape](input_shape, specs, rule) for _ in range(2))
-    random.seed(6)
+    example_major.rng = default_rng(6)
     example_major.randomize()
     layer_major.restore(example_major.snapshot())
     rng = random.Random(2)

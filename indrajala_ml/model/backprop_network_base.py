@@ -9,7 +9,7 @@ from indrajala_ml.model.bounds import validate_batch, validate_input_bounds
 from indrajala_ml.model.format2 import PYTHON
 from indrajala_ml.model.format2_persistence import Format2Persistence
 from indrajala_ml.model.layer_major import LayerMajorBatch
-from indrajala_ml.model.layer_protocols import TrainableLayer
+from indrajala_ml.model.layer_protocols import GeneratorLayer, TrainableLayer
 from indrajala_ml.model.layer_specs import (
     Dense,
     InputShape,
@@ -22,6 +22,7 @@ from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.python_optimizer import PythonOptimizer, WeightSetState
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
 
 # LayerT, the hidden layers' type: dense layers, except in a network whose specs put conv and pool
@@ -86,6 +87,26 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer](
         self.batch_norm_index = batch_norm_index(specs)
 
         self.optimizer = PythonOptimizer(self._update_rule())
+        # the dropout layers, which draw their masks from the network's generator
+        self._generator_layers = [layer for layer in self.trainable_layers if isinstance(layer, GeneratorLayer)]
+        # OS entropy until randomized(seed=, rng=) or an assignment sets it (the RNG generators
+        # workplan, D9)
+        self.rng = default_rng()
+
+    @property
+    def rng(self) -> Pcg64Generator:
+        """
+        The generator this network owns (the RNG generators workplan, D8, D5), the pure-Python port
+        of numpy's default_rng: randomize() draws the weights from it and the dropout nodes their
+        keep draws, one stream between them.
+        """
+        return self._rng
+
+    @rng.setter
+    def rng(self, rng: Pcg64Generator) -> None:
+        self._rng = rng
+        for layer in self._generator_layers:
+            layer.set_rng(rng)
 
     def _hidden_spec(self, size: int) -> Dense:
         # a dense hidden layer; the ReLU and dropout siblings return theirs
@@ -103,10 +124,17 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer](
         return SGD()
 
     @classmethod
-    def randomized(cls, *args: Any, **kwargs: Any) -> Self:
+    def randomized(cls, *args: Any, seed: Any = None, rng: Pcg64Generator | None = None, **kwargs: Any) -> Self:
         # every subclass's randomized signature is its __init__ signature; randomize() is per
-        # subclass
+        # subclass. seed (an int, a sequence of ints or any SeedSequence) seeds the network's own
+        # generator, or rng is that generator, as ArrayNetworkBase.randomized; with neither it is
+        # seeded from OS entropy
+        assert seed is None or rng is None, "randomized takes seed or rng, not both"
         network = cls(*args, **kwargs)
+        if rng is not None:
+            network.rng = rng
+        elif seed is not None:
+            network.rng = default_rng(seed)
         network.randomize()
         return network
 
@@ -258,4 +286,4 @@ def randomize_fan_in_aware(network: BackpropNetworkBase[Any]) -> None:
     """
 
     for layer in network.trainable_layers:
-        layer.randomize_fan_in_aware()
+        layer.randomize_fan_in_aware(network.rng)

@@ -23,6 +23,7 @@ from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Po
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.update_rules import SGD, Adam
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
 from tests.test_batch_norm_python_network import math_exp  # noqa: F401  # pyright: ignore[reportUnusedImport]
@@ -263,7 +264,7 @@ def _network(implementation: str, input_shape: Any, layers: list[LayerSpec], rul
     rule = SGD() if rule is None else rule
     if implementation == "python":
         network: Any = SequentialMultiClassBackpropClassifierNetwork(input_shape, layers, rule)
-        random.seed(seed)
+        network.rng = default_rng(seed)
     else:
         backend = NUMPY if implementation == "numpy" else RUST
         network = SequentialArrayNetwork(input_shape, layers, rule, shape="multiclass", backend=backend)

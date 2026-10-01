@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights_and_bias
 from indrajala_ml.model.layer_protocols import InputLayer
+from indrajala_ml.pcg64 import Pcg64Generator
 
 
 class NodeLayer:
@@ -62,11 +63,11 @@ class BackpropLayer(NodeLayer):
         for own_index, node in enumerate(self.nodes):
             node.compute_hidden_delta(next_layer.nodes, own_index)
 
-    def randomize_fan_in_aware(self) -> None:
+    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
         # per node, weights then bias, from the input layer's size, as ConvKernel's per kernel
         fan_in = len(self.input_layer.nodes)
         for node in self.nodes:
-            weights, bias = fan_in_aware_weights_and_bias(fan_in)
+            weights, bias = fan_in_aware_weights_and_bias(rng, fan_in)
             node.update_input_weights(weights)
             node.bias = bias
 

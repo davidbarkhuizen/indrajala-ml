@@ -40,6 +40,7 @@ from typing import Any, cast
 import indrajala_ml.model
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
@@ -49,6 +50,7 @@ from indrajala_ml.model.sequential_backprop_network import (
     SequentialMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.update_rules import Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.seeding import seed_everything
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "saved_models"
@@ -363,12 +365,11 @@ def _write(name: str, fixture: SavedModelFixture) -> None:
     network.restore(_positive_running_variances(network, drawn) if fixture.class_name is not None else drawn)
     states = [tuple(rng.uniform(0.0, 1.0) for _ in range(network_dimension(network))) for _ in range(STATE_COUNT)]
     if fixture.format2:
-        # a non-empty optimizer state to pin; seeded for the dropout masks (an array network's from
-        # its own generator)
+        # a non-empty optimizer state to pin; seeded for the dropout masks, which every network
+        # draws from its own generator (the files written before the RNG generators workplan's
+        # stage 4 drew pure Python's from random, seeded here)
         seed_everything(0)
-        if isinstance(network, ArrayNetworkBase):
-            array_network = cast("ArrayNetworkBase[Any]", network)
-            array_network.rng = array_network.backend.default_rng(0)
+        _seed_generator(network, 0)
         labels = [
             rng.randrange(CLASS_COUNT) if fixture.predict == "predict_probabilities" else float(rng.randrange(2))
             for _ in states
@@ -394,6 +395,15 @@ def _write(name: str, fixture: SavedModelFixture) -> None:
 def network_dimension(network: Any) -> int:
     # an ensemble's input dimension is its members'
     return network.classifiers[0].dimension if hasattr(network, "classifiers") else network.dimension
+
+
+def _seed_generator(network: Any, seed: int) -> None:
+    # the network's own generator, which its dropout masks draw from
+    if isinstance(network, ArrayNetworkBase):
+        array_network = cast("ArrayNetworkBase[Any]", network)
+        array_network.rng = array_network.backend.default_rng(seed)
+    elif isinstance(network, BackpropNetworkBase):
+        cast("BackpropNetworkBase[Any]", network).rng = default_rng(seed)
 
 
 def main() -> None:

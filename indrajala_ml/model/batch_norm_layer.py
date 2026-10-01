@@ -24,6 +24,7 @@ from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.layer_protocols import InputLayer
 from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
 from indrajala_ml.model.relu_layer import relu_activation
+from indrajala_ml.pcg64 import Pcg64Generator
 
 
 def _fold(values: Sequence[float]) -> float:
@@ -284,7 +285,7 @@ class BatchNormLayer:
     def weight_sets(self) -> Sequence[BatchNormNode]:
         return self.channels
 
-    def randomize_fan_in_aware(self) -> None:
+    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
         # D5: nothing drawn, so no other layer's draws shift
         pass
 
