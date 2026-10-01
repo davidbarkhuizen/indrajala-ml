@@ -2,8 +2,7 @@
 
 A workplan is deleted once its last stage merges. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md) and
-[dry-workplan.md](dry-workplan.md). The order
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order
 of the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
@@ -16,6 +15,7 @@ docs cite them by section:
 | Composable layers and optimizers (roadmap step 1) | #475 | #476-#485 | `git show 3a5d179:docs/composable-layers-workplan.md` |
 | The A/B harness and a stand-alone measurement guide | #487 | #488-#491 | `git show 3a5d179:docs/ab-harness-workplan.md` |
 | Batch normalization (roadmap step 2) | #486 | #493-#503 | `git show 189921c:docs/batch-norm-workplan.md` |
+| Removing duplicated code (DRY) | #506 | #507-#514 | `git show e066333:docs/dry-workplan.md` |
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization) and [measurement.md](measurement.md).
@@ -80,3 +80,27 @@ Still out of scope:
 - Significance tests (Mann-Whitney and the like). The protocol judges by ranges and agreement
   between passes, and the report adds no p-values.
 - Other machines. The profile check refuses them; comparing machines is a different question.
+
+## From the DRY audit
+
+- **The per-rule presets** (the workplan's D2). The 12 preset classes that set a rule (Adam,
+  Momentum, conv Momentum and L2, each in pure Python, numpy and Rust) each repeat a
+  hyperparameter `__init__` and a two-line `_update_rule`. They stay as they are until more
+  presets are added, when the better shared form should be clearer.
+- **Rerun the audit after each new primitive**, so new copies are caught while they are small:
+  `symilar` (pylint's duplicate finder, with `-i --ignore-docstrings --ignore-imports
+  --ignore-signatures`) over `indrajala_ml/`, `scripts/` and `tests/`, a search for function names
+  defined in more than one module, and the twin classes read side by side. The 2026-10-01 audit
+  found 0.29% duplicated at 8 lines or more in the package, and 0.91% at 10 lines or more in the
+  tests.
+- **Shared homes for the next layer kind.** The conv and pool argument checks and output size are
+  in `model/window_geometry.py`, one shape walk (`layer_specs.spec_shapes`) feeds both builders,
+  the optimizers share `OptimizerBase` and `ArrayOptimizerBase`, and a layer's optimizer accessors
+  are `WeightAndBias` or `GammaAndBeta` (`array_parameters.py`). A new layer kind extends these
+  rather than adding a copy.
+
+Still out of scope:
+
+- The crate (the workplan's D1), and scripts and demos (D5): they get their own audit if wanted.
+- The numpy and Rust layer twins' numerics (D3): they share identical methods only; their method
+  bodies (a numpy expression against one fused Rust call) stay separate by design.
