@@ -10,12 +10,12 @@ single feature pairwise (tests/test_summation_order.py).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, ClassVar, Literal
+from typing import Any, Literal
 
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray, sigmoid
+from indrajala_ml.model.array_parameters import GammaAndBeta
 from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
 
 # a group's (m, d, var, std): its value count per feature, and what the backward pass reads
@@ -27,7 +27,7 @@ def sum_rows(values: FloatArray) -> FloatArray:
     return np.cumsum(values, axis=0)[-1]
 
 
-class BatchNormArrayLayer:
+class BatchNormArrayLayer(GammaAndBeta[FloatArray]):
     """
     y = gamma * xhat + beta, then the activation, xhat normalized with the batch's statistics in
     training and the running averages in inference. gamma and beta are trained, without weight
@@ -46,8 +46,6 @@ class BatchNormArrayLayer:
     normalized as a batch of their own, and move the running averages in turn; the gradients of
     gamma and beta still sum over the whole batch.
     """
-
-    decayed: ClassVar[tuple[bool, ...]] = (False, False)
 
     def __init__(
         self,
@@ -78,21 +76,6 @@ class BatchNormArrayLayer:
 
         self.grad_gamma: FloatArray = np.zeros(features)
         self.grad_beta: FloatArray = np.zeros(features)
-
-    def parameters(self) -> tuple[FloatArray, ...]:
-        return self.gamma, self.beta
-
-    def gradients(self) -> tuple[FloatArray, ...]:
-        return self.grad_gamma, self.grad_beta
-
-    def set_parameters(self, parameters: Sequence[FloatArray]) -> None:
-        self.gamma, self.beta = parameters
-
-    def running_state(self) -> tuple[FloatArray, ...]:
-        return self.running_mean, self.running_var
-
-    def set_running_state(self, state: Sequence[FloatArray]) -> None:
-        self.running_mean, self.running_var = state
 
     def set_training_mode(self, training: bool) -> None:
         self.training = training
