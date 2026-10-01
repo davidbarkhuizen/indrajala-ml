@@ -2,15 +2,15 @@
 # (matrices are named as in the literature, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, ClassVar, Literal
+from typing import Any, Literal
 
 import indrajala_math_rust as pa
 
+from indrajala_ml.model.array_parameters import GammaAndBeta
 from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
 
 
-class BatchNormRustArrayLayer:
+class BatchNormRustArrayLayer(GammaAndBeta[pa.Array]):
     """
     BatchNormArrayLayer on the Rust backend, each method one Rust call (the crate's batch_norm.rs),
     which computes the README's expressions (Batch normalization) as the numpy layer does: given
@@ -33,8 +33,6 @@ class BatchNormRustArrayLayer:
     With a group_size, the ops normalize each ghost group (layer_specs.ghost_groups, D6) as a
     batch of its own; _var and _std are then per group per channel, group-major.
     """
-
-    decayed: ClassVar[tuple[bool, ...]] = (False, False)
 
     def __init__(
         self,
@@ -66,21 +64,6 @@ class BatchNormRustArrayLayer:
 
         self.grad_gamma = pa.Array.zeros(channels)
         self.grad_beta = pa.Array.zeros(channels)
-
-    def parameters(self) -> tuple[pa.Array, ...]:
-        return self.gamma, self.beta
-
-    def gradients(self) -> tuple[pa.Array, ...]:
-        return self.grad_gamma, self.grad_beta
-
-    def set_parameters(self, parameters: Sequence[pa.Array]) -> None:
-        self.gamma, self.beta = parameters
-
-    def running_state(self) -> tuple[pa.Array, ...]:
-        return self.running_mean, self.running_var
-
-    def set_running_state(self, state: Sequence[pa.Array]) -> None:
-        self.running_mean, self.running_var = state
 
     def set_training_mode(self, training: bool) -> None:
         self.training = training
