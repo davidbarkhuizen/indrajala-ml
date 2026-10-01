@@ -1,6 +1,7 @@
 """
-The RNG audit's measurements (docs/rng-audit.md): the crate's uniform/bernoulli_mask against
-numpy's legacy np.random (MT19937) and its PCG64 Generator, for statistical quality and speed.
+The RNG audit's measurements (docs/rng-audit.md): the crate's uniform/bernoulli_mask (its legacy
+MT19937 module functions, and its PCG64 Generator) against numpy's legacy np.random (MT19937) and
+its PCG64 Generator, for statistical quality and speed.
 
     python scripts/rng_audit.py quality [--repeats 20]
     python scripts/rng_audit.py time [--repeats 5]
@@ -8,8 +9,9 @@ numpy's legacy np.random (MT19937) and its PCG64 Generator, for statistical qual
 `quality` draws 10M uniforms from each generator and reports a 4096-bin chi-square (as a
 Wilson-Hilferty z), a Kolmogorov-Smirnov p, the lag-1 correlation (as z = r * sqrt(n)), and the
 correlation between the first draws of consecutive small calls (the position carries across calls),
-then bernoulli_mask's keep rate (as z) at three drop probabilities. --repeats reruns the crate's KS and
-lag-1 on 2M draws, since one borderline p is expected by chance somewhere in a table this size.
+then each crate generator's bernoulli_mask keep rate (as z) at three drop probabilities. --repeats
+reruns each crate generator's KS and lag-1 on 2M draws, since one borderline p is expected by chance
+somewhere in a table this size.
 
 `time` runs every (backend, repeat) in its own process, rotating the order, and reports the median
 per draw for weight-init and dropout-mask shapes.
@@ -30,7 +32,7 @@ import numpy.typing as npt
 from process_runs import interleaved_runs, run_json_worker
 
 FloatArray = npt.NDArray[np.float64]
-BACKENDS = ["rust", "numpy-legacy", "numpy-pcg64"]
+BACKENDS = ["rust", "rust-pcg64", "numpy-legacy", "numpy-pcg64"]
 # (op, shape): weight init at small/MNIST/large sizes, then dropout masks at batch 1, 32, 512
 CASES: list[tuple[str, tuple[int, int]]] = [
     ("uniform", (128, 64)),
@@ -44,6 +46,10 @@ CASES: list[tuple[str, tuple[int, int]]] = [
 
 def rust_uniform(n: int) -> FloatArray:
     return np.array(pa.uniform(0.0, 1.0, n).tolist())
+
+
+def rust_pcg64_random(generator: pa.Generator) -> Callable[[int], FloatArray]:
+    return lambda n: np.array(generator.random(n).tolist())
 
 
 def chi_square_z(counts: FloatArray) -> float:
@@ -69,6 +75,7 @@ def lag1_z(values: FloatArray) -> float:
 def quality(repeats: int) -> None:
     draw: dict[str, Callable[[int], FloatArray]] = {
         "rust": rust_uniform,
+        "rust-pcg64": rust_pcg64_random(pa.default_rng()),
         "numpy-legacy": lambda n: np.random.uniform(0.0, 1.0, n),
         "numpy-pcg64": np.random.default_rng().random,
     }
@@ -80,16 +87,25 @@ def quality(repeats: int) -> None:
             f"{backend:13s} chi2 z {chi_square_z(counts):+.2f}  KS p {ks_p(values):.3f}  "
             f"lag-1 z {lag1_z(values):+.2f}  call-to-call z {lag1_z(firsts):+.2f}"
         )
-    for drop_probability in (0.1, 0.5, 0.9):
-        mask = np.array(pa.bernoulli_mask(drop_probability, 2_000_000).tolist())
-        keep = 1.0 - drop_probability
-        z = (float(mask.mean()) - keep) / math.sqrt(keep * drop_probability / mask.size)
-        print(f"bernoulli_mask p={drop_probability}: keep rate {mask.mean():.5f}, z {z:+.2f}")
+    generator = pa.default_rng()
+    masks: dict[str, Callable[[float, int], pa.Array]] = {
+        "rust": pa.bernoulli_mask,
+        "rust-pcg64": generator.bernoulli_mask,
+    }
+    for backend, draw_mask in masks.items():
+        for drop_probability in (0.1, 0.5, 0.9):
+            mask = np.array(draw_mask(drop_probability, 2_000_000).tolist())
+            keep = 1.0 - drop_probability
+            z = (float(mask.mean()) - keep) / math.sqrt(keep * drop_probability / mask.size)
+            print(f"{backend:10s} bernoulli_mask p={drop_probability}: keep rate {mask.mean():.5f}, z {z:+.2f}")
     if repeats > 0:
-        runs = [rust_uniform(2_000_000) for _ in range(repeats)]
-        print(f"rust KS p over {repeats} runs (uniform if sound): " + " ".join(f"{ks_p(v):.2f}" for v in runs))
-        zs = [lag1_z(v) for v in runs]
-        print(f"rust lag-1 z over {repeats} runs: mean {statistics.fmean(zs):+.2f}, sd {statistics.pstdev(zs):.2f}")
+        for backend in ("rust", "rust-pcg64"):
+            runs = [draw[backend](2_000_000) for _ in range(repeats)]
+            ps = " ".join(f"{ks_p(v):.2f}" for v in runs)
+            print(f"{backend} KS p over {repeats} runs (uniform if sound): {ps}")
+            zs = [lag1_z(v) for v in runs]
+            sd = statistics.pstdev(zs)
+            print(f"{backend} lag-1 z over {repeats} runs: mean {statistics.fmean(zs):+.2f}, sd {sd:.2f}")
 
 
 def time_worker(backend: str) -> dict[str, Any]:
@@ -98,6 +114,10 @@ def time_worker(backend: str) -> dict[str, Any]:
     if backend == "rust":
         uniform = lambda shape: pa.uniform(-0.1, 0.1, shape)
         mask = lambda shape: pa.bernoulli_mask(0.3, shape)
+    elif backend == "rust-pcg64":
+        rust_generator = pa.default_rng(0)
+        uniform = lambda shape: rust_generator.uniform(-0.1, 0.1, shape)
+        mask = lambda shape: rust_generator.bernoulli_mask(0.3, shape)
     elif backend == "numpy-legacy":
         uniform = lambda shape: np.random.uniform(-0.1, 0.1, size=shape)
         mask = lambda shape: (np.random.random(shape) >= 0.3).astype(np.float64)

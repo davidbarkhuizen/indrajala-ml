@@ -2,10 +2,14 @@
 
 The random number generators this project uses: how the Rust crate's generator
 (`rust/src/random.rs`) reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and
-what is still open. The measurements and checks come from these harnesses:
+what is still open. The crate also has a PCG64 `Generator` (`rust/src/generator.rs`) that
+reproduces numpy's `default_rng` bit for bit; nothing uses it yet
+([rng-generators-workplan.md](rng-generators-workplan.md)). The measurements and checks come from these harnesses:
 
 - `rust/tests/test_random_numpy_parity.py`: the crate against `np.random`, bit for bit. It covers
   every draw function, the fused dropout masks, every seeding path and numpy's rejections.
+- `rust/tests/test_random_pcg64_parity.py`: the crate's `SeedSequence` and `Generator` against
+  numpy's `SeedSequence` and `default_rng`, bit for bit, with the state moving between the two.
 - `tests/test_seeded_init_parity.py`: seeded `randomized()` gives bit-identical numpy and Rust
   networks, for every array network class.
 - `tests/test_dropout_fused_layer_ops.py` and
@@ -115,37 +119,42 @@ provide. A probe build that exposed `(pos, key[0])` confirmed each case against 
 
 ### Statistical quality
 
-`scripts/rng_audit.py quality --repeats 20`, 10M draws per generator:
+`scripts/rng_audit.py quality --repeats 20`, 10M draws per generator (rerun 2026-10-01 with the
+crate's PCG64 row):
 
 | Generator | chi-square z (4096 bins) | KS p | lag-1 z | call-to-call z |
 |---|---:|---:|---:|---:|
-| crate | -0.79 | 0.922 | -0.44 | -0.23 |
-| numpy legacy | +0.71 | 0.909 | +0.88 | +0.49 |
-| numpy PCG64 | -0.83 | 0.055 | -0.21 | +0.23 |
+| crate legacy | +0.38 | 0.990 | +1.84 | +1.98 |
+| crate PCG64 | -1.90 | 0.867 | -0.90 | -1.25 |
+| numpy legacy | +0.69 | 0.745 | +2.24 | -1.16 |
+| numpy PCG64 | -0.88 | 0.937 | -0.02 | -1.53 |
 
-`bernoulli_mask`'s keep rate over 2M draws: z = -0.82, -1.51 and +0.65 at drop probabilities 0.1,
-0.5 and 0.9. Over three runs of 20 repeats on 2M draws, the crate's lag-1 z has mean +0.30, -0.35
-and +0.25 and sd 0.96, 0.97 and 0.78, as independent draws should. Its 60 KS p-values spread over
-[0.00, 1.00] with five below 0.015 (two print as 0.00), a little more than the one expected; the
-crate's stream is numpy legacy's bit for bit, so that is chance or the KS harness, not the
-generator. Every other statistic is within chance. The crate and numpy legacy are the same
-algorithm, so their rows differ only by their entropy seeds.
+`bernoulli_mask`'s keep rate over 2M draws: z = +1.25, -0.49 and -1.26 for the legacy stream and
+-1.03, +1.28 and -0.64 for the PCG64 `Generator`, at drop probabilities 0.1, 0.5 and 0.9. Over 20
+repeats on 2M draws, the legacy stream's lag-1 z has mean +0.01 and sd 0.78, and the PCG64's mean
+-0.31 and sd 0.98, as independent draws should. Their KS p-values spread over [0.02, 0.90] and
+[0.08, 0.94]. An earlier run of the same command gave the crate's PCG64 a KS p of 0.010 on its
+10M draws; its 20 repeats spread over [0.08, 0.94] that run too. In the audit's original three
+runs of the legacy stream, 5 of 60 KS p-values were below 0.015, a little more than the one
+expected. Each crate stream is numpy's bit for bit, so these are chance or the KS harness, not
+the generator, and each crate row differs from its numpy row only by the entropy seed.
 
 ### Speed
 
 `scripts/rng_audit.py time --repeats 5`, nanoseconds per draw, median over processes:
 
-| Case | crate | numpy legacy | numpy PCG64 |
-|---|---:|---:|---:|
-| uniform (128, 64) | 6.19 | 6.92 | 4.63 |
-| uniform (784, 128) | 6.19 | 6.63 | 4.32 |
-| uniform (1000, 1000) | 6.33 | 6.85 | 4.49 |
-| mask (1, 128) | 7.69 | 28.14 | 27.37 |
-| mask (32, 128) | 5.71 | 6.80 | 4.94 |
-| mask (512, 128) | 5.63 | 6.10 | 4.18 |
+| Case | crate legacy | crate PCG64 | numpy legacy | numpy PCG64 |
+|---|---:|---:|---:|---:|
+| uniform (128, 64) | 6.37 | 3.57 | 6.88 | 4.72 |
+| uniform (784, 128) | 6.38 | 3.60 | 6.64 | 4.44 |
+| uniform (1000, 1000) | 6.53 | 3.82 | 6.90 | 4.71 |
+| mask (1, 128) | 7.88 | 5.35 | 28.95 | 28.06 |
+| mask (32, 128) | 5.80 | 3.53 | 6.92 | 5.02 |
+| mask (512, 128) | 5.74 | 3.49 | 6.16 | 4.31 |
 
-The crate runs MT19937 slightly faster than numpy's legacy path, and avoids numpy's per-call
-overhead at batch 1. The RNG is not a hot path. A 784 x 128 init happens once per network, and
+(Rerun 2026-10-01 with the crate's PCG64 column.) The crate runs MT19937 slightly faster than
+numpy's legacy path, and PCG64 about 20% faster than numpy's (one 64-bit step per double against
+MT19937's two 32-bit draws), and avoids numpy's per-call overhead at batch 1. The RNG is not a hot path. A 784 x 128 init happens once per network, and
 the dropout mask is a small part of a training step. One Rust dropout epoch (784-128-10, batch 32,
 p = 0.5, 8192 random rows, `learn_batch` on tuple batches, 9 processes) takes a median of 381 ms
 (374-385).
