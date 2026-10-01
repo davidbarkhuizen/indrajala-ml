@@ -57,7 +57,7 @@ def _network(implementation: str, input_shape: InputShape, layers: list[LayerSpe
         backend = NUMPY if implementation == "numpy" else RUST
         shape = "single_output" if single_output else "multiclass"
         network = SequentialArrayNetwork(input_shape, layers, SGD(), shape=shape, backend=backend)
-        backend.seed(3)
+        network.rng = backend.default_rng(3)
     network.randomize()
     return network
 

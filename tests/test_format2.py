@@ -9,11 +9,12 @@ batch-norm workplan, stage 5) resume by bits too, their running averages include
 import json
 import random
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from indrajala_ml.model.array_backend import NUMPY, RUST
+from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.ensemble_array_backprop_classifier_network import EnsembleArrayBackpropClassifierNetwork
 from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
 from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
@@ -76,11 +77,20 @@ def _examples(network: Any, predict: str, count: int, seed: int) -> list[tuple[t
     ]
 
 
+def _seed_generator(network: Any, seed: int) -> None:
+    # an array network's own generator; a pure-Python one draws from random (seed_everything)
+    # until the RNG generators workplan's stage 4
+    if isinstance(network, ArrayNetworkBase):
+        array_network = cast("ArrayNetworkBase[Any]", network)
+        array_network.rng = array_network.backend.default_rng(seed)
+
+
 def _trained(name: str) -> Any:
     # a fixture's class, randomized and trained two batches, so its optimizer has state
     fixture = FIXTURES[name]
     seed_everything(1)
     network = fixture.build()
+    _seed_generator(network, 1)
     network.randomize()
     examples = _examples(network, fixture.predict, 6, seed=2)
     network.learn_batch(0.1, examples[:3])
@@ -104,6 +114,7 @@ def test_a_loaded_network_resumes_training_by_bits(
     rows = _rows(input_shape, 8, seed=1)
     seed_everything(2)
     trained = _network(implementation, input_shape, layers, rule)
+    _seed_generator(trained, 2)
     trained.randomize()
     _train(trained, rows)
 
@@ -156,6 +167,7 @@ def test_a_loaded_batch_norm_network_resumes_training_by_bits(
     rows = _rows(input_shape, 8, seed=1)
     seed_everything(2)
     trained = _network(implementation, input_shape, layers, rule)
+    _seed_generator(trained, 2)
     trained.randomize()
     _train_batches(trained, rows)
 
@@ -243,9 +255,11 @@ def test_every_saveable_network_resumes_training_by_bits(name: str, tmp_path: Pa
     assert _state_bits(loaded) == _state_bits(trained)
 
     examples = _examples(trained, FIXTURES[name].predict, 4, seed=3)
-    seed_everything(4)  # the dropout masks
+    seed_everything(4)  # the pure-Python dropout masks
+    _seed_generator(trained, 4)  # the array networks'
     trained.learn_batch(0.1, examples)
     seed_everything(4)
+    _seed_generator(loaded, 4)
     loaded.learn_batch(0.1, examples)
     assert _state_bits(loaded) == _state_bits(trained)
 

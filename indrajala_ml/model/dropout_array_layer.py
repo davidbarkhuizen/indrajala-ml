@@ -17,7 +17,8 @@ class DropoutArrayLayer(ArrayLayer):
     training defaults to False and is set by set_training_mode. The backward pass reads
     _base_activation (the sigmoid before the mask, not self.a) and _was_training (training as
     forward saw it, since the network switches training off before the backward pass).
-    drop_probability is required.
+    drop_probability is required. The masks come from rng, the network's generator, which its
+    rng setter hands over (set_rng); a layer on its own draws from OS entropy.
     """
 
     def __init__(self, size: int, input_size: int, drop_probability: float) -> None:
@@ -26,6 +27,10 @@ class DropoutArrayLayer(ArrayLayer):
         self._drop_probability = drop_probability
         self._keep_probability = 1.0 - drop_probability
         self.training = False
+        self.rng = np.random.default_rng()
+
+    def set_rng(self, rng: np.random.Generator) -> None:
+        self.rng = rng
 
     def set_training_mode(self, training: bool) -> None:
         self.training = training
@@ -34,7 +39,7 @@ class DropoutArrayLayer(ArrayLayer):
         self.z = self.W @ x + self.b
         base = sigmoid(self.z)
         if self.training:
-            self._mask = (np.random.random(self.size) >= self._drop_probability).astype(np.float64)
+            self._mask = (self.rng.random(self.size) >= self._drop_probability).astype(np.float64)
             self.a = base * self._mask / self._keep_probability
         else:
             self._mask = np.ones(self.size)
@@ -49,7 +54,7 @@ class DropoutArrayLayer(ArrayLayer):
         self.Z = X @ self.W.T + self.b
         base = sigmoid(self.Z)
         if self.training:
-            self._mask_batch = (np.random.random((batch_size, self.size)) >= self._drop_probability).astype(np.float64)
+            self._mask_batch = (self.rng.random((batch_size, self.size)) >= self._drop_probability).astype(np.float64)
             self.A = base * self._mask_batch / self._keep_probability
         else:
             self._mask_batch = np.ones((batch_size, self.size))

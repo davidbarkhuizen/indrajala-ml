@@ -87,7 +87,6 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 import indrajala_math_rust as pa
-import numpy as np
 
 from indrajala_ml.lr_schedule import linear_warmup
 from indrajala_ml.model.array_backend import NUMPY, RUST
@@ -173,7 +172,9 @@ def initial_network(
     """
     A fresh network whose weights are drawn once by numpy from `seed` and restored, so every
     backend, rate, batch size, momentum and (conv-bn) group size sees the same starting weights
-    for a given seed. group_size is conv-bn's only.
+    for a given seed. group_size is conv-bn's only. The weights are drawn from numpy's default_rng
+    (PCG64) since the RNG generators workplan's stage 3; the studies' recorded results came from
+    np.random's legacy stream, so a rerun differs from them by seed noise.
     """
     if architecture == "conv-bn":
         return _initial_conv_batch_norm_network(backend, momentum, seed, group_size)
@@ -183,8 +184,9 @@ def initial_network(
     if architecture != "dense":
         raise ValueError(f"unknown architecture {architecture!r}")
 
-    np.random.seed(seed)
-    snapshot = VectorizedMultiClassBackpropClassifierNetwork.randomized(LAYER_SIZES, DIMENSION, CLASS_COUNT).snapshot()
+    snapshot = VectorizedMultiClassBackpropClassifierNetwork.randomized(
+        LAYER_SIZES, DIMENSION, CLASS_COUNT, seed=seed
+    ).snapshot()
 
     if backend == "numpy":
         if momentum:
@@ -208,9 +210,8 @@ def initial_network(
 
 
 def _initial_conv_network(backend: str, momentum: float, seed: int):
-    np.random.seed(seed)
     snapshot = ConvVectorizedMultiClassBackpropClassifierNetwork.randomized(
-        SIDE, SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT
+        SIDE, SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT, seed=seed
     ).snapshot()
 
     if backend == "numpy":
@@ -243,8 +244,8 @@ def _initial_conv_batch_norm_network(backend: str, momentum: float, seed: int, g
     specs = conv_batch_norm_specs(group_size)
     rule: UpdateRule = Momentum(momentum) if momentum else SGD()
 
-    np.random.seed(seed)
     drawn = SequentialArrayNetwork((SIDE, SIDE, 1), specs, rule, backend=NUMPY)
+    drawn.rng = NUMPY.default_rng(seed)
     drawn.randomize()
 
     network = SequentialArrayNetwork((SIDE, SIDE, 1), specs, rule, backend=NUMPY if backend == "numpy" else RUST)

@@ -267,7 +267,7 @@ def _network(implementation: str, input_shape: Any, layers: list[LayerSpec], rul
     else:
         backend = NUMPY if implementation == "numpy" else RUST
         network = SequentialArrayNetwork(input_shape, layers, rule, shape="multiclass", backend=backend)
-        backend.seed(seed)
+        network.rng = backend.default_rng(seed)
     network.randomize()
     return network
 

@@ -115,6 +115,16 @@ class BiasFreeArrayLayer[A: BackendArray](Protocol):
 
 
 @runtime_checkable
+class GeneratorLayer(Protocol):
+    """
+    A layer that draws in training (dropout's masks), from the generator its network owns: the
+    network's rng setter hands it over (the RNG generators workplan, D8).
+    """
+
+    def set_rng(self, rng: Any, /) -> None: ...
+
+
+@runtime_checkable
 class TrainingModeLayer(Protocol):
     """
     A layer that behaves differently in training (dropout, batch norm): learn* switches it on and
@@ -154,10 +164,14 @@ class ArrayBackend[A: BackendArray](Protocol):
     # a new optimizer applying rule on this backend's arrays
     def optimizer(self, rule: UpdateRule) -> ArrayOptimizer[A]: ...
 
-    def random_layer(self, size: int, previous_size: int) -> tuple[A, A]: ...
+    # the generator a network owns (array_backend.py): numpy's np.random.Generator or the crate's
+    # pa.Generator, both numpy's default_rng (PCG64), so typed Any here
+    def default_rng(self, seed: Any = None) -> Any: ...
+
+    def random_layer(self, rng: Any, size: int, previous_size: int) -> tuple[A, A]: ...
 
     # random_layer's W alone, for a layer without a bias
-    def random_weights(self, size: int, previous_size: int) -> A: ...
+    def random_weights(self, rng: Any, size: int, previous_size: int) -> A: ...
 
     def vector(self, state: Sequence[float]) -> A: ...
 

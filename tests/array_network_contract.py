@@ -108,13 +108,13 @@ def assert_sequential_matches_preset(
     """
     sequential, a generically built network, is preset by bits: the same layer classes, then,
     from preset's randomized weights, the same weights after every learn and learn_batch step and
-    the same outputs. The backend's RNG is reseeded before each step on both, so dropout draws the
-    same masks.
+    the same outputs. Both networks' generators are reseeded before each step, so dropout draws
+    the same masks.
     """
     assert [type(layer) for layer in sequential.layers] == [type(layer) for layer in preset.layers]
     assert sequential.optimizer.rule == preset.optimizer.rule
 
-    backend.seed(0)
+    preset.rng = backend.default_rng(0)
     preset.randomize()
     sequential.restore(preset.snapshot())
     assert snapshot_bits(sequential) == snapshot_bits(preset)
@@ -123,14 +123,14 @@ def assert_sequential_matches_preset(
     for step in range(steps):
         state, category = examples(rng)
         for network in (preset, sequential):
-            backend.seed(step)
+            network.rng = backend.default_rng(step)
             network.learn(learning_rate, state, category)
         assert snapshot_bits(sequential) == snapshot_bits(preset), f"after learn step {step}"
 
     for step in range(batches):
         batch = [examples(rng) for _ in range(8)]
         for network in (preset, sequential):
-            backend.seed(steps + step)
+            network.rng = backend.default_rng(steps + step)
             network.learn_batch(learning_rate, batch)
         assert snapshot_bits(sequential) == snapshot_bits(preset), f"after learn_batch step {step}"
 

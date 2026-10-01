@@ -167,7 +167,7 @@ def _max_relative_gap(layers: list[LayerSpec], rule: UpdateRule) -> float:
     networks: list[Any] = []
     for backend in (NUMPY, RUST):
         network = SequentialArrayNetwork(INPUT, layers, rule, backend=backend)
-        backend.seed(3)
+        network.rng = backend.default_rng(3)
         network.randomize()
         networks.append(network)
     rows = _rows(40)

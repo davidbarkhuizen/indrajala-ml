@@ -22,21 +22,21 @@ def sigmoid(z: FloatArray) -> FloatArray:
         return 1.0 / (1.0 + np.exp(-z))
 
 
-def fan_in_aware_random_layer(size: int, previous_size: int) -> tuple[FloatArray, FloatArray]:
+def fan_in_aware_random_layer(rng: np.random.Generator, size: int, previous_size: int) -> tuple[FloatArray, FloatArray]:
     """
-    A layer's (W, b) drawn uniformly from [-limit, limit], limit = 1/sqrt(fan_in): the numpy
-    backend's random_layer.
+    A layer's (W, b) drawn from rng uniformly from [-limit, limit], limit = 1/sqrt(fan_in), W
+    first: the numpy backend's random_layer.
     """
-    W = fan_in_aware_random_weights(size, previous_size)
+    W = fan_in_aware_random_weights(rng, size, previous_size)
     limit = 1.0 / np.sqrt(previous_size)
-    b = np.random.uniform(-limit, limit, size=(size,))
+    b = rng.uniform(-limit, limit, size=(size,))
     return W, b
 
 
-def fan_in_aware_random_weights(size: int, previous_size: int) -> FloatArray:
+def fan_in_aware_random_weights(rng: np.random.Generator, size: int, previous_size: int) -> FloatArray:
     """fan_in_aware_random_layer's W alone: the numpy backend's random_weights."""
     limit = 1.0 / np.sqrt(previous_size)
-    return np.random.uniform(-limit, limit, size=(size, previous_size))
+    return rng.uniform(-limit, limit, size=(size, previous_size))
 
 
 class ArrayLayer(WeightAndBias[FloatArray]):

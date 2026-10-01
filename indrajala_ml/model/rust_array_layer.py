@@ -9,21 +9,21 @@ import indrajala_math_rust as pa
 from indrajala_ml.model.array_parameters import WeightAndBias
 
 
-def fan_in_aware_random_rust_layer(size: int, previous_size: int) -> tuple[pa.Array, pa.Array]:
+def fan_in_aware_random_rust_layer(rng: pa.Generator, size: int, previous_size: int) -> tuple[pa.Array, pa.Array]:
     """
-    fan_in_aware_random_layer drawn from indrajala_math_rust.uniform: the Rust backend's
-    random_layer. The crate's RNG is numpy's np.random in a separate state, so after
-    pa.seed(s) this draws bit for bit what fan_in_aware_random_layer draws after
-    np.random.seed(s). math.sqrt, not ** 0.5: ** 0.5 is 1 ULP off np.sqrt at some fan-ins.
+    fan_in_aware_random_layer drawn from the crate's Generator: the Rust backend's random_layer.
+    The crate's Generator is numpy's default_rng (PCG64), so from generators in the same state
+    this draws bit for bit what fan_in_aware_random_layer draws. math.sqrt, not ** 0.5: ** 0.5 is
+    1 ULP off np.sqrt at some fan-ins.
     """
     limit = 1.0 / math.sqrt(previous_size)
-    return fan_in_aware_random_rust_weights(size, previous_size), pa.uniform(-limit, limit, size)
+    return fan_in_aware_random_rust_weights(rng, size, previous_size), rng.uniform(-limit, limit, size)
 
 
-def fan_in_aware_random_rust_weights(size: int, previous_size: int) -> pa.Array:
+def fan_in_aware_random_rust_weights(rng: pa.Generator, size: int, previous_size: int) -> pa.Array:
     """fan_in_aware_random_rust_layer's W alone: the Rust backend's random_weights."""
     limit = 1.0 / math.sqrt(previous_size)
-    return pa.uniform(-limit, limit, (size, previous_size))
+    return rng.uniform(-limit, limit, (size, previous_size))
 
 
 class RustArrayLayer(WeightAndBias[pa.Array]):

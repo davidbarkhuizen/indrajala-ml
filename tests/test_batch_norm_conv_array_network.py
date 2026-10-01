@@ -182,7 +182,7 @@ NETWORKS: dict[str, list[LayerSpec]] = {
 
 def _network(name: str = "conv pool", rule: UpdateRule | None = None, seed: int = 3, backend: Any = NUMPY) -> Any:
     network = SequentialArrayNetwork(INPUT, NETWORKS[name], SGD() if rule is None else rule, backend=backend)
-    backend.seed(seed)
+    network.rng = backend.default_rng(seed)
     network.randomize()
     return network
 
@@ -196,9 +196,9 @@ def _rows(count: int, seed: int = 1) -> list[tuple[tuple[float, ...], int]]:  # 
 def test_randomize_draws_the_linear_conv_layers_w_only_and_nothing_for_batch_norm():
     network = _network()
     linear, norm, _pool, output = network.layers
-    NUMPY.seed(3)
-    W_linear = np.random.uniform(-1 / np.sqrt(9), 1 / np.sqrt(9), (2, 9))
-    W_output = np.random.uniform(-1 / np.sqrt(8), 1 / np.sqrt(8), (3, 8))
+    rng = np.random.default_rng(3)
+    W_linear = rng.uniform(-1 / np.sqrt(9), 1 / np.sqrt(9), (2, 9))
+    W_output = rng.uniform(-1 / np.sqrt(8), 1 / np.sqrt(8), (3, 8))
 
     assert linear.W.tobytes() == W_linear.tobytes() and output.W.tobytes() == W_output.tobytes()
     assert norm.gamma.tolist() == [1.0] * 2 and norm.beta.tolist() == [0.0] * 2

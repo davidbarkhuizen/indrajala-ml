@@ -12,6 +12,16 @@ from indrajala_ml.model.rust_array_layer import fan_in_aware_random_rust_layer, 
 from indrajala_ml.model.update_rules import UpdateRule
 
 
+def _seed_sequence_parts(seed: Any) -> tuple[Any, Any] | None:
+    """
+    Another implementation's SeedSequence (numpy's, the crate's or indrajala_ml.pcg64's) as its
+    entropy and spawn key, which seed the same stream in any of them; None for any other seed.
+    """
+    if not hasattr(seed, "spawn_key"):
+        return None
+    return seed.entropy, seed.spawn_key
+
+
 class NumpyBackend:
     """
     The array operations ArrayNetworkBase needs from numpy. The two backends' networks differ
@@ -20,10 +30,22 @@ class NumpyBackend:
     """
 
     name = "numpy"
-    # seeds the RNG random_layer draws from: np.random here, the crate's own state on Rust
+    # seeds np.random, which nothing in the networks draws from any more; the tests still seed
+    # with it until the RNG generators workplan's stage 7 deletes it
     seed = staticmethod(np.random.seed)
     random_layer = staticmethod(fan_in_aware_random_layer)
     random_weights = staticmethod(fan_in_aware_random_weights)
+
+    @staticmethod
+    def default_rng(seed: Any = None) -> np.random.Generator:
+        """
+        numpy's default_rng (PCG64), the generator a numpy network owns: an int, a sequence of
+        ints, any implementation's SeedSequence, or None for OS entropy.
+        """
+        parts = _seed_sequence_parts(seed)
+        if parts is not None and not isinstance(seed, np.random.SeedSequence):
+            seed = np.random.SeedSequence(parts[0], spawn_key=parts[1])
+        return np.random.default_rng(seed)
 
     @staticmethod
     def vector(state: Sequence[float]) -> FloatArray:
@@ -74,6 +96,14 @@ class RustBackend:
     seed = staticmethod(pa.seed)
     random_layer = staticmethod(fan_in_aware_random_rust_layer)
     random_weights = staticmethod(fan_in_aware_random_rust_weights)
+
+    @staticmethod
+    def default_rng(seed: Any = None) -> pa.Generator:
+        """NumpyBackend.default_rng's generator in the crate: the same seed, the same stream."""
+        parts = _seed_sequence_parts(seed)
+        if parts is not None and not isinstance(seed, pa.SeedSequence):
+            seed = pa.SeedSequence(parts[0], spawn_key=parts[1])
+        return pa.default_rng(seed)
 
     @staticmethod
     def vector(state: Sequence[float]) -> pa.Array:

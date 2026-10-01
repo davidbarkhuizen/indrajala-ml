@@ -39,6 +39,7 @@ from typing import Any, cast
 
 import indrajala_ml.model
 from indrajala_ml.model.array_backend import NUMPY, RUST
+from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
@@ -362,8 +363,12 @@ def _write(name: str, fixture: SavedModelFixture) -> None:
     network.restore(_positive_running_variances(network, drawn) if fixture.class_name is not None else drawn)
     states = [tuple(rng.uniform(0.0, 1.0) for _ in range(network_dimension(network))) for _ in range(STATE_COUNT)]
     if fixture.format2:
-        # a non-empty optimizer state to pin; seeded for the dropout masks
+        # a non-empty optimizer state to pin; seeded for the dropout masks (an array network's from
+        # its own generator)
         seed_everything(0)
+        if isinstance(network, ArrayNetworkBase):
+            array_network = cast("ArrayNetworkBase[Any]", network)
+            array_network.rng = array_network.backend.default_rng(0)
         labels = [
             rng.randrange(CLASS_COUNT) if fixture.predict == "predict_probabilities" else float(rng.randrange(2))
             for _ in states

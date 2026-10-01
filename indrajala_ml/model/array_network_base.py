@@ -12,6 +12,7 @@ from indrajala_ml.model.array_protocols import (
     ArrayOptimizer,
     BackendArray,
     BiasFreeArrayLayer,
+    GeneratorLayer,
     RunningStateLayer,
     TrainedArrayLayer,
     TrainingModeLayer,
@@ -70,10 +71,30 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
         self.output_layer = cast("WeightedArrayLayer[A]", self.layers[-1])
         # the dropout and batch-norm layers, which _set_training_mode switches
         self._training_mode_layers = [layer for layer in self.layers if isinstance(layer, TrainingModeLayer)]
+        # the dropout layers, which draw their masks from the network's generator
+        self._generator_layers = [layer for layer in self.layers if isinstance(layer, GeneratorLayer)]
+        # OS entropy until randomized(seed=, rng=) or an assignment sets it (the RNG generators
+        # workplan, D9)
+        self.rng = self.backend.default_rng()
         # the index of the first batch-norm layer, if any: such a network refuses a one-example
         # training step (the batch-norm workplan, D4)
         self.batch_norm_index = batch_norm_index(specs)
         self.optimizer = self._new_optimizer()
+
+    @property
+    def rng(self) -> Any:
+        """
+        The generator this network owns (the RNG generators workplan, D8), the backend's
+        default_rng: randomize() draws the weights from it and the dropout layers their masks, one
+        stream between them.
+        """
+        return self._rng
+
+    @rng.setter
+    def rng(self, rng: Any) -> None:
+        self._rng = rng
+        for layer in self._generator_layers:
+            layer.set_rng(rng)
 
     def _hidden_spec(self, size: int) -> Dense:
         # a dense hidden layer; the ReLU and dropout siblings return theirs
@@ -229,27 +250,34 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
             optimizer.apply(index, layer, learning_rate, batch_size)
 
     @classmethod
-    def randomized(cls, *args: Any, **kwargs: Any) -> Self:
+    def randomized(cls, *args: Any, seed: Any = None, rng: Any = None, **kwargs: Any) -> Self:
         # every sibling's randomized signature is its __init__ signature, so one pass-through
-        # serves them all, positional or keyword, defaults included
+        # serves them all, positional or keyword, defaults included. seed (an int, a sequence of
+        # ints or a SeedSequence) seeds the network's own generator, or rng is that generator; with
+        # neither it is seeded from OS entropy
+        assert seed is None or rng is None, "randomized takes seed or rng, not both"
         network = cls(*args, **kwargs)
+        if rng is not None:
+            network.rng = rng
+        elif seed is not None:
+            network.rng = network.backend.default_rng(seed)
         network.randomize()
         return network
 
     def randomize(self) -> None:
-        # fan-in-aware (limit = 1/sqrt(fan_in)), drawn from the backend's RNG: after
-        # backend.seed(s), numpy and Rust draw the same weights. W then b per layer, in forward
+        # fan-in-aware (limit = 1/sqrt(fan_in)), drawn from the network's generator: from the same
+        # seed, numpy and Rust draw the same weights. W then b per layer, in forward
         # order; a W is (rows, fan_in), a dense layer's (size, input_size) and a conv layer's
         # (channel_count, input_channels * kernel_size**2). A linear layer draws its W only, and a
         # pool or batch-norm layer draws nothing.
         for layer in self.layers:
             if isinstance(layer, WeightedArrayLayer):
                 rows, fan_in = layer.W.shape
-                layer.W, layer.b = self.backend.random_layer(rows, fan_in)
+                layer.W, layer.b = self.backend.random_layer(self.rng, rows, fan_in)
             elif isinstance(layer, BiasFreeArrayLayer):
                 linear = cast("BiasFreeArrayLayer[A]", layer)
                 rows, fan_in = linear.W.shape
-                linear.W = self.backend.random_weights(rows, fan_in)
+                linear.W = self.backend.random_weights(self.rng, rows, fan_in)
 
     @classmethod
     def _extra_init_kwargs(cls, state: dict[str, Any]) -> dict[str, Any]:
