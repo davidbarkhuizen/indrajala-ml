@@ -1,6 +1,7 @@
 # Workplan: the conv batch-size study with batch norm
 
-**Status: decisions D1-D6 settled; stage 1 is next.**
+**Status: stages 1 (#517) and 2 done: `lr_32` is 2 at momentum 0.0 and 0.125 at 0.9. Stage 3 is
+next.**
 
 The conv batch-size study (`indrajala_ml/batch_size_scaling.py`, findings in its docstring) found
 that the linear learning-rate scaling rule (Goyal et al. 2017) fails for the conv network at
@@ -122,6 +123,39 @@ the golden run).
 At B = 32 the arms are the same bits, so this runs once, without `--group-size`. `lr_32` per
 momentum is the best rate whose seeds all finish at 20% or more, as before. Record the table
 here and the chosen rates in the PR.
+
+Result: full MNIST, Rust, 3 seeds, 2 epochs, B = 32 (both arms), final test accuracy:
+
+| rate | momentum 0.0, epoch 2 | worst seed | momentum 0.9, epoch 2 | worst seed |
+| --- | --- | --- | --- | --- |
+| 0.03125 | 96.25% ± 0.30% | 95.93% | 97.82% ± 0.10% | 97.73% |
+| 0.0625 | 97.11% ± 0.09% | 97.01% | 97.88% ± 0.11% | 97.81% |
+| 0.125 | 97.45% ± 0.13% | 97.30% | **98.00% ± 0.24%** | 97.79% |
+| 0.25 | 97.72% ± 0.11% | 97.59% | 94.66% ± 5.78% | 87.98% |
+| 0.5 | 97.85% ± 0.16% | 97.71% | 75.46% ± 5.79% | 68.78% |
+| 1 | 97.88% ± 0.08% | 97.82% | 52.61% ± 15.63% | 39.35% |
+| **2** | **97.92% ± 0.17%** | 97.82% | 25.44% ± 6.40% | 18.08% |
+| 4 | 97.85% ± 0.19% | 97.63% | 10.56% ± 0.90% | 9.58% |
+| 8 | 94.46% ± 5.70% | 87.88% | 10.65% ± 0.94% | 9.58% |
+| 16 | 34.64% ± 4.88% | 29.09% | 10.07% ± 1.12% | 9.28% |
+| 32 | 12.06% ± 2.90% | 9.58% | 9.95% ± 1.26% | 8.92% |
+| 64 | 11.38% ± 1.82% | 9.58% | 9.95% ± 1.26% | 8.92% |
+
+- **`lr_32` = 2 at momentum 0.0 (band 97.82% - 98.12%) and 0.125 at 0.9 (band 97.79% -
+  98.26%),** by the rule above. The ladder's top two rates fail at both momenta, so it was long
+  enough.
+- **Batch norm raises accuracy, not the stability edge.** At their `lr_32` the 2-epoch means are 1.1
+  and 1.6 points above the old network's (96.82% at momentum 0.0, 96.43% at 0.9 in #454). The edge is where it
+  was: at momentum 0.0, 8 is erratic and 16 fails (the old network: 8 erratic, 16 at chance). At
+  0.9 the best rate is half the old one (0.125 against 0.25), and 0.25 is erratic (one seed
+  87.98%). So stage 3's scaled rates at B = 512 (32 and 2) are 2x and 8x past rates that already
+  fail at B = 32, as in the old study.
+- **At momentum 0.0 the rate barely matters from 0.5 to 4** (97.85% - 97.92%, within the
+  seeds' spread). The rule picks 2, the best mean. Scaling from 0.5 instead would put B = 512 at
+  8, inside the stable range: a different, gentler test of the rule, left to the owner after
+  stage 3.
+- The sweep took 53 minutes, twice stage 1's estimate: 4 workers on 4 cores gained little over
+  serial.
 
 ### Stage 3: the scaling sweep at B = 32, 128 and 512 (D3, D4)
 
