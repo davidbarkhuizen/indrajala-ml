@@ -23,8 +23,10 @@ from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustAr
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.layer_specs import (
+    Add,
     BatchNorm,
     Dense,
+    Fork,
     InputShape,
     LayerSpec,
     expand_specs,
@@ -36,10 +38,10 @@ from indrajala_ml.model.layer_specs import (
 from indrajala_ml.model.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
-from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
+from indrajala_ml.model.residual_array_layer import AddArrayLayer, AffineArrayLayer, ForkArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
@@ -63,6 +65,11 @@ class ArrayLayerClasses:
     linear: LayerClass
     batch_norm: LayerClass
     linear_conv: FrontEndLayerClass
+    # a residual block's (the residual-connections workplan): the affine layer that ends a body,
+    # the fork (size) and the add (its fork); None where not built yet (Rust, stage 4)
+    affine: LayerClass | None = None
+    fork: LayerClass | None = None
+    add: LayerClass | None = None
 
 
 LAYER_CLASSES = {
@@ -77,6 +84,9 @@ LAYER_CLASSES = {
         linear=LinearArrayLayer,
         batch_norm=BatchNormArrayLayer,
         linear_conv=LinearConvArrayLayer,
+        affine=AffineArrayLayer,
+        fork=ForkArrayLayer,
+        add=AddArrayLayer,
     ),
     "rust": ArrayLayerClasses(
         sigmoid=RustArrayLayer,
@@ -94,6 +104,9 @@ LAYER_CLASSES = {
 
 
 def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> ArrayNetworkLayer[Any]:
+    if spec.bias:
+        assert classes.affine is not None
+        return classes.affine(spec.size, input_size)
     if spec.activation == "linear":
         return classes.linear(spec.size, input_size)
     if spec.dropout is not None:
@@ -110,15 +123,35 @@ def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> Ar
 def build_array_layers(
     specs: Sequence[LayerSpec], input_shape: InputShape, backend_name: str
 ) -> list[ArrayNetworkLayer[Any]]:
-    """specs, validated (validate_layer_specs), as backend_name's layers over input_shape."""
+    """
+    specs, validated (validate_layer_specs), as backend_name's layers over input_shape: one per
+    expanded spec (expand_specs), each residual block's fork wired to its add and to its body's
+    first layer.
+    """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_residual_until(specs, "2" if backend_name == "numpy" else "4", f"on the {backend_name} backend")
+    if backend_name != "numpy":
+        refuse_residual_until(specs, "4", f"on the {backend_name} backend")
     classes = LAYER_CLASSES[backend_name]
 
     layers: list[ArrayNetworkLayer[Any]] = []
+    # each open block's fork, and the fork whose body's first layer comes next
+    forks: list[Any] = []
+    opened: Any = None
     for spec, shape in zip(expand_specs(specs), shapes, strict=True):
         input_size = math.prod(shape.input_shape)
+        if isinstance(spec, Fork):
+            assert classes.fork is not None
+            opened = classes.fork(input_size)
+            forks.append(opened)
+            layers.append(opened)
+            continue
+        if isinstance(spec, Add):
+            assert classes.add is not None
+            fork = forks.pop()
+            fork.add = classes.add(fork)
+            layers.append(fork.add)
+            continue
         if isinstance(spec, Dense):
             layers.append(_dense_layer(classes, spec, input_size))
         elif isinstance(spec, BatchNorm):
@@ -133,6 +166,8 @@ def build_array_layers(
                 conv = classes.conv if spec.activation == "relu" else classes.linear_conv
                 layers.append(conv(height, width, channels, spec.kernel_size, spec.channel_count, spec.stride))
             else:
-                assert isinstance(spec, PoolSpec)
                 layers.append(classes.pool(height, width, channels, spec.pool_size, spec.stride))
+        if opened is not None:
+            opened.body_first = layers[-1]
+            opened = None
     return layers
