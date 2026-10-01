@@ -18,16 +18,7 @@ from indrajala_ml.model.array_protocols import (
     WeightedArrayLayer,
 )
 from indrajala_ml.model.bounds import validate_batch
-from indrajala_ml.model.checkpoint import Checkpoint
-from indrajala_ml.model.format2 import (
-    NetworkFile,
-    check_kind,
-    is_format2,
-    network_from_json,
-    network_to_json,
-    preset_init_kwargs,
-    restore_file,
-)
+from indrajala_ml.model.format2_persistence import Format2Persistence
 from indrajala_ml.model.layer_specs import (
     Dense,
     InputShape,
@@ -36,12 +27,11 @@ from indrajala_ml.model.layer_specs import (
     refuse_single_example_groups,
     refuse_single_example_network,
 )
-from indrajala_ml.model.model_io import load_json, save_json
 from indrajala_ml.model.update_rules import SGD, UpdateRule
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
 
-class ArrayNetworkBase[A: BackendArray]:
+class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], list[A]]):
     """
     What every array-backed network shares, numpy and Rust (NumpyArrayNetworkBase and
     RustArrayNetworkBase set the backend, A being its array type): layers built from layer specs
@@ -290,42 +280,9 @@ class ArrayNetworkBase[A: BackendArray]:
     def implementation(self) -> str:
         return self.backend.name
 
-    def save(self, path: str) -> None:
-        # format 2 (format2.py): the specs, rule, weights and optimizer state
-        save_json(path, network_to_json(self))
-
     @classmethod
-    def load(cls, path: str) -> Self:
-        # a format-2 file, or the class's legacy envelope, which loads with fresh optimizer state
-        state = load_json(path)
-        return cls.from_format2(state) if is_format2(state) else cls._load_legacy(state)
-
-    @classmethod
-    def from_format2(cls, state: dict[str, Any]) -> Self:
-        # a numpy or a Rust file: restore converts the file's nested lists through the backend
-        file = network_from_json(state)
-        check_kind(cls, cls.backend.name, cls.format2_shape, file)
-        network = cls._from_file(file)
-        restore_file(network, file)
-        return network
-
-    @classmethod
-    def _from_file(cls, file: NetworkFile) -> Self:
-        # a preset, from the file's preset arguments; a Sequential network builds from its specs
-        return cls(**preset_init_kwargs(cls, file))
-
-    @classmethod
-    def _load_legacy(cls, state: dict[str, Any]) -> Self:
-        raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
-
-    def checkpoint(self) -> Checkpoint[list[tuple[A, ...]], list[A]]:
-        # the weights and the optimizer's state (checkpoint.py)
-        return Checkpoint(self.snapshot(), self.optimizer.state())
-
-    def restore_checkpoint(self, checkpoint: Checkpoint[Any, Any]) -> None:
-        # as restore, this backend's arrays or nested lists
-        self.restore(checkpoint.weights)
-        self.optimizer.load_state(checkpoint.optimizer)
+    def _format2_implementation(cls) -> str:
+        return cls.backend.name
 
 
 def _layer_state[A: BackendArray](layer: ArrayNetworkLayer[A]) -> tuple[A, ...]:
