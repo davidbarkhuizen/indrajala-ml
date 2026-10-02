@@ -219,9 +219,15 @@ class RustOptimizer(ArrayOptimizerBase[pa.Array, _Pair, tuple[pa.Array, pa.Array
         if not hasattr(layer, "parameters"):
             return  # a pool layer: nothing trained
         trained = cast("TrainedArrayLayer[pa.Array]", layer)
-        parameters: list[pa.Array] = []
-        for pair in _pairs(trained):
-            parameters.extend(self._apply_rule(index, pair, learning_rate, batch_size)[: len(pair.parameters)])
+        # a comprehension, so no pair outlives it: a pair still holding the old parameters and
+        # gradients when the layer rebinds them keeps their memory from being reused for the new
+        # gradients, and every step then pays fresh pages (the SGD step and Array.zeros measured 3x
+        # slower, conv B=32 epochs +11%)
+        parameters = [
+            parameter
+            for pair in _pairs(trained)
+            for parameter in self._apply_rule(index, pair, learning_rate, batch_size)[: len(pair.parameters)]
+        ]
         trained.set_parameters(parameters)
         trained.reset_gradient_accum()
 
