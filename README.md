@@ -464,6 +464,129 @@ MNIST. Without batch norm the plain network collapses to one class from 8 layers
 layer's gradient vanishing, while the residual one holds 96.9%; with batch norm the plain network
 loses 2 points by 16 layers and the residual one 0.3 (the findings are in its docstring).
 
+## Layer norm and attention
+
+A patch model, a small vision transformer (Dosovitskiy et al. 2020, "An Image is Worth 16x16
+Words", arXiv 2010.11929), cuts the image into patches, one token each, embeds them, adds learned
+positions, passes them through pre-LN blocks, `x + F(LN(x))` (Xiong et al. 2020, arXiv
+2002.04745), averages over the tokens and classifies. Single-head self-attention, layer norm over
+tokens and over flat dense layers, for the Sequential networks of all three implementations. This
+section fixes the forms they are held to;
+[docs/layer-norm-attention-workplan.md](docs/layer-norm-attention-workplan.md) builds them stage by
+stage:
+
+```python
+from indrajala_ml.model.layer_specs import Attention, Dense, LayerNorm, Patches, Position, Residual, TokenMean
+
+layers = [
+    Patches(7),  # (28, 28, 1) -> 16 tokens of 49
+    Dense(32, activation="linear", bias=True),  # the embedding, per token
+    Position(),
+    Residual((LayerNorm(), Attention())),
+    Residual((LayerNorm(), Dense(64, activation="relu"), Dense(32, activation="linear", bias=True))),
+    TokenMean(),  # 16 tokens of 32 -> 32
+    LayerNorm(),
+    Dense(10, activation="softmax", output=True, loss="cross_entropy"),
+]
+```
+
+A token sequence of `T` tokens of `d` features is flat and token-major, index `t * d + j`, so a
+batch is an `(N, T, d)` stack and an `(N * T, d)` matrix without a copy. Between `Patches`, the
+first layer, and `TokenMean` a network has a token part, in place of a conv front end: `Dense` acts
+on each token with weights shared over the tokens (ReLU, or linear with `bias=True`, no dropout),
+`Position` stands once, before any block, and a block's body ends in `Attention` or
+`Dense(d, activation="linear", bias=True)`. Sigmoid, dropout and `BatchNorm` are refused among
+tokens. After `TokenMean` the dense part's rules hold, and in any dense network `LayerNorm` may
+stand wherever a dense hidden layer may, a residual body's first layer included. A layer norm has
+no activation after it.
+
+`Patches`, `Position`, `TokenMean` and `LayerNorm` draw nothing at initialization, so adding one
+never shifts a later layer's draws: `P` and `beta` start at 0, `gamma` at 1. `Attention` draws
+`Wq, bq, Wk, bk, Wv, bv, Wo, bo` in that order, each projection `d` by `d` and fan-in-aware, as a
+dense layer draws `W`, then `b`. Under `WeightDecay` weights decay; biases, `gamma`, `beta` and `P`
+don't. Each new layer is one layer in the expanded list, so layer indices count it as one.
+
+The exact expressions, per example. `sum` is a left fold from `0.0` in index order (a batch's
+gradient sums run over examples, then tokens, the rows of the `(N * T, d)` view); a product is a
+matrix product (numpy's BLAS, the crate's products on Rust, as a dense layer's). Every
+implementation computes these, in this grouping, left to right, with no fused multiply-add and no
+power function:
+
+```text
+patches, size p, an (H, W, C) image stored channel-major (c * H * W + h * W + w)
+  token t = u * (W / p) + v                              patch row u, column v, row-major
+  feature k = c * p * p + i * p + j                      the conv kernel's (channel, row, col) order
+  x_tk = image[c, u * p + i, v * p + j]
+  backward: the inverse permutation of delta
+
+token-wise dense
+  a dense layer's expressions on each token, the batch as the (N * T, d) rows
+
+position
+  out_t = x_t + P_t                                      a new array; x is not written
+  backward: dx_t = delta_t;  grad_P_t += sum over examples of delta_t
+
+layer norm, each token's d features (a flat layer is one token)
+  mu      = sum(x_j) / d
+  c_j     = x_j - mu
+  var     = sum(c_j * c_j) / d                           biased; training and inference alike
+  std     = sqrt(var + eps)                              eps 1e-5
+  xhat_j  = c_j / std
+  y_j     = gamma_j * xhat_j + beta_j
+  backward
+  dxhat_j = delta_j * gamma_j
+  m1      = sum(dxhat_j) / d
+  m2      = sum(dxhat_j * xhat_j) / d
+  dx_j    = ((dxhat_j - m1) - xhat_j * m2) / std
+  grad_gamma_j += sum(delta_j * xhat_j);  grad_beta_j += sum(delta_j)    over examples and tokens
+
+attention, X the (T, d) tokens, s = sqrt(d)
+  Q = X Wq^T + bq;  K = X Wk^T + bk;  V = X Wv^T + bv     each the product, then the bias
+  S = (Q K^T) / s
+  m_i  = max_j(S_ij)                                     each row, max-shifted
+  e_ij = exp(S_ij - m_i)
+  P_ij = e_ij / sum_j(e_ij)
+  H = P V
+  out = H Wo^T + bo
+  backward
+  dH  = delta Wo
+  dP  = dH V^T
+  dV  = P^T dH
+  r_i = sum_j(dP_ij * P_ij)
+  dS_ij = P_ij * (dP_ij - r_i)
+  dQ  = (dS K) / s
+  dK  = (dS^T Q) / s
+  dX  = (dQ Wq + dK Wk) + dV Wv                          three products, summed in this order
+  grad_Wo += delta^T H;  grad_bo += sum(delta)           over the batch's rows
+  grad_Wq += dQ^T X;     grad_bq += sum(dQ)              and Wk, bk from dK; Wv, bv from dV
+
+token mean
+  out_j = sum_t(x_tj) / T
+  backward: dx_tj = delta_j / T for every t
+```
+
+Apart from the products, only `+ − × ÷`, `sqrt`, `max` and the softmax's `exp` appear, so
+given the same inputs the pure-Python, numpy and Rust layers compute the same bits outside the
+products, as batch norm's do, and the tests give the numpy layer the other implementation's `exp`
+(it isn't correctly rounded). numpy sums with `np.cumsum` along the summed axis
+(`tests/test_summation_order.py`), never `.sum`, whose order depends on the layout. Products
+between activations are new: `Q K^T`, `P V` and their backward per example, BLAS against the
+crate's products, explained as the dense layers' gap is, never accepted as a tolerance. Exact
+tests need none: with one token `P = [[1]]`, so attention is `(X Wv^T + bv) Wo^T + bo`; with
+`Wq = Wk = 0` and `bq = bk = 0` every weight is exactly `1/16` at `T = 16`; with `Wo` and `bo` zero an attention
+block leaves every other layer unchanged.
+
+Two biases are inert. `bk` adds `q_i · bk` to every score in row `i`, which the softmax ignores,
+so its gradient is 0 in exact arithmetic and rounding noise in floating point, which differs
+between implementations; parity tests compare it apart. `bv` only adds `Wo bv` to every output,
+as `bo` can, since each row of `P` sums to 1. Both stay, matching PyTorch's `nn.MultiheadAttention` and ViT's `qkv_bias`.
+
+On Rust each layer-norm and attention pass is one fused crate call, and the token-wise dense layer
+is the existing dense ops on the `(N * T, d)` view. A dense layer's hidden delta reads the next
+layer's `W` in one fused call (Residual connections); right before a `LayerNorm`, or a fork whose
+body starts with one, there is no `W` to read, and a sigmoid, ReLU or dropout layer takes the next
+layer's downstream and a mask op instead, its own expression unchanged.
+
 ## Refactoring
 
 A structural refactoring changes structure only, never numerics. Every stage keeps every parity
