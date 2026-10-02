@@ -14,7 +14,7 @@ from indrajala_ml.evaluate import (
 )
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.graphics.chart import new_convergence_chart_pair, plot_labeled_series
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.train import reachable_reference_and_training_data, train_linear_classifier_network
 
 

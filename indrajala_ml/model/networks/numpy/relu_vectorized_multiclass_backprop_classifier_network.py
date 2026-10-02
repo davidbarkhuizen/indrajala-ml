@@ -1,0 +1,16 @@
+from __future__ import annotations
+
+from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
+    VectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.specs.layer_specs import Dense
+
+
+class ReLUVectorizedMultiClassBackpropClassifierNetwork(VectorizedMultiClassBackpropClassifierNetwork):
+    """
+    VectorizedMultiClassBackpropClassifierNetwork with ReLUArrayLayer hidden layers and a sigmoid
+    output, as in ReLUBackpropClassifierNetwork.
+    """
+
+    def _hidden_spec(self, size: int) -> Dense:
+        return Dense(size, activation="relu")

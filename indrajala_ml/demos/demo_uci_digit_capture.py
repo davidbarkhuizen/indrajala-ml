@@ -7,7 +7,9 @@ from indrajala_ml.digit_capture import (
     paint_brush_stroke,
     tile_grid_to_state,
 )
-from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
+    MultiClassBackpropClassifierNetwork,
+)
 
 MODEL_PATH = "data/digits/trained_model.json"
 

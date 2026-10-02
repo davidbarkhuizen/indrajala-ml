@@ -2,7 +2,7 @@ from collections.abc import Callable, Sequence
 from random import Random
 
 from indrajala_ml.evaluate import class_balanced_disagreement_rate, sample_class_balanced_states
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.model.protocols.classifier_protocols import (
     BatchTrainableClassifier,
     Example,

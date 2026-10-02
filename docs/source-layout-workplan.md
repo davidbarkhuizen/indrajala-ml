@@ -1,6 +1,6 @@
 # Workplan: the source layout
 
-**Status: decisions settled (D1-D5); stages 0-3 done. Before stage 4, pytest collects 9768 tests.**
+**Status: decisions settled (D1-D5); stages 0-4 done. Before stage 5, pytest collects 9768 tests.**
 
 `indrajala_ml/` has grown flat. `indrajala_ml/model/` holds 190 modules in one directory: 61
 one-change presets, 50-odd layers across three implementations, the network bases, optimizers,
@@ -186,7 +186,14 @@ references updated together. pytest collects the same number of tests before and
    `test_rust_array_layer_sgd_step.py`, which steps layers and networks, to `tests/model/`.
    `test_batch_norm_ghost_groups.py` waits for stage 4 with the other batch-norm network tests.
    The crate's comments that cite the layer modules follow in a crate PR and a "Bump rust/".
-4. **`model/networks/`** and the presets.
+4. **`model/networks/`** and the presets. Done: the network tests that run on one implementation
+   only, all pure Python (`test_model.py` and `test_learn_batch.py` among them), went to
+   `tests/model/networks/python/`; the rest, which take the `backend` fixture or check pure Python
+   against numpy (the `*_python_network` tests), to `tests/model/networks/`, with
+   `test_batch_norm_ghost_groups.py` and `test_seeded_init_parity.py`. No network test runs on one
+   array backend alone, so `tests/model/networks/` has no `numpy/` or `rust/`. The crate cites no
+   network module, so no crate PR. `test_numerical_parity.py` and `test_numpy_rng_streams.py` test
+   the crate and numpy's streams, not a module here; they stay at the root until stage 6 places them.
 5. **The package root:** `data/`, `training/`, `capture/`, `measurement/`, `studies/`, with the
    `train`, `ensemble_train` and `machine_profile` splits.
 6. **`graphics/`** (the `chart` split) and **`demos/`** with their tests; `tests/scripts/` for the
@@ -194,5 +201,4 @@ references updated together. pytest collects the same number of tests before and
 
 ## After this plan
 
-Nothing planned. The crate's comment at `indrajala-math-rust/src/conv.rs:196` that cites the
-retired optimization docs is fixed in the next crate PR.
+Nothing planned.

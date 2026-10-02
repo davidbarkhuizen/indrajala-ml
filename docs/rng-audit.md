@@ -11,10 +11,10 @@ harnesses:
   every draw function, the fused dropout masks, every seeding path and numpy's rejections.
 - `rust/tests/test_random_pcg64_parity.py`: the crate's `SeedSequence` and `Generator` against
   numpy's `SeedSequence` and `default_rng`, bit for bit, with the state moving between the two.
-- `tests/test_seeded_init_parity.py`: seeded `randomized()` gives bit-identical numpy and Rust
+- `tests/model/networks/test_seeded_init_parity.py`: seeded `randomized()` gives bit-identical numpy and Rust
   networks, for every array network class.
 - `tests/model/layers/test_dropout_fused_layer_ops.py` and
-  `tests/test_dropout_array_multiclass_backprop_model.py`: seeded training-mode dropout, with
+  `tests/model/networks/test_dropout_array_multiclass_backprop_model.py`: seeded training-mode dropout, with
   identical masks at the layer and the network level.
 - `tests/test_numpy_rng_streams.py`: a pure-Python MT19937 that reproduces `np.random`'s stream and
   seeding. It is the algorithm the crate ports, checked against numpy without the crate. It also

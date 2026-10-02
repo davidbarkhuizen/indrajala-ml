@@ -1,4 +1,4 @@
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.model.protocols.classifier_protocols import TargetClassifier
 
 

@@ -23,8 +23,8 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
-from indrajala_ml.model.array_network_base import ArrayNetworkBase
-from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
+from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.specs.layer_specs import Dense
 
 # a batch's loss from its output rows and target rows

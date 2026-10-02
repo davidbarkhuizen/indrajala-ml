@@ -1,7 +1,7 @@
 from indrajala_ml.model.layers.python.conv_kernel import ConvKernel
 from indrajala_ml.model.layers.python.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
-from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.python.momentum_conv_multiclass_backprop_classifier_network import (
     MomentumConvMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.specs.update_rules import SGD, Momentum

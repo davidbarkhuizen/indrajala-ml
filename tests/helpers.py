@@ -11,15 +11,6 @@ import numpy as np
 import pytest
 
 import indrajala_ml.model
-from indrajala_ml.model.array_network_base import ArrayNetworkBase
-from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
-from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
-from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
-    ConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
-    ConvVectorizedMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.layers.numpy.conv_array_layer import ConvArrayLayer
@@ -28,15 +19,26 @@ from indrajala_ml.model.layers.python.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.layers.rust.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
-from indrajala_ml.model.optimizers.python_optimizer import PythonOptimizer
-from indrajala_ml.model.protocols.array_protocols import ArrayBackend, BackendArray, WeightedArrayLayer
-from indrajala_ml.model.protocols.classifier_protocols import State
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.sequential_backprop_network import (
+from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.networks.numpy.conv_vectorized_multiclass_backprop_classifier_network import (
+    ConvVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase
+from indrajala_ml.model.networks.python.conv_multiclass_backprop_classifier_network import (
+    ConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classifier_network import (
+    ConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.optimizers.python_optimizer import PythonOptimizer
+from indrajala_ml.model.protocols.array_protocols import ArrayBackend, BackendArray, WeightedArrayLayer
+from indrajala_ml.model.protocols.classifier_protocols import State
 from indrajala_ml.model.specs.array_network_shapes import ArrayMultiClassShape, ArraySingleOutputShape
 from indrajala_ml.model.specs.layer_specs import LayerSpec
 from indrajala_ml.model.specs.spec_shapes import InputShape

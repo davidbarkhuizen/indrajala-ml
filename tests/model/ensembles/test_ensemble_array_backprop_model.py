@@ -3,14 +3,14 @@ from typing import Any
 
 import pytest
 
-from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
 )
 from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_network import (
     EnsembleRustArrayBackpropClassifierNetwork,
 )
-from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
+from indrajala_ml.model.networks.numpy.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
+from indrajala_ml.model.networks.rust.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
 from tests.helpers import Backend, approx
 
 EnsembleCls = type[EnsembleArrayBackpropClassifierNetwork] | type[EnsembleRustArrayBackpropClassifierNetwork]

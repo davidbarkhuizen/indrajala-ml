@@ -48,7 +48,7 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
   - batch norm, dense and conv, under every rule (README, Batch normalization).
 
   One of them, conv then pool, ReLU, dropout and a softmax output under `Adam`, is trained against
-  its pure-Python reference (`tests/test_sequential_array_network.py`). Giving any other one a
+  its pure-Python reference (`tests/model/networks/test_sequential_array_network.py`). Giving any other one a
   preset, or using it in a demo, is a behaviour change, not refactoring: its own PR, with
   hand-computed tests and parity tests in all three implementations.
 - **Still refused by the specs:** dropout on a ReLU layer (the dropout op is fused with the
@@ -209,7 +209,7 @@ roadmap step 5 ([primitives-roadmap.md](primitives-roadmap.md)). Besides those:
 - **Parity under Adam is per step.** Under `SGD`, `Momentum` and `WeightDecay` the pure-Python
   and Rust patch models are compared with numpy after 50 steps; under `Adam` they are compared
   step by step, each step's gradients from the same parameters
-  (`tests/test_attention_python_network.py`, `tests/test_attention_rust_network.py`). Adam's
+  (`tests/model/networks/test_attention_python_network.py`, `tests/model/networks/test_attention_rust_network.py`). Adam's
   step is steepest where `|g|` is at or under its `ε`, which turns `bk`'s rounding-noise gradient
   into whole steps, so the trajectory itself is sensitive: numpy against numpy with one weight
   nudged by one ulp drifts 2e-8 to 3e-5 in 50 steps, as much as the implementations differ, and

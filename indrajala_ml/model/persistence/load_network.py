@@ -20,6 +20,11 @@ from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_networ
     EnsembleRustArrayBackpropClassifierNetwork,
 )
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.networks.python.sequential_backprop_network import (
+    SequentialBackpropClassifierNetwork,
+    SequentialMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.persistence.format2 import (
     ENSEMBLE,
     PYTHON,
@@ -30,11 +35,6 @@ from indrajala_ml.model.persistence.format2 import (
     restore_file,
 )
 from indrajala_ml.model.persistence.model_io import load_json
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.sequential_backprop_network import (
-    SequentialBackpropClassifierNetwork,
-    SequentialMultiClassBackpropClassifierNetwork,
-)
 
 _ENSEMBLES: dict[str, Any] = {
     PYTHON: EnsembleBackpropClassifierNetwork,

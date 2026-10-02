@@ -1,6 +1,6 @@
-from indrajala_ml.model.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
 from indrajala_ml.model.layers.python.backprop_node import BackpropNode
 from indrajala_ml.model.layers.python.state_node import StateNode
+from indrajala_ml.model.networks.python.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
 from indrajala_ml.model.specs.update_rules import Adam
 from tests.helpers import LayerOptimizer, WeightSets, approx
 

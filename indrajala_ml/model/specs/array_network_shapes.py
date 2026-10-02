@@ -15,7 +15,7 @@ from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import UpdateRule
 
 if TYPE_CHECKING:
-    from indrajala_ml.model.array_network_base import ArrayNetworkBase
+    from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
 
     # For the type checker only, each mixin subclasses what it's mixed into, so the attributes
     # and methods its host supplies (backend, layers, _forward, snapshot, ...) resolve; at

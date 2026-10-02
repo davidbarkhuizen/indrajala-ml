@@ -22,7 +22,9 @@ from indrajala_ml.mnist_data import (
     load_mnist_labels,
     load_mnist_records_at_indices,
 )
-from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.fan_in_aware_backprop_classifier_network import (
+    FanInAwareBackpropClassifierNetwork,
+)
 from indrajala_ml.multiclass_evaluate import confusion_matrix
 
 DIMENSION = 28 * 28

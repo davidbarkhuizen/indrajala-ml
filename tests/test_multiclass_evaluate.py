@@ -1,6 +1,8 @@
 import pytest
 
-from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
+    MultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.multiclass_evaluate import accuracy, confusion_matrix
 from tests.helpers import approx
 
@@ -8,7 +10,7 @@ from tests.helpers import approx
 def _fixed_network() -> MultiClassBackpropClassifierNetwork:
     # dimension=1, one hidden node, 2 output classes, fixed weights - deterministically
     # classifies state (2.0,) as class 0 (output node 0's activation, 0.599, exceeds output
-    # node 1's, 0.544 - see tests/test_multiclass_backprop_model.py's identical fixture for the
+    # node 1's, 0.544 - see tests/model/networks/python/test_multiclass_backprop_model.py's identical fixture for the
     # hand-derived values)
     network = MultiClassBackpropClassifierNetwork([1], 1, [(-10.0, 10.0)], 2)
     hidden_node = network.hidden_layers[0].nodes[0]

@@ -87,36 +87,36 @@ from typing import Any
 import indrajala_math_rust as pa
 
 from indrajala_ml.lr_schedule import linear_warmup
-from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
-    ConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
-    ConvVectorizedMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
-from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
-    MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
+from indrajala_ml.model.networks.numpy.conv_vectorized_multiclass_backprop_classifier_network import (
+    ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
     MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_network import (
-    MomentumRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.momentum_vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.momentum_vectorized_multiclass_backprop_classifier_network import (
     MomentumVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.protocols.classifier_protocols import BatchTrainableClassifier, Example
-from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
-    RustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec
-from indrajala_ml.model.specs.update_rules import SGD, Momentum, UpdateRule
-from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classifier_network import (
+    ConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
+    MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.momentum_rust_array_multiclass_backprop_classifier_network import (
+    MomentumRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.rust_array_multiclass_backprop_classifier_network import (
+    RustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.protocols.classifier_protocols import BatchTrainableClassifier, Example
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, Momentum, UpdateRule
 from indrajala_ml.multiclass_evaluate import accuracy
 
 SIDE = 28

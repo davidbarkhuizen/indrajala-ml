@@ -12,16 +12,18 @@ from matplotlib import pyplot
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.graphics.chart import new_axes, new_figure, plot_labeled_series
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, as_dense_layers
-from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase, as_dense_layers
+from indrajala_ml.model.networks.python.binary_cross_entropy_backprop_classifier_network import (
     BinaryCrossEntropyBackpropClassifierNetwork,
 )
-from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
-from indrajala_ml.model.protocols.classifier_protocols import Example
-from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
+    MultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.multiclass_evaluate import accuracy as multiclass_accuracy
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.targets import XORTarget

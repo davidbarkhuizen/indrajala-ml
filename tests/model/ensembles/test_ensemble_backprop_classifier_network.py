@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
 from tests.helpers import approx, assert_save_and_load_round_trip, assert_snapshot_restore_round_trip
 
 

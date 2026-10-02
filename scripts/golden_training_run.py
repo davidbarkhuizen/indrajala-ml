@@ -58,80 +58,6 @@ from typing import Any, cast
 import indrajala_math_rust as pa
 import numpy as np
 
-from indrajala_ml.model.adam_array_backprop_classifier_network import AdamArrayBackpropClassifierNetwork
-from indrajala_ml.model.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
-from indrajala_ml.model.adam_conv_multiclass_backprop_classifier_network import (
-    AdamConvMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.adam_conv_rust_array_multiclass_backprop_classifier_network import (
-    AdamConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.adam_conv_vectorized_multiclass_backprop_classifier_network import (
-    AdamConvVectorizedMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.adam_multiclass_backprop_classifier_network import AdamMultiClassBackpropClassifierNetwork
-from indrajala_ml.model.adam_rust_array_backprop_classifier_network import AdamRustArrayBackpropClassifierNetwork
-from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
-    AdamRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.adam_vectorized_multiclass_backprop_classifier_network import (
-    AdamVectorizedMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
-    BinaryCrossEntropyBackpropClassifierNetwork,
-)
-from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
-from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
-    ConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
-    ConvVectorizedMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.cross_entropy_array_backprop_classifier_network import (
-    CrossEntropyArrayBackpropClassifierNetwork,
-)
-from indrajala_ml.model.cross_entropy_conv_multiclass_backprop_classifier_network import (
-    CrossEntropyConvMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.cross_entropy_conv_rust_array_multiclass_backprop_classifier_network import (
-    CrossEntropyConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.cross_entropy_conv_vectorized_multiclass_backprop_classifier_network import (
-    CrossEntropyConvVectorizedMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.cross_entropy_multiclass_backprop_classifier_network import (
-    CrossEntropyMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.cross_entropy_rust_array_backprop_classifier_network import (
-    CrossEntropyRustArrayBackpropClassifierNetwork,
-)
-from indrajala_ml.model.cross_entropy_rust_array_multiclass_backprop_classifier_network import (
-    CrossEntropyRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.cross_entropy_vectorized_multiclass_backprop_classifier_network import (
-    CrossEntropyVectorizedMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.dropout_array_backprop_classifier_network import DropoutArrayBackpropClassifierNetwork
-from indrajala_ml.model.dropout_backprop_classifier_network import DropoutBackpropClassifierNetwork
-from indrajala_ml.model.dropout_conv_multiclass_backprop_classifier_network import (
-    DropoutConvMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.dropout_conv_rust_array_multiclass_backprop_classifier_network import (
-    DropoutConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.dropout_conv_vectorized_multiclass_backprop_classifier_network import (
-    DropoutConvVectorizedMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.dropout_multiclass_backprop_classifier_network import DropoutMultiClassBackpropClassifierNetwork
-from indrajala_ml.model.dropout_rust_array_backprop_classifier_network import DropoutRustArrayBackpropClassifierNetwork
-from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
-    DropoutRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.dropout_vectorized_multiclass_backprop_classifier_network import (
-    DropoutVectorizedMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
 )
@@ -139,99 +65,202 @@ from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import En
 from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_network import (
     EnsembleRustArrayBackpropClassifierNetwork,
 )
-from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
-from indrajala_ml.model.l2_array_backprop_classifier_network import L2ArrayBackpropClassifierNetwork
-from indrajala_ml.model.l2_conv_rust_array_multiclass_backprop_classifier_network import (
-    L2ConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.l2_conv_vectorized_multiclass_backprop_classifier_network import (
-    L2ConvVectorizedMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.l2_regularized_backprop_classifier_network import L2RegularizedBackpropClassifierNetwork
-from indrajala_ml.model.l2_regularized_conv_multiclass_backprop_classifier_network import (
-    L2RegularizedConvMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.l2_regularized_multiclass_backprop_classifier_network import (
-    L2RegularizedMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.l2_rust_array_backprop_classifier_network import L2RustArrayBackpropClassifierNetwork
-from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network import (
-    L2RustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.l2_vectorized_multiclass_backprop_classifier_network import (
-    L2VectorizedMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
-from indrajala_ml.model.momentum_array_backprop_classifier_network import MomentumArrayBackpropClassifierNetwork
-from indrajala_ml.model.momentum_backprop_classifier_network import MomentumBackpropClassifierNetwork
-from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
-    MomentumConvMultiClassBackpropClassifierNetwork,
+from indrajala_ml.model.networks.numpy.adam_array_backprop_classifier_network import AdamArrayBackpropClassifierNetwork
+from indrajala_ml.model.networks.numpy.adam_conv_vectorized_multiclass_backprop_classifier_network import (
+    AdamConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
-    MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
+from indrajala_ml.model.networks.numpy.adam_vectorized_multiclass_backprop_classifier_network import (
+    AdamVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
+from indrajala_ml.model.networks.numpy.conv_vectorized_multiclass_backprop_classifier_network import (
+    ConvVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.numpy.cross_entropy_array_backprop_classifier_network import (
+    CrossEntropyArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.numpy.cross_entropy_conv_vectorized_multiclass_backprop_classifier_network import (
+    CrossEntropyConvVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.numpy.cross_entropy_vectorized_multiclass_backprop_classifier_network import (
+    CrossEntropyVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.numpy.dropout_array_backprop_classifier_network import (
+    DropoutArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.numpy.dropout_conv_vectorized_multiclass_backprop_classifier_network import (
+    DropoutConvVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.numpy.dropout_vectorized_multiclass_backprop_classifier_network import (
+    DropoutVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.numpy.l2_array_backprop_classifier_network import L2ArrayBackpropClassifierNetwork
+from indrajala_ml.model.networks.numpy.l2_conv_vectorized_multiclass_backprop_classifier_network import (
+    L2ConvVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.numpy.l2_vectorized_multiclass_backprop_classifier_network import (
+    L2VectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.numpy.momentum_array_backprop_classifier_network import (
+    MomentumArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.numpy.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
     MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.momentum_multiclass_backprop_classifier_network import (
-    MomentumMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.momentum_rust_array_backprop_classifier_network import (
-    MomentumRustArrayBackpropClassifierNetwork,
-)
-from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_network import (
-    MomentumRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.momentum_vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.momentum_vectorized_multiclass_backprop_classifier_network import (
     MomentumVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
-from indrajala_ml.model.protocols.classifier_protocols import Example
-from indrajala_ml.model.relu_array_backprop_classifier_network import ReLUArrayBackpropClassifierNetwork
-from indrajala_ml.model.relu_backprop_classifier_network import ReLUBackpropClassifierNetwork
-from indrajala_ml.model.relu_conv_multiclass_backprop_classifier_network import (
-    ReLUConvMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.relu_conv_rust_array_multiclass_backprop_classifier_network import (
-    ReLUConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.relu_conv_vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.relu_array_backprop_classifier_network import ReLUArrayBackpropClassifierNetwork
+from indrajala_ml.model.networks.numpy.relu_conv_vectorized_multiclass_backprop_classifier_network import (
     ReLUConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.relu_multiclass_backprop_classifier_network import ReLUMultiClassBackpropClassifierNetwork
-from indrajala_ml.model.relu_rust_array_backprop_classifier_network import ReLURustArrayBackpropClassifierNetwork
-from indrajala_ml.model.relu_rust_array_multiclass_backprop_classifier_network import (
-    ReLURustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.relu_vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.relu_vectorized_multiclass_backprop_classifier_network import (
     ReLUVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
-from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
-    RustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
-from indrajala_ml.model.softmax_conv_multiclass_backprop_classifier_network import (
-    SoftmaxConvMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.softmax_conv_rust_array_multiclass_backprop_classifier_network import (
-    SoftmaxConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.softmax_conv_vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.softmax_conv_vectorized_multiclass_backprop_classifier_network import (
     SoftmaxConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
-    SoftmaxMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_network import (
-    SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.softmax_vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.softmax_vectorized_multiclass_backprop_classifier_network import (
     SoftmaxVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
+    VectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.adam_conv_multiclass_backprop_classifier_network import (
+    AdamConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.adam_multiclass_backprop_classifier_network import (
+    AdamMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.networks.python.binary_cross_entropy_backprop_classifier_network import (
+    BinaryCrossEntropyBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.conv_multiclass_backprop_classifier_network import (
+    ConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.cross_entropy_conv_multiclass_backprop_classifier_network import (
+    CrossEntropyConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.cross_entropy_multiclass_backprop_classifier_network import (
+    CrossEntropyMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.dropout_backprop_classifier_network import DropoutBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.dropout_conv_multiclass_backprop_classifier_network import (
+    DropoutConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.dropout_multiclass_backprop_classifier_network import (
+    DropoutMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.fan_in_aware_backprop_classifier_network import (
+    FanInAwareBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.l2_regularized_backprop_classifier_network import (
+    L2RegularizedBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.l2_regularized_conv_multiclass_backprop_classifier_network import (
+    L2RegularizedConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.l2_regularized_multiclass_backprop_classifier_network import (
+    L2RegularizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.momentum_backprop_classifier_network import MomentumBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.momentum_conv_multiclass_backprop_classifier_network import (
+    MomentumConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.momentum_multiclass_backprop_classifier_network import (
+    MomentumMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
+    MultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.relu_backprop_classifier_network import ReLUBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.relu_conv_multiclass_backprop_classifier_network import (
+    ReLUConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.relu_multiclass_backprop_classifier_network import (
+    ReLUMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.softmax_conv_multiclass_backprop_classifier_network import (
+    SoftmaxConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.softmax_multiclass_backprop_classifier_network import (
+    SoftmaxMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.adam_conv_rust_array_multiclass_backprop_classifier_network import (
+    AdamConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.adam_rust_array_backprop_classifier_network import (
+    AdamRustArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.adam_rust_array_multiclass_backprop_classifier_network import (
+    AdamRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classifier_network import (
+    ConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.cross_entropy_conv_rust_array_multiclass_backprop_classifier_network import (
+    CrossEntropyConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.cross_entropy_rust_array_backprop_classifier_network import (
+    CrossEntropyRustArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.cross_entropy_rust_array_multiclass_backprop_classifier_network import (
+    CrossEntropyRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.dropout_conv_rust_array_multiclass_backprop_classifier_network import (
+    DropoutConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.dropout_rust_array_backprop_classifier_network import (
+    DropoutRustArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.dropout_rust_array_multiclass_backprop_classifier_network import (
+    DropoutRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.l2_conv_rust_array_multiclass_backprop_classifier_network import (
+    L2ConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.l2_rust_array_backprop_classifier_network import (
+    L2RustArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.l2_rust_array_multiclass_backprop_classifier_network import (
+    L2RustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
+    MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.momentum_rust_array_backprop_classifier_network import (
+    MomentumRustArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.momentum_rust_array_multiclass_backprop_classifier_network import (
+    MomentumRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.relu_conv_rust_array_multiclass_backprop_classifier_network import (
+    ReLUConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.relu_rust_array_backprop_classifier_network import (
+    ReLURustArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.relu_rust_array_multiclass_backprop_classifier_network import (
+    ReLURustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
+from indrajala_ml.model.networks.rust.rust_array_multiclass_backprop_classifier_network import (
+    RustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.softmax_conv_rust_array_multiclass_backprop_classifier_network import (
+    SoftmaxConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.softmax_rust_array_multiclass_backprop_classifier_network import (
+    SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,
@@ -244,9 +273,6 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule
-from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
-    VectorizedMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.prepared_dataset import PreparedDataset
 

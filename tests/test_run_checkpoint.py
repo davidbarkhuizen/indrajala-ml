@@ -20,9 +20,9 @@ from indrajala_ml.geometry import square_bounds
 from indrajala_ml.lr_schedule import linear_warmup
 from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.networks.python.sequential_backprop_network import SequentialBackpropClassifierNetwork
+from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.persistence.load_network import load_network
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.sequential_backprop_network import SequentialBackpropClassifierNetwork
 from indrajala_ml.model.specs.layer_specs import Dense, LayerNorm, LayerSpec, Residual
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.pcg64 import default_rng, generator_state

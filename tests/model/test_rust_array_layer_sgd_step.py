@@ -15,21 +15,6 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
-    AdamRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
-    ConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.cross_entropy_rust_array_backprop_classifier_network import (
-    CrossEntropyRustArrayBackpropClassifierNetwork,
-)
-from indrajala_ml.model.cross_entropy_rust_array_multiclass_backprop_classifier_network import (
-    CrossEntropyRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network import (
-    L2RustArrayMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.model.layers.array.array_backend import RUST
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
@@ -38,23 +23,38 @@ from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustA
 from indrajala_ml.model.layers.rust.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.layers.rust.softmax_rust_array_layer import SoftmaxRustArrayLayer
-from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.rust.adam_rust_array_multiclass_backprop_classifier_network import (
+    AdamRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classifier_network import (
+    ConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.cross_entropy_rust_array_backprop_classifier_network import (
+    CrossEntropyRustArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.cross_entropy_rust_array_multiclass_backprop_classifier_network import (
+    CrossEntropyRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.l2_rust_array_multiclass_backprop_classifier_network import (
+    L2RustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
     MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.rust.momentum_rust_array_multiclass_backprop_classifier_network import (
     MomentumRustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.optimizers.rust_optimizer import RustOptimizer
-from indrajala_ml.model.relu_rust_array_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.rust.relu_rust_array_multiclass_backprop_classifier_network import (
     ReLURustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
-from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.rust.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
+from indrajala_ml.model.networks.rust.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.rust.softmax_rust_array_multiclass_backprop_classifier_network import (
     SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.optimizers.rust_optimizer import RustOptimizer
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from tests.helpers import all_subclasses, bits, model_modules
 
