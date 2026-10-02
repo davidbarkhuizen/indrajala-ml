@@ -626,6 +626,8 @@ test passing, and:
   rejected, the candidates left, and how to measure a change.
 - [docs/pypi-release-workplan.md](docs/pypi-release-workplan.md): publishing the Rust crate to
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
+- [docs/presets-workplan.md](docs/presets-workplan.md): presets for the 34 one-change
+  combinations the Sequential networks build that have no named class yet.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
   attention, then multi-head attention and a transformer block.
