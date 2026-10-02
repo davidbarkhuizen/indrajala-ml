@@ -130,7 +130,7 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
 
     def classify_rows(self, prepared: PreparedDataset) -> list[Any]:
         # classify_row for every row, as the trainers' accuracy pass needs it, through
-        # forward_batch over chunks of rows (docs/optimizations/implemented.md). The
+        # forward_batch over chunks of rows. The
         # predictions are classify_row's, but only by construction on Rust, where a batched
         # forward row equals the single-example forward exactly: numpy's X @ W.T can differ from
         # W @ x in the last ULP, so an argmax between outputs an ULP apart could differ

@@ -71,8 +71,6 @@ git show acbc49c:docs/conv-batch-norm-scaling-workplan.md (#516-#519).
 - Plain batch norm and ghost groups of 32 agree within the seeds' spread in every cell: for this
   network the statistics' sample size doesn't decide whether the rule holds.
 
-The timing findings are in docs/optimizations/ (current-baseline.md and candidates.md).
-
 The study runs its own epoch loop rather than train_backprop_network_mini_batch. The loop is the
 trainer's (reshuffle every epoch, chunk into batches, one learn_batch per batch, the schedule
 indexed by batch step across epochs) minus the pocket snapshot: the trainer's pass over the

@@ -1,6 +1,6 @@
 """
-The benchmark machine's profile: a JSON record of the hardware, OS and software stack the timings
-in docs/optimizations.md were measured on, a schema for it, and a comparison of two profiles.
+The benchmark machine's profile: a JSON record of the hardware, OS and software stack the documented
+timings were measured on, a schema for it, and a comparison of two profiles.
 
 The profile has two parts:
 - identity: what a timing depends on and should not change between a documented number and a

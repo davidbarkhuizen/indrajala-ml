@@ -64,7 +64,7 @@ own platform.
 
 ## Pitfalls to design around
 
-- **Timing baselines.** Every Rust number in docs/optimizations/ comes from a local
+- **Timing baselines.** Every Rust timing baseline comes from a local
   `maturin build --release` on the Ryzen machine, without abi3. Stage 1 changes what the build
   does at the Python boundary, and stage 2 changes where the published wheel is built (a
   manylinux container). Each stage measures its own change. None assumes it is free.

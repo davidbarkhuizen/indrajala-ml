@@ -1,7 +1,7 @@
 # pyright: reportConstantRedefinition=false
 # (matrices are named as in the literature, X, which strict mode takes for constants)
 """
-The batched accuracy pass's stage 0 (docs/optimizations/implemented.md): one training-set
+The batched accuracy pass's stage 0: one training-set
 accuracy pass row by row, as _training_accuracy does it, against batched forward passes over
 chunks of the prepared matrix.
 

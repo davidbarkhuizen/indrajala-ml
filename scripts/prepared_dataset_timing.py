@@ -1,5 +1,5 @@
 """
-The prepared dataset's A/B (docs/optimizations/implemented.md): one training epoch through the
+The prepared dataset's A/B: one training epoch through the
 trainers the demos use, before and after the dataset became one backend array (#373, #374).
 
     python scripts/prepared_dataset_timing.py time [--repeats 5] [--configs ...] [--epochs 1] [--out runs.json]

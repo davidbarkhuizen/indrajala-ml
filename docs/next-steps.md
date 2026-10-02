@@ -24,6 +24,10 @@ docs cite them by section:
 | Removing duplicated code, second pass (DRY rerun) | #550 | #551-#557 | `git show 88e1815:docs/dry-rerun-workplan.md` |
 | Presets for the one-change combinations | #559 | #560-#564 | `git show 2a799bf:docs/presets-workplan.md` |
 
+The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
+candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
+`git show 0a04977:docs/optimizations/<name>.md`.
+
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention), [measurement.md](measurement.md)
 and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
