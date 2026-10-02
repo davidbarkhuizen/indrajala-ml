@@ -16,7 +16,7 @@ from typing import Any, ClassVar, Literal
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_parameters import WeightAndBias
-from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
+from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 
 
 class PatchesRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):

@@ -2,7 +2,8 @@ from collections.abc import Callable, Sequence
 from random import Random
 
 from indrajala_ml.evaluate import class_balanced_disagreement_rate, sample_class_balanced_states
-from indrajala_ml.model.classifier_protocols import (
+from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.protocols.classifier_protocols import (
     BatchTrainableClassifier,
     Example,
     PreparedTrainableClassifier,
@@ -10,8 +11,7 @@ from indrajala_ml.model.classifier_protocols import (
     TargetClassifier,
     TrainableClassifier,
 )
-from indrajala_ml.model.layer_specs import refuse_single_example_groups
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.specs.single_example import refuse_single_example_groups
 from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 from indrajala_ml.prepared_dataset import PreparedDataset
 from indrajala_ml.run_checkpoint import RunCheckpoint
@@ -169,7 +169,7 @@ def train_linear_classifier_network[L](
     Training accuracy can oscillate rather than settle, especially when the target isn't
     representable at student's cardinality/required_active, so student is left at the epoch end
     with the best training accuracy (a pocket checkpoint: the weights and the optimizer's state,
-    model/checkpoint.py, so training on from there resumes from that epoch), which is the last
+    model/persistence/checkpoint.py, so training on from there resumes from that epoch), which is the last
     epoch when training converges. The returned ConvergenceSeries's .diagnostic says whether it converged, plateaued or
     was still improving.
 

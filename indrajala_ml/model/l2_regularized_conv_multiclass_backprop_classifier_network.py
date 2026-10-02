@@ -6,7 +6,7 @@ from typing import ClassVar
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.update_rules import WeightDecay
+from indrajala_ml.model.specs.update_rules import WeightDecay
 
 
 class L2RegularizedConvMultiClassBackpropClassifierNetwork(ConvMultiClassBackpropClassifierNetwork):

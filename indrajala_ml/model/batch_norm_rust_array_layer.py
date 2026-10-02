@@ -7,9 +7,9 @@ from typing import Any, Literal
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_parameters import GammaAndBeta, RunningAverages
-from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
 from indrajala_ml.model.residual_rust_array_layer import ForkRustArrayLayer
 from indrajala_ml.model.rust_array_layer import before_layer_norm
+from indrajala_ml.model.specs.single_example import ghost_groups, refuse_single_example
 
 
 class BatchNormRustArrayLayer(GammaAndBeta[pa.Array], RunningAverages[pa.Array]):
@@ -34,7 +34,7 @@ class BatchNormRustArrayLayer(GammaAndBeta[pa.Array], RunningAverages[pa.Array])
     training is set by set_training_mode. The backward pass reads _was_training, training as
     forward_batch saw it, since the network switches training off before the backward pass.
 
-    With a group_size, the ops normalize each ghost group (layer_specs.ghost_groups, D6) as a
+    With a group_size, the ops normalize each ghost group (single_example.ghost_groups, D6) as a
     batch of its own; _var and _std are then per group per channel, group-major.
     """
 

@@ -10,9 +10,9 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.array_parameters import WeightAndBias
-from indrajala_ml.model.array_protocols import ArrayNetworkLayer
-from indrajala_ml.model.layer_specs import refuse_single_example
-from indrajala_ml.model.window_geometry import output_size, validate_conv_arguments
+from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer
+from indrajala_ml.model.specs.single_example import refuse_single_example
+from indrajala_ml.model.specs.window_geometry import output_size, validate_conv_arguments
 
 
 class ConvGeometryArrayLayer:
@@ -98,7 +98,7 @@ class ConvArrayLayer(WeightAndBias[FloatArray], ConvGeometryArrayLayer):
     Not an ArrayLayer: size is the flattened output count (channel_count * out_height * out_width),
     while W is (channel_count, input_channels * kernel_size**2). It implements the methods
     ArrayNetworkBase calls (forward*, compute_*_delta*, downstream*, accumulate_gradient*), and
-    the network's optimizer (optimizers.py) steps W and b as a dense layer's.
+    the network's optimizer (optimizers/) steps W and b as a dense layer's.
 
     Layouts, shared with ConvRustArrayLayer (whose im2col is flattened to (N*P, C*k*k)):
 

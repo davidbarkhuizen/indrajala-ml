@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.update_rules import WeightDecay
+from indrajala_ml.model.specs.update_rules import WeightDecay
 
 
 class L2RegularizedBackpropClassifierNetwork(BackpropClassifierNetwork):

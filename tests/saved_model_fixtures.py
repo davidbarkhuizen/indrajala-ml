@@ -1,6 +1,6 @@
 """
 The save fixtures: one small saved file per network class that has save(), which
-tests/test_legacy_saved_models.py loads.
+tests/model/persistence/test_legacy_saved_models.py loads.
 
 - The legacy fixtures (the composable-layers workplan, stage 0) were written by the code before
   format 2, so every legacy envelope is pinned and keeps loading after the save format changed.
@@ -49,11 +49,16 @@ from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.layer_specs import (
+from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.sequential_backprop_network import (
+    SequentialBackpropClassifierNetwork,
+    SequentialMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
-    InputShape,
     LayerNorm,
     LayerSpec,
     Patches,
@@ -62,13 +67,8 @@ from indrajala_ml.model.layer_specs import (
     TokenMean,
     expand_specs,
 )
-from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.sequential_backprop_network import (
-    SequentialBackpropClassifierNetwork,
-    SequentialMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.update_rules import Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.helpers import bits, model_modules
 

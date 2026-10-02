@@ -19,7 +19,7 @@ from typing import Any, ClassVar
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.base_node import AbstractNode
-from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer, WeightSet
+from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer, WeightSet
 from indrajala_ml.pcg64 import Pcg64Generator
 
 

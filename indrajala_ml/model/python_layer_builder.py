@@ -17,32 +17,28 @@ from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.cross_entropy_output_layer import CrossEntropyOutputLayer
 from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
 from indrajala_ml.model.layer_norm_layer import LayerNormLayer
-from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
-from indrajala_ml.model.layer_specs import (
+from indrajala_ml.model.linear_conv_layer import LinearConvLayer
+from indrajala_ml.model.linear_layer import LinearLayer
+from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
+from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.relu_layer import ReLULayer
+from indrajala_ml.model.residual_layer import AddLayer, AffineLayer, ForkLayer
+from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
+from indrajala_ml.model.specs.layer_specs import (
     Add,
     Attention,
     BatchNorm,
     Dense,
     Fork,
-    InputShape,
     LayerNorm,
     LayerSpec,
     Patches,
     Position,
-    Shape,
     TokenMean,
     expand_specs,
-    image_shape,
-    spec_shapes,
-    token_shape,
-    validate_layer_specs,
 )
-from indrajala_ml.model.linear_conv_layer import LinearConvLayer
-from indrajala_ml.model.linear_layer import LinearLayer
-from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
-from indrajala_ml.model.relu_layer import ReLULayer
-from indrajala_ml.model.residual_layer import AddLayer, AffineLayer, ForkLayer
-from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
+from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
+from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 from indrajala_ml.model.token_layer import PatchesLayer, PositionLayer, TokenDenseLayer, TokenMeanLayer
 
 

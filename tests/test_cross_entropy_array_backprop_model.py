@@ -4,8 +4,8 @@ from indrajala_ml.model.cross_entropy_array_backprop_classifier_network import (
 from indrajala_ml.model.cross_entropy_rust_array_backprop_classifier_network import (
     CrossEntropyRustArrayBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
-from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from tests.array_network_contract import ArrayNetworkSpec, single_output_network_tests
 
 

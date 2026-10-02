@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from indrajala_ml.model.association_layer import AssociationLayer
-from indrajala_ml.model.bounds import half_widths as _half_widths
-from indrajala_ml.model.bounds import validate_input_bounds
+from indrajala_ml.model.specs.bounds import half_widths as _half_widths
+from indrajala_ml.model.specs.bounds import validate_input_bounds
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 

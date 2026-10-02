@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights_and_bias
-from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.pcg64 import Pcg64Generator
 
 

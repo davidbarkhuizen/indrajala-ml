@@ -28,7 +28,6 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.layer_specs import LayerSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.sequential_array_network import (
     SequentialArrayBackpropClassifierNetwork,
@@ -36,7 +35,8 @@ from indrajala_ml.model.sequential_array_network import (
     SequentialRustArrayMultiClassBackpropClassifierNetwork,
     SequentialVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import UpdateRule
+from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.update_rules import UpdateRule
 from tests.helpers import (
     Backend,
     approx,

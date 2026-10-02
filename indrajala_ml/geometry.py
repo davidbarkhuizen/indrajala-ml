@@ -1,5 +1,5 @@
-from indrajala_ml.model.classifier_protocols import TargetClassifier
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.protocols.classifier_protocols import TargetClassifier
 
 
 def square_bounds(l: float, dimension: int = 2) -> list[tuple[float, float]]:

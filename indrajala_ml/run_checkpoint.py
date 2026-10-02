@@ -7,7 +7,7 @@ convergence series so far; the shuffle generator's state; and the epoch and batc
 learning-rate schedule reads.
 
 The trainer returns one as result.run_checkpoint and takes one as resume_from=. save_run writes it
-as one JSON file holding both networks as format-2 network entries (model/format2.py); the model
+as one JSON file holding both networks as format-2 network entries (model/persistence/format2.py); the model
 file beside it stays the pocketed model. Single networks only: an ensemble's sub-networks train
 separately (ensemble_train.py), each with its own run.
 
@@ -19,15 +19,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
-from indrajala_ml.model.checkpoint import Checkpoint
-from indrajala_ml.model.format2 import (
+from indrajala_ml.model.persistence.checkpoint import Checkpoint
+from indrajala_ml.model.persistence.format2 import (
     ENSEMBLE,
     Format2Network,
     checkpoint_to_json,
     file_checkpoint,
     network_from_json,
 )
-from indrajala_ml.model.model_io import load_json, save_json
+from indrajala_ml.model.persistence.model_io import load_json, save_json
 
 RUN_CHECKPOINT = 1
 

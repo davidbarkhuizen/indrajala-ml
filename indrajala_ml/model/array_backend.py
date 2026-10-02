@@ -7,9 +7,10 @@ import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray, fan_in_aware_random_layer, fan_in_aware_random_weights
-from indrajala_ml.model.optimizers import NumpyOptimizer, RustOptimizer
+from indrajala_ml.model.optimizers.numpy_optimizer import NumpyOptimizer
+from indrajala_ml.model.optimizers.rust_optimizer import RustOptimizer
 from indrajala_ml.model.rust_array_layer import fan_in_aware_random_rust_layer, fan_in_aware_random_rust_weights
-from indrajala_ml.model.update_rules import UpdateRule
+from indrajala_ml.model.specs.update_rules import UpdateRule
 
 
 def _seed_sequence_parts(seed: Any) -> tuple[Any, Any] | None:

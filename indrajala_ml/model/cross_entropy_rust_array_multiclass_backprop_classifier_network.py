@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.specs.layer_specs import Dense
 
 
 class CrossEntropyRustArrayMultiClassBackpropClassifierNetwork(RustArrayMultiClassBackpropClassifierNetwork):

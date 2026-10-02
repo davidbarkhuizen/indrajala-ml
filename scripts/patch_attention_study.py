@@ -85,8 +85,9 @@ from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.array_backend import NUMPY
-from indrajala_ml.model.classifier_protocols import Example
-from indrajala_ml.model.layer_specs import (
+from indrajala_ml.model.protocols.classifier_protocols import Example
+from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,
     LayerNorm,
@@ -96,8 +97,7 @@ from indrajala_ml.model.layer_specs import (
     Residual,
     TokenMean,
 )
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import Adam
+from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.multiclass_evaluate import accuracy
 
 INPUT_SHAPE = (bss.SIDE, bss.SIDE, 1)

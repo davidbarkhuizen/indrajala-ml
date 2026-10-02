@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
-from indrajala_ml.model.update_rules import Momentum
+from indrajala_ml.model.specs.update_rules import Momentum
 
 
 class MomentumArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):

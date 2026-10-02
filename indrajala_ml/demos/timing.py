@@ -1,7 +1,7 @@
 import time
 from collections.abc import Callable, Sequence
 
-from indrajala_ml.model.classifier_protocols import Example, TrainableClassifier
+from indrajala_ml.model.protocols.classifier_protocols import Example, TrainableClassifier
 from indrajala_ml.prepared_dataset import PreparedDataset
 from indrajala_ml.train import ConvergenceSeries, train_linear_classifier_network
 

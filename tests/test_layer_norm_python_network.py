@@ -2,7 +2,7 @@
 Layer norm in pure Python (the layer-norm and attention workplan, stage 3; README, Layer norm and
 attention): LayerNormLayer against hand-computed values and against numpy's layer by bits, over
 tokens and over a flat layer, and parity with numpy after 50 steps. The cases are
-tests/test_layer_specs.py's; the gradient check and learn against a batch of one are
+tests/model/specs/test_layer_specs.py's; the gradient check and learn against a batch of one are
 tests/test_layer_norm_network.py's, on every implementation.
 """
 
@@ -15,20 +15,20 @@ import pytest
 from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
 from indrajala_ml.model.layer_norm_layer import LayerNormLayer
-from indrajala_ml.model.layer_specs import LayerSpec
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.model.state_layer import StateLayer
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.helpers import bits
+from tests.model.specs.test_layer_specs import FLAT_LAYER_NORM, _input_shape
 from tests.test_attention_python_network import (
     as_array_snapshot,
     assert_every_step_has_numpys_gradients,
     downstream,
 )
 from tests.test_layer_norm_array_network import rows
-from tests.test_layer_specs import FLAT_LAYER_NORM, _input_shape
 
 
 def network(specs: list[LayerSpec], rule: UpdateRule | None = None) -> Any:

@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from indrajala_ml.model.array_protocols import ArrayNetworkLayer, BackendArray
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer, BackendArray
 
 
 class FrontEndLayer(Protocol):
@@ -29,7 +29,7 @@ class ArrayFrontEndLayer[A: BackendArray](ArrayNetworkLayer[A], FrontEndLayer, P
 
 
 def spec_from_json(spec: dict[str, Any]) -> ConvSpec | PoolSpec:
-    # a legacy conv envelope's spec; format 2 has its own (format2.layer_from_json)
+    # a legacy conv envelope's spec; format 2 has its own (format2_json.layer_from_json)
     fields = {key: value for key, value in spec.items() if key != "type"}
     return PoolSpec(**fields) if spec["type"] == "pool" else ConvSpec(**fields)
 

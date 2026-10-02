@@ -23,7 +23,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from indrajala_ml.model.batch_norm_layer import BatchNormLayer
-from indrajala_ml.model.layer_protocols import TrainableLayer
+from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
 from indrajala_ml.model.state_layer import StateLayer
 
 # one layer's state for one example: the layer's own example_fields, then each node's

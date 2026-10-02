@@ -14,7 +14,6 @@ import pytest
 
 from indrajala_ml.digits_data import load_digits_dataset
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.layer_specs import Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.sequential_array_network import (
     SequentialArrayBackpropClassifierNetwork,
     SequentialArrayNetwork,
@@ -22,7 +21,8 @@ from indrajala_ml.model.sequential_array_network import (
     SequentialRustArrayMultiClassBackpropClassifierNetwork,
     SequentialVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import SGD, Adam
+from indrajala_ml.model.specs.layer_specs import Conv, Dense, LayerSpec, Pool
+from indrajala_ml.model.specs.update_rules import SGD, Adam
 from tests.helpers import Backend, assert_conv_array_network_weights_match, conv_reference
 from tests.test_conv_array_multiclass_backprop_model import PROBABILITY_ATOL, WEIGHT_ATOL
 

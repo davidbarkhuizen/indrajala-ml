@@ -17,8 +17,8 @@ from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, as_den
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
     BinaryCrossEntropyBackpropClassifierNetwork,
 )
-from indrajala_ml.model.classifier_protocols import Example
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
+from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )

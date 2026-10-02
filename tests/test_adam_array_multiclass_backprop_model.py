@@ -4,8 +4,8 @@ from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.adam_vectorized_multiclass_backprop_classifier_network import (
     AdamVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
-from indrajala_ml.model.update_rules import Adam, UpdateRule
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import Adam, UpdateRule
 from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_tests
 
 

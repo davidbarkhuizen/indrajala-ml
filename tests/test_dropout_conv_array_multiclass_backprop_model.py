@@ -8,8 +8,8 @@ from indrajala_ml.model.dropout_conv_rust_array_multiclass_backprop_classifier_n
 from indrajala_ml.model.dropout_conv_vectorized_multiclass_backprop_classifier_network import (
     DropoutConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
-from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from tests.array_network_contract import (
     CLASS_COUNT,
     CONV_DENSE_LAYER_SIZES,

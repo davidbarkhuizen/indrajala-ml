@@ -7,7 +7,6 @@ import pytest
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.classifier_protocols import Example
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -15,14 +14,15 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import BatchNorm, Dense
 from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
     MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
     MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import SGD, Momentum
+from indrajala_ml.model.protocols.classifier_protocols import Example
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense
+from indrajala_ml.model.specs.update_rules import SGD, Momentum
 from indrajala_ml.train import train_backprop_network_mini_batch
 
 

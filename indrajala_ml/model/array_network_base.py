@@ -6,7 +6,8 @@ from collections.abc import Sequence
 from typing import Any, ClassVar, NoReturn, Self, cast
 
 from indrajala_ml.model.array_layer_builder import build_array_layers
-from indrajala_ml.model.array_protocols import (
+from indrajala_ml.model.persistence.format2_persistence import Format2Persistence
+from indrajala_ml.model.protocols.array_protocols import (
     ArrayBackend,
     ArrayNetworkLayer,
     ArrayOptimizer,
@@ -18,18 +19,16 @@ from indrajala_ml.model.array_protocols import (
     TrainingModeLayer,
     WeightedArrayLayer,
 )
-from indrajala_ml.model.bounds import validate_batch
-from indrajala_ml.model.format2_persistence import Format2Persistence
-from indrajala_ml.model.layer_protocols import GeneratorLayer
-from indrajala_ml.model.layer_specs import (
-    Dense,
-    InputShape,
-    LayerSpec,
+from indrajala_ml.model.protocols.layer_protocols import GeneratorLayer
+from indrajala_ml.model.specs.bounds import validate_batch
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.single_example import (
     batch_norm_index,
     refuse_single_example_groups,
     refuse_single_example_network,
 )
-from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 
 
@@ -43,7 +42,7 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
 
     A sibling differs only in its layer specs (_hidden_spec/_output_spec), its update rule
     (_update_rule) and their hyperparameters. The forward and backward formulas live in the layer
-    classes, the weight updates in the network's optimizer (optimizers.py), which holds the rule's
+    classes, the weight updates in the network's optimizer (optimizers/), which holds the rule's
     state (momentum's velocities, Adam's m, v and t). What differs between the multiclass,
     single-output and conv networks (their constructor arguments, classify_state, targets,
     class_count, save/load) is in the shape mixins in array_network_shapes.py, listed before the

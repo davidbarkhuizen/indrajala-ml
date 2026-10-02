@@ -4,10 +4,10 @@ import pytest
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
-from indrajala_ml.model.python_optimizer import PythonOptimizer
+from indrajala_ml.model.optimizers.python_optimizer import PythonOptimizer
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.state_node import StateNode
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from tests.helpers import LayerOptimizer, WeightSets, approx
 
 

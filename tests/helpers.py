@@ -14,11 +14,8 @@ import indrajala_ml.model
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
-from indrajala_ml.model.array_network_shapes import ArrayMultiClassShape, ArraySingleOutputShape
-from indrajala_ml.model.array_protocols import ArrayBackend, BackendArray, WeightedArrayLayer
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
-from indrajala_ml.model.classifier_protocols import State
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
@@ -29,17 +26,21 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import InputShape, LayerSpec
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.python_optimizer import PythonOptimizer
+from indrajala_ml.model.optimizers.python_optimizer import PythonOptimizer
+from indrajala_ml.model.protocols.array_protocols import ArrayBackend, BackendArray, WeightedArrayLayer
+from indrajala_ml.model.protocols.classifier_protocols import State
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.model.specs.array_network_shapes import ArrayMultiClassShape, ArraySingleOutputShape
+from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from indrajala_ml.pcg64 import default_rng
 
 # conftest's `backend` fixture: either array backend, NUMPY or RUST
@@ -258,7 +259,7 @@ class WeightSets:
 class LayerOptimizer:
     """
     One layer updated as a network updates it: by the pure-Python optimizer (python_optimizer.py)
-    for a pure-Python layer or WeightSets, else by its backend's optimizer (optimizers.py), with
+    for a pure-Python layer or WeightSets, else by its backend's optimizer (optimizers/), with
     the layer at index 0 and one begin_step per update, so a layer-level test can drive an update
     rule on its own.
     """

@@ -2,8 +2,8 @@ import pytest
 
 from indrajala_ml.model.dropout_array_backprop_classifier_network import DropoutArrayBackpropClassifierNetwork
 from indrajala_ml.model.dropout_rust_array_backprop_classifier_network import DropoutRustArrayBackpropClassifierNetwork
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
-from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from tests.array_network_contract import DIMENSION, LAYER_SIZES, ArrayNetworkSpec, single_output_network_tests
 from tests.helpers import Backend
 

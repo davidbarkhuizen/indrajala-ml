@@ -1,11 +1,11 @@
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_network import (
     MomentumRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.momentum_vectorized_multiclass_backprop_classifier_network import (
     MomentumVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import Momentum, UpdateRule
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import Momentum, UpdateRule
 from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_tests
 
 

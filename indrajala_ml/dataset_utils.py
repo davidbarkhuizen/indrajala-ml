@@ -1,7 +1,7 @@
 import random
 from collections.abc import Sequence
 
-from indrajala_ml.model.classifier_protocols import Example
+from indrajala_ml.model.protocols.classifier_protocols import Example
 
 
 def split_train_test[L](

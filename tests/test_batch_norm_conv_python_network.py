@@ -23,8 +23,8 @@ from indrajala_ml.model.linear_conv_layer import LinearConvKernel, LinearConvLay
 from indrajala_ml.model.relu_layer import relu_activation
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.specs.update_rules import SGD, Adam, UpdateRule, WeightDecay
 from indrajala_ml.model.state_layer import StateLayer
-from indrajala_ml.model.update_rules import SGD, Adam, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import check_gradients
 from tests.helpers import bits

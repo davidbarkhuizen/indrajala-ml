@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
-from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
+from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 
 
 class AffineArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], ArrayLayer):

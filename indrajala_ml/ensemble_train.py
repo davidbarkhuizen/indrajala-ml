@@ -8,8 +8,8 @@ from collections.abc import Callable, Iterable
 from typing import Any, cast
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.classifier_protocols import BinaryClassifier, BinaryClassifierClass
-from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
+from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
+from indrajala_ml.model.protocols.classifier_protocols import BinaryClassifier, BinaryClassifierClass
 from indrajala_ml.pcg64 import SeedSequence
 from indrajala_ml.train import TrainingDiagnostic, train_linear_classifier_network
 
@@ -90,7 +90,7 @@ def _picklable_checkpoint(checkpoint: object) -> object:
     """
     A classifier's checkpoint() as nested lists, which cross a multiprocessing.Pool boundary for
     any backend: indrajala_math_rust.Array doesn't pickle. Recurses through lists, tuples, dicts
-    and dataclasses (model/checkpoint.py), calling .tolist() on each array leaf (numpy or Rust);
+    and dataclasses (model/persistence/checkpoint.py), calling .tolist() on each array leaf (numpy or Rust);
     per-node weights and state are already lists and pass through. The collecting side's
     restore_checkpoint() accepts lists.
     """

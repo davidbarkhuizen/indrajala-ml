@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from indrajala_ml.model.base_node import AbstractNode
-from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer, WeightSet
-from indrajala_ml.model.window_geometry import output_size, pool_stride, validate_pool_arguments
+from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer, WeightSet
+from indrajala_ml.model.specs.window_geometry import output_size, pool_stride, validate_pool_arguments
 from indrajala_ml.pcg64 import Pcg64Generator
 
 

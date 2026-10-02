@@ -108,9 +108,9 @@ in any of three implementations of the same maths:
 
 ```python
 from indrajala_ml.model.array_backend import RUST
-from indrajala_ml.model.layer_specs import Conv, Dense, Pool
+from indrajala_ml.model.specs.layer_specs import Conv, Dense, Pool
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import Momentum
+from indrajala_ml.model.specs.update_rules import Momentum
 
 network = SequentialArrayNetwork(
     input_shape=(28, 28, 1),
@@ -133,8 +133,9 @@ network = SequentialArrayNetwork(
 - **Update rules** (`update_rules.py`) are data too: `SGD`, `Momentum`, `Adam` and `WeightDecay`
   (see Update rules, below).
 - **The optimizer** holds all of a network's update state: `NumpyOptimizer` and `RustOptimizer`
-  (`optimizers.py`), `PythonOptimizer` (`python_optimizer.py`). It keeps momentum's velocities and
-  Adam's moments by layer position, with one step count `t`. `checkpoint()` and format 2 save
+  (`numpy_optimizer.py`, `rust_optimizer.py`), `PythonOptimizer` (`python_optimizer.py`). It keeps
+  momentum's velocities and Adam's moments by layer position, with one step count `t`.
+  `checkpoint()` and format 2 save
   it, and the network's generator's state beside it. Layers keep their weights and gradients, and no update formula.
 - **Builders** map each spec to an implementation's layer classes: `array_layer_builder.py` for
   numpy and Rust, `python_layer_builder.py` for pure Python.
@@ -202,16 +203,16 @@ are timed. Accuracy comparisons of pure-Python models are fine.
 
 ## Saving and loading
 
-Every backprop network and ensemble saves one format, format 2 (`indrajala_ml/model/format2.py`):
+Every backprop network and ensemble saves one format, format 2 (`indrajala_ml/model/persistence/format2.py`):
 a JSON file with the layer specs, the update rule, the weights, the optimizer's state
 (momentum's velocities, Adam's `m`, `v` and step count `t`) and the network's generator's state, so
 dropout's masks resume too. A loaded network resumes training where it stopped. Training on after
 `save` and `load` takes the same steps, by bits, as training on without them
-(`tests/test_format2.py`). The trainers' epoch shuffle draws from a `random.Random` passed as
+(`tests/model/persistence/test_format2.py`). The trainers' epoch shuffle draws from a `random.Random` passed as
 `rng=`, which the model file doesn't hold. A run file does (below).
 
 ```python
-from indrajala_ml.model.load_network import load_network
+from indrajala_ml.model.persistence.load_network import load_network
 
 network.save("model.json")
 network = AdamVectorizedMultiClassBackpropClassifierNetwork.load("model.json")  # its own class
@@ -238,9 +239,9 @@ network = load_network("model.json")  # the Sequential network the file describe
 - The patch model's entries are `"patches"`, `"position"`, `"layer_norm"`, `"attention"` and
   `"token_mean"`; a token-wise dense layer's is a `"dense"` one. Weights and optimizer state:
   `Position`'s `P`, a layer norm's `γ` and `β` (flat or over tokens), attention's `Wq, bq, Wk, bk,
-  Wv, bv, Wo, bo`, nothing for `Patches` or `TokenMean` (`tests/test_attention_format2.py`).
+  Wv, bv, Wo, bo`, nothing for `Patches` or `TokenMean` (`tests/model/persistence/test_attention_format2.py`).
 - `load` still reads each class's legacy file, written before format 2, with fresh optimizer
-  state (`tests/test_legacy_saved_models.py`). Files saved in format 2 don't load on older versions
+  state (`tests/model/persistence/test_legacy_saved_models.py`). Files saved in format 2 don't load on older versions
   of this package.
 
 A run stopped at an epoch boundary resumes, by bits, from a run file
@@ -283,7 +284,7 @@ gradient summed over a batch of `B` examples, so `g / B` is the mean gradient.
 For momentum the literature has competing forms. Rumelhart et al. 1986's, Goyal et al.'s eq. (10),
 folds the rate into the velocity, `v = lr * g / B + m * v; w - v`, and so needs a correction
 whenever the rate changes, as in warmup. Eq. (9) needs none, and at a constant rate the two are
-equivalent. `tests/test_update_rule_forms.py` checks each implementation of SGD, weight decay and
+equivalent. `tests/model/optimizers/test_update_rule_forms.py` checks each implementation of SGD, weight decay and
 momentum against its form bit for bit. A new rule cites its source here, and where the literature
 has competing forms (as for momentum), the choice is made explicitly. Consistency comes before
 speed: every rule divides, `g / B`, and none multiplies by a precomputed `1 / B` or `lr / B`, which
@@ -426,7 +427,7 @@ without batch norm in the body; no preset has them. Format 2 saves them (Saving 
 section fixes the forms all three implementations are held to:
 
 ```python
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, Residual
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, Residual
 
 layers = [
     Dense(64, activation="relu"),
@@ -490,7 +491,7 @@ under every update rule; no preset has them. Format 2 saves them (Saving and loa
 section fixes the forms all three implementations are held to:
 
 ```python
-from indrajala_ml.model.layer_specs import Attention, Dense, LayerNorm, Patches, Position, Residual, TokenMean
+from indrajala_ml.model.specs.layer_specs import Attention, Dense, LayerNorm, Patches, Position, Residual, TokenMean
 
 layers = [
     Patches(7),  # (28, 28, 1) -> 16 tokens of 49
@@ -623,7 +624,7 @@ test passing, and:
   new with `scripts/ab.py` ([docs/measurement.md](docs/measurement.md)). It must be within noise.
 - **Public names stay.** Demos, `demos/registry.py`, `ensemble_train.py` and the tests construct
   the concrete classes by name, and saved model files must still load:
-  `tests/test_legacy_saved_models.py` loads a committed file for every class that has `save`
+  `tests/model/persistence/test_legacy_saved_models.py` loads a committed file for every class that has `save`
   (`tests/fixtures/saved_models/`, written once by `python -m tests.saved_model_fixtures`).
 
 ## Docs

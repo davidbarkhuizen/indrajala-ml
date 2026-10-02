@@ -19,7 +19,6 @@ from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.layer_major import LayerMajorBatch
-from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.linear_layer import LinearLayer
 from indrajala_ml.model.relu_layer import relu_activation
@@ -28,8 +27,9 @@ from indrajala_ml.model.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.model.state_layer import StateLayer
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients

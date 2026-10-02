@@ -1,5 +1,5 @@
 """
-The pure-Python builder of layer specs (python_layer_builder.py): what tests/test_layer_specs.py
+The pure-Python builder of layer specs (python_layer_builder.py): what tests/model/specs/test_layer_specs.py
 checks of the numpy and Rust builder, for the pure-Python layer classes, over the same spec lists.
 """
 
@@ -13,16 +13,17 @@ from indrajala_ml.model.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.conv_layer import ConvLayer
 from indrajala_ml.model.cross_entropy_output_layer import CrossEntropyOutputLayer
 from indrajala_ml.model.dropout_layer import TrainingModeNode
-from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, InputShape, LayerSpec, Pool
 from indrajala_ml.model.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.linear_layer import LinearLayer
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer
 from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
+from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.pcg64 import default_rng
-from tests.test_layer_specs import BATCH_NORM, CONV_BATCH_NORM, INVALID, KINDS, LINEAR, OUTPUT, VALID
+from tests.model.specs.test_layer_specs import BATCH_NORM, CONV_BATCH_NORM, INVALID, KINDS, LINEAR, OUTPUT, VALID
 
 # ArrayLayerClasses' field names (KINDS), as the pure-Python classes; a dropout layer's class is
 # made per drop probability (make_dropout_layer_cls), so it's checked by its nodes instead

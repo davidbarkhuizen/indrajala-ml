@@ -12,7 +12,7 @@ from __future__ import annotations
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_parameters import GammaAndBeta
-from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden
+from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden
 
 
 class LayerNormRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], GammaAndBeta[pa.Array]):

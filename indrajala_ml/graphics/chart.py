@@ -10,8 +10,8 @@ from matplotlib.figure import Figure
 from matplotlib.legend import Legend
 
 from indrajala_ml.geometry import reference_positive_region_polygon
-from indrajala_ml.model.classifier_protocols import StateClassifier
 from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.protocols.classifier_protocols import StateClassifier
 
 
 def plot_linear_classifier_network(

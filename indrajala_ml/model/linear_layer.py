@@ -13,7 +13,7 @@ from typing import Any, ClassVar
 from indrajala_ml.model.backprop_layer import NodeLayer
 from indrajala_ml.model.backprop_node import BackpropNode
 from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights
-from indrajala_ml.model.layer_specs import refuse_single_example
+from indrajala_ml.model.specs.single_example import refuse_single_example
 from indrajala_ml.pcg64 import Pcg64Generator
 
 

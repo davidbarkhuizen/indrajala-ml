@@ -12,7 +12,6 @@ from typing import Any
 
 from indrajala_ml.model.affine_rust_array_layer import AffineRustArrayLayer
 from indrajala_ml.model.array_layer import ArrayLayer
-from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.attention_array_layer import AttentionArrayLayer
 from indrajala_ml.model.attention_rust_array_layer import AttentionRustArrayLayer
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
@@ -27,30 +26,12 @@ from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
 from indrajala_ml.model.layer_norm_rust_array_layer import LayerNormRustArrayLayer
-from indrajala_ml.model.layer_specs import (
-    Add,
-    Attention,
-    BatchNorm,
-    Dense,
-    Fork,
-    InputShape,
-    LayerNorm,
-    LayerSpec,
-    Patches,
-    Position,
-    Shape,
-    TokenMean,
-    expand_specs,
-    image_shape,
-    spec_shapes,
-    token_shape,
-    validate_layer_specs,
-)
 from indrajala_ml.model.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
+from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.residual_array_layer import AddArrayLayer, AffineArrayLayer, ForkArrayLayer
@@ -58,6 +39,21 @@ from indrajala_ml.model.residual_rust_array_layer import AddRustArrayLayer, Fork
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
+from indrajala_ml.model.specs.layer_specs import (
+    Add,
+    Attention,
+    BatchNorm,
+    Dense,
+    Fork,
+    LayerNorm,
+    LayerSpec,
+    Patches,
+    Position,
+    TokenMean,
+    expand_specs,
+)
+from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
+from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 from indrajala_ml.model.token_array_layer import (
     PatchesArrayLayer,
     PositionArrayLayer,

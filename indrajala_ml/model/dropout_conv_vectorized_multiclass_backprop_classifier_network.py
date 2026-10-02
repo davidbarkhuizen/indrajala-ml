@@ -7,8 +7,8 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
-from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.specs.layer_specs import Dense
 
 
 class DropoutConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMultiClassBackpropClassifierNetwork):

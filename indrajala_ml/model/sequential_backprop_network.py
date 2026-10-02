@@ -17,12 +17,13 @@ from typing import Any, ClassVar, Self
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.backprop_network_base import randomize_fan_in_aware
-from indrajala_ml.model.bounds import validate_class_count
-from indrajala_ml.model.format2 import NetworkFile
-from indrajala_ml.model.layer_protocols import TrainableLayer
-from indrajala_ml.model.layer_specs import Dense, InputShape, LayerSpec
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
-from indrajala_ml.model.update_rules import UpdateRule
+from indrajala_ml.model.persistence.format2 import NetworkFile
+from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
+from indrajala_ml.model.specs.bounds import validate_class_count
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import UpdateRule
 
 
 def _bounds(input_shape: InputShape, input_bounds: list[tuple[float, float]] | None) -> list[tuple[float, float]]:

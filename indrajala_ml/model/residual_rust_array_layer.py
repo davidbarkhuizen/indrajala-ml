@@ -18,7 +18,7 @@ from typing import Any
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
+from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 
 
 class ForkRustArrayLayer(Hidden[pa.Array], ParameterFree[pa.Array]):

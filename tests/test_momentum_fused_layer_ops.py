@@ -1,7 +1,7 @@
 """
 `layer_momentum_apply_accumulated_gradient` is one fused Rust call for the whole momentum update
 rule, checked against the numpy optimizer's Momentum rule
-(`indrajala_ml.model.optimizers.NumpyOptimizer`) - the production reference this function
+(`indrajala_ml.model.optimizers.numpy_optimizer.NumpyOptimizer`) - the production reference this function
 matches - the same treatment `test_adam_fused_layer_ops.py`/
 `test_l2_fused_layer_ops.py` give their own fused ops. The optimizer calls the same op on a conv
 W, (channel_count, fan_in), so it is also checked against the numpy optimizer on a conv layer.
@@ -17,7 +17,7 @@ from indrajala_math_rust import Array, layer_momentum_apply_accumulated_gradient
 
 from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer
-from indrajala_ml.model.update_rules import Momentum
+from indrajala_ml.model.specs.update_rules import Momentum
 from tests.helpers import LayerOptimizer, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)

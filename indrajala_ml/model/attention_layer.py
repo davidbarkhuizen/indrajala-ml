@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from typing import ClassVar
 
 from indrajala_ml.model.batch_norm_layer import fold
-from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.residual_layer import ParameterFreeLayer
 from indrajala_ml.model.token_layer import TokenNode, WeightRow, restore_rows, snapshot_rows, token_values
 from indrajala_ml.pcg64 import Pcg64Generator

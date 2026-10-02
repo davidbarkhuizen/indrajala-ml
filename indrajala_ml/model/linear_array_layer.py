@@ -14,7 +14,7 @@ from typing import Any, ClassVar
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.layer_specs import refuse_single_example
+from indrajala_ml.model.specs.single_example import refuse_single_example
 
 
 class LinearArrayLayer:

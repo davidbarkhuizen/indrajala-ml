@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.array_network_shapes import ArrayConvShape
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.specs.array_network_shapes import ArrayConvShape
 from indrajala_ml.prepared_dataset import PreparedDataset
 
 

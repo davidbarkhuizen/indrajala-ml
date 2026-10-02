@@ -6,7 +6,7 @@ from indrajala_ml.mnist_capture import (
     paint_brush_stroke,
     preprocess_capture,
 )
-from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
+from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
 
 MODEL_PATH = "data/mnist/trained_model.json"
 
