@@ -12,6 +12,7 @@ from indrajala_ml.model.array_protocols import (
     ArrayOptimizer,
     BackendArray,
     BiasFreeArrayLayer,
+    ProjectionsArrayLayer,
     RunningStateLayer,
     TrainedArrayLayer,
     TrainingModeLayer,
@@ -268,8 +269,9 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
         # fan-in-aware (limit = 1/sqrt(fan_in)), drawn from the network's generator: from the same
         # seed, numpy and Rust draw the same weights. W then b per layer, in forward
         # order; a W is (rows, fan_in), a dense layer's (size, input_size) and a conv layer's
-        # (channel_count, input_channels * kernel_size**2). A linear layer draws its W only, and a
-        # pool or batch-norm layer draws nothing.
+        # (channel_count, input_channels * kernel_size**2). A linear layer draws its W only, an
+        # attention layer each projection's W then b in turn, and a pool, batch-norm, layer-norm,
+        # patches, position or token-mean layer draws nothing.
         for layer in self.layers:
             if isinstance(layer, WeightedArrayLayer):
                 rows, fan_in = layer.W.shape
@@ -278,6 +280,15 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
                 linear = cast("BiasFreeArrayLayer[A]", layer)
                 rows, fan_in = linear.W.shape
                 linear.W = self.backend.random_weights(self.rng, rows, fan_in)
+            elif isinstance(layer, ProjectionsArrayLayer):
+                projections = cast("ProjectionsArrayLayer[A]", layer)
+                projections.set_parameters(
+                    [
+                        array
+                        for rows, fan_in in projections.projection_shapes
+                        for array in self.backend.random_layer(self.rng, rows, fan_in)
+                    ]
+                )
 
     @classmethod
     def _extra_init_kwargs(cls, state: dict[str, Any]) -> dict[str, Any]:

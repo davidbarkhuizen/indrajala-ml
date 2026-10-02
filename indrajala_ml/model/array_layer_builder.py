@@ -13,6 +13,7 @@ from typing import Any
 from indrajala_ml.model.affine_rust_array_layer import AffineRustArrayLayer
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
+from indrajala_ml.model.attention_array_layer import AttentionArrayLayer
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
@@ -23,13 +24,20 @@ from indrajala_ml.model.cross_entropy_array_layer import CrossEntropyArrayLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
+from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
 from indrajala_ml.model.layer_specs import (
     Add,
+    Attention,
     BatchNorm,
     Dense,
     Fork,
     InputShape,
+    LayerNorm,
     LayerSpec,
+    Patches,
+    Position,
+    Shape,
+    TokenMean,
     expand_specs,
     image_shape,
     refuse_layer_norm_attention_until,
@@ -48,6 +56,12 @@ from indrajala_ml.model.residual_rust_array_layer import AddRustArrayLayer, Fork
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
+from indrajala_ml.model.token_array_layer import (
+    PatchesArrayLayer,
+    PositionArrayLayer,
+    TokenDenseArrayLayer,
+    TokenMeanArrayLayer,
+)
 
 LayerClass = Callable[..., ArrayNetworkLayer[Any]]
 FrontEndLayerClass = Callable[..., ArrayFrontEndLayer[Any]]
@@ -109,6 +123,56 @@ LAYER_CLASSES = {
 }
 
 
+@dataclass(frozen=True)
+class TokenLayerClasses:
+    """
+    One backend's layer class for each layer of a patch model's and layer norm's (the layer-norm
+    and attention workplan): the token-wise dense layer (ReLU or affine), patches, position, layer
+    norm (over tokens or a flat layer), attention and the token mean.
+    """
+
+    token_dense: LayerClass
+    patches: LayerClass
+    position: LayerClass
+    layer_norm: LayerClass
+    attention: LayerClass
+    token_mean: LayerClass
+
+
+# Rust's come with the workplan's stage 4
+TOKEN_LAYER_CLASSES = {
+    "numpy": TokenLayerClasses(
+        token_dense=TokenDenseArrayLayer,
+        patches=PatchesArrayLayer,
+        position=PositionArrayLayer,
+        layer_norm=LayerNormArrayLayer,
+        attention=AttentionArrayLayer,
+        token_mean=TokenMeanArrayLayer,
+    ),
+}
+
+
+def _tokens(shape: Shape) -> tuple[int, int]:
+    # a layer norm's input as (tokens, features): a flat layer, or a conv front end's image, is one
+    # token
+    return (shape[0], shape[1]) if len(shape) == 2 else (1, math.prod(shape))
+
+
+def _token_layer(classes: TokenLayerClasses, spec: LayerSpec, shape: Shape) -> ArrayNetworkLayer[Any] | None:
+    # spec's layer if it is one of a patch model's or a layer norm, else None
+    if isinstance(spec, Dense) and len(shape) == 2:
+        return classes.token_dense(spec.size, shape[1], shape[0], spec.activation)
+    if isinstance(spec, Patches):
+        return classes.patches(*image_shape(shape), spec.patch_size)
+    if isinstance(spec, LayerNorm):
+        return classes.layer_norm(*_tokens(shape), spec.epsilon)
+    if isinstance(spec, Position | Attention | TokenMean):
+        tokens, features = _tokens(shape)
+        layer_class = {Position: classes.position, Attention: classes.attention, TokenMean: classes.token_mean}
+        return layer_class[type(spec)](tokens, features)
+    return None
+
+
 def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> ArrayNetworkLayer[Any]:
     if spec.bias:
         return classes.affine(spec.size, input_size)
@@ -135,8 +199,10 @@ def build_array_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_layer_norm_attention_until(specs, "2" if backend_name == "numpy" else "4", f"on the {backend_name} backend")
+    if backend_name not in TOKEN_LAYER_CLASSES:
+        refuse_layer_norm_attention_until(specs, "4", f"on the {backend_name} backend")
     classes = LAYER_CLASSES[backend_name]
+    token_classes = TOKEN_LAYER_CLASSES.get(backend_name)
 
     layers: list[ArrayNetworkLayer[Any]] = []
     # each open block's fork, and the fork whose body's first layer comes next
@@ -154,7 +220,10 @@ def build_array_layers(
             fork.add = classes.add(fork)
             layers.append(fork.add)
             continue
-        if isinstance(spec, Dense):
+        token_layer = None if token_classes is None else _token_layer(token_classes, spec, shape.input_shape)
+        if token_layer is not None:
+            layers.append(token_layer)
+        elif isinstance(spec, Dense):
             layers.append(_dense_layer(classes, spec, input_size))
         elif isinstance(spec, BatchNorm):
             layers.append(
