@@ -32,12 +32,14 @@ from indrajala_ml.model.layer_specs import (
     LayerSpec,
     expand_specs,
     image_shape,
+    refuse_layer_norm_attention_until,
     spec_shapes,
     validate_layer_specs,
 )
 from indrajala_ml.model.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
+from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
@@ -133,6 +135,7 @@ def build_array_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
+    refuse_layer_norm_attention_until(specs, "2" if backend_name == "numpy" else "4", f"on the {backend_name} backend")
     classes = LAYER_CLASSES[backend_name]
 
     layers: list[ArrayNetworkLayer[Any]] = []
@@ -165,6 +168,7 @@ def build_array_layers(
                 conv = classes.conv if spec.activation == "relu" else classes.linear_conv
                 layers.append(conv(height, width, channels, spec.kernel_size, spec.channel_count, spec.stride))
             else:
+                assert isinstance(spec, PoolSpec)
                 layers.append(classes.pool(height, width, channels, spec.pool_size, spec.stride))
         if opened is not None:
             opened.body_first = layers[-1]
