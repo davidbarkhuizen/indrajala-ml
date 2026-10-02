@@ -1,5 +1,5 @@
 """
-The prepared-dataset path (docs/optimizations/implemented.md) trains exactly as the tuple
+The prepared-dataset path trains exactly as the tuple
 path does: for every numpy and Rust array network class, learn_row gives bit-for-bit the weights
 learn gives, step by step, learn_batch_rows those of learn_batch, and classify_row agrees with
 classify_state. The batched accuracy pass predicts what classify_row does, row for

@@ -69,7 +69,7 @@ def reachable_reference_and_training_data(
 def _prepared_for[L](
     student: TrainableClassifier[L], training_data: Sequence[Example[L]] | PreparedDataset
 ) -> PreparedDataset | None:
-    # the array networks train from one backend matrix (docs/optimizations/implemented.md),
+    # the array networks train from one backend matrix,
     # prepared here once per run unless the caller already built one; every other student (the
     # pure-Python networks, the linear classifiers) keeps the tuple list
     if isinstance(training_data, PreparedDataset):
@@ -88,7 +88,7 @@ def _training_accuracy[L](
     prepared: PreparedDataset | None = None,
 ) -> float:
     if prepared is not None:
-        # classify_rows batches the forward passes (docs/optimizations/implemented.md); only an
+        # classify_rows batches the forward passes; only an
         # array network has a prepared dataset (_prepared_for)
         assert isinstance(student, PreparedTrainableClassifier)
         predictions = student.classify_rows(prepared)

@@ -3,8 +3,7 @@
 How to time a change in this repository: when to measure, how to prepare the machine, which tool
 answers which question, how to run an A/B with `scripts/ab.py` and read its report, the protocols
 behind it, what goes wrong, and the rules a timing claim in a PR must meet. It stands alone: every
-timing PR and workplan relies on it, not only optimization work
-([optimizations.md](optimizations.md) is the index of that work).
+timing PR and workplan relies on it, not only optimization work.
 
 ## 1. What to measure, and when not to
 
@@ -325,13 +324,9 @@ never moved for style or for parity alone.
   with the control recorded in the PR; record the max abs and ULP difference from the old op.
 - **Measure first; close what doesn't pay.** A stage 0 measures the stake against a bar fixed
   before measuring (about 5% of an epoch in a trained configuration). Each stage is its own PR,
-  merged before the next. A stage with no gain is closed and its reason added to
-  [Rejected](optimizations/rejected.md). Every PR quotes before/after per-op rows for the ops it
-  touches and the end-to-end effect.
-- **Update the docs to the new state, don't append to them:** replace changed numbers in
-  [Current baseline](optimizations/current-baseline.md), move the item between
-  [Candidates](optimizations/candidates.md), [Implemented](optimizations/implemented.md) and
-  [Rejected](optimizations/rejected.md). The measurements behind a change live in its PR.
+  merged before the next. A stage with no gain is closed with its reason in the PR. Every PR
+  quotes before/after per-op rows for the ops it touches and the end-to-end effect; the
+  measurements behind a change live in its PR.
 
 ## 10. For agents
 

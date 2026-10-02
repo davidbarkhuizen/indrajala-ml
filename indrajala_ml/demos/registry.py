@@ -287,7 +287,7 @@ DEMOS: list[DemoInfo] = [
             "a ConvSpec(3, 8) layer on 28x28 and 8x8 input, and the second conv layer of conv -> pool -> "
             "conv (13x13x8 in), of the stride-2 network (26x26x8 in, stride 2) and of conv -> conv "
             "(26x26x8 in), at batch sizes 1, 32 and 512. Each cell is the median over 5 interleaved loops of microseconds per call, with the Rust/numpy ratio. "
-            "The before/after reference for the recommended optimizations. Takes a minute or two."
+            "The per-op before/after reference for an optimization A/B. Takes a minute or two."
         ),
     ),
     DemoInfo(
