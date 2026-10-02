@@ -262,8 +262,20 @@ def test_a_pass_whose_tree_lacks_the_module_aborts(toy_repo: Path, capsys: pytes
     _git(toy_repo, "rm", "-q", "indrajala_ml/train.py")
     _git(toy_repo, "commit", "-q", "-m", "no train")
     assert _run(toy_repo, "run", "--bench", "cmd", "--skip-profile", "--old", "HEAD~1", "--", "scripts/probe.py") == 1
-    assert "provenance: indrajala_ml.train" in capsys.readouterr().err
+    assert "provenance: the trainer" in capsys.readouterr().err
     assert json.loads((ab.find_run(None) / "manifest.json").read_text())["state"] == "failed"
+
+
+def test_a_run_across_the_source_layout_move_finds_each_sides_trainer(toy_repo: Path) -> None:
+    # the old side has indrajala_ml/train.py, the new one indrajala_ml/training/train.py (D4)
+    (toy_repo / "indrajala_ml/training").mkdir()
+    _git(toy_repo, "mv", "indrajala_ml/train.py", "indrajala_ml/training/train.py")
+    _git(toy_repo, "commit", "-q", "-m", "move train")
+    assert _run(toy_repo, "run", "--bench", "cmd", "--skip-profile", "--old", "HEAD~1", "--", "scripts/probe.py") == 0
+    manifest = json.loads((ab.find_run(None) / "manifest.json").read_text())
+    for side, trainer in (("old", "indrajala_ml/train.py"), ("new", "indrajala_ml/training/train.py")):
+        tree = Path(manifest[side]["tree"])
+        assert all(Path(p["provenance"]["train"]) == tree / trainer for p in manifest["passes"] if p["side"] == side)
 
 
 def test_run_refuses_uncommitted_changes(toy_repo: Path, capsys: pytest.CaptureFixture[str]) -> None:

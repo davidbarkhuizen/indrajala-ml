@@ -1,6 +1,6 @@
 # Workplan: the source layout
 
-**Status: decisions settled (D1-D5); stage 0 (this plan).**
+**Status: decisions settled (D1-D5); stages 0-1 done. Before stage 2, pytest collects 9768 tests.**
 
 `indrajala_ml/` has grown flat. `indrajala_ml/model/` holds 190 modules in one directory: 61
 one-change presets, 50-odd layers across three implementations, the network bases, optimizers,

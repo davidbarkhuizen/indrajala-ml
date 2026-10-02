@@ -1,3 +1,4 @@
+import importlib
 import math
 import random
 from collections.abc import Callable, Iterable, Iterator, Sequence
@@ -9,6 +10,7 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
+import indrajala_ml.model
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
@@ -99,6 +101,30 @@ def all_subclasses[ClassT](cls: type[ClassT]) -> Iterator[type[ClassT]]:
         if subclass.__module__.startswith("indrajala_ml."):
             yield subclass
         yield from all_subclasses(subclass)
+
+
+def package_modules(package: ModuleType) -> list[ModuleType]:
+    """
+    Every module in package and its subpackages, imported, in name order. pkgutil.iter_modules
+    doesn't recurse, and it skips a namespace package (a directory without __init__.py) altogether.
+    A namespace package's __path__ can list its directory more than once, beside the editable
+    install's path hook (not a directory).
+    """
+    names = sorted(
+        {
+            ".".join((package.__name__, *path.relative_to(root).with_suffix("").parts))
+            for root in map(Path, package.__path__)
+            if root.is_dir()
+            for path in root.rglob("*.py")
+            if path.name != "__init__.py"
+        }
+    )
+    return [importlib.import_module(name) for name in names]
+
+
+def model_modules() -> list[ModuleType]:
+    """Every module under indrajala_ml.model, imported, so a walk over a class's subclasses sees them all."""
+    return package_modules(indrajala_ml.model)
 
 
 def random_vector(rng: random.Random, n: int) -> list[float]:

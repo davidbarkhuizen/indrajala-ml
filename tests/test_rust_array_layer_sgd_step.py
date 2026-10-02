@@ -7,8 +7,6 @@ the rule is SGD and the layer is dense: the other rules, and the conv layers (wh
 over output positions), keep the unfused pair.
 """
 
-import importlib
-import pkgutil
 import random
 from collections.abc import Callable
 from typing import Any
@@ -17,7 +15,6 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-import indrajala_ml.model
 from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
     AdamRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -59,7 +56,7 @@ from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_networ
     SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from tests.helpers import all_subclasses, bits
+from tests.helpers import all_subclasses, bits, model_modules
 
 SIZE, INPUT_SIZE = 7, 11
 
@@ -206,8 +203,7 @@ def test_no_dense_rust_layer_changes_accumulate_gradient():
     # the fused step computes RustArrayLayer.accumulate_gradient's plain outer product. A dense
     # subclass that changed it would train silently wrong under SGD, unless RustOptimizer.step_single
     # stopped fusing for it.
-    for module in pkgutil.iter_modules(indrajala_ml.model.__path__):
-        importlib.import_module(f"indrajala_ml.model.{module.name}")
+    model_modules()
     subclasses = list(all_subclasses(RustArrayLayer))
     assert {ReLURustArrayLayer, SoftmaxRustArrayLayer, DropoutRustArrayLayer} <= set(subclasses)
 

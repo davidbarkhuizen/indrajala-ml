@@ -5,22 +5,19 @@ forward on that row, for every dense Rust layer. Checked exactly (tolist() ==, n
 including the one-row batch.
 """
 
-import importlib
-import pkgutil
 from collections.abc import Callable
 
 import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-import indrajala_ml.model
 from indrajala_ml.model.affine_rust_array_layer import AffineRustArrayLayer
 from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
-from tests.helpers import all_subclasses
+from tests.helpers import all_subclasses, model_modules
 
 # the momentum, Adam and L2 networks use RustArrayLayer itself: their update is the optimizer's
 LAYER_CLASSES: dict[str, Callable[[int, int], RustArrayLayer]] = {
@@ -75,7 +72,6 @@ def test_dropout_training_base_activation_rows_are_bit_identical_to_forward(size
 
 
 def test_every_dense_rust_layer_is_covered():
-    for module in pkgutil.iter_modules(indrajala_ml.model.__path__):
-        importlib.import_module(f"indrajala_ml.model.{module.name}")
+    model_modules()
     covered = {type(factory(2, 3)) for factory in LAYER_CLASSES.values()}
     assert {RustArrayLayer, *all_subclasses(RustArrayLayer)} == covered
