@@ -41,7 +41,7 @@ import numpy as np
 from process_runs import interleaved_runs, run_json_worker
 from seeded_weights import seeded_randomized, seeded_shuffle
 
-from indrajala_ml import batch_size_scaling as bss
+from indrajala_ml.data.prepared_dataset import PreparedDataset, prepared_mnist
 from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import ARCHITECTURES
 from indrajala_ml.model.networks.numpy.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
@@ -55,8 +55,8 @@ from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classi
 from indrajala_ml.model.networks.rust.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.prepared_dataset import PreparedDataset, prepared_mnist
-from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
+from indrajala_ml.studies import batch_size_scaling as bss
+from indrajala_ml.training.train import train_backprop_network_mini_batch, train_linear_classifier_network
 
 BACKENDS = ["numpy", "rust"]
 NETWORKS = ["dense", *ARCHITECTURES]

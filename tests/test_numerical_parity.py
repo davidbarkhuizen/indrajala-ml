@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 from indrajala_math_rust import Array, argmax, decode_mnist_pixels, exp, outer, seed, sum_axis0, uniform
 
-from indrajala_ml.mnist_data import RECORD_SIZE, load_mnist_dataset_as_array
+from indrajala_ml.data.mnist_data import RECORD_SIZE, load_mnist_dataset_as_array
 from tests.helpers import approx, rust_to_numpy
 
 MNIST_TEST_PATH = "data/mnist/mnist-test.bin"

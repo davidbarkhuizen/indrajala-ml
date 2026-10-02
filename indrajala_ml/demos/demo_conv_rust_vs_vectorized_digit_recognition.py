@@ -10,9 +10,9 @@ from typing import Any, cast
 import indrajala_math_rust as pa
 import numpy as np
 
+from indrajala_ml.data.digits_data import load_digits_dataset, split_train_test
+from indrajala_ml.data.mnist_data import load_mnist_dataset
 from indrajala_ml.demos.timing import timed_call, timed_train
-from indrajala_ml.digits_data import load_digits_dataset, split_train_test
-from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
@@ -23,8 +23,9 @@ from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classi
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.protocols.classifier_protocols import Example, StateClassifier
-from indrajala_ml.multiclass_evaluate import accuracy
-from indrajala_ml.train import ConvergenceSeries, train_backprop_network_mini_batch
+from indrajala_ml.training.multiclass_evaluate import accuracy
+from indrajala_ml.training.train import train_backprop_network_mini_batch
+from indrajala_ml.training.training_diagnostics import ConvergenceSeries
 
 CLASS_COUNT = 10
 DENSE_LAYER_SIZES = [32]

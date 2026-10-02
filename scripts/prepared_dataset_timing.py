@@ -46,9 +46,7 @@ import numpy as np
 from process_runs import interleaved_runs, run_json_worker
 from seeded_weights import seeded_randomized, seeded_shuffle
 
-from indrajala_ml import batch_size_scaling as bss
-from indrajala_ml import train
-from indrajala_ml.mnist_data import load_mnist_dataset
+from indrajala_ml.data.mnist_data import load_mnist_dataset
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.networks.numpy.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
@@ -62,10 +60,13 @@ from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classi
 from indrajala_ml.model.networks.rust.dropout_rust_array_multiclass_backprop_classifier_network import (
     DropoutRustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
+from indrajala_ml.studies import batch_size_scaling as bss
+from indrajala_ml.training import train
+from indrajala_ml.training.train import train_backprop_network_mini_batch, train_linear_classifier_network
 
 # types only: with an old checkout first on PYTHONPATH (see AFTER) the script imports nothing new
 if TYPE_CHECKING:
+    from indrajala_ml.data.prepared_dataset import PreparedDataset
     from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
         VectorizedMultiClassBackpropClassifierNetwork,
     )
@@ -73,7 +74,6 @@ if TYPE_CHECKING:
         RustArrayMultiClassBackpropClassifierNetwork,
     )
     from indrajala_ml.model.protocols.classifier_protocols import Example
-    from indrajala_ml.prepared_dataset import PreparedDataset
 
     # the dense and conv networks of either backend
     Network = VectorizedMultiClassBackpropClassifierNetwork | RustArrayMultiClassBackpropClassifierNetwork
@@ -149,7 +149,7 @@ def measure(config: str, backend: str) -> dict[str, float]:
     result = {"epoch": _train_epoch(config, _network(config, backend), train_data)}
 
     if AFTER:
-        from indrajala_ml.prepared_dataset import prepared_mnist
+        from indrajala_ml.data.prepared_dataset import prepared_mnist
 
         network = _network(config, backend)
         start = time.perf_counter()

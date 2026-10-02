@@ -21,7 +21,7 @@ from indrajala_ml.model.layers.numpy.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from indrajala_ml.train import _chunk_into_batches, train_backprop_network_mini_batch
+from indrajala_ml.training.train import _chunk_into_batches, train_backprop_network_mini_batch
 
 EPSILON = 1e-5
 RATE = 0.1

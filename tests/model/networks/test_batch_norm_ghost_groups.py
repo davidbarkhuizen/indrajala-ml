@@ -25,7 +25,7 @@ from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSp
 from indrajala_ml.model.specs.single_example import ghost_groups
 from indrajala_ml.model.specs.update_rules import SGD, Adam
 from indrajala_ml.pcg64 import default_rng
-from indrajala_ml.train import train_backprop_network_mini_batch
+from indrajala_ml.training.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
 from tests.helpers import bits
 from tests.model.networks.test_batch_norm_python_network import (

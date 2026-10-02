@@ -1,12 +1,12 @@
+from indrajala_ml.data.mnist_data import load_mnist_dataset, load_mnist_dataset_as_array
 from indrajala_ml.demos.timing import timed_call, timed_train
-from indrajala_ml.mnist_data import load_mnist_dataset, load_mnist_dataset_as_array
 from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
     MultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.multiclass_evaluate import accuracy
+from indrajala_ml.training.multiclass_evaluate import accuracy
 
 DIMENSION = 28 * 28
 CLASS_COUNT = 10
@@ -64,7 +64,7 @@ def main() -> None:
     print()
 
     # a second measurement: the tuple decode's 47 million boxed floats against the array decode
-    # (tests/test_mnist_data.py checks they agree)
+    # (tests/data/test_mnist_data.py checks they agree)
     print("data loading comparison (full training file decode):")
     _, tuple_decode_elapsed = timed_call(load_mnist_dataset, TRAIN_PATH)
     _, array_decode_elapsed = timed_call(load_mnist_dataset_as_array, TRAIN_PATH)

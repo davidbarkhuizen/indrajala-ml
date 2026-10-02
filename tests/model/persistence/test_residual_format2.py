@@ -14,12 +14,12 @@ from typing import Any
 
 import pytest
 
-from indrajala_ml.ensemble_train import _picklable_checkpoint  # pyright: ignore[reportPrivateUsage]
 from indrajala_ml.model.persistence.format2_json import layer_from_json, layer_to_json
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec, Residual
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import Momentum, UpdateRule
+from indrajala_ml.training.ensemble_train import _picklable_checkpoint  # pyright: ignore[reportPrivateUsage]
 from tests.model.persistence.test_checkpoint import (
     IMPLEMENTATIONS,
     RULES,

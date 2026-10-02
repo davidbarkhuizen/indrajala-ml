@@ -13,7 +13,7 @@ dependencies = [
     "matplotlib",
     "pytest",
     "pyarrow",
-    "jsonschema",  # validates machine profiles (indrajala_ml/machine_profile.py)
+    "jsonschema",  # validates machine profiles (indrajala_ml/measurement/machine_profile.py)
     "numpy>=1.20",  # numpy.lib.stride_tricks.sliding_window_view (conv_array_layer.py)
 ]
 
@@ -22,7 +22,7 @@ include = ["indrajala_ml*"]
 namespaces = true
 
 [tool.setuptools.package-data]
-indrajala_ml = ["machine_profile.schema.json"]
+"indrajala_ml.measurement" = ["machine_profile.schema.json"]
 
 # ruff is pinned in ./cli (ruff_version), so its default rule set - which changes between
 # releases - is the same locally and in CI; `./cli lint` runs both checks.

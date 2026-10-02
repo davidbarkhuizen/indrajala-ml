@@ -10,7 +10,7 @@ directly in `indrajala-ml`, with its own `indrajala-datasets-uci-digits` packagi
 metadata consistency, not because indrajala-ml needs to fetch it.
 
 Also regenerates each file's derived `.bin` (via `mnist_data.convert_parquet_to_binary`) if it's
-missing: `tests/test_mnist_data.py` reads the `.bin` files directly, so they need to exist
+missing: `tests/data/test_mnist_data.py` reads the `.bin` files directly, so they need to exist
 before the test suite runs. `.bin` files are gitignored, regenerable artifacts (see
 `.gitignore`'s own comment on `data/mnist/*.bin`), so this only ever runs the conversion once
 per fresh checkout, exactly like the fetch above.
@@ -21,7 +21,7 @@ import os
 import sys
 import urllib.request
 
-# so `indrajala_ml.mnist_data` imports regardless of cwd - this script is invoked as
+# so `indrajala_ml.data.mnist_data` imports regardless of cwd - this script is invoked as
 # `python scripts/fetch_datasets.py` from the repo root, which puts scripts/ (not the repo root)
 # on sys.path by default.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -74,7 +74,7 @@ def ensure_binary_conversion(parquet_path: str, binary_path: str) -> None:
         print(f"{binary_path}: already present, skipping conversion")
         return
 
-    from indrajala_ml.mnist_data import convert_parquet_to_binary
+    from indrajala_ml.data.mnist_data import convert_parquet_to_binary
 
     print(f"{binary_path}: converting from {parquet_path} ...")
     convert_parquet_to_binary(parquet_path, binary_path)

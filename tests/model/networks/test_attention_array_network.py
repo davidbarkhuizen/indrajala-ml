@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.mnist_data import load_mnist_dataset
+from indrajala_ml.data.mnist_data import load_mnist_dataset
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.layers.numpy import attention_array_layer
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray

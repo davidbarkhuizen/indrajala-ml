@@ -1,5 +1,5 @@
+from indrajala_ml.data.mnist_data import load_mnist_dataset
 from indrajala_ml.demos.timing import timed_train
-from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
@@ -9,7 +9,7 @@ from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network i
 from indrajala_ml.model.networks.rust.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.multiclass_evaluate import accuracy
+from indrajala_ml.training.multiclass_evaluate import accuracy
 
 DIMENSION = 28 * 28
 CLASS_COUNT = 10

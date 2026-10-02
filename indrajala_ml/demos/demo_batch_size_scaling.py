@@ -1,10 +1,10 @@
 from typing import Any
 
-from indrajala_ml import batch_size_scaling as bss
-from indrajala_ml.mnist_data import load_mnist_dataset
+from indrajala_ml.data.mnist_data import load_mnist_dataset
 from indrajala_ml.model.protocols.classifier_protocols import Example
+from indrajala_ml.studies import batch_size_scaling as bss
 
-# a reduced version of the batch-size-scaling study's sweep (indrajala_ml/batch_size_scaling.py):
+# a reduced version of the batch-size-scaling study's sweep (indrajala_ml/studies/batch_size_scaling.py):
 # momentum 0.9, whose batch-32 rate the baseline sweep picked, with the 1-epoch warmup under which
 # the rule held furthest there (measured with eq. (10) momentum; with warmup, pending a rerun on
 # eq. (9), README, Update rules)

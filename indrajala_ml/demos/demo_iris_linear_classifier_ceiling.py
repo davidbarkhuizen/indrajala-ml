@@ -1,6 +1,6 @@
-from indrajala_ml.iris_data import load_iris_dataset
+from indrajala_ml.data.iris_data import load_iris_dataset
 from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
-from indrajala_ml.train import train_linear_classifier_network
+from indrajala_ml.training.train import train_linear_classifier_network
 
 SETOSA_LABEL = 0
 VERSICOLOR_LABEL = 1

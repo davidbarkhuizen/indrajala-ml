@@ -1,8 +1,8 @@
 import numpy as np
 
+from indrajala_ml.data.digits_data import load_digits_dataset
 from indrajala_ml.demos import demo_conv_rust_vs_vectorized_digit_recognition as demo
 from indrajala_ml.demos.registry import DEMOS
-from indrajala_ml.digits_data import load_digits_dataset
 
 
 def test_is_registered():

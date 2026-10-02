@@ -1,0 +1,32 @@
+import random
+
+from indrajala_ml.data.targets import XORTarget
+from indrajala_ml.geometry import square_bounds
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.training.train import train_linear_classifier_network
+from indrajala_ml.training.training_data import random_alternating_training_data
+
+
+def test_train_linear_classifier_network_drives_a_backprop_network_past_the_linear_ceiling_on_xor():
+
+    # measured on Python 3.14 from weight seed 0: 0.9666666666666667 at epoch 22 of 100,
+    # plateaued (the remaining errors sit on the x=0/y=0 boundary), well past the ~0.845 no
+    # LinearClassifierNetwork reaches on this target (test_train.py), on training data from
+    # random.Random(0)
+    bounds = square_bounds(10.0)
+    target = XORTarget(bounds)
+    training_data = random_alternating_training_data(300, target, rng=random.Random(0))
+
+    student = BackpropClassifierNetwork.randomized([8], 2, bounds, seed=0)
+    result = train_linear_classifier_network(student, training_data, learning_rate=1.0, epochs=100)
+
+    diagnostic = result.diagnostic
+    assert diagnostic.best_training_accuracy == 0.9666666666666667
+    assert diagnostic.best_epoch_index == 22
+    assert diagnostic.plateaued is True
+    assert diagnostic.converged is False
+    assert diagnostic.still_improving is False
+
+    # the trained student, not just the diagnostic's bookkeeping, actually predicts well
+    correct = sum(1 for state, category in training_data if student.classify_state(state) == category)
+    assert correct / len(training_data) == diagnostic.best_training_accuracy

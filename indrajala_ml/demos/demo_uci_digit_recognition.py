@@ -6,13 +6,13 @@ matplotlib.use("TkAgg")
 
 from matplotlib import pyplot
 
-from indrajala_ml.digits_data import load_digits_dataset, split_train_test
+from indrajala_ml.data.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.graphics.chart import new_axes, new_confusion_matrix_figure, new_figure, sample_predictions_figure
 from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
     MultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.multiclass_evaluate import accuracy, confusion_matrix
-from indrajala_ml.train import train_linear_classifier_network
+from indrajala_ml.training.multiclass_evaluate import accuracy, confusion_matrix
+from indrajala_ml.training.train import train_linear_classifier_network
 
 DIMENSION = 64
 CLASS_COUNT = 10

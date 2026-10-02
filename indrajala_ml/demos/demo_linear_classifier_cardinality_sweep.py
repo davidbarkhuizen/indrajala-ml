@@ -6,16 +6,17 @@ matplotlib.use("TkAgg")
 
 from matplotlib import pyplot
 
-from indrajala_ml.evaluate import (
+from indrajala_ml.geometry import square_bounds
+from indrajala_ml.graphics.chart import new_convergence_chart_pair, plot_labeled_series
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.training.evaluate import (
     agreement_label,
     class_balanced_disagreement_rate,
     compare_on_random_point,
     smoothed_series,
 )
-from indrajala_ml.geometry import square_bounds
-from indrajala_ml.graphics.chart import new_convergence_chart_pair, plot_labeled_series
-from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
-from indrajala_ml.train import reachable_reference_and_training_data, train_linear_classifier_network
+from indrajala_ml.training.train import train_linear_classifier_network
+from indrajala_ml.training.training_data import reachable_reference_and_training_data
 
 
 def main() -> None:

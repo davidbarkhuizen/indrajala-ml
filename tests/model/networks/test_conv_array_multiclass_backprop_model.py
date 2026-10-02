@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.digits_data import load_digits_dataset, split_train_test
+from indrajala_ml.data.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer
 from indrajala_ml.model.layers.numpy.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.layers.numpy.max_pool_array_layer import MaxPoolArrayLayer
@@ -27,8 +27,8 @@ from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classi
 )
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD
-from indrajala_ml.multiclass_evaluate import accuracy
-from indrajala_ml.train import train_linear_classifier_network
+from indrajala_ml.training.multiclass_evaluate import accuracy
+from indrajala_ml.training.train import train_linear_classifier_network
 from tests.array_network_contract import SEQUENTIAL_CLS, assert_sequential_matches_preset
 from tests.helpers import (
     Backend,

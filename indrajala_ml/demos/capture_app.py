@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from indrajala_ml.digit_capture import intensity_to_color, pixel_to_tile
+from indrajala_ml.capture.digit_capture import intensity_to_color, pixel_to_tile
 
 OFF_COLOR = "#000000"
 ON_COLOR = "#ffffff"

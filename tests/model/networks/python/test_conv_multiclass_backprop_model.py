@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from indrajala_ml.digits_data import load_digits_dataset, split_train_test
+from indrajala_ml.data.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.layers.python.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import MaxPoolLayer, PoolSpec
@@ -11,9 +11,9 @@ from indrajala_ml.model.networks.python.backprop_network_base import as_dense_la
 from indrajala_ml.model.networks.python.conv_multiclass_backprop_classifier_network import (
     ConvMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.multiclass_evaluate import accuracy
 from indrajala_ml.pcg64 import default_rng
-from indrajala_ml.train import train_linear_classifier_network
+from indrajala_ml.training.multiclass_evaluate import accuracy
+from indrajala_ml.training.train import train_linear_classifier_network
 from tests.helpers import (
     approx,
     assert_save_and_load_round_trip,

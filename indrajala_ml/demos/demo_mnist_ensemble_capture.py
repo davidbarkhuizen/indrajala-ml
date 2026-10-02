@@ -1,11 +1,11 @@
-from indrajala_ml.demos.capture_app import CaptureConfig, run_capture_demo
-from indrajala_ml.mnist_capture import (
+from indrajala_ml.capture.mnist_capture import (
     CANVAS_SIZE,
     CAPTURE_BRUSH_RADIUS,
     CAPTURE_GRID_SIZE,
     paint_brush_stroke,
     preprocess_capture,
 )
+from indrajala_ml.demos.capture_app import CaptureConfig, run_capture_demo
 from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
 
 MODEL_PATH = "data/mnist/trained_model.json"
