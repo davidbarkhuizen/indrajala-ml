@@ -91,6 +91,18 @@ class TrainedArrayLayer[A: BackendArray](ArrayNetworkLayer[A], Protocol):
 
 
 @runtime_checkable
+class ProjectionsArrayLayer[A: BackendArray](Protocol):
+    """
+    A layer of several projections, each drawn as a dense layer's (W, b) in turn (the layer-norm and
+    attention workplan, D6): attention's four, whose parameters() are the draws in order.
+    """
+
+    projection_shapes: tuple[tuple[int, int], ...]
+
+    def set_parameters(self, parameters: Sequence[A], /) -> None: ...
+
+
+@runtime_checkable
 class RunningStateLayer[A: BackendArray](Protocol):
     """
     A layer with state that a training forward pass moves but no optimizer steps: batch norm's

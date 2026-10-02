@@ -6,12 +6,12 @@ from typing import Any, Literal
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.array_parameters import GammaAndBeta
+from indrajala_ml.model.array_parameters import GammaAndBeta, RunningAverages
 from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
 from indrajala_ml.model.residual_rust_array_layer import ForkRustArrayLayer
 
 
-class BatchNormRustArrayLayer(GammaAndBeta[pa.Array]):
+class BatchNormRustArrayLayer(GammaAndBeta[pa.Array], RunningAverages[pa.Array]):
     """
     BatchNormArrayLayer on the Rust backend, each method one Rust call (the crate's batch_norm.rs),
     which computes the README's expressions (Batch normalization) as the numpy layer does: given

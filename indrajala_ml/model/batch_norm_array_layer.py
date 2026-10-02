@@ -15,7 +15,7 @@ from typing import Any, Literal
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray, sigmoid
-from indrajala_ml.model.array_parameters import GammaAndBeta
+from indrajala_ml.model.array_parameters import GammaAndBeta, RunningAverages
 from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
 
 # a group's (m, d, var, std): its value count per feature, and what the backward pass reads
@@ -27,7 +27,7 @@ def sum_rows(values: FloatArray) -> FloatArray:
     return np.cumsum(values, axis=0)[-1]
 
 
-class BatchNormArrayLayer(GammaAndBeta[FloatArray]):
+class BatchNormArrayLayer(GammaAndBeta[FloatArray], RunningAverages[FloatArray]):
     """
     y = gamma * xhat + beta, then the activation, xhat normalized with the batch's statistics in
     training and the running averages in inference. gamma and beta are trained, without weight
