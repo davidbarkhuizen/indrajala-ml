@@ -5,14 +5,14 @@ import numpy.typing as npt
 from numpy.lib.stride_tricks import sliding_window_view
 
 from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.array_protocols import ArrayNetworkLayer
+from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 from indrajala_ml.model.window_geometry import output_size, pool_stride, validate_pool_arguments
 
 # each window's winning slot index, as np.argmax returns it
 IndexArray = npt.NDArray[np.intp]
 
 
-class MaxPoolArrayLayer:
+class MaxPoolArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], ParameterFree[FloatArray]):
     """
     MaxPoolLayer (max_pool_layer.py) over numpy arrays: each of input_channels channel-major planes
     pooled separately (channel_count == input_channels), with ConvArrayLayer's flat channel-major
@@ -65,19 +65,6 @@ class MaxPoolArrayLayer:
         self.argmax = self.argmax_batch[0]
         return self.a
 
-    def compute_output_delta(self, reference: FloatArray) -> None:
-        raise NotImplementedError("MaxPoolArrayLayer is a hidden layer, not an output one.")
-
-    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
-        self.compute_output_delta(reference_batch)
-
-    def compute_hidden_delta_batch(self, next_layer: ArrayNetworkLayer[FloatArray]) -> None:
-        # max is the identity on its winning input - no activation derivative to multiply in
-        self.delta_batch = next_layer.downstream_batch()
-
-    def compute_hidden_delta(self, next_layer: ArrayNetworkLayer[FloatArray]) -> None:
-        self.delta = next_layer.downstream()
-
     def _downstream(self, delta_batch: FloatArray, argmax_batch: IndexArray) -> FloatArray:
         # the vectorized form of MaxPoolLayer.downstream_sum: each window's delta goes to its
         # winning slot only. One masked strided slice-add per slot (pr, pc) - within one slot
@@ -100,12 +87,3 @@ class MaxPoolArrayLayer:
 
     def downstream(self) -> FloatArray:
         return self._downstream(self.delta[np.newaxis, :], self.argmax[np.newaxis])[0]
-
-    # weight-free: every gradient hook below is a deliberate no-op, and with no W the optimizer
-    # skips the layer
-
-    def accumulate_gradient_batch(self, _input_activation_batch: FloatArray) -> None:
-        pass
-
-    def accumulate_gradient(self, _input_activation: FloatArray) -> None:
-        pass

@@ -16,9 +16,10 @@ from __future__ import annotations
 from typing import Any
 
 from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
+from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 
 
-class AffineArrayLayer(ArrayLayer):
+class AffineArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], ArrayLayer):
     """
     W x + b with no activation (the residual-connections workplan, D4): a residual block's body's
     last layer. Its delta is its downstream from the add after it, since the identity's derivative
@@ -33,36 +34,8 @@ class AffineArrayLayer(ArrayLayer):
         self.A = X @ self.W.T + self.b
         return self.A
 
-    def compute_output_delta(self, reference: FloatArray) -> None:
-        raise NotImplementedError("an affine layer is hidden, at the end of a residual block's body")
 
-    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
-        raise NotImplementedError("an affine layer is hidden, at the end of a residual block's body")
-
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        self.delta = next_layer.downstream()
-
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self.delta_batch = next_layer.downstream_batch()
-
-
-class _ParameterFree:
-    """What a fork and an add share: no parameters, so nothing to accumulate or step."""
-
-    def compute_output_delta(self, reference: FloatArray) -> None:
-        raise NotImplementedError(f"a {type(self).__name__} is hidden, inside a network")
-
-    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
-        raise NotImplementedError(f"a {type(self).__name__} is hidden, inside a network")
-
-    def accumulate_gradient(self, input_activation: FloatArray) -> None:
-        pass
-
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
-        pass
-
-
-class ForkArrayLayer(_ParameterFree):
+class ForkArrayLayer(Hidden[FloatArray], ParameterFree[FloatArray]):
     """
     A residual block's first layer: forward passes its input on unchanged, and keeps it (x, or X
     for a batch) for its add. Its delta is the sum of the two paths' gradients, the body's
@@ -99,7 +72,7 @@ class ForkArrayLayer(_ParameterFree):
         return self.delta_batch
 
 
-class AddArrayLayer(_ParameterFree):
+class AddArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], ParameterFree[FloatArray]):
     """
     A residual block's last layer: the body's output plus the block's input, y + x, which its fork
     kept. Its delta is its downstream from the next layer, and its downstream is its delta, which
@@ -118,12 +91,6 @@ class AddArrayLayer(_ParameterFree):
     def forward_batch(self, X: FloatArray) -> FloatArray:
         self.A = X + self.fork.X
         return self.A
-
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        self.delta = next_layer.downstream()
-
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self.delta_batch = next_layer.downstream_batch()
 
     def downstream(self) -> FloatArray:
         return self.delta

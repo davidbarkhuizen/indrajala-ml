@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.array_protocols import ArrayNetworkLayer
+from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 from indrajala_ml.model.window_geometry import pool_stride, validate_pool_arguments
 
 
-class MaxPoolRustArrayLayer:
+class MaxPoolRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):
     """
     MaxPoolArrayLayer on the Rust backend: the same layouts and tie-breaking (the first maximal slot
     in row-major order), each method one fused call (conv.rs) with a pa.ConvGeometry whose
@@ -51,30 +51,8 @@ class MaxPoolRustArrayLayer:
         self.a, self.argmax = pa.max_pool_forward_batch(x, self.geometry)
         return self.a
 
-    def compute_output_delta(self, reference: pa.Array) -> None:
-        raise NotImplementedError("MaxPoolRustArrayLayer is a hidden layer, not an output one.")
-
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
-        self.compute_output_delta(reference_batch)
-
-    def compute_hidden_delta_batch(self, next_layer: ArrayNetworkLayer[pa.Array]) -> None:
-        # max is the identity on its winning input - no activation derivative to multiply in
-        self.delta_batch = next_layer.downstream_batch()
-
-    def compute_hidden_delta(self, next_layer: ArrayNetworkLayer[pa.Array]) -> None:
-        self.delta = next_layer.downstream()
-
     def downstream_batch(self) -> pa.Array:
         return pa.max_pool_downstream_batch(self.delta_batch, self.argmax_batch, self.geometry)
 
     def downstream(self) -> pa.Array:
         return pa.max_pool_downstream_batch(self.delta, self.argmax, self.geometry)
-
-    # weight-free: every gradient hook below is a deliberate no-op, and with no W the optimizer
-    # skips the layer
-
-    def accumulate_gradient_batch(self, _input_activation_batch: pa.Array) -> None:
-        pass
-
-    def accumulate_gradient(self, _input_activation: pa.Array) -> None:
-        pass

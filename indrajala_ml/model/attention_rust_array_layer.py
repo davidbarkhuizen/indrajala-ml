@@ -15,8 +15,10 @@ from typing import Any, ClassVar
 
 import indrajala_math_rust as pa
 
+from indrajala_ml.model.hidden_layers import Hidden
 
-class AttentionRustArrayLayer:
+
+class AttentionRustArrayLayer(Hidden[pa.Array]):
     """
     AttentionArrayLayer on the Rust backend: Q = X Wq^T + bq, K and V likewise, P =
     softmax_rows((Q K^T) / sqrt(d)), out = (P V) Wo^T + bo, per example over its tokens tokens of
@@ -69,12 +71,6 @@ class AttentionRustArrayLayer:
     def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A, self._Q, self._K, self._V, self._P, self._H = pa.attention_forward_batch(X, *self.parameters())
         return self.A
-
-    def compute_output_delta(self, reference: pa.Array) -> None:
-        raise NotImplementedError("an attention layer is hidden, ending a token block's body")
-
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
-        raise NotImplementedError("an attention layer is hidden, ending a token block's body")
 
     def _backward(self, delta: pa.Array) -> None:
         self._dX, self._dQ, self._dK, self._dV = pa.attention_downstream_batch(

@@ -9,14 +9,13 @@ single example is one call too, on the 1D vector, with a batch of one's bits.
 
 from __future__ import annotations
 
-from typing import Any
-
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_parameters import GammaAndBeta
+from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden
 
 
-class LayerNormRustArrayLayer(GammaAndBeta[pa.Array]):
+class LayerNormRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], GammaAndBeta[pa.Array]):
     """
     LayerNormArrayLayer on the Rust backend: y = gamma * xhat + beta over each of tokens tokens of
     features features (a flat layer is one token), gamma and beta (features,), starting at 1 and 0
@@ -45,18 +44,6 @@ class LayerNormRustArrayLayer(GammaAndBeta[pa.Array]):
     def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A, self._xhat, self._std = pa.layer_norm_forward_batch(X, self.gamma, self.beta, self.epsilon)
         return self.A
-
-    def compute_output_delta(self, reference: pa.Array) -> None:
-        raise NotImplementedError("a layer-norm layer is hidden")
-
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
-        raise NotImplementedError("a layer-norm layer is hidden")
-
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        self.delta = next_layer.downstream()
-
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self.delta_batch = next_layer.downstream_batch()
 
     def downstream(self) -> pa.Array:
         return pa.layer_norm_downstream_batch(self.delta, self.gamma, self._xhat, self._std)
