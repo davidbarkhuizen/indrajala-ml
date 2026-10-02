@@ -54,6 +54,8 @@ MULTICLASS: dict[str, tuple[Any, ...]] = {
 CONV: dict[str, tuple[Any, ...]] = {
     "ConvVectorizedMultiClassBackpropClassifierNetwork": (),
     "MomentumConvVectorizedMultiClassBackpropClassifierNetwork": (0.9,),
+    "AdamConvVectorizedMultiClassBackpropClassifierNetwork": (),
+    "L2ConvVectorizedMultiClassBackpropClassifierNetwork": (0.01,),
 }
 # (numpy class name, its keyword-only hyperparameters)
 SINGLE_OUTPUT: dict[str, dict[str, float]] = {

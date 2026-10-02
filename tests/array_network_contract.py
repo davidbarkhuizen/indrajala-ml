@@ -12,7 +12,8 @@ update rule the test file declares: the reference is the pure-Python sequential 
 A test file declares an ArrayNetworkSpec and adds the generated tests to its module, which keeps
 each test's usual name and id (test_x[numpy], test_x[rust]):
 
-    globals().update(multiclass_network_tests(SPEC))    # or single_output_network_tests(SPEC)
+    globals().update(multiclass_network_tests(SPEC))    # or single_output_network_tests(SPEC),
+                                                        # or conv_network_tests(SPEC)
 """
 
 from __future__ import annotations
@@ -26,7 +27,9 @@ from typing import Any
 import numpy as np
 import pytest
 
+from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.layer_specs import LayerSpec
+from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.sequential_array_network import (
     SequentialArrayBackpropClassifierNetwork,
     SequentialRustArrayBackpropClassifierNetwork,
@@ -40,14 +43,20 @@ from tests.helpers import (
     assert_array_network_save_load_round_trip,
     assert_array_network_snapshot_restore_round_trip,
     assert_array_network_weights_match,
+    assert_conv_array_network_weights_match,
     assert_single_output_array_network_save_load_round_trip,
     assert_single_output_array_network_snapshot_restore_round_trip,
+    conv_reference,
     dense_reference,
 )
 
 DIMENSION = 6
 LAYER_SIZES = [5]
 CLASS_COUNT = 3
+# the conv networks' input and architecture: an overlapping pool and a strided conv after it
+CONV_SIDE = 8
+CONV_SPECS: list[ConvSpec | PoolSpec] = [ConvSpec(3, 4), PoolSpec(2, stride=1), ConvSpec(2, 3, stride=2)]
+CONV_DENSE_LAYER_SIZES = [6]
 
 # a network class, pure-Python or array, is Any here: the specs cover every array network class, whose
 # constructors take different hyperparameters
@@ -60,10 +69,12 @@ class ArrayNetworkSpec:
     network_cls: dict[str, Any]
     # the network as layer specs and an update rule, written out independently of its class:
     # equivalent(layer_sizes, output_size, *hyperparameters) -> (specs, rule). Its pure-Python
-    # reference and its sequential counterpart are both built from them
+    # reference and its sequential counterpart are both built from them. A conv network's specs
+    # are its dense layers', after its conv specs
     equivalent: Callable[..., tuple[list[LayerSpec], UpdateRule]]
     # the constructor's hyperparameters, in order (e.g. {"momentum": 0.5}): positional after
-    # class_count in a multiclass network, keyword-only after input_bounds in a single-output one
+    # class_count in a multiclass or conv network, keyword-only after input_bounds in a
+    # single-output one
     hyperparameters: dict[str, float] = field(default_factory=dict[str, float])
     learning_rate: float = 0.1
     learn_steps: int = 30
@@ -445,5 +456,119 @@ def single_output_network_tests(spec: ArrayNetworkSpec) -> dict[str, TestFunctio
         assert_sequential_matches_preset(preset, sequential, backend, example, spec.learning_rate)
         state = tuple(0.1 * i for i in range(DIMENSION))
         assert sequential.predict_probability(state) == preset.predict_probability(state)
+
+    return tests
+
+
+def conv_network_tests(spec: ArrayNetworkSpec) -> dict[str, TestFunction]:
+    hyperparameters = tuple(spec.hyperparameters.values())
+    input_size = CONV_SIDE * CONV_SIDE
+    tests, test = _test_registry()
+
+    def build(backend: Backend, *arguments: float, **keywords: float) -> Any:
+        return spec.network_cls[backend.name](
+            CONV_SIDE, CONV_SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT, *arguments, **keywords
+        )
+
+    def equivalent() -> tuple[list[LayerSpec], UpdateRule]:
+        dense_specs, rule = spec.equivalent(CONV_DENSE_LAYER_SIZES, CLASS_COUNT, *hyperparameters)
+        return [*CONV_SPECS, *dense_specs], rule
+
+    def matching_networks(rng: random.Random, backend: Backend) -> tuple[Any, Any]:
+        array_network = build(backend, *hyperparameters)
+        specs, rule = equivalent()
+        reference = conv_reference(rng, array_network, (CONV_SIDE, CONV_SIDE, 1), specs, rule, backend.owned)
+        return reference, array_network
+
+    def example(rng: random.Random) -> tuple[tuple[float, ...], int]:
+        return tuple(rng.random() for _ in range(input_size)), rng.randrange(CLASS_COUNT)
+
+    @test("test_predict_probabilities_matches_the_pure_python_reference")
+    def _(backend: Backend) -> None:
+        rng = random.Random(0)
+        reference, array_network = matching_networks(rng, backend)
+
+        for _ in range(20):
+            state, _category = example(rng)
+            assert array_network.predict_probabilities(state) == approx(
+                reference.predict_probabilities(state), rel=1e-9, abs=1e-12
+            )
+
+    if spec.parity_in_training:
+
+        @test("test_learn_matches_the_pure_python_reference_after_every_step")
+        def _(backend: Backend) -> None:
+            rng = random.Random(1)
+            reference, array_network = matching_networks(rng, backend)
+
+            for _ in range(spec.learn_steps):
+                state, category = example(rng)
+                reference.learn(spec.learning_rate, state, category)
+                array_network.learn(spec.learning_rate, state, category)
+                assert_conv_array_network_weights_match(reference, array_network)
+
+        @test("test_learn_batch_matches_the_pure_python_reference_after_every_batch")
+        def _(backend: Backend) -> None:
+            rng = random.Random(2)
+            reference, array_network = matching_networks(rng, backend)
+
+            for _ in range(spec.learn_batches):
+                batch = [example(rng) for _ in range(7)]
+                reference.learn_batch(spec.learning_rate, batch)
+                array_network.learn_batch(spec.learning_rate, batch)
+                assert_conv_array_network_weights_match(reference, array_network)
+
+    @test("test_the_optimizer_applies_its_rule")
+    def _(backend: Backend) -> None:
+        assert build(backend, *hyperparameters).optimizer.rule == equivalent()[1]
+
+    @test("test_save_load_round_trips_weights_and_predictions")
+    def _(backend: Backend, tmp_path: Path) -> None:
+        network_cls = spec.network_cls[backend.name]
+        network = network_cls.randomized(
+            CONV_SIDE, CONV_SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT, *hyperparameters
+        )
+        path = str(tmp_path / "model.json")
+        network.save(path)
+
+        loaded = network_cls.load(path)
+        assert snapshot_bits(loaded) == snapshot_bits(network)
+        assert loaded.conv_specs == network.conv_specs
+        state, _category = example(random.Random(3))
+        assert loaded.predict_probabilities(state) == network.predict_probabilities(state)
+
+    if spec.saved_hyperparameters_test is not None:
+
+        @test(f"test_save_load_round_trips_the_{spec.saved_hyperparameters_test}")
+        def _(backend: Backend, tmp_path: Path) -> None:
+            network_cls = spec.network_cls[backend.name]
+            network = network_cls.randomized(
+                CONV_SIDE, CONV_SIDE, CONV_SPECS, CONV_DENSE_LAYER_SIZES, CLASS_COUNT, **spec.saved_hyperparameters
+            )
+            path = str(tmp_path / "hyperparameters.json")
+            network.save(path)
+
+            loaded = network_cls.load(path)
+            for name, value in spec.saved_hyperparameters.items():
+                assert getattr(loaded, name) == value
+            assert loaded.optimizer.rule == network.optimizer.rule
+
+    if spec.invalid_hyperparameters:
+
+        @test("test_construction_rejects_invalid_hyperparameters")
+        def _(backend: Backend) -> None:
+            for name, value in spec.invalid_hyperparameters.items():
+                with pytest.raises(AssertionError):
+                    build(backend, **{**spec.hyperparameters, name: value})
+
+    @test("test_the_sequential_network_of_its_layer_specs_matches_it_by_bits")
+    def _(backend: Backend) -> None:
+        preset = build(backend, *hyperparameters)
+        specs, rule = equivalent()
+        sequential: Any = SEQUENTIAL_CLS["multiclass"][backend.name]((CONV_SIDE, CONV_SIDE, 1), specs, rule)
+
+        assert_sequential_matches_preset(preset, sequential, backend, example, spec.learning_rate)
+        state, _category = example(random.Random(5))
+        assert sequential.predict_probabilities(state) == preset.predict_probabilities(state)
 
     return tests

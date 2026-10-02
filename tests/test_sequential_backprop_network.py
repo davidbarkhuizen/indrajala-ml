@@ -14,6 +14,9 @@ from typing import Any
 import pytest
 
 from indrajala_ml.model.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
+from indrajala_ml.model.adam_conv_multiclass_backprop_classifier_network import (
+    AdamConvMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.adam_multiclass_backprop_classifier_network import AdamMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
@@ -29,6 +32,9 @@ from indrajala_ml.model.dropout_multiclass_backprop_classifier_network import (
 )
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
 from indrajala_ml.model.l2_regularized_backprop_classifier_network import L2RegularizedBackpropClassifierNetwork
+from indrajala_ml.model.l2_regularized_conv_multiclass_backprop_classifier_network import (
+    L2RegularizedConvMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.l2_regularized_multiclass_backprop_classifier_network import (
     L2RegularizedMultiClassBackpropClassifierNetwork,
 )
@@ -135,6 +141,20 @@ PRESETS: dict[str, tuple[Callable[[], Any], InputShape, list[LayerSpec], UpdateR
         (SIDE, SIDE, 1),
         [*CONV_SPECS, Dense(4), OUTPUT],
         Momentum(0.9),
+        True,
+    ),
+    "adam conv": (
+        lambda: AdamConvMultiClassBackpropClassifierNetwork(SIDE, SIDE, CONV_SPECS, [4], CLASS_COUNT, 0.8, 0.99, 1e-7),
+        (SIDE, SIDE, 1),
+        [*CONV_SPECS, Dense(4), OUTPUT],
+        Adam(0.8, 0.99, 1e-7),
+        True,
+    ),
+    "l2 conv": (
+        lambda: L2RegularizedConvMultiClassBackpropClassifierNetwork(SIDE, SIDE, CONV_SPECS, [4], CLASS_COUNT, 0.02),
+        (SIDE, SIDE, 1),
+        [*CONV_SPECS, Dense(4), OUTPUT],
+        WeightDecay(0.02),
         True,
     ),
     "single-output": (

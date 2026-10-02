@@ -60,6 +60,15 @@ import numpy as np
 
 from indrajala_ml.model.adam_array_backprop_classifier_network import AdamArrayBackpropClassifierNetwork
 from indrajala_ml.model.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
+from indrajala_ml.model.adam_conv_multiclass_backprop_classifier_network import (
+    AdamConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.adam_conv_rust_array_multiclass_backprop_classifier_network import (
+    AdamConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.adam_conv_vectorized_multiclass_backprop_classifier_network import (
+    AdamConvVectorizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.adam_multiclass_backprop_classifier_network import AdamMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.adam_rust_array_backprop_classifier_network import AdamRustArrayBackpropClassifierNetwork
 from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
@@ -115,7 +124,16 @@ from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
 )
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
 from indrajala_ml.model.l2_array_backprop_classifier_network import L2ArrayBackpropClassifierNetwork
+from indrajala_ml.model.l2_conv_rust_array_multiclass_backprop_classifier_network import (
+    L2ConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.l2_conv_vectorized_multiclass_backprop_classifier_network import (
+    L2ConvVectorizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.l2_regularized_backprop_classifier_network import L2RegularizedBackpropClassifierNetwork
+from indrajala_ml.model.l2_regularized_conv_multiclass_backprop_classifier_network import (
+    L2RegularizedConvMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.l2_regularized_multiclass_backprop_classifier_network import (
     L2RegularizedMultiClassBackpropClassifierNetwork,
 )
@@ -244,6 +262,12 @@ CONV_NETWORKS = {
     "rust momentum conv": (MomentumConvRustArrayMultiClassBackpropClassifierNetwork, (0.9,)),
     "python conv": (ConvMultiClassBackpropClassifierNetwork, ()),
     "python momentum conv": (MomentumConvMultiClassBackpropClassifierNetwork, (0.9,)),
+    "numpy adam conv": (AdamConvVectorizedMultiClassBackpropClassifierNetwork, ()),
+    "rust adam conv": (AdamConvRustArrayMultiClassBackpropClassifierNetwork, ()),
+    "python adam conv": (AdamConvMultiClassBackpropClassifierNetwork, ()),
+    "numpy l2 conv": (L2ConvVectorizedMultiClassBackpropClassifierNetwork, (0.01,)),
+    "rust l2 conv": (L2ConvRustArrayMultiClassBackpropClassifierNetwork, (0.01,)),
+    "python l2 conv": (L2RegularizedConvMultiClassBackpropClassifierNetwork, (0.01,)),
 }
 # an array single-output network is (class, keyword-only hyperparameters)
 SINGLE_OUTPUT_NETWORKS: dict[str, tuple[Any, dict[str, float]]] = {

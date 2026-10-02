@@ -77,6 +77,10 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "MomentumConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(
         SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.9
     ),
+    "AdamConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
+    "L2ConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(
+        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.01
+    ),
     "ReLUVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "SoftmaxVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "ArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
@@ -95,6 +99,10 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "MomentumRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.9),
     "MomentumConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
         SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.9
+    ),
+    "AdamConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
+    "L2ConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
+        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.01
     ),
     "ReLURustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "SoftmaxRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),

@@ -1,6 +1,6 @@
 # Workplan: closing the preset gaps
 
-**Status: decisions settled (D1-D4); stages 0-2 done.**
+**Status: decisions settled (D1-D4); stages 0-3 done.**
 
 The composable-layers workplan made the Sequential networks build every accepted spec list under
 every rule, in all three implementations, but left the preset table (README, Presets) with empty
