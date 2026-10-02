@@ -8,7 +8,20 @@ from typing import Any
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_parameters import WeightAndBias
+from indrajala_ml.model.layer_norm_rust_array_layer import LayerNormRustArrayLayer
 from indrajala_ml.model.residual_rust_array_layer import ForkRustArrayLayer
+
+
+def before_layer_norm(next_layer: Any) -> bool:
+    """
+    Whether next_layer has no W for a fused hidden delta to read: a LayerNorm, or a residual
+    block's fork whose body starts with one (the layer-norm and attention workplan, D5). A sigmoid,
+    ReLU or dropout layer there takes next_layer's downstream and a mask op instead (the crate's
+    array_*_mask), its own expression unchanged.
+    """
+    return isinstance(next_layer, LayerNormRustArrayLayer) or (
+        isinstance(next_layer, ForkRustArrayLayer) and isinstance(next_layer.body_first, LayerNormRustArrayLayer)
+    )
 
 
 def fan_in_aware_random_rust_layer(rng: pa.Generator, size: int, previous_size: int) -> tuple[pa.Array, pa.Array]:
@@ -62,13 +75,17 @@ class RustArrayLayer(WeightAndBias[pa.Array]):
         # hidden-delta methods keep their fused calls, which read next_layer.W themselves - a dense
         # layer is never followed by a conv or pool layer, and splitting the fusion would add a
         # boundary crossing to every dense backward step. Before a residual block's fork they call
-        # the fused skip ops instead, which read the fork's body_first and add (D8).
+        # the fused skip ops instead, which read the fork's body_first and add (D8). Before a
+        # LayerNorm, which has no W, they mask its downstream (before_layer_norm).
         return pa.layer_downstream(self.W, self.delta)
 
     def downstream_batch(self) -> pa.Array:
         return pa.layer_downstream_batch(self.W, self.delta_batch)
 
     def compute_hidden_delta(self, next_layer: Any) -> None:
+        if before_layer_norm(next_layer):
+            self.delta = pa.array_sigmoid_mask(next_layer.downstream(), self.a)
+            return
         if isinstance(next_layer, ForkRustArrayLayer):
             body = next_layer.body_first
             self.delta = pa.layer_hidden_delta_skip(body.W, body.delta, next_layer.add.delta, self.a)
@@ -79,6 +96,9 @@ class RustArrayLayer(WeightAndBias[pa.Array]):
         self.delta_batch = pa.layer_output_delta(self.A, reference_batch)
 
     def compute_hidden_delta_batch(self, next_layer: Any) -> None:
+        if before_layer_norm(next_layer):
+            self.delta_batch = pa.array_sigmoid_mask(next_layer.downstream_batch(), self.A)
+            return
         if isinstance(next_layer, ForkRustArrayLayer):
             body = next_layer.body_first
             self.delta_batch = pa.layer_hidden_delta_skip_batch(

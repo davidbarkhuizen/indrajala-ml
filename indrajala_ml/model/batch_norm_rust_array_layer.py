@@ -9,6 +9,7 @@ import indrajala_math_rust as pa
 from indrajala_ml.model.array_parameters import GammaAndBeta, RunningAverages
 from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
 from indrajala_ml.model.residual_rust_array_layer import ForkRustArrayLayer
+from indrajala_ml.model.rust_array_layer import before_layer_norm
 
 
 class BatchNormRustArrayLayer(GammaAndBeta[pa.Array], RunningAverages[pa.Array]):
@@ -23,10 +24,12 @@ class BatchNormRustArrayLayer(GammaAndBeta[pa.Array], RunningAverages[pa.Array])
     that layout in place, in the view's row order. Only ReLU follows a conv layer
     (validate_layer_specs).
 
-    A sigmoid's hidden delta is ArrayLayer's fused call on the next layer's W and delta: only a
-    dense layer or a residual block's fork follows it (the fused skip op before a fork). A ReLU's masks the next layer's downstream, which may be a dense, conv
-    or pool layer's (a conv layer's output can be one position, so positions doesn't tell);
-    after a dense layer that is the fused layer_relu_hidden_delta_batch's bits.
+    A sigmoid's hidden delta is ArrayLayer's fused call on the next layer's W and delta: a dense
+    layer or a residual block's fork follows it (the fused skip op before a fork), or a LayerNorm,
+    which has no W, whose downstream it masks (before_layer_norm). A ReLU's masks the next
+    layer's downstream, which may be a dense, conv, pool or layer-norm layer's (a conv layer's
+    output can be one position, so positions doesn't tell); after a dense layer that is the fused
+    layer_relu_hidden_delta_batch's bits.
 
     training is set by set_training_mode. The backward pass reads _was_training, training as
     forward_batch saw it, since the network switches training off before the backward pass.
@@ -125,7 +128,9 @@ class BatchNormRustArrayLayer(GammaAndBeta[pa.Array], RunningAverages[pa.Array])
     def compute_hidden_delta_batch(self, next_layer: Any) -> None:
         # dl/dy: the downstream times the activation's derivative
         assert self._was_training, "the backward pass needs a training forward pass's batch statistics"
-        if self.activation == "sigmoid" and isinstance(next_layer, ForkRustArrayLayer):
+        if self.activation == "sigmoid" and before_layer_norm(next_layer):
+            self.delta_batch = pa.array_sigmoid_mask(next_layer.downstream_batch(), self.A)
+        elif self.activation == "sigmoid" and isinstance(next_layer, ForkRustArrayLayer):
             # before a residual block: the fused skip op (D8, RustArrayLayer.compute_hidden_delta)
             body = next_layer.body_first
             self.delta_batch = pa.layer_hidden_delta_skip_batch(
