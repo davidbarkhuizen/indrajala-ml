@@ -19,12 +19,14 @@ docs cite them by section:
 | The conv batch-size study with batch norm | #516 | #517-#519 | `git show acbc49c:docs/conv-batch-norm-scaling-workplan.md` |
 | Explicit generator objects (RNG generators) | #521 | crate #46, #522-#529 | `git show aaf8bb2:docs/rng-generators-workplan.md` |
 | Residual connections (roadmap step 3) | #531 | crate #47, #532-#538 | `git show 365a173:docs/residual-connections-workplan.md` |
+| Layer norm and single-head attention (roadmap step 4) | #540 | crate #48, #542-#548 | `git show 7d3bd0a:docs/layer-norm-attention-workplan.md` |
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
-normalization, Residual connections), [measurement.md](measurement.md) and
-[rng-audit.md](rng-audit.md). The batch-size studies' findings are in
+normalization, Residual connections, Layer norm and attention), [measurement.md](measurement.md)
+and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/batch_size_scaling.py`'s docstring, the depth study's in
-`scripts/residual_depth_study.py`'s.
+`scripts/residual_depth_study.py`'s, the patch-attention study's in
+`scripts/patch_attention_study.py`'s.
 
 ## From composable layers
 
@@ -63,7 +65,8 @@ Still out of scope, for later workplans too (batch norm's included):
 
 Still out of scope:
 
-- Layer norm, group norm and instance norm. They normalize within an example, a different layer.
+- Group norm and instance norm. They normalize within an example, a different layer (layer
+  norm, the third, is built: README, Layer norm and attention).
 - Synchronized statistics across workers or processes.
 
 ## From the conv batch-size study with batch norm
@@ -162,3 +165,37 @@ Still out of scope:
 - Other bit generators (Philox, SFC64, PCG64DXSM).
 - Changing the crate's legacy MT19937 module functions, which mirror `np.random` (the workplan's
   D7).
+
+## From layer norm and attention
+
+Multi-head attention, a key size other than the token size, masking and dropout in attention are
+roadmap step 5 ([primitives-roadmap.md](primitives-roadmap.md)). Besides those:
+
+- **Layer norm against batch norm on the dense networks** (the workplan's D11 (b)): the residual
+  depth study's batch-norm cells rerun with a flat `LayerNorm` in place of `BatchNorm`.
+- **The patch study's open margin.** Attention then FFN beat FFN alone by 0.4 points, less than
+  the FFN arm's standard deviation over 3 seeds, and the FFN arm led until epoch 3. More seeds or
+  epochs would show whether attention's gain is real at this size.
+- **Parity under Adam is per step.** Under `SGD`, `Momentum` and `WeightDecay` the pure-Python
+  and Rust patch models are compared with numpy after 50 steps; under `Adam` they are compared
+  step by step, each step's gradients from the same parameters
+  (`tests/test_attention_python_network.py`, `tests/test_attention_rust_network.py`). Adam's
+  step is steepest where `|g|` is at or under its `ε`, which turns `bk`'s rounding-noise gradient
+  into whole steps, so the trajectory itself is sensitive: numpy against numpy with one weight
+  nudged by one ulp drifts 2e-8 to 3e-5 in 50 steps, as much as the implementations differ, and
+  with `bk`'s gradient zeroed on both sides the gap the bias alone explains falls to 2.4e-12. The
+  owner hasn't settled this standard; a 50-step Adam comparison with `bk` held out is the
+  alternative.
+- **A flat `LayerNorm` after a conv front end** is accepted and normalizes the whole `(h, w, c)`
+  output as one token, keeping its shape. Per position (each pixel's channels, as a transformer's
+  token) or per channel (group norm) are the other readings; none is used yet.
+- **Inert parameters.** `bk` (no effect on `P`) and `bv` (the same as `bo`) are kept to match the
+  reference models (D6). A flat `LayerNorm`'s `beta` right before a linear layer and its
+  `BatchNorm` is inert too: the batch norm cancels the constant shift, so its gradient is noise.
+- **A preset** (D12), if a patch model configuration is worth naming, under From composable
+  layers' rule for presets.
+
+Still out of scope:
+
+- A class token (D8 (b)), fixed sin-cos or drawn positions (D7 (b), (c)).
+- Sequence data (text) and its loading; conv-then-tokens hybrids.
