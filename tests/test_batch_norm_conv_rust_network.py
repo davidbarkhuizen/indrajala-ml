@@ -21,9 +21,10 @@ from indrajala_ml.model.layer_specs import Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import Momentum, UpdateRule
 from indrajala_ml.train import train_backprop_network_mini_batch
+from tests.helpers import bits, max_relative_gap, to_numpy
 from tests.test_batch_norm_array_network import EPSILON, RATE, RULES, SOFTMAX
 from tests.test_batch_norm_conv_array_network import INPUT, NETWORKS, _network, _rows
-from tests.test_batch_norm_rust_network import _bits, _numpy, _rust
+from tests.test_batch_norm_rust_network import _rust
 
 
 class _Fixed:
@@ -63,11 +64,11 @@ def test_the_layer_is_numpys_by_bits(batch_size: int, channels: int, positions: 
         dx = layer.downstream_batch()
         layer.accumulate_gradient_batch(inputs)
         values.append([activations, dx, layer.grad_gamma, layer.grad_beta, layer.running_mean, layer.running_var])
-    assert _bits([values[1]]) == _bits([values[0]])
+    assert bits(values[1]) == bits(values[0])
 
     # the deltas agree in value, but not in the sign of a ReLU's zero (numpy's downstream * 0.0 is
     # -0.0 where the downstream is negative, array_relu_mask's 0.0), as for dense batch norm
-    np.testing.assert_array_equal(_numpy(rust.delta_batch), array.delta_batch)
+    np.testing.assert_array_equal(to_numpy(rust.delta_batch), array.delta_batch)
 
 
 def test_inference_is_numpys_by_bits_for_a_batch_and_one_example():
@@ -80,10 +81,10 @@ def test_inference_is_numpys_by_bits_for_a_batch_and_one_example():
         setattr(array, name, values)
         setattr(rust, name, _rust(values))
 
-    assert _numpy(rust.forward_batch(_rust(X))).tobytes() == array.forward_batch(X).tobytes()
+    assert to_numpy(rust.forward_batch(_rust(X))).tobytes() == array.forward_batch(X).tobytes()
     for row in X:
-        assert _numpy(rust.forward(_rust(row))).tobytes() == array.forward(row).tobytes()
-    assert _bits([rust.running_state()]) == _bits([array.running_state()])  # inference doesn't move them
+        assert to_numpy(rust.forward(_rust(row))).tobytes() == array.forward(row).tobytes()
+    assert bits(rust.running_state()) == bits(array.running_state())  # inference doesn't move them
 
 
 def test_a_layer_refuses_one_example_in_training_although_it_has_several_positions():
@@ -109,13 +110,13 @@ def _conv_layers() -> tuple[ConvRustArrayLayer, LinearConvRustArrayLayer, Linear
 def test_the_linear_conv_layer_is_the_conv_layers_products_without_bias_or_relu():
     conv, linear, array = _conv_layers()
     inputs = np.random.default_rng(1).uniform(-1.0, 1.0, (3, 50))
-    A_conv = _numpy(conv.forward_batch(_rust(inputs)))
+    A_conv = to_numpy(conv.forward_batch(_rust(inputs)))
 
     # conv's b is 0.0, so its A is the linear layer's products through the ReLU, exactly
-    A = _numpy(linear.forward_batch(_rust(inputs)))
+    A = to_numpy(linear.forward_batch(_rust(inputs)))
     assert A_conv.tolist() == np.maximum(0.0, A).tolist()
     assert (A < 0.0).any()
-    assert _numpy(linear.forward(_rust(inputs[1]))).tolist() == A[1].tolist()
+    assert to_numpy(linear.forward(_rust(inputs[1]))).tolist() == A[1].tolist()
     assert linear.parameters() == (linear.W,) and linear.decayed == (True,)
     assert not hasattr(linear, "b")
 
@@ -138,14 +139,14 @@ def test_the_linear_conv_layer_passes_the_downstream_through_to_conv_s_col2im_an
     array.compute_hidden_delta_batch(_Fixed(downstream, rust=False))
     array.accumulate_gradient_batch(inputs)
 
-    assert _numpy(linear.delta_batch).tobytes() == downstream.tobytes()
-    assert _numpy(linear.downstream_batch()).tobytes() == _numpy(conv.downstream_batch()).tobytes()
-    assert _numpy(linear.grad_W).tobytes() == _numpy(conv.grad_W).tobytes()
-    np.testing.assert_allclose(_numpy(linear.downstream_batch()), array.downstream_batch(), rtol=1e-13, atol=1e-15)
-    np.testing.assert_allclose(_numpy(linear.grad_W), array.grad_W, rtol=1e-13, atol=1e-15)
+    assert to_numpy(linear.delta_batch).tobytes() == downstream.tobytes()
+    assert to_numpy(linear.downstream_batch()).tobytes() == to_numpy(conv.downstream_batch()).tobytes()
+    assert to_numpy(linear.grad_W).tobytes() == to_numpy(conv.grad_W).tobytes()
+    np.testing.assert_allclose(to_numpy(linear.downstream_batch()), array.downstream_batch(), rtol=1e-13, atol=1e-15)
+    np.testing.assert_allclose(to_numpy(linear.grad_W), array.grad_W, rtol=1e-13, atol=1e-15)
 
     linear.reset_gradient_accum()
-    assert _numpy(linear.grad_W).tolist() == np.zeros((3, 18)).tolist()
+    assert to_numpy(linear.grad_W).tolist() == np.zeros((3, 18)).tolist()
     for call in (lambda: linear.compute_hidden_delta(None), lambda: linear.downstream()):
         with pytest.raises(ValueError, match="LinearConvRustArrayLayer trains on batches only"):
             call()
@@ -157,13 +158,13 @@ def test_the_linear_conv_layer_passes_the_downstream_through_to_conv_s_col2im_an
 @pytest.mark.parametrize("name", NETWORKS)
 def test_randomize_draws_numpys_weights(name: str):
     # the crate's RNG is numpy's np.random: the same linear conv W, and batch norm draws nothing
-    assert _bits(_network(name, backend=RUST).snapshot()) == _bits(_network(name).snapshot())
+    assert bits(_network(name, backend=RUST).snapshot()) == bits(_network(name).snapshot())
 
 
 # parity with numpy
 
 
-def _max_relative_gap(layers: list[LayerSpec], rule: UpdateRule) -> float:
+def _gap_after_training(layers: list[LayerSpec], rule: UpdateRule) -> float:
     networks: list[Any] = []
     for backend in (NUMPY, RUST):
         network = SequentialArrayNetwork(INPUT, layers, rule, backend=backend)
@@ -175,12 +176,7 @@ def _max_relative_gap(layers: list[LayerSpec], rule: UpdateRule) -> float:
         batch = rows[(step * 5) % 40 :][:5]
         for network in networks:
             network.learn_batch(0.3, batch)
-
-    gap = 0.0
-    for expected_entry, actual_entry in zip(networks[0].snapshot(), networks[1].snapshot()):
-        for expected, actual in zip(expected_entry, actual_entry):
-            gap = max(gap, float((np.abs(_numpy(actual) - expected) / np.abs(expected)).max()))
-    return gap
+    return max_relative_gap(networks[0].snapshot(), networks[1].snapshot())
 
 
 # no batch norm, the same shapes: the conv and dense layers' own gap
@@ -200,13 +196,13 @@ def test_training_matches_numpy_within_the_conv_and_dense_layers_rounding(name: 
     # at most 3.5e-12 apart relative when measured, and the conv networks without batch norm
     # (CONTROLS) 3.4e-13: normalizing subtracts the mean, and d = x - mu carries its inputs'
     # rounding difference as a larger relative one, as for dense batch norm (4.4e-12 vs 1.2e-12)
-    assert _max_relative_gap(NETWORKS[name], rule) < 1e-10
+    assert _gap_after_training(NETWORKS[name], rule) < 1e-10
 
 
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
 @pytest.mark.parametrize("name", CONTROLS)
 def test_the_conv_layers_alone_have_the_same_kind_of_gap(name: str, rule: UpdateRule):
-    assert _max_relative_gap(CONTROLS[name], rule) < 1e-10
+    assert _gap_after_training(CONTROLS[name], rule) < 1e-10
 
 
 def test_train_trains_a_conv_batch_norm_network_to_its_numpy_counterparts_accuracy():

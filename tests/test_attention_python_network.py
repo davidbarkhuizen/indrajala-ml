@@ -30,8 +30,9 @@ from indrajala_ml.model.token_layer import PatchesLayer, PositionLayer, TokenDen
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients, check_gradients
+from tests.helpers import bits, split
 from tests.test_attention_array_network import IMAGE, rows
-from tests.test_batch_norm_python_network import _as_array_snapshot, _bits
+from tests.test_batch_norm_python_network import _as_array_snapshot
 from tests.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX, TOKENS
 
 
@@ -40,10 +41,6 @@ def network(specs: list[LayerSpec], rule: UpdateRule | None = None, seed: int = 
     built.rng = default_rng(seed)
     built.randomize()
     return built
-
-
-def _split(batch: list[tuple[tuple[float, ...], int]]) -> tuple[list[tuple[float, ...]], list[int]]:
-    return [state for state, _ in batch], [label for _, label in batch]
 
 
 def as_array_snapshot(python: Any) -> list[tuple[Any, ...]]:
@@ -74,7 +71,7 @@ def test_every_gradient_matches_its_finite_difference(name: str, batch_size: int
     # a trained step first, so gamma, beta and the positions aren't at their initial values
     built.learn_batch(0.5, rows(4, seed=2))
 
-    check_gradients(built, *_split(rows(batch_size)))
+    check_gradients(built, *split(rows(batch_size)))
 
 
 def test_the_readme_model_builds_its_layers_wired_together():
@@ -118,10 +115,10 @@ def test_randomize_draws_weights_then_bias_per_unit_and_row_and_nothing_for_the_
             [([rng.uniform(-limit, limit) for _ in range(fan_in)], rng.uniform(-limit, limit)) for _ in range(size)]
         )
     snapshot = built.snapshot()
-    assert _bits([snapshot[i] for i in (1, 5, 9)]) == _bits(expected)
+    assert bits([snapshot[i] for i in (1, 5, 9)]) == bits(expected)
     # positions, gamma and beta start at 0, 1 and 0
-    assert _bits(snapshot[2]) == _bits([([0.0] * 6,)] * 4)
-    assert _bits([snapshot[4], snapshot[8]]) == _bits([[([1.0], 0.0)] * 6] * 2)
+    assert bits(snapshot[2]) == bits([([0.0] * 6,)] * 4)
+    assert bits([snapshot[4], snapshot[8]]) == bits([[([1.0], 0.0)] * 6] * 2)
 
 
 def _input(values: list[float]) -> StateLayer:
@@ -153,10 +150,10 @@ def test_patches_follow_the_readmes_indices_and_send_the_inverse_permutation_bac
     tokens = [node.value() for node in layer.nodes]
 
     array = PatchesArrayLayer(height, width, channels, p)
-    assert _bits(tokens) == _bits(array.forward_batch(np.array([X]))[0].tolist())
+    assert bits(tokens) == bits(array.forward_batch(np.array([X]))[0].tolist())
 
     layer.compute_hidden_deltas(downstream(tokens))
-    assert _bits([layer.downstream_sum(i) for i in range(len(X))]) == _bits(X)
+    assert bits([layer.downstream_sum(i) for i in range(len(X))]) == bits(X)
 
 
 def test_position_adds_its_table_and_sums_its_gradient_over_the_examples_as_numpy():
@@ -172,14 +169,14 @@ def test_position_adds_its_table_and_sums_its_gradient_over_the_examples_as_nump
     for x, row in zip(X, delta, strict=True):
         inputs.update_state(tuple(x))
         layer.forward()
-        assert _bits([node.value() for node in layer.nodes]) == _bits((np.array(x) + array.P.reshape(6)).tolist())
+        assert bits([node.value() for node in layer.nodes]) == bits((np.array(x) + array.P.reshape(6)).tolist())
         layer.compute_hidden_deltas(downstream(row))
         assert [layer.downstream_sum(i) for i in range(6)] == row
         layer.accumulate_gradients()
 
     array.delta_batch = np.array(delta)
     array.accumulate_gradient_batch(np.array(X))
-    assert _bits([row.weight_gradient_accum for row in layer.rows]) == _bits(array.grad_P.tolist())
+    assert bits([row.weight_gradient_accum for row in layer.rows]) == bits(array.grad_P.tolist())
 
 
 def test_the_token_mean_is_a_left_fold_over_the_tokens_divided_by_their_count_as_numpy():
@@ -187,8 +184,8 @@ def test_the_token_mean_is_a_left_fold_over_the_tokens_divided_by_their_count_as
     layer = TokenMeanLayer(_input(X), 3, 2)
     layer.forward()
     expected = [((0.0 + X[j]) + X[2 + j]) + X[4 + j] for j in range(2)]
-    assert _bits([node.value() for node in layer.nodes]) == _bits([value / 3 for value in expected])
-    assert _bits([node.value() for node in layer.nodes]) == _bits(
+    assert bits([node.value() for node in layer.nodes]) == bits([value / 3 for value in expected])
+    assert bits([node.value() for node in layer.nodes]) == bits(
         TokenMeanArrayLayer(3, 2).forward_batch(np.array([X]))[0].tolist()
     )
 
@@ -217,7 +214,7 @@ def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bit
     snapshot = layer.snapshot_state()
     assert layer._P == [[1.0]]
     expected = affine(affine(X, snapshot[10:15]), snapshot[15:20])
-    assert _bits([node.value() for node in layer.nodes]) == _bits(expected)
+    assert bits([node.value() for node in layer.nodes]) == bits(expected)
 
 
 def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth():
@@ -231,7 +228,7 @@ def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth():
     assert layer._P == [[1 / 16] * 16] * 16
     mean = TokenMeanLayer(_input([v for row in layer._V for v in row]), 16, 8)
     mean.forward()
-    assert _bits(layer._H) == _bits([[node.value() for node in mean.nodes]] * 16)
+    assert bits(layer._H) == bits([[node.value() for node in mean.nodes]] * 16)
 
 
 def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradient_by_bits():
@@ -248,13 +245,13 @@ def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradi
     blocked.restore([*snapshot[:3], [], blocked.snapshot()[4], attention, [], *snapshot[3:]])
 
     batch = rows(5)
-    states, labels = _split(batch)
+    states, labels = split(batch)
     for state in states:
-        assert _bits(blocked._forward(state)) == _bits(plain._forward(state))
+        assert bits(blocked._forward(state)) == bits(plain._forward(state))
 
     outside = [0, 1, 2, *range(7, 14)]
     blocked_gradients = analytic_gradients(blocked, states, labels)
-    assert _bits([blocked_gradients[i] for i in outside]) == _bits(analytic_gradients(plain, states, labels))
+    assert bits([blocked_gradients[i] for i in outside]) == bits(analytic_gradients(plain, states, labels))
 
 
 @pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
@@ -265,7 +262,7 @@ def test_learn_and_a_learn_batch_of_one_example_agree_by_bits(name: str, rule: U
         single.learn(0.5, state, label)
         batched.learn_batch(0.5, [(state, label)])
 
-    assert _bits(single.snapshot()) == _bits(batched.snapshot())
+    assert bits(single.snapshot()) == bits(batched.snapshot())
 
 
 @pytest.mark.parametrize("rule", [Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
@@ -278,8 +275,8 @@ def test_the_layer_major_path_is_the_example_major_loop_by_bits(name: str, rule:
         example_major.learn_batch(0.3, batch)
         layer_major._learn_batch_layer_major(0.3, batch)
 
-    assert _bits(layer_major.snapshot()) == _bits(example_major.snapshot())
-    assert _bits(list(layer_major.optimizer.state().layers.values())) == _bits(
+    assert bits(layer_major.snapshot()) == bits(example_major.snapshot())
+    assert bits(list(layer_major.optimizer.state().layers.values())) == bits(
         list(example_major.optimizer.state().layers.values())
     )
 
@@ -355,7 +352,7 @@ def assert_every_step_has_numpys_gradients(python: Any, array: Any, data: list[t
     for step in range(50):
         batch = data[(step * 5) % 40 :][:5]
         array.restore(as_array_snapshot(python))
-        states, labels = _split(batch)
+        states, labels = split(batch)
         python.rng, array.rng = default_rng(step), NUMPY.default_rng(step)
         expected = _as_array_gradients(python, analytic_gradients(python, states, labels))
         actual = analytic_gradients(array, states, labels)

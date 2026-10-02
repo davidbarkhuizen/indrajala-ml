@@ -19,7 +19,8 @@ from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients, check_gradients
-from tests.test_batch_norm_python_network import CLASSES, _as_array_snapshot, _bits
+from tests.helpers import bits
+from tests.test_batch_norm_python_network import CLASSES, _as_array_snapshot
 from tests.test_residual_array_network import INPUT, NETWORKS, Shape, block, output, rows
 
 # the cases without batch norm, which train example by example; with it, layer-major
@@ -65,7 +66,7 @@ def test_randomize_draws_weights_then_bias_per_node_and_nothing_for_the_fork_or_
             [([rng.uniform(-limit, limit) for _ in range(fan_in)], rng.uniform(-limit, limit)) for _ in range(size)]
         )
 
-    assert _bits([entry for entry in built.snapshot() if entry]) == _bits(expected)
+    assert bits([entry for entry in built.snapshot() if entry]) == bits(expected)
 
 
 def _identity_pair(body: Dense, shape: Shape) -> tuple[Any, Any]:
@@ -91,15 +92,15 @@ def test_an_identity_block_changes_no_output_and_no_other_layers_gradient_by_bit
     states, labels = [state for state, _ in batch], [label for _, label in batch]
 
     for state in states:
-        assert _bits(residual._forward(state)) == _bits(plain._forward(state))
+        assert bits(residual._forward(state)) == bits(plain._forward(state))
 
     residual_gradients = analytic_gradients(residual, states, labels)
-    assert _bits([residual_gradients[i] for i in (0, 5, 6)]) == _bits(analytic_gradients(plain, states, labels))
+    assert bits([residual_gradients[i] for i in (0, 5, 6)]) == bits(analytic_gradients(plain, states, labels))
 
     plain.learn(0.5, *batch[0])
     residual.learn(0.5, *batch[0])
     trained = residual.snapshot()
-    assert _bits([trained[i] for i in (0, 5, 6)]) == _bits(plain.snapshot())
+    assert bits([trained[i] for i in (0, 5, 6)]) == bits(plain.snapshot())
 
 
 @pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
@@ -111,7 +112,7 @@ def test_learn_and_a_learn_batch_of_one_example_agree_by_bits(name: str, rule: U
         single.learn(0.5, state, label)
         batched.learn_batch(0.5, [(state, label)])
 
-    assert _bits(single.snapshot()) == _bits(batched.snapshot())
+    assert bits(single.snapshot()) == bits(batched.snapshot())
 
 
 @pytest.mark.parametrize("rule", [Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
@@ -126,8 +127,8 @@ def test_the_layer_major_path_is_the_example_major_loop_by_bits(name: str, rule:
         example_major.learn_batch(0.3, batch)
         layer_major._learn_batch_layer_major(0.3, batch)
 
-    assert _bits(layer_major.snapshot()) == _bits(example_major.snapshot())
-    assert _bits(list(layer_major.optimizer.state().layers.values())) == _bits(
+    assert bits(layer_major.snapshot()) == bits(example_major.snapshot())
+    assert bits(list(layer_major.optimizer.state().layers.values())) == bits(
         list(example_major.optimizer.state().layers.values())
     )
 

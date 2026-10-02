@@ -1,6 +1,8 @@
+import math
 import random
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Literal, Protocol, cast
 
 import indrajala_math_rust as pa
@@ -114,6 +116,74 @@ def rust_to_numpy(array: pa.Array) -> FloatArray:
         return np.array([array[i] for i in range(array.shape[0])])
     rows, cols = array.shape
     return np.array([[array[r, c] for c in range(cols)] for r in range(rows)])
+
+
+def bits(value: Any) -> Any:
+    """
+    Every float in value as float.hex, through either backend's arrays, lists, tuples and dicts:
+    two values' bits are equal exactly when their floats are, bit for bit (0.0 and -0.0 differ,
+    NaNs match), and pytest shows a readable diff. Tuples become lists and dict keys strings, as in
+    a JSON file of bits (tests/saved_model_fixtures.py's).
+    """
+    to_list = getattr(value, "tolist", None)
+    if to_list is not None:
+        return bits(to_list())
+    if isinstance(value, list | tuple):
+        return [bits(item) for item in cast("list[Any] | tuple[Any, ...]", value)]
+    if isinstance(value, dict):
+        return {str(key): bits(item) for key, item in cast("dict[Any, Any]", value).items()}
+    if isinstance(value, float):
+        return value.hex()
+    return value
+
+
+def split[StateT](batch: Sequence[tuple[StateT, int]]) -> tuple[list[StateT], list[int]]:
+    """A batch of (state, label) pairs as its states and its labels."""
+    return [state for state, _ in batch], [label for _, label in batch]
+
+
+def max_relative_gap(expected: Sequence[Sequence[Any]], actual: Sequence[Sequence[Any]]) -> float:
+    """The largest |actual - expected| / |expected| over two snapshots' arrays, either backend's."""
+    gap = 0.0
+    for expected_entry, actual_entry in zip(expected, actual, strict=True):
+        for expected_array, actual_array in zip(expected_entry, actual_entry, strict=True):
+            want = to_numpy(expected_array)
+            gap = max(gap, float((np.abs(to_numpy(actual_array) - want) / np.abs(want)).max()))
+    return gap
+
+
+def exp_by_math(values: FloatArray) -> FloatArray:
+    """np.exp as math.exp, elementwise, so a scalar transcription computes the same bits."""
+    return np.vectorize(math.exp, otypes=[np.float64])(values)
+
+
+def exp_by_crate(values: FloatArray) -> FloatArray:
+    """np.exp as the crate's exp (Rust's f64::exp), elementwise."""
+    return np.array(pa.exp(pa.Array(values.reshape(-1).tolist())).tolist()).reshape(values.shape)
+
+
+def sigmoid_by(exp: Callable[[FloatArray], FloatArray]) -> Callable[[FloatArray], FloatArray]:
+    """array_layer.sigmoid, 1/(1+e^-z), with exp in place of np.exp."""
+
+    def sigmoid(z: FloatArray) -> FloatArray:
+        return 1.0 / (1.0 + exp(-z))
+
+    return sigmoid
+
+
+def patching(module: ModuleType, name: str, replacement: object) -> Callable[[pytest.MonkeyPatch], None]:
+    """
+    A fixture that sets module's name to replacement for one test: how a test swaps a numpy layer's
+    exp (or the sigmoid on it) for math.exp or the crate's. exp isn't correctly rounded: np.exp
+    picks its implementation by CPU, and can differ from math.exp and Rust's f64::exp in the last
+    bit, which every later value then carries. Everything but exp is then compared by bits.
+    """
+
+    @pytest.fixture
+    def fixture(monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(module, name, replacement)
+
+    return fixture
 
 
 class WeightSets:

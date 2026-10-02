@@ -8,14 +8,12 @@ one, weight decay (D7), and parity with numpy's networks.
 
 import math
 import random
-import struct
 from typing import Any
 
 import numpy as np
 import pytest
 
 from indrajala_ml.model import batch_norm_array_layer
-from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.backprop_node import sigmoid
 from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
@@ -35,6 +33,7 @@ from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, Wei
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
+from tests.helpers import bits, exp_by_math, patching, sigmoid_by
 from tests.test_batch_norm_array_network import (
     BETA,
     EPSILON,
@@ -70,13 +69,6 @@ def _layer(activation: Any = "sigmoid") -> BatchNormLayer:
     return layer
 
 
-def _bits(tree: Any) -> list[bytes]:
-    # every float of a nested snapshot or state, by bits (0.0 and -0.0 differ, as NaNs match)
-    if isinstance(tree, list | tuple):
-        return [bits for item in tree for bits in _bits(item)]  # pyright: ignore[reportUnknownVariableType]
-    return [struct.pack("<d", tree)]
-
-
 @pytest.mark.parametrize("activation", ["sigmoid", "relu"])
 def test_every_expression_is_the_readmes_by_bits(activation: str):
     layer = _layer(activation)
@@ -92,13 +84,13 @@ def test_every_expression_is_the_readmes_by_bits(activation: str):
             delta = [ds * (1.0 if a > 0.0 else 0.0) for ds, a in zip(downstream, node.activations)]
         reference = _reference(X[:, feature].tolist(), GAMMA[feature], BETA[feature], delta)
         activate = sigmoid if activation == "sigmoid" else relu_activation
-        assert _bits(node.xhat) == _bits(reference["xhat"])
-        assert _bits(node.activations) == _bits([activate(y) for y in reference["y"]])
-        assert _bits(node.deltas) == _bits(delta)
-        assert _bits(node.dxs) == _bits(reference["dx"])
-        assert _bits(node.weight_gradient_accum) == _bits([reference["grad_gamma"]])
-        assert _bits(node.bias_gradient_accum) == _bits(reference["grad_beta"])
-        assert _bits([node.running_mean, node.running_var]) == _bits(
+        assert bits(node.xhat) == bits(reference["xhat"])
+        assert bits(node.activations) == bits([activate(y) for y in reference["y"]])
+        assert bits(node.deltas) == bits(delta)
+        assert bits(node.dxs) == bits(reference["dx"])
+        assert bits(node.weight_gradient_accum) == bits([reference["grad_gamma"]])
+        assert bits(node.bias_gradient_accum) == bits(reference["grad_beta"])
+        assert bits([node.running_mean, node.running_var]) == bits(
             [reference["running_mean"], reference["running_var"]]
         )
 
@@ -129,16 +121,8 @@ class _Next:
         return self._downstream
 
 
-@pytest.fixture
-def math_exp(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The numpy layer's sigmoid, backprop_node's, with math.exp. exp isn't correctly rounded:
-    np.exp picks its implementation by CPU, and can differ from math.exp in the last bit, which
-    every later value then carries. Everything but exp is compared by bits."""
-
-    def sigmoid_with_math_exp(z: FloatArray) -> FloatArray:
-        return np.vectorize(sigmoid, otypes=[np.float64])(z)
-
-    monkeypatch.setattr(batch_norm_array_layer, "sigmoid", sigmoid_with_math_exp)
+# the numpy layer's sigmoid with math.exp: backprop_node's
+math_exp = patching(batch_norm_array_layer, "sigmoid", sigmoid_by(exp_by_math))
 
 
 @pytest.mark.usefixtures("math_exp")
@@ -170,12 +154,12 @@ def test_the_layer_is_numpys_by_bits(activation: Any, batch_size: int):
     def columns(values: Any) -> list[list[float]]:
         return np.asarray(values).T.tolist()
 
-    assert _bits([node.activations for node in python.channels]) == _bits(columns(activations))
-    assert _bits([node.dxs for node in python.channels]) == _bits(columns(dx))
-    assert _bits([node.weight_gradient_accum[0] for node in python.channels]) == _bits(array.grad_gamma.tolist())
-    assert _bits([node.bias_gradient_accum for node in python.channels]) == _bits(array.grad_beta.tolist())
-    assert _bits([node.running_mean for node in python.channels]) == _bits(array.running_mean.tolist())
-    assert _bits([node.running_var for node in python.channels]) == _bits(array.running_var.tolist())
+    assert bits([node.activations for node in python.channels]) == bits(columns(activations))
+    assert bits([node.dxs for node in python.channels]) == bits(columns(dx))
+    assert bits([node.weight_gradient_accum[0] for node in python.channels]) == bits(array.grad_gamma.tolist())
+    assert bits([node.bias_gradient_accum for node in python.channels]) == bits(array.grad_beta.tolist())
+    assert bits([node.running_mean for node in python.channels]) == bits(array.running_mean.tolist())
+    assert bits([node.running_var for node in python.channels]) == bits(array.running_var.tolist())
 
 
 def test_inference_normalizes_with_the_running_averages():
@@ -191,7 +175,7 @@ def test_inference_normalizes_with_the_running_averages():
         sigmoid(gamma * ((x - mean) / math.sqrt(var + EPSILON)) + beta)
         for x, gamma, beta, mean, var in zip((2.0, 0.5), GAMMA, BETA, [0.5, -1.0], [2.0, 0.25])
     ]
-    assert _bits([node.value() for node in layer.nodes]) == _bits(expected)
+    assert bits([node.value() for node in layer.nodes]) == bits(expected)
     assert [(node.running_mean, node.running_var) for node in layer.channels] == [(0.5, 2.0), (-1.0, 0.25)]
 
 
@@ -237,8 +221,8 @@ def test_randomize_draws_the_linear_layers_weights_only_and_nothing_for_batch_no
         ([rng.uniform(-limit, limit) for _ in range(5)], rng.uniform(-limit, limit)) for _ in range(3)
     ]
 
-    assert _bits(linear.snapshot_state()) == _bits(linear_weights)
-    assert _bits(output.snapshot_state()) == _bits(output_weights_and_biases)
+    assert bits(linear.snapshot_state()) == bits([(weights,) for weights in linear_weights])
+    assert bits(output.snapshot_state()) == bits(output_weights_and_biases)
     assert norm.snapshot_state() == [([1.0], 0.0, 0.0, 1.0)] * 5
 
 
@@ -353,8 +337,8 @@ def test_the_layer_major_path_is_the_example_major_loop_by_bits(name: str, rule:
         example_major.learn_batch(0.3, batch)
         layer_major._learn_batch_layer_major(0.3, batch)
 
-    assert _bits(layer_major.snapshot()) == _bits(example_major.snapshot())
-    assert _bits(list(layer_major.optimizer.state().layers.values())) == _bits(
+    assert bits(layer_major.snapshot()) == bits(example_major.snapshot())
+    assert bits(list(layer_major.optimizer.state().layers.values())) == bits(
         list(example_major.optimizer.state().layers.values())
     )
 
@@ -365,13 +349,13 @@ def test_the_running_averages_move_in_training_forward_passes_only():
     norm = network.trainable_layers[1]
 
     network.learn_batch(0.5, rows)
-    trained = _bits(norm.snapshot_state())
-    assert trained != _bits([([1.0], 0.0, 0.0, 1.0)] * 5)
+    trained = bits(norm.snapshot_state())
+    assert trained != bits([([1.0], 0.0, 0.0, 1.0)] * 5)
 
     for state, _ in rows:
         network.classify_state(state)
         network.predict_probabilities(state)
-    assert _bits(norm.snapshot_state()) == trained
+    assert bits(norm.snapshot_state()) == trained
 
 
 def test_classifying_normalizes_with_the_running_averages():
@@ -389,7 +373,7 @@ def test_classifying_normalizes_with_the_running_averages():
         expected = [
             sigmoid(sum([a * w for a, w in zip(y, node.input_node_weights)]) + node.bias) for node in output.nodes
         ]
-        assert _bits(network.predict_probabilities(state)) == _bits(expected)
+        assert bits(network.predict_probabilities(state)) == bits(expected)
 
 
 def test_a_training_step_is_the_rules_step_on_gamma_and_beta():
@@ -427,8 +411,8 @@ def test_weight_decay_decays_the_linear_layers_weights_and_neither_gamma_nor_bet
 
     # gamma and beta step with plain SGD (D7), and nothing before them differs
     gamma_and_beta = [[entry[:2] for entry in network.snapshot()[1]] for network in (sgd, decayed)]
-    assert _bits(gamma_and_beta[1]) == _bits(gamma_and_beta[0])
-    assert _bits(decayed.snapshot()[0]) != _bits(sgd.snapshot()[0])
+    assert bits(gamma_and_beta[1]) == bits(gamma_and_beta[0])
+    assert bits(decayed.snapshot()[0]) != bits(sgd.snapshot()[0])
 
 
 @pytest.mark.parametrize("name", ["after a sigmoid layer", "single output"])
@@ -436,7 +420,7 @@ def test_weight_decay_decays_the_linear_layers_weights_and_neither_gamma_nor_bet
 def test_a_one_example_training_step_is_refused_naming_the_layer(name: str, method: str):
     network = _network(name)
     rows = _rows(3, NETWORKS[name][1])
-    before = _bits(network.snapshot())
+    before = bits(network.snapshot())
     index = 2 if name == "after a sigmoid layer" else 1
 
     with pytest.raises(ValueError, match=rf"layer {index}, BatchNorm\(.*D4"):
@@ -444,7 +428,7 @@ def test_a_one_example_training_step_is_refused_naming_the_layer(name: str, meth
             network.learn(0.5, *rows[0])
         else:
             network.learn_batch(0.5, rows[:1])
-    assert _bits(network.snapshot()) == before
+    assert bits(network.snapshot()) == before
 
 
 def test_train_drops_a_final_batch_of_one_for_batch_norm():
@@ -474,7 +458,7 @@ def test_snapshot_carries_the_running_averages_and_restore_returns_them():
 
     network.learn_batch(0.5, _rows(6, seed=5))
     network.restore([[list(node) for node in entry] for entry in snapshot])  # as nested lists
-    assert _bits(network.snapshot()) == _bits(snapshot)
+    assert bits(network.snapshot()) == bits(snapshot)
 
 
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
@@ -485,12 +469,12 @@ def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
 
     network.learn_batch(0.1, _rows(5, seed=7))
     network.learn_batch(0.1, _rows(4, seed=8))
-    trained = _bits(network.snapshot())
+    trained = bits(network.snapshot())
 
     network.restore_checkpoint(checkpoint)
     network.learn_batch(0.1, _rows(5, seed=7))
     network.learn_batch(0.1, _rows(4, seed=8))
-    assert _bits(network.snapshot()) == trained
+    assert bits(network.snapshot()) == trained
 
 
 # parity with numpy

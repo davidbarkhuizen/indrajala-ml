@@ -17,6 +17,7 @@ from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerSpec, Residual
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
 from tests.gradient_check import analytic_gradients, check_gradients
+from tests.helpers import bits
 
 INPUT = 4
 
@@ -68,13 +69,6 @@ def rows(count: int, shape: str = "multiclass", seed: int = 1) -> list[tuple[tup
         (tuple(rng.uniform(-1.0, 1.0) for _ in range(INPUT)), float(i % 2) if shape == "single_output" else i % 3)
         for i in range(count)
     ]
-
-
-def bits(arrays: Any) -> Any:
-    # nested lists of arrays as bytes, so equality is by bits
-    if isinstance(arrays, list | tuple):
-        return [bits(item) for item in arrays]  # pyright: ignore[reportUnknownVariableType]
-    return np.asarray(arrays.tolist()).tobytes()
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda backend: backend.name)

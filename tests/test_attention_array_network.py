@@ -42,8 +42,8 @@ from indrajala_ml.model.token_array_layer import (
 )
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
 from tests.gradient_check import analytic_gradients, check_gradients
+from tests.helpers import bits, exp_by_math, patching, split
 from tests.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX, TOKENS
-from tests.test_residual_array_network import bits
 
 # test_layer_specs' patch models read a (4, 4, 1) image: Patches(2) gives 4 tokens of 4
 IMAGE: InputShape = (4, 4, 1)
@@ -61,17 +61,8 @@ def rows(count: int, seed: int = 1, size: int = 16, classes: int = 3) -> list[tu
     return [(tuple(rng.uniform(0.0, 1.0) for _ in range(size)), i % classes) for i in range(count)]
 
 
-def _split(batch: list[tuple[tuple[float, ...], int]]) -> tuple[list[tuple[float, ...]], list[int]]:
-    return [state for state, _ in batch], [label for _, label in batch]
-
-
-@pytest.fixture
-def math_exp(monkeypatch: pytest.MonkeyPatch) -> None:
-    # the softmax's exp as math.exp, elementwise, so a scalar transcription computes the same bits
-    def exp_with_math_exp(values: FloatArray) -> FloatArray:
-        return np.vectorize(math.exp)(values)
-
-    monkeypatch.setattr(attention_array_layer, "exp", exp_with_math_exp)
+# the softmax's exp as math.exp, so a scalar transcription computes the same bits
+math_exp = patching(attention_array_layer, "exp", exp_by_math)
 
 
 @pytest.mark.parametrize("batch_size", [1, 3])
@@ -83,7 +74,7 @@ def test_every_gradient_matches_its_finite_difference(name: str, batch_size: int
     # a trained step first, so gamma, beta and the positions aren't at their initial values
     built.learn_batch(0.5, rows(4, seed=2))
 
-    check_gradients(built, *_split(rows(batch_size)))
+    check_gradients(built, *split(rows(batch_size)))
 
 
 def test_the_readme_model_builds_its_layers_wired_together():
@@ -265,7 +256,7 @@ def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradi
     blocked.restore([*snapshot[:3], (), blocked.snapshot()[4], tuple(attention), (), *snapshot[3:]])
 
     batch = rows(5)
-    states, labels = _split(batch)
+    states, labels = split(batch)
     for state in states:
         assert bits(blocked._forward(state)) == bits(plain._forward(state))
 

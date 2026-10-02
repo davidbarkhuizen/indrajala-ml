@@ -16,13 +16,10 @@ from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from tests.helpers import max_relative_gap, to_numpy
 from tests.test_residual_array_network import INPUT, NETWORKS, Shape, network, output, rows
 
 RULES = [SGD(), Momentum(0.9), Adam(), WeightDecay(0.01)]
-
-
-def _numpy(values: Any) -> Any:
-    return np.array(values.tolist())
 
 
 @pytest.mark.parametrize("name", ["sigmoid body", "two blocks in a row", "relu body"])
@@ -34,10 +31,10 @@ def test_the_layer_before_a_fork_takes_the_skip_ops_bits_and_the_fork_sums_lazil
     body_w = body.W
     built.learn_batch(0.5, rows(5))
 
-    downstream = _numpy(pa.layer_downstream_batch(body_w, body.delta_batch)) + _numpy(add.delta_batch)
-    A = _numpy(before.A)
+    downstream = to_numpy(pa.layer_downstream_batch(body_w, body.delta_batch)) + to_numpy(add.delta_batch)
+    A = to_numpy(before.A)
     expected = downstream * A * (1.0 - A) if name != "relu body" else np.where(A > 0.0, downstream, 0.0)
-    assert _numpy(before.delta_batch).tobytes() == expected.tobytes()
+    assert to_numpy(before.delta_batch).tobytes() == expected.tobytes()
     # the fused predecessor read body_first and add itself, so the fork never summed
     assert not hasattr(fork, "delta_batch") and not hasattr(fork, "delta")
 
@@ -58,13 +55,9 @@ def _trained(layers: list[LayerSpec], shape: Shape, rule: UpdateRule, steps: int
     return networks[0], networks[1], before
 
 
-def _max_relative_gap(layers: list[LayerSpec], shape: Shape, rule: UpdateRule) -> float:
+def _gap_after_training(layers: list[LayerSpec], shape: Shape, rule: UpdateRule) -> float:
     expected_network, actual_network, _ = _trained(layers, shape, rule, steps=50)
-    gap = 0.0
-    for expected_entry, actual_entry in zip(expected_network.snapshot(), actual_network.snapshot(), strict=True):
-        for expected, actual in zip(expected_entry, actual_entry, strict=True):
-            gap = max(gap, float((np.abs(_numpy(actual) - expected) / np.abs(expected)).max()))
-    return gap
+    return max_relative_gap(expected_network.snapshot(), actual_network.snapshot())
 
 
 def _max_ulps_after_one_step(layers: list[LayerSpec], shape: Shape, rule: UpdateRule) -> float:
@@ -76,7 +69,7 @@ def _max_ulps_after_one_step(layers: list[LayerSpec], shape: Shape, rule: Update
     for expected_entry, actual_entry, before_entry in entries:
         for expected, actual, start in zip(expected_entry, actual_entry, before_entry, strict=True):
             operands = np.maximum(np.abs(start), np.abs(expected - start))
-            ulps = max(ulps, float((np.abs(_numpy(actual) - expected) / np.spacing(operands)).max()))
+            ulps = max(ulps, float((np.abs(to_numpy(actual) - expected) / np.spacing(operands)).max()))
     return ulps
 
 
@@ -122,11 +115,11 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, shap
     # Rust measured 2.9e-11 relative here (Haswell's kernel; Sandybridge's 2.6e-11) and 1.6e-10 on
     # CI's. The other rules stay under 1.3e-12, the controls' kind of gap
     bound = 1e-9 if isinstance(rule, Adam) else 1e-10
-    assert _max_relative_gap(NETWORKS[name], shape, rule) < bound
+    assert _gap_after_training(NETWORKS[name], shape, rule) < bound
 
 
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
 @pytest.mark.parametrize("shape", ["multiclass", "single_output"])
 @pytest.mark.parametrize("name", CONTROLS)
 def test_the_dense_layers_alone_have_the_same_kind_of_gap(name: str, shape: Shape, rule: UpdateRule):
-    assert _max_relative_gap(CONTROLS[name], shape, rule) < 1e-10
+    assert _gap_after_training(CONTROLS[name], shape, rule) < 1e-10

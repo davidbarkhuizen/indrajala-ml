@@ -20,6 +20,7 @@ from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassB
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import train_backprop_network_mini_batch
+from tests.helpers import bits
 
 RULES: list[UpdateRule] = [SGD(), Momentum(0.9), Adam(), WeightDecay(0.01)]
 IMPLEMENTATIONS = ["python", "numpy", "rust"]
@@ -54,23 +55,9 @@ def _rows(input_shape: InputShape, count: int, seed: int) -> list[tuple[tuple[fl
     return [(tuple(rng.random() for _ in range(dimension)), rng.randrange(3)) for _ in range(count)]
 
 
-def _bits(value: Any) -> Any:
-    # every float as float.hex, through arrays, lists, tuples, dicts and checkpoints: compares bits
-    to_list = getattr(value, "tolist", None)
-    if to_list is not None:
-        return _bits(to_list())
-    if isinstance(value, (list, tuple)):
-        return [_bits(item) for item in value]  # pyright: ignore[reportUnknownVariableType]
-    if isinstance(value, dict):
-        return {key: _bits(item) for key, item in value.items()}  # pyright: ignore[reportUnknownVariableType]
-    if isinstance(value, float):
-        return value.hex()
-    return value
-
-
 def _state_bits(network: Any) -> Any:
     state = network.optimizer.state()
-    return [_bits(network.snapshot()), state.t, _bits(state.layers)]
+    return [bits(network.snapshot()), state.t, bits(state.layers)]
 
 
 def _train(network: Any, rows: list[tuple[tuple[float, ...], int]]) -> None:
@@ -122,7 +109,7 @@ def test_a_checkpoint_is_a_copy(implementation: str, rule: UpdateRule):
     _train(network, rows)
 
     def held() -> list[Any]:
-        return [_bits(checkpoint.weights), checkpoint.optimizer.t, _bits(checkpoint.optimizer.layers), checkpoint.rng]
+        return [bits(checkpoint.weights), checkpoint.optimizer.t, bits(checkpoint.optimizer.layers), checkpoint.rng]
 
     checkpoint = network.checkpoint()
     taken = held()

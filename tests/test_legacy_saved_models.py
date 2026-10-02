@@ -16,11 +16,11 @@ from typing import Any
 
 import pytest
 
+from tests.helpers import bits
 from tests.saved_model_fixtures import (
     FIXTURE_DIR,
     FIXTURES,
     MODEL_CLASSES,
-    bits,
     fixture_class,
     from_bits,
     optimizer_bits,

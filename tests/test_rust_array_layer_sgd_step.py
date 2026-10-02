@@ -10,9 +10,8 @@ over output positions), keep the unfused pair.
 import importlib
 import pkgutil
 import random
-import struct
 from collections.abc import Callable
-from typing import Any, cast
+from typing import Any
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -60,7 +59,7 @@ from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_networ
     SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from tests.helpers import all_subclasses
+from tests.helpers import all_subclasses, bits
 
 SIZE, INPUT_SIZE = 7, 11
 
@@ -103,12 +102,6 @@ NETWORK_FACTORIES: dict[str, tuple[Callable[[], Any], str]] = {
 }
 
 
-def _bits(nested: Any) -> Any:
-    if isinstance(nested, list):
-        return [_bits(item) for item in cast("list[Any]", nested)]
-    return struct.pack("<d", nested)
-
-
 def _random_layer_state(layer: RustArrayLayer, rng: np.random.Generator) -> pa.Array:
     layer.W = pa.Array(rng.uniform(-1.0, 1.0, (SIZE, INPUT_SIZE)).tolist())
     layer.b = pa.Array(rng.uniform(-1.0, 1.0, SIZE).tolist())
@@ -144,8 +137,8 @@ def test_step_single_is_bit_identical_to_accumulate_then_apply(name: str, rule_n
         unfused_optimizer.begin_step()
         unfused_step_single(0, unfused, x, learning_rate)
 
-    assert _bits(fused.W.tolist()) == _bits(unfused.W.tolist())
-    assert _bits(fused.b.tolist()) == _bits(unfused.b.tolist())
+    assert bits(fused.W.tolist()) == bits(unfused.W.tolist())
+    assert bits(fused.b.tolist()) == bits(unfused.b.tolist())
     # accumulators stay fresh zeros either way, ready for the next step
     assert fused.grad_W.tolist() == unfused.grad_W.tolist() == [[0.0] * INPUT_SIZE] * SIZE
     assert fused.grad_b.tolist() == unfused.grad_b.tolist() == [0.0] * SIZE
@@ -176,8 +169,8 @@ def test_learn_is_bit_identical_to_the_unfused_step_after_every_step(name: str):
         unfused.learn(0.5, state, category)
         for fused_layer, unfused_layer in zip(fused.layers, unfused.layers):
             if hasattr(fused_layer, "W"):
-                assert _bits(fused_layer.W.tolist()) == _bits(unfused_layer.W.tolist())
-                assert _bits(fused_layer.b.tolist()) == _bits(unfused_layer.b.tolist())
+                assert bits(fused_layer.W.tolist()) == bits(unfused_layer.W.tolist())
+                assert bits(fused_layer.b.tolist()) == bits(unfused_layer.b.tolist())
 
 
 @pytest.mark.parametrize("name", NETWORK_FACTORIES)
