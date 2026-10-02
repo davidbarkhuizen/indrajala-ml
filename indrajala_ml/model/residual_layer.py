@@ -47,7 +47,7 @@ class AffineLayer(BackpropLayer):
     _node_cls = AffineNode
 
 
-class _PassNode(AbstractNode):
+class PassNode(AbstractNode):
     """A fork's or an add's node: no weights, a value and a delta per example."""
 
     example_fields: ClassVar[tuple[str, ...]] = ("_activation", "delta")
@@ -61,7 +61,7 @@ class _PassNode(AbstractNode):
         return self._activation
 
 
-class ForkNode(_PassNode):
+class ForkNode(PassNode):
     def __init__(self, input_node: AbstractNode) -> None:
         super().__init__()
         self.input_node = input_node
@@ -70,7 +70,7 @@ class ForkNode(_PassNode):
         self._activation = self.input_node.value()
 
 
-class AddNode(_PassNode):
+class AddNode(PassNode):
     def __init__(self, body_node: AbstractNode, fork_node: ForkNode) -> None:
         super().__init__()
         self.body_node = body_node
@@ -81,7 +81,7 @@ class AddNode(_PassNode):
         self._activation = self.body_node.value() + self.fork_node.value()
 
 
-class _ParameterFreeLayer[NodeT: _PassNode]:
+class ParameterFreeLayer[NodeT: PassNode]:
     """What a fork and an add share: no weights, so nothing to draw, accumulate, step or save."""
 
     nodes: Sequence[NodeT]
@@ -118,7 +118,7 @@ class _ParameterFreeLayer[NodeT: _PassNode]:
         pass
 
 
-class ForkLayer(_ParameterFreeLayer[ForkNode]):
+class ForkLayer(ParameterFreeLayer[ForkNode]):
     """
     A residual block's first layer: its nodes pass the input layer's values on, and its delta is
     the sum of the two paths' gradients, the body's (its first layer's downstream_sum) and the
@@ -147,7 +147,7 @@ class ForkLayer(_ParameterFreeLayer[ForkNode]):
             node.delta = next_layer.downstream_sum(own_index) + add_node.delta
 
 
-class AddLayer(_ParameterFreeLayer[AddNode]):
+class AddLayer(ParameterFreeLayer[AddNode]):
     """
     A residual block's last layer: each node the body's output plus the block's input, which its
     fork passed on. Its delta is the next layer's downstream_sum, and its downstream_sum is its

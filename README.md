@@ -508,7 +508,8 @@ don't. Each new layer is one layer in the expanded list, so layer indices count 
 
 The exact expressions, per example. `sum` is a left fold from `0.0` in index order (a batch's
 gradient sums run over examples, then tokens, the rows of the `(N * T, d)` view); a product is a
-matrix product (numpy's BLAS, the crate's products on Rust, as a dense layer's). Every
+matrix product (numpy's BLAS, the crate's products on Rust, as a dense layer's; in pure Python a
+left fold too, where its flat dense layers use the builtin `sum`). Every
 implementation computes these, in this grouping, left to right, with no fused multiply-add and no
 power function:
 

@@ -9,8 +9,10 @@ state at a time (their example_fields: the activation, the delta, dropout's mask
 winning slot), so this path keeps each layer's per example, one "lane" per example, and loads a
 lane back before the layer or its neighbour reads it. A layer that reads more than its neighbours
 declares the others (a residual block's add reads its fork, and the fork its add: forward_reads and
-backward_reads, residual_layer.py), and their lanes are loaded too. A BatchNormLayer keeps its own
-per-example lists and is selected with select_example instead.
+backward_reads, residual_layer.py), and their lanes are loaded too. A layer whose per-example state
+isn't its nodes' names its own fields in its example_fields (an attention layer's Q, K, V and P,
+attention_layer.py), and a lane keeps those too. A BatchNormLayer keeps its own per-example lists
+and is selected with select_example instead.
 
 The gradients accumulate per weight in example order, as the example-major loop's do.
 """
@@ -24,20 +26,24 @@ from indrajala_ml.model.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.layer_protocols import TrainableLayer
 from indrajala_ml.model.state_layer import StateLayer
 
-# one layer's state for one example: each node's example_fields
-Lane = list[dict[str, Any]]
+# one layer's state for one example: the layer's own example_fields, then each node's
+Lane = tuple[dict[str, Any], list[dict[str, Any]]]
+
+
+def _fields(holder: object, names: Sequence[str]) -> dict[str, Any]:
+    fields = vars(holder)
+    return {name: fields[name] for name in names if name in fields}
 
 
 def _capture(layer: TrainableLayer) -> Lane:
-    lane: Lane = []
-    for node in layer.nodes:
-        fields = vars(node)
-        lane.append({name: fields[name] for name in node.example_fields if name in fields})
-    return lane
+    own: Sequence[str] = getattr(layer, "example_fields", ())
+    return _fields(layer, own), [_fields(node, node.example_fields) for node in layer.nodes]
 
 
 def _load(layer: TrainableLayer, lane: Lane) -> None:
-    for node, fields in zip(layer.nodes, lane):
+    own, nodes = lane
+    vars(layer).update(own)
+    for node, fields in zip(layer.nodes, nodes):
         vars(node).update(fields)
 
 

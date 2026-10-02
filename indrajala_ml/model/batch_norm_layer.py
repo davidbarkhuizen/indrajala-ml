@@ -3,7 +3,7 @@ Pure-Python batch normalization of a linear layer, fused with its activation (th
 workplan, D1 and D3), the counterpart of batch_norm_array_layer.py: a dense layer's each feature
 over the batch, a conv layer's each channel over the batch and every position.
 Every expression is the README's (Batch normalization), per scalar, in its grouping, and every sum
-over the batch is a left fold from 0.0 in example order (_fold), not the builtin sum, which adds
+over the batch is a left fold from 0.0 in example order (fold), not the builtin sum, which adds
 floats with compensated summation since Python 3.12.
 
 A BatchNormNode holds its feature's or channel's parameters, and its lists and statistics over a
@@ -27,8 +27,8 @@ from indrajala_ml.model.relu_layer import relu_activation
 from indrajala_ml.pcg64 import Pcg64Generator
 
 
-def _fold(values: Sequence[float]) -> float:
-    # the README's sum: a left fold from 0.0, in order
+def fold(values: Sequence[float]) -> float:
+    """The README's sum: a left fold from 0.0, in order. Layer norm's and attention's too."""
     total = 0.0
     for value in values:
         total += value
@@ -212,9 +212,9 @@ class BatchNormLayer:
             for first, end in self._groups:
                 x = values[first * positions : end * positions]
                 m = len(x)
-                mu = _fold(x) / m
+                mu = fold(x) / m
                 d = [x_i - mu for x_i in x]
-                ss = _fold([d_i * d_i for d_i in d])
+                ss = fold([d_i * d_i for d_i in d])
                 var = ss / m
                 std = math.sqrt(var + epsilon)
                 xhat = [d_i / std for d_i in d]
@@ -264,8 +264,8 @@ class BatchNormLayer:
                 dxhat = [delta_i * gamma for delta_i in deltas[first * positions : end * positions]]
                 inv_std = 1 / std
                 inv_std3 = inv_std / (var + epsilon)
-                dvar = _fold([dxhat_i * d_i * -0.5 * inv_std3 for dxhat_i, d_i in zip(dxhat, d)])
-                dmu = _fold([dxhat_i * -inv_std for dxhat_i in dxhat]) + dvar * _fold([-2 * d_i for d_i in d]) / m
+                dvar = fold([dxhat_i * d_i * -0.5 * inv_std3 for dxhat_i, d_i in zip(dxhat, d)])
+                dmu = fold([dxhat_i * -inv_std for dxhat_i in dxhat]) + dvar * fold([-2 * d_i for d_i in d]) / m
                 dxs += [dxhat_i * inv_std + dvar * (2 * d_i) / m + dmu / m for dxhat_i, d_i in zip(dxhat, d)]
             node.deltas = deltas
             node.dxs = dxs
@@ -277,10 +277,8 @@ class BatchNormLayer:
     def accumulate_gradients(self) -> None:
         # over the whole batch at once
         for node in self.channels:
-            node.weight_gradient_accum[0] += _fold(
-                [delta_i * xhat_i for delta_i, xhat_i in zip(node.deltas, node.xhat)]
-            )
-            node.bias_gradient_accum += _fold(node.deltas)
+            node.weight_gradient_accum[0] += fold([delta_i * xhat_i for delta_i, xhat_i in zip(node.deltas, node.xhat)])
+            node.bias_gradient_accum += fold(node.deltas)
 
     def weight_sets(self) -> Sequence[BatchNormNode]:
         return self.channels
