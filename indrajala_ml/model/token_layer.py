@@ -34,20 +34,21 @@ class TokenNode(PassNode):
         self._activation = value
 
 
-class WeightRow:
+class PositionRow:
     """
-    One row of a weight matrix shared over the tokens, with its bias: a token-wise dense layer's
-    unit, or a row of an attention projection. The WeightSet the optimizer steps, decayed as a
-    dense layer's node.
+    One token's row of the position table: weights without a bias, never decayed (D7). The
+    WeightSet the optimizer steps; WeightRow adds the bias and the draw.
     """
 
-    weights_decayed: ClassVar[bool] = True
-    has_bias: ClassVar[bool] = True
+    weights_decayed: ClassVar[bool] = False
+    has_bias: ClassVar[bool] = False
 
-    def __init__(self, fan_in: int) -> None:
-        self._weights = [0.0] * fan_in
+    def __init__(self, features: int) -> None:
+        # zero, where the position table starts (D7); a WeightRow until drawn
+        self._weights = [0.0] * features
+        # the WeightSet surface's bias, which the optimizer steps only with has_bias
         self.bias = 0.0
-        self.weight_gradient_accum = [0.0] * fan_in
+        self.weight_gradient_accum = [0.0] * features
         self.bias_gradient_accum = 0.0
 
     @property
@@ -61,6 +62,17 @@ class WeightRow:
     def reset_gradient_accum(self) -> None:
         self.weight_gradient_accum = [0.0] * len(self._weights)
         self.bias_gradient_accum = 0.0
+
+
+class WeightRow(PositionRow):
+    """
+    One row of a weight matrix shared over the tokens, with its bias: a token-wise dense layer's
+    unit, or a row of an attention projection. The WeightSet the optimizer steps, decayed as a
+    dense layer's node.
+    """
+
+    weights_decayed: ClassVar[bool] = True
+    has_bias: ClassVar[bool] = True
 
     def randomize(self, rng: Pcg64Generator) -> None:
         # a dense layer's node's draw: weights, then bias
@@ -148,33 +160,6 @@ class TokenMeanLayer(ParameterFreeLayer[TokenNode]):
 
     def downstream_sum(self, own_index: int) -> float:
         return self.nodes[own_index % self.size].delta / self.tokens
-
-
-class PositionRow:
-    """One token's row of the position table: weights without a bias, never decayed (D7)."""
-
-    weights_decayed: ClassVar[bool] = False
-    has_bias: ClassVar[bool] = False
-
-    def __init__(self, features: int) -> None:
-        # starting at zero (D7)
-        self._weights = [0.0] * features
-        # the WeightSet surface's bias, which the optimizer never steps (has_bias)
-        self.bias = 0.0
-        self.weight_gradient_accum = [0.0] * features
-        self.bias_gradient_accum = 0.0
-
-    @property
-    def weights(self) -> Sequence[float]:
-        return self._weights
-
-    def set_weights(self, weights: list[float]) -> None:
-        assert len(weights) == len(self._weights)
-        self._weights = weights
-
-    def reset_gradient_accum(self) -> None:
-        self.weight_gradient_accum = [0.0] * len(self._weights)
-        self.bias_gradient_accum = 0.0
 
 
 class PositionLayer(ParameterFreeLayer[TokenNode]):

@@ -16,35 +16,21 @@ import math
 from collections.abc import Sequence
 from typing import Any, ClassVar
 
-from indrajala_ml.model.batch_norm_layer import fold
+from indrajala_ml.model.batch_norm_layer import GammaAsWeights, fold
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.residual_layer import ParameterFreeLayer, PassNode
 from indrajala_ml.model.token_layer import token_values
 
 
-class LayerNormFeature:
+class LayerNormFeature(GammaAsWeights):
     """
     One feature's gamma and beta: the WeightSet the optimizer steps, as [gamma] and a bias beta,
-    never decayed (as batch norm's, the batch-norm workplan's D7). Nothing drawn: 1 and 0.
+    never decayed, as batch norm's (GammaAsWeights). Nothing drawn: 1 and 0.
     """
-
-    weights_decayed: ClassVar[bool] = False
-    has_bias: ClassVar[bool] = True
 
     def __init__(self) -> None:
         self.gamma = 1.0
-        self.bias = 0.0
-        self.weight_gradient_accum = [0.0]
-        self.bias_gradient_accum = 0.0
-
-    @property
-    def weights(self) -> Sequence[float]:
-        return [self.gamma]
-
-    def set_weights(self, weights: list[float]) -> None:
-        (self.gamma,) = weights
-
-    def reset_gradient_accum(self) -> None:
+        self.beta = 0.0
         self.weight_gradient_accum = [0.0]
         self.bias_gradient_accum = 0.0
 
@@ -96,7 +82,7 @@ class LayerNormLayer(ParameterFreeLayer[LayerNormNode]):
             for node, c_j, channel in zip(self._token(t), c, self.channels):
                 node.xhat = c_j / std
                 node.std = std
-                node.activate(channel.gamma * node.xhat + channel.bias)
+                node.activate(channel.gamma * node.xhat + channel.beta)
 
     def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         # the delta, the next layer's downstream, then each token's dl/dx, which needs all of the
@@ -127,9 +113,9 @@ class LayerNormLayer(ParameterFreeLayer[LayerNormNode]):
         return self.channels
 
     def snapshot_state(self) -> list[tuple[list[float], float]]:
-        return [([channel.gamma], channel.bias) for channel in self.channels]
+        return [([channel.gamma], channel.beta) for channel in self.channels]
 
     def restore_state(self, layer_snapshot: Sequence[Sequence[Any]]) -> None:
         for channel, (weights, beta) in zip(self.channels, layer_snapshot, strict=True):
             (channel.gamma,) = weights
-            channel.bias = beta
+            channel.beta = beta
