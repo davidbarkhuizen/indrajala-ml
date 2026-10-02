@@ -8,26 +8,26 @@ import numpy as np
 import pytest
 
 from indrajala_ml.digits_data import load_digits_dataset
-from indrajala_ml.model.array_layer import ArrayLayer
-from indrajala_ml.model.conv_array_layer import ConvArrayLayer
-from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
-from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
+from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer
+from indrajala_ml.model.layers.numpy.conv_array_layer import ConvArrayLayer
+from indrajala_ml.model.layers.numpy.max_pool_array_layer import MaxPoolArrayLayer
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.rust.conv_rust_array_layer import ConvRustArrayLayer
+from indrajala_ml.model.layers.rust.max_pool_rust_array_layer import MaxPoolRustArrayLayer
+from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
     MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
     MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Momentum
 from tests.array_network_contract import SEQUENTIAL_CLS, assert_sequential_matches_preset

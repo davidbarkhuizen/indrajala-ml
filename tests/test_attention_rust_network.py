@@ -16,20 +16,20 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-from indrajala_ml.model import attention_array_layer
-from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.attention_rust_array_layer import AttentionRustArrayLayer
-from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
-from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
-from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.numpy import attention_array_layer
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
+from indrajala_ml.model.layers.rust.attention_rust_array_layer import AttentionRustArrayLayer
+from indrajala_ml.model.layers.rust.batch_norm_rust_array_layer import BatchNormRustArrayLayer
+from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustArrayLayer
+from indrajala_ml.model.layers.rust.relu_rust_array_layer import ReLURustArrayLayer
+from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.layers.rust.token_rust_array_layer import (
+    TokenMeanRustArrayLayer,
+)
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerNorm, LayerSpec, Residual, TokenMean
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from indrajala_ml.model.token_rust_array_layer import (
-    TokenMeanRustArrayLayer,
-)
 from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, exp_by_crate, patching, split, to_numpy
 from tests.model.specs.test_layer_specs import (

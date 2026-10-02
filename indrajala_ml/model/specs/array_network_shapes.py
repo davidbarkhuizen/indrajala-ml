@@ -4,9 +4,9 @@ import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
-from indrajala_ml.model.conv_front_end import ArrayFrontEndLayer, load_conv_model_state
-from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.python.conv_front_end import ArrayFrontEndLayer, load_conv_model_state
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.persistence.format2 import NetworkFile
 from indrajala_ml.model.protocols.array_protocols import BackendArray
 from indrajala_ml.model.specs.bounds import validate_class_count, validate_layer_sizes

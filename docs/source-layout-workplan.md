@@ -1,6 +1,6 @@
 # Workplan: the source layout
 
-**Status: decisions settled (D1-D5); stages 0-2 done. Before stage 3, pytest collects 9768 tests.**
+**Status: decisions settled (D1-D5); stages 0-3 done. Before stage 4, pytest collects 9768 tests.**
 
 `indrajala_ml/` has grown flat. `indrajala_ml/model/` holds 190 modules in one directory: 61
 one-change presets, 50-odd layers across three implementations, the network bases, optimizers,
@@ -181,7 +181,11 @@ references updated together. pytest collects the same number of tests before and
    probe made path-agnostic (D4). Nothing moves.
 2. **`model/`: protocols, specs, optimizers, ensembles, persistence**, with the `layer_specs`,
    `format2` and `optimizers` splits.
-3. **`model/layers/`.**
+3. **`model/layers/`.** Done: the layer tests went to `tests/model/layers/` (numpy and Rust
+   together, the fused-op tests and `test_summation_order.py` among them), `python/` and `rust/`;
+   `test_rust_array_layer_sgd_step.py`, which steps layers and networks, to `tests/model/`.
+   `test_batch_norm_ghost_groups.py` waits for stage 4 with the other batch-norm network tests.
+   The crate's comments that cite the layer modules follow in a crate PR and a "Bump rust/".
 4. **`model/networks/`** and the presets.
 5. **The package root:** `data/`, `training/`, `capture/`, `measurement/`, `studies/`, with the
    `train`, `ensemble_train` and `machine_profile` splits.

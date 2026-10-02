@@ -9,11 +9,11 @@ import random
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_layer import ArrayLayer
-from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer
+from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
+from indrajala_ml.model.layers.python.state_layer import StateLayer
+from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule, WeightDecay
-from indrajala_ml.model.state_layer import StateLayer
 from tests.helpers import Backend, LayerOptimizer, array_layer_like
 
 MOMENTUM = Momentum(0.5)

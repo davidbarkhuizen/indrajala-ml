@@ -15,7 +15,6 @@ from typing import Any, cast
 
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
@@ -25,6 +24,7 @@ from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import En
 from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_network import (
     EnsembleRustArrayBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.sequential_array_network import (
     SequentialArrayBackpropClassifierNetwork,

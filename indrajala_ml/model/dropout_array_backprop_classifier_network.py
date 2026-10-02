@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
-from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
+from indrajala_ml.model.layers.numpy.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.specs.layer_specs import Dense
 
 

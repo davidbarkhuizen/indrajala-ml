@@ -14,10 +14,10 @@ from typing import Any, Literal
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY
-from indrajala_ml.model.array_layer import FloatArray, sigmoid
-from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
-from indrajala_ml.model.linear_array_layer import LinearArrayLayer
+from indrajala_ml.model.layers.array.array_backend import NUMPY
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray, sigmoid
+from indrajala_ml.model.layers.numpy.batch_norm_array_layer import BatchNormArrayLayer
+from indrajala_ml.model.layers.numpy.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay

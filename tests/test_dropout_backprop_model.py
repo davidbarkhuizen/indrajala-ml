@@ -4,7 +4,7 @@ import pytest
 
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.dropout_backprop_classifier_network import DropoutBackpropClassifierNetwork
-from indrajala_ml.model.dropout_layer import TrainingModeNode
+from indrajala_ml.model.layers.python.dropout_layer import TrainingModeNode
 from tests.helpers import (
     approx,
     assert_randomize_breaks_symmetry,

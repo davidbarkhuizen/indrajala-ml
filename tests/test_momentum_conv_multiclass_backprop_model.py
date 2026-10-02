@@ -2,13 +2,13 @@ import json
 import random
 from pathlib import Path
 
-from indrajala_ml.model.backprop_node import BackpropNode
-from indrajala_ml.model.conv_kernel import ConvKernel
-from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import (
     ConvMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
+from indrajala_ml.model.layers.python.backprop_node import BackpropNode
+from indrajala_ml.model.layers.python.conv_kernel import ConvKernel
+from indrajala_ml.model.layers.python.conv_layer import ConvLayer, ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
     MomentumConvMultiClassBackpropClassifierNetwork,
 )

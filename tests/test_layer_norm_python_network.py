@@ -12,14 +12,14 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY
-from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
-from indrajala_ml.model.layer_norm_layer import LayerNormLayer
+from indrajala_ml.model.layers.array.array_backend import NUMPY
+from indrajala_ml.model.layers.numpy.layer_norm_array_layer import LayerNormArrayLayer
+from indrajala_ml.model.layers.python.layer_norm_layer import LayerNormLayer
+from indrajala_ml.model.layers.python.state_layer import StateLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.specs.layer_specs import LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.pcg64 import default_rng
 from tests.helpers import bits
 from tests.model.specs.test_layer_specs import FLAT_LAYER_NORM, _input_shape

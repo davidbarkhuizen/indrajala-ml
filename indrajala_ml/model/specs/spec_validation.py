@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,

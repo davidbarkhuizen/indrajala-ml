@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.digits_data import load_digits_dataset
-from indrajala_ml.model.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.sequential_array_network import (
     SequentialArrayBackpropClassifierNetwork,
     SequentialArrayNetwork,

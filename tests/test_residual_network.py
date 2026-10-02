@@ -10,8 +10,8 @@ from typing import Any
 
 import pytest
 
-from indrajala_ml.model.array_layer_builder import LAYER_CLASSES
-from indrajala_ml.model.residual_layer import AddLayer, AffineLayer, ForkLayer
+from indrajala_ml.model.layers.array.array_layer_builder import LAYER_CLASSES
+from indrajala_ml.model.layers.python.residual_layer import AddLayer, AffineLayer, ForkLayer
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
 from tests.gradient_check import check_gradients
 from tests.helpers import Implementation, bits, randomized, split

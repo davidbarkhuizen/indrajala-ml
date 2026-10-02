@@ -9,9 +9,10 @@ from typing import Any, cast
 
 import pytest
 
-from indrajala_ml.model.array_layer_builder import LAYER_CLASSES, build_array_layers
+from indrajala_ml.model.layers.array.array_layer_builder import LAYER_CLASSES, build_array_layers
+from indrajala_ml.model.layers.python.python_layer_builder import build_python_layers
+from indrajala_ml.model.layers.python.state_layer import StateLayer
 from indrajala_ml.model.persistence.format2_json import layer_from_json, layer_to_json
-from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.specs.layer_specs import (
     Add,
     Attention,
@@ -36,7 +37,6 @@ from indrajala_ml.model.specs.single_example import (
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, SpecShape, spec_shapes
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
-from indrajala_ml.model.state_layer import StateLayer
 from tests.helpers import Backend
 
 OUTPUT = Dense(3, output=True)
@@ -99,7 +99,7 @@ INVALID: dict[str, list[LayerSpec]] = {
 }
 
 # batch norm's pairs (the batch-norm workplan, D1): accepted, and built by numpy (stage 1), pure
-# Python (stage 2, tests/test_python_layer_builder.py) and Rust (stage 3)
+# Python (stage 2, tests/model/layers/python/test_python_layer_builder.py) and Rust (stage 3)
 BATCH_NORM: dict[str, list[LayerSpec]] = {
     "sigmoid": [LINEAR, BatchNorm(), OUTPUT],
     "relu": [LINEAR, BatchNorm("relu"), OUTPUT],
@@ -111,7 +111,7 @@ BATCH_NORM: dict[str, list[LayerSpec]] = {
 }
 
 # conv batch norm's pairs: accepted, and built by numpy (stage 4a), pure Python (4b,
-# tests/test_python_layer_builder.py) and Rust (4c)
+# tests/model/layers/python/test_python_layer_builder.py) and Rust (4c)
 CONV_BATCH_NORM: dict[str, list[LayerSpec]] = {
     "conv": [LINEAR_CONV, BatchNorm("relu"), OUTPUT],
     "conv pool": [LINEAR_CONV, BatchNorm("relu"), Pool(2), OUTPUT],

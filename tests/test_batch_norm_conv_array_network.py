@@ -13,10 +13,10 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY
-from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
-from indrajala_ml.model.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
+from indrajala_ml.model.layers.array.array_backend import NUMPY
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
+from indrajala_ml.model.layers.numpy.batch_norm_array_layer import BatchNormArrayLayer
+from indrajala_ml.model.layers.numpy.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.specs.update_rules import SGD, UpdateRule

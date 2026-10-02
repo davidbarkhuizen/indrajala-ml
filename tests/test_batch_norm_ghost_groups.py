@@ -14,11 +14,11 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.base_node import AbstractNode
-from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer, sum_rows
-from indrajala_ml.model.batch_norm_layer import BatchNormLayer
-from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.numpy.batch_norm_array_layer import BatchNormArrayLayer, sum_rows
+from indrajala_ml.model.layers.python.base_node import AbstractNode
+from indrajala_ml.model.layers.python.batch_norm_layer import BatchNormLayer
+from indrajala_ml.model.layers.rust.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool

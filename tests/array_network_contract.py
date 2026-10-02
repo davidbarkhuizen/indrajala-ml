@@ -27,8 +27,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.sequential_array_network import (
     SequentialArrayBackpropClassifierNetwork,
     SequentialRustArrayBackpropClassifierNetwork,

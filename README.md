@@ -107,7 +107,7 @@ minimum-disturbance rule. A backprop network is a list of layer specs and one up
 in any of three implementations of the same maths:
 
 ```python
-from indrajala_ml.model.array_backend import RUST
+from indrajala_ml.model.layers.array.array_backend import RUST
 from indrajala_ml.model.specs.layer_specs import Conv, Dense, Pool
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.update_rules import Momentum
@@ -398,7 +398,7 @@ With ghost groups the training forward and backward expressions apply to each gr
 
 `sum` is a left fold from `0.0` in that row order, the crate's order (`sum_axis0`, and the conv
 `grad_b` sum). numpy's own reductions follow it only in some layouts
-(`tests/test_summation_order.py`): `X.sum(axis=0)` does across two or more features, but sums a
+(`tests/model/layers/test_summation_order.py`): `X.sum(axis=0)` does across two or more features, but sums a
 single feature pairwise from 8 rows, and `D.sum(axis=(0, 2))` over a conv channel doesn't. The numpy
 layers sum with `np.cumsum` along the summed axis, which does at every shape. The pure-Python layer
 sums with an explicit loop: the builtin `sum` adds floats with compensated summation since Python
@@ -585,7 +585,7 @@ Apart from the products, only `+ − × ÷`, `sqrt`, `max` and the softmax's `ex
 given the same inputs the pure-Python, numpy and Rust layers compute the same bits outside the
 products, as batch norm's do, and the tests give the numpy layer the other implementation's `exp`
 (it isn't correctly rounded). numpy sums with `np.cumsum` along the summed axis
-(`tests/test_summation_order.py`), never `.sum`, whose order depends on the layout. Products
+(`tests/model/layers/test_summation_order.py`), never `.sum`, whose order depends on the layout. Products
 between activations are new: `Q K^T`, `P V` and their backward per example, BLAS against the
 crate's products, explained as the dense layers' gap is, never accepted as a tolerance. Exact
 tests need none: with one token `P = [[1]]`, so attention is `(X Wv^T + bv) Wo^T + bo`; with

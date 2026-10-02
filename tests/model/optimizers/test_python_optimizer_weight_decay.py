@@ -1,8 +1,8 @@
 from collections.abc import Callable
 
-from indrajala_ml.model.backprop_node import BackpropNode
+from indrajala_ml.model.layers.python.backprop_node import BackpropNode
+from indrajala_ml.model.layers.python.state_node import StateNode
 from indrajala_ml.model.specs.update_rules import SGD, UpdateRule, WeightDecay
-from indrajala_ml.model.state_node import StateNode
 from tests.helpers import LayerOptimizer, WeightSets, approx
 
 

@@ -9,13 +9,13 @@ from typing import Any
 import indrajala_math_rust as pa
 import numpy as np
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.array_layer import ArrayLayer, FloatArray
-from indrajala_ml.model.conv_array_layer import ConvArrayLayer
-from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
-from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
-from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
-from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray
+from indrajala_ml.model.layers.numpy.conv_array_layer import ConvArrayLayer
+from indrajala_ml.model.layers.numpy.max_pool_array_layer import MaxPoolArrayLayer
+from indrajala_ml.model.layers.rust.conv_rust_array_layer import ConvRustArrayLayer
+from indrajala_ml.model.layers.rust.max_pool_rust_array_layer import MaxPoolRustArrayLayer
+from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.specs.update_rules import SGD
 
 CALLS = 300

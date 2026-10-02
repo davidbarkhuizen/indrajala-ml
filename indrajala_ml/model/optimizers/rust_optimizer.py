@@ -11,9 +11,9 @@ from typing import cast
 
 import indrajala_math_rust as pa
 
+from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.optimizers.array_optimizer_base import ArrayOptimizerBase
 from indrajala_ml.model.protocols.array_protocols import ArrayBackend, ArrayNetworkLayer, TrainedArrayLayer
-from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
 # a lone parameter's missing partner: the fused ops step each parameter of their pair on its own,
@@ -89,7 +89,7 @@ class RustOptimizer(ArrayOptimizerBase[pa.Array, _Pair, tuple[pa.Array, pa.Array
     ) -> None:
         if self._fused_sgd_step and isinstance(layer, RustArrayLayer):
             # accumulate then apply at batch_size=1 as one fused call, bit-identical to that pair
-            # (tests/test_rust_array_layer_sgd_step.py). It relies on the accumulators being fresh
+            # (tests/model/test_rust_array_layer_sgd_step.py). It relies on the accumulators being fresh
             # zeros, which they always are here: apply resets them after every step, and this
             # doesn't touch them. Dense layers only: a conv gradient sums over output positions,
             # which layer_sgd_step's outer product doesn't.

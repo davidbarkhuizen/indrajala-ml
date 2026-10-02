@@ -1,0 +1,77 @@
+"""
+RustArrayLayer.forward_batch computes X @ W.T with the crate's matmul_nt: one dot product per
+output, the same calls W @ x makes in forward. So each row of forward_batch is bit-identical to
+forward on that row, for every dense Rust layer. Checked exactly (tolist() ==, not approx),
+including the one-row batch.
+"""
+
+from collections.abc import Callable
+
+import indrajala_math_rust as pa
+import numpy as np
+import pytest
+
+from indrajala_ml.model.layers.rust.affine_rust_array_layer import AffineRustArrayLayer
+from indrajala_ml.model.layers.rust.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
+from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustArrayLayer
+from indrajala_ml.model.layers.rust.relu_rust_array_layer import ReLURustArrayLayer
+from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.layers.rust.softmax_rust_array_layer import SoftmaxRustArrayLayer
+from tests.helpers import all_subclasses, model_modules
+
+# the momentum, Adam and L2 networks use RustArrayLayer itself: their update is the optimizer's
+LAYER_CLASSES: dict[str, Callable[[int, int], RustArrayLayer]] = {
+    "plain": lambda size, input_size: RustArrayLayer(size, input_size),
+    "relu": lambda size, input_size: ReLURustArrayLayer(size, input_size),
+    "softmax": lambda size, input_size: SoftmaxRustArrayLayer(size, input_size),
+    "cross-entropy": lambda size, input_size: CrossEntropyRustArrayLayer(size, input_size),
+    "dropout": lambda size, input_size: DropoutRustArrayLayer(size, input_size, 0.5),
+    "affine": lambda size, input_size: AffineRustArrayLayer(size, input_size),
+}
+
+# (size, input_size): a small layer, the dense production layers (784 -> 30 -> 10), and the conv
+# tail (the dense layer after a ConvSpec(3, 8) layer on 28x28 input)
+SHAPES: list[tuple[int, int]] = [(7, 11), (30, 784), (10, 30), (32, 5408)]
+
+
+def _layer(name: str, size: int, input_size: int, rng: np.random.Generator) -> RustArrayLayer:
+    layer = LAYER_CLASSES[name](size, input_size)
+    layer.W = pa.Array(rng.uniform(-0.3, 0.3, (size, input_size)).tolist())
+    layer.b = pa.Array(rng.uniform(-0.3, 0.3, size).tolist())
+    return layer
+
+
+@pytest.mark.parametrize("name", LAYER_CLASSES)
+@pytest.mark.parametrize("size, input_size", SHAPES)
+@pytest.mark.parametrize("batch", [1, 5])
+def test_forward_batch_rows_are_bit_identical_to_forward(name: str, size: int, input_size: int, batch: int):
+    rng = np.random.default_rng(size * 10_000 + input_size + batch)
+    layer = _layer(name, size, input_size, rng)
+    X = rng.uniform(0.0, 1.0, (batch, input_size))
+
+    rows = layer.forward_batch(pa.Array(X.tolist())).tolist()
+    assert len(rows) == batch
+    for i in range(batch):
+        assert rows[i] == layer.forward(pa.Array(X[i].tolist())).tolist()
+
+
+@pytest.mark.parametrize("size, input_size", SHAPES)
+def test_dropout_training_base_activation_rows_are_bit_identical_to_forward(size: int, input_size: int):
+    # at training time the mask is random, but the pre-mask sigmoid each call keeps is not
+    rng = np.random.default_rng(size + input_size)
+    layer = _layer("dropout", size, input_size, rng)
+    assert isinstance(layer, DropoutRustArrayLayer)
+    layer.set_training_mode(True)
+    X = rng.uniform(0.0, 1.0, (3, input_size))
+
+    layer.forward_batch(pa.Array(X.tolist()))
+    rows = layer._base_activation_batch.tolist()
+    for i in range(3):
+        layer.forward(pa.Array(X[i].tolist()))
+        assert rows[i] == layer._base_activation.tolist()
+
+
+def test_every_dense_rust_layer_is_covered():
+    model_modules()
+    covered = {type(factory(2, 3)) for factory in LAYER_CLASSES.values()}
+    assert {RustArrayLayer, *all_subclasses(RustArrayLayer)} == covered

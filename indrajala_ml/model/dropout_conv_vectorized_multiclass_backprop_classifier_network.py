@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
-from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.numpy.dropout_array_layer import DropoutArrayLayer
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.specs.layer_specs import Dense
 
 

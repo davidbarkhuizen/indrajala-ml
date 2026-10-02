@@ -4,13 +4,14 @@ import math
 from collections.abc import Sequence
 from typing import Any, ClassVar, Self, cast
 
-from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.layer_major import LayerMajorBatch
+from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
+from indrajala_ml.model.layers.python.layer_major import LayerMajorBatch
+from indrajala_ml.model.layers.python.python_layer_builder import build_python_layers
+from indrajala_ml.model.layers.python.state_layer import StateLayer
 from indrajala_ml.model.optimizers.python_optimizer import PythonOptimizer, WeightSetState
 from indrajala_ml.model.persistence.format2 import PYTHON
 from indrajala_ml.model.persistence.format2_persistence import Format2Persistence
 from indrajala_ml.model.protocols.layer_protocols import GeneratorLayer, TrainableLayer
-from indrajala_ml.model.python_layer_builder import build_python_layers
 from indrajala_ml.model.specs.bounds import validate_batch, validate_input_bounds
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.specs.single_example import (
@@ -20,7 +21,6 @@ from indrajala_ml.model.specs.single_example import (
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
-from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
 
@@ -192,7 +192,7 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer](
 
     def _learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]]) -> None:
         # forward, backward and accumulate per example, then one averaged update. A one-example
-        # batch matches learn() bit for bit (tests/test_gradient_accumulation.py). The target is
+        # batch matches learn() bit for bit (tests/model/layers/python/test_gradient_accumulation.py). The target is
         # a float or a class index; _forward/_backward abstract over which. A network with batch
         # norm trains layer-major instead.
         validate_batch(batch)

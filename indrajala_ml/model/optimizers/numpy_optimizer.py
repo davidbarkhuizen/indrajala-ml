@@ -10,7 +10,7 @@ from typing import cast
 
 import numpy as np
 
-from indrajala_ml.model.array_layer import FloatArray
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.optimizers.array_optimizer_base import ArrayOptimizerBase, momentum_update
 from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer, TrainedArrayLayer
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, WeightDecay

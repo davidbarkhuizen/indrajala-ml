@@ -12,11 +12,11 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
-from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
-from indrajala_ml.model.conv_array_layer import LinearConvArrayLayer
-from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer, LinearConvRustArrayLayer
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.numpy.batch_norm_array_layer import BatchNormArrayLayer
+from indrajala_ml.model.layers.numpy.conv_array_layer import LinearConvArrayLayer
+from indrajala_ml.model.layers.rust.batch_norm_rust_array_layer import BatchNormRustArrayLayer
+from indrajala_ml.model.layers.rust.conv_rust_array_layer import ConvRustArrayLayer, LinearConvRustArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.specs.update_rules import Momentum, UpdateRule

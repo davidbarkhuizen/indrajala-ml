@@ -10,31 +10,31 @@ from typing import Any
 
 import pytest
 
-from indrajala_ml.model.attention_array_layer import AttentionArrayLayer
-from indrajala_ml.model.attention_layer import AttentionLayer
-from indrajala_ml.model.attention_rust_array_layer import AttentionRustArrayLayer
-from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
-from indrajala_ml.model.layer_norm_layer import LayerNormLayer
-from indrajala_ml.model.layer_norm_rust_array_layer import LayerNormRustArrayLayer
-from indrajala_ml.model.residual_array_layer import AddArrayLayer, ForkArrayLayer
-from indrajala_ml.model.residual_layer import AddLayer, ForkLayer
-from indrajala_ml.model.residual_rust_array_layer import AddRustArrayLayer, ForkRustArrayLayer
-from indrajala_ml.model.specs.layer_specs import LayerSpec
-from indrajala_ml.model.specs.single_example import batch_norm_index
-from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
-from indrajala_ml.model.token_array_layer import (
+from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
+from indrajala_ml.model.layers.numpy.layer_norm_array_layer import LayerNormArrayLayer
+from indrajala_ml.model.layers.numpy.residual_array_layer import AddArrayLayer, ForkArrayLayer
+from indrajala_ml.model.layers.numpy.token_array_layer import (
     PatchesArrayLayer,
     PositionArrayLayer,
     TokenDenseArrayLayer,
     TokenMeanArrayLayer,
 )
-from indrajala_ml.model.token_layer import PatchesLayer, PositionLayer, TokenDenseLayer, TokenMeanLayer
-from indrajala_ml.model.token_rust_array_layer import (
+from indrajala_ml.model.layers.python.attention_layer import AttentionLayer
+from indrajala_ml.model.layers.python.layer_norm_layer import LayerNormLayer
+from indrajala_ml.model.layers.python.residual_layer import AddLayer, ForkLayer
+from indrajala_ml.model.layers.python.token_layer import PatchesLayer, PositionLayer, TokenDenseLayer, TokenMeanLayer
+from indrajala_ml.model.layers.rust.attention_rust_array_layer import AttentionRustArrayLayer
+from indrajala_ml.model.layers.rust.layer_norm_rust_array_layer import LayerNormRustArrayLayer
+from indrajala_ml.model.layers.rust.residual_rust_array_layer import AddRustArrayLayer, ForkRustArrayLayer
+from indrajala_ml.model.layers.rust.token_rust_array_layer import (
     PatchesRustArrayLayer,
     PositionRustArrayLayer,
     TokenDenseRustArrayLayer,
     TokenMeanRustArrayLayer,
 )
+from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.single_example import batch_norm_index
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
 from tests.gradient_check import check_gradients
 from tests.helpers import Implementation, bits, randomized, split
 from tests.model.specs.test_layer_specs import TOKENS

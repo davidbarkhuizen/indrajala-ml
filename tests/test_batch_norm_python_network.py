@@ -13,15 +13,16 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model import batch_norm_array_layer
-from indrajala_ml.model.backprop_node import sigmoid
-from indrajala_ml.model.base_node import AbstractNode
-from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
-from indrajala_ml.model.batch_norm_layer import BatchNormLayer
-from indrajala_ml.model.layer_major import LayerMajorBatch
-from indrajala_ml.model.linear_conv_layer import LinearConvLayer
-from indrajala_ml.model.linear_layer import LinearLayer
-from indrajala_ml.model.relu_layer import relu_activation
+from indrajala_ml.model.layers.numpy import batch_norm_array_layer
+from indrajala_ml.model.layers.numpy.batch_norm_array_layer import BatchNormArrayLayer
+from indrajala_ml.model.layers.python.backprop_node import sigmoid
+from indrajala_ml.model.layers.python.base_node import AbstractNode
+from indrajala_ml.model.layers.python.batch_norm_layer import BatchNormLayer
+from indrajala_ml.model.layers.python.layer_major import LayerMajorBatch
+from indrajala_ml.model.layers.python.linear_conv_layer import LinearConvLayer
+from indrajala_ml.model.layers.python.linear_layer import LinearLayer
+from indrajala_ml.model.layers.python.relu_layer import relu_activation
+from indrajala_ml.model.layers.python.state_layer import StateLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
@@ -29,7 +30,6 @@ from indrajala_ml.model.sequential_backprop_network import (
 )
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients

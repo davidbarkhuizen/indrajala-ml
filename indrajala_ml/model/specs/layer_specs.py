@@ -29,8 +29,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 
 Conv = ConvSpec
 Pool = PoolSpec
