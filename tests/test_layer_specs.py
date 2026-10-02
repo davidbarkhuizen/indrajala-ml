@@ -597,14 +597,15 @@ REFUSED = {f"tokens {name}": specs for name, specs in TOKENS.items()} | {
 
 
 @pytest.mark.parametrize("specs", REFUSED.values(), ids=REFUSED.keys())
-def test_numpy_builds_the_new_specs_and_the_rest_refuse_them_until_their_stages(specs: list[LayerSpec]):
+def test_numpy_and_pure_python_build_the_new_specs_and_the_rest_refuse_them_until_their_stages(
+    specs: list[LayerSpec],
+):
     input_shape = _input_shape(specs)
     build_array_layers(specs, input_shape, "numpy")
+    size = math.prod(input_shape)
+    build_python_layers(specs, input_shape, StateLayer(size, [(0.0, 1.0)] * size))
     with pytest.raises(NotImplementedError, match="on the rust backend: not yet .* stage 4"):
         build_array_layers(specs, input_shape, "rust")
-    size = math.prod(input_shape)
-    with pytest.raises(NotImplementedError, match="in pure Python: not yet .* stage 3"):
-        build_python_layers(specs, input_shape, StateLayer(size, [(0.0, 1.0)] * size))
     new = next(spec for spec in specs if not isinstance(spec, Dense | BatchNorm))
     with pytest.raises(NotImplementedError, match="in format 2: not yet .* stage 5"):
         layer_to_json(new)

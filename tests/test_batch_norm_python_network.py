@@ -320,7 +320,7 @@ def test_every_gradient_through_dropout_after_batch_norm_matches_its_finite_diff
     network._set_training_mode(True)
     batch.forward()
     network._set_training_mode(False)
-    kept = [[fields["_kept"] for fields in lane] for lane in batch.lanes[2]]
+    kept = [[fields["_kept"] for fields in nodes] for _own, nodes in batch.lanes[2]]
     assert any(any(unit) and not all(unit) for unit in zip(*kept))
 
 

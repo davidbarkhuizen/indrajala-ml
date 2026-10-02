@@ -1,6 +1,6 @@
 # Workplan: layer norm and single-head attention
 
-**Status: in progress; decisions D1-D12 settled (2026-10-02). Stages 0, 1 and 2 done.**
+**Status: in progress; decisions D1-D12 settled (2026-10-02). Stages 0-3 done.**
 
 Roadmap step 4 ([primitives-roadmap.md](primitives-roadmap.md)). A small vision transformer on
 MNIST (Dosovitskiy et al. 2020, "An Image is Worth 16x16 Words", arXiv 2010.11929): the image cut
@@ -325,7 +325,9 @@ Exact tests that need no tolerance:
   overflow; numpy-vs-X comparisons use the `crate_exp` / `math_exp` fixtures.
 - **`LayerMajorBatch`** (pure Python) keeps per-example state in node lanes (`example_fields`).
   Attention's per-example caches (`Q`, `K`, `V`, `P`) are layer-level; they need lanes too, or the
-  batch path keeps them per example in another way. Decided in stage 3, by reading `layer_major.py`.
+  batch path keeps them per example in another way. Decided in stage 3: a layer may name its own
+  `example_fields` (attention's `Q, K, V, P, H` and backward caches), and a lane keeps those
+  beside its nodes'.
 - **Indices.** "layer i" in messages, snapshots and optimizer state stay indices into
   `expand_specs`; the new layers are one expanded spec each.
 - **No in-place writes on a shared input**, as residual connections pinned: `Position` and the

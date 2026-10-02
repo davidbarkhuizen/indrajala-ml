@@ -10,22 +10,29 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
+from indrajala_ml.model.attention_layer import AttentionLayer
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.cross_entropy_output_layer import CrossEntropyOutputLayer
 from indrajala_ml.model.dropout_layer import make_dropout_layer_cls
+from indrajala_ml.model.layer_norm_layer import LayerNormLayer
 from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.layer_specs import (
     Add,
+    Attention,
     BatchNorm,
     Dense,
     Fork,
     InputShape,
+    LayerNorm,
     LayerSpec,
+    Patches,
+    Position,
+    Shape,
+    TokenMean,
     expand_specs,
     image_shape,
-    refuse_layer_norm_attention_until,
     spec_shapes,
     validate_layer_specs,
 )
@@ -35,6 +42,7 @@ from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.relu_layer import ReLULayer
 from indrajala_ml.model.residual_layer import AddLayer, AffineLayer, ForkLayer
 from indrajala_ml.model.softmax_output_layer import SoftmaxOutputLayer
+from indrajala_ml.model.token_layer import PatchesLayer, PositionLayer, TokenDenseLayer, TokenMeanLayer
 
 
 def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
@@ -53,6 +61,27 @@ def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
     return BackpropLayer(size=spec.size, input_layer=input_layer)
 
 
+def _tokens(shape: Shape) -> tuple[int, int]:
+    # a layer norm's input as (tokens, features): a flat layer, or a conv front end's image, is one
+    # token
+    return (shape[0], shape[1]) if len(shape) == 2 else (1, math.prod(shape))
+
+
+def _token_layer(
+    spec: Patches | Position | LayerNorm | Attention | TokenMean, shape: Shape, input_layer: InputLayer
+) -> TrainableLayer:
+    if isinstance(spec, Patches):
+        return PatchesLayer(input_layer, *image_shape(shape), spec.patch_size)
+    tokens, features = _tokens(shape)
+    if isinstance(spec, LayerNorm):
+        return LayerNormLayer(input_layer, tokens, features, spec.epsilon)
+    if isinstance(spec, Position):
+        return PositionLayer(input_layer, tokens, features)
+    if isinstance(spec, Attention):
+        return AttentionLayer(input_layer, tokens, features)
+    return TokenMeanLayer(input_layer, tokens, features)
+
+
 def build_python_layers(
     specs: Sequence[LayerSpec], input_shape: InputShape, input_layer: InputLayer
 ) -> list[TrainableLayer]:
@@ -63,7 +92,6 @@ def build_python_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_layer_norm_attention_until(specs, "3", "in pure Python")
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
     )
@@ -81,8 +109,14 @@ def build_python_layers(
         elif isinstance(spec, Add):
             fork = forks.pop()
             layer = fork.add = AddLayer(previous, fork)
+        elif isinstance(spec, Dense) and len(shape.input_shape) == 2:
+            # a token-wise dense layer (D4): ReLU, or linear with a bias
+            activation = "relu" if spec.activation == "relu" else "linear"
+            layer = TokenDenseLayer(previous, spec.size, shape.input_shape[0], activation)
         elif isinstance(spec, Dense):
             layer = _dense_layer(spec, previous)
+        elif isinstance(spec, Patches | Position | LayerNorm | Attention | TokenMean):
+            layer = _token_layer(spec, shape.input_shape, previous)
         elif isinstance(spec, BatchNorm):
             layer = BatchNormLayer(
                 previous, spec.activation, spec.epsilon, spec.running_rate, shape.positions, spec.group_size
