@@ -1,10 +1,10 @@
 """
 Patch models in numpy (the layer-norm and attention workplan, stage 2; README, Layer norm and
-attention): the gradient check on every accepted patch model, the layers the builder wires and
-what randomize draws, Patches, Position and TokenMean against the README's indices and sums,
-attention's softmax and its backward by bits against a scalar transcription, the exact tests (one
-token, uniform attention, an identity attention block), learn against a batch of one, and a short
-MNIST run in which the README's model learns.
+attention): what randomize draws, Patches, Position and TokenMean against the README's indices and
+sums, attention's softmax and its backward by bits against a scalar transcription, the exact tests
+(one token, uniform attention, an identity attention block), and a short MNIST run in which the
+README's model learns. The gradient check, the README model's wiring and learn against a batch of
+one are tests/test_attention_network.py's, on every implementation.
 """
 
 import math
@@ -19,7 +19,6 @@ from indrajala_ml.model import attention_array_layer
 from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.attention_array_layer import AttentionArrayLayer
-from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
 from indrajala_ml.model.layer_specs import (
     Attention,
     Dense,
@@ -30,20 +29,17 @@ from indrajala_ml.model.layer_specs import (
     Position,
     Residual,
     TokenMean,
-    batch_norm_index,
 )
-from indrajala_ml.model.residual_array_layer import AddArrayLayer, ForkArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.token_array_layer import (
     PatchesArrayLayer,
     PositionArrayLayer,
-    TokenDenseArrayLayer,
     TokenMeanArrayLayer,
 )
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
-from tests.gradient_check import analytic_gradients, check_gradients
+from indrajala_ml.model.update_rules import SGD, Adam, UpdateRule
+from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, exp_by_math, patching, split
-from tests.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX, TOKENS
+from tests.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX
 
 # test_layer_specs' patch models read a (4, 4, 1) image: Patches(2) gives 4 tokens of 4
 IMAGE: InputShape = (4, 4, 1)
@@ -63,48 +59,6 @@ def rows(count: int, seed: int = 1, size: int = 16, classes: int = 3) -> list[tu
 
 # the softmax's exp as math.exp, so a scalar transcription computes the same bits
 math_exp = patching(attention_array_layer, "exp", exp_by_math)
-
-
-@pytest.mark.parametrize("batch_size", [1, 3])
-@pytest.mark.parametrize("name", TOKENS)
-def test_every_gradient_matches_its_finite_difference(name: str, batch_size: int):
-    if batch_size == 1 and batch_norm_index(TOKENS[name]) is not None:
-        pytest.skip("batch norm trains on batches only (the batch-norm workplan, D4)")
-    built = network(TOKENS[name])
-    # a trained step first, so gamma, beta and the positions aren't at their initial values
-    built.learn_batch(0.5, rows(4, seed=2))
-
-    check_gradients(built, *split(rows(batch_size)))
-
-
-def test_the_readme_model_builds_its_layers_wired_together():
-    built = network(TOKENS["the README's model"])
-    kinds: list[type] = [type(layer) for layer in built.layers]
-    assert kinds == [
-        PatchesArrayLayer,
-        TokenDenseArrayLayer,
-        PositionArrayLayer,
-        ForkArrayLayer,
-        LayerNormArrayLayer,
-        AttentionArrayLayer,
-        AddArrayLayer,
-        ForkArrayLayer,
-        LayerNormArrayLayer,
-        TokenDenseArrayLayer,
-        TokenDenseArrayLayer,
-        AddArrayLayer,
-        TokenMeanArrayLayer,
-        LayerNormArrayLayer,
-        type(built.layers[-1]),
-    ]
-    patches, embed, position, fork, norm, attention, add = built.layers[:7]
-    assert fork.body_first is norm and fork.add is add
-    assert (patches.size, embed.W.shape, position.P.shape) == (16, (6, 4), (4, 6))
-    assert (norm.tokens, norm.features, attention.tokens, attention.features) == (4, 6, 4, 6)
-    final = built.layers[13]
-    assert (final.tokens, final.features) == (1, 6)
-    # per layer: patches 0, W and b, P, fork 0, gamma and beta, attention's 8, add 0, ...
-    assert [len(entry) for entry in built.snapshot()] == [0, 2, 1, 0, 2, 8, 0, 0, 2, 2, 2, 0, 0, 2, 2]
 
 
 def test_randomize_draws_attentions_projections_in_order_and_nothing_for_the_parameter_free_layers():
@@ -266,22 +220,6 @@ def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradi
     assert [np.asarray(g).tobytes() for i in outside for g in blocked_gradients[i]] == [
         np.asarray(g).tobytes() for layer in plain_gradients for g in layer
     ]
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("name", ["the README's model", "token-wise layers after a block"])
-def test_learn_and_a_learn_batch_of_one_example_agree(name: str, rule: UpdateRule):
-    single, batched = network(TOKENS[name], rule), network(TOKENS[name], rule)
-    for state, label in rows(6, seed=4):
-        single.learn(0.5, state, label)
-        batched.learn_batch(0.5, [(state, label)])
-
-    # the token layers' single-example passes are their batch passes on a batch of one, but a flat
-    # dense layer's W @ x and X @ W.T are different BLAS calls, which can differ in the last bit
-    # (test_residual_array_network)
-    for one, other in zip(single.snapshot(), batched.snapshot(), strict=True):
-        for a, b in zip(one, other, strict=True):
-            assert a == pytest.approx(b, rel=1e-12, abs=1e-15)
 
 
 def test_on_mnist_the_readmes_patch_model_learns():

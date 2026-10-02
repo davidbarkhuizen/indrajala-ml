@@ -18,6 +18,13 @@ def backend(request: pytest.FixtureRequest) -> ArrayBackend[Any]:
     return request.param
 
 
+@pytest.fixture(params=["numpy", "rust", "python"])
+def implementation(request: pytest.FixtureRequest) -> str:
+    # a test taking `implementation` runs once per array backend and once on the pure-Python
+    # networks, as test_x[numpy], test_x[rust] and test_x[python] (helpers.randomized builds them)
+    return request.param
+
+
 @pytest.fixture
 def layer_cls(request: pytest.FixtureRequest, backend: ArrayBackend[Any]) -> Any:
     # the test module's LAYER_CLS ({backend name: layer class}) class for backend

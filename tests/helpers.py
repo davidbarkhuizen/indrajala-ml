@@ -32,14 +32,18 @@ from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.python_optimizer import PythonOptimizer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.pcg64 import default_rng
 
 # conftest's `backend` fixture: either array backend, NUMPY or RUST
 Backend = ArrayBackend[Any]
+# conftest's `implementation` fixture: an array backend's name, or "python" for the pure-Python networks
+Implementation = Literal["numpy", "rust", "python"]
 # a backend's array constructor on nested lists: np.array (numpy) or pa.Array (Rust)
 Wrap = Callable[[Any], Any]
 
@@ -135,6 +139,26 @@ def bits(value: Any) -> Any:
     if isinstance(value, float):
         return value.hex()
     return value
+
+
+def randomized(
+    implementation: Implementation,
+    input_shape: InputShape,
+    specs: list[LayerSpec],
+    rule: UpdateRule | None = None,
+    seed: int = 3,
+) -> Any:
+    """A multiclass network of specs on implementation, randomized from seed."""
+    rule = SGD() if rule is None else rule
+    if implementation == "python":
+        built: Any = SequentialMultiClassBackpropClassifierNetwork(input_shape, specs, rule)
+        built.rng = default_rng(seed)
+    else:
+        backend = NUMPY if implementation == "numpy" else RUST
+        built = SequentialArrayNetwork(input_shape, specs, rule, backend=backend)
+        built.rng = backend.default_rng(seed)
+    built.randomize()
+    return built
 
 
 def split[StateT](batch: Sequence[tuple[StateT, int]]) -> tuple[list[StateT], list[int]]:
