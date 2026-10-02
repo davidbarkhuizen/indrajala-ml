@@ -15,7 +15,7 @@ from typing import Any
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_parameters import AttentionProjections
-from indrajala_ml.model.hidden_layers import Hidden
+from indrajala_ml.model.specs.hidden_layers import Hidden
 
 
 class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):

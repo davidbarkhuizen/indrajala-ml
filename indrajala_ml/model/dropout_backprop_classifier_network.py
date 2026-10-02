@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.layer_specs import Dense
+from indrajala_ml.model.specs.layer_specs import Dense
 
 
 class DropoutBackpropClassifierNetwork(BackpropClassifierNetwork):

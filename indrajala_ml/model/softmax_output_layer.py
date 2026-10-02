@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_node import BackpropNode
-from indrajala_ml.model.layer_protocols import InputLayer
+from indrajala_ml.model.protocols.layer_protocols import InputLayer
 
 
 class SoftmaxOutputNode(BackpropNode):

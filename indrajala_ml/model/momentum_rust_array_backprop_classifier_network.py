@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
-from indrajala_ml.model.update_rules import Momentum
+from indrajala_ml.model.specs.update_rules import Momentum
 
 
 class MomentumRustArrayBackpropClassifierNetwork(RustArrayBackpropClassifierNetwork):

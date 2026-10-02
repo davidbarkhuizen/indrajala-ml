@@ -3,7 +3,6 @@ import random
 from pathlib import Path
 
 from indrajala_ml.model.backprop_node import BackpropNode
-from indrajala_ml.model.classifier_protocols import State
 from indrajala_ml.model.conv_kernel import ConvKernel
 from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import (
@@ -13,7 +12,8 @@ from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
     MomentumConvMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import Momentum
+from indrajala_ml.model.protocols.classifier_protocols import State
+from indrajala_ml.model.specs.update_rules import Momentum
 from tests.helpers import assert_save_and_load_round_trip
 
 # pooling (overlapping), stride, a multi-channel second conv layer and two dense layers

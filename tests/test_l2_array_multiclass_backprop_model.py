@@ -4,8 +4,8 @@ from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network imp
 from indrajala_ml.model.l2_vectorized_multiclass_backprop_classifier_network import (
     L2VectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
-from indrajala_ml.model.update_rules import UpdateRule, WeightDecay
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import UpdateRule, WeightDecay
 from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_tests
 
 

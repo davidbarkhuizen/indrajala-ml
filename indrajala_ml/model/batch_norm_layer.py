@@ -21,9 +21,9 @@ from typing import Any, ClassVar, Literal
 
 from indrajala_ml.model.backprop_node import sigmoid
 from indrajala_ml.model.base_node import AbstractNode
-from indrajala_ml.model.layer_protocols import InputLayer
-from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
+from indrajala_ml.model.protocols.layer_protocols import InputLayer
 from indrajala_ml.model.relu_layer import relu_activation
+from indrajala_ml.model.specs.single_example import ghost_groups, refuse_single_example
 from indrajala_ml.pcg64 import Pcg64Generator
 
 
@@ -154,7 +154,7 @@ class BatchNormLayer:
     size // positions channels, channel-major, each with its BatchNormNode in channels, and the
     layer's nodes are BatchNormPositions. After a dense layer, the nodes are the channels.
 
-    With a group_size, a training batch's ghost groups (layer_specs.ghost_groups, D6) are each
+    With a group_size, a training batch's ghost groups (single_example.ghost_groups, D6) are each
     normalized as a batch of their own, and move the running averages in turn; the gradients of
     gamma and beta still sum over the whole batch.
     """

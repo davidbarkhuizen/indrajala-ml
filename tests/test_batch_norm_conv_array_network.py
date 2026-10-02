@@ -17,9 +17,9 @@ from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
-from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from tests.test_batch_norm_array_network import EPSILON, RATE, SOFTMAX, _Next, _reference
 
 # 3 examples of 2 channels at 4 positions, channel-major: channel c at position p is X[n, 4c + p]

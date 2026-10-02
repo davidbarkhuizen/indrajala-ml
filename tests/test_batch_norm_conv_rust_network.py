@@ -17,9 +17,9 @@ from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.conv_array_layer import LinearConvArrayLayer
 from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer, LinearConvRustArrayLayer
-from indrajala_ml.model.layer_specs import Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import Momentum, UpdateRule
+from indrajala_ml.model.specs.layer_specs import Conv, Dense, LayerSpec, Pool
+from indrajala_ml.model.specs.update_rules import Momentum, UpdateRule
 from indrajala_ml.train import train_backprop_network_mini_batch
 from tests.helpers import bits, max_relative_gap, to_numpy
 from tests.test_batch_norm_array_network import EPSILON, RATE, RULES, SOFTMAX

@@ -83,7 +83,6 @@ from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNet
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
     BinaryCrossEntropyBackpropClassifierNetwork,
 )
-from indrajala_ml.model.classifier_protocols import Example
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
@@ -135,9 +134,11 @@ from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_networ
 from indrajala_ml.model.dropout_vectorized_multiclass_backprop_classifier_network import (
     DropoutVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.ensemble_array_backprop_classifier_network import EnsembleArrayBackpropClassifierNetwork
-from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
-from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
+from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
+    EnsembleArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
+from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_network import (
     EnsembleRustArrayBackpropClassifierNetwork,
 )
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
@@ -161,17 +162,6 @@ from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network imp
 )
 from indrajala_ml.model.l2_vectorized_multiclass_backprop_classifier_network import (
     L2VectorizedMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.layer_specs import (
-    Attention,
-    Dense,
-    InputShape,
-    LayerNorm,
-    LayerSpec,
-    Patches,
-    Position,
-    Residual,
-    TokenMean,
 )
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.momentum_array_backprop_classifier_network import MomentumArrayBackpropClassifierNetwork
@@ -198,6 +188,7 @@ from indrajala_ml.model.momentum_vectorized_multiclass_backprop_classifier_netwo
     MomentumVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
+from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.relu_array_backprop_classifier_network import ReLUArrayBackpropClassifierNetwork
 from indrajala_ml.model.relu_backprop_classifier_network import ReLUBackpropClassifierNetwork
 from indrajala_ml.model.relu_conv_multiclass_backprop_classifier_network import (
@@ -241,7 +232,18 @@ from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_networ
 from indrajala_ml.model.softmax_vectorized_multiclass_backprop_classifier_network import (
     SoftmaxVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import Adam, Momentum, UpdateRule
+from indrajala_ml.model.specs.layer_specs import (
+    Attention,
+    Dense,
+    LayerNorm,
+    LayerSpec,
+    Patches,
+    Position,
+    Residual,
+    TokenMean,
+)
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )

@@ -15,13 +15,14 @@ from typing import Any
 import pytest
 
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.layer_specs import Conv, Dense, InputShape, LayerSpec, Pool
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import SGD
+from indrajala_ml.model.specs.layer_specs import Conv, Dense, LayerSpec, Pool
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import SGD
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import GradientMismatch, check_gradients, squared_loss
 

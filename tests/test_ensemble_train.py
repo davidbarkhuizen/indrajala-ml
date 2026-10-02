@@ -18,8 +18,10 @@ from indrajala_ml.ensemble_train import (
 )
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
-from indrajala_ml.model.ensemble_array_backprop_classifier_network import EnsembleArrayBackpropClassifierNetwork
-from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
+from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
+    EnsembleArrayBackpropClassifierNetwork,
+)
+from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_network import (
     EnsembleRustArrayBackpropClassifierNetwork,
 )
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork

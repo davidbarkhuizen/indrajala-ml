@@ -1,9 +1,9 @@
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.python_optimizer import PythonOptimizer
+from indrajala_ml.model.optimizers.python_optimizer import PythonOptimizer
+from indrajala_ml.model.specs.update_rules import SGD
 from indrajala_ml.model.state_layer import StateLayer
-from indrajala_ml.model.update_rules import SGD
 from tests.helpers import LayerOptimizer, approx
 
 

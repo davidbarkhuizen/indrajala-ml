@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 
 from indrajala_ml import batch_size_scaling as bss
-from indrajala_ml.model.classifier_protocols import Example
-from indrajala_ml.model.layer_specs import Attention, Residual, validate_layer_specs
+from indrajala_ml.model.protocols.classifier_protocols import Example
+from indrajala_ml.model.specs.layer_specs import Attention, Residual
+from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import patch_attention_study as study  # scripts/ isn't a package

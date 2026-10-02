@@ -88,7 +88,6 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.lr_schedule import linear_warmup
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.classifier_protocols import BatchTrainableClassifier, Example
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -96,7 +95,6 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
     MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -109,11 +107,13 @@ from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_netwo
 from indrajala_ml.model.momentum_vectorized_multiclass_backprop_classifier_network import (
     MomentumVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.protocols.classifier_protocols import BatchTrainableClassifier, Example
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import SGD, Momentum, UpdateRule
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, Momentum, UpdateRule
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )

@@ -17,10 +17,10 @@ import pytest
 from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.array_layer import FloatArray, sigmoid
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.train import _chunk_into_batches, train_backprop_network_mini_batch
 
 EPSILON = 1e-5

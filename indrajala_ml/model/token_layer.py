@@ -21,7 +21,7 @@ from typing import ClassVar, Literal
 from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.batch_norm_layer import fold
 from indrajala_ml.model.fan_in_aware_init import fan_in_aware_weights_and_bias
-from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.relu_layer import relu_activation, relu_delta
 from indrajala_ml.model.residual_layer import ParameterFreeLayer, PassNode
 from indrajala_ml.pcg64 import Pcg64Generator

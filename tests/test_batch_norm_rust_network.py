@@ -17,11 +17,11 @@ from indrajala_ml.model import batch_norm_array_layer
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
-from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.specs.layer_specs import Dense
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.train import train_backprop_network_mini_batch
 from tests.helpers import bits, exp_by_crate, max_relative_gap, patching, sigmoid_by, to_numpy
 from tests.test_batch_norm_array_network import EPSILON, INPUT, NETWORKS, RATE, RULES, _network, _rows

@@ -44,7 +44,6 @@ from indrajala_ml.model.l2_regularized_conv_multiclass_backprop_classifier_netwo
 from indrajala_ml.model.l2_regularized_multiclass_backprop_classifier_network import (
     L2RegularizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import Conv, Dense, InputShape, LayerSpec, Pool
 from indrajala_ml.model.momentum_backprop_classifier_network import MomentumBackpropClassifierNetwork
 from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
     MomentumConvMultiClassBackpropClassifierNetwork,
@@ -68,7 +67,9 @@ from indrajala_ml.model.softmax_conv_multiclass_backprop_classifier_network impo
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.specs.layer_specs import Conv, Dense, LayerSpec, Pool
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 
 DIMENSION = 6

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.array_network_shapes import ArrayMultiClassShape
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
+from indrajala_ml.model.specs.array_network_shapes import ArrayMultiClassShape
 
 
 class RustArrayMultiClassBackpropClassifierNetwork(ArrayMultiClassShape[pa.Array], RustArrayNetworkBase):

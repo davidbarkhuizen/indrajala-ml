@@ -16,7 +16,7 @@ import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray, sigmoid
 from indrajala_ml.model.array_parameters import GammaAndBeta, RunningAverages
-from indrajala_ml.model.layer_specs import ghost_groups, refuse_single_example
+from indrajala_ml.model.specs.single_example import ghost_groups, refuse_single_example
 
 # a group's (m, d, var, std): its value count per feature, and what the backward pass reads
 GroupStats = tuple[int, FloatArray, FloatArray, FloatArray]
@@ -42,7 +42,7 @@ class BatchNormArrayLayer(GammaAndBeta[FloatArray], RunningAverages[FloatArray])
     computed on the (N * positions, channels) view, whose rows are the README's order: example by
     example, then position by position. The activations and deltas stay channel-major.
 
-    With a group_size, a training batch's ghost groups (layer_specs.ghost_groups, D6) are each
+    With a group_size, a training batch's ghost groups (single_example.ghost_groups, D6) are each
     normalized as a batch of their own, and move the running averages in turn; the gradients of
     gamma and beta still sum over the whole batch.
     """

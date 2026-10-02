@@ -3,7 +3,7 @@ Patch models and flat layer norms on Rust (the layer-norm and attention workplan
 Layer norm and attention): randomize's draws against numpy's by bits, the exact tests (one token,
 uniform attention, an identity attention block), the layer before a LayerNorm taking its downstream
 through a mask op (D5), and parity with numpy: after 50 steps under the rules whose step is linear
-in the gradient, and per step under Adam. The cases are tests/test_layer_specs.py's; the gradient
+in the gradient, and per step under Adam. The cases are tests/model/specs/test_layer_specs.py's; the gradient
 check, wiring and learn against a batch of one are tests/test_attention_network.py's (patch models)
 and tests/test_layer_norm_network.py's (flat layer norms).
 """
@@ -22,17 +22,17 @@ from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.attention_rust_array_layer import AttentionRustArrayLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerNorm, LayerSpec, Residual, TokenMean
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerNorm, LayerSpec, Residual, TokenMean
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.model.token_rust_array_layer import (
     TokenMeanRustArrayLayer,
 )
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, exp_by_crate, patching, split, to_numpy
-from tests.test_layer_specs import (
+from tests.model.specs.test_layer_specs import (
     AFFINE_5,
     ATTENTION_BLOCK,
     EMBED,

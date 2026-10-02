@@ -1,7 +1,7 @@
 """
 `layer_adam_apply_accumulated_gradient` is one fused Rust call for the whole Adam (Kingma & Ba,
 2014) update rule per parameter, checked
-against the numpy optimizer's Adam rule (`indrajala_ml.model.optimizers.NumpyOptimizer`) - the
+against the numpy optimizer's Adam rule (`indrajala_ml.model.optimizers.numpy_optimizer.NumpyOptimizer`) - the
 production reference this function matches - the same treatment `test_fused_layer_ops.py` gives every non-Adam fused
 op.
 """
@@ -13,7 +13,7 @@ import pytest
 from indrajala_math_rust import Array, layer_adam_apply_accumulated_gradient
 
 from indrajala_ml.model.array_layer import ArrayLayer
-from indrajala_ml.model.update_rules import Adam
+from indrajala_ml.model.specs.update_rules import Adam
 from tests.helpers import LayerOptimizer, approx, random_matrix, random_vector, rust_to_numpy
 
 SEEDS = range(30)

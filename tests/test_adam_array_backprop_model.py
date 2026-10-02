@@ -1,7 +1,7 @@
 from indrajala_ml.model.adam_array_backprop_classifier_network import AdamArrayBackpropClassifierNetwork
 from indrajala_ml.model.adam_rust_array_backprop_classifier_network import AdamRustArrayBackpropClassifierNetwork
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
-from indrajala_ml.model.update_rules import Adam, UpdateRule
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import Adam, UpdateRule
 from tests.array_network_contract import ArrayNetworkSpec, single_output_network_tests
 
 

@@ -16,13 +16,14 @@ import pytest
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.layer_specs import LayerSpec, batch_norm_index
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
+from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.single_example import batch_norm_index
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import check_gradients
 from tests.helpers import Implementation, bits, randomized, split
+from tests.model.specs.test_layer_specs import FLAT_LAYER_NORM, _input_shape  # pyright: ignore[reportPrivateUsage]
 from tests.test_layer_norm_array_network import rows
-from tests.test_layer_specs import FLAT_LAYER_NORM, _input_shape  # pyright: ignore[reportPrivateUsage]
 
 
 def network(implementation: Implementation, specs: list[LayerSpec], rule: UpdateRule | None = None) -> Any:

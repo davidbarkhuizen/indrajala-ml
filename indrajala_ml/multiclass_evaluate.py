@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from indrajala_ml.model.classifier_protocols import Example, StateClassifier
+from indrajala_ml.model.protocols.classifier_protocols import Example, StateClassifier
 
 
 def confusion_matrix(

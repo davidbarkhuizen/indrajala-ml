@@ -13,9 +13,9 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from tests.helpers import max_relative_gap, to_numpy
 from tests.test_residual_array_network import INPUT, NETWORKS, Shape, network, output, rows
 

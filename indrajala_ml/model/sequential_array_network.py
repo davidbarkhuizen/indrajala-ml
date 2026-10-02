@@ -22,14 +22,15 @@ import indrajala_math_rust as pa
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
 from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.array_network_shapes import SequentialMultiClassShape, SequentialSingleOutputShape
-from indrajala_ml.model.array_protocols import ArrayBackend
-from indrajala_ml.model.layer_specs import InputShape, LayerSpec
+from indrajala_ml.model.protocols.array_protocols import ArrayBackend
 from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import UpdateRule
+from indrajala_ml.model.specs.array_network_shapes import SequentialMultiClassShape, SequentialSingleOutputShape
+from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import UpdateRule
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )

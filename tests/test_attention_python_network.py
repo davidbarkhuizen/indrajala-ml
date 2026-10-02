@@ -19,20 +19,21 @@ from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.attention_layer import AttentionLayer
 from indrajala_ml.model.batch_norm_layer import BatchNormLayer, fold
 from indrajala_ml.model.layer_norm_layer import LayerNormLayer
-from indrajala_ml.model.layer_specs import InputShape, LayerNorm, LayerSpec, Position, TokenMean
 from indrajala_ml.model.linear_layer import LinearLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.specs.layer_specs import LayerNorm, LayerSpec, Position, TokenMean
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.token_array_layer import PatchesArrayLayer, PositionArrayLayer, TokenMeanArrayLayer
 from indrajala_ml.model.token_layer import PatchesLayer, PositionLayer, TokenMeanLayer
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, split
+from tests.model.specs.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX, TOKENS
 from tests.test_attention_array_network import IMAGE, rows
 from tests.test_batch_norm_python_network import _as_array_snapshot
-from tests.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX, TOKENS
 
 
 def network(specs: list[LayerSpec], rule: UpdateRule | None = None, seed: int = 3, image: InputShape = IMAGE) -> Any:

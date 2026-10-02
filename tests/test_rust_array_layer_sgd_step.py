@@ -41,7 +41,7 @@ from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_
 from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_network import (
     MomentumRustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.optimizers import RustOptimizer
+from indrajala_ml.model.optimizers.rust_optimizer import RustOptimizer
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.relu_rust_array_multiclass_backprop_classifier_network import (
     ReLURustArrayMultiClassBackpropClassifierNetwork,
@@ -55,7 +55,7 @@ from indrajala_ml.model.softmax_rust_array_layer import SoftmaxRustArrayLayer
 from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_network import (
     SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from tests.helpers import all_subclasses, bits, model_modules
 
 SIZE, INPUT_SIZE = 7, 11

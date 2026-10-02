@@ -19,10 +19,10 @@ from indrajala_ml.model import attention_array_layer
 from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.attention_array_layer import AttentionArrayLayer
-from indrajala_ml.model.layer_specs import (
+from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,
-    InputShape,
     LayerNorm,
     LayerSpec,
     Patches,
@@ -30,16 +30,16 @@ from indrajala_ml.model.layer_specs import (
     Residual,
     TokenMean,
 )
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import SGD, Adam, UpdateRule
 from indrajala_ml.model.token_array_layer import (
     PatchesArrayLayer,
     PositionArrayLayer,
     TokenMeanArrayLayer,
 )
-from indrajala_ml.model.update_rules import SGD, Adam, UpdateRule
 from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, exp_by_math, patching, split
-from tests.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX
+from tests.model.specs.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX
 
 # test_layer_specs' patch models read a (4, 4, 1) image: Patches(2) gives 4 tokens of 4
 IMAGE: InputShape = (4, 4, 1)

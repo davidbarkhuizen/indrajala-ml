@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from typing import Any, ClassVar
 
 from indrajala_ml.model.batch_norm_layer import GammaAsWeights, fold
-from indrajala_ml.model.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.residual_layer import ParameterFreeLayer, PassNode
 from indrajala_ml.model.token_layer import token_values
 

@@ -7,7 +7,7 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.max_pool_layer import PoolSpec
-from indrajala_ml.model.update_rules import WeightDecay
+from indrajala_ml.model.specs.update_rules import WeightDecay
 
 
 class L2ConvRustArrayMultiClassBackpropClassifierNetwork(ConvRustArrayMultiClassBackpropClassifierNetwork):

@@ -13,9 +13,9 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerSpec, Residual
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec, Residual
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from tests.gradient_check import analytic_gradients
 from tests.helpers import bits
 

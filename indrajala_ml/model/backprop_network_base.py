@@ -5,23 +5,22 @@ from collections.abc import Sequence
 from typing import Any, ClassVar, Self, cast
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.bounds import validate_batch, validate_input_bounds
-from indrajala_ml.model.format2 import PYTHON
-from indrajala_ml.model.format2_persistence import Format2Persistence
 from indrajala_ml.model.layer_major import LayerMajorBatch
-from indrajala_ml.model.layer_protocols import GeneratorLayer, TrainableLayer
-from indrajala_ml.model.layer_specs import (
-    Dense,
-    InputShape,
-    LayerSpec,
+from indrajala_ml.model.optimizers.python_optimizer import PythonOptimizer, WeightSetState
+from indrajala_ml.model.persistence.format2 import PYTHON
+from indrajala_ml.model.persistence.format2_persistence import Format2Persistence
+from indrajala_ml.model.protocols.layer_protocols import GeneratorLayer, TrainableLayer
+from indrajala_ml.model.python_layer_builder import build_python_layers
+from indrajala_ml.model.specs.bounds import validate_batch, validate_input_bounds
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.single_example import (
     batch_norm_index,
     refuse_single_example_groups,
     refuse_single_example_network,
 )
-from indrajala_ml.model.python_layer_builder import build_python_layers
-from indrajala_ml.model.python_optimizer import PythonOptimizer, WeightSetState
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from indrajala_ml.model.state_layer import StateLayer
-from indrajala_ml.model.update_rules import SGD, UpdateRule
 from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
 

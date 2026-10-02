@@ -19,12 +19,12 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
-from indrajala_ml.model.update_rules import SGD
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD
 from indrajala_ml.multiclass_evaluate import accuracy
 from indrajala_ml.train import train_linear_classifier_network
 from tests.array_network_contract import SEQUENTIAL_CLS, assert_sequential_matches_preset

@@ -1,6 +1,6 @@
 # Workplan: the source layout
 
-**Status: decisions settled (D1-D5); stages 0-1 done. Before stage 2, pytest collects 9768 tests.**
+**Status: decisions settled (D1-D5); stages 0-2 done. Before stage 3, pytest collects 9768 tests.**
 
 `indrajala_ml/` has grown flat. `indrajala_ml/model/` holds 190 modules in one directory: 61
 one-change presets, 50-odd layers across three implementations, the network bases, optimizers,
@@ -131,6 +131,12 @@ needn't read the other). One long class is not split. Proposed:
 A split module's test file splits along the same seams where it has matching sections
 (`test_layer_specs.py`, `test_format2.py`, `test_machine_profile.py`, `test_chart.py`); the new
 test files take the new modules' names.
+
+Done in stage 2: `format2_json`'s codecs that `format2` calls lost their leading underscore
+(`lists`, `input_to_json`, `optimizer_state_to_json`, `rng_to_json` and their readers), the one
+rename a split needs. `test_format2.py`'s two layer-entry tests became `test_format2_json.py`.
+`test_layer_specs.py` stays whole: its sections are by feature (batch norm, residual blocks, patch
+models), each mixing validation, the shape walk and the builders, so none matches one new module.
 
 Not split: `array_network_base.py` (330, one class), `batch_norm_layer.py` (307, one layer's
 nodes and layer), `demos/registry.py` (321, one table), `demos/demo_layer_op_timing.py` (338, one

@@ -19,10 +19,11 @@ from indrajala_ml.model.base_node import AbstractNode
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer, sum_rows
 from indrajala_ml.model.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
-from indrajala_ml.model.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool, ghost_groups
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
-from indrajala_ml.model.update_rules import SGD, Adam
+from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
+from indrajala_ml.model.specs.single_example import ghost_groups
+from indrajala_ml.model.specs.update_rules import SGD, Adam
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients

@@ -7,8 +7,8 @@ from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network i
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.layer_specs import Dense
 from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.specs.layer_specs import Dense
 
 
 class DropoutConvRustArrayMultiClassBackpropClassifierNetwork(ConvRustArrayMultiClassBackpropClassifierNetwork):

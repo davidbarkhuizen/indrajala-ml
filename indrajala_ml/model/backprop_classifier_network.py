@@ -5,9 +5,9 @@ from typing import ClassVar
 
 from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, as_dense_layers
-from indrajala_ml.model.bounds import half_widths as _half_widths
-from indrajala_ml.model.bounds import validate_layer_sizes
-from indrajala_ml.model.layer_protocols import TrainableLayer
+from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
+from indrajala_ml.model.specs.bounds import half_widths as _half_widths
+from indrajala_ml.model.specs.bounds import validate_layer_sizes
 
 
 class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](BackpropNetworkBase[LayerT]):

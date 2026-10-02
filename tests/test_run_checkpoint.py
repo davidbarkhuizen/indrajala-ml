@@ -19,12 +19,12 @@ import pytest
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.lr_schedule import linear_warmup
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
-from indrajala_ml.model.layer_specs import Dense, LayerNorm, LayerSpec, Residual
-from indrajala_ml.model.load_network import load_network
+from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
+from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialBackpropClassifierNetwork
-from indrajala_ml.model.update_rules import Adam
+from indrajala_ml.model.specs.layer_specs import Dense, LayerNorm, LayerSpec, Residual
+from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.pcg64 import default_rng, generator_state
 from indrajala_ml.run_checkpoint import load_run, run_from_json, run_to_json, save_run
 from indrajala_ml.train import (
@@ -46,7 +46,7 @@ RESIDUAL_LAYERS: list[LayerSpec] = [
     Dense(1, output=True),
 ]
 # flat layer norms after a dropout layer and first in a residual body (the layer-norm and attention
-# workplan, stage 5); a patch model's checkpoints are in tests/test_attention_format2.py, as its
+# workplan, stage 5); a patch model's checkpoints are in tests/model/persistence/test_attention_format2.py, as its
 # input is an image
 LAYER_NORM_LAYERS: list[LayerSpec] = [
     Dense(5, dropout=0.25),

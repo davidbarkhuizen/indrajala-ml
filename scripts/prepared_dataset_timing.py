@@ -66,7 +66,7 @@ from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_c
 
 # types only: with an old checkout first on PYTHONPATH (see AFTER) the script imports nothing new
 if TYPE_CHECKING:
-    from indrajala_ml.model.classifier_protocols import Example
+    from indrajala_ml.model.protocols.classifier_protocols import Example
     from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
         RustArrayMultiClassBackpropClassifierNetwork,
     )

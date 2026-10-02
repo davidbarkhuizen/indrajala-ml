@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
-from indrajala_ml.model.layer_specs import Dense
+from indrajala_ml.model.specs.layer_specs import Dense
 
 
 class ReLUConvMultiClassBackpropClassifierNetwork(ConvMultiClassBackpropClassifierNetwork):

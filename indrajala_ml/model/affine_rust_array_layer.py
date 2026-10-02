@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden
 
 
 class AffineRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], RustArrayLayer):

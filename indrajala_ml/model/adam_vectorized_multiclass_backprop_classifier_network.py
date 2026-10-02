@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from indrajala_ml.model.update_rules import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON, Adam
+from indrajala_ml.model.specs.update_rules import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON, Adam
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )

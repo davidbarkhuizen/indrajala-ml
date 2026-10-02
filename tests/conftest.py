@@ -4,7 +4,7 @@ from typing import Any, cast
 import pytest
 
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.array_protocols import ArrayBackend
+from indrajala_ml.model.protocols.array_protocols import ArrayBackend
 
 
 def _backend_id(backend: ArrayBackend[Any]) -> str:

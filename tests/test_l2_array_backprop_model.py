@@ -1,7 +1,7 @@
 from indrajala_ml.model.l2_array_backprop_classifier_network import L2ArrayBackpropClassifierNetwork
 from indrajala_ml.model.l2_rust_array_backprop_classifier_network import L2RustArrayBackpropClassifierNetwork
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
-from indrajala_ml.model.update_rules import UpdateRule, WeightDecay
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import UpdateRule, WeightDecay
 from tests.array_network_contract import ArrayNetworkSpec, single_output_network_tests
 
 

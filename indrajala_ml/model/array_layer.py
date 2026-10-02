@@ -43,7 +43,7 @@ class ArrayLayer(WeightAndBias[FloatArray]):
     """
     One sigmoid layer's weights and activations as arrays, not `size` BackpropNodes, with
     single-example (forward, delta, ...) and batch (forward_batch, delta_batch, ...) methods.
-    The network's optimizer (optimizers.py) steps W and b from the accumulated gradients.
+    The network's optimizer (optimizers/) steps W and b from the accumulated gradients.
     """
 
     def __init__(self, size: int, input_size: int) -> None:

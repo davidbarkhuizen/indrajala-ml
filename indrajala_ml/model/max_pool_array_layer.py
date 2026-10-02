@@ -5,8 +5,8 @@ import numpy.typing as npt
 from numpy.lib.stride_tricks import sliding_window_view
 
 from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
-from indrajala_ml.model.window_geometry import output_size, pool_stride, validate_pool_arguments
+from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
+from indrajala_ml.model.specs.window_geometry import output_size, pool_stride, validate_pool_arguments
 
 # each window's winning slot index, as np.argmax returns it
 IndexArray = npt.NDArray[np.intp]

@@ -1,11 +1,11 @@
-from indrajala_ml.model.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.relu_conv_rust_array_multiclass_backprop_classifier_network import (
     ReLUConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.relu_conv_vectorized_multiclass_backprop_classifier_network import (
     ReLUConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from tests.array_network_contract import ArrayNetworkSpec, conv_network_tests
 
 

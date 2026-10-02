@@ -15,11 +15,11 @@ import pytest
 
 from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
-from indrajala_ml.model.layer_specs import LayerSpec
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import SGD, UpdateRule
+from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from tests.helpers import bits
-from tests.test_layer_specs import _input_shape  # pyright: ignore[reportPrivateUsage]
+from tests.model.specs.test_layer_specs import _input_shape  # pyright: ignore[reportPrivateUsage]
 
 
 def network(specs: list[LayerSpec], rule: UpdateRule | None = None) -> Any:

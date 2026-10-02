@@ -11,8 +11,8 @@ from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.max_pool_array_layer import MaxPoolArrayLayer
 from indrajala_ml.model.max_pool_layer import MaxPoolLayer
 from indrajala_ml.model.max_pool_rust_array_layer import MaxPoolRustArrayLayer
+from indrajala_ml.model.specs.update_rules import SGD
 from indrajala_ml.model.state_layer import StateLayer
-from indrajala_ml.model.update_rules import SGD
 from tests.helpers import Backend, approx, fixed_downstream, to_numpy
 
 LayerCls = type[MaxPoolArrayLayer] | type[MaxPoolRustArrayLayer]

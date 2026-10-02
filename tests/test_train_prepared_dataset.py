@@ -15,7 +15,7 @@ import pytest
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.classifier_protocols import Example, State
+from indrajala_ml.model.protocols.classifier_protocols import Example, State
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )

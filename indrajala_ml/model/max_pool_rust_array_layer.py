@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
-from indrajala_ml.model.window_geometry import pool_stride, validate_pool_arguments
+from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
+from indrajala_ml.model.specs.window_geometry import pool_stride, validate_pool_arguments
 
 
 class MaxPoolRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):

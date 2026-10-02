@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.array_layer import sigmoid
-from indrajala_ml.model.update_rules import SGD, Adam, UpdateRule, WeightDecay
+from indrajala_ml.model.specs.update_rules import SGD, Adam, UpdateRule, WeightDecay
 from tests.gradient_check import check_gradients
 from tests.helpers import Backend, bits, to_numpy
 from tests.test_batch_norm_array_network import EPSILON, NETWORKS, RULES, _network, _rows

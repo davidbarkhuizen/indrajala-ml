@@ -134,13 +134,13 @@ Still out of scope:
   the package and 0.16% at 10 lines or more in the tests, the copies left having come in with
   residual connections, layer norm and attention.
 - **Shared homes for the next layer kind.** The conv and pool argument checks and output size are
-  in `model/window_geometry.py`, one shape walk (`layer_specs.spec_shapes`) feeds both builders,
+  in `model/specs/window_geometry.py`, one shape walk (`spec_shapes.spec_shapes`) feeds both builders,
   the optimizers share `OptimizerBase` and `ArrayOptimizerBase`, and a layer's optimizer accessors
   are `WeightAndBias`, `GammaAndBeta` or `AttentionProjections` (`array_parameters.py`). A hidden
   layer takes its output-delta refusals, its downstream-as-delta methods and its no-op gradient
-  accumulation from `model/hidden_layers.py` (`Hidden`, `DeltaIsDownstream`, `ParameterFree`); a
+  accumulation from `model/specs/hidden_layers.py` (`Hidden`, `DeltaIsDownstream`, `ParameterFree`); a
   pure-Python gamma-and-beta row from `GammaAsWeights`; a token shape from
-  `layer_specs.token_shape`. Tests share `bits`, `split`, `max_relative_gap`, `patching` and
+  `spec_shapes.token_shape`. Tests share `bits`, `split`, `max_relative_gap`, `patching` and
   `randomized` (`tests/helpers.py`), and a scenario every implementation runs takes conftest's
   `implementation` fixture (`tests/test_{attention,residual,layer_norm}_network.py`). A new layer
   kind extends these rather than adding a copy.

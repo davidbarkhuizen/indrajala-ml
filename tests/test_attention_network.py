@@ -16,10 +16,12 @@ from indrajala_ml.model.attention_rust_array_layer import AttentionRustArrayLaye
 from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
 from indrajala_ml.model.layer_norm_layer import LayerNormLayer
 from indrajala_ml.model.layer_norm_rust_array_layer import LayerNormRustArrayLayer
-from indrajala_ml.model.layer_specs import LayerSpec, batch_norm_index
 from indrajala_ml.model.residual_array_layer import AddArrayLayer, ForkArrayLayer
 from indrajala_ml.model.residual_layer import AddLayer, ForkLayer
 from indrajala_ml.model.residual_rust_array_layer import AddRustArrayLayer, ForkRustArrayLayer
+from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.single_example import batch_norm_index
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
 from indrajala_ml.model.token_array_layer import (
     PatchesArrayLayer,
     PositionArrayLayer,
@@ -33,11 +35,10 @@ from indrajala_ml.model.token_rust_array_layer import (
     TokenDenseRustArrayLayer,
     TokenMeanRustArrayLayer,
 )
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
 from tests.gradient_check import check_gradients
 from tests.helpers import Implementation, bits, randomized, split
+from tests.model.specs.test_layer_specs import TOKENS
 from tests.test_attention_array_network import IMAGE, rows
-from tests.test_layer_specs import TOKENS
 
 
 def network(implementation: Implementation, specs: list[LayerSpec], rule: UpdateRule | None = None) -> Any:

@@ -46,7 +46,7 @@ from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import (
     _rust_op_name,  # pyright: ignore[reportPrivateUsage]  (the conv demo's op names, shared)
 )
 from indrajala_ml.mnist_data import load_mnist_dataset
-from indrajala_ml.model.classifier_protocols import Example
+from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.train import (
     _training_accuracy,  # pyright: ignore[reportPrivateUsage]  (the trainer's own pass, timed alone)
     train_backprop_network_mini_batch,

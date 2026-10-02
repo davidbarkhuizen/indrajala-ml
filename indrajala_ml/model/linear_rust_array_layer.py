@@ -7,7 +7,7 @@ from typing import Any, ClassVar
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.layer_specs import refuse_single_example
+from indrajala_ml.model.specs.single_example import refuse_single_example
 
 
 class LinearRustArrayLayer:

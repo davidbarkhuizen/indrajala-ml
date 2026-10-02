@@ -1,7 +1,7 @@
 from random import Random
 
 from indrajala_ml.geometry import positive_region_bounding_box
-from indrajala_ml.model.classifier_protocols import StateClassifier, TargetClassifier
+from indrajala_ml.model.protocols.classifier_protocols import StateClassifier, TargetClassifier
 
 
 def sample_class_balanced_states(
