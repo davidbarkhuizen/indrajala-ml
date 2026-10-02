@@ -70,6 +70,7 @@ from indrajala_ml.model.sequential_backprop_network import (
 )
 from indrajala_ml.model.update_rules import Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
+from tests.helpers import bits
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "saved_models"
 
@@ -365,17 +366,6 @@ FIXTURES: dict[str, SavedModelFixture] = {
 def fixture_class(name: str) -> type[Any]:
     """The class whose save() wrote fixture name, and whose load() reads it."""
     return MODEL_CLASSES[FIXTURES[name].class_name or name]
-
-
-def bits(value: Any) -> Any:
-    """value (nested lists, tuples and arrays of floats) as nested lists of float.hex strings."""
-    if hasattr(value, "tolist"):
-        value = value.tolist()
-    if isinstance(value, (list, tuple)):
-        return [bits(item) for item in cast("list[Any] | tuple[Any, ...]", value)]
-    if isinstance(value, float):
-        return float.hex(value)
-    return value
 
 
 def from_bits(value: Any) -> Any:

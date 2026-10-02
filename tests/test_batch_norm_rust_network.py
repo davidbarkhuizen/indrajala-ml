@@ -15,7 +15,6 @@ import pytest
 
 from indrajala_ml.model import batch_norm_array_layer
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.layer_specs import Dense
@@ -24,35 +23,19 @@ from indrajala_ml.model.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.train import train_backprop_network_mini_batch
+from tests.helpers import bits, exp_by_crate, max_relative_gap, patching, sigmoid_by, to_numpy
 from tests.test_batch_norm_array_network import EPSILON, INPUT, NETWORKS, RATE, RULES, _network, _rows
-
-
-def _numpy(values: Any) -> Any:
-    return values if isinstance(values, np.ndarray) else np.array(values.tolist())  # pyright: ignore[reportUnknownVariableType]
 
 
 def _rust(values: Any) -> pa.Array:
     return pa.Array(np.asarray(values).tolist())
 
 
-def _bits(values: Any) -> list[bytes]:
-    # by bits, so -0.0 and 0.0 differ
-    return [_numpy(array).tobytes() for entry in values for array in entry]
-
-
 # the layers
 
 
-@pytest.fixture
-def crate_exp(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The numpy layer's sigmoid with the crate's exp. exp isn't correctly rounded: np.exp picks
-    its implementation by CPU, and can differ from Rust's f64::exp in the last bit, which every
-    later value then carries. Everything but exp is compared by bits."""
-
-    def sigmoid_with_crate_exp(z: FloatArray) -> FloatArray:
-        return 1.0 / (1.0 + _numpy(pa.exp(_rust(-z))))
-
-    monkeypatch.setattr(batch_norm_array_layer, "sigmoid", sigmoid_with_crate_exp)
+# the numpy layer's sigmoid with the crate's exp
+crate_exp = patching(batch_norm_array_layer, "sigmoid", sigmoid_by(exp_by_crate))
 
 
 class _Next:
@@ -66,7 +49,7 @@ class _Next:
 
     def downstream_batch(self) -> Any:
         downstream = pa.layer_downstream_batch(self.W, self.delta_batch)
-        return downstream if self.rust else _numpy(downstream)
+        return downstream if self.rust else to_numpy(downstream)
 
     @staticmethod
     def fixed(downstream: pa.Array) -> Any:
@@ -102,12 +85,12 @@ def test_the_layer_is_numpys_by_bits(activation: Any, batch_size: int):
         dx = layer.downstream_batch()
         layer.accumulate_gradient_batch(inputs)
         values.append([activations, dx, layer.grad_gamma, layer.grad_beta, layer.running_mean, layer.running_var])
-    assert _bits([values[1]]) == _bits([values[0]])
+    assert bits(values[1]) == bits(values[0])
 
     # the deltas agree in value, but not in the sign of a ReLU's zero: numpy's is the downstream
     # times 0.0, -0.0 where the downstream is negative, and the crate's is 0.0, as between
     # ReLUArrayLayer and ReLURustArrayLayer. Neither changes a sum that has a nonzero term
-    np.testing.assert_array_equal(_numpy(rust.delta_batch), array.delta_batch)
+    np.testing.assert_array_equal(to_numpy(rust.delta_batch), array.delta_batch)
 
 
 @pytest.mark.usefixtures("crate_exp")
@@ -122,10 +105,10 @@ def test_inference_is_numpys_by_bits_for_a_batch_and_one_example(activation: Any
         setattr(array, name, values)
         setattr(rust, name, _rust(values))
 
-    assert _numpy(rust.forward_batch(_rust(X))).tobytes() == array.forward_batch(X).tobytes()
+    assert to_numpy(rust.forward_batch(_rust(X))).tobytes() == array.forward_batch(X).tobytes()
     for row in X:
-        assert _numpy(rust.forward(_rust(row))).tobytes() == array.forward(row).tobytes()
-    assert _bits([rust.running_state()]) == _bits([array.running_state()])  # inference doesn't move them
+        assert to_numpy(rust.forward(_rust(row))).tobytes() == array.forward(row).tobytes()
+    assert bits(rust.running_state()) == bits(array.running_state())  # inference doesn't move them
 
 
 def test_a_layer_refuses_one_example_in_training():
@@ -152,11 +135,11 @@ def test_the_linear_layer_has_no_bias_and_its_delta_is_the_downstream():
     layer.accumulate_gradient_batch(_rust(X))
 
     assert layer.parameters() == (layer.W,) and layer.decayed == (True,)
-    assert _numpy(layer.delta_batch).tobytes() == _numpy(downstream).tobytes()
+    assert to_numpy(layer.delta_batch).tobytes() == to_numpy(downstream).tobytes()
     expected, _grad_b = pa.layer_accumulate_gradient_batch(
         downstream, _rust(X), pa.Array.zeros((2, 4)), pa.Array.zeros(2)
     )
-    assert _numpy(layer.grad_W).tobytes() == _numpy(expected).tobytes()
+    assert to_numpy(layer.grad_W).tobytes() == to_numpy(expected).tobytes()
     with pytest.raises(ValueError, match="LinearRustArrayLayer trains on batches only"):
         layer.compute_hidden_delta(None)
 
@@ -189,11 +172,11 @@ def test_the_optimizer_steps_a_linear_layer_and_gamma_and_beta_as_numpys_by_bits
             optimizer.begin_step()
             for index, layer in enumerate(layers):
                 optimizer.apply(index, layer, 0.1, 4)
-        assert _bits([layer.parameters() for layer in rust_layers]) == _bits(
+        assert bits([layer.parameters() for layer in rust_layers]) == bits(
             [layer.parameters() for layer in numpy_layers]
         )
-        assert _bits(rust_optimizer.state().layers.values()) == _bits(numpy_optimizer.state().layers.values())
-        assert [_numpy(layer.gradients()[0]).any() for layer in rust_layers] == [False, False]  # reset
+        assert bits(list(rust_optimizer.state().layers.values())) == bits(list(numpy_optimizer.state().layers.values()))
+        assert [to_numpy(layer.gradients()[0]).any() for layer in rust_layers] == [False, False]  # reset
 
 
 def test_adams_step_is_numpys_within_its_bias_corrections_rounding():
@@ -211,7 +194,7 @@ def test_adams_step_is_numpys_within_its_bias_corrections_rounding():
                 optimizer.apply(index, layer, 0.1, 4)
         for numpy_layer, rust_layer in zip(numpy_layers, rust_layers):
             for expected, actual in zip(numpy_layer.parameters(), rust_layer.parameters()):
-                np.testing.assert_allclose(_numpy(actual), expected, rtol=1e-15, atol=0)
+                np.testing.assert_allclose(to_numpy(actual), expected, rtol=1e-15, atol=0)
     assert [len(state) for state in rust_optimizer.state().layers.values()] == [2, 4]
 
 
@@ -222,13 +205,13 @@ def test_adams_step_is_numpys_within_its_bias_corrections_rounding():
 def test_randomize_draws_numpys_weights(name: str):
     # the crate's RNG is numpy's np.random, so the same seed draws the same linear W, and batch norm
     # draws nothing
-    assert _bits(_network(name, backend=RUST).snapshot()) == _bits(_network(name).snapshot())
+    assert bits(_network(name, backend=RUST).snapshot()) == bits(_network(name).snapshot())
 
 
 # parity with numpy
 
 
-def _max_relative_gap(layers: Any, shape: Any, rule: UpdateRule) -> float:
+def _gap_after_training(layers: Any, shape: Any, rule: UpdateRule) -> float:
     networks: list[Any] = []
     for backend in (NUMPY, RUST):
         network = SequentialArrayNetwork(INPUT, layers, rule, shape=shape, backend=backend)
@@ -240,12 +223,7 @@ def _max_relative_gap(layers: Any, shape: Any, rule: UpdateRule) -> float:
         batch = rows[(step * 5) % 40 :][:5]
         for network in networks:
             network.learn_batch(0.3, batch)
-
-    gap = 0.0
-    for expected_entry, actual_entry in zip(networks[0].snapshot(), networks[1].snapshot()):
-        for expected, actual in zip(expected_entry, actual_entry):
-            gap = max(gap, float((np.abs(_numpy(actual) - expected) / np.abs(expected)).max()))
-    return gap
+    return max_relative_gap(networks[0].snapshot(), networks[1].snapshot())
 
 
 # no batch norm, the same shapes: the dense layers' own gap
@@ -268,13 +246,13 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule
     # networks were at most 4.4e-12 apart relative when measured, and the same networks without
     # batch norm (CONTROLS) 1.2e-12: the same kind of gap, from the same products
     layers, shape = NETWORKS[name]
-    assert _max_relative_gap(layers, shape, rule) < 1e-10
+    assert _gap_after_training(layers, shape, rule) < 1e-10
 
 
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
 @pytest.mark.parametrize("name", CONTROLS)
 def test_the_dense_layers_alone_have_the_same_kind_of_gap(name: str, rule: UpdateRule):
-    assert _max_relative_gap(CONTROLS[name], "multiclass", rule) < 1e-10
+    assert _gap_after_training(CONTROLS[name], "multiclass", rule) < 1e-10
 
 
 def test_train_trains_a_batch_norm_network_to_its_numpy_counterparts_accuracy():

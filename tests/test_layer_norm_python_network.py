@@ -22,12 +22,12 @@ from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import check_gradients
+from tests.helpers import bits
 from tests.test_attention_python_network import (
     as_array_snapshot,
     assert_every_step_has_numpys_gradients,
     downstream,
 )
-from tests.test_batch_norm_python_network import _bits
 from tests.test_layer_norm_array_network import rows
 from tests.test_layer_specs import FLAT_LAYER_NORM, _input_shape
 
@@ -85,14 +85,14 @@ def test_a_layer_norm_is_numpys_by_bits(tokens: int):
     for i in range(n):
         inputs.update_state(tuple(X[i].tolist()))
         layer.forward()
-        assert _bits([node.value() for node in layer.nodes]) == _bits(Y[i].tolist())
+        assert bits([node.value() for node in layer.nodes]) == bits(Y[i].tolist())
         layer.compute_hidden_deltas(downstream(delta[i].tolist()))
-        assert _bits([layer.downstream_sum(j) for j in range(tokens * features)]) == _bits(dX[i].tolist())
+        assert bits([layer.downstream_sum(j) for j in range(tokens * features)]) == bits(dX[i].tolist())
         layer.accumulate_gradients()
 
     gradients = [channel.weight_gradient_accum[0] for channel in layer.channels]
-    assert _bits(gradients) == _bits(array.grad_gamma.tolist())
-    assert _bits([channel.bias_gradient_accum for channel in layer.channels]) == _bits(array.grad_beta.tolist())
+    assert bits(gradients) == bits(array.grad_gamma.tolist())
+    assert bits([channel.bias_gradient_accum for channel in layer.channels]) == bits(array.grad_beta.tolist())
 
 
 def _freeze_dropout(built: Any, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -132,7 +132,7 @@ def test_learn_and_a_learn_batch_of_one_example_agree_by_bits(name: str, rule: U
         single.learn(0.5, state, label)
         batched.learn_batch(0.5, [(state, label)])
 
-    assert _bits(single.snapshot()) == _bits(batched.snapshot())
+    assert bits(single.snapshot()) == bits(batched.snapshot())
 
 
 # the rules whose step is linear in the gradient, as for attention

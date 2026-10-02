@@ -39,7 +39,8 @@ from indrajala_ml.model.sequential_backprop_network import (
 )
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
 from indrajala_ml.pcg64 import default_rng
-from tests.saved_model_fixtures import CLASS_COUNT, FIXTURE_DIR, FIXTURES, MODEL_CLASSES, bits, fixture_class, outputs
+from tests.helpers import bits
+from tests.saved_model_fixtures import CLASS_COUNT, FIXTURE_DIR, FIXTURES, MODEL_CLASSES, fixture_class, outputs
 from tests.test_checkpoint import (
     CONV,
     DENSE,

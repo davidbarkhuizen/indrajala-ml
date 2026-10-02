@@ -26,6 +26,7 @@ from indrajala_ml.model.update_rules import SGD, Adam
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
+from tests.helpers import bits
 from tests.test_batch_norm_python_network import math_exp  # noqa: F401  # pyright: ignore[reportUnusedImport]
 from tests.test_batch_norm_rust_network import crate_exp  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
@@ -85,13 +86,6 @@ def _step(layer: Any, X: Any, downstream: Any) -> dict[str, Any]:
     }
 
 
-def _bits(values: dict[str, Any]) -> dict[str, list[bytes]]:
-    # by bits, so -0.0 and 0.0 differ
-    return {
-        name: [v.tobytes() for v in np.ravel(np.asarray(value, dtype=np.float64))] for name, value in values.items()
-    }
-
-
 # the layers
 
 
@@ -102,7 +96,7 @@ def test_one_group_is_plain_batch_norm_by_bits(activation: str, features: int, p
     X, downstream = _inputs(features, positions, batch)
     plain = _step(_numpy_layer(features, positions, None, activation), X, downstream)
     grouped = _step(_numpy_layer(features, positions, batch + extra, activation), X, downstream)
-    assert _bits(grouped) == _bits(plain)
+    assert bits(grouped) == bits(plain)
 
 
 def test_groups_of_2_in_a_batch_of_4_by_hand():
@@ -154,9 +148,9 @@ def test_each_group_is_a_batch_of_its_own_by_bits(features: int, positions: int,
         "running_mean": plain.running_mean,
         "running_var": plain.running_var,
     }
-    assert _bits({name: actual[name] for name in expected}) == _bits(expected)
+    assert bits({name: actual[name] for name in expected}) == bits(expected)
     delta = grouped._rows(grouped.delta_batch)
-    assert _bits({"g": actual["grad_gamma"], "b": actual["grad_beta"]}) == _bits(
+    assert bits({"g": actual["grad_gamma"], "b": actual["grad_beta"]}) == bits(
         {"g": sum_rows(delta * grouped._xhat), "b": sum_rows(delta)}
     )
 
@@ -203,7 +197,7 @@ def test_the_python_layer_is_numpys_by_bits(
         "running_mean": [node.running_mean for node in python.channels],
         "running_var": [node.running_var for node in python.channels],
     }
-    assert _bits(actual) == _bits(expected)
+    assert bits(actual) == bits(expected)
 
 
 @pytest.mark.usefixtures("crate_exp")
@@ -230,7 +224,7 @@ def test_the_rust_layer_is_numpys_by_bits(activation: Any, features: int, positi
         "running_mean": rust.running_mean.tolist(),
         "running_var": rust.running_var.tolist(),
     }
-    assert _bits(actual) == _bits(expected)
+    assert bits(actual) == bits(expected)
 
 
 @pytest.mark.parametrize("layer_class", ["python", "numpy", "rust"])
@@ -279,17 +273,6 @@ def _rows(input_shape: Any, count: int, seed: int = 1) -> list[tuple[tuple[float
     return [(tuple(rng.random() for _ in range(size)), i % 3) for i in range(count)]
 
 
-def _snapshot_bits(network: Any) -> list[bytes]:
-    def leaves(tree: Any) -> list[float]:
-        if isinstance(tree, list | tuple):
-            return [leaf for item in tree for leaf in leaves(item)]  # pyright: ignore[reportUnknownVariableType]
-        if hasattr(tree, "tolist"):
-            return leaves(tree.tolist())
-        return [tree]
-
-    return [np.float64(leaf).tobytes() for leaf in leaves(network.snapshot())]
-
-
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
 @pytest.mark.parametrize("architecture", ARCHITECTURES)
 def test_a_network_with_one_group_trains_as_plain_batch_norm_by_bits(implementation: str, architecture: str):
@@ -302,7 +285,7 @@ def test_a_network_with_one_group_trains_as_plain_batch_norm_by_bits(implementat
     for step in range(3):
         plain.learn_batch(0.1, rows[step * 6 : (step + 1) * 6])
         grouped.learn_batch(0.1, rows[step * 6 : (step + 1) * 6])
-    assert _snapshot_bits(grouped) == _snapshot_bits(plain)
+    assert bits(grouped.snapshot()) == bits(plain.snapshot())
 
 
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
@@ -322,10 +305,10 @@ def test_every_gradient_matches_its_finite_difference(implementation: str, archi
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
 def test_a_network_refuses_a_last_group_of_one_naming_the_layer(implementation: str):
     network = _network(implementation, (4,), DENSE)
-    before = _snapshot_bits(network)
+    before = bits(network.snapshot())
     with pytest.raises(ValueError, match=r"layer 1, BatchNorm\(.*group_size=2\): a batch of 5 in groups of 2"):
         network.learn_batch(0.1, _rows((4,), 5))
-    assert _snapshot_bits(network) == before
+    assert bits(network.snapshot()) == before
 
 
 @pytest.mark.parametrize("examples, batch_size", [(9, 4), (12, 5)])
@@ -338,10 +321,10 @@ def test_train_refuses_a_batch_size_that_leaves_a_group_of_one_before_training(e
         Dense(3, output=True),
     ]
     network = _network("numpy", (4,), layers)
-    before = _snapshot_bits(network)
+    before = bits(network.snapshot())
     with pytest.raises(ValueError, match="leaves a last group of one example"):
         train_backprop_network_mini_batch(network, _rows((4,), examples), batch_size)
-    assert _snapshot_bits(network) == before
+    assert bits(network.snapshot()) == before
 
 
 def test_train_refuses_a_final_short_batch_that_leaves_a_group_of_one():

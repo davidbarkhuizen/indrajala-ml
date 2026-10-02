@@ -36,6 +36,7 @@ from indrajala_ml.model.token_rust_array_layer import (
 )
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from tests.gradient_check import analytic_gradients, check_gradients
+from tests.helpers import bits, exp_by_crate, patching, split, to_numpy
 from tests.test_layer_specs import (
     AFFINE_5,
     ATTENTION_BLOCK,
@@ -49,7 +50,6 @@ from tests.test_layer_specs import (
     TOKENS,
     _input_shape,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.test_residual_array_network import bits
 
 CASES = TOKENS | {f"flat, {name}": specs for name, specs in FLAT_LAYER_NORM.items()}
 
@@ -67,26 +67,12 @@ def rows(specs: list[LayerSpec], count: int, seed: int = 1) -> list[tuple[tuple[
     return [(tuple(rng.uniform(-1.0, 1.0) for _ in range(size)), i % 3) for i in range(count)]
 
 
-def _split(batch: list[tuple[tuple[float, ...], int]]) -> tuple[list[tuple[float, ...]], list[int]]:
-    return [state for state, _ in batch], [label for _, label in batch]
-
-
-def _numpy(values: Any) -> FloatArray:
-    return np.array(values.tolist())
-
-
 def _as_numpy(snapshot: list[tuple[Any, ...]]) -> list[tuple[FloatArray, ...]]:
-    return [tuple(_numpy(array) for array in entry) for entry in snapshot]
+    return [tuple(to_numpy(array) for array in entry) for entry in snapshot]
 
 
-@pytest.fixture
-def crate_exp(monkeypatch: pytest.MonkeyPatch) -> None:
-    # numpy's softmax exp as the crate's (Rust's f64::exp): np.exp picks its implementation by CPU
-    # and can differ in the last bit
-    def exp_with_crate_exp(values: FloatArray) -> FloatArray:
-        return _numpy(pa.exp(pa.Array(values.reshape(-1).tolist()))).reshape(values.shape)
-
-    monkeypatch.setattr(attention_array_layer, "exp", exp_with_crate_exp)
+# numpy's softmax exp as the crate's (Rust's f64::exp)
+crate_exp = patching(attention_array_layer, "exp", exp_by_crate)
 
 
 def _freeze(layer: DropoutRustArrayLayer) -> None:
@@ -117,7 +103,7 @@ def test_every_gradient_matches_its_finite_difference(name: str, batch_size: int
     # a trained step first, so gamma, beta and the positions aren't at their initial values
     built.learn_batch(0.5, rows(CASES[name], 4, seed=2))
 
-    check_gradients(built, *_split(rows(CASES[name], batch_size)))
+    check_gradients(built, *split(rows(CASES[name], batch_size)))
 
 
 def test_the_readme_model_builds_its_layers_wired_together():
@@ -156,7 +142,7 @@ def test_randomize_draws_numpys_parameters_by_bits(name: str):
 def _attention(tokens: int, features: int, seed: int) -> AttentionRustArrayLayer:
     layer = AttentionRustArrayLayer(tokens, features)
     rng = np.random.default_rng(seed)
-    layer.set_parameters([pa.Array(rng.uniform(-0.5, 0.5, _numpy(p).shape).tolist()) for p in layer.parameters()])
+    layer.set_parameters([pa.Array(rng.uniform(-0.5, 0.5, to_numpy(p).shape).tolist()) for p in layer.parameters()])
     return layer
 
 
@@ -166,8 +152,8 @@ def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bit
     X = pa.Array(np.random.default_rng(2).uniform(-1.0, 1.0, (4, 5)).tolist())
 
     out = layer.forward_batch(X)
-    assert bits(_numpy(layer._P)) == bits(np.ones((4, 1)))  # pyright: ignore[reportPrivateUsage]
-    assert bits(_numpy(out)) == bits(_numpy(pa.affine_forward_batch(Wo, pa.affine_forward_batch(Wv, X, bv), bo)))
+    assert bits(to_numpy(layer._P)) == bits(np.ones((4, 1)))  # pyright: ignore[reportPrivateUsage]
+    assert bits(to_numpy(out)) == bits(to_numpy(pa.affine_forward_batch(Wo, pa.affine_forward_batch(Wv, X, bv), bo)))
 
 
 def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth():
@@ -175,14 +161,14 @@ def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth():
     layer = _attention(16, 8, 3)
     parameters = list(layer.parameters())
     for i in range(4):  # Wq, bq, Wk, bk
-        parameters[i] = pa.Array(np.zeros(_numpy(parameters[i]).shape).tolist())
+        parameters[i] = pa.Array(np.zeros(to_numpy(parameters[i]).shape).tolist())
     layer.set_parameters(parameters)
     X = pa.Array(np.random.default_rng(4).uniform(-1.0, 1.0, (3, 16 * 8)).tolist())
 
     layer.forward_batch(X)
-    assert bits(_numpy(layer._P)) == bits(np.full((48, 16), 1 / 16))  # pyright: ignore[reportPrivateUsage]
-    V, H = _numpy(layer._V), _numpy(layer._H)  # pyright: ignore[reportPrivateUsage]
-    mean = _numpy(TokenMeanRustArrayLayer(16, 8).forward_batch(pa.Array(V.reshape(3, -1).tolist())))
+    assert bits(to_numpy(layer._P)) == bits(np.full((48, 16), 1 / 16))  # pyright: ignore[reportPrivateUsage]
+    V, H = to_numpy(layer._V), to_numpy(layer._H)  # pyright: ignore[reportPrivateUsage]
+    mean = to_numpy(TokenMeanRustArrayLayer(16, 8).forward_batch(pa.Array(V.reshape(3, -1).tolist())))
     assert bits(H) == bits(np.repeat(mean, 16, axis=0))
 
 
@@ -199,9 +185,9 @@ def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradi
     attention[6], attention[7] = pa.Array.zeros((6, 6)), pa.Array.zeros(6)
     blocked.restore([*snapshot[:2], (), blocked.snapshot()[3], tuple(attention), (), *snapshot[2:]])
 
-    states, labels = _split(rows(block_specs, 5))
+    states, labels = split(rows(block_specs, 5))
     for state in states:
-        assert bits(_numpy(blocked._forward(state))) == bits(_numpy(plain._forward(state)))  # pyright: ignore[reportPrivateUsage]
+        assert bits(to_numpy(blocked._forward(state))) == bits(to_numpy(plain._forward(state)))  # pyright: ignore[reportPrivateUsage]
 
     outside = [0, 1, *range(6, 14)]
     plain_gradients = analytic_gradients(plain, states, labels)
@@ -266,14 +252,14 @@ def test_the_layer_before_a_layer_norm_masks_its_downstream(name: str, single: b
     else:
         built.learn_batch(0.0, data)
 
-    downstream = _numpy(after.downstream() if single else after.downstream_batch())
-    delta = _numpy(before.delta if single else before.delta_batch)
+    downstream = to_numpy(after.downstream() if single else after.downstream_batch())
+    delta = to_numpy(before.delta if single else before.delta_batch)
     if isinstance(before, DropoutRustArrayLayer):
-        base = _numpy(before._base_activation if single else before._base_activation_batch)  # pyright: ignore[reportPrivateUsage]
-        mask = _numpy(before._mask if single else before._mask_batch)  # pyright: ignore[reportPrivateUsage]
+        base = to_numpy(before._base_activation if single else before._base_activation_batch)  # pyright: ignore[reportPrivateUsage]
+        mask = to_numpy(before._mask if single else before._mask_batch)  # pyright: ignore[reportPrivateUsage]
         expected = downstream * (base * (1.0 - base)) * (mask / 0.7)
     else:
-        A = _numpy(before.a if single else before.A)
+        A = to_numpy(before.a if single else before.A)
         expected = (
             np.where(A > 0.0, downstream, 0.0) if isinstance(before, ReLURustArrayLayer) else downstream * A * (1.0 - A)
         )
@@ -323,7 +309,7 @@ def test_every_step_under_adam_has_numpys_gradients(name: str):
     data = rows(CASES[name], 40)
     for step in range(50):
         batch = data[(step * 5) % 40 :][:5]
-        states, labels = _split(batch)
+        states, labels = split(batch)
         rust.restore(numpy.snapshot())
         numpy.rng, rust.rng = NUMPY.default_rng(step), RUST.default_rng(step)
         expected = analytic_gradients(numpy, states, labels)

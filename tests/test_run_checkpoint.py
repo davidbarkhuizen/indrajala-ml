@@ -33,6 +33,7 @@ from indrajala_ml.train import (
     train_backprop_network_mini_batch,
     train_linear_classifier_network,
 )
+from tests.helpers import bits
 
 IMPLEMENTATIONS = ["python", "numpy", "rust"]
 ROOT = Path(__file__).resolve().parent.parent
@@ -86,26 +87,12 @@ def _train(student: Any, epochs: int, rng: Random | None, resume_from: Any = Non
     )
 
 
-def _bits(value: Any) -> Any:
-    # every float as float.hex, through arrays, lists, tuples and dicts: compares bits
-    to_list = getattr(value, "tolist", None)
-    if to_list is not None:
-        return _bits(to_list())
-    if isinstance(value, (list, tuple)):
-        return [_bits(item) for item in value]  # pyright: ignore[reportUnknownVariableType]
-    if isinstance(value, dict):
-        return {str(key): _bits(item) for key, item in value.items()}  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
-    if isinstance(value, float):
-        return value.hex()
-    return value
-
-
 def _fields_bits(value: Any) -> Any:
     # a dataclass's fields, nested ones too, as bits; dataclasses.asdict would deep-copy Rust
     # arrays, which don't pickle
     if hasattr(value, "__dataclass_fields__"):
         return {field.name: _fields_bits(getattr(value, field.name)) for field in fields(value)}
-    return _bits(value)
+    return bits(value)
 
 
 def _outcome(student: Any, result: ConvergenceSeries) -> Any:
@@ -114,7 +101,7 @@ def _outcome(student: Any, result: ConvergenceSeries) -> Any:
     diagnostic = result.diagnostic
     run = result.run_checkpoint
     assert run is not None
-    return _bits(
+    return bits(
         {
             "weights": student.snapshot(),
             "t": state.t,
@@ -181,11 +168,11 @@ def test_the_run_checkpoint_is_taken_before_the_pocket_restores():
     student = _student("numpy")
     run = _train(student, STOPPED_AFTER, Random(7)).run_checkpoint
     assert run is not None
-    assert _bits(student.snapshot()) == _bits(run.best.weights)
+    assert bits(student.snapshot()) == bits(run.best.weights)
 
     again = _train(student, STOPPED_AFTER, None, resume_from=run).run_checkpoint
     assert again is not None
-    assert _bits(again.network.weights) == _bits(run.network.weights)
+    assert bits(again.network.weights) == bits(run.network.weights)
     assert again.shuffle_state == run.shuffle_state
 
 

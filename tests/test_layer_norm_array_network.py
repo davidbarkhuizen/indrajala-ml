@@ -22,8 +22,8 @@ from indrajala_ml.model.layer_specs import LayerSpec, batch_norm_index
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
 from tests.gradient_check import check_gradients
+from tests.helpers import bits
 from tests.test_layer_specs import FLAT_LAYER_NORM, _input_shape  # pyright: ignore[reportPrivateUsage]
-from tests.test_residual_array_network import bits
 
 
 def network(specs: list[LayerSpec], rule: UpdateRule | None = None) -> Any:

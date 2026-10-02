@@ -27,11 +27,11 @@ from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.update_rules import SGD, Adam, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import check_gradients
+from tests.helpers import bits
 from tests.test_batch_norm_array_network import EPSILON, RATE, RULES, _reference
 from tests.test_batch_norm_conv_array_network import BETA, DOWNSTREAM, GAMMA, INPUT, NETWORKS, POSITIONS, X, _rows
 from tests.test_batch_norm_python_network import (  # math_exp: a fixture
     _as_array_snapshot,
-    _bits,
     math_exp,  # noqa: F401  # pyright: ignore[reportUnusedImport]
 )
 
@@ -82,12 +82,12 @@ def test_every_expression_is_the_readmes_over_each_channel_by_bits(activation: s
         else:
             delta = [ds * (1.0 if a > 0.0 else 0.0) for ds, a in zip(downstream, channel.activations)]
         reference = _reference(_channel(X.tolist(), c), GAMMA[c], BETA[c], delta)
-        assert _bits(channel.activations) == _bits([activate(y) for y in reference["y"]])
-        assert _bits(channel.deltas) == _bits(delta)
-        assert _bits(channel.dxs) == _bits(reference["dx"])
-        assert _bits(channel.weight_gradient_accum) == _bits([reference["grad_gamma"]])
-        assert _bits(channel.bias_gradient_accum) == _bits(reference["grad_beta"])
-        assert _bits([channel.running_mean, channel.running_var]) == _bits(
+        assert bits(channel.activations) == bits([activate(y) for y in reference["y"]])
+        assert bits(channel.deltas) == bits(delta)
+        assert bits(channel.dxs) == bits(reference["dx"])
+        assert bits(channel.weight_gradient_accum) == bits([reference["grad_gamma"]])
+        assert bits(channel.bias_gradient_accum) == bits(reference["grad_beta"])
+        assert bits([channel.running_mean, channel.running_var]) == bits(
             [reference["running_mean"], reference["running_var"]]
         )
 
@@ -141,13 +141,13 @@ def test_the_layer_is_numpys_by_bits(activation: Any, batch_size: int):
 
     for example in range(batch_size):
         python.select_example(example)
-        assert _bits([node.value() for node in python.nodes]) == _bits(activations[example].tolist())
-        assert _bits([node.dx for node in python.nodes]) == _bits(dx[example].tolist())
+        assert bits([node.value() for node in python.nodes]) == bits(activations[example].tolist())
+        assert bits([node.dx for node in python.nodes]) == bits(dx[example].tolist())
     for name, values in (("weight_gradient_accum", array.grad_gamma), ("bias_gradient_accum", array.grad_beta)):
         actual = [getattr(channel, name) for channel in python.channels]
-        assert _bits([value[0] if isinstance(value, list) else value for value in actual]) == _bits(values.tolist())
-    assert _bits([channel.running_mean for channel in python.channels]) == _bits(array.running_mean.tolist())
-    assert _bits([channel.running_var for channel in python.channels]) == _bits(array.running_var.tolist())
+        assert bits([value[0] if isinstance(value, list) else value for value in actual]) == bits(values.tolist())
+    assert bits([channel.running_mean for channel in python.channels]) == bits(array.running_mean.tolist())
+    assert bits([channel.running_var for channel in python.channels]) == bits(array.running_var.tolist())
 
 
 def test_inference_normalizes_each_position_with_its_channels_running_averages():
@@ -265,7 +265,7 @@ def test_the_running_averages_move_in_training_forward_passes_only():
 
     for state, _ in rows:
         network.classify_state(state)
-    assert _bits(norm.snapshot_state()) == _bits(trained)
+    assert bits(norm.snapshot_state()) == bits(trained)
 
 
 def test_the_optimizers_state_is_per_channel_with_no_bias_for_a_linear_kernel():
@@ -285,7 +285,7 @@ def test_weight_decay_decays_the_linear_conv_kernels_and_neither_gamma_nor_beta(
     for network in (sgd, decayed):
         network.learn_batch(0.5, rows)
 
-    assert _bits(decayed.snapshot()[1]) == _bits(sgd.snapshot()[1])
+    assert bits(decayed.snapshot()[1]) == bits(sgd.snapshot()[1])
     assert decayed.snapshot()[0] != sgd.snapshot()[0]
 
 
@@ -303,12 +303,12 @@ def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
 
     network.learn_batch(0.1, _rows(3, seed=7))
     network.learn_batch(0.1, _rows(2, seed=8))
-    trained = _bits(network.snapshot())
+    trained = bits(network.snapshot())
 
     network.restore_checkpoint(checkpoint)
     network.learn_batch(0.1, _rows(3, seed=7))
     network.learn_batch(0.1, _rows(2, seed=8))
-    assert _bits(network.snapshot()) == trained
+    assert bits(network.snapshot()) == trained
 
 
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)

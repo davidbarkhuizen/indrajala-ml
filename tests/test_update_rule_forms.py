@@ -14,7 +14,6 @@ epoch at B = 128 and 512).
 """
 
 import random
-import struct
 from collections.abc import Callable, Sequence
 
 import indrajala_math_rust as pa
@@ -29,7 +28,7 @@ from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.state_node import StateNode
 from indrajala_ml.model.update_rules import SGD, Momentum, UpdateRule, WeightDecay
-from tests.helpers import LayerOptimizer, WeightSets, Wrap
+from tests.helpers import LayerOptimizer, WeightSets, Wrap, bits
 
 BATCH_SIZES = [1, 6, 96, 4, 128, 512]
 SEEDS = range(5)
@@ -172,10 +171,6 @@ IMPLEMENTATIONS: list[tuple[str, Callable[[float, float, int], float], tuple[int
 ]
 
 
-def _bits(values: Sequence[float]) -> list[bytes]:
-    return [struct.pack("<d", v) for v in values]
-
-
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("batch_size", BATCH_SIZES)
 @pytest.mark.parametrize("name, weight_rule, shape, apply", IMPLEMENTATIONS, ids=[i[0] for i in IMPLEMENTATIONS])
@@ -202,8 +197,8 @@ def test_the_update_is_the_papers_form_exactly(
     expected_W = [[weight_rule(w, g, batch_size) for w, g in zip(*row)] for row in zip(W, grad_W)]
     # the bias is plain SGD in every rule, unregularized under weight decay
     expected_b = [_sgd(v, g, batch_size) for v, g in zip(b, grad_b)]
-    assert [_bits(row) for row in new_W] == [_bits(row) for row in expected_W]
-    assert _bits(new_b) == _bits(expected_b)
+    assert [bits(row) for row in new_W] == [bits(row) for row in expected_W]
+    assert bits(new_b) == bits(expected_b)
 
 
 MOMENTA = [0.0, 0.9]
@@ -280,5 +275,5 @@ def test_momentum_is_the_papers_form_exactly(
         W, u_W = [[w for w, _ in row] for row in stepped_W], [[u for _, u in row] for row in stepped_W]
         stepped_b = [_momentum(v, u, g, momentum, learning_rate, batch_size) for v, u, g in zip(b, u_b, grad_b)]
         b, u_b = [v for v, _ in stepped_b], [u for _, u in stepped_b]
-        assert [_bits(row) for row in new_W] == [_bits(row) for row in W]
-        assert _bits(new_b) == _bits(b)
+        assert [bits(row) for row in new_W] == [bits(row) for row in W]
+        assert bits(new_b) == bits(b)
