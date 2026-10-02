@@ -81,6 +81,16 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "L2ConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(
         SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.01
     ),
+    "ReLUConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
+    "DropoutConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(
+        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.3
+    ),
+    "CrossEntropyConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(
+        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT
+    ),
+    "SoftmaxConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(
+        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT
+    ),
     "ReLUVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "SoftmaxVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "ArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
@@ -103,6 +113,16 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "AdamConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
     "L2ConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
         SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.01
+    ),
+    "ReLUConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
+    "DropoutConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
+        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.3
+    ),
+    "CrossEntropyConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
+        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT
+    ),
+    "SoftmaxConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
+        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT
     ),
     "ReLURustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "SoftmaxRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),

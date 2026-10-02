@@ -83,7 +83,7 @@ class ArrayNetworkSpec:
     # draw their masks from Python's random): predictions are compared at eval only, and there are
     # no learn tests
     parity_in_training: bool = True
-    # multiclass only
+    # multiclass and conv only
     probabilities_sum_to_one: bool = False
     # the save/load round-trip test for the hyperparameters: its name suffix and the values saved
     saved_hyperparameters_test: str | None = None
@@ -490,9 +490,10 @@ def conv_network_tests(spec: ArrayNetworkSpec) -> dict[str, TestFunction]:
 
         for _ in range(20):
             state, _category = example(rng)
-            assert array_network.predict_probabilities(state) == approx(
-                reference.predict_probabilities(state), rel=1e-9, abs=1e-12
-            )
+            actual = array_network.predict_probabilities(state)
+            assert actual == approx(reference.predict_probabilities(state), rel=1e-9, abs=1e-12)
+            if spec.probabilities_sum_to_one:
+                assert sum(actual) == approx(1.0)
 
     if spec.parity_in_training:
 

@@ -56,6 +56,10 @@ CONV: dict[str, tuple[Any, ...]] = {
     "MomentumConvVectorizedMultiClassBackpropClassifierNetwork": (0.9,),
     "AdamConvVectorizedMultiClassBackpropClassifierNetwork": (),
     "L2ConvVectorizedMultiClassBackpropClassifierNetwork": (0.01,),
+    "ReLUConvVectorizedMultiClassBackpropClassifierNetwork": (),
+    "DropoutConvVectorizedMultiClassBackpropClassifierNetwork": (0.3,),
+    "CrossEntropyConvVectorizedMultiClassBackpropClassifierNetwork": (),
+    "SoftmaxConvVectorizedMultiClassBackpropClassifierNetwork": (),
 }
 # (numpy class name, its keyword-only hyperparameters)
 SINGLE_OUTPUT: dict[str, dict[str, float]] = {
