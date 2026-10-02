@@ -97,7 +97,8 @@ class ProjectionsArrayLayer[A: BackendArray](Protocol):
     attention workplan, D6): attention's four, whose parameters() are the draws in order.
     """
 
-    projection_shapes: tuple[tuple[int, int], ...]
+    @property
+    def projection_shapes(self) -> tuple[tuple[int, int], ...]: ...
 
     def set_parameters(self, parameters: Sequence[A], /) -> None: ...
 

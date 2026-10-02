@@ -13,12 +13,11 @@ isn't correctly rounded), as batch norm's tests replace sigmoid.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
-from typing import ClassVar
 
 import numpy as np
 
 from indrajala_ml.model.array_layer import FloatArray
+from indrajala_ml.model.array_parameters import AttentionProjections
 from indrajala_ml.model.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.token_array_layer import BatchShaped
 
@@ -30,7 +29,7 @@ def _transpose(stack: FloatArray) -> FloatArray:
     return stack.transpose(0, 2, 1)
 
 
-class AttentionArrayLayer(BatchShaped):
+class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     """
     Q = X Wq^T + bq, K and V likewise, P = softmax_rows((Q K^T) / sqrt(d)), out = (P V) Wo^T + bo,
     per example over its tokens tokens of features features. Its parameters, also its draw order,
@@ -41,40 +40,17 @@ class AttentionArrayLayer(BatchShaped):
     layer before reads dX.
     """
 
-    decayed: ClassVar[tuple[bool, ...]] = (True, False) * 4
-    # the projections' (rows, fan_in), each drawn as a dense layer's (W, b), in order
-    projection_shapes: tuple[tuple[int, int], ...]
-
     def __init__(self, tokens: int, features: int) -> None:
         self.tokens = tokens
         self.features = features
         self.size = tokens * features
         self.input_size = self.size
-        self.projection_shapes = ((features, features),) * 4
         self.scale = math.sqrt(features)
 
         d = features
         self.Wq, self.Wk, self.Wv, self.Wo = (np.zeros((d, d)) for _ in range(4))
         self.bq, self.bk, self.bv, self.bo = (np.zeros(d) for _ in range(4))
         self.reset_gradient_accum()
-
-    def parameters(self) -> tuple[FloatArray, ...]:
-        return self.Wq, self.bq, self.Wk, self.bk, self.Wv, self.bv, self.Wo, self.bo
-
-    def gradients(self) -> tuple[FloatArray, ...]:
-        return (
-            self.grad_Wq,
-            self.grad_bq,
-            self.grad_Wk,
-            self.grad_bk,
-            self.grad_Wv,
-            self.grad_bv,
-            self.grad_Wo,
-            self.grad_bo,
-        )
-
-    def set_parameters(self, parameters: Sequence[FloatArray]) -> None:
-        self.Wq, self.bq, self.Wk, self.bk, self.Wv, self.bv, self.Wo, self.bo = parameters
 
     def _rows(self, batch: FloatArray) -> FloatArray:
         # an (N, T * d) batch or an (N, T, d) stack as (N * T, d) rows
