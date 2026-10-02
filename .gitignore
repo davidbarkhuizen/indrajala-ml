@@ -178,3 +178,6 @@ data/mnist/trained_model.json
 # refactoring's golden training run (scripts/golden_training_run.py) - valid only on the machine
 # that recorded it, since numpy's products go through BLAS
 data/refactoring/
+
+# local outputs of the residual depth study (scripts/residual_depth_study.py --out)
+data/residual/
