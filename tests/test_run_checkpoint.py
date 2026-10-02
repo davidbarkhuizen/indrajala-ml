@@ -20,7 +20,7 @@ from indrajala_ml.geometry import square_bounds
 from indrajala_ml.lr_schedule import linear_warmup
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
-from indrajala_ml.model.layer_specs import Dense, LayerSpec, Residual
+from indrajala_ml.model.layer_specs import Dense, LayerNorm, LayerSpec, Residual
 from indrajala_ml.model.load_network import load_network
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialBackpropClassifierNetwork
@@ -42,6 +42,15 @@ LAYERS: list[LayerSpec] = [Dense(5, dropout=0.25), Dense(1, output=True)]
 RESIDUAL_LAYERS: list[LayerSpec] = [
     Dense(5, activation="relu"),
     Residual((Dense(4, dropout=0.25), Dense(5, activation="linear", bias=True))),
+    Dense(1, output=True),
+]
+# flat layer norms after a dropout layer and first in a residual body (the layer-norm and attention
+# workplan, stage 5); a patch model's checkpoints are in tests/test_attention_format2.py, as its
+# input is an image
+LAYER_NORM_LAYERS: list[LayerSpec] = [
+    Dense(5, dropout=0.25),
+    LayerNorm(),
+    Residual((LayerNorm(), Dense(4, activation="relu"), Dense(5, activation="linear", bias=True))),
     Dense(1, output=True),
 ]
 EPOCHS, STOPPED_AFTER, BATCH_SIZE = 6, 3, 5  # 24 rows: four batches of 5 and a short one of 4
@@ -126,7 +135,9 @@ def finish(model_path: str, run_path: str) -> None:
     print(json.dumps(_outcome(student, result)))
 
 
-@pytest.mark.parametrize("layers", [LAYERS, RESIDUAL_LAYERS], ids=["dense", "residual"])
+@pytest.mark.parametrize(
+    "layers", [LAYERS, RESIDUAL_LAYERS, LAYER_NORM_LAYERS], ids=["dense", "residual", "layer norm"]
+)
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
 def test_a_run_resumed_in_a_new_process_matches_the_run_in_one_go(
     implementation: str, layers: list[LayerSpec], tmp_path: Path

@@ -3,6 +3,7 @@ Layer specs (layer_specs.py) and their numpy and Rust builder (array_layer_build
 lists are accepted, the layer class each spec kind maps to, and the shapes the builder chains.
 """
 
+import json
 import math
 from typing import Any, cast
 
@@ -28,7 +29,6 @@ from indrajala_ml.model.layer_specs import (
     TokenMean,
     batch_norm_index,
     expand_specs,
-    refuse_layer_norm_attention_until,
     refuse_single_example_groups,
     refuse_single_example_network,
     spec_paths,
@@ -591,26 +591,11 @@ def test_the_shape_walk_carries_tokens_from_the_patches_to_the_mean():
     assert spec_shapes(FLAT_LAYER_NORM["after a conv front end"], (8, 8, 1))[2] == SpecShape((3, 3, 2), (3, 3, 2))
 
 
-REFUSED = {f"tokens {name}": specs for name, specs in TOKENS.items()} | {
-    "flat layer norm": FLAT_LAYER_NORM["after sigmoid"],
-    "flat layer norm in a body": FLAT_LAYER_NORM["a body's first layer"],
-}
-
-
-@pytest.mark.parametrize("specs", REFUSED.values(), ids=REFUSED.keys())
-def test_every_implementation_builds_the_new_specs_and_format_2_refuses_them_until_its_stage(
-    specs: list[LayerSpec],
-):
+@pytest.mark.parametrize("specs", (TOKENS | FLAT_LAYER_NORM).values(), ids=(TOKENS | FLAT_LAYER_NORM).keys())
+def test_every_implementation_builds_the_new_specs_and_format_2_round_trips_them(specs: list[LayerSpec]):
     input_shape = _input_shape(specs)
     build_array_layers(specs, input_shape, "numpy")
     build_array_layers(specs, input_shape, "rust")
     size = math.prod(input_shape)
     build_python_layers(specs, input_shape, StateLayer(size, [(0.0, 1.0)] * size))
-    new = next(spec for spec in specs if not isinstance(spec, Dense | BatchNorm))
-    with pytest.raises(NotImplementedError, match="in format 2: not yet .* stage 5"):
-        layer_to_json(new)
-
-
-def test_the_refusal_names_each_new_kind_once():
-    with pytest.raises(NotImplementedError, match=r"^Patches, Position, LayerNorm, Attention, TokenMean in format 2"):
-        refuse_layer_norm_attention_until(TOKENS["the README's model"], "5", "in format 2")
+    assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs

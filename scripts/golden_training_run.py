@@ -32,6 +32,13 @@ The residual entries (the residual-connections workplan, stage 5) are Sequential
 RESIDUAL_SPECS, two residual blocks in a row, in all three implementations, added after the rest:
 no earlier entry moved when they were recorded.
 
+The patch-model and layer-norm entries (the layer-norm and attention workplan, stage 5) are
+Sequential networks in all three implementations, added after the residual ones: PATCH_SPECS, the
+README's patch model over the conv networks' 6x6 rows under Adam, and LAYER_NORM_SPECS, flat layer
+norms after a dropout and a ReLU layer and first in a residual body under momentum (on Rust, the
+layers before a layer norm take its downstream and a mask op). No earlier entry moved when they
+were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -40,6 +47,7 @@ generators workplan: numpy and Rust in stage 3, pure Python in stage 4).
 
 import argparse
 import json
+import math
 import os
 import random
 import sys
@@ -104,7 +112,17 @@ from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network imp
 from indrajala_ml.model.l2_vectorized_multiclass_backprop_classifier_network import (
     L2VectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layer_specs import Dense, LayerSpec, Residual
+from indrajala_ml.model.layer_specs import (
+    Attention,
+    Dense,
+    InputShape,
+    LayerNorm,
+    LayerSpec,
+    Patches,
+    Position,
+    Residual,
+    TokenMean,
+)
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.momentum_backprop_classifier_network import MomentumBackpropClassifierNetwork
 from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
@@ -145,7 +163,7 @@ from indrajala_ml.model.softmax_rust_array_multiclass_backprop_classifier_networ
 from indrajala_ml.model.softmax_vectorized_multiclass_backprop_classifier_network import (
     SoftmaxVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.update_rules import Momentum
+from indrajala_ml.model.update_rules import Adam, Momentum, UpdateRule
 from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
@@ -243,12 +261,42 @@ RESIDUAL_SPECS: list[LayerSpec] = [
 RESIDUAL_NETWORKS = ["numpy residual", "rust residual", "python residual"]
 
 
-def _residual_network(name: str) -> Any:
-    rule = Momentum(0.9)
+# the README's patch model over the 6x6 image: 4 patches of 3x3, embedded to 4, a position, the
+# attention and FFN blocks, the mean, a layer norm and the output, under Adam
+PATCH_SPECS: list[LayerSpec] = [
+    Patches(3),
+    Dense(4, activation="linear", bias=True),
+    Position(),
+    Residual((LayerNorm(), Attention())),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
+    TokenMean(),
+    LayerNorm(),
+    Dense(CLASS_COUNT, output=True),
+]
+PATCH_NETWORKS = ["numpy patch model", "rust patch model", "python patch model"]
+# flat layer norms after a dropout layer, first in a residual body and after a ReLU layer, under
+# momentum
+LAYER_NORM_SPECS: list[LayerSpec] = [
+    Dense(4, dropout=0.3),
+    LayerNorm(),
+    Residual((LayerNorm(), Dense(3, activation="relu"), Dense(4, activation="linear", bias=True))),
+    Dense(4, activation="relu"),
+    LayerNorm(),
+    Dense(CLASS_COUNT, output=True),
+]
+LAYER_NORM_NETWORKS = ["numpy layer norm", "rust layer norm", "python layer norm"]
+
+
+def _sequential_network(name: str, input_shape: InputShape, specs: list[LayerSpec], rule: UpdateRule) -> Any:
     if _backend(name) == "python":
-        return SequentialMultiClassBackpropClassifierNetwork((DIMENSION,), RESIDUAL_SPECS, rule, INPUT_BOUNDS)
+        bounds = [(0.0, 1.0)] * math.prod(input_shape)
+        return SequentialMultiClassBackpropClassifierNetwork(input_shape, specs, rule, bounds)
     backend = NUMPY if _backend(name) == "numpy" else RUST
-    return SequentialArrayNetwork((DIMENSION,), RESIDUAL_SPECS, rule, backend=backend)
+    return SequentialArrayNetwork(input_shape, specs, rule, backend=backend)
+
+
+def _residual_network(name: str) -> Any:
+    return _sequential_network(name, (DIMENSION,), RESIDUAL_SPECS, Momentum(0.9))
 
 
 def _backend(name: str) -> str:
@@ -284,16 +332,11 @@ def _inject(network: Any, backend: str, rng: random.Random) -> None:
         # per layer, a (weights, bias) per node or kernel; a pool layer's empty list stays empty
         network.restore(_random_like(rng, network.snapshot()))
         return
-    # every layer's W and b drawn in the shape the network's own snapshot has; a pool layer's
-    # empty entry stays empty
-    snapshot: list[tuple[Any, ...]] = []
-    for entry in network.snapshot():
-        if len(entry) == 0:
-            snapshot.append(())
-            continue
-        W, b = entry
-        snapshot.append(tuple(WRAP[backend](_random_like(rng, part.tolist())) for part in (W, b)))
-    network.restore(snapshot)
+    # every layer's parameters (W and b; P; gamma and beta; attention's eight) drawn in order, in
+    # the shapes the network's own snapshot has; a parameter-free layer's empty entry stays empty
+    network.restore(
+        [tuple(WRAP[backend](_random_like(rng, part.tolist())) for part in entry) for entry in network.snapshot()]
+    )
 
 
 def _train(network: Any, rows: Sequence[Example[Any]], backend: str) -> tuple[dict[str, Any], PreparedDataset | None]:
@@ -437,6 +480,14 @@ def run_all() -> dict[str, Any]:
 
     for name in RESIDUAL_NETWORKS:
         results[name] = _run_network(name, _residual_network(name), multiclass_rows, "predict_probabilities")
+
+    for name in PATCH_NETWORKS:
+        network = _sequential_network(name, (CONV_HEIGHT, CONV_WIDTH, 1), PATCH_SPECS, Adam())
+        results[name] = _run_network(name, network, conv_rows, "predict_probabilities")
+
+    for name in LAYER_NORM_NETWORKS:
+        network = _sequential_network(name, (DIMENSION,), LAYER_NORM_SPECS, Momentum(0.9))
+        results[name] = _run_network(name, network, multiclass_rows, "predict_probabilities")
     return results
 
 

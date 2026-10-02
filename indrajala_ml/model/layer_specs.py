@@ -182,18 +182,6 @@ def expand_specs(specs: Sequence[LayerSpec | Fork | Add]) -> list[ExpandedSpec]:
     return expanded
 
 
-def refuse_layer_norm_attention_until(specs: Sequence[LayerSpec], stage: str, where: str) -> None:
-    """A builder's or writer's refusal of the layer-norm and attention workplan's specs before the
-    stage that builds them there."""
-    kinds = dict.fromkeys(
-        type(spec).__name__ for spec in expand_specs(specs) if isinstance(spec, TokenSpec | LayerNorm)
-    )
-    if kinds:
-        raise NotImplementedError(
-            f"{', '.join(kinds)} {where}: not yet (the layer-norm and attention workplan, stage {stage})"
-        )
-
-
 def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:
     """
     Each expanded spec's place in specs as written, for messages: "layer 2", or inside a block

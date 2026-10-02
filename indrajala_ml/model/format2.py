@@ -24,20 +24,26 @@ network resumes training by bits, its dropout masks included.
   pure Python. class_count is the output layer's size.
 - layers holds each spec's fields under its kind: "dense", "conv", "pool", "batch_norm" (the
   batch-norm workplan, Format 2) or "residual", {"kind": "residual", "body": [...]} with the body's
-  entries (the residual-connections workplan, stage 5). A ReLU conv entry leaves out its
-  activation, as before ConvSpec had one; a linear conv entry has "activation": "linear". A dense
-  entry has "bias": true only for a residual block's affine layer.
+  entries (the residual-connections workplan, stage 5), and "patches", "position", "layer_norm",
+  "attention" or "token_mean" (the layer-norm and attention workplan, stage 5). A ReLU conv entry
+  leaves out its activation, as before ConvSpec had one; a linear conv entry has "activation":
+  "linear". A dense entry has "bias": true only for an affine layer (a residual block's, or a
+  token-wise embedding); a token-wise dense layer's entry is a dense one.
 - weights is the network's snapshot() as lists, one entry per layer, a residual block's flattened
   into its fork, body and add (layer_specs.expand_specs). On numpy and Rust, per layer: [W, b] (an
   affine layer's too); [W] for a linear (bias-free) layer; [gamma, beta, running_mean, running_var]
-  for a batch-norm layer; [] for a pool layer, a fork or an add. In pure Python, per node or
-  kernel: [weights, bias]; [weights] for a linear one; [[gamma], beta, running_mean, running_var]
-  per batch-norm channel.
+  for a batch-norm layer; [P] for a position; [gamma, beta] for a layer norm; [Wq, bq, Wk, bk, Wv,
+  bv, Wo, bo] for attention; [] for a pool layer, a fork, an add, patches or a token mean. In pure
+  Python, per node or kernel: [weights, bias]; [weights] for a linear one; [[gamma], beta,
+  running_mean, running_var] per batch-norm channel; [weights] per position row (a token's); [[gamma],
+  beta] per layer-norm feature; [weights, bias] per attention row, Wq's, then Wk's, Wv's and Wo's.
 - optimizer_state holds the step count t and, per layer (expanded, as weights), the rule's state or
   null: momentum's velocity, Adam's m and v. On numpy and Rust, per parameter (velocity_W,
-  velocity_b; velocity_W alone for a linear layer; velocity_gamma, velocity_beta for batch norm). In
-  pure Python, per node, kernel or channel (velocity_weights, velocity_bias; no bias entries for a
-  linear one, and a batch-norm channel's gamma is its one weight and its beta its bias).
+  velocity_b; velocity_W alone for a linear layer; velocity_gamma, velocity_beta for batch norm and
+  layer norm; velocity_P; velocity_Wq, velocity_bq, ... for attention). In pure Python, per node,
+  kernel, channel or row (velocity_weights, velocity_bias; no bias entries for a linear one or a
+  position row, and a batch-norm channel's or layer-norm feature's gamma is its one weight and its
+  beta its bias).
 - rng is the network's generator's state (the RNG generators workplan, D3): numpy's
   bit_generator.state, flattened, with the 128-bit state and inc as hex strings, since JSON readers
   outside Python lose precision on large integers. It's optional: a file saved before it loads with
@@ -62,15 +68,19 @@ from indrajala_ml.model.checkpoint import Checkpoint, OptimizerState
 from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.layer_specs import (
     Add,
+    Attention,
     BatchNorm,
     Dense,
     ExpandedSpec,
     Fork,
     InputShape,
+    LayerNorm,
     LayerSpec,
+    Patches,
+    Position,
     Residual,
+    TokenMean,
     expand_specs,
-    refuse_layer_norm_attention_until,
 )
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
@@ -84,6 +94,16 @@ IMPLEMENTATIONS = (PYTHON, "numpy", "rust")
 SHAPES = ("multiclass", "single_output")
 
 _RULES: dict[str, type[UpdateRule]] = {"sgd": SGD, "momentum": Momentum, "adam": Adam, "weight_decay": WeightDecay}
+# the layer-norm and attention workplan's specs by kind (stage 5); a token-wise dense layer's entry
+# is a "dense" one
+_TOKEN_SPECS: dict[str, type[Patches | Position | LayerNorm | Attention | TokenMean]] = {
+    "patches": Patches,
+    "position": Position,
+    "layer_norm": LayerNorm,
+    "attention": Attention,
+    "token_mean": TokenMean,
+}
+_TOKEN_KINDS = {cls: kind for kind, cls in _TOKEN_SPECS.items()}
 
 
 class _Optimizer(Protocol):
@@ -135,7 +155,6 @@ def _lists(value: Any) -> Any:
 
 
 def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
-    refuse_layer_norm_attention_until([spec], "5", "in format 2")
     if isinstance(spec, Residual):
         return {"kind": "residual", "body": [layer_to_json(layer) for layer in spec.body]}
     if isinstance(spec, ConvSpec):
@@ -158,7 +177,9 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
         if not spec.bias:
             del fields["bias"]
         return {"kind": "dense", **fields}
-    return {"kind": "pool", **asdict(spec)}
+    if isinstance(spec, PoolSpec):
+        return {"kind": "pool", **asdict(spec)}
+    return {"kind": _TOKEN_KINDS[type(spec)], **asdict(spec)}
 
 
 def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
@@ -174,6 +195,8 @@ def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
             return BatchNorm(**fields)
         case "residual":
             return Residual(tuple(layer_from_json(layer) for layer in spec["body"]))
+        case kind if kind in _TOKEN_SPECS:
+            return _TOKEN_SPECS[kind](**fields)
         case kind:
             raise ValueError(f"unknown layer kind {kind!r}")
 
@@ -221,9 +244,13 @@ def _state_names(rule: UpdateRule) -> tuple[str, ...]:
 def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
     # an array layer's parameters, in its parameters() order
     match spec:
-        case BatchNorm():
+        case BatchNorm() | LayerNorm():
             return ("gamma", "beta")
-        case Fork() | Add() | PoolSpec():
+        case Position():
+            return ("P",)
+        case Attention():
+            return ("Wq", "bq", "Wk", "bk", "Wv", "bv", "Wo", "bo")
+        case Fork() | Add() | PoolSpec() | Patches() | TokenMean():
             return ()
         case Dense() if spec.bias:
             return ("W", "b")
