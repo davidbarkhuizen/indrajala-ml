@@ -97,7 +97,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
 | `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
-| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study and the refactoring golden run; see `docs/measurement.md` |
+| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention study and the refactoring golden run; see `docs/measurement.md` |
 | `docs/` | the measurement guide, optimization docs, next steps, the PyPI release workplan, the primitives roadmap, the RNG audit, machine profiles |
 
 ## Models
@@ -125,9 +125,11 @@ network = SequentialArrayNetwork(
   (sigmoid or ReLU, dropout on sigmoid only), `Conv(kernel_size, channel_count, stride)`,
   `Pool(pool_size, stride)`, and the output layer `Dense(size, output=True, activation, loss)`
   (sigmoid with the squared or cross-entropy loss, or softmax with cross-entropy), with
-  `BatchNorm(activation)` after a linear layer (Batch normalization) and `Residual(body)` for a
-  dense residual block (Residual connections). Activations are fused into their layer.
-  `validate_layer_specs` refuses a list that some implementation can't build.
+  `BatchNorm(activation)` after a linear layer (Batch normalization), `Residual(body)` for a
+  residual block (Residual connections), `LayerNorm(epsilon)`, and a patch model's
+  `Patches(patch_size)`, `Position()`, `Attention()` and `TokenMean()` (Layer norm and
+  attention). Activations are fused into their layer. `validate_layer_specs` refuses a list that
+  some implementation can't build.
 - **Update rules** (`update_rules.py`) are data too: `SGD`, `Momentum`, `Adam` and `WeightDecay`
   (see Update rules, below).
 - **The optimizer** holds all of a network's update state: `NumpyOptimizer` and `RustOptimizer`
@@ -181,8 +183,9 @@ arguments. It equals, by bits, the Sequential network of the same specs and rule
 An empty cell has no preset, but the Sequential network of that implementation builds the
 combination, so each array preset has a pure-Python parity reference. Combinations the Sequential
 networks build that no preset has, and those still out of reach, are listed in
-[docs/next-steps.md](docs/next-steps.md), From composable layers. Batch norm and residual blocks
-have no preset: the Sequential networks build them (Batch normalization, Residual connections).
+[docs/next-steps.md](docs/next-steps.md), From composable layers. Batch norm, residual blocks,
+layer norm and patch models have no preset: the Sequential networks build them (Batch
+normalization, Residual connections, Layer norm and attention).
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,
 hand-computed examples, and the reference the array implementations are checked against. It is
@@ -474,10 +477,9 @@ A patch model, a small vision transformer (Dosovitskiy et al. 2020, "An Image is
 Words", arXiv 2010.11929), cuts the image into patches, one token each, embeds them, adds learned
 positions, passes them through pre-LN blocks, `x + F(LN(x))` (Xiong et al. 2020, arXiv
 2002.04745), averages over the tokens and classifies. Single-head self-attention, layer norm over
-tokens and over flat dense layers, for the Sequential networks of all three implementations. This
-section fixes the forms they are held to;
-[docs/layer-norm-attention-workplan.md](docs/layer-norm-attention-workplan.md) builds them stage by
-stage:
+tokens and over flat dense layers, for the Sequential networks of all three implementations,
+under every update rule; no preset has them. Format 2 saves them (Saving and loading). This
+section fixes the forms all three implementations are held to:
 
 ```python
 from indrajala_ml.model.layer_specs import Attention, Dense, LayerNorm, Patches, Position, Residual, TokenMean
@@ -592,6 +594,12 @@ layer's `W` in one fused call (Residual connections); right before a `LayerNorm`
 body starts with one, there is no `W` to read, and a sigmoid, ReLU or dropout layer takes the next
 layer's downstream and a mask op instead, its own expression unchanged.
 
+`scripts/patch_attention_study.py` trains patch models with an FFN block, an attention block, or
+both, against a conv network and a dense one, on MNIST under Adam (3 seeds, 5 epochs). Attention
+then FFN beats FFN alone by less than a standard deviation, 95.8% against 95.4%; the attention
+block alone is the weakest, 92.4%, below the dense control's 93.9%; and the conv network wins,
+98.0%, as Dosovitskiy et al. 2020 predict at this data size (the findings are in its docstring).
+
 ## Refactoring
 
 A structural refactoring changes structure only, never numerics. Every stage keeps every parity
@@ -619,7 +627,8 @@ test passing, and:
 - [docs/pypi-release-workplan.md](docs/pypi-release-workplan.md): publishing the Rust crate to
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
-  primitives: composable layers, batch norm, residual connections, then attention.
+  primitives: composable layers, batch norm, residual connections, layer norm and single-head
+  attention, then multi-head attention and a transformer block.
 - [docs/next-steps.md](docs/next-steps.md): the work left over from completed workplans, and how
   to read those workplans in git history.
 - [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's
