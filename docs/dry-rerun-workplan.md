@@ -1,6 +1,6 @@
 # Workplan: remove duplicated code, second pass (DRY rerun)
 
-**Status: in progress; decisions D1-D9 settled by the owner (2026-10-02). Stages 1-3 done.**
+**Status: in progress; decisions D1-D9 settled by the owner (2026-10-02). Stages 1-4 done.**
 
 The first DRY workplan (#506-#515, `git show e066333:docs/dry-workplan.md`) asked for the audit
 to be rerun after each new primitive ([next-steps.md](next-steps.md), "From the DRY audit").
@@ -173,8 +173,9 @@ cover the order unchanged.
 
 ### Stage 4: the builders (finding 6, D6)
 
-`_tokens` moves to `layer_specs.py` (public, beside `image_shape`); both builders import it. The
-pure-Python `_dense_layer` tests linear before dropout, as the array one does.
+`_tokens` moves to `layer_specs.py` (public, beside `image_shape`, as `token_shape`: the builders
+already name a local `tokens`); both builders import it. The pure-Python `_dense_layer` tests linear
+before dropout, as the array one does.
 
 ### Stage 5: the test helpers (findings 7 and 8, D7)
 

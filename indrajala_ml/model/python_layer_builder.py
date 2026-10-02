@@ -34,6 +34,7 @@ from indrajala_ml.model.layer_specs import (
     expand_specs,
     image_shape,
     spec_shapes,
+    token_shape,
     validate_layer_specs,
 )
 from indrajala_ml.model.linear_conv_layer import LinearConvLayer
@@ -48,12 +49,12 @@ from indrajala_ml.model.token_layer import PatchesLayer, PositionLayer, TokenDen
 def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
     if spec.bias:
         return AffineLayer(size=spec.size, input_layer=input_layer)
+    if spec.activation == "linear":
+        return LinearLayer(size=spec.size, input_layer=input_layer)
     if spec.dropout is not None:
         return make_dropout_layer_cls(spec.dropout)(size=spec.size, input_layer=input_layer)
     if spec.activation == "relu":
         return ReLULayer(size=spec.size, input_layer=input_layer)
-    if spec.activation == "linear":
-        return LinearLayer(size=spec.size, input_layer=input_layer)
     if spec.activation == "softmax":
         return SoftmaxOutputLayer(size=spec.size, input_layer=input_layer)
     if spec.loss == "cross_entropy":
@@ -61,18 +62,12 @@ def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
     return BackpropLayer(size=spec.size, input_layer=input_layer)
 
 
-def _tokens(shape: Shape) -> tuple[int, int]:
-    # a layer norm's input as (tokens, features): a flat layer, or a conv front end's image, is one
-    # token
-    return (shape[0], shape[1]) if len(shape) == 2 else (1, math.prod(shape))
-
-
 def _token_layer(
     spec: Patches | Position | LayerNorm | Attention | TokenMean, shape: Shape, input_layer: InputLayer
 ) -> TrainableLayer:
     if isinstance(spec, Patches):
         return PatchesLayer(input_layer, *image_shape(shape), spec.patch_size)
-    tokens, features = _tokens(shape)
+    tokens, features = token_shape(shape)
     if isinstance(spec, LayerNorm):
         return LayerNormLayer(input_layer, tokens, features, spec.epsilon)
     if isinstance(spec, Position):
