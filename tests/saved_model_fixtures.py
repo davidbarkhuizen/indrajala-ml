@@ -195,7 +195,9 @@ def _single_output(
     )
 
 
-def _conv(name: str, implementation: str, hyperparameters: dict[str, float] | None = None) -> SavedModelFixture:
+def _conv(
+    name: str, implementation: str, hyperparameters: dict[str, float] | None = None, format2: bool = False
+) -> SavedModelFixture:
     hyperparameters = hyperparameters or {}
     return SavedModelFixture(
         implementation,
@@ -204,6 +206,7 @@ def _conv(name: str, implementation: str, hyperparameters: dict[str, float] | No
         ),
         "predict_probabilities",
         hyperparameters,
+        format2=format2,
     )
 
 
@@ -366,6 +369,18 @@ FIXTURES: dict[str, SavedModelFixture] = {
             ("Momentum", MOMENTUM),
             ("Adam", ADAM),
             ("L2", L2),
+        )
+    },
+    # format 2 only
+    **{
+        name: _conv(name, implementation, hyperparameters, format2=True)
+        for name, implementation, hyperparameters in (
+            ("AdamConvMultiClassBackpropClassifierNetwork", "python", ADAM),
+            ("AdamConvVectorizedMultiClassBackpropClassifierNetwork", "numpy", ADAM),
+            ("AdamConvRustArrayMultiClassBackpropClassifierNetwork", "rust", ADAM),
+            ("L2RegularizedConvMultiClassBackpropClassifierNetwork", "python", L2),
+            ("L2ConvVectorizedMultiClassBackpropClassifierNetwork", "numpy", L2),
+            ("L2ConvRustArrayMultiClassBackpropClassifierNetwork", "rust", L2),
         )
     },
     "SequentialVectorizedMultiClassBackpropClassifierNetwork": _sequential("numpy", True, Adam(**ADAM)),

@@ -179,6 +179,8 @@ arguments. It equals, by bits, the Sequential network of the same specs and rule
 | … `WeightDecay` | `L2RegularizedMultiClassBackpropClassifierNetwork` | `L2VectorizedMultiClassBackpropClassifierNetwork` | `L2RustArrayMultiClassBackpropClassifierNetwork` |
 | conv and pool, then sigmoid multiclass, `SGD` | `ConvMultiClassBackpropClassifierNetwork` | `ConvVectorizedMultiClassBackpropClassifierNetwork` | `ConvRustArrayMultiClassBackpropClassifierNetwork` |
 | … `Momentum` | `MomentumConvMultiClassBackpropClassifierNetwork` | `MomentumConvVectorizedMultiClassBackpropClassifierNetwork` | `MomentumConvRustArrayMultiClassBackpropClassifierNetwork` |
+| … `Adam` | `AdamConvMultiClassBackpropClassifierNetwork` | `AdamConvVectorizedMultiClassBackpropClassifierNetwork` | `AdamConvRustArrayMultiClassBackpropClassifierNetwork` |
+| … `WeightDecay` | `L2RegularizedConvMultiClassBackpropClassifierNetwork` | `L2ConvVectorizedMultiClassBackpropClassifierNetwork` | `L2ConvRustArrayMultiClassBackpropClassifierNetwork` |
 
 An empty cell has no preset, but the Sequential network of that implementation builds the
 combination, so each array preset has a pure-Python parity reference. Combinations the Sequential
