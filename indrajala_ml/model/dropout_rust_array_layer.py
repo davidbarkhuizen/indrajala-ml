@@ -5,7 +5,7 @@ from typing import Any
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.residual_rust_array_layer import ForkRustArrayLayer
-from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.rust_array_layer import RustArrayLayer, before_layer_norm
 
 
 class DropoutRustArrayLayer(RustArrayLayer):
@@ -46,6 +46,11 @@ class DropoutRustArrayLayer(RustArrayLayer):
         return self.A
 
     def compute_hidden_delta(self, next_layer: Any) -> None:
+        if before_layer_norm(next_layer):
+            self.delta = pa.array_dropout_mask(
+                next_layer.downstream(), self._base_activation, self._mask, self._keep_probability, self._was_training
+            )
+            return
         if isinstance(next_layer, ForkRustArrayLayer):
             # before a residual block: the fused skip op (D8, RustArrayLayer.compute_hidden_delta)
             body = next_layer.body_first
@@ -69,6 +74,15 @@ class DropoutRustArrayLayer(RustArrayLayer):
         )
 
     def compute_hidden_delta_batch(self, next_layer: Any) -> None:
+        if before_layer_norm(next_layer):
+            self.delta_batch = pa.array_dropout_mask(
+                next_layer.downstream_batch(),
+                self._base_activation_batch,
+                self._mask_batch,
+                self._keep_probability,
+                self._was_training,
+            )
+            return
         if isinstance(next_layer, ForkRustArrayLayer):
             body = next_layer.body_first
             self.delta_batch = pa.layer_dropout_hidden_delta_skip_batch(

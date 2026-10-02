@@ -14,6 +14,7 @@ from indrajala_ml.model.affine_rust_array_layer import AffineRustArrayLayer
 from indrajala_ml.model.array_layer import ArrayLayer
 from indrajala_ml.model.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.attention_array_layer import AttentionArrayLayer
+from indrajala_ml.model.attention_rust_array_layer import AttentionRustArrayLayer
 from indrajala_ml.model.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
@@ -25,6 +26,7 @@ from indrajala_ml.model.cross_entropy_rust_array_layer import CrossEntropyRustAr
 from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
+from indrajala_ml.model.layer_norm_rust_array_layer import LayerNormRustArrayLayer
 from indrajala_ml.model.layer_specs import (
     Add,
     Attention,
@@ -40,7 +42,6 @@ from indrajala_ml.model.layer_specs import (
     TokenMean,
     expand_specs,
     image_shape,
-    refuse_layer_norm_attention_until,
     spec_shapes,
     validate_layer_specs,
 )
@@ -61,6 +62,12 @@ from indrajala_ml.model.token_array_layer import (
     PositionArrayLayer,
     TokenDenseArrayLayer,
     TokenMeanArrayLayer,
+)
+from indrajala_ml.model.token_rust_array_layer import (
+    PatchesRustArrayLayer,
+    PositionRustArrayLayer,
+    TokenDenseRustArrayLayer,
+    TokenMeanRustArrayLayer,
 )
 
 LayerClass = Callable[..., ArrayNetworkLayer[Any]]
@@ -139,7 +146,6 @@ class TokenLayerClasses:
     token_mean: LayerClass
 
 
-# Rust's come with the workplan's stage 4
 TOKEN_LAYER_CLASSES = {
     "numpy": TokenLayerClasses(
         token_dense=TokenDenseArrayLayer,
@@ -148,6 +154,14 @@ TOKEN_LAYER_CLASSES = {
         layer_norm=LayerNormArrayLayer,
         attention=AttentionArrayLayer,
         token_mean=TokenMeanArrayLayer,
+    ),
+    "rust": TokenLayerClasses(
+        token_dense=TokenDenseRustArrayLayer,
+        patches=PatchesRustArrayLayer,
+        position=PositionRustArrayLayer,
+        layer_norm=LayerNormRustArrayLayer,
+        attention=AttentionRustArrayLayer,
+        token_mean=TokenMeanRustArrayLayer,
     ),
 }
 
@@ -199,10 +213,8 @@ def build_array_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    if backend_name not in TOKEN_LAYER_CLASSES:
-        refuse_layer_norm_attention_until(specs, "4", f"on the {backend_name} backend")
     classes = LAYER_CLASSES[backend_name]
-    token_classes = TOKEN_LAYER_CLASSES.get(backend_name)
+    token_classes = TOKEN_LAYER_CLASSES[backend_name]
 
     layers: list[ArrayNetworkLayer[Any]] = []
     # each open block's fork, and the fork whose body's first layer comes next
@@ -220,7 +232,7 @@ def build_array_layers(
             fork.add = classes.add(fork)
             layers.append(fork.add)
             continue
-        token_layer = None if token_classes is None else _token_layer(token_classes, spec, shape.input_shape)
+        token_layer = _token_layer(token_classes, spec, shape.input_shape)
         if token_layer is not None:
             layers.append(token_layer)
         elif isinstance(spec, Dense):

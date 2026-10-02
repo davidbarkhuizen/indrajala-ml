@@ -1,6 +1,6 @@
 # Workplan: layer norm and single-head attention
 
-**Status: in progress; decisions D1-D12 settled (2026-10-02). Stages 0-3 done.**
+**Status: in progress; decisions D1-D12 settled (2026-10-02). Stages 0-4 done.**
 
 Roadmap step 4 ([primitives-roadmap.md](primitives-roadmap.md)). A small vision transformer on
 MNIST (Dosovitskiy et al. 2020, "An Image is Worth 16x16 Words", arXiv 2010.11929): the image cut

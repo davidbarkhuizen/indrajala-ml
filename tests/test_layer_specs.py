@@ -28,6 +28,7 @@ from indrajala_ml.model.layer_specs import (
     TokenMean,
     batch_norm_index,
     expand_specs,
+    refuse_layer_norm_attention_until,
     refuse_single_example_groups,
     refuse_single_example_network,
     spec_paths,
@@ -597,20 +598,19 @@ REFUSED = {f"tokens {name}": specs for name, specs in TOKENS.items()} | {
 
 
 @pytest.mark.parametrize("specs", REFUSED.values(), ids=REFUSED.keys())
-def test_numpy_and_pure_python_build_the_new_specs_and_the_rest_refuse_them_until_their_stages(
+def test_every_implementation_builds_the_new_specs_and_format_2_refuses_them_until_its_stage(
     specs: list[LayerSpec],
 ):
     input_shape = _input_shape(specs)
     build_array_layers(specs, input_shape, "numpy")
+    build_array_layers(specs, input_shape, "rust")
     size = math.prod(input_shape)
     build_python_layers(specs, input_shape, StateLayer(size, [(0.0, 1.0)] * size))
-    with pytest.raises(NotImplementedError, match="on the rust backend: not yet .* stage 4"):
-        build_array_layers(specs, input_shape, "rust")
     new = next(spec for spec in specs if not isinstance(spec, Dense | BatchNorm))
     with pytest.raises(NotImplementedError, match="in format 2: not yet .* stage 5"):
         layer_to_json(new)
 
 
 def test_the_refusal_names_each_new_kind_once():
-    with pytest.raises(NotImplementedError, match=r"^Patches, Position, LayerNorm, Attention, TokenMean on the rust"):
-        build_array_layers(TOKENS["the README's model"], (4, 4, 1), "rust")
+    with pytest.raises(NotImplementedError, match=r"^Patches, Position, LayerNorm, Attention, TokenMean in format 2"):
+        refuse_layer_norm_attention_until(TOKENS["the README's model"], "5", "in format 2")
