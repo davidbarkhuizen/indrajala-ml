@@ -12,6 +12,10 @@ tests/test_legacy_saved_models.py loads.
 - The residual fixtures (the residual-connections workplan, stage 5) are format-2 files of a
   Sequential network per implementation with two residual blocks, one holding a batch-norm pair,
   named Residual<class name>.
+- The patch-model and layer-norm fixtures (the layer-norm and attention workplan, stage 5) are
+  format-2 files of a Sequential network per implementation: a patch model with the attention and
+  FFN blocks, named Attention<class name>, and a dense network with flat layer norms after a
+  dropout layer and first in a residual body, named LayerNorm<class name>.
 
 Each fixture is two files in tests/fixtures/saved_models/: <name>.json, the file the class's
 own save() wrote, and <name>.expected.json, what the saved network held and predicted:
@@ -45,7 +49,19 @@ from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, InputShape, LayerSpec, Residual, expand_specs
+from indrajala_ml.model.layer_specs import (
+    Attention,
+    BatchNorm,
+    Dense,
+    InputShape,
+    LayerNorm,
+    LayerSpec,
+    Patches,
+    Position,
+    Residual,
+    TokenMean,
+    expand_specs,
+)
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import (
@@ -100,6 +116,25 @@ RESIDUAL: list[LayerSpec] = [
     Dense(4, activation="relu"),
     Residual((Dense(3, activation="relu"), Dense(4, activation="linear", bias=True))),
     Residual((Dense(3, activation="linear"), BatchNorm("relu"), Dense(4, activation="linear", bias=True))),
+    Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+]
+# the README's patch model over the 6x6 image: 4 patches of 3x3, embedded to 4, a position, the
+# attention and FFN blocks, the mean, a layer norm (epsilon off its default) and a softmax output
+PATCH_MODEL: list[LayerSpec] = [
+    Patches(3),
+    Dense(4, activation="linear", bias=True),
+    Position(),
+    Residual((LayerNorm(), Attention())),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
+    TokenMean(),
+    LayerNorm(epsilon=1e-4),
+    Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+]
+# flat layer norms: after a dropout layer (epsilon off its default), and first in a residual body
+LAYER_NORM: list[LayerSpec] = [
+    Dense(4, dropout=0.25),
+    LayerNorm(epsilon=1e-4),
+    Residual((LayerNorm(), Dense(3, activation="relu"), Dense(4, activation="linear", bias=True))),
     Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
 ]
 FORMAT_2_TRAINING_STEPS = 2
@@ -182,13 +217,16 @@ def _python_single_output(name: str, hyperparameters: dict[str, float] | None = 
 
 
 def _sequential(
-    implementation: str, multiclass: bool, rule: UpdateRule, class_name: str | None = None, residual: bool = False
+    implementation: str,
+    multiclass: bool,
+    rule: UpdateRule,
+    class_name: str | None = None,
+    architecture: tuple[InputShape, list[LayerSpec]] | None = None,
 ) -> SavedModelFixture:
+    # architecture is a named fixture's (class_name given): its input shape and layers
     def build() -> Any:
-        if residual:
-            input_shape, layers = (DIMENSION,), RESIDUAL
-        elif class_name is not None:
-            input_shape, layers = SEQUENTIAL_INPUT, BATCH_NORM
+        if architecture is not None:
+            input_shape, layers = architecture
         elif multiclass:
             input_shape, layers = SEQUENTIAL_INPUT, SEQUENTIAL_MULTICLASS
         else:
@@ -294,7 +332,7 @@ FIXTURES: dict[str, SavedModelFixture] = {
     "SequentialRustArrayBackpropClassifierNetwork": _sequential("rust", False, Momentum(**MOMENTUM)),
     "SequentialBackpropClassifierNetwork": _sequential("python", False, WeightDecay(**L2)),
     **{
-        f"BatchNorm{name}": _sequential(implementation, True, Adam(**ADAM), name)
+        f"BatchNorm{name}": _sequential(implementation, True, Adam(**ADAM), name, (SEQUENTIAL_INPUT, BATCH_NORM))
         for name, implementation in (
             ("SequentialVectorizedMultiClassBackpropClassifierNetwork", "numpy"),
             ("SequentialRustArrayMultiClassBackpropClassifierNetwork", "rust"),
@@ -302,7 +340,19 @@ FIXTURES: dict[str, SavedModelFixture] = {
         )
     },
     **{
-        f"Residual{name}": _sequential(implementation, True, Adam(**ADAM), name, residual=True)
+        f"Residual{name}": _sequential(implementation, True, Adam(**ADAM), name, ((DIMENSION,), RESIDUAL))
+        for name, implementation in (
+            ("SequentialVectorizedMultiClassBackpropClassifierNetwork", "numpy"),
+            ("SequentialRustArrayMultiClassBackpropClassifierNetwork", "rust"),
+            ("SequentialMultiClassBackpropClassifierNetwork", "python"),
+        )
+    },
+    **{
+        f"{prefix}{name}": _sequential(implementation, True, Adam(**ADAM), name, architecture)
+        for prefix, architecture in (
+            ("Attention", (SEQUENTIAL_INPUT, PATCH_MODEL)),
+            ("LayerNorm", ((DIMENSION,), LAYER_NORM)),
+        )
         for name, implementation in (
             ("SequentialVectorizedMultiClassBackpropClassifierNetwork", "numpy"),
             ("SequentialRustArrayMultiClassBackpropClassifierNetwork", "rust"),

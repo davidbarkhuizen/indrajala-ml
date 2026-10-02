@@ -224,6 +224,10 @@ network = load_network("model.json")  # the Sequential network the file describe
 - A residual block's entry is `{"kind": "residual", "body": [...]}`, with its body's entries; its
   affine layer's entry alone has `"bias": true`. Weights and optimizer state are per layer of the
   flattened block (`expand_specs`): an affine layer's `W` and `b`, nothing for the fork and add.
+- The patch model's entries are `"patches"`, `"position"`, `"layer_norm"`, `"attention"` and
+  `"token_mean"`; a token-wise dense layer's is a `"dense"` one. Weights and optimizer state:
+  `Position`'s `P`, a layer norm's `γ` and `β` (flat or over tokens), attention's `Wq, bq, Wk, bk,
+  Wv, bv, Wo, bo`, nothing for `Patches` or `TokenMean` (`tests/test_attention_format2.py`).
 - `load` still reads each class's legacy file, written before format 2, with fresh optimizer
   state (`tests/test_legacy_saved_models.py`). Files saved in format 2 don't load on older versions
   of this package.
