@@ -1,11 +1,11 @@
 """
 Patch models in pure Python (the layer-norm and attention workplan, stage 3; README, Layer norm and
-attention): the gradient check on every accepted patch model, the layers the builder wires and what
-randomize draws, Patches, Position and TokenMean against the README's indices and sums and against
-numpy by bits, the exact tests (one token, uniform attention, an identity attention block), learn
-against a batch of one, the layer-major path's lanes (attention's own caches among them) against
-the example-major loop, and parity with numpy after 50 steps. The cases are
-tests/test_attention_array_network.py's.
+attention): what randomize draws, Patches, Position and TokenMean against the README's indices and
+sums and against numpy by bits, the exact tests (one token, uniform attention, an identity attention
+block), the layer-major path's lanes (attention's own caches among them) against the example-major
+loop, and parity with numpy after 50 steps. The cases are tests/test_attention_array_network.py's;
+the gradient check, the README model's wiring and learn against a batch of one are
+tests/test_attention_network.py's.
 """
 
 import math
@@ -19,17 +19,16 @@ from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.attention_layer import AttentionLayer
 from indrajala_ml.model.batch_norm_layer import BatchNormLayer, fold
 from indrajala_ml.model.layer_norm_layer import LayerNormLayer
-from indrajala_ml.model.layer_specs import InputShape, LayerNorm, LayerSpec, Position, TokenMean, batch_norm_index
+from indrajala_ml.model.layer_specs import InputShape, LayerNorm, LayerSpec, Position, TokenMean
 from indrajala_ml.model.linear_layer import LinearLayer
-from indrajala_ml.model.residual_layer import AddLayer, ForkLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.token_array_layer import PatchesArrayLayer, PositionArrayLayer, TokenMeanArrayLayer
-from indrajala_ml.model.token_layer import PatchesLayer, PositionLayer, TokenDenseLayer, TokenMeanLayer
+from indrajala_ml.model.token_layer import PatchesLayer, PositionLayer, TokenMeanLayer
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
-from tests.gradient_check import analytic_gradients, check_gradients
+from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, split
 from tests.test_attention_array_network import IMAGE, rows
 from tests.test_batch_norm_python_network import _as_array_snapshot
@@ -60,48 +59,6 @@ def as_array_snapshot(python: Any) -> list[tuple[Any, ...]]:
                 values for rows_ in projections for values in ([w for w, _ in rows_], [b for _, b in rows_])
             )
     return snapshot
-
-
-@pytest.mark.parametrize("batch_size", [1, 3])
-@pytest.mark.parametrize("name", TOKENS)
-def test_every_gradient_matches_its_finite_difference(name: str, batch_size: int):
-    if batch_size == 1 and batch_norm_index(TOKENS[name]) is not None:
-        pytest.skip("batch norm trains on batches only (the batch-norm workplan, D4)")
-    built = network(TOKENS[name])
-    # a trained step first, so gamma, beta and the positions aren't at their initial values
-    built.learn_batch(0.5, rows(4, seed=2))
-
-    check_gradients(built, *split(rows(batch_size)))
-
-
-def test_the_readme_model_builds_its_layers_wired_together():
-    built = network(TOKENS["the README's model"])
-    kinds: list[type] = [type(layer) for layer in built.trainable_layers]
-    assert kinds == [
-        PatchesLayer,
-        TokenDenseLayer,
-        PositionLayer,
-        ForkLayer,
-        LayerNormLayer,
-        AttentionLayer,
-        AddLayer,
-        ForkLayer,
-        LayerNormLayer,
-        TokenDenseLayer,
-        TokenDenseLayer,
-        AddLayer,
-        TokenMeanLayer,
-        LayerNormLayer,
-        type(built.output_layer),
-    ]
-    patches, embed, position, fork, norm, attention, add = built.trainable_layers[:7]
-    assert fork.body_first is norm and fork.add is add and attention.input_layer is norm
-    assert (patches.size, len(embed.units), embed.input_size, len(position.rows)) == (16, 6, 4, 4)
-    assert (norm.tokens, norm.features, attention.tokens, attention.features) == (4, 6, 4, 6)
-    final = built.trainable_layers[13]
-    assert (final.tokens, final.features) == (1, 6)
-    # per layer, its weight sets: embedding units, position rows, features, attention's 4 * 6 rows, ...
-    assert [len(entry) for entry in built.snapshot()] == [0, 6, 4, 0, 6, 24, 0, 0, 6, 8, 6, 0, 0, 6, 3]
 
 
 def test_randomize_draws_weights_then_bias_per_unit_and_row_and_nothing_for_the_parameter_free_layers():
@@ -252,17 +209,6 @@ def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradi
     outside = [0, 1, 2, *range(7, 14)]
     blocked_gradients = analytic_gradients(blocked, states, labels)
     assert bits([blocked_gradients[i] for i in outside]) == bits(analytic_gradients(plain, states, labels))
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("name", ["the README's model", "token-wise layers after a block"])
-def test_learn_and_a_learn_batch_of_one_example_agree_by_bits(name: str, rule: UpdateRule):
-    single, batched = network(TOKENS[name], rule), network(TOKENS[name], rule)
-    for state, label in rows(6, seed=4):
-        single.learn(0.5, state, label)
-        batched.learn_batch(0.5, [(state, label)])
-
-    assert bits(single.snapshot()) == bits(batched.snapshot())
 
 
 @pytest.mark.parametrize("rule", [Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
