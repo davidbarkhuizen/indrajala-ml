@@ -35,7 +35,42 @@ def fold(values: Sequence[float]) -> float:
     return total
 
 
-class BatchNormNode(AbstractNode):
+class GammaAsWeights:
+    """
+    A feature's gamma and beta as the WeightSet the optimizer steps: [gamma] as the weights and
+    beta as the bias, never decayed (the batch-norm workplan's D7). Batch norm's BatchNormNode and layer norm's
+    LayerNormFeature; each sets gamma, beta and the accumulators in its __init__.
+    """
+
+    weights_decayed: ClassVar[bool] = False
+    has_bias: ClassVar[bool] = True
+
+    gamma: float
+    beta: float
+    weight_gradient_accum: list[float]
+    bias_gradient_accum: float
+
+    @property
+    def weights(self) -> Sequence[float]:
+        return [self.gamma]
+
+    def set_weights(self, weights: list[float]) -> None:
+        (self.gamma,) = weights
+
+    @property
+    def bias(self) -> float:
+        return self.beta
+
+    @bias.setter
+    def bias(self, value: float) -> None:
+        self.beta = value
+
+    def reset_gradient_accum(self) -> None:
+        self.weight_gradient_accum = [0.0]
+        self.bias_gradient_accum = 0.0
+
+
+class BatchNormNode(GammaAsWeights, AbstractNode):
     """
     One feature or channel: gamma and beta (the WeightSet the optimizer steps, as [gamma] and a
     bias beta), the running averages, and over a training batch its lists of d = x - mu, x-hat, the
@@ -43,10 +78,6 @@ class BatchNormNode(AbstractNode):
     without a group_size). As a dense layer's node, value(), delta and dx are the selected
     example's (BatchNormLayer.select_example), or the inference forward pass's.
     """
-
-    # gamma and beta are not decayed (D7); beta steps as a bias
-    weights_decayed: ClassVar[bool] = False
-    has_bias: ClassVar[bool] = True
 
     def __init__(self, input_node: AbstractNode) -> None:
         self.input_node = input_node
@@ -85,26 +116,6 @@ class BatchNormNode(AbstractNode):
     def activate(self, value: float) -> None:
         # the layer computes a feature's activation, over the batch or in inference
         self._activation = value
-
-    # the WeightSet surface (layer_protocols.py)
-    @property
-    def weights(self) -> Sequence[float]:
-        return [self.gamma]
-
-    def set_weights(self, weights: list[float]) -> None:
-        (self.gamma,) = weights
-
-    @property
-    def bias(self) -> float:
-        return self.beta
-
-    @bias.setter
-    def bias(self, value: float) -> None:
-        self.beta = value
-
-    def reset_gradient_accum(self) -> None:
-        self.weight_gradient_accum = [0.0]
-        self.bias_gradient_accum = 0.0
 
 
 class BatchNormPosition(AbstractNode):
