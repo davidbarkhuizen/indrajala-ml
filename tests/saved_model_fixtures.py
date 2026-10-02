@@ -16,6 +16,8 @@ tests/test_legacy_saved_models.py loads.
   format-2 files of a Sequential network per implementation: a patch model with the attention and
   FFN blocks, named Attention<class name>, and a dense network with flat layer norms after a
   dropout layer and first in a residual body, named LayerNorm<class name>.
+- The pure-Python multiclass presets' fixtures (the presets workplan, stage 1) are format 2 only,
+  like the single-output ones: those classes never wrote a legacy envelope.
 
 Each fixture is two files in tests/fixtures/saved_models/: <name>.json, the file the class's
 own save() wrote, and <name>.expected.json, what the saved network held and predicted:
@@ -197,12 +199,16 @@ def _conv(name: str, implementation: str, hyperparameters: dict[str, float] | No
     )
 
 
-def _python_multiclass(name: str) -> SavedModelFixture:
+def _python_multiclass(
+    name: str, hyperparameters: dict[str, float] | None = None, format2: bool = False
+) -> SavedModelFixture:
+    hyperparameters = hyperparameters or {}
     return SavedModelFixture(
         "python",
-        lambda: MODEL_CLASSES[name](LAYER_SIZES, DIMENSION, INPUT_BOUNDS, CLASS_COUNT),
+        lambda: MODEL_CLASSES[name](LAYER_SIZES, DIMENSION, INPUT_BOUNDS, CLASS_COUNT, **hyperparameters),
         "predict_probabilities",
-        {},
+        hyperparameters,
+        format2=format2,
     )
 
 
@@ -324,6 +330,20 @@ FIXTURES: dict[str, SavedModelFixture] = {
             ("DropoutBackpropClassifierNetwork", DROPOUT),
             ("ReLUBackpropClassifierNetwork", None),
             ("BinaryCrossEntropyBackpropClassifierNetwork", None),
+        )
+    },
+    # format 2 only
+    **{
+        f"{prefix}MultiClassBackpropClassifierNetwork": _python_multiclass(
+            f"{prefix}MultiClassBackpropClassifierNetwork", hyperparameters, format2=True
+        )
+        for prefix, hyperparameters in (
+            ("CrossEntropy", None),
+            ("ReLU", None),
+            ("Dropout", DROPOUT),
+            ("Momentum", MOMENTUM),
+            ("Adam", ADAM),
+            ("L2Regularized", L2),
         )
     },
     "SequentialVectorizedMultiClassBackpropClassifierNetwork": _sequential("numpy", True, Adam(**ADAM)),

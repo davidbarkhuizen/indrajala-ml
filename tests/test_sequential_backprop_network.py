@@ -14,21 +14,35 @@ from typing import Any
 import pytest
 
 from indrajala_ml.model.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
+from indrajala_ml.model.adam_multiclass_backprop_classifier_network import AdamMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
     BinaryCrossEntropyBackpropClassifierNetwork,
 )
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.cross_entropy_multiclass_backprop_classifier_network import (
+    CrossEntropyMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.dropout_backprop_classifier_network import DropoutBackpropClassifierNetwork
+from indrajala_ml.model.dropout_multiclass_backprop_classifier_network import (
+    DropoutMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
 from indrajala_ml.model.l2_regularized_backprop_classifier_network import L2RegularizedBackpropClassifierNetwork
+from indrajala_ml.model.l2_regularized_multiclass_backprop_classifier_network import (
+    L2RegularizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.layer_specs import Conv, Dense, InputShape, LayerSpec, Pool
 from indrajala_ml.model.momentum_backprop_classifier_network import MomentumBackpropClassifierNetwork
 from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (
     MomentumConvMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.momentum_multiclass_backprop_classifier_network import (
+    MomentumMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.model.relu_backprop_classifier_network import ReLUBackpropClassifierNetwork
+from indrajala_ml.model.relu_multiclass_backprop_classifier_network import ReLUMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
@@ -65,6 +79,48 @@ PRESETS: dict[str, tuple[Callable[[], Any], InputShape, list[LayerSpec], UpdateR
         (DIMENSION,),
         [*HIDDEN, Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy")],
         SGD(),
+        True,
+    ),
+    "multiclass cross-entropy": (
+        lambda: CrossEntropyMultiClassBackpropClassifierNetwork([5, 4], DIMENSION, BOUNDS, CLASS_COUNT),
+        (DIMENSION,),
+        [*HIDDEN, Dense(CLASS_COUNT, output=True, loss="cross_entropy")],
+        SGD(),
+        True,
+    ),
+    "multiclass relu": (
+        lambda: ReLUMultiClassBackpropClassifierNetwork([5, 4], DIMENSION, BOUNDS, CLASS_COUNT),
+        (DIMENSION,),
+        [Dense(5, activation="relu"), Dense(4, activation="relu"), OUTPUT],
+        SGD(),
+        True,
+    ),
+    "multiclass dropout": (
+        lambda: DropoutMultiClassBackpropClassifierNetwork([5, 4], DIMENSION, BOUNDS, CLASS_COUNT, 0.3),
+        (DIMENSION,),
+        [Dense(5, dropout=0.3), Dense(4, dropout=0.3), OUTPUT],
+        SGD(),
+        True,
+    ),
+    "multiclass momentum": (
+        lambda: MomentumMultiClassBackpropClassifierNetwork([5, 4], DIMENSION, BOUNDS, CLASS_COUNT, 0.9),
+        (DIMENSION,),
+        [*HIDDEN, OUTPUT],
+        Momentum(0.9),
+        True,
+    ),
+    "multiclass adam": (
+        lambda: AdamMultiClassBackpropClassifierNetwork([5, 4], DIMENSION, BOUNDS, CLASS_COUNT, 0.8, 0.99, 1e-7),
+        (DIMENSION,),
+        [*HIDDEN, OUTPUT],
+        Adam(0.8, 0.99, 1e-7),
+        True,
+    ),
+    "multiclass l2": (
+        lambda: L2RegularizedMultiClassBackpropClassifierNetwork([5, 4], DIMENSION, BOUNDS, CLASS_COUNT, 0.02),
+        (DIMENSION,),
+        [*HIDDEN, OUTPUT],
+        WeightDecay(0.02),
         True,
     ),
     "conv": (
