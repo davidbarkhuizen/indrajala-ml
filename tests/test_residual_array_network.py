@@ -1,8 +1,9 @@
 """
 Residual blocks on the array backends (the residual-connections workplan, stages 2 and 4; README,
-Residual connections): the gradient check on residual networks, identity blocks (an affine layer of zeros
-makes a block the identity, by bits, in the forward and the backward pass), learn against a batch
-of one, the block's layers, and the fork's input left as it was.
+Residual connections): randomize's draws, identity blocks (an affine layer of zeros makes a block
+the identity, by bits, in the forward and the backward pass), and the fork's input left as it was.
+The cases are shared: the gradient check, the block's layers and learn against a batch of one are
+tests/test_residual_network.py's, on every implementation.
 """
 
 import random
@@ -12,11 +13,10 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.array_layer_builder import LAYER_CLASSES
 from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerSpec, Residual
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule
-from tests.gradient_check import analytic_gradients, check_gradients
+from indrajala_ml.model.update_rules import SGD, UpdateRule
+from tests.gradient_check import analytic_gradients
 from tests.helpers import bits
 
 INPUT = 4
@@ -69,32 +69,6 @@ def rows(count: int, shape: str = "multiclass", seed: int = 1) -> list[tuple[tup
         (tuple(rng.uniform(-1.0, 1.0) for _ in range(INPUT)), float(i % 2) if shape == "single_output" else i % 3)
         for i in range(count)
     ]
-
-
-@pytest.mark.parametrize("backend", BACKENDS, ids=lambda backend: backend.name)
-@pytest.mark.parametrize("shape", ["multiclass", "single_output"])
-@pytest.mark.parametrize("name", NETWORKS)
-def test_every_gradient_matches_its_finite_difference(name: str, shape: Shape, backend: Any):
-    built = network(name, shape, backend=backend)
-    # a trained step first, so the affine layers and batch norm aren't at their initial values
-    built.learn_batch(0.5, rows(6, shape, seed=2))
-    batch = rows(5, shape)
-
-    check_gradients(built, [state for state, _ in batch], [label for _, label in batch])
-
-
-@pytest.mark.parametrize("backend", BACKENDS, ids=lambda backend: backend.name)
-def test_a_block_builds_a_fork_its_body_and_an_add_wired_together(backend: Any):
-    built = network("sigmoid body", backend=backend)
-    dense, fork, body, end, add, out = built.layers
-
-    classes = LAYER_CLASSES[backend.name]
-    assert (type(fork), type(add), type(end)) == (classes.fork, classes.add, classes.affine)
-    assert fork.body_first is body and fork.add is add and add.fork is fork
-    assert (fork.size, add.size, end.W.shape, end.b.shape) == (INPUT, INPUT, (INPUT, 5), (INPUT,))
-    # the fork and add hold nothing: their snapshot entries are empty
-    assert [len(entry) for entry in built.snapshot()] == [2, 0, 2, 2, 0, 2]
-    assert dense.W.shape == (INPUT, INPUT) and out.W.shape == (3, INPUT)
 
 
 def test_randomize_draws_w_then_b_per_weighted_layer_and_nothing_for_the_fork_or_add():
@@ -159,26 +133,6 @@ def test_an_identity_block_changes_no_output_and_no_other_layers_gradient_by_bit
     residual.learn(0.5, *batch[0])
     trained = residual.snapshot()
     assert bits([trained[i] for i in (0, 5, 6)]) == bits(plain.snapshot())
-
-
-@pytest.mark.parametrize("backend", BACKENDS, ids=lambda backend: backend.name)
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("name", ["sigmoid body", "relu body", "two blocks in a row", "block first"])
-def test_learn_and_a_learn_batch_of_one_example_agree(name: str, rule: UpdateRule, backend: Any):
-    single, batched = network(name, rule=rule, backend=backend), network(name, rule=rule, backend=backend)
-
-    for state, label in rows(6, seed=4):
-        single.learn(0.5, state, label)
-        batched.learn_batch(0.5, [(state, label)])
-
-    # numpy's single-example W @ x and the batch's X @ W.T are different BLAS calls, which can
-    # differ in the last bit (ArrayNetworkBase.classify_rows); Rust's are one loop, so by bits
-    if backend is NUMPY:
-        for one, other in zip(single.snapshot(), batched.snapshot(), strict=True):
-            for a, b in zip(one, other, strict=True):
-                assert a == pytest.approx(b, rel=1e-12, abs=1e-15)
-    else:
-        assert bits(single.snapshot()) == bits(batched.snapshot())
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda backend: backend.name)

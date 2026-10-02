@@ -1,11 +1,11 @@
 """
 Patch models and flat layer norms on Rust (the layer-norm and attention workplan, stage 4; README,
-Layer norm and attention): randomize's draws against numpy's by bits, the gradient check and learn
-against a batch of one on the flat layer norms, the exact tests (one token, uniform attention, an
-identity attention block), the layer before a LayerNorm taking its downstream through a mask op
-(D5), and parity with numpy: after 50 steps under the rules whose step is linear in the gradient,
-and per step under Adam. The cases are tests/test_layer_specs.py's; the patch models' gradient
-check, wiring and learn against a batch of one are tests/test_attention_network.py's.
+Layer norm and attention): randomize's draws against numpy's by bits, the exact tests (one token,
+uniform attention, an identity attention block), the layer before a LayerNorm taking its downstream
+through a mask op (D5), and parity with numpy: after 50 steps under the rules whose step is linear
+in the gradient, and per step under Adam. The cases are tests/test_layer_specs.py's; the gradient
+check, wiring and learn against a batch of one are tests/test_attention_network.py's (patch models)
+and tests/test_layer_norm_network.py's (flat layer norms).
 """
 
 import math
@@ -22,7 +22,7 @@ from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.attention_rust_array_layer import AttentionRustArrayLayer
 from indrajala_ml.model.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerNorm, LayerSpec, Residual, TokenMean, batch_norm_index
+from indrajala_ml.model.layer_specs import BatchNorm, Dense, LayerNorm, LayerSpec, Residual, TokenMean
 from indrajala_ml.model.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
@@ -30,7 +30,7 @@ from indrajala_ml.model.token_rust_array_layer import (
     TokenMeanRustArrayLayer,
 )
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from tests.gradient_check import analytic_gradients, check_gradients
+from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, exp_by_crate, patching, split, to_numpy
 from tests.test_layer_specs import (
     AFFINE_5,
@@ -46,8 +46,8 @@ from tests.test_layer_specs import (
     _input_shape,  # pyright: ignore[reportPrivateUsage]
 )
 
-# the flat layer norms; the patch models' gradient check, wiring and learn against a batch of one are
-# tests/test_attention_network.py's
+# the flat layer norms; the gradient check, wiring and learn against a batch of one are
+# tests/test_attention_network.py's (patch models) and tests/test_layer_norm_network.py's (flat)
 FLAT = {f"flat, {name}": specs for name, specs in FLAT_LAYER_NORM.items()}
 CASES = TOKENS | FLAT
 
@@ -71,37 +71,6 @@ def _as_numpy(snapshot: list[tuple[Any, ...]]) -> list[tuple[FloatArray, ...]]:
 
 # numpy's softmax exp as the crate's (Rust's f64::exp)
 crate_exp = patching(attention_array_layer, "exp", exp_by_crate)
-
-
-def _freeze(layer: DropoutRustArrayLayer) -> None:
-    # a fresh generator before every forward pass, so the gradient check's perturbed passes drop the
-    # same nodes as its training step (the crate draws the mask from a crate Generator itself)
-    forward, forward_batch = layer.forward, layer.forward_batch
-
-    def frozen(x: Any) -> Any:
-        layer.set_rng(pa.default_rng(11))
-        return forward(x)
-
-    def frozen_batch(X: Any) -> Any:
-        layer.set_rng(pa.default_rng(11))
-        return forward_batch(X)
-
-    layer.forward, layer.forward_batch = frozen, frozen_batch  # pyright: ignore[reportAttributeAccessIssue]
-
-
-@pytest.mark.parametrize("batch_size", [1, 3])
-@pytest.mark.parametrize("name", FLAT)
-def test_every_gradient_matches_its_finite_difference(name: str, batch_size: int):
-    if batch_size == 1 and batch_norm_index(FLAT[name]) is not None:
-        pytest.skip("batch norm trains on batches only (the batch-norm workplan, D4)")
-    built = network(FLAT[name])
-    for layer in built.layers:
-        if isinstance(layer, DropoutRustArrayLayer):
-            _freeze(layer)
-    # a trained step first, so gamma, beta and the positions aren't at their initial values
-    built.learn_batch(0.5, rows(FLAT[name], 4, seed=2))
-
-    check_gradients(built, *split(rows(FLAT[name], batch_size)))
 
 
 @pytest.mark.parametrize("name", CASES)
@@ -168,24 +137,6 @@ def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradi
     assert [np.asarray(g).tobytes() for i in outside for g in blocked_gradients[i]] == [
         np.asarray(g).tobytes() for layer in plain_gradients for g in layer
     ]
-
-
-SINGLE = ["flat, after sigmoid", "flat, before a block"]
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("name", SINGLE)
-def test_learn_and_a_learn_batch_of_one_example_agree_by_bits(name: str, rule: UpdateRule):
-    # each token layer's and layer norm's single-example ops give a batch of one's bits, and so do
-    # the crate's dense ops (W @ x against X @ W.T, outer against delta^T X at one row)
-    single, batched = network(CASES[name], rule), network(CASES[name], rule)
-    for state, label in rows(CASES[name], 6, seed=4):
-        single.learn(0.5, state, label)
-        batched.learn_batch(0.5, [(state, label)])
-
-    assert bits([a for entry in _as_numpy(single.snapshot()) for a in entry]) == bits(
-        [a for entry in _as_numpy(batched.snapshot()) for a in entry]
-    )
 
 
 # the layer right before a LayerNorm, or a fork whose body starts with one (D5), and its mask

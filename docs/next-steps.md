@@ -2,8 +2,7 @@
 
 A workplan is deleted once its last stage merges. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
-[dry-rerun-workplan.md](dry-rerun-workplan.md). The order
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order
 of the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
@@ -21,6 +20,7 @@ docs cite them by section:
 | Explicit generator objects (RNG generators) | #521 | crate #46, #522-#529 | `git show aaf8bb2:docs/rng-generators-workplan.md` |
 | Residual connections (roadmap step 3) | #531 | crate #47, #532-#538 | `git show 365a173:docs/residual-connections-workplan.md` |
 | Layer norm and single-head attention (roadmap step 4) | #540 | crate #48, #542-#548 | `git show 7d3bd0a:docs/layer-norm-attention-workplan.md` |
+| Removing duplicated code, second pass (DRY rerun) | #550 | #551-#557 | `git show 88e1815:docs/dry-rerun-workplan.md` |
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention), [measurement.md](measurement.md)
@@ -119,17 +119,35 @@ Still out of scope:
   defined in more than one module, and the twin classes read side by side. The 2026-10-01 audit
   found 0.29% duplicated at 8 lines or more in the package, and 0.91% at 10 lines or more in the
   tests.
+  The rerun of 2026-10-02 (the DRY rerun workplan, #550-#557) found 0.20% at 8 lines or more in
+  the package and 0.16% at 10 lines or more in the tests, the copies left having come in with
+  residual connections, layer norm and attention.
 - **Shared homes for the next layer kind.** The conv and pool argument checks and output size are
   in `model/window_geometry.py`, one shape walk (`layer_specs.spec_shapes`) feeds both builders,
   the optimizers share `OptimizerBase` and `ArrayOptimizerBase`, and a layer's optimizer accessors
-  are `WeightAndBias` or `GammaAndBeta` (`array_parameters.py`). A new layer kind extends these
-  rather than adding a copy.
+  are `WeightAndBias`, `GammaAndBeta` or `AttentionProjections` (`array_parameters.py`). A hidden
+  layer takes its output-delta refusals, its downstream-as-delta methods and its no-op gradient
+  accumulation from `model/hidden_layers.py` (`Hidden`, `DeltaIsDownstream`, `ParameterFree`); a
+  pure-Python gamma-and-beta row from `GammaAsWeights`; a token shape from
+  `layer_specs.token_shape`. Tests share `bits`, `split`, `max_relative_gap`, `patching` and
+  `randomized` (`tests/helpers.py`), and a scenario every implementation runs takes conftest's
+  `implementation` fixture (`tests/test_{attention,residual,layer_norm}_network.py`). A new layer
+  kind extends these rather than adding a copy.
+- **The linear, conv and batch-norm layers' own output-delta refusals** (the rerun's stage 1).
+  They are hand-written, with their own messages, rather than taken from `Hidden`; they were not
+  in the rerun's findings. Move them onto the mixin when one of those layers is next touched.
+- **The builders' wiring loop** (the rerun's D6). The fork, add and body-first loop is the same in
+  `python_layer_builder.py` and `array_layer_builder.py`; sharing it needs callbacks for the fork
+  and the add, more indirection than its 12 lines are worth. Revisit if another layer kind that
+  links layers arrives.
 
 Still out of scope:
 
 - The crate (the workplan's D1), and scripts and demos (D5): they get their own audit if wanted.
 - The numpy and Rust layer twins' numerics (D3): they share identical methods only; their method
   bodies (a numpy expression against one fused Rust call) stay separate by design.
+- The Add twins (the rerun's D2): `AddArrayLayer` and `AddRustArrayLayer` have the same method
+  bodies, but each backend keeps its own named, typed class, which the tests check.
 
 ## From residual connections
 

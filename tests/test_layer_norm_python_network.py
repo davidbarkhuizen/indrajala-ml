@@ -1,9 +1,9 @@
 """
 Layer norm in pure Python (the layer-norm and attention workplan, stage 3; README, Layer norm and
 attention): LayerNormLayer against hand-computed values and against numpy's layer by bits, over
-tokens and over a flat layer; the gradient check on dense networks with a flat LayerNorm; learn
-against a batch of one; and parity with numpy after 50 steps. The cases are
-tests/test_layer_norm_array_network.py's.
+tokens and over a flat layer, and parity with numpy after 50 steps. The cases are
+tests/test_layer_specs.py's; the gradient check and learn against a batch of one are
+tests/test_layer_norm_network.py's, on every implementation.
 """
 
 import math
@@ -15,13 +15,12 @@ import pytest
 from indrajala_ml.model.array_backend import NUMPY
 from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
 from indrajala_ml.model.layer_norm_layer import LayerNormLayer
-from indrajala_ml.model.layer_specs import LayerSpec, batch_norm_index
+from indrajala_ml.model.layer_specs import LayerSpec
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.state_layer import StateLayer
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
-from tests.gradient_check import check_gradients
 from tests.helpers import bits
 from tests.test_attention_python_network import (
     as_array_snapshot,
@@ -93,46 +92,6 @@ def test_a_layer_norm_is_numpys_by_bits(tokens: int):
     gradients = [channel.weight_gradient_accum[0] for channel in layer.channels]
     assert bits(gradients) == bits(array.grad_gamma.tolist())
     assert bits([channel.bias_gradient_accum for channel in layer.channels]) == bits(array.grad_beta.tolist())
-
-
-def _freeze_dropout(built: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    # the generator reseeded before each batch pass, so the gradient check's perturbed passes drop
-    # the same nodes as its training step: the loss is a function of the weights again
-    for name in ("_learn_batch", "_forward_batch_outputs"):
-        method = getattr(built, name)
-
-        def seeded(*args: Any, method: Any = method) -> Any:
-            built.rng = default_rng(11)
-            return method(*args)
-
-        monkeypatch.setattr(built, name, seeded)
-
-
-@pytest.mark.parametrize("batch_size", [1, 3])
-@pytest.mark.parametrize("name", FLAT_LAYER_NORM)
-def test_every_gradient_matches_its_finite_difference(name: str, batch_size: int, monkeypatch: pytest.MonkeyPatch):
-    specs = FLAT_LAYER_NORM[name]
-    if batch_size == 1 and batch_norm_index(specs) is not None:
-        pytest.skip("batch norm trains on batches only (the batch-norm workplan, D4)")
-    built = network(specs)
-    # a trained step first, so gamma and beta aren't at their initial values
-    built.learn_batch(0.5, rows(specs, 4, seed=2))
-    _freeze_dropout(built, monkeypatch)
-
-    batch = rows(specs, batch_size)
-    check_gradients(built, [state for state, _ in batch], [label for _, label in batch])
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("name", ["alone", "after sigmoid", "after ReLU", "a body's first layer"])
-def test_learn_and_a_learn_batch_of_one_example_agree_by_bits(name: str, rule: UpdateRule):
-    specs = FLAT_LAYER_NORM[name]
-    single, batched = network(specs, rule), network(specs, rule)
-    for state, label in rows(specs, 6, seed=4):
-        single.learn(0.5, state, label)
-        batched.learn_batch(0.5, [(state, label)])
-
-    assert bits(single.snapshot()) == bits(batched.snapshot())
 
 
 # the rules whose step is linear in the gradient, as for attention
