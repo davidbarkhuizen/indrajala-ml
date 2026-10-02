@@ -81,6 +81,11 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "SoftmaxVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "ArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
     "CrossEntropyArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
+    "AdamArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
+    "DropoutArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, drop_probability=0.3),
+    "L2ArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, l2_lambda=0.01),
+    "MomentumArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, momentum=0.9),
+    "ReLUArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
     "RustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "AdamRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "ConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
@@ -95,6 +100,11 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "SoftmaxRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "RustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
     "CrossEntropyRustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
+    "AdamRustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
+    "DropoutRustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, drop_probability=0.3),
+    "L2RustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, l2_lambda=0.01),
+    "MomentumRustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, momentum=0.9),
+    "ReLURustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
     "SequentialVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(
         (DIMENSION,), SEQUENTIAL_MULTICLASS, Momentum(0.9)
     ),

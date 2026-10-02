@@ -163,11 +163,11 @@ arguments. It equals, by bits, the Sequential network of the same specs and rule
 | sigmoid, one output, `SGD` | `BackpropClassifierNetwork` | `ArrayBackpropClassifierNetwork` | `RustArrayBackpropClassifierNetwork` |
 | … cross-entropy loss | `BinaryCrossEntropyBackpropClassifierNetwork` | `CrossEntropyArrayBackpropClassifierNetwork` | `CrossEntropyRustArrayBackpropClassifierNetwork` |
 | … fan-in-aware initialization | `FanInAwareBackpropClassifierNetwork` | | |
-| … ReLU hidden layers | `ReLUBackpropClassifierNetwork` | | |
-| … dropout | `DropoutBackpropClassifierNetwork` | | |
-| … `Momentum` | `MomentumBackpropClassifierNetwork` | | |
-| … `Adam` | `AdamBackpropClassifierNetwork` | | |
-| … `WeightDecay` | `L2RegularizedBackpropClassifierNetwork` | | |
+| … ReLU hidden layers | `ReLUBackpropClassifierNetwork` | `ReLUArrayBackpropClassifierNetwork` | `ReLURustArrayBackpropClassifierNetwork` |
+| … dropout | `DropoutBackpropClassifierNetwork` | `DropoutArrayBackpropClassifierNetwork` | `DropoutRustArrayBackpropClassifierNetwork` |
+| … `Momentum` | `MomentumBackpropClassifierNetwork` | `MomentumArrayBackpropClassifierNetwork` | `MomentumRustArrayBackpropClassifierNetwork` |
+| … `Adam` | `AdamBackpropClassifierNetwork` | `AdamArrayBackpropClassifierNetwork` | `AdamRustArrayBackpropClassifierNetwork` |
+| … `WeightDecay` | `L2RegularizedBackpropClassifierNetwork` | `L2ArrayBackpropClassifierNetwork` | `L2RustArrayBackpropClassifierNetwork` |
 | one-vs-rest ensemble of one-output networks | `EnsembleBackpropClassifierNetwork` | `EnsembleArrayBackpropClassifierNetwork` | `EnsembleRustArrayBackpropClassifierNetwork` |
 | sigmoid, multiclass, `SGD` | `MultiClassBackpropClassifierNetwork` | `VectorizedMultiClassBackpropClassifierNetwork` | `RustArrayMultiClassBackpropClassifierNetwork` |
 | … cross-entropy loss | `CrossEntropyMultiClassBackpropClassifierNetwork` | `CrossEntropyVectorizedMultiClassBackpropClassifierNetwork` | `CrossEntropyRustArrayMultiClassBackpropClassifierNetwork` |
