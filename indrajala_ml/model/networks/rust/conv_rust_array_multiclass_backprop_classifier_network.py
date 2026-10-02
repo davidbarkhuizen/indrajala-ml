@@ -6,7 +6,7 @@ from indrajala_ml.model.networks.rust.rust_array_multiclass_backprop_classifier_
     RustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.specs.array_network_shapes import ArrayConvShape
-from indrajala_ml.prepared_dataset import PreparedDataset
+from indrajala_ml.data.prepared_dataset import PreparedDataset
 
 
 class ConvRustArrayMultiClassBackpropClassifierNetwork(

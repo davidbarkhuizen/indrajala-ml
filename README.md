@@ -86,13 +86,11 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | --- | --- |
 | `indrajala_ml/model/` | classifier networks and their layers |
 | `indrajala_ml/demos/` | runnable demos; `registry.py` lists them in menu order |
-| `indrajala_ml/train.py` | training loops (linear classifier, mini-batch backprop) and synthetic data |
-| `indrajala_ml/evaluate.py`, `multiclass_evaluate.py` | disagreement rate, accuracy, confusion matrix |
-| `indrajala_ml/ensemble_train.py` | one-vs-rest ensemble training over multiprocessing |
-| `indrajala_ml/*_data.py` | MNIST, UCI digits and Iris loaders |
-| `indrajala_ml/prepared_dataset.py` | a dataset as one backend matrix, which the array networks train from |
-| `indrajala_ml/benchmark_sweep.py`, `benchmark_data.py` | multi-seed parameter sweeps over MNIST proxy tasks |
-| `indrajala_ml/batch_size_scaling.py` | the batch-size scaling study (linear learning-rate scaling with warmup) |
+| `indrajala_ml/training/` | training loops (`train.py`), synthetic training data, run checkpoints, evaluation (disagreement rate, accuracy, confusion matrix), one-vs-rest ensemble training over multiprocessing (`ensemble_train.py`) |
+| `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
+| `indrajala_ml/capture/` | painted digits turned into UCI digits and MNIST inputs |
+| `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks |
+| `indrajala_ml/studies/batch_size_scaling.py` | the batch-size scaling study (linear learning-rate scaling with warmup) |
 | `indrajala_ml/graphics/chart.py` | matplotlib plotting |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
@@ -245,7 +243,7 @@ network = load_network("model.json")  # the Sequential network the file describe
   of this package.
 
 A run stopped at an epoch boundary resumes, by bits, from a run file
-(`indrajala_ml/run_checkpoint.py`). `train_backprop_network_mini_batch` returns
+(`indrajala_ml/training/run_checkpoint.py`). `train_backprop_network_mini_batch` returns
 `result.run_checkpoint`, taken before the pocket restores the best epoch. It holds the last
 epoch's network, the pocket's network, accuracy and epoch, the per-epoch accuracies, the
 convergence series, the shuffle generator's state, and the epoch and batch counters, which a
@@ -253,7 +251,7 @@ learning-rate schedule reads. `save_run` writes it as one JSON file, with both n
 network entries. The model file stays the pocketed model.
 
 ```python
-from indrajala_ml.run_checkpoint import load_run, save_run
+from indrajala_ml.training.run_checkpoint import load_run, save_run
 
 result = train_backprop_network_mini_batch(network, data, 32, epochs=10, rng=Random(7))
 network.save("model.json")
@@ -265,7 +263,7 @@ result = train_backprop_network_mini_batch(network, data, 32, epochs=20, resume_
 
 `epochs` counts the whole run, so the resumed call trains epochs 10 to 19. Given the same data,
 batch size, learning rate and reference classifier, it ends where an uninterrupted 20-epoch run
-ends (`tests/test_run_checkpoint.py`). A run file holds one network's run, not an ensemble's.
+ends (`tests/training/test_run_checkpoint.py`). A run file holds one network's run, not an ensemble's.
 
 ## Update rules
 

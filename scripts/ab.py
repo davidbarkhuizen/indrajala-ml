@@ -77,15 +77,15 @@ STDERR_TAIL = 20
 CLEAN_DAYS = 14
 
 # printed as JSON by a process in a pass's environment: where the trainer and the crate
-# extension resolve from, and the extension's hash
+# extension resolve from, and the extension's hash. argv[1] is the side's tree
 PROVENANCE_PROBE = r"""
-import hashlib, importlib.util, json, pathlib
-try:  # the trainer, in either source layout (docs/source-layout-workplan.md, D4)
-    import indrajala_ml.training.train as train
-except ModuleNotFoundError as error:
-    if error.name not in ("indrajala_ml.training", "indrajala_ml.training.train"):
-        raise
-    import indrajala_ml.train as train
+import hashlib, importlib, importlib.util, json, pathlib, sys
+# the trainer, in the tree's own source layout (docs/source-layout-workplan.md, D4); chosen by
+# file, not by trying imports: indrajala_ml is a namespace package, so in a tree from before the
+# layout, indrajala_ml.training resolves to the editable install's checkout
+tree = pathlib.Path(sys.argv[1])
+moved = (tree / "indrajala_ml/training/train.py").exists()
+train = importlib.import_module("indrajala_ml.training.train" if moved else "indrajala_ml.train")
 result = {"train": train.__file__, "extension": None, "sha256": None}
 spec = importlib.util.find_spec("indrajala_math_rust")
 if spec is not None and spec.origin is not None:
@@ -619,7 +619,12 @@ def check_provenance(run_dir: Path, tree: Path, env: dict[str, str], extension_s
     or indrajala_ml.train before the source layout moved it) is tree's and the crate extension's hash
     is extension_sha (when given)."""
     result = subprocess.run(
-        [sys.executable, "-c", PROVENANCE_PROBE], check=False, cwd=run_dir, env=env, capture_output=True, text=True
+        [sys.executable, "-c", PROVENANCE_PROBE, str(tree)],
+        check=False,
+        cwd=run_dir,
+        env=env,
+        capture_output=True,
+        text=True,
     )
     if result.returncode:
         raise AbError(f"provenance: the trainer doesn't import from {tree}", result.stderr.splitlines())

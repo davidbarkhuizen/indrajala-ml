@@ -58,6 +58,7 @@ from typing import Any, cast
 import indrajala_math_rust as pa
 import numpy as np
 
+from indrajala_ml.data.prepared_dataset import PreparedDataset
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
 )
@@ -274,7 +275,6 @@ from indrajala_ml.model.specs.layer_specs import (
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule
 from indrajala_ml.pcg64 import default_rng
-from indrajala_ml.prepared_dataset import PreparedDataset
 
 # A network is typed Any here: the script drives the network classes, dense, conv, single-output
 # and ensemble, of all three implementations, through the methods they share by name. Recorded

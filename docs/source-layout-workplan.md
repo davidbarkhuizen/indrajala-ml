@@ -1,6 +1,6 @@
 # Workplan: the source layout
 
-**Status: decisions settled (D1-D5); stages 0-4 done. Before stage 5, pytest collects 9768 tests.**
+**Status: decisions settled (D1-D5); stages 0-5 done. Before stage 6, pytest collects 9768 tests.**
 
 `indrajala_ml/` has grown flat. `indrajala_ml/model/` holds 190 modules in one directory: 61
 one-change presets, 50-odd layers across three implementations, the network bases, optimizers,
@@ -138,6 +138,13 @@ rename a split needs. `test_format2.py`'s two layer-entry tests became `test_for
 `test_layer_specs.py` stays whole: its sections are by feature (batch norm, residual blocks, patch
 models), each mixing validation, the shape walk and the builders, so none matches one new module.
 
+Done in stage 5: `worker_sizing`'s three functions that `ensemble_train` calls lost their leading
+underscore (`available_memory_bytes`, `estimate_bytes_per_example`, `select_worker_count`).
+`test_train.py`, `test_ensemble_train.py` and `test_machine_profile.py` split along the same seams
+into `test_training_data.py`, `test_balanced_dataset.py`, `test_worker_sizing.py` and
+`test_machine_profile_capture.py` (the collectors' tests, with their fixtures). `SCHEMA_VERSION`
+went with `capture`, which writes it; the schema file moved beside `machine_profile`.
+
 Not split: `array_network_base.py` (330, one class), `batch_norm_layer.py` (307, one layer's
 nodes and layer), `demos/registry.py` (321, one table), `demos/demo_layer_op_timing.py` (338, one
 demo), `batch_size_scaling.py` (308, one study).
@@ -195,7 +202,14 @@ references updated together. pytest collects the same number of tests before and
    network module, so no crate PR. `test_numerical_parity.py` and `test_numpy_rng_streams.py` test
    the crate and numpy's streams, not a module here; they stay at the root until stage 6 places them.
 5. **The package root:** `data/`, `training/`, `capture/`, `measurement/`, `studies/`, with the
-   `train`, `ensemble_train` and `machine_profile` splits.
+   `train`, `ensemble_train` and `machine_profile` splits. Done: each module's tests went to its
+   folder under `tests/` (the pipeline tests to `tests/training/`). The paths built from
+   `__file__` (`machine_profile_capture`'s repository root, two tests') go up one more level.
+   `test_patch_attention_study.py` and `test_residual_depth_study.py` test scripts, not
+   `studies/`, so they wait for `tests/scripts/` in stage 6.
+   `ab.py`'s probe now picks the trainer by which file the side's tree has: trying
+   `indrajala_ml.training.train` first found the editable install's once `training/` existed,
+   since `indrajala_ml` is a namespace package.
 6. **`graphics/`** (the `chart` split) and **`demos/`** with their tests; `tests/scripts/` for the
    scripts' tests; then retire this plan.
 

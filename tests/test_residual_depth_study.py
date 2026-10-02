@@ -7,10 +7,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, Residual, expand_specs
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
+from indrajala_ml.studies import batch_size_scaling as bss
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import residual_depth_study as study  # scripts/ isn't a package

@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.digits_data import load_digits_dataset
+from indrajala_ml.data.digits_data import load_digits_dataset
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer
 from indrajala_ml.model.layers.numpy.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.layers.numpy.max_pool_array_layer import MaxPoolArrayLayer

@@ -1,9 +1,10 @@
 import time
 from collections.abc import Callable, Sequence
 
+from indrajala_ml.data.prepared_dataset import PreparedDataset
 from indrajala_ml.model.protocols.classifier_protocols import Example, TrainableClassifier
-from indrajala_ml.prepared_dataset import PreparedDataset
-from indrajala_ml.train import ConvergenceSeries, train_linear_classifier_network
+from indrajala_ml.training.train import train_linear_classifier_network
+from indrajala_ml.training.training_diagnostics import ConvergenceSeries
 
 
 def timed_call[**P, T](fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> tuple[T, float]:

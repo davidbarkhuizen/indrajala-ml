@@ -1,7 +1,7 @@
 import pytest
 
+from indrajala_ml.data.digits_data import load_digits_dataset
 from indrajala_ml.demos import demo_conv_depth_uci_digits_comparison as demo
-from indrajala_ml.digits_data import load_digits_dataset
 
 
 def test_parameter_counts_match_a_hand_count():

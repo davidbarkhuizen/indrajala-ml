@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from indrajala_ml.prepared_dataset import PreparedDataset
+    from indrajala_ml.data.prepared_dataset import PreparedDataset
 
 State = tuple[float, ...]
 type Example[L] = tuple[State, L]

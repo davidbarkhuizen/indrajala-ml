@@ -31,7 +31,7 @@ from indrajala_ml.model.networks.sequential_array_network import SequentialArray
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
-from indrajala_ml.train import train_backprop_network_mini_batch
+from indrajala_ml.training.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
 from tests.helpers import bits, exp_by_math, patching, sigmoid_by
 from tests.model.networks.test_batch_norm_array_network import (

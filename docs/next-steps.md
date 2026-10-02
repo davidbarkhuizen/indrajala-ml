@@ -32,7 +32,7 @@ candidate optimizations) were retired the same way: `git show 0a04977:docs/optim
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention), [measurement.md](measurement.md)
 and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
-`indrajala_ml/batch_size_scaling.py`'s docstring, the depth study's in
+`indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/residual_depth_study.py`'s, the patch-attention study's in
 `scripts/patch_attention_study.py`'s.
 
@@ -185,7 +185,7 @@ Still out of scope:
   dropout draw per node, so the same seed gives other values. Until the draw order matches, the
   per-node dropout reference is compared with the array networks only at eval
   ([rng-audit.md](rng-audit.md), Open work).
-- **Run checkpoints beyond one network's mini-batch run** (`indrajala_ml/run_checkpoint.py`):
+- **Run checkpoints beyond one network's mini-batch run** (`indrajala_ml/training/run_checkpoint.py`):
   resuming mid-epoch, resuming `train_linear_classifier_network` (it returns no run checkpoint),
   and resuming an ensemble's run, whose sub-networks train as separate jobs.
 

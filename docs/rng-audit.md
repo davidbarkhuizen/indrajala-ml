@@ -34,7 +34,7 @@ against the latest numpy.
 | Pure-Python weight init | `fan_in_aware_weights_and_bias`, `randomize()` of the node networks and `LinearClassifierNetwork` | the network's `indrajala_ml.pcg64` generator (numpy's `default_rng`, bit for bit) | `randomized(..., seed=s)` or `rng=`, or `network.rng = ...`; OS entropy otherwise |
 | Pure-Python dropout | `DropoutNode.forward` (`rng.random() >= p`) | the network's, as above | as above |
 | Epoch shuffle, all backends | `train.py`'s trainers (`epoch_order`), `batch_size_scaling.train_epoch` | a `random.Random` passed as `rng=` | `rng=random.Random(s)`, which gives the order `random.seed(s)` gave; OS entropy otherwise |
-| Synthetic data and disagreement samples | `train.py` (`random_alternating_training_data`, `reachable_reference_and_training_data`'s `data_rng=`), `evaluate.py` | a `random.Random` passed as `rng=` | as above |
+| Synthetic data and disagreement samples | `training_data.py` (`random_alternating_training_data`, `reachable_reference_and_training_data`'s `data_rng=`), `evaluate.py` | a `random.Random` passed as `rng=` | as above |
 | Data splits, sampling, ensemble jobs | `dataset_utils`, `benchmark_data`, `ensemble_train` | `random.Random(seed)` instances | an explicit seed argument; OS entropy when it is `None` |
 | numpy weight init | `fan_in_aware_random_layer` (`rng.uniform`) | the network's `np.random.default_rng` (PCG64) | `randomized(..., seed=s)` or `rng=`, or `network.rng = ...`; OS entropy otherwise |
 | numpy dropout | `DropoutArrayLayer` (`rng.random(shape) >= p`) | the network's, as above | as above |
@@ -49,7 +49,7 @@ implementation's `default_rng` takes. Since stage 5 the shuffles and the samplin
 from a `random.Random` passed to them (D6), each ensemble job's seeded from its job seed, so
 nothing in `indrajala_ml` draws from a global state (D4); a test checks the global `random` is
 left untouched. Stage 6 put the generator's state into checkpoints and format-2 files, and stage
-7 into run files (`indrajala_ml/run_checkpoint.py`), which hold the shuffle generator's state too,
+7 into run files (`indrajala_ml/training/run_checkpoint.py`), which hold the shuffle generator's state too,
 so a stopped run resumes by bits. Stage 7 also deleted `seed_everything` and `backend.seed`. The
 crate keeps its MT19937 module functions (`pa.seed`, `pa.random`, `pa.uniform`), mirroring
 `np.random` (D7), and nothing in `indrajala_ml` calls them.
