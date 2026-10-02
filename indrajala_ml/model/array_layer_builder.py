@@ -43,6 +43,7 @@ from indrajala_ml.model.layer_specs import (
     expand_specs,
     image_shape,
     spec_shapes,
+    token_shape,
     validate_layer_specs,
 )
 from indrajala_ml.model.linear_array_layer import LinearArrayLayer
@@ -166,12 +167,6 @@ TOKEN_LAYER_CLASSES = {
 }
 
 
-def _tokens(shape: Shape) -> tuple[int, int]:
-    # a layer norm's input as (tokens, features): a flat layer, or a conv front end's image, is one
-    # token
-    return (shape[0], shape[1]) if len(shape) == 2 else (1, math.prod(shape))
-
-
 def _token_layer(classes: TokenLayerClasses, spec: LayerSpec, shape: Shape) -> ArrayNetworkLayer[Any] | None:
     # spec's layer if it is one of a patch model's or a layer norm, else None
     if isinstance(spec, Dense) and len(shape) == 2:
@@ -179,9 +174,9 @@ def _token_layer(classes: TokenLayerClasses, spec: LayerSpec, shape: Shape) -> A
     if isinstance(spec, Patches):
         return classes.patches(*image_shape(shape), spec.patch_size)
     if isinstance(spec, LayerNorm):
-        return classes.layer_norm(*_tokens(shape), spec.epsilon)
+        return classes.layer_norm(*token_shape(shape), spec.epsilon)
     if isinstance(spec, Position | Attention | TokenMean):
-        tokens, features = _tokens(shape)
+        tokens, features = token_shape(shape)
         layer_class = {Position: classes.position, Attention: classes.attention, TokenMean: classes.token_mean}
         return layer_class[type(spec)](tokens, features)
     return None

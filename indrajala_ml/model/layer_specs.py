@@ -25,6 +25,7 @@ dense part. A token sequence of T tokens of d features is the shape (T, d), flat
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, NoReturn
@@ -263,6 +264,14 @@ def image_shape(shape: Shape) -> ImageShape:
     """shape, which a conv or pool layer reads, as (height, width, channels)."""
     assert len(shape) == 3, f"a conv, pool or Patches layer needs a (height, width, channels) input; got {shape}"
     return shape
+
+
+def token_shape(shape: Shape) -> TokenShape:
+    """
+    shape, which a layer norm or a patch model's token layer reads, as (tokens, features): a flat
+    layer, or a conv front end's image, is one token.
+    """
+    return (shape[0], shape[1]) if len(shape) == 2 else (1, math.prod(shape))
 
 
 @dataclass(frozen=True)
