@@ -16,31 +16,10 @@ from typing import Any, ClassVar, Literal
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.array_parameters import WeightAndBias
+from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 
 
-class _ParameterFree:
-    """A parameter-free hidden layer whose delta is its downstream, the identity's derivative being 1."""
-
-    def compute_output_delta(self, reference: pa.Array) -> None:
-        raise NotImplementedError(f"a {type(self).__name__} is hidden, inside a network")
-
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
-        raise NotImplementedError(f"a {type(self).__name__} is hidden, inside a network")
-
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        self.delta = next_layer.downstream()
-
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self.delta_batch = next_layer.downstream_batch()
-
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
-        pass
-
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
-        pass
-
-
-class PatchesRustArrayLayer(_ParameterFree):
+class PatchesRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):
     """
     PatchesArrayLayer on the Rust backend: each channel-major (H, W, C) image as H/p * W/p tokens of
     p * p * C features (patches_forward), its downstream the inverse permutation (patches_downstream).
@@ -67,7 +46,7 @@ class PatchesRustArrayLayer(_ParameterFree):
         return pa.patches_downstream(self.delta_batch, self.height, self.width, self.channels, self.patch_size)
 
 
-class TokenMeanRustArrayLayer(_ParameterFree):
+class TokenMeanRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):
     """TokenMeanArrayLayer on the Rust backend: the mean over the tokens, (T, d) to (d,)."""
 
     def __init__(self, tokens: int, features: int) -> None:
@@ -88,7 +67,7 @@ class TokenMeanRustArrayLayer(_ParameterFree):
         return pa.token_mean_downstream(self.delta_batch, self.tokens)
 
 
-class PositionRustArrayLayer(_ParameterFree):
+class PositionRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
     """
     PositionArrayLayer on the Rust backend: a learned (T, d) table P added to the tokens, starting
     at zero and never decayed. Its delta is its downstream, and P's gradient that delta summed over
@@ -137,7 +116,7 @@ class PositionRustArrayLayer(_ParameterFree):
         self.grad_P = pa.Array.zeros((self.tokens, self.features))
 
 
-class TokenDenseRustArrayLayer(WeightAndBias[pa.Array]):
+class TokenDenseRustArrayLayer(Hidden[pa.Array], WeightAndBias[pa.Array]):
     """
     TokenDenseArrayLayer on the Rust backend: a dense layer acting on each token, its W (size,
     input_size) and b shared over the tokens (D4), as the existing dense ops (layer_relu_forward_batch,
@@ -171,12 +150,6 @@ class TokenDenseRustArrayLayer(WeightAndBias[pa.Array]):
         rows = self._forward_op(self.W, self._rows(X, self.input_size), self.b)
         self.A = rows.reshape((X.shape[0], self.tokens * self.size))
         return self.A
-
-    def compute_output_delta(self, reference: pa.Array) -> None:
-        raise NotImplementedError("a token-wise dense layer is hidden")
-
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
-        raise NotImplementedError("a token-wise dense layer is hidden")
 
     def compute_hidden_delta(self, next_layer: Any) -> None:
         downstream = next_layer.downstream()

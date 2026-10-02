@@ -18,24 +18,10 @@ from typing import Any
 
 import indrajala_math_rust as pa
 
-
-class _ParameterFree:
-    """What a fork and an add share: no parameters, so nothing to accumulate or step."""
-
-    def compute_output_delta(self, reference: pa.Array) -> None:
-        raise NotImplementedError(f"a {type(self).__name__} is hidden, inside a network")
-
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
-        raise NotImplementedError(f"a {type(self).__name__} is hidden, inside a network")
-
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
-        pass
-
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
-        pass
+from indrajala_ml.model.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 
 
-class ForkRustArrayLayer(_ParameterFree):
+class ForkRustArrayLayer(Hidden[pa.Array], ParameterFree[pa.Array]):
     """
     ForkArrayLayer on the Rust backend: forward passes its input on and keeps it. Its delta, the
     body's downstream plus the add's delta, is computed when downstream*() asks for it: a dense
@@ -72,7 +58,7 @@ class ForkRustArrayLayer(_ParameterFree):
         return self.body_first.downstream_batch() + self.add.delta_batch
 
 
-class AddRustArrayLayer(_ParameterFree):
+class AddRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):
     """AddArrayLayer on the Rust backend: y + x, its delta the next layer's downstream and its own downstream."""
 
     def __init__(self, fork: ForkRustArrayLayer) -> None:
@@ -87,12 +73,6 @@ class AddRustArrayLayer(_ParameterFree):
     def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A = X + self.fork.X
         return self.A
-
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        self.delta = next_layer.downstream()
-
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self.delta_batch = next_layer.downstream_batch()
 
     def downstream(self) -> pa.Array:
         return self.delta
