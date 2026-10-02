@@ -23,9 +23,15 @@ The benchmark machine is a Ryzen 7 3700U laptop: 4 cores / 8 threads (Zen 2), 32
 512 KB L2 per core, 4 MB L3, the `schedutil` governor. Its full record is
 `docs/machine_profiles/ryzen7-3700u.json`.
 
-- **Close the browser and the editor** before any timing run, and keep other work light while it
-  runs: reading and writing are fine; tests, lint and builds are not. A background IDE once spoiled
-  a whole measurement, and a run that overlapped a browser was re-run in full.
+- **Check the machine yourself, then go.** Before a timing run or a long sweep, read the 1-minute
+  load (`uptime`) and the running processes (`ps`). If the browser (Brave) or the editor (Zed) is
+  running, close it (`pkill brave`, `pkill zed`); don't stop to ask the owner. If the load is high,
+  wait and check again. Keep other work light while it runs: reading and writing are fine; tests,
+  lint and builds are not. A background IDE once spoiled a whole measurement.
+- **A run the browser overlapped is re-run in full.** The pre-flight check only covers the moment
+  before the run. If the browser was opened during one, stop it by PID (`ab.py`, its benchmark and
+  its worker processes), rename its run directory to `<run>-browser-open` without reading it, and
+  start again once the 1-minute load is below 1.0.
 - **Check the machine's identity.** `ab.py` does this itself. By hand:
   `python scripts/machine_profile.py compare docs/machine_profiles/ryzen7-3700u.json`, in the
   same shell and environment as the benchmark. It exits 1 and names each changed identity field:
@@ -279,7 +285,9 @@ What to do next:
   ([§4](#4-running-an-ab-with-abpy)).
   After a bad build, remove its `~/code/ab-runs/wheels/<sha>/` directory before running again.
 - **`pkill -f <pattern>` also matches the invoking shell's own command line.** Stop a stray
-  benchmark by PID.
+  benchmark by PID. Waiting is the same: `while pgrep -f "<pattern>"` matches its own loop's
+  command line and never exits, and a `pgrep` right after `(nohup cmd &)` can catch the wrapper
+  shell. Read the Python process's PID from `pgrep -af` and wait with `kill -0 <PID>`.
 
 ## 8. Judging correctness
 
@@ -289,6 +297,11 @@ only 71-83% of test predictions after training, though they stay within 1e-15 th
 UCI epoch. So a change is judged by step-by-step parity (per-step agreement to about 1e-15), never
 by end-of-run accuracy. The golden run (`scripts/golden_training_run.py check
 data/refactoring/golden_run.json`, about 1 s) pins 45 networks bit for bit.
+
+The golden run is the default gate, not a sacred one. A change that is genuinely more correct may
+move its bits: propose it to the owner first, and if they accept it, re-record the golden file and
+say so in the PR, with the measured difference and why the new result is more correct. Bits are
+never moved for style or for parity alone.
 
 ## 9. Rules for a timing claim in a PR, and for an optimization PR
 
@@ -337,6 +350,7 @@ the whole conversation. The repository's `CLAUDE.md` repeats these rules.
 - **Pass the table on without reading it.** Put `report --md` into the PR body by concatenating
   files.
 - **Keep the machine quiet.** Nothing CPU-heavy runs while an A/B does: no tests, lint or builds.
-  Reading code and writing docs are fine. Ask the owner to close the browser and editor first.
+  Reading code and writing docs are fine. Check the load and close the browser and editor yourself
+  first ([§2](#2-preparing-the-machine)).
 - **Extend `ab.py` instead of working around it.** A measurement it can't express gets a probe or
   an adapter, not a new driver script.
