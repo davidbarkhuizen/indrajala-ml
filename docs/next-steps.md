@@ -3,9 +3,8 @@
 A workplan is deleted once its last stage merges, and never before: only when every stage and
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md) and
-[presets-workplan.md](presets-workplan.md). The order of the next ML primitives is in
-[primitives-roadmap.md](primitives-roadmap.md).
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order of
+the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
 
@@ -23,6 +22,7 @@ docs cite them by section:
 | Residual connections (roadmap step 3) | #531 | crate #47, #532-#538 | `git show 365a173:docs/residual-connections-workplan.md` |
 | Layer norm and single-head attention (roadmap step 4) | #540 | crate #48, #542-#548 | `git show 7d3bd0a:docs/layer-norm-attention-workplan.md` |
 | Removing duplicated code, second pass (DRY rerun) | #550 | #551-#557 | `git show 88e1815:docs/dry-rerun-workplan.md` |
+| Presets for the one-change combinations | #559 | #560-#564 | `git show 2a799bf:docs/presets-workplan.md` |
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention), [measurement.md](measurement.md)
@@ -34,14 +34,12 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 ## From composable layers
 
 - **New combinations.** The Sequential networks build every spec list `validate_layer_specs`
-  accepts under every rule, in all three implementations. These combinations have no preset:
-  - `Adam` and `WeightDecay` with conv layers (numerics that exist, applied to conv weights);
-  - ReLU hidden layers under `Momentum`, `Adam` or `WeightDecay`, and in a conv network;
-  - dropout under a rule other than `SGD`, and in a conv network;
-  - softmax or cross-entropy output layers after conv, or under a rule other than `SGD`;
-  - on pure Python, the multiclass dense presets that exist only as numpy and Rust (cross-entropy,
-    ReLU, dropout, momentum, Adam, weight decay), and on numpy and Rust, the one-output presets
-    that exist only in pure Python (ReLU, dropout, momentum, Adam, weight decay);
+  accepts under every rule, in all three implementations. Every one-change combination has a
+  preset in all three (the presets workplan; README, Presets). These have none:
+  - two or more changes at once: ReLU, dropout, cross-entropy or softmax under `Momentum`, `Adam`
+    or `WeightDecay`, ReLU with dropout, dropout with a softmax output, and so on, dense and conv
+    (the presets workplan rejected one preset per combination: the class count grows
+    multiplicatively, and the Sequential networks are the API for them);
   - batch norm, dense and conv, under every rule (README, Batch normalization).
 
   One of them, conv then pool, ReLU, dropout and a softmax output under `Adam`, is trained against
@@ -53,6 +51,10 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
   `W`), and one rule per layer.
 - **Weight decay with momentum or Adam** needs a published form chosen and cited first (README,
   Update rules).
+- **Ensembles over the new one-output presets** (the presets workplan). The ensembles fix their
+  sub-network class (`classifier_cls`); a choice of sub-network is its own change.
+- **Demos for the new conv presets** (the presets workplan's D4), each with its own tuned,
+  measured PR: a demo makes an accuracy claim.
 
 Still out of scope, for later workplans too (batch norm's included):
 
@@ -111,10 +113,12 @@ Still out of scope:
 
 ## From the DRY audit
 
-- **The per-rule presets** (the workplan's D2). The 12 preset classes that set a rule (Adam,
-  Momentum, conv Momentum and L2, each in pure Python, numpy and Rust) each repeat a
-  hyperparameter `__init__` and a two-line `_update_rule`. They stay as they are until more
-  presets are added, when the better shared form should be clearer.
+- **The per-rule presets** (the workplan's D2). The preset classes that set a rule each repeat a
+  hyperparameter `__init__` and a two-line `_update_rule`. There were 12 at the audit (Adam,
+  Momentum, conv Momentum and L2, each in pure Python, numpy and Rust); the presets workplan
+  brought them to 27 (`Momentum`, `Adam` and `WeightDecay`, each one-output, multiclass and conv,
+  in all three implementations). D2 waited for more presets before choosing a shared form; that
+  point has come, and the form is the next DRY pass's to choose.
 - **Rerun the audit after each new primitive**, so new copies are caught while they are small:
   `symilar` (pylint's duplicate finder, with `-i --ignore-docstrings --ignore-imports
   --ignore-signatures`) over `indrajala_ml/`, `scripts/` and `tests/`, a search for function names

@@ -42,8 +42,8 @@ installs on the first build (a distro `cargo` ignores the pin).
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
-| `tests/` | ~5350 | this package: models, training, data loaders, Rust-vs-numpy parity |
-| `rust/tests/` | ~2000 | the submodule's own `indrajala_math_rust` API, checked against numpy |
+| `tests/` | ~7400 | this package: models, training, data loaders, Rust-vs-numpy parity |
+| `rust/tests/` | ~2400 | the submodule's own `indrajala_math_rust` API, checked against numpy |
 
 Both need the submodule checked out **and** built into `.venv`: `tests/` imports
 `indrajala_math_rust` directly, and `rust/tests/` only exists once the submodule is initialised.
@@ -186,12 +186,14 @@ arguments. It equals, by bits, the Sequential network of the same specs and rule
 | … cross-entropy loss | `CrossEntropyConvMultiClassBackpropClassifierNetwork` | `CrossEntropyConvVectorizedMultiClassBackpropClassifierNetwork` | `CrossEntropyConvRustArrayMultiClassBackpropClassifierNetwork` |
 | … softmax output, cross-entropy loss | `SoftmaxConvMultiClassBackpropClassifierNetwork` | `SoftmaxConvVectorizedMultiClassBackpropClassifierNetwork` | `SoftmaxConvRustArrayMultiClassBackpropClassifierNetwork` |
 
-An empty cell has no preset, but the Sequential network of that implementation builds the
-combination, so each array preset has a pure-Python parity reference. Combinations the Sequential
-networks build that no preset has, and those still out of reach, are listed in
-[docs/next-steps.md](docs/next-steps.md), From composable layers. Batch norm, residual blocks,
-layer norm and patch models have no preset: the Sequential networks build them (Batch
-normalization, Residual connections, Layer norm and attention).
+Each preset changes one thing in its row's base network. The one empty cell is not a gap: the
+array one-output networks already initialize fan-in-aware, so `ArrayBackpropClassifierNetwork` and
+`RustArrayBackpropClassifierNetwork` are its counterparts. Combinations of two or more changes
+(ReLU under `Adam`, dropout with a softmax output, ...) have no preset; the Sequential networks
+build them, and [docs/next-steps.md](docs/next-steps.md), From composable layers, lists them with
+those still out of reach. Batch norm, residual blocks, layer norm and patch models have no preset
+either: the Sequential networks build them (Batch normalization, Residual connections, Layer norm
+and attention).
 
 The pure-Python implementation is for correctness and parity checking only: gradient checks,
 hand-computed examples, and the reference the array implementations are checked against. It is
@@ -632,8 +634,6 @@ test passing, and:
   rejected, the candidates left, and how to measure a change.
 - [docs/pypi-release-workplan.md](docs/pypi-release-workplan.md): publishing the Rust crate to
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
-- [docs/presets-workplan.md](docs/presets-workplan.md): presets for the 34 one-change
-  combinations the Sequential networks build that have no named class yet.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
   attention, then multi-head attention and a transformer block.
