@@ -181,3 +181,4 @@ data/refactoring/
 
 # local outputs of the residual depth study (scripts/residual_depth_study.py --out)
 data/residual/
+data/attention/
