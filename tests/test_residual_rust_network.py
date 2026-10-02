@@ -1,9 +1,9 @@
 """
 Residual blocks on Rust (the residual-connections workplan, stage 4): the layer before a fork takes
 its hidden delta from the fused skip op (D8), whose bits are the unfused downstream, add and
-derivative; the fork sums lazily; and training matches numpy within the dense layers' rounding. The
-gradient check, identity blocks and learn against a batch of one run on both backends in
-tests/test_residual_array_network.py.
+derivative; the fork sums lazily; and training matches numpy within the dense layers' rounding.
+Identity blocks run on both array backends in tests/test_residual_array_network.py; the gradient
+check, the block's layers and learn against a batch of one are tests/test_residual_network.py's.
 """
 
 from typing import Any

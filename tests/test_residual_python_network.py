@@ -1,9 +1,9 @@
 """
 Residual blocks in pure Python (the residual-connections workplan, stage 3; README, Residual
-connections): the gradient check, identity blocks by bits, learn against a batch of one, the
-layer-major batch path (for a block holding batch norm) against the example-major loop, the block's
-layers and their wiring, and parity with numpy after 50 steps. The cases are
-tests/test_residual_array_network.py's.
+connections): randomize's draws, identity blocks by bits, the layer-major batch path (for a block
+holding batch norm) against the example-major loop, and parity with numpy after 50 steps. The cases
+are tests/test_residual_array_network.py's; the gradient check, the block's layers and learn against
+a batch of one are tests/test_residual_network.py's, on every implementation.
 """
 
 import math
@@ -14,11 +14,10 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.layer_specs import Dense, LayerSpec
-from indrajala_ml.model.residual_layer import AddLayer, AffineLayer, ForkLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
-from tests.gradient_check import analytic_gradients, check_gradients
+from tests.gradient_check import analytic_gradients
 from tests.helpers import bits
 from tests.test_batch_norm_python_network import CLASSES, _as_array_snapshot
 from tests.test_residual_array_network import INPUT, NETWORKS, Shape, block, output, rows
@@ -32,28 +31,6 @@ def network(name: str, shape: Shape = "multiclass", rule: UpdateRule | None = No
     built.rng = default_rng(seed)
     built.randomize()
     return built
-
-
-@pytest.mark.parametrize("shape", ["multiclass", "single_output"])
-@pytest.mark.parametrize("name", NETWORKS)
-def test_every_gradient_matches_its_finite_difference(name: str, shape: Shape):
-    built = network(name, shape)
-    built.learn_batch(0.5, rows(6, shape, seed=2))
-    batch = rows(5, shape)
-
-    check_gradients(built, [state for state, _ in batch], [label for _, label in batch])
-
-
-def test_a_block_builds_a_fork_its_body_and_an_add_wired_together():
-    built = network("sigmoid body")
-    dense, fork, body, end, add, out = built.trainable_layers
-
-    assert isinstance(fork, ForkLayer) and isinstance(add, AddLayer) and isinstance(end, AffineLayer)
-    assert fork.body_first is body and fork.add is add and add.fork is fork
-    assert fork.input_layer is dense and body.input_layer is fork and add.input_layer is end and out.input_layer is add
-    assert [node.input_node for node in fork.nodes] == list(dense.nodes)
-    assert [(node.body_node, node.fork_node) for node in add.nodes] == list(zip(end.nodes, fork.nodes, strict=True))
-    assert fork.snapshot_state() == [] and add.snapshot_state() == [] and fork.weight_sets() == []
 
 
 def test_randomize_draws_weights_then_bias_per_node_and_nothing_for_the_fork_or_add():
@@ -101,18 +78,6 @@ def test_an_identity_block_changes_no_output_and_no_other_layers_gradient_by_bit
     residual.learn(0.5, *batch[0])
     trained = residual.snapshot()
     assert bits([trained[i] for i in (0, 5, 6)]) == bits(plain.snapshot())
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("name", ["sigmoid body", "relu body", "two blocks in a row", "block first"])
-def test_learn_and_a_learn_batch_of_one_example_agree_by_bits(name: str, rule: UpdateRule):
-    single, batched = network(name, rule=rule), network(name, rule=rule)
-
-    for state, label in rows(6, seed=4):
-        single.learn(0.5, state, label)
-        batched.learn_batch(0.5, [(state, label)])
-
-    assert bits(single.snapshot()) == bits(batched.snapshot())
 
 
 @pytest.mark.parametrize("rule", [Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)

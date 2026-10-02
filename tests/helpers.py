@@ -147,15 +147,21 @@ def randomized(
     specs: list[LayerSpec],
     rule: UpdateRule | None = None,
     seed: int = 3,
+    shape: Literal["multiclass", "single_output"] = "multiclass",
 ) -> Any:
-    """A multiclass network of specs on implementation, randomized from seed."""
+    """A network of specs on implementation, of shape, randomized from seed."""
     rule = SGD() if rule is None else rule
     if implementation == "python":
-        built: Any = SequentialMultiClassBackpropClassifierNetwork(input_shape, specs, rule)
+        cls = (
+            SequentialMultiClassBackpropClassifierNetwork
+            if shape == "multiclass"
+            else SequentialBackpropClassifierNetwork
+        )
+        built: Any = cls(input_shape, specs, rule)
         built.rng = default_rng(seed)
     else:
         backend = NUMPY if implementation == "numpy" else RUST
-        built = SequentialArrayNetwork(input_shape, specs, rule, backend=backend)
+        built = SequentialArrayNetwork(input_shape, specs, rule, shape=shape, backend=backend)
         built.rng = backend.default_rng(seed)
     built.randomize()
     return built
