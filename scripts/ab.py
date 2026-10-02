@@ -17,9 +17,10 @@ Each side is a commit, checked out once as a detached worktree under ~/code/ab-w
 A run lives in ~/code/ab-runs/<YYYY-MM-DD>-<name>/ (manifest.json, progress.jsonl, and each pass's
 raw output and logs), which is also the neutral working directory every pass runs from, with a
 `data` symlink to this checkout's data/. A pass runs the benchmark once, in its own process tree,
-with only its side's tree on PYTHONPATH; a probe first checks that indrajala_ml.train comes from
-that tree and that the crate extension's hash is the run's. `run` does a smoke run of each side
-with the benchmark's smallest settings before the passes. RUN defaults to the most recent run.
+with only its side's tree on PYTHONPATH; a probe first checks that the trainer
+(indrajala_ml.training.train, or indrajala_ml.train in a tree from before the source layout) comes
+from that tree and that the crate extension's hash is the run's. `run` does a smoke run of each
+side with the benchmark's smallest settings before the passes. RUN defaults to the most recent run.
 
 Output is bounded: raw data goes to files only, `run` and `extend` print a line when they start
 and one when they finish (or the failing step's last 20 lines of stderr, exiting 1), and
@@ -75,11 +76,16 @@ BRIEF_LINES = 15
 STDERR_TAIL = 20
 CLEAN_DAYS = 14
 
-# printed as JSON by a process in a pass's environment: where indrajala_ml.train and the crate
+# printed as JSON by a process in a pass's environment: where the trainer and the crate
 # extension resolve from, and the extension's hash
 PROVENANCE_PROBE = r"""
 import hashlib, importlib.util, json, pathlib
-import indrajala_ml.train as train
+try:  # the trainer, in either source layout (docs/source-layout-workplan.md, D4)
+    import indrajala_ml.training.train as train
+except ModuleNotFoundError as error:
+    if error.name not in ("indrajala_ml.training", "indrajala_ml.training.train"):
+        raise
+    import indrajala_ml.train as train
 result = {"train": train.__file__, "extension": None, "sha256": None}
 spec = importlib.util.find_spec("indrajala_math_rust")
 if spec is not None and spec.origin is not None:
@@ -609,16 +615,17 @@ def _pass_env(tree: Path, site: str | None = None) -> dict[str, str]:
 
 
 def check_provenance(run_dir: Path, tree: Path, env: dict[str, str], extension_sha: str | None) -> dict[str, Any]:
-    """Where the pass's environment imports from; raises unless indrajala_ml.train is tree's and the
-    crate extension's hash is extension_sha (when given)."""
+    """Where the pass's environment imports from; raises unless the trainer (indrajala_ml.training.train,
+    or indrajala_ml.train before the source layout moved it) is tree's and the crate extension's hash
+    is extension_sha (when given)."""
     result = subprocess.run(
         [sys.executable, "-c", PROVENANCE_PROBE], check=False, cwd=run_dir, env=env, capture_output=True, text=True
     )
     if result.returncode:
-        raise AbError(f"provenance: indrajala_ml.train doesn't import from {tree}", result.stderr.splitlines())
+        raise AbError(f"provenance: the trainer doesn't import from {tree}", result.stderr.splitlines())
     found: dict[str, Any] = json.loads(result.stdout.strip().splitlines()[-1])
     if not Path(found["train"]).resolve().is_relative_to(tree.resolve()):
-        raise AbError(f"provenance: indrajala_ml.train imported from {found['train']}, not from {tree}")
+        raise AbError(f"provenance: the trainer imported from {found['train']}, not from {tree}")
     if extension_sha is not None and found["sha256"] != extension_sha:
         raise AbError(
             f"provenance: crate extension {found['extension']} has sha256 {str(found['sha256'])[:12]}, "
@@ -1219,7 +1226,7 @@ def protocol_paragraph(data: ReportData) -> str:
     text += (
         f". Each pass ran `{command}` (the script from the {manifest['script_from']} tree) in its own process "
         f"tree, from a neutral working directory with only its side's tree on `PYTHONPATH`. Before each pass a "
-        f"probe checked that `indrajala_ml.train` imported from that tree"
+        f"probe checked that the trainer module imported from that tree"
     )
     if manifest["old"].get("site"):
         builds = " and ".join(

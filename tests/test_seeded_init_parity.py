@@ -10,8 +10,6 @@ the same dropout masks and leaves both generators in the same state. 1 / n ** 0.
 
 from __future__ import annotations
 
-import importlib
-import pkgutil
 import random
 from collections.abc import Callable
 from typing import Any
@@ -20,7 +18,6 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-import indrajala_ml.model
 from indrajala_ml.model.array_backend import NumpyBackend, RustBackend
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.conv_layer import ConvSpec
@@ -31,10 +28,9 @@ from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.update_rules import SGD
 from indrajala_ml.pcg64 import SeedSequence
 from tests.array_network_contract import snapshot_bits
-from tests.helpers import all_subclasses
+from tests.helpers import all_subclasses, model_modules
 
-for _module in pkgutil.iter_modules(indrajala_ml.model.__path__):
-    importlib.import_module(f"indrajala_ml.model.{_module.name}")
+model_modules()
 
 SIDE = 6
 CLASS_COUNT = 3

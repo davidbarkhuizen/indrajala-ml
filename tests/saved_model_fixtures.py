@@ -38,16 +38,13 @@ as first written. Only a new class gets a new file.
 
 from __future__ import annotations
 
-import importlib
 import json
-import pkgutil
 import random
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-import indrajala_ml.model
 from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
@@ -73,7 +70,7 @@ from indrajala_ml.model.sequential_backprop_network import (
 )
 from indrajala_ml.model.update_rules import Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
-from tests.helpers import bits
+from tests.helpers import bits, model_modules
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "saved_models"
 
@@ -147,8 +144,7 @@ FORMAT_2_TRAINING_STEPS = 2
 def _model_classes() -> dict[str, type[Any]]:
     # every class defined in indrajala_ml.model, by name
     classes: dict[str, type[Any]] = {}
-    for module_info in pkgutil.iter_modules(indrajala_ml.model.__path__):
-        module = importlib.import_module(f"indrajala_ml.model.{module_info.name}")
+    for module in model_modules():
         for name, value in vars(module).items():
             if isinstance(value, type) and value.__module__ == module.__name__:
                 classes[name] = cast("type[Any]", value)

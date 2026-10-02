@@ -91,9 +91,10 @@ python scripts/ab.py report --md ab-table.md                     # the table for
 ```
 
 `run` checks the machine, runs each side once at the benchmark's smallest settings (a smoke run,
-about a minute), then the passes. Before each pass a probe checks that `indrajala_ml.train`
-imports from that side's tree and that the crate extension's hash is the expected one. Arguments
-after `--` go to the benchmark: `-- --configs "conv B=32" --repeats 5 --epochs 2`.
+about a minute), then the passes. Before each pass a probe checks that the trainer
+(`indrajala_ml.training.train`, or `indrajala_ml.train` before the source layout) imports from
+that side's tree and that the crate extension's hash is the expected one. Arguments after `--` go
+to the benchmark: `-- --configs "conv B=32" --repeats 5 --epochs 2`.
 
 **A crate change** (committed in `indrajala-math-rust`):
 

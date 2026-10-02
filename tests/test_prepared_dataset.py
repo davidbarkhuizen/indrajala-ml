@@ -6,8 +6,6 @@ classify_state. The batched accuracy pass predicts what classify_row does, row f
 row. The classes are enumerated from the two bases, so a new one can't be missed.
 """
 
-import importlib
-import pkgutil
 import random
 from collections.abc import Callable
 from typing import Any
@@ -16,7 +14,6 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-import indrajala_ml.model
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.classifier_protocols import Example
@@ -31,7 +28,7 @@ from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.update_rules import Adam, Momentum
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset, prepared_mnist
 from indrajala_ml.train import _training_accuracy
-from tests.helpers import all_subclasses
+from tests.helpers import all_subclasses, model_modules
 
 MNIST_TRAIN = "data/mnist/mnist-train.bin"
 
@@ -40,8 +37,7 @@ DIMENSION = SIDE * SIDE
 CLASS_COUNT = 3
 CONV_SPECS = [ConvSpec(3, 2), PoolSpec(2)]
 
-for _module in pkgutil.iter_modules(indrajala_ml.model.__path__):
-    importlib.import_module(f"indrajala_ml.model.{_module.name}")
+model_modules()
 
 
 def _class_name(cls: type[Any]) -> str:
