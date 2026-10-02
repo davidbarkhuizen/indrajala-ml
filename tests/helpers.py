@@ -575,16 +575,17 @@ def assert_array_network_snapshot_restore_round_trip(
 
 
 def assert_single_output_array_network_snapshot_restore_round_trip(
-    array_network_cls: Any, layer_sizes: list[int], dimension: int
+    array_network_cls: Any, layer_sizes: list[int], dimension: int, **hyperparameters: float
 ) -> None:
     """
     The single-output analogue of assert_array_network_snapshot_restore_round_trip above, for
-    ArrayBackpropClassifierNetwork/RustArrayBackpropClassifierNetwork (no class_count argument).
+    ArrayBackpropClassifierNetwork/RustArrayBackpropClassifierNetwork and their presets (no
+    class_count argument; the hyperparameters are keyword-only).
     """
-    network = array_network_cls.randomized(layer_sizes, dimension)
+    network = array_network_cls.randomized(layer_sizes, dimension, **hyperparameters)
     snapshot = network.snapshot()
 
-    other = array_network_cls(layer_sizes, dimension)
+    other = array_network_cls(layer_sizes, dimension, **hyperparameters)
     other.restore(snapshot)
 
     for (W1, b1), (W2, b2) in zip(network.snapshot(), other.snapshot()):

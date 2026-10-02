@@ -55,7 +55,16 @@ CONV: dict[str, tuple[Any, ...]] = {
     "ConvVectorizedMultiClassBackpropClassifierNetwork": (),
     "MomentumConvVectorizedMultiClassBackpropClassifierNetwork": (0.9,),
 }
-SINGLE_OUTPUT = ["ArrayBackpropClassifierNetwork", "CrossEntropyArrayBackpropClassifierNetwork"]
+# (numpy class name, its keyword-only hyperparameters)
+SINGLE_OUTPUT: dict[str, dict[str, float]] = {
+    "ArrayBackpropClassifierNetwork": {},
+    "AdamArrayBackpropClassifierNetwork": {},
+    "CrossEntropyArrayBackpropClassifierNetwork": {},
+    "DropoutArrayBackpropClassifierNetwork": {"drop_probability": 0.3},
+    "L2ArrayBackpropClassifierNetwork": {"l2_lambda": 0.01},
+    "MomentumArrayBackpropClassifierNetwork": {"momentum": 0.9},
+    "ReLUArrayBackpropClassifierNetwork": {},
+}
 # (numpy class name, its constructor's arguments): a conv front end, then every dense kind
 SEQUENTIAL: dict[str, tuple[Any, ...]] = {
     "SequentialVectorizedMultiClassBackpropClassifierNetwork": (
@@ -143,7 +152,10 @@ def test_conv_randomized_is_identical_after_the_same_seed(numpy_name: str, seed:
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("numpy_name", SINGLE_OUTPUT)
 def test_single_output_randomized_is_identical_after_the_same_seed(numpy_name: str, seed: int):
-    assert_seeded_randomized_identical(lambda cls, s: cls.randomized([4], 9, seed=s), numpy_name, seed)
+    hyperparameters = SINGLE_OUTPUT[numpy_name]
+    assert_seeded_randomized_identical(
+        lambda cls, s: cls.randomized([4], 9, seed=s, **hyperparameters), numpy_name, seed
+    )
 
 
 @pytest.mark.parametrize("seed", SEEDS)

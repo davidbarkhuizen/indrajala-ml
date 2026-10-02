@@ -1,6 +1,6 @@
 # Workplan: closing the preset gaps
 
-**Status: decisions settled (D1-D4); stages 0 and 1 done.**
+**Status: decisions settled (D1-D4); stages 0-2 done.**
 
 The composable-layers workplan made the Sequential networks build every accepted spec list under
 every rule, in all three implementations, but left the preset table (README, Presets) with empty
@@ -94,7 +94,9 @@ Checks to watch:
 - **One-output pure-Python presets initialize by bounds width; the array ones fan-in-aware.** The
   group B presets follow their array base (fan-in-aware, `(layer_sizes, dimension)`), so their
   pure-Python counterparts differ at initialization; parity compares them from the same weights,
-  never from the same seed.
+  never from the same seed. Their hyperparameters are keyword-only, after the `input_bounds` the
+  array one-output networks accept and ignore (`ensemble_train.py` passes it positionally), so a
+  required one can follow its default.
 - **Pure-Python multiclass presets** take `MultiClassBackpropClassifierNetwork`'s arguments
   (`layer_sizes, dimension, input_bounds, class_count`) plus their hyperparameters.
 

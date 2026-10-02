@@ -18,6 +18,7 @@ tests/test_legacy_saved_models.py loads.
   dropout layer and first in a residual body, named LayerNorm<class name>.
 - The pure-Python multiclass presets' fixtures (the presets workplan, stage 1) are format 2 only,
   like the single-output ones: those classes never wrote a legacy envelope.
+- So are the numpy and Rust one-output presets' fixtures (the presets workplan, stage 2).
 
 Each fixture is two files in tests/fixtures/saved_models/: <name>.json, the file the class's
 own save() wrote, and <name>.expected.json, what the saved network held and predicted:
@@ -181,9 +182,16 @@ def _dense(name: str, implementation: str, hyperparameters: dict[str, float] | N
     )
 
 
-def _single_output(name: str, implementation: str) -> SavedModelFixture:
+def _single_output(
+    name: str, implementation: str, hyperparameters: dict[str, float] | None = None, format2: bool = False
+) -> SavedModelFixture:
+    hyperparameters = hyperparameters or {}
     return SavedModelFixture(
-        implementation, lambda: MODEL_CLASSES[name](LAYER_SIZES, DIMENSION), "predict_probability", {}
+        implementation,
+        lambda: MODEL_CLASSES[name](LAYER_SIZES, DIMENSION, **hyperparameters),
+        "predict_probability",
+        hyperparameters,
+        format2=format2,
     )
 
 
@@ -344,6 +352,20 @@ FIXTURES: dict[str, SavedModelFixture] = {
             ("Momentum", MOMENTUM),
             ("Adam", ADAM),
             ("L2Regularized", L2),
+        )
+    },
+    # format 2 only
+    **{
+        f"{prefix}{family}BackpropClassifierNetwork": _single_output(
+            f"{prefix}{family}BackpropClassifierNetwork", implementation, hyperparameters, format2=True
+        )
+        for family, implementation in (("Array", "numpy"), ("RustArray", "rust"))
+        for prefix, hyperparameters in (
+            ("ReLU", None),
+            ("Dropout", DROPOUT),
+            ("Momentum", MOMENTUM),
+            ("Adam", ADAM),
+            ("L2", L2),
         )
     },
     "SequentialVectorizedMultiClassBackpropClassifierNetwork": _sequential("numpy", True, Adam(**ADAM)),
