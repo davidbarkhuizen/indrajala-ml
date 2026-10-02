@@ -1,6 +1,6 @@
 # Workplan: remove duplicated code, second pass (DRY rerun)
 
-**Status: in progress; decisions D1-D9 settled by the owner (2026-10-02). Stage 1 done.**
+**Status: in progress; decisions D1-D9 settled by the owner (2026-10-02). Stages 1 and 2 done.**
 
 The first DRY workplan (#506-#515, `git show e066333:docs/dry-workplan.md`) asked for the audit
 to be rerun after each new primitive ([next-steps.md](next-steps.md), "From the DRY audit").

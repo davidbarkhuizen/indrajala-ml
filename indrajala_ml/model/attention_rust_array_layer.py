@@ -10,15 +10,15 @@ as the dense layers do (the parity tests explain the gap).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, ClassVar
+from typing import Any
 
 import indrajala_math_rust as pa
 
+from indrajala_ml.model.array_parameters import AttentionProjections
 from indrajala_ml.model.hidden_layers import Hidden
 
 
-class AttentionRustArrayLayer(Hidden[pa.Array]):
+class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     """
     AttentionArrayLayer on the Rust backend: Q = X Wq^T + bq, K and V likewise, P =
     softmax_rows((Q K^T) / sqrt(d)), out = (P V) Wo^T + bo, per example over its tokens tokens of
@@ -30,39 +30,16 @@ class AttentionRustArrayLayer(Hidden[pa.Array]):
     its 1D vector, with a batch of one's bits.
     """
 
-    decayed: ClassVar[tuple[bool, ...]] = (True, False) * 4
-    # the projections' (rows, fan_in), each drawn as a dense layer's (W, b), in order
-    projection_shapes: tuple[tuple[int, int], ...]
-
     def __init__(self, tokens: int, features: int) -> None:
         self.tokens = tokens
         self.features = features
         self.size = tokens * features
         self.input_size = self.size
-        self.projection_shapes = ((features, features),) * 4
 
         d = features
         self.Wq, self.Wk, self.Wv, self.Wo = (pa.Array.zeros((d, d)) for _ in range(4))
         self.bq, self.bk, self.bv, self.bo = (pa.Array.zeros(d) for _ in range(4))
         self.reset_gradient_accum()
-
-    def parameters(self) -> tuple[pa.Array, ...]:
-        return self.Wq, self.bq, self.Wk, self.bk, self.Wv, self.bv, self.Wo, self.bo
-
-    def gradients(self) -> tuple[pa.Array, ...]:
-        return (
-            self.grad_Wq,
-            self.grad_bq,
-            self.grad_Wk,
-            self.grad_bk,
-            self.grad_Wv,
-            self.grad_bv,
-            self.grad_Wo,
-            self.grad_bo,
-        )
-
-    def set_parameters(self, parameters: Sequence[pa.Array]) -> None:
-        self.Wq, self.bq, self.Wk, self.bk, self.Wv, self.bv, self.Wo, self.bo = parameters
 
     def forward(self, x: pa.Array) -> pa.Array:
         self.a, self._Q, self._K, self._V, self._P, self._H = pa.attention_forward(x, *self.parameters())
