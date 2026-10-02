@@ -16,7 +16,7 @@ from indrajala_ml.graphics.chart import (
     plot_linear_classifier_network,
     plot_training_data,
 )
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.train import (
     random_alternating_training_data,
     reachable_reference_and_training_data,

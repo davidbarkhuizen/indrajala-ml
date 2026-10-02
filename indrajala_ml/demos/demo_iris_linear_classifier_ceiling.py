@@ -1,5 +1,5 @@
 from indrajala_ml.iris_data import load_iris_dataset
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.train import train_linear_classifier_network
 
 SETOSA_LABEL = 0

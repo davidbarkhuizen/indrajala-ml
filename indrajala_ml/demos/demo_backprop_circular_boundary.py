@@ -8,7 +8,7 @@ from matplotlib import pyplot
 
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.graphics.chart import new_axes, new_figure, plot_classifier_probability_heatmap, plot_training_data
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.train import random_alternating_training_data, train_linear_classifier_network
 
 

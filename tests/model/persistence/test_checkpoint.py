@@ -14,8 +14,8 @@ import pytest
 
 from indrajala_ml.ensemble_train import _picklable_checkpoint  # pyright: ignore[reportPrivateUsage]
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay

@@ -109,7 +109,7 @@ in any of three implementations of the same maths:
 ```python
 from indrajala_ml.model.layers.array.array_backend import RUST
 from indrajala_ml.model.specs.layer_specs import Conv, Dense, Pool
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.update_rules import Momentum
 
 network = SequentialArrayNetwork(
@@ -156,7 +156,7 @@ numpy classes are the reference the Rust classes are tested against
 
 A preset is a named class for one fixed combination of specs and rule, with its own constructor
 arguments. It equals, by bits, the Sequential network of the same specs and rule
-(`tests/array_network_contract.py`, `tests/test_sequential_backprop_network.py`). The demos,
+(`tests/array_network_contract.py`, `tests/model/networks/python/test_sequential_backprop_network.py`). The demos,
 `ensemble_train.py` and saved files use the presets by name.
 
 | Layers and rule | pure Python | numpy | Rust |
@@ -403,9 +403,9 @@ single feature pairwise from 8 rows, and `D.sum(axis=(0, 2))` over a conv channe
 layers sum with `np.cumsum` along the summed axis, which does at every shape. The pure-Python layer
 sums with an explicit loop: the builtin `sum` adds floats with compensated summation since Python
 3.12. Given the same inputs, the pure-Python, numpy and Rust layers compute the same bits, except
-for a sigmoid's `exp` (`tests/test_batch_norm_python_network.py`,
-`tests/test_batch_norm_rust_network.py`, their conv counterparts, and
-`tests/test_batch_norm_ghost_groups.py`). Whole networks agree within their dense and conv layers'
+for a sigmoid's `exp` (`tests/model/networks/test_batch_norm_python_network.py`,
+`tests/model/networks/test_batch_norm_rust_network.py`, their conv counterparts, and
+`tests/model/networks/test_batch_norm_ghost_groups.py`). Whole networks agree within their dense and conv layers'
 rounding only, which differs with or without batch norm: the pure-Python parity tolerance, and
 between numpy and Rust, BLAS's products against the crate's. Only `+ − × ÷` and `sqrt` appear, each
 correctly rounded in IEEE 754, so every implementation that follows these forms computes the same

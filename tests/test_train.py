@@ -4,8 +4,8 @@ from collections.abc import Sequence
 import pytest
 
 from indrajala_ml.geometry import is_positive_region_bounded, square_bounds
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.model.protocols.classifier_protocols import Example, StateClassifier
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.targets import XORTarget

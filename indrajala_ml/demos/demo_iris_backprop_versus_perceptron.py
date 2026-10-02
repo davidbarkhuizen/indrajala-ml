@@ -3,8 +3,8 @@ from collections.abc import Sequence
 
 from indrajala_ml.dataset_utils import split_train_test
 from indrajala_ml.iris_data import load_iris_dataset
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.model.protocols.classifier_protocols import Example, StateClassifier
 from indrajala_ml.train import train_linear_classifier_network
 

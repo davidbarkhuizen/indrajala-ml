@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.ensembles.ensemble_base import EnsembleBase
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.persistence.format2 import PYTHON, ensemble_classifiers, ensemble_to_json, is_format2
 from indrajala_ml.model.persistence.model_io import load_json, save_json
 from indrajala_ml.model.protocols.classifier_protocols import BinaryClassifier

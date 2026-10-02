@@ -85,8 +85,8 @@ from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.mnist_data import load_mnist_dataset
 from indrajala_ml.model.layers.array.array_backend import NUMPY
+from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.protocols.classifier_protocols import Example
-from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,

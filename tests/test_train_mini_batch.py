@@ -3,8 +3,10 @@ import random
 import pytest
 
 from indrajala_ml.geometry import square_bounds
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
+    MultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.train import (
     _chunk_into_batches,
     reachable_reference_and_training_data,

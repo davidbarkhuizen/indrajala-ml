@@ -3,10 +3,14 @@ from typing import Any
 
 from indrajala_ml.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
-from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
-from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.conv_multiclass_backprop_classifier_network import (
+    ConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
+    MultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.multiclass_evaluate import accuracy
 from indrajala_ml.train import train_linear_classifier_network

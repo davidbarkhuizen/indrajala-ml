@@ -15,15 +15,15 @@ import numpy as np
 import pytest
 
 from indrajala_ml.mnist_data import load_mnist_dataset
-from indrajala_ml.model.array_network_base import ArrayNetworkBase
-from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
-    DropoutRustArrayMultiClassBackpropClassifierNetwork,
-)
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
-from indrajala_ml.model.numpy_array_network_base import NumpyArrayNetworkBase
+from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
+from indrajala_ml.model.networks.rust.dropout_rust_array_multiclass_backprop_classifier_network import (
+    DropoutRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.protocols.classifier_protocols import Example
-from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.specs.layer_specs import Dense
 from indrajala_ml.model.specs.update_rules import Adam, Momentum
 from indrajala_ml.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset, prepared_mnist

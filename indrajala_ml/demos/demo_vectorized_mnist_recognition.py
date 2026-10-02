@@ -1,8 +1,10 @@
 from indrajala_ml.demos.timing import timed_call, timed_train
 from indrajala_ml.mnist_data import load_mnist_dataset, load_mnist_dataset_as_array
-from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
-from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
+    MultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.multiclass_evaluate import accuracy
 
@@ -21,7 +23,7 @@ def main() -> None:
         "the full 60000-example MNIST training set, same architecture/hyperparameters, "
         "pure-Python MultiClassBackpropClassifierNetwork vs. its numpy-array-backed "
         "VectorizedMultiClassBackpropClassifierNetwork sibling (already parity-checked "
-        "step-by-step in tests/test_array_multiclass_backprop_model.py, and "
+        "step-by-step in tests/model/networks/test_array_multiclass_backprop_model.py, and "
         "accuracy-trajectory-checked at UCI digits scale in "
         "demo_vectorized_uci_digit_recognition.py)."
     )

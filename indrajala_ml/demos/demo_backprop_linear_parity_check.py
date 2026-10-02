@@ -15,8 +15,8 @@ from indrajala_ml.graphics.chart import (
     plot_linear_classifier_network,
     plot_training_data,
 )
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.train import reachable_reference_and_training_data, train_linear_classifier_network
 
 

@@ -13,15 +13,15 @@ from typing import Any, cast
 import pytest
 
 from indrajala_ml.mnist_data import load_mnist_dataset
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
-from indrajala_ml.model.protocols.classifier_protocols import Example, State
-from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
-    RustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.networks.rust.rust_array_multiclass_backprop_classifier_network import (
+    RustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.protocols.classifier_protocols import Example, State
 from indrajala_ml.prepared_dataset import PreparedDataset, prepared_mnist
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
 

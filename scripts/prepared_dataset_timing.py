@@ -49,30 +49,30 @@ from seeded_weights import seeded_randomized, seeded_shuffle
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml import train
 from indrajala_ml.mnist_data import load_mnist_dataset
-from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
-    ConvRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.networks.numpy.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
-    DropoutRustArrayMultiClassBackpropClassifierNetwork,
-)
-from indrajala_ml.model.dropout_vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.dropout_vectorized_multiclass_backprop_classifier_network import (
     DropoutVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classifier_network import (
+    ConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.rust.dropout_rust_array_multiclass_backprop_classifier_network import (
+    DropoutRustArrayMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
 
 # types only: with an old checkout first on PYTHONPATH (see AFTER) the script imports nothing new
 if TYPE_CHECKING:
-    from indrajala_ml.model.protocols.classifier_protocols import Example
-    from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (
-        RustArrayMultiClassBackpropClassifierNetwork,
-    )
-    from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
+    from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
         VectorizedMultiClassBackpropClassifierNetwork,
     )
+    from indrajala_ml.model.networks.rust.rust_array_multiclass_backprop_classifier_network import (
+        RustArrayMultiClassBackpropClassifierNetwork,
+    )
+    from indrajala_ml.model.protocols.classifier_protocols import Example
     from indrajala_ml.prepared_dataset import PreparedDataset
 
     # the dense and conv networks of either backend

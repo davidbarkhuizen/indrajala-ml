@@ -15,8 +15,6 @@ from typing import Any, cast
 
 import pytest
 
-from indrajala_ml.model.array_network_base import ArrayNetworkBase
-from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
 )
@@ -25,18 +23,20 @@ from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_networ
     EnsembleRustArrayBackpropClassifierNetwork,
 )
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
-from indrajala_ml.model.persistence.load_network import load_network
-from indrajala_ml.model.sequential_array_network import (
+from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase
+from indrajala_ml.model.networks.python.sequential_backprop_network import (
+    SequentialBackpropClassifierNetwork,
+    SequentialMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.sequential_array_network import (
     SequentialArrayBackpropClassifierNetwork,
     SequentialArrayNetwork,
     SequentialRustArrayBackpropClassifierNetwork,
     SequentialRustArrayMultiClassBackpropClassifierNetwork,
     SequentialVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.sequential_backprop_network import (
-    SequentialBackpropClassifierNetwork,
-    SequentialMultiClassBackpropClassifierNetwork,
-)
+from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule

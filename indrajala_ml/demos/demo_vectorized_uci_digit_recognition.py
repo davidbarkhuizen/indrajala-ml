@@ -9,9 +9,11 @@ from matplotlib import pyplot
 from indrajala_ml.demos.timing import timed_train
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.graphics.chart import new_axes, new_confusion_matrix_figure, new_figure, sample_predictions_figure
-from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
-from indrajala_ml.model.vectorized_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
+    MultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.multiclass_evaluate import accuracy, confusion_matrix
 
@@ -27,7 +29,7 @@ def main() -> None:
         "demo_uci_digit_recognition.py trains, here trained by "
         "VectorizedMultiClassBackpropClassifierNetwork, a numpy-array-backed sibling, "
         "parity-checked step-by-step against the pure-Python MultiClassBackpropClassifierNetwork "
-        "in tests/test_array_multiclass_backprop_model.py. This demo trains both, at the "
+        "in tests/model/networks/test_array_multiclass_backprop_model.py. This demo trains both, at the "
         "same seed and hyperparameters, and reports the actual measured accuracy trajectory and "
         "wall-clock cost of each."
     )

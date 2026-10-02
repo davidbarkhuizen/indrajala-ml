@@ -7,8 +7,8 @@ import random
 from collections.abc import Callable, Iterable
 from typing import Any, cast
 
-from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.protocols.classifier_protocols import BinaryClassifier, BinaryClassifierClass
 from indrajala_ml.pcg64 import SeedSequence
 from indrajala_ml.train import TrainingDiagnostic, train_linear_classifier_network

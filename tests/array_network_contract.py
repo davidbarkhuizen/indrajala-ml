@@ -29,7 +29,7 @@ import pytest
 
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
-from indrajala_ml.model.sequential_array_network import (
+from indrajala_ml.model.networks.sequential_array_network import (
     SequentialArrayBackpropClassifierNetwork,
     SequentialRustArrayBackpropClassifierNetwork,
     SequentialRustArrayMultiClassBackpropClassifierNetwork,

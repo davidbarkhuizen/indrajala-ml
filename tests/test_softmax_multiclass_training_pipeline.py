@@ -1,5 +1,5 @@
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
-from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
+from indrajala_ml.model.networks.python.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.multiclass_evaluate import accuracy

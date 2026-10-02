@@ -14,7 +14,7 @@ from indrajala_ml.graphics.chart import (
     plot_training_data,
     reference_region_bounds,
 )
-from indrajala_ml.model.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
 from tests.helpers import classifier_with_bounded_square_region
 
 
