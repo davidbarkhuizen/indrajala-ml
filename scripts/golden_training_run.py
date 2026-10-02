@@ -95,6 +95,15 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
 from indrajala_ml.model.cross_entropy_array_backprop_classifier_network import (
     CrossEntropyArrayBackpropClassifierNetwork,
 )
+from indrajala_ml.model.cross_entropy_conv_multiclass_backprop_classifier_network import (
+    CrossEntropyConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.cross_entropy_conv_rust_array_multiclass_backprop_classifier_network import (
+    CrossEntropyConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.cross_entropy_conv_vectorized_multiclass_backprop_classifier_network import (
+    CrossEntropyConvVectorizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.cross_entropy_multiclass_backprop_classifier_network import (
     CrossEntropyMultiClassBackpropClassifierNetwork,
 )
@@ -109,6 +118,15 @@ from indrajala_ml.model.cross_entropy_vectorized_multiclass_backprop_classifier_
 )
 from indrajala_ml.model.dropout_array_backprop_classifier_network import DropoutArrayBackpropClassifierNetwork
 from indrajala_ml.model.dropout_backprop_classifier_network import DropoutBackpropClassifierNetwork
+from indrajala_ml.model.dropout_conv_multiclass_backprop_classifier_network import (
+    DropoutConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.dropout_conv_rust_array_multiclass_backprop_classifier_network import (
+    DropoutConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.dropout_conv_vectorized_multiclass_backprop_classifier_network import (
+    DropoutConvVectorizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.dropout_multiclass_backprop_classifier_network import DropoutMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.dropout_rust_array_backprop_classifier_network import DropoutRustArrayBackpropClassifierNetwork
 from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
@@ -182,6 +200,15 @@ from indrajala_ml.model.momentum_vectorized_multiclass_backprop_classifier_netwo
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.model.relu_array_backprop_classifier_network import ReLUArrayBackpropClassifierNetwork
 from indrajala_ml.model.relu_backprop_classifier_network import ReLUBackpropClassifierNetwork
+from indrajala_ml.model.relu_conv_multiclass_backprop_classifier_network import (
+    ReLUConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.relu_conv_rust_array_multiclass_backprop_classifier_network import (
+    ReLUConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.relu_conv_vectorized_multiclass_backprop_classifier_network import (
+    ReLUConvVectorizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.relu_multiclass_backprop_classifier_network import ReLUMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.relu_rust_array_backprop_classifier_network import ReLURustArrayBackpropClassifierNetwork
 from indrajala_ml.model.relu_rust_array_multiclass_backprop_classifier_network import (
@@ -196,6 +223,15 @@ from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import
 )
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.softmax_conv_multiclass_backprop_classifier_network import (
+    SoftmaxConvMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.softmax_conv_rust_array_multiclass_backprop_classifier_network import (
+    SoftmaxConvRustArrayMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.softmax_conv_vectorized_multiclass_backprop_classifier_network import (
+    SoftmaxConvVectorizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
@@ -268,6 +304,18 @@ CONV_NETWORKS = {
     "numpy l2 conv": (L2ConvVectorizedMultiClassBackpropClassifierNetwork, (0.01,)),
     "rust l2 conv": (L2ConvRustArrayMultiClassBackpropClassifierNetwork, (0.01,)),
     "python l2 conv": (L2RegularizedConvMultiClassBackpropClassifierNetwork, (0.01,)),
+    "numpy relu conv": (ReLUConvVectorizedMultiClassBackpropClassifierNetwork, ()),
+    "rust relu conv": (ReLUConvRustArrayMultiClassBackpropClassifierNetwork, ()),
+    "python relu conv": (ReLUConvMultiClassBackpropClassifierNetwork, ()),
+    "numpy dropout conv": (DropoutConvVectorizedMultiClassBackpropClassifierNetwork, (0.3,)),
+    "rust dropout conv": (DropoutConvRustArrayMultiClassBackpropClassifierNetwork, (0.3,)),
+    "python dropout conv": (DropoutConvMultiClassBackpropClassifierNetwork, (0.3,)),
+    "numpy cross-entropy conv": (CrossEntropyConvVectorizedMultiClassBackpropClassifierNetwork, ()),
+    "rust cross-entropy conv": (CrossEntropyConvRustArrayMultiClassBackpropClassifierNetwork, ()),
+    "python cross-entropy conv": (CrossEntropyConvMultiClassBackpropClassifierNetwork, ()),
+    "numpy softmax conv": (SoftmaxConvVectorizedMultiClassBackpropClassifierNetwork, ()),
+    "rust softmax conv": (SoftmaxConvRustArrayMultiClassBackpropClassifierNetwork, ()),
+    "python softmax conv": (SoftmaxConvMultiClassBackpropClassifierNetwork, ()),
 }
 # an array single-output network is (class, keyword-only hyperparameters)
 SINGLE_OUTPUT_NETWORKS: dict[str, tuple[Any, dict[str, float]]] = {

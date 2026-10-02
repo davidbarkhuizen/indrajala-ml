@@ -23,10 +23,16 @@ from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import 
     BinaryCrossEntropyBackpropClassifierNetwork,
 )
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.cross_entropy_conv_multiclass_backprop_classifier_network import (
+    CrossEntropyConvMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.cross_entropy_multiclass_backprop_classifier_network import (
     CrossEntropyMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.dropout_backprop_classifier_network import DropoutBackpropClassifierNetwork
+from indrajala_ml.model.dropout_conv_multiclass_backprop_classifier_network import (
+    DropoutConvMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.dropout_multiclass_backprop_classifier_network import (
     DropoutMultiClassBackpropClassifierNetwork,
 )
@@ -48,10 +54,16 @@ from indrajala_ml.model.momentum_multiclass_backprop_classifier_network import (
 )
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.model.relu_backprop_classifier_network import ReLUBackpropClassifierNetwork
+from indrajala_ml.model.relu_conv_multiclass_backprop_classifier_network import (
+    ReLUConvMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.relu_multiclass_backprop_classifier_network import ReLUMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.softmax_conv_multiclass_backprop_classifier_network import (
+    SoftmaxConvMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
@@ -155,6 +167,34 @@ PRESETS: dict[str, tuple[Callable[[], Any], InputShape, list[LayerSpec], UpdateR
         (SIDE, SIDE, 1),
         [*CONV_SPECS, Dense(4), OUTPUT],
         WeightDecay(0.02),
+        True,
+    ),
+    "relu conv": (
+        lambda: ReLUConvMultiClassBackpropClassifierNetwork(SIDE, SIDE, CONV_SPECS, [4], CLASS_COUNT),
+        (SIDE, SIDE, 1),
+        [*CONV_SPECS, Dense(4, activation="relu"), OUTPUT],
+        SGD(),
+        True,
+    ),
+    "dropout conv": (
+        lambda: DropoutConvMultiClassBackpropClassifierNetwork(SIDE, SIDE, CONV_SPECS, [4], CLASS_COUNT, 0.3),
+        (SIDE, SIDE, 1),
+        [*CONV_SPECS, Dense(4, dropout=0.3), OUTPUT],
+        SGD(),
+        True,
+    ),
+    "cross-entropy conv": (
+        lambda: CrossEntropyConvMultiClassBackpropClassifierNetwork(SIDE, SIDE, CONV_SPECS, [4], CLASS_COUNT),
+        (SIDE, SIDE, 1),
+        [*CONV_SPECS, Dense(4), Dense(CLASS_COUNT, output=True, loss="cross_entropy")],
+        SGD(),
+        True,
+    ),
+    "softmax conv": (
+        lambda: SoftmaxConvMultiClassBackpropClassifierNetwork(SIDE, SIDE, CONV_SPECS, [4], CLASS_COUNT),
+        (SIDE, SIDE, 1),
+        [*CONV_SPECS, Dense(4), Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy")],
+        SGD(),
         True,
     ),
     "single-output": (

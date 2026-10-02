@@ -181,6 +181,10 @@ arguments. It equals, by bits, the Sequential network of the same specs and rule
 | … `Momentum` | `MomentumConvMultiClassBackpropClassifierNetwork` | `MomentumConvVectorizedMultiClassBackpropClassifierNetwork` | `MomentumConvRustArrayMultiClassBackpropClassifierNetwork` |
 | … `Adam` | `AdamConvMultiClassBackpropClassifierNetwork` | `AdamConvVectorizedMultiClassBackpropClassifierNetwork` | `AdamConvRustArrayMultiClassBackpropClassifierNetwork` |
 | … `WeightDecay` | `L2RegularizedConvMultiClassBackpropClassifierNetwork` | `L2ConvVectorizedMultiClassBackpropClassifierNetwork` | `L2ConvRustArrayMultiClassBackpropClassifierNetwork` |
+| … ReLU dense hidden layers | `ReLUConvMultiClassBackpropClassifierNetwork` | `ReLUConvVectorizedMultiClassBackpropClassifierNetwork` | `ReLUConvRustArrayMultiClassBackpropClassifierNetwork` |
+| … dropout on the dense hidden layers | `DropoutConvMultiClassBackpropClassifierNetwork` | `DropoutConvVectorizedMultiClassBackpropClassifierNetwork` | `DropoutConvRustArrayMultiClassBackpropClassifierNetwork` |
+| … cross-entropy loss | `CrossEntropyConvMultiClassBackpropClassifierNetwork` | `CrossEntropyConvVectorizedMultiClassBackpropClassifierNetwork` | `CrossEntropyConvRustArrayMultiClassBackpropClassifierNetwork` |
+| … softmax output, cross-entropy loss | `SoftmaxConvMultiClassBackpropClassifierNetwork` | `SoftmaxConvVectorizedMultiClassBackpropClassifierNetwork` | `SoftmaxConvRustArrayMultiClassBackpropClassifierNetwork` |
 
 An empty cell has no preset, but the Sequential network of that implementation builds the
 combination, so each array preset has a pure-Python parity reference. Combinations the Sequential
