@@ -59,6 +59,7 @@ import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.model.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
+from indrajala_ml.model.adam_multiclass_backprop_classifier_network import AdamMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network import (
     AdamRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -83,6 +84,9 @@ from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network i
 from indrajala_ml.model.cross_entropy_array_backprop_classifier_network import (
     CrossEntropyArrayBackpropClassifierNetwork,
 )
+from indrajala_ml.model.cross_entropy_multiclass_backprop_classifier_network import (
+    CrossEntropyMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.cross_entropy_rust_array_backprop_classifier_network import (
     CrossEntropyRustArrayBackpropClassifierNetwork,
 )
@@ -93,6 +97,7 @@ from indrajala_ml.model.cross_entropy_vectorized_multiclass_backprop_classifier_
     CrossEntropyVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.dropout_backprop_classifier_network import DropoutBackpropClassifierNetwork
+from indrajala_ml.model.dropout_multiclass_backprop_classifier_network import DropoutMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_network import (
     DropoutRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -106,6 +111,9 @@ from indrajala_ml.model.ensemble_rust_array_backprop_classifier_network import (
 )
 from indrajala_ml.model.fan_in_aware_backprop_classifier_network import FanInAwareBackpropClassifierNetwork
 from indrajala_ml.model.l2_regularized_backprop_classifier_network import L2RegularizedBackpropClassifierNetwork
+from indrajala_ml.model.l2_regularized_multiclass_backprop_classifier_network import (
+    L2RegularizedMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network import (
     L2RustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -134,6 +142,9 @@ from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_
 from indrajala_ml.model.momentum_conv_vectorized_multiclass_backprop_classifier_network import (
     MomentumConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.momentum_multiclass_backprop_classifier_network import (
+    MomentumMultiClassBackpropClassifierNetwork,
+)
 from indrajala_ml.model.momentum_rust_array_multiclass_backprop_classifier_network import (
     MomentumRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -142,6 +153,7 @@ from indrajala_ml.model.momentum_vectorized_multiclass_backprop_classifier_netwo
 )
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.model.relu_backprop_classifier_network import ReLUBackpropClassifierNetwork
+from indrajala_ml.model.relu_multiclass_backprop_classifier_network import ReLUMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.relu_rust_array_multiclass_backprop_classifier_network import (
     ReLURustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -237,6 +249,12 @@ ENSEMBLES = {
 PYTHON_MULTICLASS_NETWORKS = {
     "python multiclass": (MultiClassBackpropClassifierNetwork, ()),
     "python softmax": (SoftmaxMultiClassBackpropClassifierNetwork, ()),
+    "python multiclass momentum": (MomentumMultiClassBackpropClassifierNetwork, (0.9,)),
+    "python multiclass l2": (L2RegularizedMultiClassBackpropClassifierNetwork, (0.01,)),
+    "python multiclass adam": (AdamMultiClassBackpropClassifierNetwork, ()),
+    "python multiclass relu": (ReLUMultiClassBackpropClassifierNetwork, ()),
+    "python multiclass dropout": (DropoutMultiClassBackpropClassifierNetwork, (0.3,)),
+    "python multiclass cross-entropy": (CrossEntropyMultiClassBackpropClassifierNetwork, ()),
 }
 PYTHON_SINGLE_OUTPUT_NETWORKS = {
     "python single-output": (BackpropClassifierNetwork, ()),
