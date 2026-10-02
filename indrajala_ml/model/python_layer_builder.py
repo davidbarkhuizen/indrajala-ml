@@ -25,6 +25,7 @@ from indrajala_ml.model.layer_specs import (
     LayerSpec,
     expand_specs,
     image_shape,
+    refuse_layer_norm_attention_until,
     spec_shapes,
     validate_layer_specs,
 )
@@ -62,6 +63,7 @@ def build_python_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
+    refuse_layer_norm_attention_until(specs, "3", "in pure Python")
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
     )

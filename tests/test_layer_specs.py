@@ -12,15 +12,20 @@ from indrajala_ml.model.array_layer_builder import LAYER_CLASSES, build_array_la
 from indrajala_ml.model.format2 import layer_from_json, layer_to_json
 from indrajala_ml.model.layer_specs import (
     Add,
+    Attention,
     BatchNorm,
     Conv,
     Dense,
     Fork,
     InputShape,
+    LayerNorm,
     LayerSpec,
+    Patches,
     Pool,
+    Position,
     Residual,
     SpecShape,
+    TokenMean,
     batch_norm_index,
     expand_specs,
     refuse_single_example_groups,
@@ -377,3 +382,236 @@ def test_every_implementation_builds_a_block_and_format_2_round_trips_it(specs: 
     build_array_layers(specs, input_shape, backend.name)
     build_python_layers(specs, input_shape, StateLayer(math.prod(input_shape), [(0.0, 1.0)] * math.prod(input_shape)))
     assert [layer_from_json(layer_to_json(spec)) for spec in specs] == specs
+
+
+# patch models (the layer-norm and attention workplan, stage 1): over a (4, 4, 1) image, Patches(2)
+# gives 4 tokens of 4, and the embedding makes them 4 tokens of 6
+PATCHES = Patches(2)
+EMBED = Dense(6, activation="linear", bias=True)
+AFFINE_6 = Dense(6, activation="linear", bias=True)
+ATTENTION_BLOCK = Residual((LayerNorm(), Attention()))
+FFN_BLOCK = Residual((LayerNorm(), Dense(8, activation="relu"), AFFINE_6))
+SOFTMAX = Dense(3, output=True, activation="softmax", loss="cross_entropy")
+
+TOKENS: dict[str, list[LayerSpec]] = {
+    "the README's model": [
+        PATCHES,
+        EMBED,
+        Position(),
+        ATTENTION_BLOCK,
+        FFN_BLOCK,
+        TokenMean(),
+        LayerNorm(),
+        SOFTMAX,
+    ],
+    "patches, then the mean": [PATCHES, TokenMean(), OUTPUT],
+    "no position": [PATCHES, EMBED, ATTENTION_BLOCK, TokenMean(), OUTPUT],
+    "no embedding": [PATCHES, Position(), Residual((LayerNorm(), Attention())), TokenMean(), OUTPUT],
+    "the attention block alone": [PATCHES, EMBED, Position(), ATTENTION_BLOCK, TokenMean(), OUTPUT],
+    "the FFN block alone": [PATCHES, EMBED, Position(), FFN_BLOCK, TokenMean(), OUTPUT],
+    "two layers' blocks": [PATCHES, EMBED, ATTENTION_BLOCK, FFN_BLOCK, ATTENTION_BLOCK, FFN_BLOCK, TokenMean(), OUTPUT],
+    "a ReLU embedding": [PATCHES, Dense(6, activation="relu"), Position(), ATTENTION_BLOCK, TokenMean(), OUTPUT],
+    "attention alone in its body": [PATCHES, EMBED, Residual((Attention(),)), TokenMean(), OUTPUT],
+    "an affine body": [PATCHES, EMBED, Residual((AFFINE_6,)), TokenMean(), OUTPUT],
+    "a layer norm between blocks": [PATCHES, EMBED, ATTENTION_BLOCK, LayerNorm(), FFN_BLOCK, TokenMean(), OUTPUT],
+    "token-wise layers after a block": [
+        PATCHES,
+        EMBED,
+        ATTENTION_BLOCK,
+        Dense(5, activation="relu"),
+        TokenMean(),
+        OUTPUT,
+    ],
+    "a dense part after the mean": [
+        PATCHES,
+        EMBED,
+        ATTENTION_BLOCK,
+        TokenMean(),
+        Dense(5, activation="relu"),
+        LINEAR,
+        BatchNorm(),
+        BLOCK_5,
+        OUTPUT,
+    ],
+}
+
+TOKENS_INVALID: dict[str, list[LayerSpec]] = {
+    "patches after a conv layer": [Conv(3, 2), PATCHES, TokenMean(), OUTPUT],
+    "patches after a dense layer": [Dense(16), PATCHES, TokenMean(), OUTPUT],
+    "patches twice": [PATCHES, PATCHES, TokenMean(), OUTPUT],
+    "patches without a mean": [PATCHES, EMBED, OUTPUT],
+    "patch size 0": [Patches(0), TokenMean(), OUTPUT],
+    "two positions": [PATCHES, EMBED, Position(), Position(), TokenMean(), OUTPUT],
+    "a position after a block": [PATCHES, EMBED, ATTENTION_BLOCK, Position(), TokenMean(), OUTPUT],
+    "a position in a body": [PATCHES, EMBED, Residual((Position(), AFFINE_6)), TokenMean(), OUTPUT],
+    "a sigmoid token layer": [PATCHES, Dense(6), TokenMean(), OUTPUT],
+    "a dropout token layer": [PATCHES, Dense(6, dropout=0.3), TokenMean(), OUTPUT],
+    "a linear token layer without a bias": [PATCHES, Dense(6, activation="linear"), TokenMean(), OUTPUT],
+    "a batch norm among the tokens": [PATCHES, Dense(6, activation="linear"), BatchNorm("relu"), TokenMean(), OUTPUT],
+    "a batch norm after the embedding": [PATCHES, EMBED, BatchNorm("relu"), TokenMean(), OUTPUT],
+    "a batch norm in a token body": [
+        PATCHES,
+        EMBED,
+        Residual((Dense(6, activation="linear"), BatchNorm("relu"), AFFINE_6)),
+        TokenMean(),
+        OUTPUT,
+    ],
+    "a sigmoid token body": [PATCHES, EMBED, Residual((Dense(8), AFFINE_6)), TokenMean(), OUTPUT],
+    "a token body ending ReLU": [
+        PATCHES,
+        EMBED,
+        Residual((LayerNorm(), Dense(6, activation="relu"))),
+        TokenMean(),
+        OUTPUT,
+    ],
+    "a token body ending in a layer norm": [PATCHES, EMBED, Residual((LayerNorm(),)), TokenMean(), OUTPUT],
+    "attention before the body's end": [PATCHES, EMBED, Residual((Attention(), AFFINE_6)), TokenMean(), OUTPUT],
+    "attention outside a block": [PATCHES, EMBED, Attention(), TokenMean(), OUTPUT],
+    "a nested token block": [PATCHES, EMBED, Residual((ATTENTION_BLOCK, AFFINE_6)), TokenMean(), OUTPUT],
+    "an empty token body": [PATCHES, EMBED, Residual(()), TokenMean(), OUTPUT],
+    "a conv layer among the tokens": [PATCHES, Conv(1, 2), TokenMean(), OUTPUT],
+    "a pool layer after the mean": [PATCHES, TokenMean(), Pool(2), OUTPUT],
+    "a mean twice": [PATCHES, TokenMean(), TokenMean(), OUTPUT],
+    "a position after the mean": [PATCHES, TokenMean(), Position(), OUTPUT],
+    "attention after the mean": [PATCHES, TokenMean(), Residual((Attention(),)), OUTPUT],
+    "a mean without patches": [Dense(5), TokenMean(), OUTPUT],
+    "a mean after a conv layer": [Conv(3, 2), TokenMean(), OUTPUT],
+    "a position without patches": [Dense(5), Position(), OUTPUT],
+    "attention without patches": [Dense(5), Residual((LayerNorm(), Attention())), OUTPUT],
+    "a layer norm with no epsilon": [PATCHES, Residual((LayerNorm(epsilon=0.0), AFFINE_6)), TokenMean(), OUTPUT],
+}
+
+# a flat layer norm (D5) wherever a dense hidden layer may stand: before and after each hidden-layer
+# kind, and as a residual body's first layer
+FLAT_LAYER_NORM: dict[str, list[LayerSpec]] = {
+    "alone": [LayerNorm(), OUTPUT],
+    "before the output layer": [Dense(5), LayerNorm(), SOFTMAX],
+    "after sigmoid": [Dense(5), LayerNorm(), Dense(4), OUTPUT],
+    "before sigmoid": [LayerNorm(), Dense(5), OUTPUT],
+    "after ReLU": [Dense(5, activation="relu"), LayerNorm(), OUTPUT],
+    "before ReLU": [Dense(5), LayerNorm(), Dense(4, activation="relu"), OUTPUT],
+    "after dropout": [Dense(5, dropout=0.3), LayerNorm(), OUTPUT],
+    "before dropout": [Dense(5), LayerNorm(), Dense(4, dropout=0.3), OUTPUT],
+    "after a batch-norm pair": [LINEAR, BatchNorm(), LayerNorm(), OUTPUT],
+    "before a batch-norm pair": [Dense(5), LayerNorm(), LINEAR, BatchNorm(), OUTPUT],
+    "after a block": [Dense(5), BLOCK_5, LayerNorm(), OUTPUT],
+    "before a block": [Dense(5), LayerNorm(), BLOCK_5, OUTPUT],
+    "a body's first layer": [Dense(5), Residual((LayerNorm(), Dense(8, activation="relu"), AFFINE_5)), OUTPUT],
+    "inside a body": [Dense(5), Residual((Dense(8, activation="relu"), LayerNorm(), AFFINE_5)), OUTPUT],
+    "twice": [Dense(5), LayerNorm(), LayerNorm(), OUTPUT],
+    "after a conv front end": [Conv(3, 2), Pool(2), LayerNorm(), Dense(5), OUTPUT],
+}
+
+FLAT_LAYER_NORM_INVALID: dict[str, list[LayerSpec]] = {
+    "between a linear layer and its batch norm": [LINEAR, LayerNorm(), BatchNorm(), OUTPUT],
+    "a batch norm after it": [Dense(5), LayerNorm(), BatchNorm(), OUTPUT],
+    "a body's last layer": [Dense(5), Residual((Dense(8), LayerNorm())), OUTPUT],
+    "the output layer": [Dense(5), LayerNorm()],
+    "no epsilon": [Dense(5), LayerNorm(epsilon=0.0), OUTPUT],
+    "a conv layer after it": [Conv(3, 2), LayerNorm(), Conv(2, 2), OUTPUT],
+}
+
+
+def _input_shape(specs: list[LayerSpec]) -> InputShape:
+    return (4, 4, 1) if isinstance(specs[0], Patches) else (8, 8, 1) if isinstance(specs[0], Conv) else (5,)
+
+
+@pytest.mark.parametrize("specs", (TOKENS | FLAT_LAYER_NORM).values(), ids=(TOKENS | FLAT_LAYER_NORM).keys())
+def test_patch_models_and_flat_layer_norms_are_accepted(specs: list[LayerSpec]):
+    validate_layer_specs(specs)
+    spec_shapes(specs, _input_shape(specs))
+
+
+INVALID_TOKENS = TOKENS_INVALID | {f"flat layer norm, {name}": specs for name, specs in FLAT_LAYER_NORM_INVALID.items()}
+
+
+@pytest.mark.parametrize("specs", INVALID_TOKENS.values(), ids=INVALID_TOKENS.keys())
+def test_a_malformed_patch_model_or_flat_layer_norm_is_rejected(specs: list[LayerSpec]):
+    with pytest.raises(AssertionError):
+        validate_layer_specs(specs)
+
+
+TOKEN_SHAPE_INVALID: dict[str, tuple[list[LayerSpec], InputShape]] = {
+    "a patch size that doesn't divide the height": ([Patches(3), TokenMean(), OUTPUT], (4, 6, 1)),
+    "a patch size that doesn't divide the width": ([Patches(3), TokenMean(), OUTPUT], (6, 4, 1)),
+    "patches over a flat input": ([PATCHES, TokenMean(), OUTPUT], (16,)),
+    "a token block's size mismatch": (
+        [PATCHES, EMBED, Residual((Dense(5, activation="linear", bias=True),)), TokenMean(), OUTPUT],
+        (4, 4, 1),
+    ),
+    "attention over the unembedded patches, then an affine block of the embedding's size": (
+        [PATCHES, ATTENTION_BLOCK, Residual((AFFINE_6,)), TokenMean(), OUTPUT],
+        (4, 4, 1),
+    ),
+}
+
+
+@pytest.mark.parametrize("specs, input_shape", TOKEN_SHAPE_INVALID.values(), ids=TOKEN_SHAPE_INVALID.keys())
+def test_a_patch_model_that_doesnt_fit_its_input_is_rejected_by_the_shape_walk(
+    specs: list[LayerSpec], input_shape: InputShape
+):
+    validate_layer_specs(specs)
+    with pytest.raises(AssertionError):
+        spec_shapes(specs, input_shape)
+
+
+def test_the_shape_walk_carries_tokens_from_the_patches_to_the_mean():
+    # the README's model: 28x28x1 -> 16 tokens of 49 -> of 32 ... -> the mean of 32 -> 10
+    specs: list[LayerSpec] = [
+        Patches(7),
+        Dense(32, activation="linear", bias=True),
+        Position(),
+        Residual((LayerNorm(), Attention())),
+        Residual((LayerNorm(), Dense(64, activation="relu"), Dense(32, activation="linear", bias=True))),
+        TokenMean(),
+        LayerNorm(),
+        Dense(10, activation="softmax", output=True, loss="cross_entropy"),
+    ]
+    validate_layer_specs(specs)
+    assert spec_shapes(specs, (28, 28, 1)) == [
+        SpecShape((28, 28, 1), (16, 49)),
+        SpecShape((16, 49), (16, 32)),
+        SpecShape((16, 32), (16, 32)),
+        SpecShape((16, 32), (16, 32)),  # the attention block: fork, layer norm, attention, add
+        SpecShape((16, 32), (16, 32)),
+        SpecShape((16, 32), (16, 32)),
+        SpecShape((16, 32), (16, 32)),
+        SpecShape((16, 32), (16, 32)),  # the FFN block: fork, layer norm, ReLU, affine, add
+        SpecShape((16, 32), (16, 32)),
+        SpecShape((16, 32), (16, 64)),
+        SpecShape((16, 64), (16, 32)),
+        SpecShape((16, 32), (16, 32)),
+        SpecShape((16, 32), (32,)),
+        SpecShape((32,), (32,)),
+        SpecShape((32,), (10,)),
+    ]
+    # each patch's 2 * 2 * 3 values, the 3 x 2 grid of patches row-major
+    assert spec_shapes([Patches(2), TokenMean(), OUTPUT], (6, 4, 3))[0] == SpecShape((6, 4, 3), (6, 12))
+    assert spec_shapes(FLAT_LAYER_NORM["after a conv front end"], (8, 8, 1))[2] == SpecShape((3, 3, 2), (3, 3, 2))
+
+
+REFUSED = {f"tokens {name}": specs for name, specs in TOKENS.items()} | {
+    "flat layer norm": FLAT_LAYER_NORM["after sigmoid"],
+    "flat layer norm in a body": FLAT_LAYER_NORM["a body's first layer"],
+}
+
+
+@pytest.mark.parametrize("specs", REFUSED.values(), ids=REFUSED.keys())
+def test_the_builders_and_format_2_refuse_the_new_specs_until_their_stages(specs: list[LayerSpec], backend: Backend):
+    input_shape = _input_shape(specs)
+    stage = "2" if backend.name == "numpy" else "4"
+    with pytest.raises(
+        NotImplementedError, match=f"not yet \\(the layer-norm and attention workplan, stage {stage}\\)"
+    ):
+        build_array_layers(specs, input_shape, backend.name)
+    size = math.prod(input_shape)
+    with pytest.raises(NotImplementedError, match="in pure Python: not yet .* stage 3"):
+        build_python_layers(specs, input_shape, StateLayer(size, [(0.0, 1.0)] * size))
+    new = next(spec for spec in specs if not isinstance(spec, Dense | BatchNorm))
+    with pytest.raises(NotImplementedError, match="in format 2: not yet .* stage 5"):
+        layer_to_json(new)
+
+
+def test_the_refusal_names_each_new_kind_once():
+    with pytest.raises(NotImplementedError, match=r"^Patches, Position, LayerNorm, Attention, TokenMean on the numpy"):
+        build_array_layers(TOKENS["the README's model"], (4, 4, 1), "numpy")

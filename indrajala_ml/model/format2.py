@@ -70,6 +70,7 @@ from indrajala_ml.model.layer_specs import (
     LayerSpec,
     Residual,
     expand_specs,
+    refuse_layer_norm_attention_until,
 )
 from indrajala_ml.model.max_pool_layer import PoolSpec
 from indrajala_ml.model.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
@@ -134,6 +135,7 @@ def _lists(value: Any) -> Any:
 
 
 def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
+    refuse_layer_norm_attention_until([spec], "5", "in format 2")
     if isinstance(spec, Residual):
         return {"kind": "residual", "body": [layer_to_json(layer) for layer in spec.body]}
     if isinstance(spec, ConvSpec):

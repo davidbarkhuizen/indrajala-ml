@@ -15,6 +15,12 @@ Conv(3, 8, activation="linear"), BatchNorm(activation="relu").
 A residual block (the residual-connections workplan, D1) is a nested spec, Residual(body), whose
 output is its input plus its body's: x + F(x). The builders flatten it (expand_specs) into a Fork,
 the body's layers, then an Add, so a network's layers are its expanded specs, not its specs.
+
+A patch model (the layer-norm and attention workplan; README, Layer norm and attention) starts with
+Patches, which cuts the image into tokens, has a token part of token-wise Dense layers, a Position
+and residual blocks over tokens (LayerNorm, Attention), and ends it with TokenMean, before the
+dense part. A token sequence of T tokens of d features is the shape (T, d), flat and token-major
+(D2). LayerNorm stands in flat dense networks too (D5).
 """
 
 from __future__ import annotations
@@ -94,7 +100,52 @@ class Residual:
         object.__setattr__(self, "body", tuple(self.body))
 
 
-LayerSpec = Dense | ConvSpec | PoolSpec | BatchNorm | Residual
+@dataclass(frozen=True)
+class Patches:
+    """
+    An (H, W, C) image as (H/p * W/p, p * p * C) tokens, p the patch_size, which divides H and W:
+    the patches in row-major order, each patch's values in the conv kernel's (channel, row, col)
+    order (D3). Parameter-free, and the first layer.
+    """
+
+    patch_size: int
+
+
+@dataclass(frozen=True)
+class Position:
+    """A learned (T, d) table added to the tokens, starting at zero (D7). Once, before any block."""
+
+
+@dataclass(frozen=True)
+class LayerNorm:
+    """
+    Each token's features (a flat layer's, as one token) normalized by their mean and biased
+    variance, epsilon added to the variance, then gamma * xhat + beta per feature, gamma starting at
+    1 and beta at 0 (D5). No activation after it, and the same in training and inference. It stands
+    among the tokens, and wherever a dense hidden layer may.
+    """
+
+    epsilon: float = 1e-5
+
+
+@dataclass(frozen=True)
+class Attention:
+    """
+    Single-head self-attention over the tokens, keys as wide as the tokens, no mask, biases on
+    all four projections, ending in the affine output projection (D6). It ends a token block's
+    body.
+    """
+
+
+@dataclass(frozen=True)
+class TokenMean:
+    """The mean over the tokens, (T, d) to (d,) (D8): the token part's end."""
+
+
+LayerSpec = Dense | ConvSpec | PoolSpec | BatchNorm | Residual | Patches | Position | LayerNorm | Attention | TokenMean
+
+# the specs that act on tokens only, between Patches and TokenMean, both included
+TokenSpec = Patches | Position | Attention | TokenMean
 
 
 @dataclass(frozen=True)
@@ -111,7 +162,9 @@ class Add:
 
 
 # a network's layers, one spec each: its specs with every Residual flattened
-ExpandedSpec = Dense | ConvSpec | PoolSpec | BatchNorm | Fork | Add
+ExpandedSpec = (
+    Dense | ConvSpec | PoolSpec | BatchNorm | Fork | Add | Patches | Position | LayerNorm | Attention | TokenMean
+)
 
 
 def expand_specs(specs: Sequence[LayerSpec | Fork | Add]) -> list[ExpandedSpec]:
@@ -127,6 +180,18 @@ def expand_specs(specs: Sequence[LayerSpec | Fork | Add]) -> list[ExpandedSpec]:
         else:
             expanded.append(spec)
     return expanded
+
+
+def refuse_layer_norm_attention_until(specs: Sequence[LayerSpec], stage: str, where: str) -> None:
+    """A builder's or writer's refusal of the layer-norm and attention workplan's specs before the
+    stage that builds them there."""
+    kinds = dict.fromkeys(
+        type(spec).__name__ for spec in expand_specs(specs) if isinstance(spec, TokenSpec | LayerNorm)
+    )
+    if kinds:
+        raise NotImplementedError(
+            f"{', '.join(kinds)} {where}: not yet (the layer-norm and attention workplan, stage {stage})"
+        )
 
 
 def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:
@@ -201,11 +266,14 @@ def batch_norm_index(specs: Sequence[LayerSpec]) -> int | None:
 # flat layout is channel-major (conv_layer.py, conv_array_layer.py)
 InputShape = tuple[int] | tuple[int, int, int]
 ImageShape = tuple[int, int, int]
+# a token sequence inside a network, (tokens, features), flat and token-major (D2): never an input
+TokenShape = tuple[int, int]
+Shape = InputShape | TokenShape
 
 
-def image_shape(shape: InputShape) -> ImageShape:
+def image_shape(shape: Shape) -> ImageShape:
     """shape, which a conv or pool layer reads, as (height, width, channels)."""
-    assert len(shape) == 3, f"a conv or pool layer needs a (height, width, channels) input; got {shape}"
+    assert len(shape) == 3, f"a conv, pool or Patches layer needs a (height, width, channels) input; got {shape}"
     return shape
 
 
@@ -217,8 +285,8 @@ class SpecShape:
     out_width (1 for every other spec).
     """
 
-    input_shape: InputShape
-    output_shape: InputShape
+    input_shape: Shape
+    output_shape: Shape
     positions: int = 1
 
 
@@ -227,22 +295,27 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
     Each of expand_specs(specs)' shapes over input_shape, in forward order, each spec's input shape
     the previous one's output shape: what every builder needs besides the choice of class. A
     BatchNorm keeps its linear layer's shape (validate_layer_specs), and a Fork and an Add their
-    input's. A residual block's input is flat (D2), and its Add's input is its Fork's (D5): both
-    are checked here, where the shapes are known. The specs' own arguments are checked by the
-    layers built from them, not here.
+    input's. A residual block's input is flat (D2) or tokens, and its Add's input is its Fork's
+    (D5): both are checked here, where the shapes are known, as is a patch size that doesn't divide
+    the image. A Dense over tokens acts on each (the layer-norm and attention workplan, D4), and a
+    Position, a LayerNorm and an Attention keep their input's shape (a LayerNorm after a conv front
+    end normalizes the flat image as one token). The specs' own arguments are checked by the layers
+    built from them, not here.
     """
     shapes: list[SpecShape] = []
-    shape = input_shape
+    shape: Shape = input_shape
     # each open block's input shape, its Fork's
-    forks: list[InputShape] = []
+    forks: list[Shape] = []
     for spec in expand_specs(specs):
         if isinstance(spec, Dense):
-            shapes.append(SpecShape(shape, (spec.size,)))
+            shapes.append(SpecShape(shape, (shape[0], spec.size) if len(shape) == 2 else (spec.size,)))
         elif isinstance(spec, BatchNorm):
             positions = shape[0] * shape[1] if len(shape) == 3 else 1
             shapes.append(SpecShape(shape, shape, positions))
         elif isinstance(spec, Fork):
-            assert len(shape) == 1, f"a residual block is dense only (D2): its input is flat; got {shape}"
+            assert len(shape) in (1, 2), (
+                f"a residual block is dense or over tokens (D2): its input is flat or tokens; got {shape}"
+            )
             forks.append(shape)
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, Add):
@@ -251,6 +324,18 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
                 f"a residual block's output size is its input size (D5): its body ends in {shape}, not {fork}"
             )
             shapes.append(SpecShape(shape, shape))
+        elif isinstance(spec, Patches):
+            height, width, channels = image_shape(shape)
+            size = spec.patch_size
+            assert height % size == 0 and width % size == 0, (
+                f"a patch size divides the image (the layer-norm and attention workplan, D3); got {spec!r} over {shape}"
+            )
+            shapes.append(SpecShape(shape, ((height // size) * (width // size), size * size * channels)))
+        elif isinstance(spec, Position | LayerNorm | Attention):
+            shapes.append(SpecShape(shape, shape))
+        elif isinstance(spec, TokenMean):
+            assert len(shape) == 2, f"a TokenMean reads tokens; got {shape}"
+            shapes.append(SpecShape(shape, (shape[1],)))
         else:
             height, width, channels = image_shape(shape)
             if isinstance(spec, ConvSpec):
@@ -286,6 +371,10 @@ def _check_hidden_dense(spec: Dense) -> None:
     assert spec.loss == "squared", f"a loss belongs to the output layer; got {spec!r}"
 
 
+def _check_layer_norm(spec: LayerNorm) -> None:
+    assert spec.epsilon > 0.0, f"epsilon must be positive; got {spec!r}"
+
+
 def _check_residual(spec: Residual, in_body: bool) -> None:
     assert not in_body, f"a residual block's body holds no residual block (D6); got {spec!r}"
     assert spec.body, f"a residual block's body needs at least one layer; got {spec!r}"
@@ -301,10 +390,13 @@ def _check_residual(spec: Residual, in_body: bool) -> None:
 
 
 def _check_dense_layers(dense: Sequence[LayerSpec], output: LayerSpec, in_body: bool) -> None:
-    # dense hidden layers, BatchNorms and residual blocks, then output after them: a network's
-    # dense part before its output layer, or a block's body before its affine layer
+    # dense hidden layers, BatchNorms, LayerNorms and residual blocks, then output after them: a
+    # network's dense part before its output layer, or a block's body before its affine layer
     for i, spec in enumerate(dense):
         after = dense[i + 1] if i + 1 < len(dense) else output
+        if isinstance(spec, LayerNorm):
+            _check_layer_norm(spec)
+            continue
         if isinstance(spec, BatchNorm):
             _check_batch_norm(spec, dense[i - 1] if i > 0 else None)
             continue
@@ -321,6 +413,56 @@ def _check_dense_layers(dense: Sequence[LayerSpec], output: LayerSpec, in_body: 
         )
 
 
+def _check_token_residual(spec: Residual, in_body: bool) -> None:
+    assert not in_body, f"a residual block's body holds no residual block (D6); got {spec!r}"
+    assert spec.body, f"a residual block's body needs at least one layer; got {spec!r}"
+    *layers, last = spec.body
+    affine = isinstance(last, Dense) and last.activation == "linear" and last.bias
+    assert affine or isinstance(last, Attention), (
+        f'a token block\'s body ends in Attention or an affine layer, Dense(n, "linear", bias=True) '
+        f"(the layer-norm and attention workplan, D1, D6); got {spec!r}"
+    )
+    if isinstance(last, Dense):
+        _check_hidden_dense(last)
+    _check_token_layers(layers, in_body=True)
+
+
+def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool) -> None:
+    # a token part's layers, between Patches and TokenMean, or a token block's body before its last
+    # layer (the layer-norm and attention workplan, D1, D4, D7)
+    batch_norm = next((spec for spec in expand_specs(tokens) if isinstance(spec, BatchNorm)), None)
+    assert batch_norm is None, f"a BatchNorm doesn't stand among the tokens, a LayerNorm does (D4); got {batch_norm!r}"
+    blocks = 0
+    for spec in tokens:
+        if isinstance(spec, Position):
+            assert not in_body and blocks == 0, (
+                f"a Position stands in the token part, before any block (D7); got {list(tokens)!r}"
+            )
+        elif isinstance(spec, LayerNorm):
+            _check_layer_norm(spec)
+        elif isinstance(spec, Residual):
+            _check_token_residual(spec, in_body)
+            blocks += 1
+        else:
+            assert isinstance(spec, Dense), (
+                "among the tokens stand a token-wise Dense, a Position, a LayerNorm and residual blocks, "
+                f"Attention ending a block's body (D1, D4); got {spec!r}"
+            )
+            _check_hidden_dense(spec)
+            assert spec.activation == "relu" or (spec.activation == "linear" and spec.bias), (
+                f"a token-wise Dense is ReLU, or linear with bias=True, with no dropout (D4); got {spec!r}"
+            )
+    assert sum(isinstance(spec, Position) for spec in tokens) <= 1, f"one Position at most (D7); got {list(tokens)!r}"
+
+
+def _check_no_tokens(specs: Sequence[LayerSpec], where: str) -> None:
+    token = next((spec for spec in expand_specs(specs) if isinstance(spec, TokenSpec)), None)
+    assert token is None, (
+        f"{token!r} acts on tokens, between Patches, the first layer, and TokenMean (the layer-norm and "
+        f"attention workplan, D3, D8); got it {where}"
+    )
+
+
 def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:
     """
     Rejects a spec list that some implementation can't build: a conv or pool layer after a dense
@@ -329,13 +471,35 @@ def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:
     is fused with the sigmoid), a linear layer without a BatchNorm right after it or a BatchNorm
     without one right before it (a conv one's BatchNorm is ReLU), a residual block that isn't a
     dense body ending in an affine layer (Residual), and an output layer that isn't exactly the
-    last layer. A block counts as a dense layer. Its sizes are checked by spec_shapes.
+    last layer. A block counts as a dense layer, and a LayerNorm may stand wherever a dense hidden
+    layer may. In place of a front end, a patch model has a token part (_check_token_layers), from
+    Patches, the first layer, to TokenMean. Sizes are checked by spec_shapes.
     """
     assert specs, "a network needs at least one layer"
     *hidden, output = specs
 
-    # the front end: every layer before the first dense one or residual block
-    front_end_length = next((i for i, spec in enumerate(hidden) if isinstance(spec, Dense | Residual)), len(hidden))
+    if hidden and isinstance(hidden[0], Patches):
+        assert hidden[0].patch_size >= 1, f"a patch size is at least 1; got {hidden[0]!r}"
+        mean = next((i for i, spec in enumerate(hidden) if isinstance(spec, TokenMean)), None)
+        assert mean is not None, (
+            f"a token part ends in TokenMean, before the dense part (the layer-norm and attention workplan, D8); "
+            f"got {list(specs)!r}"
+        )
+        tokens, dense = hidden[1:mean], hidden[mean + 1 :]
+        _check_token_layers(tokens, in_body=False)
+        _check_no_tokens([*dense, output], "after TokenMean")
+        assert not any(isinstance(spec, ConvSpec | PoolSpec) for spec in dense), (
+            f"a patch model has no conv or pool layer (D3); got {list(specs)!r}"
+        )
+        _check_dense_layers(dense, output, in_body=False)
+        _check_output(output)
+        return
+    _check_no_tokens(specs, "in a network that doesn't start with Patches")
+
+    # the front end: every layer before the first dense one, LayerNorm or residual block
+    front_end_length = next(
+        (i for i, spec in enumerate(hidden) if isinstance(spec, Dense | LayerNorm | Residual)), len(hidden)
+    )
     front_end = hidden[:front_end_length]
     assert not any(isinstance(spec, ConvSpec | PoolSpec) for spec in hidden[front_end_length:]), (
         f"conv and pool layers must all come before the dense layers; got {list(specs)!r}"
@@ -354,7 +518,10 @@ def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:
     )
 
     _check_dense_layers(hidden[front_end_length:], output, in_body=False)
+    _check_output(output)
 
+
+def _check_output(output: LayerSpec) -> None:
     assert isinstance(output, Dense) and output.output, (
         f"the last layer must be the output layer, Dense(..., output=True); got {output!r}"
     )
