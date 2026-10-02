@@ -12,7 +12,7 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
@@ -86,7 +86,7 @@ CONTROLS: dict[str, list[LayerSpec]] = {
 # lr * g / (|g| + epsilon), has slope lr * epsilon / (|g| + epsilon)**2, which turns a gradient
 # near epsilon's size into a steep step: one ulp of such a gradient was ~1000 of its step (the
 # deep control, g ~ 8e-9, OpenBLAS's Sandybridge kernel). Adam's step from the same gradient is
-# pinned against numpy in tests/test_adam_fused_layer_ops.py
+# pinned against numpy in tests/model/layers/test_adam_fused_layer_ops.py
 LINEAR_RULES = [rule for rule in RULES if not isinstance(rule, Adam)]
 
 

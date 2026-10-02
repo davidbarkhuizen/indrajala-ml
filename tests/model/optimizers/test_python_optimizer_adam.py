@@ -1,7 +1,7 @@
 from indrajala_ml.model.adam_backprop_classifier_network import AdamBackpropClassifierNetwork
-from indrajala_ml.model.backprop_node import BackpropNode
+from indrajala_ml.model.layers.python.backprop_node import BackpropNode
+from indrajala_ml.model.layers.python.state_node import StateNode
 from indrajala_ml.model.specs.update_rules import Adam
-from indrajala_ml.model.state_node import StateNode
 from tests.helpers import LayerOptimizer, WeightSets, approx
 
 BETA1, BETA2, EPSILON = 0.9, 0.999, 1e-8

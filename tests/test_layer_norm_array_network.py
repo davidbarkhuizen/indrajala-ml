@@ -13,8 +13,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY
-from indrajala_ml.model.layer_norm_array_layer import LayerNormArrayLayer
+from indrajala_ml.model.layers.array.array_backend import NUMPY
+from indrajala_ml.model.layers.numpy.layer_norm_array_layer import LayerNormArrayLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, UpdateRule

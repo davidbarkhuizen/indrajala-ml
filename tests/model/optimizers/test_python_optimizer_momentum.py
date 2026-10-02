@@ -1,10 +1,10 @@
 from collections.abc import Callable
 
-from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.backprop_node import BackpropNode
+from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
+from indrajala_ml.model.layers.python.backprop_node import BackpropNode
+from indrajala_ml.model.layers.python.state_layer import StateLayer
+from indrajala_ml.model.layers.python.state_node import StateNode
 from indrajala_ml.model.specs.update_rules import SGD, Momentum, UpdateRule
-from indrajala_ml.model.state_layer import StateLayer
-from indrajala_ml.model.state_node import StateNode
 from tests.helpers import LayerOptimizer, WeightSets, approx
 
 

@@ -15,10 +15,15 @@ import numpy as np
 import pytest
 
 from indrajala_ml.mnist_data import load_mnist_dataset
-from indrajala_ml.model import attention_array_layer
-from indrajala_ml.model.array_backend import NUMPY
-from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.attention_array_layer import AttentionArrayLayer
+from indrajala_ml.model.layers.array.array_backend import NUMPY
+from indrajala_ml.model.layers.numpy import attention_array_layer
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
+from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
+from indrajala_ml.model.layers.numpy.token_array_layer import (
+    PatchesArrayLayer,
+    PositionArrayLayer,
+    TokenMeanArrayLayer,
+)
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
@@ -32,11 +37,6 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, UpdateRule
-from indrajala_ml.model.token_array_layer import (
-    PatchesArrayLayer,
-    PositionArrayLayer,
-    TokenMeanArrayLayer,
-)
 from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, exp_by_math, patching, split
 from tests.model.specs.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX

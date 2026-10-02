@@ -49,7 +49,6 @@ from seeded_weights import seeded_randomized, seeded_shuffle
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml import train
 from indrajala_ml.mnist_data import load_mnist_dataset
-from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -62,6 +61,7 @@ from indrajala_ml.model.dropout_rust_array_multiclass_backprop_classifier_networ
 from indrajala_ml.model.dropout_vectorized_multiclass_backprop_classifier_network import (
     DropoutVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.train import train_backprop_network_mini_batch, train_linear_classifier_network
 
 # types only: with an old checkout first on PYTHONPATH (see AFTER) the script imports nothing new

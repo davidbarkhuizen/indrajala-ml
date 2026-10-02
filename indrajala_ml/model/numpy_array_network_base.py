@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from indrajala_ml.model.array_backend import NUMPY
-from indrajala_ml.model.array_layer import FloatArray
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.layers.array.array_backend import NUMPY
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 
 
 class NumpyArrayNetworkBase(ArrayNetworkBase[FloatArray]):

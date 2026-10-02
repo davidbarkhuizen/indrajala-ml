@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
-from indrajala_ml.model.base_node import AbstractNode
+from indrajala_ml.model.layers.python.base_node import AbstractNode
 from indrajala_ml.pcg64 import Pcg64Generator
 
 

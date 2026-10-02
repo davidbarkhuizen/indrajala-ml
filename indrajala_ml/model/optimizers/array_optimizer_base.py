@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from indrajala_ml.model.array_layer import FloatArray
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.optimizers.optimizer_base import OptimizerBase
 from indrajala_ml.model.persistence.checkpoint import OptimizerState
 from indrajala_ml.model.protocols.array_protocols import ArrayBackend, BackendArray, TrainedArrayLayer

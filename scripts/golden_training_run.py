@@ -77,13 +77,11 @@ from indrajala_ml.model.adam_rust_array_multiclass_backprop_classifier_network i
 from indrajala_ml.model.adam_vectorized_multiclass_backprop_classifier_network import (
     AdamVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
 from indrajala_ml.model.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.binary_cross_entropy_backprop_classifier_network import (
     BinaryCrossEntropyBackpropClassifierNetwork,
 )
-from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_multiclass_backprop_classifier_network import ConvMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -163,7 +161,9 @@ from indrajala_ml.model.l2_rust_array_multiclass_backprop_classifier_network imp
 from indrajala_ml.model.l2_vectorized_multiclass_backprop_classifier_network import (
     L2VectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.momentum_array_backprop_classifier_network import MomentumArrayBackpropClassifierNetwork
 from indrajala_ml.model.momentum_backprop_classifier_network import MomentumBackpropClassifierNetwork
 from indrajala_ml.model.momentum_conv_multiclass_backprop_classifier_network import (

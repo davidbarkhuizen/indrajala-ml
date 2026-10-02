@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.array_backend import RUST
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.layers.array.array_backend import RUST
 
 
 class RustArrayNetworkBase(ArrayNetworkBase[pa.Array]):

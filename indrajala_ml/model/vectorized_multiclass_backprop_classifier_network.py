@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from indrajala_ml.model.array_layer import FloatArray
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.specs.array_network_shapes import ArrayMultiClassShape
 

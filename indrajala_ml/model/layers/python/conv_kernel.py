@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import ClassVar
+
+from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_bias
+from indrajala_ml.pcg64 import Pcg64Generator
+
+
+class ConvKernel:
+    """
+    One conv output channel's shared weights, a flat in_channels x kernel_size x kernel_size
+    list (in that order), and bias, read by every ConvUnit of the channel. Not a BackpropNode: its
+    input_node_weights is owned per node and rebound on update, which doesn't suit a list many units
+    share.
+
+    accumulate_gradient() is called once per contributing position (every unit of the channel, for
+    every example), and the network's optimizer (python_optimizer.py) steps the kernel once,
+    dividing by batch_size only: positions are summed, examples averaged.
+    """
+
+    # the WeightSet flags (layer_protocols.py)
+    weights_decayed: ClassVar[bool] = True
+    has_bias: ClassVar[bool] = True
+
+    def __init__(
+        self,
+        kernel_size: int,
+        in_channels: int = 1,
+        weights: list[float] | None = None,
+        bias: float = 0.0,
+    ) -> None:
+
+        assert kernel_size >= 1, f"kernel_size must be at least 1; got {kernel_size}"
+        assert in_channels >= 1, f"in_channels must be at least 1; got {in_channels}"
+
+        self.kernel_size = kernel_size
+        self.in_channels = in_channels
+
+        fan_in = kernel_size * kernel_size * in_channels
+        self.weights: list[float] = weights if weights is not None else [0.0 for _ in range(fan_in)]
+        assert len(self.weights) == fan_in, (
+            f"expected {fan_in} weights (kernel_size**2 * in_channels); got {len(self.weights)}"
+        )
+
+        self.bias: float = bias
+
+        self.weight_gradient_accum: list[float] = [0.0 for _ in range(fan_in)]
+        self.bias_gradient_accum: float = 0.0
+
+    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
+        # a kernel's fan-in is its receptive field, kernel_size**2 * in_channels
+        self.weights, self.bias = fan_in_aware_weights_and_bias(rng, len(self.weights))
+
+    def accumulate_gradient(self, delta: float, receptive_field_values: Sequence[float]) -> None:
+        assert len(receptive_field_values) == len(self.weights)
+        for i, value in enumerate(receptive_field_values):
+            self.weight_gradient_accum[i] += delta * value
+        self.bias_gradient_accum += delta
+
+    # set_weights and reset_gradient_accum: the WeightSet surface (layer_protocols.py), shared with
+    # BackpropNode
+    def set_weights(self, weights: list[float]) -> None:
+        self.weights = weights
+
+    def reset_gradient_accum(self) -> None:
+        self.weight_gradient_accum = [0.0 for _ in self.weights]
+        self.bias_gradient_accum = 0.0

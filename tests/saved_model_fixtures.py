@@ -45,11 +45,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase
-from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,

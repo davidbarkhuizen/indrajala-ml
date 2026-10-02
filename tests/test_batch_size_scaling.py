@@ -6,14 +6,14 @@ import pytest
 
 from indrajala_ml import batch_size_scaling as bss
 from indrajala_ml.mnist_data import load_mnist_dataset
-from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
     MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
 )

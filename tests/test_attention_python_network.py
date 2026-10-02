@@ -15,19 +15,19 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY
-from indrajala_ml.model.attention_layer import AttentionLayer
-from indrajala_ml.model.batch_norm_layer import BatchNormLayer, fold
-from indrajala_ml.model.layer_norm_layer import LayerNormLayer
-from indrajala_ml.model.linear_layer import LinearLayer
+from indrajala_ml.model.layers.array.array_backend import NUMPY
+from indrajala_ml.model.layers.numpy.token_array_layer import PatchesArrayLayer, PositionArrayLayer, TokenMeanArrayLayer
+from indrajala_ml.model.layers.python.attention_layer import AttentionLayer
+from indrajala_ml.model.layers.python.batch_norm_layer import BatchNormLayer, fold
+from indrajala_ml.model.layers.python.layer_norm_layer import LayerNormLayer
+from indrajala_ml.model.layers.python.linear_layer import LinearLayer
+from indrajala_ml.model.layers.python.state_layer import StateLayer
+from indrajala_ml.model.layers.python.token_layer import PatchesLayer, PositionLayer, TokenMeanLayer
 from indrajala_ml.model.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.specs.layer_specs import LayerNorm, LayerSpec, Position, TokenMean
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from indrajala_ml.model.state_layer import StateLayer
-from indrajala_ml.model.token_array_layer import PatchesArrayLayer, PositionArrayLayer, TokenMeanArrayLayer
-from indrajala_ml.model.token_layer import PatchesLayer, PositionLayer, TokenMeanLayer
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, split

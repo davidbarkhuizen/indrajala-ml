@@ -13,15 +13,15 @@ import numpy as np
 from indrajala_ml.demos.timing import timed_call, timed_train
 from indrajala_ml.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.mnist_data import load_mnist_dataset
-from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.protocols.classifier_protocols import Example, StateClassifier
 from indrajala_ml.multiclass_evaluate import accuracy
 from indrajala_ml.train import ConvergenceSeries, train_backprop_network_mini_batch

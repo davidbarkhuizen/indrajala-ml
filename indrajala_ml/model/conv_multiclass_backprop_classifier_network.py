@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, ClassVar, Self, cast
 
-from indrajala_ml.model.backprop_layer import BackpropLayer
-from indrajala_ml.model.conv_front_end import load_conv_model_state
-from indrajala_ml.model.conv_layer import ConvLayer, ConvSpec
-from indrajala_ml.model.max_pool_layer import MaxPoolLayer, PoolSpec
+from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
+from indrajala_ml.model.layers.python.conv_front_end import load_conv_model_state
+from indrajala_ml.model.layers.python.conv_layer import ConvLayer, ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import MaxPoolLayer, PoolSpec
 from indrajala_ml.model.multiclass_backprop_classifier_network import MultiClassBackpropClassifierNetwork
 from indrajala_ml.model.specs.bounds import validate_class_count, validate_layer_sizes
 

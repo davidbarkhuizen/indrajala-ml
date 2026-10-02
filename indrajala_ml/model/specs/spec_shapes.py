@@ -9,7 +9,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from indrajala_ml.model.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.specs.layer_specs import (
     Add,
     Attention,

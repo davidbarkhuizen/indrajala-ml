@@ -9,7 +9,7 @@ with the parity tests); this module reuses their cases.
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_layer import sigmoid
+from indrajala_ml.model.layers.numpy.array_layer import sigmoid
 from indrajala_ml.model.specs.update_rules import SGD, Adam, UpdateRule, WeightDecay
 from tests.gradient_check import check_gradients
 from tests.helpers import Backend, bits, to_numpy

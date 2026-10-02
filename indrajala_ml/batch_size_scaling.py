@@ -87,14 +87,14 @@ from typing import Any
 import indrajala_math_rust as pa
 
 from indrajala_ml.lr_schedule import linear_warmup
-from indrajala_ml.model.array_backend import NUMPY, RUST
-from indrajala_ml.model.conv_layer import ConvSpec
 from indrajala_ml.model.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.momentum_conv_rust_array_multiclass_backprop_classifier_network import (
     MomentumConvRustArrayMultiClassBackpropClassifierNetwork,
 )

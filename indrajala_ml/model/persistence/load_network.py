@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
 )
@@ -20,6 +19,7 @@ from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import En
 from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_network import (
     EnsembleRustArrayBackpropClassifierNetwork,
 )
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.persistence.format2 import (
     ENSEMBLE,
     PYTHON,

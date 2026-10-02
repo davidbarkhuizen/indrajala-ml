@@ -19,9 +19,9 @@ from typing import Any, Literal
 
 import indrajala_math_rust as pa
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
 from indrajala_ml.model.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
-from indrajala_ml.model.array_layer import FloatArray
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.protocols.array_protocols import ArrayBackend
 from indrajala_ml.model.rust_array_backprop_classifier_network import RustArrayBackpropClassifierNetwork
 from indrajala_ml.model.rust_array_multiclass_backprop_classifier_network import (

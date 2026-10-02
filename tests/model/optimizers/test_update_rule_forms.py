@@ -20,14 +20,14 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_layer import ArrayLayer
-from indrajala_ml.model.backprop_node import BackpropNode
-from indrajala_ml.model.conv_array_layer import ConvArrayLayer
-from indrajala_ml.model.conv_kernel import ConvKernel
-from indrajala_ml.model.conv_rust_array_layer import ConvRustArrayLayer
-from indrajala_ml.model.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer
+from indrajala_ml.model.layers.numpy.conv_array_layer import ConvArrayLayer
+from indrajala_ml.model.layers.python.backprop_node import BackpropNode
+from indrajala_ml.model.layers.python.conv_kernel import ConvKernel
+from indrajala_ml.model.layers.python.state_node import StateNode
+from indrajala_ml.model.layers.rust.conv_rust_array_layer import ConvRustArrayLayer
+from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.specs.update_rules import SGD, Momentum, UpdateRule, WeightDecay
-from indrajala_ml.model.state_node import StateNode
 from tests.helpers import LayerOptimizer, WeightSets, Wrap, bits
 
 BATCH_SIZES = [1, 6, 96, 4, 128, 512]

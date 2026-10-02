@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, ClassVar, NoReturn, Self, cast
 
-from indrajala_ml.model.array_layer_builder import build_array_layers
+from indrajala_ml.model.layers.array.array_layer_builder import build_array_layers
 from indrajala_ml.model.persistence.format2_persistence import Format2Persistence
 from indrajala_ml.model.protocols.array_protocols import (
     ArrayBackend,

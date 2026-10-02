@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, ClassVar, Self
 
-from indrajala_ml.model.backprop_layer import BackpropLayer
 from indrajala_ml.model.backprop_network_base import BackpropNetworkBase, randomize_fan_in_aware
+from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.protocols.classification import argmax_first_occurrence
 from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
 from indrajala_ml.model.specs.bounds import validate_class_count, validate_layer_sizes

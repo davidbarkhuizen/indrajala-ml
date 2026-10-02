@@ -13,9 +13,9 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_layer import FloatArray
-from indrajala_ml.model.dropout_array_layer import DropoutArrayLayer
-from indrajala_ml.model.dropout_rust_array_layer import DropoutRustArrayLayer
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
+from indrajala_ml.model.layers.numpy.dropout_array_layer import DropoutArrayLayer
+from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.specs.layer_specs import LayerSpec
 from indrajala_ml.model.specs.single_example import batch_norm_index
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule

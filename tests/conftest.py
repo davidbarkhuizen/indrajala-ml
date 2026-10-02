@@ -3,7 +3,7 @@ from typing import Any, cast
 
 import pytest
 
-from indrajala_ml.model.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.protocols.array_protocols import ArrayBackend
 
 

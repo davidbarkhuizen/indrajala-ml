@@ -18,10 +18,10 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
-from indrajala_ml.model.array_backend import NumpyBackend, RustBackend
 from indrajala_ml.model.array_network_base import ArrayNetworkBase
-from indrajala_ml.model.conv_layer import ConvSpec
-from indrajala_ml.model.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.array.array_backend import NumpyBackend, RustBackend
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.specs.layer_specs import Dense
