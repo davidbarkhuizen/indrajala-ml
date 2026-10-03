@@ -42,7 +42,7 @@ from process_runs import interleaved_runs, run_json_worker
 from seeded_weights import seeded_randomized, seeded_shuffle
 
 from indrajala_ml.data.prepared_dataset import PreparedDataset, prepared_mnist
-from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import ARCHITECTURES
+from indrajala_ml.demos.conv.demo_conv_rust_vs_vectorized_digit_recognition import ARCHITECTURES
 from indrajala_ml.model.networks.numpy.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )

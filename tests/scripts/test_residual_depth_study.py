@@ -12,7 +12,7 @@ from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, Residual, exp
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 from indrajala_ml.studies import batch_size_scaling as bss
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
 import residual_depth_study as study  # scripts/ isn't a package
 
 

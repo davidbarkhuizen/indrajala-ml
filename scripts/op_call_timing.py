@@ -36,7 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from process_runs import interleaved_runs, run_json_worker
 
-from indrajala_ml.demos import demo_conv_rust_vs_vectorized_digit_recognition as demo
+from indrajala_ml.demos.conv import demo_conv_rust_vs_vectorized_digit_recognition as demo
 
 DEFAULT_OPS = ["conv_accumulate_gradient_batch"]
 DEFAULT_OVERRIDES = "0:0"

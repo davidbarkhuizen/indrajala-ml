@@ -80,7 +80,7 @@ CLEAN_DAYS = 14
 # extension resolve from, and the extension's hash. argv[1] is the side's tree
 PROVENANCE_PROBE = r"""
 import hashlib, importlib, importlib.util, json, pathlib, sys
-# the trainer, in the tree's own source layout (docs/source-layout-workplan.md, D4); chosen by
+# the trainer, in the tree's own source layout (the source layout workplan, D4); chosen by
 # file, not by trying imports: indrajala_ml is a namespace package, so in a tree from before the
 # layout, indrajala_ml.training resolves to the editable install's checkout
 tree = pathlib.Path(sys.argv[1])

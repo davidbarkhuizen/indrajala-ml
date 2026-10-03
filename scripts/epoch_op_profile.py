@@ -22,7 +22,7 @@ from typing import Any
 
 from process_runs import run_json_worker
 
-from indrajala_ml.demos import demo_conv_rust_vs_vectorized_digit_recognition as demo
+from indrajala_ml.demos.conv import demo_conv_rust_vs_vectorized_digit_recognition as demo
 
 
 def worker(architecture: str, trainer: str) -> dict[str, Any]:

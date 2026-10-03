@@ -34,7 +34,7 @@ extend-exclude = ["rust"]  # the crate's own repo (submodule)
 
 [tool.ruff.lint.per-file-ignores]
 # B023: the timing closures are called inside the loop iteration that defines them.
-"indrajala_ml/demos/demo_conv_rust_vs_vectorized_digit_recognition.py" = ["B023"]
+"indrajala_ml/demos/conv/demo_conv_rust_vs_vectorized_digit_recognition.py" = ["B023"]
 "scripts/accuracy_pass_timing.py" = ["B023"]
 
 # pinned in ./cli (pyright_version); `./cli lint` runs it. Strict everywhere. The tests read

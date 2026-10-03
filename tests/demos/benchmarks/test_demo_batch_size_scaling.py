@@ -1,5 +1,5 @@
 from indrajala_ml.data.mnist_data import load_mnist_dataset
-from indrajala_ml.demos import demo_batch_size_scaling as demo
+from indrajala_ml.demos.benchmarks import demo_batch_size_scaling as demo
 from indrajala_ml.demos.registry import DEMOS
 from indrajala_ml.studies import batch_size_scaling as bss
 

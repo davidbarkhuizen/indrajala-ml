@@ -1,6 +1,6 @@
 """
 tests/helpers.py's module walk: the class walks over indrajala_ml.model (all_subclasses, the saved
-model fixtures) find every class, wherever docs/source-layout-workplan.md moves its module.
+model fixtures) find every class, wherever the source layout workplan moved its module.
 """
 
 import importlib

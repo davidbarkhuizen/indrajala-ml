@@ -7,9 +7,8 @@ matplotlib.use("TkAgg")
 from matplotlib import pyplot
 
 from indrajala_ml.geometry import square_bounds
-from indrajala_ml.graphics.chart import (
-    new_axes,
-    new_figure,
+from indrajala_ml.graphics.chart import new_axes, new_figure
+from indrajala_ml.graphics.classifier_plots import (
     plot_classifier_probability_heatmap,
     plot_linear_classifier_network,
     plot_training_data,

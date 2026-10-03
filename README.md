@@ -85,18 +85,18 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | Path | Contents |
 | --- | --- |
 | `indrajala_ml/model/` | classifier networks and their layers |
-| `indrajala_ml/demos/` | runnable demos; `registry.py` lists them in menu order |
+| `indrajala_ml/demos/` | runnable demos in topic folders (linear, backprop, uci_digits, mnist, conv, benchmarks); `registry.py` lists them in menu order |
 | `indrajala_ml/training/` | training loops (`train.py`), synthetic training data, run checkpoints, evaluation (disagreement rate, accuracy, confusion matrix), one-vs-rest ensemble training over multiprocessing (`ensemble_train.py`) |
 | `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
 | `indrajala_ml/capture/` | painted digits turned into UCI digits and MNIST inputs |
 | `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks |
 | `indrajala_ml/studies/batch_size_scaling.py` | the batch-size scaling study (linear learning-rate scaling with warmup) |
-| `indrajala_ml/graphics/chart.py` | matplotlib plotting |
+| `indrajala_ml/graphics/` | matplotlib plotting: figures, axes, legends and series (`chart.py`), classifier plots (`classifier_plots.py`) and evaluation plots (`evaluation_plots.py`) |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
 | `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
 | `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention study and the refactoring golden run; see `docs/measurement.md` |
-| `docs/` | the measurement guide, next steps, the PyPI release and source-layout workplans, the primitives roadmap, the RNG audit, machine profiles |
+| `docs/` | the measurement guide, next steps, the PyPI release workplan, the primitives roadmap, the RNG audit, machine profiles |
 
 ## Models
 
@@ -148,7 +148,7 @@ The numpy and Rust networks are one implementation: `ArrayNetworkBase` calls the
 operations that differ through a backend object (`array_backend.py`), and `RustArrayNetworkBase`
 is the subclass that sets the Rust backend. Only the layers are written once per backend. The
 numpy classes are the reference the Rust classes are tested against
-(`tests/test_*fused_layer_ops.py`, `tests/test_numerical_parity.py`).
+(`tests/model/layers/test_*fused_layer_ops.py`, `tests/model/layers/test_numerical_parity.py`).
 
 ### Presets
 
@@ -631,8 +631,6 @@ test passing, and:
   with `scripts/ab.py`, and the rules for a timing claim in a PR.
 - [docs/pypi-release-workplan.md](docs/pypi-release-workplan.md): publishing the Rust crate to
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
-- [docs/source-layout-workplan.md](docs/source-layout-workplan.md): grouping the Python modules into
-  subpackages, `tests/` mirroring them, and splitting the large modules.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
   attention, then multi-head attention and a transformer block.

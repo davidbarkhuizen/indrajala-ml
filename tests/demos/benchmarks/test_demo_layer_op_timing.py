@@ -1,4 +1,4 @@
-from indrajala_ml.demos import demo_layer_op_timing as demo
+from indrajala_ml.demos.benchmarks import demo_layer_op_timing as demo
 from indrajala_ml.demos.registry import DEMOS
 
 
