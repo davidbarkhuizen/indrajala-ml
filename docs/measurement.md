@@ -53,7 +53,7 @@ From the quick survey to the decisive number:
 
 | question | tool | notes |
 | --- | --- | --- |
-| Which ops look slow? | `python -m indrajala_ml.demos.demo_layer_op_timing` | every layer op, numpy and Rust interleaved; batch rows can be far off (interleaving). Finds candidates, never judges them. |
+| Which ops look slow? | `python -m indrajala_ml.demos.benchmarks.demo_layer_op_timing` | every layer op, numpy and Rust interleaved; batch rows can be far off (interleaving). Finds candidates, never judges them. |
 | How fast is one op? | `python scripts/focused_benchmark.py` | loops of about 20 ms, median of 9, each (case, backend) in its own process; faults per call; `--matmul MxKxN`, `--rust-threads`, `--openblas-threads`, `--malloc both`, `--kernel-overrides`. **The number to quote.** |
 | Faults or compute? | `focused_benchmark.py --malloc both` | glibc defaults against both allocator thresholds at 1e9; a time that drops with the faults was paying for them. |
 | Why is it slow (or slow in some processes)? | `python scripts/perf_region.py -- driver.py` | hardware counters for only the region a driver marks (`with counted():`), per unit of work, one row per process; `OPENBLAS_NUM_THREADS=1` unless `--openblas-threads`. Needs `perf_event_paranoid` <= 2. For cycles per instruction, `perf record` the driver and `perf annotate` the op. |
@@ -62,7 +62,7 @@ From the quick survey to the decisive number:
 | A training-path change | `python scripts/prepared_dataset_timing.py time` | one trainer epoch per process, dense full MNIST and the conv subset, both backends; `--epochs N`. The default A/B benchmark. |
 | An accuracy pass, per row against batched | `python scripts/accuracy_pass_timing.py time` | all demo architectures, both backends; counts differing predictions. |
 | Dense full-MNIST epochs, broken down | `python scripts/batch_size_timing.py time` / `profile` | epoch, step loop, one accuracy pass and conversions apart, per batch size. Its accuracy-pass column times the old tuple path. |
-| The Rust/numpy ratios end to end | `python -m indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition` | about 3 minutes; median of 5 from identical weights, UCI digits and a 2000-row MNIST subset, plus a Rust op profile. |
+| The Rust/numpy ratios end to end | `python -m indrajala_ml.demos.conv.demo_conv_rust_vs_vectorized_digit_recognition` | about 3 minutes; median of 5 from identical weights, UCI digits and a 2000-row MNIST subset, plus a Rust op profile. |
 | Old against new, any of the above | `python scripts/ab.py run --bench <benchmark>` | [§4](#4-running-an-ab-with-abpy). Every script above with an adapter, and any probe. |
 | A threading setting | `set_matmul_threading(t, threshold)` | in one process, no rebuild; accept only on end-to-end numbers. |
 | A kernel setting | `set_kernel_overrides(rows_per_block, k_block)` | `matmul_narrow`'s rows per block and `matmul_long_k`'s slab rows, no rebuild; `--kernel-overrides R:K` in the scripts above. |
@@ -319,7 +319,7 @@ never moved for style or for parity alone.
 - **Bit-identical claims are tested, not assumed:** a crate test pins the new op with `==` on
   `tolist()` at shapes that reach every kernel path, threading and blocking threshold; it passes
   on the old build, and a mutation (a second rounding, a changed start value or order) fails it.
-- **Bit-changing changes:** the `rtol` parity tests (`tests/test_*fused_layer_ops.py`, the
+- **Bit-changing changes:** the `rtol` parity tests (`tests/model/layers/test_*fused_layer_ops.py`, the
   step-by-step network parity tests) pass unchanged; a moved end-to-end pin is compared with a
   1-ULP control on the old code (nudge one initial weight) and updated only if it moves similarly,
   with the control recorded in the PR; record the max abs and ULP difference from the old op.

@@ -16,10 +16,10 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
 import ab  # scripts/ isn't a package
 
-FIXTURES = Path(__file__).resolve().parent / "fixtures/ab"
+FIXTURES = Path(__file__).resolve().parent.parent / "fixtures/ab"
 RUNS = sorted(d.name for d in FIXTURES.iterdir() if (d / "manifest.json").is_file())
 
 

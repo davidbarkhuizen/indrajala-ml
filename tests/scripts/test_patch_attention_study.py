@@ -11,7 +11,7 @@ from indrajala_ml.model.specs.layer_specs import Attention, Residual
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 from indrajala_ml.studies import batch_size_scaling as bss
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
 import patch_attention_study as study  # scripts/ isn't a package
 
 # counted by hand: the embedding 49 * 32 + 32, positions 16 * 32, layer norms 2 * 32 each, an

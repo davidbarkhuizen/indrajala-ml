@@ -14,13 +14,8 @@ from indrajala_ml.data.mnist_data import (
     load_mnist_labels,
     load_mnist_records_at_indices,
 )
-from indrajala_ml.graphics.chart import (
-    new_axes,
-    new_confusion_matrix_figure,
-    new_figure,
-    sample_predictions_figure,
-    style_dark_legend,
-)
+from indrajala_ml.graphics.chart import new_axes, new_figure, style_dark_legend
+from indrajala_ml.graphics.evaluation_plots import new_confusion_matrix_figure, sample_predictions_figure
 from indrajala_ml.model.networks.python.fan_in_aware_backprop_classifier_network import (
     FanInAwareBackpropClassifierNetwork,
 )

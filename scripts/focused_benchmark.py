@@ -49,7 +49,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
 from process_runs import run_json_worker
 
-from indrajala_ml.demos.demo_layer_op_timing import (
+from indrajala_ml.demos.benchmarks.demo_layer_op_timing import (
     BACKENDS,
     DENSE_SHAPES,
     SEED,

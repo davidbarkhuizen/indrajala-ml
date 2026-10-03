@@ -23,7 +23,7 @@ clean () {
 
     rm -rf .pytest_cache
     rm -rf indrajala_ml/__pycache__
-    rm -rf indrajala_ml/demos/__pycache__
+    find indrajala_ml/demos -name __pycache__ -type d -prune -exec rm -rf {} +
     rm -rf tests/__pycache__
 }
 

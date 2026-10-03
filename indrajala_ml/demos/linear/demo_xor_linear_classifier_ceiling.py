@@ -8,7 +8,8 @@ from matplotlib import pyplot
 
 from indrajala_ml.data.targets import XORTarget
 from indrajala_ml.geometry import square_bounds
-from indrajala_ml.graphics.chart import new_axes, new_figure, plot_linear_classifier_network, plot_training_data
+from indrajala_ml.graphics.chart import new_axes, new_figure
+from indrajala_ml.graphics.classifier_plots import plot_linear_classifier_network, plot_training_data
 from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
 from indrajala_ml.training.evaluate import class_balanced_disagreement_rate
 from indrajala_ml.training.train import train_linear_classifier_network

@@ -11,7 +11,7 @@ class DemoInfo:
 
 DEMOS: list[DemoInfo] = [
     DemoInfo(
-        module="indrajala_ml.demos.demo_minimum_disturbance_training",
+        module="indrajala_ml.demos.linear.demo_minimum_disturbance_training",
         title="Minimum-disturbance training",
         summary="Trains one cardinality=4 linear classifier; plots its convergence and decision boundary.",
         description=(
@@ -24,7 +24,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_linear_classifier_cardinality_sweep",
+        module="indrajala_ml.demos.linear.demo_linear_classifier_cardinality_sweep",
         title="Linear-classifier cardinality sweep",
         summary="Trains linear classifiers at cardinality 1-4 and overlays their convergence curves.",
         description=(
@@ -37,7 +37,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_unreachable_class_safety_guard",
+        module="indrajala_ml.demos.linear.demo_unreachable_class_safety_guard",
         title="Unreachable-class safety guard",
         summary="Headless demo of the guard that stops training-data generation from hanging forever.",
         description=(
@@ -49,7 +49,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_xor_linear_classifier_ceiling",
+        module="indrajala_ml.demos.linear.demo_xor_linear_classifier_ceiling",
         title="XOR: linear-classifier ceiling",
         summary="Shows no linear-classifier gate (AND/OR/majority, cardinality 1-4) can learn XOR.",
         description=(
@@ -62,7 +62,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_xor_backprop_convergence",
+        module="indrajala_ml.demos.backprop.demo_xor_backprop_convergence",
         title="XOR: backprop convergence",
         summary="Trains a backprop network on the same XOR target - and shows it converges past the ceiling.",
         description=(
@@ -74,7 +74,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_iris_linear_classifier_ceiling",
+        module="indrajala_ml.demos.linear.demo_iris_linear_classifier_ceiling",
         title="Iris: linear-classifier ceiling",
         summary="Headless - real Fisher's Iris data: perceptron solves setosa-vs-rest, hits a real ceiling on versicolor-vs-virginica.",
         description=(
@@ -90,7 +90,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_iris_backprop_versus_perceptron",
+        module="indrajala_ml.demos.backprop.demo_iris_backprop_versus_perceptron",
         title="Iris: backprop vs. perceptron on a real ceiling",
         summary="Headless - unlike XOR, backprop doesn't clear the versicolor/virginica ceiling; it does generalize slightly better.",
         description=(
@@ -105,7 +105,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_backprop_stripes_architecture_sweep",
+        module="indrajala_ml.demos.backprop.demo_backprop_stripes_architecture_sweep",
         title="Backprop stripes architecture sweep",
         summary="Compares backprop architectures ([4],[8],[4,4],[8,8]) at matched node budgets.",
         description=(
@@ -118,7 +118,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_backprop_circular_boundary",
+        module="indrajala_ml.demos.backprop.demo_backprop_circular_boundary",
         title="Backprop circular boundary",
         summary="Trains a backprop network on a circular target to show a genuinely curved boundary.",
         description=(
@@ -130,7 +130,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_backprop_linear_parity_check",
+        module="indrajala_ml.demos.backprop.demo_backprop_linear_parity_check",
         title="Backprop vs linear parity check",
         summary="Trains both model types on an easy, linearly-separable target as a parity check.",
         description=(
@@ -143,7 +143,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_uci_digit_recognition",
+        module="indrajala_ml.demos.uci_digits.demo_uci_digit_recognition",
         title="UCI digit recognition",
         summary="Trains a multi-class backprop network on the bundled 8x8 UCI digits dataset.",
         description=(
@@ -155,7 +155,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_vectorized_uci_digit_recognition",
+        module="indrajala_ml.demos.uci_digits.demo_vectorized_uci_digit_recognition",
         title="Vectorized UCI digit recognition (numpy)",
         summary="Trains pure-Python and numpy-array-backed networks on UCI digits; compares accuracy and wall-clock.",
         description=(
@@ -167,7 +167,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_rust_vs_vectorized_uci_digit_recognition",
+        module="indrajala_ml.demos.uci_digits.demo_rust_vs_vectorized_uci_digit_recognition",
         title="Rust vs vectorized UCI digit recognition",
         summary="Trains pure-Python, numpy, and Rust-array-core-backed networks on UCI digits side by side.",
         description=(
@@ -181,7 +181,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_uci_digit_capture",
+        module="indrajala_ml.demos.uci_digits.demo_uci_digit_capture",
         title="UCI digit capture",
         summary="Interactive mouse-painted digit capture, classified live by the UCI digit-recognition model.",
         description=(
@@ -194,7 +194,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_mnist_ensemble_recognition",
+        module="indrajala_ml.demos.mnist.demo_mnist_ensemble_recognition",
         title="MNIST ensemble recognition",
         summary="Trains a 10-network ensemble on the full MNIST dataset via parallel multiprocessing.",
         description=(
@@ -206,7 +206,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_vectorized_mnist_recognition",
+        module="indrajala_ml.demos.mnist.demo_vectorized_mnist_recognition",
         title="Vectorized MNIST recognition (numpy)",
         summary="One real epoch on full MNIST, pure-Python vs. numpy-array-backed - accuracy and wall-clock.",
         description=(
@@ -220,7 +220,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_rust_vs_vectorized_mnist_recognition",
+        module="indrajala_ml.demos.mnist.demo_rust_vs_vectorized_mnist_recognition",
         title="Rust vs vectorized MNIST recognition",
         summary="One real epoch on full MNIST, pure-Python vs. numpy vs. Rust-array-core-backed.",
         description=(
@@ -234,7 +234,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_mnist_ensemble_capture",
+        module="indrajala_ml.demos.mnist.demo_mnist_ensemble_capture",
         title="MNIST ensemble capture",
         summary="Interactive mouse-painted digit capture, classified live by the MNIST ensemble model.",
         description=(
@@ -247,7 +247,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_conv_depth_uci_digits_comparison",
+        module="indrajala_ml.demos.conv.demo_conv_depth_uci_digits_comparison",
         title="Conv depth comparison on UCI digits",
         summary="Headless - conv depth and max pooling vs. stride (plus a dense baseline) on UCI digits, across paired seeds.",
         description=(
@@ -261,7 +261,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition",
+        module="indrajala_ml.demos.conv.demo_conv_rust_vs_vectorized_digit_recognition",
         title="Rust vs vectorized conv networks",
         summary="Headless - numpy vs Rust conv network training time from identical weights, UCI digits and MNIST.",
         description=(
@@ -276,7 +276,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_layer_op_timing",
+        module="indrajala_ml.demos.benchmarks.demo_layer_op_timing",
         title="Per-op layer timing, numpy vs Rust",
         summary="Headless - microseconds per call of every dense and conv layer op, numpy vs Rust.",
         description=(
@@ -291,7 +291,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_batch_size_scaling",
+        module="indrajala_ml.demos.benchmarks.demo_batch_size_scaling",
         title="Batch-size scaling (linear LR rule)",
         summary="Headless - does scaling the learning rate with the batch hold from batch 32 to 1024 on full MNIST?",
         description=(
@@ -306,7 +306,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.demo_backprop_variant_comparison",
+        module="indrajala_ml.demos.backprop.demo_backprop_variant_comparison",
         title="Backprop variant comparison",
         summary="Reproduces this repo's documented model/loss/init comparisons, runnably, side by side.",
         description=(

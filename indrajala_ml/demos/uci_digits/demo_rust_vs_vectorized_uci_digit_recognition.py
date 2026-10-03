@@ -8,7 +8,8 @@ from matplotlib import pyplot
 
 from indrajala_ml.data.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.demos.timing import timed_train
-from indrajala_ml.graphics.chart import new_axes, new_confusion_matrix_figure, new_figure, sample_predictions_figure
+from indrajala_ml.graphics.chart import new_axes, new_figure
+from indrajala_ml.graphics.evaluation_plots import new_confusion_matrix_figure, sample_predictions_figure
 from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )

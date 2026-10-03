@@ -3,9 +3,8 @@
 A workplan is deleted once its last stage merges, and never before: only when every stage and
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md) and
-[source-layout-workplan.md](source-layout-workplan.md). The order of the next ML primitives is in
-[primitives-roadmap.md](primitives-roadmap.md).
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order of
+the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
 
@@ -24,6 +23,7 @@ docs cite them by section:
 | Layer norm and single-head attention (roadmap step 4) | #540 | crate #48, #542-#548 | `git show 7d3bd0a:docs/layer-norm-attention-workplan.md` |
 | Removing duplicated code, second pass (DRY rerun) | #550 | #551-#557 | `git show 88e1815:docs/dry-rerun-workplan.md` |
 | Presets for the one-change combinations | #559 | #560-#564 | `git show 2a799bf:docs/presets-workplan.md` |
+| The source layout | #566 | #567-#573 | `git show b362621:docs/source-layout-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -142,7 +142,7 @@ Still out of scope:
   pure-Python gamma-and-beta row from `GammaAsWeights`; a token shape from
   `spec_shapes.token_shape`. Tests share `bits`, `split`, `max_relative_gap`, `patching` and
   `randomized` (`tests/helpers.py`), and a scenario every implementation runs takes conftest's
-  `implementation` fixture (`tests/test_{attention,residual,layer_norm}_network.py`). A new layer
+  `implementation` fixture (`tests/model/networks/test_{attention,residual,layer_norm}_network.py`). A new layer
   kind extends these rather than adding a copy.
 - **The linear, conv and batch-norm layers' own output-delta refusals** (the rerun's stage 1).
   They are hand-written, with their own messages, rather than taken from `Hidden`; they were not

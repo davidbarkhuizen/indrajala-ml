@@ -6,10 +6,8 @@ matplotlib.use("Agg")
 
 
 from indrajala_ml.geometry import square_bounds
-from indrajala_ml.graphics.chart import (
-    disagreement_axis_bounds,
-    new_axes,
-    new_figure,
+from indrajala_ml.graphics.chart import new_axes, new_figure
+from indrajala_ml.graphics.classifier_plots import (
     plot_linear_classifier_network,
     plot_training_data,
     reference_region_bounds,
@@ -36,12 +34,6 @@ def test_reference_region_bounds_leaves_fallback_unchanged_when_unbounded():
     classifier = LinearClassifierNetwork.randomized(1, 2, bounds)
 
     assert reference_region_bounds(classifier, bounds) == bounds
-
-
-def test_disagreement_axis_bounds():
-
-    assert disagreement_axis_bounds(500.0) == [(0.0, 500.0), (0.0, 1.0)]
-    assert disagreement_axis_bounds(500.0, log=True) == [(0.0, 500.0), (1.0e-3, 1.0)]
 
 
 def test_plot_training_data_assigns_marker_and_color_by_sorted_category_not_set_order():

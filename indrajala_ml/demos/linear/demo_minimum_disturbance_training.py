@@ -7,11 +7,8 @@ matplotlib.use("TkAgg")
 from matplotlib import pyplot
 
 from indrajala_ml.geometry import is_positive_region_bounded, square_bounds
-from indrajala_ml.graphics.chart import (
-    new_axes,
-    new_convergence_chart_pair,
-    new_figure,
-    place_tk_window,
+from indrajala_ml.graphics.chart import new_axes, new_convergence_chart_pair, new_figure, place_tk_window
+from indrajala_ml.graphics.classifier_plots import (
     plot_linear_classifier_network,
     plot_training_data,
     reference_region_bounds,

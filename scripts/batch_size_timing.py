@@ -42,7 +42,7 @@ from process_runs import interleaved_runs, run_json_worker
 from seeded_weights import seeded_shuffle
 
 from indrajala_ml.data.mnist_data import load_mnist_dataset
-from indrajala_ml.demos.demo_conv_rust_vs_vectorized_digit_recognition import (
+from indrajala_ml.demos.conv.demo_conv_rust_vs_vectorized_digit_recognition import (
     _rust_op_name,  # pyright: ignore[reportPrivateUsage]  (the conv demo's op names, shared)
 )
 from indrajala_ml.model.protocols.classifier_protocols import Example
