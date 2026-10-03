@@ -17,7 +17,7 @@ own platform.
 - **Anyone can use it.** Today the crate installs only from a source checkout, with rustup and
   maturin. Many more people can run `pip install`.
 - **Other platforms test what has only been assumed.** Only Linux x86_64 with AVX2 has ever built
-  or run the crate. On aarch64 the scalar matmul fallback is the only path, so the ~1,560 op tests
+  or run the crate. On aarch64 the scalar matmul fallback is the only path, so the ~2,375 op tests
   there run the fallback for real. Today it is tested only indirectly, through the parity claims
   about the AVX2 path. Windows and macOS find anything in the build or tests that assumes Linux.
 - **Each decision is measured and recorded.** The abi3 choice and the manylinux build could
@@ -29,11 +29,11 @@ own platform.
 - `rust/Cargo.toml`: version 0.1.0, `license = "MIT"`, `crate-type = ["cdylib"]` (a Python module
   only, so crates.io is out of scope), and `pyo3 = "0.29"` with `extension-module` and
   `multiple-pymethods`. The module declares `gil_used = true` (not audited for free-threaded
-  Python), and both pyclasses opt out of the by-value `FromPyObject` (`skip_from_py_object`).
+  Python), and all four pyclasses opt out of the by-value `FromPyObject` (`skip_from_py_object`).
 - `rust/pyproject.toml`: name, version, `license = "MIT"`, `requires-python = ">=3.14"`. It has no
   description, authors, URLs or classifiers.
-- Of the 9 source files, 2 use `#[pyclass]` (`Array`, `ConvGeometry`). Every function borrows
-  its arrays (`&RustArray`), so no call copies an array at the boundary.
+- Of the 14 source files, 4 use `#[pyclass]` (`Array`, `ConvGeometry`, `SeedSequence`, `Generator`).
+  Every function borrows its arrays (`&RustArray`), so no call copies an array at the boundary.
 - The AVX2/FMA code is gated with `#[cfg(target_arch = "x86_64")]` and picked at runtime with
   `is_x86_feature_detected!`. A portable x86_64 wheel still uses AVX2 where the CPU has it, and
   aarch64 compiles only the scalar path.
@@ -110,14 +110,14 @@ abi3 restricts pyo3 to the stable C API, and some of its fast paths (such as unc
 list access) then go through slower calls.
 
 1. On a branch, add `abi3-py314` to pyo3's features. Build it and check that everything still
-   compiles. Two pyclasses and no buffer protocol are expected to be fine.
+   compiles. Four pyclasses and no buffer protocol are expected to be fine.
 2. Time abi3 against non-abi3, both builds committed and alternated
    ([measurement.md](measurement.md#6-protocols)):
    `focused_benchmark.py --backend rust` over the single-example dense ops at the smallest shapes
    (where the Python boundary is the largest share of a call), and `epoch_op_profile.py` for conv.
 3. Decide from the measurement. Adopt abi3 if nothing on a hot path regresses above noise, and
-   use one wheel per interpreter otherwise. Record the decision and its numbers in
-   `implemented.md` or `rejected.md`.
+   use one wheel per interpreter otherwise. Record the decision and its numbers in this workplan's
+   Decisions section (the `docs/optimizations/` files that once held such records were retired).
 
 This decision also affects indrajala-ml's own build, since `./cli build-rust` builds whatever
 Cargo.toml says. So the choice holds everywhere, not only for the published wheels.
