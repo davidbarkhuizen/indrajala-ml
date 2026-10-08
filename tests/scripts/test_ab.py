@@ -258,6 +258,26 @@ def test_run_and_extend_end_to_end(toy_repo: Path, capsys: pytest.CaptureFixture
     assert capsys.readouterr().out == f"{run_dir.name}: done, 6 passes done\n"
 
 
+def test_pooled_report_of_an_aa_pools_every_pass(toy_repo: Path, tmp_path: Path) -> None:
+    args = ["run", "--bench", "cmd", "--old", "HEAD", "--order", "ONNO", "--skip-profile", "--", "scripts/probe.py"]
+    assert _run(toy_repo, *args) == 0
+    out = tmp_path / "pooled.md"
+    assert _run(toy_repo, "report", "--pooled", str(out)) == 0
+    lines = out.read_text().splitlines()
+    assert "- spread of per-pass medians over 2 rows: median 0.0%, 90th percentile 0.0%, max 0.0%" in lines
+    assert (
+        "- pass shifts (median over rows of pass median / pooled median): 1 +0.0%, 2 +0.0%, 3 +0.0%, 4 +0.0%" in lines
+    )
+    assert "| case | median (min-max) s | per-pass medians (1, 2, 3, 4) | spread |" in lines
+    assert "| toy | 2.001 (2.000-2.002) | 2.001, 2.001, 2.001, 2.001 | 0.0% |" in lines
+    assert "| steady (control) | 1.001 (1.000-1.002) | 1.001, 1.001, 1.001, 1.001 | 0.0% |" in lines
+
+
+def test_pooled_report_refuses_an_ab() -> None:
+    with pytest.raises(ab.AbError, match="is for an A/A"):
+        ab.pooled_report(ab.report_data(FIXTURES / "pr480"))
+
+
 def test_a_policy_change_during_a_pass_fails_it_and_stops_the_run(
     toy_repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
