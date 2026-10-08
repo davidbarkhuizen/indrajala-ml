@@ -2,42 +2,45 @@
 
 An outline, not a workplan. It covers the places where the crate's Rust lags numpy on the
 i7-9700K (`jebel`), or where its ratio to numpy got markedly worse from the Ryzen laptop to the
-i7. It also has one opportunity that is likely significant although Rust doesn't lag there
-(item 3). Small wins are left out: the aim is the large gaps, not diminishing returns. One cross-cutting
-section, "Kernels and parameters from the machine", sits outside the ranking: it's the mechanism
-items 1-4 build on. For each, it says which kernel or parameter change to investigate, ordered by
+i7. Small wins are left out: the aim is the large gaps, not diminishing returns. One
+cross-cutting section, "Kernels and parameters from the machine", sits outside the ranking: it's
+the mechanism items 1-4 build on. For each, it says which kernel or parameter change to investigate, ordered by
 expected payoff. Each item becomes its own workplan when it is taken up.
 
 The numbers are from the benchmark machine workplan's stages 5 and 6, in
 [machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md): the per-op table, the conv demo
-ratio table and the epoch shares. Ratios are Rust / numpy time, so above 1 means Rust lags.
+ratio table, the kernel protocol configurations and the epoch shares. The laptop's columns
+were measured at the same code (D11). Ratios are Rust / numpy time, so above 1 means Rust lags.
 Absolute times aren't compared across machines, only ratios.
 
 ## The gaps
 
 Every per-op row that lags numpy on the i7 or got markedly worse than on the laptop, with the
-item that covers it. Ratios are given at default threading / one thread each.
+item that covers it. Ratios are given at default threading / one thread each. The laptop's
+default-threading ratios are rough (its A/A's per-pass spread was 32% at the median row).
 
 | shape | op | batch | i7 | laptop | item |
 | --- | --- | --- | --- | --- | --- |
-| 32 x 5408 (conv tail) | `accumulate_gradient_batch` | 512 | 1.25 / **3.93** | 0.59 / 2.81 | 1 |
-| 30 x 784 | `accumulate_gradient_batch` | 512 | 1.44 / 1.49 | 1.04 / 1.31 | 1 |
-| 32 x 5408 | `forward_batch` | 512 | 1.55 / 1.55 | 1.31 / 0.99 | 2 |
-| 32 x 5408 | `forward_batch` | 32 | **2.56** / 1.34 | 1.50 / 0.92 | 2, 4 |
-| 30 x 784 | `forward_batch` | 512 | 1.23 / 1.21 | 0.94 / 1.05 | 2 |
-| 32 x 5408 | `downstream_batch` | 32 | **3.09** / 0.91 | 1.53 / 1.01 | 4 |
-| 32 x 5408 | `accumulate_gradient_batch` | 32 | 1.64 / 0.93 | 1.42 / 1.10 | 4 |
-| 30 x 784 | `downstream_batch` | 512 | 1.85 / 0.94 | 1.41 / 1.21 | 4 |
-| 30 x 784 | `downstream_batch` | 32 | 1.23 / 0.74 | 1.25 / 0.99 | 4 |
-| 30 x 784 | `forward_batch` | 32 | 1.15 / 0.80 | - | 4 |
+| 32 x 5408 (conv tail) | `accumulate_gradient_batch` | 512 | 1.25 / **3.93** | 0.60 / 2.82 | 1 |
+| 30 x 784 | `accumulate_gradient_batch` | 512 | 1.44 / 1.49 | 1.18 / 1.34 | 1 |
+| 32 x 5408 | `forward_batch` | 512 | 1.55 / 1.55 | 1.71 / 0.97 | 2 |
+| 32 x 5408 | `forward_batch` | 32 | **2.56** / 1.34 | 1.89 / 0.89 | 2, 4 |
+| 30 x 784 | `forward_batch` | 512 | 1.23 / 1.21 | 1.03 / 0.99 | 2 |
+| 32 x 5408 | `downstream_batch` | 32 | **3.09** / 0.91 | 2.05 / 0.93 | 4 |
+| 32 x 5408 | `accumulate_gradient_batch` | 32 | 1.64 / 0.93 | 1.52 / 1.05 | 4 |
+| 30 x 784 | `downstream_batch` | 512 | 1.85 / 0.94 | 2.00 / 1.13 | 4 |
+| 30 x 784 | `downstream_batch` | 32 | 1.23 / 0.74 | 1.30 / 0.95 | 4 |
+| 30 x 784 | `forward_batch` | 32 | 1.15 / 0.80 | 1.16 / 0.82 | 4 |
 
-There is also the MNIST-subset conv demo (item 5). Rust still wins every network there, but
-every ratio moved towards numpy, most for the single-example `conv` network (0.20-0.21 to
-0.41). The UCI digits ratios held.
+**The conv epochs got markedly worse** (items 3 and 5). Rust still wins them, but its ratio to
+numpy went from 0.48 to 0.81 at mini-batch 32 and from 0.57 to 0.94 at 512: numpy's conv epoch
+is 2.8x faster on the i7 than on the laptop, Rust's only 1.7x. The MNIST-subset conv demo shows
+the same on every network, most for the single-example `conv` network (0.19-0.21 to 0.41); the
+UCI digits ratios held.
 
-Rust doesn't lag in whole epochs (conv mini-batch at 0.81x and 0.94x, dense at 0.45x), the
-conv tail's `downstream_batch` at batch 512, or `accumulate_gradient_batch` at 30 x 784 batch
-32. These are left out unless one of the items below moves them.
+Left out, because Rust doesn't lag and its ratio didn't get worse: the dense epochs (0.54-0.58
+on the laptop, 0.45 here), the conv tail's `downstream_batch` at batch 512, and
+`accumulate_gradient_batch` at 30 x 784 batch 32.
 
 Every change below has to keep the golden run bit-identical. Each output stays one FMA chain in
 its fixed order, so the changes are limited to blocking, tiling, threading and dispatch, which
@@ -47,7 +50,7 @@ the crate already does without moving a bit.
 
 **Rows:** `accumulate_gradient_batch` at batch 512. The conv tail takes 15.4 ms against numpy's
 3.9 ms on one thread, the largest gap in the table (the laptop's was 2.8x). 30 x 784 is at about
-1.45x both ways.
+1.45x both ways (the laptop's 1.18 / 1.34).
 
 **The likely cause:** `delta_batch.T @ X` goes through `matmul_add` and `matmul_2d`. That kernel
 sizes its row blocks so one block of `a` is 16 KB: 4 rows at `K` = 512. Each block streams all
@@ -87,10 +90,12 @@ batch size and in the accuracy passes.
 
 ## 3. Spread `conv_forward_batch` over examples
 
-**Why, although Rust doesn't lag:** `conv_forward_batch` is the largest single op in a Rust conv
-epoch: 36% of a mini-batch-32 epoch (the laptop's 29%) and 23% single-example. It runs on one
-thread at every batch size, im2col included, on a machine with 8 idle cores. `matmul_narrow`'s
-row threading of the product alone gained nothing at N = 512.
+**Why:** `conv_forward_batch` is the largest single op in a Rust conv epoch on both machines
+(36% of a mini-batch-32 epoch here, 23% single-example), and it gained least from the i7: the
+laptop takes 1.4-1.5x the i7's time on it, against 2-3x on the dense batch ops. That fits the
+conv epochs' move towards numpy. It runs on one thread at every batch size, im2col included, on
+a machine with 8 idle cores. `matmul_narrow`'s row threading of the product alone gained nothing
+at N = 512.
 
 **To investigate:** split the batch's examples across threads. Each example's `cols` slab,
 product and `A` row are independent and written in order, so no output changes value. Threading
@@ -103,7 +108,7 @@ threaded calls start on cold, clocked-down cores.
 ## 4. Threaded scaling against OpenBLAS
 
 **Rows:** the default-threading rows that are level or better on one thread: conv-tail batch 32
-(numpy 2.6-3.1x faster, against about 1.5x on the laptop), and 30 x 784's `downstream_batch` at
+(numpy 2.6-3.1x faster, against 1.5-2.1x on the laptop), and 30 x 784's `downstream_batch` at
 batch 512 (1.85x threaded, 0.94x on one thread). OpenBLAS uses the i7's 8 real cores, and on the
 laptop it had 4 cores with SMT. The crate gained less from the extra cores.
 
@@ -131,9 +136,9 @@ result suggests cold cores in training limit it. Investigate before committing t
 
 ## 5. The conv layer on 28x28 inputs
 
-**The gap:** the MNIST-subset conv demo ratios moved towards numpy on every network. The 8x8
-UCI digits ratios held. `conv_forward_batch`'s share of a mini-batch-32 Rust epoch grew from
-29% to 36%, and it's the largest single op in both the single-example and mini-batch epochs.
+**The gap:** the conv epochs and the MNIST-subset conv demo moved towards numpy on every
+network (see "The gaps"); the 8x8 UCI digits ratios held. Of the conv ops, `conv_forward_batch`
+gained least from the i7 (1.4-1.5x, against 1.6-1.8x for `conv_accumulate_gradient_batch`).
 
 **To investigate:** find which ops lost ground at 28x28. Time the conv ops against numpy's, per
 op, at batch 1, 32 and 512:
@@ -142,7 +147,8 @@ op, at batch 1, 32 and 512:
 - the downstream, through `matmul_narrow`
 - the accumulate, through `matmul_long_k`
 
-The single-example `conv` network lost the most (0.20 to 0.41), and item 3 doesn't reach batch 1.
+The single-example `conv` network lost the most (0.19-0.21 to 0.41), and item 3 doesn't reach
+batch 1.
 
 **Payoff:** medium. Rust is still ahead on these networks, so the target is the lost ground, not
 a lag. The per-op timing decides whether there is a kernel to fix.
@@ -184,9 +190,6 @@ them best.
 
 ## How each item proceeds
 
-- **Wait for the laptop's numbers first:** its ratios above are still from its retired baseline
-  (older commits). Stage 5's laptop runs (D11) replace them and may change which rows count as
-  "markedly worse".
 - **Workflow:** each item gets its own workplan, with the crate change landing in
   `indrajala-math-rust` first and then a "Bump rust/" PR here.
 - **Stop at the bar:** an item ends when its next step can't clear the 5% noise bar in an
