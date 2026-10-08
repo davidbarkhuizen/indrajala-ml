@@ -155,3 +155,14 @@ def test_cli_profile_then_compare_against_itself_and_an_edited_copy(tmp_path: Pa
     assert differs.returncode == 1
     assert "identity.os.kernel_release: " in differs.stdout
     assert '-> "0.0.0-edited"' in differs.stdout
+
+
+def test_profile_out_onto_a_profile_keeps_its_noise_rules(tmp_path: Path):
+    out = tmp_path / "profile.json"
+    assert run_script("profile", "--out", str(out)).returncode == 0
+    recorded = json.loads(out.read_text())
+    assert "noise_rules" not in recorded
+    rules = {"shifted_pass": 0.02, "high_load": 1.5, "small_consistent": 0.02, "measured_by": "a test"}
+    out.write_text(json.dumps({**recorded, "noise_rules": rules}))
+    assert run_script("profile", "--out", str(out)).returncode == 0
+    assert json.loads(out.read_text())["noise_rules"] == rules

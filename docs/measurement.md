@@ -54,6 +54,12 @@ figures and gotchas below were measured on the Ryzen 7 3700U laptop before it
   limits, kernel,
   `perf_event_paranoid`, Python, numpy and its BLAS, rustc, the crate's release
   profile, the thread env vars. `profile --out FILE` records a new machine.
+- **Each machine has its own profile and noise rules.** `ab.py` picks the profile in
+  `docs/machine_profiles/` recorded on the host it runs on (`jebel`: `i7-9700k.json`,
+  `pyramidon`: `ryzen7-3700u.json`), and refuses a host with none unless
+  `--allow-profile-change`. A profile's `noise_rules`, set by hand from that machine's A/As, are
+  the thresholds its reports use ([§5](#5-reading-the-report)): `shifted_pass`, `high_load` and
+  `small_consistent`. `profile --out` onto an existing profile keeps them.
 - **The policy can change mid-run.** `thermald` puts PL1 back to 95 W within 15-40 minutes of
   the setup script, restarted or not, so the script stops it for the session (it starts again at
   boot). `ab.py` re-reads the frequency policy and the power limits after every pass. When they
@@ -171,18 +177,22 @@ machine check, why any passes were added) and one table per metric.
 1. **The header:** commits, pass order, benchmark and arguments, and for a crate A/B each side's
    crate commit and extension hash. When the crate's Rust changed, the two hashes must differ;
    `ab.py` refuses the run otherwise.
-2. **The machine:** the profile check, the pre-flight 1-minute load (flagged above 1.5), and
+2. **The machine:** the profile check, the pre-flight 1-minute load (flagged above the machine's
+   `high_load`, 1.5 on both machines), and
    processes that were above 10% of a CPU around the passes.
 3. **Controls.** The control rows are `prepare` for `prepared_dataset_timing`, and the other
    backend's rows with `--control-backend`. Rust-only benchmarks have none, and the line says so.
    If a control row is *consistent*, the report says so first: this A/B can't resolve a change of
    about that size, and `epoch_op_profile.py` is the next step.
-4. **Shifted passes.** A pass whose rows, the controls included, sit 5% or more from their side's
-   pooled medians in the same direction (the median over rows of pass median / pooled median).
-   Whole passes run 5-15% fast or slow on this machine, the untouched control included. The
+4. **Shifted passes.** A pass whose rows, the controls included, sit the machine's
+   `shifted_pass` or more from their side's pooled medians in the same direction (the median over
+   rows of pass median / pooled median): 2% on the i7, 5% on the laptop, where whole passes ran
+   5-15% fast or slow, the untouched control included. The
    report says whether shifted passes are balanced between the sides, or names the `extend
    --order` that balances them. A shifted pass is never dropped.
-5. **Consistent rows**, largest |Δ| first, with old and new medians.
+5. **Consistent rows**, largest |Δ| first, with old and new medians. A row under the machine's
+   `small_consistent` (2% on the i7) is marked `consistent, small`: an A/A there flags rows that
+   size by chance, so one A/B doesn't establish it.
 6. **A summary:** how many rows are within noise, how many of those are separated but inside their
    spread, and the largest |Δ|.
 

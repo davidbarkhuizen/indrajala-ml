@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "identity": {
     "cpu": {
       "vendor": "AuthenticAMD",
@@ -119,5 +119,11 @@
       "repo_dirty": false,
       "rust": "638ff13aa0d4dc64ba76cbbd0efb4b0d0258dba0"
     }
+  },
+  "noise_rules": {
+    "shifted_pass": 0.05,
+    "high_load": 1.5,
+    "small_consistent": 0.0,
+    "measured_by": "the rules measurement.md had for the Ryzen laptop before per-machine rules (whole passes shifted 5-15%, #477-#480); stage 5's laptop runs (D11) may revise them"
   }
 }

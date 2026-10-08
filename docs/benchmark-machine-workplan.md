@@ -127,6 +127,14 @@ Settled with the owner on 2026-10-07.
   `docs/machine_profiles/i7-9700k.json` becomes `PROFILE_REFERENCE`. The Ryzen file stays as
   history and as the schema tests' second fixture. No lookup by hostname: two reference machines
   would mean two sets of noise rules.
+
+  **Replaced (owner, 2026-10-08, stage 4): a profile per host, with its own noise rules.** The
+  noise thresholds are a property of the machine, so each profile carries `noise_rules`
+  (`shifted_pass`, `high_load`, `small_consistent`; schema version 4), and `ab.py` picks the
+  profile recorded on the host it runs on. `PROFILE_REFERENCE` remains the benchmark machine:
+  the one an unknown host is compared to under `--allow-profile-change`, and the one whose numbers
+  the docs quote. The i7's rules come from stage 4's A/As; the laptop keeps the rules it had until
+  its own runs (D11) revise them.
 - **D5. The golden run: recorded fresh here, then checked across the machines.** It is
   machine-specific by design (numpy's BLAS) and lives in an ignored file. Stage 0 records a new
   one on `main`. The laptop's file is gone, but the laptop is still available (owner, 2026-10-08;
@@ -138,11 +146,11 @@ Settled with the owner on 2026-10-07.
   rerun exactly later.
 - **D11. The laptop: occasional runs at the baseline tag** (owner, 2026-10-08). The Ryzen laptop
   (`pyramidon`) still exists, so its columns are measured, not quoted from retired docs: stage 5
-  runs its golden run (D5) and the non-A/B measurements there, at the same commit pair. It is not
-  a second reference machine: `ab.py` keeps one reference profile (D4), and a laptop `ab.py` run,
-  if one is needed, passes `--allow-profile-change`. Before its first run, the laptop is set up for
-  ssh from `jebel` (owner), checked out at the tags, built, and its profile re-recorded at
-  schema 3 (its state, not a reference). Revisited if a crate workplan needs laptop A/Bs.
+  runs its golden run (D5) and the non-A/B measurements there, at the same commit pair. Since
+  D4's replacement, `ab.py` on the laptop checks against its own profile and noise rules. Before its
+  first run, the laptop is set up for ssh from `jebel` (owner), checked out at the tags, built, and
+  its profile re-recorded at schema 4 (keeping its noise rules). Its baseline numbers stay context
+  for the i7's.
 - **D7. What the baseline covers: everything.** An A/A of every `ab.py` adapter at its default
   arguments (stage 4), plus the per-op table, the conv demo's ratio table and the kernel protocol
   configurations (stage 5), as in the laptop's retired baseline, with a laptop column where one
@@ -388,8 +396,6 @@ Done when this file is deleted and next-steps.md lists it.
 - **Rerunning the baseline** after a change that could move every number (kernel, BIOS,
   numpy/OpenBLAS, rustc, the frequency policy): rerun stages 4-5 at the same tags, then at
   `main`, and replace `docs/machine_profiles/i7-9700k.md`'s tables, with the reason, in one PR.
-- **A second reference machine,** if one is ever needed: a lookup by hostname, and per-machine
-  noise rules (D4's alternative).
 
 ## Out of scope
 
