@@ -54,6 +54,11 @@ figures and gotchas below were measured on the Ryzen 7 3700U laptop before it
   limits, kernel,
   `perf_event_paranoid`, Python, numpy and its BLAS, rustc, the crate's release
   profile, the thread env vars. `profile --out FILE` records a new machine.
+- **The policy can change mid-run.** PL1 was once found back at 95 W in the middle of a session,
+  with no reboot: most likely `thermald`, which cools through RAPL and put back the limit it read
+  when it started. The setup script now restarts `thermald` after setting PL1. `ab.py` re-reads
+  the frequency policy and the power limits after every pass. When they changed, it fails that
+  pass and stops the run; re-run the setup script, then `ab.py extend`.
 - **`PATH`.** Non-login shells lack `~/.cargo/bin`: builds fail and the profile reads `rustc` as
   null. `export PATH=$HOME/.cargo/bin:$PATH` (`ab.py` sets it itself). The crate's toolchain is
   pinned in `rust/rust-toolchain.toml`, which only rustup honours.
