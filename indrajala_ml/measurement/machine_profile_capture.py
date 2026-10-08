@@ -330,6 +330,16 @@ def _perf_event_paranoid() -> int | None:
     return int(text.strip()) if text is not None else None
 
 
+def power_policy() -> JSONObject:
+    """The frequency policy and package power limits as they are now: the part of
+    identity.cpu that software can change while the machine is up (thermald rewrites RAPL's
+    PL1), so ab.py re-reads it after every pass."""
+    return {
+        "frequency": parse_frequency(_frequency_files()),
+        "power_limits": parse_power_limits(_power_limit_constraints()),
+    }
+
+
 def capture() -> JSONObject:
     """The profile of the machine this runs on."""
     # clocks first: the rest (numpy's import, git, rustc, lspci) boosts the cores within ms
@@ -356,8 +366,7 @@ def capture() -> JSONObject:
                 "threads_per_core": logical // physical if logical and physical else None,
                 "caches": summarize_caches(_cache_entries()),
                 "isa": cpuinfo["isa"],
-                "frequency": parse_frequency(_frequency_files()),
-                "power_limits": parse_power_limits(_power_limit_constraints()),
+                **power_policy(),
             },
             "memory": {
                 "total_mib": meminfo.get("MemTotal"),

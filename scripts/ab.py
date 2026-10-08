@@ -19,8 +19,9 @@ raw output and logs), which is also the neutral working directory every pass run
 `data` symlink to this checkout's data/. A pass runs the benchmark once, in its own process tree,
 with only its side's tree on PYTHONPATH; a probe first checks that the trainer
 (indrajala_ml.training.train, or indrajala_ml.train in a tree from before the source layout) comes
-from that tree and that the crate extension's hash is the run's. `run` does a smoke run of each
-side with the benchmark's smallest settings before the passes. RUN defaults to the most recent run.
+from that tree and that the crate extension's hash is the run's, and after it the frequency policy
+and power limits are read again: a pass during which they left the reference profile's fails the
+run. `run` does a smoke run of each side with the benchmark's smallest settings before the passes. RUN defaults to the most recent run.
 
 Output is bounded: raw data goes to files only, `run` and `extend` print a line when they start
 and one when they finish (or the failing step's last 20 lines of stderr, exiting 1), and
@@ -60,6 +61,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
+
+from indrajala_ml.measurement.machine_profile import compare
+from indrajala_ml.measurement.machine_profile_capture import power_policy
 
 REPO = Path(__file__).resolve().parent.parent
 RUNS_ROOT = Path(os.environ.get("AB_RUNS_ROOT", Path.home() / "code/ab-runs"))
@@ -663,7 +667,21 @@ def _run_step(
     return provenance, command
 
 
-def _run_passes(run_dir: Path, manifest: dict[str, Any], sides: list[str]) -> None:
+def reference_policy(manifest: dict[str, Any], preflight: dict[str, Any]) -> dict[str, Any] | None:
+    """The reference profile's frequency policy and power limits, which every pass is checked
+    against; None when the machine check was skipped or allowed a changed identity."""
+    if preflight.get("profile") != "identity matches":
+        return None
+    cpu = json.loads((Path(manifest["repo"]) / PROFILE_REFERENCE).read_text())["identity"]["cpu"]
+    return {key: cpu[key] for key in power_policy()}
+
+
+def policy_changes(reference: dict[str, Any]) -> list[str]:
+    """Each frequency-policy or power-limit field that differs from reference now."""
+    return [str(change) for change in compare({"identity": reference}, {"identity": power_policy()})]
+
+
+def _run_passes(run_dir: Path, manifest: dict[str, Any], sides: list[str], policy: dict[str, Any] | None) -> None:
     first = max((p["number"] for p in manifest["passes"]), default=0) + 1
     for number, side in enumerate(sides, first):
         stem = f"pass-{number:02d}-{side}"
@@ -681,6 +699,14 @@ def _run_passes(run_dir: Path, manifest: dict[str, Any], sides: list[str]) -> No
         _append_progress(run_dir, {"event": "start", **record})
         try:
             record["provenance"], record["command"] = _run_step(manifest, run_dir, side, stem, manifest["args"])
+            # after the pass, so a change during it fails it: thermald can reset PL1 mid-run
+            if policy is not None and (changes := policy_changes(policy)):
+                record["policy_changes"] = changes
+                raise AbError(
+                    f"{stem}: the machine's frequency policy or power limits changed during the pass "
+                    "(re-run the setup script, then ab.py extend)",
+                    changes,
+                )
             record["status"] = "ok"
         except AbError:
             record["status"] = "failed"
@@ -835,7 +861,7 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
                 raise AbError(
                     f"smoke ({side}): the benchmark ran but gave no rows", _tail(smoke.with_suffix(".stderr"))
                 )
-        _run_passes(run_dir, manifest, sides)
+        _run_passes(run_dir, manifest, sides, reference_policy(manifest, manifest["preflight"]))
 
     _guarded(run_dir, manifest, work)
     _finish(run_dir, manifest, started, len(sides))
@@ -864,7 +890,7 @@ def cmd_extend(args: argparse.Namespace) -> None:
             f"extending {run_dir.name}: passes {first}-{first + len(sides) - 1} ({_order_text(sides)}), {_eta(manifest, len(sides))}",
             flush=True,
         )
-        _run_passes(run_dir, manifest, sides)
+        _run_passes(run_dir, manifest, sides, reference_policy(manifest, manifest["extends"][-1]["preflight"]))
 
     _guarded(run_dir, manifest, work)
     _finish(run_dir, manifest, started, len(sides))

@@ -258,6 +258,39 @@ def test_run_and_extend_end_to_end(toy_repo: Path, capsys: pytest.CaptureFixture
     assert capsys.readouterr().out == f"{run_dir.name}: done, 6 passes done\n"
 
 
+def test_a_policy_change_during_a_pass_fails_it_and_stops_the_run(
+    toy_repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    reference: dict[str, dict[str, object]] = {
+        "frequency": {"governor": "powersave", "energy_performance_preference": "balance_performance"},
+        "power_limits": {"long_term_w": 65, "short_term_w": 120},
+    }
+    reset: dict[str, dict[str, object]] = {**reference, "power_limits": {"long_term_w": 95, "short_term_w": 120}}
+    readings = iter([reference, reset])  # after pass 1, then after pass 2: thermald put back 95 W
+
+    def preflight(*_: object) -> dict[str, object]:
+        return {"profile": "identity matches"}
+
+    def reference_policy(*_: object) -> dict[str, dict[str, object]]:
+        return reference
+
+    def power_policy() -> dict[str, dict[str, object]]:
+        return next(readings)
+
+    monkeypatch.setattr(ab, "_preflight", preflight)
+    monkeypatch.setattr(ab, "reference_policy", reference_policy)
+    monkeypatch.setattr(ab, "power_policy", power_policy)
+
+    assert _run(toy_repo, "run", "--bench", "cmd", "--old", "HEAD~1", "--order", "ONNO", "--", "scripts/probe.py") == 1
+    err = capsys.readouterr().err
+    assert "pass-02-new: the machine's frequency policy or power limits changed during the pass" in err
+    assert "identity.power_limits.long_term_w: 65 -> 95" in err
+    manifest = json.loads((ab.find_run(None) / "manifest.json").read_text())
+    assert manifest["state"] == "failed"
+    assert [(p["number"], p["status"]) for p in manifest["passes"]] == [(1, "ok"), (2, "failed")]
+    assert manifest["passes"][1]["policy_changes"] == ["identity.power_limits.long_term_w: 65 -> 95"]
+
+
 def test_a_pass_whose_tree_lacks_the_module_aborts(toy_repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     _git(toy_repo, "rm", "-q", "indrajala_ml/train.py")
     _git(toy_repo, "commit", "-q", "-m", "no train")
