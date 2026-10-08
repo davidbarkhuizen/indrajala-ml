@@ -10,6 +10,10 @@ The profile has two parts:
 - state: what is expected to change from run to run (clocks now, load, free memory, power,
   commits). It is recorded for context and never compared.
 
+A recorded profile may also carry noise_rules, set by hand from the machine's A/As: the thresholds
+scripts/ab.py reports by on that machine. They are never captured; `profile --out` onto an
+existing profile keeps them.
+
     python scripts/machine_profile.py profile [--out FILE]
     python scripts/machine_profile.py compare REFERENCE [CURRENT]
 """
@@ -103,6 +107,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "profile":
         profile = capture()
+        if args.out and Path(args.out).is_file():
+            existing = json.loads(Path(args.out).read_text())
+            if "noise_rules" in existing:
+                profile["noise_rules"] = existing["noise_rules"]
         validate(profile)
         text = json.dumps(profile, indent=2) + "\n"
         if args.out:

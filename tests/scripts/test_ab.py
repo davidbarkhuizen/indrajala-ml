@@ -611,3 +611,48 @@ def test_the_machine_line_says_when_load_follows_crate_builds() -> None:
     assert line.startswith(
         "profile: identity matches; max 1-min load 2.30 (HIGH) (measured just after this run's crate builds)"
     )
+
+
+REPO = Path(__file__).resolve().parent.parent.parent
+
+
+def test_each_host_has_its_profile_and_noise_rules() -> None:
+    i7, ryzen = ab.host_profile(REPO, "jebel"), ab.host_profile(REPO, "pyramidon")
+    assert i7 is not None and i7.name == "i7-9700k.json"
+    assert ryzen is not None and ryzen.name == "ryzen7-3700u.json"
+    assert ab.host_profile(REPO, "elsewhere") is None
+    assert ab.noise_rules(i7) == {"shifted_pass": 0.02, "high_load": 1.5, "small_consistent": 0.02}
+    assert ab.noise_rules(ryzen) == ab.DEFAULT_RULES
+    assert ab.noise_rules(None) == ab.DEFAULT_RULES
+
+
+def _with_rules(tmp_path: Path, run: str, rules: dict[str, float]) -> Path:
+    copy = tmp_path / run
+    shutil.copytree(FIXTURES / run, copy)
+    manifest = json.loads((copy / "manifest.json").read_text())
+    manifest["noise_rules"] = rules
+    (copy / "manifest.json").write_text(json.dumps(manifest))
+    return copy
+
+
+def test_the_shift_threshold_is_the_runs_recorded_rule(tmp_path: Path) -> None:
+    assert len(ab.report_data(FIXTURES / "pr480").shifted) == 2  # no rules recorded: the defaults
+    assert ab.report_data(_with_rules(tmp_path, "pr480", {"shifted_pass": 0.5})).shifted == []
+
+
+def test_consistent_rows_under_the_small_rule_are_marked_small(tmp_path: Path) -> None:
+    plain = ab.report_data(FIXTURES / "pr477-ab1")
+    consistent = [row for row in plain.rows if row.consistent and not row.control]
+    assert consistent and not any(plain.small(row) for row in consistent)
+    marked = ab.report_data(_with_rules(tmp_path, "pr477-ab1", {"small_consistent": 1.0}))
+    assert all(marked.small(row) for row in marked.rows if row.consistent)
+    assert any(line.startswith("consistent, small: ") for line in ab.brief_report(marked))
+    assert "| consistent, small |" in ab.markdown_report(marked)
+
+
+def test_a_host_without_a_profile_is_refused(
+    toy_repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(ab.socket, "gethostname", lambda: "elsewhere")
+    assert _run(toy_repo, "run", "--bench", "cmd", "--old", "HEAD~1", "--", "scripts/probe.py") == 1
+    assert "machine profile: none in docs/machine_profiles for host elsewhere" in capsys.readouterr().err

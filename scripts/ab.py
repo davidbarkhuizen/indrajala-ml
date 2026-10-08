@@ -20,8 +20,15 @@ raw output and logs), which is also the neutral working directory every pass run
 with only its side's tree on PYTHONPATH; a probe first checks that the trainer
 (indrajala_ml.training.train, or indrajala_ml.train in a tree from before the source layout) comes
 from that tree and that the crate extension's hash is the run's, and after it the frequency policy
-and power limits are read again: a pass during which they left the reference profile's fails the
-run. `run` does a smoke run of each side with the benchmark's smallest settings before the passes. RUN defaults to the most recent run.
+and power limits are read again: a pass during which they left the machine profile's fails the
+run. `run` does a smoke run of each side with the benchmark's smallest settings before the passes.
+RUN defaults to the most recent run.
+
+The machine check uses the profile in docs/machine_profiles/ recorded on this host (its
+state.hostname); a host with none is refused unless --allow-profile-change, which compares against
+PROFILE_REFERENCE. The profile's noise_rules (the shifted-pass threshold, the high-load flag, the
+small-consistent mark; DEFAULT_RULES without them) go into the run's manifest, and its reports use
+them.
 
 Output is bounded: raw data goes to files only, `run` and `extend` print a line when they start
 and one when they finish (or the failing step's last 20 lines of stderr, exiting 1), and
@@ -32,8 +39,10 @@ The report pools every complete pass of a side: per (metric, case), the median a
 all runs, Δ median, and each pass's own median. A row is *consistent* when every per-pass median
 of one side lies beyond every one of the other (2+ passes a side) and the gap between the sides
 is wider than each side's own spread of per-pass medians; otherwise it is within noise. A pass
-is *shifted* when its rows, the controls included, sit 5% or more from their side's pooled
-medians in the same direction; the report names the `extend` order that balances shifted passes.
+is *shifted* when its rows, the controls included, sit the machine's `shifted_pass` (5% by
+default) or more from their side's pooled medians in the same direction; the report names the
+`extend` order that balances shifted passes. A consistent row under the machine's
+`small_consistent` is marked small: an A/A on that machine flags rows that size by chance.
 
 Benchmarks: prepared_dataset_timing (control: `prepare`, plus the other backend's rows with
 --control-backend), and cmd, a probe that prints one JSON object per line to stdout:
@@ -54,6 +63,7 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import statistics
 import subprocess
 import sys
@@ -70,12 +80,18 @@ RUNS_ROOT = Path(os.environ.get("AB_RUNS_ROOT", Path.home() / "code/ab-runs"))
 WORKTREES_ROOT = Path(os.environ.get("AB_WORKTREES_ROOT", Path.home() / "code/ab-worktrees"))
 CRATE_REPO = Path(os.environ.get("AB_CRATE_REPO", Path.home() / "code/indrajala-math-rust"))
 CARGO_BIN = Path.home() / ".cargo/bin"
-PROFILE_REFERENCE = "docs/machine_profiles/i7-9700k.json"
+PROFILES_DIR = "docs/machine_profiles"
+PROFILE_REFERENCE = f"{PROFILES_DIR}/i7-9700k.json"  # the benchmark machine; an unknown host is compared to it
 THREAD_VARS = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")
 DIRTY_PATHS = ("indrajala_ml", "scripts", "rust")
-SHIFT = 0.05  # a pass this far from its side's pooled medians is shifted
 BUSY_PERCENT = 10.0  # a process above this share of one CPU is recorded as busy
-HIGH_LOAD = 1.5  # a 1-minute load average above this is reported
+# the noise rules of a host without a profile, of a profile without them, and of runs from before
+# per-machine rules: the Ryzen laptop's (measurement.md)
+DEFAULT_RULES = {
+    "shifted_pass": 0.05,  # a pass this far from its side's pooled medians is shifted
+    "high_load": 1.5,  # a pre-flight 1-minute load average above this is flagged
+    "small_consistent": 0.0,  # a consistent row under this |Δ| is marked small (chance level in an A/A)
+}
 BRIEF_LINES = 15
 STDERR_TAIL = 20
 CLEAN_DAYS = 14
@@ -667,12 +683,26 @@ def _run_step(
     return provenance, command
 
 
+def host_profile(repo: Path, hostname: str) -> Path | None:
+    """The machine profile under PROFILES_DIR recorded on hostname, if any."""
+    for path in sorted((repo / PROFILES_DIR).glob("*.json")):
+        if json.loads(path.read_text()).get("state", {}).get("hostname") == hostname:
+            return path
+    return None
+
+
+def noise_rules(profile: Path | None) -> dict[str, float]:
+    """A machine's noise rules: its profile's noise_rules, else DEFAULT_RULES."""
+    rules: dict[str, float] = json.loads(profile.read_text()).get("noise_rules", {}) if profile else {}
+    return {key: rules.get(key, value) for key, value in DEFAULT_RULES.items()}
+
+
 def reference_policy(manifest: dict[str, Any], preflight: dict[str, Any]) -> dict[str, Any] | None:
-    """The reference profile's frequency policy and power limits, which every pass is checked
+    """The machine profile's frequency policy and power limits, which every pass is checked
     against; None when the machine check was skipped or allowed a changed identity."""
     if preflight.get("profile") != "identity matches":
         return None
-    cpu = json.loads((Path(manifest["repo"]) / PROFILE_REFERENCE).read_text())["identity"]["cpu"]
+    cpu = json.loads((Path(manifest["repo"]) / preflight["profile_path"]).read_text())["identity"]["cpu"]
     return {key: cpu[key] for key in power_policy()}
 
 
@@ -728,14 +758,25 @@ def _preflight(run_dir: Path, manifest: dict[str, Any], skip_profile: bool, allo
     data = Path(manifest["repo"]) / "data"
     if data.is_dir() and not (run_dir / "data").exists():
         (run_dir / "data").symlink_to(data)
-    if skip_profile:
-        record["profile"] = "skipped"
-        return record
     # from the checkout, not a worktree: worktrees have no rust/ submodule, and the crate both sides
     # import is the venv's, built from the checkout's rust/
     tree = Path(manifest["repo"])
+    hostname = socket.gethostname()
+    profile = host_profile(tree, hostname)
+    manifest["noise_rules"] = noise_rules(profile)
+    if skip_profile:
+        record["profile"] = "skipped"
+        return record
+    if profile is None:
+        if not allow_change:
+            raise AbError(
+                f"machine profile: none in {PROFILES_DIR} for host {hostname} "
+                f"(--allow-profile-change to run against {PROFILE_REFERENCE}, under the default noise rules)"
+            )
+        profile = tree / PROFILE_REFERENCE
+    record["profile_path"] = str(profile.relative_to(tree))
     result = subprocess.run(
-        [sys.executable, str(tree / "scripts/machine_profile.py"), "compare", str(tree / PROFILE_REFERENCE)],
+        [sys.executable, str(tree / "scripts/machine_profile.py"), "compare", str(profile)],
         check=False,
         cwd=run_dir,
         env=_pass_env(tree),
@@ -749,7 +790,10 @@ def _preflight(run_dir: Path, manifest: dict[str, Any], skip_profile: bool, allo
         record["profile"] = "identity changed (allowed)"
         record["profile_output"] = [line for line in lines if "->" in line][:STDERR_TAIL]
     else:
-        raise AbError("machine profile: identity changed (--allow-profile-change to run anyway)", lines)
+        raise AbError(
+            f"machine profile: identity changed from {record['profile_path']} (--allow-profile-change to run anyway)",
+            lines,
+        )
     return record
 
 
@@ -1051,6 +1095,11 @@ class ReportData:
     passes: dict[str, list[int]]  # complete pass numbers per side
     shifted: list[ShiftedPass]
     one_sided: int  # (metric, case) pairs only one side measured
+    rules: dict[str, float]  # the machine's noise rules the run recorded (DEFAULT_RULES before them)
+
+    def small(self, row: RowStats) -> bool:
+        """A consistent row whose |Δ| is under the machine's chance level for one A/B."""
+        return row.consistent and abs(row.delta) < self.rules["small_consistent"]
 
 
 def report_data(run_dir: Path) -> ReportData:
@@ -1077,10 +1126,11 @@ def report_data(run_dir: Path) -> ReportData:
             one_sided += 1
             continue
         rows.append(RowStats(key[0], key[1], meta[key][0], meta[key][1], old, new))
-    return ReportData(manifest, rows, passes, _shifted_passes(rows, passes), one_sided)
+    rules = {**DEFAULT_RULES, **manifest.get("noise_rules", {})}
+    return ReportData(manifest, rows, passes, _shifted_passes(rows, passes, rules["shifted_pass"]), one_sided, rules)
 
 
-def _shifted_passes(rows: list[RowStats], passes: dict[str, list[int]]) -> list[ShiftedPass]:
+def _shifted_passes(rows: list[RowStats], passes: dict[str, list[int]], threshold: float) -> list[ShiftedPass]:
     shifted: list[ShiftedPass] = []
     for side, numbers in passes.items():
         for index, number in enumerate(numbers):
@@ -1098,7 +1148,7 @@ def _shifted_passes(rows: list[RowStats], passes: dict[str, list[int]]) -> list[
                 continue
             ratio = statistics.median(ratios)
             control = statistics.median(control_ratios) if control_ratios else ratio
-            if abs(ratio - 1) >= SHIFT and abs(control - 1) >= SHIFT and (ratio < 1) == (control < 1):
+            if abs(ratio - 1) >= threshold and abs(control - 1) >= threshold and (ratio < 1) == (control < 1):
                 shifted.append(ShiftedPass(number, side, ratio))
     return sorted(shifted, key=lambda s: s.number)
 
@@ -1146,7 +1196,13 @@ def _commits_line(manifest: dict[str, Any], data: ReportData) -> str:
 
 def _machine_line(manifest: dict[str, Any]) -> str:
     checks = [manifest.get("preflight", {})] + [e.get("preflight", {}) for e in manifest["extends"]]
-    profiles = sorted({c.get("profile", "not recorded") for c in checks})
+    profiles = sorted(
+        {
+            c.get("profile", "not recorded") + (f" ({Path(c['profile_path']).name})" if "profile_path" in c else "")
+            for c in checks
+        }
+    )
+    high_load = {**DEFAULT_RULES, **manifest.get("noise_rules", {})}["high_load"]
     # pre-flight only: before a later pass the 1-minute load still counts the previous pass's benchmark
     loads = [c["load"][0] for c in checks if "load" in c]
     busy = sorted(
@@ -1155,7 +1211,7 @@ def _machine_line(manifest: dict[str, Any]) -> str:
     )
     line = f"profile: {', '.join(profiles)}"
     if loads:
-        line += f"; max 1-min load {max(loads):.2f}" + (" (HIGH)" if max(loads) > HIGH_LOAD else "")
+        line += f"; max 1-min load {max(loads):.2f}" + (" (HIGH)" if max(loads) > high_load else "")
         if any(c.get("after_builds") for c in checks):
             line += " (measured just after this run's crate builds)"
     return line + f"; busy processes: {', '.join(busy[:4]) or 'none'}"
@@ -1190,7 +1246,7 @@ def brief_report(data: ReportData) -> list[str]:
     shown = consistent if len(consistent) <= room else consistent[: room - 1]
     for row in shown:
         lines.append(
-            f"consistent: {_row_label(row)} {_delta(row.delta)} "
+            f"consistent{', small' if data.small(row) else ''}: {_row_label(row)} {_delta(row.delta)} "
             f"({_value(row.old_median, row.unit)} -> {_value(row.new_median, row.unit)} {row.unit})"
         )
     if len(shown) < len(consistent):
@@ -1229,6 +1285,7 @@ def _table(rows: list[RowStats], data: ReportData) -> list[str]:
             + ", ".join(_value(v, unit) for v in row.new_pass_medians)
         )
         verdict = "consistent" if row.consistent else ("separated, inside spread" if row.separated else "within noise")
+        verdict += ", small" if data.small(row) else ""
         if row.control:
             verdict += " (control)"
         lines.append(

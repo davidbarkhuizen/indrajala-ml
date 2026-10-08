@@ -17,7 +17,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUST_ROOT = REPO_ROOT / "rust"
 

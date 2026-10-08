@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Machine profile",
-  "description": "The benchmark machine's profile (indrajala_ml/measurement/machine_profile.py). identity is compared between profiles; state is recorded only.",
+  "description": "The benchmark machine's profile (indrajala_ml/measurement/machine_profile.py). identity is compared between profiles; state is recorded only; noise_rules, set by hand from the machine's A/As, are the thresholds scripts/ab.py reports by on that machine.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -11,7 +11,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 3
+      "const": 4
     },
     "identity": {
       "type": "object",
@@ -549,6 +549,39 @@
               ]
             }
           }
+        }
+      }
+    },
+    "noise_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shifted_pass",
+        "high_load",
+        "small_consistent",
+        "measured_by"
+      ],
+      "properties": {
+        "shifted_pass": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "a pass this far from its side's pooled medians (a fraction) is shifted"
+        },
+        "high_load": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "a pre-flight 1-minute load average above this is flagged"
+        },
+        "small_consistent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "a consistent row under this |delta| (a fraction) is marked small: chance level in this machine's A/As"
+        },
+        "measured_by": {
+          "type": "string",
+          "description": "where the values come from"
         }
       }
     }

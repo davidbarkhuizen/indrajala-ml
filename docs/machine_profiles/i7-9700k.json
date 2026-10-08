@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "identity": {
     "cpu": {
       "vendor": "GenuineIntel",
@@ -122,5 +122,11 @@
       "repo_dirty": false,
       "rust": "66ecc0de6fd2419d5ee886ee20d18406edcf61c4"
     }
+  },
+  "noise_rules": {
+    "shifted_pass": 0.02,
+    "high_load": 1.5,
+    "small_consistent": 0.02,
+    "measured_by": "benchmark machine workplan, stage 4 (2026-10-08): six A/As at baseline-i7-9700k; no pass of 36 shifted more than 0.9%, and 7 of 591 rows were consistent by chance, all under 2%"
   }
 }
