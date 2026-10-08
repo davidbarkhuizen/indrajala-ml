@@ -10,7 +10,7 @@ docs/measurement.md (the A/B harness workplan in docs/next-steps.md has the desi
                              --new-crate 750d83a --control-backend numpy
     python scripts/ab.py status [RUN]
     python scripts/ab.py extend [RUN] --order NO
-    python scripts/ab.py report [RUN] [--brief] [--md FILE]
+    python scripts/ab.py report [RUN] [--brief] [--md FILE] [--pooled FILE]
     python scripts/ab.py clean [--worktrees] [--wheels]
 
 Each side is a commit, checked out once as a detached worktree under ~/code/ab-worktrees/<sha7>.
@@ -33,7 +33,9 @@ them.
 Output is bounded: raw data goes to files only, `run` and `extend` print a line when they start
 and one when they finish (or the failing step's last 20 lines of stderr, exiting 1), and
 `report --brief` prints at most 15 lines. `report --md FILE` writes the full table and a protocol
-paragraph for a PR body.
+paragraph for a PR body. `report --pooled FILE`, for an A/A only (one commit and one crate on both
+sides), writes the baseline's form instead: each row pooled over every pass, with its spread of
+per-pass medians and each pass's shift (docs/machine_profiles/).
 
 The report pools every complete pass of a side: per (metric, case), the median and min-max over
 all runs, Δ median, and each pass's own median. A row is *consistent* when every per-pass median
@@ -968,7 +970,11 @@ def cmd_report(args: argparse.Namespace) -> None:
         Path(args.md).write_text(markdown_report(data))
         if not args.brief:
             print(f"wrote {args.md}")
-    if args.brief or not args.md:
+    if args.pooled:
+        Path(args.pooled).write_text(pooled_report(data))
+        if not args.brief:
+            print(f"wrote {args.pooled}")
+    if args.brief or not (args.md or args.pooled):
         print("\n".join(brief_report(data)))
 
 
@@ -1334,6 +1340,76 @@ def protocol_paragraph(data: ReportData) -> str:
     return text
 
 
+def pass_shifts(data: ReportData) -> dict[int, float]:
+    """Per pass of an A/A, the median over rows of its median / the row's median over every pass."""
+    numbers = sorted(data.passes["old"] + data.passes["new"])
+    ratios: dict[int, list[float]] = {number: [] for number in numbers}
+    for row in data.rows:
+        medians = _pass_medians(row, data)
+        pooled = statistics.median(row.old_runs + row.new_runs)
+        if pooled:
+            for number, median in medians.items():
+                ratios[number].append(median / pooled)
+    return {number: statistics.median(values) for number, values in ratios.items() if values}
+
+
+def _pass_medians(row: RowStats, data: ReportData) -> dict[int, float]:
+    medians = dict(zip(data.passes["old"], row.old_pass_medians)) | dict(zip(data.passes["new"], row.new_pass_medians))
+    return dict(sorted(medians.items()))
+
+
+def pass_spread(row: RowStats, data: ReportData) -> float | None:
+    """The range of a row's per-pass medians over every pass, as a fraction of its pooled median."""
+    medians = list(_pass_medians(row, data).values())
+    pooled = statistics.median(row.old_runs + row.new_runs)
+    return (max(medians) - min(medians)) / pooled if medians and pooled else None
+
+
+def pooled_report(data: ReportData) -> str:
+    """An A/A as a baseline: per row, the median (min-max) over every pass, the per-pass medians in
+    pass order and their spread; before the tables, the spread over rows and each pass's shift."""
+    manifest = data.manifest
+    if manifest["old"]["commit"] != manifest["new"]["commit"] or manifest["old"]["crate"] != manifest["new"]["crate"]:
+        raise AbError("report --pooled is for an A/A: both sides must have the same commit and crate")
+    spreads = sorted(s for row in data.rows if (s := pass_spread(row, data)) is not None)
+    shifts = pass_shifts(data)
+    lines = [protocol_paragraph(data), ""]
+    lines += [f"- {line}" for line in brief_report(data)[2:]]
+    if spreads:
+        tenth = spreads[min(len(spreads) - 1, int(0.9 * len(spreads)))]
+        lines.append(
+            f"- spread of per-pass medians over {len(spreads)} rows: median {statistics.median(spreads) * 100:.1f}%, "
+            f"90th percentile {tenth * 100:.1f}%, max {spreads[-1] * 100:.1f}%"
+        )
+    if shifts:
+        lines.append(
+            "- pass shifts (median over rows of pass median / pooled median): "
+            + ", ".join(f"{number} {_delta(ratio - 1)}" for number, ratio in shifts.items())
+        )
+    numbers = ", ".join(str(n) for n in sorted(data.passes["old"] + data.passes["new"]))
+    metrics = list(dict.fromkeys(row.metric for row in data.rows))
+    for metric in metrics:
+        rows = [row for row in data.rows if row.metric == metric]
+        unit = rows[0].unit
+        lines += [
+            "",
+            f"### {metric}",
+            "",
+            f"| case | median (min-max) {unit} | per-pass medians ({numbers}) | spread |",
+            "|---|---|---|---|",
+        ]
+        for row in rows:
+            runs = row.old_runs + row.new_runs
+            per_pass = ", ".join(_value(v, unit) for v in _pass_medians(row, data).values())
+            spread = pass_spread(row, data)
+            lines.append(
+                f"| {row.case}{' (control)' if row.control else ''} "
+                f"| {_value(statistics.median(runs), unit)} ({_value(min(runs), unit)}-{_value(max(runs), unit)}) "
+                f"| {per_pass} | {'-' if spread is None else f'{spread * 100:.1f}%'} |"
+            )
+    return "\n".join(lines) + "\n"
+
+
 def markdown_report(data: ReportData) -> str:
     lines = [protocol_paragraph(data), ""]
     lines += [f"- {line}" for line in brief_report(data)[2:]]
@@ -1383,6 +1459,7 @@ def main(argv: list[str] | None = None) -> int:
     report.add_argument("run", nargs="?")
     report.add_argument("--brief", action="store_true", help=f"at most {BRIEF_LINES} lines (the default output)")
     report.add_argument("--md", help="write the full tables and the protocol paragraph here")
+    report.add_argument("--pooled", help="an A/A only: write each row pooled over every pass, with its spread, here")
     clean = commands.add_parser("clean", help="remove worktrees no recent run refers to")
     clean.add_argument("--worktrees", action="store_true")
     clean.add_argument("--wheels", action="store_true", help="cached crate wheels and their site directories")

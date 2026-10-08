@@ -1,7 +1,7 @@
 # Workplan: a baseline on the new benchmark machine
 
 **Status: D1-D11 settled; stage 0 done (2026-10-07: both test suites, lint and a fresh golden
-run pass here); stages 1-3 done; stages 4-7 are planned.**
+run pass here); stages 1-4 done; stages 5-7 are planned.**
 
 Benchmarking moves from the Ryzen 7 3700U laptop (`pyramidon`) to a desktop Core i7-9700K
 (`jebel`). Every timing rule in [measurement.md](measurement.md) was written and calibrated on the
@@ -319,6 +319,25 @@ threshold. Keep a rule as it is if the numbers support it. If one doesn't fit th
 propose the new value with its numbers in the PR; the owner decides.
 
 Done when all six A/As are recorded and measurement.md's noise figures are this machine's.
+
+**Done 2026-10-08.** The six A/As (`~/code/ab-runs/2026-10-08-baseline-aa-*`) are in
+[machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md), each as `ab.py report --pooled`
+(added for this stage), with the noise table. Per benchmark, the median spread of a row's
+per-pass medians was 0.7-4.3%; no pass of 36 shifted more than 0.9%; 7 of 591 rows were flagged
+*consistent*, all under 2% and by chance. measurement.md's figures are this machine's now. The
+owner made the noise rules per machine (#582; D4 replaced): the i7's are `shifted_pass` 2%,
+`high_load` 1.5 and `small_consistent` 2%. Along the way:
+
+- **`thermald` reset PL1 to 95 W mid-session**, twice. `ab.py` now re-reads the frequency policy
+  and power limits after every pass (#579), and the setup script stops `thermald` (#581, D10).
+  The first two attempts at these A/As were discarded; the failed one is
+  `-prepared_dataset_timing-pl1-reset`.
+- **Per-process modes** in the single-example Rust `downstream` on the 32 x 5408 conv tail
+  (about 20.8, 22.1-22.4 and 23.8 µs), in both of the day's `focused_benchmark` A/As: a lead
+  for stage 6, beside the laptop's bimodal max-pool.
+- **numpy batch ops ran 15-20% slower** in the afternoon A/A (PL1 65 W throughout) than in the
+  morning one (PL1 at 95 W for part of it): whether 65 W costs all-core numpy bursts is a lead
+  for stage 6.
 
 ### Stage 5: the end-to-end and per-op baseline
 

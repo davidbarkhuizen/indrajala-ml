@@ -22,10 +22,12 @@ The benchmark machine is a Core i7-9700K desktop (`jebel`): 8 cores / 8 threads 
 SMT), 32 KB L1d and 256 KB L2 per core, 12 MB L3, AVX2 and FMA without AVX-512, `intel_pstate`
 (active, hardware-managed clocks) with the `powersave` governor, EPP `balance_performance` and
 turbo on, and the package power limit PL1 lowered to 65 W (at the stock 95 W a long all-core load
-reaches 100 C and throttles). Its full record is `docs/machine_profiles/i7-9700k.json`. The noise
-figures and gotchas below were measured on the Ryzen 7 3700U laptop before it
-(`docs/machine_profiles/ryzen7-3700u.json`) and are being re-measured here
-([the benchmark machine workplan](benchmark-machine-workplan.md)).
+reaches 100 C and throttles). Its full record is `docs/machine_profiles/i7-9700k.json`, and its
+noise and baseline, from six A/As of every benchmark, are in
+[`docs/machine_profiles/i7-9700k.md`](machine_profiles/i7-9700k.md). The noise figures below are
+this machine's. The gotchas in §7 were measured on the Ryzen 7 3700U laptop before it
+(`docs/machine_profiles/ryzen7-3700u.json`) and are being re-checked here
+([the benchmark machine workplan](benchmark-machine-workplan.md), stage 6).
 
 - **Run the setup script once per boot.** `sudo scripts/benchmark_machine_setup.sh` sets the
   frequency policy the profile records (governor, EPP, turbo, PL1), `perf_event_paranoid` 2, and
@@ -186,8 +188,9 @@ machine check, why any passes were added) and one table per metric.
    about that size, and `epoch_op_profile.py` is the next step.
 4. **Shifted passes.** A pass whose rows, the controls included, sit the machine's
    `shifted_pass` or more from their side's pooled medians in the same direction (the median over
-   rows of pass median / pooled median): 2% on the i7, 5% on the laptop, where whole passes ran
-   5-15% fast or slow, the untouched control included. The
+   rows of pass median / pooled median): 2% on the i7, where no pass of 36 in its A/As moved more
+   than 0.9%, and 5% on the laptop, where whole passes ran 5-15% fast or slow, the untouched
+   control included. The
    report says whether shifted passes are balanced between the sides, or names the `extend
    --order` that balances them. A shifted pass is never dropped.
 5. **Consistent rows**, largest |Δ| first, with old and new medians. A row under the machine's
@@ -227,8 +230,11 @@ What to do next:
 - ✓ **One process per measurement**, and **numpy and Rust in separate processes**, always.
 - ✓ **Alternate the sides** (`ONNONO`), so drift over the run falls on both. Rotate the order
   within a pass too (the scripts' `interleaved_runs`).
-- ✓ **Numbers vary 20-30% between passes on this machine**, sometimes more. Treat a change as
-  real only when the passes agree: the verdict above makes "agree" exact.
+- ✓ **Numbers vary between passes.** On the i7 a row's per-pass medians spread about 1-4% (the
+  median over rows, per benchmark), and 6-13% for the noisiest tenth of rows. A single process
+  can still land far off (one numpy op ran 50% slow in one pass of six), and a few ops settle in
+  distinct per-process modes. On the laptop it was 20-30%. Treat a change as real only when the
+  passes agree: the verdict above makes "agree" exact.
 - ✓ **Read the control.** A change to one backend can't move the other; `prepare` converts the
   dataset and runs no training code. When the control moves as much as the change, the numbers
   can't resolve it.
@@ -255,8 +261,9 @@ What to do next:
   `data/mnist/`). `ab.py` symlinks the checkout's `data` into the run directory.
 - **Worker processes inherit the environment, not `sys.path` edits.** A tree goes into
   `PYTHONPATH`, never into `sys.path` in a driver.
-- **Whole passes shift** by 5-15% in every config, the controls included (#480, and #477's first
-  A/B). Balance them ([§5](#5-reading-the-report)).
+- **Whole passes shift** on a noisy machine: by 5-15% in every config on the laptop, the controls
+  included (#480, and #477's first A/B). On the i7, with the setup script applied, no pass of 36
+  moved more than 0.9%. Balance a shifted pass ([§5](#5-reading-the-report)) on either.
 - **numpy's OpenBLAS threads slow a Rust call run soon after.** After a BLAS call its workers
   spin for 100-500 ms (`OPENBLAS_THREAD_TIMEOUT`). A Rust batch op in that window measured 2-5x
   slow, whatever Rust's own thread count. Any per-op ratio measured interleaved with threaded
