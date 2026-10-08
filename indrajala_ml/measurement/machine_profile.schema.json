@@ -11,7 +11,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "identity": {
       "type": "object",
@@ -153,7 +153,9 @@
                 "governor",
                 "min_mhz",
                 "max_mhz",
-                "boost_enabled"
+                "boost_enabled",
+                "energy_performance_preference",
+                "intel_pstate_status"
               ],
               "properties": {
                 "driver": {
@@ -183,6 +185,20 @@
                 "boost_enabled": {
                   "type": [
                     "boolean",
+                    "null"
+                  ]
+                },
+                "energy_performance_preference": {
+                  "description": "cpu0's cpufreq/energy_performance_preference (EPP), null where the driver has none",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "intel_pstate_status": {
+                  "description": "intel_pstate/status (active, passive, off), null without intel_pstate",
+                  "type": [
+                    "string",
                     "null"
                   ]
                 }

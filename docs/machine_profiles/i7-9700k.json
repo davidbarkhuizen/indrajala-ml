@@ -2,39 +2,39 @@
   "schema_version": 2,
   "identity": {
     "cpu": {
-      "vendor": "AuthenticAMD",
-      "model_name": "AMD Ryzen 7 3700U with Radeon Vega Mobile Gfx",
+      "vendor": "GenuineIntel",
+      "model_name": "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz",
       "architecture": "x86_64",
       "sockets": 1,
-      "physical_cores": 4,
+      "physical_cores": 8,
       "logical_cpus": 8,
-      "threads_per_core": 2,
+      "threads_per_core": 1,
       "caches": [
         {
           "level": 1,
           "type": "Data",
           "size_kib": 32,
-          "shared_by_logical_cpus": 2,
-          "instances": 4
+          "shared_by_logical_cpus": 1,
+          "instances": 8
         },
         {
           "level": 1,
           "type": "Instruction",
-          "size_kib": 64,
-          "shared_by_logical_cpus": 2,
-          "instances": 4
+          "size_kib": 32,
+          "shared_by_logical_cpus": 1,
+          "instances": 8
         },
         {
           "level": 2,
           "type": "Unified",
-          "size_kib": 512,
-          "shared_by_logical_cpus": 2,
-          "instances": 4
+          "size_kib": 256,
+          "shared_by_logical_cpus": 1,
+          "instances": 8
         },
         {
           "level": 3,
           "type": "Unified",
-          "size_kib": 4096,
+          "size_kib": 12288,
           "shared_by_logical_cpus": 8,
           "instances": 1
         }
@@ -47,29 +47,29 @@
         "avx512f": false
       },
       "frequency": {
-        "driver": "acpi-cpufreq",
-        "governor": "schedutil",
-        "min_mhz": 1400,
-        "max_mhz": 2300,
+        "driver": "intel_pstate",
+        "governor": "powersave",
+        "min_mhz": 800,
+        "max_mhz": 4900,
         "boost_enabled": true,
-        "energy_performance_preference": null,
-        "intel_pstate_status": null
+        "energy_performance_preference": "balance_performance",
+        "intel_pstate_status": "active"
       }
     },
     "memory": {
-      "total_mib": 5353,
-      "swap_total_mib": 4095
+      "total_mib": 31442,
+      "swap_total_mib": 8191
     },
     "gpus": [
       {
         "class": "VGA compatible controller",
-        "vendor": "Advanced Micro Devices, Inc. [AMD/ATI]",
-        "device": "Picasso/Raven 2 [Radeon Vega Series / Radeon Vega Mobile Series]"
+        "vendor": "Intel Corporation",
+        "device": "CoffeeLake-S GT2 [UHD Graphics 630]"
       }
     ],
     "os": {
       "system": "Linux",
-      "kernel_release": "7.0.0-34-generic",
+      "kernel_release": "7.0.0-38-generic",
       "distribution": "Ubuntu 26.04.1 LTS",
       "perf_event_paranoid": 2
     },
@@ -97,26 +97,26 @@
     }
   },
   "state": {
-    "captured_at": "2026-09-29T12:00:50Z",
-    "hostname": "pyramidon",
+    "captured_at": "2026-10-08T02:29:45Z",
+    "hostname": "jebel",
     "load_average": [
-      0.33,
-      0.66,
-      0.76
+      1.63,
+      0.83,
+      0.34
     ],
-    "memory_available_mib": 3180,
+    "memory_available_mib": 28902,
     "cpu_mhz_now": {
-      "min": 1382,
-      "max": 3892
+      "min": 4154,
+      "max": 4600
     },
     "power": {
-      "on_ac": true,
-      "battery_percent": 100
+      "on_ac": null,
+      "battery_percent": null
     },
     "commits": {
-      "repo": "c4d92f40cdf8557d189ee8fce06e6c0e0cafbe08",
+      "repo": "1eb8d1619ee9fb02972dbbb612271d3385558a3d",
       "repo_dirty": false,
-      "rust": "638ff13aa0d4dc64ba76cbbd0efb4b0d0258dba0"
+      "rust": "66ecc0de6fd2419d5ee886ee20d18406edcf61c4"
     }
   }
 }

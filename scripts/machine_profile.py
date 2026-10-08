@@ -3,7 +3,7 @@ Capture the benchmark machine's profile as JSON, or compare a profile against a 
 indrajala_ml/measurement/machine_profile.py and docs/measurement.md, "Preparing the machine").
 
     python scripts/machine_profile.py profile [--out FILE]
-    python scripts/machine_profile.py compare docs/machine_profiles/ryzen7-3700u.json [CURRENT]
+    python scripts/machine_profile.py compare docs/machine_profiles/i7-9700k.json [CURRENT]
 
 compare exits 0 if the identities match and 1 if they don't, printing each difference as
 `path: reference -> current`.

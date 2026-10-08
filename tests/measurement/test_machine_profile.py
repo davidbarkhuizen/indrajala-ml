@@ -10,13 +10,18 @@ import pytest
 from indrajala_ml.measurement import machine_profile as mp
 from indrajala_ml.measurement import machine_profile_capture as mpc
 
-REFERENCE_PATH = Path(__file__).resolve().parents[2] / "docs/machine_profiles/ryzen7-3700u.json"
-SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts/machine_profile.py"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT_PATH = REPO_ROOT / "scripts/machine_profile.py"
+# the benchmark machine (ab.py's PROFILE_REFERENCE) and the laptop before it (an AMD cpufreq policy)
+PROFILE_PATHS = [
+    REPO_ROOT / "docs/machine_profiles/i7-9700k.json",
+    REPO_ROOT / "docs/machine_profiles/ryzen7-3700u.json",
+]
 
 
-@pytest.fixture(scope="module")
-def reference() -> mpc.JSONObject:
-    return json.loads(REFERENCE_PATH.read_text())
+@pytest.fixture(scope="module", params=PROFILE_PATHS, ids=lambda path: path.stem)
+def reference(request: pytest.FixtureRequest) -> mpc.JSONObject:
+    return json.loads(request.param.read_text())
 
 
 # --- capture and schema ---
@@ -56,7 +61,7 @@ def test_schema_rejects_an_unknown_key(reference: mpc.JSONObject):
 def test_schema_rejects_a_wrong_schema_version(reference: mpc.JSONObject):
 
     profile = copy.deepcopy(reference)
-    profile["schema_version"] = 2
+    profile["schema_version"] = 1
     with pytest.raises(jsonschema.ValidationError):
         mp.validate(profile)
 

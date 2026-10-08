@@ -17,7 +17,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUST_ROOT = REPO_ROOT / "rust"
 
@@ -123,7 +123,12 @@ def summarize_caches(entries: Iterable[Mapping[str, str]]) -> list[JSONObject]:
 
 def parse_frequency(files: Mapping[str, str | None]) -> JSONObject | None:
     """The cpufreq policy from cpu0's cpufreq files (a dict of file name -> text, None when
-    missing) and the global boost file (key "boost"). None if there is no cpufreq at all."""
+    missing), the global boost file (key "boost") and intel_pstate's status and no_turbo files
+    (keys "intel_pstate_status", "no_turbo"). None if there is no cpufreq at all.
+
+    Turbo is AMD's boost or cpb file, or under intel_pstate (which has neither) no_turbo inverted.
+    The energy-performance preference (EPP) decides how fast a hardware-managed core clocks up,
+    as the governor does elsewhere."""
     if files.get("scaling_driver") is None and files.get("scaling_governor") is None:
         return None
 
@@ -131,15 +136,27 @@ def parse_frequency(files: Mapping[str, str | None]) -> JSONObject | None:
         text = files.get(name)
         return int(text.strip()) // 1000 if text is not None else None
 
+    def stripped(name: str) -> str | None:
+        text = files.get(name)
+        return text.strip() if text is not None else None
+
     boost = files.get("boost")
     if boost is None:
         boost = files.get("cpb")
+    if boost is not None:
+        boost_enabled: bool | None = boost.strip() == "1"
+    elif (no_turbo := files.get("no_turbo")) is not None:
+        boost_enabled = no_turbo.strip() == "0"
+    else:
+        boost_enabled = None
     return {
         "driver": driver.strip() if (driver := files.get("scaling_driver")) else None,
         "governor": governor.strip() if (governor := files.get("scaling_governor")) else None,
         "min_mhz": mhz("cpuinfo_min_freq"),
         "max_mhz": mhz("cpuinfo_max_freq"),
-        "boost_enabled": boost.strip() == "1" if boost is not None else None,
+        "boost_enabled": boost_enabled,
+        "energy_performance_preference": stripped("energy_performance_preference"),
+        "intel_pstate_status": stripped("intel_pstate_status"),
     }
 
 
@@ -227,9 +244,19 @@ def _cache_entries() -> list[dict[str, str]]:
 
 def _frequency_files() -> dict[str, str | None]:
     cpufreq = Path("/sys/devices/system/cpu/cpu0/cpufreq")
-    names = ["scaling_driver", "scaling_governor", "cpuinfo_min_freq", "cpuinfo_max_freq", "cpb"]
+    names = [
+        "scaling_driver",
+        "scaling_governor",
+        "cpuinfo_min_freq",
+        "cpuinfo_max_freq",
+        "cpb",
+        "energy_performance_preference",
+    ]
     files = {name: read_text(cpufreq / name) for name in names}
     files["boost"] = read_text("/sys/devices/system/cpu/cpufreq/boost")
+    intel_pstate = Path("/sys/devices/system/cpu/intel_pstate")
+    files["intel_pstate_status"] = read_text(intel_pstate / "status")
+    files["no_turbo"] = read_text(intel_pstate / "no_turbo")
     return files
 
 

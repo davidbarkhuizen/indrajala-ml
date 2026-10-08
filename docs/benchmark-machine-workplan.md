@@ -1,6 +1,7 @@
 # Workplan: a baseline on the new benchmark machine
 
-**Status: D1-D9 settled (D1 by stage 2's measurement); stages 0-7 are planned.**
+**Status: D1-D9 settled (D1 by stage 2's measurement); stage 0 done (2026-10-07: both test
+suites, lint and a fresh golden run pass here); stage 1 done; stages 2-7 are planned.**
 
 Benchmarking moves from the Ryzen 7 3700U laptop (`pyramidon`) to a desktop Core i7-9700K
 (`jebel`). Every timing rule in [measurement.md](measurement.md) was written and calibrated on the

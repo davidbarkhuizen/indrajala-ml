@@ -18,33 +18,48 @@ timing PR and workplan relies on it, not only optimization work.
 
 ## 2. Preparing the machine
 
-The benchmark machine is a Ryzen 7 3700U laptop: 4 cores / 8 threads (Zen 2), 32 KB L1d and
-512 KB L2 per core, 4 MB L3, the `schedutil` governor. Its full record is
-`docs/machine_profiles/ryzen7-3700u.json`.
+The benchmark machine is a Core i7-9700K desktop (`jebel`): 8 cores / 8 threads (Coffee Lake, no
+SMT), 32 KB L1d and 256 KB L2 per core, 12 MB L3, AVX2 and FMA without AVX-512, `intel_pstate`
+(active, hardware-managed clocks) with the `powersave` governor, EPP `balance_performance` and
+turbo on. Its full record is `docs/machine_profiles/i7-9700k.json`. The noise figures and gotchas
+below were measured on the Ryzen 7 3700U laptop before it (`docs/machine_profiles/ryzen7-3700u.json`)
+and are being re-measured here ([the benchmark machine workplan](benchmark-machine-workplan.md)).
 
+- **Run the setup script once per boot.** `sudo scripts/benchmark_machine_setup.sh` sets the
+  frequency policy the profile records (governor, EPP, turbo), `perf_event_paranoid` 2, and holds
+  snap refreshes for 24 hours, then prints what it set. None of it survives a reboot (the snap hold
+  expires), and the machine check below refuses a run until it is applied.
 - **Check the machine yourself, then go.** Before a timing run or a long sweep, read the 1-minute
-  load (`uptime`) and the running processes (`ps`). If the browser (Brave) or the editor (Zed) is
-  running, close it (`pkill brave`, `pkill zed`); don't stop to ask the owner. If the load is high,
-  wait and check again. Keep other work light while it runs: reading and writing are fine; tests,
-  lint and builds are not. A background IDE once spoiled a whole measurement.
-- **A run the browser overlapped is re-run in full.** The pre-flight check only covers the moment
-  before the run. If the browser was opened during one, stop it by PID (`ab.py`, its benchmark and
+  load (`uptime`) and the running processes (`ps`). If a browser (Brave, Firefox) or the editor
+  (Zed) is running, close it (`pkill brave`, `pkill firefox`, `pkill zed`); don't stop to ask the
+  owner. If the load is high, wait and check again. Keep other work light while it runs: reading
+  and writing are fine; tests, lint and builds are not. A background IDE once spoiled a whole
+  measurement.
+- **Package jobs.** `unattended-upgrades` is enabled and snaps refresh on their own schedule; either
+  can start a large job mid-run. Before a run, `systemctl is-active apt-daily.service
+  apt-daily-upgrade.service` prints `inactive` twice when no apt job runs (`unattended-upgrades`
+  itself is a shutdown hook, always active), `snap changes` lists none that isn't `Done`, and
+  `snap refresh --time` shows the hold ("next: ... (but held)"). Wait out a running job; re-apply
+  the setup script if the hold has expired.
+- **A run a browser or package job overlapped is re-run in full.** The pre-flight check only covers
+  the moment before the run. If the browser was opened during one, stop it by PID (`ab.py`, its benchmark and
   its worker processes), rename its run directory to `<run>-browser-open` without reading it, and
   start again once the 1-minute load is below 1.0.
 - **Check the machine's identity.** `ab.py` does this itself. By hand:
-  `python scripts/machine_profile.py compare docs/machine_profiles/ryzen7-3700u.json`, in the
+  `python scripts/machine_profile.py compare docs/machine_profiles/i7-9700k.json`, in the
   same shell and environment as the benchmark. It exits 1 and names each changed identity field:
-  CPU, caches, cpufreq policy, kernel, Python, numpy and its BLAS, rustc, the crate's release
+  CPU, caches, cpufreq policy (governor, EPP, turbo, the `intel_pstate` mode), kernel,
+  `perf_event_paranoid`, Python, numpy and its BLAS, rustc, the crate's release
   profile, the thread env vars. `profile --out FILE` records a new machine.
 - **`PATH`.** Non-login shells lack `~/.cargo/bin`: builds fail and the profile reads `rustc` as
   null. `export PATH=$HOME/.cargo/bin:$PATH` (`ab.py` sets it itself). The crate's toolchain is
   pinned in `rust/rust-toolchain.toml`, which only rustup honours.
-- **BLAS threads.** numpy's OpenBLAS worker threads compete with Rust for the 4 cores (see
+- **BLAS threads.** numpy's OpenBLAS worker threads compete with Rust for the cores (see
   [Gotchas](#7-gotchas)). Keep the default unless the measurement is about kernels, and never mix
   settings between the sides: `ab.py` records `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS` and
   `MKL_NUM_THREADS` in each run's manifest.
-- **`perf`** needs `kernel.perf_event_paranoid` <= 2; it is 4 by default here (`sudo sysctl
-  kernel.perf_event_paranoid=2`, until reboot). Without it, internals are timed in a local probe
+- **`perf`** needs `kernel.perf_event_paranoid` <= 2; it is 4 by default here, and the setup
+  script sets 2 until reboot. Without it, internals are timed in a local probe
   build of the crate (timers and counters behind a Python-callable switch).
 
 ## 3. Choosing the measurement
