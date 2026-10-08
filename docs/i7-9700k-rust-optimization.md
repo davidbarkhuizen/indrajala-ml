@@ -2,8 +2,8 @@
 
 An outline, not a workplan. It covers the places where the crate's Rust lags numpy on the
 i7-9700K (`jebel`), or where its ratio to numpy got markedly worse from the Ryzen laptop to the
-i7. It also has two opportunities that are likely significant although Rust doesn't lag there
-(items 3 and 6). For each, it says which kernel or parameter change to investigate, ordered by
+i7. It also has one opportunity that is likely significant although Rust doesn't lag there
+(item 3). Small wins are left out: the aim is the large gaps, not diminishing returns. For each, it says which kernel or parameter change to investigate, ordered by
 expected payoff. Each item becomes its own workplan when it is taken up.
 
 The numbers are from the benchmark machine workplan's stages 5 and 6, in
@@ -145,31 +145,6 @@ The single-example `conv` network lost the most (0.20 to 0.41), and item 3 doesn
 **Payoff:** medium. Rust is still ahead on these networks, so the target is the lost ground, not
 a lag. The per-op timing decides whether there is a kernel to fix.
 
-## 6. Derive the parameters from CPU attributes
-
-**Why, although Rust doesn't lag:** the crate's constants were tuned on the laptop:
-
-- `THREADING_THRESHOLD_FLOPS` (8M)
-- `MAX_THREADS` (8, capped by `available_parallelism`, which counts SMT threads: 8 on the 4-core
-  laptop)
-- `A_BLOCK_BYTES` (16 KB)
-- `NARROW_ROWS_PER_BLOCK` (4) and `LONG_K_BLOCK` (64)
-- the register tiles (`TILE_ROWS` 2, `NT` 4 x 2)
-
-Stage 6 found them best or tied on the i7, but items 1, 2 and 4 add new block sizes and change
-the threading. The two machines' L2s differ by 2x (256 KB against 512 KB per core), so constants
-fixed for one machine may not suit the other.
-
-**To investigate:** following the owner's direction, derive these sizes and counts at run time
-from the CPU's attributes rather than branching per chip: physical cores for the thread count,
-L1 and L2 sizes for block and slab sizes. Keep the override hooks (`set_matmul_threading`,
-`set_kernel_overrides`). Check each formula against both machines; it has to reproduce today's
-choices where they're best. One lead to fold in: a 16-row slab is 3.9-5.0% faster on 28x28's
-`accumulate`, at the noise bar.
-
-**Payoff on the i7:** small for today's constants. It matters for the sizes items 1 and 2
-introduce, and for every machine the benchmark archive adds.
-
 ## How each item proceeds
 
 - **Wait for the laptop's numbers first:** its ratios above are still from its retired baseline
@@ -177,6 +152,11 @@ introduce, and for every machine the benchmark archive adds.
   "markedly worse".
 - **Workflow:** each item gets its own workplan, with the crate change landing in
   `indrajala-math-rust` first and then a "Bump rust/" PR here.
+- **Stop at the bar:** an item ends when its next step can't clear the 5% noise bar in an
+  epoch. Don't polish an item past that.
+- **No new fixed constants:** block and slab sizes that items 1 and 2 introduce come from the
+  machine's cache sizes, read at run time, with an override hook, as the owner directed. The two
+  machines' L2s differ by 2x (256 KB against 512 KB per core).
 - **Measuring:** each change is timed with `ab.py` as a crate A/B (the two `.so` hashes must
   differ) on both machines, and passes the golden run bit-identical. A change for the i7 must not
   cost the laptop.
