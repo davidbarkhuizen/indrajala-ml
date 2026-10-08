@@ -265,23 +265,31 @@ What to do next:
   included (#480, and #477's first A/B). On the i7, with the setup script applied, no pass of 36
   moved more than 0.9%. Balance a shifted pass ([§5](#5-reading-the-report)) on either.
 - **numpy's OpenBLAS threads slow a Rust call run soon after.** After a BLAS call its workers
-  spin for 100-500 ms (`OPENBLAS_THREAD_TIMEOUT`). A Rust batch op in that window measured 2-5x
-  slow, whatever Rust's own thread count. Any per-op ratio measured interleaved with threaded
-  numpy is suspect; the conv demo interleaves (unmeasured effect, at most the start of each run).
-- **numpy's default threading makes numpy look fast in hot loops** but doesn't pay in training
-  (its MNIST conv mini-batch 32 epoch was faster at `OPENBLAS_NUM_THREADS=1`). Compare on one
-  thread each (`--openblas-threads 1 --rust-threads 1`) to see the kernels.
-- **Clocks.** Idle cores drop to 1.1-1.5 GHz and a busy one boosts to 3.8 GHz, taking hundreds of
-  ms of load to clock up. Time loops, not single calls. Clocks carry over between settings (an
-  8-thread setting run after another read up to 2x faster), and between paired processes (the
-  second of a pair once read 26-27 against 41-43 µs whichever setting ran second): rotate the
-  order.
+  spin for a while (`OPENBLAS_THREAD_TIMEOUT`) before they sleep. On the i7, the conv tail's
+  `downstream_batch` right after a threaded numpy product took 1.56x its time after a 1 s sleep at
+  batch 512 (threaded in Rust: 4.0 against 2.56 ms) and 1.09x at batch 32 (one thread)
+  (`scripts/openblas_spin_probe.py`, stage 6). The numpy product also evicts the op's data: even
+  after the sleep, batch 32 read 8.7% slower than with no numpy call. Any per-op ratio measured
+  interleaved with threaded numpy is suspect; the conv demo interleaves (unmeasured effect, at
+  most the start of each run).
+- **numpy's default threading makes numpy look fast in hot loops.** Compare on one thread each
+  (`--openblas-threads 1 --rust-threads 1`) to see the kernels. On the i7 it pays in training too:
+  at `OPENBLAS_NUM_THREADS=1` the MNIST conv mini-batch 32 epoch was 6.8% slower (0.433 against
+  0.405 s), conv 512 4.8% and dense 32 6.3% (stage 6).
+- **Clocks.** An idle core clocks up in about 3 ms on the i7 under D1's policy (the first small
+  products about 6x slow), so time loops, not single calls. In rotated runs settings barely carry
+  over (pass shifts within about 1%), but all-core work does: run in a fixed order, the same
+  8-thread products read 5-20% apart from one setting to the next, the package power budget
+  (PL1 65 W, PL2 120 W) spent by what ran before. Rotate the order.
 - **`--rust-threads 1` hides what training's threading does.** Past 8M flops training threads
-  the op. 4-row blocks in `matmul_narrow` took 40% off conv-conv's second-conv accumulate (8 rows)
-  on one thread and nothing when threaded over rows, where each thread already had 2 rows. Time a
-  kernel change at the thread count training uses too.
+  the op. On the i7, 1-row blocks in `matmul_narrow` (against the default 4) cost 5-8% on the
+  batch-512 conv `downstream_batch` ops on one thread and within 2% threaded over rows; at batch
+  32, under the threshold, 10-20% either way (stage 6). Time a kernel change at the thread count
+  training uses too.
 - **Isolated loops flatter threading.** Back-to-back calls keep every core clocked up; in
-  training the cores idle between calls and each threaded call pays the cold clock.
+  training the cores idle between calls and each threaded call pays the cold clock. On the i7, 8
+  threads ran 2.3-3.2x faster than 1 on 1.6-5.5M-flop products in isolation, yet lowering the
+  8M threshold to 2M or 4M changed no epoch by more than 1.6% (stage 6).
 - **A probe's allocation pattern is not the real call path's.** A probe loop allocating fresh
   outputs faulted on every page (5410 faults a call, 40% of its time) where the real op had 0.1;
   glibc's mmap threshold adapts to what the process freed before. Quote fault costs from the
@@ -295,17 +303,14 @@ What to do next:
 - **glibc heap trimming can fault a batch op's buffers back in on every call** when calls are
   chained (freed top-of-heap returned to the OS). `focused_benchmark.py --malloc both` separates
   it.
-- **A time can be bimodal between processes, not only noisy.** The one-pass max-pool downstream
-  at batch 32 (probe and op) runs at about 17 cycles a window (190-200 µs) in some processes
-  and 42-49 (470-570 µs) in others, tight within each. The counters show the same instructions, L1
-  and L2 accesses in both modes; the slow one is integer-scheduler stalls (ALU-token stalls 24
-  against 1 a window). Ruled out, each measured: page faults and allocator thresholds, clock
-  frequency, the core and its SMT sibling, virtual placement (buffers pinned to a 2^28-aligned
-  arena, ASLR off), physical pages (re-paged between trials), the AVX upper state, SSBD, the `+=`
-  read (a store-only pass) and the division (a slot-offset table: still 4.7-8.5 ns a window). The
-  cause is unknown. A median of loops in one process can't see it: run several processes and
-  quote both modes. `ab.py`'s per-pass medians and ranges show a second mode; it doesn't classify
-  modes.
+- **A time can be modal between processes, not only noisy.** On the i7, the single-example Rust
+  `downstream` on the 32 x 5408 conv tail settles per process at about 20.8, 22.3 or 23.8 µs,
+  each process steady (20 processes, stage 6). `perf_region.py` shows the same instructions and
+  L1 misses in every mode; the slow ones send about 50% more demand loads past L2 to L3 (714
+  against about 1085 L3 hits a call), and the extra cycles are stalls on those misses. Physical
+  page placement in the L2's sets is the likely cause (not tested). A median of loops in one
+  process can't see it: run several processes and quote the modes. `ab.py`'s per-pass medians
+  and ranges show a second mode; it doesn't classify modes.
 - **The conv demo's mini-batch runs barely train** (about 10% accuracy in 1-2 epochs at lr 0.5):
   their timings are valid, their accuracy columns are not. conv-conv's single-example MNIST run is
   unstable at lr 0.5 too (numpy collapsed to 0.11 where Rust reached 0.52; it trains at 0.2).
@@ -327,6 +332,30 @@ What to do next:
   benchmark by PID. Waiting is the same: `while pgrep -f "<pattern>"` matches its own loop's
   command line and never exits, and a `pgrep` right after `(nohup cmd &)` can catch the wrapper
   shell. Read the Python process's PID from `pgrep -af` and wait with `kill -0 <PID>`.
+
+**Measured on the Ryzen laptop** (Zen 2, 4 cores; the benchmark machine workplan's D9). These
+didn't hold on the i7, or held with other numbers; the i7's are above, and
+[machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md) has each side by side.
+
+- A Rust batch op right after a threaded numpy call ran 2-5x slow, whatever Rust's thread count
+  (the i7: 1.56x threaded, 1.09x on one thread).
+- numpy's threading didn't pay in training: the MNIST conv mini-batch 32 epoch was faster at
+  `OPENBLAS_NUM_THREADS=1` (0.94 against 1.18 s; the i7: 6.8% slower).
+- Idle cores dropped to 1.1-1.5 GHz and took hundreds of ms of load to clock up to 3.8 GHz.
+  Clocks carried over between settings (an 8-thread setting run after another read up to 2x
+  faster) and between paired processes (the second of a pair once read 26-27 against 41-43 µs
+  whichever setting ran second).
+- 4-row blocks in `matmul_narrow` took 40% off conv-conv's second-conv accumulate (8 rows) on one
+  thread and nothing when threaded over rows, where each thread already had 2 rows.
+- The one-pass max-pool downstream at batch 32 (probe and op) was bimodal between processes:
+  about 17 cycles a window (190-200 µs) in some and 42-49 (470-570 µs) in others, tight within
+  each. The counters showed the same instructions, L1 and L2 accesses in both modes; the slow one
+  was integer-scheduler stalls (ALU-token stalls 24 against 1 a window). Ruled out, each measured:
+  page faults and allocator thresholds, clock frequency, the core and its SMT sibling, virtual
+  placement (buffers pinned to a 2^28-aligned arena, ASLR off), physical pages (re-paged between
+  trials), the AVX upper state, SSBD, the `+=` read (a store-only pass) and the division (a
+  slot-offset table: still 4.7-8.5 ns a window). The cause is unknown. On the i7 the same op is
+  unimodal (157.6-161.6 µs over 20 processes).
 
 ## 8. Judging correctness
 
