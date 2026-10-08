@@ -149,57 +149,35 @@ a lag. The per-op timing decides whether there is a kernel to fix.
 
 ## Kernels and parameters from the machine
 
-This is the owner's direction for the crate, and it's a general pattern, not an i7 item: one
-codebase that reads the machine at run time and adapts to it. No branches per chip. The
-machines it has to serve:
+The owner's direction for the crate, as a general pattern: one codebase that reads the machine
+at run time and adapts to it, with no branches per chip. Kernels are chosen by ISA, as the
+crate already does for AVX2+FMA with a scalar fallback; a different architecture (another ISA
+width, or ARM) gets its own kernels behind the same dispatch. Parameters are derived from the
+machine's attributes. Only the machines we have (the i7 and the Ryzen laptop) are designed for
+here; other hardware gets its own campaign when it arrives.
 
-- today's i7 (AVX2) and Ryzen laptop (AVX2, SMT)
-- a planned modern desktop, likely with AVX-512 and a GPU
-- an Apple M-series machine (ARM, NEON, P and E cores) for a later optimization campaign
-
-**Two layers:**
-
-- **Kernels, chosen by ISA at run time.** The crate already does this for AVX2+FMA, with a
-  scalar fallback. AVX-512 and NEON would be new kernels behind the same dispatch. Whether to use
-  a wider path is measured per microarchitecture, not taken from the feature flag alone: Zen 4
-  runs 512-bit operations double-pumped, Zen 5 natively, and some Intel parts downclock under
-  them.
-- **Parameters, derived from the machine's attributes.** A `CpuInfo` read once per process:
-  physical (performance) cores, L1, L2 and L3 sizes, cache line size, ISA. Every size and count
-  comes from it, and each keeps its override hook (`set_matmul_threading`,
-  `set_kernel_overrides`).
+**The mechanism:** a `CpuInfo` read once per process (physical cores, L1, L2 and L3 sizes, ISA).
+Every size and count comes from it, and each keeps its override hook (`set_matmul_threading`,
+`set_kernel_overrides`).
 
 **What may vary by machine, and what may not:** blocking, slab sizes, tiling of output columns,
 thread counts and dispatch never change an FMA chain's order, so they can follow the machine.
 Reduction grouping can't: `dot_product`'s 4-lane grouping is what makes the golden run
 bit-identical across machines (checked between the i7 and the laptop in the benchmark machine
-workplan's D5). An AVX-512 or NEON dot product has to keep 4-lane chains: two per zmm register,
-or two NEON registers per chain.
+workplan's D5), and any future kernel has to keep it.
 
 **What to derive, and from what:**
 
 | constant | today | derived from |
 | --- | --- | --- |
-| `MAX_THREADS` | 8, capped by `available_parallelism` (counts SMT threads: 8 on the 4-core laptop) | physical cores; performance cores on Apple |
+| `MAX_THREADS` | 8, capped by `available_parallelism` (counts SMT threads: 8 on the 4-core laptop) | physical cores |
 | `A_BLOCK_BYTES` | 16 KB | L1d |
-| `LONG_K_BLOCK`, items 1 and 2's `K` slabs | 64 rows; new | L2 |
+| `LONG_K_BLOCK`, items 1 and 2's `K` slabs | 64 rows; new | L2 (256 KB on the i7, 512 KB on the laptop) |
 | `NARROW_ROWS_PER_BLOCK` | 4 | L1d; likely stays 4 |
 | `THREADING_THRESHOLD_FLOPS` | 8M | not cache sizes: it depends on clock-up and spawn cost. Stays measured, revisited after item 4 |
-| register tiles (`TILE_ROWS` 2, `NT` 4 x 2) | fixed | the ISA's register count; changes only with a new kernel |
 
-**Rules:**
-
-- A formula has to reproduce today's constants wherever stage 6 found them best, on both
-  machines.
-- A formula is validated only on machines that were measured. On any other machine it's a
-  starting point until that machine's own campaign checks it.
-- Detection is per OS: Linux sysfs or `cpuid` on x86, `sysctl` (`hw.perflevel0.*`) on macOS.
-
-**Out of scope here:** a GPU backend. Consumer GPUs run f64 at 1/32 to 1/64 of their f32 rate,
-and their reductions won't match the CPU bit for bit. That backend means f32 and a tolerance
-contract instead of bit-identity: an owner decision for its own workplan. The Apple campaign
-also needs harness work (no `perf` or RAPL there), and expects a larger numpy lead: numpy on
-macOS runs on Accelerate's matrix units.
+**Rule:** a formula has to reproduce today's constants on both machines wherever stage 6 found
+them best.
 
 **Order:** the `CpuInfo` mechanism and the thread cap come first, or alongside item 1, so items
 1 and 2 derive their slab sizes from it from the start.
