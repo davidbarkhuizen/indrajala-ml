@@ -1,6 +1,6 @@
 # Workplan: a baseline on the new benchmark machine
 
-**Status: D1-D10 settled; stage 0 done (2026-10-07: both test suites, lint and a fresh golden
+**Status: D1-D11 settled; stage 0 done (2026-10-07: both test suites, lint and a fresh golden
 run pass here); stages 1-3 done; stages 4-7 are planned.**
 
 Benchmarking moves from the Ryzen 7 3700U laptop (`pyramidon`) to a desktop Core i7-9700K
@@ -60,9 +60,9 @@ Things that differ in ways that matter:
   The per-op ratios may move in both directions.
 - **OpenBLAS's kernel.** The laptop's numpy reported OpenBLAS `DYNAMIC_ARCH ... Haswell`. A Coffee
   Lake without AVX-512 should select the same Haswell kernels. If it does, and the crate takes its
-  AVX2 path on both, the golden run may have been bit-identical across the two machines. The
-  laptop's golden file is gone, so it can't be tested (D5); stage 1's profile records the BLAS
-  build either way.
+  AVX2 path on both, the golden run may be bit-identical across the two machines. The laptop's
+  golden file is gone, but the laptop isn't, so stage 5 tests it (D5); stage 1's profile records
+  the BLAS build either way.
 - **Intel frequency controls.** `machine_profile_capture.py` reads `cpufreq/boost` or `cpb`
   (AMD) for `boost_enabled`. Neither exists under `intel_pstate`, so the field would read `null`.
   It records no EPP (`energy_performance_preference`), and EPP decides how fast the cores clock
@@ -124,14 +124,22 @@ Settled with the owner on 2026-10-07.
   `docs/machine_profiles/i7-9700k.json` becomes `PROFILE_REFERENCE`. The Ryzen file stays as
   history and as the schema tests' second fixture. No lookup by hostname: two reference machines
   would mean two sets of noise rules.
-- **D5. The golden run: recorded fresh here, no cross-machine check.** It is machine-specific by
-  design (numpy's BLAS) and lives in an ignored file. Stage 0 records a new one on `main`. The
-  laptop is gone and its file with it, so whether the two machines computed the same bits stays
-  unknown.
+- **D5. The golden run: recorded fresh here, then checked across the machines.** It is
+  machine-specific by design (numpy's BLAS) and lives in an ignored file. Stage 0 records a new
+  one on `main`. The laptop's file is gone, but the laptop is still available (owner, 2026-10-08;
+  D11). Stage 5 records a golden run on it at the baseline tag, and each machine checks the
+  other's file, which settles whether the two compute the same bits.
 - **D6. The baseline commit: tagged in both repos.** The `main` commit stage 3 merges on is
   tagged `baseline-i7-9700k` here, and the submodule's commit with the same name in
   `indrajala-math-rust`. Every number in the baseline comes from that commit pair, so it can be
   rerun exactly later.
+- **D11. The laptop: occasional runs at the baseline tag** (owner, 2026-10-08). The Ryzen laptop
+  (`pyramidon`) still exists, so its columns are measured, not quoted from retired docs: stage 5
+  runs its golden run (D5) and the non-A/B measurements there, at the same commit pair. It is not
+  a second reference machine: `ab.py` keeps one reference profile (D4), and a laptop `ab.py` run,
+  if one is needed, passes `--allow-profile-change`. Before its first run, the laptop is set up for
+  ssh from `jebel` (owner), checked out at the tags, built, and its profile re-recorded at
+  schema 3 (its state, not a reference). Revisited if a crate workplan needs laptop A/Bs.
 - **D7. What the baseline covers: everything.** An A/A of every `ab.py` adapter at its default
   arguments (stage 4), plus the per-op table, the conv demo's ratio table and the kernel protocol
   configurations (stage 5), as in the laptop's retired baseline, with a laptop column where one
@@ -170,9 +178,11 @@ Settled with the owner on 2026-10-07.
 - **The desktop is in use.** GNOME, the terminal and Claude Code itself run during every pass.
   Their CPU share is recorded by `ab.py` (processes above 10% of a CPU); stage 2 checks it stays
   small. A run with a browser open is re-run in full, as now.
-- **Comparing with the laptop.** The laptop is not available to rerun anything. Its numbers come
-  from retired docs and old PRs, at older commits. A cross-machine column is context, never a
-  timing claim: the ratios (Rust/numpy) are the comparable part, the absolute times are not.
+- **Comparing with the laptop.** Its columns are measured at the baseline tag (D11), so the code
+  is the same, but the machines aren't quieted the same way and their noise rules differ. A
+  cross-machine column is context, never a timing claim: the ratios (Rust/numpy) are the
+  comparable part, the absolute times are rougher. Numbers from the retired docs, at older
+  commits, are quoted only where no laptop run exists.
 
 ## Stages
 
@@ -316,9 +326,13 @@ measurement.md §6 (one process per measurement, numpy and Rust apart, rotated o
    epoch at mini-batch 32 and 512, and the dense MNIST epoch at batch 32 and 512, both backends.
 4. **Where a Rust epoch spends its time:** `epoch_op_profile.py` for the conv configuration,
    the top ops by share.
+5. **On the laptop, at the same tags (D11):** its profile re-recorded; a golden run recorded
+   there and checked against `jebel`'s file, and `jebel` checking the laptop's (D5); and steps
+   1-4 there, for the laptop columns. The laptop keeps its old checklist: Brave and Zed closed,
+   on AC power, its own machine profile compared before each measurement.
 
 Done when `docs/machine_profiles/i7-9700k.md` has every table, each with its command, commit
-pair and date.
+pair and date, the laptop columns measured, and D5's answer recorded.
 
 ### Stage 6: re-check the laptop's machine-specific findings
 
@@ -380,8 +394,8 @@ Done when this file is deleted and next-steps.md lists it.
   numerics. This plan measures; it changes nothing that runs in training.
 - Re-recording any parity test or the golden run for bits (the golden run is recorded fresh here
   because it is machine-specific, not to move bits).
-- Running anything on the laptop again, or claiming a cross-machine speedup from the laptop
-  columns.
+- Laptop runs beyond D11's (stage 5's golden run and columns), and claiming a cross-machine
+  speedup from the laptop columns.
 - GPU work (the UHD 630 is unused), BIOS settings beyond what the owner chooses for cooling and
   power limits, and kernel boot parameters (`isolcpus`, `nohz_full`): only if stage 2 shows the
   noise needs them, as a new decision.
