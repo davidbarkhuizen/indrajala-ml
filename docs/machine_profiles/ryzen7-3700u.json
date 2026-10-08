@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "identity": {
     "cpu": {
       "vendor": "AuthenticAMD",
@@ -54,7 +54,8 @@
         "boost_enabled": true,
         "energy_performance_preference": null,
         "intel_pstate_status": null
-      }
+      },
+      "power_limits": null
     },
     "memory": {
       "total_mib": 5353,
