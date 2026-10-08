@@ -32,8 +32,10 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
   and Zed if they are running, and wait out a high load. Keep the machine quiet during the run:
   no tests, lint or builds; reading and writing are fine.
 - A PR that changes no `learn*` or `classify_rows` path needs no A/B, and neither does one confined
-  to pure-Python code (never timed). Every change passes the golden run:
+  to pure-Python code (never timed). Every change that could reach training results (the
+  package, the crate, the golden run's script or its data) passes the golden run:
   `.venv/bin/python scripts/golden_training_run.py check data/refactoring/golden_run.json`.
+  A change that can't (docs, machine profiles, CI config) needs no golden run.
 
 ## Testing
 
