@@ -104,7 +104,7 @@ Settled with the owner on 2026-10-08.
 
   | tier | when | what | archived |
   | --- | --- | --- | --- |
-  | 0 | every PR | tests, lint, golden-run check | no |
+  | 0 | every PR | tests, lint; the golden-run check where the change could reach training results (not for docs or machine profiles) | no |
   | 1 | a PR that changes a timed path and claims no speedup | one A/B of the single most relevant benchmark, to show it got no slower | no |
   | 2 | a PR claiming a speedup | the full protocol (measurement.md) on the affected benchmarks | yes |
   | 3 | milestones: a release; a toolchain, numpy/BLAS, kernel or BIOS change; a new benchmark machine | the full baseline (the benchmark machine workplan's stages 4-5) | yes |
