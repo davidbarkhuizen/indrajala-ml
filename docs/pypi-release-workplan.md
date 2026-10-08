@@ -65,7 +65,8 @@ own platform.
 ## Pitfalls to design around
 
 - **Timing baselines.** Every Rust timing baseline comes from a local
-  `maturin build --release` on the Ryzen machine, without abi3. Stage 1 changes what the build
+  `maturin build --release` on the benchmark machine (`jebel`), without abi3; the baselines are
+  [machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md)'s. Stage 1 changes what the build
   does at the Python boundary, and stage 2 changes where the published wheel is built (a
   manylinux container). Each stage measures its own change. None assumes it is free.
 - **The golden run is bit-exact.** abi3 doesn't touch the kernels, so
@@ -164,7 +165,7 @@ Also, before merging, and recorded in the PR:
   goes in its own commit so the PR shows what broke where.
 - The CI wall time before and after (median of three runs: runner timings vary 2-3x),
   and each job's time, for the README.
-- **The manylinux wheel against the local build**, on the Ryzen machine: install the CI-built
+- **The manylinux wheel against the local build**, on the benchmark machine: install the CI-built
   `manylinux_2_28` x86_64 wheel and time it against `./cli build-rust`'s wheel from the same
   commit, with the stage 1 protocol. If the published wheel is slower, anyone quoting timings
   needs to know. It should be the same code under the same flags, but it needs measuring.

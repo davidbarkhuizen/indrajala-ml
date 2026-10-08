@@ -4,7 +4,6 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
 in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
-[benchmark-machine-workplan.md](benchmark-machine-workplan.md),
 [benchmark-archive-workplan.md](benchmark-archive-workplan.md). The order of
 the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -26,6 +25,7 @@ docs cite them by section:
 | Removing duplicated code, second pass (DRY rerun) | #550 | #551-#557 | `git show 88e1815:docs/dry-rerun-workplan.md` |
 | Presets for the one-change combinations | #559 | #560-#564 | `git show 2a799bf:docs/presets-workplan.md` |
 | The source layout | #566 | #567-#573 | `git show b362621:docs/source-layout-workplan.md` |
+| A baseline on the new benchmark machine (i7-9700K) | #575 | #576-#590, #592 | `git show 480164d:docs/benchmark-machine-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -231,3 +231,25 @@ Still out of scope:
 
 - A class token (D8 (b)), fixed sin-cos or drawn positions (D7 (b), (c)).
 - Sequence data (text) and its loading; conv-then-tokens hybrids.
+
+## From the benchmark machine baseline
+
+- **Crate tuning for the gaps it found.** Where Rust lags numpy on the i7, or lost ground from
+  the laptop, and what to investigate for each, ordered by payoff:
+  [i7-9700k-rust-optimization.md](i7-9700k-rust-optimization.md). Each item gets its own crate
+  workplan with an A/B on both machines (measurement.md §9).
+- **Rerunning the baseline** after a change that could move every number (kernel, BIOS,
+  numpy/OpenBLAS, rustc, the frequency policy): rerun the workplan's stages 4-5 at the same
+  tags, then at `main`, and replace [machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md)'s
+  tables, with the reason, in one PR.
+- **The laptop's columns** need rerunning only after a software change on the laptop (numpy,
+  OpenBLAS, rustc, its kernel). The two machines run the same stack today, and their golden runs
+  are byte-identical (D5). A crate change for the i7 is A/B'd on the laptop too, preferably on one
+  thread: its default-threading A/As are noisy (a 32% per-pass spread at the median row).
+
+Still out of scope:
+
+- Claiming a cross-machine speedup from the laptop columns: they're context, and only their
+  Rust/numpy ratios compare.
+- GPU work, BIOS settings beyond cooling and power limits, and kernel boot parameters
+  (`isolcpus`, `nohz_full`): the i7's noise didn't need them.

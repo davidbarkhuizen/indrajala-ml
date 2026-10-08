@@ -25,9 +25,10 @@ turbo on, and the package power limit PL1 lowered to 65 W (at the stock 95 W a l
 reaches 100 C and throttles). Its full record is `docs/machine_profiles/i7-9700k.json`, and its
 noise and baseline, from six A/As of every benchmark, are in
 [`docs/machine_profiles/i7-9700k.md`](machine_profiles/i7-9700k.md). The noise figures below are
-this machine's. The gotchas in §7 were measured on the Ryzen 7 3700U laptop before it
-(`docs/machine_profiles/ryzen7-3700u.json`) and are being re-checked here
-([the benchmark machine workplan](benchmark-machine-workplan.md), stage 6).
+this machine's. The gotchas in §7 were first measured on the Ryzen 7 3700U laptop before it
+(`docs/machine_profiles/ryzen7-3700u.json`) and re-checked here (the benchmark machine
+workplan's stage 6, `git show 480164d:docs/benchmark-machine-workplan.md`): §7 has the i7's numbers, and the
+findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
 
 - **Run the setup script once per boot.** `sudo scripts/benchmark_machine_setup.sh` sets the
   frequency policy the profile records (governor, EPP, turbo, PL1), `perf_event_paranoid` 2, and
