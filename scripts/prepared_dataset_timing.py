@@ -21,7 +21,10 @@ from numpy-drawn seed-0 weights, the shuffle seeded 0 (seeded_weights.seeded_shu
 - dense dropout B=32 (not run by default; --configs): dense B=32's network and weights with
   dropout at 0.5 on the hidden layer, its masks drawn from the network's generator seeded 0, or
   on a tree from before the network owned one, from the seeded globals. Added for the RNG
-  generators workplan's stage 3, which moved the masks onto the network's generator.
+  generators workplan's stage 3, which moved the masks onto the network's generator;
+- conv B=512 (not run by default; --configs): conv B=32's network and weights at mini-batch 512,
+  the kernel protocol's large-batch conv epoch (docs/measurement.md, §6). Added for the benchmark
+  machine workplan's stage 5.
 
 Measures (seconds):
 - epoch: the trainer given the tuple list, as every demo calls it, including its two
@@ -86,11 +89,10 @@ AFTER = hasattr(train, "_prepared_for")
 BACKENDS = ["numpy", "rust"]
 CONFIGS = ["dense B=32", "dense single", "conv B=32", "conv single"]
 # the configs --configs can name: the default ones, then the opt-in ones
-ALL_CONFIGS = [*CONFIGS, "dense dropout B=32"]
+ALL_CONFIGS = [*CONFIGS, "dense dropout B=32", "conv B=512"]
 DROP_PROBABILITY = 0.5
 MEASURES = ["epoch", "prepare", "epoch, loader"]
 LEARNING_RATE = 0.5
-BATCH_SIZE = 32
 SEED = 0
 CONV_SPECS = [ConvSpec(3, 8)]
 CONV_DENSE_LAYER_SIZES = [32]
@@ -137,8 +139,9 @@ def _train_epoch(config: str, network: Network, data: list[Example[int]] | Prepa
     if config.endswith("single"):
         train_linear_classifier_network(network, data, learning_rate=LEARNING_RATE, epochs=EPOCHS, **shuffle)
     else:
+        batch_size = int(config.split("B=")[1])  # every mini-batch config names it
         train_backprop_network_mini_batch(
-            network, data, BATCH_SIZE, learning_rate=LEARNING_RATE, epochs=EPOCHS, **shuffle
+            network, data, batch_size, learning_rate=LEARNING_RATE, epochs=EPOCHS, **shuffle
         )
     return time.perf_counter() - start
 

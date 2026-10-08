@@ -1,7 +1,8 @@
 # Workplan: a baseline on the new benchmark machine
 
 **Status: D1-D11 settled; stage 0 done (2026-10-07: both test suites, lint and a fresh golden
-run pass here); stages 1-4 done; stages 5-7 are planned.**
+run pass here); stages 1-4 done; stage 5's `jebel` part done, its laptop part waits for ssh to the
+laptop (D11); stages 6-7 are planned.**
 
 Benchmarking moves from the Ryzen 7 3700U laptop (`pyramidon`) to a desktop Core i7-9700K
 (`jebel`). Every timing rule in [measurement.md](measurement.md) was written and calibrated on the
@@ -363,6 +364,16 @@ measurement.md §6 (one process per measurement, numpy and Rust apart, rotated o
 
 Done when `docs/machine_profiles/i7-9700k.md` has every table, each with its command, commit
 pair and date, the laptop columns measured, and D5's answer recorded.
+
+**`jebel`'s part done 2026-10-08** (steps 1-4). Stage 4's A/As already covered the
+default-threading per-op table, the dense configurations and the op profile, so only three runs
+were added: the per-op A/A at one thread each, the conv epoch A/A at mini-batch 32 and 512 (a new
+`conv B=512` config in `prepared_dataset_timing.py`), and two conv demo runs. Every table is in
+[machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md), with the laptop's retired numbers
+as context. Leads for stage 6: on one thread each, Rust's conv-tail `accumulate_gradient_batch`
+at batch 512 takes 3.9x numpy's time (the laptop's was 2.8x), and `forward_batch` there 1.55x;
+`conv_forward_batch` grew to 36% of a mini-batch conv epoch. Step 5 (the laptop) waits for ssh
+to it.
 
 ### Stage 6: re-check the laptop's machine-specific findings
 
