@@ -2,7 +2,7 @@
 
 **Status: D1-D11 settled; stage 0 done (2026-10-07: both test suites, lint and a fresh golden
 run pass here); stages 1-4 done; stage 5's `jebel` part done, its laptop part waits for ssh to the
-laptop (D11); stages 6-7 are planned.**
+laptop (D11); stage 6 done (2026-10-08); stage 7 is planned.**
 
 Benchmarking moves from the Ryzen 7 3700U laptop (`pyramidon`) to a desktop Core i7-9700K
 (`jebel`). Every timing rule in [measurement.md](measurement.md) was written and calibrated on the
@@ -404,6 +404,24 @@ enough to act on (over the 5% bar, measurement.md §9) becomes an entry in
 [next-steps.md](next-steps.md) for its own crate workplan.
 
 Done when every finding has an outcome recorded with its numbers.
+
+**Done 2026-10-08.** Every finding has its numbers and outcome in
+[machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md) ("Laptop findings, re-checked"),
+and measurement.md §7 carries this machine's numbers, with the laptop's under "Measured on the
+Ryzen laptop" (D9). Four hold with other numbers: the threading threshold and thread count (8M
+and 8 threads are right end to end; any threshold from 2M to 12M is equal), the kernel blocking
+constants (4 rows and the 64-row slab best or tied), OpenBLAS's spin-wait (1.56x, not 2-5x) and
+clocks (about 3 ms to clock up; what carries over is the power budget on all-core work). Two
+don't hold here: numpy's threading pays in training (the conv batch-32 epoch is 6.8% slower at
+one thread), and the max-pool downstream has no modes. This machine has its own per-process
+modes, in the conv tail's single-example Rust `downstream` (L2 misses, not scheduler stalls).
+Three scripts gained options (`focused_benchmark.py --rust-threads N:T`,
+`prepared_dataset_timing.py --rust-threading N:T` and its `dense B=512` config) and one is new
+(`openblas_spin_probe.py`).
+
+No difference over the 5% bar calls for a crate change, so nothing goes to next-steps.md. Leads
+for a crate workplan, with stage 5's above: 28x28's `accumulate` is 3.9-5.0% faster with a
+16-row slab (at the bar, that shape only; 2-10% slower elsewhere).
 
 ### Stage 7: docs, and retire the plan
 
