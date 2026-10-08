@@ -1,8 +1,7 @@
 # Workplan: a baseline on the new benchmark machine
 
 **Status: D1-D11 settled; stage 0 done (2026-10-07: both test suites, lint and a fresh golden
-run pass here); stages 1-4 done; stage 5's `jebel` part done, its laptop part waits for ssh to the
-laptop (D11); stage 6 done (2026-10-08); stage 7 is planned.**
+run pass here); stages 1-6 done (2026-10-08); stage 7 is planned.**
 
 Benchmarking moves from the Ryzen 7 3700U laptop (`pyramidon`) to a desktop Core i7-9700K
 (`jebel`). Every timing rule in [measurement.md](measurement.md) was written and calibrated on the
@@ -372,8 +371,18 @@ were added: the per-op A/A at one thread each, the conv epoch A/A at mini-batch 
 [machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md), with the laptop's retired numbers
 as context. Leads for stage 6: on one thread each, Rust's conv-tail `accumulate_gradient_batch`
 at batch 512 takes 3.9x numpy's time (the laptop's was 2.8x), and `forward_batch` there 1.55x;
-`conv_forward_batch` grew to 36% of a mini-batch conv epoch. Step 5 (the laptop) waits for ssh
-to it.
+`conv_forward_batch` grew to 36% of a mini-batch conv epoch.
+
+**Step 5 (the laptop) done 2026-10-08.** Its profile re-recorded (schema 4, noise rules kept),
+then at `321d688` (the tag's training code, crate `66ecc0d`): a golden run, and A/As of the
+per-op commands at both thread settings, the conv epochs at mini-batch 32 and 512,
+`batch_size_timing` and `epoch_op_profile`, and two conv demo runs. The laptop columns are in
+[machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md). **D5's answer:** the two golden
+runs are byte-identical, so the machines compute the same bits. New since the retired numbers:
+the conv epochs moved towards numpy on the i7 (Rust/numpy 0.48 to 0.81 at mini-batch 32, 0.57 to
+0.94 at 512) while the dense ones moved towards Rust; `conv_forward_batch` gained least from the
+i7 of the large ops. The laptop's default-threading per-op A/A is noisy (median spread 32%), so
+its default-threading per-op ratios are context only.
 
 ### Stage 6: re-check the laptop's machine-specific findings
 
