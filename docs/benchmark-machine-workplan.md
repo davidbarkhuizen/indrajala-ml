@@ -1,7 +1,7 @@
 # Workplan: a baseline on the new benchmark machine
 
-**Status: D1-D9 settled (D1 by stage 2's measurement); stage 0 done (2026-10-07: both test
-suites, lint and a fresh golden run pass here); stage 1 done; stages 2-7 are planned.**
+**Status: D1-D10 settled; stage 0 done (2026-10-07: both test suites, lint and a fresh golden
+run pass here); stages 1-2 done; stages 3-7 are planned.**
 
 Benchmarking moves from the Ryzen 7 3700U laptop (`pyramidon`) to a desktop Core i7-9700K
 (`jebel`). Every timing rule in [measurement.md](measurement.md) was written and calibrated on the
@@ -92,8 +92,28 @@ Settled with the owner on 2026-10-07.
   Turbo off (a flat 3.6 GHz) is the fallback only if both are noisy: it is the quietest and the
   least realistic, and it hides the cold-clock effects in training (threaded calls on idle cores)
   that the laptop's threading findings rest on. The chosen policy is recorded in the profile, so
-  the machine check catches a reboot that reset it. Stage 2 writes the answer and its numbers
-  here.
+  the machine check catches a reboot that reset it.
+
+  **Answer (stage 2, 2026-10-08): (a), the defaults.** Both A/As were clean and close; (a) had the
+  smaller pass-to-pass spread, so it stays (`prepared_dataset_timing`, 16 timed rows each, with
+  D10's 65 W PL1 applied):
+
+  | | (a) `balance_performance` | (b) `performance` |
+  | --- | --- | --- |
+  | pass-to-pass spread, median / max over rows | 3.2% / 5.6% | 3.5% / 7.2% |
+  | largest A/A median difference | 3.3% | 2.9% |
+  | controls, busy processes | all within noise, none | all within noise, none |
+  | clock-up from idle (one 96x96 product, back to back) | about 6x slower for the first 3 ms | none |
+
+  Epoch times under the two agree within 2%. (a) also keeps the cold-clock start that training
+  sees; on this machine it lasts about 3 ms, not the laptop's hundreds. (c) wasn't needed.
+- **D10. PL1 (RAPL's long-term package power limit): 65 W, set by the D2 script** (owner,
+  2026-10-08, from stage 2's step 1). At the stock 95 W, ten minutes of all eight cores reached
+  100 C: 460 package thermal-throttle events, clocks falling from 4.2 to 3.8 GHz while power fell
+  under the limit. The cooling can't be improved. At 65 W the same load held 3.69 GHz and about
+  78 C with no throttling, about 8% slower per epoch. One busy core draws about 37 W and the
+  threaded conv case about 40 W, so neither is affected. PL2 stays at 120 W. The profile records
+  both (`power_limits`, `schema_version` 3), so the machine check catches a reboot that reset it.
 - **D2. Reapplying the settings after a reboot: a checked-in script.**
   `scripts/benchmark_machine_setup.sh` (it needs sudo) sets the D1 policy, D3's
   `perf_event_paranoid` and holds snap refreshes, and the owner runs it after boot. The machine
@@ -217,6 +237,29 @@ Measurement only; the PR records findings in this workplan and changes the setup
    setup script, and re-record the profile if the policy changed.
 
 Done when D1 is settled and recorded with its numbers.
+
+**Done 2026-10-08.** Step 1, with `turbostat --interval 1`, 95 W PL1 unless marked:
+
+| case | busy (of 8 CPUs) | clock | package power | package temp, max | throttling |
+| --- | --- | --- | --- | --- | --- |
+| idle, 60 s | 0.6% | 800 MHz | 2 W | 32 C | none |
+| one core: conv B=32, Rust matmul capped at 1 thread, 120 s | 12.5% | 4.8 GHz, flat | 35-38 W | 72 C | none |
+| the threaded case: conv B=512, 120 s | 16% | 4.6 GHz, flat | 37-41 W | 79 C | none |
+| all eight: 8 copies of the one-core load, 10 min | 99.6% | 4.2 GHz falling to 3.8 | 95 W, then 76-85 | 100 C | 460 package events |
+| the same at 65 W PL1 (D10) | 99.6% | 3.69 GHz, flat | 65 W | 78 C (93 for one second) | none |
+
+- **The conv mini-batch 512 epoch is not an all-core load:** about 1.3 CPUs busy, so step 1's
+  all-core case ran eight single-threaded copies instead.
+- **Eight copies each ran 2.7x slower than one alone** (0.9 s an epoch against 0.33), of which the
+  clock explains about 1.2x. The rest is most likely shared L3 and memory bandwidth: a question for
+  stage 6's threading re-check.
+- **Clock-up (step 2)** is about 3 ms from idle under (a) and nothing under (b) (D1).
+- **Background load (step 4):** `ab.py` reported no process above 10% of a CPU in either A/A; the
+  1-minute load stayed under 0.7.
+
+The probes (the load loop, the `turbostat` driver and the clock-up timer) were throwaway scripts;
+the A/A runs are `~/code/ab-runs/2026-10-08-stage2-aa-a-balance-performance` and
+`-aa-b-performance`.
 
 ### Stage 3: the baseline commit
 

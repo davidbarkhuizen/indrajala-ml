@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-# The frequency policy timed under (workplan D1). The defaults until stage 2 settles D1.
+# The frequency policy timed under (workplan D1: the defaults, chosen by stage 2's A/As).
 governor="powersave"
 energy_performance_preference="balance_performance"
 no_turbo="0"

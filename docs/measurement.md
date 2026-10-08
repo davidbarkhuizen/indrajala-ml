@@ -21,14 +21,16 @@ timing PR and workplan relies on it, not only optimization work.
 The benchmark machine is a Core i7-9700K desktop (`jebel`): 8 cores / 8 threads (Coffee Lake, no
 SMT), 32 KB L1d and 256 KB L2 per core, 12 MB L3, AVX2 and FMA without AVX-512, `intel_pstate`
 (active, hardware-managed clocks) with the `powersave` governor, EPP `balance_performance` and
-turbo on. Its full record is `docs/machine_profiles/i7-9700k.json`. The noise figures and gotchas
-below were measured on the Ryzen 7 3700U laptop before it (`docs/machine_profiles/ryzen7-3700u.json`)
-and are being re-measured here ([the benchmark machine workplan](benchmark-machine-workplan.md)).
+turbo on, and the package power limit PL1 lowered to 65 W (at the stock 95 W a long all-core load
+reaches 100 C and throttles). Its full record is `docs/machine_profiles/i7-9700k.json`. The noise
+figures and gotchas below were measured on the Ryzen 7 3700U laptop before it
+(`docs/machine_profiles/ryzen7-3700u.json`) and are being re-measured here
+([the benchmark machine workplan](benchmark-machine-workplan.md)).
 
 - **Run the setup script once per boot.** `sudo scripts/benchmark_machine_setup.sh` sets the
-  frequency policy the profile records (governor, EPP, turbo), `perf_event_paranoid` 2, and holds
-  snap refreshes for 24 hours, then prints what it set. None of it survives a reboot (the snap hold
-  expires), and the machine check below refuses a run until it is applied.
+  frequency policy the profile records (governor, EPP, turbo, PL1), `perf_event_paranoid` 2, and
+  holds snap refreshes for 24 hours, then prints what it set. None of it survives a reboot (the
+  snap hold expires), and the machine check below refuses a run until it is applied.
 - **Check the machine yourself, then go.** Before a timing run or a long sweep, read the 1-minute
   load (`uptime`) and the running processes (`ps`). If a browser (Brave, Firefox) or the editor
   (Zed) is running, close it (`pkill brave`, `pkill firefox`, `pkill zed`); don't stop to ask the
@@ -48,7 +50,8 @@ and are being re-measured here ([the benchmark machine workplan](benchmark-machi
 - **Check the machine's identity.** `ab.py` does this itself. By hand:
   `python scripts/machine_profile.py compare docs/machine_profiles/i7-9700k.json`, in the
   same shell and environment as the benchmark. It exits 1 and names each changed identity field:
-  CPU, caches, cpufreq policy (governor, EPP, turbo, the `intel_pstate` mode), kernel,
+  CPU, caches, cpufreq policy (governor, EPP, turbo, the `intel_pstate` mode), the package power
+  limits, kernel,
   `perf_event_paranoid`, Python, numpy and its BLAS, rustc, the crate's release
   profile, the thread env vars. `profile --out FILE` records a new machine.
 - **`PATH`.** Non-login shells lack `~/.cargo/bin`: builds fail and the profile reads `rustc` as
