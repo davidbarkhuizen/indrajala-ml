@@ -1,3 +1,5 @@
+import pytest
+
 from indrajala_ml.measurement import machine_profile_capture as mpc
 
 CPUINFO = """\
@@ -114,7 +116,10 @@ def test_parse_frequency():
         "cpuinfo_min_freq": "1400000\n",
         "cpuinfo_max_freq": "2300000\n",
         "cpb": None,
+        "energy_performance_preference": None,
         "boost": "1\n",
+        "intel_pstate_status": None,
+        "no_turbo": None,
     }
 
     assert mpc.parse_frequency(files) == {
@@ -123,13 +128,52 @@ def test_parse_frequency():
         "min_mhz": 1400,
         "max_mhz": 2300,
         "boost_enabled": True,
+        "energy_performance_preference": None,
+        "intel_pstate_status": None,
+    }
+
+
+@pytest.mark.parametrize("no_turbo, boost_enabled", [("0\n", True), ("1\n", False)])
+def test_parse_frequency_under_intel_pstate_reads_turbo_from_no_turbo(no_turbo: str, boost_enabled: bool):
+
+    # the i7-9700K's sysfs: intel_pstate has no boost or cpb file
+    files = {
+        "scaling_driver": "intel_pstate\n",
+        "scaling_governor": "powersave\n",
+        "cpuinfo_min_freq": "800000\n",
+        "cpuinfo_max_freq": "4900000\n",
+        "cpb": None,
+        "energy_performance_preference": "balance_performance\n",
+        "boost": None,
+        "intel_pstate_status": "active\n",
+        "no_turbo": no_turbo,
+    }
+
+    assert mpc.parse_frequency(files) == {
+        "driver": "intel_pstate",
+        "governor": "powersave",
+        "min_mhz": 800,
+        "max_mhz": 4900,
+        "boost_enabled": boost_enabled,
+        "energy_performance_preference": "balance_performance",
+        "intel_pstate_status": "active",
     }
 
 
 def test_parse_frequency_without_cpufreq_is_null():
 
     files = dict.fromkeys(
-        ["scaling_driver", "scaling_governor", "cpuinfo_min_freq", "cpuinfo_max_freq", "cpb", "boost"]
+        [
+            "scaling_driver",
+            "scaling_governor",
+            "cpuinfo_min_freq",
+            "cpuinfo_max_freq",
+            "cpb",
+            "energy_performance_preference",
+            "boost",
+            "intel_pstate_status",
+            "no_turbo",
+        ]
     )
 
     assert mpc.parse_frequency(files) is None
