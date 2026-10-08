@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "identity": {
     "cpu": {
       "vendor": "GenuineIntel",
@@ -54,6 +54,10 @@
         "boost_enabled": true,
         "energy_performance_preference": "balance_performance",
         "intel_pstate_status": "active"
+      },
+      "power_limits": {
+        "long_term_w": 65,
+        "short_term_w": 120
       }
     },
     "memory": {
@@ -97,24 +101,24 @@
     }
   },
   "state": {
-    "captured_at": "2026-10-08T02:29:45Z",
+    "captured_at": "2026-10-08T06:21:06Z",
     "hostname": "jebel",
     "load_average": [
-      1.63,
-      0.83,
-      0.34
+      3.3,
+      5.86,
+      3.74
     ],
-    "memory_available_mib": 28902,
+    "memory_available_mib": 29283,
     "cpu_mhz_now": {
-      "min": 4154,
-      "max": 4600
+      "min": 800,
+      "max": 4793
     },
     "power": {
       "on_ac": null,
       "battery_percent": null
     },
     "commits": {
-      "repo": "1eb8d1619ee9fb02972dbbb612271d3385558a3d",
+      "repo": "c6f7e0993d26dc9bedb6f9b72450fb17972b7d1c",
       "repo_dirty": false,
       "rust": "66ecc0de6fd2419d5ee886ee20d18406edcf61c4"
     }

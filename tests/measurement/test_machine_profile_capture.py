@@ -249,3 +249,20 @@ def test_parse_release_profile():
         "lto": True,
         "codegen-units": 1,
     }
+
+
+def test_parse_power_limits():
+
+    # the i7-9700K's RAPL package-0 zone, with PL1 lowered by the setup script
+    constraints = {
+        "0": {"name": "long_term\n", "power_limit_uw": "65000000\n"},
+        "1": {"name": "short_term\n", "power_limit_uw": "120000000\n"},
+    }
+
+    assert mpc.parse_power_limits(constraints) == {"long_term_w": 65, "short_term_w": 120}
+
+
+def test_parse_power_limits_without_rapl_is_null():
+
+    assert mpc.parse_power_limits({}) is None
+    assert mpc.parse_power_limits({"0": {"name": None, "power_limit_uw": None}}) is None

@@ -11,7 +11,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 2
+      "const": 3
     },
     "identity": {
       "type": "object",
@@ -37,7 +37,8 @@
             "threads_per_core",
             "caches",
             "isa",
-            "frequency"
+            "frequency",
+            "power_limits"
           ],
           "properties": {
             "vendor": {
@@ -199,6 +200,32 @@
                   "description": "intel_pstate/status (active, passive, off), null without intel_pstate",
                   "type": [
                     "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "power_limits": {
+              "description": "RAPL package-0's power limits in watts (PL1 long_term, PL2 short_term), null without RAPL",
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "long_term_w",
+                "short_term_w"
+              ],
+              "properties": {
+                "long_term_w": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "short_term_w": {
+                  "type": [
+                    "integer",
                     "null"
                   ]
                 }

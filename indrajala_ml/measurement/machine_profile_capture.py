@@ -17,7 +17,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUST_ROOT = REPO_ROOT / "rust"
 
@@ -160,6 +160,21 @@ def parse_frequency(files: Mapping[str, str | None]) -> JSONObject | None:
     }
 
 
+def parse_power_limits(constraints: Mapping[str, Mapping[str, str | None]]) -> JSONObject | None:
+    """The package power limits in watts from RAPL's package-0 zone (a dict of constraint index
+    -> dict of "name" and "power_limit_uw" text): PL1 (long_term) and PL2 (short_term). None
+    without a RAPL package zone. The limit, not the clock policy, decides how fast a long
+    all-core load runs."""
+    watts: dict[str, int] = {}
+    for files in constraints.values():
+        name, limit = files.get("name"), files.get("power_limit_uw")
+        if name is not None and limit is not None:
+            watts[name.strip()] = int(limit.strip()) // 1_000_000
+    if not watts:
+        return None
+    return {"long_term_w": watts.get("long_term"), "short_term_w": watts.get("short_term")}
+
+
 def parse_meminfo(text: str) -> dict[str, int]:
     """/proc/meminfo's fields in MiB (the file gives kB)."""
     fields: dict[str, int] = {}
@@ -260,6 +275,17 @@ def _frequency_files() -> dict[str, str | None]:
     return files
 
 
+def _power_limit_constraints() -> dict[str, dict[str, str | None]]:
+    zone = Path("/sys/class/powercap/intel-rapl:0")
+    if (read_text(zone / "name") or "").strip() != "package-0":
+        return {}
+    constraints: dict[str, dict[str, str | None]] = {}
+    for index in range(2):
+        files = {name: read_text(zone / f"constraint_{index}_{name}") for name in ("name", "power_limit_uw")}
+        constraints[str(index)] = files
+    return constraints
+
+
 def _cpu_mhz_now() -> dict[str, int] | None:
     values: list[int] = []
     for cpu in _cpu_dirs():
@@ -331,6 +357,7 @@ def capture() -> JSONObject:
                 "caches": summarize_caches(_cache_entries()),
                 "isa": cpuinfo["isa"],
                 "frequency": parse_frequency(_frequency_files()),
+                "power_limits": parse_power_limits(_power_limit_constraints()),
             },
             "memory": {
                 "total_mib": meminfo.get("MemTotal"),
