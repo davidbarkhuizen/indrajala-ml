@@ -114,6 +114,9 @@ Settled with the owner on 2026-10-07.
   78 C with no throttling, about 8% slower per epoch. One busy core draws about 37 W and the
   threaded conv case about 40 W, so neither is affected. PL2 stays at 120 W. The profile records
   both (`power_limits`, `schema_version` 3), so the machine check catches a reboot that reset it.
+  **`thermald` is stopped for the session** (owner, 2026-10-08, stage 4): running, it put PL1 back
+  to 95 W within 15-40 minutes, twice, the second time though restarted after PL1 was set. Stopped,
+  PL1 held for all six A/As (109 minutes). The setup script stops it; it starts again at boot.
 - **D2. Reapplying the settings after a reboot: a checked-in script.**
   `scripts/benchmark_machine_setup.sh` (it needs sudo) sets the D1 policy, D3's
   `perf_event_paranoid` and holds snap refreshes, and the owner runs it after boot. The machine
