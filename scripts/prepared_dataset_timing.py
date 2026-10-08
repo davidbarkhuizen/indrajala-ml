@@ -12,6 +12,9 @@ PYTHONPATH (the output starts with the trainers module it imported):
 
     python scripts/ab.py run --bench prepared_dataset_timing [--old main] [--new HEAD]
 
+--rust-threading N:T calls set_matmul_threading(N, T) in the Rust workers before training (0 keeps
+a default), so one build sweeps the crate's thread count and threading threshold in real epochs.
+
 --epochs trains each run for more epochs (one accuracy pass per epoch, plus one before), as a
 longer run does; the batched accuracy pass's A/B used it. Configs, each one epoch by default,
 from numpy-drawn seed-0 weights, the shuffle seeded 0 (seeded_weights.seeded_shuffle):
@@ -24,7 +27,9 @@ from numpy-drawn seed-0 weights, the shuffle seeded 0 (seeded_weights.seeded_shu
   generators workplan's stage 3, which moved the masks onto the network's generator;
 - conv B=512 (not run by default; --configs): conv B=32's network and weights at mini-batch 512,
   the kernel protocol's large-batch conv epoch (docs/measurement.md, §6). Added for the benchmark
-  machine workplan's stage 5.
+  machine workplan's stage 5;
+- dense B=512 (not run by default; --configs): dense B=32's network and weights at batch 512, the
+  kernel protocol's large-batch dense epoch. Added for the benchmark machine workplan's stage 6.
 
 Measures (seconds):
 - epoch: the trainer given the tuple list, as every demo calls it, including its two
@@ -89,7 +94,7 @@ AFTER = hasattr(train, "_prepared_for")
 BACKENDS = ["numpy", "rust"]
 CONFIGS = ["dense B=32", "dense single", "conv B=32", "conv single"]
 # the configs --configs can name: the default ones, then the opt-in ones
-ALL_CONFIGS = [*CONFIGS, "dense dropout B=32", "conv B=512"]
+ALL_CONFIGS = [*CONFIGS, "dense dropout B=32", "conv B=512", "dense B=512"]
 DROP_PROBABILITY = 0.5
 MEASURES = ["epoch", "prepare", "epoch, loader"]
 LEARNING_RATE = 0.5
@@ -98,6 +103,7 @@ CONV_SPECS = [ConvSpec(3, 8)]
 CONV_DENSE_LAYER_SIZES = [32]
 CONV_TRAIN_LIMIT = 2000
 EPOCHS = 1  # --epochs
+RUST_THREADING: str | None = None  # --rust-threading
 CONV_CLASSES = {
     "numpy": ConvVectorizedMultiClassBackpropClassifierNetwork,
     "rust": ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -163,11 +169,15 @@ def measure(config: str, backend: str) -> dict[str, float]:
 
 
 def _run_worker(config: str, backend: str) -> dict[str, Any]:
-    return run_json_worker([sys.executable, __file__, "worker", config, backend, "--epochs", str(EPOCHS)])
+    command = [sys.executable, __file__, "worker", config, backend, "--epochs", str(EPOCHS)]
+    if RUST_THREADING is not None:
+        command += ["--rust-threading", RUST_THREADING]
+    return run_json_worker(command)
 
 
 def time_all(configs: list[str], repeats: int) -> dict[str, list[dict[str, Any]]]:
-    print(f"trainers: {train.__file__}; prepared path: {AFTER}; epochs per run: {EPOCHS}\n")
+    threading = f"; Rust threading {RUST_THREADING}" if RUST_THREADING is not None else ""
+    print(f"trainers: {train.__file__}; prepared path: {AFTER}; epochs per run: {EPOCHS}{threading}\n")
     cells = [(config, backend) for config in configs for backend in BACKENDS]
     runs = interleaved_runs(cells, repeats, lambda cell: _run_worker(*cell))
 
@@ -190,11 +200,16 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--epochs", type=int, default=1, help="epochs per training run (default 1)")
     parser.add_argument("--out", help="write every run's raw measurements here as JSON")
+    parser.add_argument("--rust-threading", help="N:T, set_matmul_threading(N, T) in the Rust workers")
     args = parser.parse_args(argv)
-    global EPOCHS
+    global EPOCHS, RUST_THREADING
     EPOCHS = args.epochs  # pyright: ignore[reportConstantRedefinition]  (--epochs sets it, once)
+    RUST_THREADING = args.rust_threading  # pyright: ignore[reportConstantRedefinition]  (likewise)
 
     if args.mode == "worker":
+        if args.args[1] == "rust" and RUST_THREADING is not None:
+            threads, _, threshold = RUST_THREADING.partition(":")
+            pa.set_matmul_threading(int(threads), int(threshold or 0))
         print(json.dumps(measure(args.args[0], args.args[1])))
     else:
         runs = time_all(args.configs or CONFIGS, args.repeats)

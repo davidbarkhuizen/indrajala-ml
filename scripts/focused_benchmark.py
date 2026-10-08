@@ -25,6 +25,9 @@ the timed processes, so freed memory is never handed back to the OS and nothing 
 `--malloc both` times each case under both settings. A time that drops with the faults is paying
 for them; one that doesn't is compute or cache traffic.
 
+`--rust-threads N:T` also sets the threading threshold to T flops (`--rust-threads 8:1` threads
+every product), so one build sweeps where threading starts to pay.
+
 `--kernel-overrides R:K` calls `set_kernel_overrides(R, K)` in the Rust processes: `matmul_narrow`'s
 rows per block and `matmul_long_k`'s slab rows (0 keeps a default; a slab past `K` is unblocked),
 so one build times every setting.
@@ -151,7 +154,8 @@ def worker(args: argparse.Namespace) -> None:
     if args.backend_to_run == "rust" and args.rust_threads is not None:
         import indrajala_math_rust as pa
 
-        pa.set_matmul_threading(args.rust_threads, 0)
+        threads, _, threshold = args.rust_threads.partition(":")
+        pa.set_matmul_threading(int(threads), int(threshold or 0))
     if args.backend_to_run == "rust" and args.kernel_overrides is not None:
         import indrajala_math_rust as pa
 
@@ -177,7 +181,7 @@ def run_in_process(case: Case, backend: str, args: argparse.Namespace, malloc: s
     for spec in args.matmul:
         command += ["--matmul", spec]
     if args.rust_threads is not None:
-        command += ["--rust-threads", str(args.rust_threads)]
+        command += ["--rust-threads", args.rust_threads]
     if args.kernel_overrides is not None:
         command += ["--kernel-overrides", args.kernel_overrides]
     return run_json_worker(command, env)
@@ -207,7 +211,10 @@ def main() -> None:
     parser.add_argument("--passes", type=int, default=2)
     parser.add_argument("--loops", type=int, default=9)
     parser.add_argument("--target-ms", type=float, default=20.0)
-    parser.add_argument("--rust-threads", type=int, help="set_matmul_threading(N, 0) before timing Rust")
+    parser.add_argument(
+        "--rust-threads",
+        help="N or N:T, set_matmul_threading(N, T) before timing Rust (T, the threshold in flops, 0 = default)",
+    )
     parser.add_argument("--openblas-threads", type=int, help="OPENBLAS_NUM_THREADS for the numpy processes")
     parser.add_argument(
         "--kernel-overrides",
