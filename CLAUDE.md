@@ -28,9 +28,13 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
 - **In a crate A/B, the header's two `.so` hashes must differ** when the crate's Rust changed; the
   same hash twice means one crate was timed on both sides (docs/measurement.md, Gotchas).
 - **Put `report --md FILE` into a PR body by concatenating files**, not by reading and retyping it.
-- **Check the machine, then go; don't ask.** Before a run, check `uptime` and `ps`; `pkill` Brave
-  and Zed if they are running, and wait out a high load. Keep the machine quiet during the run:
-  no tests, lint or builds; reading and writing are fine.
+- **The setup script runs after every boot.** `sudo scripts/benchmark_machine_setup.sh` (frequency
+  policy, PL1 65 W, `thermald` stopped, snap refreshes held) needs the owner's own terminal;
+  `ab.py`'s machine check refuses a run until it has run.
+- **Check the machine, then go; don't ask.** Before a run, check `uptime` and `ps`; `pkill` Brave,
+  Firefox and Zed if they are running, and wait out a high load, an apt job or a snap refresh
+  (measurement.md §2). Keep the machine quiet during the run: no tests, lint or builds; reading
+  and writing are fine.
 - A PR that changes no `learn*` or `classify_rows` path needs no A/B, and neither does one confined
   to pure-Python code (never timed). Every change that could reach training results (the
   package, the crate, the golden run's script or its data) passes the golden run:

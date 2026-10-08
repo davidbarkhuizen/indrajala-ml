@@ -9,7 +9,8 @@
 # snap refreshes, then prints the state it set. None of it survives a reboot except the snap
 # hold, which expires, and ab.py's machine check refuses a run when the frequency policy, the
 # power limit or perf_event_paranoid differ from docs/machine_profiles/i7-9700k.json.
-# It changes nothing that isn't on this list (docs/benchmark-machine-workplan.md, D2 and D3).
+# It changes nothing that isn't on this list (the benchmark machine workplan's D2 and D3:
+# git show 480164d:docs/benchmark-machine-workplan.md).
 
 set -euo pipefail
 

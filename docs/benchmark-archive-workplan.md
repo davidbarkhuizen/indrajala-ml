@@ -51,8 +51,9 @@ last longer:
 - CLAUDE.md's Timing rules exempt a PR that touches no `learn*` or `classify_rows` path, and one
   confined to pure Python. Every other PR that touches the training path gets an A/B, with no
   distinction between "show it didn't get slower" and "show it got faster".
-- `jebel` runs everything: Claude Code, development, and benchmarks. `pyramidon` is idle until
-  the benchmark machine workplan's stage 5 (D11), which needs ssh to it set up.
+- `jebel` runs everything: Claude Code, development, and benchmarks. `pyramidon` is reachable
+  over ssh both ways (set up 2026-10-08) and ran the benchmark machine workplan's laptop columns
+  (D11), but hosts no development yet.
 - The setup script needs sudo after every boot, and `sudo` only works in the owner's own terminal
   (no TTY for the agent).
 
@@ -158,9 +159,9 @@ Settled with the owner on 2026-10-08.
 ## Stages
 
 Each stage is one PR (or a pair: the archive repo's, then indrajala-ml's), merged before the next,
-with `./cli test`, `./cli lint` and the golden run green. The benchmark machine workplan's stage 5
-(the laptop, D11) needs ssh to the Ryzen, which stage 5 here sets up the other way round; the two
-are scheduled together.
+with `./cli test`, `./cli lint` and, where the change could reach training results, the golden
+run green. ssh between the machines already works both ways (key-only, set up for the benchmark
+machine workplan's D11), so stage 5 here builds on it.
 
 ### Stage 1: the archive repository
 
@@ -250,8 +251,8 @@ Done when this file is deleted and next-steps.md lists it.
   process for untrusted submissions is its own plan.
 - **A run queue on `jebel`** (several A/Bs queued from the Ryzen, run back to back), if one at a
   time with the lock turns out to be the bottleneck.
-- **Crate tuning on CPU attributes** (the benchmark machine workplan's stage 6 leads) uses the
-  archive's profiles and runs from both machines.
+- **Crate tuning on CPU attributes** ([i7-9700k-rust-optimization.md](i7-9700k-rust-optimization.md))
+  uses the archive's profiles and runs from both machines.
 
 ## Out of scope
 

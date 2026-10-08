@@ -629,6 +629,11 @@ test passing, and:
 
 - [docs/measurement.md](docs/measurement.md): how to time a change: the machine, the tools, A/Bs
   with `scripts/ab.py`, and the rules for a timing claim in a PR.
+- [docs/machine_profiles/i7-9700k.md](docs/machine_profiles/i7-9700k.md): the benchmark machine's
+  noise and baseline (A/As of every benchmark, the per-op, conv demo and kernel tables), with the
+  Ryzen laptop's numbers beside them.
+- [docs/i7-9700k-rust-optimization.md](docs/i7-9700k-rust-optimization.md): where the Rust crate
+  lags numpy on the benchmark machine, and what to investigate for each gap.
 - [docs/pypi-release-workplan.md](docs/pypi-release-workplan.md): publishing the Rust crate to
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
