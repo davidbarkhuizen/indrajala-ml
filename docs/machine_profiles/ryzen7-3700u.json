@@ -70,7 +70,7 @@
     ],
     "os": {
       "system": "Linux",
-      "kernel_release": "7.0.0-34-generic",
+      "kernel_release": "7.0.0-38-generic",
       "distribution": "Ubuntu 26.04.1 LTS",
       "perf_event_paranoid": 2
     },
@@ -98,26 +98,26 @@
     }
   },
   "state": {
-    "captured_at": "2026-09-29T12:00:50Z",
+    "captured_at": "2026-10-08T17:12:57Z",
     "hostname": "pyramidon",
     "load_average": [
-      0.33,
-      0.66,
-      0.76
+      1.08,
+      0.56,
+      0.59
     ],
-    "memory_available_mib": 3180,
+    "memory_available_mib": 3295,
     "cpu_mhz_now": {
-      "min": 1382,
-      "max": 3892
+      "min": 1400,
+      "max": 3729
     },
     "power": {
       "on_ac": true,
-      "battery_percent": 100
+      "battery_percent": 85
     },
     "commits": {
-      "repo": "c4d92f40cdf8557d189ee8fce06e6c0e0cafbe08",
+      "repo": "321d688f34ba0a6cce6353476ab4c0e2977e8ab8",
       "repo_dirty": false,
-      "rust": "638ff13aa0d4dc64ba76cbbd0efb4b0d0258dba0"
+      "rust": "66ecc0de6fd2419d5ee886ee20d18406edcf61c4"
     }
   },
   "noise_rules": {
