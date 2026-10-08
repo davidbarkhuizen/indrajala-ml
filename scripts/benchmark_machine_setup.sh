@@ -4,8 +4,8 @@
 #
 #     sudo scripts/benchmark_machine_setup.sh
 #
-# Sets the frequency policy and package power limit the machine profile records (restarting
-# thermald, so it keeps the limit), perf_event_paranoid 2 (for scripts/perf_region.py) and holds
+# Sets the frequency policy and package power limit the machine profile records (stopping
+# thermald, which resets the limit), perf_event_paranoid 2 (for scripts/perf_region.py) and holds
 # snap refreshes, then prints the state it set. None of it survives a reboot except the snap
 # hold, which expires, and ab.py's machine check refuses a run when the frequency policy, the
 # power limit or perf_event_paranoid differ from docs/machine_profiles/i7-9700k.json.
@@ -52,12 +52,12 @@ if [[ "$(cat "$rapl_package/name" 2>/dev/null)" != "package-0" \
     exit 1
 fi
 echo "$((pl1_watts * 1000000))" > "$rapl_package/constraint_0_power_limit_uw"
-# thermald (--adaptive) cools through RAPL first. PL1 was found back at 95 W mid-session, no
-# reboot, most likely thermald putting back the limit it read at its start, before this script.
-# Restarted now, it starts from 65 W. ab.py re-reads PL1 after every pass (workplan stage 4).
-if systemctl is-active --quiet thermald; then
-    systemctl restart thermald
-fi
+# thermald (--adaptive) cools through RAPL first, and puts PL1 back to the package's 95 W
+# (RAPL's max_power_uw) within about 15-40 minutes, restarted after this script or not. Stopped,
+# PL1 held at 65 W for 109 minutes of A/As (workplan stage 4). It starts again at boot. The CPU
+# still throttles itself at 100 C, and 65 W keeps an all-core load near 78 C (stage 2).
+# ab.py re-reads PL1 after every pass.
+systemctl stop thermald
 
 sysctl --quiet kernel.perf_event_paranoid="$perf_event_paranoid"
 
