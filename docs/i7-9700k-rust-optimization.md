@@ -3,7 +3,9 @@
 An outline, not a workplan. It covers the places where the crate's Rust lags numpy on the
 i7-9700K (`jebel`), or where its ratio to numpy got markedly worse from the Ryzen laptop to the
 i7. It also has one opportunity that is likely significant although Rust doesn't lag there
-(item 3). Small wins are left out: the aim is the large gaps, not diminishing returns. For each, it says which kernel or parameter change to investigate, ordered by
+(item 3). Small wins are left out: the aim is the large gaps, not diminishing returns. One cross-cutting
+section, "Kernels and parameters from the machine", sits outside the ranking: it's the mechanism
+items 1-4 build on. For each, it says which kernel or parameter change to investigate, ordered by
 expected payoff. Each item becomes its own workplan when it is taken up.
 
 The numbers are from the benchmark machine workplan's stages 5 and 6, in
@@ -145,6 +147,63 @@ The single-example `conv` network lost the most (0.20 to 0.41), and item 3 doesn
 **Payoff:** medium. Rust is still ahead on these networks, so the target is the lost ground, not
 a lag. The per-op timing decides whether there is a kernel to fix.
 
+## Kernels and parameters from the machine
+
+This is the owner's direction for the crate, and it's a general pattern, not an i7 item: one
+codebase that reads the machine at run time and adapts to it. No branches per chip. The
+machines it has to serve:
+
+- today's i7 (AVX2) and Ryzen laptop (AVX2, SMT)
+- a planned modern desktop, likely with AVX-512 and a GPU
+- an Apple M-series machine (ARM, NEON, P and E cores) for a later optimization campaign
+
+**Two layers:**
+
+- **Kernels, chosen by ISA at run time.** The crate already does this for AVX2+FMA, with a
+  scalar fallback. AVX-512 and NEON would be new kernels behind the same dispatch. Whether to use
+  a wider path is measured per microarchitecture, not taken from the feature flag alone: Zen 4
+  runs 512-bit operations double-pumped, Zen 5 natively, and some Intel parts downclock under
+  them.
+- **Parameters, derived from the machine's attributes.** A `CpuInfo` read once per process:
+  physical (performance) cores, L1, L2 and L3 sizes, cache line size, ISA. Every size and count
+  comes from it, and each keeps its override hook (`set_matmul_threading`,
+  `set_kernel_overrides`).
+
+**What may vary by machine, and what may not:** blocking, slab sizes, tiling of output columns,
+thread counts and dispatch never change an FMA chain's order, so they can follow the machine.
+Reduction grouping can't: `dot_product`'s 4-lane grouping is what makes the golden run
+bit-identical across machines (checked between the i7 and the laptop in the benchmark machine
+workplan's D5). An AVX-512 or NEON dot product has to keep 4-lane chains: two per zmm register,
+or two NEON registers per chain.
+
+**What to derive, and from what:**
+
+| constant | today | derived from |
+| --- | --- | --- |
+| `MAX_THREADS` | 8, capped by `available_parallelism` (counts SMT threads: 8 on the 4-core laptop) | physical cores; performance cores on Apple |
+| `A_BLOCK_BYTES` | 16 KB | L1d |
+| `LONG_K_BLOCK`, items 1 and 2's `K` slabs | 64 rows; new | L2 |
+| `NARROW_ROWS_PER_BLOCK` | 4 | L1d; likely stays 4 |
+| `THREADING_THRESHOLD_FLOPS` | 8M | not cache sizes: it depends on clock-up and spawn cost. Stays measured, revisited after item 4 |
+| register tiles (`TILE_ROWS` 2, `NT` 4 x 2) | fixed | the ISA's register count; changes only with a new kernel |
+
+**Rules:**
+
+- A formula has to reproduce today's constants wherever stage 6 found them best, on both
+  machines.
+- A formula is validated only on machines that were measured. On any other machine it's a
+  starting point until that machine's own campaign checks it.
+- Detection is per OS: Linux sysfs or `cpuid` on x86, `sysctl` (`hw.perflevel0.*`) on macOS.
+
+**Out of scope here:** a GPU backend. Consumer GPUs run f64 at 1/32 to 1/64 of their f32 rate,
+and their reductions won't match the CPU bit for bit. That backend means f32 and a tolerance
+contract instead of bit-identity: an owner decision for its own workplan. The Apple campaign
+also needs harness work (no `perf` or RAPL there), and expects a larger numpy lead: numpy on
+macOS runs on Accelerate's matrix units.
+
+**Order:** the `CpuInfo` mechanism and the thread cap come first, or alongside item 1, so items
+1 and 2 derive their slab sizes from it from the start.
+
 ## How each item proceeds
 
 - **Wait for the laptop's numbers first:** its ratios above are still from its retired baseline
@@ -154,9 +213,8 @@ a lag. The per-op timing decides whether there is a kernel to fix.
   `indrajala-math-rust` first and then a "Bump rust/" PR here.
 - **Stop at the bar:** an item ends when its next step can't clear the 5% noise bar in an
   epoch. Don't polish an item past that.
-- **No new fixed constants:** block and slab sizes that items 1 and 2 introduce come from the
-  machine's cache sizes, read at run time, with an override hook, as the owner directed. The two
-  machines' L2s differ by 2x (256 KB against 512 KB per core).
+- **No new fixed constants:** sizes that items 1 and 2 introduce come from `CpuInfo` (above).
+  The two machines' L2s already differ by 2x (256 KB against 512 KB per core).
 - **Measuring:** each change is timed with `ab.py` as a crate A/B (the two `.so` hashes must
   differ) on both machines, and passes the golden run bit-identical. A change for the i7 must not
   cost the laptop.
