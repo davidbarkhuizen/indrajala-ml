@@ -1,9 +1,10 @@
 # Rust against numpy on the i7: what to investigate
 
-An outline, not a workplan. It covers only the places where the crate's Rust lags numpy on the
+An outline, not a workplan. It covers the places where the crate's Rust lags numpy on the
 i7-9700K (`jebel`), or where its ratio to numpy got markedly worse from the Ryzen laptop to the
-i7. For each, it says which kernel or parameter change to investigate, ordered by expected
-payoff. Each item becomes its own workplan when it is taken up.
+i7. It also has two opportunities that are likely significant although Rust doesn't lag there
+(items 3 and 6). For each, it says which kernel or parameter change to investigate, ordered by
+expected payoff. Each item becomes its own workplan when it is taken up.
 
 The numbers are from the benchmark machine workplan's stages 5 and 6, in
 [machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md): the per-op table, the conv demo
@@ -20,23 +21,21 @@ item that covers it. Ratios are given at default threading / one thread each.
 | 32 x 5408 (conv tail) | `accumulate_gradient_batch` | 512 | 1.25 / **3.93** | 0.59 / 2.81 | 1 |
 | 30 x 784 | `accumulate_gradient_batch` | 512 | 1.44 / 1.49 | 1.04 / 1.31 | 1 |
 | 32 x 5408 | `forward_batch` | 512 | 1.55 / 1.55 | 1.31 / 0.99 | 2 |
-| 32 x 5408 | `forward_batch` | 32 | **2.56** / 1.34 | 1.50 / 0.92 | 2, 3 |
+| 32 x 5408 | `forward_batch` | 32 | **2.56** / 1.34 | 1.50 / 0.92 | 2, 4 |
 | 30 x 784 | `forward_batch` | 512 | 1.23 / 1.21 | 0.94 / 1.05 | 2 |
-| 32 x 5408 | `downstream_batch` | 32 | **3.09** / 0.91 | 1.53 / 1.01 | 3 |
-| 32 x 5408 | `accumulate_gradient_batch` | 32 | 1.64 / 0.93 | 1.42 / 1.10 | 3 |
-| 30 x 784 | `downstream_batch` | 512 | 1.85 / 0.94 | 1.41 / 1.21 | 3 |
-| 30 x 784 | `downstream_batch` | 32 | 1.23 / 0.74 | 1.25 / 0.99 | 3 |
-| 30 x 784 | `forward_batch` | 32 | 1.15 / 0.80 | - | 3 |
+| 32 x 5408 | `downstream_batch` | 32 | **3.09** / 0.91 | 1.53 / 1.01 | 4 |
+| 32 x 5408 | `accumulate_gradient_batch` | 32 | 1.64 / 0.93 | 1.42 / 1.10 | 4 |
+| 30 x 784 | `downstream_batch` | 512 | 1.85 / 0.94 | 1.41 / 1.21 | 4 |
+| 30 x 784 | `downstream_batch` | 32 | 1.23 / 0.74 | 1.25 / 0.99 | 4 |
+| 30 x 784 | `forward_batch` | 32 | 1.15 / 0.80 | - | 4 |
 
-There is also the MNIST-subset conv demo (item 4). Rust still wins every network there, but
+There is also the MNIST-subset conv demo (item 5). Rust still wins every network there, but
 every ratio moved towards numpy, most for the single-example `conv` network (0.20-0.21 to
 0.41). The UCI digits ratios held.
 
-Out of scope, because Rust doesn't lag and its ratio didn't get worse: whole epochs (conv
-mini-batch at 0.81x and 0.94x, dense at 0.45x), the conv tail's `downstream_batch` at batch 512,
-`accumulate_gradient_batch` at 30 x 784 batch 32, and retuning the crate's constants for their
-own sake. Stage 6 found the threshold, thread count, block and slab sizes best or tied on the
-i7.
+Rust doesn't lag in whole epochs (conv mini-batch at 0.81x and 0.94x, dense at 0.45x), the
+conv tail's `downstream_batch` at batch 512, or `accumulate_gradient_batch` at 30 x 784 batch
+32. These are left out unless one of the items below moves them.
 
 Every change below has to keep the golden run bit-identical. Each output stays one FMA chain in
 its fixed order, so the changes are limited to blocking, tiling, threading and dispatch, which
@@ -84,7 +83,22 @@ blocking.
 **Payoff:** medium to high. The gap is smaller than item 1's, but `forward_batch` runs at every
 batch size and in the accuracy passes.
 
-## 3. Threaded scaling against OpenBLAS
+## 3. Spread `conv_forward_batch` over examples
+
+**Why, although Rust doesn't lag:** `conv_forward_batch` is the largest single op in a Rust conv
+epoch: 36% of a mini-batch-32 epoch (the laptop's 29%) and 23% single-example. It runs on one
+thread at every batch size, im2col included, on a machine with 8 idle cores. `matmul_narrow`'s
+row threading of the product alone gained nothing at N = 512.
+
+**To investigate:** split the batch's examples across threads. Each example's `cols` slab,
+product and `A` row are independent and written in order, so no output changes value. Threading
+the whole example (im2col, product, and the bias and ReLU pass) parallelizes the memory-bound
+part too. Find the batch size where it starts to pay: the threshold work found that in training,
+threaded calls start on cold, clocked-down cores.
+
+**Payoff:** likely significant at batch 512, given the op's share. Less certain at batch 32.
+
+## 4. Threaded scaling against OpenBLAS
 
 **Rows:** the default-threading rows that are level or better on one thread: conv-tail batch 32
 (numpy 2.6-3.1x faster, against about 1.5x on the laptop), and 30 x 784's `downstream_batch` at
@@ -113,23 +127,48 @@ Rust now (1.56x).
 **Payoff:** uncertain. It's large on isolated ops if spawning is the cost, but the threshold
 result suggests cold cores in training limit it. Investigate before committing to it.
 
-## 4. The conv layer on 28x28 inputs
+## 5. The conv layer on 28x28 inputs
 
 **The gap:** the MNIST-subset conv demo ratios moved towards numpy on every network. The 8x8
 UCI digits ratios held. `conv_forward_batch`'s share of a mini-batch-32 Rust epoch grew from
 29% to 36%, and it's the largest single op in both the single-example and mini-batch epochs.
 
-**To investigate:**
+**To investigate:** find which ops lost ground at 28x28. Time the conv ops against numpy's, per
+op, at batch 1, 32 and 512:
 
-1. Find which ops lost ground at 28x28: time the conv ops (`conv_forward_batch`, the downstream
-   through `matmul_narrow`, the accumulate through `matmul_long_k`) against numpy's per op, at
-   batch 1, 32 and 512.
-2. For mini-batch, split `conv_forward_batch`'s examples across threads. It runs on one thread at
-   every batch size, im2col included, and each example's `cols` slab, product and `A` row are
-   independent and written in order, so no output changes value.
+- `conv_forward_batch`
+- the downstream, through `matmul_narrow`
+- the accumulate, through `matmul_long_k`
+
+The single-example `conv` network lost the most (0.20 to 0.41), and item 3 doesn't reach batch 1.
 
 **Payoff:** medium. Rust is still ahead on these networks, so the target is the lost ground, not
-a lag. Step 1 decides whether there is a kernel to fix.
+a lag. The per-op timing decides whether there is a kernel to fix.
+
+## 6. Derive the parameters from CPU attributes
+
+**Why, although Rust doesn't lag:** the crate's constants were tuned on the laptop:
+
+- `THREADING_THRESHOLD_FLOPS` (8M)
+- `MAX_THREADS` (8, capped by `available_parallelism`, which counts SMT threads: 8 on the 4-core
+  laptop)
+- `A_BLOCK_BYTES` (16 KB)
+- `NARROW_ROWS_PER_BLOCK` (4) and `LONG_K_BLOCK` (64)
+- the register tiles (`TILE_ROWS` 2, `NT` 4 x 2)
+
+Stage 6 found them best or tied on the i7, but items 1, 2 and 4 add new block sizes and change
+the threading. The two machines' L2s differ by 2x (256 KB against 512 KB per core), so constants
+fixed for one machine may not suit the other.
+
+**To investigate:** following the owner's direction, derive these sizes and counts at run time
+from the CPU's attributes rather than branching per chip: physical cores for the thread count,
+L1 and L2 sizes for block and slab sizes. Keep the override hooks (`set_matmul_threading`,
+`set_kernel_overrides`). Check each formula against both machines; it has to reproduce today's
+choices where they're best. One lead to fold in: a 16-row slab is 3.9-5.0% faster on 28x28's
+`accumulate`, at the noise bar.
+
+**Payoff on the i7:** small for today's constants. It matters for the sizes items 1 and 2
+introduce, and for every machine the benchmark archive adds.
 
 ## How each item proceeds
 
