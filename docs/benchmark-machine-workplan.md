@@ -1,7 +1,7 @@
 # Workplan: a baseline on the new benchmark machine
 
 **Status: D1-D10 settled; stage 0 done (2026-10-07: both test suites, lint and a fresh golden
-run pass here); stages 1-2 done; stages 3-7 are planned.**
+run pass here); stages 1-3 done; stages 4-7 are planned.**
 
 Benchmarking moves from the Ryzen 7 3700U laptop (`pyramidon`) to a desktop Core i7-9700K
 (`jebel`). Every timing rule in [measurement.md](measurement.md) was written and calibrated on the
@@ -270,6 +270,12 @@ the A/A runs are `~/code/ab-runs/2026-10-08-stage2-aa-a-balance-performance` and
    stages 4-6.
 
 Done when the tags exist and the skeleton is merged.
+
+**Done 2026-10-08.** Both repositories have an annotated `baseline-i7-9700k` tag: indrajala-ml at
+`6f0e9de` (stage 2's merge) and indrajala-math-rust at `66ecc0d`, its `rust/`. The skeleton is
+[machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md). Stage 5 has one gap to close: the
+conv mini-batch 512 epoch (step 3) has no script config yet, so stage 5 adds one to
+`prepared_dataset_timing.py`.
 
 ### Stage 4: noise and baseline from A/As of every benchmark
 
