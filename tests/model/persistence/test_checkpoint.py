@@ -69,14 +69,13 @@ def _train(network: Any, rows: list[tuple[tuple[float, ...], int]]) -> None:
         network.learn(0.1, state, category)
 
 
-@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
-@pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("architecture", [DENSE, CONV, DROPOUT], ids=["dense", "conv", "dropout"])
-@pytest.mark.parametrize("across_workers", [False, True], ids=["in_memory", "as_lists"])
-def test_a_restored_checkpoint_resumes_training_by_bits(
-    implementation: str, rule: UpdateRule, architecture: tuple[InputShape, list[LayerSpec]], across_workers: bool
-):
-    input_shape, layers = architecture
+def assert_a_restored_checkpoint_resumes_by_bits(
+    implementation: str, input_shape: InputShape, layers: list[LayerSpec], rule: UpdateRule, across_workers: bool
+) -> Any:
+    """
+    A network trains on, from a checkpoint (pickled as lists when across_workers), and another
+    network restored from it trains as far; returns the first once their states agree by bits.
+    """
     rows = _rows(input_shape, 8, seed=1)
 
     trained = _seeded(_network(implementation, input_shape, layers, rule), 2)
@@ -95,6 +94,17 @@ def test_a_restored_checkpoint_resumes_training_by_bits(
     _train(resumed, rows)
 
     assert _state_bits(resumed) == _state_bits(trained)
+    return trained
+
+
+@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
+@pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
+@pytest.mark.parametrize("architecture", [DENSE, CONV, DROPOUT], ids=["dense", "conv", "dropout"])
+@pytest.mark.parametrize("across_workers", [False, True], ids=["in_memory", "as_lists"])
+def test_a_restored_checkpoint_resumes_training_by_bits(
+    implementation: str, rule: UpdateRule, architecture: tuple[InputShape, list[LayerSpec]], across_workers: bool
+):
+    trained = assert_a_restored_checkpoint_resumes_by_bits(implementation, *architecture, rule, across_workers)
     assert trained.optimizer.t == 2 * 5
 
 

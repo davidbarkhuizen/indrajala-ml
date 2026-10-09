@@ -35,13 +35,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     """
 
     def __init__(self, tokens: int, features: int, heads: int = 1, key_size: int | None = None) -> None:
-        self.tokens = tokens
-        self._resolve_heads(features, heads, key_size)
-        self.size = tokens * features
-        self.input_size = self.size
-
-        self.Wq, self.bq, self.Wk, self.bk, self.Wv, self.bv, self.Wo, self.bo = self._zeros()
-        self.reset_gradient_accum()
+        self._set_up(tokens, features, heads, key_size)
 
     def _zeros(self) -> list[pa.Array]:
         return [
@@ -80,31 +74,12 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         return self._dX
 
     def _accumulate(self, delta: pa.Array, X: pa.Array) -> None:
-        (
-            self.grad_Wq,
-            self.grad_bq,
-            self.grad_Wk,
-            self.grad_bk,
-            self.grad_Wv,
-            self.grad_bv,
-            self.grad_Wo,
-            self.grad_bo,
-        ) = pa.attention_accumulate_gradient_batch(delta, X, self._H, self._dQ, self._dK, self._dV, *self.gradients())
+        self._set_gradients(
+            pa.attention_accumulate_gradient_batch(delta, X, self._H, self._dQ, self._dK, self._dV, *self.gradients())
+        )
 
     def accumulate_gradient(self, input_activation: pa.Array) -> None:
         self._accumulate(self.delta, input_activation)
 
     def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
         self._accumulate(self.delta_batch, input_activation_batch)
-
-    def reset_gradient_accum(self) -> None:
-        (
-            self.grad_Wq,
-            self.grad_bq,
-            self.grad_Wk,
-            self.grad_bk,
-            self.grad_Wv,
-            self.grad_bv,
-            self.grad_Wo,
-            self.grad_bo,
-        ) = self._zeros()

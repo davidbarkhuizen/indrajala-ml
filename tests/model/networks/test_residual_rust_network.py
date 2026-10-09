@@ -16,7 +16,7 @@ from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from tests.helpers import max_relative_gap, to_numpy
+from tests.helpers import learn_in_step, max_relative_gap, to_numpy
 from tests.model.networks.test_residual_array_network import INPUT, NETWORKS, Shape, network, output, rows
 
 RULES = [SGD(), Momentum(0.9), Adam(), WeightDecay(0.01)]
@@ -48,10 +48,7 @@ def _trained(layers: list[LayerSpec], shape: Shape, rule: UpdateRule, steps: int
         networks.append(built)
     before = networks[0].snapshot()
     data = rows(40, shape)
-    for step in range(steps):
-        batch = data[(step * 5) % 40 :][:5]
-        for built in networks:
-            built.learn_batch(0.3, batch)
+    learn_in_step(0.3, data, networks, steps)
     return networks[0], networks[1], before
 
 

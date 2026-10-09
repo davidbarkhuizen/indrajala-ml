@@ -138,6 +138,18 @@ Still out of scope:
   The rerun of 2026-10-02 (the DRY rerun workplan, #550-#557) found 0.20% at 8 lines or more in
   the package and 0.16% at 10 lines or more in the tests, the copies left having come in with
   residual connections, layer norm and attention.
+  The rerun of 2026-10-09, after multi-head attention, found 0.16% at 8 lines or more in the
+  package, 0.14% at 10 lines or more in the tests and 0.00% in the scripts, and removed what it
+  found in one PR: `AttentionProjections` took the attention layers' shared setup (`_set_up`), the
+  gradients' order (`_set_gradients`) and `reset_gradient_accum`, and `tests/helpers.py` took
+  `batches` and `learn_in_step` (the 50-step parity loop, 11 copies), `assert_snapshots_close` (5)
+  and `assert_learn_and_a_batch_of_one_agree` (3), `test_checkpoint` the restored-checkpoint
+  scenario (3) and `test_layer_specs` the README's patch model (2).
+- **The studies' protocol helpers** (found by the 2026-10-09 rerun, out of its scope: scripts).
+  `_load`, `_mean_sd` and `_table` are the same in `indrajala_ml/studies/patch_study.py`,
+  `scripts/residual_depth_study.py` and `scripts/batch_size_scaling_sweep.py` (symilar misses them
+  at 10 lines). The next study script should take them from a shared studies module rather than
+  copy them a fourth time; moving the two older scripts onto it can come with that.
 - **Shared homes for the next layer kind.** The conv and pool argument checks and output size are
   in `model/specs/window_geometry.py`, one shape walk (`spec_shapes.spec_shapes`) feeds both builders,
   the optimizers share `OptimizerBase` and `ArrayOptimizerBase`, and a layer's optimizer accessors
@@ -145,9 +157,9 @@ Still out of scope:
   layer takes its output-delta refusals, its downstream-as-delta methods and its no-op gradient
   accumulation from `model/specs/hidden_layers.py` (`Hidden`, `DeltaIsDownstream`, `ParameterFree`); a
   pure-Python gamma-and-beta row from `GammaAsWeights`; a token shape from
-  `spec_shapes.token_shape`. Tests share `bits`, `split`, `max_relative_gap`, `patching` and
-  `randomized` (`tests/helpers.py`), and a scenario every implementation runs takes conftest's
-  `implementation` fixture (`tests/model/networks/test_{attention,residual,layer_norm}_network.py`). A new layer
+  `spec_shapes.token_shape`. Tests share `bits`, `split`, `max_relative_gap`, `patching`,
+  `randomized`, `learn_in_step` and the `assert_*` scenarios (`tests/helpers.py`), and a scenario
+  every implementation runs takes conftest's `implementation` fixture (`tests/model/networks/test_{attention,residual,layer_norm}_network.py`). A new layer
   kind extends these rather than adding a copy.
 - **The linear, conv and batch-norm layers' own output-delta refusals** (the rerun's stage 1).
   They are hand-written, with their own messages, rather than taken from `Hidden`; they were not

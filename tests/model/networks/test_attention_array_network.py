@@ -28,10 +28,8 @@ from indrajala_ml.model.layers.numpy.token_array_layer import (
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
-    Dense,
     LayerNorm,
     LayerSpec,
-    Patches,
     Position,
     Residual,
     TokenMean,
@@ -40,7 +38,7 @@ from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, UpdateRule
 from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, exp_by_math, patching, split
-from tests.model.specs.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX
+from tests.model.specs.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, README_PATCH_MODEL, SOFTMAX
 
 # test_layer_specs' patch models read a (4, 4, 1) image: Patches(2) gives 4 tokens of 4
 IMAGE: InputShape = (4, 4, 1)
@@ -352,17 +350,7 @@ def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradi
 def test_on_mnist_the_readmes_patch_model_learns():
     data = load_mnist_dataset("data/mnist/mnist-train.bin", limit=640)
     train, held = data[:512], data[512:]
-    readme: list[LayerSpec] = [
-        Patches(7),
-        Dense(32, activation="linear", bias=True),
-        Position(),
-        Residual((LayerNorm(), Attention())),
-        Residual((LayerNorm(), Dense(64, activation="relu"), Dense(32, activation="linear", bias=True))),
-        TokenMean(),
-        LayerNorm(),
-        Dense(10, activation="softmax", output=True, loss="cross_entropy"),
-    ]
-    built = network(readme, Adam(), image=(28, 28, 1))
+    built = network(README_PATCH_MODEL, Adam(), image=(28, 28, 1))
 
     def held_loss() -> float:
         outputs = NUMPY.matrix([state for state, _ in held])

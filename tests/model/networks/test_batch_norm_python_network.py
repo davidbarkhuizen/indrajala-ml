@@ -33,7 +33,7 @@ from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRul
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.training.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
-from tests.helpers import bits, exp_by_math, patching, sigmoid_by
+from tests.helpers import assert_snapshots_close, bits, exp_by_math, learn_in_step, patching, sigmoid_by
 from tests.model.networks.test_batch_norm_array_network import (
     BETA,
     EPSILON,
@@ -514,11 +514,6 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule
     array = _matching_numpy_network(python, name, rule)
     rows = _rows(40, NETWORKS[name][1])
 
-    for step in range(50):
-        batch = rows[(step * 5) % 40 :][:5]
-        python.learn_batch(0.3, batch)
-        array.learn_batch(0.3, batch)
+    learn_in_step(0.3, rows, (python, array))
 
-    for expected, actual in zip(_as_array_snapshot(python), array.snapshot()):
-        for values, array_values in zip(expected, actual):
-            np.testing.assert_allclose(array_values, values, rtol=1e-9, atol=1e-9)
+    assert_snapshots_close(_as_array_snapshot(python), array.snapshot())

@@ -23,7 +23,7 @@ from indrajala_ml.model.networks.sequential_array_network import SequentialArray
 from indrajala_ml.model.specs.layer_specs import Dense
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.training.train import train_backprop_network_mini_batch
-from tests.helpers import bits, exp_by_crate, max_relative_gap, patching, sigmoid_by, to_numpy
+from tests.helpers import bits, exp_by_crate, learn_in_step, max_relative_gap, patching, sigmoid_by, to_numpy
 from tests.model.networks.test_batch_norm_array_network import EPSILON, INPUT, NETWORKS, RATE, RULES, _network, _rows
 
 
@@ -219,10 +219,7 @@ def _gap_after_training(layers: Any, shape: Any, rule: UpdateRule) -> float:
         network.randomize()
         networks.append(network)
     rows = _rows(40, shape)
-    for step in range(50):
-        batch = rows[(step * 5) % 40 :][:5]
-        for network in networks:
-            network.learn_batch(0.3, batch)
+    learn_in_step(0.3, rows, networks)
     return max_relative_gap(networks[0].snapshot(), networks[1].snapshot())
 
 

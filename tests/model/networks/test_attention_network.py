@@ -36,7 +36,7 @@ from indrajala_ml.model.specs.layer_specs import Attention, LayerNorm, LayerSpec
 from indrajala_ml.model.specs.single_example import batch_norm_index
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
 from tests.gradient_check import check_gradients
-from tests.helpers import Implementation, bits, randomized, split
+from tests.helpers import Implementation, assert_learn_and_a_batch_of_one_agree, randomized, split
 from tests.model.networks.test_attention_array_network import IMAGE, rows
 from tests.model.specs.test_layer_specs import EMBED, FFN_BLOCK, PATCHES, SOFTMAX, TOKENS
 
@@ -170,19 +170,4 @@ def test_the_readme_model_builds_its_layers_wired_together(implementation: Imple
 @pytest.mark.parametrize("name", ["the README's model", "token-wise layers after a block"])
 def test_learn_and_a_learn_batch_of_one_example_agree(name: str, rule: UpdateRule, implementation: Implementation):
     single, batched = network(implementation, TOKENS[name], rule), network(implementation, TOKENS[name], rule)
-    for state, label in rows(6, seed=4):
-        single.learn(0.5, state, label)
-        batched.learn_batch(0.5, [(state, label)])
-
-    if implementation == "numpy":
-        # the token layers' single-example passes are their batch passes on a batch of one, but a
-        # flat dense layer's W @ x and X @ W.T are different BLAS calls, which can differ in the last
-        # bit (test_residual_array_network)
-        for one, other in zip(single.snapshot(), batched.snapshot(), strict=True):
-            for a, b in zip(one, other, strict=True):
-                assert a == pytest.approx(b, rel=1e-12, abs=1e-15)
-    else:
-        # by bits: pure Python's single-example step is its batch of one's, and so are each Rust
-        # token layer's and layer norm's single-example ops and the crate's dense ops (W @ x against
-        # X @ W.T, outer against delta^T X at one row)
-        assert bits(single.snapshot()) == bits(batched.snapshot())
+    assert_learn_and_a_batch_of_one_agree(implementation, single, batched, rows(6, seed=4))

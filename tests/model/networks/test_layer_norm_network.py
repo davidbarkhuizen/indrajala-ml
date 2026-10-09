@@ -21,7 +21,7 @@ from indrajala_ml.model.specs.single_example import batch_norm_index
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import check_gradients
-from tests.helpers import Implementation, bits, randomized, split
+from tests.helpers import Implementation, assert_learn_and_a_batch_of_one_agree, randomized, split
 from tests.model.networks.test_layer_norm_array_network import rows
 from tests.model.specs.test_layer_specs import FLAT_LAYER_NORM, _input_shape  # pyright: ignore[reportPrivateUsage]
 
@@ -95,19 +95,4 @@ def test_every_gradient_matches_its_finite_difference(
 def test_learn_and_a_learn_batch_of_one_example_agree(name: str, rule: UpdateRule, implementation: Implementation):
     specs = FLAT_LAYER_NORM[name]
     single, batched = network(implementation, specs, rule), network(implementation, specs, rule)
-    for state, label in rows(specs, 6, seed=4):
-        single.learn(0.5, state, label)
-        batched.learn_batch(0.5, [(state, label)])
-
-    if implementation == "numpy":
-        # layer norm's single-example pass is its batch pass on a batch of one, but a dense layer's
-        # W @ x and X @ W.T are different BLAS calls, which can differ in the last bit
-        # (test_residual_network)
-        for one, other in zip(single.snapshot(), batched.snapshot(), strict=True):
-            for a, b in zip(one, other, strict=True):
-                assert a == pytest.approx(b, rel=1e-12, abs=1e-15)
-    else:
-        # by bits: pure Python's single-example step is its batch of one's, and so are Rust's layer
-        # norm's single-example ops and the crate's dense ops (W @ x against X @ W.T, outer against
-        # delta^T X at one row)
-        assert bits(single.snapshot()) == bits(batched.snapshot())
+    assert_learn_and_a_batch_of_one_agree(implementation, single, batched, rows(specs, 6, seed=4))

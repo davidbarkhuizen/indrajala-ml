@@ -47,15 +47,9 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     """
 
     def __init__(self, tokens: int, features: int, heads: int = 1, key_size: int | None = None) -> None:
-        self.tokens = tokens
-        self._resolve_heads(features, heads, key_size)
-        self.size = tokens * features
-        self.input_size = self.size
+        self._set_up(tokens, features, heads, key_size)
         # computed once and divided by, never multiplied by its reciprocal
         self.scale = math.sqrt(self.key_size)
-
-        self.Wq, self.bq, self.Wk, self.bk, self.Wv, self.bv, self.Wo, self.bo = self._zeros()
-        self.reset_gradient_accum()
 
     def _zeros(self) -> list[FloatArray]:
         return [np.zeros(shape) for rows, fan_in in self.projection_shapes for shape in ((rows, fan_in), (rows,))]
@@ -140,15 +134,3 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         self.grad_bv += sum_rows(self._dV)
         self.grad_Wo += delta.T @ self._H
         self.grad_bo += sum_rows(delta)
-
-    def reset_gradient_accum(self) -> None:
-        (
-            self.grad_Wq,
-            self.grad_bq,
-            self.grad_Wk,
-            self.grad_bk,
-            self.grad_Wv,
-            self.grad_bv,
-            self.grad_Wo,
-            self.grad_bo,
-        ) = self._zeros()

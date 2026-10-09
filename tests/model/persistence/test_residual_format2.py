@@ -8,9 +8,7 @@ resume by bits, also as nested lists across a worker boundary.
 """
 
 import json
-import pickle
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -19,7 +17,6 @@ from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec, Residual
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import Momentum, UpdateRule
-from indrajala_ml.training.ensemble_train import _picklable_checkpoint  # pyright: ignore[reportPrivateUsage]
 from tests.model.persistence.test_checkpoint import (
     IMPLEMENTATIONS,
     RULES,
@@ -28,6 +25,7 @@ from tests.model.persistence.test_checkpoint import (
     _seeded,
     _state_bits,
     _train,
+    assert_a_restored_checkpoint_resumes_by_bits,
 )
 from tests.model.persistence.test_format2 import SEQUENTIAL, _file, _save_and_load, _train_batches
 
@@ -143,19 +141,4 @@ def test_numpy_and_rust_residual_files_load_into_each_other(saved_by: str, tmp_p
 def test_a_restored_residual_checkpoint_resumes_training_by_bits(
     implementation: str, rule: UpdateRule, across_workers: bool
 ):
-    input_shape, layers = RESIDUAL
-    rows = _rows(input_shape, 8, seed=1)
-    trained: Any = _seeded(_network(implementation, input_shape, layers, rule), 2)
-    trained.randomize()
-    _train(trained, rows)
-    checkpoint = trained.checkpoint()
-    if across_workers:
-        checkpoint = pickle.loads(pickle.dumps(_picklable_checkpoint(checkpoint)))
-    _train(trained, rows)
-
-    resumed = _seeded(_network(implementation, input_shape, layers, rule), 3)
-    resumed.randomize()
-    resumed.restore_checkpoint(checkpoint)
-    _train(resumed, rows)
-
-    assert _state_bits(resumed) == _state_bits(trained)
+    assert_a_restored_checkpoint_resumes_by_bits(implementation, *RESIDUAL, rule, across_workers)
