@@ -89,7 +89,7 @@ jobs:
       # Keyed on scripts/fetch_datasets.py's own content, which embeds every dataset's pinned
       # tag and each file's expected SHA-256 - so bumping either one changes the hash and
       # invalidates the cache automatically, rather than risking a stale cache silently serving
-      # old data forever. MNIST and the sequence task's three corpora.
+      # old data forever. MNIST and the sequence task's four corpora.
       - name: Cache datasets
         uses: actions/cache@v6
         with:
@@ -98,6 +98,7 @@ jobs:
             data/tinyshakespeare
             data/herodotus-rawlinson
             data/muqaddimah
+            data/euclid-heath
           key: datasets-${{ hashFiles('scripts/fetch_datasets.py') }}
 
       # The crate's release wheel, keyed on the rust/ submodule commit, the maturin pin in ./cli

@@ -169,6 +169,7 @@ data/mnist/trained_model.json
 data/tinyshakespeare/
 data/herodotus-rawlinson/
 data/muqaddimah/
+data/euclid-heath/
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
