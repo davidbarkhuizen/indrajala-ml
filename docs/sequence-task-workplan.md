@@ -68,6 +68,17 @@ Each lists the options considered, with pros and cons, and the choice.
     all.
   - (d) A word-level corpus (WikiText-2, Penn Treebank). Pros: closer to real language modelling.
     Cons: a vocabulary of 10,000 to 33,000 makes the output layer the whole cost; PTB's licence.
+  - *Added by the owner (2026-10-09)*: two more corpora beside Tiny Shakespeare, each in its own
+    repository like it (D3), cleaned by a script there that rebuilds the text byte for byte from
+    a pinned source:
+    - Herodotus' *Histories* in George Rawlinson's translation (`indrajala-datasets-herodotus-rawlinson`,
+      from Wikisource's 1910 text): 1,496,601 characters, ASCII, 76 symbols; public domain.
+    - Ibn Khaldun's *Muqaddimah* in Arabic (`indrajala-datasets-muqaddimah`, from OpenITI's text
+      of the Dar al-Qalam edition, 1984): 1,012,838 characters, unvocalized, 40 symbols. The text
+      is CC BY-NC-SA 4.0, OpenITI's licence: for study only, fetched and never redistributed here.
+
+    The loader reads any of the three (`text_data.CORPORA`). Tiny Shakespeare stays the study's
+    corpus (D9); whether the study also covers the other two is settled with stage 8.
 - **D3. Hosting the corpus. Settled: (a).**
   - (a) *Chosen.* A new `indrajala-datasets-tinyshakespeare` repository, tagged, fetched and
     checksum-verified by `scripts/fetch_datasets.py` as MNIST is. Pros: the existing pattern; the

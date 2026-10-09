@@ -5,7 +5,7 @@ expected SHA-256.
 
 Presence+checksum is checked first, network only as a last resort: a repeated `./cli setup`/
 `./cli fetch-data` against an unchanged local checkout performs zero network calls after the
-first successful fetch. MNIST and Tiny Shakespeare are fetched here - UCI digits' digits.csv stays committed
+first successful fetch. MNIST and the sequence task's corpora are fetched here - UCI digits' digits.csv stays committed
 directly in `indrajala-ml`, with its own `indrajala-datasets-uci-digits` packaging existing for
 metadata consistency, not because indrajala-ml needs to fetch it.
 
@@ -29,9 +29,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PINNED_REF = "v2026-09-16"
 _RAW_BASE = f"https://raw.githubusercontent.com/davidbarkhuizen/indrajala-datasets-mnist/{PINNED_REF}/data"
 TEXT_PINNED_REF = "v2026-10-09"
-_TEXT_RAW_BASE = (
-    f"https://raw.githubusercontent.com/davidbarkhuizen/indrajala-datasets-tinyshakespeare/{TEXT_PINNED_REF}/data"
-)
+
+
+def _text_url(repository: str, filename: str) -> str:
+    # one of the sequence task's corpora, from its indrajala-datasets-* repository at the pinned tag
+    return f"https://raw.githubusercontent.com/davidbarkhuizen/{repository}/{TEXT_PINNED_REF}/data/{filename}"
+
 
 DATASETS = [
     {
@@ -50,7 +53,18 @@ DATASETS = [
         # the sequence task's corpus (docs/sequence-task-workplan.md, D2, D3): read as text, no conversion
         "local_path": "data/tinyshakespeare/tinyshakespeare.txt",
         "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
-        "url": f"{_TEXT_RAW_BASE}/tinyshakespeare.txt",
+        "url": _text_url("indrajala-datasets-tinyshakespeare", "tinyshakespeare.txt"),
+    },
+    {
+        "local_path": "data/herodotus-rawlinson/herodotus-rawlinson.txt",
+        "sha256": "ef4c270ac327f310e667cabf736ab75c479aee346163239b8b21759479ad6052",
+        "url": _text_url("indrajala-datasets-herodotus-rawlinson", "herodotus-rawlinson.txt"),
+    },
+    {
+        # CC BY-NC-SA 4.0 (the repository's LICENSE-TEXT.md): fetched for study, never redistributed here
+        "local_path": "data/muqaddimah/muqaddimah.txt",
+        "sha256": "883cd692c518cb84901bdcd3d46552279065be865af3a6f15400a075a2249715",
+        "url": _text_url("indrajala-datasets-muqaddimah", "muqaddimah.txt"),
     },
 ]
 
