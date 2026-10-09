@@ -85,6 +85,7 @@ def test_the_corpus_gives_the_workplans_windows():
         ("tinyshakespeare", 1_115_394, 65, (15_443, 1_716)),
         ("herodotus-rawlinson", 1_496_601, 76, (20_722, 2_302)),
         ("muqaddimah", 1_012_838, 40, (14_023, 1_558)),
+        ("euclid-heath", 823_448, 67, (11_401, 1_266)),
     ],
 )
 def test_each_corpus_gives_its_windows(corpus: str, length: int, symbols: int, windows_per_part: tuple[int, int]):

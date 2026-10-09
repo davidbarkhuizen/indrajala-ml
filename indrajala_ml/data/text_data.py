@@ -1,8 +1,8 @@
 """
 A character-level text corpus as next-token examples (the sequence task workplan, D2-D4): Tiny
-Shakespeare, Herodotus in Rawlinson's translation, or Ibn Khaldun's Muqaddimah in Arabic, each
-fetched and checksum-verified by scripts/fetch_datasets.py and read as UTF-8 (the first two are
-ASCII).
+Shakespeare, Herodotus in Rawlinson's translation, Ibn Khaldun's Muqaddimah in Arabic, or Euclid's
+Elements in Heath's translation, each fetched and checksum-verified by scripts/fetch_datasets.py
+and read as UTF-8 (all but the Muqaddimah are ASCII).
 
 The vocabulary is the corpus's characters, sorted, each a token id by its place. The first
 TRAIN_FRACTION of the text is for training and the rest held out (nanoGPT's split), each part cut
@@ -23,6 +23,7 @@ CORPORA = {
     "tinyshakespeare": "data/tinyshakespeare/tinyshakespeare.txt",
     "herodotus-rawlinson": "data/herodotus-rawlinson/herodotus-rawlinson.txt",
     "muqaddimah": "data/muqaddimah/muqaddimah.txt",
+    "euclid-heath": "data/euclid-heath/euclid-heath.txt",
 }
 TEXT_PATH = CORPORA["tinyshakespeare"]
 CONTEXT = 64

@@ -66,6 +66,12 @@ DATASETS = [
         "sha256": "883cd692c518cb84901bdcd3d46552279065be865af3a6f15400a075a2249715",
         "url": _text_url("indrajala-datasets-muqaddimah", "muqaddimah.txt"),
     },
+    {
+        # CC BY-SA 4.0 (the repository's LICENSE-TEXT.md), adapted from the Perseus Digital Library
+        "local_path": "data/euclid-heath/euclid-heath.txt",
+        "sha256": "5b2a8d39410a422b2fca03f682030dc978f585a03ffa6e83ba6c84290ef2b2d6",
+        "url": _text_url("indrajala-datasets-euclid-heath", "euclid-heath.txt"),
+    },
 ]
 
 
