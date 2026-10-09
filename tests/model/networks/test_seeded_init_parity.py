@@ -92,9 +92,14 @@ def rust_counterpart(numpy_name: str) -> type[Any]:
     return RUST_CLASSES[numpy_name.replace("ArrayBackprop", "RustArrayBackprop")]
 
 
+# numpy classes with no Rust counterpart yet: the sequence network's comes with the sequence task
+# workplan's stage 5, and its seeded-init case with it
+NUMPY_ONLY = {"SequentialSequenceArrayNetwork"}
+
+
 def test_every_array_network_class_is_covered():
     covered = {*MULTICLASS, *CONV, *SINGLE_OUTPUT, *SEQUENTIAL}
-    assert covered == set(NUMPY_CLASSES)
+    assert covered | NUMPY_ONLY == set(NUMPY_CLASSES)
     assert {rust_counterpart(name) for name in covered} == set(RUST_CLASSES.values())
     assert set(NUMPY_CLASSES.values()) | set(RUST_CLASSES.values()) == set(all_subclasses(ArrayNetworkBase)) - {
         NumpyArrayNetworkBase,

@@ -2,13 +2,17 @@
 # (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 """
 A patch model's token layers in numpy (the layer-norm and attention workplan; README, Layer norm and
-attention): Patches, Position, TokenMean and the token-wise dense layer. A token sequence of T
-tokens of d features is flat and token-major, index t * d + j (D2), so a batch's (N, T * d)
-activations are an (N * T, d) matrix without a copy.
+attention): Patches, Position, TokenMean and the token-wise dense layer; and a sequence model's
+(the sequence task workplan, stage 3): Embedding and the token-wise softmax output layer. A token
+sequence of T tokens of d features is flat and token-major, index t * d + j (D2), so a batch's
+(N, T * d) activations are an (N * T, d) matrix without a copy.
 
 Each of these layers, layer norm's and attention's computes a batch; its single-example methods are
 the batch ones on a batch of one (BatchShaped), so learn and learn_batch of one example agree by
 construction.
+
+The token-wise softmax's exp is this module's exp, which tests may replace with another
+implementation's, as attention's.
 """
 
 from __future__ import annotations
@@ -17,9 +21,12 @@ from collections.abc import Sequence
 from typing import Any, ClassVar, Literal
 
 import numpy as np
+import numpy.typing as npt
 
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
+
+exp = np.exp
 
 
 class BatchShaped:
@@ -123,6 +130,60 @@ class TokenMeanArrayLayer(_ParameterFree):
         return np.broadcast_to(share, (n, self.tokens, self.size)).reshape(n, self.input_size)
 
 
+class EmbeddingArrayLayer(BatchShaped):
+    """
+    T token ids, each in [0, vocabulary), as T tokens of size features: token t is row x_t of a
+    learned (vocabulary, size) table E (the sequence task workplan, D5), a new array. The first
+    layer, so it sends nothing back. E's gradient is a scatter-add of its delta's rows into the rows
+    they read, in row order (example by example, token by token): np.add.at, unbuffered, a left fold
+    per row of E. E is drawn as a weight matrix of fan-in size, and not decayed, as P isn't.
+    """
+
+    decayed: ClassVar[tuple[bool, ...]] = (False,)
+
+    def __init__(self, tokens: int, vocabulary: int, size: int) -> None:
+        self.tokens = tokens
+        self.vocabulary = vocabulary
+        self.features = size
+        self.size = tokens * size
+        self.input_size = tokens
+        self.E: FloatArray = np.zeros((vocabulary, size))
+        self.grad_E: FloatArray = np.zeros((vocabulary, size))
+
+    def parameters(self) -> tuple[FloatArray, ...]:
+        return (self.E,)
+
+    def gradients(self) -> tuple[FloatArray, ...]:
+        return (self.grad_E,)
+
+    def set_parameters(self, parameters: Sequence[FloatArray]) -> None:
+        (self.E,) = parameters
+
+    def _ids(self, X: FloatArray) -> npt.NDArray[np.intp]:
+        # X's token ids, refused unless each is a whole number in [0, vocabulary)
+        ids = X.astype(np.intp)
+        assert np.array_equal(ids, X) and ids.min() >= 0 and ids.max() < self.vocabulary, (
+            f"an Embedding reads token ids, whole numbers in [0, {self.vocabulary})"
+        )
+        return ids
+
+    def forward_batch(self, X: FloatArray) -> FloatArray:
+        return self.E[self._ids(X)].reshape(X.shape[0], self.size)
+
+    def _backward(self, downstream: FloatArray) -> None:
+        self.delta_batch = downstream
+
+    def downstream_batch(self) -> FloatArray:
+        raise NotImplementedError("an Embedding is the first layer: nothing reads its downstream")
+
+    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+        ids = self._ids(input_activation_batch).reshape(-1)
+        np.add.at(self.grad_E, ids, self.delta_batch.reshape(ids.size, self.features))
+
+    def reset_gradient_accum(self) -> None:
+        self.grad_E = np.zeros(self.E.shape)
+
+
 class PositionArrayLayer(BatchShaped):
     """
     A learned (T, d) table P added to the tokens (D7), starting at zero and never decayed:
@@ -196,3 +257,29 @@ class TokenDenseArrayLayer(BatchShaped, ArrayLayer):
 
     def _rows(self, batch: FloatArray, features: int) -> FloatArray:
         return batch.reshape(batch.shape[0] * self.tokens, features)
+
+
+class TokenSoftmaxArrayLayer(TokenDenseArrayLayer):
+    """
+    The token-wise output layer (the sequence task workplan, D6): a softmax output layer acting on
+    each token, its W (size, input_size) and b shared over the tokens. Each token's row is
+    max-shifted, exp'd and divided by its sum, a left fold. The loss is the mean of the tokens'
+    cross-entropies, so the output delta is (P - Y) / T, per example.
+    """
+
+    def __init__(self, size: int, input_size: int, tokens: int) -> None:
+        assert size >= 2, f"a softmax layer needs at least 2 nodes to normalize over; got size={size}"
+        super().__init__(size, input_size, tokens, "linear")
+
+    def forward_batch(self, X: FloatArray) -> FloatArray:
+        n = X.shape[0]
+        Z = X.reshape(n * self.tokens, self.input_size) @ self.W.T + self.b
+        e = exp(Z - Z.max(axis=1, keepdims=True))
+        self.A = (e / np.cumsum(e, axis=1)[:, -1:]).reshape(n, self.tokens * self.size)
+        return self.A
+
+    def compute_output_delta(self, reference: FloatArray) -> None:
+        self.compute_output_delta_batch(reference[np.newaxis, :])
+
+    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
+        self.delta_batch = (self.A - reference_batch) / self.tokens

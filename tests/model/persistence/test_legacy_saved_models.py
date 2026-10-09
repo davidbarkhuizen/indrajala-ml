@@ -60,9 +60,14 @@ def test_legacy_file_loads(name: str) -> None:
     assert outputs(loaded, fixture.predict, states) == expected_outputs
 
 
+# saveable classes without a fixture yet: the sequence network's comes with the sequence task
+# workplan's stage 7 (fixtures, checkpoints and golden entries)
+WITHOUT_FIXTURES = {"SequentialSequenceArrayNetwork"}
+
+
 def test_every_saveable_class_has_a_fixture() -> None:
     # the networks, not the shape mixins and bases that define save for them
     saveable = {name for name, cls in MODEL_CLASSES.items() if name.endswith("Network") and hasattr(cls, "save")}
-    assert saveable == {fixture.class_name or name for name, fixture in FIXTURES.items()}
+    assert saveable - WITHOUT_FIXTURES == {fixture.class_name or name for name, fixture in FIXTURES.items()}
     for name in FIXTURES:
         assert (FIXTURE_DIR / f"{name}.json").exists(), name

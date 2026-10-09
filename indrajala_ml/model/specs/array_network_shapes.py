@@ -10,8 +10,8 @@ from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.persistence.format2 import NetworkFile
 from indrajala_ml.model.protocols.array_protocols import BackendArray
 from indrajala_ml.model.specs.bounds import validate_class_count, validate_layer_sizes
-from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
-from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, token_wise_output
+from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
 from indrajala_ml.model.specs.update_rules import UpdateRule
 
 if TYPE_CHECKING:
@@ -224,6 +224,7 @@ class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
     def __init__(self, input_shape: InputShape, layers: Sequence[LayerSpec], update_rule: UpdateRule) -> None:
         output = layers[-1] if layers else None
         assert isinstance(output, Dense), f"the last layer must be the output layer, a Dense; got {output!r}"
+        _refuse_token_wise_output(layers, "multiclass")
         validate_class_count(output.size)
 
         self.class_count = output.size
@@ -255,6 +256,7 @@ class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
     preset_arguments: ClassVar[tuple[str, ...] | None] = None
 
     def __init__(self, input_shape: InputShape, layers: Sequence[LayerSpec], update_rule: UpdateRule) -> None:
+        _refuse_token_wise_output(layers, "single-output")
         output = layers[-1] if layers else None
         assert isinstance(output, Dense) and output.size == 1, (
             f"a single-output network's last layer is a one-node Dense; got {output!r}"
@@ -276,4 +278,89 @@ class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
     @classmethod
     def _load_legacy(cls, state: dict[str, Any]) -> Self:
         # not the preset parent's envelope, which no Sequential network ever wrote
+        raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
+
+
+def _refuse_token_wise_output(layers: Sequence[LayerSpec], shape: str) -> None:
+    # a token-wise output layer gives one prediction per token: the sequence shape's
+    assert not token_wise_output(layers), (
+        f"a token-wise output layer is a sequence network's (the sequence task workplan, D6), not a {shape} "
+        f"one's: build it with shape='sequence'; got {layers[-1]!r}"
+    )
+
+
+class SequentialSequenceShape[A: BackendArray](_ShapeBase[A]):
+    """
+    The sequence shape over ArrayNetworkBase, for either backend (the sequence task workplan, D6):
+    a network of any accepted layer specs whose output layer is token-wise (token_wise_output), a
+    softmax over class_count classes for each of its tokens tokens. Its label is one class per
+    token, a tuple; classify_state is the per-token argmax, and its targets are one-hot per token.
+    The loss is the mean of the tokens' cross-entropies (the token-wise output layer's).
+
+    A mixin, listed before the backend's base. It saves in format 2 only, as the other Sequential
+    shapes, with the shape "sequence".
+    """
+
+    format2_shape: ClassVar[str] = "sequence"
+    preset_arguments: ClassVar[tuple[str, ...] | None] = None
+
+    def __init__(self, input_shape: InputShape, layers: Sequence[LayerSpec], update_rule: UpdateRule) -> None:
+        assert layers and token_wise_output(layers), (
+            "a sequence network's token part ends in its output layer, applied to each token (the sequence task "
+            f"workplan, D6); got {list(layers)!r}"
+        )
+        output = layers[-1]
+        assert isinstance(output, Dense)
+        validate_class_count(output.size)
+
+        self.class_count = output.size
+        self.dimension = math.prod(input_shape)
+        self.update_rule = update_rule
+
+        super().__init__(layers, input_shape)
+        self.tokens = spec_shapes(layers, input_shape)[-1].output_shape[0]
+
+    def _update_rule(self) -> UpdateRule:
+        return self.update_rule
+
+    def predict_probabilities(self, state: tuple[float, ...]) -> list[list[float]]:
+        """Each token's class probabilities."""
+        values = self._forward(state).tolist()
+        width = self.class_count
+        return [values[i : i + width] for i in range(0, len(values), width)]
+
+    def classify_state(self, state: tuple[float, ...]) -> tuple[int, ...]:
+        return self._classify_output(self._forward(state))
+
+    def _classify_output(self, output: A) -> tuple[int, ...]:
+        return self._classify_output_batch(self.backend.matrix([output.tolist()]))[0]
+
+    def _classify_output_batch(self, output_batch: A) -> list[tuple[int, ...]]:
+        return self.backend.argmax_token_rows(output_batch, self.class_count)
+
+    def _target_array(self, category: Sequence[int]) -> A:
+        target = self.backend.zeros(self.tokens * self.class_count)
+        for t, label in enumerate(self._labels(category)):
+            target[t * self.class_count + label] = 1.0
+        return target
+
+    def _target_batch_array(self, categories: Sequence[Sequence[int]]) -> A:
+        target_batch = self.backend.zeros((len(categories), self.tokens * self.class_count))
+        for row, category in enumerate(categories):
+            for t, label in enumerate(self._labels(category)):
+                target_batch[row, t * self.class_count + label] = 1.0
+        return target_batch
+
+    def _labels(self, category: Sequence[int]) -> Sequence[int]:
+        assert len(category) == self.tokens, (
+            f"a sequence network's label is one class per token, {self.tokens}; got {len(category)}"
+        )
+        return category
+
+    @classmethod
+    def _from_file(cls, file: NetworkFile) -> Self:
+        return cls(file.input_shape, file.layers, file.update_rule)
+
+    @classmethod
+    def _load_legacy(cls, state: dict[str, Any]) -> Self:
         raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")

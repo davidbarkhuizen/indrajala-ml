@@ -176,7 +176,7 @@ def randomized(
     specs: list[LayerSpec],
     rule: UpdateRule | None = None,
     seed: int = 3,
-    shape: Literal["multiclass", "single_output"] = "multiclass",
+    shape: Literal["multiclass", "single_output", "sequence"] = "multiclass",
 ) -> Any:
     """A network of specs on implementation, of shape, randomized from seed."""
     rule = SGD() if rule is None else rule
@@ -233,7 +233,7 @@ def assert_snapshots_close(expected: Sequence[Sequence[Any]], actual: Sequence[S
 
 
 def assert_learn_and_a_batch_of_one_agree(
-    implementation: Implementation, single: Any, batched: Any, data: Iterable[tuple[Any, int]]
+    implementation: Implementation, single: Any, batched: Any, data: Iterable[tuple[Any, Any]]
 ) -> None:
     """
     single learns each example of data alone and batched as a batch of one; they then agree by

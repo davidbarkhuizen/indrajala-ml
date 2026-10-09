@@ -9,6 +9,11 @@ puts the heads side by side again and projects. One code path for every head cou
 layer is the same blocks with h = 1. Every sum but a product is a left fold through np.cumsum
 along the last axis (tests/model/layers/test_summation_order.py).
 
+A causal layer (the sequence task workplan, D7) sets each score S_ij with j > i to -inf before the
+max shift: the row max comes from the unmasked scores (the diagonal never is), exp(-inf) is exactly
+0, so a masked weight P_ij is exactly 0 and so is its dS_ij, and the backward pass is unchanged. An
+unmasked layer computes what it did before the mask.
+
 The softmax's exp is this module's exp, which tests replace with another implementation's (it
 isn't correctly rounded), as batch norm's tests replace sigmoid.
 """
@@ -37,19 +42,24 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     Per example over its tokens tokens of features features (d), in heads heads (h) of key_size
     features (d_k, d / h when None): Q = X Wq^T + bq, K and V likewise, each head's
     P[i] = softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and H[i] = P[i] V[i], out = H Wo^T + bo with H
-    the heads side by side. Its parameters, also its draw order, are Wq, bq, Wk, bk, Wv, bv, Wo,
-    bo: Wq, Wk, Wv (h * d_k, d) and Wo (d, h * d_k), heads as row (Wo: column) blocks, each drawn
-    as a dense layer's W then b, the weights decayed and the biases not. Hidden only, ending a
-    token block's body.
+    the heads side by side; a causal one masks S_ij for j > i. Its parameters, also its draw order,
+    are Wq, bq, Wk, bk, Wv, bv, Wo, bo: Wq, Wk, Wv (h * d_k, d) and Wo (d, h * d_k), heads as row
+    (Wo: column) blocks, each drawn as a dense layer's W then b, the weights decayed and the biases
+    not. Hidden only, ending a token block's body.
 
     The backward pass runs whole in _backward, since the gradients need dQ, dK and dV and the
     layer before reads dX.
     """
 
-    def __init__(self, tokens: int, features: int, heads: int = 1, key_size: int | None = None) -> None:
+    def __init__(
+        self, tokens: int, features: int, heads: int = 1, key_size: int | None = None, causal: bool = False
+    ) -> None:
         self._set_up(tokens, features, heads, key_size)
         # computed once and divided by, never multiplied by its reciprocal
         self.scale = math.sqrt(self.key_size)
+        self.causal = causal
+        # the masked scores, j > i: True above the diagonal
+        self._future = np.triu(np.ones((tokens, tokens), dtype=np.bool_), k=1)
 
     def _zeros(self) -> list[FloatArray]:
         return [np.zeros(shape) for rows, fan_in in self.projection_shapes for shape in ((rows, fan_in), (rows,))]
@@ -75,6 +85,8 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     def _attend(self, Q: FloatArray, K: FloatArray, V: FloatArray) -> tuple[FloatArray, FloatArray]:
         # per example and head, on (N, h, T, d_k) views: the weights P (N, h, T, T) and H
         S = (Q @ _transpose(K)) / self.scale
+        if self.causal:
+            S = np.where(self._future, -np.inf, S)
         m = S.max(axis=-1, keepdims=True)
         e = exp(S - m)
         P = e / np.cumsum(e, axis=-1)[..., -1:]

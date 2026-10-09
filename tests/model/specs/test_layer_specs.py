@@ -783,8 +783,8 @@ def _builds(specs: list[LayerSpec], backend: str) -> Any:
     ids=[*SEQUENCE.keys(), "only the mask"],
 )
 def test_the_builders_refuse_sequence_specs_until_their_stages(specs: list[LayerSpec]):
+    _builds(specs, "numpy")
     for backend, where, stage in (
-        ("numpy", "on the numpy backend", "3"),
         ("rust", "on the rust backend", "5"),
         ("python", "in pure Python", "6"),
     ):

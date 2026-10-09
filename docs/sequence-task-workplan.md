@@ -1,7 +1,7 @@
 # Workplan: a sequence task with causal masking (roadmap step 6)
 
 **Status: decisions D1-D12 settled by the owner (2026-10-09), each as recommended. Stage 1 done
-(#621, #622, #623); stage 2 done: the specs. Stages 3-9 not started.**
+(#621, #622, #623); stage 2 done: the specs (#625); stage 3 done: numpy. Stages 4-9 not started.**
 
 Roadmap step 6 ([primitives-roadmap.md](primitives-roadmap.md)): next-token prediction on a small
 text corpus, a causal transformer. It brings the network's first per-token output and loss and
@@ -189,7 +189,14 @@ Each lists the options considered, with pros and cons, and the choice.
    Rust at 5, pure Python at 6. Format 2's `"sequence"` network shape comes with the network, at 3.
 3. **numpy**: the mask in attend, `Embedding`, the token-wise softmax output and loss, the
    `sequence` shape, per-token targets in the trainer, the evaluation (D8). Tier 1 A/B of the
-   attention case (its unmasked path must not move).
+   attention case (its unmasked path must not move). Done: a causal `AttentionArrayLayer` sets
+   `S_ij`, `j > i`, to `-inf` before the max shift (an unmasked one computes what it did);
+   `EmbeddingArrayLayer` reads ids (refusing any that isn't a whole number in range), its gradient
+   a scatter-add in row order (`np.add.at`), its `E` drawn as a weight matrix of fan-in `size`
+   and not decayed, as `P` isn't; `TokenSoftmaxArrayLayer`, its delta `(P - Y) / T`, its sum a
+   left fold; the `sequence` shape (`SequentialSequenceShape`, format 2's `"sequence"`,
+   `load_network`), which the multiclass and single-output shapes refuse; the trainer's accuracy
+   per token (a window counts the fraction of its tokens right); `sequence_evaluate` (D8).
 4. **The crate** (`indrajala-math-rust`): `causal` in `AttentionOptions` and the four ops,
    `embedding_*` ops; then a "Bump rust/" PR here.
 5. **Rust layers**: the Rust `Embedding` and the mask through the ops; parity with numpy.

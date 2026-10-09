@@ -25,7 +25,7 @@ from indrajala_ml.model.networks.rust.dropout_rust_array_multiclass_backprop_cla
 )
 from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.protocols.classifier_protocols import Example
-from indrajala_ml.model.specs.layer_specs import Dense
+from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, LayerSpec, Residual
 from indrajala_ml.model.specs.update_rules import Adam, Momentum
 from indrajala_ml.training.train import _training_accuracy
 from tests.helpers import all_subclasses, model_modules
@@ -58,6 +58,12 @@ SEQUENTIAL_MULTICLASS = [
     Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
 ]
 SEQUENTIAL_SINGLE_OUTPUT = [Dense(5, activation="relu"), Dense(1, output=True, loss="cross_entropy")]
+# a sequence network (the sequence task workplan, stage 3) over DIMENSION ids of CLASS_COUNT tokens
+SEQUENCE: list[LayerSpec] = [
+    Embedding(CLASS_COUNT, 4),
+    Residual((LayerNorm(), Attention(heads=2, causal=True))),
+    Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+]
 
 # how to build each class; a class missing here fails test_every_class_has_a_constructor.
 # Both twins' generators are reseeded before each step (_seed_step), so the dropout classes
@@ -137,6 +143,7 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     ),
     "SequentialArrayBackpropClassifierNetwork": lambda cls: cls((DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT, Adam()),
     "SequentialRustArrayBackpropClassifierNetwork": lambda cls: cls((DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT, Adam()),
+    "SequentialSequenceArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
 }
 
 
@@ -148,8 +155,27 @@ def _is_binary(cls: type[Any]) -> bool:
     return not hasattr(cls, "predict_probabilities")
 
 
-def _rows(cls: type[Any], count: int = 20) -> list[Example[float]] | list[Example[int]]:
+def _is_sequence(cls: type[Any]) -> bool:
+    return cls.format2_shape == "sequence"
+
+
+def _label_type(cls: type[Any]) -> type[Any]:
+    return float if _is_binary(cls) else tuple if _is_sequence(cls) else int
+
+
+def _rows(
+    cls: type[Any], count: int = 20
+) -> list[Example[float]] | list[Example[int]] | list[Example[tuple[int, ...]]]:
     rng = random.Random(1)
+    if _is_sequence(cls):
+        # token ids, and a class per token
+        return [
+            (
+                tuple(float(rng.randrange(CLASS_COUNT)) for _ in range(DIMENSION)),
+                tuple(rng.randrange(CLASS_COUNT) for _ in range(DIMENSION)),
+            )
+            for _ in range(count)
+        ]
     labels = [float(i % 2) for i in range(count)] if _is_binary(cls) else [i % CLASS_COUNT for i in range(count)]
     return [(tuple(rng.random() for _ in range(DIMENSION)), label) for label in labels]
 
@@ -226,7 +252,7 @@ def test_classify_rows_matches_classify_row(cls: type[Any]):
     prepared = network.prepare_dataset(_rows(cls, CLASSIFY_ROW_COUNT))
     predictions = network.classify_rows(prepared)
     assert predictions == [network.classify_row(prepared, i) for i in range(len(prepared))]
-    assert {type(p) for p in predictions} == {float if _is_binary(cls) else int}
+    assert {type(p) for p in predictions} == {_label_type(cls)}
 
 
 @pytest.mark.parametrize("cls", NETWORK_CLASSES, ids=_class_name)

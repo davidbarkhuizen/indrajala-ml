@@ -10,7 +10,7 @@ pure-Python networks mustn't.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
@@ -43,6 +43,13 @@ _ENSEMBLES: dict[str, Any] = {
 }
 
 
+_ARRAY_SHAPES: dict[str, Literal["multiclass", "single_output", "sequence"]] = {
+    "multiclass": "multiclass",
+    "single_output": "single_output",
+    "sequence": "sequence",
+}
+
+
 def load_network(path: str) -> Any:
     """The network or ensemble a format-2 file describes, with its weights and optimizer state."""
     state = load_json(path)
@@ -56,6 +63,8 @@ def load_network(path: str) -> Any:
 
 def _sequential(file: NetworkFile) -> Any:
     network: Any
+    if file.implementation == PYTHON and file.shape == "sequence":
+        raise NotImplementedError("a sequence network in pure Python: not yet (the sequence task workplan, stage 6)")
     if file.implementation == PYTHON:
         cls = (
             SequentialMultiClassBackpropClassifierNetwork
@@ -65,7 +74,8 @@ def _sequential(file: NetworkFile) -> Any:
         network = cls(file.input_shape, file.layers, file.update_rule, file.input_bounds)
     else:
         backend = NUMPY if file.implementation == NUMPY.name else RUST
-        shape = "multiclass" if file.shape == "multiclass" else "single_output"
-        network = SequentialArrayNetwork(file.input_shape, file.layers, file.update_rule, shape=shape, backend=backend)
+        network = SequentialArrayNetwork(
+            file.input_shape, file.layers, file.update_rule, shape=_ARRAY_SHAPES[file.shape], backend=backend
+        )
     restore_file(network, file)
     return network

@@ -25,7 +25,7 @@ from typing import Any, cast
 
 from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase
-from indrajala_ml.model.specs.layer_specs import Dense
+from indrajala_ml.model.specs.layer_specs import Dense, token_wise_output
 
 # a batch's loss from its output rows and target rows
 Loss = Callable[[list[list[float]], list[list[float]]], float]
@@ -59,16 +59,30 @@ def softmax_cross_entropy_loss(outputs: list[list[float]], targets: list[list[fl
     return -sum(t * math.log(a) for row, target in zip(outputs, targets) for a, t in zip(row, target))
 
 
-def loss_of(output: Dense) -> Loss:
-    """The loss whose gradient the output layer's delta is."""
+def token_cross_entropy_loss(tokens: int) -> Loss:
+    # a token-wise softmax output layer's delta, (a - t) / T, is the gradient of the mean of its
+    # tokens' cross-entropies (the sequence task workplan, D6)
+    def loss(outputs: list[list[float]], targets: list[list[float]]) -> float:
+        return softmax_cross_entropy_loss(outputs, targets) / tokens
+
+    return loss
+
+
+def loss_of(output: Dense, tokens: int | None = None) -> Loss:
+    """The loss whose gradient the output layer's delta is; tokens for a token-wise one."""
+    if tokens is not None:
+        return token_cross_entropy_loss(tokens)
     if output.activation == "softmax":
         return softmax_cross_entropy_loss
     return binary_cross_entropy_loss if output.loss == "cross_entropy" else squared_loss
 
 
 def targets(network: Any, labels: Sequence[Any]) -> list[list[float]]:
-    # one-hot rows for a multiclass network, the label itself for a one-output network
+    # one-hot rows for a multiclass network, the label itself for a one-output network, and one-hot
+    # per token, side by side, for a sequence network's labels, one class per token
     size = network.layer_specs[-1].size
+    if labels and isinstance(labels[0], tuple):
+        return [[1.0 if i == token else 0.0 for token in label for i in range(size)] for label in labels]
     if size == 1:
         return [[float(label)] for label in labels]
     return [[1.0 if i == label else 0.0 for i in range(size)] for label in labels]
@@ -195,7 +209,9 @@ def compare_gradients(
     Every trained weight's analytic gradient and its central difference, for the whole batch's
     loss (loss_of the output spec, unless given). Leaves the network's weights as they were.
     """
-    loss = loss_of(network.layer_specs[-1]) if loss is None else loss
+    specs = network.layer_specs
+    tokens = getattr(network, "tokens", None) if token_wise_output(specs) else None
+    loss = loss_of(specs[-1], tokens) if loss is None else loss
     target_rows = targets(network, labels)
     base = _as_lists(network.snapshot())
 

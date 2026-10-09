@@ -1,7 +1,8 @@
 """
 Array networks of any accepted layer specs and update rule (the composable-layers workplan, The
 design): SequentialArrayNetwork builds one for a shape and backend, as one of the four classes
-below, which the registry walks cover as they do the presets.
+below, which the registry walks cover as they do the presets. A sequence network (the sequence
+task workplan, D6), whose output layer is token-wise, is shape="sequence".
 
     network = SequentialArrayNetwork(
         (28, 28, 1),
@@ -22,6 +23,7 @@ import indrajala_math_rust as pa
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.networks.numpy.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
+from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )
@@ -30,7 +32,11 @@ from indrajala_ml.model.networks.rust.rust_array_multiclass_backprop_classifier_
     RustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.protocols.array_protocols import ArrayBackend
-from indrajala_ml.model.specs.array_network_shapes import SequentialMultiClassShape, SequentialSingleOutputShape
+from indrajala_ml.model.specs.array_network_shapes import (
+    SequentialMultiClassShape,
+    SequentialSequenceShape,
+    SequentialSingleOutputShape,
+)
 from indrajala_ml.model.specs.layer_specs import LayerSpec
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import UpdateRule
@@ -58,11 +64,15 @@ class SequentialRustArrayBackpropClassifierNetwork(
     """SequentialSingleOutputShape on the Rust backend."""
 
 
+class SequentialSequenceArrayNetwork(SequentialSequenceShape[FloatArray], NumpyArrayNetworkBase):
+    """SequentialSequenceShape on the numpy backend."""
+
+
 def SequentialArrayNetwork(
     input_shape: InputShape,
     layers: Sequence[LayerSpec],
     update_rule: UpdateRule,
-    shape: Literal["multiclass", "single_output"] = "multiclass",
+    shape: Literal["multiclass", "single_output", "sequence"] = "multiclass",
     backend: ArrayBackend[Any] = NUMPY,
 ) -> Any:
     """The sequential network class for shape and backend, built from the rest of the arguments."""
@@ -74,7 +84,11 @@ def SequentialArrayNetwork(
             if rust
             else SequentialVectorizedMultiClassBackpropClassifierNetwork
         )
+    elif shape == "sequence":
+        # its Rust class comes with the sequence task workplan's stage 5
+        assert not rust, "a sequence network on the rust backend: not yet (the sequence task workplan, stage 5)"
+        cls = SequentialSequenceArrayNetwork
     else:
-        assert shape == "single_output", f"shape is 'multiclass' or 'single_output'; got {shape!r}"
+        assert shape == "single_output", f"shape is 'multiclass', 'single_output' or 'sequence'; got {shape!r}"
         cls = SequentialRustArrayBackpropClassifierNetwork if rust else SequentialArrayBackpropClassifierNetwork
     return cls(input_shape, layers, update_rule)
