@@ -1076,7 +1076,7 @@ def _clean_worktrees(repo: Path, referenced: set[Path]) -> None:
     print(f"removed {len(removed)} worktrees ({', '.join(removed) or 'none'}), kept {kept}")
 
 
-# ---- the archive (docs/benchmark-archive-workplan.md)
+# ---- the archive (docs/measurement.md, §10)
 
 
 @dataclass
