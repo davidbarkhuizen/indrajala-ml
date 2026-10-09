@@ -26,7 +26,7 @@ timing PR and workplan relies on it, not only optimization work.
   | the change touches | benchmark |
   | --- | --- |
   | the trainers, the training loop or dataset preparation | `prepared_dataset_timing` |
-  | one dense, conv or other layer op, or its crate kernel | `focused_benchmark` |
+  | one dense, conv, attention or other layer op, or its crate kernel | `focused_benchmark` (attention: `--shape attention`) |
   | crate ops across a Rust training epoch | `epoch_op_profile` |
   | the Python-to-crate call boundary (argument conversion, call overhead) | `op_call_timing` |
   | `classify_rows` or the accuracy passes | `accuracy_pass_timing` |
