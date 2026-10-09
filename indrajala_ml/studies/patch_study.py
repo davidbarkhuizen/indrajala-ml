@@ -1,12 +1,14 @@
 """
 The patch-model studies' protocol (scripts/patch_attention_study.py, the layer-norm and attention
-workplan's D11; scripts/multi_head_attention_study.py, the multi-head attention workplan's D8): full
-MNIST, numpy, Adam at batch 32, one learning rate per arm, the trainer's epoch loop.
+workplan's D11; scripts/multi_head_attention_study.py, the multi-head attention workplan's D8;
+scripts/patch_geometry_study.py, its D8 (b) and (c)): full MNIST, numpy, Adam at batch 32, one
+learning rate per arm, the trainer's epoch loop.
 
 A study names its arms and a function from an arm to its layers; everything else is shared:
 
 - the patch models' parts: 16 patches of 7 x 7 embedded as d = 32 features with learned
-  positions, FFN blocks 64 wide, the mean over the tokens, a layer norm and a softmax output;
+  positions, FFN blocks 64 wide, the mean over the tokens, a layer norm and a softmax output (the
+  patch size, d and the FFN width are arguments, for scripts/patch_geometry_study.py);
 - a run (run_config): fan-in-aware initialization from the seed, the epochs, test accuracy after
   every epoch, the parameter count, and the seconds per epoch spent in learn_batch;
 - the stages: `time` (one epoch of one arm, which sizes the grid), `tune` (each arm over the rates,
@@ -70,9 +72,9 @@ def output() -> Dense:
     return Dense(bss.CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy")
 
 
-def ffn_block() -> Residual:
+def ffn_block(token_size: int = TOKEN_SIZE, ffn_size: int = FFN_SIZE) -> Residual:
     return Residual(
-        (LayerNorm(), Dense(FFN_SIZE, activation="relu"), Dense(TOKEN_SIZE, activation="linear", bias=True))
+        (LayerNorm(), Dense(ffn_size, activation="relu"), Dense(token_size, activation="linear", bias=True))
     )
 
 
@@ -80,11 +82,13 @@ def attention_block(attention: Attention | None = None) -> Residual:
     return Residual((LayerNorm(), attention or Attention()))
 
 
-def patch_model(blocks: Sequence[LayerSpec]) -> list[LayerSpec]:
+def patch_model(
+    blocks: Sequence[LayerSpec], patch_size: int = PATCH_SIZE, token_size: int = TOKEN_SIZE
+) -> list[LayerSpec]:
     """The patches, embedding and positions, then blocks, then the mean, a layer norm and the output."""
     return [
-        Patches(PATCH_SIZE),
-        Dense(TOKEN_SIZE, activation="linear", bias=True),
+        Patches(patch_size),
+        Dense(token_size, activation="linear", bias=True),
         Position(),
         *blocks,
         TokenMean(),
