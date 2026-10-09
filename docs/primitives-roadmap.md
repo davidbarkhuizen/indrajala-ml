@@ -97,8 +97,9 @@ have nothing to show on MNIST. Its workplan settles, with each option's pros and
   three implementations and the crate, with a test that a future token can't change an earlier
   output;
 - **the study**: what a causal transformer reaches against a unigram and a bigram baseline and an
-  FFN-only model, in bits per character, and that removing the mask lets the training loss fall
-  to near zero while the held-out loss does not (the leak a mask prevents).
+  FFN-only model, in bits per character, and that removing the mask lets the loss fall toward
+  zero, on held-out text too, since every position can read the token it predicts (the leak a
+  mask prevents).
 
 Generation (sampling text from the model), padding masks and variable-length sequences stay out
 unless the workplan finds them needed.
