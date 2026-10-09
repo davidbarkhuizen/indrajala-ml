@@ -868,6 +868,19 @@ def test_a_run_is_dated_once(name: str, expected: str, tmp_path: Path, monkeypat
     assert ab._new_run_dir(name).name == f"{expected}-2"
 
 
+def test_a_run_named_by_a_relative_path_is_found_as_an_absolute_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # each pass runs inside the run directory, so a relative one would name it twice (extend's case)
+    monkeypatch.setattr(ab, "RUNS_ROOT", tmp_path)
+    run_dir = tmp_path / "2026-10-09-a-run"
+    run_dir.mkdir()
+    (run_dir / "manifest.json").write_text("{}")
+    monkeypatch.chdir(tmp_path)
+    assert ab.find_run("2026-10-09-a-run") == run_dir.resolve()
+    assert ab.find_run("2026-10-09-a-run").is_absolute()
+
+
 def test_a_second_run_is_refused_while_one_holds_the_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ab, "RUNS_ROOT", tmp_path)
     hold = (

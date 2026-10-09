@@ -506,7 +506,8 @@ def find_run(run: str | None) -> Path:
         return runs[-1]
     for candidate in (Path(run), RUNS_ROOT / run):
         if (candidate / "manifest.json").is_file():
-            return candidate
+            # absolute: each pass runs its benchmark inside the run directory
+            return candidate.resolve()
     matches = [d for d in _run_dirs() if d.name.endswith(run)]
     if len(matches) != 1:
         raise AbError(f"no single run matches {run!r} under {RUNS_ROOT}")
