@@ -3,8 +3,7 @@
 A workplan is deleted once its last stage merges, and never before: only when every stage and
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
-[benchmark-archive-workplan.md](benchmark-archive-workplan.md). The order of
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order of
 the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
@@ -26,6 +25,7 @@ docs cite them by section:
 | Presets for the one-change combinations | #559 | #560-#564 | `git show 2a799bf:docs/presets-workplan.md` |
 | The source layout | #566 | #567-#573 | `git show b362621:docs/source-layout-workplan.md` |
 | A baseline on the new benchmark machine (i7-9700K) | #575 | #576-#590, #592 | `git show 480164d:docs/benchmark-machine-workplan.md` |
+| A benchmark archive, tiered benchmarking, and a remote benchmark machine | #584 | #593-#598, archive #1-#11 | `git show 056b808:docs/benchmark-archive-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -253,3 +253,20 @@ Still out of scope:
   Rust/numpy ratios compare.
 - GPU work, BIOS settings beyond cooling and power limits, and kernel boot parameters
   (`isolcpus`, `nohz_full`): the i7's noise didn't need them.
+
+## From the benchmark archive
+
+- **Results from other people's machines,** if the project is used widely: submissions to the
+  archive by PR, with a recorded profile, a clean tree and a named commit. The record format
+  allows it; reviewing untrusted submissions needs its own plan.
+- **A run queue on `jebel`** (several A/Bs queued from `pyramidon`, run back to back), if one run
+  at a time under the run lock turns out to be the bottleneck.
+- **Crate tuning on CPU attributes** ([i7-9700k-rust-optimization.md](i7-9700k-rust-optimization.md))
+  uses the archive's profiles and runs from both machines.
+
+Still out of scope:
+
+- Changing the timing protocol (the verdict rule, the noise rules per machine) except from data,
+  as tier 1's pass count was.
+- Hosting results anywhere but the archive repository: no dashboards, no release assets.
+- Benchmarks in CI: GitHub's runners are shared and noisy, so no timing is ever taken there.

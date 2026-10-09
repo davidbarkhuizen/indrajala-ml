@@ -627,8 +627,11 @@ test passing, and:
 
 ## Docs
 
-- [docs/measurement.md](docs/measurement.md): how to time a change: the machine, the tools, A/Bs
-  with `scripts/ab.py`, and the rules for a timing claim in a PR.
+- [docs/measurement.md](docs/measurement.md): how to time a change: the machines, the tools, A/Bs
+  with `scripts/ab.py`, the benchmarking tiers, and the rules for a timing claim in a PR.
+- [`indrajala-benchmarks`](https://github.com/davidbarkhuizen/indrajala-benchmarks): the archive
+  of golden runs, A/B runs with their reports, and the machine profiles they ran on; CI there
+  re-renders every report with `ab.py` (measurement.md, §10).
 - [docs/machine_profiles/i7-9700k.md](docs/machine_profiles/i7-9700k.md): the benchmark machine's
   noise and baseline (A/As of every benchmark, the per-op, conv demo and kernel tables), with the
   Ryzen laptop's numbers beside them.
