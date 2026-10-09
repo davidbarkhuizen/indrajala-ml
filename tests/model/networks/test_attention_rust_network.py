@@ -1,11 +1,14 @@
 """
 Patch models and flat layer norms on Rust (the layer-norm and attention workplan, stage 4; README,
 Layer norm and attention): randomize's draws against numpy's by bits, the exact tests (one token,
-uniform attention, an identity attention block), the layer before a LayerNorm taking its downstream
-through a mask op (D5), and parity with numpy: after 50 steps under the rules whose step is linear
-in the gradient, and per step under Adam. The cases are tests/model/specs/test_layer_specs.py's; the gradient
-check, wiring and learn against a batch of one are tests/model/networks/test_attention_network.py's (patch models)
-and tests/model/networks/test_layer_norm_network.py's (flat layer norms).
+uniform attention, an identity attention block; with heads, identical and silent heads too), the
+layer before a LayerNorm taking its downstream through a mask op (D5), and parity with numpy: after
+50 steps under the rules whose step is linear in the gradient, and per step under Adam, one head
+and many (the multi-head attention workplan, stage 5). The cases are
+tests/model/specs/test_layer_specs.py's and tests/model/networks/test_attention_network.py's
+MULTI_HEAD; the gradient check, wiring and learn against a batch of one are
+tests/model/networks/test_attention_network.py's (patch models) and
+tests/model/networks/test_layer_norm_network.py's (flat layer norms).
 """
 
 import math
@@ -32,6 +35,8 @@ from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerNorm, La
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, exp_by_crate, patching, split, to_numpy
+from tests.model.networks.test_attention_array_network import HEAD_IDS, HEADS
+from tests.model.networks.test_attention_network import MULTI_HEAD
 from tests.model.specs.test_layer_specs import (
     AFFINE_5,
     ATTENTION_BLOCK,
@@ -81,26 +86,38 @@ def test_randomize_draws_numpys_parameters_by_bits(name: str):
     )
 
 
-def _attention(tokens: int, features: int, seed: int) -> AttentionRustArrayLayer:
-    layer = AttentionRustArrayLayer(tokens, features)
+def _attention(
+    tokens: int, features: int, seed: int, heads: int = 1, key_size: int | None = None
+) -> AttentionRustArrayLayer:
+    layer = AttentionRustArrayLayer(tokens, features, heads, key_size)
     rng = np.random.default_rng(seed)
     layer.set_parameters([pa.Array(rng.uniform(-0.5, 0.5, to_numpy(p).shape).tolist()) for p in layer.parameters()])
     return layer
 
 
-def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bits():
-    layer = _attention(1, 5, 1)
+def _head(rows: FloatArray, i: int, width: int) -> FloatArray:
+    # head i's columns of packed (N * T, h * width) rows
+    return rows[:, i * width : (i + 1) * width]
+
+
+@pytest.mark.parametrize(("heads", "key_size"), HEADS, ids=HEAD_IDS)
+def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bits(heads: int, key_size: int | None):
+    layer = _attention(1, 6, 1, heads, key_size)
     *_, Wv, bv, Wo, bo = layer.parameters()
-    X = pa.Array(np.random.default_rng(2).uniform(-1.0, 1.0, (4, 5)).tolist())
+    X = pa.Array(np.random.default_rng(2).uniform(-1.0, 1.0, (4, 6)).tolist())
 
     out = layer.forward_batch(X)
-    assert bits(to_numpy(layer._P)) == bits(np.ones((4, 1)))  # pyright: ignore[reportPrivateUsage]
+    assert bits(to_numpy(layer._P)) == bits(np.ones((4, heads)))  # pyright: ignore[reportPrivateUsage]
     assert bits(to_numpy(out)) == bits(to_numpy(pa.affine_forward_batch(Wo, pa.affine_forward_batch(Wv, X, bv), bo)))
 
 
-def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth():
-    # T = 16: every score is 0, every weight 1/16, and H is the token mean of V, the same fold
-    layer = _attention(16, 8, 3)
+@pytest.mark.parametrize(
+    ("heads", "key_size"), [(1, None), (2, None), (4, None), (4, 3)], ids=["1", "2", "4", "4 of 3"]
+)
+def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth(heads: int, key_size: int | None):
+    # T = 16: every score is 0, every weight 1/16, and each head's H the token mean of its V, the
+    # same fold
+    layer = _attention(16, 8, 3, heads, key_size)
     parameters = list(layer.parameters())
     for i in range(4):  # Wq, bq, Wk, bk
         parameters[i] = pa.Array(np.zeros(to_numpy(parameters[i]).shape).tolist())
@@ -108,10 +125,52 @@ def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth():
     X = pa.Array(np.random.default_rng(4).uniform(-1.0, 1.0, (3, 16 * 8)).tolist())
 
     layer.forward_batch(X)
-    assert bits(to_numpy(layer._P)) == bits(np.full((48, 16), 1 / 16))  # pyright: ignore[reportPrivateUsage]
+    assert bits(to_numpy(layer._P)) == bits(np.full((48, heads * 16), 1 / 16))  # pyright: ignore[reportPrivateUsage]
     V, H = to_numpy(layer._V), to_numpy(layer._H)  # pyright: ignore[reportPrivateUsage]
-    mean = to_numpy(TokenMeanRustArrayLayer(16, 8).forward_batch(pa.Array(V.reshape(3, -1).tolist())))
-    assert bits(H) == bits(np.repeat(mean, 16, axis=0))
+    d_k = layer.key_size
+    for i in range(heads):
+        V_i = pa.Array(_head(V, i, d_k).reshape(3, -1).tolist())
+        mean = to_numpy(TokenMeanRustArrayLayer(16, d_k).forward_batch(V_i))
+        assert bits(_head(H, i, d_k)) == bits(np.repeat(mean, 16, axis=0))
+
+
+@pytest.mark.parametrize(("heads", "key_size"), [(2, None), (3, None), (2, 4)], ids=["2", "3", "2 of 4"])
+def test_identical_heads_weigh_and_mix_alike_by_bits(heads: int, key_size: int | None):
+    layer = _attention(4, 6, 5, heads, key_size)
+    d_k = layer.key_size
+    parameters = [to_numpy(p) for p in layer.parameters()]
+    for i in range(6):  # each head's blocks of Wq, bq, Wk, bk, Wv, bv: head 0's
+        parameters[i] = np.concatenate([parameters[i][:d_k]] * heads)
+    layer.set_parameters([pa.Array(p.tolist()) for p in parameters])
+    X = pa.Array(np.random.default_rng(6).uniform(-1.0, 1.0, (3, 4 * 6)).tolist())
+
+    layer.forward_batch(X)
+    P, H = to_numpy(layer._P), to_numpy(layer._H)  # pyright: ignore[reportPrivateUsage]
+    for i in range(1, heads):
+        assert bits(_head(P, i, 4)) == bits(_head(P, 0, 4))
+        assert bits(_head(H, i, d_k)) == bits(_head(H, 0, d_k))
+
+
+@pytest.mark.parametrize(("heads", "key_size"), [(2, None), (3, None), (2, 4)], ids=["2", "3", "2 of 4"])
+def test_a_silent_heads_projection_gradients_are_exactly_zero(heads: int, key_size: int | None):
+    # with head i's columns of Wo zero, dH[i] is exactly zero, and so is all that flows from it
+    layer = _attention(4, 6, 7, heads, key_size)
+    d_k, silent = layer.key_size, heads - 1
+    parameters = [to_numpy(p) for p in layer.parameters()]
+    parameters[6][:, silent * d_k : (silent + 1) * d_k] = 0.0
+    layer.set_parameters([pa.Array(p.tolist()) for p in parameters])
+    rng = np.random.default_rng(8)
+    X = pa.Array(rng.uniform(-1.0, 1.0, (3, 4 * 6)).tolist())
+    delta = pa.Array(rng.uniform(-0.5, 0.5, (3, 4 * 6)).tolist())
+    layer.forward_batch(X)
+    layer._backward(delta)  # pyright: ignore[reportPrivateUsage]
+    layer._accumulate(delta, X)  # pyright: ignore[reportPrivateUsage]
+
+    gradients = [to_numpy(g) for g in layer.gradients()]
+    for weight, bias in ((0, 1), (2, 3), (4, 5)):  # Wq, bq; Wk, bk; Wv, bv
+        assert not np.any(gradients[weight][silent * d_k : (silent + 1) * d_k])
+        assert not np.any(gradients[bias][silent * d_k : (silent + 1) * d_k])
+        assert np.any(gradients[weight][: silent * d_k])  # the others' blocks are not
 
 
 def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradient_by_bits():
@@ -200,19 +259,16 @@ def _layer_scales(snapshot: list[tuple[FloatArray, ...]]) -> list[float]:
 LINEAR_RULES = [SGD(), Momentum(0.9), WeightDecay(0.01)]
 
 
-@pytest.mark.usefixtures("crate_exp")
-@pytest.mark.parametrize("rule", LINEAR_RULES, ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("name", CASES)
-def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule: UpdateRule):
+def _assert_training_matches_numpy(specs: list[LayerSpec], rule: UpdateRule, rate: float) -> None:
     # outside the products both compute the README's expressions by bits (the crate's ops tests),
     # and the products are numpy's BLAS against the crate's, as the dense layers'. Measured after 50
     # steps: within 1.7e-12 of each layer's scale (a flat layer norm after ReLU, Momentum)
-    rust, numpy = network(CASES[name], rule), network(CASES[name], rule, backend=NUMPY)
-    data = rows(CASES[name], 40)
+    rust, numpy = network(specs, rule), network(specs, rule, backend=NUMPY)
+    data = rows(specs, 40)
     for step in range(50):
         batch = data[(step * 5) % 40 :][:5]
-        rust.learn_batch(0.3, batch)
-        numpy.learn_batch(0.3, batch)
+        rust.learn_batch(rate, batch)
+        numpy.learn_batch(rate, batch)
 
     expected, actual = numpy.snapshot(), _as_numpy(rust.snapshot())
     for scale, expected_entry, actual_entry in zip(_layer_scales(expected), expected, actual, strict=True):
@@ -221,16 +277,29 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule
 
 
 @pytest.mark.usefixtures("crate_exp")
+@pytest.mark.parametrize("rule", LINEAR_RULES, ids=lambda rule: type(rule).__name__)
 @pytest.mark.parametrize("name", CASES)
-def test_every_step_under_adam_has_numpys_gradients(name: str):
+def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule: UpdateRule):
+    _assert_training_matches_numpy(CASES[name], rule, 0.3)
+
+
+@pytest.mark.usefixtures("crate_exp")
+@pytest.mark.parametrize("rule", LINEAR_RULES, ids=lambda rule: type(rule).__name__)
+@pytest.mark.parametrize("name", MULTI_HEAD)
+def test_multi_head_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule: UpdateRule):
+    # at 0.1, as pure Python's: two multi-head layers under Momentum diverge at 0.3
+    _assert_training_matches_numpy(MULTI_HEAD[name], rule, 0.1)
+
+
+def _assert_every_adam_step_has_numpys_gradients(specs: list[LayerSpec], rate: float) -> None:
     # Adam's steep step at |g| near epsilon makes the trajectory chaotic (the stage 3 parity tests:
     # numpy against numpy with a one-ulp nudge drifts as far), so each of 50 steps is checked from
     # numpy's weights: Rust's gradients within 1e-10 of each layer's largest gradient (measured
     # 7e-13, the dense part after the mean). Attention's bk, rounding noise (D6), is compared apart:
     # on both sides within 1e-12 of attention's largest gradient (measured 6.9e-14; pure Python's
     # folds against numpy's BLAS gave 4e-16, the crate's products against BLAS more)
-    rust, numpy = network(CASES[name], SGD()), network(CASES[name], Adam(), backend=NUMPY)
-    data = rows(CASES[name], 40)
+    rust, numpy = network(specs, SGD()), network(specs, Adam(), backend=NUMPY)
+    data = rows(specs, 40)
     for step in range(50):
         batch = data[(step * 5) % 40 :][:5]
         states, labels = split(batch)
@@ -247,4 +316,16 @@ def test_every_step_under_adam_has_numpys_gradients(name: str):
                     continue
                 np.testing.assert_allclose(rust_values, values, rtol=0.0, atol=1e-10 * scale)
         numpy.rng = NUMPY.default_rng(step)
-        numpy.learn_batch(0.3, batch)
+        numpy.learn_batch(rate, batch)
+
+
+@pytest.mark.usefixtures("crate_exp")
+@pytest.mark.parametrize("name", CASES)
+def test_every_step_under_adam_has_numpys_gradients(name: str):
+    _assert_every_adam_step_has_numpys_gradients(CASES[name], 0.3)
+
+
+@pytest.mark.usefixtures("crate_exp")
+@pytest.mark.parametrize("name", MULTI_HEAD)
+def test_every_multi_head_step_under_adam_has_numpys_gradients(name: str):
+    _assert_every_adam_step_has_numpys_gradients(MULTI_HEAD[name], 0.1)
