@@ -201,7 +201,14 @@ Still out of scope:
   from one PCG64 stream family, but the per-node networks draw weights node by node and one
   dropout draw per node, so the same seed gives other values. Until the draw order matches, the
   per-node dropout reference is compared with the array networks only at eval
-  ([rng-audit.md](rng-audit.md), Open work).
+  ([rng-audit.md](rng-audit.md), Open work). The weights differ the same way: a pure-Python
+  layer with a bias draws each row's weights then its bias (a dense node, a token-wise dense
+  unit, an attention projection row), where numpy and Rust draw a whole W, then b. A layer
+  without a bias draws alike in all three (a linear layer, and the sequence task's embedding,
+  whose rows match numpy's `E` by bits). So the pure-Python parity tests (attention's, the
+  sequence task's) restore numpy from pure Python's snapshot rather than seeding both, and pin
+  pure Python's own draw order. Matching it would change every pure-Python network's draws: a
+  golden re-record (measurement.md, §8) and the owner's call.
 - **Run checkpoints beyond one network's mini-batch run** (`indrajala_ml/training/run_checkpoint.py`):
   resuming mid-epoch, resuming `train_linear_classifier_network` (it returns no run checkpoint),
   and resuming an ensemble's run, whose sub-networks train as separate jobs.
