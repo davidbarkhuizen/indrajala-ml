@@ -421,10 +421,21 @@ UCI epoch. So a change is judged by step-by-step parity (per-step agreement to a
 by end-of-run accuracy. The golden run (`scripts/golden_training_run.py check
 data/refactoring/golden_run.json`, about 1 s) pins 106 networks bit for bit.
 
-The golden run is the default gate, not a sacred one. A change that is genuinely more correct may
-move its bits: propose it to the owner first, and if they accept it, re-record the golden file and
-say so in the PR, with the measured difference and why the new result is more correct. Bits are
-never moved for style or for parity alone.
+The golden run is the default gate, not a sacred one. Two kinds of change may move its bits:
+
+- **More correct**: the new result is genuinely more accurate (a better-rounded sum, a fixed
+  formula).
+- **Fundamentally better structured**: keeping the old bits would need a special case, a second
+  code path for the old behaviour, or a design that blocks known later work (a workplan's
+  extension points), and the new structure removes that. The new bits must still pass the parity
+  standard (step-by-step agreement between implementations, explained gaps), and the PR names the
+  structural gain, not only the code that changed.
+
+Either way: propose it to the owner first (a workplan decision counts), and if they accept it,
+re-record the golden file and say so in the PR, with the entries that moved, the measured
+difference and the reason. The new version is archived as a material change (§10). Bits are never
+moved for style (renames, reformatting, an equivalent reordering with no structural gain) or for
+parity alone.
 
 ## 9. Rules for a timing claim in a PR, and for an optimization PR
 
