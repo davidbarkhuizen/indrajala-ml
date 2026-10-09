@@ -90,12 +90,12 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
 | `indrajala_ml/capture/` | painted digits turned into UCI digits and MNIST inputs |
 | `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks |
-| `indrajala_ml/studies/batch_size_scaling.py` | the batch-size scaling study (linear learning-rate scaling with warmup) |
+| `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol |
 | `indrajala_ml/graphics/` | matplotlib plotting: figures, axes, legends and series (`chart.py`), classifier plots (`classifier_plots.py`) and evaluation plots (`evaluation_plots.py`) |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
 | `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
-| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention study and the refactoring golden run; see `docs/measurement.md` |
+| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention and multi-head attention studies and the refactoring golden run; see `docs/measurement.md` |
 | `docs/` | the measurement guide, next steps, the PyPI release workplan, the primitives roadmap, the RNG audit, machine profiles |
 
 ## Models
@@ -125,8 +125,8 @@ network = SequentialArrayNetwork(
   (sigmoid with the squared or cross-entropy loss, or softmax with cross-entropy), with
   `BatchNorm(activation)` after a linear layer (Batch normalization), `Residual(body)` for a
   residual block (Residual connections), `LayerNorm(epsilon)`, and a patch model's
-  `Patches(patch_size)`, `Position()`, `Attention()` and `TokenMean()` (Layer norm and
-  attention). Activations are fused into their layer. `validate_layer_specs` refuses a list that
+  `Patches(patch_size)`, `Position()`, `Attention(heads, key_size)` and `TokenMean()` (Layer norm
+  and attention). Activations are fused into their layer. `validate_layer_specs` refuses a list that
   some implementation can't build.
 - **Update rules** (`update_rules.py`) are data too: `SGD`, `Momentum`, `Adam` and `WeightDecay`
   (see Update rules, below).
@@ -237,7 +237,9 @@ network = load_network("model.json")  # the Sequential network the file describe
 - The patch model's entries are `"patches"`, `"position"`, `"layer_norm"`, `"attention"` and
   `"token_mean"`; a token-wise dense layer's is a `"dense"` one. Weights and optimizer state:
   `Position`'s `P`, a layer norm's `γ` and `β` (flat or over tokens), attention's `Wq, bq, Wk, bk,
-  Wv, bv, Wo, bo`, nothing for `Patches` or `TokenMean` (`tests/model/persistence/test_attention_format2.py`).
+  Wv, bv, Wo, bo` (heads as row blocks), nothing for `Patches` or `TokenMean`
+  (`tests/model/persistence/test_attention_format2.py`). An `"attention"` entry has `"heads"` and
+  `"key_size"` only when they aren't the defaults, so a one-head file is as before they existed.
 - `load` still reads each class's legacy file, written before format 2, with fresh optimizer
   state (`tests/model/persistence/test_legacy_saved_models.py`). Files saved in format 2 don't load on older versions
   of this package.
@@ -483,8 +485,8 @@ loses 2 points by 16 layers and the residual one 0.3 (the findings are in its do
 A patch model, a small vision transformer (Dosovitskiy et al. 2020, "An Image is Worth 16x16
 Words", arXiv 2010.11929), cuts the image into patches, one token each, embeds them, adds learned
 positions, passes them through pre-LN blocks, `x + F(LN(x))` (Xiong et al. 2020, arXiv
-2002.04745), averages over the tokens and classifies. Single-head self-attention, layer norm over
-tokens and over flat dense layers, for the Sequential networks of all three implementations,
+2002.04745), averages over the tokens and classifies. Multi-head self-attention (Vaswani et al. 2017, "Attention
+Is All You Need", arXiv 1706.03762, §3.2.2), layer norm over tokens and over flat dense layers, for the Sequential networks of all three implementations,
 under every update rule; no preset has them. Format 2 saves them (Saving and loading). This
 section fixes the forms all three implementations are held to:
 
@@ -513,10 +515,17 @@ tokens. After `TokenMean` the dense part's rules hold, and in any dense network 
 stand wherever a dense hidden layer may, a residual body's first layer included. A layer norm has
 no activation after it.
 
+`Attention(heads=1, key_size=None)` attends in `heads` heads of `key_size` features each, `d_k`;
+`None` means `d / heads`, which `heads` must then divide (Keras's `key_dim`). Values are as wide as
+keys. At the default, its parameter count, `4d² + 4d`, doesn't depend on `heads`; a set `key_size`
+makes the projections `heads * key_size` wide, independently of `d`. A transformer layer is the two
+blocks above; a deeper encoder writes them again.
+
 `Patches`, `Position`, `TokenMean` and `LayerNorm` draw nothing at initialization, so adding one
 never shifts a later layer's draws: `P` and `beta` start at 0, `gamma` at 1. `Attention` draws
-`Wq, bq, Wk, bk, Wv, bv, Wo, bo` in that order, each projection `d` by `d` and fan-in-aware, as a
-dense layer draws `W`, then `b`. Under `WeightDecay` weights decay; biases, `gamma`, `beta` and `P`
+`Wq, bq, Wk, bk, Wv, bv, Wo, bo` in that order, fan-in-aware, as a dense layer draws `W`, then `b`:
+`Wq`, `Wk` and `Wv` are `(h * d_k, d)`, head `i`'s rows a block, and `Wo` is `(d, h * d_k)`, its
+fan-in `h * d_k`. Under `WeightDecay` weights decay; biases, `gamma`, `beta` and `P`
 don't. Each new layer is one layer in the expanded list, so layer indices count it as one.
 
 The exact expressions, per example. `sum` is a left fold from `0.0` in index order (a batch's
@@ -556,7 +565,7 @@ layer norm, each token's d features (a flat layer is one token)
 
 attention, X the (T, d) tokens, h heads of d_k features, s = sqrt(d_k)
   [i] is head i's block: rows i * d_k to (i + 1) * d_k - 1 of Wq, Wk, Wv and their biases,
-  the same columns of Q, K, V, H and Wo; today h = 1 and d_k = d, so [0] is the whole matrix
+  the same columns of Q, K, V, H and Wo; at one head with d_k = d, [0] is the whole matrix
   project
     Q = X Wq^T + bq;  K = X Wk^T + bk;  V = X Wv^T + bv   (T, h * d_k) each: the product, then the bias
   attend, each head i
@@ -606,8 +615,12 @@ Two biases are inert. In each head `bk[i]` adds `q_t · bk[i]` to every score in
 floating point, which differs between implementations; parity tests compare it apart. `bv` only
 adds `Wo bv` to every output, as `bo` can, since each row of every `P[i]` sums to 1. Both stay, matching PyTorch's `nn.MultiheadAttention` and ViT's `qkv_bias`.
 
-On Rust each layer-norm and attention pass is one fused crate call, and the token-wise dense layer
-is the existing dense ops on the `(N * T, d)` view. A dense layer's hidden delta reads the next
+Every implementation's attention layer, and the crate, is the same three blocks per pass, project,
+attend and combine, each tested on its own; masking, dropout on `P`, grouped key/value heads and
+cross-attention each have a named place among them (next-steps.md, From multi-head attention).
+On Rust each layer-norm and attention pass is still one crate call, the attention ops thin
+wrappers over the crate's blocks, and the token-wise dense layer is the existing dense ops on the
+`(N * T, d)` view. A dense layer's hidden delta reads the next
 layer's `W` in one fused call (Residual connections); right before a `LayerNorm`, or a fork whose
 body starts with one, there is no `W` to read, and a sigmoid, ReLU or dropout layer takes the next
 layer's downstream and a mask op instead, its own expression unchanged.
@@ -617,6 +630,10 @@ both, against a conv network and a dense one, on MNIST under Adam (3 seeds, 5 ep
 then FFN beats FFN alone by less than a standard deviation, 95.8% against 95.4%; the attention
 block alone is the weakest, 92.4%, below the dense control's 93.9%; and the conv network wins,
 98.0%, as Dosovitskiy et al. 2020 predict at this data size (the findings are in its docstring).
+`scripts/multi_head_attention_study.py` reruns the attention-then-FFN model with 1, 2 and 4 heads,
+4 heads of 32 features, and two layers, at 5 seeds. At this size more heads change nothing (96.1%,
+96.2%, 96.0%), wider heads stay within noise, and a second layer helps on every seed: two layers of
+4 heads reach 97.0%, a point under the conv network with 11% of its parameters.
 
 ## Refactoring
 
@@ -652,7 +669,7 @@ test passing, and:
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
-  attention, then multi-head attention and a transformer block.
+  attention, multi-head attention and a transformer block, all done.
 - [docs/next-steps.md](docs/next-steps.md): the work left over from completed workplans, and how
   to read those workplans in git history.
 - [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's
