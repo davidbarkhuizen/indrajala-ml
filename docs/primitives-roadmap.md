@@ -46,7 +46,8 @@ Layer norm (over tokens and in flat dense networks) and single-head self-attenti
 learned `Position`s, pre-LN attention and FFN blocks, and `TokenMean`. The retired workplan and its
 open work are in next-steps.md. The patch-attention study (`scripts/patch_attention_study.py`)
 found the expected result, weakly: attention then FFN beats FFN alone by less than a standard
-deviation, and the conv network beats every patch model at this data size. Step 5 is next.
+deviation, and the conv network beats every patch model at this data size. Step 5 is next: its
+workplan is [multi-head-attention-workplan.md](multi-head-attention-workplan.md).
 
 ## 5. Multi-head attention and a full transformer block
 
