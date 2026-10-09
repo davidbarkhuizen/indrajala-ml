@@ -197,7 +197,9 @@ machine check, why any passes were added) and one table per metric.
 
 **Other commands.** `status` prints one line (the pass running, how many are done, an ETA).
 `clean --worktrees` and `clean --wheels` remove the worktrees and crate builds no run of the last
-14 days refers to. `RUN` defaults to the most recent run everywhere.
+14 days refers to. `RUN` defaults to the most recent run everywhere. A machine runs one `run` or
+`extend` at a time: a second is refused while the first holds `~/code/ab-runs/run.lock`, which
+frees itself when its process ends, however it ends.
 
 ## 5. Reading the report
 

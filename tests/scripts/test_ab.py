@@ -849,3 +849,25 @@ def test_report_passes_pools_only_the_passes_named() -> None:
 def test_report_passes_refuses_what_the_run_lacks(passes: str, message: str) -> None:
     with pytest.raises(ab.AbError, match=message):
         ab.report_data(FIXTURES / "pr480", passes)
+
+
+def test_a_second_run_is_refused_while_one_holds_the_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ab, "RUNS_ROOT", tmp_path)
+    hold = (
+        "import fcntl, sys, time; f = open(sys.argv[1], 'a+'); f.write('pid 1, run x'); f.flush(); "
+        "fcntl.flock(f, fcntl.LOCK_EX); print('held', flush=True); time.sleep(60)"
+    )
+    holder = subprocess.Popen(
+        [sys.executable, "-c", hold, str(tmp_path / "run.lock")],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert holder.stdout is not None and holder.stdout.readline() == "held\n"
+        with pytest.raises(ab.AbError, match="another run holds .*: pid 1, run x"), ab.run_lock("run --bench cmd"):
+            pass
+    finally:
+        holder.kill()
+        holder.wait()
+    with ab.run_lock("run --bench cmd"):  # freed when its holder died
+        assert "run --bench cmd" in (tmp_path / "run.lock").read_text()

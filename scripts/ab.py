@@ -69,7 +69,9 @@ touched. When they are equal, both sides use the venv's extension.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime
+import fcntl
 import hashlib
 import json
 import os
@@ -79,6 +81,7 @@ import statistics
 import subprocess
 import sys
 import time
+from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -948,6 +951,23 @@ def cmd_extend(args: argparse.Namespace) -> None:
     _finish(run_dir, manifest, started, len(sides))
 
 
+@contextlib.contextmanager
+def run_lock(what: str) -> Generator[None]:
+    """One run or extend at a time on this machine: an flock on RUNS_ROOT/run.lock for as long as
+    the process lives, so a killed run never leaves it held. The second is refused, naming the first."""
+    RUNS_ROOT.mkdir(parents=True, exist_ok=True)
+    with open(RUNS_ROOT / "run.lock", "a+") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock.seek(0)
+            raise AbError(f"another run holds {RUNS_ROOT / 'run.lock'}: {lock.read().strip()}") from None
+        lock.truncate(0)
+        lock.write(f"pid {os.getpid()}, {what}, since {_local_now().isoformat(timespec='seconds')}\n")
+        lock.flush()
+        yield
+
+
 def cmd_status(args: argparse.Namespace) -> None:
     run_dir = find_run(args.run)
     manifest = _manifest(run_dir)
@@ -1650,9 +1670,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("arguments after -- are for run only")
     try:
         if args.command == "run":
-            cmd_run(args, extra)
+            with run_lock(f"run --bench {args.bench}"):
+                cmd_run(args, extra)
         elif args.command == "extend":
-            cmd_extend(args)
+            with run_lock(f"extend {args.run or 'the latest run'}"):
+                cmd_extend(args)
         elif args.command == "status":
             cmd_status(args)
         elif args.command == "report":
