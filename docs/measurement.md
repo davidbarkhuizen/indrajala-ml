@@ -398,7 +398,54 @@ never moved for style or for parity alone.
   quotes before/after per-op rows for the ops it touches and the end-to-end effect; the
   measurements behind a change live in its PR.
 
-## 10. For agents
+## 10. Archiving results
+
+Runs worth keeping go to the public archive,
+[`indrajala-benchmarks`](https://github.com/davidbarkhuizen/indrajala-benchmarks), so they outlive
+the machine that ran them and can be re-reported under later noise rules. Its README and
+`FORMAT.md` describe a record. The commands below work in a clone at `AB_ARCHIVE_REPO` (default
+`~/code/indrajala-benchmarks`); each adds its records and their `INDEX.md` lines on a new branch,
+opens a PR, and squash-merges it when the archive's CI is green. A merged record is never
+changed: a correction is a new record with `--replaces <archive path>`.
+
+**When:**
+
+- **The runs behind a speedup claim** in a PR, once the PR merges, with `--reason` naming it.
+- **A full baseline:** a release; a toolchain, numpy/BLAS, kernel or BIOS change; a new benchmark
+  machine.
+- **A golden run version:** when the owner approves a material change to the bits
+  ([§8](#8-judging-correctness)), or when new functionality adds entries without moving any.
+
+A run that only shows a change got no slower, and a run for a PR that didn't merge, aren't
+archived. A failed run is archived only when its failure is the finding, with a `--reason`
+saying so.
+
+**An A/B or A/A run:**
+
+```
+python scripts/ab.py archive [RUN ...] --reason "#NNN: what it claims"
+```
+
+It refuses a run still going, a failed run without `--reason`, and a run directory holding any
+file `ab.py` didn't write. It renders `brief.txt`, `report.md` and, for an A/A, `pooled.md`, and
+cites the machine profile the run's check recorded, if that profile's identity hash still
+matches. A run from before identity hashes, or run without the machine check, names its profile:
+`--profile docs/machine_profiles/<machine>.json`. A record is named after its run directory.
+
+**A golden run version** (it doesn't train; it archives the file as it is):
+
+```
+python scripts/golden_training_run.py archive data/refactoring/golden_run.json \
+    --reason new-functionality --note "#NNN: what it adds" --commit <recorded at>
+```
+
+`--reason` is `material` or `new-functionality`. The record lists the entries added, moved and
+removed against the host's previous version, and a `new-functionality` version in which an entry
+moved is refused. `--date` defaults to the file's, `--profile` to this host's.
+
+`--no-pr` on either command stops after the commit, leaving the branch in the clone.
+
+## 11. For agents
 
 Most A/Bs here are run by an agent, where the cost is turns: each check on a running job re-reads
 the whole conversation. The repository's `CLAUDE.md` repeats these rules.

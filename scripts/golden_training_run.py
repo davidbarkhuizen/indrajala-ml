@@ -6,6 +6,13 @@ within a tolerance.
 
     python scripts/golden_training_run.py record golden.json   # on main, before the first stage
     python scripts/golden_training_run.py check golden.json    # after each stage
+    python scripts/golden_training_run.py archive golden.json --reason {material,new-functionality}
+        --note TEXT [--commit REF] [--date YYYY-MM-DD] [--profile FILE] [--replaces PATH] [--no-pr]
+
+archive adds the file to the benchmark archive as a new version for this host
+(indrajala_ml/measurement/benchmark_archive.py; docs/measurement.md, §8): its commit pair, why, and
+which entries were added, moved or removed against the previous version. A new-functionality
+version in which an earlier entry moved is refused.
 
 Each network is built with the same injected weights (a seeded random.Random, independent of
 either backend's RNG), then trained with learn, learn_row, learn_batch and
@@ -46,19 +53,23 @@ generators workplan: numpy and Rust in stage 3, pure Python in stage 4).
 """
 
 import argparse
+import datetime
 import json
 import math
 import os
 import random
+import socket
 import sys
 import tempfile
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, cast
 
 import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.data.prepared_dataset import PreparedDataset
+from indrajala_ml.measurement import benchmark_archive
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
 )
@@ -668,11 +679,65 @@ def check(golden: dict[str, Any], results: dict[str, Any]) -> bool:
     return identical
 
 
+def archive(args: argparse.Namespace) -> None:
+    """The golden file as a new version in the benchmark archive, by an auto-merged PR (or, with
+    --no-pr, a commit on a new branch of the archive's clone)."""
+    repo = Path(__file__).resolve().parent.parent
+    commit = benchmark_archive.resolve_commit(repo, args.commit)
+    profile = Path(args.profile) if args.profile else benchmark_archive.host_profile(repo, socket.gethostname())
+    if profile is None:
+        raise benchmark_archive.ArchiveError(f"no machine profile for {socket.gethostname()}: name one with --profile")
+    date = (
+        args.date
+        or datetime.datetime.fromtimestamp(os.path.getmtime(args.path), datetime.UTC).astimezone().date().isoformat()
+    )
+    archive_repo = Path(args.archive_repo)
+    branch = benchmark_archive.start(archive_repo)
+    try:
+        paths, lines, summary = benchmark_archive.archive_golden(
+            archive_repo,
+            Path(args.path),
+            repo=repo,
+            commit=commit,
+            reason=args.reason,
+            note=args.note,
+            profile=profile,
+            date=date,
+            replaces=args.replaces,
+        )
+        benchmark_archive.add_index_lines(archive_repo, lines)
+    except benchmark_archive.ArchiveError:
+        benchmark_archive.abandon(archive_repo, branch)
+        raise
+    title = f"Archive a golden run: {summary.split(':')[0]}"
+    done = benchmark_archive.finish(
+        archive_repo, branch, [*paths, "INDEX.md"], title, f"{summary}\n\n{args.note}", args.no_pr
+    )
+    print(f"archived {summary}: {done}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("mode", choices=["record", "check"])
+    parser.add_argument("mode", choices=["record", "check", "archive"])
     parser.add_argument("path", help="the golden run's JSON file")
+    parser.add_argument("--reason", choices=["material", "new-functionality"], help="archive: why this version")
+    parser.add_argument("--note", help="archive: what changed, and the PR")
+    parser.add_argument("--commit", default="HEAD", help="archive: the commit it was recorded at")
+    parser.add_argument("--date", help="archive: the date it was recorded (default: the file's)")
+    parser.add_argument("--profile", help="archive: the machine profile (default: this host's)")
+    parser.add_argument("--replaces", help="archive: the archive path of the record this one corrects")
+    parser.add_argument("--archive-repo", default=str(benchmark_archive.ARCHIVE_REPO), help="archive: its clone")
+    parser.add_argument("--no-pr", action="store_true", help="archive: stop after the commit (tests)")
     args = parser.parse_args(argv)
+    if args.mode == "archive":
+        if not (args.reason and args.note):
+            parser.error("archive needs --reason and --note")
+        try:
+            archive(args)
+        except benchmark_archive.ArchiveError as error:
+            print(f"golden_training_run.py archive: {error}", file=sys.stderr)
+            sys.exit(1)
+        return
 
     results = run_all()
     if args.mode == "record":
