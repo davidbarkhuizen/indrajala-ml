@@ -10,6 +10,7 @@ from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import Attention, Residual
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 from indrajala_ml.studies import batch_size_scaling as bss
+from indrajala_ml.studies import patch_study
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
 import patch_attention_study as study  # scripts/ isn't a package
@@ -24,7 +25,9 @@ PARAMETER_COUNTS = {"ffn": 6762, "attention": 6794, "attention-ffn": 11050, "con
 @pytest.mark.parametrize("arm", study.ARMS)
 def test_each_arm_is_a_valid_network_of_its_parameter_count(arm: str):
     validate_layer_specs(study.arm_specs(arm))
-    assert study.parameter_count(study.initial_network(arm, seed=0)) == PARAMETER_COUNTS[arm]
+    assert (
+        patch_study.parameter_count(patch_study.initial_network(study.arm_specs(arm), seed=0)) == PARAMETER_COUNTS[arm]
+    )
 
 
 def test_the_dense_control_has_about_attention_ffns_parameter_count():
@@ -42,11 +45,11 @@ def test_a_run_records_every_epoch_and_repeats_from_its_seed():
     examples: list[Example[int]] = [
         (tuple(rng.random() for _ in range(bss.DIMENSION)), rng.randrange(bss.CLASS_COUNT)) for _ in range(40)
     ]
-    study._datasets[("train", "test", 1)] = (examples, examples[:8])
-    context = {"train_path": "train", "test_path": "test", "limit": 1, "epochs": 2}
+    patch_study._datasets[("train", "test", 1)] = (examples, examples[:8])  # pyright: ignore[reportPrivateUsage]
+    context = {"train_path": "train", "test_path": "test", "limit": 1, "epochs": 2, "arm_specs": study.arm_specs}
 
-    first = study.run_config(context, ("attention-ffn", 0.001), 0)
-    second = study.run_config(context, ("attention-ffn", 0.001), 0)
+    first = patch_study.run_config(context, ("attention-ffn", 0.001), 0)
+    second = patch_study.run_config(context, ("attention-ffn", 0.001), 0)
 
     assert len(first["test_accuracies"]) == len(first["epoch_seconds"]) == 2
     assert first["parameter_count"] == PARAMETER_COUNTS["attention-ffn"]
