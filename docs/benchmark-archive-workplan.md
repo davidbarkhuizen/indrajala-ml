@@ -1,7 +1,11 @@
 # Workplan: a benchmark archive, tiered benchmarking, and a remote benchmark machine
 
 **Status: D1-D10 settled (owner, 2026-10-08). Stages 1-4 done (2026-10-09): the archive exists
-and is seeded, with CI reproducing every report; tier 1 runs 4 passes. Next: stage 5.**
+and is seeded, with CI reproducing every report; tier 1 runs 4 passes. Stage 5's code and docs
+are done (#596-#598): a tier 1 A/B started from `pyramidon` ran on `jebel`, survived its ssh
+session being killed, and reported back while `pyramidon` built and passed its tests. Left for
+the owner: `sudo scripts/install_benchmark_setup.sh` on `jebel`, and Claude Code and `gh` on
+`pyramidon`. Then stage 6.**
 
 Three changes that belong together, because each makes benchmarking cheaper to do and its results
 last longer:

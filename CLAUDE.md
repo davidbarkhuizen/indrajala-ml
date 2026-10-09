@@ -18,23 +18,29 @@
 
 Timing a change follows [docs/measurement.md](docs/measurement.md); read it before any benchmark.
 
+- **Development runs on `pyramidon`; timing runs on `jebel`,** started from `pyramidon` with
+  `ab.py remote --host jebel run ...` (docs/measurement.md, §4). Push both sides first.
 - **Every old-against-new timing goes through `scripts/ab.py`** (`run`, then `report --brief`).
   No hand-built driver or pooling scripts: a measurement it can't express gets a probe or an
   adapter in `ab.py`, in the same PR.
-- **Launch `ab.py run` in the background and don't poll.** Its exit is the signal; use `status`
-  only when the owner asks, and schedule no wake-ups for runs under an hour.
+- **Launch `ab.py remote --host jebel run` in the background and don't poll.** Its exit is the
+  signal, with the brief report; use `status` only when the owner asks, and schedule no wake-ups
+  for runs under an hour. A dropped ssh session ends only the wait: run the `remote ... wait` it
+  names.
 - **Read `report --brief` only.** Open a raw pass file only when the brief report flags something
   it can't explain.
 - **In a crate A/B, the header's two `.so` hashes must differ** when the crate's Rust changed; the
   same hash twice means one crate was timed on both sides (docs/measurement.md, Gotchas).
-- **Put `report --md FILE` into a PR body by concatenating files**, not by reading and retyping it.
-- **The setup script runs after every boot.** `sudo scripts/benchmark_machine_setup.sh` (frequency
-  policy, PL1 65 W, `thermald` stopped, snap refreshes held) needs the owner's own terminal;
-  `ab.py`'s machine check refuses a run until it has run.
-- **Check the machine, then go; don't ask.** Before a run, check `uptime` and `ps`; `pkill` Brave,
-  Firefox and Zed if they are running, and wait out a high load, an apt job or a snap refresh
-  (measurement.md §2). Keep the machine quiet during the run: no tests, lint or builds; reading
-  and writing are fine.
+- **Put `remote ... report RUN --md FILE` into a PR body by concatenating files**, not by reading
+  and retyping it.
+- **After a reboot, `ab.py remote run` re-applies `jebel`'s setup itself** (frequency policy, PL1
+  65 W, `thermald` stopped, snap refreshes held), through the root-owned copy the owner installs
+  with `sudo scripts/install_benchmark_setup.sh`. When it says the copy is missing or stale, ask
+  the owner to run that in their own terminal on `jebel`.
+- **Check `jebel`, then go; don't ask.** Before a run, check its `uptime` and `ps` over ssh;
+  `pkill -x` Brave, Firefox and Zed there if they are running, and wait out a high load, an apt
+  job or a snap refresh (measurement.md §2). Nothing else runs on `jebel` during the run;
+  development on `pyramidon` carries on.
 - **A PR's tier decides its timing** (docs/measurement.md, §1): **0**, no timed path changed
   (new functionality that leaves existing timed paths alone, docs, pure-Python code, never timed):
   no A/B; **1**, a timed path (`learn*`, `classify_rows`, the crate) changed with no speedup
