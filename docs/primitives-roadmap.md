@@ -25,10 +25,8 @@ Python, numpy, Rust). There is no masking, no dropout in attention and no recurr
    on MNIST.
 5. **Multi-head attention and a full transformer block**: done (2026-10-09), as deeper multi-head
    patch models on MNIST.
-
-No step 6 is proposed yet. The candidates are the extension points step 5 named (masking with a
-sequence task, dropout in attention, grouped key/value heads, cross-attention) and GELU, in
-[next-steps.md](next-steps.md), From multi-head attention.
+6. **A sequence task with causal masking**: proposed (2026-10-09). Next-token prediction on a small
+   text dataset: the network's first per-token output and loss, and attention's first mask.
 
 ## 1 to 5. Done
 
@@ -62,8 +60,51 @@ found that more heads change nothing at this size (16 tokens of 32), and depth h
 4 heads reach 97.0%, a point under the conv network. The case made for step 5 is in this file's
 history: `git show d70cf0f:docs/primitives-roadmap.md`.
 
+## 6. A sequence task with causal masking
+
+Every model so far reads one example and gives one label: a patch model's tokens are pooled by
+`TokenMean` before a single output. Attention's defining use, a model of sequences that predicts
+each token from the ones before it (Vaswani et al. 2017; Radford et al. 2018, "Improving Language
+Understanding by Generative Pre-Training"), needs three things the framework lacks: a sequence
+dataset, an output and a loss at every token, and a causal mask so that token `t` attends only to
+tokens `<= t`. Step 5 named the mask's place (attend, before the max shift: an additive mask on
+the scores, the backward pass unchanged because a masked weight is exactly zero), and left it for
+this step because without the other two it can't be trained or tested on a real task.
+
+The candidates for step 6, each one of step 5's extension points (next-steps.md, From multi-head
+attention) or GELU:
+
+| candidate | pros | cons |
+| --- | --- | --- |
+| **A sequence task with causal masking** (proposed) | opens a new task family, language modelling, rather than refining the image one; the mask is the smallest attention change, already placed; per-token outputs and losses are framework structure every later sequence feature needs (padding masks, generation, cross-attention); a text dataset tests the framework off MNIST | the largest step: a dataset and loader, a new network shape, a per-token output and loss, and new evaluation (per-token accuracy, bits per character), in all three implementations and the crate |
+| Dropout in attention | regularization the MNIST patch models might use; its place is named | needs a training and inference switch in a token layer and mask draws in three implementations' orders; the patch models don't overfit at 5 epochs, so a study would likely show nothing |
+| GELU | ViT's and GPT's FFN activation; small | needs `erf`, which stable Rust lacks; an activation, not a primitive; at this size unlikely to move accuracy |
+| Grouped- or multi-query attention | named place; fewer key/value parameters | an inference-memory optimization: nothing here is memory-bound, so there is nothing to measure |
+| Cross-attention | named place | needs a second input to a layer, which `Sequential` doesn't have, and an encoder-decoder task: its own design, after a sequence task exists |
+
+A sequence task comes first because the rest either need it (cross-attention, padding masks) or
+have nothing to show on MNIST. Its workplan settles, with each option's pros and cons:
+
+- **the dataset**: a small character-level corpus (Tiny Shakespeare, about 1.1 M characters and 65
+  symbols, Karpathy 2015's char-rnn), packaged and checksum-pinned as MNIST is
+  (`scripts/fetch_datasets.py`), or a synthetic task generated from a seed, or both;
+- **the input**: one-hot tokens through the existing token-wise `Dense` (no new layer), or an
+  `Embedding(vocabulary, d)` spec reading token ids;
+- **the output and loss**: a token-wise softmax output at every position and cross-entropy averaged
+  over the tokens, a new network shape beside `multiclass` and `single_output`, with per-token
+  targets through the trainer, the evaluation and the save format;
+- **the mask**: `Attention(causal=True)`, a field with a default (step 5's D7), in attend in all
+  three implementations and the crate, with a test that a future token can't change an earlier
+  output;
+- **the study**: what a causal transformer reaches against a unigram and a bigram baseline and an
+  FFN-only model, in bits per character, and that removing the mask lets the training loss fall
+  to near zero while the held-out loss does not (the leak a mask prevents).
+
+Generation (sampling text from the model), padding masks and variable-length sequences stay out
+unless the workplan finds them needed.
+
 ## Out of scope
 
-- Recurrent networks (RNN, LSTM): no sequence dataset, and attention covers the sequence case
-  in the literature this project follows.
+- Recurrent networks (RNN, LSTM): attention covers the sequence case in the literature this
+  project follows.
 - GPU backends.
