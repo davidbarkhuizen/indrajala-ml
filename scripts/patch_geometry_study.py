@@ -26,6 +26,52 @@ Seconds per epoch compare only within one study.
 Adam at batch 32, one rate per arm from `tune`, 5 epochs, 5 seeds, OPENBLAS_NUM_THREADS=1,
 4 workers. Attention's cost grows with T^2: one epoch of the slowest arm is timed first and the
 grid sized from it.
+
+Findings, on jebel (i7-9700K), nothing else running. One epoch of the slowest arm, p4-4-head-k32,
+took 42.0 s alone (`time`), so `tune` ran every arm at every rate in TUNE_RATES for 2 epochs and 5
+seeds (about an hour), and `sweep` 5 epochs and 5 seeds at each arm's best rate (about 25 min).
+The seeds are the multi-head study's, so each arm is paired seed by seed with its cited
+counterpart there.
+
+- tune: the best rates were 0.0005 (d64-4-head-2-layer), 0.001 (p4-1-head, d64-1-head,
+  d64-4-head), 0.002 (p4-4-head-k32, p4-ffn) and 0.004 (p4-4-head, d64-ffn); no arm diverged.
+- Smaller patches cost accuracy at this length of training: every patch-4 arm ends under its
+  patch-7 counterpart, 1-head by 1.21 +- 0.72 points, 4-head by 0.60 +- 0.33, 4-head-k32 by
+  0.40 +- 0.42 and ffn by 0.86 +- 0.55, on every seed but one of 4-head-k32's. A token of 16 pixels carries less
+  than one of 49, and 49 positions are more to learn in 5 epochs.
+- The bottleneck still doesn't measurably bind: at T = 49, where each 8-wide head's scores have
+  rank at most 8 of 49, lifting it (4-head-k32) adds 0.42 +- 0.83 points over 4-head (4 of 5
+  seeds), twice the patch-7 margin (+0.22 +- 0.40) but no more resolved.
+- With more tokens, heads start to matter, and attention needs them: 4-head is 0.58 +- 0.73 over
+  1-head (4 of 5) where at T = 16 heads changed nothing; one head beats the FFN block alone by
+  only 0.05 +- 0.49, four by 0.63 +- 0.45 and four wide ones by 1.05 +- 0.68 (4 of 5 each).
+- At d = 64, heads and depth both help on every seed: 4-head over 1-head +0.62 +- 0.51, a second
+  layer +0.48 +- 0.22 (5 of 5 each). But the wider FFN block alone (128 wide) gains the most
+  from the width, +0.74 +- 0.47 over its d = 32 control (5 of 5), and stands level with
+  attention: one head is 0.40 +- 0.53 under it (4 of 5 seeds), four heads 0.23 +- 0.43 over.
+- The best model, d64-4-head-2-layer at 97.12% +- 0.25%, is only 0.13 +- 0.38 points over the
+  multi-head study's best (4-head-2-layer at d = 32, 96.98%) with 3.7 times its parameters (71946
+  against 19594), and still 0.9 points under the conv network (98.00%).
+
+So on MNIST at 5 epochs, neither more tokens nor wider ones close the gap to conv: patch 7 and
+d = 32 stay the better trade, the low-rank bound stays unresolved, and the one new effect is that
+heads help once there are more tokens or wider ones to split.
+
+| arm | rate | parameters | epoch 1 | epoch 3 | epoch 5 | seconds per epoch |
+|---|---|---|---|---|---|---|
+| p4-1-head | 0.001 | 11050 | 86.86% +- 0.77% | 93.65% +- 0.47% | 94.86% +- 0.72% | 25.0 |
+| p4-4-head | 0.004 | 11050 | 91.95% +- 0.87% | 94.83% +- 0.37% | 95.44% +- 0.34% | 40.6 |
+| p4-4-head-k32 | 0.002 | 23626 | 91.43% +- 0.90% | 94.87% +- 0.75% | 95.86% +- 0.59% | 61.3 |
+| p4-ffn | 0.002 | 6762 | 91.29% +- 0.34% | 93.76% +- 0.48% | 94.81% +- 0.31% | 11.0 |
+| d64-1-head | 0.001 | 38474 | 91.74% +- 0.74% | 95.35% +- 0.65% | 96.01% +- 0.53% | 16.4 |
+| d64-4-head | 0.001 | 38474 | 93.30% +- 0.86% | 95.79% +- 0.16% | 96.64% +- 0.32% | 17.5 |
+| d64-4-head-2-layer | 0.0005 | 71946 | 94.42% +- 0.42% | 96.72% +- 0.14% | 97.12% +- 0.25% | 31.4 |
+| d64-ffn | 0.004 | 21706 | 93.74% +- 0.79% | 95.33% +- 1.10% | 96.41% +- 0.47% | 8.5 |
+
+Test accuracy, mean +- standard deviation over the 5 seeds; a difference "+- x" is the mean and
+standard deviation of the per-seed differences. Seconds per epoch are the mean over the seeds and
+epochs, 4 jobs at once: patch 4 costs 2.3 to 4.2 times patch 7's per epoch. Raw outputs in
+data/attention/patch-geometry-{tune,sweep}.{json,txt} (untracked).
 """
 
 from __future__ import annotations

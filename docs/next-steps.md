@@ -268,10 +268,13 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
   inference switch in a token layer and mask draws in all three implementations' orders.
 - **GELU** (D5 (c)), ViT's FFN activation, an activation for `Dense`: it needs `erf`, which stable
   Rust lacks (the `tanh` form is a different function), in all three implementations and the crate.
-- **The study's other arms** (D8 (b), (c)): `d = 64`, and patch size 4 (`T = 49`). Both change
-  what step 4's numbers control for. The second also tests the bottleneck again: at `d_k = 8` and
-  `T = 16` each head's scores have rank at most 8 of 16, yet lifting it (`key_size=32`) stayed
-  within noise (+0.22 +- 0.40 points); at `T = 49` the bound is tighter, 8 of 49.
+- **The study's other arms** (D8 (b), (c)): run on 2026-10-09 (`scripts/patch_geometry_study.py`,
+  findings in its docstring). Patch 4 (`T = 49`) costs every arm 0.4 to 1.2 points at 5 epochs;
+  the low-rank bound still doesn't measurably bind (+0.42 +- 0.83 for `key_size=32`); heads start
+  to help with more or wider tokens (+0.6 over one head at `T = 49` and at `d = 64`); and `d = 64`
+  adds 0.13 points to the best model at 3.7 times the parameters. Patch 7 and `d = 32` stay the
+  MNIST patch models' trade; the gap to conv (0.9 points) is for the sequence task to revisit, not
+  more MNIST geometry.
 - **The numpy attention backward's 10% from stage 3.** #606's tier 1 A/B reported the numpy rows
   within noise, but before #610 both sides imported the new tree's package. Rerun on 2026-10-09
   with the fixed script (`ab.py run --script-from`, #616; report on #616), stage 3 made
