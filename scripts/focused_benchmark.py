@@ -10,7 +10,10 @@ Cases are demo_layer_op_timing's (every dense, conv and max-pool layer op), plus
 - per dense shape and batch, the parts of the two backward batch ops: `bare downstream`
   (`delta_batch @ W`), `bare accumulate` (`delta_batch.T @ X`), `transpose` (`delta_batch.T`),
   `add` (`grad_W + update`) and `sum_axis0` (`delta_batch`);
-- `--matmul MxKxN`, a bare `(M, K) @ (K, N)` product, repeatable.
+- `--matmul MxKxN`, a bare `(M, K) @ (K, N)` product, repeatable;
+- per batch, a one-head `Attention()` over a patch model's 16 tokens of 32 features (the
+  multi-head attention workplan, D10): `forward_batch`, `hidden_delta_batch` (its whole backward
+  pass, from the next layer's downstream to dX) and `accumulate_gradient_batch`.
 
 Examples:
 
@@ -60,6 +63,8 @@ from indrajala_ml.demos.benchmarks.demo_layer_op_timing import (
     _backend_array,  # pyright: ignore[reportPrivateUsage]  (the demo's cases build their arrays with it)
     all_cases,
 )
+from indrajala_ml.model.layers.array.array_layer_builder import build_array_layers
+from indrajala_ml.model.specs.layer_specs import Attention, Dense, Patches, Position, Residual, TokenMean
 
 PART_OPS = ("bare downstream", "bare accumulate", "transpose", "add", "sum_axis0")
 
@@ -108,10 +113,70 @@ def matmul_case(spec: str) -> Case:
     return Case(f"matmul {m}x{k}x{n}", "bare matmul", None, build)
 
 
+# a patch model's attention, as patch_attention_study.py's: 28x28 images in patches of 7, so 16
+# tokens, embedded in 32 features
+ATTENTION_LABEL = "attention 16 x 32"
+ATTENTION_SPECS = [
+    Patches(7),
+    Dense(32, activation="linear", bias=True),
+    Position(),
+    Residual((Attention(),)),
+    TokenMean(),
+    Dense(10, activation="softmax", output=True, loss="cross_entropy"),
+]
+ATTENTION_OPS = ("forward_batch", "hidden_delta_batch", "accumulate_gradient_batch")
+ATTENTION_PARAMETERS = ("Wq", "bq", "Wk", "bk", "Wv", "bv", "Wo", "bo")
+
+
+class _Downstream:
+    """The next layer, as the attention layer's hidden delta reads it."""
+
+    def __init__(self, delta: Any) -> None:
+        self.delta = delta
+
+    def downstream_batch(self) -> Any:
+        return self.delta
+
+
+def attention_cases(batch_sizes: Sequence[int]) -> list[Case]:
+    """
+    A one-head Attention() layer's batch ops. The layer comes from the builder, from specs alone,
+    so the case runs unchanged on a tree whose attention constructor takes more arguments (ab.py
+    runs the new tree's script on both sides). Its parameters are drawn in their order, each
+    projection uniform within 1 / sqrt(fan_in); the input is uniform in [-1, 1], as after a layer
+    norm, and the delta in [-0.1, 0.1].
+    """
+
+    def op_case(op: str, batch: int) -> Callable[[str], Callable[[], object]]:
+        def build(backend: str) -> Callable[[], object]:
+            rng = np.random.default_rng(SEED)
+            layers = build_array_layers(ATTENTION_SPECS, (28, 28, 1), backend)
+            layer: Any = next(layer for layer in layers if hasattr(layer, "Wq"))
+            names = iter(ATTENTION_PARAMETERS)
+            for rows, fan_in in layer.projection_shapes:
+                limit = 1 / np.sqrt(fan_in)
+                setattr(layer, next(names), _backend_array(backend, rng.uniform(-limit, limit, size=(rows, fan_in))))
+                setattr(layer, next(names), _backend_array(backend, rng.uniform(-limit, limit, size=rows)))
+            X = _backend_array(backend, rng.uniform(-1.0, 1.0, size=(batch, layer.input_size)))
+            below = _Downstream(_backend_array(backend, rng.uniform(-0.1, 0.1, size=(batch, layer.size))))
+            layer.forward_batch(X)
+            layer.compute_hidden_delta_batch(below)
+            if op == "forward_batch":
+                return lambda: layer.forward_batch(X)
+            if op == "hidden_delta_batch":
+                return lambda: layer.compute_hidden_delta_batch(below)
+            return lambda: layer.accumulate_gradient_batch(X)
+
+        return build
+
+    return [Case(ATTENTION_LABEL, op, batch, op_case(op, batch)) for op in ATTENTION_OPS for batch in batch_sizes]
+
+
 def every_case(batch_sizes: Sequence[int], matmuls: Sequence[str]) -> list[Case]:
     cases = all_cases(batch_sizes)
     for label, size, input_size in DENSE_SHAPES:
         cases += dense_part_cases(label, size, input_size, batch_sizes)
+    cases += attention_cases(batch_sizes)
     return cases + [matmul_case(spec) for spec in matmuls]
 
 
