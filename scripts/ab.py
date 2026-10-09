@@ -13,6 +13,9 @@ docs/measurement.md (the A/B harness workplan in docs/next-steps.md has the desi
     python scripts/ab.py report [RUN] [--brief] [--md FILE] [--pooled FILE]
     python scripts/ab.py clean [--worktrees] [--wheels]
     python scripts/ab.py archive [RUN ...] [--reason TEXT] [--profile FILE] [--replaces PATH] [--no-pr]
+    python scripts/ab.py check [--apply-setup]
+    python scripts/ab.py wait [RUN]
+    python scripts/ab.py remote --host jebel run|extend|wait|status|report|archive [its arguments]
 
 Each side is a commit, checked out once as a detached worktree under ~/code/ab-worktrees/<sha7>.
 A run lives in ~/code/ab-runs/<YYYY-MM-DD>-<name>/ (manifest.json, progress.jsonl, and each pass's
@@ -37,6 +40,18 @@ only those ab.py wrote, its reports rendered now (brief.txt, report.md, and pool
 a record.json, and the profile snapshot it ran under, in one PR squash-merged when the archive's CI
 is green. The profile is the one the run's machine checks recorded, if its identity hash still
 matches; a run from before identity hashes, or without a machine check, names it with --profile.
+
+`run --detach` and `extend --detach` start the command in its own session, so it outlives the
+shell or ssh session that started it, and return once its run directory exists; `wait` blocks
+until it ends and prints the brief report. A machine runs one run or extend at a time (an flock on
+RUNS_ROOT/run.lock). `check` is the machine check alone; with --apply-setup a failed check re-runs
+the setup through its installed root-owned copy (scripts/install_benchmark_setup.sh), once.
+
+`remote --host H` runs a command on a benchmark machine over ssh, in its checkout (REMOTE_REPO from
+its home). `remote run` resolves the sides to commits here (they must be on GitHub), then on the
+host brings the checkout to origin's main (rebuilding its crate when rust/ moved), runs the check
+with --apply-setup, starts the run detached and waits for it; a dropped connection ends only the
+wait (`remote wait RUN` resumes it). `remote report --md FILE` writes FILE here.
 
 Output is bounded: raw data goes to files only, `run` and `extend` print a line when they start
 and one when they finish (or the failing step's last 20 lines of stderr, exiting 1), and
@@ -75,6 +90,7 @@ import fcntl
 import hashlib
 import json
 import os
+import shlex
 import shutil
 import socket
 import statistics
@@ -96,6 +112,13 @@ RUNS_ROOT = Path(os.environ.get("AB_RUNS_ROOT", Path.home() / "code/ab-runs"))
 WORKTREES_ROOT = Path(os.environ.get("AB_WORKTREES_ROOT", Path.home() / "code/ab-worktrees"))
 CRATE_REPO = Path(os.environ.get("AB_CRATE_REPO", Path.home() / "code/indrajala-math-rust"))
 CARGO_BIN = Path.home() / ".cargo/bin"
+# the benchmark machine's setup, as installed by scripts/install_benchmark_setup.sh (root-owned, and
+# the only command its sudoers entry allows)
+SETUP_COPY = Path("/usr/local/sbin/indrajala-benchmark-setup")
+SETUP_SCRIPT = "scripts/benchmark_machine_setup.sh"
+REMOTE_REPO = "code/indrajala-ml"  # the checkout on a remote host, from its home directory
+WAIT_SECONDS = 10
+DETACH_SECONDS = 600  # a detached run's manifest appears after its worktrees, before any crate build
 PROFILE_REFERENCE = f"{PROFILES_DIR}/i7-9700k.json"  # the benchmark machine; an unknown host is compared to it
 RAW_SUFFIXES = (".json", ".stdout", ".stderr")  # what a pass or smoke step writes, per stem
 THREAD_VARS = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")
@@ -992,14 +1015,14 @@ def cmd_status(args: argparse.Namespace) -> None:
 def cmd_report(args: argparse.Namespace) -> None:
     run_dir = find_run(args.run)
     data = report_data(run_dir, args.passes)
-    if args.md:
-        Path(args.md).write_text(markdown_report(data))
-        if not args.brief:
-            print(f"wrote {args.md}")
-    if args.pooled:
-        Path(args.pooled).write_text(pooled_report(data))
-        if not args.brief:
-            print(f"wrote {args.pooled}")
+    for target, render in ((args.md, markdown_report), (args.pooled, pooled_report)):
+        if target == "-":  # for ab.py remote report: the file alone on stdout
+            print(render(data), end="")
+            return
+        if target:
+            Path(target).write_text(render(data))
+            if not args.brief:
+                print(f"wrote {target}")
     if args.brief or not (args.md or args.pooled):
         print("\n".join(brief_report(data)))
 
@@ -1618,17 +1641,10 @@ def markdown_report(data: ReportData) -> str:
 # ---- entry point
 
 
-def main(argv: list[str] | None = None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
-    extra: list[str] = []
-    if "--" in argv:
-        split = argv.index("--")
-        argv, extra = argv[:split], argv[split + 1 :]
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--repo", default=str(REPO), help="the repository whose commits are compared")
-    commands = parser.add_subparsers(dest="command", required=True)
+# ---- detached and remote runs
 
-    run = commands.add_parser("run", help="run an A/B")
+
+def _run_parser(run: argparse.ArgumentParser) -> argparse.ArgumentParser:
     run.add_argument("--bench", required=True, choices=sorted(ADAPTERS))
     run.add_argument("--old", default="main")
     run.add_argument("--new", default="HEAD")
@@ -1638,21 +1654,247 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--script-from", choices=["old", "new"], default="new")
     run.add_argument("--old-crate", help="crate commit for the old side (default: its tree's rust/ submodule)")
     run.add_argument("--new-crate", help="crate commit for the new side (default: its tree's rust/ submodule)")
-    for command in (run, extend := commands.add_parser("extend", help="add passes to a finished run")):
-        command.add_argument("--allow-profile-change", action="store_true")
-        command.add_argument("--skip-profile", action="store_true", help="skip the machine check (tests, toy probes)")
+    return run
+
+
+def _report_parser(report: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    report.add_argument("run", nargs="?")
+    report.add_argument("--brief", action="store_true", help=f"at most {BRIEF_LINES} lines (the default output)")
+    report.add_argument("--md", help="write the full tables and the protocol paragraph here (- for stdout)")
+    report.add_argument("--pooled", help="an A/A only: each row pooled over every pass, with its spread, here")
+    report.add_argument("--passes", help="report only these passes, e.g. 1-4 or 1,2,5 (the tier 1 check)")
+    return report
+
+
+def machine_check(repo: Path) -> tuple[Path, list[str] | None]:
+    """This host's profile, and None when the machine matches it, else the comparison's output."""
+    hostname = socket.gethostname()
+    profile = host_profile(repo, hostname)
+    if profile is None:
+        raise AbError(f"machine profile: none in {PROFILES_DIR} for host {hostname}")
+    result = subprocess.run(
+        [sys.executable, str(repo / "scripts/machine_profile.py"), "compare", str(profile)],
+        check=False,
+        cwd=RUNS_ROOT,
+        env=_pass_env(repo),
+        capture_output=True,
+        text=True,
+    )
+    return profile, None if result.returncode == 0 else (result.stdout + result.stderr).splitlines()
+
+
+def apply_setup(repo: Path) -> None:
+    """Re-apply the benchmark machine's settings (after a reboot) through the installed copy, which
+    must be the checkout's setup script: a stale copy is the owner's to re-install."""
+    install = "sudo scripts/install_benchmark_setup.sh"
+    if not SETUP_COPY.is_file():
+        raise AbError(f"{SETUP_COPY} isn't installed: the owner runs {install} once, in their own terminal")
+    copy, source = (hashlib.sha256(p.read_bytes()).hexdigest() for p in (SETUP_COPY, repo / SETUP_SCRIPT))
+    if copy != source:
+        raise AbError(f"{SETUP_COPY} differs from {SETUP_SCRIPT}: the owner re-runs {install}")
+    result = subprocess.run(["sudo", "-n", str(SETUP_COPY)], check=False, capture_output=True, text=True)
+    if result.returncode:
+        raise AbError(f"sudo -n {SETUP_COPY} failed", (result.stdout + result.stderr).splitlines())
+
+
+def check_machine(repo: Path, apply: bool) -> str:
+    """The machine check alone; with apply, a failed check re-applies the setup and checks once more."""
+    profile, differences = machine_check(repo)
+    note = ""
+    if differences and apply:
+        apply_setup(repo)
+        profile, differences = machine_check(repo)
+        note = " after re-applying the setup"
+    if differences:
+        raise AbError(f"machine check: this host differs from {profile.name}{note}", differences)
+    return f"machine check: matches {profile.name}{note}"
+
+
+def sync_checkout(repo: Path, commits: list[str]) -> list[str]:
+    """Bring a benchmark machine's checkout to origin's main, rebuilding the venv's crate when rust/
+    moved, and check that the commits to time have arrived. Returns what it did, for the log."""
+    if _git(repo, "status", "--porcelain", "--untracked-files=no"):
+        raise AbError(f"the checkout at {repo} has uncommitted changes: a benchmark machine's must be clean")
+    if _git(repo, "rev-parse", "--abbrev-ref", "HEAD") != "main":
+        raise AbError(f"the checkout at {repo} isn't on main")
+    before, head = _crate_commit(repo, "HEAD"), _git(repo, "rev-parse", "HEAD")
+    _git(repo, "fetch", "--quiet", "origin")
+    _git(repo, "merge", "--quiet", "--ff-only", "origin/main")
+    _git(repo, "submodule", "update", "--quiet", "--init")
+    done = [f"checkout {head[:7]} -> {_git(repo, 'rev-parse', '--short', 'HEAD')}"]
+    for commit in commits:
+        if subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{commit}^{{commit}}"], check=False).returncode:
+            raise AbError(f"commit {commit[:7]} isn't on {repo}'s origin: push it first")
+    if (after := _crate_commit(repo, "HEAD")) != before and after:
+        result = subprocess.run(
+            ["./cli", "build-rust"], cwd=repo, check=False, env=_pass_env(repo), capture_output=True, text=True
+        )
+        if result.returncode:
+            raise AbError("./cli build-rust failed", (result.stdout + result.stderr).splitlines())
+        done.append(f"rebuilt the venv's crate at {after[:7]}")
+    return done
+
+
+def detach(argv: list[str], what: str) -> None:
+    """Start this command (argv, without --detach) as its own session, so it outlives the shell or
+    ssh session that started it, and return once its run directory names it."""
+    launches = RUNS_ROOT / "launches"
+    launches.mkdir(parents=True, exist_ok=True)
+    log = launches / f"{_local_now():%Y%m%d-%H%M%S}-{os.getpid()}.log"
+    with open(log, "w") as out:
+        child = subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), *argv],
+            stdin=subprocess.DEVNULL,
+            stdout=out,
+            stderr=subprocess.STDOUT,
+            cwd=RUNS_ROOT,
+            start_new_session=True,
+        )
+    deadline = time.monotonic() + DETACH_SECONDS
+    while time.monotonic() < deadline:
+        if (code := child.poll()) is not None:
+            raise AbError(f"{what} exited {code} before it started (log {log})", _tail(log))
+        found = [d for d in _run_dirs() if _manifest(d)["pid"] == child.pid and _manifest(d)["state"] == "running"]
+        if found:
+            named = launches / f"{found[0].name}-{log.name}"
+            log.rename(named)  # the child keeps writing to it
+            print(f"started {found[0].name} detached (pid {child.pid}, log {named}); next: ab.py wait {found[0].name}")
+            return
+        time.sleep(0.5)
+    raise AbError(f"{what} (pid {child.pid}) named no run directory within {DETACH_SECONDS} s (log {log})", _tail(log))
+
+
+def cmd_wait(args: argparse.Namespace) -> None:
+    """Block until a run ends; print the brief report, or fail with its launch log's tail."""
+    run_dir = find_run(args.run)
+    while (manifest := _manifest(run_dir))["state"] == "running" and _pid_alive(manifest["pid"]):
+        time.sleep(WAIT_SECONDS)
+    if manifest["state"] != "done":
+        logs = sorted((RUNS_ROOT / "launches").glob(f"{run_dir.name}-*.log"))
+        state = manifest["state"] if manifest["state"] != "running" else "stopped (its process is gone)"
+        raise AbError(f"{run_dir.name}: {state}", _tail(logs[-1]) if logs else [])
+    print("\n".join(brief_report(report_data(run_dir))))
+
+
+def _ssh(host: str, remote_repo: str, ab_args: list[str], capture: bool = False) -> subprocess.CompletedProcess[str]:
+    """ab.py on host, in its checkout and venv. Keepalives make a dropped connection fail in about
+    a minute (exit 255) instead of hanging; what runs detached there carries on."""
+    command = f"cd {shlex.quote(remote_repo)} && .venv/bin/python scripts/ab.py {shlex.join(ab_args)}"
+    ssh = ["ssh", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", host]
+    return subprocess.run([*ssh, command], check=False, text=True, capture_output=capture)
+
+
+def _remote(host: str, remote_repo: str, ab_args: list[str], resume: str) -> None:
+    result = _ssh(host, remote_repo, ab_args)
+    if result.returncode == 255:
+        raise AbError(f"lost the ssh session to {host}; anything detached there carries on: {resume}")
+    if result.returncode:
+        raise AbError(f"ab.py {ab_args[0]} on {host} exited {result.returncode}")
+
+
+def cmd_remote(args: argparse.Namespace, extra: list[str]) -> None:
+    """run and extend start detached on the host and wait there; the rest run there as they are."""
+    host, remote_repo = args.host, args.remote_repo
+    rest = list(args.rest)
+    prefix = f"ab.py remote --host {host}" + (f" --remote-repo {remote_repo}" if remote_repo != REMOTE_REPO else "")
+    if args.action == "run":
+        options = _run_parser(argparse.ArgumentParser(prog=f"{prefix} run")).parse_args(rest)
+        repo = Path(args.repo).resolve()
+        if options.new == "HEAD" and _git(repo, "status", "--porcelain", "--untracked-files=no", "--", *DIRTY_PATHS):
+            raise AbError(f"uncommitted changes under {', '.join(DIRTY_PATHS)}: commit and push them first")
+        resolved = {
+            side: _git(repo, "rev-parse", "--verify", f"{getattr(options, side)}^{{commit}}") for side in ("old", "new")
+        }
+        name = options.name or f"{_git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')}-{options.bench}"
+        rest = _replace_options(rest, {"--old": resolved["old"], "--new": resolved["new"], "--name": name})
+        start = ["run", "--detach", "--sync", "--apply-setup", *rest, *(["--", *extra] if extra else [])]
+    elif args.action == "extend":
+        start = ["extend", "--detach", "--apply-setup", *rest]
+    elif args.action == "report":
+        cmd_remote_report(args, rest)
+        return
+    else:
+        _remote(host, remote_repo, [args.action, *rest], f"{prefix} {args.action} {shlex.join(rest)}")
+        return
+    started = _ssh(host, remote_repo, start, capture=True)
+    print(started.stdout, end="")
+    if started.returncode:
+        raise AbError(f"ab.py {args.action} on {host} didn't start", started.stderr.splitlines())
+    run = started.stdout.split("started ", 1)[1].split()[0]
+    _remote(host, remote_repo, ["wait", run], f"{prefix} wait {run}")
+
+
+def cmd_remote_report(args: argparse.Namespace, rest: list[str]) -> None:
+    """report on the host; --md and --pooled files are written here."""
+    options = _report_parser(argparse.ArgumentParser(prog="ab.py remote report")).parse_args(rest)
+    common = [*([options.run] if options.run else []), *(["--passes", options.passes] if options.passes else [])]
+    for flag, target in (("--md", options.md), ("--pooled", options.pooled)):
+        if target:
+            result = _ssh(args.host, args.remote_repo, ["report", *common, flag, "-"], capture=True)
+            if result.returncode:
+                raise AbError(f"ab.py report {flag} on {args.host} failed", result.stderr.splitlines())
+            Path(target).write_text(result.stdout)
+            if not options.brief:
+                print(f"wrote {target}")
+    if options.brief or not (options.md or options.pooled):
+        _remote(args.host, args.remote_repo, ["report", *common, "--brief"], "report again")
+
+
+def _replace_options(argv: list[str], values: dict[str, str]) -> list[str]:
+    """argv with each option's value set (replaced, or appended)."""
+    out: list[str] = []
+    skip = False
+    for index, token in enumerate(argv):
+        if skip:
+            skip = False
+            continue
+        option, equals, _ = token.partition("=")
+        if option in values:
+            skip = not equals and index + 1 < len(argv)
+            continue
+        out.append(token)
+    for option, value in values.items():
+        out += [option, value]
+    return out
+
+
+def _detached_argv(argv: list[str]) -> list[str]:
+    """argv for the detached process: the parent's own steps (--detach, --sync, --apply-setup) removed."""
+    split = argv.index("--") if "--" in argv else len(argv)
+    own = {"--detach", "--sync", "--apply-setup"}
+    return [token for token in argv[:split] if token not in own] + argv[split:]
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    full = list(argv)
+    extra: list[str] = []
+    if "--" in argv:
+        split = argv.index("--")
+        argv, extra = argv[:split], argv[split + 1 :]
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--repo", default=str(REPO), help="the repository whose commits are compared")
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    run = _run_parser(commands.add_parser("run", help="run an A/B"))
+    run.add_argument("--sync", action="store_true", help="with --detach: first bring this checkout to origin's main")
+    extend = commands.add_parser("extend", help="add passes to a finished run")
     extend.add_argument("run", nargs="?")
     extend.add_argument("--order", required=True)
     extend.add_argument("--note", help="why the passes were added (default: the shifted passes they balance)")
+    for command in (run, extend):
+        command.add_argument("--allow-profile-change", action="store_true")
+        command.add_argument("--skip-profile", action="store_true", help="skip the machine check (tests, toy probes)")
+        command.add_argument("--detach", action="store_true", help="start in its own session and return (ab.py wait)")
+        command.add_argument("--apply-setup", action="store_true", help="with --detach: as check --apply-setup, first")
 
     status = commands.add_parser("status", help="one line: the run's progress")
     status.add_argument("run", nargs="?")
-    report = commands.add_parser("report", help="the pooled table and verdicts")
-    report.add_argument("run", nargs="?")
-    report.add_argument("--brief", action="store_true", help=f"at most {BRIEF_LINES} lines (the default output)")
-    report.add_argument("--md", help="write the full tables and the protocol paragraph here")
-    report.add_argument("--pooled", help="an A/A only: write each row pooled over every pass, with its spread, here")
-    report.add_argument("--passes", help="report only these passes, e.g. 1-4 or 1,2,5 (the tier 1 check)")
+    wait = commands.add_parser("wait", help="block until the run ends, then print its brief report")
+    wait.add_argument("run", nargs="?")
+    check = commands.add_parser("check", help="the machine check alone")
+    check.add_argument("--apply-setup", action="store_true", help=f"if it fails, sudo -n {SETUP_COPY} and check again")
+    _report_parser(commands.add_parser("report", help="the pooled table and verdicts"))
     clean = commands.add_parser("clean", help="remove worktrees no recent run refers to")
     clean.add_argument("--worktrees", action="store_true")
     clean.add_argument("--wheels", action="store_true", help="cached crate wheels and their site directories")
@@ -1665,16 +1907,39 @@ def main(argv: list[str] | None = None) -> int:
     archive.add_argument("--archive-repo", default=str(benchmark_archive.ARCHIVE_REPO), help="the archive's clone")
     archive.add_argument("--no-pr", action="store_true", help="stop after the commit on a new branch (tests)")
 
+    remote = commands.add_parser("remote", help="a command on the benchmark machine, over ssh")
+    remote.add_argument("--host", required=True)
+    remote.add_argument("--remote-repo", default=REMOTE_REPO, help="its checkout, from its home directory")
+    remote.add_argument("action", choices=["run", "extend", "wait", "status", "report", "archive"])
+    remote.add_argument("rest", nargs=argparse.REMAINDER, help="the command's own arguments")
+
     args = parser.parse_args(argv)
-    if extra and args.command != "run":
+    if extra and args.command not in ("run", "remote"):
         parser.error("arguments after -- are for run only")
+    if args.command in ("run", "extend") and not args.detach and (args.apply_setup or getattr(args, "sync", False)):
+        parser.error("--sync and --apply-setup go with --detach (ab.py check --apply-setup runs the check alone)")
     try:
-        if args.command == "run":
+        if args.command in ("run", "extend") and args.detach:
+            what = f"ab.py {args.command}"
+            with run_lock(f"{what} --detach, preparing"):  # nothing changes the checkout under a run
+                repo = Path(args.repo).resolve()
+                if getattr(args, "sync", False):
+                    print("\n".join(sync_checkout(repo, [args.old, args.new])))
+                if args.apply_setup and not args.skip_profile:
+                    print(check_machine(repo, apply=True), flush=True)
+            detach(_detached_argv(full), what)
+        elif args.command == "run":
             with run_lock(f"run --bench {args.bench}"):
                 cmd_run(args, extra)
         elif args.command == "extend":
             with run_lock(f"extend {args.run or 'the latest run'}"):
                 cmd_extend(args)
+        elif args.command == "wait":
+            cmd_wait(args)
+        elif args.command == "check":
+            print(check_machine(Path(args.repo).resolve(), args.apply_setup))
+        elif args.command == "remote":
+            cmd_remote(args, extra)
         elif args.command == "status":
             cmd_status(args)
         elif args.command == "report":

@@ -871,3 +871,159 @@ def test_a_second_run_is_refused_while_one_holds_the_lock(tmp_path: Path, monkey
         holder.wait()
     with ab.run_lock("run --bench cmd"):  # freed when its holder died
         assert "run --bench cmd" in (tmp_path / "run.lock").read_text()
+
+
+@pytest.fixture
+def detachable(toy_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """toy_repo, with the roots also in the environment a detached ab.py starts with."""
+    monkeypatch.setenv("AB_RUNS_ROOT", str(tmp_path / "runs"))
+    monkeypatch.setenv("AB_WORKTREES_ROOT", str(tmp_path / "worktrees"))
+    return toy_repo
+
+
+DETACHED_RUN = ["run", "--detach", "--bench", "cmd", "--old", "HEAD~1", "--order", "ONNO", "--skip-profile"]
+
+
+def test_a_detached_run_outlives_its_starter_and_wait_reports_it(
+    detachable: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _run(detachable, *DETACHED_RUN, "--", "scripts/probe.py") == 0
+    started = capsys.readouterr().out
+    assert started.startswith("started ") and " detached (pid " in started
+    name = started.split()[1]
+    assert _run(detachable, "wait", name) == 0
+    brief = capsys.readouterr().out.splitlines()
+    assert brief[0].startswith(f"{name}: old ") and len(brief) <= ab.BRIEF_LINES
+    assert json.loads((ab.RUNS_ROOT / name / "manifest.json").read_text())["state"] == "done"
+    assert len(list((ab.RUNS_ROOT / "launches").glob(f"{name}-*.log"))) == 1
+
+
+def test_a_detached_run_that_fails_is_reported_by_wait_with_its_log(
+    detachable: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _run(detachable, *DETACHED_RUN, "--", "scripts/missing.py") == 0
+    name = capsys.readouterr().out.split()[1]
+    assert _run(detachable, "wait", name) == 1
+    err = capsys.readouterr().err
+    assert f"{name}: failed" in err and "missing.py" in err
+
+
+def test_a_detached_run_that_cannot_start_says_so(detachable: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert _run(detachable, *[a if a != "HEAD~1" else "no-such-ref" for a in DETACHED_RUN], "--", "x.py") == 1
+    assert "exited 1 before it started" in capsys.readouterr().err
+
+
+def test_sync_and_apply_setup_need_detach(toy_repo: Path) -> None:
+    with pytest.raises(SystemExit):
+        _run(toy_repo, "run", "--bench", "cmd", "--sync", "--", "x.py")
+
+
+def test_the_check_re_applies_the_setup_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    results: list[list[str] | None] = [["governor: performance -> powersave"], None]
+
+    def machine_check(repo: Path) -> tuple[Path, list[str] | None]:
+        return tmp_path / "i7.json", results.pop(0)
+
+    monkeypatch.setattr(ab, "machine_check", machine_check)
+    applied: list[Path] = []
+    monkeypatch.setattr(ab, "apply_setup", applied.append)
+    assert ab.check_machine(tmp_path, apply=True) == "machine check: matches i7.json after re-applying the setup"
+    assert applied == [tmp_path]
+    results[:] = [["governor: x -> y"], ["governor: x -> y"]]
+    with pytest.raises(ab.AbError, match="differs from i7.json after re-applying"):
+        ab.check_machine(tmp_path, apply=True)
+    results[:] = [["governor: x -> y"]]
+    with pytest.raises(ab.AbError, match=r"differs from i7.json$"):
+        ab.check_machine(tmp_path, apply=False)
+
+
+def test_apply_setup_runs_only_an_installed_copy_of_the_checkouts_script(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / ab.SETUP_SCRIPT).write_text("#!/bin/sh\necho set\n")
+    monkeypatch.setattr(ab, "SETUP_COPY", tmp_path / "installed")
+    with pytest.raises(ab.AbError, match="isn't installed: the owner runs sudo scripts/install_benchmark_setup.sh"):
+        ab.apply_setup(tmp_path)
+    (tmp_path / "installed").write_text("#!/bin/sh\necho old\n")
+    with pytest.raises(ab.AbError, match="differs from scripts/benchmark_machine_setup.sh: the owner re-runs"):
+        ab.apply_setup(tmp_path)
+
+
+def test_sync_brings_a_benchmark_checkout_to_origin(toy_repo: Path, tmp_path: Path) -> None:
+    bench = tmp_path / "bench"
+    subprocess.run(["git", "clone", "-q", str(toy_repo), str(bench)], check=True)
+    (toy_repo / "indrajala_ml/toy.py").write_text("VALUE = 3.0\n")
+    _git(toy_repo, "commit", "-qam", "toy 3.0")
+    head = ab._git(toy_repo, "rev-parse", "HEAD")
+    done = ab.sync_checkout(bench, [head, "HEAD~1"])
+    assert done == [f"checkout {ab._git(bench, 'rev-parse', 'HEAD~1')[:7]} -> {head[:7]}"]
+    with pytest.raises(ab.AbError, match="isn't on .*'s origin: push it first"):
+        ab.sync_checkout(bench, ["0" * 40])
+    (bench / "indrajala_ml/toy.py").write_text("VALUE = 4.0\n")
+    with pytest.raises(ab.AbError, match="uncommitted changes"):
+        ab.sync_checkout(bench, [])
+
+
+def test_option_rewriting_for_remote_and_detached_runs() -> None:
+    argv = ["--bench", "cmd", "--old=main", "--name", "x", "--order", "ONNO"]
+    assert ab._replace_options(argv, {"--old": "abc", "--name": "y", "--new": "def"}) == [
+        "--bench", "cmd", "--order", "ONNO", "--old", "abc", "--name", "y", "--new", "def",
+    ]  # fmt: skip
+    full = ["--repo", "r", "run", "--detach", "--sync", "--bench", "cmd", "--apply-setup", "--", "p.py", "--detach"]
+    assert ab._detached_argv(full) == ["--repo", "r", "run", "--bench", "cmd", "--", "p.py", "--detach"]
+
+
+class FakeSsh:
+    def __init__(self, results: list[tuple[int, str]]) -> None:
+        self.calls: list[list[str]] = []
+        self.results = results
+
+    def __call__(
+        self, host: str, remote_repo: str, ab_args: list[str], capture: bool = False
+    ) -> subprocess.CompletedProcess[str]:
+        self.calls.append(ab_args)
+        code, out = self.results.pop(0)
+        return subprocess.CompletedProcess(ab_args, code, out, "")
+
+
+def test_remote_run_starts_detached_on_the_host_and_waits_there(
+    toy_repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ssh = FakeSsh([(0, "checkout a -> b\nstarted 2026-10-09-x-cmd detached (pid 7, log l)\n"), (0, "")])
+    monkeypatch.setattr(ab, "_ssh", ssh)
+    assert _run(toy_repo, "remote", "--host", "jebel", "run", "--bench", "cmd", "--old", "HEAD~1", "--", "p.py") == 0
+    start, wait = ssh.calls
+    old, new = (ab._git(toy_repo, "rev-parse", ref) for ref in ("HEAD~1", "HEAD"))
+    assert start == [
+        "run", "--detach", "--sync", "--apply-setup", "--bench", "cmd",
+        "--old", old, "--new", new, "--name", "main-cmd", "--", "p.py",
+    ]  # fmt: skip
+    assert wait == ["wait", "2026-10-09-x-cmd"]
+    assert "started 2026-10-09-x-cmd" in capsys.readouterr().out
+
+
+def test_a_dropped_ssh_session_names_the_command_that_resumes_the_wait(
+    toy_repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(ab, "_ssh", FakeSsh([(0, "started r1 detached (pid 7, log l)\n"), (255, "")]))
+    assert _run(toy_repo, "remote", "--host", "jebel", "run", "--bench", "cmd", "--", "p.py") == 1
+    assert "lost the ssh session to jebel; anything detached there carries on: ab.py remote --host jebel wait r1" in (
+        capsys.readouterr().err
+    )
+
+
+def test_remote_report_writes_the_markdown_here(
+    toy_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ssh = FakeSsh([(0, "| table |\n")])
+    monkeypatch.setattr(ab, "_ssh", ssh)
+    out = tmp_path / "ab-table.md"
+    assert _run(toy_repo, "remote", "--host", "jebel", "report", "r1", "--passes", "1-4", "--md", str(out)) == 0
+    assert ssh.calls == [["report", "r1", "--passes", "1-4", "--md", "-"]]
+    assert out.read_text() == "| table |\n"
+
+
+def test_report_md_to_stdout_is_the_file_alone(capsys: pytest.CaptureFixture[str]) -> None:
+    assert ab.main(["report", str(FIXTURES / "pr480"), "--md", "-"]) == 0
+    assert capsys.readouterr().out == ab.markdown_report(ab.report_data(FIXTURES / "pr480"))
