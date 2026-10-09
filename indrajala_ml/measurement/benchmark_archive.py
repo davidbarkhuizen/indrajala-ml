@@ -211,8 +211,10 @@ def archive_golden(
     replaces: str | None,
 ) -> tuple[list[str], list[str], str]:
     """Copy a golden file into the archive as golden/<host>/<date>-<commit7>.json.gz with its note
-    (.md), comparing it with the host's previous version. Returns (paths written, INDEX.md lines, a
-    one-line summary). Refuses a new-functionality version in which an earlier entry moved."""
+    (.md), comparing it with the host's previous version (_previous_golden). A correction of a
+    record with the same date and commit (replaces) takes the next free name, <date>-<commit7>-2 and
+    so on. Returns (paths written, INDEX.md lines, a one-line summary). Refuses a new-functionality
+    version in which an earlier entry moved."""
     if reason not in ("material", "new-functionality"):
         raise ArchiveError(f"reason {reason!r}: material or new-functionality")
     raw = golden.read_bytes()
@@ -224,10 +226,15 @@ def archive_golden(
     host_dir = archive / "golden" / host
     stem = f"{date}-{commit[:7]}"
     if (host_dir / f"{stem}.json.gz").exists():
-        raise ArchiveError(f"golden/{host}/{stem} is already archived (a correction is a new record: --replaces)")
-    versions = sorted(host_dir.glob("*.json.gz"))
-    previous = str(versions[-1].relative_to(archive)) if versions else None
-    before: dict[str, Any] = json.loads(gzip.decompress(versions[-1].read_bytes())) if versions else {}
+        if replaces is None:
+            raise ArchiveError(f"golden/{host}/{stem} is already archived (a correction is a new record: --replaces)")
+        version = stem
+        n = 2
+        while (host_dir / f"{version}-{n}.json.gz").exists():
+            n += 1
+        stem = f"{version}-{n}"
+    previous = _previous_golden(archive, host_dir, replaces)
+    before: dict[str, Any] = json.loads(gzip.decompress((archive / previous).read_bytes())) if previous else {}
     added = sorted(entries.keys() - before.keys())
     removed = sorted(before.keys() - entries.keys())
     moved = sorted(name for name in entries.keys() & before.keys() if entries[name] != before[name])
@@ -267,6 +274,28 @@ def archive_golden(
     else:
         summary = f"golden/{host}/{stem}: {len(added)} added, {len(moved)} moved, {len(removed)} removed"
     return paths, lines, summary
+
+
+def _golden_meta(path: Path) -> dict[str, Any]:
+    # the fenced json block at the end of a golden file's note
+    note = path.with_name(path.name.removesuffix(".json.gz") + ".md").read_text()
+    return json.loads(re.findall(r"```json\n(.*?)\n```", note, re.DOTALL)[-1])
+
+
+def _previous_golden(archive: Path, host_dir: Path, replaces: str | None) -> str | None:
+    """The host's newest golden version, by the records' own chain: of the records not replaced (nor
+    being replaced), the one none of the others names as its previous. Not by name: two versions of
+    one date sort by their commits' hashes."""
+    versions = {str(path.relative_to(archive)): _golden_meta(path) for path in host_dir.glob("*.json.gz")}
+    replaced = {meta["replaces"] for meta in versions.values()} | {replaces}
+    live = {path: meta for path, meta in versions.items() if path not in replaced}
+    newest = sorted(set(live) - {meta["previous"] for meta in live.values()})
+    if len(newest) > 1 or (live and not newest):
+        raise ArchiveError(
+            f"golden/{host_dir.name}: can't tell its newest version from the records' previous and replaces "
+            f"(candidates: {', '.join(newest) or 'none'})"
+        )
+    return newest[0] if newest else None
 
 
 def golden_note(meta: dict[str, Any]) -> str:

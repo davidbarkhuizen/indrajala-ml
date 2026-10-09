@@ -517,7 +517,10 @@ python scripts/golden_training_run.py archive data/refactoring/golden_run.json \
 
 `--reason` is `material` or `new-functionality`. The record lists the entries added, moved and
 removed against the host's previous version, and a `new-functionality` version in which an entry
-moved is refused. `--date` defaults to the file's, `--profile` to this host's.
+moved is refused. The previous version is found by the records' chain (the one no other record
+names as its previous, replaced records left out), not by file name: two versions of one date
+sort by commit hash. A correction of a record with the same date and commit takes the next free
+name, `<date>-<commit7>-2`. `--date` defaults to the file's, `--profile` to this host's.
 
 `--no-pr` on either command stops after the commit, leaving the branch in the clone.
 
