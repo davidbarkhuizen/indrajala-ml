@@ -239,6 +239,14 @@ Still out of scope:
   the laptop, and what to investigate for each, ordered by payoff:
   [i7-9700k-rust-optimization.md](i7-9700k-rust-optimization.md). Each item gets its own crate
   workplan with an A/B on both machines (measurement.md §9).
+- **Code placement on the i7** (multi-head attention, stage 5, #609). The multi-head crate's
+  attention ops ran up to 14% slower per call on `jebel` with the same instructions per call
+  (within 0.3%): in the new build, forward's µops from the legacy decoder (`idq.mite_uops`) tripled
+  as uop-cache delivery fell, a placement effect on Coffee Lake (the JCC erratum's 32-byte
+  windows), and ops whose code didn't change moved by up to 13% between builds. `pyramidon` showed
+  no change. To investigate: `perf record` the hot loop's addresses in both builds, and whether
+  `-C llvm-args=-x86-branches-within-32B-boundaries` (or function and loop alignment) makes crate
+  A/Bs on the i7 stable; until then, a crate A/B's few-percent rows there may be placement.
 - **Rerunning the baseline** after a change that could move every number (kernel, BIOS,
   numpy/OpenBLAS, rustc, the frequency policy): rerun the workplan's stages 4-5 at the same
   tags, then at `main`, and replace [machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md)'s
