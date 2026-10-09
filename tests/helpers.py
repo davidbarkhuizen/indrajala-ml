@@ -211,6 +211,49 @@ def max_relative_gap(expected: Sequence[Sequence[Any]], actual: Sequence[Sequenc
     return gap
 
 
+def batches[T](data: Sequence[T], steps: int = 50, size: int = 5) -> Iterator[Sequence[T]]:
+    """steps batches of size examples, taken in turn round data (whose length size divides)."""
+    for step in range(steps):
+        yield data[(step * size) % len(data) :][:size]
+
+
+def learn_in_step(rate: float, data: Sequence[Any], networks: Iterable[Any], steps: int = 50) -> None:
+    """Each network learns the same batches(data, steps) at rate, batch by batch."""
+    networks = list(networks)
+    for batch in batches(data, steps):
+        for network in networks:
+            network.learn_batch(rate, batch)
+
+
+def assert_snapshots_close(expected: Sequence[Sequence[Any]], actual: Sequence[Sequence[Any]]) -> None:
+    """Two numpy snapshots agree within the 1e-9 every pure-Python parity test allows."""
+    for expected_entry, actual_entry in zip(expected, actual, strict=True):
+        for values, actual_values in zip(expected_entry, actual_entry, strict=True):
+            np.testing.assert_allclose(actual_values, values, rtol=1e-9, atol=1e-9)
+
+
+def assert_learn_and_a_batch_of_one_agree(
+    implementation: Implementation, single: Any, batched: Any, data: Iterable[tuple[Any, int]]
+) -> None:
+    """
+    single learns each example of data alone and batched as a batch of one; they then agree by
+    bits, but within 1e-12 on numpy, where a dense layer's single-example W @ x and the batch's
+    X @ W.T are different BLAS calls, which can differ in the last bit (ArrayNetworkBase.
+    classify_rows). Pure Python's single-example step is its batch of one's, and the crate's
+    single-example ops (W @ x against X @ W.T, outer against delta^T X at one row) are its batch
+    of one's.
+    """
+    for state, label in data:
+        single.learn(0.5, state, label)
+        batched.learn_batch(0.5, [(state, label)])
+    if implementation == "numpy":
+        for one, other in zip(single.snapshot(), batched.snapshot(), strict=True):
+            for a, b in zip(one, other, strict=True):
+                assert a == pytest.approx(b, rel=1e-12, abs=1e-15)
+    else:
+        assert bits(single.snapshot()) == bits(batched.snapshot())
+
+
 def exp_by_math(values: FloatArray) -> FloatArray:
     """np.exp as math.exp, elementwise, so a scalar transcription computes the same bits."""
     return np.vectorize(math.exp, otypes=[np.float64])(values)

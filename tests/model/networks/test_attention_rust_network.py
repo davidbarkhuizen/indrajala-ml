@@ -34,7 +34,7 @@ from indrajala_ml.model.networks.sequential_array_network import SequentialArray
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerNorm, LayerSpec, Residual, TokenMean
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from tests.gradient_check import analytic_gradients
-from tests.helpers import bits, exp_by_crate, patching, split, to_numpy
+from tests.helpers import batches, bits, exp_by_crate, learn_in_step, patching, split, to_numpy
 from tests.model.networks.test_attention_array_network import HEAD_IDS, HEADS
 from tests.model.networks.test_attention_network import MULTI_HEAD
 from tests.model.specs.test_layer_specs import (
@@ -265,10 +265,7 @@ def _assert_training_matches_numpy(specs: list[LayerSpec], rule: UpdateRule, rat
     # steps: within 1.7e-12 of each layer's scale (a flat layer norm after ReLU, Momentum)
     rust, numpy = network(specs, rule), network(specs, rule, backend=NUMPY)
     data = rows(specs, 40)
-    for step in range(50):
-        batch = data[(step * 5) % 40 :][:5]
-        rust.learn_batch(rate, batch)
-        numpy.learn_batch(rate, batch)
+    learn_in_step(rate, data, (rust, numpy))
 
     expected, actual = numpy.snapshot(), _as_numpy(rust.snapshot())
     for scale, expected_entry, actual_entry in zip(_layer_scales(expected), expected, actual, strict=True):
@@ -300,8 +297,7 @@ def _assert_every_adam_step_has_numpys_gradients(specs: list[LayerSpec], rate: f
     # folds against numpy's BLAS gave 4e-16, the crate's products against BLAS more)
     rust, numpy = network(specs, SGD()), network(specs, Adam(), backend=NUMPY)
     data = rows(specs, 40)
-    for step in range(50):
-        batch = data[(step * 5) % 40 :][:5]
+    for step, batch in enumerate(batches(data)):
         states, labels = split(batch)
         rust.restore(numpy.snapshot())
         numpy.rng, rust.rng = NUMPY.default_rng(step), RUST.default_rng(step)

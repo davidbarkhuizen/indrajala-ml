@@ -557,18 +557,22 @@ def test_a_patch_model_that_doesnt_fit_its_input_is_rejected_by_the_shape_walk(
         spec_shapes(specs, input_shape)
 
 
+# the README's patch model, over a 28x28x1 image
+README_PATCH_MODEL: list[LayerSpec] = [
+    Patches(7),
+    Dense(32, activation="linear", bias=True),
+    Position(),
+    Residual((LayerNorm(), Attention())),
+    Residual((LayerNorm(), Dense(64, activation="relu"), Dense(32, activation="linear", bias=True))),
+    TokenMean(),
+    LayerNorm(),
+    Dense(10, activation="softmax", output=True, loss="cross_entropy"),
+]
+
+
 def test_the_shape_walk_carries_tokens_from_the_patches_to_the_mean():
     # the README's model: 28x28x1 -> 16 tokens of 49 -> of 32 ... -> the mean of 32 -> 10
-    specs: list[LayerSpec] = [
-        Patches(7),
-        Dense(32, activation="linear", bias=True),
-        Position(),
-        Residual((LayerNorm(), Attention())),
-        Residual((LayerNorm(), Dense(64, activation="relu"), Dense(32, activation="linear", bias=True))),
-        TokenMean(),
-        LayerNorm(),
-        Dense(10, activation="softmax", output=True, loss="cross_entropy"),
-    ]
+    specs = README_PATCH_MODEL
     validate_layer_specs(specs)
     assert spec_shapes(specs, (28, 28, 1)) == [
         SpecShape((28, 28, 1), (16, 49)),

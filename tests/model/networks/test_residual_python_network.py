@@ -10,7 +10,6 @@ import math
 import random
 from typing import Any
 
-import numpy as np
 import pytest
 
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
@@ -18,7 +17,7 @@ from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients
-from tests.helpers import bits
+from tests.helpers import assert_snapshots_close, bits, learn_in_step
 from tests.model.networks.test_batch_norm_python_network import CLASSES, _as_array_snapshot
 from tests.model.networks.test_residual_array_network import INPUT, NETWORKS, Shape, block, output, rows
 
@@ -115,11 +114,6 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, shap
     array.restore(_as_array_snapshot(python))
     data = rows(40, shape)
 
-    for step in range(50):
-        batch = data[(step * 5) % 40 :][:5]
-        python.learn_batch(0.3, batch)
-        array.learn_batch(0.3, batch)
+    learn_in_step(0.3, data, (python, array))
 
-    for expected, actual in zip(_as_array_snapshot(python), array.snapshot(), strict=True):
-        for values, array_values in zip(expected, actual, strict=True):
-            np.testing.assert_allclose(array_values, values, rtol=1e-9, atol=1e-9)
+    assert_snapshots_close(_as_array_snapshot(python), array.snapshot())

@@ -14,7 +14,7 @@ from indrajala_ml.model.layers.array.array_layer_builder import LAYER_CLASSES
 from indrajala_ml.model.layers.python.residual_layer import AddLayer, AffineLayer, ForkLayer
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
 from tests.gradient_check import check_gradients
-from tests.helpers import Implementation, bits, randomized, split
+from tests.helpers import Implementation, assert_learn_and_a_batch_of_one_agree, randomized, split
 from tests.model.networks.test_residual_array_network import INPUT, NETWORKS, Shape, output, rows
 
 
@@ -63,16 +63,4 @@ def test_a_block_builds_a_fork_its_body_and_an_add_wired_together(implementation
 def test_learn_and_a_learn_batch_of_one_example_agree(name: str, rule: UpdateRule, implementation: Implementation):
     single, batched = network(implementation, name, rule=rule), network(implementation, name, rule=rule)
 
-    for state, label in rows(6, seed=4):
-        single.learn(0.5, state, label)
-        batched.learn_batch(0.5, [(state, label)])
-
-    if implementation == "numpy":
-        # numpy's single-example W @ x and the batch's X @ W.T are different BLAS calls, which can
-        # differ in the last bit (ArrayNetworkBase.classify_rows)
-        for one, other in zip(single.snapshot(), batched.snapshot(), strict=True):
-            for a, b in zip(one, other, strict=True):
-                assert a == pytest.approx(b, rel=1e-12, abs=1e-15)
-    else:
-        # by bits: Rust's are one loop, and pure Python's single-example step is its batch of one's
-        assert bits(single.snapshot()) == bits(batched.snapshot())
+    assert_learn_and_a_batch_of_one_agree(implementation, single, batched, rows(6, seed=4))

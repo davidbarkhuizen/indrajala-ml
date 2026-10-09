@@ -21,7 +21,7 @@ from indrajala_ml.model.networks.sequential_array_network import SequentialArray
 from indrajala_ml.model.specs.layer_specs import LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
-from tests.helpers import bits
+from tests.helpers import assert_snapshots_close, bits, learn_in_step
 from tests.model.networks.test_attention_python_network import (
     as_array_snapshot,
     assert_every_step_has_numpys_gradients,
@@ -116,14 +116,9 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule
     python.rng = default_rng(7)
     data = rows(specs, 40)
 
-    for step in range(50):
-        batch = data[(step * 5) % 40 :][:5]
-        python.learn_batch(0.3, batch)
-        array.learn_batch(0.3, batch)
+    learn_in_step(0.3, data, (python, array))
 
-    for expected, actual in zip(as_array_snapshot(python), array.snapshot(), strict=True):
-        for values, array_values in zip(expected, actual, strict=True):
-            np.testing.assert_allclose(array_values, values, rtol=1e-9, atol=1e-9)
+    assert_snapshots_close(as_array_snapshot(python), array.snapshot())
 
 
 @pytest.mark.parametrize("name", FLAT_LAYER_NORM)

@@ -32,7 +32,7 @@ from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients
-from tests.helpers import bits, split
+from tests.helpers import assert_snapshots_close, batches, bits, learn_in_step, split
 from tests.model.networks.test_attention_array_network import IMAGE, rows
 from tests.model.networks.test_attention_network import MULTI_HEAD
 from tests.model.networks.test_batch_norm_python_network import _as_array_snapshot
@@ -259,14 +259,9 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule
     array.restore(as_array_snapshot(python))
     data = rows(40)
 
-    for step in range(50):
-        batch = data[(step * 5) % 40 :][:5]
-        python.learn_batch(0.3, batch)
-        array.learn_batch(0.3, batch)
+    learn_in_step(0.3, data, (python, array))
 
-    for expected, actual in zip(as_array_snapshot(python), array.snapshot(), strict=True):
-        for values, array_values in zip(expected, actual, strict=True):
-            np.testing.assert_allclose(array_values, values, rtol=1e-9, atol=1e-9)
+    assert_snapshots_close(as_array_snapshot(python), array.snapshot())
 
 
 def _as_array_gradients(python: Any, gradients: list[Any]) -> list[list[Any]]:
@@ -303,8 +298,7 @@ def assert_every_step_has_numpys_gradients(python: Any, array: Any, data: list[t
     Attention's bk, rounding noise (D6), is compared apart: within 1e-13 of attention's largest
     gradient on both sides.
     """
-    for step in range(50):
-        batch = data[(step * 5) % 40 :][:5]
+    for step, batch in enumerate(batches(data)):
         array.restore(as_array_snapshot(python))
         states, labels = split(batch)
         python.rng, array.rng = default_rng(step), NUMPY.default_rng(step)
@@ -340,14 +334,9 @@ def test_multi_head_training_matches_numpy_within_the_dense_layers_rounding(name
     array.restore(as_array_snapshot(python))
     data = rows(40)
 
-    for step in range(50):
-        batch = data[(step * 5) % 40 :][:5]
-        python.learn_batch(0.1, batch)
-        array.learn_batch(0.1, batch)
+    learn_in_step(0.1, data, (python, array))
 
-    for expected, actual in zip(as_array_snapshot(python), array.snapshot(), strict=True):
-        for values, array_values in zip(expected, actual, strict=True):
-            np.testing.assert_allclose(array_values, values, rtol=1e-9, atol=1e-9)
+    assert_snapshots_close(as_array_snapshot(python), array.snapshot())
 
 
 @pytest.mark.parametrize("name", MULTI_HEAD)

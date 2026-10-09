@@ -65,10 +65,13 @@ class AttentionProjections[A]:
 
     decayed: ClassVar[tuple[bool, ...]] = (True, False) * 4
 
+    tokens: int
     features: int
     heads: int
     key_size: int
     width: int
+    size: int
+    input_size: int
     Wq: A
     bq: A
     Wk: A
@@ -89,15 +92,24 @@ class AttentionProjections[A]:
     @property
     def projection_shapes(self) -> tuple[tuple[int, int], ...]:
         # the projections' (rows, fan_in), each drawn as a dense layer's (W, b), in order
-        width = self.heads * self.key_size
-        return ((width, self.features),) * 3 + ((self.features, width),)
+        return ((self.width, self.features),) * 3 + ((self.features, self.width),)
 
-    def _resolve_heads(self, features: int, heads: int, key_size: int | None) -> None:
-        # heads of key_size features each (features / heads when None), and the projections' width
+    def _set_up(self, tokens: int, features: int, heads: int, key_size: int | None) -> None:
+        # tokens tokens of features features, in heads heads of key_size features (features /
+        # heads when None); the parameters and gradients zero
+        self.tokens = tokens
         self.features = features
         self.heads = heads
         self.key_size = features // heads if key_size is None else key_size
         self.width = heads * self.key_size
+        self.size = tokens * features
+        self.input_size = self.size
+        self.set_parameters(self._zeros())
+        self.reset_gradient_accum()
+
+    def _zeros(self) -> list[A]:
+        # a zero array per parameter, in order: the backend's
+        raise NotImplementedError
 
     def parameters(self) -> tuple[A, ...]:
         return self.Wq, self.bq, self.Wk, self.bk, self.Wv, self.bv, self.Wo, self.bo
@@ -116,6 +128,21 @@ class AttentionProjections[A]:
 
     def set_parameters(self, parameters: Sequence[A]) -> None:
         self.Wq, self.bq, self.Wk, self.bk, self.Wv, self.bv, self.Wo, self.bo = parameters
+
+    def _set_gradients(self, gradients: Sequence[A]) -> None:
+        (
+            self.grad_Wq,
+            self.grad_bq,
+            self.grad_Wk,
+            self.grad_bk,
+            self.grad_Wv,
+            self.grad_bv,
+            self.grad_Wo,
+            self.grad_bo,
+        ) = gradients
+
+    def reset_gradient_accum(self) -> None:
+        self._set_gradients(self._zeros())
 
 
 class RunningAverages[A]:
