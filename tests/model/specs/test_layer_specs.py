@@ -782,16 +782,11 @@ def _builds(specs: list[LayerSpec], backend: str) -> Any:
     [*SEQUENCE.values(), [PATCHES, EMBED, CAUSAL_BLOCK, TokenMean(), OUTPUT]],
     ids=[*SEQUENCE.keys(), "only the mask"],
 )
-def test_the_builders_refuse_sequence_specs_until_their_stages(specs: list[LayerSpec]):
+def test_numpy_and_rust_build_sequence_specs_and_pure_python_refuses_them_until_stage_6(specs: list[LayerSpec]):
     _builds(specs, "numpy")
-    for backend, where, stage in (
-        ("rust", "on the rust backend", "5"),
-        ("python", "in pure Python", "6"),
-    ):
-        with pytest.raises(
-            NotImplementedError, match=rf"{where}: not yet \(the sequence task workplan, stage {stage}\)"
-        ):
-            _builds(specs, backend)
+    _builds(specs, "rust")
+    with pytest.raises(NotImplementedError, match=r"in pure Python: not yet \(the sequence task workplan, stage 6\)"):
+        _builds(specs, "python")
 
 
 @pytest.mark.parametrize("specs", TOKENS.values(), ids=TOKENS.keys())

@@ -13,6 +13,7 @@ tests/model/networks/test_layer_norm_network.py's (flat layer norms).
 
 import math
 import random
+from collections.abc import Callable
 from typing import Any
 
 import indrajala_math_rust as pa
@@ -259,12 +260,20 @@ def _layer_scales(snapshot: list[tuple[FloatArray, ...]]) -> list[float]:
 LINEAR_RULES = [SGD(), Momentum(0.9), WeightDecay(0.01)]
 
 
-def _assert_training_matches_numpy(specs: list[LayerSpec], rule: UpdateRule, rate: float) -> None:
+# a network of specs under a rule on a backend, and count examples for specs: these tests' own by
+# default, a sequence model's in tests/model/networks/test_sequence_rust_network.py
+Build = Callable[..., Any]
+Examples = Callable[[list[LayerSpec], int], list[Any]]
+
+
+def _assert_training_matches_numpy(
+    specs: list[LayerSpec], rule: UpdateRule, rate: float, build: Build = network, examples: Examples = rows
+) -> None:
     # outside the products both compute the README's expressions by bits (the crate's ops tests),
     # and the products are numpy's BLAS against the crate's, as the dense layers'. Measured after 50
     # steps: within 1.7e-12 of each layer's scale (a flat layer norm after ReLU, Momentum)
-    rust, numpy = network(specs, rule), network(specs, rule, backend=NUMPY)
-    data = rows(specs, 40)
+    rust, numpy = build(specs, rule), build(specs, rule, backend=NUMPY)
+    data = examples(specs, 40)
     learn_in_step(rate, data, (rust, numpy))
 
     expected, actual = numpy.snapshot(), _as_numpy(rust.snapshot())
@@ -288,15 +297,17 @@ def test_multi_head_training_matches_numpy_within_the_dense_layers_rounding(name
     _assert_training_matches_numpy(MULTI_HEAD[name], rule, 0.1)
 
 
-def _assert_every_adam_step_has_numpys_gradients(specs: list[LayerSpec], rate: float) -> None:
+def _assert_every_adam_step_has_numpys_gradients(
+    specs: list[LayerSpec], rate: float, build: Build = network, examples: Examples = rows
+) -> None:
     # Adam's steep step at |g| near epsilon makes the trajectory chaotic (the stage 3 parity tests:
     # numpy against numpy with a one-ulp nudge drifts as far), so each of 50 steps is checked from
     # numpy's weights: Rust's gradients within 1e-10 of each layer's largest gradient (measured
     # 7e-13, the dense part after the mean). Attention's bk, rounding noise (D6), is compared apart:
     # on both sides within 1e-12 of attention's largest gradient (measured 6.9e-14; pure Python's
     # folds against numpy's BLAS gave 4e-16, the crate's products against BLAS more)
-    rust, numpy = network(specs, SGD()), network(specs, Adam(), backend=NUMPY)
-    data = rows(specs, 40)
+    rust, numpy = build(specs, SGD()), build(specs, Adam(), backend=NUMPY)
+    data = examples(specs, 40)
     for step, batch in enumerate(batches(data)):
         states, labels = split(batch)
         rust.restore(numpy.snapshot())

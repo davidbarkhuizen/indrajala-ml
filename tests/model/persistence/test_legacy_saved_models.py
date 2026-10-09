@@ -60,9 +60,9 @@ def test_legacy_file_loads(name: str) -> None:
     assert outputs(loaded, fixture.predict, states) == expected_outputs
 
 
-# saveable classes without a fixture yet: the sequence network's comes with the sequence task
+# saveable classes without a fixture yet: the sequence networks' come with the sequence task
 # workplan's stage 7 (fixtures, checkpoints and golden entries)
-WITHOUT_FIXTURES = {"SequentialSequenceArrayNetwork"}
+WITHOUT_FIXTURES = {"SequentialSequenceArrayNetwork", "SequentialSequenceRustArrayNetwork"}
 
 
 def test_every_saveable_class_has_a_fixture() -> None:

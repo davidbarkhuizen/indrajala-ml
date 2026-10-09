@@ -144,6 +144,7 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "SequentialArrayBackpropClassifierNetwork": lambda cls: cls((DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT, Adam()),
     "SequentialRustArrayBackpropClassifierNetwork": lambda cls: cls((DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT, Adam()),
     "SequentialSequenceArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
+    "SequentialSequenceRustArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
 }
 
 

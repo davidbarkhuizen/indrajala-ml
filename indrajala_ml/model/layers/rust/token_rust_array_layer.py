@@ -2,10 +2,13 @@
 # (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 """
 A patch model's token layers on the Rust backend (the layer-norm and attention workplan; README,
-Layer norm and attention): Patches, Position, TokenMean and the token-wise dense layer, the
-counterparts of token_array_layer.py's. Patches and TokenMean are the crate's tokens.rs; Position
-is Array's + and sum_axis0; the token-wise dense layer is the existing dense ops (fused.rs) on the
-(N * T, d) rows (D9). Each takes a single example as its 1D vector, with a batch of one's bits.
+Layer norm and attention): Patches, Position, TokenMean and the token-wise dense layer; and a
+sequence model's (the sequence task workplan, stage 5): Embedding and the token-wise softmax output
+layer, the counterparts of token_array_layer.py's. Patches, TokenMean and Embedding are the crate's
+tokens.rs; Position is Array's + and sum_axis0; the token-wise dense and softmax layers are the
+existing dense ops (fused.rs) on the (N * T, d) rows (D9), the softmax's row sum a left fold
+(array_softmax), as numpy's. Each takes a single example as its 1D vector, with a batch of one's
+bits.
 """
 
 from __future__ import annotations
@@ -65,6 +68,57 @@ class TokenMeanRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], Par
 
     def downstream_batch(self) -> pa.Array:
         return pa.token_mean_downstream(self.delta_batch, self.tokens)
+
+
+class EmbeddingRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
+    """
+    EmbeddingArrayLayer on the Rust backend: T token ids as T tokens of size features, token t row
+    x_t of a learned (vocabulary, size) table E (embedding_forward), which refuses any id that isn't
+    a whole number in [0, vocabulary). The first layer, so it sends nothing back. E's gradient is a
+    scatter-add of its delta's rows into the rows they read, in row order (embedding_accumulate_gradient,
+    np.add.at's bits). E is drawn as a weight matrix of fan-in size, and not decayed.
+    """
+
+    decayed: ClassVar[tuple[bool, ...]] = (False,)
+
+    def __init__(self, tokens: int, vocabulary: int, size: int) -> None:
+        self.tokens = tokens
+        self.vocabulary = vocabulary
+        self.features = size
+        self.size = tokens * size
+        self.input_size = tokens
+        self.E = pa.Array.zeros((vocabulary, size))
+        self.reset_gradient_accum()
+
+    def parameters(self) -> tuple[pa.Array, ...]:
+        return (self.E,)
+
+    def gradients(self) -> tuple[pa.Array, ...]:
+        return (self.grad_E,)
+
+    def set_parameters(self, parameters: Sequence[pa.Array]) -> None:
+        (self.E,) = parameters
+
+    def forward(self, x: pa.Array) -> pa.Array:
+        return pa.embedding_forward(x, self.E)
+
+    def forward_batch(self, X: pa.Array) -> pa.Array:
+        return pa.embedding_forward(X, self.E)
+
+    def downstream(self) -> pa.Array:
+        raise NotImplementedError("an Embedding is the first layer: nothing reads its downstream")
+
+    def downstream_batch(self) -> pa.Array:
+        raise NotImplementedError("an Embedding is the first layer: nothing reads its downstream")
+
+    def accumulate_gradient(self, input_activation: pa.Array) -> None:
+        self.grad_E = pa.embedding_accumulate_gradient(self.delta, input_activation, self.grad_E)
+
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
+        self.grad_E = pa.embedding_accumulate_gradient(self.delta_batch, input_activation_batch, self.grad_E)
+
+    def reset_gradient_accum(self) -> None:
+        self.grad_E = pa.Array.zeros((self.vocabulary, self.features))
 
 
 class PositionRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
@@ -181,3 +235,23 @@ class TokenDenseRustArrayLayer(Hidden[pa.Array], WeightAndBias[pa.Array]):
     def reset_gradient_accum(self) -> None:
         self.grad_W = pa.Array.zeros((self.size, self.input_size))
         self.grad_b = pa.Array.zeros(self.size)
+
+
+class TokenSoftmaxRustArrayLayer(TokenDenseRustArrayLayer):
+    """
+    TokenSoftmaxArrayLayer on the Rust backend, the token-wise output layer (the sequence task
+    workplan, D6): layer_softmax_forward_batch on the rows of tokens, each row max-shifted, exp'd and
+    divided by its sum, a left fold (array_softmax). The loss is the mean of the tokens'
+    cross-entropies, so the output delta is (P - Y) / T, per example.
+    """
+
+    def __init__(self, size: int, input_size: int, tokens: int) -> None:
+        assert size >= 2, f"a softmax layer needs at least 2 nodes to normalize over; got size={size}"
+        super().__init__(size, input_size, tokens, "linear")
+        self._forward_op = pa.layer_softmax_forward_batch
+
+    def compute_output_delta(self, reference: pa.Array) -> None:
+        self.delta = (self.a - reference) / self.tokens
+
+    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
+        self.delta_batch = (self.A - reference_batch) / self.tokens
