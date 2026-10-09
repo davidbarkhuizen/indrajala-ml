@@ -1,9 +1,10 @@
 """
-Patch models in numpy (the layer-norm and attention workplan, stage 2; README, Layer norm and
-attention): what randomize draws, Patches, Position and TokenMean against the README's indices and
-sums, attention's softmax and its backward by bits against a scalar transcription, the exact tests
-(one token, uniform attention, an identity attention block), and a short MNIST run in which the
-README's model learns. The gradient check, the README model's wiring and learn against a batch of
+Patch models in numpy (the layer-norm and attention workplan, stage 2; the multi-head attention
+workplan, stage 3; README, Layer norm and attention): what randomize draws, Patches, Position and
+TokenMean against the README's indices and sums, attention's softmax and its backward per head by
+bits against a scalar transcription, its packed head blocks, the exact tests (one token, uniform
+attention, identical heads, a silent head, an identity attention block, the blocks called in turn),
+and a short MNIST run in which the README's model learns. The gradient check, the README model's wiring and learn against a batch of
 one are tests/model/networks/test_attention_network.py's, on every implementation.
 """
 
@@ -136,33 +137,70 @@ def _softmax_rows(S: list[list[float]]) -> list[list[float]]:
     return P
 
 
+# (heads, key_size) over 6 features: one head as step 4's, heads splitting the width, and key sizes
+# that make h * d_k differ from d both ways (the defaults hide d against h * d_k mix-ups)
+HEADS = [(1, None), (2, None), (3, None), (2, 4), (4, 1)]
+HEAD_IDS = ["one head", "two heads of 3", "three heads of 2", "two heads of 4", "four heads of 1"]
+
+
+def _attention_block(heads: int, key_size: int | None) -> Residual:
+    return Residual((LayerNorm(), Attention(heads=heads, key_size=key_size)))
+
+
+def _block(heads: FloatArray, i: int, key_size: int) -> FloatArray:
+    # head i's columns of (..., h * d_k) rows
+    return heads[..., i * key_size : (i + 1) * key_size]
+
+
 @pytest.mark.usefixtures("math_exp")
-def test_attentions_softmax_and_its_backward_follow_the_readme_by_bits():
-    built = network([PATCHES, EMBED, ATTENTION_BLOCK, TokenMean(), SOFTMAX])
+@pytest.mark.parametrize(("heads", "key_size"), HEADS, ids=HEAD_IDS)
+def test_attentions_softmax_and_its_backward_follow_the_readme_per_head_by_bits(heads: int, key_size: int | None):
+    built = network([PATCHES, EMBED, _attention_block(heads, key_size), TokenMean(), SOFTMAX])
     batch = rows(3)
     built.learn_batch(0.5, batch)
     attention = built.layers[4]
     assert isinstance(attention, AttentionArrayLayer)
+    d_k = attention.key_size
+    assert d_k == (6 // heads if key_size is None else key_size)
+    width = heads * d_k
 
     Wo = attention.Wo.copy()  # the optimizer steps it in place after the backward pass
     built.learn_batch(0.5, batch)  # the forward and backward passes to compare against
-    Q, K, P = attention._Q, attention._K, attention._P
-    S = (Q @ K.transpose(0, 2, 1)) / math.sqrt(6)
-    for n in range(3):
-        assert bits(P[n]) == bits(np.array(_softmax_rows(S[n].tolist())))
+    # the caches: Q, K, V as (N, h, T, d_k) views, P (N, h, T, T), H and dQ, dK, dV as (N * T, h * d_k)
+    Q, K, V, P = attention._Q, attention._K, attention._V, attention._P
+    assert (Q.shape, P.shape, attention._H.shape, attention._dQ.shape) == (
+        (3, heads, 4, d_k),
+        (3, heads, 4, 4),
+        (12, width),
+        (12, width),
+    )
+    dH = (attention.delta_batch.reshape(-1, 6) @ Wo).reshape(3, 4, width)
+    for i in range(heads):
+        Qi, Ki, Vi, Pi = Q[:, i], K[:, i], V[:, i], P[:, i]
+        S = (Qi @ Ki.transpose(0, 2, 1)) / math.sqrt(d_k)
+        for n in range(3):
+            assert bits(Pi[n]) == bits(np.array(_softmax_rows(S[n].tolist())))
+        H = attention._H.reshape(3, 4, width)
+        assert bits(_block(H, i, d_k)) == bits(Pi @ Vi)
 
-    # dS from dP: r_i = sum_j(dP_ij * P_ij), a left fold, then P_ij * (dP_ij - r_i)
-    dH = (attention.delta_batch.reshape(-1, 6) @ Wo).reshape(3, 4, 6)
-    dP = dH @ attention._V.transpose(0, 2, 1)
-    dS = np.empty_like(dP)
-    for n in range(3):
-        for i in range(4):
-            r = 0.0
-            for j in range(4):
-                r += dP[n, i, j] * P[n, i, j]
-            dS[n, i] = [P[n, i, j] * (dP[n, i, j] - r) for j in range(4)]
-    assert bits(attention._dQ) == bits(((dS @ K) / math.sqrt(6)).reshape(-1, 6))
-    assert bits(attention._dK) == bits(((dS.transpose(0, 2, 1) @ Q) / math.sqrt(6)).reshape(-1, 6))
+        # dS from dP: r_t = sum_u(dP_tu * P_tu), a left fold, then P_tu * (dP_tu - r_t)
+        dHi = _block(dH, i, d_k)
+        dP = dHi @ Vi.transpose(0, 2, 1)
+        dS = np.empty_like(dP)
+        for n in range(3):
+            for t in range(4):
+                r = 0.0
+                for u in range(4):
+                    r += dP[n, t, u] * Pi[n, t, u]
+                dS[n, t] = [Pi[n, t, u] * (dP[n, t, u] - r) for u in range(4)]
+        dQ, dK, dV = (
+            attention._dQ.reshape(3, 4, width),
+            attention._dK.reshape(3, 4, width),
+            attention._dV.reshape(3, 4, width),
+        )
+        assert bits(_block(dQ, i, d_k)) == bits((dS @ Ki) / math.sqrt(d_k))
+        assert bits(_block(dK, i, d_k)) == bits((dS.transpose(0, 2, 1) @ Qi) / math.sqrt(d_k))
+        assert bits(_block(dV, i, d_k)) == bits(Pi.transpose(0, 2, 1) @ dHi)
 
 
 def _parameters(layer: AttentionArrayLayer, seed: int) -> list[FloatArray]:
@@ -170,20 +208,46 @@ def _parameters(layer: AttentionArrayLayer, seed: int) -> list[FloatArray]:
     return [rng.uniform(-0.5, 0.5, parameter.shape) for parameter in layer.parameters()]
 
 
-def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bits():
-    layer = AttentionArrayLayer(1, 5)
+@pytest.mark.parametrize(("heads", "key_size"), [(1, None), (2, None), (3, 4)], ids=["one head", "two", "three of 4"])
+def test_the_projections_are_packed_head_blocks_and_wos_fan_in_is_their_width(heads: int, key_size: int | None):
+    layer = AttentionArrayLayer(4, 6, heads, key_size)
+    width = heads * layer.key_size
+    assert layer.projection_shapes == ((width, 6), (width, 6), (width, 6), (6, width))
+    assert [p.shape for p in layer.parameters()] == [(width, 6), (width,)] * 3 + [(6, width), (6,)]
+    assert [g.shape for g in layer.gradients()] == [p.shape for p in layer.parameters()]
+    assert layer.scale == math.sqrt(layer.key_size)
+
+
+def test_randomize_draws_wo_at_fan_in_heads_times_key_size():
+    built = network([PATCHES, EMBED, _attention_block(3, 4), TokenMean(), SOFTMAX])
+    rng = np.random.default_rng(3)
+    expected: list[Any] = []
+    # the embedding, attention's three (12, 6) projections and Wo (6, 12), then the output layer
+    for rows_, fan_in in [(6, 4), (12, 6), (12, 6), (12, 6), (6, 12), (3, 6)]:
+        limit = 1.0 / np.sqrt(fan_in)
+        expected += [rng.uniform(-limit, limit, (rows_, fan_in)), rng.uniform(-limit, limit, rows_)]
+    snapshot = built.snapshot()
+    assert bits([array for i in (1, 4, 7) for array in snapshot[i]]) == bits(expected)
+
+
+@pytest.mark.parametrize(("heads", "key_size"), HEADS, ids=HEAD_IDS)
+def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bits(heads: int, key_size: int | None):
+    layer = AttentionArrayLayer(1, 6, heads, key_size)
     layer.set_parameters(_parameters(layer, 1))
     *_, Wv, bv, Wo, bo = layer.parameters()
-    X = np.random.default_rng(2).uniform(-1.0, 1.0, (4, 5))
+    X = np.random.default_rng(2).uniform(-1.0, 1.0, (4, 6))
 
     out = layer.forward_batch(X)
-    assert bits(layer._P) == bits(np.ones((4, 1, 1)))
+    assert bits(layer._P) == bits(np.ones((4, heads, 1, 1)))
     assert bits(out) == bits((X @ Wv.T + bv) @ Wo.T + bo)
 
 
-def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth():
-    # T = 16: every score is 0, every weight 1/16, and H is the token mean of V, the same fold
-    layer = AttentionArrayLayer(16, 8)
+@pytest.mark.parametrize(
+    ("heads", "key_size"), [(1, None), (2, None), (4, None), (4, 3)], ids=["1", "2", "4", "4 of 3"]
+)
+def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth(heads: int, key_size: int | None):
+    # T = 16: every score is 0, every weight 1/16, and each head's H is the token mean of its V
+    layer = AttentionArrayLayer(16, 8, heads, key_size)
     parameters = _parameters(layer, 3)
     for i in range(4):  # Wq, bq, Wk, bk
         parameters[i] = np.zeros_like(parameters[i])
@@ -191,9 +255,68 @@ def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth():
     X = np.random.default_rng(4).uniform(-1.0, 1.0, (3, 16 * 8))
 
     layer.forward_batch(X)
-    assert bits(layer._P) == bits(np.full((3, 16, 16), 1 / 16))
-    mean = TokenMeanArrayLayer(16, 8).forward_batch(layer._V.reshape(3, -1))
-    assert bits(layer._H) == bits(np.broadcast_to(mean[:, np.newaxis, :], (3, 16, 8)))
+    assert bits(layer._P) == bits(np.full((3, heads, 16, 16), 1 / 16))
+    width = layer.width
+    V = layer._V.transpose(0, 2, 1, 3).reshape(3, 16 * width)
+    mean = TokenMeanArrayLayer(16, width).forward_batch(V)
+    assert bits(layer._H.reshape(3, 16, width)) == bits(np.broadcast_to(mean[:, np.newaxis, :], (3, 16, width)))
+
+
+@pytest.mark.parametrize(("heads", "key_size"), [(2, None), (3, None), (2, 4)], ids=["2", "3", "2 of 4"])
+def test_identical_heads_weigh_and_mix_alike_by_bits(heads: int, key_size: int | None):
+    layer = AttentionArrayLayer(4, 6, heads, key_size)
+    parameters = _parameters(layer, 5)
+    d_k = layer.key_size
+    for i in range(6):  # each head's blocks of Wq, bq, Wk, bk, Wv, bv: head 0's
+        parameters[i] = np.concatenate([parameters[i][:d_k]] * heads)
+    layer.set_parameters(parameters)
+    X = np.random.default_rng(6).uniform(-1.0, 1.0, (3, 4 * 6))
+
+    layer.forward_batch(X)
+    H = layer._H.reshape(3, 4, layer.width)
+    for i in range(1, heads):
+        assert bits(layer._P[:, i]) == bits(layer._P[:, 0])
+        assert bits(_block(H, i, d_k)) == bits(_block(H, 0, d_k))
+
+
+@pytest.mark.parametrize(("heads", "key_size"), [(2, None), (3, None), (2, 4)], ids=["2", "3", "2 of 4"])
+def test_a_silent_heads_projection_gradients_are_exactly_zero(heads: int, key_size: int | None):
+    # with head i's columns of Wo zero, dH[i] is exactly zero, and so is all that flows from it
+    layer = AttentionArrayLayer(4, 6, heads, key_size)
+    parameters = _parameters(layer, 7)
+    d_k, silent = layer.key_size, heads - 1
+    parameters[6][:, silent * d_k : (silent + 1) * d_k] = 0.0
+    layer.set_parameters(parameters)
+    rng = np.random.default_rng(8)
+    X = rng.uniform(-1.0, 1.0, (3, 4 * 6))
+    layer.forward_batch(X)
+    layer._backward(rng.uniform(-0.5, 0.5, (3, 4 * 6)))
+    layer.accumulate_gradient_batch(X)
+
+    gradients = layer.gradients()
+    for weight, bias in ((0, 1), (2, 3), (4, 5)):  # Wq, bq; Wk, bk; Wv, bv
+        assert not np.any(gradients[weight][silent * d_k : (silent + 1) * d_k])
+        assert not np.any(gradients[bias][silent * d_k : (silent + 1) * d_k])
+        assert np.any(gradients[weight][: silent * d_k])  # the others' blocks are not
+
+
+@pytest.mark.parametrize(("heads", "key_size"), HEADS, ids=HEAD_IDS)
+def test_the_blocks_called_in_turn_are_the_layers_passes_by_bits(heads: int, key_size: int | None):
+    layer = AttentionArrayLayer(4, 6, heads, key_size)
+    layer.set_parameters(_parameters(layer, 9))
+    rng = np.random.default_rng(10)
+    X, delta = rng.uniform(-1.0, 1.0, (3, 4 * 6)), rng.uniform(-0.5, 0.5, (3, 4 * 6))
+
+    Q, K, V = layer._project(X.reshape(-1, 6))
+    P, H = layer._attend(layer._heads(Q), layer._heads(K), layer._heads(V))
+    out = layer._combine(layer._side_by_side(H))
+    assert bits(layer.forward_batch(X)) == bits(out.reshape(3, -1))
+
+    dQ, dK, dV = layer._attend_backward(layer._heads(layer._combine_backward(delta.reshape(-1, 6))))
+    dX = layer._project_backward(layer._side_by_side(dQ), layer._side_by_side(dK), layer._side_by_side(dV))
+    layer._backward(delta)
+    assert bits(layer.downstream_batch()) == bits(dX.reshape(3, -1))
+    assert bits(layer._P) == bits(P)
 
 
 def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradient_by_bits():

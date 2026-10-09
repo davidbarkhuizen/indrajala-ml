@@ -57,14 +57,18 @@ class GammaAndBeta[A]:
 
 class AttentionProjections[A]:
     """
-    Single-head attention's (Wq, bq, Wk, bk, Wv, bv, Wo, bo), each projection (d, d) and drawn as a
-    dense layer's (W, b) in turn, the weights decayed and the biases not. The order is also the
-    draw, save and step order.
+    Attention's (Wq, bq, Wk, bk, Wv, bv, Wo, bo), each drawn as a dense layer's (W, b) in turn, the
+    weights decayed and the biases not (the multi-head attention workplan, D2): Wq, Wk and Wv are
+    (heads * key_size, d), their rows in head blocks, and Wo (d, heads * key_size), its columns in
+    the same blocks. The order is also the draw, save and step order.
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (True, False) * 4
 
     features: int
+    heads: int
+    key_size: int
+    width: int
     Wq: A
     bq: A
     Wk: A
@@ -85,7 +89,15 @@ class AttentionProjections[A]:
     @property
     def projection_shapes(self) -> tuple[tuple[int, int], ...]:
         # the projections' (rows, fan_in), each drawn as a dense layer's (W, b), in order
-        return ((self.features, self.features),) * 4
+        width = self.heads * self.key_size
+        return ((width, self.features),) * 3 + ((self.features, width),)
+
+    def _resolve_heads(self, features: int, heads: int, key_size: int | None) -> None:
+        # heads of key_size features each (features / heads when None), and the projections' width
+        self.features = features
+        self.heads = heads
+        self.key_size = features // heads if key_size is None else key_size
+        self.width = heads * self.key_size
 
     def parameters(self) -> tuple[A, ...]:
         return self.Wq, self.bq, self.Wk, self.bk, self.Wv, self.bv, self.Wo, self.bo

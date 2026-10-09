@@ -172,9 +172,12 @@ def _token_layer(classes: TokenLayerClasses, spec: LayerSpec, shape: Shape) -> A
         return classes.patches(*image_shape(shape), spec.patch_size)
     if isinstance(spec, LayerNorm):
         return classes.layer_norm(*token_shape(shape), spec.epsilon)
-    if isinstance(spec, Position | Attention | TokenMean):
+    if isinstance(spec, Attention):
         tokens, features = token_shape(shape)
-        layer_class = {Position: classes.position, Attention: classes.attention, TokenMean: classes.token_mean}
+        return classes.attention(tokens, features, spec.heads, spec.head_size(features))
+    if isinstance(spec, Position | TokenMean):
+        tokens, features = token_shape(shape)
+        layer_class = {Position: classes.position, TokenMean: classes.token_mean}
         return layer_class[type(spec)](tokens, features)
     return None
 
@@ -205,7 +208,8 @@ def build_array_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_multi_head_until(specs, "3" if backend_name == "numpy" else "5", f"on the {backend_name} backend")
+    if backend_name == "rust":
+        refuse_multi_head_until(specs, "5", "on the rust backend")
     classes = LAYER_CLASSES[backend_name]
     token_classes = TOKEN_LAYER_CLASSES[backend_name]
 
