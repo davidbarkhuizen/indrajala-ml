@@ -320,6 +320,10 @@ What to do next:
   its own repo root first on `sys.path` made the old side import the new tree's package (#610);
   to time two commits from before such a fix, take the script from a third commit:
   `ab.py run --script-from COMMIT`.
+- **A new `ab.py` option fails on the host's first `remote run` after it merges.** The host's own
+  `ab.py` parses the command before `--sync` brings its checkout to main. Bring the host's
+  checkout to main first (`git fetch origin && git merge --ff-only origin/main` there, what
+  `--sync` does when `rust/` hasn't moved), then run.
 - **Whole passes shift** on a noisy machine: by 5-15% in every config on the laptop, the controls
   included (#480, and #477's first A/B). On the i7, with the setup script applied, no pass of 36
   moved more than 0.9%. Balance a shifted pass ([§5](#5-reading-the-report)) on either.

@@ -272,10 +272,15 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
   what step 4's numbers control for. The second also tests the bottleneck again: at `d_k = 8` and
   `T = 16` each head's scores have rank at most 8 of 16, yet lifting it (`key_size=32`) stayed
   within noise (+0.22 +- 0.40 points); at `T = 49` the bound is tighter, 8 of 49.
-- **Stage 3's numpy A/B** (#606) was probably invalid: before #610, both sides of an A/B imported
-  the new tree's package, so both ran the new numpy layer. It reported the numpy rows within
-  noise. Re-running it needs the fixed script, which neither stage-3 tree has: a `--bench cmd`
-  probe, or an `ab.py` option to take the script from a given commit.
+- **The numpy attention backward's 10% from stage 3.** #606's tier 1 A/B reported the numpy rows
+  within noise, but before #610 both sides imported the new tree's package. Rerun on 2026-10-09
+  with the fixed script (`ab.py run --script-from`, #616; report on #616), stage 3 made
+  `hidden_delta_batch` 10.2% slower (243 to 268 us per call, the stage-1 attention case at batch
+  32, consistent over 6 passes); `forward_batch` and `accumulate_gradient_batch` stayed within
+  noise. Main's numpy backward is still stage 3's. The cost came with the three-block structure
+  (D10), likely in the backward's (N, h, T, d_k) views or its stacked `np.matmul`s. Worth a look
+  when the numpy layer is next touched (the sequence task's mask will be): a fix must keep the
+  blocks and their bits.
 
 Still out of scope:
 
