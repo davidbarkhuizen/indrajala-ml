@@ -56,16 +56,23 @@ this machine's. The gotchas in §7 were first measured on the Ryzen 7 3700U lapt
 workplan's stage 6, `git show 480164d:docs/benchmark-machine-workplan.md`): §7 has the i7's numbers, and the
 findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
 
-- **Run the setup script once per boot.** `sudo scripts/benchmark_machine_setup.sh` sets the
-  frequency policy the profile records (governor, EPP, turbo, PL1), `perf_event_paranoid` 2, and
-  holds snap refreshes for 24 hours, then prints what it set. None of it survives a reboot (the
-  snap hold expires), and the machine check below refuses a run until it is applied.
-- **Check the machine yourself, then go.** Before a timing run or a long sweep, read the 1-minute
-  load (`uptime`) and the running processes (`ps`). If a browser (Brave, Firefox) or the editor
-  (Zed) is running, close it (`pkill brave`, `pkill firefox`, `pkill zed`); don't stop to ask the
-  owner. If the load is high, wait and check again. Keep other work light while it runs: reading
-  and writing are fine; tests, lint and builds are not. A background IDE once spoiled a whole
-  measurement.
+- **Development runs on the laptop (`pyramidon`); `jebel` only benchmarks,** driven from the
+  laptop over ssh with `ab.py remote --host jebel` ([§4](#4-running-an-ab-with-abpy)). Edits,
+  builds, tests and lint carry on on the laptop during a run.
+- **The setup script, once per boot.** `scripts/benchmark_machine_setup.sh` sets the frequency
+  policy the profile records (governor, EPP, turbo, PL1), `perf_event_paranoid` 2, and holds snap
+  refreshes for 24 hours, then prints what it set. None of it survives a reboot (the snap hold
+  expires), and the machine check below refuses a run until it is applied. `ab.py remote run`
+  applies it after a reboot by itself, through a root-owned copy that a sudoers entry allows
+  without a password: the owner installs both once with `sudo scripts/install_benchmark_setup.sh`
+  on `jebel`, and again whenever the setup script changes (`ab.py` refuses to run a copy that
+  differs from the checkout's). By hand on `jebel`: `ab.py check --apply-setup`.
+- **Check the machine yourself, then go.** Before a timing run or a long sweep, read `jebel`'s
+  1-minute load and its running processes (`ssh jebel uptime`, `ssh jebel ps -eo pcpu,comm
+  --sort=-pcpu`). If a browser (Brave, Firefox) or the editor (Zed) is running there, close it
+  (`ssh jebel 'pkill -x brave; pkill -x firefox; pkill -x zed'`); don't stop to ask the owner. If
+  the load is high, wait and check again. Nothing else runs on `jebel` during a run: no tests,
+  lint or builds there. A background IDE once spoiled a whole measurement.
 - **Package jobs.** `unattended-upgrades` is enabled and snaps refresh on their own schedule; either
   can start a large job mid-run. Before a run, `systemctl is-active apt-daily.service
   apt-daily-upgrade.service` prints `inactive` twice when no apt job runs (`unattended-upgrades`
@@ -92,7 +99,8 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
 - **The policy can change mid-run.** `thermald` puts PL1 back to 95 W within 15-40 minutes of
   the setup script, restarted or not, so the script stops it for the session (it starts again at
   boot). `ab.py` re-reads the frequency policy and the power limits after every pass. When they
-  changed, it fails that pass and stops the run; re-run the setup script, then `ab.py extend`.
+  changed, it fails that pass and stops the run; `ab.py remote --host jebel extend RUN --order
+  ...` re-applies the setup and adds the passes.
 - **`PATH`.** Non-login shells lack `~/.cargo/bin`: builds fail and the profile reads `rustc` as
   null. `export PATH=$HOME/.cargo/bin:$PATH` (`ab.py` sets it itself). The crate's toolchain is
   pinned in `rust/rust-toolchain.toml`, which only rustup honours.
@@ -194,6 +202,24 @@ python scripts/ab.py extend --order NO      # numbered after the existing passes
 **Into a PR.** Put the `--md` file into the PR body by concatenating files, not by retyping it.
 The file has the protocol paragraph (commits, order, command, working directory, provenance,
 machine check, why any passes were added) and one table per metric.
+
+**On `jebel`, from the laptop.** `remote --host jebel` runs a command on the benchmark machine
+over ssh. `remote run` takes `run`'s arguments; it resolves `--old` and `--new` to commits on the
+laptop (push them first: `jebel` fetches them), names the run after the laptop's branch, then on
+`jebel` brings the checkout to `origin/main` (rebuilding its crate when `rust/` moved), runs the
+machine check and re-applies the setup if it fails, starts the run detached, and waits there:
+
+```
+python scripts/ab.py remote --host jebel run --bench prepared_dataset_timing --order ONNO
+python scripts/ab.py remote --host jebel report RUN --md ab-table.md   # the file is written here
+python scripts/ab.py remote --host jebel archive RUN --reason "#NNN: what it claims"
+```
+
+The run never depends on the ssh session. If the connection drops, or the laptop sleeps, only the
+wait ends, and its message names the command that resumes it: `remote --host jebel wait RUN`.
+`remote extend`, `status` and `archive` work the same way. On `jebel` itself the pieces are `run
+--detach` (start in its own session; the log is in `~/code/ab-runs/launches/`), `wait` and
+`check`.
 
 **Other commands.** `status` prints one line (the pass running, how many are done, an ETA).
 `clean --worktrees` and `clean --wheels` remove the worktrees and crate builds no run of the last
@@ -481,9 +507,11 @@ moved is refused. `--date` defaults to the file's, `--profile` to this host's.
 Most A/Bs here are run by an agent, where the cost is turns: each check on a running job re-reads
 the whole conversation. The repository's `CLAUDE.md` repeats these rules.
 
-- **Launch in the background and don't poll.** Start `ab.py run` as a background command and let
-  its exit be the signal. Use `status` only when the owner asks. Don't schedule wake-ups for runs
-  under an hour.
+- **Launch in the background and don't poll.** Start `ab.py remote --host jebel run` as a
+  background command and let its exit be the signal; it prints the brief report when the run
+  ends. Use `status` only when the owner asks. Don't schedule wake-ups for runs under an hour. If
+  it exits with "lost the ssh session", the run carries on: start the `remote ... wait` it names,
+  the same way.
 - **Read the brief report only.** Read `report --brief` and nothing else from the run. Open a raw
   pass file only when the brief report flags something it can't explain.
 - **In a crate A/B, check the header before the verdict.** The two `.so` hashes must differ when
@@ -492,8 +520,8 @@ the whole conversation. The repository's `CLAUDE.md` repeats these rules.
   nothing.
 - **Pass the table on without reading it.** Put `report --md` into the PR body by concatenating
   files.
-- **Keep the machine quiet.** Nothing CPU-heavy runs while an A/B does: no tests, lint or builds.
-  Reading code and writing docs are fine. Check the load and close the browser and editor yourself
-  first ([§2](#2-preparing-the-machine)).
+- **Keep `jebel` quiet.** Nothing else runs there during an A/B: development stays on the laptop,
+  where building and testing carry on. Check `jebel`'s load and close its browser and editor
+  yourself first ([§2](#2-preparing-the-machine)).
 - **Extend `ab.py` instead of working around it.** A measurement it can't express gets a probe or
   an adapter, not a new driver script.

@@ -1817,7 +1817,7 @@ def cmd_remote(args: argparse.Namespace, extra: list[str]) -> None:
         _remote(host, remote_repo, [args.action, *rest], f"{prefix} {args.action} {shlex.join(rest)}")
         return
     started = _ssh(host, remote_repo, start, capture=True)
-    print(started.stdout, end="")
+    print(started.stdout, end="", flush=True)  # before the wait, which may last hours
     if started.returncode:
         raise AbError(f"ab.py {args.action} on {host} didn't start", started.stderr.splitlines())
     run = started.stdout.split("started ", 1)[1].split()[0]
