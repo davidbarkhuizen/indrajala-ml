@@ -1,7 +1,7 @@
 # Workplan: a sequence task with causal masking (roadmap step 6)
 
-**Status: decisions D1-D12 settled by the owner (2026-10-09), each as recommended; stages 1-9
-are planned.**
+**Status: decisions D1-D12 settled by the owner (2026-10-09), each as recommended. Stage 1 done
+(#621, #622, #623); stage 2 done: the specs. Stages 3-9 not started.**
 
 Roadmap step 6 ([primitives-roadmap.md](primitives-roadmap.md)): next-token prediction on a small
 text corpus, a causal transformer. It brings the network's first per-token output and loss and
@@ -180,7 +180,13 @@ Each lists the options considered, with pros and cons, and the choice.
 1. **The corpus**: the dataset repository (D3), `scripts/fetch_datasets.py`'s entry, a loader in
    `indrajala_ml/data/` (vocabulary, windows, split) and its tests.
 2. **Specs**: `Embedding`, `Attention(causal)`, a token part ending in a token-wise output, the
-   `sequence` shape in `spec_shapes` and validation, format 2's entries. No layer yet.
+   `sequence` shape in `spec_shapes` and validation, format 2's entries. No layer yet. Done:
+   `Embedding(vocabulary, size)` starts a token part as `Patches` does, over a flat input of `T`
+   ids; a token part without `TokenMean` ends in the output layer, applied to each token, which is
+   softmax (`token_wise_output`, the `sequence` shape's specs); `Attention(causal=False)`. Format 2
+   has an `"embedding"` entry, its table `E`, and writes `"causal"` only when true. Until their
+   stages the builders refuse all three with "not yet" (`refuse_sequence_specs_until`): numpy at 3,
+   Rust at 5, pure Python at 6. Format 2's `"sequence"` network shape comes with the network, at 3.
 3. **numpy**: the mask in attend, `Embedding`, the token-wise softmax output and loss, the
    `sequence` shape, per-token targets in the trainer, the evaluation (D8). Tier 1 A/B of the
    attention case (its unmasked path must not move).

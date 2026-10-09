@@ -21,6 +21,10 @@ Patches, which cuts the image into tokens, has a token part of token-wise Dense 
 and residual blocks over tokens (LayerNorm, Attention), and ends it with TokenMean, before the
 dense part. A token sequence of T tokens of d features is the shape (T, d), flat and token-major
 (D2). LayerNorm stands in flat dense networks too (D5).
+
+A sequence model (the sequence task workplan) starts its token part with Embedding, which reads T
+token ids, in place of Patches, and may end it in its output layer, applied to each token, in place of
+TokenMean and a dense part (D5, D6): token_wise_output. Its attention may be causal (D7).
 """
 
 from __future__ import annotations
@@ -111,6 +115,17 @@ class Patches:
 
 
 @dataclass(frozen=True)
+class Embedding:
+    """
+    A flat input of T token ids, each in [0, vocabulary), as (T, size) tokens: each id's row of a
+    learned (vocabulary, size) table (the sequence task workplan, D5). The first layer, as Patches.
+    """
+
+    vocabulary: int
+    size: int
+
+
+@dataclass(frozen=True)
 class Position:
     """A learned (T, d) table added to the tokens, starting at zero (D7). Once, before any block."""
 
@@ -131,13 +146,16 @@ class LayerNorm:
 class Attention:
     """
     Self-attention over the tokens in heads heads of key_size features each (d / heads when None,
-    which heads must then divide), values as wide as keys, no mask, biases on all four
-    projections, ending in the affine output projection (the layer-norm and attention workplan,
-    D6; the multi-head attention workplan, D2, D3). It ends a token block's body.
+    which heads must then divide), values as wide as keys, biases on all four projections, ending
+    in the affine output projection (the layer-norm and attention workplan, D6; the multi-head
+    attention workplan, D2, D3). It ends a token block's body. A causal one masks each token's
+    scores for the tokens after it, so token t attends to tokens 0 to t only (the sequence task
+    workplan, D7).
     """
 
     heads: int = 1
     key_size: int | None = None
+    causal: bool = False
 
     def head_size(self, features: int) -> int:
         """Each head's width d_k over tokens of features features: key_size, else features / heads."""
@@ -149,10 +167,24 @@ class TokenMean:
     """The mean over the tokens, (T, d) to (d,) (D8): the token part's end."""
 
 
-LayerSpec = Dense | ConvSpec | PoolSpec | BatchNorm | Residual | Patches | Position | LayerNorm | Attention | TokenMean
+LayerSpec = (
+    Dense
+    | ConvSpec
+    | PoolSpec
+    | BatchNorm
+    | Residual
+    | Patches
+    | Embedding
+    | Position
+    | LayerNorm
+    | Attention
+    | TokenMean
+)
 
-# the specs that act on tokens only, between Patches and TokenMean, both included
-TokenSpec = Patches | Position | Attention | TokenMean
+# the specs that start a token part, as a network's first layer
+TokenStart = Patches | Embedding
+# the specs that act on tokens only, from the token part's start to its TokenMean, both included
+TokenSpec = Patches | Embedding | Position | Attention | TokenMean
 
 
 @dataclass(frozen=True)
@@ -170,7 +202,18 @@ class Add:
 
 # a network's layers, one spec each: its specs with every Residual flattened
 ExpandedSpec = (
-    Dense | ConvSpec | PoolSpec | BatchNorm | Fork | Add | Patches | Position | LayerNorm | Attention | TokenMean
+    Dense
+    | ConvSpec
+    | PoolSpec
+    | BatchNorm
+    | Fork
+    | Add
+    | Patches
+    | Embedding
+    | Position
+    | LayerNorm
+    | Attention
+    | TokenMean
 )
 
 
@@ -187,6 +230,28 @@ def expand_specs(specs: Sequence[LayerSpec | Fork | Add]) -> list[ExpandedSpec]:
         else:
             expanded.append(spec)
     return expanded
+
+
+def token_wise_output(specs: Sequence[LayerSpec]) -> bool:
+    """
+    Whether specs' output layer is applied to each token: a token part without a TokenMean, which
+    ends in the output layer (the sequence task workplan, D6). A sequence network's specs do; every
+    other network's don't.
+    """
+    return bool(specs) and isinstance(specs[0], TokenStart) and not any(isinstance(spec, TokenMean) for spec in specs)
+
+
+def refuse_sequence_specs_until(specs: Sequence[LayerSpec], stage: str, where: str) -> None:
+    """
+    A builder's refusal of an Embedding, a causal Attention or a token-wise output layer before the
+    sequence task workplan's stage that builds them there.
+    """
+    spec = next(
+        (s for s in expand_specs(specs) if isinstance(s, Embedding) or (isinstance(s, Attention) and s.causal)),
+        specs[-1] if token_wise_output(specs) else None,
+    )
+    if spec is not None:
+        raise NotImplementedError(f"{spec!r} {where}: not yet (the sequence task workplan, stage {stage})")
 
 
 def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:
