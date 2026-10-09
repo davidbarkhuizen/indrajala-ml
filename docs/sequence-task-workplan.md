@@ -4,7 +4,7 @@
 (#621, #622, #623); stage 2 done: the specs (#625); stage 3 done: numpy (#626); stage 4 done: the
 crate (indrajala-math-rust #53, #627); stage 5 done: the Rust layers (#628); stage 6 done: pure
 Python (#631); stage 7 done: fixtures, checkpoints and golden entries (#632); stage 8 done: the
-study. Stage 9 not started.**
+study (#634). Stage 9 not started.**
 
 Roadmap step 6 ([primitives-roadmap.md](primitives-roadmap.md)): next-token prediction on a small
 text corpus, a causal transformer. It brings the network's first per-token output and loss and
