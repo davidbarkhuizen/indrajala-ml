@@ -3,8 +3,8 @@
 A workplan is deleted once its last stage merges, and never before: only when every stage and
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
-[multi-head-attention-workplan.md](multi-head-attention-workplan.md). The order of the next ML
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order
+of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## Retired workplans
@@ -27,6 +27,7 @@ docs cite them by section:
 | The source layout | #566 | #567-#573 | `git show b362621:docs/source-layout-workplan.md` |
 | A baseline on the new benchmark machine (i7-9700K) | #575 | #576-#590, #592 | `git show 480164d:docs/benchmark-machine-workplan.md` |
 | A benchmark archive, tiered benchmarking, and a remote benchmark machine | #584 | #593-#598, archive #1-#11 | `git show 056b808:docs/benchmark-archive-workplan.md` |
+| Multi-head attention and a transformer block (roadmap step 5) | #602 | crate #51-#52, #603-#613, archive #12-#13 | `git show d70cf0f:docs/multi-head-attention-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -37,7 +38,8 @@ normalization, Residual connections, Layer norm and attention), [measurement.md]
 and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/residual_depth_study.py`'s, the patch-attention study's in
-`scripts/patch_attention_study.py`'s.
+`scripts/patch_attention_study.py`'s, the multi-head attention study's in
+`scripts/multi_head_attention_study.py`'s.
 
 ## From composable layers
 
@@ -201,14 +203,11 @@ Still out of scope:
 
 ## From layer norm and attention
 
-Multi-head attention, a key size other than the token size, masking and dropout in attention are
-roadmap step 5 ([primitives-roadmap.md](primitives-roadmap.md)). Besides those:
+Multi-head attention and a key size were roadmap step 5, now done; masking and dropout in attention
+moved to From multi-head attention. Besides those:
 
 - **Layer norm against batch norm on the dense networks** (the workplan's D11 (b)): the residual
   depth study's batch-norm cells rerun with a flat `LayerNorm` in place of `BatchNorm`.
-- **The patch study's open margin.** Attention then FFN beat FFN alone by 0.4 points, less than
-  the FFN arm's standard deviation over 3 seeds, and the FFN arm led until epoch 3. More seeds or
-  epochs would show whether attention's gain is real at this size.
 - **Parity under Adam is per step.** Under `SGD`, `Momentum` and `WeightDecay` the pure-Python
   and Rust patch models are compared with numpy after 50 steps; under `Adam` they are compared
   step by step, each step's gradients from the same parameters
@@ -232,6 +231,48 @@ Still out of scope:
 
 - A class token (D8 (b)), fixed sin-cos or drawn positions (D7 (b), (c)).
 - Sequence data (text) and its loading; conv-then-tokens hybrids.
+
+## From multi-head attention
+
+The workplan settled `Attention(heads, key_size)`, the parameters packed with heads as row blocks
+(D2), and every implementation and the crate in three blocks per pass: project, attend, combine
+(D4). The patch study's open margin is answered: at 5 seeds attention then FFN beats FFN alone by
+0.40 +- 0.30 points, on 4 of 5 seeds (`scripts/multi_head_attention_study.py`).
+
+- **The extension points** (the workplan's D6, D7), each a field with a default, added by the work
+  that uses it:
+
+  | later work | where it goes | what it adds |
+  | --- | --- | --- |
+  | masking, causal or padding | attend, forward: an additive mask on `S[i]` before the max shift | a mask field in the options; backward unchanged (`P_ij = 0` zeroes `dS_ij`) |
+  | dropout on the weights | attend: an inverted mask on `P[i]` before `H[i] = P[i] V[i]`, kept for backward | a mask field in the options, drawn by the layer from the network's generator |
+  | dropout after the projection | after combine | a token-wise dropout layer, outside attention |
+  | a separate value width | project and combine: `Wv` `(h·d_v, d)`, `Wo` `(d, h·d_v)` | a `value_size` field defaulting to `key_size` |
+  | grouped- or multi-query attention | project: `Wk`, `Wv` with `g` row blocks; attend: head `i` reads key/value block `i // (h / g)` | a `key_value_heads` field defaulting to `heads` |
+  | cross-attention | project: `K`, `V` from a second input | a second input to the layer, which `Sequential` doesn't have: its own design |
+
+  A causal mask is useful only with a per-token loss and a sequence dataset, neither of which
+  exists: its workplan comes with the sequence task. Dropout in attention needs a training and
+  inference switch in a token layer and mask draws in all three implementations' orders.
+- **GELU** (D5 (c)), ViT's FFN activation, an activation for `Dense`: it needs `erf`, which stable
+  Rust lacks (the `tanh` form is a different function), in all three implementations and the crate.
+- **The study's other arms** (D8 (b), (c)): `d = 64`, and patch size 4 (`T = 49`). Both change
+  what step 4's numbers control for. The second also tests the bottleneck again: at `d_k = 8` and
+  `T = 16` each head's scores have rank at most 8 of 16, yet lifting it (`key_size=32`) stayed
+  within noise (+0.22 +- 0.40 points); at `T = 49` the bound is tighter, 8 of 49.
+- **Stage 3's numpy A/B** (#606) was probably invalid: before #610, both sides of an A/B imported
+  the new tree's package, so both ran the new numpy layer. It reported the numpy rows within
+  noise. Re-running it needs the fixed script, which neither stage-3 tree has: a `--bench cmd`
+  probe, or an `ab.py` option to take the script from a given commit.
+
+Still out of scope:
+
+- A `TransformerLayer` spec (D5 (b)): a transformer layer is the attention and FFN blocks written
+  again; a spec would freeze pre-LN against post-LN, the activation and where dropout goes.
+- A class token, relative position biases, and head pruning or per-head analysis (Michel et al.
+  2019, "Are Sixteen Heads Really Better than One?").
+- A faster multi-head kernel: a crate-tuning item (From the benchmark machine baseline), with its
+  own A/B.
 
 ## From the benchmark machine baseline
 

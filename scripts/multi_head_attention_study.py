@@ -47,8 +47,8 @@ both, though it ran on the Ryzen laptop), so its conv and dense controls compare
   of 32 features.
 - Wider heads don't resolve the bottleneck question: 4-head-k32 is 0.22 +- 0.40 points over 4-head
   (3 of 5 seeds), within noise, at 2.1x the parameters and 1.6x the time per epoch. At d_k = 8 and
-  T = 16 the per-head score matrix's rank bound (8) is half the tokens, so Bhojanapalli et al.'s
-  bottleneck may only bind with more tokens or narrower heads.
+  T = 16 each head's scores have rank at most 8 of 16, so the bound binds, but this task doesn't
+  measurably need the full rank; with more tokens (patch size 4, T = 49) it would bind harder.
 - Depth helps, more than heads, as expected: a second layer adds 0.57 +- 0.45 points at one head
   and 0.95 +- 0.41 at four, on every seed. 4-head-2-layer is the best patch model, 96.98% +- 0.21%,
   0.91 +- 0.18 points over 1-head on every seed; at two layers four heads lead one by 0.34 +- 0.55
