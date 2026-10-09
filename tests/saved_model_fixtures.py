@@ -16,6 +16,9 @@ tests/model/persistence/test_legacy_saved_models.py loads.
   format-2 files of a Sequential network per implementation: a patch model with the attention and
   FFN blocks, named Attention<class name>, and a dense network with flat layer norms after a
   dropout layer and first in a residual body, named LayerNorm<class name>.
+- The multi-head fixtures (the multi-head attention workplan, stage 6) are format-2 files of a
+  Sequential network per implementation: the patch model with a two-head attention layer whose key
+  size isn't d / heads, named MultiHeadAttention<class name>.
 - The pure-Python multiclass presets' fixtures (the presets workplan, stage 1) are format 2 only,
   like the single-output ones: those classes never wrote a legacy envelope.
 - So are the numpy and Rust one-output presets' fixtures (the presets workplan, stage 2).
@@ -126,6 +129,18 @@ PATCH_MODEL: list[LayerSpec] = [
     Dense(4, activation="linear", bias=True),
     Position(),
     Residual((LayerNorm(), Attention())),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
+    TokenMean(),
+    LayerNorm(epsilon=1e-4),
+    Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+]
+# the patch model with two heads of 3 features over its 4-wide tokens, so the projections are 6
+# wide, not 4: heads and key_size both off their defaults
+MULTI_HEAD_PATCH_MODEL: list[LayerSpec] = [
+    Patches(3),
+    Dense(4, activation="linear", bias=True),
+    Position(),
+    Residual((LayerNorm(), Attention(heads=2, key_size=3))),
     Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
     TokenMean(),
     LayerNorm(epsilon=1e-4),
@@ -417,6 +432,7 @@ FIXTURES: dict[str, SavedModelFixture] = {
         f"{prefix}{name}": _sequential(implementation, True, Adam(**ADAM), name, architecture)
         for prefix, architecture in (
             ("Attention", (SEQUENTIAL_INPUT, PATCH_MODEL)),
+            ("MultiHeadAttention", (SEQUENTIAL_INPUT, MULTI_HEAD_PATCH_MODEL)),
             ("LayerNorm", ((DIMENSION,), LAYER_NORM)),
         )
         for name, implementation in (

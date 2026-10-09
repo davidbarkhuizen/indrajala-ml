@@ -5,7 +5,8 @@ attention arithmetic in its three blocks (#603). Stage 1 done: the attention ben
 Stage 2 done: the spec (#605). Stage 3 done: numpy in three blocks, the golden run
 bit-identical (#606). Stage 4 done: pure Python in the same blocks (#607). Stage 5 done: the crate
 in blocks with a `heads` argument (indrajala-math-rust #51) and the Rust layer passing it, the
-golden run bit-identical. Stages 6-8 not started.**
+golden run bit-identical. Stage 6 done: two-head patch-model fixtures, multi-head checkpoint round
+trips and a multi-head golden entry per implementation (#612). Stages 7-8 not started.**
 
 Roadmap step 5 ([primitives-roadmap.md](primitives-roadmap.md)): multi-head attention and a full
 transformer block. Step 4 (the layer-norm and attention workplan, retired:
