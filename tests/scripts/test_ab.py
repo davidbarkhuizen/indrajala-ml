@@ -831,3 +831,21 @@ def test_a_machine_check_records_the_host_and_its_profiles_identity(toy_repo: Pa
     record = ab._preflight(run_dir, manifest, skip_profile=False, allow_change=True)  # pyright: ignore[reportPrivateUsage]
     assert record["hostname"] == ab.socket.gethostname()
     assert record["profile_identity"] == benchmark_archive.identity_sha256(json.loads(I7.read_text()))
+
+
+def test_report_passes_pools_only_the_passes_named() -> None:
+    whole = ab.report_data(FIXTURES / "pr480")
+    first = ab.report_data(FIXTURES / "pr480", "1-4")
+    assert whole.passes == {"old": [1, 4, 6], "new": [2, 3, 5]}
+    assert first.passes == {"old": [1, 4], "new": [2, 3]}
+    assert all(len(row.old) == 2 and len(row.new) == 2 for row in first.rows)
+    assert "passes ONNO (2 old, 2 new)" in ab.brief_report(first)[0]
+    assert "this report pools passes 1-4 only" in ab.protocol_paragraph(first)
+    assert "pools passes" not in ab.protocol_paragraph(whole)
+    assert ab.report_data(FIXTURES / "pr480", "1,4,2-3").passes == first.passes
+
+
+@pytest.mark.parametrize(("passes", "message"), [("1-9", "has no pass 7, 8, 9"), ("one", "give pass numbers")])
+def test_report_passes_refuses_what_the_run_lacks(passes: str, message: str) -> None:
+    with pytest.raises(ab.AbError, match=message):
+        ab.report_data(FIXTURES / "pr480", passes)
