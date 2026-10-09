@@ -130,10 +130,18 @@ class LayerNorm:
 @dataclass(frozen=True)
 class Attention:
     """
-    Single-head self-attention over the tokens, keys as wide as the tokens, no mask, biases on
-    all four projections, ending in the affine output projection (D6). It ends a token block's
-    body.
+    Self-attention over the tokens in heads heads of key_size features each (d / heads when None,
+    which heads must then divide), values as wide as keys, no mask, biases on all four
+    projections, ending in the affine output projection (the layer-norm and attention workplan,
+    D6; the multi-head attention workplan, D2, D3). It ends a token block's body.
     """
+
+    heads: int = 1
+    key_size: int | None = None
+
+    def head_size(self, features: int) -> int:
+        """Each head's width d_k over tokens of features features: key_size, else features / heads."""
+        return features // self.heads if self.key_size is None else self.key_size
 
 
 @dataclass(frozen=True)
@@ -179,6 +187,17 @@ def expand_specs(specs: Sequence[LayerSpec | Fork | Add]) -> list[ExpandedSpec]:
         else:
             expanded.append(spec)
     return expanded
+
+
+def refuse_multi_head_until(specs: Sequence[LayerSpec], stage: str, where: str) -> None:
+    """A builder's refusal of an Attention with more than one head or a key_size before the multi-head
+    attention workplan's stage that builds it there."""
+    spec = next(
+        (s for s in expand_specs(specs) if isinstance(s, Attention) and s != Attention()),
+        None,
+    )
+    if spec is not None:
+        raise NotImplementedError(f"{spec!r} {where}: not yet (the multi-head attention workplan, stage {stage})")
 
 
 def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:

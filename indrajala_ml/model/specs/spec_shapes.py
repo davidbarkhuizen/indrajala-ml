@@ -68,7 +68,8 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
     BatchNorm keeps its linear layer's shape (validate_layer_specs), and a Fork and an Add their
     input's. A residual block's input is flat (D2) or tokens, and its Add's input is its Fork's
     (D5): both are checked here, where the shapes are known, as is a patch size that doesn't divide
-    the image. A Dense over tokens acts on each (the layer-norm and attention workplan, D4), and a
+    the image, and an Attention's heads that don't divide its token width when it has no key_size. A
+    Dense over tokens acts on each (the layer-norm and attention workplan, D4), and a
     Position, a LayerNorm and an Attention keep their input's shape (a LayerNorm after a conv front
     end normalizes the flat image as one token). The specs' own arguments are checked by the layers
     built from them, not here.
@@ -102,7 +103,14 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
                 f"a patch size divides the image (the layer-norm and attention workplan, D3); got {spec!r} over {shape}"
             )
             shapes.append(SpecShape(shape, ((height // size) * (width // size), size * size * channels)))
-        elif isinstance(spec, Position | LayerNorm | Attention):
+        elif isinstance(spec, Attention):
+            _, features = token_shape(shape)
+            assert spec.key_size is not None or features % spec.heads == 0, (
+                f"an Attention without a key_size splits the token width among its heads, so its heads divide it "
+                f"(the multi-head attention workplan, D3); got {spec!r} over tokens of {features} features"
+            )
+            shapes.append(SpecShape(shape, shape))
+        elif isinstance(spec, Position | LayerNorm):
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, TokenMean):
             assert len(shape) == 2, f"a TokenMean reads tokens; got {shape}"

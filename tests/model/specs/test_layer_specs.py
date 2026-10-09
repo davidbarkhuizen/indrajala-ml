@@ -5,6 +5,7 @@ lists are accepted, the layer class each spec kind maps to, and the shapes the b
 
 import json
 import math
+import re
 from typing import Any, cast
 
 import pytest
@@ -28,6 +29,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Residual,
     TokenMean,
     expand_specs,
+    refuse_multi_head_until,
     spec_paths,
 )
 from indrajala_ml.model.specs.single_example import (
@@ -598,4 +600,83 @@ def test_every_implementation_builds_the_new_specs_and_format_2_round_trips_them
     build_array_layers(specs, input_shape, "rust")
     size = math.prod(input_shape)
     build_python_layers(specs, input_shape, StateLayer(size, [(0.0, 1.0)] * size))
+    assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
+
+
+# multi-head attention (the multi-head attention workplan, stage 2): over a (4, 4, 1) image,
+# Patches(2) and a 32-wide embedding give 4 tokens of 32
+EMBED_32 = Dense(32, activation="linear", bias=True)
+
+
+def _multi_head(attention: Attention) -> list[LayerSpec]:
+    return [PATCHES, EMBED_32, Residual((LayerNorm(), attention)), TokenMean(), OUTPUT]
+
+
+MULTI_HEAD = {
+    "two heads": Attention(heads=2),
+    "four heads": Attention(heads=4),
+    "a head per feature": Attention(heads=32),
+    "one head, a narrower key": Attention(key_size=8),
+    "three heads of 8, not dividing the width": Attention(heads=3, key_size=8),
+    "four heads of 32, wider than the width": Attention(heads=4, key_size=32),
+}
+MULTI_HEAD_INVALID = {
+    "no heads": Attention(heads=0),
+    "negative heads": Attention(heads=-1),
+    "a key size of 0": Attention(key_size=0),
+    "a key size of 0 with heads": Attention(heads=2, key_size=0),
+}
+MULTI_HEAD_SHAPE_INVALID = {
+    "three heads over 32 features": Attention(heads=3),
+    "more heads than features": Attention(heads=64),
+}
+
+
+@pytest.mark.parametrize("attention", MULTI_HEAD.values(), ids=MULTI_HEAD.keys())
+def test_heads_and_key_sizes_are_accepted(attention: Attention):
+    specs = _multi_head(attention)
+    validate_layer_specs(specs)
+    assert spec_shapes(specs, (4, 4, 1))[4] == SpecShape((4, 32), (4, 32))  # attention keeps its shape
+
+
+@pytest.mark.parametrize("attention", MULTI_HEAD_INVALID.values(), ids=MULTI_HEAD_INVALID.keys())
+def test_no_heads_or_an_empty_key_is_rejected(attention: Attention):
+    with pytest.raises(AssertionError, match=re.escape(repr(attention))):
+        validate_layer_specs(_multi_head(attention))
+
+
+@pytest.mark.parametrize("attention", MULTI_HEAD_SHAPE_INVALID.values(), ids=MULTI_HEAD_SHAPE_INVALID.keys())
+def test_heads_that_dont_divide_the_width_without_a_key_size_are_rejected_by_the_shape_walk(attention: Attention):
+    specs = _multi_head(attention)
+    validate_layer_specs(specs)
+    with pytest.raises(AssertionError, match="over tokens of 32 features"):
+        spec_shapes(specs, (4, 4, 1))
+
+
+def test_the_head_size_is_the_key_size_else_the_width_over_the_heads():
+    assert Attention().head_size(32) == 32
+    assert Attention(heads=4).head_size(32) == 8
+    assert Attention(key_size=16).head_size(32) == 16
+    assert Attention(heads=4, key_size=32).head_size(32) == 32
+
+
+@pytest.mark.parametrize("attention", MULTI_HEAD.values(), ids=MULTI_HEAD.keys())
+def test_the_builders_refuse_heads_and_key_sizes_until_their_stages(attention: Attention):
+    specs = _multi_head(attention)
+    for backend, stage in (("numpy", "3"), ("rust", "5")):
+        with pytest.raises(NotImplementedError, match=rf"on the {backend} backend: not yet \(.*, stage {stage}\)"):
+            build_array_layers(specs, (4, 4, 1), backend)
+    with pytest.raises(
+        NotImplementedError, match=r"in pure Python: not yet \(the multi-head attention workplan, stage 4\)"
+    ):
+        build_python_layers(specs, (4, 4, 1), StateLayer(16, [(0.0, 1.0)] * 16))
+
+
+def test_a_one_head_attention_without_a_key_size_is_not_refused():
+    refuse_multi_head_until(_multi_head(Attention(heads=1, key_size=None)), "3", "here")
+
+
+@pytest.mark.parametrize("attention", MULTI_HEAD.values(), ids=MULTI_HEAD.keys())
+def test_format_2_round_trips_heads_and_key_sizes(attention: Attention):
+    specs = _multi_head(attention)
     assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
