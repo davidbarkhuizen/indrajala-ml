@@ -3,7 +3,8 @@
 **Status: decisions D1-D12 settled by the owner (2026-10-09), each as recommended. Stage 1 done
 (#621, #622, #623); stage 2 done: the specs (#625); stage 3 done: numpy (#626); stage 4 done: the
 crate (indrajala-math-rust #53, #627); stage 5 done: the Rust layers (#628); stage 6 done: pure
-Python (#631); stage 7 done: fixtures, checkpoints and golden entries (#632). Stages 8-9 not started.**
+Python (#631); stage 7 done: fixtures, checkpoints and golden entries (#632); stage 8 done: the
+study. Stage 9 not started.**
 
 Roadmap step 6 ([primitives-roadmap.md](primitives-roadmap.md)): next-token prediction on a small
 text corpus, a causal transformer. It brings the network's first per-token output and loss and
@@ -272,5 +273,11 @@ not a basis for any decision.
    windows of 6 ids; the 109 earlier entries bit-identical, the file re-recorded on both machines
    (112 networks) and archived as `new-functionality`.
 8. **The study** (D9), on the four corpora (D2). Euclid's repository and its `CORPORA` entry
-   land first, each its own PR.
+   land first, each its own PR. Done: Euclid's in #630; `scripts/sequence_study.py` and
+   `indrajala_ml/studies/sequence_study.py`, run on jebel (10 epochs, 5 seeds, each corpus and
+   arm at its tuned rate; findings in the script). The per-token model (ffn) is the bigram floor
+   on every corpus; one causal layer takes 0.8 to 1.5 bits per character under it and a second
+   0.09 to 0.17 more; the leak reaches 0.04 to 0.06 bits per character held out on every corpus,
+   copying. Euclid is the lowest-loss corpus (1.50 at 2 layers), as predicted, but its
+   masked-unmasked gap is the smallest, not the sharpest.
 9. **Docs**: README, roadmap, next-steps; the workplan retired.
