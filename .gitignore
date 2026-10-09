@@ -165,8 +165,10 @@ data/mnist/*.parquet
 data/mnist/*.bin
 data/mnist/trained_model.json
 
-# the sequence task's corpus, fetched by scripts/fetch_datasets.py - not committed
+# the sequence task's corpora, fetched by scripts/fetch_datasets.py - not committed
 data/tinyshakespeare/
+data/herodotus-rawlinson/
+data/muqaddimah/
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

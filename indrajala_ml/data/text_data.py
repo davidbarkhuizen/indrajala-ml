@@ -1,6 +1,8 @@
 """
 A character-level text corpus as next-token examples (the sequence task workplan, D2-D4): Tiny
-Shakespeare, fetched and checksum-verified by scripts/fetch_datasets.py.
+Shakespeare, Herodotus in Rawlinson's translation, or Ibn Khaldun's Muqaddimah in Arabic, each
+fetched and checksum-verified by scripts/fetch_datasets.py and read as UTF-8 (the first two are
+ASCII).
 
 The vocabulary is the corpus's characters, sorted, each a token id by its place. The first
 TRAIN_FRACTION of the text is for training and the rest held out (nanoGPT's split), each part cut
@@ -17,7 +19,12 @@ from dataclasses import dataclass
 
 from indrajala_ml.model.protocols.classifier_protocols import Example
 
-TEXT_PATH = "data/tinyshakespeare/tinyshakespeare.txt"
+CORPORA = {
+    "tinyshakespeare": "data/tinyshakespeare/tinyshakespeare.txt",
+    "herodotus-rawlinson": "data/herodotus-rawlinson/herodotus-rawlinson.txt",
+    "muqaddimah": "data/muqaddimah/muqaddimah.txt",
+}
+TEXT_PATH = CORPORA["tinyshakespeare"]
 CONTEXT = 64
 TRAIN_FRACTION = 0.9
 
@@ -67,7 +74,7 @@ def split(text: str, train_fraction: float = TRAIN_FRACTION) -> tuple[str, str]:
 
 
 def load_text(path: str = TEXT_PATH) -> str:
-    with open(path, encoding="ascii") as f:
+    with open(path, encoding="utf-8") as f:
         return f.read()
 
 

@@ -4,7 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from indrajala_ml.data.text_data import CONTEXT, TEXT_PATH, Vocabulary, load_text, load_text_dataset, split, windows
+from indrajala_ml.data.text_data import (
+    CONTEXT,
+    CORPORA,
+    TEXT_PATH,
+    Vocabulary,
+    load_text,
+    load_text_dataset,
+    split,
+    windows,
+)
 
 
 def test_a_vocabulary_is_the_texts_characters_sorted_and_round_trips():
@@ -68,3 +77,26 @@ def test_the_corpus_gives_the_workplans_windows():
     assert len(state) == len(labels) == CONTEXT
     assert vocabulary.decode([int(i) for i in state]) == load_text()[:CONTEXT]
     assert vocabulary.decode(labels) == load_text()[1 : CONTEXT + 1]
+
+
+@pytest.mark.parametrize(
+    ("corpus", "length", "symbols", "windows_per_part"),
+    [
+        ("tinyshakespeare", 1_115_394, 65, (15_443, 1_716)),
+        ("herodotus-rawlinson", 1_496_601, 76, (20_722, 2_302)),
+        ("muqaddimah", 1_012_838, 40, (14_023, 1_558)),
+    ],
+)
+def test_each_corpus_gives_its_windows(corpus: str, length: int, symbols: int, windows_per_part: tuple[int, int]):
+    text = load_text(CORPORA[corpus])
+    train, held_out, vocabulary = load_text_dataset(CORPORA[corpus])
+
+    assert (len(text), len(vocabulary)) == (length, symbols)
+    assert (len(train), len(held_out)) == windows_per_part
+    assert vocabulary.decode(train[0][1]) == text[1 : CONTEXT + 1]
+
+
+def test_the_muqaddimah_is_arabic_letters_space_newline_and_parentheses():
+    vocabulary = Vocabulary.of(load_text(CORPORA["muqaddimah"]))
+    assert vocabulary.symbols[:4] == "\n ()"
+    assert all("\u0621" <= symbol <= "\u064a" for symbol in vocabulary.symbols[4:])
