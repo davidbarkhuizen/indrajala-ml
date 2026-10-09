@@ -8,9 +8,35 @@ timing PR and workplan relies on it, not only optimization work.
 ## 1. What to measure, and when not to
 
 - **Pure-Python networks are never timed.** They are for correctness and parity only.
-- **A PR that changes no `learn*` or `classify_rows` path needs no A/B.** Say so in the PR, as
-  #481-#483 did. A refactor through those paths needs one, even if it should cost nothing: #477's
-  first A/B found a 5-8% regression from a runtime `cast` on a generic Protocol.
+- **How much timing a change needs is its tier,** the highest that applies:
+
+  | tier | when | what | archived ([§10](#10-archiving-results)) |
+  | --- | --- | --- | --- |
+  | 0 | every PR | tests, lint; the golden run where the change could reach training results | no |
+  | 1 | it changes a timed path (a `learn*` or `classify_rows` path, or the crate) and claims no speedup | one A/B of the most relevant benchmark (below) at 4 passes, `--order ONNO`, to show it got no slower | no |
+  | 2 | it claims a speedup | the full protocol (§4-§6, 6 passes) on the affected benchmarks | yes |
+  | 3 | a release; a toolchain, numpy/BLAS, kernel or BIOS change; a new benchmark machine | the full baseline: an A/A of every benchmark ([machine profiles](machine_profiles/)) | yes |
+
+  A tier 0 PR says it needs no A/B, as #481-#483 did. New functionality that adds code paths
+  without changing existing timed ones is tier 0: it adds golden entries, not timings. A refactor
+  through a timed path is tier 1 even if it should cost nothing: #477's first A/B found a 5-8%
+  regression from a runtime `cast` on a generic Protocol.
+- **Tier 1's most relevant benchmark:**
+
+  | the change touches | benchmark |
+  | --- | --- |
+  | the trainers, the training loop or dataset preparation | `prepared_dataset_timing` |
+  | one dense, conv or other layer op, or its crate kernel | `focused_benchmark` |
+  | crate ops across a Rust training epoch | `epoch_op_profile` |
+  | the Python-to-crate call boundary (argument conversion, call overhead) | `op_call_timing` |
+  | `classify_rows` or the accuracy passes | `accuracy_pass_timing` |
+  | mini-batch paths of dense training | `batch_size_timing` |
+
+- **Why 4 passes are enough for tier 1, and what a flagged row means there.** Over passes 1-4
+  (`report --passes 1-4`), the i7's six A/As flagged 43 of 591 rows consistent (7.3%, up to 9.5%),
+  what chance gives at 2 passes a side (8-9%, simulated); over all 6 passes, 7 (1.2%). So a tier 1
+  row that comes out consistent and slower isn't a regression yet: `ab.py extend --order NO` makes
+  the run 6 passes, then report again.
 - **Correctness first.** A change is judged by parity and the golden run
   ([§8](#8-judging-correctness)), never by timing or accuracy.
 - **A timing claim is measured, not argued.** A number in a PR comes from a run by this guide,
@@ -375,6 +401,9 @@ never moved for style or for parity alone.
 ## 9. Rules for a timing claim in a PR, and for an optimization PR
 
 **Any timing claim:**
+- The PR names its tier ([§1](#1-what-to-measure-and-when-not-to)). A tier 1 PR claims only "no
+  slower", with max |Δ| from its 4-pass table; a speedup claim is tier 2. Tier 2 and 3 runs are
+  archived once the PR merges ([§10](#10-archiving-results)).
 - It comes from an `ab.py` run on the benchmark machine, with the machine check passing (or the
   change it names explained).
 - The PR gives the `--md` output: the protocol paragraph and the table, with its verdicts. A

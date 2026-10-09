@@ -43,7 +43,8 @@ and one when they finish (or the failing step's last 20 lines of stderr, exiting
 `report --brief` prints at most 15 lines. `report --md FILE` writes the full table and a protocol
 paragraph for a PR body. `report --pooled FILE`, for an A/A only (one commit and one crate on both
 sides), writes the baseline's form instead: each row pooled over every pass, with its spread of
-per-pass medians and each pass's shift (docs/machine_profiles/).
+per-pass medians and each pass's shift (docs/machine_profiles/). `report --passes 1-4` pools only
+the passes named, to see what a shorter run would have concluded.
 
 The report pools every complete pass of a side: per (metric, case), the median and min-max over
 all runs, Δ median, and each pass's own median. A row is *consistent* when every per-pass median
@@ -970,7 +971,7 @@ def cmd_status(args: argparse.Namespace) -> None:
 
 def cmd_report(args: argparse.Namespace) -> None:
     run_dir = find_run(args.run)
-    data = report_data(run_dir)
+    data = report_data(run_dir, args.passes)
     if args.md:
         Path(args.md).write_text(markdown_report(data))
         if not args.brief:
@@ -1248,21 +1249,40 @@ class ReportData:
     shifted: list[ShiftedPass]
     one_sided: int  # (metric, case) pairs only one side measured
     rules: dict[str, float]  # the machine's noise rules the run recorded (DEFAULT_RULES before them)
+    selected: str | None = None  # report --passes, as given: the report covers only these passes
 
     def small(self, row: RowStats) -> bool:
         """A consistent row whose |Δ| is under the machine's chance level for one A/B."""
         return row.consistent and abs(row.delta) < self.rules["small_consistent"]
 
 
-def report_data(run_dir: Path) -> ReportData:
+def parse_passes(text: str) -> set[int]:
+    """report --passes: "1-4", "1,2,5" or a mix, "1-4,7"."""
+    numbers: set[int] = set()
+    try:
+        for part in text.split(","):
+            first, _, last = part.partition("-")
+            numbers |= set(range(int(first), int(last or first) + 1))
+    except ValueError:
+        raise AbError(f"--passes {text}: give pass numbers and ranges, e.g. 1-4 or 1,2,5") from None
+    if not numbers:
+        raise AbError(f"--passes {text}: no passes")
+    return numbers
+
+
+def report_data(run_dir: Path, selected: str | None = None) -> ReportData:
+    """The run's complete passes pooled per row; with selected (report --passes), only those."""
     manifest = _manifest(run_dir)
+    numbers = parse_passes(selected) if selected else None
+    if numbers and (missing := numbers - {p["number"] for p in manifest["passes"]}):
+        raise AbError(f"--passes {selected}: {run_dir.name} has no pass {', '.join(map(str, sorted(missing)))}")
     adapter = ADAPTERS[manifest["bench"]]
     passes: dict[str, list[int]] = {"old": [], "new": []}
     per_pass: dict[tuple[str, str], dict[int, list[float]]] = {}
     meta: dict[tuple[str, str], tuple[str, bool]] = {}
     for record in manifest["passes"]:
         stem = run_dir / record["stem"]
-        if record["status"] != "ok":
+        if record["status"] != "ok" or (numbers and record["number"] not in numbers):
             continue
         passes[record["side"]].append(record["number"])
         for row in adapter.rows(stem.with_suffix(".json"), stem.with_suffix(".stdout"), manifest["control_backend"]):
@@ -1279,7 +1299,8 @@ def report_data(run_dir: Path) -> ReportData:
             continue
         rows.append(RowStats(key[0], key[1], meta[key][0], meta[key][1], old, new))
     rules = {**DEFAULT_RULES, **manifest.get("noise_rules", {})}
-    return ReportData(manifest, rows, passes, _shifted_passes(rows, passes, rules["shifted_pass"]), one_sided, rules)
+    shifted = _shifted_passes(rows, passes, rules["shifted_pass"])
+    return ReportData(manifest, rows, passes, shifted, one_sided, rules, selected)
 
 
 def _shifted_passes(rows: list[RowStats], passes: dict[str, list[int]], threshold: float) -> list[ShiftedPass]:
@@ -1465,6 +1486,8 @@ def protocol_paragraph(data: ReportData) -> str:
         last = extend["first_pass"] + len(extend["order"]) - 1
         text += f", then passes {extend['first_pass']}-{last} ({extend['order']})"
         text += f", which {extend['note']}" if extend["note"] else ""
+    if data.selected:
+        text += f"; this report pools passes {data.selected} only"
     runs = [len(row.old_runs) for row in data.rows[:1]] + [len(row.new_runs) for row in data.rows[:1]]
     text += (
         f". Each pass ran `{command}` (the script from the {manifest['script_from']} tree) in its own process "
@@ -1609,6 +1632,7 @@ def main(argv: list[str] | None = None) -> int:
     report.add_argument("--brief", action="store_true", help=f"at most {BRIEF_LINES} lines (the default output)")
     report.add_argument("--md", help="write the full tables and the protocol paragraph here")
     report.add_argument("--pooled", help="an A/A only: write each row pooled over every pass, with its spread, here")
+    report.add_argument("--passes", help="report only these passes, e.g. 1-4 or 1,2,5 (the tier 1 check)")
     clean = commands.add_parser("clean", help="remove worktrees no recent run refers to")
     clean.add_argument("--worktrees", action="store_true")
     clean.add_argument("--wheels", action="store_true", help="cached crate wheels and their site directories")

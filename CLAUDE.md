@@ -35,8 +35,14 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
   Firefox and Zed if they are running, and wait out a high load, an apt job or a snap refresh
   (measurement.md §2). Keep the machine quiet during the run: no tests, lint or builds; reading
   and writing are fine.
-- A PR that changes no `learn*` or `classify_rows` path needs no A/B, and neither does one confined
-  to pure-Python code (never timed). Every change that could reach training results (the
+- **A PR's tier decides its timing** (docs/measurement.md, §1): **0**, no timed path changed
+  (new functionality that leaves existing timed paths alone, docs, pure-Python code, never timed):
+  no A/B; **1**, a timed path (`learn*`, `classify_rows`, the crate) changed with no speedup
+  claimed: one A/B of the most relevant benchmark (§1's table) with `--order ONNO`, and a
+  consistent slower row is extended (`extend --order NO`) before it counts; **2**, a speedup
+  claimed: the full protocol, 6 passes; **3**, a release, toolchain, numpy/BLAS, kernel or BIOS
+  change, or new machine: the full baseline. Tier 2 and 3 runs go to the archive once the PR
+  merges (`ab.py archive`, §10). Every change that could reach training results (the
   package, the crate, the golden run's script or its data) passes the golden run:
   `.venv/bin/python scripts/golden_training_run.py check data/refactoring/golden_run.json`.
   A change that can't (docs, machine profiles, CI config) needs no golden run.

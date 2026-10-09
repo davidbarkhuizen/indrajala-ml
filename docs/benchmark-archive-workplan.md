@@ -1,7 +1,7 @@
 # Workplan: a benchmark archive, tiered benchmarking, and a remote benchmark machine
 
-**Status: D1-D10 settled (owner, 2026-10-08); no stage started. Starts after the benchmark
-machine workplan's stage 4 merges.**
+**Status: D1-D10 settled (owner, 2026-10-08). Stages 1-4 done (2026-10-09): the archive exists
+and is seeded, with CI reproducing every report; tier 1 runs 4 passes. Next: stage 5.**
 
 Three changes that belong together, because each makes benchmarking cheaper to do and its results
 last longer:
@@ -112,7 +112,8 @@ Settled with the owner on 2026-10-08.
 
   New functionality that adds code paths without changing existing timed ones is tier 0: it
   adds golden entries (D10), not timings. Tier 1 runs 4 passes (`ONNO`) instead of 6 if stage 4
-  shows that gives the same verdicts on the i7's A/As.
+  shows that gives the same verdicts on the i7's A/As. **Stage 4: it does** (43 of 591 rows
+  consistent over passes 1-4, 7.3%, against 8-9% by chance at 2 passes a side; measurement.md §1).
 - **D8. Roles: `pyramidon` is the development harness host, `jebel` the benchmark machine,
   administered from it over ssh.** Claude Code and all development (edits, builds, tests, lint)
   run on the Ryzen. `jebel` runs benchmarks and nothing else, and is driven over ssh. The Ryzen
