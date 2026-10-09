@@ -4,6 +4,7 @@ published), and run/extend end to end on a toy probe in a temporary repository. 
 """
 
 import base64
+import datetime
 import hashlib
 import json
 import os
@@ -849,6 +850,22 @@ def test_report_passes_pools_only_the_passes_named() -> None:
 def test_report_passes_refuses_what_the_run_lacks(passes: str, message: str) -> None:
     with pytest.raises(ab.AbError, match=message):
         ab.report_data(FIXTURES / "pr480", passes)
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("my-branch-cmd", "2026-10-09-my-branch-cmd"),
+        ("feature/x-cmd", "2026-10-09-feature-x-cmd"),
+        ("2026-10-08-pyramidon-remote-aa", "2026-10-08-pyramidon-remote-aa"),
+        ("2026-13-01-not-a-date", "2026-10-09-2026-13-01-not-a-date"),
+    ],
+)
+def test_a_run_is_dated_once(name: str, expected: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ab, "RUNS_ROOT", tmp_path)
+    monkeypatch.setattr(ab, "_local_now", lambda: datetime.datetime(2026, 10, 9, 8, 0, tzinfo=datetime.UTC))
+    assert ab._new_run_dir(name).name == expected
+    assert ab._new_run_dir(name).name == f"{expected}-2"
 
 
 def test_a_second_run_is_refused_while_one_holds_the_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

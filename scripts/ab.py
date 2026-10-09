@@ -513,8 +513,18 @@ def find_run(run: str | None) -> Path:
     return matches[0]
 
 
+def _dated(name: str) -> bool:
+    try:
+        datetime.date.fromisoformat(name[:10])
+    except ValueError:
+        return False
+    return name[10:11] == "-"
+
+
 def _new_run_dir(name: str) -> Path:
-    base = RUNS_ROOT / f"{_local_now().date().isoformat()}-{name.replace('/', '-')}"
+    """Today's date before the name, unless --name already starts with a date."""
+    name = name.replace("/", "-")
+    base = RUNS_ROOT / (name if _dated(name) else f"{_local_now().date().isoformat()}-{name}")
     run_dir, n = base, 1
     while run_dir.exists():
         n += 1
