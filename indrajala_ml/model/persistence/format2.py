@@ -17,7 +17,8 @@ network resumes training by bits, its dropout masks included.
       "rng": {"bit_generator": "PCG64", "state": "0x...", "inc": "0x...", "has_uint32": 0, "uinteger": 0}
     }
 
-- implementation is "python", "numpy" or "rust", and shape "multiclass" or "single_output".
+- implementation is "python", "numpy" or "rust", and shape "multiclass", "single_output" or
+  "sequence" (a token-wise output layer, the sequence task workplan, stage 3).
 - preset holds a preset's class and constructor arguments, from which its load rebuilds it. A
   Sequential network's file has none.
 - input is {"dimension": d} or {"height": h, "width": w, "channels": c}, with "input_bounds" in
@@ -91,7 +92,7 @@ PYTHON = "python"
 ENSEMBLE = "ensemble"
 # the array backends' names (array_backend.py), which this module mustn't import
 IMPLEMENTATIONS = (PYTHON, "numpy", "rust")
-SHAPES = ("multiclass", "single_output")
+SHAPES = ("multiclass", "single_output", "sequence")
 
 
 class _Optimizer(Protocol):

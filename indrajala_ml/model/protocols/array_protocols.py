@@ -104,6 +104,16 @@ class ProjectionsArrayLayer[A: BackendArray](Protocol):
 
 
 @runtime_checkable
+class EmbeddingTableLayer[A: BackendArray](Protocol):
+    """
+    An embedding's (vocabulary, size) table E (the sequence task workplan, D5), drawn as a weight
+    matrix of vocabulary rows and fan-in size.
+    """
+
+    E: A
+
+
+@runtime_checkable
 class RunningStateLayer[A: BackendArray](Protocol):
     """
     A layer with state that a training forward pass moves but no optimizer steps: batch norm's
@@ -192,3 +202,6 @@ class ArrayBackend[A: BackendArray](Protocol):
     def argmax(self, vector: A) -> int: ...
 
     def argmax_rows(self, matrix: A) -> list[int]: ...
+
+    # argmax_rows per token of a sequence network's output rows, each T runs of classes values
+    def argmax_token_rows(self, matrix: A, classes: int) -> list[tuple[int, ...]]: ...

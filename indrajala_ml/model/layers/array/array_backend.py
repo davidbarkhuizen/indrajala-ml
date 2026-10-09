@@ -93,6 +93,11 @@ class NumpyBackend:
     def argmax_rows(matrix: FloatArray) -> list[int]:
         return np.argmax(matrix, axis=1).tolist()
 
+    @staticmethod
+    def argmax_token_rows(matrix: FloatArray, classes: int) -> list[tuple[int, ...]]:
+        rows = np.argmax(matrix.reshape(matrix.shape[0], -1, classes), axis=2).tolist()
+        return [tuple(row) for row in rows]
+
 
 class RustBackend:
     """NumpyBackend's operations on indrajala_math_rust arrays."""
@@ -151,6 +156,14 @@ class RustBackend:
         # pa.argmax takes a vector only. max keeps the first of equal maxima (it replaces only on
         # a strict >, as pa.argmax does) and index finds that one
         return [row.index(max(row)) for row in matrix.tolist()]
+
+    @staticmethod
+    def argmax_token_rows(matrix: pa.Array, classes: int) -> list[tuple[int, ...]]:
+        # argmax_rows per token: each row's runs of classes values
+        return [
+            tuple(token.index(max(token)) for token in (row[i : i + classes] for i in range(0, len(row), classes)))
+            for row in matrix.tolist()
+        ]
 
 
 NUMPY = NumpyBackend()

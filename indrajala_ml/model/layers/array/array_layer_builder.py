@@ -23,10 +23,12 @@ from indrajala_ml.model.layers.numpy.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.layers.numpy.residual_array_layer import AddArrayLayer, AffineArrayLayer, ForkArrayLayer
 from indrajala_ml.model.layers.numpy.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.layers.numpy.token_array_layer import (
+    EmbeddingArrayLayer,
     PatchesArrayLayer,
     PositionArrayLayer,
     TokenDenseArrayLayer,
     TokenMeanArrayLayer,
+    TokenSoftmaxArrayLayer,
 )
 from indrajala_ml.model.layers.python.conv_front_end import ArrayFrontEndLayer
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
@@ -56,6 +58,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
+    Embedding,
     Fork,
     LayerNorm,
     LayerSpec,
@@ -133,7 +136,9 @@ class TokenLayerClasses:
     """
     One backend's layer class for each layer of a patch model's and layer norm's (the layer-norm
     and attention workplan): the token-wise dense layer (ReLU or affine), patches, position, layer
-    norm (over tokens or a flat layer), attention and the token mean.
+    norm (over tokens or a flat layer), attention and the token mean; and a sequence model's (the
+    sequence task workplan): the embedding and the token-wise softmax output layer, None on a
+    backend before its stage (refuse_sequence_specs_until).
     """
 
     token_dense: LayerClass
@@ -142,6 +147,8 @@ class TokenLayerClasses:
     layer_norm: LayerClass
     attention: LayerClass
     token_mean: LayerClass
+    embedding: LayerClass | None
+    token_output: LayerClass | None
 
 
 TOKEN_LAYER_CLASSES = {
@@ -152,6 +159,8 @@ TOKEN_LAYER_CLASSES = {
         layer_norm=LayerNormArrayLayer,
         attention=AttentionArrayLayer,
         token_mean=TokenMeanArrayLayer,
+        embedding=EmbeddingArrayLayer,
+        token_output=TokenSoftmaxArrayLayer,
     ),
     "rust": TokenLayerClasses(
         token_dense=TokenDenseRustArrayLayer,
@@ -160,21 +169,29 @@ TOKEN_LAYER_CLASSES = {
         layer_norm=LayerNormRustArrayLayer,
         attention=AttentionRustArrayLayer,
         token_mean=TokenMeanRustArrayLayer,
+        embedding=None,
+        token_output=None,
     ),
 }
 
 
 def _token_layer(classes: TokenLayerClasses, spec: LayerSpec, shape: Shape) -> ArrayNetworkLayer[Any] | None:
-    # spec's layer if it is one of a patch model's or a layer norm, else None
+    # spec's layer if it is one of a patch model's, a sequence model's or a layer norm, else None
+    if isinstance(spec, Dense) and len(shape) == 2 and spec.output:
+        assert classes.token_output is not None
+        return classes.token_output(spec.size, shape[1], shape[0])
     if isinstance(spec, Dense) and len(shape) == 2:
         return classes.token_dense(spec.size, shape[1], shape[0], spec.activation)
     if isinstance(spec, Patches):
         return classes.patches(*image_shape(shape), spec.patch_size)
+    if isinstance(spec, Embedding):
+        assert classes.embedding is not None
+        return classes.embedding(shape[0], spec.vocabulary, spec.size)
     if isinstance(spec, LayerNorm):
         return classes.layer_norm(*token_shape(shape), spec.epsilon)
     if isinstance(spec, Attention):
         tokens, features = token_shape(shape)
-        return classes.attention(tokens, features, spec.heads, spec.head_size(features))
+        return classes.attention(tokens, features, spec.heads, spec.head_size(features), spec.causal)
     if isinstance(spec, Position | TokenMean):
         tokens, features = token_shape(shape)
         layer_class = {Position: classes.position, TokenMean: classes.token_mean}
@@ -208,7 +225,8 @@ def build_array_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_sequence_specs_until(specs, "3" if backend_name == "numpy" else "5", f"on the {backend_name} backend")
+    if backend_name != "numpy":
+        refuse_sequence_specs_until(specs, "5", f"on the {backend_name} backend")
     classes = LAYER_CLASSES[backend_name]
     token_classes = TOKEN_LAYER_CLASSES[backend_name]
 

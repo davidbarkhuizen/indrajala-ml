@@ -2,7 +2,7 @@
 # (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import Any, ClassVar, NoReturn, Self, cast
 
 from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
@@ -14,6 +14,7 @@ from indrajala_ml.model.protocols.array_protocols import (
     ArrayOptimizer,
     BackendArray,
     BiasFreeArrayLayer,
+    EmbeddingTableLayer,
     ProjectionsArrayLayer,
     RunningStateLayer,
     TrainedArrayLayer,
@@ -133,14 +134,19 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
         # predictions are classify_row's, but only by construction on Rust, where a batched
         # forward row equals the single-example forward exactly: numpy's X @ W.T can differ from
         # W @ x in the last ULP, so an argmax between outputs an ULP apart could differ
-        states = self._prepared_states(prepared)
         predictions: list[Any] = []
+        for output_batch in self.forward_rows(prepared):
+            predictions.extend(self._classify_output_batch(output_batch))
+        return predictions
+
+    def forward_rows(self, prepared: PreparedDataset) -> Iterator[A]:
+        """The inference forward pass's output rows for every row of prepared, in chunks of rows."""
+        states = self._prepared_states(prepared)
         for start in range(0, len(prepared), CLASSIFY_CHUNK_ROWS):
             X = self.backend.row_range(states, start, min(start + CLASSIFY_CHUNK_ROWS, len(prepared)))
             for layer in self.layers:
                 X = layer.forward_batch(X)
-            predictions.extend(self._classify_output_batch(X))
-        return predictions
+            yield X
 
     def prepare_dataset(self, rows: Sequence[tuple[tuple[float, ...], object]]) -> PreparedDataset:
         return PreparedDataset.from_rows(rows, self.backend.name)
@@ -269,8 +275,9 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
         # seed, numpy and Rust draw the same weights. W then b per layer, in forward
         # order; a W is (rows, fan_in), a dense layer's (size, input_size) and a conv layer's
         # (channel_count, input_channels * kernel_size**2). A linear layer draws its W only, an
-        # attention layer each projection's W then b in turn, and a pool, batch-norm, layer-norm,
-        # patches, position or token-mean layer draws nothing.
+        # embedding its E (vocabulary, size) as a W, an attention layer each projection's W then b
+        # in turn, and a pool, batch-norm, layer-norm, patches, position or token-mean layer draws
+        # nothing.
         for layer in self.layers:
             if isinstance(layer, WeightedArrayLayer):
                 rows, fan_in = layer.W.shape
@@ -279,6 +286,10 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
                 linear = cast("BiasFreeArrayLayer[A]", layer)
                 rows, fan_in = linear.W.shape
                 linear.W = self.backend.random_weights(self.rng, rows, fan_in)
+            elif isinstance(layer, EmbeddingTableLayer):
+                embedding = cast("EmbeddingTableLayer[A]", layer)
+                vocabulary, size = embedding.E.shape
+                embedding.E = self.backend.random_weights(self.rng, vocabulary, size)
             elif isinstance(layer, ProjectionsArrayLayer):
                 projections = cast("ProjectionsArrayLayer[A]", layer)
                 projections.set_parameters(

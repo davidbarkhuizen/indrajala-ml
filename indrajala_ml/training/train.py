@@ -42,11 +42,22 @@ def _training_accuracy[L](
         # array network has a prepared dataset (_prepared_for)
         assert isinstance(student, PreparedTrainableClassifier)
         predictions = student.classify_rows(prepared)
-        correct = sum(1 for predicted, category in zip(predictions, prepared.labels) if predicted == category)
+        correct = sum(_correct(predicted, category) for predicted, category in zip(predictions, prepared.labels))
         return correct / len(prepared)
     assert not isinstance(training_data, PreparedDataset)  # a PreparedDataset always has prepared
-    correct = sum(1 for state, category in training_data if student.classify_state(state) == category)
+    correct = sum(_correct(student.classify_state(state), category) for state, category in training_data)
     return correct / len(training_data)
+
+
+def _correct(predicted: object, category: object) -> float:
+    # 1 for a right label, 0 for a wrong one; for a sequence network's label, one class per token
+    # (the sequence task workplan, D6), the fraction of its tokens right, so that over windows of
+    # one length the accuracy is per token
+    if isinstance(category, tuple):
+        labels: tuple[object, ...] = category  # pyright: ignore[reportUnknownVariableType]
+        assert isinstance(predicted, tuple) and len(predicted) == len(labels)  # pyright: ignore[reportUnknownArgumentType]
+        return sum(p == c for p, c in zip(predicted, labels)) / len(labels)  # pyright: ignore[reportUnknownArgumentType, reportUnknownVariableType]
+    return 1.0 if predicted == category else 0.0
 
 
 def train_linear_classifier_network[L](
@@ -66,6 +77,8 @@ def train_linear_classifier_network[L](
     learning_rate is a float or a schedule from the iteration index to a rate (e.g.
     lr_schedule.linear_warmup), read once per learn() call. Iterations, not epochs, since a schedule
     targets per-step instability.
+
+    For a sequence network, whose label is one class per token, the accuracy is per token.
 
     Training accuracy can oscillate rather than settle, especially when the target isn't
     representable at student's cardinality/required_active, so student is left at the epoch end

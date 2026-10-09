@@ -34,7 +34,11 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     its 1D vector, with a batch of one's bits.
     """
 
-    def __init__(self, tokens: int, features: int, heads: int = 1, key_size: int | None = None) -> None:
+    def __init__(
+        self, tokens: int, features: int, heads: int = 1, key_size: int | None = None, causal: bool = False
+    ) -> None:
+        # the mask comes to the crate's ops at the sequence task workplan's stage 4, and here at 5
+        assert not causal, "causal attention on the rust backend: not yet (the sequence task workplan, stage 5)"
         self._set_up(tokens, features, heads, key_size)
 
     def _zeros(self) -> list[pa.Array]:
