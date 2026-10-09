@@ -129,6 +129,46 @@ def test_golden_versions_name_what_was_added_and_refuse_a_moved_entry_as_new_fun
         _archive_golden(archive, moved, "material", "2026-10-09")
 
 
+def test_golden_versions_chain_by_previous_not_by_name_and_a_correction_takes_the_next_name(
+    archive: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # versions of one date at 3f681e6, 13db8dd and 4d15b23 (pyramidon's on 2026-10-09): by name,
+    # 3f681e6 sorts last, which the archive once took as 4d15b23's previous
+    git = benchmark_archive._git  # pyright: ignore[reportPrivateUsage]
+
+    def fake_commits(repo: Path, *args: str) -> str:
+        return "160000 commit " + "c" * 40 + "\trust" if args[0] == "ls-tree" else git(repo, *args)
+
+    monkeypatch.setattr(benchmark_archive, "_git", fake_commits)
+
+    def archive_at(commit7: str, entries: int, replaces: str | None = None) -> dict[str, Any]:
+        golden = _golden(tmp_path, {f"e{i}": ["0x1p+0"] for i in range(entries)})
+        paths, _, _ = benchmark_archive.archive_golden(
+            archive,
+            golden,
+            repo=REPO,
+            commit=commit7 + "0" * 33,
+            reason="new-functionality",
+            note="n",
+            profile=I7,
+            date="2026-10-09",
+            replaces=replaces,
+        )
+        meta = json.loads((archive / paths[1]).read_text().split("```json\n")[1].split("\n```")[0])
+        return {"path": paths[0], **meta}
+
+    first = archive_at("3f681e6", 1)
+    second = archive_at("13db8dd", 2)
+    third = archive_at("4d15b23", 3)
+    assert (second["previous"], third["previous"]) == (first["path"], second["path"])
+    assert third["added"] == ["e2"]
+
+    corrected = archive_at("4d15b23", 3, replaces=third["path"])
+    assert corrected["path"] == "golden/jebel/2026-10-09-4d15b23-2.json.gz"
+    assert (corrected["previous"], corrected["added"], corrected["replaces"]) == (second["path"], ["e2"], third["path"])
+    assert archive_at("5e6f7a8", 4)["previous"] == corrected["path"]
+
+
 def test_golden_script_archives_onto_a_new_branch_without_training(archive: Path, tmp_path: Path) -> None:
     sys.path.insert(0, str(REPO / "scripts"))
     import golden_training_run
