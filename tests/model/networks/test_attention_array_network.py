@@ -246,7 +246,9 @@ def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bit
     ("heads", "key_size"), [(1, None), (2, None), (4, None), (4, 3)], ids=["1", "2", "4", "4 of 3"]
 )
 def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth(heads: int, key_size: int | None):
-    # T = 16: every score is 0, every weight 1/16, and each head's H is the token mean of its V
+    # T = 16: every score is 0, every weight exactly 1/16, and each head's H the token mean of its V,
+    # within rounding: H = P V is a BLAS product, whose order of summation over a strided head view
+    # depends on the CPU's kernel (README, Layer norm and attention), not the mean's left fold
     layer = AttentionArrayLayer(16, 8, heads, key_size)
     parameters = _parameters(layer, 3)
     for i in range(4):  # Wq, bq, Wk, bk
@@ -259,7 +261,9 @@ def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth(heads: in
     width = layer.width
     V = layer._V.transpose(0, 2, 1, 3).reshape(3, 16 * width)
     mean = TokenMeanArrayLayer(16, width).forward_batch(V)
-    assert bits(layer._H.reshape(3, 16, width)) == bits(np.broadcast_to(mean[:, np.newaxis, :], (3, 16, width)))
+    expected = np.broadcast_to(mean[:, np.newaxis, :], (3, 16, width))
+    # 16 terms summed in another order: a few ulps
+    np.testing.assert_allclose(layer._H.reshape(3, 16, width), expected, rtol=1e-14, atol=1e-15)
 
 
 @pytest.mark.parametrize(("heads", "key_size"), [(2, None), (3, None), (2, 4)], ids=["2", "3", "2 of 4"])
