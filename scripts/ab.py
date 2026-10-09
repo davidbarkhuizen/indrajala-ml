@@ -3,7 +3,7 @@ Timing A/Bs between two commits, run and reported by the protocol in
 docs/measurement.md (the A/B harness workplan in docs/next-steps.md has the design):
 
     python scripts/ab.py run --bench prepared_dataset_timing [--old main] [--new HEAD] [--order ONNONO]
-                             [--name NAME] [--control-backend numpy] [--script-from new]
+                             [--name NAME] [--control-backend numpy] [--script-from new|old|COMMIT]
                              [--allow-profile-change] [-- <benchmark arguments>]
     python scripts/ab.py run --bench cmd [...] -- probe.py [probe arguments]
     python scripts/ab.py run --bench prepared_dataset_timing --old main --new main --old-crate 638ff13
@@ -26,7 +26,9 @@ with only its side's tree on PYTHONPATH; a probe first checks that the trainer
 from that tree and that the crate extension's hash is the run's, and after it the frequency policy
 and power limits are read again: a pass during which they left the machine profile's fails the
 run. `run` does a smoke run of each side with the benchmark's smallest settings before the passes.
-RUN defaults to the most recent run.
+RUN defaults to the most recent run. The benchmark script comes from the new side's tree, or the
+old's, or with `--script-from COMMIT` from a third tree at that commit: to time two commits that
+predate a fix to the script itself.
 
 The machine check uses the profile in docs/machine_profiles/ recorded on this host (its
 state.hostname); a host with none is refused unless --allow-profile-change, which compares against
@@ -880,6 +882,13 @@ def _guarded(run_dir: Path, manifest: dict[str, Any], work: Any) -> None:
 # ---- commands
 
 
+def _script_commit(repo: Path, script_from: str) -> str | None:
+    """The commit --script-from names, or None when it names a side (old or new)."""
+    if script_from in ("old", "new"):
+        return None
+    return _git(repo, "rev-parse", "--verify", f"{script_from}^{{commit}}")
+
+
 def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
     repo = Path(args.repo).resolve()
     adapter = ADAPTERS[args.bench]
@@ -894,6 +903,7 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
     for side, commit in commits.items():
         ref: str | None = getattr(args, f"{side}_crate")
         crates[side] = resolve_crate(ref) if ref else _crate_commit(repo, commit)
+    script = _script_commit(repo, args.script_from)
     bench_args = extra or list(adapter.default_args)
     name = args.name or f"{_git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')}-{adapter.name}"
     run_dir = _new_run_dir(name)
@@ -907,7 +917,7 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
         "bench": adapter.name,
         "args": bench_args,
         "smoke_args": adapter.smoke_args(bench_args),
-        "script_from": args.script_from,
+        "script_from": "script" if script else args.script_from,
         "control_backend": args.control_backend,
         "order": _order_text(sides),
         "python": sys.executable,
@@ -918,12 +928,15 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
     }
     for side in ("old", "new"):
         manifest[side] = {"ref": getattr(args, side), "commit": commits[side], "crate": crates[side]}
+    if script:
+        manifest["script"] = {"ref": args.script_from, "commit": script}
     _write_json(run_dir / "manifest.json", manifest)
     started = time.monotonic()
 
     def work() -> None:
-        for side in ("old", "new"):
-            manifest[side]["tree"] = str(ensure_worktree(repo, commits[side]))
+        for side in ("old", "new", "script"):
+            if side in manifest:
+                manifest[side]["tree"] = str(ensure_worktree(repo, manifest[side]["commit"]))
         if crates["old"] != crates["new"]:  # switch the crate per pass; the venv is never touched
             for side in ("old", "new"):
                 crate = crates[side]
@@ -1522,6 +1535,12 @@ def _table(rows: list[RowStats], data: ReportData) -> list[str]:
     return lines
 
 
+def _script_source(manifest: dict[str, Any]) -> str:
+    if manifest["script_from"] == "script":
+        return f"the script from `{manifest['script']['commit'][:7]}`, a third tree"
+    return f"the script from the {manifest['script_from']} tree"
+
+
 def protocol_paragraph(data: ReportData) -> str:
     manifest = data.manifest
     adapter = ADAPTERS[manifest["bench"]]
@@ -1544,7 +1563,7 @@ def protocol_paragraph(data: ReportData) -> str:
         text += f"; this report pools passes {data.selected} only"
     runs = [len(row.old_runs) for row in data.rows[:1]] + [len(row.new_runs) for row in data.rows[:1]]
     text += (
-        f". Each pass ran `{command}` (the script from the {manifest['script_from']} tree) in its own process "
+        f". Each pass ran `{command}` ({_script_source(manifest)}) in its own process "
         f"tree, from a neutral working directory with only its side's tree on `PYTHONPATH`. Before each pass a "
         f"probe checked that the trainer module imported from that tree"
     )
@@ -1662,7 +1681,7 @@ def _run_parser(run: argparse.ArgumentParser) -> argparse.ArgumentParser:
     run.add_argument("--order", default="ONNONO")
     run.add_argument("--name", help="default <branch>-<bench>")
     run.add_argument("--control-backend", choices=["numpy", "rust"], help="also read this backend's rows as controls")
-    run.add_argument("--script-from", choices=["old", "new"], default="new")
+    run.add_argument("--script-from", default="new", help="old, new, or a commit whose benchmark script both sides run")
     run.add_argument("--old-crate", help="crate commit for the old side (default: its tree's rust/ submodule)")
     run.add_argument("--new-crate", help="crate commit for the new side (default: its tree's rust/ submodule)")
     return run
@@ -1817,7 +1836,10 @@ def cmd_remote(args: argparse.Namespace, extra: list[str]) -> None:
             side: _git(repo, "rev-parse", "--verify", f"{getattr(options, side)}^{{commit}}") for side in ("old", "new")
         }
         name = options.name or f"{_git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')}-{options.bench}"
-        rest = _replace_options(rest, {"--old": resolved["old"], "--new": resolved["new"], "--name": name})
+        values = {"--old": resolved["old"], "--new": resolved["new"], "--name": name}
+        if script := _script_commit(repo, options.script_from):
+            values["--script-from"] = script
+        rest = _replace_options(rest, values)
         start = ["run", "--detach", "--sync", "--apply-setup", *rest, *(["--", *extra] if extra else [])]
     elif args.action == "extend":
         start = ["extend", "--detach", "--apply-setup", *rest]
@@ -1935,7 +1957,8 @@ def main(argv: list[str] | None = None) -> int:
             with run_lock(f"{what} --detach, preparing"):  # nothing changes the checkout under a run
                 repo = Path(args.repo).resolve()
                 if getattr(args, "sync", False):
-                    print("\n".join(sync_checkout(repo, [args.old, args.new])))
+                    script = [] if args.script_from in ("old", "new") else [args.script_from]
+                    print("\n".join(sync_checkout(repo, [args.old, args.new, *script])))
                 if args.apply_setup and not args.skip_profile:
                     print(check_machine(repo, apply=True), flush=True)
             detach(_detached_argv(full), what)

@@ -316,6 +316,10 @@ What to do next:
   `data/mnist/`). `ab.py` symlinks the checkout's `data` into the run directory.
 - **Worker processes inherit the environment, not `sys.path` edits.** A tree goes into
   `PYTHONPATH`, never into `sys.path` in a driver.
+- **Both sides run one tree's benchmark script** (the new side's by default). A script that put
+  its own repo root first on `sys.path` made the old side import the new tree's package (#610);
+  to time two commits from before such a fix, take the script from a third commit:
+  `ab.py run --script-from COMMIT`.
 - **Whole passes shift** on a noisy machine: by 5-15% in every config on the laptop, the controls
   included (#480, and #477's first A/B). On the i7, with the setup script applied, no pass of 36
   moved more than 0.9%. Balance a shifted pass ([§5](#5-reading-the-report)) on either.
