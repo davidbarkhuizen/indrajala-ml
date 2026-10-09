@@ -334,6 +334,26 @@ def test_a_run_across_the_source_layout_move_finds_each_sides_trainer(toy_repo: 
         assert all(Path(p["provenance"]["train"]) == tree / trainer for p in manifest["passes"] if p["side"] == side)
 
 
+def test_script_from_a_commit_runs_that_commits_script_on_both_sides(toy_repo: Path) -> None:
+    # a third commit fixes the probe; the two sides before it run the fixed script from a third tree
+    (toy_repo / "scripts/probe.py").write_text(PROBE.replace('"case": "toy"', '"case": "fixed"'))
+    _git(toy_repo, "commit", "-q", "-am", "fix the probe")
+    args = ["run", "--bench", "cmd", "--skip-profile", "--old", "HEAD~2", "--new", "HEAD~1", "--order", "ON"]
+    assert _run(toy_repo, *args, "--script-from", "HEAD", "--", "scripts/probe.py") == 0
+
+    run_dir = ab.find_run(None)
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    fixed = ab._git(toy_repo, "rev-parse", "HEAD")
+    assert manifest["script_from"] == "script" and manifest["script"]["commit"] == fixed
+    assert (Path(manifest["script"]["tree"]) / "scripts/probe.py").read_text().count('"fixed"') == 1
+    data = ab.report_data(run_dir)
+    assert {row.case for row in data.rows} == {"fixed", "steady"}
+    # each side still imports its own tree's package: toy.VALUE is 1.0 old, 2.0 new
+    fixed_row = next(row for row in data.rows if row.case == "fixed")
+    assert (min(fixed_row.old_runs), min(fixed_row.new_runs)) == (1.0, 2.0)
+    assert f"the script from `{fixed[:7]}`, a third tree" in ab.protocol_paragraph(data)
+
+
 def test_run_refuses_uncommitted_changes(toy_repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (toy_repo / "indrajala_ml/toy.py").write_text("VALUE = 3.0\n")
     assert _run(toy_repo, "run", "--bench", "cmd", "--skip-profile", "--old", "HEAD~1", "--", "scripts/probe.py") == 1
@@ -1031,6 +1051,17 @@ def test_remote_run_starts_detached_on_the_host_and_waits_there(
     ]  # fmt: skip
     assert wait == ["wait", "2026-10-09-x-cmd"]
     assert "started 2026-10-09-x-cmd" in capsys.readouterr().out
+
+
+def test_remote_run_resolves_a_script_commit_here(toy_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ssh = FakeSsh([(0, "started r1 detached (pid 7, log l)\n"), (0, "")])
+    monkeypatch.setattr(ab, "_ssh", ssh)
+    assert (
+        _run(toy_repo, "remote", "--host", "jebel", "run", "--bench", "cmd", "--script-from", "HEAD~1", "--", "p.py")
+        == 0
+    )
+    start = ssh.calls[0]
+    assert start[start.index("--script-from") + 1] == ab._git(toy_repo, "rev-parse", "HEAD~1")
 
 
 def test_a_dropped_ssh_session_names_the_command_that_resumes_the_wait(
