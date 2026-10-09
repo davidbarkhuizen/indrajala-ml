@@ -80,6 +80,12 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
         return {"kind": "dense", **fields}
     if isinstance(spec, PoolSpec):
         return {"kind": "pool", **asdict(spec)}
+    if isinstance(spec, Attention):
+        # heads and key_size only when not the default (the multi-head attention workplan), so a
+        # one-head entry is as before Attention had them and older checkouts load it
+        default = Attention()
+        fields = {key: value for key, value in asdict(spec).items() if value != getattr(default, key)}
+        return {"kind": "attention", **fields}
     return {"kind": _TOKEN_KINDS[type(spec)], **asdict(spec)}
 
 

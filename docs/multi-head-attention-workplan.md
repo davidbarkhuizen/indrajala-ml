@@ -1,7 +1,8 @@
 # Workplan: multi-head attention
 
 **Status: decisions D1-D10 settled (2026-10-09). Stage 0 done: this plan (#602) and the README's
-attention arithmetic in its three blocks. Stages 1-8 not started.**
+attention arithmetic in its three blocks (#603). Stage 1 done: the attention benchmark case (#604).
+Stage 2 done: the spec. Stages 3-8 not started.**
 
 Roadmap step 5 ([primitives-roadmap.md](primitives-roadmap.md)): multi-head attention and a full
 transformer block. Step 4 (the layer-norm and attention workplan, retired:
@@ -221,8 +222,9 @@ class Attention:
     key_size: int | None = None
 ```
 
-`validate_layer_specs` refuses `heads < 1`, `key_size < 1`, and `heads` not dividing `d` when
-`key_size` is `None`, with the layer's path and the token width in the message. Format 2 writes
+`validate_layer_specs` refuses `heads < 1` and `key_size < 1`; `spec_shapes`, where `d` is known,
+refuses `heads` not dividing `d` when `key_size` is `None`, with the spec and the token width in the
+message. `Attention.head_size(d)` resolves `d_k` for the builders. Format 2 writes
 `heads` and `key_size` only when not the default, so existing files load unchanged;
 `layer_from_json` passes them through `_TOKEN_SPECS` as today.
 

@@ -51,6 +51,11 @@ def _check_layer_norm(spec: LayerNorm) -> None:
     assert spec.epsilon > 0.0, f"epsilon must be positive; got {spec!r}"
 
 
+def _check_attention(spec: Attention) -> None:
+    assert spec.heads >= 1, f"an Attention has at least one head; got {spec!r}"
+    assert spec.key_size is None or spec.key_size >= 1, f"a key_size is at least 1; got {spec!r}"
+
+
 def _check_residual(spec: Residual, in_body: bool) -> None:
     assert not in_body, f"a residual block's body holds no residual block (D6); got {spec!r}"
     assert spec.body, f"a residual block's body needs at least one layer; got {spec!r}"
@@ -100,6 +105,8 @@ def _check_token_residual(spec: Residual, in_body: bool) -> None:
     )
     if isinstance(last, Dense):
         _check_hidden_dense(last)
+    elif isinstance(last, Attention):
+        _check_attention(last)
     _check_token_layers(layers, in_body=True)
 
 

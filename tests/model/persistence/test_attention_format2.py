@@ -42,6 +42,7 @@ from tests.model.persistence.test_checkpoint import (
 )
 from tests.model.persistence.test_format2 import SEQUENTIAL, _file, _save_and_load
 from tests.model.specs.test_layer_specs import AFFINE_5, TOKENS
+from tests.saved_model_fixtures import FIXTURE_DIR, FIXTURES, fixture_class
 
 # the README's model over a (4, 4, 1) image: 4 tokens of 4, embedded to 6, a position, the attention
 # and FFN blocks, the mean, a layer norm and a softmax output
@@ -68,13 +69,27 @@ ARCHITECTURE_IDS = ["patch model", "flat layer norm"]
         (LayerNorm(), {"kind": "layer_norm", "epsilon": 1e-5}),
         (LayerNorm(epsilon=1e-3), {"kind": "layer_norm", "epsilon": 1e-3}),
         (Attention(), {"kind": "attention"}),
+        (Attention(heads=4), {"kind": "attention", "heads": 4}),
+        (Attention(key_size=8), {"kind": "attention", "key_size": 8}),
+        (Attention(heads=3, key_size=8), {"kind": "attention", "heads": 3, "key_size": 8}),
         (TokenMean(), {"kind": "token_mean"}),
         (
             Residual((LayerNorm(), Attention())),
             {"kind": "residual", "body": [{"kind": "layer_norm", "epsilon": 1e-5}, {"kind": "attention"}]},
         ),
     ],
-    ids=["patches", "position", "layer norm", "layer norm epsilon", "attention", "token mean", "attention block"],
+    ids=[
+        "patches",
+        "position",
+        "layer norm",
+        "layer norm epsilon",
+        "attention",
+        "attention heads",
+        "attention key size",
+        "attention heads and key size",
+        "token mean",
+        "attention block",
+    ],
 )
 def test_each_new_spec_has_its_entry(spec: LayerSpec, entry: dict[str, Any]):
     assert layer_to_json(spec) == entry
@@ -205,3 +220,19 @@ def test_a_restored_checkpoint_resumes_training_by_bits(
     _train(resumed, rows)
 
     assert _state_bits(resumed) == _state_bits(trained)
+
+
+ATTENTION_FIXTURES = [name for name in FIXTURES if name.startswith("Attention")]
+
+
+@pytest.mark.parametrize("name", ATTENTION_FIXTURES)
+def test_a_one_head_patch_model_fixture_re_saves_byte_identically(name: str, tmp_path: Path):
+    # heads and key_size are written only when not the default (the multi-head attention workplan,
+    # stage 2), so a one-head file is as before Attention had them
+    path = tmp_path / f"{name}.json"
+    fixture_class(name).load(str(FIXTURE_DIR / f"{name}.json")).save(str(path))
+    assert path.read_bytes() == (FIXTURE_DIR / f"{name}.json").read_bytes()
+
+
+def test_there_is_an_attention_fixture_per_implementation():
+    assert len(ATTENTION_FIXTURES) == 3
