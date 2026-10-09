@@ -52,6 +52,13 @@ with four heads of 3 features, so the projections are 12 wide over 4-wide tokens
 sqrt(3), is inexact. No earlier entry moved in that workplan's stages 3-5, which restructured
 attention.
 
+The sequence entries (the sequence task workplan, stage 7, D12) are SEQUENCE_SPECS in all three
+implementations, added after the multi-head ones: a causal transformer over token ids with a
+token-wise softmax output, under Adam. Its rows are Tiny Shakespeare's first 84 characters (D2),
+cut as text_data cuts a corpus: the excerpt's 30 characters as the vocabulary, and 12 windows of 6
+token ids, each labelled with the next character at every position. The excerpt is embedded, so
+the golden run reads no fetched data. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -75,6 +82,7 @@ import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.data.prepared_dataset import PreparedDataset
+from indrajala_ml.data.text_data import Vocabulary, windows
 from indrajala_ml.measurement import benchmark_archive
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
@@ -203,7 +211,10 @@ from indrajala_ml.model.networks.python.relu_conv_multiclass_backprop_classifier
 from indrajala_ml.model.networks.python.relu_multiclass_backprop_classifier_network import (
     ReLUMultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.networks.python.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
+from indrajala_ml.model.networks.python.sequential_backprop_network import (
+    SequentialMultiClassBackpropClassifierNetwork,
+    SequentialSequenceBackpropNetwork,
+)
 from indrajala_ml.model.networks.python.softmax_conv_multiclass_backprop_classifier_network import (
     SoftmaxConvMultiClassBackpropClassifierNetwork,
 )
@@ -282,12 +293,14 @@ from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,
+    Embedding,
     LayerNorm,
     LayerSpec,
     Patches,
     Position,
     Residual,
     TokenMean,
+    token_wise_output,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule
@@ -459,14 +472,33 @@ LAYER_NORM_SPECS: list[LayerSpec] = [
     Dense(CLASS_COUNT, output=True),
 ]
 LAYER_NORM_NETWORKS = ["numpy layer norm", "rust layer norm", "python layer norm"]
+# a causal transformer over Tiny Shakespeare's first 84 characters, 12 windows of 6 token ids: the
+# embedding, a position, a causal attention block of two heads of 3 features, the FFN block, a layer
+# norm and a token-wise softmax output, under Adam
+TINY_SHAKESPEARE_OPENING = "First Citizen:\nBefore we proceed any further, hear me speak.\n\nAll:\nSpeak, speak.\n\nFi"
+SEQUENCE_CONTEXT = 6
+SEQUENCE_VOCABULARY = Vocabulary.of(TINY_SHAKESPEARE_OPENING)
+SEQUENCE_SPECS: list[LayerSpec] = [
+    Embedding(len(SEQUENCE_VOCABULARY), 4),
+    Position(),
+    Residual((LayerNorm(), Attention(heads=2, key_size=3, causal=True))),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
+    LayerNorm(),
+    Dense(len(SEQUENCE_VOCABULARY), output=True, activation="softmax", loss="cross_entropy"),
+]
+SEQUENCE_NETWORKS = ["numpy sequence model", "rust sequence model", "python sequence model"]
 
 
 def _sequential_network(name: str, input_shape: InputShape, specs: list[LayerSpec], rule: UpdateRule) -> Any:
+    # a token-wise output makes a sequence network
+    sequence = token_wise_output(specs)
     if _backend(name) == "python":
+        if sequence:
+            return SequentialSequenceBackpropNetwork(input_shape, specs, rule)
         bounds = [(0.0, 1.0)] * math.prod(input_shape)
         return SequentialMultiClassBackpropClassifierNetwork(input_shape, specs, rule, bounds)
     backend = NUMPY if _backend(name) == "numpy" else RUST
-    return SequentialArrayNetwork(input_shape, specs, rule, backend=backend)
+    return SequentialArrayNetwork(input_shape, specs, rule, "sequence" if sequence else "multiclass", backend)
 
 
 def _residual_network(name: str) -> Any:
@@ -665,6 +697,12 @@ def run_all() -> dict[str, Any]:
     for name in MULTI_HEAD_PATCH_NETWORKS:
         network = _sequential_network(name, (CONV_HEIGHT, CONV_WIDTH, 1), MULTI_HEAD_PATCH_SPECS, Adam())
         results[name] = _run_network(name, network, conv_rows, "predict_probabilities")
+
+    sequence_rows = windows(SEQUENCE_VOCABULARY.encode(TINY_SHAKESPEARE_OPENING), SEQUENCE_CONTEXT)
+    assert len(sequence_rows) == ROW_COUNT, f"the excerpt is {ROW_COUNT} windows; got {len(sequence_rows)}"
+    for name in SEQUENCE_NETWORKS:
+        network = _sequential_network(name, (SEQUENCE_CONTEXT,), SEQUENCE_SPECS, Adam())
+        results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
     return results
 
 

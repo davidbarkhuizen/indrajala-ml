@@ -19,6 +19,9 @@ tests/model/persistence/test_legacy_saved_models.py loads.
 - The multi-head fixtures (the multi-head attention workplan, stage 6) are format-2 files of a
   Sequential network per implementation: the patch model with a two-head attention layer whose key
   size isn't d / heads, named MultiHeadAttention<class name>.
+- The sequence fixtures (the sequence task workplan, stage 7) are format-2 files of each
+  implementation's sequence class: a causal transformer over token ids with a token-wise softmax
+  output, its states token ids and its labels one class per token.
 - The pure-Python multiclass presets' fixtures (the presets workplan, stage 1) are format 2 only,
   like the single-output ones: those classes never wrote a legacy envelope.
 - So are the numpy and Rust one-output presets' fixtures (the presets workplan, stage 2).
@@ -56,12 +59,14 @@ from indrajala_ml.model.networks.python.backprop_network_base import BackpropNet
 from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
+    SequentialSequenceBackpropNetwork,
 )
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
+    Embedding,
     LayerNorm,
     LayerSpec,
     Patches,
@@ -152,6 +157,19 @@ LAYER_NORM: list[LayerSpec] = [
     LayerNorm(epsilon=1e-4),
     Residual((LayerNorm(), Dense(3, activation="relu"), Dense(4, activation="linear", bias=True))),
     Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+]
+# a causal transformer over 5 token ids of a vocabulary of 7: embedded to 4, a position, a causal
+# two-head attention block of 3 features per head and the FFN block, a layer norm (epsilon off its
+# default) and a token-wise softmax output
+TOKENS = 5
+VOCABULARY = 7
+SEQUENCE_MODEL: list[LayerSpec] = [
+    Embedding(VOCABULARY, 4),
+    Position(),
+    Residual((LayerNorm(), Attention(heads=2, key_size=3, causal=True))),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
+    LayerNorm(epsilon=1e-4),
+    Dense(VOCABULARY, output=True, activation="softmax", loss="cross_entropy"),
 ]
 FORMAT_2_TRAINING_STEPS = 2
 
@@ -276,6 +294,16 @@ def _sequential(
         format2=True,
         class_name=class_name,
     )
+
+
+def _sequence(implementation: str) -> SavedModelFixture:
+    def build() -> Any:
+        if implementation == "python":
+            return SequentialSequenceBackpropNetwork((TOKENS,), SEQUENCE_MODEL, Adam(**ADAM))
+        backend = NUMPY if implementation == "numpy" else RUST
+        return SequentialArrayNetwork((TOKENS,), SEQUENCE_MODEL, Adam(**ADAM), "sequence", backend)
+
+    return SavedModelFixture(implementation, build, "predict_probabilities", {}, format2=True)
 
 
 def _ensemble(name: str, implementation: str, classifier_name: str) -> SavedModelFixture:
@@ -441,6 +469,9 @@ FIXTURES: dict[str, SavedModelFixture] = {
             ("SequentialMultiClassBackpropClassifierNetwork", "python"),
         )
     },
+    "SequentialSequenceArrayNetwork": _sequence("numpy"),
+    "SequentialSequenceRustArrayNetwork": _sequence("rust"),
+    "SequentialSequenceBackpropNetwork": _sequence("python"),
 }
 
 
@@ -503,16 +534,13 @@ def _write(name: str, fixture: SavedModelFixture) -> None:
     # numpy and Rust, [] for a pool layer, one such list per ensemble member
     drawn = _random_like(rng, bits(network.snapshot()))
     network.restore(_positive_running_variances(network, drawn) if fixture.class_name is not None else drawn)
-    states = [tuple(rng.uniform(0.0, 1.0) for _ in range(network_dimension(network))) for _ in range(STATE_COUNT)]
+    states = [random_state(rng, network) for _ in range(STATE_COUNT)]
     if fixture.format2:
         # a non-empty optimizer state to pin; seeded for the dropout masks, which every network
         # draws from its own generator (the files written before the RNG generators workplan's
         # stage 4 drew pure Python's from random, seeded here then)
         _seed_generator(network, 0)
-        labels = [
-            rng.randrange(CLASS_COUNT) if fixture.predict == "predict_probabilities" else float(rng.randrange(2))
-            for _ in states
-        ]
+        labels = [random_label(rng, network, fixture.predict) for _ in states]
         for _ in range(FORMAT_2_TRAINING_STEPS):
             network.learn_batch(0.1, list(zip(states, labels)))
 
@@ -529,6 +557,22 @@ def _write(name: str, fixture: SavedModelFixture) -> None:
         json.dump(expected, f, indent=1)
         f.write("\n")
     print(f"{name}: written")
+
+
+def random_state(rng: random.Random, network: Any) -> tuple[float, ...]:
+    """A state for network drawn from rng: uniform in [0, 1), or token ids below an Embedding's vocabulary."""
+    dimension = network_dimension(network)
+    specs = getattr(network, "layer_specs", None)
+    if specs and isinstance(specs[0], Embedding):
+        return tuple(float(rng.randrange(specs[0].vocabulary)) for _ in range(dimension))
+    return tuple(rng.uniform(0.0, 1.0) for _ in range(dimension))
+
+
+def random_label(rng: random.Random, network: Any, predict: str) -> Any:
+    """A label for network drawn from rng: a class, 0.0 or 1.0, or a sequence network's class per token."""
+    if getattr(network, "format2_shape", None) == "sequence":
+        return tuple(rng.randrange(network.class_count) for _ in range(network.tokens))
+    return rng.randrange(CLASS_COUNT) if predict == "predict_probabilities" else float(rng.randrange(2))
 
 
 def network_dimension(network: Any) -> int:

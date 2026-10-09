@@ -3,7 +3,7 @@
 **Status: decisions D1-D12 settled by the owner (2026-10-09), each as recommended. Stage 1 done
 (#621, #622, #623); stage 2 done: the specs (#625); stage 3 done: numpy (#626); stage 4 done: the
 crate (indrajala-math-rust #53, #627); stage 5 done: the Rust layers (#628); stage 6 done: pure
-Python. Stages 7-9 not started.**
+Python (#631); stage 7 done: fixtures, checkpoints and golden entries. Stages 8-9 not started.**
 
 Roadmap step 6 ([primitives-roadmap.md](primitives-roadmap.md)): next-token prediction on a small
 text corpus, a causal transformer. It brings the network's first per-token output and loss and
@@ -261,7 +261,16 @@ not a basis for any decision.
    and scatter-add and the token-wise softmax and delta against numpy by bits (numpy's `exp`
    `math.exp`); training within the dense layers' rounding after 50 steps under SGD, Momentum and
    weight decay, and every Adam step's gradients.
-7. **Fixtures, checkpoints and golden entries** (D12).
+7. **Fixtures, checkpoints and golden entries** (D12). A saved-model fixture per sequence class
+   (`tests/saved_model_fixtures.py`): a causal transformer over 5 token ids of a vocabulary of 7
+   under Adam, its states token ids and its labels a class per token; every saveable class now
+   has a fixture. Checkpoints resume by bits for a sequence model under every rule in all three
+   implementations, in memory and as lists, and the trainer's pocket restores a sequence network's
+   best epoch (`test_checkpoint.py`, accuracy per token). Golden entries (D12): "numpy sequence
+   model", "rust sequence model" and "python sequence model", a causal transformer over Tiny
+   Shakespeare's first 84 characters (D2), embedded in the script and cut by `text_data` into 12
+   windows of 6 ids; the 109 earlier entries bit-identical, the file re-recorded on both machines
+   (112 networks) and archived as `new-functionality`.
 8. **The study** (D9), on the four corpora (D2). Euclid's repository and its `CORPORA` entry
    land first, each its own PR.
 9. **Docs**: README, roadmap, next-steps; the workplan retired.

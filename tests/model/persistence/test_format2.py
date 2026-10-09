@@ -28,12 +28,15 @@ from indrajala_ml.model.networks.python.backprop_network_base import BackpropNet
 from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
+    SequentialSequenceBackpropNetwork,
 )
 from indrajala_ml.model.networks.sequential_array_network import (
     SequentialArrayBackpropClassifierNetwork,
     SequentialArrayNetwork,
     SequentialRustArrayBackpropClassifierNetwork,
     SequentialRustArrayMultiClassBackpropClassifierNetwork,
+    SequentialSequenceArrayNetwork,
+    SequentialSequenceRustArrayNetwork,
     SequentialVectorizedMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.persistence.load_network import load_network
@@ -54,7 +57,15 @@ from tests.model.persistence.test_checkpoint import (
     _state_bits,
     _train,
 )
-from tests.saved_model_fixtures import CLASS_COUNT, FIXTURE_DIR, FIXTURES, MODEL_CLASSES, fixture_class, outputs
+from tests.saved_model_fixtures import (
+    FIXTURE_DIR,
+    FIXTURES,
+    MODEL_CLASSES,
+    fixture_class,
+    outputs,
+    random_label,
+    random_state,
+)
 
 ENSEMBLES = {name for name in FIXTURES if name.startswith("Ensemble")}
 NETWORKS = sorted(set(FIXTURES) - ENSEMBLES)
@@ -67,6 +78,9 @@ SEQUENTIAL = {
     ("numpy", "single_output"): SequentialArrayBackpropClassifierNetwork,
     ("rust", "multiclass"): SequentialRustArrayMultiClassBackpropClassifierNetwork,
     ("rust", "single_output"): SequentialRustArrayBackpropClassifierNetwork,
+    ("python", "sequence"): SequentialSequenceBackpropNetwork,
+    ("numpy", "sequence"): SequentialSequenceArrayNetwork,
+    ("rust", "sequence"): SequentialSequenceRustArrayNetwork,
 }
 
 
@@ -85,13 +99,7 @@ def _file(network: Any, tmp_path: Path) -> str:
 
 def _examples(network: Any, predict: str, count: int, seed: int) -> list[tuple[tuple[float, ...], Any]]:
     rng = random.Random(seed)
-    return [
-        (
-            tuple(rng.random() for _ in range(network.dimension)),
-            rng.randrange(CLASS_COUNT) if predict == "predict_probabilities" else float(rng.randrange(2)),
-        )
-        for _ in range(count)
-    ]
+    return [(random_state(rng, network), random_label(rng, network, predict)) for _ in range(count)]
 
 
 def _seed_generator(network: Any, seed: int) -> None:
