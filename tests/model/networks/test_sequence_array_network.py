@@ -23,9 +23,8 @@ from indrajala_ml.model.networks.sequential_array_network import (
     SequentialArrayNetwork,
     SequentialSequenceArrayNetwork,
 )
-from indrajala_ml.model.persistence.format2 import network_from_json, network_to_json
+from indrajala_ml.model.persistence.format2 import network_to_json
 from indrajala_ml.model.persistence.load_network import load_network
-from indrajala_ml.model.persistence.model_io import save_json
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,
@@ -286,16 +285,6 @@ def test_a_saved_sequence_network_loads_and_trains_on_by_bits(name: str, tmp_pat
     built.learn_batch(0.1, data[3:])
     loaded.learn_batch(0.1, data[3:])
     assert bits(loaded.snapshot()) == bits(built.snapshot())
-
-
-def test_a_pure_python_sequence_file_is_refused_until_stage_6(tmp_path: Path):
-    state = network_to_json(network(CAUSAL))
-    state["implementation"] = "python"
-    network_from_json(state)  # the file itself is well formed
-    path = str(tmp_path / "python.json")
-    save_json(path, state)
-    with pytest.raises(NotImplementedError, match="stage 6"):
-        load_network(path)
 
 
 # training and evaluation

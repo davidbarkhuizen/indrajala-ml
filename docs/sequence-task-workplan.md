@@ -2,7 +2,8 @@
 
 **Status: decisions D1-D12 settled by the owner (2026-10-09), each as recommended. Stage 1 done
 (#621, #622, #623); stage 2 done: the specs (#625); stage 3 done: numpy (#626); stage 4 done: the
-crate (indrajala-math-rust #53, #627); stage 5 done: the Rust layers. Stages 6-9 not started.**
+crate (indrajala-math-rust #53, #627); stage 5 done: the Rust layers (#628); stage 6 done: pure
+Python. Stages 7-9 not started.**
 
 Roadmap step 6 ([primitives-roadmap.md](primitives-roadmap.md)): next-token prediction on a small
 text corpus, a causal transformer. It brings the network's first per-token output and loss and
@@ -217,8 +218,8 @@ not a basis for any decision.
    ids; a token part without `TokenMean` ends in the output layer, applied to each token, which is
    softmax (`token_wise_output`, the `sequence` shape's specs); `Attention(causal=False)`. Format 2
    has an `"embedding"` entry, its table `E`, and writes `"causal"` only when true. Until their
-   stages the builders refuse all three with "not yet" (`refuse_sequence_specs_until`): numpy at 3,
-   Rust at 5, pure Python at 6. Format 2's `"sequence"` network shape comes with the network, at 3.
+   stages the builders refused all three with "not yet" (`refuse_sequence_specs_until`, retired at
+   6): numpy at 3, Rust at 5, pure Python at 6. Format 2's `"sequence"` network shape comes with the network, at 3.
 3. **numpy**: the mask in attend, `Embedding`, the token-wise softmax output and loss, the
    `sequence` shape, per-token targets in the trainer, the evaluation (D8). Tier 1 A/B of the
    attention case (its unmasked path must not move). Done: a causal `AttentionArrayLayer` sets
@@ -247,7 +248,19 @@ not a basis for any decision.
    token-wise softmax and its delta where no product rounds (with numpy's `exp` the crate's).
    Training matches numpy within the dense layers' rounding, after 50 steps under SGD, Momentum
    and weight decay and per step under Adam (`test_sequence_rust_network.py`).
-6. **Pure Python**: the mask, `Embedding`, the sequence shape; parity.
+6. **Pure Python**: the mask, `Embedding`, the sequence shape; parity. Done: a causal
+   `AttentionLayer` sets `S_ij`, `j > i`, to `-inf` before the max shift, as numpy's (the backward
+   pass unchanged); `EmbeddingLayer`, one weight set per row of `E` (`EmbeddingRow`, not decayed,
+   no bias, drawn as a linear layer's node of fan-in `size`), refusing ids as numpy does, its
+   gradient a scatter-add in numpy's row order; `TokenSoftmaxLayer`, the token-wise dense layer
+   with a softmax per token (its sum a left fold) and the output delta `(p - y) / T`;
+   `SequentialSequenceBackpropNetwork` (the base's output layer a second type parameter), which
+   `load_network` builds from a pure-Python `"sequence"` file. The multiclass and single-output
+   networks of all three implementations refuse a token-wise output (`refuse_token_wise_output`).
+   Parity at `T = 5`, a vocabulary of 7 (`test_sequence_python_network.py`): the embedding's rows
+   and scatter-add and the token-wise softmax and delta against numpy by bits (numpy's `exp`
+   `math.exp`); training within the dense layers' rounding after 50 steps under SGD, Momentum and
+   weight decay, and every Adam step's gradients.
 7. **Fixtures, checkpoints and golden entries** (D12).
 8. **The study** (D9), on the four corpora (D2). Euclid's repository and its `CORPORA` entry
    land first, each its own PR.

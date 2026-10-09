@@ -10,7 +10,7 @@ from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.persistence.format2 import NetworkFile
 from indrajala_ml.model.protocols.array_protocols import BackendArray
 from indrajala_ml.model.specs.bounds import validate_class_count, validate_layer_sizes
-from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, token_wise_output
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, refuse_token_wise_output, token_wise_output
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
 from indrajala_ml.model.specs.update_rules import UpdateRule
 
@@ -224,7 +224,7 @@ class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
     def __init__(self, input_shape: InputShape, layers: Sequence[LayerSpec], update_rule: UpdateRule) -> None:
         output = layers[-1] if layers else None
         assert isinstance(output, Dense), f"the last layer must be the output layer, a Dense; got {output!r}"
-        _refuse_token_wise_output(layers, "multiclass")
+        refuse_token_wise_output(layers, "multiclass")
         validate_class_count(output.size)
 
         self.class_count = output.size
@@ -256,7 +256,7 @@ class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
     preset_arguments: ClassVar[tuple[str, ...] | None] = None
 
     def __init__(self, input_shape: InputShape, layers: Sequence[LayerSpec], update_rule: UpdateRule) -> None:
-        _refuse_token_wise_output(layers, "single-output")
+        refuse_token_wise_output(layers, "single-output")
         output = layers[-1] if layers else None
         assert isinstance(output, Dense) and output.size == 1, (
             f"a single-output network's last layer is a one-node Dense; got {output!r}"
@@ -279,14 +279,6 @@ class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
     def _load_legacy(cls, state: dict[str, Any]) -> Self:
         # not the preset parent's envelope, which no Sequential network ever wrote
         raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
-
-
-def _refuse_token_wise_output(layers: Sequence[LayerSpec], shape: str) -> None:
-    # a token-wise output layer gives one prediction per token: the sequence shape's
-    assert not token_wise_output(layers), (
-        f"a token-wise output layer is a sequence network's (the sequence task workplan, D6), not a {shape} "
-        f"one's: build it with shape='sequence'; got {layers[-1]!r}"
-    )
 
 
 class SequentialSequenceShape[A: BackendArray](_ShapeBase[A]):

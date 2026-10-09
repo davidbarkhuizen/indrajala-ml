@@ -241,17 +241,15 @@ def token_wise_output(specs: Sequence[LayerSpec]) -> bool:
     return bool(specs) and isinstance(specs[0], TokenStart) and not any(isinstance(spec, TokenMean) for spec in specs)
 
 
-def refuse_sequence_specs_until(specs: Sequence[LayerSpec], stage: str, where: str) -> None:
+def refuse_token_wise_output(specs: Sequence[LayerSpec], shape: str) -> None:
     """
-    A builder's refusal of an Embedding, a causal Attention or a token-wise output layer before the
-    sequence task workplan's stage that builds them there.
+    A multiclass or single-output network's refusal of a token-wise output layer, which gives one
+    prediction per token: the sequence shape's (the sequence task workplan, D6).
     """
-    spec = next(
-        (s for s in expand_specs(specs) if isinstance(s, Embedding) or (isinstance(s, Attention) and s.causal)),
-        specs[-1] if token_wise_output(specs) else None,
+    assert not token_wise_output(specs), (
+        f"a token-wise output layer is a sequence network's (the sequence task workplan, D6), not a {shape} "
+        f"one's: build it with shape='sequence'; got {specs[-1]!r}"
     )
-    if spec is not None:
-        raise NotImplementedError(f"{spec!r} {where}: not yet (the sequence task workplan, stage {stage})")
 
 
 def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:

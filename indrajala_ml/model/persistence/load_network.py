@@ -23,6 +23,7 @@ from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
+    SequentialSequenceBackpropNetwork,
 )
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.persistence.format2 import (
@@ -40,6 +41,13 @@ _ENSEMBLES: dict[str, Any] = {
     PYTHON: EnsembleBackpropClassifierNetwork,
     NUMPY.name: EnsembleArrayBackpropClassifierNetwork,
     RUST.name: EnsembleRustArrayBackpropClassifierNetwork,
+}
+
+
+_PYTHON_SHAPES: dict[str, Any] = {
+    "multiclass": SequentialMultiClassBackpropClassifierNetwork,
+    "single_output": SequentialBackpropClassifierNetwork,
+    "sequence": SequentialSequenceBackpropNetwork,
 }
 
 
@@ -63,14 +71,8 @@ def load_network(path: str) -> Any:
 
 def _sequential(file: NetworkFile) -> Any:
     network: Any
-    if file.implementation == PYTHON and file.shape == "sequence":
-        raise NotImplementedError("a sequence network in pure Python: not yet (the sequence task workplan, stage 6)")
     if file.implementation == PYTHON:
-        cls = (
-            SequentialMultiClassBackpropClassifierNetwork
-            if file.shape == "multiclass"
-            else SequentialBackpropClassifierNetwork
-        )
+        cls = _PYTHON_SHAPES[file.shape]
         network = cls(file.input_shape, file.layers, file.update_rule, file.input_bounds)
     else:
         backend = NUMPY if file.implementation == NUMPY.name else RUST
