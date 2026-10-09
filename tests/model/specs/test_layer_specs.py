@@ -661,15 +661,12 @@ def test_the_head_size_is_the_key_size_else_the_width_over_the_heads():
 
 
 @pytest.mark.parametrize("attention", MULTI_HEAD.values(), ids=MULTI_HEAD.keys())
-def test_numpy_builds_heads_and_key_sizes_and_the_others_refuse_them_until_their_stages(attention: Attention):
+def test_numpy_and_pure_python_build_heads_and_key_sizes_and_rust_refuses_them_until_stage_5(attention: Attention):
     specs = _multi_head(attention)
     build_array_layers(specs, (4, 4, 1), "numpy")
     with pytest.raises(NotImplementedError, match=r"on the rust backend: not yet \(.*, stage 5\)"):
         build_array_layers(specs, (4, 4, 1), "rust")
-    with pytest.raises(
-        NotImplementedError, match=r"in pure Python: not yet \(the multi-head attention workplan, stage 4\)"
-    ):
-        build_python_layers(specs, (4, 4, 1), StateLayer(16, [(0.0, 1.0)] * 16))
+    build_python_layers(specs, (4, 4, 1), StateLayer(16, [(0.0, 1.0)] * 16))
 
 
 def test_a_one_head_attention_without_a_key_size_is_not_refused():

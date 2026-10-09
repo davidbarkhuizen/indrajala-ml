@@ -76,7 +76,7 @@ MULTI_HEAD: dict[str, list[LayerSpec]] = {
     "two layers": [PATCHES, EMBED, _heads_block(2), FFN_BLOCK, _heads_block(3, 4), FFN_BLOCK, TokenMean(), SOFTMAX],
 }
 # the implementations whose builders build more than one head so far, and each other's stage
-MULTI_HEAD_STAGES = {"numpy": None, "python": "4", "rust": "5"}
+MULTI_HEAD_STAGES = {"numpy": None, "python": None, "rust": "5"}
 
 
 @pytest.mark.parametrize("batch_size", [1, 3])
