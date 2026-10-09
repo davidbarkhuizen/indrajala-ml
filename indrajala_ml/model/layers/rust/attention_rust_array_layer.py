@@ -30,16 +30,24 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     its 1D vector, with a batch of one's bits.
     """
 
-    def __init__(self, tokens: int, features: int) -> None:
+    def __init__(self, tokens: int, features: int, heads: int = 1, key_size: int | None = None) -> None:
         self.tokens = tokens
-        self.features = features
+        self._resolve_heads(features, heads, key_size)
+        assert self.heads == 1 and self.key_size == features, (
+            "one head as wide as the tokens: not yet more (the multi-head attention workplan, stage 5)"
+        )
         self.size = tokens * features
         self.input_size = self.size
 
-        d = features
-        self.Wq, self.Wk, self.Wv, self.Wo = (pa.Array.zeros((d, d)) for _ in range(4))
-        self.bq, self.bk, self.bv, self.bo = (pa.Array.zeros(d) for _ in range(4))
+        self.Wq, self.bq, self.Wk, self.bk, self.Wv, self.bv, self.Wo, self.bo = self._zeros()
         self.reset_gradient_accum()
+
+    def _zeros(self) -> list[pa.Array]:
+        return [
+            array
+            for rows, fan_in in self.projection_shapes
+            for array in (pa.Array.zeros((rows, fan_in)), pa.Array.zeros(rows))
+        ]
 
     def forward(self, x: pa.Array) -> pa.Array:
         self.a, self._Q, self._K, self._V, self._P, self._H = pa.attention_forward(x, *self.parameters())
@@ -87,6 +95,13 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         self._accumulate(self.delta_batch, input_activation_batch)
 
     def reset_gradient_accum(self) -> None:
-        d = self.features
-        self.grad_Wq, self.grad_Wk, self.grad_Wv, self.grad_Wo = (pa.Array.zeros((d, d)) for _ in range(4))
-        self.grad_bq, self.grad_bk, self.grad_bv, self.grad_bo = (pa.Array.zeros(d) for _ in range(4))
+        (
+            self.grad_Wq,
+            self.grad_bq,
+            self.grad_Wk,
+            self.grad_bk,
+            self.grad_Wv,
+            self.grad_bv,
+            self.grad_Wo,
+            self.grad_bo,
+        ) = self._zeros()

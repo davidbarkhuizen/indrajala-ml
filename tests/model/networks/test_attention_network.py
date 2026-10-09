@@ -32,13 +32,13 @@ from indrajala_ml.model.layers.rust.token_rust_array_layer import (
     TokenDenseRustArrayLayer,
     TokenMeanRustArrayLayer,
 )
-from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.layer_specs import Attention, LayerNorm, LayerSpec, Position, Residual, TokenMean
 from indrajala_ml.model.specs.single_example import batch_norm_index
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
 from tests.gradient_check import check_gradients
 from tests.helpers import Implementation, bits, randomized, split
 from tests.model.networks.test_attention_array_network import IMAGE, rows
-from tests.model.specs.test_layer_specs import TOKENS
+from tests.model.specs.test_layer_specs import EMBED, FFN_BLOCK, PATCHES, SOFTMAX, TOKENS
 
 
 def network(implementation: Implementation, specs: list[LayerSpec], rule: UpdateRule | None = None) -> Any:
@@ -57,6 +57,36 @@ def test_every_gradient_matches_its_finite_difference(name: str, batch_size: int
         pytest.skip("batch norm trains on batches only (the batch-norm workplan, D4)")
     built = network(implementation, TOKENS[name])
     # a trained step first, so gamma, beta and the positions aren't at their initial values
+    built.learn_batch(0.5, rows(4, seed=2))
+
+    check_gradients(built, *split(rows(batch_size)))
+
+
+def _heads_block(heads: int, key_size: int | None = None) -> Residual:
+    return Residual((LayerNorm(), Attention(heads=heads, key_size=key_size)))
+
+
+# multi-head patch models over 4 tokens of 6 (the multi-head attention workplan): h in {2, 3, 4}, and
+# key sizes that make h * d_k differ from d both ways
+MULTI_HEAD: dict[str, list[LayerSpec]] = {
+    "two heads": [PATCHES, EMBED, Position(), _heads_block(2), FFN_BLOCK, TokenMean(), SOFTMAX],
+    "three heads": [PATCHES, EMBED, _heads_block(3), TokenMean(), SOFTMAX],
+    "four heads of 2, wider than d": [PATCHES, EMBED, Position(), _heads_block(4, 2), FFN_BLOCK, TokenMean(), SOFTMAX],
+    "two heads of 2, narrower than d": [PATCHES, EMBED, _heads_block(2, 2), TokenMean(), SOFTMAX],
+    "two layers": [PATCHES, EMBED, _heads_block(2), FFN_BLOCK, _heads_block(3, 4), FFN_BLOCK, TokenMean(), SOFTMAX],
+}
+# the implementations whose builders build more than one head so far, and each other's stage
+MULTI_HEAD_STAGES = {"numpy": None, "python": "4", "rust": "5"}
+
+
+@pytest.mark.parametrize("batch_size", [1, 3])
+@pytest.mark.parametrize("name", MULTI_HEAD)
+def test_every_multi_head_gradient_matches_its_finite_difference(
+    name: str, batch_size: int, implementation: Implementation
+):
+    if MULTI_HEAD_STAGES[implementation] is not None:
+        pytest.skip(f"multi-head attention on {implementation}: stage {MULTI_HEAD_STAGES[implementation]}")
+    built = network(implementation, MULTI_HEAD[name])
     built.learn_batch(0.5, rows(4, seed=2))
 
     check_gradients(built, *split(rows(batch_size)))
