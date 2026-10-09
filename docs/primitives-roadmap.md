@@ -25,8 +25,9 @@ Python, numpy, Rust). There is no masking, no dropout in attention and no recurr
    on MNIST.
 5. **Multi-head attention and a full transformer block**: done (2026-10-09), as deeper multi-head
    patch models on MNIST.
-6. **A sequence task with causal masking**: proposed (2026-10-09). Next-token prediction on a small
-   text dataset: the network's first per-token output and loss, and attention's first mask.
+6. **A sequence task with causal masking**: planned (2026-10-09,
+   [sequence-task-workplan.md](sequence-task-workplan.md)). Next-token prediction on a small text
+   dataset: the network's first per-token output and loss, and attention's first mask.
 
 ## 1 to 5. Done
 
