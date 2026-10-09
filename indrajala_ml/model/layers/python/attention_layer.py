@@ -14,6 +14,11 @@ columns i * T to (i + 1) * T - 1. It names them in example_fields, and the layer
 (layer_major.py) keeps them in lanes, as it does the nodes' fields. Every pass assigns new lists,
 never writes into a cached one, so a lane can hold them without a copy.
 
+A causal layer (the sequence task workplan, D7) sets each score S_ij with j > i to -inf before the
+max shift, as numpy's: the row max comes from the unmasked scores (the diagonal never is),
+exp(-inf) is exactly 0, so a masked weight P_ij is exactly 0 and so is its dS_ij, and the backward
+pass is unchanged.
+
 The softmax's exp is this module's exp, which tests may replace, as attention_array_layer's.
 """
 
@@ -67,10 +72,10 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
     Over tokens tokens of features features (d), in heads heads (h) of key_size features (d_k,
     d / h when None): Q = X Wq^T + bq, K and V likewise, each head's P[i] =
     softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and H[i] = P[i] V[i], out = H Wo^T + bo with H the
-    heads side by side. Its weight sets, also its draw and snapshot order, are Wq's h * d_k rows of
-    d weights, then Wk's and Wv's, then Wo's d rows of h * d_k weights, each row with its bias,
-    drawn as a dense layer's node, weights then bias: the weights decayed and the biases not.
-    Hidden only, ending a token block's body.
+    heads side by side; a causal one masks S_ij for j > i. Its weight sets, also its draw and
+    snapshot order, are Wq's h * d_k rows of d weights, then Wk's and Wv's, then Wo's d rows of
+    h * d_k weights, each row with its bias, drawn as a dense layer's node, weights then bias: the
+    weights decayed and the biases not. Hidden only, ending a token block's body.
 
     The backward pass runs whole in compute_hidden_deltas, since the gradients need dQ, dK and dV
     and the layer before reads dX.
@@ -79,7 +84,13 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
     example_fields: ClassVar[tuple[str, ...]] = ("_Q", "_K", "_V", "_P", "_H", "_dQ", "_dK", "_dV", "_dX")
 
     def __init__(
-        self, input_layer: InputLayer, tokens: int, features: int, heads: int = 1, key_size: int | None = None
+        self,
+        input_layer: InputLayer,
+        tokens: int,
+        features: int,
+        heads: int = 1,
+        key_size: int | None = None,
+        causal: bool = False,
     ) -> None:
         assert len(input_layer.nodes) == tokens * features
         self.input_layer = input_layer
@@ -90,6 +101,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         self.width = heads * self.key_size
         # computed once and divided by, never multiplied by its reciprocal
         self.scale = math.sqrt(self.key_size)
+        self.causal = causal
         self.queries, self.keys, self.values = ([WeightRow(features) for _ in range(self.width)] for _ in range(3))
         self.outputs = [WeightRow(self.width) for _ in range(features)]
         self.nodes = [TokenNode() for _ in range(tokens * features)]
@@ -129,8 +141,10 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         for i in range(self.heads):
             Qi, Ki, Vi = self._head(Q, i), self._head(K, i), self._head(V, i)
             P: Matrix = []
-            for q in Qi:
+            for i_query, q in enumerate(Qi):
                 s = [_dot(q, k) / self.scale for k in Ki]
+                if self.causal:
+                    s[i_query + 1 :] = [-math.inf] * (len(s) - i_query - 1)
                 m = max(s)
                 e = [exp(s_u - m) for s_u in s]
                 total = fold(e)

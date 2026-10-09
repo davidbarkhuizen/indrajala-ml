@@ -1,8 +1,9 @@
 """
 A patch model's token layers in pure Python (the layer-norm and attention workplan, stage 3; README,
 Layer norm and attention), the counterparts of token_array_layer.py: Patches, Position, TokenMean
-and the token-wise dense layer. A token sequence of T tokens of d features is T * d nodes,
-token-major, node t * d + j (D2).
+and the token-wise dense layer; and a sequence model's (the sequence task workplan, stage 6):
+Embedding and the token-wise softmax output layer. A token sequence of T tokens of d features is
+T * d nodes, token-major, node t * d + j (D2).
 
 Every sum is a left fold from 0.0 in index order (fold), the token-wise dense layer's weighted
 sums included: the README's order, which the builtin sum, compensated since Python 3.12, isn't. A
@@ -11,20 +12,25 @@ set of its own (WeightRow, PositionRow), apart from the nodes, which hold each t
 
 Each node caches its value and delta per example (PassNode's example_fields), so the layer-major
 batch path (layer_major.py) keeps them in lanes.
+
+The token-wise softmax's exp is this module's exp, which tests may replace, as attention_layer's.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from typing import ClassVar, Literal
 
 from indrajala_ml.model.layers.python.base_node import AbstractNode
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
-from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_bias
+from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights, fan_in_aware_weights_and_bias
 from indrajala_ml.model.layers.python.relu_layer import relu_activation, relu_delta
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer, PassNode
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.pcg64 import Pcg64Generator
+
+exp = math.exp
 
 
 class TokenNode(PassNode):
@@ -62,6 +68,16 @@ class PositionRow:
     def reset_gradient_accum(self) -> None:
         self.weight_gradient_accum = [0.0] * len(self._weights)
         self.bias_gradient_accum = 0.0
+
+
+class EmbeddingRow(PositionRow):
+    """
+    One token id's row of an embedding table (the sequence task workplan, D5): weights without a
+    bias, never decayed, as a position row; drawn as a linear layer's node, of fan-in its size.
+    """
+
+    def randomize(self, rng: Pcg64Generator) -> None:
+        self.set_weights(fan_in_aware_weights(rng, len(self._weights)))
 
 
 class WeightRow(PositionRow):
@@ -162,6 +178,68 @@ class TokenMeanLayer(ParameterFreeLayer[TokenNode]):
         return self.nodes[own_index % self.size].delta / self.tokens
 
 
+class EmbeddingLayer(ParameterFreeLayer[TokenNode]):
+    """
+    T token ids, each in [0, vocabulary), as T tokens of size features: token t is row x_t of a
+    learned (vocabulary, size) table E (the sequence task workplan, D5), one weight set per row.
+    The first layer, so it sends nothing back. E's gradient is a scatter-add of its delta's rows
+    into the rows they read, token by token after the examples before: numpy's np.add.at order.
+    """
+
+    def __init__(self, input_layer: InputLayer, tokens: int, vocabulary: int, size: int) -> None:
+        assert len(input_layer.nodes) == tokens
+        self.input_layer = input_layer
+        self.tokens = tokens
+        self.vocabulary = vocabulary
+        self.features = size
+        self.rows = [EmbeddingRow(size) for _ in range(vocabulary)]
+        self.nodes = [TokenNode() for _ in range(tokens * size)]
+        self.size = len(self.nodes)
+
+    def _ids(self) -> list[int]:
+        # the input's token ids, refused unless each is a whole number in [0, vocabulary)
+        values = [node.value() for node in self.input_layer.nodes]
+        ids = [int(value) for value in values]
+        assert ids == values and min(ids) >= 0 and max(ids) < self.vocabulary, (
+            f"an Embedding reads token ids, whole numbers in [0, {self.vocabulary})"
+        )
+        return ids
+
+    def forward(self) -> None:
+        d = self.features
+        for t, token_id in enumerate(self._ids()):
+            for j, weight in enumerate(self.rows[token_id].weights):
+                self.nodes[t * d + j].activate(weight)
+
+    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+        for own_index, node in enumerate(self.nodes):
+            node.delta = next_layer.downstream_sum(own_index)
+
+    def downstream_sum(self, own_index: int) -> float:
+        raise NotImplementedError("an Embedding is the first layer: nothing reads its downstream")
+
+    def accumulate_gradients(self) -> None:
+        d = self.features
+        for t, token_id in enumerate(self._ids()):
+            accum = self.rows[token_id].weight_gradient_accum
+            for j in range(d):
+                accum[j] += self.nodes[t * d + j].delta
+
+    def weight_sets(self) -> Sequence[EmbeddingRow]:
+        return self.rows
+
+    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
+        for row in self.rows:
+            row.randomize(rng)
+
+    def snapshot_state(self) -> list[tuple[list[float]]]:
+        return [(list(row.weights),) for row in self.rows]
+
+    def restore_state(self, layer_snapshot: Sequence[Sequence[list[float]]]) -> None:
+        for row, (weights,) in zip(self.rows, layer_snapshot, strict=True):
+            row.set_weights(list(weights))
+
+
 class PositionLayer(ParameterFreeLayer[TokenNode]):
     """
     A learned (T, d) table P added to the tokens (D7), starting at zero: out_t = x_t + P_t. Its
@@ -260,3 +338,44 @@ class TokenDenseLayer(ParameterFreeLayer[TokenNode]):
 
     def restore_state(self, layer_snapshot: Sequence[tuple[list[float], float]]) -> None:
         restore_rows(self.units, layer_snapshot)
+
+
+class TokenOutputNode(TokenNode):
+    """One class of one token in the token-wise softmax output layer: its delta is (p - y) / T."""
+
+    def __init__(self, tokens: int) -> None:
+        super().__init__()
+        self.tokens = tokens
+
+    def compute_output_delta(self, reference_value: float) -> None:
+        # the mean of the tokens' cross-entropies: softmax with cross-entropy per token, over T
+        self.delta = (self.value() - reference_value) / self.tokens
+
+
+class TokenSoftmaxLayer(TokenDenseLayer):
+    """
+    The token-wise output layer (the sequence task workplan, D6): a softmax output layer acting on
+    each token, its units shared over the tokens. Each token's z is max-shifted, exp'd and divided
+    by its sum, a left fold. The loss is the mean of the tokens' cross-entropies, so each node's
+    output delta is (p - y) / T (TokenOutputNode).
+    """
+
+    nodes: list[TokenOutputNode]  # pyright: ignore[reportIncompatibleVariableOverride]
+
+    def __init__(self, input_layer: InputLayer, size: int, tokens: int) -> None:
+        assert size >= 2, f"a softmax layer needs at least 2 nodes to normalize over; got size={size}"
+        super().__init__(input_layer, size, tokens, "linear")
+        self.nodes = [TokenOutputNode(tokens) for _ in range(tokens * size)]
+
+    def forward(self) -> None:
+        for t in range(self.tokens):
+            x = token_values(self.input_layer.nodes, t, self.input_size)
+            z = [fold([x_j * w_j for x_j, w_j in zip(x, unit.weights)]) + unit.bias for unit in self.units]
+            m = max(z)
+            e = [exp(z_k - m) for z_k in z]
+            total = fold(e)
+            for k, e_k in enumerate(e):
+                self.nodes[t * self.size + k].activate(e_k / total)
+
+    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+        raise NotImplementedError("a token-wise softmax layer is the output layer: its deltas are the output's")

@@ -30,7 +30,6 @@ from indrajala_ml.model.specs.layer_specs import (
     Residual,
     TokenMean,
     expand_specs,
-    refuse_sequence_specs_until,
     spec_paths,
     token_wise_output,
 )
@@ -782,16 +781,9 @@ def _builds(specs: list[LayerSpec], backend: str) -> Any:
     [*SEQUENCE.values(), [PATCHES, EMBED, CAUSAL_BLOCK, TokenMean(), OUTPUT]],
     ids=[*SEQUENCE.keys(), "only the mask"],
 )
-def test_numpy_and_rust_build_sequence_specs_and_pure_python_refuses_them_until_stage_6(specs: list[LayerSpec]):
-    _builds(specs, "numpy")
-    _builds(specs, "rust")
-    with pytest.raises(NotImplementedError, match=r"in pure Python: not yet \(the sequence task workplan, stage 6\)"):
-        _builds(specs, "python")
-
-
-@pytest.mark.parametrize("specs", TOKENS.values(), ids=TOKENS.keys())
-def test_a_patch_model_without_the_new_specs_is_not_refused(specs: list[LayerSpec]):
-    refuse_sequence_specs_until(specs, "3", "here")
+def test_all_three_implementations_build_sequence_specs(specs: list[LayerSpec]):
+    for backend in ("numpy", "rust", "python"):
+        _builds(specs, backend)
 
 
 @pytest.mark.parametrize("specs", SEQUENCE.values(), ids=SEQUENCE.keys())

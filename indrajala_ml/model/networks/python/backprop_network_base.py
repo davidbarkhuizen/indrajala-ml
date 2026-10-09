@@ -8,6 +8,7 @@ from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.layers.python.layer_major import LayerMajorBatch
 from indrajala_ml.model.layers.python.python_layer_builder import build_python_layers
 from indrajala_ml.model.layers.python.state_layer import StateLayer
+from indrajala_ml.model.layers.python.token_layer import TokenSoftmaxLayer
 from indrajala_ml.model.optimizers.python_optimizer import PythonOptimizer, WeightSetState
 from indrajala_ml.model.persistence.format2 import PYTHON
 from indrajala_ml.model.persistence.format2_persistence import Format2Persistence
@@ -25,10 +26,12 @@ from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
 
 # LayerT, the hidden layers' type: dense layers, except in a network whose specs put conv and pool
-# layers first (ConvMultiClassBackpropClassifierNetwork, the sequential networks)
-class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer](
-    Format2Persistence[list[list[Any]], list[WeightSetState]]
-):
+# layers first (ConvMultiClassBackpropClassifierNetwork, the sequential networks); OutputT, the
+# output layer's: a dense one, except a sequence network's token-wise softmax
+class BackpropNetworkBase[
+    LayerT: TrainableLayer = BackpropLayer,
+    OutputT: BackpropLayer | TokenSoftmaxLayer = BackpropLayer,
+](Format2Persistence[list[list[Any]], list[WeightSetState]]):
     """
     What every pure-Python network shares: layers built from layer specs (layer_specs.py,
     python_layer_builder.py) behind a StateLayer, the forward pass, the optimizer (_update_rule,
@@ -79,8 +82,9 @@ class BackpropNetworkBase[LayerT: TrainableLayer = BackpropLayer](
         # pool layers come first
         self.hidden_layers = cast("list[LayerT]", self.trainable_layers[:-1])
         output_layer = self.trainable_layers[-1]
-        assert isinstance(output_layer, BackpropLayer)  # validate_layer_specs: a Dense
-        self.output_layer = output_layer
+        # validate_layer_specs: a Dense, which a sequence network's specs apply to each token
+        assert isinstance(output_layer, BackpropLayer | TokenSoftmaxLayer)
+        self.output_layer = cast("OutputT", output_layer)
         # the index of the first batch-norm layer, if any: such a network trains layer-major
         # (layer_major.py, the batch-norm workplan's D3) and refuses a one-example training step (D4)
         self.batch_norm_index = batch_norm_index(specs)
@@ -267,7 +271,7 @@ def as_dense_layers(layers: Sequence[TrainableLayer]) -> list[BackpropLayer]:
     return dense
 
 
-def randomize_fan_in_aware(network: BackpropNetworkBase[Any]) -> None:
+def randomize_fan_in_aware(network: BackpropNetworkBase[Any, Any]) -> None:
     """
     Fan-in-aware initialization, limit = 1/sqrt(fan_in) per layer, so a layer's weighted input sum
     doesn't saturate every sigmoid once fan-in reaches the tens or hundreds. On UCI digits: 99.5%

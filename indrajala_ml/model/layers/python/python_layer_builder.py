@@ -23,13 +23,21 @@ from indrajala_ml.model.layers.python.max_pool_layer import MaxPoolLayer, PoolSp
 from indrajala_ml.model.layers.python.relu_layer import ReLULayer
 from indrajala_ml.model.layers.python.residual_layer import AddLayer, AffineLayer, ForkLayer
 from indrajala_ml.model.layers.python.softmax_output_layer import SoftmaxOutputLayer
-from indrajala_ml.model.layers.python.token_layer import PatchesLayer, PositionLayer, TokenDenseLayer, TokenMeanLayer
+from indrajala_ml.model.layers.python.token_layer import (
+    EmbeddingLayer,
+    PatchesLayer,
+    PositionLayer,
+    TokenDenseLayer,
+    TokenMeanLayer,
+    TokenSoftmaxLayer,
+)
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.specs.layer_specs import (
     Add,
     Attention,
     BatchNorm,
     Dense,
+    Embedding,
     Fork,
     LayerNorm,
     LayerSpec,
@@ -37,7 +45,6 @@ from indrajala_ml.model.specs.layer_specs import (
     Position,
     TokenMean,
     expand_specs,
-    refuse_sequence_specs_until,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
@@ -60,17 +67,19 @@ def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
 
 
 def _token_layer(
-    spec: Patches | Position | LayerNorm | Attention | TokenMean, shape: Shape, input_layer: InputLayer
+    spec: Patches | Embedding | Position | LayerNorm | Attention | TokenMean, shape: Shape, input_layer: InputLayer
 ) -> TrainableLayer:
     if isinstance(spec, Patches):
         return PatchesLayer(input_layer, *image_shape(shape), spec.patch_size)
+    if isinstance(spec, Embedding):
+        return EmbeddingLayer(input_layer, shape[0], spec.vocabulary, spec.size)
     tokens, features = token_shape(shape)
     if isinstance(spec, LayerNorm):
         return LayerNormLayer(input_layer, tokens, features, spec.epsilon)
     if isinstance(spec, Position):
         return PositionLayer(input_layer, tokens, features)
     if isinstance(spec, Attention):
-        return AttentionLayer(input_layer, tokens, features, spec.heads, spec.head_size(features))
+        return AttentionLayer(input_layer, tokens, features, spec.heads, spec.head_size(features), spec.causal)
     return TokenMeanLayer(input_layer, tokens, features)
 
 
@@ -84,7 +93,6 @@ def build_python_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_sequence_specs_until(specs, "6", "in pure Python")
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
     )
@@ -102,13 +110,16 @@ def build_python_layers(
         elif isinstance(spec, Add):
             fork = forks.pop()
             layer = fork.add = AddLayer(previous, fork)
+        elif isinstance(spec, Dense) and len(shape.input_shape) == 2 and spec.output:
+            # the token-wise output layer (the sequence task workplan, D6): softmax per token
+            layer = TokenSoftmaxLayer(previous, spec.size, shape.input_shape[0])
         elif isinstance(spec, Dense) and len(shape.input_shape) == 2:
             # a token-wise dense layer (D4): ReLU, or linear with a bias
             activation = "relu" if spec.activation == "relu" else "linear"
             layer = TokenDenseLayer(previous, spec.size, shape.input_shape[0], activation)
         elif isinstance(spec, Dense):
             layer = _dense_layer(spec, previous)
-        elif isinstance(spec, Patches | Position | LayerNorm | Attention | TokenMean):
+        elif isinstance(spec, Patches | Embedding | Position | LayerNorm | Attention | TokenMean):
             layer = _token_layer(spec, shape.input_shape, previous)
         elif isinstance(spec, BatchNorm):
             layer = BatchNormLayer(

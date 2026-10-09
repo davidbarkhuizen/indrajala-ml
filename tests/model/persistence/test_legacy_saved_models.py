@@ -62,7 +62,11 @@ def test_legacy_file_loads(name: str) -> None:
 
 # saveable classes without a fixture yet: the sequence networks' come with the sequence task
 # workplan's stage 7 (fixtures, checkpoints and golden entries)
-WITHOUT_FIXTURES = {"SequentialSequenceArrayNetwork", "SequentialSequenceRustArrayNetwork"}
+WITHOUT_FIXTURES = {
+    "SequentialSequenceArrayNetwork",
+    "SequentialSequenceRustArrayNetwork",
+    "SequentialSequenceBackpropNetwork",
+}
 
 
 def test_every_saveable_class_has_a_fixture() -> None:
