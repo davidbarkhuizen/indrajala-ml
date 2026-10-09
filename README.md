@@ -554,25 +554,34 @@ layer norm, each token's d features (a flat layer is one token)
   dx_j    = ((dxhat_j - m1) - xhat_j * m2) / std
   grad_gamma_j += sum(delta_j * xhat_j);  grad_beta_j += sum(delta_j)    over examples and tokens
 
-attention, X the (T, d) tokens, s = sqrt(d)
-  Q = X Wq^T + bq;  K = X Wk^T + bk;  V = X Wv^T + bv     each the product, then the bias
-  S = (Q K^T) / s
-  m_i  = max_j(S_ij)                                     each row, max-shifted
-  e_ij = exp(S_ij - m_i)
-  P_ij = e_ij / sum_j(e_ij)
-  H = P V
-  out = H Wo^T + bo
-  backward
-  dH  = delta Wo
-  dP  = dH V^T
-  dV  = P^T dH
-  r_i = sum_j(dP_ij * P_ij)
-  dS_ij = P_ij * (dP_ij - r_i)
-  dQ  = (dS K) / s
-  dK  = (dS^T Q) / s
-  dX  = (dQ Wq + dK Wk) + dV Wv                          three products, summed in this order
-  grad_Wo += delta^T H;  grad_bo += sum(delta)           over the batch's rows
-  grad_Wq += dQ^T X;     grad_bq += sum(dQ)              and Wk, bk from dK; Wv, bv from dV
+attention, X the (T, d) tokens, h heads of d_k features, s = sqrt(d_k)
+  [i] is head i's block: rows i * d_k to (i + 1) * d_k - 1 of Wq, Wk, Wv and their biases,
+  the same columns of Q, K, V, H and Wo; today h = 1 and d_k = d, so [0] is the whole matrix
+  project
+    Q = X Wq^T + bq;  K = X Wk^T + bk;  V = X Wv^T + bv   (T, h * d_k) each: the product, then the bias
+  attend, each head i
+    S[i] = (Q[i] K[i]^T) / s                             (T, T)
+    m_t  = max_u(S[i]_tu)                                each row, max-shifted
+    e_tu = exp(S[i]_tu - m_t)
+    P[i]_tu = e_tu / sum_u(e_tu)
+    H[i] = P[i] V[i]                                     (T, d_k)
+  combine
+    H = [H[0] ... H[h-1]]                                (T, h * d_k): the heads side by side
+    out = H Wo^T + bo                                    one product over all h * d_k columns
+  backward, in the same blocks, last first
+  combine
+    dH = delta Wo                                        (T, h * d_k)
+    grad_Wo += delta^T H;  grad_bo += sum(delta)         over the batch's rows
+  attend, each head i
+    dP[i] = dH[i] V[i]^T
+    dV[i] = P[i]^T dH[i]
+    r_t   = sum_u(dP[i]_tu * P[i]_tu)
+    dS[i]_tu = P[i]_tu * (dP[i]_tu - r_t)
+    dQ[i] = (dS[i] K[i]) / s
+    dK[i] = (dS[i]^T Q[i]) / s
+  project
+    dX = (dQ Wq + dK Wk) + dV Wv                         three products over all heads, in this order
+    grad_Wq += dQ^T X;  grad_bq += sum(dQ)               and Wk, bk from dK; Wv, bv from dV
 
 token mean
   out_j = sum_t(x_tj) / T
@@ -585,15 +594,17 @@ products, as batch norm's do, and the tests give the numpy layer the other imple
 (it isn't correctly rounded). numpy sums with `np.cumsum` along the summed axis
 (`tests/model/layers/test_summation_order.py`), never `.sum`, whose order depends on the layout. Products
 between activations are new: `Q K^T`, `P V` and their backward per example, BLAS against the
-crate's products, explained as the dense layers' gap is, never accepted as a tolerance. Exact
-tests need none: with one token `P = [[1]]`, so attention is `(X Wv^T + bv) Wo^T + bo`; with
-`Wq = Wk = 0` and `bq = bk = 0` every weight is exactly `1/16` at `T = 16`; with `Wo` and `bo` zero an attention
+crate's products, explained as the dense layers' gap is, never accepted as a tolerance. The heads
+meet only in the products that span them, `H Wo^T` and `dQ Wq` and its two siblings: each is one
+product over all `h * d_k` columns, never a sum of per-head products. Exact tests need none: with
+one token every `P[i] = [[1]]`, so attention is `(X Wv^T + bv) Wo^T + bo`; with `Wq = Wk = 0` and
+`bq = bk = 0` every weight is exactly `1/16` at `T = 16`; with `Wo` and `bo` zero an attention
 block leaves every other layer unchanged.
 
-Two biases are inert. `bk` adds `q_i · bk` to every score in row `i`, which the softmax ignores,
-so its gradient is 0 in exact arithmetic and rounding noise in floating point, which differs
-between implementations; parity tests compare it apart. `bv` only adds `Wo bv` to every output,
-as `bo` can, since each row of `P` sums to 1. Both stay, matching PyTorch's `nn.MultiheadAttention` and ViT's `qkv_bias`.
+Two biases are inert. In each head `bk[i]` adds `q_t · bk[i]` to every score in row `t` of
+`S[i]`, which the softmax ignores, so its gradient is 0 in exact arithmetic and rounding noise in
+floating point, which differs between implementations; parity tests compare it apart. `bv` only
+adds `Wo bv` to every output, as `bo` can, since each row of every `P[i]` sums to 1. Both stay, matching PyTorch's `nn.MultiheadAttention` and ViT's `qkv_bias`.
 
 On Rust each layer-norm and attention pass is one fused crate call, and the token-wise dense layer
 is the existing dense ops on the `(N * T, d)` view. A dense layer's hidden delta reads the next
