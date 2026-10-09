@@ -12,7 +12,11 @@
 - **Retire a workplan only when it is complete** (every stage and decision resolved); its leftover
   work moves into [docs/next-steps.md](docs/next-steps.md).
 - **"Bit-identical" is claimed only when checked** (golden run, parity tests). The golden run may
-  be re-recorded only for an owner-approved correctness improvement (docs/measurement.md, §8).
+  be re-recorded only for an owner-approved change that is more correct or fundamentally better
+  structured (docs/measurement.md, §8); never to avoid a special case's cost alone, never for style.
+- **Structure first.** The priority is a well-structured, extensible framework: when keeping the
+  golden bits would need a special case, a duplicate path or a design that blocks known later
+  work, prefer the better structure and re-record (§8).
 
 ## Timing
 
