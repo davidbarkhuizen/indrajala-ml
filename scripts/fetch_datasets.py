@@ -5,11 +5,11 @@ expected SHA-256.
 
 Presence+checksum is checked first, network only as a last resort: a repeated `./cli setup`/
 `./cli fetch-data` against an unchanged local checkout performs zero network calls after the
-first successful fetch. Only MNIST is fetched here - UCI digits' digits.csv stays committed
+first successful fetch. MNIST and Tiny Shakespeare are fetched here - UCI digits' digits.csv stays committed
 directly in `indrajala-ml`, with its own `indrajala-datasets-uci-digits` packaging existing for
 metadata consistency, not because indrajala-ml needs to fetch it.
 
-Also regenerates each file's derived `.bin` (via `mnist_data.convert_parquet_to_binary`) if it's
+Also regenerates each MNIST file's derived `.bin` (via `mnist_data.convert_parquet_to_binary`) if it's
 missing: `tests/data/test_mnist_data.py` reads the `.bin` files directly, so they need to exist
 before the test suite runs. `.bin` files are gitignored, regenerable artifacts (see
 `.gitignore`'s own comment on `data/mnist/*.bin`), so this only ever runs the conversion once
@@ -28,6 +28,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 PINNED_REF = "v2026-09-16"
 _RAW_BASE = f"https://raw.githubusercontent.com/davidbarkhuizen/indrajala-datasets-mnist/{PINNED_REF}/data"
+TEXT_PINNED_REF = "v2026-10-09"
+_TEXT_RAW_BASE = (
+    f"https://raw.githubusercontent.com/davidbarkhuizen/indrajala-datasets-tinyshakespeare/{TEXT_PINNED_REF}/data"
+)
 
 DATASETS = [
     {
@@ -41,6 +45,12 @@ DATASETS = [
         "binary_path": "data/mnist/mnist-test.bin",
         "sha256": "d49fcf556ce25b002b302e318ce4a11098bbfe5d4499c3f35d7c72297c52374b",
         "url": f"{_RAW_BASE}/mnist-test.parquet",
+    },
+    {
+        # the sequence task's corpus (docs/sequence-task-workplan.md, D2, D3): read as text, no conversion
+        "local_path": "data/tinyshakespeare/tinyshakespeare.txt",
+        "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
+        "url": f"{_TEXT_RAW_BASE}/tinyshakespeare.txt",
     },
 ]
 
@@ -84,7 +94,8 @@ def ensure_binary_conversion(parquet_path: str, binary_path: str) -> None:
 def main() -> None:
     for dataset in DATASETS:
         ensure_dataset_file(dataset["local_path"], dataset["sha256"], dataset["url"])
-        ensure_binary_conversion(dataset["local_path"], dataset["binary_path"])
+        if "binary_path" in dataset:
+            ensure_binary_conversion(dataset["local_path"], dataset["binary_path"])
 
 
 if __name__ == "__main__":
