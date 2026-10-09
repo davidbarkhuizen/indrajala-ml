@@ -251,9 +251,9 @@ def _initial_conv_batch_norm_network(backend: str, momentum: float, seed: int, g
     return network
 
 
-def train_epoch(
-    network: BatchTrainableClassifier[int],
-    train_data: Sequence[Example[int]],
+def train_epoch[L](
+    network: BatchTrainableClassifier[L],
+    train_data: Sequence[Example[L]],
     batch_size: int,
     learning_rate: float | Callable[[int], float],
     first_step: int,
