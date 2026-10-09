@@ -1451,8 +1451,11 @@ def protocol_paragraph(data: ReportData) -> str:
     manifest = data.manifest
     adapter = ADAPTERS[manifest["bench"]]
     script_tree = Path(manifest.get(manifest["script_from"], {}).get("tree", "<tree>"))
-    command = " ".join(["python", *adapter.command(script_tree, manifest["args"], Path("<pass output>"))])
-    command = command.replace(str(script_tree) + "/", "")
+    if manifest["bench"] == "cmd":  # the probe as given: resolving it here would depend on the cwd
+        command = " ".join(["python", *manifest["args"]])
+    else:
+        command = " ".join(["python", *adapter.command(script_tree, manifest["args"], Path("<pass output>"))])
+        command = command.replace(str(script_tree) + "/", "")
     extension: dict[str, Any] = manifest.get("extension") or {}
     text = (
         f"Old `{manifest['old']['commit'][:7]}` against new `{manifest['new']['commit'][:7]}`, run with "
