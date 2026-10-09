@@ -198,7 +198,14 @@ Each lists the options considered, with pros and cons, and the choice.
    `load_network`), which the multiclass and single-output shapes refuse; the trainer's accuracy
    per token (a window counts the fraction of its tokens right); `sequence_evaluate` (D8).
 4. **The crate** (`indrajala-math-rust`): `causal` in `AttentionOptions` and the four ops,
-   `embedding_*` ops; then a "Bump rust/" PR here.
+   `embedding_*` ops; then a "Bump rust/" PR here. Done (indrajala-math-rust #53): the two
+   forward ops take `causal` (keyword, default false), masking as numpy does; the two backward
+   ops take none, as they read `P`, whose masked weights are exactly 0. An unmasked pass keeps
+   its bits. `embedding_forward(x, table)` and `embedding_accumulate_gradient(delta, x,
+   grad_table)`, the scatter-add in row order (`np.add.at`'s bits), refuse ids as numpy does. The
+   token-wise softmax output needs no new op: `array_softmax`'s row sum already was a left fold,
+   now written out and pinned by bits against `np.cumsum`, so stage 5 compares it to numpy by
+   bits (with numpy's `exp` replaced, as for attention).
 5. **Rust layers**: the Rust `Embedding` and the mask through the ops; parity with numpy.
 6. **Pure Python**: the mask, `Embedding`, the sequence shape; parity.
 7. **Fixtures, checkpoints and golden entries** (D12).
