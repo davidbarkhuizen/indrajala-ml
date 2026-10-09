@@ -25,7 +25,9 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     K and V likewise, each head's P[i] = softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and
     H[i] = P[i] V[i], out = H Wo^T + bo with H the heads side by side. Its parameters, also its
     draw order, are Wq, bq, Wk, bk, Wv, bv, Wo, bo: Wq, Wk, Wv (h * d_k, d) and Wo (d, h * d_k),
-    heads as row (Wo: column) blocks; the weights are decayed, the biases not. Hidden only, ending a
+    heads as row (Wo: column) blocks; the weights are decayed, the biases not. A causal layer (the
+    sequence task workplan, D7) masks S_ij for j > i in the two forward ops; the backward ops read
+    P, whose masked weights are exactly 0, so they take no mask. Hidden only, ending a
     token block's body. The caches are packed as the crate's: Q, K, V, H (N * T, h * d_k) and P
     (N * T, h * T), head i in columns i * T..
 
@@ -37,8 +39,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     def __init__(
         self, tokens: int, features: int, heads: int = 1, key_size: int | None = None, causal: bool = False
     ) -> None:
-        # the mask comes to the crate's ops at the sequence task workplan's stage 4, and here at 5
-        assert not causal, "causal attention on the rust backend: not yet (the sequence task workplan, stage 5)"
+        self.causal = causal
         self._set_up(tokens, features, heads, key_size)
 
     def _zeros(self) -> list[pa.Array]:
@@ -49,12 +50,14 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         ]
 
     def forward(self, x: pa.Array) -> pa.Array:
-        self.a, self._Q, self._K, self._V, self._P, self._H = pa.attention_forward(x, *self.parameters(), heads=self.heads)
+        self.a, self._Q, self._K, self._V, self._P, self._H = pa.attention_forward(
+            x, *self.parameters(), heads=self.heads, causal=self.causal
+        )
         return self.a
 
     def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A, self._Q, self._K, self._V, self._P, self._H = pa.attention_forward_batch(
-            X, *self.parameters(), heads=self.heads
+            X, *self.parameters(), heads=self.heads, causal=self.causal
         )
         return self.A
 

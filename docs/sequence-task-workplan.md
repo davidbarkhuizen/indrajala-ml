@@ -1,7 +1,8 @@
 # Workplan: a sequence task with causal masking (roadmap step 6)
 
 **Status: decisions D1-D12 settled by the owner (2026-10-09), each as recommended. Stage 1 done
-(#621, #622, #623); stage 2 done: the specs (#625); stage 3 done: numpy. Stages 4-9 not started.**
+(#621, #622, #623); stage 2 done: the specs (#625); stage 3 done: numpy (#626); stage 4 done: the
+crate (indrajala-math-rust #53, #627); stage 5 done: the Rust layers. Stages 6-9 not started.**
 
 Roadmap step 6 ([primitives-roadmap.md](primitives-roadmap.md)): next-token prediction on a small
 text corpus, a causal transformer. It brings the network's first per-token output and loss and
@@ -206,7 +207,15 @@ Each lists the options considered, with pros and cons, and the choice.
    token-wise softmax output needs no new op: `array_softmax`'s row sum already was a left fold,
    now written out and pinned by bits against `np.cumsum`, so stage 5 compares it to numpy by
    bits (with numpy's `exp` replaced, as for attention).
-5. **Rust layers**: the Rust `Embedding` and the mask through the ops; parity with numpy.
+5. **Rust layers**: the Rust `Embedding` and the mask through the ops; parity with numpy. Done:
+   `AttentionRustArrayLayer` passes `causal` to the two forward ops (the backward ops take none,
+   stage 4); `EmbeddingRustArrayLayer` on `embedding_forward` and `embedding_accumulate_gradient`;
+   `TokenSoftmaxRustArrayLayer`, `layer_softmax_forward_batch` on the `(N * T, d)` rows (its sum
+   `array_softmax`'s left fold) and the delta `(P - Y) / T`; `SequentialSequenceRustArrayNetwork`.
+   By bits against numpy: randomize's draws, the embedding's rows and scatter-add, and the
+   token-wise softmax and its delta where no product rounds (with numpy's `exp` the crate's).
+   Training matches numpy within the dense layers' rounding, after 50 steps under SGD, Momentum
+   and weight decay and per step under Adam (`test_sequence_rust_network.py`).
 6. **Pure Python**: the mask, `Embedding`, the sequence shape; parity.
 7. **Fixtures, checkpoints and golden entries** (D12).
 8. **The study** (D9).

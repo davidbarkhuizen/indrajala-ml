@@ -1,6 +1,6 @@
 """
 Array networks of any accepted layer specs and update rule (the composable-layers workplan, The
-design): SequentialArrayNetwork builds one for a shape and backend, as one of the four classes
+design): SequentialArrayNetwork builds one for a shape and backend, as one of the classes
 below, which the registry walks cover as they do the presets. A sequence network (the sequence
 task workplan, D6), whose output layer is token-wise, is shape="sequence".
 
@@ -31,6 +31,7 @@ from indrajala_ml.model.networks.rust.rust_array_backprop_classifier_network imp
 from indrajala_ml.model.networks.rust.rust_array_multiclass_backprop_classifier_network import (
     RustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.protocols.array_protocols import ArrayBackend
 from indrajala_ml.model.specs.array_network_shapes import (
     SequentialMultiClassShape,
@@ -68,6 +69,10 @@ class SequentialSequenceArrayNetwork(SequentialSequenceShape[FloatArray], NumpyA
     """SequentialSequenceShape on the numpy backend."""
 
 
+class SequentialSequenceRustArrayNetwork(SequentialSequenceShape[pa.Array], RustArrayNetworkBase):
+    """SequentialSequenceShape on the Rust backend."""
+
+
 def SequentialArrayNetwork(
     input_shape: InputShape,
     layers: Sequence[LayerSpec],
@@ -85,9 +90,7 @@ def SequentialArrayNetwork(
             else SequentialVectorizedMultiClassBackpropClassifierNetwork
         )
     elif shape == "sequence":
-        # its Rust class comes with the sequence task workplan's stage 5
-        assert not rust, "a sequence network on the rust backend: not yet (the sequence task workplan, stage 5)"
-        cls = SequentialSequenceArrayNetwork
+        cls = SequentialSequenceRustArrayNetwork if rust else SequentialSequenceArrayNetwork
     else:
         assert shape == "single_output", f"shape is 'multiclass', 'single_output' or 'sequence'; got {shape!r}"
         cls = SequentialRustArrayBackpropClassifierNetwork if rust else SequentialArrayBackpropClassifierNetwork

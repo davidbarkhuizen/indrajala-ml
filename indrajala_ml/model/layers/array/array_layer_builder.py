@@ -47,10 +47,12 @@ from indrajala_ml.model.layers.rust.residual_rust_array_layer import AddRustArra
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.layers.rust.softmax_rust_array_layer import SoftmaxRustArrayLayer
 from indrajala_ml.model.layers.rust.token_rust_array_layer import (
+    EmbeddingRustArrayLayer,
     PatchesRustArrayLayer,
     PositionRustArrayLayer,
     TokenDenseRustArrayLayer,
     TokenMeanRustArrayLayer,
+    TokenSoftmaxRustArrayLayer,
 )
 from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.specs.layer_specs import (
@@ -66,7 +68,6 @@ from indrajala_ml.model.specs.layer_specs import (
     Position,
     TokenMean,
     expand_specs,
-    refuse_sequence_specs_until,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
@@ -137,8 +138,7 @@ class TokenLayerClasses:
     One backend's layer class for each layer of a patch model's and layer norm's (the layer-norm
     and attention workplan): the token-wise dense layer (ReLU or affine), patches, position, layer
     norm (over tokens or a flat layer), attention and the token mean; and a sequence model's (the
-    sequence task workplan): the embedding and the token-wise softmax output layer, None on a
-    backend before its stage (refuse_sequence_specs_until).
+    sequence task workplan): the embedding and the token-wise softmax output layer.
     """
 
     token_dense: LayerClass
@@ -147,8 +147,8 @@ class TokenLayerClasses:
     layer_norm: LayerClass
     attention: LayerClass
     token_mean: LayerClass
-    embedding: LayerClass | None
-    token_output: LayerClass | None
+    embedding: LayerClass
+    token_output: LayerClass
 
 
 TOKEN_LAYER_CLASSES = {
@@ -169,8 +169,8 @@ TOKEN_LAYER_CLASSES = {
         layer_norm=LayerNormRustArrayLayer,
         attention=AttentionRustArrayLayer,
         token_mean=TokenMeanRustArrayLayer,
-        embedding=None,
-        token_output=None,
+        embedding=EmbeddingRustArrayLayer,
+        token_output=TokenSoftmaxRustArrayLayer,
     ),
 }
 
@@ -178,14 +178,12 @@ TOKEN_LAYER_CLASSES = {
 def _token_layer(classes: TokenLayerClasses, spec: LayerSpec, shape: Shape) -> ArrayNetworkLayer[Any] | None:
     # spec's layer if it is one of a patch model's, a sequence model's or a layer norm, else None
     if isinstance(spec, Dense) and len(shape) == 2 and spec.output:
-        assert classes.token_output is not None
         return classes.token_output(spec.size, shape[1], shape[0])
     if isinstance(spec, Dense) and len(shape) == 2:
         return classes.token_dense(spec.size, shape[1], shape[0], spec.activation)
     if isinstance(spec, Patches):
         return classes.patches(*image_shape(shape), spec.patch_size)
     if isinstance(spec, Embedding):
-        assert classes.embedding is not None
         return classes.embedding(shape[0], spec.vocabulary, spec.size)
     if isinstance(spec, LayerNorm):
         return classes.layer_norm(*token_shape(shape), spec.epsilon)
@@ -225,8 +223,6 @@ def build_array_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    if backend_name != "numpy":
-        refuse_sequence_specs_until(specs, "5", f"on the {backend_name} backend")
     classes = LAYER_CLASSES[backend_name]
     token_classes = TOKEN_LAYER_CLASSES[backend_name]
 

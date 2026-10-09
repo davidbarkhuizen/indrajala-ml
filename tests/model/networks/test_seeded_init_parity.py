@@ -24,7 +24,7 @@ from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
-from indrajala_ml.model.specs.layer_specs import Dense
+from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, Position, Residual
 from indrajala_ml.model.specs.update_rules import SGD
 from indrajala_ml.pcg64 import SeedSequence
 from tests.array_network_contract import snapshot_bits
@@ -75,6 +75,19 @@ SEQUENTIAL: dict[str, tuple[Any, ...]] = {
         SGD(),
     ),
     "SequentialArrayBackpropClassifierNetwork": ((9,), [Dense(4), Dense(1, output=True)], SGD()),
+    # a causal transformer over 5 ids of a vocabulary of 7: every sequence layer draws
+    "SequentialSequenceArrayNetwork": (
+        (5,),
+        [
+            Embedding(7, 6),
+            Position(),
+            Residual((LayerNorm(), Attention(heads=2, causal=True))),
+            Residual((LayerNorm(), Dense(8, activation="relu"), Dense(6, activation="linear", bias=True))),
+            LayerNorm(),
+            Dense(7, output=True, activation="softmax", loss="cross_entropy"),
+        ],
+        SGD(),
+    ),
 }
 
 
@@ -89,17 +102,14 @@ RUST_CLASSES = _classes(RustArrayNetworkBase)
 def rust_counterpart(numpy_name: str) -> type[Any]:
     if "Vectorized" in numpy_name:
         return RUST_CLASSES[numpy_name.replace("Vectorized", "RustArray")]
-    return RUST_CLASSES[numpy_name.replace("ArrayBackprop", "RustArrayBackprop")]
-
-
-# numpy classes with no Rust counterpart yet: the sequence network's comes with the sequence task
-# workplan's stage 5, and its seeded-init case with it
-NUMPY_ONLY = {"SequentialSequenceArrayNetwork"}
+    if "ArrayBackprop" in numpy_name:
+        return RUST_CLASSES[numpy_name.replace("ArrayBackprop", "RustArrayBackprop")]
+    return RUST_CLASSES[numpy_name.replace("ArrayNetwork", "RustArrayNetwork")]
 
 
 def test_every_array_network_class_is_covered():
     covered = {*MULTICLASS, *CONV, *SINGLE_OUTPUT, *SEQUENTIAL}
-    assert covered | NUMPY_ONLY == set(NUMPY_CLASSES)
+    assert covered == set(NUMPY_CLASSES)
     assert {rust_counterpart(name) for name in covered} == set(RUST_CLASSES.values())
     assert set(NUMPY_CLASSES.values()) | set(RUST_CLASSES.values()) == set(all_subclasses(ArrayNetworkBase)) - {
         NumpyArrayNetworkBase,
@@ -124,6 +134,16 @@ def assert_seeded_randomized_identical(build: Callable[[type[Any], int], Any], n
 
 def _rows(width: int, network: Any) -> list[tuple[tuple[float, ...], Any]]:
     rng = random.Random(width)
+    if network.format2_shape == "sequence":
+        # token ids, and a class per token
+        classes = network.class_count
+        return [
+            (
+                tuple(float(rng.randrange(classes)) for _ in range(width)),
+                tuple(rng.randrange(classes) for _ in range(width)),
+            )
+            for _ in range(4)
+        ]
     single_output = getattr(network, "class_count", None) is None
     return [
         (tuple(rng.uniform(0.0, 1.0) for _ in range(width)), rng.random() if single_output else i % CLASS_COUNT)

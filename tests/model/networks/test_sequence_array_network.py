@@ -269,11 +269,6 @@ def test_the_sequence_shape_refuses_a_network_without_a_token_wise_output():
         SequentialArrayNetwork(IDS, SEQUENCE["an embedding, then the mean"], SGD(), shape="sequence")
 
 
-def test_the_rust_backend_refuses_a_sequence_network_until_stage_5():
-    with pytest.raises(AssertionError, match="stage 5"):
-        SequentialArrayNetwork(IDS, CAUSAL, SGD(), shape="sequence", backend=RUST)
-
-
 @pytest.mark.parametrize("name", TOKEN_WISE)
 def test_a_saved_sequence_network_loads_and_trains_on_by_bits(name: str, tmp_path: Path):
     specs = TOKEN_WISE[name]
