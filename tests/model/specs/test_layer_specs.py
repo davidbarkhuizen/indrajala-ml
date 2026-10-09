@@ -20,6 +20,7 @@ from indrajala_ml.model.specs.layer_specs import (
     BatchNorm,
     Conv,
     Dense,
+    Embedding,
     Fork,
     LayerNorm,
     LayerSpec,
@@ -29,7 +30,9 @@ from indrajala_ml.model.specs.layer_specs import (
     Residual,
     TokenMean,
     expand_specs,
+    refuse_sequence_specs_until,
     spec_paths,
+    token_wise_output,
 )
 from indrajala_ml.model.specs.single_example import (
     batch_norm_index,
@@ -441,7 +444,7 @@ TOKENS_INVALID: dict[str, list[LayerSpec]] = {
     "patches after a conv layer": [Conv(3, 2), PATCHES, TokenMean(), OUTPUT],
     "patches after a dense layer": [Dense(16), PATCHES, TokenMean(), OUTPUT],
     "patches twice": [PATCHES, PATCHES, TokenMean(), OUTPUT],
-    "patches without a mean": [PATCHES, EMBED, OUTPUT],
+    "patches without a mean, a sigmoid output per token": [PATCHES, EMBED, OUTPUT],
     "patch size 0": [Patches(0), TokenMean(), OUTPUT],
     "two positions": [PATCHES, EMBED, Position(), Position(), TokenMean(), OUTPUT],
     "a position after a block": [PATCHES, EMBED, ATTENTION_BLOCK, Position(), TokenMean(), OUTPUT],
@@ -680,4 +683,122 @@ def test_every_builder_builds_heads_and_key_sizes(attention: Attention):
 @pytest.mark.parametrize("attention", MULTI_HEAD.values(), ids=MULTI_HEAD.keys())
 def test_format_2_round_trips_heads_and_key_sizes(attention: Attention):
     specs = _multi_head(attention)
+    assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
+
+
+# sequence models (the sequence task workplan, stage 2): over 5 token ids of a vocabulary of 7, an
+# Embedding gives 5 tokens of 6, and a token-wise softmax output 5 tokens of 7
+IDS = Embedding(7, 6)
+CAUSAL_BLOCK = Residual((LayerNorm(), Attention(heads=2, causal=True)))
+TOKEN_OUTPUT = Dense(7, output=True, activation="softmax", loss="cross_entropy")
+
+SEQUENCE: dict[str, list[LayerSpec]] = {
+    "a causal transformer": [IDS, Position(), CAUSAL_BLOCK, FFN_BLOCK, LayerNorm(), TOKEN_OUTPUT],
+    "the embedding, then the output": [IDS, TOKEN_OUTPUT],
+    "a token-wise FFN, no attention": [IDS, Position(), FFN_BLOCK, TOKEN_OUTPUT],
+    "the leak arm, unmasked": [IDS, Position(), ATTENTION_BLOCK, FFN_BLOCK, TOKEN_OUTPUT],
+    "an embedding, then the mean": [IDS, CAUSAL_BLOCK, TokenMean(), SOFTMAX],
+    "patches, then a token-wise output": [
+        PATCHES,
+        EMBED,
+        ATTENTION_BLOCK,
+        Dense(3, output=True, activation="softmax", loss="cross_entropy"),
+    ],
+    "a causal patch model": [PATCHES, EMBED, CAUSAL_BLOCK, TokenMean(), OUTPUT],
+}
+
+SEQUENCE_INVALID: dict[str, list[LayerSpec]] = {
+    "an embedding after a dense layer": [Dense(5), IDS, TOKEN_OUTPUT],
+    "an embedding after patches": [PATCHES, IDS, TOKEN_OUTPUT],
+    "two embeddings": [IDS, Embedding(7, 6), TOKEN_OUTPUT],
+    "an embedding after the mean": [IDS, TokenMean(), IDS, TOKEN_OUTPUT],
+    "an embedding in a body": [IDS, Residual((IDS, AFFINE_6)), TOKEN_OUTPUT],
+    "an empty vocabulary": [Embedding(0, 6), TOKEN_OUTPUT],
+    "an embedding of no features": [Embedding(7, 0), TOKEN_OUTPUT],
+    "a token-wise sigmoid output": [IDS, Dense(7, output=True)],
+    "a token-wise sigmoid cross-entropy output": [IDS, Dense(7, output=True, loss="cross_entropy")],
+    "a causal block outside a token part": [Dense(5), Residual((LayerNorm(), Attention(causal=True))), OUTPUT],
+    "causal attention outside a block": [IDS, Attention(causal=True), TOKEN_OUTPUT],
+}
+
+
+@pytest.mark.parametrize("specs", SEQUENCE.values(), ids=SEQUENCE.keys())
+def test_sequence_models_are_accepted(specs: list[LayerSpec]):
+    validate_layer_specs(specs)
+    spec_shapes(specs, (5,) if isinstance(specs[0], Embedding) else (4, 4, 1))
+
+
+@pytest.mark.parametrize("specs", SEQUENCE_INVALID.values(), ids=SEQUENCE_INVALID.keys())
+def test_a_malformed_sequence_model_is_rejected(specs: list[LayerSpec]):
+    with pytest.raises(AssertionError):
+        validate_layer_specs(specs)
+
+
+def test_an_embedding_over_an_image_is_rejected_by_the_shape_walk():
+    specs = SEQUENCE["the embedding, then the output"]
+    validate_layer_specs(specs)
+    with pytest.raises(AssertionError, match="a flat input of token ids"):
+        spec_shapes(specs, (5, 1, 1))
+
+
+def test_the_shape_walk_carries_ids_to_a_token_per_id_and_an_output_per_token():
+    # 5 ids -> 5 tokens of 6 ... -> 5 tokens of 7, one softmax per token
+    shapes = spec_shapes(SEQUENCE["a causal transformer"], (5,))
+    assert shapes[0] == SpecShape((5,), (5, 6))
+    # the position, then the causal block: fork, layer norm, attention, add
+    assert shapes[1:-1] == [SpecShape((5, 6), (5, 6))] * 5 + [
+        SpecShape((5, 6), (5, 6)),  # the FFN block: fork, layer norm, ReLU, affine, add
+        SpecShape((5, 6), (5, 6)),
+        SpecShape((5, 6), (5, 8)),
+        SpecShape((5, 8), (5, 6)),
+        SpecShape((5, 6), (5, 6)),
+        SpecShape((5, 6), (5, 6)),  # the final layer norm
+    ]
+    assert shapes[-1] == SpecShape((5, 6), (5, 7))
+
+
+def test_only_a_token_part_without_a_mean_has_a_token_wise_output():
+    assert token_wise_output(SEQUENCE["a causal transformer"])
+    assert token_wise_output(SEQUENCE["patches, then a token-wise output"])
+    assert not token_wise_output(SEQUENCE["an embedding, then the mean"])
+    assert not token_wise_output(TOKENS["the README's model"])
+    assert not token_wise_output(VALID["softmax output"])
+
+
+def test_attention_is_unmasked_by_default():
+    assert Attention() == Attention(causal=False)
+
+
+def _builds(specs: list[LayerSpec], backend: str) -> Any:
+    input_shape: InputShape = (5,) if isinstance(specs[0], Embedding) else (4, 4, 1)
+    size = math.prod(input_shape)
+    if backend == "python":
+        return build_python_layers(specs, input_shape, StateLayer(size, [(0.0, 1.0)] * size))
+    return build_array_layers(specs, input_shape, backend)
+
+
+@pytest.mark.parametrize(
+    "specs",
+    [*SEQUENCE.values(), [PATCHES, EMBED, CAUSAL_BLOCK, TokenMean(), OUTPUT]],
+    ids=[*SEQUENCE.keys(), "only the mask"],
+)
+def test_the_builders_refuse_sequence_specs_until_their_stages(specs: list[LayerSpec]):
+    for backend, where, stage in (
+        ("numpy", "on the numpy backend", "3"),
+        ("rust", "on the rust backend", "5"),
+        ("python", "in pure Python", "6"),
+    ):
+        with pytest.raises(
+            NotImplementedError, match=rf"{where}: not yet \(the sequence task workplan, stage {stage}\)"
+        ):
+            _builds(specs, backend)
+
+
+@pytest.mark.parametrize("specs", TOKENS.values(), ids=TOKENS.keys())
+def test_a_patch_model_without_the_new_specs_is_not_refused(specs: list[LayerSpec]):
+    refuse_sequence_specs_until(specs, "3", "here")
+
+
+@pytest.mark.parametrize("specs", SEQUENCE.values(), ids=SEQUENCE.keys())
+def test_format_2_round_trips_sequence_specs(specs: list[LayerSpec]):
     assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs

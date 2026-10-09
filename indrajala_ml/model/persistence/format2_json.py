@@ -19,6 +19,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
+    Embedding,
     ExpandedSpec,
     Fork,
     LayerNorm,
@@ -33,10 +34,11 @@ from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
 _RULES: dict[str, type[UpdateRule]] = {"sgd": SGD, "momentum": Momentum, "adam": Adam, "weight_decay": WeightDecay}
-# the layer-norm and attention workplan's specs by kind (stage 5); a token-wise dense layer's entry
-# is a "dense" one
-_TOKEN_SPECS: dict[str, type[Patches | Position | LayerNorm | Attention | TokenMean]] = {
+# the layer-norm and attention workplan's specs by kind (stage 5), and the sequence task workplan's
+# Embedding (stage 2); a token-wise dense layer's entry, an output layer's included, is a "dense" one
+_TOKEN_SPECS: dict[str, type[Patches | Embedding | Position | LayerNorm | Attention | TokenMean]] = {
     "patches": Patches,
+    "embedding": Embedding,
     "position": Position,
     "layer_norm": LayerNorm,
     "attention": Attention,
@@ -81,8 +83,9 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
     if isinstance(spec, PoolSpec):
         return {"kind": "pool", **asdict(spec)}
     if isinstance(spec, Attention):
-        # heads and key_size only when not the default (the multi-head attention workplan), so a
-        # one-head entry is as before Attention had them and older checkouts load it
+        # heads, key_size and causal only when not the default (the multi-head attention workplan;
+        # the sequence task workplan, D7), so a one-head unmasked entry is as before Attention had
+        # them and older checkouts load it
         default = Attention()
         fields = {key: value for key, value in asdict(spec).items() if value != getattr(default, key)}
         return {"kind": "attention", **fields}
@@ -155,6 +158,8 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("gamma", "beta")
         case Position():
             return ("P",)
+        case Embedding():
+            return ("E",)
         case Attention():
             return ("Wq", "bq", "Wk", "bk", "Wv", "bv", "Wo", "bo")
         case Fork() | Add() | PoolSpec() | Patches() | TokenMean():

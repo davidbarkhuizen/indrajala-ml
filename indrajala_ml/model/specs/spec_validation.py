@@ -20,7 +20,9 @@ from indrajala_ml.model.specs.layer_specs import (
     Residual,
     TokenMean,
     TokenSpec,
+    TokenStart,
     expand_specs,
+    token_wise_output,
 )
 
 
@@ -141,9 +143,18 @@ def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool) -> None:
 def _check_no_tokens(specs: Sequence[LayerSpec], where: str) -> None:
     token = next((spec for spec in expand_specs(specs) if isinstance(spec, TokenSpec)), None)
     assert token is None, (
-        f"{token!r} acts on tokens, between Patches, the first layer, and TokenMean (the layer-norm and "
-        f"attention workplan, D3, D8); got it {where}"
+        f"{token!r} acts on tokens, between Patches or an Embedding, the first layer, and TokenMean or a "
+        f"token-wise output layer (the layer-norm and attention workplan, D3, D8; the sequence task "
+        f"workplan, D5, D6); got it {where}"
     )
+
+
+def _check_token_start(spec: TokenStart) -> None:
+    if isinstance(spec, Patches):
+        assert spec.patch_size >= 1, f"a patch size is at least 1; got {spec!r}"
+    else:
+        assert spec.vocabulary >= 1, f"an Embedding's vocabulary has at least one token; got {spec!r}"
+        assert spec.size >= 1, f"an Embedding's tokens have at least one feature; got {spec!r}"
 
 
 def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:
@@ -156,18 +167,19 @@ def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:
     dense body ending in an affine layer (Residual), and an output layer that isn't exactly the
     last layer. A block counts as a dense layer, and a LayerNorm may stand wherever a dense hidden
     layer may. In place of a front end, a patch model has a token part (_check_token_layers), from
-    Patches, the first layer, to TokenMean. Sizes are checked by spec_shapes.
+    Patches or an Embedding, the first layer, to TokenMean, or to the output layer, applied to each
+    token, which is then softmax (the sequence task workplan, D6). Sizes are checked by spec_shapes.
     """
     assert specs, "a network needs at least one layer"
     *hidden, output = specs
 
-    if hidden and isinstance(hidden[0], Patches):
-        assert hidden[0].patch_size >= 1, f"a patch size is at least 1; got {hidden[0]!r}"
-        mean = next((i for i, spec in enumerate(hidden) if isinstance(spec, TokenMean)), None)
-        assert mean is not None, (
-            f"a token part ends in TokenMean, before the dense part (the layer-norm and attention workplan, D8); "
-            f"got {list(specs)!r}"
-        )
+    if hidden and isinstance(hidden[0], TokenStart):
+        _check_token_start(hidden[0])
+        if token_wise_output(specs):
+            _check_token_layers(hidden[1:], in_body=False)
+            _check_output(output, token_wise=True)
+            return
+        mean = next(i for i, spec in enumerate(hidden) if isinstance(spec, TokenMean))
         tokens, dense = hidden[1:mean], hidden[mean + 1 :]
         _check_token_layers(tokens, in_body=False)
         _check_no_tokens([*dense, output], "after TokenMean")
@@ -177,7 +189,7 @@ def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:
         _check_dense_layers(dense, output, in_body=False)
         _check_output(output)
         return
-    _check_no_tokens(specs, "in a network that doesn't start with Patches")
+    _check_no_tokens(specs, "in a network that doesn't start with Patches or an Embedding")
 
     # the front end: every layer before the first dense one, LayerNorm or residual block
     front_end_length = next(
@@ -204,9 +216,13 @@ def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:
     _check_output(output)
 
 
-def _check_output(output: LayerSpec) -> None:
+def _check_output(output: LayerSpec, token_wise: bool = False) -> None:
     assert isinstance(output, Dense) and output.output, (
         f"the last layer must be the output layer, Dense(..., output=True); got {output!r}"
+    )
+    assert not token_wise or output.activation == "softmax", (
+        f"a token-wise output layer is softmax, with the cross-entropy loss (the sequence task workplan, D6); "
+        f"got {output!r}"
     )
     assert output.size >= 1, f"the output layer needs at least one node; got {output!r}"
     assert output.dropout is None, f"the output layer doesn't drop out; got {output!r}"

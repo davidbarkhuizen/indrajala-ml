@@ -24,26 +24,29 @@ network resumes training by bits, its dropout masks included.
   pure Python. class_count is the output layer's size.
 - layers holds each spec's fields under its kind: "dense", "conv", "pool", "batch_norm" (the
   batch-norm workplan, Format 2) or "residual", {"kind": "residual", "body": [...]} with the body's
-  entries (the residual-connections workplan, stage 5), and "patches", "position", "layer_norm",
-  "attention" or "token_mean" (the layer-norm and attention workplan, stage 5). A ReLU conv entry
-  leaves out its activation, as before ConvSpec had one; a linear conv entry has "activation":
-  "linear". A dense entry has "bias": true only for an affine layer (a residual block's, or a
-  token-wise embedding); a token-wise dense layer's entry is a dense one.
+  entries (the residual-connections workplan, stage 5), "patches", "position", "layer_norm",
+  "attention" or "token_mean" (the layer-norm and attention workplan, stage 5), and "embedding"
+  (the sequence task workplan, stage 2). An attention entry has "heads", "key_size" and "causal"
+  only when not the default. A ReLU conv entry leaves out its activation, as before ConvSpec had
+  one; a linear conv entry has "activation": "linear". A dense entry has "bias": true only for an
+  affine layer (a residual block's, or a token-wise embedding); a token-wise dense layer's entry,
+  a token-wise output layer's included, is a dense one.
 - weights is the network's snapshot() as lists, one entry per layer, a residual block's flattened
   into its fork, body and add (layer_specs.expand_specs). On numpy and Rust, per layer: [W, b] (an
   affine layer's too); [W] for a linear (bias-free) layer; [gamma, beta, running_mean, running_var]
-  for a batch-norm layer; [P] for a position; [gamma, beta] for a layer norm; [Wq, bq, Wk, bk, Wv,
-  bv, Wo, bo] for attention; [] for a pool layer, a fork, an add, patches or a token mean. In pure
-  Python, per node or kernel: [weights, bias]; [weights] for a linear one; [[gamma], beta,
-  running_mean, running_var] per batch-norm channel; [weights] per position row (a token's); [[gamma],
+  for a batch-norm layer; [P] for a position; [E], the (vocabulary, size) table, for an embedding;
+  [gamma, beta] for a layer norm; [Wq, bq, Wk, bk, Wv, bv, Wo, bo] for attention; [] for a pool
+  layer, a fork, an add, patches or a token mean. In pure Python, per node or kernel: [weights,
+  bias]; [weights] for a linear one; [[gamma], beta, running_mean, running_var] per batch-norm
+  channel; [weights] per position row (a token's) and per embedding row (a token id's); [[gamma],
   beta] per layer-norm feature; [weights, bias] per attention row, Wq's, then Wk's, Wv's and Wo's.
 - optimizer_state holds the step count t and, per layer (expanded, as weights), the rule's state or
   null: momentum's velocity, Adam's m and v. On numpy and Rust, per parameter (velocity_W,
   velocity_b; velocity_W alone for a linear layer; velocity_gamma, velocity_beta for batch norm and
-  layer norm; velocity_P; velocity_Wq, velocity_bq, ... for attention). In pure Python, per node,
-  kernel, channel or row (velocity_weights, velocity_bias; no bias entries for a linear one or a
-  position row, and a batch-norm channel's or layer-norm feature's gamma is its one weight and its
-  beta its bias).
+  layer norm; velocity_P; velocity_E; velocity_Wq, velocity_bq, ... for attention). In pure Python,
+  per node, kernel, channel or row (velocity_weights, velocity_bias; no bias entries for a linear
+  one, a position row or an embedding row, and a batch-norm channel's or layer-norm feature's gamma
+  is its one weight and its beta its bias).
 - rng is the network's generator's state (the RNG generators workplan, D3): numpy's
   bit_generator.state, flattened, with the 128-bit state and inc as hex strings, since JSON readers
   outside Python lose precision on large integers. It's optional: a file saved before it loads with

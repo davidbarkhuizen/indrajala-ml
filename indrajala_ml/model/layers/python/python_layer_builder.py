@@ -37,6 +37,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Position,
     TokenMean,
     expand_specs,
+    refuse_sequence_specs_until,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
@@ -83,6 +84,7 @@ def build_python_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
+    refuse_sequence_specs_until(specs, "6", "in pure Python")
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
     )

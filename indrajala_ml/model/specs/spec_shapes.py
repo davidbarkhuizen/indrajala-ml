@@ -15,6 +15,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
+    Embedding,
     Fork,
     LayerNorm,
     LayerSpec,
@@ -68,11 +69,13 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
     BatchNorm keeps its linear layer's shape (validate_layer_specs), and a Fork and an Add their
     input's. A residual block's input is flat (D2) or tokens, and its Add's input is its Fork's
     (D5): both are checked here, where the shapes are known, as is a patch size that doesn't divide
-    the image, and an Attention's heads that don't divide its token width when it has no key_size. A
-    Dense over tokens acts on each (the layer-norm and attention workplan, D4), and a
-    Position, a LayerNorm and an Attention keep their input's shape (a LayerNorm after a conv front
-    end normalizes the flat image as one token). The specs' own arguments are checked by the layers
-    built from them, not here.
+    the image, an Embedding over an input that isn't flat, and an Attention's heads that don't
+    divide its token width when it has no key_size. An Embedding gives a token of its size per
+    input value, an id (the sequence task workplan, D5). A Dense over tokens acts on each (the
+    layer-norm and attention workplan, D4), a token-wise output layer included (the sequence task
+    workplan, D6), and a Position, a LayerNorm and an Attention keep their input's shape (a
+    LayerNorm after a conv front end normalizes the flat image as one token). The specs' own
+    arguments are checked by the layers built from them, not here.
     """
     shapes: list[SpecShape] = []
     shape: Shape = input_shape
@@ -103,6 +106,9 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
                 f"a patch size divides the image (the layer-norm and attention workplan, D3); got {spec!r} over {shape}"
             )
             shapes.append(SpecShape(shape, ((height // size) * (width // size), size * size * channels)))
+        elif isinstance(spec, Embedding):
+            assert len(shape) == 1, f"an Embedding reads a flat input of token ids (D5); got {spec!r} over {shape}"
+            shapes.append(SpecShape(shape, (shape[0], spec.size)))
         elif isinstance(spec, Attention):
             _, features = token_shape(shape)
             assert spec.key_size is not None or features % spec.heads == 0, (
