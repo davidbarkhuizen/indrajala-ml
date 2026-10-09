@@ -418,6 +418,16 @@ def test_the_boundary_probe_goes_through_the_probe_contract() -> None:
     assert len(ab.brief_report(data)) <= ab.BRIEF_LINES
 
 
+def test_a_probe_report_is_the_same_from_any_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    data = ab.report_data(FIXTURES / "pyo3-probe")
+    reports: list[str] = []
+    for cwd in (tmp_path, FIXTURES):
+        monkeypatch.chdir(cwd)
+        reports.append(ab.protocol_paragraph(data))
+    assert reports[0] == reports[1]
+    assert "ran `python boundary_probe.py`" in reports[0]
+
+
 def test_rust_only_benchmarks_say_there_is_no_control() -> None:
     brief = ab.brief_report(ab.report_data(FIXTURES / "pyo3-epoch"))
     assert brief[2] == ab.EpochOpProfile.no_control
