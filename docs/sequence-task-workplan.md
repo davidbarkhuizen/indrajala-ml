@@ -78,8 +78,24 @@ Each lists the options considered, with pros and cons, and the choice.
       of the Dar al-Qalam edition, 1984): 1,012,838 characters, unvocalized, 40 symbols. The text
       is CC BY-NC-SA 4.0, OpenITI's licence: for study only, fetched and never redistributed here.
 
-    The loader reads any of the three (`text_data.CORPORA`). Tiny Shakespeare stays the study's
-    corpus (D9); whether the study also covers the other two is settled with stage 8.
+    - *Added by the owner (2026-10-09)*: Euclid's *Elements* in Thomas Heath's translation
+      (`indrajala-datasets-euclid-heath`, from the Perseus Digital Library's TEI text of the 1908
+      Cambridge edition, `PerseusDL/canonical-greekLit` at a pinned commit). The translation is
+      public domain; Perseus's encoding is CC BY-SA 4.0, so the cleaned text may be redistributed
+      with attribution under the same licence. Its `clean.py` keeps Euclid's text alone: the
+      definitions, postulates, common notions and propositions of the 13 books. It drops Heath's
+      introductions and notes, the figures, the cross-references (`[ I. 46 ]`) and the 11 Greek
+      phrases Heath quotes in his asides (173 characters, none of them notation: points are
+      named with Latin letters), and mends the spacing the markup leaves. About 0.9 M characters
+      before cleaning; the cleaned size and symbol count are recorded with the repository. A
+      deliberately different text: formulaic, and naming points by letters that only attention
+      over earlier tokens can track.
+
+    The loader reads any of the corpora (`text_data.CORPORA`; Euclid's entry comes with its
+    repository). *Settled by the owner (2026-10-09)*: the study (D9) covers all four corpora in
+    equal depth (the same arms, seeds and tuning on each), to see what differences between them
+    are observable. This is for the study only: Tiny Shakespeare stays the default corpus
+    everywhere else (benchmarks, golden entries (D12), tests).
 - **D3. Hosting the corpus. Settled: (a).**
   - (a) *Chosen.* A new `indrajala-datasets-tinyshakespeare` repository, tagged, fetched and
     checksum-verified by `scripts/fetch_datasets.py` as MNIST is. Pros: the existing pattern; the
@@ -149,7 +165,8 @@ Each lists the options considered, with pros and cons, and the choice.
     model's progress (the top choice is often right long before the distribution is).
 - **D9. The study. Settled: (a).** `scripts/sequence_study.py`, numpy, Adam, one rate per arm
   from a short `tune`, 3 or 5 seeds, timed first and the grid sized from it, on the patch studies'
-  protocol where it fits.
+  protocol where it fits. Every arm runs on each of the four corpora (D2), so the timing sizes
+  the grid for all four.
   - (a) *Chosen.* Arms: a unigram and a bigram model computed from counts (no training: the
     floors); an FFN-only model, each token blind to the others apart from positions; 1 and 2
     layers of a causal transformer at `d = 64`, 4 heads; and the 2-layer model without the mask,
@@ -175,6 +192,20 @@ Each lists the options considered, with pros and cons, and the choice.
     did for multi-head (the old entries bit-identical, the file re-recorded with the new entries
     on both machines and archived as `new-functionality`). Pros: the established form. Cons: none
     beyond the re-record.
+
+## Naive predictions
+
+Recorded before the study (stage 8), as the agent stated them to the owner on 2026-10-09 when
+Euclid was proposed as a corpus (D2), quoted and not developed. The study tests them; they are
+not a basis for any decision.
+
+- Euclid's *Elements*: "it's extremely formulaic. The same phrases recur constantly ("I say
+  that", "Therefore… Q.E.D."), and the capital letters naming points (ABC, BDEC) are a pattern
+  that only attention over the earlier text can learn. I'd expect it to reach a much lower loss
+  than the other corpora, and the masked versus unmasked comparison may show a sharper gap."
+- Euclid against the other three: "the most different text of the four; tests whether the mask
+  matters more on structured text", and "the corpus most likely to show the differences you said
+  you're looking for".
 
 ## Stages
 
@@ -218,5 +249,6 @@ Each lists the options considered, with pros and cons, and the choice.
    and weight decay and per step under Adam (`test_sequence_rust_network.py`).
 6. **Pure Python**: the mask, `Embedding`, the sequence shape; parity.
 7. **Fixtures, checkpoints and golden entries** (D12).
-8. **The study** (D9).
+8. **The study** (D9), on the four corpora (D2). Euclid's repository and its `CORPORA` entry
+   land first, each its own PR.
 9. **Docs**: README, roadmap, next-steps; the workplan retired.
