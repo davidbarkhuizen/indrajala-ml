@@ -48,9 +48,11 @@ import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
-# run as `python scripts/focused_benchmark.py` from the repo root, which puts scripts/ (not the
-# repo root) on sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# run as `python scripts/focused_benchmark.py` from the repo root, which puts scripts/ (not the repo root)
+# on sys.path: the root goes last, a fallback, so a PYTHONPATH tree comes first. ab.py runs the new
+# tree's script on both sides with each side's tree on PYTHONPATH, and inserting the root first
+# would import the new tree's package on the old side too
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 from process_runs import run_json_worker
