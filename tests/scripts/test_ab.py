@@ -19,6 +19,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
 import ab  # scripts/ isn't a package
 
+from indrajala_ml.measurement import benchmark_archive
+
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures/ab"
 RUNS = sorted(d.name for d in FIXTURES.iterdir() if (d / "manifest.json").is_file())
 
@@ -676,3 +678,146 @@ def test_a_host_without_a_profile_is_refused(
     monkeypatch.setattr(ab.socket, "gethostname", lambda: "elsewhere")
     assert _run(toy_repo, "run", "--bench", "cmd", "--old", "HEAD~1", "--", "scripts/probe.py") == 1
     assert "machine profile: none in docs/machine_profiles for host elsewhere" in capsys.readouterr().err
+
+
+# ---- archive (the benchmark archive workplan, stage 2): into a temporary clone with no remote
+
+RYZEN = REPO / "docs/machine_profiles/ryzen7-3700u.json"
+I7 = REPO / "docs/machine_profiles/i7-9700k.json"
+
+
+@pytest.fixture
+def archive_clone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.setenv(var, "t@t" if "EMAIL" in var else "t")
+    clone = tmp_path / "archive"
+    clone.mkdir()
+    (clone / "INDEX.md").write_text("# Index\n")
+    _git(clone, "init", "-q", "-b", "main")
+    _git(clone, "add", ".")
+    _git(clone, "commit", "-q", "-m", "empty")
+    monkeypatch.setattr(ab, "RUNS_ROOT", tmp_path / "runs")
+    return clone
+
+
+def _fixture_run(name: str, root: Path) -> Path:
+    """A fixture run as ab.py left it: without the published table its test compares with."""
+    run = root / name
+    shutil.copytree(FIXTURES / name, run, ignore=shutil.ignore_patterns("published.md"))
+    return run
+
+
+def _archive(clone: Path, *args: str) -> int:
+    return ab.main(["archive", *args, "--archive-repo", str(clone), "--no-pr"])
+
+
+def _show(clone: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(clone), *args], check=True, capture_output=True, text=True).stdout
+
+
+def test_archive_copies_a_run_its_reports_and_its_assigned_profile(archive_clone: Path, tmp_path: Path) -> None:
+    run = _fixture_run("pr480", tmp_path)
+    assert _archive(archive_clone, str(run), "--profile", str(RYZEN), "--reason", "PR #480") == 0
+    record_dir = archive_clone / "runs/pyramidon/2026-09-29-pr480"
+    record = json.loads((record_dir / "record.json").read_text())
+    assert record["profile"] == "machines/pyramidon/20261008T171257Z-profile.json"
+    assert (record["profile_source"], record["reason"], record["replaces"]) == ("assigned", "PR #480", None)
+    assert record["files"] == sorted(p.name for p in run.iterdir())
+    assert record["reports"] == ["brief.txt", "report.md"]  # an A/B: no pooled report
+    assert (record_dir / "report.md").read_text() == ab.markdown_report(ab.report_data(run))
+    assert (archive_clone / record["profile"]).read_bytes() == RYZEN.read_bytes()
+    index = [line for line in (archive_clone / "INDEX.md").read_text().splitlines() if line.startswith("- ")]
+    assert index == [
+        (
+            "- 2026-10-08 · pyramidon · profile · [20261008T171257Z-profile.json]"
+            "(machines/pyramidon/20261008T171257Z-profile.json) · cited by a record"
+        ),
+        "- 2026-09-29 · pyramidon · run · [2026-09-29-pr480](runs/pyramidon/2026-09-29-pr480) · PR #480",
+    ]
+    assert _show(archive_clone, "status", "--porcelain") == ""
+    committed = _show(archive_clone, "show", "--name-only", "--format=%s", "HEAD").splitlines()
+    assert committed[0] == "Archive 1 run from pyramidon"
+    # subject, blank line, raw files, reports and record, profile, INDEX.md
+    assert len(committed) == 2 + len(record["files"]) + 3 + 1 + 1
+
+
+def test_archive_takes_a_batch_in_one_commit_and_refuses_a_record_already_there(
+    archive_clone: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    runs = [str(_fixture_run(name, tmp_path)) for name in ("pr479", "pr480")]
+    assert _archive(archive_clone, *runs, "--profile", str(RYZEN)) == 0
+    assert _show(archive_clone, "log", "--format=%s", "-1").strip() == "Archive 2 runs from pyramidon"
+    branch = _show(archive_clone, "rev-parse", "--abbrev-ref", "HEAD").strip()
+    assert _archive(archive_clone, runs[1], "--profile", str(RYZEN)) == 1
+    assert "runs/pyramidon/2026-09-29-pr480 is already archived" in capsys.readouterr().err
+    # the failed batch's branch is gone and the tree clean
+    assert _show(archive_clone, "rev-parse", "--abbrev-ref", "HEAD").strip() == "main"
+    assert branch in _show(archive_clone, "branch")
+    assert _show(archive_clone, "status", "--porcelain") == ""
+
+
+def test_archive_refuses_files_ab_py_did_not_write(
+    archive_clone: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = tmp_path / "pr480"
+    shutil.copytree(FIXTURES / "pr480", run)
+    assert _archive(archive_clone, str(run), "--profile", str(RYZEN)) == 1
+    assert "holds files ab.py didn't write; move them out first: published.md" in capsys.readouterr().err
+    assert _show(archive_clone, "rev-parse", "--abbrev-ref", "HEAD").strip() == "main"
+
+
+def test_archive_needs_a_profile_for_a_run_that_recorded_none_and_a_reason_for_a_failed_run(
+    archive_clone: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = _fixture_run("pr480", tmp_path)
+    assert _archive(archive_clone, str(run)) == 1
+    assert "recorded no matching profile identity: name its profile with --profile" in capsys.readouterr().err
+    manifest = json.loads((run / "manifest.json").read_text())
+    manifest["state"] = "failed"
+    (run / "manifest.json").write_text(json.dumps(manifest))
+    assert _archive(archive_clone, str(run), "--profile", str(RYZEN)) == 1
+    assert "failed: archive it only with --reason" in capsys.readouterr().err
+
+
+def _checked_run(tmp_path: Path, identity: str) -> Path:
+    """pr480 as if it had run on jebel under the i7's profile, its machine check recording identity."""
+    run = _fixture_run("pr480", tmp_path)
+    manifest = json.loads((run / "manifest.json").read_text())
+    manifest["repo"] = str(REPO)
+    check = {
+        "hostname": "jebel",
+        "profile": "identity matches",
+        "profile_path": "docs/machine_profiles/i7-9700k.json",
+        "profile_identity": identity,
+    }
+    manifest["preflight"] = check
+    for extend in manifest["extends"]:
+        extend["preflight"] = check
+    (run / "manifest.json").write_text(json.dumps(manifest))
+    return run
+
+
+def test_archive_cites_the_profile_a_run_checked_and_refuses_one_re_recorded_since(
+    archive_clone: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    identity = benchmark_archive.identity_sha256(json.loads(I7.read_text()))
+    run = _checked_run(tmp_path / "a", identity)
+    assert _archive(archive_clone, str(run), "--profile", str(RYZEN)) == 1
+    assert "names its own profile: archive it without --profile" in capsys.readouterr().err
+    assert _archive(archive_clone, str(run)) == 0
+    record = json.loads((archive_clone / "runs/jebel/2026-09-29-pr480/record.json").read_text())
+    assert (record["profile"], record["profile_source"]) == ("machines/jebel/20261008T062106Z-profile.json", "checked")
+
+    assert _archive(archive_clone, str(_checked_run(tmp_path / "b", "0" * 64))) == 1
+    assert "i7-9700k.json was re-recorded with another identity since the run" in capsys.readouterr().err
+
+
+def test_a_machine_check_records_the_host_and_its_profiles_identity(toy_repo: Path, tmp_path: Path) -> None:
+    (toy_repo / "docs/machine_profiles").mkdir(parents=True)
+    shutil.copyfile(I7, toy_repo / "docs/machine_profiles/i7-9700k.json")
+    manifest = {"repo": str(toy_repo)}
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    record = ab._preflight(run_dir, manifest, skip_profile=False, allow_change=True)  # pyright: ignore[reportPrivateUsage]
+    assert record["hostname"] == ab.socket.gethostname()
+    assert record["profile_identity"] == benchmark_archive.identity_sha256(json.loads(I7.read_text()))

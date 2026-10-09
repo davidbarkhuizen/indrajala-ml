@@ -12,6 +12,7 @@ docs/measurement.md (the A/B harness workplan in docs/next-steps.md has the desi
     python scripts/ab.py extend [RUN] --order NO
     python scripts/ab.py report [RUN] [--brief] [--md FILE] [--pooled FILE]
     python scripts/ab.py clean [--worktrees] [--wheels]
+    python scripts/ab.py archive [RUN ...] [--reason TEXT] [--profile FILE] [--replaces PATH] [--no-pr]
 
 Each side is a commit, checked out once as a detached worktree under ~/code/ab-worktrees/<sha7>.
 A run lives in ~/code/ab-runs/<YYYY-MM-DD>-<name>/ (manifest.json, progress.jsonl, and each pass's
@@ -29,6 +30,13 @@ state.hostname); a host with none is refused unless --allow-profile-change, whic
 PROFILE_REFERENCE. The profile's noise_rules (the shifted-pass threshold, the high-load flag, the
 small-consistent mark; DEFAULT_RULES without them) go into the run's manifest, and its reports use
 them.
+
+`archive` adds finished runs to the benchmark archive (indrajala_ml/measurement/benchmark_archive.py,
+a clone at AB_ARCHIVE_REPO, default ~/code/indrajala-benchmarks): each run's files, which must be
+only those ab.py wrote, its reports rendered now (brief.txt, report.md, and pooled.md for an A/A),
+a record.json, and the profile snapshot it ran under, in one PR squash-merged when the archive's CI
+is green. The profile is the one the run's machine checks recorded, if its identity hash still
+matches; a run from before identity hashes, or without a machine check, names it with --profile.
 
 Output is bounded: raw data goes to files only, `run` and `extend` print a line when they start
 and one when they finish (or the failing step's last 20 lines of stderr, exiting 1), and
@@ -74,6 +82,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from indrajala_ml.measurement import benchmark_archive
+from indrajala_ml.measurement.benchmark_archive import PROFILES_DIR, ArchiveError, host_profile
 from indrajala_ml.measurement.machine_profile import compare
 from indrajala_ml.measurement.machine_profile_capture import power_policy
 
@@ -82,8 +92,8 @@ RUNS_ROOT = Path(os.environ.get("AB_RUNS_ROOT", Path.home() / "code/ab-runs"))
 WORKTREES_ROOT = Path(os.environ.get("AB_WORKTREES_ROOT", Path.home() / "code/ab-worktrees"))
 CRATE_REPO = Path(os.environ.get("AB_CRATE_REPO", Path.home() / "code/indrajala-math-rust"))
 CARGO_BIN = Path.home() / ".cargo/bin"
-PROFILES_DIR = "docs/machine_profiles"
 PROFILE_REFERENCE = f"{PROFILES_DIR}/i7-9700k.json"  # the benchmark machine; an unknown host is compared to it
+RAW_SUFFIXES = (".json", ".stdout", ".stderr")  # what a pass or smoke step writes, per stem
 THREAD_VARS = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")
 DIRTY_PATHS = ("indrajala_ml", "scripts", "rust")
 BUSY_PERCENT = 10.0  # a process above this share of one CPU is recorded as busy
@@ -685,14 +695,6 @@ def _run_step(
     return provenance, command
 
 
-def host_profile(repo: Path, hostname: str) -> Path | None:
-    """The machine profile under PROFILES_DIR recorded on hostname, if any."""
-    for path in sorted((repo / PROFILES_DIR).glob("*.json")):
-        if json.loads(path.read_text()).get("state", {}).get("hostname") == hostname:
-            return path
-    return None
-
-
 def noise_rules(profile: Path | None) -> dict[str, float]:
     """A machine's noise rules: its profile's noise_rules, else DEFAULT_RULES."""
     rules: dict[str, float] = json.loads(profile.read_text()).get("noise_rules", {}) if profile else {}
@@ -764,6 +766,7 @@ def _preflight(run_dir: Path, manifest: dict[str, Any], skip_profile: bool, allo
     # import is the venv's, built from the checkout's rust/
     tree = Path(manifest["repo"])
     hostname = socket.gethostname()
+    record["hostname"] = hostname
     profile = host_profile(tree, hostname)
     manifest["noise_rules"] = noise_rules(profile)
     if skip_profile:
@@ -777,6 +780,8 @@ def _preflight(run_dir: Path, manifest: dict[str, Any], skip_profile: bool, allo
             )
         profile = tree / PROFILE_REFERENCE
     record["profile_path"] = str(profile.relative_to(tree))
+    # which profile, exactly: ab.py archive cites the snapshot whose identity this is
+    record["profile_identity"] = benchmark_archive.identity_sha256(json.loads(profile.read_text()))
     result = subprocess.run(
         [sys.executable, str(tree / "scripts/machine_profile.py"), "compare", str(profile)],
         check=False,
@@ -1025,6 +1030,147 @@ def _clean_worktrees(repo: Path, referenced: set[Path]) -> None:
         removed.append(tree.name)
     _git(repo, "worktree", "prune")
     print(f"removed {len(removed)} worktrees ({', '.join(removed) or 'none'}), kept {kept}")
+
+
+# ---- the archive (docs/benchmark-archive-workplan.md)
+
+
+@dataclass
+class ArchivedRun:
+    """A run checked and rendered for the archive, before anything is written there."""
+
+    run_dir: Path
+    host: str
+    name: str  # <date>-<name>, its directory in the archive
+    files: list[str]  # the files ab.py wrote, as they are copied
+    reports: dict[str, str]  # rendered at archive time: file name -> text
+    profile: Path  # the profile it ran under, whose snapshot the record cites
+    profile_source: str  # "checked" (by the identity hash the run recorded) or "assigned"
+    manifest: dict[str, Any]
+
+
+def run_files(run_dir: Path, manifest: dict[str, Any]) -> list[str]:
+    """The files of a run directory, which must be only those ab.py writes: the manifest, the
+    progress log, and each pass's and smoke step's output and logs (the data symlink is skipped)."""
+    stems = {p["stem"] for p in manifest["passes"]} | {"smoke-old", "smoke-new"}
+    allowed = {"manifest.json", "progress.jsonl"} | {stem + suffix for stem in stems for suffix in RAW_SUFFIXES}
+    names = sorted(p.name for p in run_dir.iterdir() if p.name != "data")
+    if others := [name for name in names if name not in allowed or not (run_dir / name).is_file()]:
+        raise AbError(f"{run_dir.name}: holds files ab.py didn't write; move them out first: {', '.join(others)}")
+    return names
+
+
+def check_for_archive(run_dir: Path, profile: str | None, reason: str | None) -> ArchivedRun:
+    """A run ready to archive: finished (a failed run needs a reason), only its own files, its
+    reports rendered, and its profile either checked by the run or named with --profile."""
+    manifest = _manifest(run_dir)
+    if manifest["state"] == "running":
+        raise AbError(f"{run_dir.name} is still running (or was killed: ab.py status)")
+    if manifest["state"] == "failed" and not reason:
+        raise AbError(f"{run_dir.name} failed: archive it only with --reason saying why it is worth keeping")
+    files = run_files(run_dir, manifest)
+    data = report_data(run_dir)
+    reports = {"brief.txt": "\n".join(brief_report(data)) + "\n", "report.md": markdown_report(data)}
+    if _is_aa(manifest):
+        reports["pooled.md"] = pooled_report(data)
+    checks = [manifest.get("preflight", {})] + [e.get("preflight", {}) for e in manifest["extends"]]
+    if all(c.get("profile") == "identity matches" and "profile_identity" in c for c in checks):
+        if profile:
+            raise AbError(f"{run_dir.name} names its own profile: archive it without --profile")
+        paths = {c["profile_path"] for c in checks}
+        identities = {c["profile_identity"] for c in checks}
+        if len(paths) != 1 or len(identities) != 1:
+            raise AbError(f"{run_dir.name}: its machine checks name more than one profile")
+        path = Path(manifest["repo"]) / paths.pop()
+        if benchmark_archive.identity_sha256(json.loads(path.read_text())) != identities.pop():
+            raise AbError(
+                f"{run_dir.name}: {path.name} was re-recorded with another identity since the run; "
+                "archive it with --profile naming the profile it ran under"
+            )
+        source = "checked"
+    elif profile:
+        path, source = Path(profile), "assigned"
+    else:
+        raise AbError(f"{run_dir.name} recorded no matching profile identity: name its profile with --profile")
+    host = json.loads(path.read_text())["state"]["hostname"]
+    hostnames = {c["hostname"] for c in checks if "hostname" in c}
+    if hostnames - {host}:
+        raise AbError(f"{run_dir.name} ran on {', '.join(sorted(hostnames))}, but {path.name} is {host}'s")
+    # by its directory, not the manifest's name: a run directory renamed after its run (a failed run
+    # moved aside for its re-run) keeps the name it started with
+    date = manifest["created"][:10]
+    name = run_dir.name if run_dir.name.startswith(date) else f"{date}-{run_dir.name}"
+    return ArchivedRun(run_dir, host, name, files, reports, path, source, manifest)
+
+
+def _is_aa(manifest: dict[str, Any]) -> bool:
+    return all(manifest["old"][key] == manifest["new"][key] for key in ("commit", "crate"))
+
+
+def write_record(archive: Path, run: ArchivedRun, reason: str, replaces: str | None) -> tuple[list[str], list[str]]:
+    """Copy run into archive with its reports and record.json; returns (paths, INDEX.md lines)."""
+    snapshot, added_profile = benchmark_archive.add_profile(archive, run.profile)
+    relative = f"runs/{run.host}/{run.name}"
+    destination = archive / relative
+    if destination.exists():
+        raise AbError(f"{relative} is already archived (a correction is a new record: --replaces)")
+    if replaces and not (archive / replaces).exists():
+        raise AbError(f"--replaces {replaces}: no such record in the archive")
+    benchmark_archive.copy_files(run.run_dir, destination, run.files)
+    for name, text in run.reports.items():
+        (destination / name).write_text(text)
+    record = {
+        "format": benchmark_archive.FORMAT,
+        "kind": "run",
+        "host": run.host,
+        "name": run.name,
+        "archived_at": _now(),
+        "reason": reason,
+        "replaces": replaces,
+        "profile": snapshot,
+        "profile_source": run.profile_source,
+        "formats": {
+            "ab_manifest": run.manifest["version"],
+            "profile_schema": json.loads(run.profile.read_text())["schema_version"],
+        },
+        "rendered_by": {"indrajala_ml": _git(REPO, "rev-parse", "HEAD")},
+        "files": run.files,
+        "reports": sorted(run.reports),
+    }
+    _write_json(destination / "record.json", record)
+    paths = [relative]
+    lines = [benchmark_archive.index_line(run.name[:10], run.host, "run", run.name, relative, reason)]
+    if added_profile:
+        paths.append(snapshot)
+        lines.append(benchmark_archive.profile_index_line(archive, snapshot))
+    return paths, lines
+
+
+def cmd_archive(args: argparse.Namespace) -> None:
+    archive = Path(args.archive_repo)
+    runs = [check_for_archive(find_run(run), args.profile, args.reason) for run in args.runs or [None]]
+    if len(runs) > 1 and args.replaces:
+        raise AbError("--replaces names one record: archive the correction on its own")
+    branch = benchmark_archive.start(archive)
+    paths: list[str] = []
+    lines: list[str] = []
+    try:
+        for run in runs:
+            reason = args.reason or f"ab.py run {run.manifest['name']}"
+            run_paths, run_lines = write_record(archive, run, reason, args.replaces)
+            paths += run_paths
+            lines += run_lines
+        benchmark_archive.add_index_lines(archive, lines)
+    except AbError, ArchiveError:
+        benchmark_archive.abandon(archive, branch)
+        raise
+    hosts = sorted({run.host for run in runs})
+    title = f"Archive {len(runs)} run{'s' if len(runs) > 1 else ''} from {', '.join(hosts)}"
+    body = "\n".join(line for line in lines if " · run · " in line)
+    if args.reason:
+        body = f"{args.reason}\n\n{body}"
+    done = benchmark_archive.finish(archive, branch, [*paths, "INDEX.md"], title, body, args.no_pr)
+    print(f"archived {', '.join(run.name for run in runs)}: {done}")
 
 
 # ---- the report
@@ -1464,6 +1610,14 @@ def main(argv: list[str] | None = None) -> int:
     clean.add_argument("--worktrees", action="store_true")
     clean.add_argument("--wheels", action="store_true", help="cached crate wheels and their site directories")
 
+    archive = commands.add_parser("archive", help="add runs to the benchmark archive, by an auto-merged PR")
+    archive.add_argument("runs", nargs="*", metavar="RUN", help="default: the most recent run")
+    archive.add_argument("--reason", help="why they are kept (the PR, the milestone); a failed run needs one")
+    archive.add_argument("--profile", help="the profile a run without a recorded profile identity ran under")
+    archive.add_argument("--replaces", help="the archive path of the record this one corrects")
+    archive.add_argument("--archive-repo", default=str(benchmark_archive.ARCHIVE_REPO), help="the archive's clone")
+    archive.add_argument("--no-pr", action="store_true", help="stop after the commit on a new branch (tests)")
+
     args = parser.parse_args(argv)
     if extra and args.command != "run":
         parser.error("arguments after -- are for run only")
@@ -1476,11 +1630,13 @@ def main(argv: list[str] | None = None) -> int:
             cmd_status(args)
         elif args.command == "report":
             cmd_report(args)
+        elif args.command == "archive":
+            cmd_archive(args)
         else:
             cmd_clean(args)
-    except AbError as error:
+    except (AbError, ArchiveError) as error:
         print(f"ab.py {args.command}: {error}", file=sys.stderr)
-        for line in error.tail:
+        for line in error.tail if isinstance(error, AbError) else []:
             print(f"  {line}", file=sys.stderr)
         return 1
     return 0
