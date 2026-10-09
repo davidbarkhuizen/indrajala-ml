@@ -7,6 +7,9 @@ implementations, through their class's load and load_network; the weights and op
 expanded layer (P for a position, gamma and beta for a layer norm, attention's eight arrays, none
 for patches or a token mean); numpy and Rust files load into each other; and
 checkpoint()/restore_checkpoint() resume by bits, also as nested lists across a worker boundary.
+
+A multi-head patch model (the multi-head attention workplan, stage 6), two heads of 4 features over
+6-wide tokens, so h·d_k isn't d, does all of the same, and its file holds attention's packed arrays.
 """
 
 import json
@@ -41,7 +44,7 @@ from tests.model.persistence.test_checkpoint import (
     _train,
 )
 from tests.model.persistence.test_format2 import SEQUENTIAL, _file, _save_and_load
-from tests.model.specs.test_layer_specs import AFFINE_5, TOKENS
+from tests.model.specs.test_layer_specs import AFFINE_5, ATTENTION_BLOCK, TOKENS
 from tests.saved_model_fixtures import FIXTURE_DIR, FIXTURES, fixture_class
 
 # the README's model over a (4, 4, 1) image: 4 tokens of 4, embedded to 6, a position, the attention
@@ -57,8 +60,16 @@ FLAT_LAYER_NORM: tuple[InputShape, list[LayerSpec]] = (
         Dense(3, output=True),
     ],
 )
-ARCHITECTURES = [PATCH_MODEL, FLAT_LAYER_NORM]
-ARCHITECTURE_IDS = ["patch model", "flat layer norm"]
+# the README's model with two heads of 4 features over its 6-wide tokens: projections 8 wide
+MULTI_HEAD_PATCH_MODEL: tuple[InputShape, list[LayerSpec]] = (
+    (4, 4, 1),
+    [
+        Residual((LayerNorm(), Attention(heads=2, key_size=4))) if spec == ATTENTION_BLOCK else spec
+        for spec in TOKENS["the README's model"]
+    ],
+)
+ARCHITECTURES = [PATCH_MODEL, MULTI_HEAD_PATCH_MODEL, FLAT_LAYER_NORM]
+ARCHITECTURE_IDS = ["patch model", "multi-head patch model", "flat layer norm"]
 
 
 @pytest.mark.parametrize(
@@ -180,6 +191,26 @@ def test_a_patch_model_file_holds_an_entry_per_expanded_layer(implementation: st
         ]
 
 
+@pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
+def test_a_multi_head_files_attention_entry_holds_the_packed_arrays(implementation: str, tmp_path: Path):
+    # Wq, Wk and Wv (8, 6), their biases (8,), Wo (6, 8) and bo (6,): heads as row blocks
+    input_shape, layers = MULTI_HEAD_PATCH_MODEL
+    network = _network(implementation, input_shape, layers, Momentum(0.9))
+    network.randomize()
+    _train(network, _rows(input_shape, 8, seed=1))
+
+    saved = json.loads(Path(_file(network, tmp_path)).read_text())
+
+    assert saved["layers"][3]["body"][1] == {"kind": "attention", "heads": 2, "key_size": 4}
+    attention = saved["weights"][5]
+    if implementation == "python":
+        # a (weights, bias) per row: 8 of Wq, Wk and Wv each over 6 inputs, then 6 of Wo over 8
+        assert [(len(weights), type(bias)) for weights, bias in attention] == [(6, float)] * 24 + [(8, float)] * 6
+    else:
+        shapes = [(len(array), len(array[0])) if isinstance(array[0], list) else (len(array),) for array in attention]
+        assert shapes == [(8, 6), (8,), (8, 6), (8,), (8, 6), (8,), (6, 8), (6,)]
+
+
 @pytest.mark.parametrize("saved_by", ["numpy", "rust"])
 @pytest.mark.parametrize("architecture", ARCHITECTURES, ids=ARCHITECTURE_IDS)
 def test_numpy_and_rust_files_load_into_each_other(
@@ -222,17 +253,18 @@ def test_a_restored_checkpoint_resumes_training_by_bits(
     assert _state_bits(resumed) == _state_bits(trained)
 
 
-ATTENTION_FIXTURES = [name for name in FIXTURES if name.startswith("Attention")]
+ATTENTION_FIXTURES = [name for name in FIXTURES if name.startswith(("Attention", "MultiHeadAttention"))]
 
 
 @pytest.mark.parametrize("name", ATTENTION_FIXTURES)
-def test_a_one_head_patch_model_fixture_re_saves_byte_identically(name: str, tmp_path: Path):
+def test_a_patch_model_fixture_re_saves_byte_identically(name: str, tmp_path: Path):
     # heads and key_size are written only when not the default (the multi-head attention workplan,
-    # stage 2), so a one-head file is as before Attention had them
+    # stage 2), so a one-head file is as before Attention had them; a multi-head one (stage 6) as
+    # first written
     path = tmp_path / f"{name}.json"
     fixture_class(name).load(str(FIXTURE_DIR / f"{name}.json")).save(str(path))
     assert path.read_bytes() == (FIXTURE_DIR / f"{name}.json").read_bytes()
 
 
-def test_there_is_an_attention_fixture_per_implementation():
-    assert len(ATTENTION_FIXTURES) == 3
+def test_there_is_a_one_head_and_a_multi_head_fixture_per_implementation():
+    assert len(ATTENTION_FIXTURES) == 6

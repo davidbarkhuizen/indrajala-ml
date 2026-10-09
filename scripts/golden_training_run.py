@@ -46,6 +46,12 @@ norms after a dropout and a ReLU layer and first in a residual body under moment
 layers before a layer norm take its downstream and a mask op). No earlier entry moved when they
 were recorded.
 
+The multi-head patch-model entries (the multi-head attention workplan, stage 6) are
+MULTI_HEAD_PATCH_SPECS in all three implementations, added after the layer-norm ones: the patch model
+with four heads of 3 features, so the projections are 12 wide over 4-wide tokens and the scale,
+sqrt(3), is inexact. No earlier entry moved in that workplan's stages 3-5, which restructured
+attention.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -426,6 +432,22 @@ PATCH_SPECS: list[LayerSpec] = [
     Dense(CLASS_COUNT, output=True),
 ]
 PATCH_NETWORKS = ["numpy patch model", "rust patch model", "python patch model"]
+# the patch model with four heads of 3 features over its 4-wide tokens, under Adam
+MULTI_HEAD_PATCH_SPECS: list[LayerSpec] = [
+    Patches(3),
+    Dense(4, activation="linear", bias=True),
+    Position(),
+    Residual((LayerNorm(), Attention(heads=4, key_size=3))),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
+    TokenMean(),
+    LayerNorm(),
+    Dense(CLASS_COUNT, output=True),
+]
+MULTI_HEAD_PATCH_NETWORKS = [
+    "numpy multi-head patch model",
+    "rust multi-head patch model",
+    "python multi-head patch model",
+]
 # flat layer norms after a dropout layer, first in a residual body and after a ReLU layer, under
 # momentum
 LAYER_NORM_SPECS: list[LayerSpec] = [
@@ -639,6 +661,10 @@ def run_all() -> dict[str, Any]:
     for name in LAYER_NORM_NETWORKS:
         network = _sequential_network(name, (DIMENSION,), LAYER_NORM_SPECS, Momentum(0.9))
         results[name] = _run_network(name, network, multiclass_rows, "predict_probabilities")
+
+    for name in MULTI_HEAD_PATCH_NETWORKS:
+        network = _sequential_network(name, (CONV_HEIGHT, CONV_WIDTH, 1), MULTI_HEAD_PATCH_SPECS, Adam())
+        results[name] = _run_network(name, network, conv_rows, "predict_probabilities")
     return results
 
 
