@@ -1,6 +1,7 @@
 # Workplan: multi-head attention
 
-**Status: decisions D1-D10 settled (2026-10-09). Stages 0-8 not started.**
+**Status: decisions D1-D10 settled (2026-10-09). Stage 0 done: this plan (#602) and the README's
+attention arithmetic in its three blocks. Stages 1-8 not started.**
 
 Roadmap step 5 ([primitives-roadmap.md](primitives-roadmap.md)): multi-head attention and a full
 transformer block. Step 4 (the layer-norm and attention workplan, retired:
