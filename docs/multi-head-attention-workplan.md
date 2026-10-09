@@ -3,7 +3,7 @@
 **Status: decisions D1-D10 settled (2026-10-09). Stage 0 done: this plan (#602) and the README's
 attention arithmetic in its three blocks (#603). Stage 1 done: the attention benchmark case (#604).
 Stage 2 done: the spec (#605). Stage 3 done: numpy in three blocks, the golden run
-bit-identical. Stages 4-8 not started.**
+bit-identical (#606). Stage 4 done: pure Python in the same blocks. Stages 5-8 not started.**
 
 Roadmap step 5 ([primitives-roadmap.md](primitives-roadmap.md)): multi-head attention and a full
 transformer block. Step 4 (the layer-norm and attention workplan, retired:

@@ -37,7 +37,6 @@ from indrajala_ml.model.specs.layer_specs import (
     Position,
     TokenMean,
     expand_specs,
-    refuse_multi_head_until,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
@@ -70,7 +69,7 @@ def _token_layer(
     if isinstance(spec, Position):
         return PositionLayer(input_layer, tokens, features)
     if isinstance(spec, Attention):
-        return AttentionLayer(input_layer, tokens, features)
+        return AttentionLayer(input_layer, tokens, features, spec.heads, spec.head_size(features))
     return TokenMeanLayer(input_layer, tokens, features)
 
 
@@ -84,7 +83,6 @@ def build_python_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_multi_head_until(specs, "4", "in pure Python")
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
     )

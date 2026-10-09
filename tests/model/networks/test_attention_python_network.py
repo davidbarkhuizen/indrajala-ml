@@ -1,9 +1,11 @@
 """
-Patch models in pure Python (the layer-norm and attention workplan, stage 3; README, Layer norm and
-attention): what randomize draws, Patches, Position and TokenMean against the README's indices and
-sums and against numpy by bits, the exact tests (one token, uniform attention, an identity attention
-block), the layer-major path's lanes (attention's own caches among them) against the example-major
-loop, and parity with numpy after 50 steps. The cases are tests/model/networks/test_attention_array_network.py's;
+Patch models in pure Python (the layer-norm and attention workplan, stage 3; the multi-head
+attention workplan, stage 4; README, Layer norm and attention): what randomize draws, Patches,
+Position and TokenMean against the README's indices and sums and against numpy by bits, attention's
+packed head blocks, the exact tests (one token, uniform attention, identical heads, a silent head,
+an identity attention block, the blocks called in turn), the layer-major path's lanes (attention's
+own caches among them) against the example-major loop, and parity with numpy after 50 steps (step
+by step under Adam), at one head and several. The cases are tests/model/networks/test_attention_array_network.py's;
 the gradient check, the README model's wiring and learn against a batch of one are
 tests/model/networks/test_attention_network.py's.
 """
@@ -32,6 +34,7 @@ from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients
 from tests.helpers import bits, split
 from tests.model.networks.test_attention_array_network import IMAGE, rows
+from tests.model.networks.test_attention_network import MULTI_HEAD
 from tests.model.networks.test_batch_norm_python_network import _as_array_snapshot
 from tests.model.specs.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX, TOKENS
 
@@ -41,6 +44,12 @@ def network(specs: list[LayerSpec], rule: UpdateRule | None = None, seed: int = 
     built.rng = default_rng(seed)
     built.randomize()
     return built
+
+
+def _projections(layer: AttentionLayer, entry: list[Any]) -> list[list[Any]]:
+    # an attention layer's weight sets split into Wq's, Wk's, Wv's (h * d_k rows each) and Wo's (d)
+    w = layer.width
+    return [entry[:w], entry[w : 2 * w], entry[2 * w : 3 * w], entry[3 * w :]]
 
 
 def as_array_snapshot(python: Any) -> list[tuple[Any, ...]]:
@@ -54,8 +63,7 @@ def as_array_snapshot(python: Any) -> list[tuple[Any, ...]]:
         if isinstance(layer, LayerNormLayer):
             snapshot[i] = ([gamma for (gamma,), _ in entry], [beta for _, beta in entry])
         elif isinstance(layer, AttentionLayer):
-            d = layer.features
-            projections = [entry[p * d : (p + 1) * d] for p in range(4)]
+            projections = _projections(layer, entry)
             snapshot[i] = tuple(
                 values for rows_ in projections for values in ([w for w, _ in rows_], [b for _, b in rows_])
             )
@@ -266,8 +274,7 @@ def _as_array_gradients(python: Any, gradients: list[Any]) -> list[list[Any]]:
     arrays: list[list[Any]] = []
     for layer, entry in zip(python.trainable_layers, gradients, strict=True):
         if isinstance(layer, AttentionLayer):
-            d = layer.features
-            projections = [entry[p * d : (p + 1) * d] for p in range(4)]
+            projections = _projections(layer, entry)
             arrays.append(
                 [values for rows_ in projections for values in ([w for w, _ in rows_], [b for _, b in rows_])]
             )
@@ -320,3 +327,154 @@ def test_every_step_under_adam_has_numpys_gradients(name: str):
     python = network(TOKENS[name], Adam())
     array = SequentialArrayNetwork(IMAGE, TOKENS[name], SGD(), backend=NUMPY)
     assert_every_step_has_numpys_gradients(python, array, rows(40))
+
+
+# multi-head (the multi-head attention workplan, stage 4): the shared models over 4 tokens of 6
+@pytest.mark.parametrize("rule", LINEAR_RULES, ids=lambda rule: type(rule).__name__)
+@pytest.mark.parametrize("name", MULTI_HEAD)
+def test_multi_head_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule: UpdateRule):
+    # at 0.1, not the one-head test's 0.3: two multi-head layers under Momentum diverge at 0.3 (numpy
+    # overflows), which would compare two blow-ups rather than two trainings
+    python = network(MULTI_HEAD[name], rule)
+    array = SequentialArrayNetwork(IMAGE, MULTI_HEAD[name], rule, backend=NUMPY)
+    array.restore(as_array_snapshot(python))
+    data = rows(40)
+
+    for step in range(50):
+        batch = data[(step * 5) % 40 :][:5]
+        python.learn_batch(0.1, batch)
+        array.learn_batch(0.1, batch)
+
+    for expected, actual in zip(as_array_snapshot(python), array.snapshot(), strict=True):
+        for values, array_values in zip(expected, actual, strict=True):
+            np.testing.assert_allclose(array_values, values, rtol=1e-9, atol=1e-9)
+
+
+@pytest.mark.parametrize("name", MULTI_HEAD)
+def test_every_multi_head_step_under_adam_has_numpys_gradients(name: str):
+    python = network(MULTI_HEAD[name], Adam())
+    array = SequentialArrayNetwork(IMAGE, MULTI_HEAD[name], SGD(), backend=NUMPY)
+    assert_every_step_has_numpys_gradients(python, array, rows(40))
+
+
+@pytest.mark.parametrize("rule", [Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)
+@pytest.mark.parametrize("name", ["two heads", "four heads of 2, wider than d", "two layers"])
+def test_the_multi_head_layer_major_path_is_the_example_major_loop_by_bits(name: str, rule: UpdateRule):
+    example_major, layer_major = network(MULTI_HEAD[name], rule), network(MULTI_HEAD[name], rule)
+    for size in (3, 5, 4):
+        batch = rows(size, seed=size)
+        example_major.learn_batch(0.3, batch)
+        layer_major._learn_batch_layer_major(0.3, batch)
+
+    assert bits(layer_major.snapshot()) == bits(example_major.snapshot())
+
+
+def _heads_attention(tokens: int, X: list[float], heads: int, key_size: int | None, seed: int) -> AttentionLayer:
+    # 6 features, every weight set drawn from seed
+    layer = AttentionLayer(_input(X), tokens, 6, heads, key_size)
+    rng = random.Random(seed)
+    layer.restore_state(
+        [([rng.uniform(-0.5, 0.5) for _ in row.weights], rng.uniform(-0.5, 0.5)) for row in layer.weight_sets()]
+    )
+    return layer
+
+
+HEADS = [(1, None), (2, None), (3, None), (2, 4), (4, 1)]
+HEAD_IDS = ["one head", "two heads of 3", "three heads of 2", "two heads of 4", "four heads of 1"]
+
+
+@pytest.mark.parametrize(("heads", "key_size"), HEADS, ids=HEAD_IDS)
+def test_the_weight_sets_are_packed_head_blocks_and_wos_rows_are_their_width(heads: int, key_size: int | None):
+    layer = AttentionLayer(_input([0.0] * 24), 4, 6, heads, key_size)
+    w = heads * layer.key_size
+    assert (layer.width, layer.scale) == (w, math.sqrt(layer.key_size))
+    assert [len(row.weights) for row in layer.weight_sets()] == [6] * (3 * w) + [w] * 6
+
+
+@pytest.mark.parametrize(("heads", "key_size"), HEADS, ids=HEAD_IDS)
+def test_one_token_attends_only_to_itself_in_every_head_by_bits(heads: int, key_size: int | None):
+    rng = random.Random(2)
+    X = [rng.uniform(-1.0, 1.0) for _ in range(6)]
+    layer = _heads_attention(1, X, heads, key_size, seed=1)
+    layer.forward()
+
+    def affine(x: list[float], rows_: list[tuple[list[float], float]]) -> list[float]:
+        return [fold([x_j * w_j for x_j, w_j in zip(x, weights, strict=True)]) + b for weights, b in rows_]
+
+    w = layer.width
+    snapshot = layer.snapshot_state()
+    assert layer._P == [[1.0] * heads]
+    expected = affine(affine(X, snapshot[2 * w : 3 * w]), snapshot[3 * w :])
+    assert bits([node.value() for node in layer.nodes]) == bits(expected)
+
+
+@pytest.mark.parametrize(("heads", "key_size"), [(1, None), (2, None), (3, 4)], ids=["1", "2", "3 of 4"])
+def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth_in_every_head(heads: int, key_size: int | None):
+    rng = random.Random(4)
+    layer = _heads_attention(16, [rng.uniform(-1.0, 1.0) for _ in range(16 * 6)], heads, key_size, seed=3)
+    w = layer.width
+    snapshot = layer.snapshot_state()
+    layer.restore_state([([0.0] * 6, 0.0)] * (2 * w) + snapshot[2 * w :])  # Wq, bq, Wk, bk
+    layer.forward()
+
+    assert layer._P == [[1 / 16] * (16 * heads)] * 16
+    mean = TokenMeanLayer(_input([v for row in layer._V for v in row]), 16, w)
+    mean.forward()
+    assert bits(layer._H) == bits([[node.value() for node in mean.nodes]] * 16)
+
+
+@pytest.mark.parametrize(("heads", "key_size"), [(2, None), (3, None), (2, 4)], ids=["2", "3", "2 of 4"])
+def test_identical_heads_weigh_and_mix_alike_by_bits(heads: int, key_size: int | None):
+    rng = random.Random(6)
+    layer = _heads_attention(4, [rng.uniform(-1.0, 1.0) for _ in range(24)], heads, key_size, seed=5)
+    d_k, w = layer.key_size, layer.width
+    snapshot = layer.snapshot_state()
+    # each of Wq, Wk, Wv: head 0's rows (with their biases) for every head
+    same = [row for p in range(3) for _ in range(heads) for row in snapshot[p * w : p * w + d_k]]
+    layer.restore_state(same + snapshot[3 * w :])
+    layer.forward()
+
+    for i in range(1, heads):
+        assert bits([row[i * 4 : (i + 1) * 4] for row in layer._P]) == bits([row[:4] for row in layer._P])
+        assert bits([row[i * d_k : (i + 1) * d_k] for row in layer._H]) == bits([row[:d_k] for row in layer._H])
+
+
+@pytest.mark.parametrize(("heads", "key_size"), [(2, None), (3, None), (2, 4)], ids=["2", "3", "2 of 4"])
+def test_a_silent_heads_projection_gradients_are_exactly_zero(heads: int, key_size: int | None):
+    rng = random.Random(8)
+    layer = _heads_attention(4, [rng.uniform(-1.0, 1.0) for _ in range(24)], heads, key_size, seed=7)
+    d_k, w, silent = layer.key_size, layer.width, heads - 1
+    snapshot = layer.snapshot_state()
+    outputs = [
+        ([0.0 if silent * d_k <= j < (silent + 1) * d_k else v for j, v in enumerate(weights)], b)
+        for weights, b in snapshot[3 * w :]
+    ]
+    layer.restore_state(snapshot[: 3 * w] + outputs)
+    layer.forward()
+    layer.compute_hidden_deltas(downstream([rng.uniform(-0.5, 0.5) for _ in range(24)]))
+    layer.accumulate_gradients()
+
+    for p in range(3):  # Wq, Wk, Wv: the silent head's rows and biases
+        rows_ = layer.weight_sets()[p * w : (p + 1) * w]
+        assert all(
+            g == 0.0 for row in rows_[silent * d_k :] for g in [*row.weight_gradient_accum, row.bias_gradient_accum]
+        )
+        assert any(g != 0.0 for row in rows_[: silent * d_k] for g in row.weight_gradient_accum)
+
+
+@pytest.mark.parametrize(("heads", "key_size"), HEADS, ids=HEAD_IDS)
+def test_the_blocks_called_in_turn_are_the_layers_passes_by_bits(heads: int, key_size: int | None):
+    rng = random.Random(10)
+    layer = _heads_attention(4, [rng.uniform(-1.0, 1.0) for _ in range(24)], heads, key_size, seed=9)
+    delta = [rng.uniform(-0.5, 0.5) for _ in range(24)]
+
+    Q, K, V = layer._project(layer._inputs())
+    P, H = layer._attend(Q, K, V)
+    out = layer._combine(H)
+    layer.forward()
+    assert bits([node.value() for node in layer.nodes]) == bits([v for row in out for v in row])
+
+    layer.compute_hidden_deltas(downstream(delta))
+    dQ, dK, dV = layer._attend_backward(layer._combine_backward(layer._deltas()))
+    assert bits(layer._dX) == bits(layer._project_backward(dQ, dK, dV))
+    assert bits(layer._P) == bits(P)
