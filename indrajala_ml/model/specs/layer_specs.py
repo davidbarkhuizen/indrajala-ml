@@ -189,17 +189,6 @@ def expand_specs(specs: Sequence[LayerSpec | Fork | Add]) -> list[ExpandedSpec]:
     return expanded
 
 
-def refuse_multi_head_until(specs: Sequence[LayerSpec], stage: str, where: str) -> None:
-    """A builder's refusal of an Attention with more than one head or a key_size before the multi-head
-    attention workplan's stage that builds it there."""
-    spec = next(
-        (s for s in expand_specs(specs) if isinstance(s, Attention) and s != Attention()),
-        None,
-    )
-    if spec is not None:
-        raise NotImplementedError(f"{spec!r} {where}: not yet (the multi-head attention workplan, stage {stage})")
-
-
 def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:
     """
     Each expanded spec's place in specs as written, for messages: "layer 2", or inside a block

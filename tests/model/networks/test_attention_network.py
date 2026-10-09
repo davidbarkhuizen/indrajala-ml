@@ -75,8 +75,6 @@ MULTI_HEAD: dict[str, list[LayerSpec]] = {
     "two heads of 2, narrower than d": [PATCHES, EMBED, _heads_block(2, 2), TokenMean(), SOFTMAX],
     "two layers": [PATCHES, EMBED, _heads_block(2), FFN_BLOCK, _heads_block(3, 4), FFN_BLOCK, TokenMean(), SOFTMAX],
 }
-# the implementations whose builders build more than one head so far, and each other's stage
-MULTI_HEAD_STAGES = {"numpy": None, "python": None, "rust": "5"}
 
 
 @pytest.mark.parametrize("batch_size", [1, 3])
@@ -84,8 +82,6 @@ MULTI_HEAD_STAGES = {"numpy": None, "python": None, "rust": "5"}
 def test_every_multi_head_gradient_matches_its_finite_difference(
     name: str, batch_size: int, implementation: Implementation
 ):
-    if MULTI_HEAD_STAGES[implementation] is not None:
-        pytest.skip(f"multi-head attention on {implementation}: stage {MULTI_HEAD_STAGES[implementation]}")
     built = network(implementation, MULTI_HEAD[name])
     built.learn_batch(0.5, rows(4, seed=2))
 
