@@ -152,7 +152,7 @@ def training_outputs(network: Any, states: Sequence[tuple[float, ...]]) -> list[
             for layer in array_network.layers:
                 batch = layer.forward_batch(batch)
             return batch.tolist()
-        # one example at a time, or layer-major for a network with batch norm, as _learn_batch runs it
+        # one example at a time, or layer-major for a network with batch norm or dropout, as _learn_batch runs it
         return network._forward_batch_outputs(states)
     finally:
         network._set_training_mode(False)

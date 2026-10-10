@@ -349,3 +349,63 @@ def test_pure_python_sequential_randomized_is_numpys_after_the_same_seed(python_
     python = PYTHON_CLASSES[python_name].randomized(*SEQUENTIAL[numpy_name], seed=seed)
     numpy_network = NUMPY_CLASSES[numpy_name].randomized(*SEQUENTIAL[numpy_name], seed=seed)
     assert_pure_python_seeded_like_numpy(python, numpy_network)
+
+
+def _record_python_masks(python: Any) -> list[list[list[float]]]:
+    # each dropout layer's mask per forward pass, in call order: a training batch's (batch, size)
+    # mask per layer, as numpy's _mask_batch, when the layer runs every example before the next layer
+    masks: list[list[list[float]]] = []
+    for layer in python._generator_layers:
+        rows: list[list[float]] = []
+        masks.append(rows)
+
+        def forward(layer: Any = layer, rows: list[list[float]] = rows, inner: Any = layer.forward) -> None:
+            inner()
+            rows.append([1.0 if node._kept else 0.0 for node in layer.nodes])
+
+        layer.forward = forward
+    return masks
+
+
+def assert_pure_python_trains_like_numpy(python: Any, numpy_network: Any) -> None:
+    # a seeded training batch draws numpy's masks, layer by layer (the RNG draw-order workplan, D3),
+    # and leaves the generator in numpy's state
+    assert_pure_python_seeded_like_numpy(python, numpy_network)
+    width = numpy_network.input_shape[0] if len(numpy_network.input_shape) == 1 else SIDE * SIDE
+    rows = _rows(width, numpy_network)
+    masks = _record_python_masks(python)
+    python.learn_batch(0.5, rows)
+    numpy_network.learn_batch(0.5, rows)
+    assert [np.array(mask).tobytes() for mask in masks] == _mask_bits(numpy_network)
+    assert generator_state(python.rng) == numpy_network.rng.bit_generator.state
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("layer_sizes", [[7], [7, 5], [6, 5, 4]], ids=["one", "two", "three"])
+def test_pure_python_dropout_masks_are_numpys_after_the_same_seed(layer_sizes: list[int], seed: int):
+    # every hidden layer drops out: one, two and three dropout layers
+    python = PYTHON_CLASSES["DropoutMultiClassBackpropClassifierNetwork"].randomized(
+        layer_sizes, 12, [(0.0, 1.0)] * 12, CLASS_COUNT, 0.3, seed=seed
+    )
+    numpy_network = NUMPY_CLASSES["DropoutVectorizedMultiClassBackpropClassifierNetwork"].randomized(
+        layer_sizes, 12, CLASS_COUNT, 0.3, seed=seed
+    )
+    assert_pure_python_trains_like_numpy(python, numpy_network)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize(
+    "python_name",
+    ["DropoutConvMultiClassBackpropClassifierNetwork", "SequentialMultiClassBackpropClassifierNetwork"],
+)
+def test_pure_python_conv_dropout_masks_are_numpys_after_the_same_seed(python_name: str, seed: int):
+    # a dropout layer behind conv and pool layers (the preset, and a Sequential network's specs)
+    if python_name in PYTHON_CONV:
+        numpy_name = PYTHON_CONV[python_name]
+        args: tuple[Any, ...] = (SIDE, SIDE, CONV_SPECS, [5, 4], CLASS_COUNT, 0.3)
+    else:
+        numpy_name = PYTHON_SEQUENTIAL[python_name]
+        args = SEQUENTIAL[numpy_name]
+    python = PYTHON_CLASSES[python_name].randomized(*args, seed=seed)
+    numpy_network = NUMPY_CLASSES[numpy_name].randomized(*args, seed=seed)
+    assert_pure_python_trains_like_numpy(python, numpy_network)

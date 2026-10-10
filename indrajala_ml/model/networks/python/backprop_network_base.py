@@ -85,13 +85,18 @@ class BackpropNetworkBase[
         # validate_layer_specs: a Dense, which a sequence network's specs apply to each token
         assert isinstance(output_layer, BackpropLayer | TokenSoftmaxLayer)
         self.output_layer = cast("OutputT", output_layer)
-        # the index of the first batch-norm layer, if any: such a network trains layer-major
-        # (layer_major.py, the batch-norm workplan's D3) and refuses a one-example training step (D4)
+        # the index of the first batch-norm layer, if any: such a network refuses a one-example
+        # training step (the batch-norm workplan's D4)
         self.batch_norm_index = batch_norm_index(specs)
 
         self.optimizer = PythonOptimizer(self._update_rule())
         # the dropout layers, which draw their masks from the network's generator
         self._generator_layers = [layer for layer in self.trainable_layers if isinstance(layer, GeneratorLayer)]
+        # a network with a layer that needs the batch's order trains layer-major (layer_major.py):
+        # batch norm, which normalizes over the batch (the batch-norm workplan, D3), and dropout,
+        # whose layers then draw their masks layer by layer, each example's in turn, numpy's
+        # (batch, size) order (the RNG draw-order workplan, D3)
+        self._layer_major = self.batch_norm_index is not None or bool(self._generator_layers)
         # OS entropy until randomized(seed=, rng=) or an assignment sets it (the RNG generators
         # workplan, D9)
         self.rng = default_rng()
@@ -198,9 +203,9 @@ class BackpropNetworkBase[
         # forward, backward and accumulate per example, then one averaged update. A one-example
         # batch matches learn() bit for bit (tests/model/layers/python/test_gradient_accumulation.py). The target is
         # a float or a class index; _forward/_backward abstract over which. A network with batch
-        # norm trains layer-major instead.
+        # norm or dropout trains layer-major instead (__init__'s _layer_major).
         validate_batch(batch)
-        if self.batch_norm_index is not None:
+        if self._layer_major:
             if len(batch) == 1:
                 self._refuse_single_example()
             refuse_single_example_groups(self.layer_specs, len(batch))
@@ -230,8 +235,8 @@ class BackpropNetworkBase[
 
     def _forward_batch_outputs(self, states: Sequence[tuple[float, ...]]) -> list[list[float]]:
         # the output rows of the forward pass learn_batch runs over states, in the training mode
-        # the caller set: per example, or layer-major for a network with batch norm
-        if self.batch_norm_index is None:
+        # the caller set: per example, or layer-major for a network with batch norm or dropout
+        if not self._layer_major:
             return [self._forward_outputs(state) for state in states]
         pass_ = LayerMajorBatch(self.input_layer, self.trainable_layers, states)
         pass_.forward()

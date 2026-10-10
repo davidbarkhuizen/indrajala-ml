@@ -1,8 +1,8 @@
 # Workplan: pure Python's random draws in numpy's order
 
 **Status: decisions D1-D7 settled by the owner (2026-10-10), each as recommended. Stages 1 (this
-plan) and 2 (weights) done; stage 3 not started. Done before roadmap step 7 (the owner,
-2026-10-10).**
+plan), 2 (weights) and 3 (dropout masks) done; stage 4 not started. Done before roadmap step 7
+(the owner, 2026-10-10).**
 
 From one seed, numpy and Rust build the same network and draw the same dropout masks, by bits
 (`tests/model/networks/test_seeded_init_parity.py`). Pure Python draws from the same PCG64 stream
@@ -127,9 +127,14 @@ Each lists the options considered, with pros and cons, and the choice.
    the layer's scale), and the batch-norm conv network "after a relu conv" under Adam, whose
    trajectory Adam's epsilon amplifies past 1e-9 at half of 20 seeds, compared step by step
    instead.
-3. **Dropout masks** (D3): dropout networks train layer-major; a seeded training batch draws
-   numpy's masks and leaves the generator in numpy's state, with one and with two dropout layers;
-   the golden re-record of the dropout entries (D5).
+3. **Dropout masks** (D3), done: a pure-Python network with a dropout layer trains layer-major
+   (`BackpropNetworkBase._layer_major`: batch norm or dropout; `batch_norm_index` keeps only the
+   one-example refusal). A seeded training batch draws numpy's masks by bits and leaves the
+   generator in numpy's state, with one, two and three dropout layers, and behind conv and pool
+   layers (`test_seeded_init_parity.py`); the old example-major loop fails it with two or more.
+   The golden re-record (D5) moved exactly the two pure-Python entries with two dropout layers
+   (`python dropout` and `python multiclass dropout`, `LAYER_SIZES = [4, 3]`); `python dropout
+   conv`, with one, and every other entry stayed bit-identical, archived as `material`.
 4. **The parity tests** (D4): seed both sides; the snapshot-restoring helpers and the tests of
    pure Python's own order go.
 5. **Docs**: rng-audit.md's Open work, next-steps.md's entry, the README's notes on parity; the
