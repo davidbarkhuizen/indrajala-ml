@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from indrajala_ml.model.layers.python.backprop_node import BackpropNode
-from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_bias
+from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_biases
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.pcg64 import Pcg64Generator
 
@@ -64,11 +64,10 @@ class BackpropLayer(NodeLayer):
             node.compute_hidden_delta(next_layer.downstream_sum(own_index))
 
     def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
-        # per node, weights then bias, from the input layer's size, as ConvKernel's per kernel
-        fan_in = len(self.input_layer.nodes)
-        for node in self.nodes:
-            weights, bias = fan_in_aware_weights_and_bias(rng, fan_in)
-            node.update_input_weights(weights)
+        # every node's weights, then every bias, from the input layer's size: numpy's order
+        weights, biases = fan_in_aware_weights_and_biases(rng, len(self.nodes), len(self.input_layer.nodes))
+        for node, node_weights, bias in zip(self.nodes, weights, biases, strict=True):
+            node.update_input_weights(node_weights)
             node.bias = bias
 
     def snapshot_state(self) -> list[tuple[list[float], float]]:

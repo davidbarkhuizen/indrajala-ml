@@ -6,6 +6,11 @@ default_rng on numpy and the crate's Generator on Rust, which is numpy's bit for
 the same way, so the weights match bit for bit, not within a tolerance. A learn_batch then draws
 the same dropout masks and leaves both generators in the same state. 1 / n ** 0.5 is 1 ULP off 1 / np.sqrt(n) at fan-in 5579 (and math.sqrt never is, 1 to
 99,999), so the Rust limit uses math.sqrt; 2921, whose n ** 0.5 alone differs, is kept as a control.
+
+Pure Python draws from the same PCG64 stream (indrajala_ml.pcg64) in numpy's order, so every
+pure-Python network with an array twin starts from a seed with numpy's weights by bits, and its
+generator in numpy's state (the RNG draw-order workplan, D2 and D4). The bounds-width networks
+(BackpropClassifierNetwork's presets) have no array twin.
 """
 
 from __future__ import annotations
@@ -23,12 +28,14 @@ from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
+from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, Position, Residual
 from indrajala_ml.model.specs.update_rules import SGD
-from indrajala_ml.pcg64 import SeedSequence
+from indrajala_ml.pcg64 import SeedSequence, generator_state
 from tests.array_network_contract import snapshot_bits
 from tests.helpers import all_subclasses, model_modules
+from tests.model.networks.test_attention_python_network import as_array_snapshot
 
 model_modules()
 
@@ -249,3 +256,96 @@ def test_assigning_rng_reaches_the_dropout_layers():
     rng = RustBackend.default_rng(4)
     network.rng = rng
     assert [layer.rng is rng for layer in network.layers if hasattr(layer, "set_rng")] == [True, True]
+
+
+# pure Python: (pure-Python class name, numpy twin's name); each is built with its twin's arguments,
+# the multiclass and single-output ones with input bounds after the dimension
+PYTHON_MULTICLASS = {
+    "MultiClassBackpropClassifierNetwork": "VectorizedMultiClassBackpropClassifierNetwork",
+    **{
+        f"{prefix}MultiClassBackpropClassifierNetwork": f"{twin}VectorizedMultiClassBackpropClassifierNetwork"
+        for prefix, twin in [
+            ("Adam", "Adam"),
+            ("CrossEntropy", "CrossEntropy"),
+            ("Dropout", "Dropout"),
+            ("L2Regularized", "L2"),
+            ("Momentum", "Momentum"),
+            ("ReLU", "ReLU"),
+            ("Softmax", "Softmax"),
+        ]
+    },
+}
+PYTHON_CONV = {
+    python.replace("MultiClass", "ConvMultiClass"): numpy.replace("Vectorized", "ConvVectorized")
+    for python, numpy in PYTHON_MULTICLASS.items()
+}
+PYTHON_SEQUENTIAL = {
+    "SequentialMultiClassBackpropClassifierNetwork": "SequentialVectorizedMultiClassBackpropClassifierNetwork",
+    "SequentialBackpropClassifierNetwork": "SequentialArrayBackpropClassifierNetwork",
+    "SequentialSequenceBackpropNetwork": "SequentialSequenceArrayNetwork",
+}
+PYTHON_SINGLE_OUTPUT = {"FanInAwareBackpropClassifierNetwork": "ArrayBackpropClassifierNetwork"}
+# bounds-width randomize (BackpropClassifierNetwork.randomize), which no array network draws
+PYTHON_WITHOUT_TWIN = {
+    "BackpropClassifierNetwork",
+    "AdamBackpropClassifierNetwork",
+    "BinaryCrossEntropyBackpropClassifierNetwork",
+    "DropoutBackpropClassifierNetwork",
+    "L2RegularizedBackpropClassifierNetwork",
+    "MomentumBackpropClassifierNetwork",
+    "ReLUBackpropClassifierNetwork",
+}
+PYTHON_CLASSES = _classes(BackpropNetworkBase)
+
+
+def test_every_pure_python_network_class_is_covered():
+    twins = {**PYTHON_MULTICLASS, **PYTHON_CONV, **PYTHON_SEQUENTIAL, **PYTHON_SINGLE_OUTPUT}
+    assert set(twins) | PYTHON_WITHOUT_TWIN == set(PYTHON_CLASSES)
+    assert set(twins.values()) <= set(NUMPY_CLASSES)
+
+
+def assert_pure_python_seeded_like_numpy(python: Any, numpy_network: Any) -> None:
+    expected = [
+        [np.asarray(array, dtype=np.float64).tobytes() for array in entry] for entry in numpy_network.snapshot()
+    ]
+    actual = [
+        [np.asarray(values, dtype=np.float64).tobytes() for values in entry] for entry in as_array_snapshot(python)
+    ]
+    assert actual == expected
+    assert generator_state(python.rng) == numpy_network.rng.bit_generator.state
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("python_name", PYTHON_MULTICLASS)
+def test_pure_python_multiclass_randomized_is_numpys_after_the_same_seed(python_name: str, seed: int):
+    numpy_name = PYTHON_MULTICLASS[python_name]
+    args = MULTICLASS[numpy_name]
+    python = PYTHON_CLASSES[python_name].randomized([7, 5], 12, [(0.0, 1.0)] * 12, CLASS_COUNT, *args, seed=seed)
+    numpy_network = NUMPY_CLASSES[numpy_name].randomized([7, 5], 12, CLASS_COUNT, *args, seed=seed)
+    assert_pure_python_seeded_like_numpy(python, numpy_network)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("python_name", PYTHON_CONV)
+def test_pure_python_conv_randomized_is_numpys_after_the_same_seed(python_name: str, seed: int):
+    numpy_name = PYTHON_CONV[python_name]
+    args = CONV[numpy_name]
+    python = PYTHON_CLASSES[python_name].randomized(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, *args, seed=seed)
+    numpy_network = NUMPY_CLASSES[numpy_name].randomized(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, *args, seed=seed)
+    assert_pure_python_seeded_like_numpy(python, numpy_network)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_pure_python_fan_in_aware_single_output_randomized_is_numpys_after_the_same_seed(seed: int):
+    python = PYTHON_CLASSES["FanInAwareBackpropClassifierNetwork"].randomized([4], 9, [(0.0, 1.0)] * 9, seed=seed)
+    numpy_network = NUMPY_CLASSES["ArrayBackpropClassifierNetwork"].randomized([4], 9, seed=seed)
+    assert_pure_python_seeded_like_numpy(python, numpy_network)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("python_name", PYTHON_SEQUENTIAL)
+def test_pure_python_sequential_randomized_is_numpys_after_the_same_seed(python_name: str, seed: int):
+    numpy_name = PYTHON_SEQUENTIAL[python_name]
+    python = PYTHON_CLASSES[python_name].randomized(*SEQUENTIAL[numpy_name], seed=seed)
+    numpy_network = NUMPY_CLASSES[numpy_name].randomized(*SEQUENTIAL[numpy_name], seed=seed)
+    assert_pure_python_seeded_like_numpy(python, numpy_network)

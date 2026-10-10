@@ -30,7 +30,14 @@ from typing import ClassVar
 
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer
-from indrajala_ml.model.layers.python.token_layer import TokenNode, WeightRow, restore_rows, snapshot_rows, token_values
+from indrajala_ml.model.layers.python.token_layer import (
+    TokenNode,
+    WeightRow,
+    randomize_rows,
+    restore_rows,
+    snapshot_rows,
+    token_values,
+)
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.pcg64 import Pcg64Generator
 
@@ -74,8 +81,9 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
     softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and H[i] = P[i] V[i], out = H Wo^T + bo with H the
     heads side by side; a causal one masks S_ij for j > i. Its weight sets, also its draw and
     snapshot order, are Wq's h * d_k rows of d weights, then Wk's and Wv's, then Wo's d rows of
-    h * d_k weights, each row with its bias, drawn as a dense layer's node, weights then bias: the
-    weights decayed and the biases not. Hidden only, ending a token block's body.
+    h * d_k weights, each row with its bias: the weights decayed and the biases not. Each projection
+    is drawn as a dense layer, its rows' weights then its biases, Wq, Wk, Wv and Wo in turn. Hidden
+    only, ending a token block's body.
 
     The backward pass runs whole in compute_hidden_deltas, since the gradients need dQ, dK and dV
     and the layer before reads dX.
@@ -229,8 +237,9 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         return [*self.queries, *self.keys, *self.values, *self.outputs]
 
     def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
-        for row in self.weight_sets():
-            row.randomize(rng)
+        # each projection as a matrix, q, k, v, o in turn: numpy's order
+        for rows in (self.queries, self.keys, self.values, self.outputs):
+            randomize_rows(rows, rng)
 
     def snapshot_state(self) -> list[tuple[list[float], float]]:
         return snapshot_rows(self.weight_sets())

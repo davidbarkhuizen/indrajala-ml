@@ -32,7 +32,7 @@ from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients
-from tests.helpers import assert_snapshots_close, batches, bits, learn_in_step, split
+from tests.helpers import assert_snapshots_close, batches, bits, learn_in_step, numpy_draws, split
 from tests.model.networks.test_attention_array_network import IMAGE, rows
 from tests.model.networks.test_attention_network import MULTI_HEAD
 from tests.model.networks.test_batch_norm_python_network import _as_array_snapshot
@@ -70,18 +70,13 @@ def as_array_snapshot(python: Any) -> list[tuple[Any, ...]]:
     return snapshot
 
 
-def test_randomize_draws_weights_then_bias_per_unit_and_row_and_nothing_for_the_parameter_free_layers():
+def test_randomize_draws_numpys_weights_and_nothing_for_the_parameter_free_layers():
     built = network([PATCHES, EMBED, Position(), ATTENTION_BLOCK, TokenMean(), LayerNorm(), SOFTMAX])
-    rng = default_rng(3)
-    expected: list[Any] = []
-    # the embedding's units, attention's Wq, Wk, Wv and Wo rows, then the output layer's nodes
-    for size, fan_in in [(6, 4), (24, 6), (3, 6)]:
-        limit = 1 / math.sqrt(fan_in)
-        expected.append(
-            [([rng.uniform(-limit, limit) for _ in range(fan_in)], rng.uniform(-limit, limit)) for _ in range(size)]
-        )
+    # numpy's order: the embedding's units, attention's Wq, Wk, Wv and Wo, each W then b, then the
+    # output layer
+    embedding, *projections, output = numpy_draws(3, [(6, 4, True), *[(6, 6, True)] * 4, (3, 6, True)])
     snapshot = built.snapshot()
-    assert bits([snapshot[i] for i in (1, 5, 9)]) == bits(expected)
+    assert bits([snapshot[i] for i in (1, 5, 9)]) == bits([embedding, [row for p in projections for row in p], output])
     # positions, gamma and beta start at 0, 1 and 0
     assert bits(snapshot[2]) == bits([([0.0] * 6,)] * 4)
     assert bits([snapshot[4], snapshot[8]]) == bits([[([1.0], 0.0)] * 6] * 2)
@@ -295,8 +290,10 @@ def assert_every_step_has_numpys_gradients(python: Any, array: Any, data: list[t
     """
     50 of python's training steps, each first checked against array's gradients from the same
     weights and the same draws (dropout's masks): within 1e-10 of each layer's scale (_scales).
-    Attention's bk, rounding noise (D6), is compared apart: within 1e-13 of attention's largest
-    gradient on both sides.
+    Attention's bk, rounding noise (D6), is compared apart: within 1e-11 of attention's largest
+    gradient on both sides. The noise follows the terms that cancel, not the gradients, so once
+    Adam's steps shrink attention's gradients it reaches 2.8e-12 of them (a dense part after the
+    mean, over seeds 0 to 11), and under 6e-14 in every other model.
     """
     for step, batch in enumerate(batches(data)):
         array.restore(as_array_snapshot(python))
@@ -308,7 +305,7 @@ def assert_every_step_has_numpys_gradients(python: Any, array: Any, data: list[t
         for layer, python_layer, array_layer, scale in layers:
             for i, (values, array_values) in enumerate(zip(python_layer, array_layer, strict=True)):
                 if isinstance(layer, AttentionLayer) and i == 3:
-                    assert max(np.abs(values).max(), np.abs(array_values).max()) <= 1e-13 * scale
+                    assert max(np.abs(values).max(), np.abs(array_values).max()) <= 1e-11 * scale
                     continue
                 np.testing.assert_allclose(array_values, values, rtol=0.0, atol=1e-10 * scale)
         python.rng = default_rng(step)
@@ -317,7 +314,7 @@ def assert_every_step_has_numpys_gradients(python: Any, array: Any, data: list[t
 
 @pytest.mark.parametrize("name", TOKENS)
 def test_every_step_under_adam_has_numpys_gradients(name: str):
-    # measured within 2.6e-13 of each layer's scale, and bk's within 4e-16 of attention's
+    # measured within 2.6e-13 of each layer's scale (seed 3, before pure Python drew numpy's order)
     python = network(TOKENS[name], Adam())
     array = SequentialArrayNetwork(IMAGE, TOKENS[name], SGD(), backend=NUMPY)
     assert_every_step_has_numpys_gradients(python, array, rows(40))

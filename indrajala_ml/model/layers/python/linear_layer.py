@@ -59,10 +59,11 @@ class LinearLayer(NodeLayer):
             node.delta = next_layer.downstream_sum(own_index)
 
     def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
-        # per node, weights only: no bias to draw
-        fan_in = len(self.input_layer.nodes)
-        for node in self.nodes:
-            node.update_input_weights(fan_in_aware_weights(rng, fan_in))
+        # every node's weights, in node order: no bias to draw
+        for node, weights in zip(
+            self.nodes, fan_in_aware_weights(rng, len(self.nodes), len(self.input_layer.nodes)), strict=True
+        ):
+            node.update_input_weights(weights)
 
     def snapshot_state(self) -> list[tuple[list[float]]]:
         return [(list(node.input_node_weights),) for node in self.nodes]

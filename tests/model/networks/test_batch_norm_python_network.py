@@ -33,7 +33,7 @@ from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRul
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.training.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
-from tests.helpers import assert_snapshots_close, bits, exp_by_math, learn_in_step, patching, sigmoid_by
+from tests.helpers import assert_snapshots_close, bits, exp_by_math, learn_in_step, numpy_draws, patching, sigmoid_by
 from tests.model.networks.test_batch_norm_array_network import (
     BETA,
     EPSILON,
@@ -213,15 +213,9 @@ def test_the_linear_layer_has_no_bias_and_its_delta_is_the_downstream():
 def test_randomize_draws_the_linear_layers_weights_only_and_nothing_for_batch_norm():
     network = _network()
     linear, norm, output = network.trainable_layers
-    rng = default_rng(3)
-    limit = 1 / math.sqrt(4)
-    linear_weights = [[rng.uniform(-limit, limit) for _ in range(4)] for _ in range(5)]
-    limit = 1 / math.sqrt(5)
-    output_weights_and_biases = [
-        ([rng.uniform(-limit, limit) for _ in range(5)], rng.uniform(-limit, limit)) for _ in range(3)
-    ]
+    linear_weights, output_weights_and_biases = numpy_draws(3, [(5, 4, False), (3, 5, True)])
 
-    assert bits(linear.snapshot_state()) == bits([(weights,) for weights in linear_weights])
+    assert bits(linear.snapshot_state()) == bits(linear_weights)
     assert bits(output.snapshot_state()) == bits(output_weights_and_biases)
     assert norm.snapshot_state() == [([1.0], 0.0, 0.0, 1.0)] * 5
 

@@ -10,7 +10,6 @@ and vocabulary. The cases are tests/model/specs/test_layer_specs.py's SEQUENCE; 
 math.exp, as pure Python's.
 """
 
-import math
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +39,7 @@ from tests.helpers import (
     bits,
     exp_by_math,
     learn_in_step,
+    numpy_draws,
     patching,
 )
 from tests.model.networks.test_attention_python_network import (
@@ -89,14 +89,9 @@ attention_exp = patching(attention_array_layer, "exp", exp_by_math)
 token_exp = patching(token_array_layer, "exp", exp_by_math)
 
 
-def test_randomize_draws_the_embeddings_rows_then_each_output_unit_weights_then_bias():
-    # pure Python draws per row and unit, numpy per matrix (parity restores numpy from pure Python)
+def test_randomize_draws_numpys_embedding_table_then_output_weights_then_biases():
     built = network(SEQUENCE["the embedding, then the output"])
-    rng = default_rng(3)
-    limit = 1 / math.sqrt(6)
-    embedding = [([rng.uniform(-limit, limit) for _ in range(6)],) for _ in range(VOCABULARY)]
-    output = [([rng.uniform(-limit, limit) for _ in range(6)], rng.uniform(-limit, limit)) for _ in range(VOCABULARY)]
-    assert bits(built.snapshot()) == bits([embedding, output])
+    assert bits(built.snapshot()) == bits(numpy_draws(3, [(VOCABULARY, 6, False), (VOCABULARY, 6, True)]))
 
 
 def test_a_sequence_network_in_pure_python_is_its_class():

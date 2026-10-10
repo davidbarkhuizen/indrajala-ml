@@ -1,7 +1,8 @@
 # Workplan: pure Python's random draws in numpy's order
 
-**Status: decisions D1-D7 settled by the owner (2026-10-10), each as recommended. Stage 1 (this
-plan) done; stage 2 not started. Done before roadmap step 7 (the owner, 2026-10-10).**
+**Status: decisions D1-D7 settled by the owner (2026-10-10), each as recommended. Stages 1 (this
+plan) and 2 (weights) done; stage 3 not started. Done before roadmap step 7 (the owner,
+2026-10-10).**
 
 From one seed, numpy and Rust build the same network and draw the same dropout masks, by bits
 (`tests/model/networks/test_seeded_init_parity.py`). Pure Python draws from the same PCG64 stream
@@ -93,7 +94,10 @@ Each lists the options considered, with pros and cons, and the choice.
 - **D5. The golden run. Settled: (a).** The draws change every pure-Python entry whose network
   draws fan-in-aware weights with a bias, and the dropout entries; numpy's and Rust's entries
   can't move. A re-record under §8 (measurement.md), as "more correct": all three implementations
-  seeded alike.
+  seeded alike. *Found in stage 2:* the golden run injects every network's weights from its own
+  `random.Random` and draws only dropout masks from the network's generator, so stage 2's weight
+  order can't reach it: it stayed bit-identical (112 networks), with no re-record. Stage 3's masks
+  re-record once.
   - (a) *Chosen.* Each stage that changes draws re-records once (stage 2 the weights, stage 3
     the masks), on both machines, archived as `material`, with the list of entries that changed and
     the rest checked bit-identical first. Pros: each re-record has one cause, and its list of
@@ -110,9 +114,19 @@ Each lists the options considered, with pros and cons, and the choice.
 ## Stages
 
 1. **This workplan** (D1-D7 settled), with the roadmap: done before step 7.
-2. **Weights** (D2): the shared helper; every pure-Python layer with a bias draws numpy's order;
-   seeded init parity against numpy by bits for every pure-Python network with an array twin
-   (D4); the golden re-record of the changed entries (D5), both machines, archived.
+2. **Weights** (D2), done: the shared helper (`fan_in_aware_weights_and_biases`, and
+   `fan_in_aware_weights` for the layers without a bias); every pure-Python layer with a bias
+   draws numpy's order, a conv layer its kernels and an attention layer each projection as one
+   matrix; seeded init parity against numpy by bits, weights and generator state, for every
+   pure-Python network with an array twin (D4), and a check that every pure-Python class is
+   either covered or bounds-width. The golden run stayed bit-identical (D5): no re-record. The
+   tests that pinned pure Python's own order now pin numpy's (`tests/helpers.py`'s `numpy_draws`);
+   the two digit-pipeline tests' measured accuracies were re-measured. New starting weights
+   exposed two parity checks tuned to one seed, both on gradients that are rounding noise (a bias
+   that batch norm or softmax cancels): attention's bk bound measured over 12 seeds (now 1e-11 of
+   the layer's scale), and the batch-norm conv network "after a relu conv" under Adam, whose
+   trajectory Adam's epsilon amplifies past 1e-9 at half of 20 seeds, compared step by step
+   instead.
 3. **Dropout masks** (D3): dropout networks train layer-major; a seeded training batch draws
    numpy's masks and leaves the generator in numpy's state, with one and with two dropout layers;
    the golden re-record of the dropout entries (D5).
