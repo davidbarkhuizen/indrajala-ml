@@ -5,7 +5,8 @@ decision is resolved and only future work is left. Whatever it left open (its "A
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
 in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
 [rng-draw-order-workplan.md](rng-draw-order-workplan.md),
-[attention-dropout-workplan.md](attention-dropout-workplan.md). The order
+[attention-dropout-workplan.md](attention-dropout-workplan.md),
+[rotary-positions-workplan.md](rotary-positions-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -73,7 +74,7 @@ Still out of scope, for later workplans too (batch norm's included):
 
 - Separate activation layers, which would add a crossing per layer on Rust. Activations stay fused.
 - Parameter groups and per-layer learning rates. (Schedulers beyond today's `lr_schedule.py` were
-  lifted out of scope on 2026-10-10: roadmap step 9.)
+  lifted out of scope on 2026-10-10: roadmap step 10.)
 - Deleting or renaming any network class (the workplan's D1).
 
 ## From batch norm
