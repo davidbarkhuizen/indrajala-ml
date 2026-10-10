@@ -339,12 +339,13 @@ CANDIDATES: dict[str, Candidate] = {
 
 @dataclass(frozen=True)
 class Settings:
-    """A sweep's training and screening settings (D7), the same for every study in it."""
+    """A sweep's training and screening settings (D7, its budget and plateau rule from Stage 4's
+    calibration), the same for every study in it."""
 
     epoch_examples: int = 2**16
     batch_size: int = 64
-    max_epochs: int = 100
-    patience: int = 10
+    max_epochs: int = 200
+    patience: int = 30
     screen: int = 500
     seeds: int = 5
 
