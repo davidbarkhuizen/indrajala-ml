@@ -6,7 +6,8 @@ list, and the parts of its "Out of scope" that still bind later work) moves here
 in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
 [rng-draw-order-workplan.md](rng-draw-order-workplan.md),
 [attention-dropout-workplan.md](attention-dropout-workplan.md),
-[rotary-positions-workplan.md](rotary-positions-workplan.md). The order
+[rotary-positions-workplan.md](rotary-positions-workplan.md),
+[generation-workplan.md](generation-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
