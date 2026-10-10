@@ -1,9 +1,9 @@
 # Workplan: dropout in attention (roadmap step 7)
 
 **Status: decisions D1-D10 settled by the owner (2026-10-10), each as recommended. Stage 1 (this
-plan) done. Starts after the RNG
-draw-order workplan ([rng-draw-order-workplan.md](rng-draw-order-workplan.md)) is retired, so
-that its masks are tested in all three implementations by bits from the first stage.**
+plan) done. The RNG draw-order workplan, which it waited for, is retired (2026-10-10,
+[next-steps.md](next-steps.md)), so its masks are tested in all three implementations by bits from
+the first stage.**
 
 Roadmap step 7 ([primitives-roadmap.md](primitives-roadmap.md)): dropout inside the transformer,
 on the attention weights and on the blocks' outputs, in all three implementations and the crate,
