@@ -188,3 +188,6 @@ data/refactoring/
 # local outputs of the residual depth study (scripts/residual_depth_study.py --out)
 data/residual/
 data/attention/
+
+# the addition study's sweeps (scripts/addition_study.py): results and trained models
+data/addition/

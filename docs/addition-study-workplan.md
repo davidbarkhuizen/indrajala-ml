@@ -197,6 +197,57 @@ Each lists the options considered, with pros and cons, and the choice.
     rarity of long carries. Cons: a fixed budget can call a network too small that is only slow;
     the confirming rungs (D6) and the report's epochs-to-pass show how near the budget each pass
     was.
+  - **The calibration (Stage 4)**, `scripts/addition_calibration.json` on `pyramidon`: every
+    candidate at the rung its bisection tries first, `n = 4`, each rate, 5 seeds (a rate's seeds
+    stop once decided; 117 runs, every model kept), a loose budget (200 epochs, patience 40) so that tighter rules could be
+    replayed from each run's per-epoch screens. Seconds an epoch are training plus the screen,
+    with 4 workers (`train_seconds / epochs`; a passing run's includes its whole catalogue).
+
+    | candidate | size | parameters | 0.001 | 0.003 | 0.01 | s/epoch | rate |
+    | --- | --- | --- | --- | --- | --- | --- | --- |
+    | 1 column-causal | 2 layers, 1 head, d 12 | 3,015 | 5/5 passing, 4-9 epochs | 5/5, 2-5 | 5/5, 1-4 | 3 | 0.003 |
+    | 2 column-unordered | the same | 2,811 | 5/5, 3-8 | 5/5, 1-4 | 5/5, 1 | 3 | 0.003 |
+    | 3 column-noncausal | the same | 3,015 | 5/5, 3-5 | 5/5, 2-3 | 5/5, 1-3 | 3 | 0.003 |
+    | 4 column-ffn | 2 layers, d 16 | 2,803 | best screen 0.245 | 0.250 | 0.256 | 2.8 | 0.01 |
+    | 5 string-causal | 2 layers, 1 head, d 12 | 2,919 | 0.570 | 0.498 | 0.343 | 18.8 | 0.001 |
+    | 6 dense-per-digit | depth 2, width 8 | 1,015 | 0.890 | 0.917 | 0.697 | 2.1 | 0.003 |
+    | 7 regression-digits | depth 2, width 32 | 1,505 | 0.957 | 0.999 | 0.990 | 1.1 | 0.003 |
+    | 8 regression-scalars | depth 2, width 32 | 1,217 | 0.941 | 0.998 | 0.997 | 0.7 | 0.003 |
+
+    Failing candidates' cells are the mean over seeds of each run's best screen accuracy; none of
+    candidates 4-8 passed at any rate. **The rate** is the one with the highest mean best screen
+    (4-8), and for the column transformers, which pass at every rate, 0.003, not the fastest
+    0.01: near the threshold a small network is the fragile case, and 0.01 is the rate that
+    cost the string format a third of its screen (every seed back to 0.20 by its plateau) and the
+    dense per-digit networks a quarter. Pros: one
+    rate a candidate keeps the sweep's runs at 5 a rung. Cons: probed at one size; a rate that
+    suits `d = 12` may not suit `d = 4` or `n = 6`, which the report's per-rung rates would show as
+    a non-monotone ladder.
+  - **The budget and plateau rule: 200 epochs, patience 30** (`Settings`' defaults). Replaying
+    the calibration's screens (an option "cuts" a run when it would have stopped before the run's
+    best screen):
+    - (a) 100 epochs, patience 10, the stage 3 defaults: 31% of the epochs; cuts 57 of the 72
+      failing runs, by up to 0.38 of the screen. Candidates 6-8 still improve past epoch 100
+      (their best screens, at their rates, mostly at epochs 121-198).
+    - (b) 100 epochs, patience 20: 54% of the epochs; cuts 41, by up to 0.25.
+    - (c) 200 epochs, patience 20: 63%; cuts 34, by up to 0.18 (string-causal at 0.001).
+    - (d) *Chosen.* 200 epochs, patience 30: 87% of the epochs; cuts 9 runs, 6 of them by less
+      than 0.01 and the two large cuts (0.17, 0.16) at a rate not chosen (0.001), and none of the column transformers' passes (all by epoch 9). Pros: the slow
+      candidates get their full curve, so a failure is capacity, not the clock. Cons: most of the
+      cost of patience 40; the regressions at 0.003 were still improving when the budget stopped
+      them (two seeds of 7, two of 8), so a regression's failure near 0.999 may be the budget, which the report's
+      epochs column shows.
+    - (e) 200 epochs, patience 40, the calibration's own rule: cuts nothing by construction, at
+      15% more epochs than (d) for 9 small gains.
+    - (f) A budget per candidate (400 for 6-8, which cost 0.7-2.1 s an epoch). Pros: the
+      regressions' curves finished. Cons: the budget is a sweep's `Settings`, so it means a
+      second config and sweep directory; worth it only if the sweep shows 7 or 8 within a
+      rung of passing.
+
+    The sweep's cost from these timings: a failing string-format run is 20-50 minutes at
+    `n = 4` (plateaus at epochs 44-137), the dominant cost; a column transformer's failing run
+    (the small rungs; none failed here) a few minutes at patience 30; `n = 6` is 1.4 times the
+    tokens.
   - (b) One fixed training set. Pros: a sample-efficiency curve. Cons: mixes overfitting into
     the size question; a later study.
 - **D8. Held out. Settled: (a).** A triple is held out when a hash of `(a, b, c)` (the ordered
@@ -231,8 +282,9 @@ Each lists the options considered, with pros and cons, and the choice.
    retries, the search, early stopping, the models kept; tests with stand-in candidates (the
    search's choices, resuming, a run that raises, the report) and every real candidate trained,
    saved and reloaded.
-4. **Calibration** on `pyramidon`: every candidate at one middle size at `n = 4`, the rate probe,
-   timing; the budget and plateau rule written into D7.
+4. **Calibration** (done; `scripts/addition_calibration.json`) on `pyramidon`: every candidate at
+   one middle size at `n = 4`, the rate probe, timing; the rates, budget and plateau rule written
+   into D7.
 5. **The sweep** on `jebel`, unattended; the findings into the script's docstring (findings, the
    tables, the protocol, as `sequence_study.py`'s); the PR with the report.
 6. **Docs**: a README section, next-steps (this plan's leftovers and the section below), the
