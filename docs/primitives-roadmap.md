@@ -49,7 +49,8 @@ its masks in all three by bits.
     [segments-workplan.md](segments-workplan.md)).
 12. **Context length**: windows of 256 and 1,024 characters, with tiled attention; planned
     (2026-10-10, [context-length-workplan.md](context-length-workplan.md)).
-13. **FFN activations: GELU and SwiGLU.**
+13. **FFN activations: GELU and SwiGLU**; planned (2026-10-10,
+    [ffn-activations-workplan.md](ffn-activations-workplan.md)).
 14. **Grouped- and multi-query attention.**
 15. **Cross-attention**, with an encoder-decoder model on Greek-English translation.
 

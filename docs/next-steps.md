@@ -10,7 +10,8 @@ in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
 [segments-workplan.md](segments-workplan.md),
-[context-length-workplan.md](context-length-workplan.md). The order
+[context-length-workplan.md](context-length-workplan.md),
+[ffn-activations-workplan.md](ffn-activations-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -284,6 +285,7 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
   all three implementations' orders.
 - **GELU** (D5 (c)), ViT's FFN activation, an activation for `Dense`: it needs `erf`, which stable
   Rust lacks (the `tanh` form is a different function), in all three implementations and the crate.
+  Planned with SwiGLU as roadmap step 13 ([ffn-activations-workplan.md](ffn-activations-workplan.md)).
 - **The study's other arms** (D8 (b), (c)): run on 2026-10-09 (`scripts/patch_geometry_study.py`,
   findings in its docstring). Patch 4 (`T = 49`) costs every arm 0.4 to 1.2 points at 5 epochs;
   the low-rank bound still doesn't measurably bind (+0.42 +- 0.83 for `key_size=32`); heads start
