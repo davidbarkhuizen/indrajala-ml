@@ -41,9 +41,9 @@ from tests.model.networks.test_batch_norm_conv_array_network import (
     _rows,
 )
 from tests.model.networks.test_batch_norm_python_network import (  # math_exp: a fixture
-    _as_array_snapshot,
     math_exp,  # noqa: F401  # pyright: ignore[reportUnusedImport]
 )
+from tests.python_array_snapshot import as_array_snapshot, seeded_like
 
 
 class _Input(AbstractNode):
@@ -337,8 +337,7 @@ def test_training_matches_numpy_within_the_parity_tolerance(name: str, rule: Upd
     # steps in: at most 1.4e-4 of every pure-Python parity test's tolerance (1e-9, relative and
     # absolute) over seeds 0 to 19 when measured
     python = _network(name, rule)
-    array = SequentialArrayNetwork(INPUT, NETWORKS[name], rule)
-    array.restore(_as_array_snapshot(python))
+    array = seeded_like(python, SequentialArrayNetwork(INPUT, NETWORKS[name], rule), 4)
     rows = _rows(20)
 
     for step in range(20):
@@ -346,7 +345,7 @@ def test_training_matches_numpy_within_the_parity_tolerance(name: str, rule: Upd
         python.learn_batch(0.3, batch)
         array.learn_batch(0.3, batch)
 
-    assert_snapshots_close(_as_array_snapshot(python), array.snapshot())
+    assert_snapshots_close(as_array_snapshot(python), array.snapshot())
 
 
 def test_every_step_after_a_relu_conv_under_adam_has_numpys_gradients():

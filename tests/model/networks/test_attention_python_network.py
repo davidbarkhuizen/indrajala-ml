@@ -32,11 +32,11 @@ from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients
-from tests.helpers import assert_snapshots_close, batches, bits, learn_in_step, numpy_draws, split
+from tests.helpers import assert_snapshots_close, batches, bits, learn_in_step, split
 from tests.model.networks.test_attention_array_network import IMAGE, rows
 from tests.model.networks.test_attention_network import MULTI_HEAD
-from tests.model.networks.test_batch_norm_python_network import _as_array_snapshot
 from tests.model.specs.test_layer_specs import ATTENTION_BLOCK, EMBED, FFN_BLOCK, PATCHES, SOFTMAX, TOKENS
+from tests.python_array_snapshot import as_array_snapshot, projections, seeded_like
 
 
 def network(specs: list[LayerSpec], rule: UpdateRule | None = None, seed: int = 3, image: InputShape = IMAGE) -> Any:
@@ -46,37 +46,13 @@ def network(specs: list[LayerSpec], rule: UpdateRule | None = None, seed: int = 
     return built
 
 
-def _projections(layer: AttentionLayer, entry: list[Any]) -> list[list[Any]]:
-    # an attention layer's weight sets split into Wq's, Wk's, Wv's (h * d_k rows each) and Wo's (d)
-    w = layer.width
-    return [entry[:w], entry[w : 2 * w], entry[2 * w : 3 * w], entry[3 * w :]]
-
-
-def as_array_snapshot(python: Any) -> list[tuple[Any, ...]]:
-    """
-    The pure-Python snapshot as numpy's: a layer norm's per-feature ([gamma], beta) as (gamma,
-    beta), attention's rows as (Wq, bq, Wk, bk, Wv, bv, Wo, bo), the position table's rows as P, and
-    every other layer as _as_array_snapshot's.
-    """
-    snapshot: list[tuple[Any, ...]] = list(_as_array_snapshot(python))
-    for i, (layer, entry) in enumerate(zip(python.trainable_layers, python.snapshot(), strict=True)):
-        if isinstance(layer, LayerNormLayer):
-            snapshot[i] = ([gamma for (gamma,), _ in entry], [beta for _, beta in entry])
-        elif isinstance(layer, AttentionLayer):
-            projections = _projections(layer, entry)
-            snapshot[i] = tuple(
-                values for rows_ in projections for values in ([w for w, _ in rows_], [b for _, b in rows_])
-            )
-    return snapshot
-
-
 def test_randomize_draws_numpys_weights_and_nothing_for_the_parameter_free_layers():
-    built = network([PATCHES, EMBED, Position(), ATTENTION_BLOCK, TokenMean(), LayerNorm(), SOFTMAX])
-    # numpy's order: the embedding's units, attention's Wq, Wk, Wv and Wo, each W then b, then the
-    # output layer
-    embedding, *projections, output = numpy_draws(3, [(6, 4, True), *[(6, 6, True)] * 4, (3, 6, True)])
+    specs: list[LayerSpec] = [PATCHES, EMBED, Position(), ATTENTION_BLOCK, TokenMean(), LayerNorm(), SOFTMAX]
+    built = network(specs)
+    # numpy's weights from the same seed: the embedding's, attention's Wq, Wk, Wv and Wo, each W
+    # then b, and the output layer's
+    seeded_like(built, SequentialArrayNetwork(IMAGE, specs, SGD(), backend=NUMPY), 3)
     snapshot = built.snapshot()
-    assert bits([snapshot[i] for i in (1, 5, 9)]) == bits([embedding, [row for p in projections for row in p], output])
     # positions, gamma and beta start at 0, 1 and 0
     assert bits(snapshot[2]) == bits([([0.0] * 6,)] * 4)
     assert bits([snapshot[4], snapshot[8]]) == bits([[([1.0], 0.0)] * 6] * 2)
@@ -250,8 +226,7 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule
     # Python's folds against numpy's BLAS, as for the dense layers, so the networks agree within
     # the tolerance every pure-Python parity test allows. Measured: 3.5e-12 relative at most
     python = network(TOKENS[name], rule)
-    array = SequentialArrayNetwork(IMAGE, TOKENS[name], rule, backend=NUMPY)
-    array.restore(as_array_snapshot(python))
+    array = seeded_like(python, SequentialArrayNetwork(IMAGE, TOKENS[name], rule, backend=NUMPY), 3)
     data = rows(40)
 
     learn_in_step(0.3, data, (python, array))
@@ -264,9 +239,12 @@ def _as_array_gradients(python: Any, gradients: list[Any]) -> list[list[Any]]:
     arrays: list[list[Any]] = []
     for layer, entry in zip(python.trainable_layers, gradients, strict=True):
         if isinstance(layer, AttentionLayer):
-            projections = _projections(layer, entry)
             arrays.append(
-                [values for rows_ in projections for values in ([w for w, _ in rows_], [b for _, b in rows_])]
+                [
+                    values
+                    for rows_ in projections(layer, entry)
+                    for values in ([w for w, _ in rows_], [b for _, b in rows_])
+                ]
             )
         elif isinstance(layer, LayerNormLayer | BatchNormLayer):
             arrays.append([[gamma for (gamma,), _ in entry], [beta for _, beta in entry]])
@@ -327,8 +305,7 @@ def test_multi_head_training_matches_numpy_within_the_dense_layers_rounding(name
     # at 0.1, not the one-head test's 0.3: two multi-head layers under Momentum diverge at 0.3 (numpy
     # overflows), which would compare two blow-ups rather than two trainings
     python = network(MULTI_HEAD[name], rule)
-    array = SequentialArrayNetwork(IMAGE, MULTI_HEAD[name], rule, backend=NUMPY)
-    array.restore(as_array_snapshot(python))
+    array = seeded_like(python, SequentialArrayNetwork(IMAGE, MULTI_HEAD[name], rule, backend=NUMPY), 3)
     data = rows(40)
 
     learn_in_step(0.1, data, (python, array))

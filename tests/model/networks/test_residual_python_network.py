@@ -16,9 +16,10 @@ from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients
-from tests.helpers import assert_snapshots_close, bits, learn_in_step, numpy_draws
-from tests.model.networks.test_batch_norm_python_network import CLASSES, _as_array_snapshot
+from tests.helpers import assert_snapshots_close, bits, learn_in_step
+from tests.model.networks.test_batch_norm_python_network import CLASSES
 from tests.model.networks.test_residual_array_network import INPUT, NETWORKS, Shape, block, output, rows
+from tests.python_array_snapshot import as_array_snapshot, seeded_like
 
 # the cases without batch norm, which train example by example; with it, layer-major
 EXAMPLE_MAJOR = [name for name in NETWORKS if "batch norm" not in name]
@@ -33,9 +34,9 @@ def network(name: str, shape: Shape = "multiclass", rule: UpdateRule | None = No
 
 def test_randomize_draws_numpys_weights_and_nothing_for_the_fork_or_add():
     built = network("sigmoid body")
-    expected = numpy_draws(3, [(INPUT, INPUT, True), (5, INPUT, True), (INPUT, 5, True), (3, INPUT, True)])
-
-    assert bits([entry for entry in built.snapshot() if entry]) == bits(expected)
+    seeded_like(built, SequentialArrayNetwork((INPUT,), [*NETWORKS["sigmoid body"], output("multiclass")], SGD()), 3)
+    # the fork and add hold no weights
+    assert [i for i, entry in enumerate(built.snapshot()) if not entry] == [1, 4]
 
 
 def _identity_pair(body: Dense, shape: Shape) -> tuple[Any, Any]:
@@ -103,10 +104,9 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, shap
     # the tolerance every pure-Python parity test allows (assert_array_network_weights_match)
     python = network(name, shape, rule)
     specs: list[LayerSpec] = [*NETWORKS[name], output(shape)]
-    array = SequentialArrayNetwork((INPUT,), specs, rule, shape=shape)
-    array.restore(_as_array_snapshot(python))
+    array = seeded_like(python, SequentialArrayNetwork((INPUT,), specs, rule, shape=shape), 3)
     data = rows(40, shape)
 
     learn_in_step(0.3, data, (python, array))
 
-    assert_snapshots_close(_as_array_snapshot(python), array.snapshot())
+    assert_snapshots_close(as_array_snapshot(python), array.snapshot())

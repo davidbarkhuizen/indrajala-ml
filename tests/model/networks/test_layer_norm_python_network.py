@@ -22,13 +22,10 @@ from indrajala_ml.model.specs.layer_specs import LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.helpers import assert_snapshots_close, bits, learn_in_step
-from tests.model.networks.test_attention_python_network import (
-    as_array_snapshot,
-    assert_every_step_has_numpys_gradients,
-    downstream,
-)
+from tests.model.networks.test_attention_python_network import assert_every_step_has_numpys_gradients, downstream
 from tests.model.networks.test_layer_norm_array_network import rows
 from tests.model.specs.test_layer_specs import FLAT_LAYER_NORM, _input_shape
+from tests.python_array_snapshot import as_array_snapshot, seeded_like
 
 
 def network(specs: list[LayerSpec], rule: UpdateRule | None = None) -> Any:
@@ -107,13 +104,10 @@ LINEAR_RULES = [SGD(), Momentum(0.9), WeightDecay(0.01)]
 def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule: UpdateRule):
     # layer norm computes the same bits in both (test_a_layer_norm_is_numpys_by_bits); the dense
     # layers don't, as without it, so the networks agree within the tolerance every pure-Python
-    # parity test allows. Dropout's masks are the same draws in both
+    # parity test allows. Seeded alike, both draw the same dropout masks
     specs = FLAT_LAYER_NORM[name]
     python = network(specs, rule)
-    array = SequentialArrayNetwork(_input_shape(specs), specs, rule, backend=NUMPY)
-    array.restore(as_array_snapshot(python))
-    array.rng = NUMPY.default_rng(7)
-    python.rng = default_rng(7)
+    array = seeded_like(python, SequentialArrayNetwork(_input_shape(specs), specs, rule, backend=NUMPY), 3)
     data = rows(specs, 40)
 
     learn_in_step(0.3, data, (python, array))

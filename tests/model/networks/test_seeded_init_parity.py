@@ -35,7 +35,7 @@ from indrajala_ml.model.specs.update_rules import SGD
 from indrajala_ml.pcg64 import SeedSequence, generator_state
 from tests.array_network_contract import snapshot_bits
 from tests.helpers import all_subclasses, model_modules
-from tests.model.networks.test_attention_python_network import as_array_snapshot
+from tests.python_array_snapshot import assert_seeded_alike
 
 model_modules()
 
@@ -304,17 +304,6 @@ def test_every_pure_python_network_class_is_covered():
     assert set(twins.values()) <= set(NUMPY_CLASSES)
 
 
-def assert_pure_python_seeded_like_numpy(python: Any, numpy_network: Any) -> None:
-    expected = [
-        [np.asarray(array, dtype=np.float64).tobytes() for array in entry] for entry in numpy_network.snapshot()
-    ]
-    actual = [
-        [np.asarray(values, dtype=np.float64).tobytes() for values in entry] for entry in as_array_snapshot(python)
-    ]
-    assert actual == expected
-    assert generator_state(python.rng) == numpy_network.rng.bit_generator.state
-
-
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("python_name", PYTHON_MULTICLASS)
 def test_pure_python_multiclass_randomized_is_numpys_after_the_same_seed(python_name: str, seed: int):
@@ -322,7 +311,7 @@ def test_pure_python_multiclass_randomized_is_numpys_after_the_same_seed(python_
     args = MULTICLASS[numpy_name]
     python = PYTHON_CLASSES[python_name].randomized([7, 5], 12, [(0.0, 1.0)] * 12, CLASS_COUNT, *args, seed=seed)
     numpy_network = NUMPY_CLASSES[numpy_name].randomized([7, 5], 12, CLASS_COUNT, *args, seed=seed)
-    assert_pure_python_seeded_like_numpy(python, numpy_network)
+    assert_seeded_alike(python, numpy_network)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -332,14 +321,14 @@ def test_pure_python_conv_randomized_is_numpys_after_the_same_seed(python_name: 
     args = CONV[numpy_name]
     python = PYTHON_CLASSES[python_name].randomized(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, *args, seed=seed)
     numpy_network = NUMPY_CLASSES[numpy_name].randomized(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, *args, seed=seed)
-    assert_pure_python_seeded_like_numpy(python, numpy_network)
+    assert_seeded_alike(python, numpy_network)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_pure_python_fan_in_aware_single_output_randomized_is_numpys_after_the_same_seed(seed: int):
     python = PYTHON_CLASSES["FanInAwareBackpropClassifierNetwork"].randomized([4], 9, [(0.0, 1.0)] * 9, seed=seed)
     numpy_network = NUMPY_CLASSES["ArrayBackpropClassifierNetwork"].randomized([4], 9, seed=seed)
-    assert_pure_python_seeded_like_numpy(python, numpy_network)
+    assert_seeded_alike(python, numpy_network)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -348,7 +337,7 @@ def test_pure_python_sequential_randomized_is_numpys_after_the_same_seed(python_
     numpy_name = PYTHON_SEQUENTIAL[python_name]
     python = PYTHON_CLASSES[python_name].randomized(*SEQUENTIAL[numpy_name], seed=seed)
     numpy_network = NUMPY_CLASSES[numpy_name].randomized(*SEQUENTIAL[numpy_name], seed=seed)
-    assert_pure_python_seeded_like_numpy(python, numpy_network)
+    assert_seeded_alike(python, numpy_network)
 
 
 def _record_python_masks(python: Any) -> list[list[list[float]]]:
@@ -370,7 +359,7 @@ def _record_python_masks(python: Any) -> list[list[list[float]]]:
 def assert_pure_python_trains_like_numpy(python: Any, numpy_network: Any) -> None:
     # a seeded training batch draws numpy's masks, layer by layer (the RNG draw-order workplan, D3),
     # and leaves the generator in numpy's state
-    assert_pure_python_seeded_like_numpy(python, numpy_network)
+    assert_seeded_alike(python, numpy_network)
     width = numpy_network.input_shape[0] if len(numpy_network.input_shape) == 1 else SIDE * SIDE
     rows = _rows(width, numpy_network)
     masks = _record_python_masks(python)
