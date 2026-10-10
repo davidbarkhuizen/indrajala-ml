@@ -21,7 +21,7 @@ pass over a 64-token window takes 2.5 ms in numpy and 1.5 ms in Rust: 1.5 to 2.5
 1,000 characters without a cache. A cache makes a character one token's pass through the
 projections and FFNs and one row of attention scores, about `T` times less work. Incremental
 decoding is also framework structure every later sequence feature uses (longer contexts,
-cross-attention's decoder, step 14).
+cross-attention's decoder, step 15).
 
 ## What exists, and what changes
 

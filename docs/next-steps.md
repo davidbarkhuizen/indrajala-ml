@@ -9,7 +9,8 @@ in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan
 [rotary-positions-workplan.md](rotary-positions-workplan.md),
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
-[segments-workplan.md](segments-workplan.md). The order
+[segments-workplan.md](segments-workplan.md),
+[context-length-workplan.md](context-length-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
