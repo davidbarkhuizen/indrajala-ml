@@ -3,7 +3,8 @@
 """
 A patch model's token layers in numpy (the layer-norm and attention workplan; README, Layer norm and
 attention): Patches, Position, TokenMean and the token-wise dense layer; and a sequence model's
-(the sequence task workplan, stage 3): Embedding and the token-wise softmax output layer. A token
+(the sequence task workplan, stage 3): Embedding and the token-wise softmax output layer; and the
+token-wise dropout (the attention-dropout workplan, stage 3). A token
 sequence of T tokens of d features is flat and token-major, index t * d + j (D2), so a batch's
 (N, T * d) activations are an (N * T, d) matrix without a copy.
 
@@ -128,6 +129,47 @@ class TokenMeanArrayLayer(_ParameterFree):
         n = self.delta_batch.shape[0]
         share = (self.delta_batch / self.tokens)[:, np.newaxis, :]
         return np.broadcast_to(share, (n, self.tokens, self.size)).reshape(n, self.input_size)
+
+
+class TokenDropoutArrayLayer(_ParameterFree):
+    """
+    Inverted dropout of each token's features (the attention-dropout workplan, D2), in training
+    only: an (N, T * d) mask M per forward batch, drawn row-major from the network's generator
+    (example, token, feature), M = u >= p, out = X * M / keep; its delta is the downstream * M /
+    keep. In inference it passes its input on and draws nothing. training and rng are set as a
+    dense dropout layer's (DropoutArrayLayer); the mask the forward pass drew, None when it drew
+    none, is what the backward pass reads, since the network switches training off before it.
+    """
+
+    def __init__(self, tokens: int, features: int, drop_probability: float) -> None:
+        assert 0.0 <= drop_probability < 1.0, f"drop_probability must be in [0.0, 1.0); got {drop_probability}"
+        self.size = tokens * features
+        self.input_size = self.size
+        self._drop_probability = drop_probability
+        self._keep_probability = 1.0 - drop_probability
+        self.training = False
+        self.rng = np.random.default_rng()
+        self._mask_batch: FloatArray | None = None
+
+    def set_rng(self, rng: np.random.Generator) -> None:
+        self.rng = rng
+
+    def set_training_mode(self, training: bool) -> None:
+        self.training = training
+
+    def forward_batch(self, X: FloatArray) -> FloatArray:
+        if not self.training:
+            self._mask_batch = None
+            return X
+        self._mask_batch = (self.rng.random(X.shape) >= self._drop_probability).astype(np.float64)
+        return X * self._mask_batch / self._keep_probability
+
+    def _backward(self, downstream: FloatArray) -> None:
+        mask = self._mask_batch
+        self.delta_batch = downstream if mask is None else downstream * mask / self._keep_probability
+
+    def downstream_batch(self) -> FloatArray:
+        return self.delta_batch
 
 
 class EmbeddingArrayLayer(BatchShaped):

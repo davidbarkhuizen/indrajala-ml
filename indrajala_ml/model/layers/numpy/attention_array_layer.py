@@ -14,6 +14,13 @@ max shift: the row max comes from the unmasked scores (the diagonal never is), e
 0, so a masked weight P_ij is exactly 0 and so is its dS_ij, and the backward pass is unchanged. An
 unmasked layer computes what it did before the mask.
 
+A layer with dropout (the attention-dropout workplan, D3, D4) drops its weights in training: one
+(N, h, T, T) mask M per forward batch, drawn row-major from the network's generator (example,
+head, query, key), every entry drawn, the causally masked ones included, M_ij = u_ij >= dropout;
+P~ = P * M / keep and H = P~ V. The backward pass takes dV = P~^T dH and dP = (dH V^T) * M / keep,
+then the softmax's backward with the undropped P. In inference, and at dropout 0, nothing is
+drawn and the layer computes what it did before dropout.
+
 The softmax's exp is this module's exp, which tests replace with another implementation's (it
 isn't correctly rounded), as batch norm's tests replace sigmoid.
 """
@@ -42,7 +49,8 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     Per example over its tokens tokens of features features (d), in heads heads (h) of key_size
     features (d_k, d / h when None): Q = X Wq^T + bq, K and V likewise, each head's
     P[i] = softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and H[i] = P[i] V[i], out = H Wo^T + bo with H
-    the heads side by side; a causal one masks S_ij for j > i. Its parameters, also its draw order,
+    the heads side by side; a causal one masks S_ij for j > i, and one with dropout drops P's
+    entries in training. Its parameters, also its draw order,
     are Wq, bq, Wk, bk, Wv, bv, Wo, bo: Wq, Wk, Wv (h * d_k, d) and Wo (d, h * d_k), heads as row
     (Wo: column) blocks, each drawn as a dense layer's W then b, the weights decayed and the biases
     not. Hidden only, ending a token block's body.
@@ -52,7 +60,13 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     """
 
     def __init__(
-        self, tokens: int, features: int, heads: int = 1, key_size: int | None = None, causal: bool = False
+        self,
+        tokens: int,
+        features: int,
+        heads: int = 1,
+        key_size: int | None = None,
+        causal: bool = False,
+        dropout: float = 0.0,
     ) -> None:
         self._set_up(tokens, features, heads, key_size)
         # computed once and divided by, never multiplied by its reciprocal
@@ -60,6 +74,20 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         self.causal = causal
         # the masked scores, j > i: True above the diagonal
         self._future = np.triu(np.ones((tokens, tokens), dtype=np.bool_), k=1)
+        assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
+        self.dropout = dropout
+        self._keep = 1.0 - dropout
+        # set by set_training_mode and set_rng, as a dense dropout layer's; the forward pass's mask,
+        # None when it drew none, is what the backward pass reads
+        self.training = False
+        self.rng = np.random.default_rng()
+        self._M: FloatArray | None = None
+
+    def set_rng(self, rng: np.random.Generator) -> None:
+        self.rng = rng
+
+    def set_training_mode(self, training: bool) -> None:
+        self.training = training
 
     def _zeros(self) -> list[FloatArray]:
         return [np.zeros(shape) for rows, fan_in in self.projection_shapes for shape in ((rows, fan_in), (rows,))]
@@ -90,6 +118,11 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         m = S.max(axis=-1, keepdims=True)
         e = exp(S - m)
         P = e / np.cumsum(e, axis=-1)[..., -1:]
+        if self.training and self.dropout > 0.0:
+            self._M = (self.rng.random(P.shape) >= self.dropout).astype(np.float64)
+            self._P_dropped = P * self._M / self._keep
+            return P, self._P_dropped @ V
+        self._M = None
         return P, P @ V
 
     def _combine(self, H: FloatArray) -> FloatArray:
@@ -114,7 +147,11 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         # per example and head, on (N, h, T, d_k) views: dQ, dK and dV
         Q, K, V, P = self._Q, self._K, self._V, self._P
         dP = dH @ _transpose(V)
-        dV = _transpose(P) @ dH
+        if self._M is None:
+            dV = _transpose(P) @ dH
+        else:
+            dV = _transpose(self._P_dropped) @ dH
+            dP = dP * self._M / self._keep
         r = np.cumsum(dP * P, axis=-1)[..., -1:]
         dS = P * (dP - r)
         dQ = (dS @ K) / self.scale
