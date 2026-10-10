@@ -35,7 +35,8 @@ three implementations start, and drop out, alike from one seed
 ([rng-draw-order-workplan.md](rng-draw-order-workplan.md)); step 7's attention dropout then tests
 its masks in all three by bits.
 
-7. **Dropout in attention**: on the attention weights and after the output projection.
+7. **Dropout in attention**: on the attention weights and after the output projection; planned
+   (2026-10-10, [attention-dropout-workplan.md](attention-dropout-workplan.md)).
 8. **Generation**: sampling text from a trained sequence model.
 9. **A decaying learning-rate schedule**, with longer training.
 10. **Padding masks and variable-length windows.**
