@@ -12,7 +12,8 @@ in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan
 [segments-workplan.md](segments-workplan.md),
 [context-length-workplan.md](context-length-workplan.md),
 [ffn-activations-workplan.md](ffn-activations-workplan.md),
-[grouped-query-attention-workplan.md](grouped-query-attention-workplan.md). The order
+[grouped-query-attention-workplan.md](grouped-query-attention-workplan.md),
+[cross-attention-workplan.md](cross-attention-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
