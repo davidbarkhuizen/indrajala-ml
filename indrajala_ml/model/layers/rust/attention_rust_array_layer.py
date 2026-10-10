@@ -58,13 +58,14 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         ]
 
     def forward(self, x: pa.Array) -> pa.Array:
-        self.a, self._Q, self._K, self._V, self._P, self._H = pa.attention_forward(
+        # the seventh, the mask, is None without dropout (stage 5 passes dropout, training and rng)
+        self.a, self._Q, self._K, self._V, self._P, self._H, _ = pa.attention_forward(
             x, *self.parameters(), heads=self.heads, causal=self.causal
         )
         return self.a
 
     def forward_batch(self, X: pa.Array) -> pa.Array:
-        self.A, self._Q, self._K, self._V, self._P, self._H = pa.attention_forward_batch(
+        self.A, self._Q, self._K, self._V, self._P, self._H, _ = pa.attention_forward_batch(
             X, *self.parameters(), heads=self.heads, causal=self.causal
         )
         return self.A
