@@ -51,7 +51,8 @@ its masks in all three by bits.
     (2026-10-10, [context-length-workplan.md](context-length-workplan.md)).
 13. **FFN activations: GELU and SwiGLU**; planned (2026-10-10,
     [ffn-activations-workplan.md](ffn-activations-workplan.md)).
-14. **Grouped- and multi-query attention.**
+14. **Grouped- and multi-query attention**; planned (2026-10-10,
+    [grouped-query-attention-workplan.md](grouped-query-attention-workplan.md)).
 15. **Cross-attention**, with an encoder-decoder model on Greek-English translation.
 
 Steps 7 to 13 were ordered by the owner on 2026-10-10 from the candidates the multi-head attention
