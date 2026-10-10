@@ -30,9 +30,16 @@ text generation and no recurrence.
 6. **A sequence task with causal masking**: done (2026-10-10), as next-character prediction on
    four text corpora.
 
-No step 7 is proposed yet. The candidates are the extension points step 5 named and step 6 left
-(dropout in attention, grouped key/value heads, cross-attention, padding masks), generation, and
-GELU, in [next-steps.md](next-steps.md), From multi-head attention and From the sequence task.
+7. **Dropout in attention**: on the attention weights and after the output projection.
+8. **Generation**: sampling text from a trained sequence model.
+9. **A decaying learning-rate schedule**, with longer training.
+10. **Padding masks and variable-length windows.**
+11. **GELU.**
+12. **Grouped- and multi-query attention.**
+13. **Cross-attention**, with an encoder-decoder task.
+
+Steps 7 to 13 were ordered by the owner on 2026-10-10 from the candidates the multi-head attention
+and sequence task workplans left (next-steps.md); the case for each, and for the order, is below.
 
 ## 1 to 6. Done
 
@@ -77,6 +84,26 @@ layer takes 0.8 to 1.5 bits per character under it, a second layer 0.09 to 0.17 
 Euclid 1.50, Herodotus 1.95, Tiny Shakespeare 2.48, the *Muqaddimah* 2.79), and without the mask
 the model copies the next input, 0.04 to 0.06 bits per character on held-out text. The case made
 for step 6 is in this file's history: `git show f6e843b:docs/primitives-roadmap.md`.
+
+## 7 to 13. The order after the sequence task
+
+Ordered by what each can measure on the models that exist, and by cost. Each step's open questions
+are its workplan's to settle.
+
+| step | pros | cons |
+| --- | --- | --- |
+| 7. Dropout in attention | the one primitive with a measured question waiting: the sequence study's held-out loss is above its training loss, by 0.3 bits per character on Tiny Shakespeare and the *Muqaddimah* and 0.49 on Euclid, where the MNIST patch models never overfit; both places are named (next-steps.md, From multi-head attention); the dense layers' dropout, the network's generator and its saved state already exist; GPT's and Vaswani et al.'s regularizer | a training and inference switch in the token layers; mask draws in all three implementations' orders, where pure Python's weight draws already differ for layers with a bias; a crate PR first (a mask on `P` kept for backward); Euclid's gap mixes overfitting with a shift in the text (its held-out part is Book XII on), so the study needs a held-out set that separates them |
+| 8. Generation | the cheapest step: no layer, no crate change, no golden entries; the most persuasive demo of a language model; works on today's models | not a primitive; `T` forward passes per window's worth of text, with no key/value cache; a script to keep working; a 10-epoch model at 2.48 bits per character on Tiny Shakespeare gives mostly garbled text |
+| 9. A decaying schedule, longer training | the study's clearest open question: neither transformer had converged at 10 epochs; small, pure Python (`lr_schedule.py`), no crate change; every task gains | a training feature, not a primitive; lifts composable layers' "schedulers beyond today's `lr_schedule.py`" out of scope (the owner, 2026-10-10); its payoff is a longer study (10 epochs took about 2.5 h on `jebel`) |
+| 10. Padding masks, variable-length windows | generalizes the causal mask; needed before any variable-length input or ragged batches, and by step 13 | nothing pads while windows are fixed, so step 10 must bring the input that pads; a mask input to a layer, which `Sequential` doesn't have; the loss and the evaluation skip padded positions |
+| 11. GELU | ViT's and GPT's FFN activation; small | needs `erf`, which stable Rust lacks (the `tanh` form is a different function); an activation, not a primitive; unlikely to move the loss at this size |
+| 12. Grouped- and multi-query attention | a named place; fewer key and value parameters | an inference-memory optimization, and nothing here is memory-bound: the study can only compare loss at equal parameters |
+| 13. Cross-attention | completes the original transformer; opens tasks with a second input (translation, conditioning) | the largest: a second input to a layer, a network that isn't a list of layers, an encoder-decoder task and its dataset; it needs step 10 |
+
+Dropout leads because its question is measured; generation follows because it's cheap and shows
+what steps 7 and 9 buy; the schedule comes before the larger steps so that their studies train to
+convergence. Padding masks come before cross-attention, which needs them. GELU and grouped heads
+are small and measure little; cross-attention is last as the largest.
 
 ## Out of scope
 

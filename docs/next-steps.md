@@ -70,7 +70,8 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 Still out of scope, for later workplans too (batch norm's included):
 
 - Separate activation layers, which would add a crossing per layer on Rust. Activations stay fused.
-- Parameter groups, per-layer learning rates, and schedulers beyond today's `lr_schedule.py`.
+- Parameter groups and per-layer learning rates. (Schedulers beyond today's `lr_schedule.py` were
+  lifted out of scope on 2026-10-10: roadmap step 9.)
 - Deleting or renaming any network class (the workplan's D1).
 
 ## From batch norm
