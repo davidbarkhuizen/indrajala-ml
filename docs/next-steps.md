@@ -28,18 +28,19 @@ docs cite them by section:
 | A baseline on the new benchmark machine (i7-9700K) | #575 | #576-#590, #592 | `git show 480164d:docs/benchmark-machine-workplan.md` |
 | A benchmark archive, tiered benchmarking, and a remote benchmark machine | #584 | #593-#598, archive #1-#11 | `git show 056b808:docs/benchmark-archive-workplan.md` |
 | Multi-head attention and a transformer block (roadmap step 5) | #602 | crate #51-#52, #603-#613, archive #12-#13 | `git show d70cf0f:docs/multi-head-attention-workplan.md` |
+| A sequence task with causal masking (roadmap step 6) | #620 | crate #53, #621-#634, archive #14-#17 | `git show f6e843b:docs/sequence-task-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
 `git show 0a04977:docs/optimizations/<name>.md`.
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
-normalization, Residual connections, Layer norm and attention), [measurement.md](measurement.md)
+normalization, Residual connections, Layer norm and attention, The sequence task), [measurement.md](measurement.md)
 and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/residual_depth_study.py`'s, the patch-attention study's in
 `scripts/patch_attention_study.py`'s, the multi-head attention study's in
-`scripts/multi_head_attention_study.py`'s.
+`scripts/multi_head_attention_study.py`'s, the sequence study's in `scripts/sequence_study.py`'s.
 
 ## From composable layers
 
@@ -148,8 +149,8 @@ Still out of scope:
 - **The studies' protocol helpers** (found by the 2026-10-09 rerun, out of its scope: scripts).
   `_load`, `_mean_sd` and `_table` are the same in `indrajala_ml/studies/patch_study.py`,
   `scripts/residual_depth_study.py` and `scripts/batch_size_scaling_sweep.py` (symilar misses them
-  at 10 lines). The next study script should take them from a shared studies module rather than
-  copy them a fourth time; moving the two older scripts onto it can come with that.
+  at 10 lines). The sequence study (`indrajala_ml/studies/sequence_study.py`) copied `_mean_sd`
+  and `_table` a fourth time; a shared studies module should take them from all four, in one PR.
 - **Shared homes for the next layer kind.** The conv and pool argument checks and output size are
   in `model/specs/window_geometry.py`, one shape walk (`spec_shapes.spec_shapes`) feeds both builders,
   the optimizers share `OptimizerBase` and `ArrayOptimizerBase`, and a layer's optimizer accessors
@@ -249,7 +250,7 @@ moved to From multi-head attention. Besides those:
 Still out of scope:
 
 - A class token (D8 (b)), fixed sin-cos or drawn positions (D7 (b), (c)).
-- Sequence data (text) and its loading; conv-then-tokens hybrids.
+- Conv-then-tokens hybrids.
 
 ## From multi-head attention
 
@@ -263,16 +264,15 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
 
   | later work | where it goes | what it adds |
   | --- | --- | --- |
-  | masking, causal or padding | attend, forward: an additive mask on `S[i]` before the max shift | a mask field in the options; backward unchanged (`P_ij = 0` zeroes `dS_ij`) |
+  | padding masks (causal is done: `Attention(causal=True)`, the sequence task) | attend, forward: an additive mask on `S[i]` before the max shift, as the causal mask's `-inf` | a mask input; backward unchanged (`P_ij = 0` zeroes `dS_ij`) |
   | dropout on the weights | attend: an inverted mask on `P[i]` before `H[i] = P[i] V[i]`, kept for backward | a mask field in the options, drawn by the layer from the network's generator |
   | dropout after the projection | after combine | a token-wise dropout layer, outside attention |
   | a separate value width | project and combine: `Wv` `(h·d_v, d)`, `Wo` `(d, h·d_v)` | a `value_size` field defaulting to `key_size` |
   | grouped- or multi-query attention | project: `Wk`, `Wv` with `g` row blocks; attend: head `i` reads key/value block `i // (h / g)` | a `key_value_heads` field defaulting to `heads` |
   | cross-attention | project: `K`, `V` from a second input | a second input to the layer, which `Sequential` doesn't have: its own design |
 
-  A causal mask is useful only with a per-token loss and a sequence dataset, neither of which
-  exists: its workplan comes with the sequence task. Dropout in attention needs a training and
-  inference switch in a token layer and mask draws in all three implementations' orders.
+  Dropout in attention needs a training and inference switch in a token layer and mask draws in
+  all three implementations' orders.
 - **GELU** (D5 (c)), ViT's FFN activation, an activation for `Dense`: it needs `erf`, which stable
   Rust lacks (the `tanh` form is a different function), in all three implementations and the crate.
 - **The study's other arms** (D8 (b), (c)): run on 2026-10-09 (`scripts/patch_geometry_study.py`,
@@ -288,9 +288,9 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
   `hidden_delta_batch` 10.2% slower (243 to 268 us per call, the stage-1 attention case at batch
   32, consistent over 6 passes); `forward_batch` and `accumulate_gradient_batch` stayed within
   noise. Main's numpy backward is still stage 3's. The cost came with the three-block structure
-  (D10), likely in the backward's (N, h, T, d_k) views or its stacked `np.matmul`s. Worth a look
-  when the numpy layer is next touched (the sequence task's mask will be): a fix must keep the
-  blocks and their bits.
+  (D10), likely in the backward's (N, h, T, d_k) views or its stacked `np.matmul`s. The sequence
+  task's mask touched the numpy layer's forward only and left this as it was. Still worth a look:
+  a fix must keep the blocks and their bits.
 
 Still out of scope:
 
@@ -300,6 +300,48 @@ Still out of scope:
   2019, "Are Sixteen Heads Really Better than One?").
 - A faster multi-head kernel: a crate-tuning item (From the benchmark machine baseline), with its
   own A/B.
+
+## From the sequence task
+
+The workplan settled `Embedding(vocabulary, size)` over token ids (D5), a token-wise softmax output
+with the mean of the `T` cross-entropies as the `"sequence"` network shape (D6), and
+`Attention(causal=True)`, `-inf` on the future scores before the max shift (D7), in all three
+implementations and the crate; four corpora, each in its own dataset repository (D2, D3); fixed
+non-overlapping windows of 65 characters, the last 10% held out (D4). The study
+(`scripts/sequence_study.py`, D9) found every arm where D9 expected it (README, The sequence task).
+
+- **Generation** (D11 (b)): `scripts/sample_text.py`, a sliding window of the last `T` characters,
+  sampling from the output at the last position, `T` forward passes per window's worth of text. The
+  fixed-`T` network has no shorter prefix; a sliding window needs none.
+- **Longer training.** Neither transformer had converged at 10 epochs: their held-out losses
+  still fell by 0.01 to 0.05 bits per character over the last three. More epochs, with a decaying
+  rate once the curve flattens (`lr_schedule.py` has linear warmup only), would show where the
+  2-layer models stop; the 5-seed sweep took about 2.5 h on `jebel` at 6 workers.
+- **Euclid's train/held-out gap.** On Euclid the 2-layer model is 0.49 bits per character lower on
+  training windows than held out (1.01 against 1.50), the widest of the four corpora (Herodotus:
+  none), and the gap grows with the model (ffn 0.17, 1-layer 0.44). The held-out part is the
+  text's last 10%, from Book XII's similar pyramids (XII.8) through Book XIII, and even the
+  counted bigram is 0.16 bits worse there, so the gap mixes overfitting with a shift in the text. A held-out set of
+  windows drawn from across the text would separate the two.
+- **Windows at random offsets** (D4 (b)): every position of every character a target, the usual
+  language-model sampler. It needs a sampler in the trainer (an epoch no longer a permutation of
+  fixed rows) and its state in run checkpoints. Overlapping fixed windows at stride `T / 2`
+  (D4 (c)) are the cheaper middle step, with correlated examples.
+- **Padding masks and variable-length windows** (D1 (b)): nothing pads while windows are fixed;
+  the mask's place is From multi-head attention's table.
+- **A synthetic sequence task** (D2 (b)), copying or reversal from a seed: a known optimal loss,
+  and a task only attention over earlier tokens solves. The study's leak arm and the mask's own
+  test (a future token can't change an earlier output) already cover what it would test.
+- **Pure Python's draw order** for layers with a bias, which the sequence task's parity tests
+  restore around: From the RNG generators workplan.
+
+Still out of scope:
+
+- A summed per-token loss (D6 (b)): with the mean, a step's size doesn't depend on `T`.
+- A separate `TokenOutput` spec (D6 (c)): inside a token part `Dense` already means "per token".
+- A network-level causal flag (D7 (b)): the mask is per layer, so an encoder and a causal block
+  can mix later.
+- Word-level corpora (D2 (d)): a vocabulary of 10,000 or more makes the output layer the whole cost.
 
 ## From the benchmark machine baseline
 

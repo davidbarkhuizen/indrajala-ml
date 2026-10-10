@@ -50,7 +50,7 @@ DATASETS = [
         "url": f"{_RAW_BASE}/mnist-test.parquet",
     },
     {
-        # the sequence task's corpus (docs/sequence-task-workplan.md, D2, D3): read as text, no conversion
+        # the sequence task's corpus (the sequence task workplan, D2, D3): read as text, no conversion
         "local_path": "data/tinyshakespeare/tinyshakespeare.txt",
         "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed",
         "url": _text_url("indrajala-datasets-tinyshakespeare", "tinyshakespeare.txt"),

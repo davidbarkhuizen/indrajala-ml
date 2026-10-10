@@ -10,9 +10,11 @@ transformers.
 Dense backprop, the perceptron and MADALINE, ReLU, softmax with cross-entropy, conv and max
 pooling, momentum, Adam, L2, dropout, ensembles, linear warmup, batch norm with ghost groups,
 residual blocks, layer norm and multi-head self-attention over patch tokens, stacked into transformer
-layers (README, Models, Batch normalization, Residual connections and Layer norm and attention),
-built from composable layer specs and update rules. Each is in all three implementations (pure
-Python, numpy, Rust). There is no masking, no dropout in attention and no recurrence.
+layers, and a causal transformer over token ids for next-token prediction, with a per-token output
+and loss (README, Models, Batch normalization, Residual connections, Layer norm and attention and
+The sequence task), built from composable layer specs and update rules. Each is in all three
+implementations (pure Python, numpy, Rust). There is no padding mask, no dropout in attention, no
+text generation and no recurrence.
 
 ## The order
 
@@ -25,11 +27,14 @@ Python, numpy, Rust). There is no masking, no dropout in attention and no recurr
    on MNIST.
 5. **Multi-head attention and a full transformer block**: done (2026-10-09), as deeper multi-head
    patch models on MNIST.
-6. **A sequence task with causal masking**: planned (2026-10-09,
-   [sequence-task-workplan.md](sequence-task-workplan.md)). Next-token prediction on a small text
-   dataset: the network's first per-token output and loss, and attention's first mask.
+6. **A sequence task with causal masking**: done (2026-10-10), as next-character prediction on
+   four text corpora.
 
-## 1 to 5. Done
+No step 7 is proposed yet. The candidates are the extension points step 5 named and step 6 left
+(dropout in attention, grouped key/value heads, cross-attention, padding masks), generation, and
+GELU, in [next-steps.md](next-steps.md), From multi-head attention and From the sequence task.
+
+## 1 to 6. Done
 
 Composable layers and optimizers, then batch normalization, both done (2026-09-30); their retired
 workplans and the work they left open are in [next-steps.md](next-steps.md). The case made for
@@ -61,49 +66,17 @@ found that more heads change nothing at this size (16 tokens of 32), and depth h
 4 heads reach 97.0%, a point under the conv network. The case made for step 5 is in this file's
 history: `git show d70cf0f:docs/primitives-roadmap.md`.
 
-## 6. A sequence task with causal masking
-
-Every model so far reads one example and gives one label: a patch model's tokens are pooled by
-`TokenMean` before a single output. Attention's defining use, a model of sequences that predicts
-each token from the ones before it (Vaswani et al. 2017; Radford et al. 2018, "Improving Language
-Understanding by Generative Pre-Training"), needs three things the framework lacks: a sequence
-dataset, an output and a loss at every token, and a causal mask so that token `t` attends only to
-tokens `<= t`. Step 5 named the mask's place (attend, before the max shift: an additive mask on
-the scores, the backward pass unchanged because a masked weight is exactly zero), and left it for
-this step because without the other two it can't be trained or tested on a real task.
-
-The candidates for step 6, each one of step 5's extension points (next-steps.md, From multi-head
-attention) or GELU:
-
-| candidate | pros | cons |
-| --- | --- | --- |
-| **A sequence task with causal masking** (proposed) | opens a new task family, language modelling, rather than refining the image one; the mask is the smallest attention change, already placed; per-token outputs and losses are framework structure every later sequence feature needs (padding masks, generation, cross-attention); a text dataset tests the framework off MNIST | the largest step: a dataset and loader, a new network shape, a per-token output and loss, and new evaluation (per-token accuracy, bits per character), in all three implementations and the crate |
-| Dropout in attention | regularization the MNIST patch models might use; its place is named | needs a training and inference switch in a token layer and mask draws in three implementations' orders; the patch models don't overfit at 5 epochs, so a study would likely show nothing |
-| GELU | ViT's and GPT's FFN activation; small | needs `erf`, which stable Rust lacks; an activation, not a primitive; at this size unlikely to move accuracy |
-| Grouped- or multi-query attention | named place; fewer key/value parameters | an inference-memory optimization: nothing here is memory-bound, so there is nothing to measure |
-| Cross-attention | named place | needs a second input to a layer, which `Sequential` doesn't have, and an encoder-decoder task: its own design, after a sequence task exists |
-
-A sequence task comes first because the rest either need it (cross-attention, padding masks) or
-have nothing to show on MNIST. Its workplan settles, with each option's pros and cons:
-
-- **the dataset**: a small character-level corpus (Tiny Shakespeare, about 1.1 M characters and 65
-  symbols, Karpathy 2015's char-rnn), packaged and checksum-pinned as MNIST is
-  (`scripts/fetch_datasets.py`), or a synthetic task generated from a seed, or both;
-- **the input**: one-hot tokens through the existing token-wise `Dense` (no new layer), or an
-  `Embedding(vocabulary, d)` spec reading token ids;
-- **the output and loss**: a token-wise softmax output at every position and cross-entropy averaged
-  over the tokens, a new network shape beside `multiclass` and `single_output`, with per-token
-  targets through the trainer, the evaluation and the save format;
-- **the mask**: `Attention(causal=True)`, a field with a default (step 5's D7), in attend in all
-  three implementations and the crate, with a test that a future token can't change an earlier
-  output;
-- **the study**: what a causal transformer reaches against a unigram and a bigram baseline and an
-  FFN-only model, in bits per character, and that removing the mask lets the loss fall toward
-  zero, on held-out text too, since every position can read the token it predicts (the leak a
-  mask prevents).
-
-Generation (sampling text from the model), padding masks and variable-length sequences stay out
-unless the workplan finds them needed.
+The sequence task was done on 2026-10-10: `Embedding(vocabulary, size)`, a token part ending in
+a token-wise softmax output with the mean per-token cross-entropy (the `"sequence"` network shape),
+and `Attention(causal=True)`, the mask in attend before the max shift, in all three
+implementations and the crate; four character-level corpora (Tiny Shakespeare, Herodotus, the
+*Muqaddimah*, Euclid's *Elements*), each in its own dataset repository. The retired workplan and
+its open work are in next-steps.md. The sequence study (`scripts/sequence_study.py`) found what
+the literature predicts: a per-token model only reaches the bigram floor, one causal attention
+layer takes 0.8 to 1.5 bits per character under it, a second layer 0.09 to 0.17 more (2-layer:
+Euclid 1.50, Herodotus 1.95, Tiny Shakespeare 2.48, the *Muqaddimah* 2.79), and without the mask
+the model copies the next input, 0.04 to 0.06 bits per character on held-out text. The case made
+for step 6 is in this file's history: `git show f6e843b:docs/primitives-roadmap.md`.
 
 ## Out of scope
 
