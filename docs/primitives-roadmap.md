@@ -37,15 +37,20 @@ its masks in all three by bits.
 
 7. **Dropout in attention**: on the attention weights and after the output projection; planned
    (2026-10-10, [attention-dropout-workplan.md](attention-dropout-workplan.md)).
-8. **Generation**: sampling text from a trained sequence model.
-9. **A decaying learning-rate schedule**, with longer training.
-10. **Padding masks and variable-length windows.**
-11. **GELU.**
-12. **Grouped- and multi-query attention.**
-13. **Cross-attention**, with an encoder-decoder task.
+8. **Rotary position embedding**: positions inside attention, so that a cached key stays valid
+   as a window slides; planned (2026-10-10,
+   [rotary-positions-workplan.md](rotary-positions-workplan.md)).
+9. **Generation**: sampling text from a trained sequence model, with a key/value cache.
+10. **A decaying learning-rate schedule**, with longer training.
+11. **Padding masks and variable-length windows.**
+12. **GELU.**
+13. **Grouped- and multi-query attention.**
+14. **Cross-attention**, with an encoder-decoder task.
 
 Steps 7 to 13 were ordered by the owner on 2026-10-10 from the candidates the multi-head attention
-and sequence task workplans left (next-steps.md); the case for each, and for the order, is below.
+and sequence task workplans left (next-steps.md); the same day the owner chose a key/value cache
+for generation and put rotary positions before it (step 8), renumbering the rest. The case for
+each, and for the order, is below.
 
 ## 1 to 6. Done
 
@@ -91,7 +96,7 @@ Euclid 1.50, Herodotus 1.95, Tiny Shakespeare 2.48, the *Muqaddimah* 2.79), and 
 the model copies the next input, 0.04 to 0.06 bits per character on held-out text. The case made
 for step 6 is in this file's history: `git show f6e843b:docs/primitives-roadmap.md`.
 
-## 7 to 13. The order after the sequence task
+## 7 to 14. The order after the sequence task
 
 Ordered by what each can measure on the models that exist, and by cost. Each step's open questions
 are its workplan's to settle.
@@ -99,17 +104,19 @@ are its workplan's to settle.
 | step | pros | cons |
 | --- | --- | --- |
 | 7. Dropout in attention | the one primitive with a measured question waiting: the sequence study's held-out loss is above its training loss, by 0.3 bits per character on Tiny Shakespeare and the *Muqaddimah* and 0.49 on Euclid, where the MNIST patch models never overfit; both places are named (next-steps.md, From multi-head attention); the dense layers' dropout, the network's generator and its saved state already exist; GPT's and Vaswani et al.'s regularizer | a training and inference switch in the token layers; mask draws in all three implementations' orders, where pure Python's weight draws already differ for layers with a bias; a crate PR first (a mask on `P` kept for backward); Euclid's gap mixes overfitting with a shift in the text (its held-out part is Book XII on), so the study needs a held-out set that separates them |
-| 8. Generation | the cheapest step: no layer, no crate change, no golden entries; the most persuasive demo of a language model; works on today's models | not a primitive; `T` forward passes per window's worth of text, with no key/value cache; a script to keep working; a 10-epoch model at 2.48 bits per character on Tiny Shakespeare gives mostly garbled text |
-| 9. A decaying schedule, longer training | the study's clearest open question: neither transformer had converged at 10 epochs; small, pure Python (`lr_schedule.py`), no crate change; every task gains | a training feature, not a primitive; lifts composable layers' "schedulers beyond today's `lr_schedule.py`" out of scope (the owner, 2026-10-10); its payoff is a longer study (10 epochs took about 2.5 h on `jebel`) |
-| 10. Padding masks, variable-length windows | generalizes the causal mask; needed before any variable-length input or ragged batches, and by step 13 | nothing pads while windows are fixed, so step 10 must bring the input that pads; a mask input to a layer, which `Sequential` doesn't have; the loss and the evaluation skip padded positions |
-| 11. GELU | ViT's and GPT's FFN activation; small | needs `erf`, which stable Rust lacks (the `tanh` form is a different function); an activation, not a primitive; unlikely to move the loss at this size |
-| 12. Grouped- and multi-query attention | a named place; fewer key and value parameters | an inference-memory optimization, and nothing here is memory-bound: the study can only compare loss at equal parameters |
-| 13. Cross-attention | completes the original transformer; opens tasks with a second input (translation, conditioning) | the largest: a second input to a layer, a network that isn't a list of layers, an encoder-decoder task and its dataset; it needs step 10 |
+| 8. Rotary position embedding | parameter-free positions inside attention (Su et al. 2021), the scheme of most decoders since; scores depend on token distance only, so step 9's cached keys stay valid as its window slides (with learned positions every cached key goes stale once the window moves); a `positions` field on `Attention` admits other schemes later | a new attention option in three implementations and the crate; `cos` and `sin` aren't correctly rounded, so one table must feed all three; models retrain with it |
+| 9. Generation | the most persuasive demo of a language model; a key/value cache makes a character one token's pass (a full 64-token pass is 1.5 ms in Rust, 2.5 ms in numpy, on `pyramidon`), and incremental decoding is structure later sequence work reuses | a second forward path, a decode step, through every token layer in three implementations and the crate; a 10-epoch model at 2.48 bits per character on Tiny Shakespeare gives mostly garbled text |
+| 10. A decaying schedule, longer training | the study's clearest open question: neither transformer had converged at 10 epochs; small, pure Python (`lr_schedule.py`), no crate change; every task gains | a training feature, not a primitive; lifts composable layers' "schedulers beyond today's `lr_schedule.py`" out of scope (the owner, 2026-10-10); its payoff is a longer study (10 epochs took about 2.5 h on `jebel`) |
+| 11. Padding masks, variable-length windows | generalizes the causal mask; needed before any variable-length input or ragged batches, and by step 14 | nothing pads while windows are fixed, so step 11 must bring the input that pads; a mask input to a layer, which `Sequential` doesn't have; the loss and the evaluation skip padded positions |
+| 12. GELU | ViT's and GPT's FFN activation; small | needs `erf`, which stable Rust lacks (the `tanh` form is a different function); an activation, not a primitive; unlikely to move the loss at this size |
+| 13. Grouped- and multi-query attention | a named place; fewer key and value parameters; a smaller key/value cache per generated token (step 9) | an inference-memory optimization, and nothing here is memory-bound: the study compares loss at equal parameters and step 9's decode speed |
+| 14. Cross-attention | completes the original transformer; opens tasks with a second input (translation, conditioning) | the largest: a second input to a layer, a network that isn't a list of layers, an encoder-decoder task and its dataset; it needs step 11 |
 
-Dropout leads because its question is measured; generation follows because it's cheap and shows
-what steps 7 and 9 buy; the schedule comes before the larger steps so that their studies train to
-convergence. Padding masks come before cross-attention, which needs them. GELU and grouped heads
-are small and measure little; cross-attention is last as the largest.
+Dropout leads because its question is measured; rotary positions come next because generation's
+cache needs them; generation then shows what steps 7, 8 and 10 buy; the schedule comes before the
+larger steps so that their studies train to convergence. Padding masks come before cross-attention,
+which needs them. GELU and grouped heads are small and measure little; cross-attention is last as
+the largest.
 
 ## Out of scope
 
