@@ -4,7 +4,8 @@
 A patch model's token layers on the Rust backend (the layer-norm and attention workplan; README,
 Layer norm and attention): Patches, Position, TokenMean and the token-wise dense layer; and a
 sequence model's (the sequence task workplan, stage 5): Embedding and the token-wise softmax output
-layer, the counterparts of token_array_layer.py's. Patches, TokenMean and Embedding are the crate's
+layer; and the token-wise dropout (the attention-dropout workplan, stage 5), the counterparts of
+token_array_layer.py's. Patches, TokenMean and Embedding are the crate's
 tokens.rs; Position is Array's + and sum_axis0; the token-wise dense and softmax layers are the
 existing dense ops (fused.rs) on the (N * T, d) rows (D9), the softmax's row sum a left fold
 (array_softmax), as numpy's. Each takes a single example as its 1D vector, with a batch of one's
@@ -68,6 +69,49 @@ class TokenMeanRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], Par
 
     def downstream_batch(self) -> pa.Array:
         return pa.token_mean_downstream(self.delta_batch, self.tokens)
+
+
+class TokenDropoutRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):
+    """
+    TokenDropoutArrayLayer on the Rust backend: in training each forward pass draws its mask from
+    rng, the network's crate Generator (token_dropout_forward), numpy's default_rng, so from
+    generators in the same state the masks are TokenDropoutArrayLayer's by bits; the downstream is
+    token_dropout_downstream with that mask. In inference it passes its input on and draws nothing.
+    """
+
+    def __init__(self, tokens: int, features: int, drop_probability: float) -> None:
+        assert 0.0 <= drop_probability < 1.0, f"drop_probability must be in [0.0, 1.0); got {drop_probability}"
+        self.size = tokens * features
+        self.input_size = self.size
+        self._drop_probability = drop_probability
+        self.training = False
+        self.rng = pa.default_rng()
+        self._mask: pa.Array | None = None
+
+    def set_rng(self, rng: pa.Generator) -> None:
+        self.rng = rng
+
+    def set_training_mode(self, training: bool) -> None:
+        self.training = training
+
+    def forward(self, x: pa.Array) -> pa.Array:
+        if not self.training:
+            self._mask = None
+            return x
+        a, self._mask = pa.token_dropout_forward(x, self._drop_probability, self.rng)
+        return a
+
+    def forward_batch(self, X: pa.Array) -> pa.Array:
+        return self.forward(X)
+
+    def _downstream(self, delta: pa.Array) -> pa.Array:
+        return delta if self._mask is None else pa.token_dropout_downstream(delta, self._mask, self._drop_probability)
+
+    def downstream(self) -> pa.Array:
+        return self._downstream(self.delta)
+
+    def downstream_batch(self) -> pa.Array:
+        return self._downstream(self.delta_batch)
 
 
 class EmbeddingRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):

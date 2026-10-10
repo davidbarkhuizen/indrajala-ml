@@ -858,7 +858,7 @@ def test_format_2_round_trips_dropout_specs(specs: list[LayerSpec]):
     assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
 
 
-@pytest.mark.parametrize(("backend", "stage"), [("rust", "5"), ("python", "6")], ids=["rust", "python"])
+@pytest.mark.parametrize(("backend", "stage"), [("python", "6")], ids=["python"])
 @pytest.mark.parametrize(
     "specs",
     [DROPOUT["the attention weights only"], DROPOUT["the residual dropout only"], DROPOUT["no drop at all"]],
