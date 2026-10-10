@@ -432,7 +432,7 @@ def test_the_blocks_called_in_turn_are_the_layers_passes_by_bits(heads: int, key
     delta = [rng.uniform(-0.5, 0.5) for _ in range(24)]
 
     Q, K, V = layer._project(layer._inputs())
-    P, H = layer._attend(Q, K, V)
+    P, H, _ = layer._attend(Q, K, V)
     out = layer._combine(H)
     layer.forward()
     assert bits([node.value() for node in layer.nodes]) == bits([v for row in out for v in row])

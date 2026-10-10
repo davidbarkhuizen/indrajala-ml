@@ -31,7 +31,6 @@ from indrajala_ml.model.specs.layer_specs import (
     Residual,
     TokenMean,
     expand_specs,
-    refuse_dropout_specs_until,
     spec_paths,
     token_wise_output,
 )
@@ -858,20 +857,7 @@ def test_format_2_round_trips_dropout_specs(specs: list[LayerSpec]):
     assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
 
 
-@pytest.mark.parametrize(("backend", "stage"), [("python", "6")], ids=["python"])
-@pytest.mark.parametrize(
-    "specs",
-    [DROPOUT["the attention weights only"], DROPOUT["the residual dropout only"], DROPOUT["no drop at all"]],
-    ids=["attention", "a dropout", "a dropout of 0"],
-)
-def test_every_builder_refuses_dropout_until_its_stage(specs: list[LayerSpec], backend: str, stage: str):
-    with pytest.raises(
-        NotImplementedError, match=re.escape(f"not yet (the attention-dropout workplan, stage {stage})")
-    ):
-        _builds(specs, backend)
-
-
-def test_attention_without_dropout_isnt_refused():
-    refuse_dropout_specs_until(SEQUENCE["a causal transformer"], "3", "here")
+@pytest.mark.parametrize("specs", DROPOUT.values(), ids=DROPOUT.keys())
+def test_all_three_implementations_build_dropout_specs(specs: list[LayerSpec]):
     for backend in ("numpy", "rust", "python"):
-        _builds([IDS, Position(), Residual((LayerNorm(), Attention(dropout=0.0))), TOKEN_OUTPUT], backend)
+        _builds(specs, backend)
