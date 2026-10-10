@@ -7,7 +7,8 @@ in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan
 [rng-draw-order-workplan.md](rng-draw-order-workplan.md),
 [attention-dropout-workplan.md](attention-dropout-workplan.md),
 [rotary-positions-workplan.md](rotary-positions-workplan.md),
-[generation-workplan.md](generation-workplan.md). The order
+[generation-workplan.md](generation-workplan.md),
+[training-recipe-workplan.md](training-recipe-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -65,7 +66,7 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
   sigmoid), a conv or pool layer after a dense one (the fused hidden delta reads the next layer's
   `W`), and one rule per layer.
 - **Weight decay with momentum or Adam** needs a published form chosen and cited first (README,
-  Update rules).
+  Update rules). For Adam it is chosen: AdamW (Loshchilov & Hutter 2019), roadmap step 10.
 - **Ensembles over the new one-output presets** (the presets workplan). The ensembles fix their
   sub-network class (`classifier_cls`); a choice of sub-network is its own change.
 - **Demos for the new conv presets** (the presets workplan's D4), each with its own tuned,
