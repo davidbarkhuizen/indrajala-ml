@@ -3,7 +3,8 @@
 A workplan is deleted once its last stage merges, and never before: only when every stage and
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md). The order
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
+[rng-draw-order-workplan.md](rng-draw-order-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -210,7 +211,8 @@ Still out of scope:
   whose rows match numpy's `E` by bits). So the pure-Python parity tests (attention's, the
   sequence task's) restore numpy from pure Python's snapshot rather than seeding both, and pin
   pure Python's own draw order. Matching it would change every pure-Python network's draws: a
-  golden re-record (measurement.md, §8) and the owner's call.
+  golden re-record (measurement.md, §8). The owner has scheduled it before roadmap step 7:
+  [rng-draw-order-workplan.md](rng-draw-order-workplan.md).
 - **Run checkpoints beyond one network's mini-batch run** (`indrajala_ml/training/run_checkpoint.py`):
   resuming mid-epoch, resuming `train_linear_classifier_network` (it returns no run checkpoint),
   and resuming an ensemble's run, whose sub-networks train as separate jobs.
