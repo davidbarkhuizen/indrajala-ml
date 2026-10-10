@@ -27,7 +27,7 @@ Requires Python >= 3.14, a Debian/Ubuntu host (`setup` apt-installs `python3-tk`
 installs on the first build (a distro `cargo` ignores the pin).
 
 ```
-./cli setup          # submodule, .venv, pip deps, release build of rust/, fetch MNIST
+./cli setup          # submodule, .venv, pip deps, release build of rust/, fetch MNIST and the text corpora
 ./cli test           # pytest tests/ and rust/tests/ (or: ./cli test <path> ...)
 ./cli lint           # ruff check, ruff format --check, pyright
 ./cli demo           # interactive demo menu
@@ -87,15 +87,15 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `indrajala_ml/model/` | classifier networks and their layers |
 | `indrajala_ml/demos/` | runnable demos in topic folders (linear, backprop, uci_digits, mnist, conv, benchmarks); `registry.py` lists them in menu order |
 | `indrajala_ml/training/` | training loops (`train.py`), synthetic training data, run checkpoints, evaluation (disagreement rate, accuracy, confusion matrix), one-vs-rest ensemble training over multiprocessing (`ensemble_train.py`) |
-| `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
+| `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; the text corpora's (`text_data.py`); `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
 | `indrajala_ml/capture/` | painted digits turned into UCI digits and MNIST inputs |
 | `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks |
-| `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol |
+| `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol; `sequence_study.py`, the sequence study's |
 | `indrajala_ml/graphics/` | matplotlib plotting: figures, axes, legends and series (`chart.py`), classifier plots (`classifier_plots.py`) and evaluation plots (`evaluation_plots.py`) |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
-| `data/` | UCI digits and Iris (committed); MNIST (fetched into `data/mnist/`) |
-| `scripts/fetch_datasets.py` | checksum-verified MNIST fetch from a pinned `indrajala-datasets-mnist` tag |
-| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention and multi-head attention studies and the refactoring golden run; see `docs/measurement.md` |
+| `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
+| `scripts/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
+| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention, multi-head attention and sequence studies and the refactoring golden run; see `docs/measurement.md` |
 | `docs/` | the measurement guide, next steps, the PyPI release workplan, the primitives roadmap, the RNG audit, machine profiles |
 
 ## Models
@@ -114,7 +114,7 @@ network = SequentialArrayNetwork(
     input_shape=(28, 28, 1),
     layers=[Conv(5, 8), Pool(2), Dense(30), Dense(10, output=True)],
     update_rule=Momentum(0.9),
-    shape="multiclass",  # or "single_output"
+    shape="multiclass",  # or "single_output", or "sequence"
     backend=RUST,  # or NUMPY
 )
 ```
@@ -126,7 +126,8 @@ network = SequentialArrayNetwork(
   `BatchNorm(activation)` after a linear layer (Batch normalization), `Residual(body)` for a
   residual block (Residual connections), `LayerNorm(epsilon)`, and a patch model's
   `Patches(patch_size)`, `Position()`, `Attention(heads, key_size)` and `TokenMean()` (Layer norm
-  and attention). Activations are fused into their layer. `validate_layer_specs` refuses a list that
+  and attention), and a sequence model's `Embedding(vocabulary, size)` and `Attention(causal=True)`
+  (The sequence task). Activations are fused into their layer. `validate_layer_specs` refuses a list that
   some implementation can't build.
 - **Update rules** (`update_rules.py`) are data too: `SGD`, `Momentum`, `Adam` and `WeightDecay`
   (see Update rules, below).
@@ -140,7 +141,7 @@ network = SequentialArrayNetwork(
 
 | Implementation | Base | Sequential network |
 | --- | --- | --- |
-| pure Python, one object per node | `BackpropNetworkBase` | `SequentialMultiClassBackpropClassifierNetwork`, `SequentialBackpropClassifierNetwork` (`sequential_backprop_network.py`) |
+| pure Python, one object per node | `BackpropNetworkBase` | `SequentialMultiClassBackpropClassifierNetwork`, `SequentialBackpropClassifierNetwork`, `SequentialSequenceBackpropNetwork` (`sequential_backprop_network.py`) |
 | numpy arrays | `ArrayNetworkBase` | `SequentialArrayNetwork(..., backend=NUMPY)` |
 | Rust arrays (production backend) | `RustArrayNetworkBase` | `SequentialArrayNetwork(..., backend=RUST)` |
 
@@ -240,6 +241,9 @@ network = load_network("model.json")  # the Sequential network the file describe
   Wv, bv, Wo, bo` (heads as row blocks), nothing for `Patches` or `TokenMean`
   (`tests/model/persistence/test_attention_format2.py`). An `"attention"` entry has `"heads"` and
   `"key_size"` only when they aren't the defaults, so a one-head file is as before they existed.
+- A sequence model's file has the `"sequence"` shape, an `"embedding"` entry with its table `E`
+  (its weights and optimizer state per row, a token id's, in pure Python), and `"causal": true` on
+  a causal attention entry, written only when true (The sequence task).
 - `load` still reads each class's legacy file, written before format 2, with fresh optimizer
   state (`tests/model/persistence/test_legacy_saved_models.py`). Files saved in format 2 don't load on older versions
   of this package.
@@ -635,6 +639,95 @@ block alone is the weakest, 92.4%, below the dense control's 93.9%; and the conv
 96.2%, 96.0%), wider heads stay within noise, and a second layer helps on every seed: two layers of
 4 heads reach 97.0%, a point under the conv network with 11% of its parameters.
 
+## The sequence task
+
+A sequence network predicts every token of a window from the tokens before it: next-character
+prediction on a text corpus, a small causal transformer (Vaswani et al. 2017, §3.2.3; Radford et
+al. 2018), in all three implementations and the crate, under every update rule; no preset has one.
+It reads `T` token ids, gives a softmax over the vocabulary at each of the `T` positions, and is
+trained on the mean of the `T` cross-entropies:
+
+```python
+from indrajala_ml.data.text_data import load_text_dataset
+from indrajala_ml.model.layers.array.array_backend import NUMPY
+from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, Position, Residual
+from indrajala_ml.model.specs.update_rules import Adam
+from indrajala_ml.training.sequence_evaluate import sequence_evaluate
+from indrajala_ml.training.train import train_backprop_network_mini_batch
+
+train, held_out, vocabulary = load_text_dataset()  # Tiny Shakespeare, windows of 64 + 1 characters
+V = len(vocabulary)  # 65
+layers = [
+    Embedding(V, 64),  # 64 token ids -> 64 tokens of 64
+    Position(),
+    Residual((LayerNorm(), Attention(heads=4, causal=True))),
+    Residual((LayerNorm(), Dense(256, activation="relu"), Dense(64, activation="linear", bias=True))),
+    LayerNorm(),
+    Dense(V, activation="softmax", output=True, loss="cross_entropy"),  # a softmax per token
+]
+network = SequentialArrayNetwork((64,), layers, Adam(), "sequence", NUMPY)
+network.randomize()
+train_backprop_network_mini_batch(network, train, 32, learning_rate=0.002, epochs=10)
+print(sequence_evaluate(network, held_out).bits_per_token)
+```
+
+- **The corpora** (`indrajala_ml/data/text_data.py`, `CORPORA`): Tiny Shakespeare (Karpathy 2015,
+  1.1 M characters, 65 symbols), the default everywhere; Herodotus' *Histories* in Rawlinson's
+  translation; Ibn Khaldun's *Muqaddimah* in Arabic; and Euclid's *Elements* in Heath's translation.
+  Each lives in its own `indrajala-datasets-*` repository, cleaned there by a script that rebuilds
+  it byte for byte from a pinned source, and `scripts/fetch_datasets.py` fetches and
+  checksum-verifies it into `data/<name>/`, as it does MNIST. The *Muqaddimah*'s text is
+  CC BY-NC-SA 4.0 (OpenITI's), fetched for study and never redistributed here; Euclid's encoding is
+  Perseus's, CC BY-SA 4.0.
+- **Examples**: the vocabulary is the corpus's characters, sorted, a token id each. The first 90%
+  of the text is for training and the last 10% held out (nanoGPT's split), each cut into
+  non-overlapping windows of `T + 1` characters, `T = 64`: a window's first `T` ids are its state,
+  as floats, and its last `T` its labels, one class per token. The trainer is generic over the
+  label, and reports accuracy per token.
+- **`Embedding(vocabulary, size)`** starts the token part, as `Patches` does, over a flat input of
+  `T` ids: each id's row of a learned `(vocabulary, size)` table `E`. It refuses an id that isn't
+  a whole number in range. `E` is drawn as a weight matrix of fan-in `size` and doesn't decay.
+- **A token-wise output**: a token part may end, without `TokenMean`, in its output layer, a
+  softmax with cross-entropy applied to each token. That is the `"sequence"` network shape, beside
+  `"multiclass"` and `"single_output"`, which refuse it; `classify_state` gives the per-token argmax.
+- **`Attention(causal=True)`** masks each token's scores for the tokens after it, so token `t`
+  attends to tokens `0` to `t` only.
+- **`sequence_evaluate(network, examples)`** gives the mean per-token cross-entropy in nats,
+  `bits_per_token` (bits per character here) and the per-token accuracy.
+
+The exact expressions, in the forms of Layer norm and attention:
+
+```text
+embedding, x the T ids, E (vocabulary, size)
+  out_t = E[x_t]                                         a copy of the row
+  backward: grad_E[x_t] += delta_t                       a scatter-add, examples then tokens in order (np.add.at's)
+
+causal attention, attend, each head i
+  S[i]_tu = -inf for u > t, after the scale              before the max shift; the diagonal is never masked
+  so P[i]_tu = exp(-inf) / ... = 0 exactly, and dS[i]_tu = 0: the backward pass is unchanged
+
+token-wise softmax output, each token's V outputs
+  z_t = x_t W^T + b;  P_t = softmax(z_t)                 the softmax's sum a left fold
+  loss = sum_t(-log P_t[y_t]) / T                        the mean over the tokens
+  delta_t = (P_t - Y_t) / T                              Y_t one-hot
+```
+
+On Rust the mask is a `causal` keyword on the crate's two attention forward ops (the backward ops
+read `P`, whose masked weights are already 0), the embedding is `embedding_forward` and
+`embedding_accumulate_gradient`, and the token-wise softmax is the dense softmax op on the
+`(N * T, d)` rows. Format 2 saves an `"embedding"` entry and its `E`, writes `"causal"` only when
+true, and records the `"sequence"` shape (Saving and loading).
+
+`scripts/sequence_study.py` trains a 1- and 2-layer causal transformer (`d = 64`, 4 heads), an
+FFN-only model and the 2-layer model without its mask against counted unigram and bigram floors,
+on all four corpora, under Adam (5 seeds, 10 epochs, numpy). Held-out bits per character at 2
+layers: Euclid 1.50, Herodotus 1.95, Tiny Shakespeare 2.48, the *Muqaddimah* 2.79. A per-token
+model is a bigram model (FFN-only sits 0.01 bits above the counted bigram on every corpus); one
+causal layer takes 0.8 to 1.5 bits under it, and a second 0.09 to 0.17 more, neither yet
+converged at 10 epochs. Without the mask the model copies the next input: 0.04 to 0.06 bits per
+character, held out too, on every corpus (the findings are in its docstring).
+
 ## Refactoring
 
 A structural refactoring changes structure only, never numerics. Every stage keeps every parity
@@ -669,7 +762,8 @@ test passing, and:
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
-  attention, multi-head attention and a transformer block, all done.
+  attention, multi-head attention and a transformer block, and a sequence task with causal
+  masking, all done.
 - [docs/next-steps.md](docs/next-steps.md): the work left over from completed workplans, and how
   to read those workplans in git history.
 - [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's
