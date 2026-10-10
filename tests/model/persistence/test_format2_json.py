@@ -2,6 +2,7 @@
 Format 2's layer entries (model/persistence/format2_json.py): an entry added to a spec after files
 were saved without it is left out at its default, so those files are what such a network saves now.
 The sequence task workplan's (stage 2): an embedding's entry, its table E, and a causal attention's.
+The attention-dropout workplan's (stage 2, D7): an attention's dropout, and a token dropout's entry.
 """
 
 from indrajala_ml.model.persistence.checkpoint import OptimizerState
@@ -11,7 +12,7 @@ from indrajala_ml.model.persistence.format2_json import (
     optimizer_state_from_json,
     optimizer_state_to_json,
 )
-from indrajala_ml.model.specs.layer_specs import Attention, BatchNorm, Conv, Dense, Embedding
+from indrajala_ml.model.specs.layer_specs import Attention, BatchNorm, Conv, Dense, Dropout, Embedding, Position
 from indrajala_ml.model.specs.update_rules import Adam
 
 
@@ -50,4 +51,28 @@ def test_an_embeddings_optimizer_state_is_its_tables():
     entry = optimizer_state_to_json(Adam(), False, state, specs)
     assert entry["layers"][0] == {"m_E": [[0.5, 0.25]] * 3, "v_E": [[0.125, 1.0]] * 3}
     assert list(entry["layers"][1]) == ["m_W", "v_W", "m_b", "v_b"]
+    assert optimizer_state_from_json(Adam(), False, entry, specs) == state
+
+
+def test_an_attention_entry_holds_dropout_only_when_it_drops():
+    # no "dropout" without it: the attention fixtures are what such a network saves now, and older
+    # checkouts load them (the attention-dropout workplan, D7)
+    assert layer_to_json(Attention(dropout=0.0)) == {"kind": "attention"}
+    assert layer_to_json(Attention(causal=True, dropout=0.1)) == {"kind": "attention", "causal": True, "dropout": 0.1}
+    assert layer_from_json({"kind": "attention", "dropout": 0.1}) == Attention(dropout=0.1)
+
+
+def test_a_dropout_has_its_entry_and_no_optimizer_state():
+    assert layer_to_json(Dropout(0.1)) == {"kind": "dropout", "p": 0.1}
+    assert layer_from_json({"kind": "dropout", "p": 0.1}) == Dropout(0.1)
+    # no weights, so no state: the optimizer steps the layers around it only
+    specs = [
+        Embedding(3, 2),
+        Position(),
+        Dropout(0.1),
+        Dense(3, output=True, activation="softmax", loss="cross_entropy"),
+    ]
+    state = OptimizerState(1, {0: [[[0.5, 0.25]] * 3, [[0.125, 1.0]] * 3], 1: [[[1.0, 2.0]], [[3.0, 4.0]]]})
+    entry = optimizer_state_to_json(Adam(), False, state, specs)
+    assert entry["layers"][2] is None
     assert optimizer_state_from_json(Adam(), False, entry, specs) == state

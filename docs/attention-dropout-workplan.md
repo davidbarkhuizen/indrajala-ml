@@ -1,7 +1,7 @@
 # Workplan: dropout in attention (roadmap step 7)
 
-**Status: decisions D1-D10 settled by the owner (2026-10-10), each as recommended. Stage 1 (this
-plan) done. The RNG draw-order workplan, which it waited for, is retired (2026-10-10,
+**Status: decisions D1-D10 settled by the owner (2026-10-10), each as recommended. Stages 1 (this
+plan) and 2 (the specs) done. The RNG draw-order workplan, which it waited for, is retired (2026-10-10,
 [next-steps.md](next-steps.md)), so its masks are tested in all three implementations by bits from
 the first stage.**
 
@@ -143,8 +143,10 @@ Each lists the options considered, with pros and cons, and the choice.
 ## Stages
 
 1. **This workplan** (D1-D10 settled).
-2. **Specs**: `Attention(dropout)`, `Dropout(p)` (D2), validation, `spec_shapes`, format 2's
-   entries (D7); builders refuse both with "not yet" until their stages.
+2. **Specs** (done): `Attention(dropout)`, `Dropout(p)` (D2), validation, `spec_shapes`, format 2's
+   entries (D7); builders refuse both with "not yet" until their stages
+   (`refuse_dropout_specs_until`; an `Attention(dropout=0.0)` builds as before, a `Dropout(0.0)`
+   is refused with the rest).
 3. **numpy**: the mask on `P` (D3, D4) and the token dropout, the training switch, parity tests by
    hand; tier 1 A/B of numpy's attention case with dropout off.
 4. **The crate** (`indrajala-math-rust`): the attention ops' `dropout`, `training`, `rng` keywords
