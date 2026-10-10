@@ -11,10 +11,11 @@ Dense backprop, the perceptron and MADALINE, ReLU, softmax with cross-entropy, c
 pooling, momentum, Adam, L2, dropout, ensembles, linear warmup, batch norm with ghost groups,
 residual blocks, layer norm and multi-head self-attention over patch tokens, stacked into transformer
 layers, and a causal transformer over token ids for next-token prediction, with a per-token output
-and loss (README, Models, Batch normalization, Residual connections, Layer norm and attention and
-The sequence task), built from composable layer specs and update rules. Each is in all three
-implementations (pure Python, numpy, Rust). There is no padding mask, no dropout in attention, no
-text generation and no recurrence.
+and loss, and dropout on its attention weights and among its tokens (README, Models, Batch
+normalization, Residual connections, Layer norm and attention, The sequence task and Dropout among
+the tokens), built from composable layer specs and update rules. Each is in all three
+implementations (pure Python, numpy, Rust). There is no padding mask, no text generation and no
+recurrence.
 
 ## The order
 
@@ -35,8 +36,8 @@ three implementations start, and drop out, alike from one seed; done (2026-10-10
 [rng-audit.md](rng-audit.md)). Step 7's attention dropout then tests its masks in all three by
 bits.
 
-7. **Dropout in attention**: on the attention weights and after the output projection; planned
-   (2026-10-10, [attention-dropout-workplan.md](attention-dropout-workplan.md)).
+7. **Dropout in attention**: done (2026-10-11), on the attention weights and token-wise, for the
+   embedding and each block's output.
 8. **Rotary position embedding**: positions inside attention, so that a cached key stays valid
    as a window slides; planned (2026-10-10,
    [rotary-positions-workplan.md](rotary-positions-workplan.md)).
@@ -64,7 +65,7 @@ a design. That reframed padding as segments (step 11), added context length (ste
 to the FFN activations production uses (step 13) and gave cross-attention a real translation task
 (step 15). The case for each, and for the order, is below.
 
-## 1 to 6. Done
+## 1 to 7. Done
 
 Composable layers and optimizers, then batch normalization, both done (2026-09-30); their retired
 workplans and the work they left open are in [next-steps.md](next-steps.md). The case made for
@@ -108,14 +109,23 @@ Euclid 1.50, Herodotus 1.95, Tiny Shakespeare 2.48, the *Muqaddimah* 2.79), and 
 the model copies the next input, 0.04 to 0.06 bits per character on held-out text. The case made
 for step 6 is in this file's history: `git show f6e843b:docs/primitives-roadmap.md`.
 
-## 7 to 15. The order after the sequence task
+Dropout in attention was done on 2026-10-11: `Attention(dropout=p)`, inverted dropout on the
+attention weights before the weighted sum of the values, and a token-wise `Dropout(p)` after
+`Position` and ending a block's body (GPT's `attn_pdrop`, `embd_pdrop` and `resid_pdrop`), in all
+three implementations and the crate, their masks by bits in all three. The retired workplan and its
+open work are in next-steps.md. The attention-dropout study (`scripts/attention_dropout_study.py`)
+found the sequence study's train/held-out gaps mostly the text's shift (Euclid's 0.49 bits per
+character falls to 0.04 on a split from across the text), and dropout narrowing them by fitting
+the training text worse, a cost of 0.01 to 0.35 bits held out at 10 epochs. The case made for step
+7 is in this file's history: `git show 1ea3fb5:docs/primitives-roadmap.md`.
+
+## 8 to 15. The order after the sequence task
 
 Ordered by what each can measure on the models that exist, and by cost. Each step's open questions
 are its workplan's to settle.
 
 | step | pros | cons |
 | --- | --- | --- |
-| 7. Dropout in attention | the one primitive with a measured question waiting: the sequence study's held-out loss is above its training loss, by 0.3 bits per character on Tiny Shakespeare and the *Muqaddimah* and 0.49 on Euclid, where the MNIST patch models never overfit; both places are named (next-steps.md, From multi-head attention); the dense layers' dropout, the network's generator and its saved state already exist; GPT's and Vaswani et al.'s regularizer | a training and inference switch in the token layers; mask draws in all three implementations' orders, where pure Python's weight draws already differ for layers with a bias; a crate PR first (a mask on `P` kept for backward); Euclid's gap mixes overfitting with a shift in the text (its held-out part is Book XII on), so the study needs a held-out set that separates them |
 | 8. Rotary position embedding | parameter-free positions inside attention (Su et al. 2021), the scheme of most decoders since; scores depend on token distance only, so step 9's cached keys stay valid as its window slides (with learned positions every cached key goes stale once the window moves); a `positions` field on `Attention` admits other schemes later | a new attention option in three implementations and the crate; `cos` and `sin` aren't correctly rounded, so one table must feed all three; models retrain with it |
 | 9. Generation | the most persuasive demo of a language model; a key/value cache makes a character one token's pass (a full 64-token pass is 1.5 ms in Rust, 2.5 ms in numpy, on `pyramidon`), and incremental decoding is structure later sequence work reuses | a second forward path, a decode step, through every token layer in three implementations and the crate; a 10-epoch model at 2.48 bits per character on Tiny Shakespeare gives mostly garbled text |
 | 10. The training recipe, longer training | the study's clearest open question: neither transformer had converged at 10 epochs; production trains with all three of a warmup-cosine schedule, AdamW and global-norm clipping (Brown et al. 2020, appendix B), so the step brings the recipe, not the schedule alone; every task gains | a training feature, not a primitive; lifts composable layers' "schedulers beyond today's `lr_schedule.py`" out of scope (the owner, 2026-10-10); its payoff is a longer study (10 epochs took about 2.5 h on `jebel`) |
@@ -125,7 +135,7 @@ are its workplan's to settle.
 | 14. Grouped- and multi-query attention | a named place; fewer key and value parameters; a smaller key/value cache per generated token (step 9) | an inference-memory optimization, and nothing here is memory-bound: the study compares loss at equal parameters and step 9's decode speed |
 | 15. Cross-attention | completes the original transformer; opens tasks with a second input (translation, conditioning) | the largest: a second input to a layer, a network that isn't a list of layers, an encoder-decoder task and its dataset; it needs step 11 |
 
-Dropout leads because its question is measured; rotary positions come next because generation's
+Dropout led because its question was measured (done, above); rotary positions come next because generation's
 cache needs them; generation then shows what steps 7, 8 and 10 buy; the training recipe comes
 before the larger steps so that their studies train to convergence. Segments come before context
 length, whose long windows pack paragraphs, and before cross-attention, which needs their padding.

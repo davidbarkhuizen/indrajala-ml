@@ -90,7 +90,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; the text corpora's (`text_data.py`); `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
 | `indrajala_ml/capture/` | painted digits turned into UCI digits and MNIST inputs |
 | `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks |
-| `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol; `sequence_study.py`, the sequence study's |
+| `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol; `sequence_study.py`, the sequence study's; `attention_dropout_study.py`, the attention-dropout study's |
 | `indrajala_ml/graphics/` | matplotlib plotting: figures, axes, legends and series (`chart.py`), classifier plots (`classifier_plots.py`) and evaluation plots (`evaluation_plots.py`) |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
@@ -126,8 +126,9 @@ network = SequentialArrayNetwork(
   `BatchNorm(activation)` after a linear layer (Batch normalization), `Residual(body)` for a
   residual block (Residual connections), `LayerNorm(epsilon)`, and a patch model's
   `Patches(patch_size)`, `Position()`, `Attention(heads, key_size)` and `TokenMean()` (Layer norm
-  and attention), and a sequence model's `Embedding(vocabulary, size)` and `Attention(causal=True)`
-  (The sequence task). Activations are fused into their layer. `validate_layer_specs` refuses a list that
+  and attention), a sequence model's `Embedding(vocabulary, size)` and `Attention(causal=True)`
+  (The sequence task), and `Attention(dropout=p)` and a token-wise `Dropout(p)` (Dropout among the
+  tokens). Activations are fused into their layer. `validate_layer_specs` refuses a list that
   some implementation can't build.
 - **Update rules** (`update_rules.py`) are data too: `SGD`, `Momentum`, `Adam` and `WeightDecay`
   (see Update rules, below).
@@ -517,10 +518,11 @@ batch is an `(N, T, d)` stack and an `(N * T, d)` matrix without a copy. Between
 first layer, and `TokenMean` a network has a token part, in place of a conv front end: `Dense` acts
 on each token with weights shared over the tokens (ReLU, or linear with `bias=True`, no dropout),
 `Position` stands once, before any block, and a block's body ends in `Attention` or
-`Dense(d, activation="linear", bias=True)`. Sigmoid, dropout and `BatchNorm` are refused among
-tokens. After `TokenMean` the dense part's rules hold, and in any dense network `LayerNorm` may
-stand wherever a dense hidden layer may, a residual body's first layer included. A layer norm has
-no activation after it.
+`Dense(d, activation="linear", bias=True)`. Sigmoid, a dense layer's dropout and `BatchNorm` are
+refused among tokens; the token-wise `Dropout` stands only where Dropout among the tokens says.
+After `TokenMean` the dense part's rules hold, and in any dense network `LayerNorm` may stand
+wherever a dense hidden layer may, a residual body's first layer included. A layer norm has no
+activation after it.
 
 `Attention(heads=1, key_size=None)` attends in `heads` heads of `key_size` features each, `d_k`;
 `None` means `d / heads`, which `heads` must then divide (Keras's `key_dim`). Values are as wide as
@@ -623,8 +625,9 @@ floating point, which differs between implementations; parity tests compare it a
 adds `Wo bv` to every output, as `bo` can, since each row of every `P[i]` sums to 1. Both stay, matching PyTorch's `nn.MultiheadAttention` and ViT's `qkv_bias`.
 
 Every implementation's attention layer, and the crate, is the same three blocks per pass, project,
-attend and combine, each tested on its own; masking, dropout on `P`, grouped key/value heads and
-cross-attention each have a named place among them (next-steps.md, From multi-head attention).
+attend and combine, each tested on its own; the causal mask and dropout on `P` sit in attend (The sequence task,
+Dropout among the tokens), and padding masks, grouped key/value heads and cross-attention each
+have a named place among them (next-steps.md, From multi-head attention).
 On Rust each layer-norm and attention pass is still one crate call, the attention ops thin
 wrappers over the crate's blocks, and the token-wise dense layer is the existing dense ops on the
 `(N * T, d)` view. A dense layer's hidden delta reads the next
@@ -730,6 +733,81 @@ model is a bigram model (FFN-only sits 0.01 bits above the counted bigram on eve
 causal layer takes 0.8 to 1.5 bits under it, and a second 0.09 to 0.17 more, neither yet
 converged at 10 epochs. Without the mask the model copies the next input: 0.04 to 0.06 bits per
 character, held out too, on every corpus (the findings are in its docstring).
+
+## Dropout among the tokens
+
+A transformer drops out in two ways (Vaswani et al. 2017, §5.4; GPT-2's and nanoGPT's `attn_pdrop`,
+`resid_pdrop` and `embd_pdrop`), and both are here, in all three implementations and the crate,
+under every update rule, for any token part:
+
+```python
+layers = [
+    Embedding(V, 64),
+    Position(),
+    Dropout(0.1),  # the embedding dropout
+    Residual((LayerNorm(), Attention(heads=4, causal=True, dropout=0.1), Dropout(0.1))),  # attn_pdrop, resid_pdrop
+    Residual((LayerNorm(), Dense(256, activation="relu"), Dense(64, activation="linear", bias=True), Dropout(0.1))),
+    LayerNorm(),
+    Dense(V, activation="softmax", output=True, loss="cross_entropy"),
+]
+```
+
+- **`Attention(dropout=p)`** drops each attention weight in training, after the softmax and
+  before the weighted sum of the values, the kept ones scaled by `1 / (1 - p)`: inverted dropout,
+  as PyTorch's `scaled_dot_product_attention(dropout_p=p)`, so a row of the dropped weights no
+  longer sums to 1 in training and is the plain softmax in inference.
+- **`Dropout(p)`** drops each feature of each token, inverted, in training; it has no weights.
+  Validation allows it in two places only: right after `Position` (the embedding dropout), and
+  ending a block's body right after its `Attention` or affine `Dense` (the residual dropout,
+  before the add). A dense layer's `Dense(dropout=p)` stays refused among tokens: it is fused with
+  a sigmoid, and a token-wise `Dense` is ReLU or linear.
+- **Training and inference.** Only `learn*` switches the layers into training for its forward
+  pass; `classify_*`, `forward_rows` and `sequence_evaluate` run in inference, where neither
+  mechanism draws or drops anything, so evaluation is deterministic.
+- **The draws.** Masks come from the network's generator in forward order, one draw a layer a
+  batch: an attention's `(N, h, T, T)` mask row-major (example, head, query, key), every entry
+  drawn, the causally masked ones included; a `Dropout`'s `(N, T, d)` mask row-major (example,
+  token, feature); a weight is kept when its draw `u >= p`, as a dense dropout layer's. An
+  attention at `dropout=0` draws nothing and computes what it did before dropout, so a model
+  without dropout keeps its bits; a `Dropout(0.0)` still draws its mask, as `Dense(dropout=0.0)`
+  does. Pure Python draws in numpy's order (rng-audit.md): a network trains layer-major when a
+  layer draws, example-major otherwise, and its masks match numpy's by bits.
+- **Saving.** Format 2 writes an attention's `"dropout"` only when set, as `"causal"`, and a
+  `{"kind": "dropout", "p": p}` entry for the token layer; the generator's saved state resumes the
+  masks by bits (Saving and loading).
+
+The exact expressions, in the forms of Layer norm and attention, `keep = 1 - p`:
+
+```text
+attention dropout, attend, each head i, in training
+  M[i]_tu = 1 if u_tu >= p else 0                        u drawn as above
+  P~[i] = P[i] * M[i] / keep
+  H[i]  = P~[i] V[i]
+  backward
+  dV[i] = P~[i]^T dH[i]
+  dP[i] = (dH[i] V[i]^T) * M[i] / keep
+  then the softmax's backward as before, with the undropped P[i]
+
+token dropout, in training
+  M_tj = 1 if u_tj >= p else 0
+  out_tj = x_tj * M_tj / keep
+  backward: dx_tj = delta_tj * M_tj / keep
+```
+
+On Rust the crate's attention forward ops take `dropout`, `training` and `rng` keywords and
+return the mask beside the caches (`None` when nothing was drawn), and the downstream op takes it;
+the token layer is `token_dropout_forward` and `token_dropout_downstream`.
+
+`scripts/attention_dropout_study.py` trains the sequence study's 2-layer model with each
+mechanism at 0.1, both at 0.1 and both at 0.2, against no dropout, on Euclid, Tiny Shakespeare and
+Herodotus, with the last 10% held out and with a spread split (each of 100 blocks' last tenth),
+under Adam (5 seeds, 10 epochs, one rate, numpy). The train/held-out gaps the sequence study found
+are mostly the text's shift: on the spread split Euclid's falls from 0.49 to 0.04 bits per
+character and Tiny Shakespeare's from 0.30 to 0.07, with the training loss unchanged. Dropout
+narrows every gap by fitting the training text worse, and costs 0.01 to 0.35 bits held out
+everywhere except attention dropout on Euclid's contiguous split (0.02 lower, on every seed); on
+Herodotus, with no gap to close, it only costs. Attention dropout adds 10% to an epoch, the
+token-wise dropout 6-7% (the findings are in its docstring).
 
 ## Refactoring
 
