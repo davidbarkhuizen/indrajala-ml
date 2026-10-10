@@ -44,7 +44,9 @@ its masks in all three by bits.
    (2026-10-10, [generation-workplan.md](generation-workplan.md)).
 10. **The training recipe**: learning-rate schedules as data, AdamW and gradient clipping, with
     longer training; planned (2026-10-10, [training-recipe-workplan.md](training-recipe-workplan.md)).
-11. **Padding masks and variable-length windows.**
+11. **Segments: packing, document masks and padding**: one segment id per token, for packed
+    training windows and padded inference batches; planned (2026-10-10,
+    [segments-workplan.md](segments-workplan.md)).
 12. **GELU.**
 13. **Grouped- and multi-query attention.**
 14. **Cross-attention**, with an encoder-decoder task.
@@ -109,14 +111,14 @@ are its workplan's to settle.
 | 8. Rotary position embedding | parameter-free positions inside attention (Su et al. 2021), the scheme of most decoders since; scores depend on token distance only, so step 9's cached keys stay valid as its window slides (with learned positions every cached key goes stale once the window moves); a `positions` field on `Attention` admits other schemes later | a new attention option in three implementations and the crate; `cos` and `sin` aren't correctly rounded, so one table must feed all three; models retrain with it |
 | 9. Generation | the most persuasive demo of a language model; a key/value cache makes a character one token's pass (a full 64-token pass is 1.5 ms in Rust, 2.5 ms in numpy, on `pyramidon`), and incremental decoding is structure later sequence work reuses | a second forward path, a decode step, through every token layer in three implementations and the crate; a 10-epoch model at 2.48 bits per character on Tiny Shakespeare gives mostly garbled text |
 | 10. The training recipe, longer training | the study's clearest open question: neither transformer had converged at 10 epochs; production trains with all three of a warmup-cosine schedule, AdamW and global-norm clipping (Brown et al. 2020, appendix B), so the step brings the recipe, not the schedule alone; every task gains | a training feature, not a primitive; lifts composable layers' "schedulers beyond today's `lr_schedule.py`" out of scope (the owner, 2026-10-10); its payoff is a longer study (10 epochs took about 2.5 h on `jebel`) |
-| 11. Padding masks, variable-length windows | generalizes the causal mask; needed before any variable-length input or ragged batches, and by step 14 | nothing pads while windows are fixed, so step 11 must bring the input that pads; a mask input to a layer, which `Sequential` doesn't have; the loss and the evaluation skip padded positions |
+| 11. Segments: packing, document masks, padding | one segment id per token is production's single mechanism for packed training windows (GPT-3 packs documents; Llama 3 masks attention between them) and padded inference batches (batched decoding, encoders, cross-attention's sources); the long-form corpora's paragraphs (median 729 to 1,266 characters) are the units it packs; generalizes the causal mask | a forward context carrying per-batch information to every layer, a refactor of every layer's signature before the feature; special tokens in the tokenizer; the loss over counted tokens only |
 | 12. GELU | ViT's and GPT's FFN activation; small | needs `erf`, which stable Rust lacks (the `tanh` form is a different function); an activation, not a primitive; unlikely to move the loss at this size |
 | 13. Grouped- and multi-query attention | a named place; fewer key and value parameters; a smaller key/value cache per generated token (step 9) | an inference-memory optimization, and nothing here is memory-bound: the study compares loss at equal parameters and step 9's decode speed |
 | 14. Cross-attention | completes the original transformer; opens tasks with a second input (translation, conditioning) | the largest: a second input to a layer, a network that isn't a list of layers, an encoder-decoder task and its dataset; it needs step 11 |
 
 Dropout leads because its question is measured; rotary positions come next because generation's
 cache needs them; generation then shows what steps 7, 8 and 10 buy; the schedule comes before the
-larger steps so that their studies train to convergence. Padding masks come before cross-attention,
+larger steps so that their studies train to convergence. Segments come before cross-attention,
 which needs them. GELU and grouped heads are small and measure little; cross-attention is last as
 the largest.
 
