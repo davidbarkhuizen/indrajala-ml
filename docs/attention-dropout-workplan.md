@@ -169,5 +169,6 @@ Each lists the options considered, with pros and cons, and the choice.
    in all three implementations, and three golden entries (`<implementation> attention dropout
    model`, every dropout 0.1): 115 networks, the earlier 112 bit-identical, re-recorded on both
    machines and archived as `new-functionality`.
-8. **The study** (D8): the loader's spread split first, its own PR.
+8. **The study** (D8): the loader's spread split first, its own PR (done:
+   `load_text_dataset(split_by="spread")`, `spread_split`).
 9. **Docs**: README, roadmap, next-steps; the workplan retired.
