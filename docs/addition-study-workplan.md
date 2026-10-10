@@ -1,8 +1,8 @@
 # Workplan: the smallest network that adds (a study)
 
-**Status: D1, D2 and D4 settled by the owner; D3 and D5-D11 settled by the agent as recommended
-(2026-10-10). Stages 1 (this plan), 2 (the catalogue) and 3 (the candidates and the harness)
-done.**
+**Status: D1, D2, D4 and D12 settled by the owner; D3 and D5-D11 settled by the agent as
+recommended (2026-10-10). Stages 1 (this plan), 2 (the catalogue), 3 (the candidates and the
+harness) and 4 (the calibration) done.**
 
 Which is the smallest network, built from indrajala-ml's existing layers and networks, that
 reliably internalises addition: that adds two or three base-3 numbers it never saw, through every
@@ -166,7 +166,8 @@ Each lists the options considered, with pros and cons, and the choice.
   - (b) `n = 6` only. Pros: half the runs. Cons: no exhaustive check of the whole space.
   - (c) `n = 4, 6, 8`. Pros: a curve of threshold against `n`. Cons: `7^8` patterns (5.8 M) sampled,
     not exhaustive, and the most expensive runs; a later sweep if 4 and 6 differ.
-- **D4. The candidates. Settled by the owner:** all eight above.
+- **D4. The candidates. Settled by the owner:** all eight above (calibrated in Stage 4; the sweep
+  takes the three that passed, D12).
 - **D5. Size ladders.** Settled:
   - 1-3 and 5: layers `{1, 2, 3}`, heads `{1, 2}`, `d` in `{4, 6, 8, 12, 16, 24, 32}` (`d`
     divisible by the heads), FFN width `2d`. Pros: the region where the threshold should sit
@@ -242,7 +243,7 @@ Each lists the options considered, with pros and cons, and the choice.
     - (f) A budget per candidate (400 for 6-8, which cost 0.7-2.1 s an epoch). Pros: the
       regressions' curves finished. Cons: the budget is a sweep's `Settings`, so it means a
       second config and sweep directory; worth it only if the sweep shows 7 or 8 within a
-      rung of passing.
+      rung of passing. Moot under D12: 7 and 8 aren't in the sweep.
 
     The sweep's cost from these timings: a failing string-format run is 20-50 minutes at
     `n = 4` (plateaus at epochs 44-137), the dominant cost; a column transformer's failing run
@@ -268,6 +269,29 @@ Each lists the options considered, with pros and cons, and the choice.
 - **D11. Where it runs. Settled.** Development and the calibration on `pyramidon`, the sweep on
   `jebel` (nothing else running), Rust backend, `OPENBLAS_NUM_THREADS=1`, 6 workers. Tier 0: no
   timed path changes.
+- **D12. The sweep's candidates. Settled by the owner: (a)** ("only use candidates that have
+  actually been successful"). The calibration (D7) passed candidates 1-3 at every rate and seed,
+  and failed 4-8 at every rate.
+  - (a) *Chosen.* **Candidates 1-3 only**, at `n = 4` and `n = 6`, every shape, bisecting `d`
+    (`scripts/addition_sweep.json`). Pros: every run searches a threshold that exists, so the
+    sweep's hours go to the question (how small can a passing network be); the dominant cost,
+    string-causal's 20-50-minute failing runs, is gone, so the sweep is hours, not days. Cons:
+    4-8 get no threshold, only the calibration's verdict at one middle size and the budget of
+    D7: a larger string-format or dense network might pass, and the study can't say so; the
+    cross-candidate table compares three variants of one design.
+  - (b) All eight, as planned. Pros: every candidate's threshold or the largest size it fails
+    at. Cons: 4-8's bisections climb towards their largest rungs, where every run fails slowly;
+    string-causal alone would take most of the sweep, likely days, for results the calibration
+    already predicts.
+  - (c) 1-3 plus the cheap failing candidates (4, 6-8, 0.7-2.8 s an epoch), string-causal left
+    out. Pros: a size at which each dense candidate fails or passes, at a few hours' cost.
+    Cons: still hours mostly spent confirming failures; 4 is a control that must fail by
+    construction, and 7-8's failures near 0.999 may be the budget (D7 (f)), so a failure would
+    not settle them either.
+
+  4-8's thresholds become a next-steps entry when the plan retires: a sweep of them wants
+  a reason to expect a pass first (a larger budget, step 10's training recipe, step 11's
+  answer-only loss for 5).
 
 ## Stages
 
@@ -285,7 +309,8 @@ Each lists the options considered, with pros and cons, and the choice.
 4. **Calibration** (done; `scripts/addition_calibration.json`) on `pyramidon`: every candidate at
    one middle size at `n = 4`, the rate probe, timing; the rates, budget and plateau rule written
    into D7.
-5. **The sweep** on `jebel`, unattended; the findings into the script's docstring (findings, the
+5. **The sweep** on `jebel`, unattended (`scripts/addition_sweep.json`: candidates 1-3, D12);
+   the findings into the script's docstring (findings, the
    tables, the protocol, as `sequence_study.py`'s); the PR with the report.
 6. **Docs**: a README section, next-steps (this plan's leftovers and the section below), the
    workplan retired.
