@@ -1,7 +1,7 @@
 # Workplan: the smallest network that adds (a study)
 
-**Status: drafted 2026-10-10. D1, D2 and D4 settled by the owner; D3 and D5-D11 settled by the
-agent as recommended, open to the owner's review on this plan's PR.**
+**Status: D1, D2 and D4 settled by the owner; D3 and D5-D11 settled by the agent as recommended
+(2026-10-10). Stages 1 (this plan) and 2 (the catalogue) done.**
 
 Which is the smallest network, built from indrajala-ml's existing layers and networks, that
 reliably internalises addition: that adds two or three base-3 numbers it never saw, through every
@@ -69,8 +69,8 @@ digits. `f(a, b, c)` is the candidate's decoded answer, `n + 1` digits.
 | **A2** associativity | `f(f(a, b, 0), c, 0) = f(a, f(b, c, 0), 0) = f(a, b, c)` | triples of `n - 1` digits (each partial sum fits `n` digits) | relation; a partial sum whose top digit isn't 0 fails | 10,000 triples |
 | **A3** identity | `f(a, 0, 0) = f(0, a, 0) = f(0, 0, a) = a` | uniform `a` | oracle | exhaustive at `n <= 6` (729) |
 | **M1** column sum | with every `s_t <= 2` (no carries), each digit is `s_t` | uniform patterns over `{0, 1, 2}^n`, digits drawn per column sum | oracle | every pattern × 4 |
-| **M2** carry from a reset | the carry out of a reset (1 or 2) reaches the next column | a reset at every column, every value | oracle | every column × value × 16 |
-| **M3** carry over distance `L` | the carry into a column at distance `L` | every `L` in `1..n-1`, every carry value, every dependent map in between | oracle | 1,000 per `L`; reports `L*`, the largest `L` with every case right |
+| **M2** carry from a reset | the carry out of a reset (0, 1 or 2) reaches the next column | a reset at every column, every value; only the next column's digit checked | oracle | every column × value × 16 |
+| **M3** carry over distance `L` | the carry into a column at distance `L` | every `L` in `1..n` (`L = n`: down to column 0's carry in), every carry value, every dependent map in between; only the digit at distance `L` checked | oracle | 1,000 per `L`; reports `L*`, the largest `L` with every case at `1..L` right |
 | **M4** final carry | sum digit `n`, carry out of the top column, 0, 1 or 2 | top columns' patterns giving each | oracle | 1,000 per value |
 | **M5** every carry pattern | every one of the `7^n` column-sum patterns | concrete digits per pattern | oracle | exhaustive over patterns: `7^4 × 4`, `7^6 × 1` (117,649) |
 
@@ -210,7 +210,7 @@ Each lists the options considered, with pros and cons, and the choice.
 ## Stages
 
 1. **This workplan.**
-2. **The catalogue** (`indrajala_ml/data/addition_data.py`): digits, column sums and carry maps,
+2. **The catalogue** (done; `indrajala_ml/data/addition_data.py`): digits, column sums and carry maps,
    the hashed partition, every property's generator, verifier and shrinking, the training mixture;
    tests: each generator's cases satisfy its statement, the oracle adders pass and fail exactly as
    they should.
