@@ -31,7 +31,7 @@ against the latest numpy.
 
 | Use | Code | Generator | Seeded by |
 |---|---|---|---|
-| Pure-Python weight init | `fan_in_aware_weights_and_bias`, `randomize()` of the node networks and `LinearClassifierNetwork` | the network's `indrajala_ml.pcg64` generator (numpy's `default_rng`, bit for bit) | `randomized(..., seed=s)` or `rng=`, or `network.rng = ...`; OS entropy otherwise |
+| Pure-Python weight init | `fan_in_aware_weights_and_biases` (numpy's order), `randomize()` of the node networks and `LinearClassifierNetwork` | the network's `indrajala_ml.pcg64` generator (numpy's `default_rng`, bit for bit) | `randomized(..., seed=s)` or `rng=`, or `network.rng = ...`; OS entropy otherwise |
 | Pure-Python dropout | `DropoutNode.forward` (`rng.random() >= p`) | the network's, as above | as above |
 | Epoch shuffle, all backends | `train.py`'s trainers (`epoch_order`), `batch_size_scaling.train_epoch` | a `random.Random` passed as `rng=` | `rng=random.Random(s)`, which gives the order `random.seed(s)` gave; OS entropy otherwise |
 | Synthetic data and disagreement samples | `training_data.py` (`random_alternating_training_data`, `reachable_reference_and_training_data`'s `data_rng=`), `evaluate.py` | a `random.Random` passed as `rng=` | as above |

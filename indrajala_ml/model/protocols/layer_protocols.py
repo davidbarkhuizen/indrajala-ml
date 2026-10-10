@@ -68,7 +68,8 @@ class TrainableLayer(InputLayer, Protocol):
     # what the optimizer steps: a dense layer's nodes, a conv layer's kernels, none for a pool layer
     def weight_sets(self) -> Sequence[WeightSet]: ...
 
-    # fan_in_aware_weights_and_bias per node or kernel, in order; a pool layer draws nothing
+    # fan_in_aware_weights_and_biases over the nodes or kernels, every weight row then every bias, in
+    # numpy's order; a pool layer draws nothing
     def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None: ...
 
     # a dense or conv layer's (weights, bias) per node or kernel, a linear layer's (weights,) per node,

@@ -1,9 +1,6 @@
-import math
-
 import pytest
 
 from indrajala_ml.model.layers.python.conv_kernel import ConvKernel
-from indrajala_ml.pcg64 import default_rng
 from tests.helpers import LayerOptimizer, WeightSets, approx
 
 
@@ -20,19 +17,6 @@ def test_explicit_weights_must_match_fan_in():
 
     with pytest.raises(AssertionError):
         ConvKernel(kernel_size=2, in_channels=1, weights=[0.1, 0.2, 0.3])  # only 3, needs 4
-
-
-def test_randomize_fan_in_aware_draws_within_the_expected_limit():
-
-    kernel = ConvKernel(kernel_size=3, in_channels=1)  # fan_in = 9
-    kernel.randomize_fan_in_aware(default_rng(0))
-
-    limit = 1.0 / math.sqrt(9)
-    assert len(kernel.weights) == 9
-    assert all(-limit <= w <= limit for w in kernel.weights)
-    assert -limit <= kernel.bias <= limit
-    # not literally all zero/identical - a real random draw happened
-    assert len(set(kernel.weights)) > 1
 
 
 def test_accumulate_then_apply_at_batch_size_one_matches_the_direct_formula():

@@ -6,6 +6,7 @@ from typing import ClassVar, Literal
 
 from indrajala_ml.model.layers.python.conv_kernel import ConvKernel
 from indrajala_ml.model.layers.python.conv_unit import ConvUnit
+from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_biases
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.specs.window_geometry import output_size, validate_conv_arguments
 from indrajala_ml.pcg64 import Pcg64Generator
@@ -135,5 +136,11 @@ class ConvLayer:
             kernel.bias = bias
 
     def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
-        for kernel in self.kernels:
-            kernel.randomize_fan_in_aware(rng)
+        # every kernel's weights, then every bias unless the kernels have none: numpy's order, a
+        # kernel's fan-in its receptive field, kernel_size**2 * in_channels
+        weights, biases = fan_in_aware_weights_and_biases(
+            rng, len(self.kernels), len(self.kernels[0].weights), bias=self._kernel_cls.has_bias
+        )
+        for kernel, kernel_weights, bias in zip(self.kernels, weights, biases, strict=True):
+            kernel.weights = kernel_weights
+            kernel.bias = bias

@@ -19,10 +19,10 @@ def test_train_linear_classifier_network_drives_multiclass_backprop_on_real_digi
     result = train_linear_classifier_network(student, train_data, learning_rate=0.5, epochs=15)
 
     diagnostic = result.diagnostic
-    assert diagnostic.best_training_accuracy == 0.975
-    assert diagnostic.best_epoch_index == 14
-    assert diagnostic.plateaued is False
+    assert diagnostic.best_training_accuracy == 0.9875
+    assert diagnostic.best_epoch_index == 11
+    assert diagnostic.plateaued is True
     assert diagnostic.converged is False
-    assert diagnostic.still_improving is True
+    assert diagnostic.still_improving is False
 
-    assert accuracy(student, test_data) == 0.95
+    assert accuracy(student, test_data) == 0.925

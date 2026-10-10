@@ -28,6 +28,7 @@ from indrajala_ml.model.specs.update_rules import SGD, Adam, UpdateRule, WeightD
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import check_gradients
 from tests.helpers import assert_snapshots_close, bits
+from tests.model.networks.test_attention_python_network import assert_every_step_has_numpys_gradients
 from tests.model.networks.test_batch_norm_array_network import EPSILON, RATE, RULES, _reference
 from tests.model.networks.test_batch_norm_conv_array_network import (
     BETA,
@@ -234,8 +235,8 @@ def test_randomize_draws_the_linear_conv_kernels_weights_only_and_nothing_for_ba
     linear, norm, *_rest = network.trainable_layers
     rng = default_rng(4)
 
-    # each kernel draws 9 weights, in kernel order, and no bias
-    assert [kernel.weights for kernel in linear.kernels] == [fan_in_aware_weights(rng, 9) for _ in range(2)]
+    # the kernels' 9 weights each, in kernel order, and no bias
+    assert [kernel.weights for kernel in linear.kernels] == fan_in_aware_weights(rng, 2, 9)
     assert norm.snapshot_state() == [([1.0], 0.0, 0.0, 1.0)] * 2
 
 
@@ -320,12 +321,21 @@ def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
     assert bits(network.snapshot()) == trained
 
 
-@pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("name", NETWORKS)
+# "after a relu conv" under Adam is compared step by step instead (below)
+TRAJECTORIES = [
+    pytest.param(name, rule, id=f"{name}-{type(rule).__name__}")
+    for rule in RULES
+    for name in NETWORKS
+    if not (name == "after a relu conv" and isinstance(rule, Adam))
+]
+
+
+@pytest.mark.parametrize(("name", "rule"), TRAJECTORIES)
 def test_training_matches_numpy_within_the_parity_tolerance(name: str, rule: UpdateRule):
     # batch norm computes the same bits in both (test_the_layer_is_numpys_by_bits); the conv and
     # dense layers' sums don't: the builtin sum and example-order accumulation against BLAS. 20
-    # steps in: at most 1.1e-12 relative when measured, within every pure-Python parity test's 1e-9
+    # steps in: at most 1.4e-4 of every pure-Python parity test's tolerance (1e-9, relative and
+    # absolute) over seeds 0 to 19 when measured
     python = _network(name, rule)
     array = SequentialArrayNetwork(INPUT, NETWORKS[name], rule)
     array.restore(_as_array_snapshot(python))
@@ -337,3 +347,15 @@ def test_training_matches_numpy_within_the_parity_tolerance(name: str, rule: Upd
         array.learn_batch(0.3, batch)
 
     assert_snapshots_close(_as_array_snapshot(python), array.snapshot())
+
+
+def test_every_step_after_a_relu_conv_under_adam_has_numpys_gradients():
+    # the first conv's bias gradient is rounding noise whenever its ReLU units are all alive: a bias
+    # shifts the linear conv's every output in a channel alike, and batch norm subtracts the mean
+    # (the attention parity tests' bk, likewise). Adam divides noise by its epsilon into steps of
+    # about 1e-9, which differ between the two implementations and grow from there, so whole
+    # trajectories leave the 1e-9 tolerance at half of seeds 0 to 19 (up to 87 times it). From the
+    # same weights each step, the gradients agree at every one of those seeds
+    python = _network("after a relu conv", Adam())
+    array = SequentialArrayNetwork(INPUT, NETWORKS["after a relu conv"], SGD())
+    assert_every_step_has_numpys_gradients(python, array, _rows(40))

@@ -24,7 +24,7 @@ from typing import ClassVar, Literal
 
 from indrajala_ml.model.layers.python.base_node import AbstractNode
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
-from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights, fan_in_aware_weights_and_bias
+from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_biases
 from indrajala_ml.model.layers.python.relu_layer import relu_activation, relu_delta
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer, PassNode
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
@@ -73,27 +73,32 @@ class PositionRow:
 class EmbeddingRow(PositionRow):
     """
     One token id's row of an embedding table (the sequence task workplan, D5): weights without a
-    bias, never decayed, as a position row; drawn as a linear layer's node, of fan-in its size.
+    bias, never decayed, as a position row; drawn as a linear layer's node, of fan-in its size
+    (randomize_rows).
     """
-
-    def randomize(self, rng: Pcg64Generator) -> None:
-        self.set_weights(fan_in_aware_weights(rng, len(self._weights)))
 
 
 class WeightRow(PositionRow):
     """
     One row of a weight matrix shared over the tokens, with its bias: a token-wise dense layer's
     unit, or a row of an attention projection. The WeightSet the optimizer steps, decayed as a
-    dense layer's node.
+    dense layer's node, and drawn as one (randomize_rows).
     """
 
     weights_decayed: ClassVar[bool] = True
     has_bias: ClassVar[bool] = True
 
-    def randomize(self, rng: Pcg64Generator) -> None:
-        # a dense layer's node's draw: weights, then bias
-        weights, self.bias = fan_in_aware_weights_and_bias(rng, len(self._weights))
-        self.set_weights(weights)
+
+def randomize_rows(rows: Sequence[EmbeddingRow] | Sequence[WeightRow], rng: Pcg64Generator) -> None:
+    """
+    rows drawn as one weight matrix, of fan-in a row's size: every row's weights, then every bias
+    when the rows have one, numpy's order (fan_in_aware_init.py). A token-wise dense layer's units,
+    an attention projection's rows, or an embedding table.
+    """
+    weights, biases = fan_in_aware_weights_and_biases(rng, len(rows), len(rows[0].weights), bias=rows[0].has_bias)
+    for row, row_weights, bias in zip(rows, weights, biases, strict=True):
+        row.set_weights(row_weights)
+        row.bias = bias
 
 
 def snapshot_rows(rows: Sequence[WeightRow]) -> list[tuple[list[float], float]]:
@@ -229,8 +234,7 @@ class EmbeddingLayer(ParameterFreeLayer[TokenNode]):
         return self.rows
 
     def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
-        for row in self.rows:
-            row.randomize(rng)
+        randomize_rows(self.rows, rng)
 
     def snapshot_state(self) -> list[tuple[list[float]]]:
         return [(list(row.weights),) for row in self.rows]
@@ -284,7 +288,7 @@ class TokenDenseLayer(ParameterFreeLayer[TokenNode]):
     """
     A dense layer acting on each token (D4), its units (W's rows and b) shared over the tokens:
     z_tk = sum_j(x_tj * W_kj) + b_k, then ReLU or the identity. Its units are drawn as a dense
-    layer's nodes, weights then bias, and stepped and decayed as theirs.
+    layer's nodes, every unit's weights then every bias, and stepped and decayed as theirs.
     """
 
     def __init__(self, input_layer: InputLayer, size: int, tokens: int, activation: Literal["relu", "linear"]) -> None:
@@ -330,8 +334,7 @@ class TokenDenseLayer(ParameterFreeLayer[TokenNode]):
         return self.units
 
     def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
-        for unit in self.units:
-            unit.randomize(rng)
+        randomize_rows(self.units, rng)
 
     def snapshot_state(self) -> list[tuple[list[float], float]]:
         return snapshot_rows(self.units)

@@ -3,9 +3,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import ClassVar
 
-from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_bias
-from indrajala_ml.pcg64 import Pcg64Generator
-
 
 class ConvKernel:
     """
@@ -47,10 +44,6 @@ class ConvKernel:
 
         self.weight_gradient_accum: list[float] = [0.0 for _ in range(fan_in)]
         self.bias_gradient_accum: float = 0.0
-
-    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
-        # a kernel's fan-in is its receptive field, kernel_size**2 * in_channels
-        self.weights, self.bias = fan_in_aware_weights_and_bias(rng, len(self.weights))
 
     def accumulate_gradient(self, delta: float, receptive_field_values: Sequence[float]) -> None:
         assert len(receptive_field_values) == len(self.weights)

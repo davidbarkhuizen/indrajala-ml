@@ -6,7 +6,6 @@ are tests/model/networks/test_residual_array_network.py's; the gradient check, t
 a batch of one are tests/model/networks/test_residual_network.py's, on every implementation.
 """
 
-import math
 import random
 from typing import Any
 
@@ -17,7 +16,7 @@ from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import analytic_gradients
-from tests.helpers import assert_snapshots_close, bits, learn_in_step
+from tests.helpers import assert_snapshots_close, bits, learn_in_step, numpy_draws
 from tests.model.networks.test_batch_norm_python_network import CLASSES, _as_array_snapshot
 from tests.model.networks.test_residual_array_network import INPUT, NETWORKS, Shape, block, output, rows
 
@@ -32,15 +31,9 @@ def network(name: str, shape: Shape = "multiclass", rule: UpdateRule | None = No
     return built
 
 
-def test_randomize_draws_weights_then_bias_per_node_and_nothing_for_the_fork_or_add():
+def test_randomize_draws_numpys_weights_and_nothing_for_the_fork_or_add():
     built = network("sigmoid body")
-    rng = default_rng(3)
-    expected: list[Any] = []
-    for size, fan_in in [(INPUT, INPUT), (5, INPUT), (INPUT, 5), (3, INPUT)]:
-        limit = 1 / math.sqrt(fan_in)
-        expected.append(
-            [([rng.uniform(-limit, limit) for _ in range(fan_in)], rng.uniform(-limit, limit)) for _ in range(size)]
-        )
+    expected = numpy_draws(3, [(INPUT, INPUT, True), (5, INPUT, True), (INPUT, 5, True), (3, INPUT, True)])
 
     assert bits([entry for entry in built.snapshot() if entry]) == bits(expected)
 

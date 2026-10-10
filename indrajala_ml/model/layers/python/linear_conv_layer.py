@@ -13,21 +13,15 @@ from typing import ClassVar
 from indrajala_ml.model.layers.python.conv_kernel import ConvKernel
 from indrajala_ml.model.layers.python.conv_layer import ConvLayer
 from indrajala_ml.model.layers.python.conv_unit import ConvUnit
-from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights
-from indrajala_ml.pcg64 import Pcg64Generator
 
 
 class LinearConvKernel(ConvKernel):
     """
     A ConvKernel without a bias: its bias stays 0.0, and neither the optimizer (has_bias), a draw
-    nor a snapshot touches it.
+    (ConvLayer.randomize_fan_in_aware) nor a snapshot touches it.
     """
 
     has_bias: ClassVar[bool] = False
-
-    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
-        # weights only, as LinearLayer draws
-        self.weights = fan_in_aware_weights(rng, len(self.weights))
 
     def accumulate_gradient(self, delta: float, receptive_field_values: Sequence[float]) -> None:
         # ConvKernel's, without the bias
