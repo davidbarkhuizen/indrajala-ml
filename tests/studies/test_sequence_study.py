@@ -79,7 +79,7 @@ def test_a_run_records_every_epoch_and_repeats_from_its_seed():
         return tuple(float(i) for i in ids[:-1]), tuple(ids[1:])
 
     study._datasets.clear()  # pyright: ignore[reportPrivateUsage]
-    study._datasets[("probe", 1)] = ([window() for _ in range(40)], [window() for _ in range(8)], 5)  # pyright: ignore[reportPrivateUsage]
+    study._datasets[("probe", 1, "contiguous")] = ([window() for _ in range(40)], [window() for _ in range(8)], 5)  # pyright: ignore[reportPrivateUsage]
     context = {"limit": 1, "epochs": 2}
 
     first = study.run_config(context, ("probe", "1-layer", 0.001), 0)
