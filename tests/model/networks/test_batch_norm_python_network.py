@@ -303,7 +303,7 @@ def test_every_gradient_through_dropout_after_batch_norm_matches_its_finite_diff
 
 
 # the layer-major path's lanes against the example-major loop, over every layer kind but dropout
-# (whose draw order the two paths don't share)
+# (a dropout network trains layer-major either way: the RNG draw-order workplan, D3)
 LAYER_MAJOR_CASES: dict[str, tuple[Any, list[LayerSpec], str]] = {
     "sigmoid": ((4,), [Dense(5), Dense(4), Dense(3, output=True)], "multiclass"),
     "relu softmax": ((4,), [Dense(5, activation="relu"), SOFTMAX], "multiclass"),

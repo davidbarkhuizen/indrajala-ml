@@ -1,8 +1,11 @@
 """
 The pure-Python layer-major batch path (the batch-norm workplan, D3): a batch forward layer by
-layer, then backward layer by layer, which batch norm needs, since each of its values depends on
-the whole batch. Only a network with a BatchNorm layer takes it; every other network keeps
-BackpropNetworkBase's example-major loop, so its bits don't change.
+layer, then backward layer by layer, for a network with a layer that needs the batch's order
+(BackpropNetworkBase's _layer_major). Batch norm needs it, since each of its values depends on the
+whole batch; dropout takes it so that each dropout layer draws its masks for the whole batch,
+example by example, before the next layer draws: numpy's (batch, size) row-major order, layer by
+layer (the RNG draw-order workplan, D3). Every other network keeps BackpropNetworkBase's
+example-major loop, which this path matches by bits.
 
 Every other layer runs its own per-example code unchanged: a layer's nodes hold one example's
 state at a time (their example_fields: the activation, the delta, dropout's mask, a pool unit's
