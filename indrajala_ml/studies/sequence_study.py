@@ -59,6 +59,7 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.studies import batch_size_scaling as bss
+from indrajala_ml.studies.common import mean_sd, table
 from indrajala_ml.studies.patch_study import parameter_count
 from indrajala_ml.training.sequence_evaluate import SequenceEvaluation, sequence_evaluate
 
@@ -187,16 +188,6 @@ def bits(nats: float) -> float:
     return nats / math.log(2.0)
 
 
-def _mean_sd(values: list[float], fmt: str) -> str:
-    sd = statistics.stdev(values) if len(values) > 1 else 0.0
-    return f"{format(statistics.mean(values), fmt)} ± {format(sd, fmt)}"
-
-
-def _table(header: list[str], rows: list[list[str]]) -> str:
-    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
-    return "\n".join(lines + ["| " + " | ".join(row) + " |" for row in rows])
-
-
 def _final(runs: list[dict[str, Any]], key: str = "held_out_cross_entropies") -> list[float]:
     return [run[key][-1] for run in runs]
 
@@ -219,12 +210,12 @@ def _rows(configs: list[Config], results: Results, epochs: int) -> list[list[str
         rows.append(
             [arm, f"{rate:g}", str(runs[0]["parameter_count"])]
             + [
-                _mean_sd([bits(run["held_out_cross_entropies"][e]) for run in runs], ".3f")
+                mean_sd([bits(run["held_out_cross_entropies"][e]) for run in runs], ".3f")
                 for e in _epochs_shown(epochs)
             ]
-            + [_mean_sd(_final(runs, "held_out_accuracies"), ".2%")]
-            + [_mean_sd([bits(value) for value in _final(runs, "train_cross_entropies")], ".3f")]
-            + [_mean_sd([s for run in runs for s in run["epoch_seconds"]], ".1f")]
+            + [mean_sd(_final(runs, "held_out_accuracies"), ".2%")]
+            + [mean_sd([bits(value) for value in _final(runs, "train_cross_entropies")], ".3f")]
+            + [mean_sd([s for run in runs for s in run["epoch_seconds"]], ".1f")]
         )
     return rows
 
@@ -251,7 +242,7 @@ def report(configs: list[Config], results: Results, epochs: int, limit: int | No
     sections: list[str] = []
     for corpus in dict.fromkeys(corpus for corpus, _arm, _rate in configs):
         rows = _floor_rows(corpus, limit, epochs) + _rows([c for c in configs if c[0] == corpus], results, epochs)
-        sections.append(f"{corpus}\n\n{_table(_header(epochs), rows)}")
+        sections.append(f"{corpus}\n\n{table(_header(epochs), rows)}")
     return "\n\n".join(sections)
 
 
