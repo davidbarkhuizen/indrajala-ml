@@ -4,7 +4,6 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
 in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
-[rng-draw-order-workplan.md](rng-draw-order-workplan.md),
 [attention-dropout-workplan.md](attention-dropout-workplan.md),
 [rotary-positions-workplan.md](rotary-positions-workplan.md),
 [generation-workplan.md](generation-workplan.md),
@@ -39,6 +38,7 @@ docs cite them by section:
 | A benchmark archive, tiered benchmarking, and a remote benchmark machine | #584 | #593-#598, archive #1-#11 | `git show 056b808:docs/benchmark-archive-workplan.md` |
 | Multi-head attention and a transformer block (roadmap step 5) | #602 | crate #51-#52, #603-#613, archive #12-#13 | `git show d70cf0f:docs/multi-head-attention-workplan.md` |
 | A sequence task with causal masking (roadmap step 6) | #620 | crate #53, #621-#634, archive #14-#17 | `git show f6e843b:docs/sequence-task-workplan.md` |
+| Pure Python's random draws in numpy's order (RNG draw order) | #637 | #649-#652, archive #18-#19 | `git show 7a80858:docs/rng-draw-order-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -209,19 +209,6 @@ Still out of scope:
 
 ## From the RNG generators workplan
 
-- **Matching the pure-Python networks with the array networks from one seed.** All three draw
-  from one PCG64 stream family, but the per-node networks draw weights node by node and one
-  dropout draw per node, so the same seed gives other values. Until the draw order matches, the
-  per-node dropout reference is compared with the array networks only at eval
-  ([rng-audit.md](rng-audit.md), Open work). The weights differ the same way: a pure-Python
-  layer with a bias draws each row's weights then its bias (a dense node, a token-wise dense
-  unit, an attention projection row), where numpy and Rust draw a whole W, then b. A layer
-  without a bias draws alike in all three (a linear layer, and the sequence task's embedding,
-  whose rows match numpy's `E` by bits). So the pure-Python parity tests (attention's, the
-  sequence task's) restore numpy from pure Python's snapshot rather than seeding both, and pin
-  pure Python's own draw order. Matching it would change every pure-Python network's draws: a
-  golden re-record (measurement.md, §8). The owner has scheduled it before roadmap step 7:
-  [rng-draw-order-workplan.md](rng-draw-order-workplan.md).
 - **Run checkpoints beyond one network's mini-batch run** (`indrajala_ml/training/run_checkpoint.py`):
   resuming mid-epoch, resuming `train_linear_classifier_network` (it returns no run checkpoint),
   and resuming an ensemble's run, whose sub-networks train as separate jobs.
@@ -232,6 +219,24 @@ Still out of scope:
 - Other bit generators (Philox, SFC64, PCG64DXSM).
 - Changing the crate's legacy MT19937 module functions, which mirror `np.random` (the workplan's
   D7).
+
+## From the RNG draw order
+
+From one seed, every pure-Python network with an array twin now builds numpy's weights and draws
+numpy's dropout masks by bits ([rng-audit.md](rng-audit.md)), and the parity tests seed both
+sides. Left over:
+
+- **The bounds-width networks' draws** (D1 (c)): `BackpropClassifierNetwork`'s presets and
+  `LinearClassifierNetwork` scale each node's weights by the input bounds, which no array network
+  draws, so there is no order to match. Out of scope unless they gain an array twin.
+- **A step-by-step gradient check of the batch-norm conv networks** would need the attention
+  tests' `_scales` to give a linear conv layer before batch norm batch norm's scale, as it gives a
+  `LinearLayer` (found in stage 2, #649). Batch norm's own gamma and beta gradients can also cancel
+  to about 1e-6 there ("conv and dense pairs", seed 19). Nothing checks those networks step by step
+  today.
+- **Docstring figures measured with the old draw order**, such as `randomize_fan_in_aware`'s
+  99.5% training and 96.9% test accuracy on UCI digits, are historical: re-measure one only when it
+  is cited as current.
 
 ## From layer norm and attention
 
@@ -345,8 +350,6 @@ non-overlapping windows of 65 characters, the last 10% held out (D4). The study
 - **A synthetic sequence task** (D2 (b)), copying or reversal from a seed: a known optimal loss,
   and a task only attention over earlier tokens solves. The study's leak arm and the mask's own
   test (a future token can't change an earlier output) already cover what it would test.
-- **Pure Python's draw order** for layers with a bias, which the sequence task's parity tests
-  restore around: From the RNG generators workplan.
 
 Still out of scope:
 

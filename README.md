@@ -198,7 +198,10 @@ and attention).
 The pure-Python implementation is for correctness and parity checking only: gradient checks,
 hand-computed examples, and the reference the array implementations are checked against. It is
 never used for performance (speed/timing) measurement; only the numpy and Rust implementations
-are timed. Accuracy comparisons of pure-Python models are fine.
+are timed. Accuracy comparisons of pure-Python models are fine. From one seed, every pure-Python
+network with an array twin starts with numpy's and Rust's weights and draws their dropout masks,
+by bits (`tests/model/networks/test_seeded_init_parity.py`; [docs/rng-audit.md](docs/rng-audit.md)),
+so a parity test seeds all sides alike.
 
 ## Saving and loading
 

@@ -31,9 +31,9 @@ text generation and no recurrence.
    four text corpora.
 
 Before step 7, a fix, not a primitive: pure Python's random draws in numpy's order, so that all
-three implementations start, and drop out, alike from one seed
-([rng-draw-order-workplan.md](rng-draw-order-workplan.md)); step 7's attention dropout then tests
-its masks in all three by bits.
+three implementations start, and drop out, alike from one seed; done (2026-10-10, #649-#652;
+[rng-audit.md](rng-audit.md)). Step 7's attention dropout then tests its masks in all three by
+bits.
 
 7. **Dropout in attention**: on the attention weights and after the output projection; planned
    (2026-10-10, [attention-dropout-workplan.md](attention-dropout-workplan.md)).

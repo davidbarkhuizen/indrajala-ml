@@ -12,7 +12,9 @@ harnesses:
 - `rust/tests/test_random_pcg64_parity.py`: the crate's `SeedSequence` and `Generator` against
   numpy's `SeedSequence` and `default_rng`, bit for bit, with the state moving between the two.
 - `tests/model/networks/test_seeded_init_parity.py`: seeded `randomized()` gives bit-identical numpy and Rust
-  networks, for every array network class.
+  networks, for every array network class, and pure-Python networks with numpy's weights, for
+  every pure-Python class with an array twin; a seeded training batch then draws the same dropout
+  masks in all three, with one, two and three dropout layers.
 - `tests/model/layers/test_dropout_fused_layer_ops.py` and
   `tests/model/networks/test_dropout_array_multiclass_backprop_model.py`: seeded training-mode dropout, with
   identical masks at the layer and the network level.
@@ -32,7 +34,7 @@ against the latest numpy.
 | Use | Code | Generator | Seeded by |
 |---|---|---|---|
 | Pure-Python weight init | `fan_in_aware_weights_and_biases` (numpy's order), `randomize()` of the node networks and `LinearClassifierNetwork` | the network's `indrajala_ml.pcg64` generator (numpy's `default_rng`, bit for bit) | `randomized(..., seed=s)` or `rng=`, or `network.rng = ...`; OS entropy otherwise |
-| Pure-Python dropout | `DropoutNode.forward` (`rng.random() >= p`) | the network's, as above | as above |
+| Pure-Python dropout | `DropoutNode.forward` (`rng.random() >= p`), layer by layer over a training batch (`layer_major.py`) | the network's, as above | as above |
 | Epoch shuffle, all backends | `train.py`'s trainers (`epoch_order`), `batch_size_scaling.train_epoch` | a `random.Random` passed as `rng=` | `rng=random.Random(s)`, which gives the order `random.seed(s)` gave; OS entropy otherwise |
 | Synthetic data and disagreement samples | `training_data.py` (`random_alternating_training_data`, `reachable_reference_and_training_data`'s `data_rng=`), `evaluate.py` | a `random.Random` passed as `rng=` | as above |
 | Data splits, sampling, ensemble jobs | `dataset_utils`, `benchmark_data`, `ensemble_train` | `random.Random(seed)` instances | an explicit seed argument; OS entropy when it is `None` |
@@ -53,6 +55,15 @@ left untouched. Stage 6 put the generator's state into checkpoints and format-2 
 so a stopped run resumes by bits. Stage 7 also deleted `seed_everything` and `backend.seed`. The
 crate keeps its MT19937 module functions (`pa.seed`, `pa.random`, `pa.uniform`), mirroring
 `np.random` (D7), and nothing in `indrajala_ml` calls them.
+
+Since the RNG draw-order workplan (retired: [next-steps.md](next-steps.md)), pure Python draws
+in numpy's order too. A layer draws its whole weight matrix row by row, then its biases
+(`fan_in_aware_weights_and_biases`), and an attention layer draws each projection that way, `q, k,
+v, o` in turn. A network with dropout trains layer-major, so each dropout layer draws its batch's
+`(batch, size)` mask, row-major, before the next layer draws. So from one seed all three build the
+same network and drop out alike, and a pure-Python parity test seeds both sides
+(`tests/python_array_snapshot.py`). The bounds-width networks (`BackpropClassifierNetwork`'s
+presets, `LinearClassifierNetwork`) have no array twin and keep their own draws.
 
 From the same seed, numpy and Rust draw the same weights and masks, so a seeded Rust run
 reproduces a seeded numpy run. They agree to the backends' matmul differences, which are about an
@@ -203,10 +214,6 @@ fan-in from 1 to 4999 can produce `limit`.
 
 ## Open work
 
-- Matching the pure-Python networks with the array networks from one seed. The streams already
-  match when seeded through the words, as above. What's left is draw order: the per-node networks
-  draw weights node by node, and their dropout draws one `random.random()` per node. Until that's
-  checked, the per-node dropout reference is compared with the array networks only at eval.
 - The legacy module functions have no `get_state`/`set_state`, and no draw takes broadcast
   `low`/`high`. The repo doesn't use them. A generator's state reads and sets through
   `pcg64.generator_state` and `set_generator_state`.
