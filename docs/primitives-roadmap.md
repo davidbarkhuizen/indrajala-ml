@@ -40,7 +40,8 @@ its masks in all three by bits.
 8. **Rotary position embedding**: positions inside attention, so that a cached key stays valid
    as a window slides; planned (2026-10-10,
    [rotary-positions-workplan.md](rotary-positions-workplan.md)).
-9. **Generation**: sampling text from a trained sequence model, with a key/value cache.
+9. **Generation**: sampling text from a trained sequence model, with a key/value cache; planned
+   (2026-10-10, [generation-workplan.md](generation-workplan.md)).
 10. **A decaying learning-rate schedule**, with longer training.
 11. **Padding masks and variable-length windows.**
 12. **GELU.**
