@@ -53,7 +53,8 @@ its masks in all three by bits.
     [ffn-activations-workplan.md](ffn-activations-workplan.md)).
 14. **Grouped- and multi-query attention**; planned (2026-10-10,
     [grouped-query-attention-workplan.md](grouped-query-attention-workplan.md)).
-15. **Cross-attention**, with an encoder-decoder model on Greek-English translation.
+15. **Cross-attention**, with an encoder-decoder model on Greek-English translation; planned
+    (2026-10-10, [cross-attention-workplan.md](cross-attention-workplan.md)).
 
 Steps 7 to 13 were ordered by the owner on 2026-10-10 from the candidates the multi-head attention
 and sequence task workplans left (next-steps.md). The same day the owner chose a key/value cache
