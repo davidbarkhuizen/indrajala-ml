@@ -14,6 +14,10 @@ swapped for one that records each layer's accumulated gradients and resets them,
 stepping. The update rule doesn't matter, since the rule only consumes the gradient.
 
     check_gradients(network, batch)  # raises GradientMismatch naming the worst weight
+
+A network that drops out draws new masks each pass, so its check takes rng, a factory of fresh
+generators: every pass, the analytic one and each loss evaluation, starts from rng(), so every pass
+drops the same units and the loss is a function of the weights alone.
 """
 
 from __future__ import annotations
@@ -203,11 +207,16 @@ class GradientMismatch(AssertionError):
 
 
 def compare_gradients(
-    network: Any, states: Sequence[tuple[float, ...]], labels: Sequence[Any], loss: Loss | None = None
+    network: Any,
+    states: Sequence[tuple[float, ...]],
+    labels: Sequence[Any],
+    loss: Loss | None = None,
+    rng: Callable[[], Any] | None = None,
 ) -> list[Comparison]:
     """
     Every trained weight's analytic gradient and its central difference, for the whole batch's
-    loss (loss_of the output spec, unless given). Leaves the network's weights as they were.
+    loss (loss_of the output spec, unless given), each pass from rng() when given. Leaves the
+    network's weights as they were.
     """
     specs = network.layer_specs
     tokens = getattr(network, "tokens", None) if token_wise_output(specs) else None
@@ -215,12 +224,18 @@ def compare_gradients(
     target_rows = targets(network, labels)
     base = _as_lists(network.snapshot())
 
+    def reseed() -> None:
+        if rng is not None:
+            network.rng = rng()
+
     def batch_loss(snapshot: Any) -> float:
         network.restore(snapshot)
+        reseed()
         return loss(training_outputs(network, states), target_rows)
 
     try:
         network.restore(base)
+        reseed()
         gradients = analytic_gradients(network, states, labels)
         comparisons: list[Comparison] = []
         # a layer's snapshot entry may hold state after its trained weights (batch norm's running
@@ -242,13 +257,17 @@ def _leaves_at(tree: Any, path: tuple[int, ...]) -> float:
 
 
 def check_gradients(
-    network: Any, states: Sequence[tuple[float, ...]], labels: Sequence[Any], loss: Loss | None = None
+    network: Any,
+    states: Sequence[tuple[float, ...]],
+    labels: Sequence[Any],
+    loss: Loss | None = None,
+    rng: Callable[[], Any] | None = None,
 ) -> list[Comparison]:
     """
     compare_gradients, raising GradientMismatch at the worst weight if any is outside the allowed
     error, or if every gradient is zero (a check that can't fail). Returns the comparisons.
     """
-    comparisons = compare_gradients(network, states, labels, loss)
+    comparisons = compare_gradients(network, states, labels, loss, rng)
     assert comparisons, "the network has no trained weights to check"
     assert any(c.analytic != 0.0 for c in comparisons), "every analytic gradient is zero: the check would be vacuous"
     worst = max(comparisons, key=lambda c: c.excess)

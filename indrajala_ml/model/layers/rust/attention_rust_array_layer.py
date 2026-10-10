@@ -37,8 +37,16 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     """
 
     def __init__(
-        self, tokens: int, features: int, heads: int = 1, key_size: int | None = None, causal: bool = False
+        self,
+        tokens: int,
+        features: int,
+        heads: int = 1,
+        key_size: int | None = None,
+        causal: bool = False,
+        dropout: float = 0.0,
     ) -> None:
+        # dropout comes with the crate's ops (the attention-dropout workplan, stages 4 and 5)
+        assert dropout == 0.0, f"an attention's dropout on Rust: not yet (the attention-dropout workplan, stage 5); got {dropout}"
         self.causal = causal
         self._set_up(tokens, features, heads, key_size)
 

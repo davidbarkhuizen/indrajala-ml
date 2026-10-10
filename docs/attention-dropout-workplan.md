@@ -1,7 +1,7 @@
 # Workplan: dropout in attention (roadmap step 7)
 
 **Status: decisions D1-D10 settled by the owner (2026-10-10), each as recommended. Stages 1 (this
-plan) and 2 (the specs) done. The RNG draw-order workplan, which it waited for, is retired (2026-10-10,
+plan), 2 (the specs) and 3 (numpy) done. The RNG draw-order workplan, which it waited for, is retired (2026-10-10,
 [next-steps.md](next-steps.md)), so its masks are tested in all three implementations by bits from
 the first stage.**
 
@@ -147,8 +147,11 @@ Each lists the options considered, with pros and cons, and the choice.
    entries (D7); builders refuse both with "not yet" until their stages
    (`refuse_dropout_specs_until`; an `Attention(dropout=0.0)` builds as before, a `Dropout(0.0)`
    is refused with the rest).
-3. **numpy**: the mask on `P` (D3, D4) and the token dropout, the training switch, parity tests by
-   hand; tier 1 A/B of numpy's attention case with dropout off.
+3. **numpy** (done): the mask on `P` (D3, D4) and the token dropout (`TokenDropoutArrayLayer`), the
+   training switch, parity tests by hand; tier 1 A/B of numpy's attention case with dropout off. At
+   dropout 0 an attention draws nothing; a `Dropout(0.0)` draws its mask as a dense dropout layer
+   does. The gradient check holds the masks by reseeding the network's generator per pass
+   (`check_gradients(..., rng=)`).
 4. **The crate** (`indrajala-math-rust`): the attention ops' `dropout`, `training`, `rng` keywords
    and the mask through backward (D5); a token dropout forward and backward; numpy's bits; then a
    "Bump rust/" PR here with the tier 1 A/B (D10).

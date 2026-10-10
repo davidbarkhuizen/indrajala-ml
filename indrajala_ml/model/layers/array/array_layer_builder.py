@@ -27,6 +27,7 @@ from indrajala_ml.model.layers.numpy.token_array_layer import (
     PatchesArrayLayer,
     PositionArrayLayer,
     TokenDenseArrayLayer,
+    TokenDropoutArrayLayer,
     TokenMeanArrayLayer,
     TokenSoftmaxArrayLayer,
 )
@@ -60,6 +61,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
+    Dropout,
     Embedding,
     Fork,
     LayerNorm,
@@ -139,7 +141,8 @@ class TokenLayerClasses:
     One backend's layer class for each layer of a patch model's and layer norm's (the layer-norm
     and attention workplan): the token-wise dense layer (ReLU or affine), patches, position, layer
     norm (over tokens or a flat layer), attention and the token mean; and a sequence model's (the
-    sequence task workplan): the embedding and the token-wise softmax output layer.
+    sequence task workplan): the embedding and the token-wise softmax output layer; and the
+    token-wise dropout (the attention-dropout workplan; Rust's at stage 5).
     """
 
     token_dense: LayerClass
@@ -150,6 +153,7 @@ class TokenLayerClasses:
     token_mean: LayerClass
     embedding: LayerClass
     token_output: LayerClass
+    dropout: LayerClass | None
 
 
 TOKEN_LAYER_CLASSES = {
@@ -162,6 +166,7 @@ TOKEN_LAYER_CLASSES = {
         token_mean=TokenMeanArrayLayer,
         embedding=EmbeddingArrayLayer,
         token_output=TokenSoftmaxArrayLayer,
+        dropout=TokenDropoutArrayLayer,
     ),
     "rust": TokenLayerClasses(
         token_dense=TokenDenseRustArrayLayer,
@@ -172,6 +177,7 @@ TOKEN_LAYER_CLASSES = {
         token_mean=TokenMeanRustArrayLayer,
         embedding=EmbeddingRustArrayLayer,
         token_output=TokenSoftmaxRustArrayLayer,
+        dropout=None,
     ),
 }
 
@@ -190,7 +196,10 @@ def _token_layer(classes: TokenLayerClasses, spec: LayerSpec, shape: Shape) -> A
         return classes.layer_norm(*token_shape(shape), spec.epsilon)
     if isinstance(spec, Attention):
         tokens, features = token_shape(shape)
-        return classes.attention(tokens, features, spec.heads, spec.head_size(features), spec.causal)
+        return classes.attention(tokens, features, spec.heads, spec.head_size(features), spec.causal, spec.dropout)
+    if isinstance(spec, Dropout):
+        assert classes.dropout is not None  # refused before its stage (refuse_dropout_specs_until)
+        return classes.dropout(*token_shape(shape), spec.p)
     if isinstance(spec, Position | TokenMean):
         tokens, features = token_shape(shape)
         layer_class = {Position: classes.position, TokenMean: classes.token_mean}
@@ -224,7 +233,8 @@ def build_array_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_dropout_specs_until(specs, "3" if backend_name == "numpy" else "5", f"on the {backend_name} backend")
+    if backend_name == "rust":
+        refuse_dropout_specs_until(specs, "5", "on the rust backend")
     classes = LAYER_CLASSES[backend_name]
     token_classes = TOKEN_LAYER_CLASSES[backend_name]
 
