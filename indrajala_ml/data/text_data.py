@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import Literal
 
 from indrajala_ml.model.protocols.classifier_protocols import Example
@@ -95,7 +96,7 @@ def spread_split(
     """
     assert blocks >= 1 and len(text) >= blocks, f"a spread split needs a character per block; got {blocks} blocks"
     bounds = [b * len(text) // blocks for b in range(blocks + 1)]
-    pieces = [split(text[start:end], train_fraction) for start, end in zip(bounds, bounds[1:])]
+    pieces = [split(text[start:end], train_fraction) for start, end in pairwise(bounds)]
     return [train for train, _ in pieces], [held_out for _, held_out in pieces]
 
 
