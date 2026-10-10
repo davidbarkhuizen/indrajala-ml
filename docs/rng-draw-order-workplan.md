@@ -1,7 +1,7 @@
 # Workplan: pure Python's random draws in numpy's order
 
 **Status: decisions D1-D7 settled by the owner (2026-10-10), each as recommended. Stages 1 (this
-plan), 2 (weights) and 3 (dropout masks) done; stage 4 not started. Done before roadmap step 7
+plan), 2 (weights), 3 (dropout masks) and 4 (the parity tests) done; stage 5 not started. Done before roadmap step 7
 (the owner, 2026-10-10).**
 
 From one seed, numpy and Rust build the same network and draw the same dropout masks, by bits
@@ -135,7 +135,18 @@ Each lists the options considered, with pros and cons, and the choice.
    The golden re-record (D5) moved exactly the two pure-Python entries with two dropout layers
    (`python dropout` and `python multiclass dropout`, `LAYER_SIZES = [4, 3]`); `python dropout
    conv`, with one, and every other entry stayed bit-identical, archived as `material`.
-4. **The parity tests** (D4): seed both sides; the snapshot-restoring helpers and the tests of
-   pure Python's own order go.
+4. **The parity tests** (D4), done: every pure-Python parity test (attention's, multi-head
+   attention's, layer norm's, batch norm's, batch norm's conv networks', the residual blocks', the
+   sequence task's) seeds both sides from one seed and checks them alike by bits, weights and
+   generator state, before training (`tests/python_array_snapshot.py`: `seeded_like`,
+   `assert_seeded_alike`, and the one `as_array_snapshot` that replaced the attention and
+   batch-norm tests' two). The tests that pinned the network draws against a reconstruction of
+   numpy's order (`numpy_draws`) now check against the numpy network itself, and `numpy_draws`
+   went. Layer norm's parity test no longer reseeds both generators before training: seeded alike,
+   they draw the same masks. The trajectories start from the same bits as before, so every
+   tolerance stands unchanged. Kept by design: the step-by-step Adam checks still restore numpy
+   from pure Python at each step, since they compare gradients from the same weights, not
+   trajectories; and restores between two networks of one implementation (pure Python's learn
+   against learn_batch, numpy against Rust) aren't this plan's workaround.
 5. **Docs**: rng-audit.md's Open work, next-steps.md's entry, the README's notes on parity; the
    workplan retired.

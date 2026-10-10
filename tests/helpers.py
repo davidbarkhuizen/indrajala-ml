@@ -151,25 +151,6 @@ def rust_to_numpy(array: pa.Array) -> FloatArray:
     return np.array([[array[r, c] for c in range(cols)] for r in range(rows)])
 
 
-def numpy_draws(seed: int, matrices: Sequence[tuple[int, int, bool]]) -> list[list[Any]]:
-    """
-    What numpy's generator from seed draws for matrices, each (rows, fan_in, has_bias) in turn: W
-    (rows, fan_in), then b when has_bias, from [-limit, limit], limit = 1/sqrt(fan_in), as
-    array_layer.fan_in_aware_random_layer draws. Per matrix, as a pure-Python layer's snapshot: a
-    (weights, bias) per row, or a (weights,) without a bias.
-    """
-    rng = np.random.default_rng(seed)
-    drawn: list[list[Any]] = []
-    for rows, fan_in, has_bias in matrices:
-        limit = 1.0 / np.sqrt(fan_in)
-        W = rng.uniform(-limit, limit, size=(rows, fan_in)).tolist()
-        if has_bias:
-            drawn.append(list(zip(W, rng.uniform(-limit, limit, size=(rows,)).tolist(), strict=True)))
-        else:
-            drawn.append([(weights,) for weights in W])
-    return drawn
-
-
 def bits(value: Any) -> Any:
     """
     Every float in value as float.hex, through either backend's arrays, lists, tuples and dicts:

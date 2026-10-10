@@ -19,7 +19,6 @@ from indrajala_ml.model.layers.python.backprop_node import sigmoid
 from indrajala_ml.model.layers.python.base_node import AbstractNode
 from indrajala_ml.model.layers.python.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.layers.python.layer_major import LayerMajorBatch
-from indrajala_ml.model.layers.python.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.layers.python.linear_layer import LinearLayer
 from indrajala_ml.model.layers.python.relu_layer import relu_activation
 from indrajala_ml.model.layers.python.state_layer import StateLayer
@@ -33,7 +32,7 @@ from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRul
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.training.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
-from tests.helpers import assert_snapshots_close, bits, exp_by_math, learn_in_step, numpy_draws, patching, sigmoid_by
+from tests.helpers import assert_snapshots_close, bits, exp_by_math, learn_in_step, patching, sigmoid_by
 from tests.model.networks.test_batch_norm_array_network import (
     BETA,
     EPSILON,
@@ -47,6 +46,7 @@ from tests.model.networks.test_batch_norm_array_network import (
     _reference,
     _rows,
 )
+from tests.python_array_snapshot import as_array_snapshot, seeded_like
 
 DOWNSTREAM = [[0.3, -0.7], [-0.1, 0.2], [0.5, 0.4]]
 
@@ -212,11 +212,8 @@ def test_the_linear_layer_has_no_bias_and_its_delta_is_the_downstream():
 
 def test_randomize_draws_the_linear_layers_weights_only_and_nothing_for_batch_norm():
     network = _network()
-    linear, norm, output = network.trainable_layers
-    linear_weights, output_weights_and_biases = numpy_draws(3, [(5, 4, False), (3, 5, True)])
-
-    assert bits(linear.snapshot_state()) == bits(linear_weights)
-    assert bits(output.snapshot_state()) == bits(output_weights_and_biases)
+    _seeded_numpy_network(network, "sigmoid", SGD())
+    norm = network.trainable_layers[1]
     assert norm.snapshot_state() == [([1.0], 0.0, 0.0, 1.0)] * 5
 
 
@@ -474,25 +471,10 @@ def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
 # parity with numpy
 
 
-def _matching_numpy_network(python: Any, name: str, rule: UpdateRule) -> Any:
+def _seeded_numpy_network(python: Any, name: str, rule: UpdateRule, seed: int = 3) -> Any:
+    # numpy's network from python's seed: the same weights by bits (the RNG draw-order workplan, D4)
     layers, shape = NETWORKS[name]
-    array = SequentialArrayNetwork(INPUT, layers, rule, shape=shape)
-    array.restore(_as_array_snapshot(python))
-    return array
-
-
-def _as_array_snapshot(python: Any) -> list[tuple[list[Any], ...]]:
-    # the pure-Python snapshot, per node or feature, as numpy's, per parameter
-    snapshot: list[tuple[list[Any], ...]] = []
-    for layer, entry in zip(python.trainable_layers, python.snapshot()):
-        if isinstance(layer, BatchNormLayer):
-            gamma, beta, mean, var = zip(*entry)
-            snapshot.append(([g for (g,) in gamma], list(beta), list(mean), list(var)))
-        elif isinstance(layer, LinearLayer | LinearConvLayer):
-            snapshot.append(([weights for (weights,) in entry],))
-        else:
-            snapshot.append(tuple(list(values) for values in zip(*entry)))
-    return snapshot
+    return seeded_like(python, SequentialArrayNetwork(INPUT, layers, rule, shape=shape), seed)
 
 
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
@@ -505,9 +487,9 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule
     # (assert_array_network_weights_match), 50 steps in: at most 6e-10 relative when measured,
     # Adam's steps amplifying it most, as they do for networks without batch norm
     python = _network(name, rule)
-    array = _matching_numpy_network(python, name, rule)
+    array = _seeded_numpy_network(python, name, rule)
     rows = _rows(40, NETWORKS[name][1])
 
     learn_in_step(0.3, rows, (python, array))
 
-    assert_snapshots_close(_as_array_snapshot(python), array.snapshot())
+    assert_snapshots_close(as_array_snapshot(python), array.snapshot())

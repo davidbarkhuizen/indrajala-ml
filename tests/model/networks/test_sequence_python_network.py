@@ -39,12 +39,10 @@ from tests.helpers import (
     bits,
     exp_by_math,
     learn_in_step,
-    numpy_draws,
     patching,
 )
 from tests.model.networks.test_attention_python_network import (
     LINEAR_RULES,
-    as_array_snapshot,
     assert_every_step_has_numpys_gradients,
     downstream,
 )
@@ -58,6 +56,7 @@ from tests.model.networks.test_sequence_array_network import (
     rows,
 )
 from tests.model.specs.test_layer_specs import SEQUENCE
+from tests.python_array_snapshot import as_array_snapshot, assert_seeded_alike
 
 
 def network(specs: list[LayerSpec], rule: UpdateRule | None = None, seed: int = 3) -> Any:
@@ -90,8 +89,8 @@ token_exp = patching(token_array_layer, "exp", exp_by_math)
 
 
 def test_randomize_draws_numpys_embedding_table_then_output_weights_then_biases():
-    built = network(SEQUENCE["the embedding, then the output"])
-    assert bits(built.snapshot()) == bits(numpy_draws(3, [(VOCABULARY, 6, False), (VOCABULARY, 6, True)]))
+    specs = SEQUENCE["the embedding, then the output"]
+    assert_seeded_alike(network(specs), numpy_network(specs))
 
 
 def test_a_sequence_network_in_pure_python_is_its_class():
@@ -250,7 +249,7 @@ def test_a_sequence_networks_class_is_the_argmax_per_token_and_its_targets_one_h
     assert len(probabilities) == TOKENS and all(len(token) == VOCABULARY for token in probabilities)
     assert built.classify_state(state) == tuple(int(np.argmax(token)) for token in probabilities)
     array = numpy_network(CAUSAL)
-    array.restore(as_array_snapshot(built))
+    assert_seeded_alike(built, array)
     assert built.classify_state(state) == array.classify_state(state)
 
     label = (2, 0, 6, 6, 1)
@@ -325,7 +324,7 @@ def test_training_matches_numpy_within_the_dense_layers_rounding(name: str, rule
     # networks agree within the tolerance every pure-Python parity test allows
     specs = SEQUENCE[name]
     python, array = network(specs, rule), numpy_network(specs, rule)
-    array.restore(as_array_snapshot(python))
+    assert_seeded_alike(python, array)
 
     learn_in_step(0.1, rows(specs, 40), (python, array))
 
