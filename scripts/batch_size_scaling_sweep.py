@@ -27,10 +27,9 @@ import statistics
 import sys
 from typing import Any
 
-from indrajala_ml.data.mnist_data import load_mnist_dataset
 from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
-from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.studies import batch_size_scaling as bss
+from indrajala_ml.studies.common import load_mnist, mean_sd, table
 
 BASELINE_RATES = {
     "dense": [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
@@ -48,25 +47,11 @@ STABLE_ACCURACY = 0.20  # chance (0.10) plus a margin: every seed must end at le
 
 # (batch_size, rate, warmup_epochs, momentum)
 Config = tuple[int, float, float, float]
-Datasets = tuple[list[Example[int]], list[Example[int]]]
-
-_datasets: dict[tuple[str, str, int | None], Datasets] = {}
-
-
-def _load(context: dict[str, Any]) -> Datasets:
-    key = (context["train_path"], context["test_path"], context["limit"])
-    if key not in _datasets:
-        _datasets.clear()
-        _datasets[key] = (
-            load_mnist_dataset(context["train_path"], limit=context["limit"]),
-            load_mnist_dataset(context["test_path"], limit=context["limit"]),
-        )
-    return _datasets[key]
 
 
 def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, Any]:
     batch_size, rate, warmup_epochs, momentum = config
-    train_data, test_data = _load(context)
+    train_data, test_data = load_mnist(context)
     return bss.train_and_evaluate(
         "rust",
         train_data,
@@ -82,24 +67,13 @@ def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, 
     )
 
 
-def _mean_sd(values: list[float]) -> str:
-    sd = statistics.stdev(values) if len(values) > 1 else 0.0
-    return f"{statistics.mean(values):.2%} ± {sd:.2%}"
-
-
 def per_epoch_row(runs: list[dict[str, Any]]) -> list[str]:
     epochs = len(runs[0]["test_accuracies"])
-    return [_mean_sd([run["test_accuracies"][e] for run in runs]) for e in range(epochs)]
+    return [mean_sd([run["test_accuracies"][e] for run in runs]) for e in range(epochs)]
 
 
 def final_accuracies(runs: list[dict[str, Any]]) -> list[float]:
     return [run["test_accuracies"][-1] for run in runs]
-
-
-def _table(header: list[str], rows: list[list[str]]) -> str:
-    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
-    lines += ["| " + " | ".join(row) + " |" for row in rows]
-    return "\n".join(lines)
 
 
 def baseline(
@@ -117,7 +91,7 @@ def baseline(
             finals = final_accuracies(runs)
             stable = min(finals) >= STABLE_ACCURACY
             rows.append([f"{rate:g}"] + per_epoch_row(runs) + [f"{min(finals):.2%}", "yes" if stable else "no"])
-        print(_table(["rate"] + [f"epoch {e + 1}" for e in range(epochs)] + ["worst seed", "stable"], rows))
+        print(table(["rate"] + [f"epoch {e + 1}" for e in range(epochs)] + ["worst seed", "stable"], rows))
 
         stable_rates = [
             rate
@@ -130,9 +104,7 @@ def baseline(
                 key=lambda rate: statistics.mean(final_accuracies(results[(bss.BASE_BATCH_SIZE, rate, 0.0, momentum)])),
             )
             finals = final_accuracies(results[(bss.BASE_BATCH_SIZE, best, 0.0, momentum)])
-            print(
-                f"\nlr_32 = {best:g}: batch-32 band {_mean_sd(finals)} (min {min(finals):.2%}, max {max(finals):.2%})"
-            )
+            print(f"\nlr_32 = {best:g}: batch-32 band {mean_sd(finals)} (min {min(finals):.2%}, max {max(finals):.2%})")
     return results
 
 
@@ -163,7 +135,7 @@ def scaling(
         band = final_accuracies(band_runs)
         low, high = min(band), max(band)
         print(f"\n### momentum {momentum}, lr_32 = {base_rate:g}")
-        print(f"batch-32 band (no warmup, final epoch): {_mean_sd(band)}, seeds span {low:.2%} - {high:.2%}\n")
+        print(f"batch-32 band (no warmup, final epoch): {mean_sd(band)}, seeds span {low:.2%} - {high:.2%}\n")
         rows: list[list[str]] = []
         for config in configs:
             batch_size, rate, warmup, config_momentum = config
@@ -178,7 +150,7 @@ def scaling(
                 + ["yes" if low <= mean <= high else ("above" if mean > high else "no")]
             )
         print(
-            _table(
+            table(
                 ["B", "rate", "value", "warmup epochs (steps)", "total steps"]
                 + [f"epoch {e + 1}" for e in range(epochs)]
                 + ["in band"],

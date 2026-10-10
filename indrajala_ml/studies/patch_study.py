@@ -31,11 +31,9 @@ from typing import Any
 
 import numpy as np
 
-from indrajala_ml.data.mnist_data import load_mnist_dataset
 from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,
@@ -48,6 +46,7 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.studies import batch_size_scaling as bss
+from indrajala_ml.studies.common import load_mnist, mean_sd, table
 from indrajala_ml.training.multiclass_evaluate import accuracy
 
 INPUT_SHAPE = (bss.SIDE, bss.SIDE, 1)
@@ -61,11 +60,8 @@ WORKERS = 4  # each worker holds its own copy of the dataset; memory, not cores,
 
 # (arm, rate)
 Config = tuple[str, float]
-Datasets = tuple[list[Example[int]], list[Example[int]]]
 # a study's arm to its layers; module-level, since run_parameter_sweep pickles the context
 ArmSpecs = Callable[[str], list[LayerSpec]]
-
-_datasets: dict[tuple[str, str, int | None], Datasets] = {}
 
 
 def output() -> Dense:
@@ -118,20 +114,9 @@ def parameter_count(network: Any) -> int:
     return count(network.snapshot())
 
 
-def _load(context: dict[str, Any]) -> Datasets:
-    key = (context["train_path"], context["test_path"], context["limit"])
-    if key not in _datasets:
-        _datasets.clear()
-        _datasets[key] = (
-            load_mnist_dataset(context["train_path"], limit=context["limit"]),
-            load_mnist_dataset(context["test_path"], limit=context["limit"]),
-        )
-    return _datasets[key]
-
-
 def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, Any]:
     arm, rate = config
-    train_data, test_data = _load(context)
+    train_data, test_data = load_mnist(context)
     arm_specs: ArmSpecs = context["arm_specs"]
     network = initial_network(arm_specs(arm), seed)
 
@@ -151,16 +136,6 @@ def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, 
     }
 
 
-def _mean_sd(values: list[float], fmt: str = ".2%") -> str:
-    sd = statistics.stdev(values) if len(values) > 1 else 0.0
-    return f"{format(statistics.mean(values), fmt)} ± {format(sd, fmt)}"
-
-
-def _table(header: list[str], rows: list[list[str]]) -> str:
-    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
-    return "\n".join(lines + ["| " + " | ".join(row) + " |" for row in rows])
-
-
 def _finals(runs: list[dict[str, Any]]) -> list[float]:
     return [run["test_accuracies"][-1] for run in runs]
 
@@ -168,8 +143,8 @@ def _finals(runs: list[dict[str, Any]]) -> list[float]:
 def _rows(configs: list[Config], results: dict[Config, list[dict[str, Any]]], epochs: int) -> list[list[str]]:
     return [
         [arm, f"{rate:g}", str(results[(arm, rate)][0]["parameter_count"])]
-        + [_mean_sd([run["test_accuracies"][e] for run in results[(arm, rate)]]) for e in range(epochs)]
-        + [_mean_sd([s for run in results[(arm, rate)] for s in run["epoch_seconds"]], ".1f")]
+        + [mean_sd([run["test_accuracies"][e] for run in results[(arm, rate)]]) for e in range(epochs)]
+        + [mean_sd([s for run in results[(arm, rate)] for s in run["epoch_seconds"]], ".1f")]
         for arm, rate in configs
     ]
 
@@ -181,7 +156,7 @@ def _header(epochs: int) -> list[str]:
 def time_one(context: dict[str, Any], arm: str, rate: float) -> dict[Config, list[dict[str, Any]]]:
     """One epoch of one arm in this process: the cost that sizes the grid."""
     result = run_config({**context, "epochs": 1}, (arm, rate), 0)
-    print(_table(_header(1), _rows([(arm, rate)], {(arm, rate): [result]}, 1)))
+    print(table(_header(1), _rows([(arm, rate)], {(arm, rate): [result]}, 1)))
     return {(arm, rate): [result]}
 
 
@@ -190,12 +165,12 @@ def tune(
 ) -> dict[Config, list[dict[str, Any]]]:
     configs: list[Config] = [(arm, rate) for arm in arms for rate in rates]
     results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=WORKERS)
-    print(_table(_header(context["epochs"]), _rows(configs, results, context["epochs"])))
+    print(table(_header(context["epochs"]), _rows(configs, results, context["epochs"])))
     print()
     for arm in arms:
         finite = [c for c in configs if c[0] == arm and all(math.isfinite(a) for a in _finals(results[c]))]
         best = max(finite, key=lambda config: statistics.mean(_finals(results[config])))
-        print(f"best rate for {arm}: {best[1]:g} ({_mean_sd(_finals(results[best]))})")
+        print(f"best rate for {arm}: {best[1]:g} ({mean_sd(_finals(results[best]))})")
     return results
 
 
@@ -204,7 +179,7 @@ def sweep(
 ) -> dict[Config, list[dict[str, Any]]]:
     configs: list[Config] = list(zip(arms, rates, strict=True))
     results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=WORKERS)
-    print(_table(_header(context["epochs"]), _rows(configs, results, context["epochs"])))
+    print(table(_header(context["epochs"]), _rows(configs, results, context["epochs"])))
     return results
 
 

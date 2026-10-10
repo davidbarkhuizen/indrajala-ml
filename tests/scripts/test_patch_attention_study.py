@@ -10,7 +10,7 @@ from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import Attention, Residual
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 from indrajala_ml.studies import batch_size_scaling as bss
-from indrajala_ml.studies import patch_study
+from indrajala_ml.studies import common, patch_study
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
 import patch_attention_study as study  # scripts/ isn't a package
@@ -45,7 +45,7 @@ def test_a_run_records_every_epoch_and_repeats_from_its_seed():
     examples: list[Example[int]] = [
         (tuple(rng.random() for _ in range(bss.DIMENSION)), rng.randrange(bss.CLASS_COUNT)) for _ in range(40)
     ]
-    patch_study._datasets[("train", "test", 1)] = (examples, examples[:8])  # pyright: ignore[reportPrivateUsage]
+    common._mnist_datasets[("train", "test", 1)] = (examples, examples[:8])  # pyright: ignore[reportPrivateUsage]
     context = {"train_path": "train", "test_path": "test", "limit": 1, "epochs": 2, "arm_specs": study.arm_specs}
 
     first = patch_study.run_config(context, ("attention-ffn", 0.001), 0)

@@ -157,11 +157,6 @@ Still out of scope:
   `batches` and `learn_in_step` (the 50-step parity loop, 11 copies), `assert_snapshots_close` (5)
   and `assert_learn_and_a_batch_of_one_agree` (3), `test_checkpoint` the restored-checkpoint
   scenario (3) and `test_layer_specs` the README's patch model (2).
-- **The studies' protocol helpers** (found by the 2026-10-09 rerun, out of its scope: scripts).
-  `_load`, `_mean_sd` and `_table` are the same in `indrajala_ml/studies/patch_study.py`,
-  `scripts/residual_depth_study.py` and `scripts/batch_size_scaling_sweep.py` (symilar misses them
-  at 10 lines). The sequence study (`indrajala_ml/studies/sequence_study.py`) copied `_mean_sd`
-  and `_table` a fourth time; a shared studies module should take them from all four, in one PR.
 - **Shared homes for the next layer kind.** The conv and pool argument checks and output size are
   in `model/specs/window_geometry.py`, one shape walk (`spec_shapes.spec_shapes`) feeds both builders,
   the optimizers share `OptimizerBase` and `ArrayOptimizerBase`, and a layer's optimizer accessors
@@ -172,7 +167,8 @@ Still out of scope:
   `spec_shapes.token_shape`. Tests share `bits`, `split`, `max_relative_gap`, `patching`,
   `randomized`, `learn_in_step` and the `assert_*` scenarios (`tests/helpers.py`), and a scenario
   every implementation runs takes conftest's `implementation` fixture (`tests/model/networks/test_{attention,residual,layer_norm}_network.py`). A new layer
-  kind extends these rather than adding a copy.
+  kind extends these rather than adding a copy. A study takes its cached MNIST
+  loading, mean ± sd cells and Markdown tables from `indrajala_ml/studies/common.py`.
 - **The linear, conv and batch-norm layers' own output-delta refusals** (the rerun's stage 1).
   They are hand-written, with their own messages, rather than taken from `Hidden`; they were not
   in the rerun's findings. Move them onto the mixin when one of those layers is next touched.

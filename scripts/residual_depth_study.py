@@ -76,7 +76,6 @@ from typing import Any
 
 import numpy as np
 
-from indrajala_ml.data.mnist_data import load_mnist_dataset
 from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
@@ -84,6 +83,7 @@ from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec, Residual
 from indrajala_ml.model.specs.update_rules import Momentum
 from indrajala_ml.studies import batch_size_scaling as bss
+from indrajala_ml.studies.common import load_mnist, mean_sd, table
 from indrajala_ml.training.multiclass_evaluate import accuracy
 
 WIDTH = 64
@@ -99,9 +99,6 @@ WORKERS = 4  # each worker holds its own copy of the dataset; memory, not cores,
 
 # (arm, depth, batch norm, rate)
 Config = tuple[str, int, bool, float]
-Datasets = tuple[list[Example[int]], list[Example[int]]]
-
-_datasets: dict[tuple[str, str, int | None], Datasets] = {}
 
 
 def _relu_layer(batch_norm: bool) -> list[LayerSpec]:
@@ -159,20 +156,9 @@ def initial_gradient_norm(network: Any, examples: list[Example[int]]) -> float:
     return float(np.linalg.norm(gradient))
 
 
-def _load(context: dict[str, Any]) -> Datasets:
-    key = (context["train_path"], context["test_path"], context["limit"])
-    if key not in _datasets:
-        _datasets.clear()
-        _datasets[key] = (
-            load_mnist_dataset(context["train_path"], limit=context["limit"]),
-            load_mnist_dataset(context["test_path"], limit=context["limit"]),
-        )
-    return _datasets[key]
-
-
 def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, Any]:
     arm, depth, batch_norm, rate = config
-    train_data, test_data = _load(context)
+    train_data, test_data = load_mnist(context)
     network = initial_network(arm, depth, batch_norm, seed)
     gradient_norm = initial_gradient_norm(network, train_data[:GRADIENT_EXAMPLES])
 
@@ -186,16 +172,6 @@ def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, 
     return {"test_accuracies": test_accuracies, "initial_gradient_norm": gradient_norm}
 
 
-def _mean_sd(values: list[float], fmt: str = ".2%") -> str:
-    sd = statistics.stdev(values) if len(values) > 1 else 0.0
-    return f"{format(statistics.mean(values), fmt)} ± {format(sd, fmt)}"
-
-
-def _table(header: list[str], rows: list[list[str]]) -> str:
-    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
-    return "\n".join(lines + ["| " + " | ".join(row) + " |" for row in rows])
-
-
 def _finals(runs: list[dict[str, Any]]) -> list[float]:
     return [run["test_accuracies"][-1] for run in runs]
 
@@ -205,13 +181,13 @@ def tune(context: dict[str, Any], seeds: list[int], rates: list[float]) -> dict[
     results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=WORKERS)
     rows = [
         [f"{config[3]:g}"]
-        + [_mean_sd([run["test_accuracies"][e] for run in results[config]]) for e in range(context["epochs"])]
+        + [mean_sd([run["test_accuracies"][e] for run in results[config]]) for e in range(context["epochs"])]
         for config in configs
     ]
-    print(_table(["rate"] + [f"epoch {e + 1}" for e in range(context["epochs"])], rows))
+    print(table(["rate"] + [f"epoch {e + 1}" for e in range(context["epochs"])], rows))
     finite = [config for config in configs if all(math.isfinite(a) for a in _finals(results[config]))]
     best = max(finite, key=lambda config: statistics.mean(_finals(results[config])))
-    print(f"\nbest rate: {best[3]:g} ({_mean_sd(_finals(results[best]))})")
+    print(f"\nbest rate: {best[3]:g} ({mean_sd(_finals(results[best]))})")
     return results
 
 
@@ -230,11 +206,11 @@ def sweep(
                 runs = results[(arm, depth, batch_norm, rate)]
                 rows.append(
                     [str(depth), arm]
-                    + [_mean_sd([run["test_accuracies"][e] for run in runs]) for e in range(context["epochs"])]
-                    + [_mean_sd([run["initial_gradient_norm"] for run in runs], ".3g")]
+                    + [mean_sd([run["test_accuracies"][e] for run in runs]) for e in range(context["epochs"])]
+                    + [mean_sd([run["initial_gradient_norm"] for run in runs], ".3g")]
                 )
         print(
-            _table(
+            table(
                 ["depth", "arm"]
                 + [f"epoch {e + 1}" for e in range(context["epochs"])]
                 + ["first layer's gradient norm at init"],
