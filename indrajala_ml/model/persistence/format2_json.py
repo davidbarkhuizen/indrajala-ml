@@ -19,6 +19,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
+    Dropout,
     Embedding,
     ExpandedSpec,
     Fork,
@@ -35,13 +36,15 @@ from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRul
 
 _RULES: dict[str, type[UpdateRule]] = {"sgd": SGD, "momentum": Momentum, "adam": Adam, "weight_decay": WeightDecay}
 # the layer-norm and attention workplan's specs by kind (stage 5), and the sequence task workplan's
-# Embedding (stage 2); a token-wise dense layer's entry, an output layer's included, is a "dense" one
-_TOKEN_SPECS: dict[str, type[Patches | Embedding | Position | LayerNorm | Attention | TokenMean]] = {
+# Embedding (stage 2) and the attention-dropout workplan's Dropout (D7); a token-wise dense layer's
+# entry, an output layer's included, is a "dense" one
+_TOKEN_SPECS: dict[str, type[Patches | Embedding | Position | LayerNorm | Attention | Dropout | TokenMean]] = {
     "patches": Patches,
     "embedding": Embedding,
     "position": Position,
     "layer_norm": LayerNorm,
     "attention": Attention,
+    "dropout": Dropout,
     "token_mean": TokenMean,
 }
 _TOKEN_KINDS = {cls: kind for kind, cls in _TOKEN_SPECS.items()}
@@ -83,9 +86,10 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
     if isinstance(spec, PoolSpec):
         return {"kind": "pool", **asdict(spec)}
     if isinstance(spec, Attention):
-        # heads, key_size and causal only when not the default (the multi-head attention workplan;
-        # the sequence task workplan, D7), so a one-head unmasked entry is as before Attention had
-        # them and older checkouts load it
+        # heads, key_size, causal and dropout only when not the default (the multi-head attention
+        # workplan; the sequence task workplan, D7; the attention-dropout workplan, D7), so a
+        # one-head unmasked entry without dropout is as before Attention had them and older
+        # checkouts load it
         default = Attention()
         fields = {key: value for key, value in asdict(spec).items() if value != getattr(default, key)}
         return {"kind": "attention", **fields}
@@ -162,7 +166,7 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("E",)
         case Attention():
             return ("Wq", "bq", "Wk", "bk", "Wv", "bv", "Wo", "bo")
-        case Fork() | Add() | PoolSpec() | Patches() | TokenMean():
+        case Fork() | Add() | PoolSpec() | Patches() | Dropout() | TokenMean():
             return ()
         case Dense() if spec.bias:
             return ("W", "b")

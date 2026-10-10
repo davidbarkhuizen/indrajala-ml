@@ -15,6 +15,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
+    Dropout,
     Embedding,
     Fork,
     LayerNorm,
@@ -73,7 +74,7 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
     divide its token width when it has no key_size. An Embedding gives a token of its size per
     input value, an id (the sequence task workplan, D5). A Dense over tokens acts on each (the
     layer-norm and attention workplan, D4), a token-wise output layer included (the sequence task
-    workplan, D6), and a Position, a LayerNorm and an Attention keep their input's shape (a
+    workplan, D6), and a Position, a LayerNorm, an Attention and a Dropout keep their input's shape (a
     LayerNorm after a conv front end normalizes the flat image as one token). The specs' own
     arguments are checked by the layers built from them, not here.
     """
@@ -116,7 +117,7 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
                 f"(the multi-head attention workplan, D3); got {spec!r} over tokens of {features} features"
             )
             shapes.append(SpecShape(shape, shape))
-        elif isinstance(spec, Position | LayerNorm):
+        elif isinstance(spec, Position | LayerNorm | Dropout):
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, TokenMean):
             assert len(shape) == 2, f"a TokenMean reads tokens; got {shape}"

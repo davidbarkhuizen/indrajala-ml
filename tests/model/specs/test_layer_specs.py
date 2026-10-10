@@ -20,6 +20,7 @@ from indrajala_ml.model.specs.layer_specs import (
     BatchNorm,
     Conv,
     Dense,
+    Dropout,
     Embedding,
     Fork,
     LayerNorm,
@@ -30,6 +31,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Residual,
     TokenMean,
     expand_specs,
+    refuse_dropout_specs_until,
     spec_paths,
     token_wise_output,
 )
@@ -789,3 +791,89 @@ def test_all_three_implementations_build_sequence_specs(specs: list[LayerSpec]):
 @pytest.mark.parametrize("specs", SEQUENCE.values(), ids=SEQUENCE.keys())
 def test_format_2_round_trips_sequence_specs(specs: list[LayerSpec]):
     assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
+
+
+# dropout among the tokens (the attention-dropout workplan, stage 2): an Attention's dropout on its
+# weights, and a Dropout after the Position (the embedding's) or ending a block's body (the residual one)
+DROP = Dropout(0.1)
+DROPPED_ATTENTION = Residual((LayerNorm(), Attention(heads=2, causal=True, dropout=0.1), DROP))
+DROPPED_FFN = Residual((LayerNorm(), Dense(8, activation="relu"), AFFINE_6, DROP))
+
+DROPOUT: dict[str, list[LayerSpec]] = {
+    "GPT's three dropouts": [IDS, Position(), DROP, DROPPED_ATTENTION, DROPPED_FFN, LayerNorm(), TOKEN_OUTPUT],
+    "the attention weights only": [IDS, Position(), Residual((LayerNorm(), Attention(dropout=0.2))), TOKEN_OUTPUT],
+    "the residual dropout only": [IDS, Residual((LayerNorm(), Attention(), DROP)), TOKEN_OUTPUT],
+    "the embedding dropout only": [IDS, Position(), DROP, FFN_BLOCK, TOKEN_OUTPUT],
+    "a patch model's": [PATCHES, EMBED, Position(), DROP, DROPPED_ATTENTION, TokenMean(), OUTPUT],
+    "no drop at all": [IDS, Position(), Dropout(0.0), Residual((Attention(dropout=0.0), Dropout(0.0))), TOKEN_OUTPUT],
+}
+
+DROPOUT_INVALID: dict[str, list[LayerSpec]] = {
+    "a dropout without a position": [IDS, DROP, TOKEN_OUTPUT],
+    "a dropout after a block": [IDS, Position(), ATTENTION_BLOCK, DROP, TOKEN_OUTPUT],
+    "a dropout after a token-wise dense layer": [PATCHES, EMBED, DROP, TokenMean(), OUTPUT],
+    "a dropout before the position": [IDS, DROP, Position(), TOKEN_OUTPUT],
+    "two dropouts after the position": [IDS, Position(), DROP, DROP, TOKEN_OUTPUT],
+    "a dropout opening a body": [IDS, Residual((DROP, LayerNorm(), Attention())), TOKEN_OUTPUT],
+    "a dropout mid-body": [IDS, Residual((LayerNorm(), DROP, Dense(8, activation="relu"), AFFINE_6)), TOKEN_OUTPUT],
+    "a dropout after a body's layer norm": [IDS, Residual((Attention(), LayerNorm(), DROP)), TOKEN_OUTPUT],
+    "two dropouts ending a body": [IDS, Residual((Attention(), DROP, DROP)), TOKEN_OUTPUT],
+    "a body of a dropout alone": [IDS, Residual((DROP,)), TOKEN_OUTPUT],
+    "a dropout in a dense part": [PATCHES, EMBED, TokenMean(), DROP, OUTPUT],
+    "a dropout in a flat network": [Dense(5), DROP, OUTPUT],
+    "a dropout in a flat block": [Dense(5), Residual((Dense(5, activation="linear", bias=True), DROP)), OUTPUT],
+    "a dropout of 1": [IDS, Position(), Dropout(1.0), TOKEN_OUTPUT],
+    "a negative dropout": [IDS, Position(), Dropout(-0.1), TOKEN_OUTPUT],
+    "attention dropout of 1": [IDS, Residual((Attention(dropout=1.0),)), TOKEN_OUTPUT],
+    "negative attention dropout": [IDS, Residual((Attention(dropout=-0.1),)), TOKEN_OUTPUT],
+}
+
+
+@pytest.mark.parametrize("specs", DROPOUT.values(), ids=DROPOUT.keys())
+def test_dropout_among_the_tokens_is_accepted(specs: list[LayerSpec]):
+    validate_layer_specs(specs)
+    spec_shapes(specs, (5,) if isinstance(specs[0], Embedding) else (4, 4, 1))
+
+
+@pytest.mark.parametrize("specs", DROPOUT_INVALID.values(), ids=DROPOUT_INVALID.keys())
+def test_a_misplaced_or_out_of_range_dropout_is_rejected(specs: list[LayerSpec]):
+    with pytest.raises(AssertionError):
+        validate_layer_specs(specs)
+
+
+def test_a_dropout_keeps_its_tokens_shape():
+    shapes = spec_shapes(DROPOUT["GPT's three dropouts"], (5,))
+    # the embedding, the position, the dropout, then the attention block: fork, layer norm,
+    # attention, dropout, add
+    assert shapes[2] == SpecShape((5, 6), (5, 6))
+    assert shapes[3:8] == [SpecShape((5, 6), (5, 6))] * 5
+
+
+def test_attention_drops_nothing_by_default():
+    assert Attention() == Attention(dropout=0.0)
+
+
+@pytest.mark.parametrize("specs", DROPOUT.values(), ids=DROPOUT.keys())
+def test_format_2_round_trips_dropout_specs(specs: list[LayerSpec]):
+    assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
+
+
+@pytest.mark.parametrize(
+    ("backend", "stage"), [("numpy", "3"), ("rust", "5"), ("python", "6")], ids=["numpy", "rust", "python"]
+)
+@pytest.mark.parametrize(
+    "specs",
+    [DROPOUT["the attention weights only"], DROPOUT["the residual dropout only"], DROPOUT["no drop at all"]],
+    ids=["attention", "a dropout", "a dropout of 0"],
+)
+def test_every_builder_refuses_dropout_until_its_stage(specs: list[LayerSpec], backend: str, stage: str):
+    with pytest.raises(
+        NotImplementedError, match=re.escape(f"not yet (the attention-dropout workplan, stage {stage})")
+    ):
+        _builds(specs, backend)
+
+
+def test_attention_without_dropout_isnt_refused():
+    refuse_dropout_specs_until(SEQUENCE["a causal transformer"], "3", "here")
+    for backend in ("numpy", "rust", "python"):
+        _builds([IDS, Position(), Residual((LayerNorm(), Attention(dropout=0.0))), TOKEN_OUTPUT], backend)

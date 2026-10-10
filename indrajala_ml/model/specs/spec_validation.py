@@ -13,6 +13,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
+    Dropout,
     LayerNorm,
     LayerSpec,
     Patches,
@@ -56,6 +57,11 @@ def _check_layer_norm(spec: LayerNorm) -> None:
 def _check_attention(spec: Attention) -> None:
     assert spec.heads >= 1, f"an Attention has at least one head; got {spec!r}"
     assert spec.key_size is None or spec.key_size >= 1, f"a key_size is at least 1; got {spec!r}"
+    assert 0.0 <= spec.dropout < 1.0, f"an Attention's dropout is in [0.0, 1.0); got {spec!r}"
+
+
+def _check_dropout(spec: Dropout) -> None:
+    assert 0.0 <= spec.p < 1.0, f"a Dropout's p is in [0.0, 1.0); got {spec!r}"
 
 
 def _check_residual(spec: Residual, in_body: bool) -> None:
@@ -100,10 +106,15 @@ def _check_token_residual(spec: Residual, in_body: bool) -> None:
     assert not in_body, f"a residual block's body holds no residual block (D6); got {spec!r}"
     assert spec.body, f"a residual block's body needs at least one layer; got {spec!r}"
     *layers, last = spec.body
+    if isinstance(last, Dropout) and layers:
+        # the residual dropout, after the body's last layer (the attention-dropout workplan, D2)
+        _check_dropout(last)
+        *layers, last = layers
     affine = isinstance(last, Dense) and last.activation == "linear" and last.bias
     assert affine or isinstance(last, Attention), (
         f'a token block\'s body ends in Attention or an affine layer, Dense(n, "linear", bias=True) '
-        f"(the layer-norm and attention workplan, D1, D6); got {spec!r}"
+        f"(the layer-norm and attention workplan, D1, D6), then may end in a Dropout (the attention-dropout "
+        f"workplan, D2); got {spec!r}"
     )
     if isinstance(last, Dense):
         _check_hidden_dense(last)
@@ -118,8 +129,14 @@ def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool) -> None:
     batch_norm = next((spec for spec in expand_specs(tokens) if isinstance(spec, BatchNorm)), None)
     assert batch_norm is None, f"a BatchNorm doesn't stand among the tokens, a LayerNorm does (D4); got {batch_norm!r}"
     blocks = 0
-    for spec in tokens:
-        if isinstance(spec, Position):
+    for i, spec in enumerate(tokens):
+        if isinstance(spec, Dropout):
+            assert i > 0 and isinstance(tokens[i - 1], Position), (
+                "a Dropout among the tokens stands right after the Position, or ends a block's body after its "
+                f"Attention or affine layer (the attention-dropout workplan, D2); got {list(tokens)!r}"
+            )
+            _check_dropout(spec)
+        elif isinstance(spec, Position):
             assert not in_body and blocks == 0, (
                 f"a Position stands in the token part, before any block (D7); got {list(tokens)!r}"
             )
@@ -130,7 +147,7 @@ def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool) -> None:
             blocks += 1
         else:
             assert isinstance(spec, Dense), (
-                "among the tokens stand a token-wise Dense, a Position, a LayerNorm and residual blocks, "
+                "among the tokens stand a token-wise Dense, a Position, a Dropout, a LayerNorm and residual blocks, "
                 f"Attention ending a block's body (D1, D4); got {spec!r}"
             )
             _check_hidden_dense(spec)

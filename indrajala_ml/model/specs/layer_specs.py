@@ -25,6 +25,11 @@ dense part. A token sequence of T tokens of d features is the shape (T, d), flat
 A sequence model (the sequence task workplan) starts its token part with Embedding, which reads T
 token ids, in place of Patches, and may end it in its output layer, applied to each token, in place of
 TokenMean and a dense part (D5, D6): token_wise_output. Its attention may be causal (D7).
+
+Dropout among the tokens (the attention-dropout workplan, D1, D2) is an Attention's dropout, on
+its attention weights, and Dropout(p), a layer of its own after the Position (the embedding's) or
+ending a block's body after its Attention or affine layer (the residual one). It is a layer, where
+a dense layer's dropout is fused with its sigmoid, because no activation stands there to fuse with.
 """
 
 from __future__ import annotations
@@ -150,16 +155,31 @@ class Attention:
     in the affine output projection (the layer-norm and attention workplan, D6; the multi-head
     attention workplan, D2, D3). It ends a token block's body. A causal one masks each token's
     scores for the tokens after it, so token t attends to tokens 0 to t only (the sequence task
-    workplan, D7).
+    workplan, D7). In training, dropout is the drop probability of each attention weight, the
+    kept ones scaled by 1 / (1 - dropout) before the weighted sum of the values (the
+    attention-dropout workplan, D3, D4).
     """
 
     heads: int = 1
     key_size: int | None = None
     causal: bool = False
+    dropout: float = 0.0
 
     def head_size(self, features: int) -> int:
         """Each head's width d_k over tokens of features features: key_size, else features / heads."""
         return features // self.heads if self.key_size is None else self.key_size
+
+
+@dataclass(frozen=True)
+class Dropout:
+    """
+    Inverted dropout of each token's features, in training only, p the drop probability: each
+    feature kept with probability 1 - p and scaled by 1 / (1 - p) (the attention-dropout workplan,
+    D2). No weights. It stands right after the Position (the embedding dropout), or ends a token
+    block's body right after its Attention or affine layer (the residual dropout).
+    """
+
+    p: float
 
 
 @dataclass(frozen=True)
@@ -178,13 +198,14 @@ LayerSpec = (
     | Position
     | LayerNorm
     | Attention
+    | Dropout
     | TokenMean
 )
 
 # the specs that start a token part, as a network's first layer
 TokenStart = Patches | Embedding
 # the specs that act on tokens only, from the token part's start to its TokenMean, both included
-TokenSpec = Patches | Embedding | Position | Attention | TokenMean
+TokenSpec = Patches | Embedding | Position | Attention | Dropout | TokenMean
 
 
 @dataclass(frozen=True)
@@ -213,6 +234,7 @@ ExpandedSpec = (
     | Position
     | LayerNorm
     | Attention
+    | Dropout
     | TokenMean
 )
 
@@ -250,6 +272,19 @@ def refuse_token_wise_output(specs: Sequence[LayerSpec], shape: str) -> None:
         f"a token-wise output layer is a sequence network's (the sequence task workplan, D6), not a {shape} "
         f"one's: build it with shape='sequence'; got {specs[-1]!r}"
     )
+
+
+def refuse_dropout_specs_until(specs: Sequence[LayerSpec], stage: str, where: str) -> None:
+    """
+    A builder's refusal of an Attention with dropout or a Dropout before the attention-dropout
+    workplan's stage that builds them there.
+    """
+    spec = next(
+        (s for s in expand_specs(specs) if isinstance(s, Dropout) or (isinstance(s, Attention) and s.dropout)),
+        None,
+    )
+    if spec is not None:
+        raise NotImplementedError(f"{spec!r} {where}: not yet (the attention-dropout workplan, stage {stage})")
 
 
 def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:
