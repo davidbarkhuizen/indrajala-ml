@@ -1,8 +1,8 @@
 # Workplan: context length (roadmap step 12)
 
 **Status: decisions D1-D10 settled (2026-10-10) by building for extensibility, speed and real-world
-production (the owner's direction, 2026-10-10), except D9's golden re-record, which needs the
-owner's approval under measurement.md §8. Stage 1 (this plan) done.**
+production (the owner's direction, 2026-10-10); D9's golden re-record approved by the owner
+(2026-10-10) under measurement.md §8. Stage 1 (this plan) done.**
 
 Roadmap step 12 ([primitives-roadmap.md](primitives-roadmap.md)): sequence models over windows of
 256 and 1,024 characters, not 64, with the attention that makes that affordable (tiled, with an
@@ -93,7 +93,7 @@ Each lists the options considered, with pros and cons, and the choice.
   with more context, predict better), on both held-out splits.
 - **D9. Golden run and timing.** Tiled attention changes every attention entry's bits (D3 (a)): a
   re-record under measurement.md §8 as fundamentally better structured (one path, memory linear in
-  `T`), which needs **the owner's approval** before stage 3 merges; every other entry
+  `T`), **approved by the owner on 2026-10-10**, recorded in stage 3; every other entry
   bit-identical. A speedup is claimed at long `T`: tier 2, the full protocol, archived; at `T = 64`
   the A/B must show no slowdown, or the PR says how much and why.
 - **D10. Out of scope.** Mixed precision (float32 or bfloat16 compute), sequence parallelism, and
