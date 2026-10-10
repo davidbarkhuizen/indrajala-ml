@@ -274,19 +274,6 @@ def refuse_token_wise_output(specs: Sequence[LayerSpec], shape: str) -> None:
     )
 
 
-def refuse_dropout_specs_until(specs: Sequence[LayerSpec], stage: str, where: str) -> None:
-    """
-    A builder's refusal of an Attention with dropout or a Dropout before the attention-dropout
-    workplan's stage that builds them there.
-    """
-    spec = next(
-        (s for s in expand_specs(specs) if isinstance(s, Dropout) or (isinstance(s, Attention) and s.dropout)),
-        None,
-    )
-    if spec is not None:
-        raise NotImplementedError(f"{spec!r} {where}: not yet (the attention-dropout workplan, stage {stage})")
-
-
 def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:
     """
     Each expanded spec's place in specs as written, for messages: "layer 2", or inside a block

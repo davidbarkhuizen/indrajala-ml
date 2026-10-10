@@ -2,7 +2,8 @@
 A patch model's token layers in pure Python (the layer-norm and attention workplan, stage 3; README,
 Layer norm and attention), the counterparts of token_array_layer.py: Patches, Position, TokenMean
 and the token-wise dense layer; and a sequence model's (the sequence task workplan, stage 6):
-Embedding and the token-wise softmax output layer. A token sequence of T tokens of d features is
+Embedding and the token-wise softmax output layer; and the token-wise dropout (the attention-dropout
+workplan, stage 6). A token sequence of T tokens of d features is
 T * d nodes, token-major, node t * d + j (D2).
 
 Every sum is a left fold from 0.0 in index order (fold), the token-wise dense layer's weighted
@@ -28,7 +29,7 @@ from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weig
 from indrajala_ml.model.layers.python.relu_layer import relu_activation, relu_delta
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer, PassNode
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
-from indrajala_ml.pcg64 import Pcg64Generator
+from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
 exp = math.exp
 
@@ -155,6 +156,64 @@ class PatchesLayer(ParameterFreeLayer[TokenNode]):
 
     def downstream_sum(self, own_index: int) -> float:
         return self.nodes[self.target[own_index]].delta
+
+
+class DropoutTokenNode(TokenNode):
+    """A token dropout's node: its value and delta per example, and the mask value it drew."""
+
+    example_fields: ClassVar[tuple[str, ...]] = ("_activation", "delta", "_mask")
+
+    def __init__(self) -> None:
+        super().__init__()
+        # the mask value the forward pass drew, or None when it drew none, as in inference
+        self._mask: float | None = None
+
+
+class TokenDropoutLayer(ParameterFreeLayer[DropoutTokenNode]):
+    """
+    Inverted dropout of each token's features (the attention-dropout workplan, D2, D6), in training
+    only: each node draws its mask value m from the network's generator, node by node, m = 1.0 if
+    u >= p else 0.0, and passes x * m / keep on (numpy's X * M / keep, so a dropped negative is
+    -0.0); its downstream is delta * m / keep. Its network trains layer-major, so the draws are
+    numpy's (N, T * d) row-major order. In inference it passes its input on and draws nothing.
+    """
+
+    def __init__(self, input_layer: InputLayer, tokens: int, features: int, drop_probability: float) -> None:
+        assert 0.0 <= drop_probability < 1.0, f"drop_probability must be in [0.0, 1.0); got {drop_probability}"
+        assert len(input_layer.nodes) == tokens * features
+        self.input_layer = input_layer
+        self._drop_probability = drop_probability
+        self._keep_probability = 1.0 - drop_probability
+        self.training = False
+        self.rng: Pcg64Generator = default_rng()
+        self.nodes = [DropoutTokenNode() for _ in range(tokens * features)]
+        self.size = len(self.nodes)
+
+    def set_rng(self, rng: Pcg64Generator) -> None:
+        self.rng = rng
+
+    def set_training_mode(self, training: bool) -> None:
+        self.training = training
+
+    def forward(self) -> None:
+        for node, input_node in zip(self.nodes, self.input_layer.nodes):
+            x = input_node.value()
+            if self.training:
+                m = 1.0 if self.rng.random() >= self._drop_probability else 0.0
+                node._mask = m  # pyright: ignore[reportPrivateUsage]
+                node.activate(x * m / self._keep_probability)
+            else:
+                node._mask = None  # pyright: ignore[reportPrivateUsage]
+                node.activate(x)
+
+    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+        for own_index, node in enumerate(self.nodes):
+            node.delta = next_layer.downstream_sum(own_index)
+
+    def downstream_sum(self, own_index: int) -> float:
+        node = self.nodes[own_index]
+        m = node._mask  # pyright: ignore[reportPrivateUsage]
+        return node.delta if m is None else node.delta * m / self._keep_probability
 
 
 class TokenMeanLayer(ParameterFreeLayer[TokenNode]):

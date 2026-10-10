@@ -95,8 +95,10 @@ class BackpropNetworkBase[
         # a network with a layer that needs the batch's order trains layer-major (layer_major.py):
         # batch norm, which normalizes over the batch (the batch-norm workplan, D3), and dropout,
         # whose layers then draw their masks layer by layer, each example's in turn, numpy's
-        # (batch, size) order (the RNG draw-order workplan, D3)
-        self._layer_major = self.batch_norm_index is not None or bool(self._generator_layers)
+        # (batch, size) order (the RNG draw-order workplan, D3). A generator layer draws unless it
+        # says it doesn't (an attention at dropout 0: the attention-dropout workplan, D6)
+        drawing = [layer for layer in self._generator_layers if getattr(layer, "draws", True)]
+        self._layer_major = self.batch_norm_index is not None or bool(drawing)
         # OS entropy until randomized(seed=, rng=) or an assignment sets it (the RNG generators
         # workplan, D9)
         self.rng = default_rng()

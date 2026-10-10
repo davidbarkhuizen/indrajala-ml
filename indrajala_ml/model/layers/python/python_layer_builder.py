@@ -28,6 +28,7 @@ from indrajala_ml.model.layers.python.token_layer import (
     PatchesLayer,
     PositionLayer,
     TokenDenseLayer,
+    TokenDropoutLayer,
     TokenMeanLayer,
     TokenSoftmaxLayer,
 )
@@ -37,6 +38,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
+    Dropout,
     Embedding,
     Fork,
     LayerNorm,
@@ -45,7 +47,6 @@ from indrajala_ml.model.specs.layer_specs import (
     Position,
     TokenMean,
     expand_specs,
-    refuse_dropout_specs_until,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
@@ -68,7 +69,9 @@ def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
 
 
 def _token_layer(
-    spec: Patches | Embedding | Position | LayerNorm | Attention | TokenMean, shape: Shape, input_layer: InputLayer
+    spec: Patches | Embedding | Position | LayerNorm | Attention | Dropout | TokenMean,
+    shape: Shape,
+    input_layer: InputLayer,
 ) -> TrainableLayer:
     if isinstance(spec, Patches):
         return PatchesLayer(input_layer, *image_shape(shape), spec.patch_size)
@@ -80,7 +83,11 @@ def _token_layer(
     if isinstance(spec, Position):
         return PositionLayer(input_layer, tokens, features)
     if isinstance(spec, Attention):
-        return AttentionLayer(input_layer, tokens, features, spec.heads, spec.head_size(features), spec.causal)
+        return AttentionLayer(
+            input_layer, tokens, features, spec.heads, spec.head_size(features), spec.causal, spec.dropout
+        )
+    if isinstance(spec, Dropout):
+        return TokenDropoutLayer(input_layer, tokens, features, spec.p)
     return TokenMeanLayer(input_layer, tokens, features)
 
 
@@ -94,7 +101,6 @@ def build_python_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_dropout_specs_until(specs, "6", "in pure Python")
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
     )
@@ -121,7 +127,7 @@ def build_python_layers(
             layer = TokenDenseLayer(previous, spec.size, shape.input_shape[0], activation)
         elif isinstance(spec, Dense):
             layer = _dense_layer(spec, previous)
-        elif isinstance(spec, Patches | Embedding | Position | LayerNorm | Attention | TokenMean):
+        elif isinstance(spec, Patches | Embedding | Position | LayerNorm | Attention | Dropout | TokenMean):
             layer = _token_layer(spec, shape.input_shape, previous)
         elif isinstance(spec, BatchNorm):
             layer = BatchNormLayer(

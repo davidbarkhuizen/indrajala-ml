@@ -19,6 +19,14 @@ max shift, as numpy's: the row max comes from the unmasked scores (the diagonal 
 exp(-inf) is exactly 0, so a masked weight P_ij is exactly 0 and so is its dS_ij, and the backward
 pass is unchanged.
 
+A layer with dropout (the attention-dropout workplan, D3, D4, D6) drops its weights in training:
+each example's forward pass draws a 0/1 mask M[i] per head from the network's generator, T * T
+values in (query, key) order, every entry drawn, the causally masked ones included, M_ij = u_ij >=
+dropout; P~ = P * M / keep and H = P~ V. Its network trains layer-major (layer_major.py), each layer
+drawing every example's masks in turn, so the draws are numpy's (N, h, T, T) row-major order. The
+backward pass takes dV = P~^T dH and dP = (dH V^T) * M / keep, then the softmax's backward with the
+undropped P. In inference, and at dropout 0, nothing is drawn.
+
 The softmax's exp is this module's exp, which tests may replace, as attention_array_layer's.
 """
 
@@ -39,7 +47,7 @@ from indrajala_ml.model.layers.python.token_layer import (
     token_values,
 )
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
-from indrajala_ml.pcg64 import Pcg64Generator
+from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
 exp = math.exp
 
@@ -69,6 +77,11 @@ def _columns(A: Matrix, start: int, width: int) -> Matrix:
     return [row[start : start + width] for row in A]
 
 
+def _dropped(A: Matrix, M: Matrix, keep: float) -> Matrix:
+    # A * M / keep, per scalar in that grouping: numpy's P * M / keep (a dropped negative is -0.0)
+    return [[a * m / keep for a, m in zip(a_row, m_row)] for a_row, m_row in zip(A, M)]
+
+
 def _side_by_side(blocks: Sequence[Matrix]) -> Matrix:
     # _columns' inverse: the blocks' rows joined, block 0's first
     return [[value for block in blocks for value in block[t]] for t in range(len(blocks[0]))]
@@ -89,7 +102,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
     and the layer before reads dX.
     """
 
-    example_fields: ClassVar[tuple[str, ...]] = ("_Q", "_K", "_V", "_P", "_H", "_dQ", "_dK", "_dV", "_dX")
+    example_fields: ClassVar[tuple[str, ...]] = ("_Q", "_K", "_V", "_P", "_M", "_H", "_dQ", "_dK", "_dV", "_dX")
 
     def __init__(
         self,
@@ -99,8 +112,10 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         heads: int = 1,
         key_size: int | None = None,
         causal: bool = False,
+        dropout: float = 0.0,
     ) -> None:
         assert len(input_layer.nodes) == tokens * features
+        assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
         self.input_layer = input_layer
         self.tokens = tokens
         self.features = features
@@ -110,6 +125,11 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         # computed once and divided by, never multiplied by its reciprocal
         self.scale = math.sqrt(self.key_size)
         self.causal = causal
+        self.dropout = dropout
+        self._keep = 1.0 - dropout
+        # set by set_training_mode and set_rng, as a dense dropout layer's nodes'
+        self.training = False
+        self.rng: Pcg64Generator = default_rng()
         self.queries, self.keys, self.values = ([WeightRow(features) for _ in range(self.width)] for _ in range(3))
         self.outputs = [WeightRow(self.width) for _ in range(features)]
         self.nodes = [TokenNode() for _ in range(tokens * features)]
@@ -120,11 +140,24 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         self._K: Matrix
         self._V: Matrix
         self._P: Matrix
+        # the mask this example's forward pass drew, packed as P, or None when it drew none
+        self._M: Matrix | None = None
         self._H: Matrix
         self._dQ: Matrix
         self._dK: Matrix
         self._dV: Matrix
         self._dX: list[float]
+
+    @property
+    def draws(self) -> bool:
+        """Whether a training pass draws from the generator: at dropout > 0 (the network's _layer_major)."""
+        return self.dropout > 0.0
+
+    def set_rng(self, rng: Pcg64Generator) -> None:
+        self.rng = rng
+
+    def set_training_mode(self, training: bool) -> None:
+        self.training = training
 
     def _inputs(self) -> Matrix:
         return [token_values(self.input_layer.nodes, t, self.features) for t in range(self.tokens)]
@@ -142,10 +175,13 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         # each over all heads, (T, h * d_k)
         return _affine(X, self.queries), _affine(X, self.keys), _affine(X, self.values)
 
-    def _attend(self, Q: Matrix, K: Matrix, V: Matrix) -> tuple[Matrix, Matrix]:
-        # each head's weights and mix: P (T, h * T) and H (T, h * d_k), packed
+    def _attend(self, Q: Matrix, K: Matrix, V: Matrix) -> tuple[Matrix, Matrix, Matrix | None]:
+        # each head's weights, mix and mask: P (T, h * T), H (T, h * d_k) and M (T, h * T, or None
+        # when nothing is drawn), packed
+        dropping = self.training and self.dropout > 0.0
         weights: list[Matrix] = []
         mixes: list[Matrix] = []
+        masks: list[Matrix] = []
         for i in range(self.heads):
             Qi, Ki, Vi = self._head(Q, i), self._head(K, i), self._head(V, i)
             P: Matrix = []
@@ -158,9 +194,15 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
                 total = fold(e)
                 P.append([e_u / total for e_u in e])
             weights.append(P)
-            # H[i] = P[i] V[i]
-            mixes.append([[_dot(p, v) for v in _transpose(Vi)] for p in P])
-        return _side_by_side(weights), _side_by_side(mixes)
+            mixed = P
+            if dropping:
+                # P~[i] = P[i] * M[i] / keep, M[i] drawn query by query, key by key
+                M = [[1.0 if self.rng.random() >= self.dropout else 0.0 for _ in s] for s in P]
+                masks.append(M)
+                mixed = _dropped(P, M, self._keep)
+            # H[i] = P[i] V[i], or P~[i] V[i]
+            mixes.append([[_dot(p, v) for v in _transpose(Vi)] for p in mixed])
+        return _side_by_side(weights), _side_by_side(mixes), _side_by_side(masks) if dropping else None
 
     def _combine(self, H: Matrix) -> Matrix:
         # one product over all heads' columns
@@ -168,7 +210,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
 
     def forward(self) -> None:
         self._Q, self._K, self._V = self._project(self._inputs())
-        self._P, self._H = self._attend(self._Q, self._K, self._V)
+        self._P, self._H, self._M = self._attend(self._Q, self._K, self._V)
         out = self._combine(self._H)
         for node, value in zip(self.nodes, (value for row in out for value in row)):
             node.activate(value)
@@ -188,9 +230,14 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         for i in range(self.heads):
             Q, K, V, dHi = self._head(self._Q, i), self._head(self._K, i), self._head(self._V, i), self._head(dH, i)
             P = _columns(self._P, i * T, T)
-            # dP = dH V^T, dV = P^T dH
+            # dP = dH V^T, dV = P^T dH; with a mask, dP * M / keep and dV = P~^T dH
             dP = [[_dot(dh, v) for v in V] for dh in dHi]
-            dVs.append([[_dot(p_column, dh_column) for dh_column in _transpose(dHi)] for p_column in _transpose(P)])
+            mixed = P
+            if self._M is not None:
+                M = _columns(self._M, i * T, T)
+                mixed = _dropped(P, M, self._keep)
+                dP = _dropped(dP, M, self._keep)
+            dVs.append([[_dot(p_column, dh_column) for dh_column in _transpose(dHi)] for p_column in _transpose(mixed)])
             dS: Matrix = []
             for p, dp in zip(P, dP):
                 r = fold([dp_u * p_u for dp_u, p_u in zip(dp, p)])
