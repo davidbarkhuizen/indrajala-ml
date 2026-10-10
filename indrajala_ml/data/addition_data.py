@@ -21,6 +21,7 @@ triple (D8).
 
 from __future__ import annotations
 
+import functools
 import itertools
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
@@ -325,10 +326,12 @@ def _carry_over_distance(n: int, rng: Random) -> list[Case]:
 def _final_carry(n: int, rng: Random) -> list[Case]:
     cases: list[Case] = []
     for value in range(BASE):
-        while sum(case.stratum == value for case in cases) < PER_STRATUM:
+        count = 0
+        while count < PER_STRATUM:
             triple = pattern_triple(n, rng)
             if carries(column_sums(triple, n))[n] == value:
                 cases.append(Case(triple, column=n, stratum=value))
+                count += 1
     return cases
 
 
@@ -381,18 +384,23 @@ def property_cases(prop: Property, n: int) -> list[Case]:
     return prop.generate(n, Random(f"addition-{prop.id}-{n}"))
 
 
+@functools.cache
+def screen_cases(prop: Property, n: int, limit: int) -> list[Case]:
+    """Every k-th of a property's cases, k the smallest that leaves at most limit; held per process."""
+    cases = property_cases(prop, n)
+    return cases[:: -(-len(cases) // limit)] if len(cases) > limit else cases
+
+
 def evaluate(
-    f: Adder, n: int, properties: Sequence[Property] = CATALOGUE, limit: int | None = None
+    f: Adder, n: int, properties: Sequence[Property] = CATALOGUE, limit: int | None = None, shrink: bool = True
 ) -> list[PropertyResult]:
     """
-    Each property verified against f, its failures shrunk. limit takes every k-th case (k the
-    smallest that leaves at most limit): a fast screen of the same cases.
+    Each property verified against f, its failures shrunk (unless not shrink). limit takes every
+    k-th case (k the smallest that leaves at most limit): a fast screen of the same cases.
     """
     results: list[PropertyResult] = []
     for prop in properties:
-        cases = property_cases(prop, n)
-        if limit is not None and len(cases) > limit:
-            cases = cases[:: -(-len(cases) // limit)]
+        cases = property_cases(prop, n) if limit is None else screen_cases(prop, n, limit)
         holds = prop.verify(cases, f, n)
         result = PropertyResult(prop.id, len(cases), sum(holds))
         for case, ok in zip(cases, holds, strict=True):
@@ -400,12 +408,12 @@ def evaluate(
                 passed, count = result.strata.get(case.stratum, (0, 0))
                 result.strata[case.stratum] = (passed + ok, count + 1)
             if not ok and len(result.failures) < FAILURES_KEPT:
-                result.failures.append(shrink(case, prop.verify, f, n))
+                result.failures.append(minimal(case, prop.verify, f, n) if shrink else case)
         results.append(result)
     return results
 
 
-def shrink(case: Case, verify: Verifier, f: Adder, n: int) -> Case:
+def minimal(case: Case, verify: Verifier, f: Adder, n: int) -> Case:
     """
     A failing case made minimal: whole columns zeroed from the top while it still fails, then
     single digits lowered; the column checked and the stratum kept.
