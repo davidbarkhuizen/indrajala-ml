@@ -1,7 +1,8 @@
 # Workplan: dropout in attention (roadmap step 7)
 
 **Status: decisions D1-D10 settled by the owner (2026-10-10), each as recommended. Stages 1 (this
-plan), 2 (the specs), 3 (numpy) and 4 (the crate) done. The RNG draw-order workplan, which it waited for, is retired (2026-10-10,
+plan), 2 (the specs), 3 (numpy), 4 (the crate) and 5 (Rust layers)
+done. The RNG draw-order workplan, which it waited for, is retired (2026-10-10,
 [next-steps.md](next-steps.md)), so its masks are tested in all three implementations by bits from
 the first stage.**
 
@@ -156,7 +157,9 @@ Each lists the options considered, with pros and cons, and the choice.
    keywords and the mask through backward (D5); a token dropout forward and backward
    (`token_dropout_*`); numpy's bits; then a "Bump rust/" PR here with the tier 1 A/B (D10). The
    forward ops return the mask, packed as `p`, as a seventh element (`None` when nothing was drawn).
-5. **Rust layers**: through the new ops; masks by bits against numpy from one seed.
+5. **Rust layers** (done): through the new ops (`AttentionRustArrayLayer(dropout)`,
+   `TokenDropoutRustArrayLayer`); masks by bits against numpy from one seed; tier 1 A/B of the
+   Rust attention case with dropout off.
 6. **Pure Python** (D6): masks by bits against numpy from one seed, training within the dense
    layers' rounding.
 7. **Fixtures, checkpoints and golden entries** (D7, D9).

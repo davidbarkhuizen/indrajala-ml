@@ -27,8 +27,11 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     draw order, are Wq, bq, Wk, bk, Wv, bv, Wo, bo: Wq, Wk, Wv (h * d_k, d) and Wo (d, h * d_k),
     heads as row (Wo: column) blocks; the weights are decayed, the biases not. A causal layer (the
     sequence task workplan, D7) masks S_ij for j > i in the two forward ops; the backward ops read
-    P, whose masked weights are exactly 0, so they take no mask. Hidden only, ending a
-    token block's body. The caches are packed as the crate's: Q, K, V, H (N * T, h * d_k) and P
+    P, whose masked weights are exactly 0, so they take no mask. A layer with dropout (the
+    attention-dropout workplan, D3-D5) drops its weights in training: the forward ops draw the mask
+    from rng, the network's crate Generator, in numpy's (N, h, T, T) order, so from generators in
+    the same state it is AttentionArrayLayer's by bits, and the backward op takes it. In inference
+    and at dropout 0 nothing is drawn. Hidden only, ending a token block's body. The caches are packed as the crate's: Q, K, V, H (N * T, h * d_k) and P
     (N * T, h * T), head i in columns i * T..
 
     The backward pass runs whole when the delta is computed (attention_downstream_batch), since the
@@ -45,10 +48,21 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         causal: bool = False,
         dropout: float = 0.0,
     ) -> None:
-        # dropout comes with the crate's ops (the attention-dropout workplan, stages 4 and 5)
-        assert dropout == 0.0, f"an attention's dropout on Rust: not yet (the attention-dropout workplan, stage 5); got {dropout}"
+        assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
         self.causal = causal
+        self.dropout = dropout
         self._set_up(tokens, features, heads, key_size)
+        # set by set_training_mode and set_rng, as a dense dropout layer's; the forward pass's mask,
+        # None when it drew none, is what the backward pass reads
+        self.training = False
+        self.rng = pa.default_rng()
+        self._M: pa.Array | None = None
+
+    def set_rng(self, rng: pa.Generator) -> None:
+        self.rng = rng
+
+    def set_training_mode(self, training: bool) -> None:
+        self.training = training
 
     def _zeros(self) -> list[pa.Array]:
         return [
@@ -58,21 +72,43 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         ]
 
     def forward(self, x: pa.Array) -> pa.Array:
-        # the seventh, the mask, is None without dropout (stage 5 passes dropout, training and rng)
-        self.a, self._Q, self._K, self._V, self._P, self._H, _ = pa.attention_forward(
-            x, *self.parameters(), heads=self.heads, causal=self.causal
+        self.a, self._Q, self._K, self._V, self._P, self._H, self._M = pa.attention_forward(
+            x,
+            *self.parameters(),
+            heads=self.heads,
+            causal=self.causal,
+            dropout=self.dropout,
+            training=self.training,
+            rng=self.rng,
         )
         return self.a
 
     def forward_batch(self, X: pa.Array) -> pa.Array:
-        self.A, self._Q, self._K, self._V, self._P, self._H, _ = pa.attention_forward_batch(
-            X, *self.parameters(), heads=self.heads, causal=self.causal
+        self.A, self._Q, self._K, self._V, self._P, self._H, self._M = pa.attention_forward_batch(
+            X,
+            *self.parameters(),
+            heads=self.heads,
+            causal=self.causal,
+            dropout=self.dropout,
+            training=self.training,
+            rng=self.rng,
         )
         return self.A
 
     def _backward(self, delta: pa.Array) -> None:
         self._dX, self._dQ, self._dK, self._dV = pa.attention_downstream_batch(
-            delta, self.Wq, self.Wk, self.Wv, self.Wo, self._Q, self._K, self._V, self._P, heads=self.heads
+            delta,
+            self.Wq,
+            self.Wk,
+            self.Wv,
+            self.Wo,
+            self._Q,
+            self._K,
+            self._V,
+            self._P,
+            heads=self.heads,
+            mask=self._M,
+            dropout=self.dropout,
         )
 
     def compute_hidden_delta(self, next_layer: Any) -> None:
