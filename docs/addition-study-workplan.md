@@ -1,7 +1,8 @@
 # Workplan: the smallest network that adds (a study)
 
 **Status: D1, D2 and D4 settled by the owner; D3 and D5-D11 settled by the agent as recommended
-(2026-10-10). Stages 1 (this plan) and 2 (the catalogue) done.**
+(2026-10-10). Stages 1 (this plan), 2 (the catalogue) and 3 (the candidates and the harness)
+done.**
 
 Which is the smallest network, built from indrajala-ml's existing layers and networks, that
 reliably internalises addition: that adds two or three base-3 numbers it never saw, through every
@@ -119,10 +120,18 @@ watching:
   recorded with its traceback and retried once.
 - **The search** (D6) chooses the next runs from the results so far: no hand-picking between
   batches.
-- **Early stopping**: a run evaluates a fast screen of the catalogue each epoch and stops at the
-  first epoch that passes it all, or at the budget, or after a plateau (D7); the full catalogue
-  runs once, at the end.
-- **`status`** prints finished, running and failed runs; **`report`** builds the tables (Findings)
+- **Early stopping**: a run evaluates a fast screen of the catalogue each epoch (a spread of each
+  property's cases); a passing screen triggers the whole catalogue, and the run stops when that
+  passes too (a screen alone missed a rare failure in testing), at the budget, or after a plateau
+  (D7). The whole catalogue runs once more at the end, its failures shrunk.
+- **A rung is decided as soon as its seeds settle it** (4 passing, or 2 failing of 5): its
+  remaining seeds aren't run.
+- **Every run's trained model is kept:** its network(s) in format 2 under `models/<run>/` with a
+  manifest (candidate, `n`, size), passing or not; `load_model` rebuilds it as an adder, and
+  `check MODEL` runs the whole catalogue against it again. A failing model is kept for later probes
+  (Excluded for missing infrastructure).
+- **`status`** prints finished, running and failed runs; **`candidates`** lists the eight and their
+  ladders; **`report`** builds the tables (Findings)
   from the result files at any time, mid-sweep included, as Markdown for the PR.
 - **One command on `jebel`:** `nohup ... run CONFIG; ... report` in the background (measurement.md
   §4's pattern); its exit is the signal, its last lines the report.
@@ -194,7 +203,9 @@ Each lists the options considered, with pros and cons, and the choice.
   triple, and so each of its orders: sorted first) falls in one tenth. Pros: deterministic, nothing
   stored, commutativity can't leak a held-out triple through its reorder. Cons: B1's exhaustive
   check at `n = 4` includes trained triples, so it claims correctness on the space, B3 alone the
-  generalisation.
+  generalisation. At `n = 2` the tenth removes whole contexts (every order of a triple is one
+  column-1 multiset over one column-0 carry), and a network that fits the rest fails exactly those
+  (found in Stage 3's tests): the study's widths start at 4.
 - **D9. The pass bar. Settled: (a).**
   - (a) *Chosen.* A network passes a property at 100% of its cases; a size **succeeds** when 4 of 5
     seeds pass every property. Pros: "reliably" made exact; a seed-lucky size doesn't count.
@@ -214,9 +225,12 @@ Each lists the options considered, with pros and cons, and the choice.
    the hashed partition, every property's generator, verifier and shrinking, the training mixture;
    tests: each generator's cases satisfy its statement, the oracle adders pass and fail exactly as
    they should.
-3. **The candidates and the harness** (`scripts/addition_study.py`): the eight encoders, specs
-   and decoders; `run`, `status`, `report`; resuming, retries, the search, early stopping; tests
-   with oracle candidates (resume after a killed run, the search's choices, the report).
+3. **The candidates and the harness** (done; `indrajala_ml/studies/addition_study.py`,
+   `scripts/addition_study.py`): the eight encoders, specs and decoders (candidate 5 decoded
+   greedily, a digit at a time); `run`, `status`, `report`, `check`, `candidates`; resuming,
+   retries, the search, early stopping, the models kept; tests with stand-in candidates (the
+   search's choices, resuming, a run that raises, the report) and every real candidate trained,
+   saved and reloaded.
 4. **Calibration** on `pyramidon`: every candidate at one middle size at `n = 4`, the rate probe,
    timing; the budget and plateau rule written into D7.
 5. **The sweep** on `jebel`, unattended; the findings into the script's docstring (findings, the
