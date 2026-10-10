@@ -22,6 +22,10 @@ tests/model/persistence/test_legacy_saved_models.py loads.
 - The sequence fixtures (the sequence task workplan, stage 7) are format-2 files of each
   implementation's sequence class: a causal transformer over token ids with a token-wise softmax
   output, its states token ids and its labels one class per token.
+- The attention-dropout fixtures (the attention-dropout workplan, stage 7) are format-2 files of
+  each implementation's sequence class with GPT's three dropouts: a Dropout after the Position, an
+  Attention with dropout and a Dropout ending each block's body, named SequenceDropout<class name>.
+  Their two training steps draw masks from the network's seeded generator.
 - The pure-Python multiclass presets' fixtures (the presets workplan, stage 1) are format 2 only,
   like the single-output ones: those classes never wrote a legacy envelope.
 - So are the numpy and Rust one-output presets' fixtures (the presets workplan, stage 2).
@@ -66,6 +70,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Dense,
+    Dropout,
     Embedding,
     LayerNorm,
     LayerSpec,
@@ -168,6 +173,16 @@ SEQUENCE_MODEL: list[LayerSpec] = [
     Position(),
     Residual((LayerNorm(), Attention(heads=2, key_size=3, causal=True))),
     Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
+    LayerNorm(epsilon=1e-4),
+    Dense(VOCABULARY, output=True, activation="softmax", loss="cross_entropy"),
+]
+# SEQUENCE_MODEL with GPT's three dropouts (the attention-dropout workplan, D1, D2)
+ATTENTION_DROPOUT_MODEL: list[LayerSpec] = [
+    Embedding(VOCABULARY, 4),
+    Position(),
+    Dropout(0.1),
+    Residual((LayerNorm(), Attention(heads=2, key_size=3, causal=True, dropout=0.2), Dropout(0.1))),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True), Dropout(0.1))),
     LayerNorm(epsilon=1e-4),
     Dense(VOCABULARY, output=True, activation="softmax", loss="cross_entropy"),
 ]
@@ -296,14 +311,17 @@ def _sequential(
     )
 
 
-def _sequence(implementation: str) -> SavedModelFixture:
+def _sequence(
+    implementation: str, class_name: str | None = None, layers: list[LayerSpec] = SEQUENCE_MODEL
+) -> SavedModelFixture:
+    # layers is a named fixture's (class_name given)
     def build() -> Any:
         if implementation == "python":
-            return SequentialSequenceBackpropNetwork((TOKENS,), SEQUENCE_MODEL, Adam(**ADAM))
+            return SequentialSequenceBackpropNetwork((TOKENS,), layers, Adam(**ADAM))
         backend = NUMPY if implementation == "numpy" else RUST
-        return SequentialArrayNetwork((TOKENS,), SEQUENCE_MODEL, Adam(**ADAM), "sequence", backend)
+        return SequentialArrayNetwork((TOKENS,), layers, Adam(**ADAM), "sequence", backend)
 
-    return SavedModelFixture(implementation, build, "predict_probabilities", {}, format2=True)
+    return SavedModelFixture(implementation, build, "predict_probabilities", {}, format2=True, class_name=class_name)
 
 
 def _ensemble(name: str, implementation: str, classifier_name: str) -> SavedModelFixture:
@@ -472,6 +490,14 @@ FIXTURES: dict[str, SavedModelFixture] = {
     "SequentialSequenceArrayNetwork": _sequence("numpy"),
     "SequentialSequenceRustArrayNetwork": _sequence("rust"),
     "SequentialSequenceBackpropNetwork": _sequence("python"),
+    **{
+        f"SequenceDropout{name}": _sequence(implementation, name, ATTENTION_DROPOUT_MODEL)
+        for name, implementation in (
+            ("SequentialSequenceArrayNetwork", "numpy"),
+            ("SequentialSequenceRustArrayNetwork", "rust"),
+            ("SequentialSequenceBackpropNetwork", "python"),
+        )
+    },
 }
 
 

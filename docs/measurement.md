@@ -427,7 +427,7 @@ weights by numpy and Rust, or by numpy against itself with one weight nudged by 
 only 71-83% of test predictions after training, though they stay within 1e-15 through the first
 UCI epoch. So a change is judged by step-by-step parity (per-step agreement to about 1e-15), never
 by end-of-run accuracy. The golden run (`scripts/golden_training_run.py check
-data/refactoring/golden_run.json`, about 1 s) pins 112 networks bit for bit.
+data/refactoring/golden_run.json`, about 1 s) pins 115 networks bit for bit.
 
 The golden run is the default gate, not a sacred one. Two kinds of change may move its bits:
 

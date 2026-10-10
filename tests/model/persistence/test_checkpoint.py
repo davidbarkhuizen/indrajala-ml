@@ -23,6 +23,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Conv,
     Dense,
+    Dropout,
     Embedding,
     LayerNorm,
     LayerSpec,
@@ -53,6 +54,18 @@ SEQUENCE: tuple[InputShape, list[LayerSpec]] = (
         Embedding(7, 4),
         Position(),
         Residual((LayerNorm(), Attention(heads=2, causal=True))),
+        Dense(7, output=True, activation="softmax", loss="cross_entropy"),
+    ],
+)
+# the sequence model with GPT's three dropouts (the attention-dropout workplan, D7): the masks of the
+# attention weights and the token dropouts draw from the network's generator too
+ATTENTION_DROPOUT: tuple[InputShape, list[LayerSpec]] = (
+    (5,),
+    [
+        Embedding(7, 4),
+        Position(),
+        Dropout(0.2),
+        Residual((LayerNorm(), Attention(heads=2, causal=True, dropout=0.2), Dropout(0.2))),
         Dense(7, output=True, activation="softmax", loss="cross_entropy"),
     ],
 )
@@ -139,7 +152,11 @@ def assert_a_restored_checkpoint_resumes_by_bits(
 
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
-@pytest.mark.parametrize("architecture", [DENSE, CONV, DROPOUT, SEQUENCE], ids=["dense", "conv", "dropout", "sequence"])
+@pytest.mark.parametrize(
+    "architecture",
+    [DENSE, CONV, DROPOUT, SEQUENCE, ATTENTION_DROPOUT],
+    ids=["dense", "conv", "dropout", "sequence", "attention dropout"],
+)
 @pytest.mark.parametrize("across_workers", [False, True], ids=["in_memory", "as_lists"])
 def test_a_restored_checkpoint_resumes_training_by_bits(
     implementation: str, rule: UpdateRule, architecture: tuple[InputShape, list[LayerSpec]], across_workers: bool

@@ -252,3 +252,18 @@ def test_a_patch_model_fixture_re_saves_byte_identically(name: str, tmp_path: Pa
 
 def test_there_is_a_one_head_and_a_multi_head_fixture_per_implementation():
     assert len(ATTENTION_FIXTURES) == 6
+
+
+# the attention-dropout workplan's (stage 7): the sequence model with GPT's three dropouts, its
+# "dropout" entries and an attention entry's "dropout" (D7)
+DROPOUT_FIXTURES = [name for name in FIXTURES if name.startswith("SequenceDropout")]
+
+
+@pytest.mark.parametrize("name", DROPOUT_FIXTURES)
+def test_a_dropout_sequence_fixture_re_saves_byte_identically(name: str, tmp_path: Path):
+    path = tmp_path / f"{name}.json"
+    fixture_class(name).load(str(FIXTURE_DIR / f"{name}.json")).save(str(path))
+    assert path.read_bytes() == (FIXTURE_DIR / f"{name}.json").read_bytes()
+    entries = json.loads(path.read_text())["layers"]
+    assert {"kind": "dropout", "p": 0.1} in entries
+    assert len(DROPOUT_FIXTURES) == 3
