@@ -4,7 +4,8 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
 in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
-[rng-draw-order-workplan.md](rng-draw-order-workplan.md). The order
+[rng-draw-order-workplan.md](rng-draw-order-workplan.md),
+[attention-dropout-workplan.md](attention-dropout-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
