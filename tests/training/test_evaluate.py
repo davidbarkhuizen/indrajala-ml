@@ -31,11 +31,14 @@ def test_sample_class_balanced_states_succeeds_within_a_tight_budget_for_a_tiny_
 def test_sample_class_balanced_states_falls_back_to_input_bounds_when_unbounded():
 
     # cardinality=1 is never bounded, so positive_region_bounding_box returns None - this
-    # should still work exactly as before (uniform sampling over the whole input_bounds)
+    # should still work exactly as before (uniform sampling over the whole input_bounds); seeded,
+    # since an unseeded network's boundary can miss the box and leave a class unreachable
     bounds = square_bounds(10.0)
-    classifier = LinearClassifierNetwork.randomized(1, 2, bounds)
+    classifier = LinearClassifierNetwork.randomized(1, 2, bounds, seed=5)
 
-    positive_states, negative_states = sample_class_balanced_states(classifier, count=10, max_attempts=20_000)
+    positive_states, negative_states = sample_class_balanced_states(
+        classifier, count=10, max_attempts=20_000, rng=random.Random(5)
+    )
 
     assert len(positive_states) == len(negative_states) == 10
     assert all(classifier.classify_state(state) == 1.0 for state in positive_states)
