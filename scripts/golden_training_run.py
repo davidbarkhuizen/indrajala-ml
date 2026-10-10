@@ -59,6 +59,13 @@ cut as text_data cuts a corpus: the excerpt's 30 characters as the vocabulary, a
 token ids, each labelled with the next character at every position. The excerpt is embedded, so
 the golden run reads no fetched data. No earlier entry moved when they were recorded.
 
+The attention-dropout entries (the attention-dropout workplan, stage 7, D9) are
+ATTENTION_DROPOUT_SPECS in all three implementations, added after the sequence ones: the sequence
+model with GPT's three dropouts at 0.1 (a Dropout after the Position, the attention's weights, and
+a Dropout ending each block's body), on the sequence rows. Their masks draw from each network's
+generator, seeded from SEED, so the three implementations draw the same masks. No earlier entry
+moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -293,6 +300,7 @@ from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,
+    Dropout,
     Embedding,
     LayerNorm,
     LayerSpec,
@@ -487,6 +495,21 @@ SEQUENCE_SPECS: list[LayerSpec] = [
     Dense(len(SEQUENCE_VOCABULARY), output=True, activation="softmax", loss="cross_entropy"),
 ]
 SEQUENCE_NETWORKS = ["numpy sequence model", "rust sequence model", "python sequence model"]
+# SEQUENCE_SPECS with GPT's three dropouts at 0.1 (the attention-dropout workplan, D9)
+ATTENTION_DROPOUT_SPECS: list[LayerSpec] = [
+    Embedding(len(SEQUENCE_VOCABULARY), 4),
+    Position(),
+    Dropout(0.1),
+    Residual((LayerNorm(), Attention(heads=2, key_size=3, causal=True, dropout=0.1), Dropout(0.1))),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True), Dropout(0.1))),
+    LayerNorm(),
+    Dense(len(SEQUENCE_VOCABULARY), output=True, activation="softmax", loss="cross_entropy"),
+]
+ATTENTION_DROPOUT_NETWORKS = [
+    "numpy attention dropout model",
+    "rust attention dropout model",
+    "python attention dropout model",
+]
 
 
 def _sequential_network(name: str, input_shape: InputShape, specs: list[LayerSpec], rule: UpdateRule) -> Any:
@@ -702,6 +725,9 @@ def run_all() -> dict[str, Any]:
     assert len(sequence_rows) == ROW_COUNT, f"the excerpt is {ROW_COUNT} windows; got {len(sequence_rows)}"
     for name in SEQUENCE_NETWORKS:
         network = _sequential_network(name, (SEQUENCE_CONTEXT,), SEQUENCE_SPECS, Adam())
+        results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
+    for name in ATTENTION_DROPOUT_NETWORKS:
+        network = _sequential_network(name, (SEQUENCE_CONTEXT,), ATTENTION_DROPOUT_SPECS, Adam())
         results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
     return results
 

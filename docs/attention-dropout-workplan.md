@@ -1,8 +1,8 @@
 # Workplan: dropout in attention (roadmap step 7)
 
 **Status: decisions D1-D10 settled by the owner (2026-10-10), each as recommended. Stages 1 (this
-plan), 2 (the specs), 3 (numpy), 4 (the crate), 5 (Rust layers) and
-6 (pure Python) done. The RNG draw-order workplan, which it waited for, is retired (2026-10-10,
+plan), 2 (the specs), 3 (numpy), 4 (the crate), 5 (Rust layers), 6
+(pure Python) and 7 (fixtures, checkpoints, golden entries) done. The RNG draw-order workplan, which it waited for, is retired (2026-10-10,
 [next-steps.md](next-steps.md)), so its masks are tested in all three implementations by bits from
 the first stage.**
 
@@ -164,6 +164,10 @@ Each lists the options considered, with pros and cons, and the choice.
    layers' rounding (`AttentionLayer(dropout)`, `TokenDropoutLayer`). A network trains layer-major
    only when a layer draws: an attention at dropout 0 leaves it example-major. The builders' "not
    yet" refusal is gone.
-7. **Fixtures, checkpoints and golden entries** (D7, D9).
+7. **Fixtures, checkpoints and golden entries** (D7, D9; done): a `SequenceDropout<class>` fixture
+   per sequence class (GPT's three dropouts), a checkpoint case resuming by bits under every rule
+   in all three implementations, and three golden entries (`<implementation> attention dropout
+   model`, every dropout 0.1): 115 networks, the earlier 112 bit-identical, re-recorded on both
+   machines and archived as `new-functionality`.
 8. **The study** (D8): the loader's spread split first, its own PR.
 9. **Docs**: README, roadmap, next-steps; the workplan retired.
