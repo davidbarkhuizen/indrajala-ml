@@ -22,7 +22,7 @@ structure. Production systems handle variable-length text two ways, and both nee
   corpora are where this matters: a paragraph's median length is 729 characters on Herodotus,
   1,266 on the *Muqaddimah* and 1,130 on Euclid, so step 12's longer windows will span several.
 - **Inference pads.** Batched generation (step 9's decoder, several prompts at once), encoder
-  tasks and sequence-to-sequence (step 14, sources of different lengths) batch inputs of
+  tasks and sequence-to-sequence (step 15, sources of different lengths) batch inputs of
   different lengths, padded to one width, and the padding must change nothing.
 
 Both are one mechanism: a segment id per token, `0` for padding, and attention allowed from `t` to
@@ -54,7 +54,7 @@ Each lists the options considered, with pros and cons, and the choice.
     largest refactor since composable layers (D3).
   - (b) Padding only. Cons: what production training does (packing, boundaries) left out; step
     12's long windows then cross paragraphs blindly.
-  - (c) Packing only. Cons: batched inference and step 14 still lack padding.
+  - (c) Packing only. Cons: batched inference and step 15 still lack padding.
 - **D2. Special tokens. Settled: (a).**
   - (a) *Chosen.* The tokenizer (step 9's file, `kind: "characters"`) gains `special` tokens after
     the symbols: a separator (`<|sep|>`, id `V`) ending each paragraph, and a pad (`<|pad|>`, id
@@ -71,7 +71,7 @@ Each lists the options considered, with pros and cons, and the choice.
     path; packing still needs a boundary marker.
 - **D3. Carrying per-batch information to the layers. Settled: (a).**
   - (a) *Chosen.* An explicit forward context: every layer's forward, backward and gradient
-    passes take a `ForwardContext` (`segments` now; step 9's decode positions, step 14's encoder
+    passes take a `ForwardContext` (`segments` now; step 9's decode positions, step 15's encoder
     output later), built once per batch by the network from the input ids. Layers that don't need
     it ignore it. A first stage changes every layer's signature in all three implementations with
     an empty context and nothing else, the golden run bit-identical. Pros: what a layer reads is in
