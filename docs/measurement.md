@@ -71,7 +71,10 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   1-minute load and its running processes (`ssh jebel uptime`, `ssh jebel ps -eo pcpu,comm
   --sort=-pcpu`). If a browser (Brave, Firefox) or the editor (Zed) is running there, close it
   (`ssh jebel 'pkill -x brave; pkill -x firefox; pkill -x zed'`); don't stop to ask the owner. If
-  the load is high, wait and check again. Nothing else runs on `jebel` during a run: no tests,
+  the load is high, wait and check again. `ab.py run` and `extend` check it too: with the machine
+  check on, a 1-minute load over the profile's `high_load` (1.5 on `jebel`) is waited on for up to
+  5 minutes (the average lags a job that just ended, a crate build included), then refused with
+  the busy processes; `--allow-load` runs anyway and records the load in the manifest. Nothing else runs on `jebel` during a run: no tests,
   lint or builds there. A background IDE once spoiled a whole measurement.
 - **Studies and A/Bs take turns.** A study's training stages (every `*_study.py` and
   `batch_size_scaling_sweep.py` stage that trains, and `addition_study.py run`) hold the same
