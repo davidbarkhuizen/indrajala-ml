@@ -4,7 +4,7 @@ docs/measurement.md (the A/B harness workplan in docs/next-steps.md has the desi
 
     python scripts/ab.py run --bench prepared_dataset_timing [--old main] [--new HEAD] [--order ONNONO]
                              [--name NAME] [--control-backend numpy] [--script-from new|old|COMMIT]
-                             [--allow-profile-change] [-- <benchmark arguments>]
+                             [--allow-profile-change] [--allow-load] [-- <benchmark arguments>]
     python scripts/ab.py run --bench cmd [...] -- probe.py [probe arguments]
     python scripts/ab.py run --bench prepared_dataset_timing --old main --new main --old-crate 638ff13
                              --new-crate 750d83a --control-backend numpy
@@ -47,7 +47,9 @@ matches; a run from before identity hashes, or without a machine check, names it
 shell or ssh session that started it, and return once its run directory exists; `wait` blocks
 until it ends and prints the brief report. A machine runs one run or extend at a time (an flock on
 RUNS_ROOT/run.lock). `check` is the machine check alone; with --apply-setup a failed check re-runs
-the setup through its installed root-owned copy (scripts/install_benchmark_setup.sh), once.
+the setup through its installed root-owned copy (scripts/install_benchmark_setup.sh), once. With the machine
+check on, run and extend wait up to 5 minutes for the 1-minute load to fall to the profile's
+high_load, then refuse (--allow-load runs anyway, recorded).
 
 `remote --host H` runs a command on a benchmark machine over ssh, in its checkout (REMOTE_REPO from
 its home). `remote run` resolves the sides to commits here (they must be on GitHub), then on the
@@ -133,6 +135,8 @@ DEFAULT_RULES = {
     "small_consistent": 0.0,  # a consistent row under this |Δ| is marked small (chance level in an A/A)
 }
 BRIEF_LINES = 15
+LOAD_WAIT_S = 300  # how long the pre-flight waits for a high load to fall before refusing
+LOAD_POLL_S = 15
 STDERR_TAIL = 20
 CLEAN_DAYS = 14
 
@@ -790,8 +794,32 @@ def _run_passes(run_dir: Path, manifest: dict[str, Any], sides: list[str], polic
             _append_progress(run_dir, {"event": "end", "number": number, "status": record["status"], "end": _now()})
 
 
-def _preflight(run_dir: Path, manifest: dict[str, Any], skip_profile: bool, allow_change: bool) -> dict[str, Any]:
-    """The machine check, load and thread settings, and the data symlink; returns the record."""
+def wait_for_quiet(high_load: float, allow: bool) -> dict[str, Any]:
+    """
+    The 1-minute load at or under the machine's high_load, waiting up to LOAD_WAIT_S for it to fall
+    (it lags: after a study or a crate build ends, a load of 6 takes about 1.5 minutes to fall under
+    1.5), else refused, naming the busy processes (the study-runs workplan, D3). allow
+    (--allow-load) records the load and runs at once.
+    """
+    if allow:
+        return {"load": os.getloadavg()[0], "allowed": True}
+    start = time.monotonic()
+    while (load := os.getloadavg()[0]) > high_load:
+        if time.monotonic() - start >= LOAD_WAIT_S:
+            raise AbError(
+                f"the 1-minute load is {load:.2f}, over this machine's {high_load:g}, after waiting "
+                f"{LOAD_WAIT_S // 60} minutes (--allow-load to run anyway); busy:",
+                busy_processes() or ["(no single process above the busy threshold)"],
+            )
+        time.sleep(LOAD_POLL_S)
+    return {"load": load, "waited_s": round(time.monotonic() - start)}
+
+
+def _preflight(
+    run_dir: Path, manifest: dict[str, Any], skip_profile: bool, allow_change: bool, allow_load: bool = False
+) -> dict[str, Any]:
+    """The machine check, the load (wait_for_quiet), thread settings, and the data symlink; returns
+    the record. --skip-profile skips the load check with the machine check."""
     record: dict[str, Any] = {
         "at": _now(),
         "load": list(os.getloadavg()),
@@ -811,6 +839,7 @@ def _preflight(run_dir: Path, manifest: dict[str, Any], skip_profile: bool, allo
     if skip_profile:
         record["profile"] = "skipped"
         return record
+    record["quiet"] = wait_for_quiet(manifest["noise_rules"]["high_load"], allow_load)
     if profile is None:
         if not allow_change:
             raise AbError(
@@ -947,7 +976,9 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
                 {side: manifest[side]["crate"] for side in ("old", "new")},
                 {side: manifest[side]["extension_sha"] for side in ("old", "new")},
             )
-        manifest["preflight"] = _preflight(run_dir, manifest, args.skip_profile, args.allow_profile_change)
+        manifest["preflight"] = _preflight(
+            run_dir, manifest, args.skip_profile, args.allow_profile_change, args.allow_load
+        )
         manifest["preflight"]["after_builds"] = list(BUILT)
         _write_json(run_dir / "manifest.json", manifest)
         print(
@@ -984,7 +1015,7 @@ def cmd_extend(args: argparse.Namespace) -> None:
 
     def work() -> None:
         manifest["extends"][-1]["preflight"] = _preflight(
-            run_dir, manifest, args.skip_profile, args.allow_profile_change
+            run_dir, manifest, args.skip_profile, args.allow_profile_change, args.allow_load
         )
         _write_json(run_dir / "manifest.json", manifest)
         print(
@@ -1912,6 +1943,9 @@ def main(argv: list[str] | None = None) -> int:
     extend.add_argument("--note", help="why the passes were added (default: the shifted passes they balance)")
     for command in (run, extend):
         command.add_argument("--allow-profile-change", action="store_true")
+        command.add_argument(
+            "--allow-load", action="store_true", help="run at once whatever the load (recorded in the manifest)"
+        )
         command.add_argument("--skip-profile", action="store_true", help="skip the machine check (tests, toy probes)")
         command.add_argument("--detach", action="store_true", help="start in its own session and return (ab.py wait)")
         command.add_argument("--apply-setup", action="store_true", help="with --detach: as check --apply-setup, first")

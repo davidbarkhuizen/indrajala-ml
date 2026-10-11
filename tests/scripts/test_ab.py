@@ -843,13 +843,97 @@ def test_archive_cites_the_profile_a_run_checked_and_refuses_one_re_recorded_sin
     assert "i7-9700k.json was re-recorded with another identity since the run" in capsys.readouterr().err
 
 
+class _Clock:
+    """time.monotonic and time.sleep for wait_for_quiet: sleeping moves the clock."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps = 0
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+        self.sleeps += 1
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> _Clock:
+    clock = _Clock()
+    monkeypatch.setattr(ab.time, "monotonic", clock.monotonic)
+    monkeypatch.setattr(ab.time, "sleep", clock.sleep)
+    monkeypatch.setattr(ab, "busy_processes", lambda: ["python3 600% scripts/addition_study.py"])
+    return clock
+
+
+def _loads(monkeypatch: pytest.MonkeyPatch, clock: _Clock, by_time: list[tuple[float, float]]) -> None:
+    """The 1-minute load from each (from this time, this load), the last holding."""
+
+    def getloadavg() -> tuple[float, float, float]:
+        load = [value for start, value in by_time if clock.now >= start][-1]
+        return (load, load, load)
+
+    monkeypatch.setattr(ab.os, "getloadavg", getloadavg)
+
+
+def test_a_quiet_machine_runs_at_once(monkeypatch: pytest.MonkeyPatch, clock: _Clock) -> None:
+    _loads(monkeypatch, clock, [(0, 0.4)])
+    assert ab.wait_for_quiet(1.5, allow=False) == {"load": 0.4, "waited_s": 0}
+    assert clock.sleeps == 0
+
+
+def test_a_load_that_falls_during_the_wait_runs(monkeypatch: pytest.MonkeyPatch, clock: _Clock) -> None:
+    _loads(monkeypatch, clock, [(0, 6.0), (90, 1.2)])
+    assert ab.wait_for_quiet(1.5, allow=False) == {"load": 1.2, "waited_s": 90}
+
+
+def test_a_load_that_stays_high_is_refused_naming_the_busy(monkeypatch: pytest.MonkeyPatch, clock: _Clock) -> None:
+    _loads(monkeypatch, clock, [(0, 6.0)])
+    with pytest.raises(ab.AbError, match=r"load is 6.00, over this machine's 1.5, after waiting 5 minutes") as refused:
+        ab.wait_for_quiet(1.5, allow=False)
+    assert refused.value.tail == ["python3 600% scripts/addition_study.py"]
+    assert clock.now == ab.LOAD_WAIT_S
+
+
+def test_allow_load_runs_at_once_and_records_it(monkeypatch: pytest.MonkeyPatch, clock: _Clock) -> None:
+    _loads(monkeypatch, clock, [(0, 6.0)])
+    assert ab.wait_for_quiet(1.5, allow=True) == {"load": 6.0, "allowed": True}
+    assert clock.sleeps == 0
+
+
+def test_skip_profile_skips_the_load_check(
+    toy_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clock: _Clock
+) -> None:
+    _loads(monkeypatch, clock, [(0, 6.0)])
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    record = ab._preflight(run_dir, {"repo": str(toy_repo)}, skip_profile=True, allow_change=False)  # pyright: ignore[reportPrivateUsage]
+    assert record["profile"] == "skipped" and "quiet" not in record
+
+
+def test_the_machine_check_waits_on_the_profiles_load_rule(
+    toy_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clock: _Clock
+) -> None:
+    (toy_repo / "docs/machine_profiles").mkdir(parents=True)
+    profile = json.loads(I7.read_text())
+    profile["state"]["hostname"] = ab.socket.gethostname()
+    profile["noise_rules"]["high_load"] = 3.0
+    (toy_repo / "docs/machine_profiles/i7-9700k.json").write_text(json.dumps(profile))
+    _loads(monkeypatch, clock, [(0, 2.5)])  # over the default 1.5, under this profile's 3.0
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    record = ab._preflight(run_dir, {"repo": str(toy_repo)}, skip_profile=False, allow_change=True)  # pyright: ignore[reportPrivateUsage]
+    assert record["quiet"] == {"load": 2.5, "waited_s": 0}
+
+
 def test_a_machine_check_records_the_host_and_its_profiles_identity(toy_repo: Path, tmp_path: Path) -> None:
     (toy_repo / "docs/machine_profiles").mkdir(parents=True)
     shutil.copyfile(I7, toy_repo / "docs/machine_profiles/i7-9700k.json")
     manifest = {"repo": str(toy_repo)}
     run_dir = tmp_path / "run"
     run_dir.mkdir()
-    record = ab._preflight(run_dir, manifest, skip_profile=False, allow_change=True)  # pyright: ignore[reportPrivateUsage]
+    record = ab._preflight(run_dir, manifest, skip_profile=False, allow_change=True, allow_load=True)  # pyright: ignore[reportPrivateUsage]
     assert record["hostname"] == ab.socket.gethostname()
     assert record["profile_identity"] == benchmark_archive.identity_sha256(json.loads(I7.read_text()))
 
