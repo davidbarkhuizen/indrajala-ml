@@ -81,7 +81,7 @@ Datasets = tuple[list[Window], list[Window], int]
 Config = tuple[str, str, float]
 Results = dict[Config, list[dict[str, Any]]]
 
-_datasets: dict[tuple[str, int | None], Datasets] = {}
+_datasets: dict[tuple[str, int | None, text_data.Split], Datasets] = {}
 
 
 def attention_block(causal: bool = True) -> Residual:
@@ -120,13 +120,13 @@ def initial_network(specs: list[LayerSpec], seed: int) -> Any:
     return network
 
 
-def load(corpus: str, limit: int | None = None) -> Datasets:
-    """The corpus's training and held-out windows (the first limit of each, for a smoke run) and its
-    vocabulary's size; one corpus held per process."""
-    key = (corpus, limit)
+def load(corpus: str, limit: int | None = None, split_by: text_data.Split = "contiguous") -> Datasets:
+    """The corpus's training and held-out windows (the first limit of each, for a smoke run), split
+    as split_by says, and its vocabulary's size; one corpus and split held per process."""
+    key = (corpus, limit, split_by)
     if key not in _datasets:
         _datasets.clear()
-        train, held_out, vocabulary = text_data.load_text_dataset(text_data.CORPORA[corpus])
+        train, held_out, vocabulary = text_data.load_text_dataset(text_data.CORPORA[corpus], split_by=split_by)
         _datasets[key] = (train[:limit], held_out[:limit], len(vocabulary))
     return _datasets[key]
 
@@ -161,7 +161,19 @@ def counted(arm: str, train: Sequence[Window], held_out: Sequence[Window], vocab
 def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, Any]:
     corpus, arm, rate = config
     train, held_out, vocabulary = load(corpus, context["limit"])
-    network = initial_network(arm_specs(arm, vocabulary), seed)
+    return train_run(arm_specs(arm, vocabulary), train, held_out, rate, context["epochs"], seed)
+
+
+def train_run(
+    specs: list[LayerSpec], train: list[Window], held_out: list[Window], rate: float, epochs: int, seed: int
+) -> dict[str, Any]:
+    """
+    One run: specs initialized from seed and trained epochs epochs at rate, its shuffle seeded too,
+    with the held-out cross-entropy and accuracy, the training windows' cross-entropy (the first
+    as many as held out) and the seconds in learn_batch after every epoch. The evaluations run in
+    inference, so a model with dropout is measured without it.
+    """
+    network = initial_network(specs, seed)
     train_sample = train[: len(held_out)]
 
     shuffle_rng = random.Random(seed)
@@ -173,7 +185,7 @@ def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, 
         "parameter_count": parameter_count(network),
     }
     step = 0
-    for _ in range(context["epochs"]):
+    for _ in range(epochs):
         steps, seconds = bss.train_epoch(network, train, BATCH_SIZE, rate, step, shuffle_rng)
         step += steps
         evaluation = sequence_evaluate(network, held_out)
@@ -192,13 +204,13 @@ def _final(runs: list[dict[str, Any]], key: str = "held_out_cross_entropies") ->
     return [run[key][-1] for run in runs]
 
 
-def _epochs_shown(epochs: int) -> list[int]:
+def epochs_shown(epochs: int) -> list[int]:
     # the first, middle and last epochs, as indices
     return sorted({0, (epochs - 1) // 2, epochs - 1})
 
 
 def _header(epochs: int) -> list[str]:
-    shown = [f"epoch {e + 1}" for e in _epochs_shown(epochs)]
+    shown = [f"epoch {e + 1}" for e in epochs_shown(epochs)]
     return ["arm", "rate", "parameters", *shown, "accuracy", "train", "seconds per epoch"]
 
 
@@ -209,10 +221,7 @@ def _rows(configs: list[Config], results: Results, epochs: int) -> list[list[str
         _corpus, arm, rate = config
         rows.append(
             [arm, f"{rate:g}", str(runs[0]["parameter_count"])]
-            + [
-                mean_sd([bits(run["held_out_cross_entropies"][e]) for run in runs], ".3f")
-                for e in _epochs_shown(epochs)
-            ]
+            + [mean_sd([bits(run["held_out_cross_entropies"][e]) for run in runs], ".3f") for e in epochs_shown(epochs)]
             + [mean_sd(_final(runs, "held_out_accuracies"), ".2%")]
             + [mean_sd([bits(value) for value in _final(runs, "train_cross_entropies")], ".3f")]
             + [mean_sd([s for run in runs for s in run["epoch_seconds"]], ".1f")]
@@ -229,7 +238,7 @@ def _floor_rows(corpus: str, limit: int | None, epochs: int) -> list[list[str]]:
         held = f"{evaluation.bits_per_token:.3f}"
         rows.append(
             [arm, "counted", str(vocabulary if arm == "unigram" else vocabulary**2)]
-            + [held] * len(_epochs_shown(epochs))
+            + [held] * len(epochs_shown(epochs))
             + [f"{evaluation.accuracy:.2%}", f"{train_evaluation.bits_per_token:.3f}", ""]
         )
     return rows
