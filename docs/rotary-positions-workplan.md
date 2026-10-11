@@ -122,6 +122,7 @@ Settled by the owner (2026-10-10), as proposed:
    (rotated, a key bias no longer cancels in the softmax).
 6. **Pure Python** (done): the rotation in its project block; parity. Its Adam parity helper,
    as the Rust one, treats `bk` as rounding noise only when `positions == "none"`.
-7. **Fixtures, checkpoints and golden entries** (D7).
+7. **Fixtures, checkpoints and golden entries** (done; D7): three golden entries, the sequence
+   model with rotary attention in each implementation; the 115 earlier entries bit-identical.
 8. **The study** (D8).
 9. **Docs**: README, roadmap, next-steps; the workplan retired.

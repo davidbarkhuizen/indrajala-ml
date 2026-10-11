@@ -70,6 +70,17 @@ ATTENTION_DROPOUT: tuple[InputShape, list[LayerSpec]] = (
     ],
 )
 
+# the sequence model with rotary attention in place of the Position (the rotary-positions workplan,
+# D7): the table derives from the spec, so a restored network rotates as the saved one did
+ROTARY: tuple[InputShape, list[LayerSpec]] = (
+    (5,),
+    [
+        Embedding(7, 4),
+        Residual((LayerNorm(), Attention(heads=2, causal=True, positions="rotary"))),
+        Dense(7, output=True, activation="softmax", loss="cross_entropy"),
+    ],
+)
+
 
 def _network(implementation: str, input_shape: InputShape, layers: list[LayerSpec], rule: UpdateRule) -> Any:
     sequence = token_wise_output(layers)
@@ -154,8 +165,8 @@ def assert_a_restored_checkpoint_resumes_by_bits(
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
 @pytest.mark.parametrize(
     "architecture",
-    [DENSE, CONV, DROPOUT, SEQUENCE, ATTENTION_DROPOUT],
-    ids=["dense", "conv", "dropout", "sequence", "attention dropout"],
+    [DENSE, CONV, DROPOUT, SEQUENCE, ATTENTION_DROPOUT, ROTARY],
+    ids=["dense", "conv", "dropout", "sequence", "attention dropout", "rotary"],
 )
 @pytest.mark.parametrize("across_workers", [False, True], ids=["in_memory", "as_lists"])
 def test_a_restored_checkpoint_resumes_training_by_bits(
