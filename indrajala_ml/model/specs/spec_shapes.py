@@ -116,6 +116,10 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
                 f"an Attention without a key_size splits the token width among its heads, so its heads divide it "
                 f"(the multi-head attention workplan, D3); got {spec!r} over tokens of {features} features"
             )
+            assert spec.positions != "rotary" or spec.head_size(features) % 2 == 0, (
+                f"a rotary Attention pairs each head's features j and j + d_k / 2, so its head size is even (the "
+                f"rotary-positions workplan, D6); got {spec!r} over tokens of {features} features"
+            )
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, Position | LayerNorm | Dropout):
             shapes.append(SpecShape(shape, shape))

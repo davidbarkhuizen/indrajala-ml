@@ -31,6 +31,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Residual,
     TokenMean,
     expand_specs,
+    refuse_rotary_specs_until,
     spec_paths,
     token_wise_output,
 )
@@ -861,3 +862,76 @@ def test_format_2_round_trips_dropout_specs(specs: list[LayerSpec]):
 def test_all_three_implementations_build_dropout_specs(specs: list[LayerSpec]):
     for backend in ("numpy", "rust", "python"):
         _builds(specs, backend)
+
+
+# rotary positions (the rotary-positions workplan, stage 2): an Attention's positions="rotary", in
+# place of a learned Position (D2, D6)
+# heads of 2 features each over the tokens of 6 (an even head size, D6)
+ROTARY_BLOCK = Residual((LayerNorm(), Attention(heads=3, causal=True, positions="rotary")))
+
+ROTARY: dict[str, list[LayerSpec]] = {
+    "a rotary decoder": [IDS, ROTARY_BLOCK, FFN_BLOCK, ROTARY_BLOCK, LayerNorm(), TOKEN_OUTPUT],
+    "a rotary block beside an unrotated one": [IDS, ROTARY_BLOCK, CAUSAL_BLOCK, TOKEN_OUTPUT],
+    "a non-causal rotary attention": [IDS, Residual((Attention(positions="rotary"),)), TOKEN_OUTPUT],
+    "its own base": [IDS, Residual((Attention(positions="rotary", rotary_base=500.0),)), TOKEN_OUTPUT],
+    "an even key_size": [IDS, Residual((Attention(heads=3, key_size=4, positions="rotary"),)), TOKEN_OUTPUT],
+    "with dropout": [IDS, Residual((Attention(positions="rotary", dropout=0.1), Dropout(0.1))), TOKEN_OUTPUT],
+    "a patch model's": [PATCHES, EMBED, ROTARY_BLOCK, TokenMean(), OUTPUT],
+}
+
+ROTARY_INVALID: dict[str, list[LayerSpec]] = {
+    "a rotary attention after a position": [IDS, Position(), ROTARY_BLOCK, TOKEN_OUTPUT],
+    "a patch model's after a position": [PATCHES, EMBED, Position(), ROTARY_BLOCK, TokenMean(), OUTPUT],
+    "an unknown scheme": [IDS, Residual((Attention(positions="alibi"),)), TOKEN_OUTPUT],  # type: ignore[arg-type]
+    "a zero base": [IDS, Residual((Attention(positions="rotary", rotary_base=0.0),)), TOKEN_OUTPUT],
+    "a base without rotation": [IDS, Residual((Attention(rotary_base=500.0),)), TOKEN_OUTPUT],
+}
+
+
+@pytest.mark.parametrize("specs", ROTARY.values(), ids=ROTARY.keys())
+def test_rotary_attention_is_accepted(specs: list[LayerSpec]):
+    validate_layer_specs(specs)
+    spec_shapes(specs, (5,) if isinstance(specs[0], Embedding) else (4, 4, 1))
+
+
+@pytest.mark.parametrize("specs", ROTARY_INVALID.values(), ids=ROTARY_INVALID.keys())
+def test_rotary_attention_with_a_position_or_a_bad_field_is_rejected(specs: list[LayerSpec]):
+    with pytest.raises(AssertionError):
+        validate_layer_specs(specs)
+
+
+@pytest.mark.parametrize(
+    "attention",
+    [Attention(heads=2, key_size=3, positions="rotary"), Attention(heads=3, positions="rotary")],
+    ids=["an odd key_size", "an odd split of the width"],
+)
+def test_a_rotary_attention_needs_an_even_head_size(attention: Attention):
+    # over tokens of 9 features: a key_size of 3, or 9 split among 3 heads
+    specs: list[LayerSpec] = [Embedding(7, 9), Residual((attention,)), TOKEN_OUTPUT]
+    validate_layer_specs(specs)
+    with pytest.raises(AssertionError, match="head size is even"):
+        spec_shapes(specs, (5,))
+
+
+def test_attention_rotates_nothing_by_default():
+    assert Attention() == Attention(positions="none", rotary_base=10000.0)
+
+
+@pytest.mark.parametrize("specs", ROTARY.values(), ids=ROTARY.keys())
+def test_format_2_round_trips_rotary_specs(specs: list[LayerSpec]):
+    assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
+
+
+@pytest.mark.parametrize(
+    ("backend", "stage"), [("numpy", "3"), ("rust", "5"), ("python", "6")], ids=["numpy", "rust", "python"]
+)
+@pytest.mark.parametrize("specs", [ROTARY["a rotary decoder"], ROTARY["a patch model's"]], ids=["sequence", "patches"])
+def test_every_builder_refuses_rotary_attention_until_its_stage(specs: list[LayerSpec], backend: str, stage: str):
+    with pytest.raises(NotImplementedError, match=re.escape(f"not yet (the rotary-positions workplan, stage {stage})")):
+        _builds(specs, backend)
+
+
+def test_unrotated_attention_isnt_refused():
+    refuse_rotary_specs_until(SEQUENCE["a causal transformer"], "3", "here")
+    for backend in ("numpy", "rust", "python"):
+        _builds([IDS, Position(), Residual((LayerNorm(), Attention(positions="none"))), TOKEN_OUTPUT], backend)

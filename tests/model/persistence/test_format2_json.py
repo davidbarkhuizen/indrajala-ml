@@ -3,6 +3,7 @@ Format 2's layer entries (model/persistence/format2_json.py): an entry added to 
 were saved without it is left out at its default, so those files are what such a network saves now.
 The sequence task workplan's (stage 2): an embedding's entry, its table E, and a causal attention's.
 The attention-dropout workplan's (stage 2, D7): an attention's dropout, and a token dropout's entry.
+The rotary-positions workplan's (stage 2, D2): an attention's positions and rotary base.
 """
 
 from indrajala_ml.model.persistence.checkpoint import OptimizerState
@@ -76,3 +77,13 @@ def test_a_dropout_has_its_entry_and_no_optimizer_state():
     entry = optimizer_state_to_json(Adam(), False, state, specs)
     assert entry["layers"][2] is None
     assert optimizer_state_from_json(Adam(), False, entry, specs) == state
+
+
+def test_an_attention_entry_holds_its_positions_only_when_it_rotates():
+    # no "positions" or "rotary_base" without rotation: older files are what such a network saves now
+    # (the rotary-positions workplan, D2)
+    assert layer_to_json(Attention(positions="none")) == {"kind": "attention"}
+    assert layer_to_json(Attention(positions="rotary")) == {"kind": "attention", "positions": "rotary"}
+    entry = {"kind": "attention", "causal": True, "positions": "rotary", "rotary_base": 500.0}
+    assert layer_to_json(Attention(causal=True, positions="rotary", rotary_base=500.0)) == entry
+    assert layer_from_json(entry) == Attention(causal=True, positions="rotary", rotary_base=500.0)
