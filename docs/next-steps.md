@@ -466,9 +466,10 @@ report scripts/addition_sweep.json`), to be written into the study's docstring.
   H2). The saved models use a learned `Position` tied to their `T`, so they can't be run at
   another length. Milestone A retrains the column transformers with rotary or no positions at the
   sweep's threshold sizes, rates and budget: the sweep tells it what to train, not what to load.
-- **Probes of the passing adders.** Every run's model is kept, passing or not: a ladder of nearly
-  identical networks either side of the threshold. Probing the smallest passing 2-layer networks
-  against the failing d 4 ones could locate the carry lookahead (which layer finds the deciding
-  column below, which head propagates the carry). This needs the accessor for a layer's
-  activations on a batch (the workplan's Excluded for missing infrastructure). It also needs the
-  models kept somewhere durable: today they exist only in `data/addition/` on `jebel`.
+- **Probes of the passing adders.** Probing the smallest passing 2-layer networks against
+  near-misses one width below (d 4 at `n = 4`) could locate the carry lookahead: which layer
+  finds the deciding column below, and which head propagates the carry. This needs the accessor
+  for a layer's activations on a batch (the workplan's Excluded for missing infrastructure). The
+  probes don't need the sweep's exact files. When this is planned, it retrains the passing and
+  near-miss networks it needs (minutes for a few seeds), on the code of the day. Only the passing
+  models at each threshold and the width above are archived (the model archive, after the sweep).
