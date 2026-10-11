@@ -4,7 +4,6 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
 in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
-[attention-dropout-workplan.md](attention-dropout-workplan.md),
 [rotary-positions-workplan.md](rotary-positions-workplan.md),
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
@@ -39,18 +38,21 @@ docs cite them by section:
 | Multi-head attention and a transformer block (roadmap step 5) | #602 | crate #51-#52, #603-#613, archive #12-#13 | `git show d70cf0f:docs/multi-head-attention-workplan.md` |
 | A sequence task with causal masking (roadmap step 6) | #620 | crate #53, #621-#634, archive #14-#17 | `git show f6e843b:docs/sequence-task-workplan.md` |
 | Pure Python's random draws in numpy's order (RNG draw order) | #637 | #649-#652, archive #18-#19 | `git show 7a80858:docs/rng-draw-order-workplan.md` |
+| Dropout in attention (roadmap step 7) | #638 | crate #54, #654-#660, #666, archive #20-#21 | `git show 8d2019e:docs/attention-dropout-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
 `git show 0a04977:docs/optimizations/<name>.md`.
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
-normalization, Residual connections, Layer norm and attention, The sequence task), [measurement.md](measurement.md)
+normalization, Residual connections, Layer norm and attention, The sequence task, Dropout among the
+tokens), [measurement.md](measurement.md)
 and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/residual_depth_study.py`'s, the patch-attention study's in
 `scripts/patch_attention_study.py`'s, the multi-head attention study's in
-`scripts/multi_head_attention_study.py`'s, the sequence study's in `scripts/sequence_study.py`'s.
+`scripts/multi_head_attention_study.py`'s, the sequence study's in `scripts/sequence_study.py`'s,
+the attention dropout study's in `scripts/attention_dropout_study.py`'s.
 
 ## From composable layers
 
@@ -278,14 +280,12 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
   | later work | where it goes | what it adds |
   | --- | --- | --- |
   | padding masks (causal is done: `Attention(causal=True)`, the sequence task) | attend, forward: an additive mask on `S[i]` before the max shift, as the causal mask's `-inf` | a mask input; backward unchanged (`P_ij = 0` zeroes `dS_ij`) |
-  | dropout on the weights | attend: an inverted mask on `P[i]` before `H[i] = P[i] V[i]`, kept for backward | a mask field in the options, drawn by the layer from the network's generator |
-  | dropout after the projection | after combine | a token-wise dropout layer, outside attention |
+  | dropout on the weights (done: `Attention(dropout=p)`, roadmap step 7) | attend: an inverted mask on `P[i]` before `H[i] = P[i] V[i]`, kept for backward | a `dropout` field, the mask drawn by the layer from the network's generator |
+  | dropout after the projection (done: `Dropout(p)`, roadmap step 7) | after combine | a token-wise dropout layer, outside attention |
   | a separate value width | project and combine: `Wv` `(h·d_v, d)`, `Wo` `(d, h·d_v)` | a `value_size` field defaulting to `key_size` |
   | grouped- or multi-query attention | project: `Wk`, `Wv` with `g` row blocks; attend: head `i` reads key/value block `i // (h / g)` | a `key_value_heads` field defaulting to `heads` |
   | cross-attention | project: `K`, `V` from a second input | a second input to the layer, which `Sequential` doesn't have: its own design |
 
-  Dropout in attention needs a training and inference switch in a token layer and mask draws in
-  all three implementations' orders.
 - **GELU** (D5 (c)), ViT's FFN activation, an activation for `Dense`: it needs `erf`, which stable
   Rust lacks (the `tanh` form is a different function), in all three implementations and the crate.
   Planned with SwiGLU as roadmap step 13 ([ffn-activations-workplan.md](ffn-activations-workplan.md)).
@@ -335,8 +335,10 @@ non-overlapping windows of 65 characters, the last 10% held out (D4). The study
   training windows than held out (1.01 against 1.50), the widest of the four corpora (Herodotus:
   none), and the gap grows with the model (ffn 0.17, 1-layer 0.44). The held-out part is the
   text's last 10%, from Book XII's similar pyramids (XII.8) through Book XIII, and even the
-  counted bigram is 0.16 bits worse there, so the gap mixes overfitting with a shift in the text. A held-out set of
-  windows drawn from across the text would separate the two.
+  counted bigram is 0.16 bits worse there, so the gap mixes overfitting with a shift in the text.
+  Answered by the attention-dropout study (#666): on a split from across the text (each of 100
+  blocks' last tenth held out) the 2-layer model's gap is 0.04 (1.05 against 1.02), so about 93%
+  of it is the shift and little is overfitting; Tiny Shakespeare's 0.30 falls to 0.07 the same way.
 - **Windows at random offsets** (D4 (b)): every position of every character a target, the usual
   language-model sampler. It needs a sampler in the trainer (an epoch no longer a permutation of
   fixed rows) and its state in run checkpoints. Overlapping fixed windows at stride `T / 2`
@@ -354,6 +356,44 @@ Still out of scope:
 - A network-level causal flag (D7 (b)): the mask is per layer, so an encoder and a causal block
   can mix later.
 - Word-level corpora (D2 (d)): a vocabulary of 10,000 or more makes the output layer the whole cost.
+
+## From attention dropout
+
+The workplan settled both of the literature's mechanisms (D1): `Attention(dropout=p)`, inverted
+dropout on `P` (D3), one `(N, h, T, T)` mask a batch drawn row-major (D4), and a token-wise
+`Dropout(p)` after `Position` and ending a block's body (D2); the crate's attention ops take
+`dropout`, `training` and `rng` keywords (D5); all three implementations, their masks by bits (D6);
+format 2 entries and three golden entries (D7, D9). The study (D8, #666;
+`scripts/attention_dropout_study.py`'s docstring) found the sequence study's gaps mostly the text's
+shift (on a split from across the text Euclid's 0.49 bits per character falls to 0.04, Tiny
+Shakespeare's 0.30 to 0.07), and dropout narrowing every gap by raising the training loss, at a
+cost of 0.01 to 0.35 bits held out; the one gain is attention dropout 0.1 on Euclid's contiguous
+split (0.023 lower, every seed), which the spread split doesn't repeat.
+
+- **Two crate shifts for the next baseline to measure against.** After crate #54 (#656's tier 1
+  A/B, 6 passes), Rust `hidden_delta_batch` at batch 32 was 3.5% slower with dropout off, though its
+  products are unchanged, while in the same run the unchanged `accumulate_gradient_batch` at batch
+  32 moved 7.6% faster: read as a codegen or layout shift, as #627's (the sequence task's crate
+  bump, +1.5% to +5.5% on some batch ops). On `jebel` such rows may be code placement (From the
+  benchmark machine baseline). Beside the numpy backward's 10% (From multi-head attention).
+- **`Dropout(0.0)` draws its mask; `Attention(dropout=0.0)` draws nothing.** The token layer
+  follows the dense dropout layer, which draws at 0 too; the attention keeps a model without
+  dropout on its old bits. A `Dropout(0.0)` could be refused by validation, or skipped at 0, which
+  would change its draws (a golden entry has none at 0 today).
+- **Drawing only the unmasked entries under a causal mask** (D4 (b)): about half an attention
+  mask's draws fall on weights already 0. Skipping them changes the order every implementation
+  must walk and every dropout golden entry's bits; worth it only if the draws show up in a profile.
+- **The study's open questions.** A rate tuned per arm (every arm ran at the control's 0.002;
+  dropout may prefer a higher one); longer runs (no arm had converged at 10 epochs, the dropout
+  arms least: 0.044 to 0.081 bits per character in the last three epochs, against 0.014 to 0.047);
+  a larger model, which overfits more and leaves dropout something to remove; and whether
+  attention dropout's gain across Euclid's shift is real or a 10-epoch accident.
+
+Still out of scope:
+
+- Dropout fields on the layers that end a body (D2 (b)): `Dropout(p)` is the one token-wise form;
+  a linear `Dense`'s dropout would need a linear variant of every fused `layer_dropout_*` op.
+- Renormalizing each row of `P` after dropping (D3 (b)): no reference uses it.
 
 ## From the benchmark machine baseline
 
