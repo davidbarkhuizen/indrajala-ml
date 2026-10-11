@@ -34,6 +34,7 @@ import statistics
 from typing import Any
 
 from indrajala_ml.data import text_data
+from indrajala_ml.measurement import machine_lock
 from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
@@ -170,17 +171,20 @@ def main(argv: list[str] | None = None, description: str | None = None) -> None:
     parser.add_argument("--out", help="every run's raw result, as JSON")
     args = parser.parse_args(argv)
 
-    if args.stage == "time":
-        epochs = 1
-        configs: list[Config] = [(args.corpus, args.split, args.arm)]
-        results: Results = {configs[0]: [run_config({"limit": args.limit, "epochs": 1}, configs[0], 0)]}
-    else:
-        epochs = args.epochs
-        configs = [(c, s, a) for c in args.corpora for s in args.splits for a in args.arms]
-        context = {"limit": args.limit, "epochs": epochs}
-        results = run_parameter_sweep(configs, list(range(args.seeds)), run_config, context, worker_count=args.workers)
+    with machine_lock.study():
+        if args.stage == "time":
+            epochs = 1
+            configs: list[Config] = [(args.corpus, args.split, args.arm)]
+            results: Results = {configs[0]: [run_config({"limit": args.limit, "epochs": 1}, configs[0], 0)]}
+        else:
+            epochs = args.epochs
+            configs = [(c, s, a) for c in args.corpora for s in args.splits for a in args.arms]
+            context = {"limit": args.limit, "epochs": epochs}
+            results = run_parameter_sweep(
+                configs, list(range(args.seeds)), run_config, context, worker_count=args.workers
+            )
 
-    print(report(configs, results, epochs))
-    if args.out:
-        with open(args.out, "w") as f:
-            json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
+        print(report(configs, results, epochs))
+        if args.out:
+            with open(args.out, "w") as f:
+                json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)

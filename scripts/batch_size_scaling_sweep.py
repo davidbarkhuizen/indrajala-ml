@@ -27,6 +27,7 @@ import statistics
 import sys
 from typing import Any
 
+from indrajala_ml.measurement import machine_lock
 from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.studies import batch_size_scaling as bss
 from indrajala_ml.studies.common import load_mnist, mean_sd, table
@@ -181,33 +182,34 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--warmups", type=float, nargs="+", default=WARMUP_EPOCHS, help="warmup epochs (scaling)")
     args = parser.parse_args(argv)
-    if args.group_size is not None and args.architecture != "conv-bn":
-        sys.exit("--group-size is for --architecture conv-bn only")
+    with machine_lock.study():
+        if args.group_size is not None and args.architecture != "conv-bn":
+            sys.exit("--group-size is for --architecture conv-bn only")
 
-    context: dict[str, Any] = {
-        "train_path": bss.TRAIN_PATH,
-        "test_path": bss.TEST_PATH,
-        "limit": args.limit,
-        "epochs": args.epochs,
-        "train_size": args.limit or 60000,
-        "architecture": args.architecture,
-        "group_size": args.group_size,
-    }
-    seeds = SEEDS[: args.seeds]
+        context: dict[str, Any] = {
+            "train_path": bss.TRAIN_PATH,
+            "test_path": bss.TEST_PATH,
+            "limit": args.limit,
+            "epochs": args.epochs,
+            "train_size": args.limit or 60000,
+            "architecture": args.architecture,
+            "group_size": args.group_size,
+        }
+        seeds = SEEDS[: args.seeds]
 
-    if args.stage == "baseline":
-        results = baseline(context, seeds, BASELINE_RATES[args.architecture], args.momenta)
-    else:
-        lr32 = _parse_lr32(args.lr32)
-        if not lr32:
-            sys.exit("scaling needs --lr32 momentum=rate for each momentum")
-        if bss.BASE_BATCH_SIZE not in args.batch_sizes or 0.0 not in args.warmups:
-            sys.exit(f"scaling needs batch size {bss.BASE_BATCH_SIZE} and warmup 0 for the batch-32 band")
-        results = scaling(context, seeds, lr32, args.batch_sizes, args.warmups)
+        if args.stage == "baseline":
+            results = baseline(context, seeds, BASELINE_RATES[args.architecture], args.momenta)
+        else:
+            lr32 = _parse_lr32(args.lr32)
+            if not lr32:
+                sys.exit("scaling needs --lr32 momentum=rate for each momentum")
+            if bss.BASE_BATCH_SIZE not in args.batch_sizes or 0.0 not in args.warmups:
+                sys.exit(f"scaling needs batch size {bss.BASE_BATCH_SIZE} and warmup 0 for the batch-32 band")
+            results = scaling(context, seeds, lr32, args.batch_sizes, args.warmups)
 
-    if args.out:
-        with open(args.out, "w") as f:
-            json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
+        if args.out:
+            with open(args.out, "w") as f:
+                json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
 
 
 if __name__ == "__main__":

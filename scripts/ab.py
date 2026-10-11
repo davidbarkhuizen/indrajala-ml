@@ -88,7 +88,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime
-import fcntl
 import hashlib
 import json
 import os
@@ -104,7 +103,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from indrajala_ml.measurement import benchmark_archive
+from indrajala_ml.measurement import benchmark_archive, machine_lock
 from indrajala_ml.measurement.benchmark_archive import PROFILES_DIR, ArchiveError, host_profile
 from indrajala_ml.measurement.machine_profile import compare
 from indrajala_ml.measurement.machine_profile_capture import power_policy
@@ -1000,18 +999,14 @@ def cmd_extend(args: argparse.Namespace) -> None:
 
 @contextlib.contextmanager
 def run_lock(what: str) -> Generator[None]:
-    """One run or extend at a time on this machine: an flock on RUNS_ROOT/run.lock for as long as
-    the process lives, so a killed run never leaves it held. The second is refused, naming the first."""
-    RUNS_ROOT.mkdir(parents=True, exist_ok=True)
-    with open(RUNS_ROOT / "run.lock", "a+") as lock:
+    """One run or extend at a time on this machine, and none during a study's training: the machine
+    lock (indrajala_ml/measurement/machine_lock.py) on RUNS_ROOT/run.lock for as long as the process
+    lives, so a killed run never leaves it held. The second is refused, naming the first."""
+    with contextlib.ExitStack() as stack:
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            lock.seek(0)
-            raise AbError(f"another run holds {RUNS_ROOT / 'run.lock'}: {lock.read().strip()}") from None
-        lock.truncate(0)
-        lock.write(f"pid {os.getpid()}, {what}, since {_local_now().isoformat(timespec='seconds')}\n")
-        lock.flush()
+            stack.enter_context(machine_lock.hold(what, "run", RUNS_ROOT))
+        except machine_lock.MachineBusy as busy:
+            raise AbError(str(busy)) from None
         yield
 
 

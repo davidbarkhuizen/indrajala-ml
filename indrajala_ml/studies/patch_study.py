@@ -31,6 +31,7 @@ from typing import Any
 
 import numpy as np
 
+from indrajala_ml.measurement import machine_lock
 from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
@@ -209,22 +210,23 @@ def main(
     parser.add_argument("--out", help="every run's raw result, as JSON")
     args = parser.parse_args(argv)
 
-    context = {
-        "train_path": bss.TRAIN_PATH,
-        "test_path": bss.TEST_PATH,
-        "limit": args.limit,
-        "epochs": args.epochs or (TUNE_EPOCHS if args.stage == "tune" else epochs),
-        "arm_specs": arm_specs,
-    }
-    seeds = list(range(args.seeds or seed_count))
-    if args.stage == "time":
-        results = time_one(context, args.arm, (args.rates or [0.001])[0])
-    elif args.stage == "tune":
-        results = tune(context, seeds, args.arms, args.rates or TUNE_RATES)
-    else:
-        if args.rates is None or len(args.rates) != len(args.arms):
-            sys.exit("sweep needs --rates, one per arm, the rates tune chose")
-        results = sweep(context, seeds, args.arms, args.rates)
-    if args.out:
-        with open(args.out, "w") as f:
-            json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
+    with machine_lock.study():
+        context = {
+            "train_path": bss.TRAIN_PATH,
+            "test_path": bss.TEST_PATH,
+            "limit": args.limit,
+            "epochs": args.epochs or (TUNE_EPOCHS if args.stage == "tune" else epochs),
+            "arm_specs": arm_specs,
+        }
+        seeds = list(range(args.seeds or seed_count))
+        if args.stage == "time":
+            results = time_one(context, args.arm, (args.rates or [0.001])[0])
+        elif args.stage == "tune":
+            results = tune(context, seeds, args.arms, args.rates or TUNE_RATES)
+        else:
+            if args.rates is None or len(args.rates) != len(args.arms):
+                sys.exit("sweep needs --rates, one per arm, the rates tune chose")
+            results = sweep(context, seeds, args.arms, args.rates)
+        if args.out:
+            with open(args.out, "w") as f:
+                json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)

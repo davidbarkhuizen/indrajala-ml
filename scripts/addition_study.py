@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 
 from indrajala_ml.data import addition_data as ad
+from indrajala_ml.measurement import machine_lock
 from indrajala_ml.studies import addition_study as st
 
 
@@ -57,7 +58,8 @@ def main(argv: list[str]) -> int:
         return 0
     sweep = st.load_config(args.config)
     if args.command == "run":
-        st.run(sweep, log=lambda line: print(line, flush=True))
+        with machine_lock.study():
+            st.run(sweep, log=lambda line: print(line, flush=True))
         print(st.report(sweep))
     elif args.command == "status":
         print(st.status(sweep))

@@ -1,7 +1,7 @@
 # Workplan: studies and timing runs sharing `jebel`
 
 **Status: decisions D1-D9 settled (2026-10-11; the owner: "going with your recommendation on
-each decision point"). Stage 1 (this plan) done (#670). Trimmed the same day at the owner's
+each decision point"). Stages 1 (this plan, #670) and 2 (the lock) done. Trimmed the same day at the owner's
 request, for more focused benchmarking: D4 (b), D5, D6 and D7 deferred to
 next-steps, leaving the lock, the load refusal and the result files.**
 
@@ -123,7 +123,7 @@ while a study runs** until stage 2 is there: these stages merge to `main` any ti
 ## Stages
 
 1. **This workplan** (done, #670; trimmed in its own PR).
-2. **The machine lock (D1 (a), D2).** `run_lock` moves from `scripts/ab.py` to
+2. **The machine lock (D1 (a), D2)** (done). `run_lock` moves from `scripts/ab.py` to
    `indrajala_ml/measurement/machine_lock.py`, with its record as one JSON line (`what`, `kind`
    run or study, `pid`, `since`). `ab.py` imports it, and its refusal prints the record. Every
    study command line that trains takes it, through `machine_lock.study("<study> <stage>")`.
@@ -131,7 +131,11 @@ while a study runs** until stage 2 is there: these stages merge to `main` any ti
    `AB_RUNS_ROOT`); a killed holder frees it; the lock's file isn't inherited by the forkserver
    workers. On `jebel`: a tiny addition config running, `ab.py remote --host jebel run` is
    refused naming it. Docs: measurement.md §2, §4 and §11, and CLAUDE.md's "Check `jebel`, then
-   go".
+   go". As built: the end-to-end check ran on `pyramidon` (a tiny addition config held the lock;
+   `ab.py extend` was refused naming it, and went ahead once the study was stopped); `jebel`'s
+   waits for the addition sweep to end, since its checkout mustn't move under the sweep. The
+   rotary study (`rotary_study.py`, on the unmerged `rotary-study` branch) takes the lock when
+   that branch is rebased.
 3. **The load refusal (D3).** In `_preflight`, for `run` and `extend`: wait, then refuse, with
    `--allow-load` and its manifest record. Tests with `os.getloadavg` patched: under the rule
    passes, over it waits then refuses with the busy list, a fall during the wait passes, and

@@ -914,7 +914,7 @@ def test_a_second_run_is_refused_while_one_holds_the_lock(tmp_path: Path, monkey
     )
     try:
         assert holder.stdout is not None and holder.stdout.readline() == "held\n"
-        with pytest.raises(ab.AbError, match="another run holds .*: pid 1, run x"), ab.run_lock("run --bench cmd"):
+        with pytest.raises(ab.AbError, match="run.lock is held by pid 1, run x"), ab.run_lock("run --bench cmd"):
             pass
     finally:
         holder.kill()

@@ -73,6 +73,12 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   (`ssh jebel 'pkill -x brave; pkill -x firefox; pkill -x zed'`); don't stop to ask the owner. If
   the load is high, wait and check again. Nothing else runs on `jebel` during a run: no tests,
   lint or builds there. A background IDE once spoiled a whole measurement.
+- **Studies and A/Bs take turns.** A study's training stages (every `*_study.py` and
+  `batch_size_scaling_sweep.py` stage that trains, and `addition_study.py run`) hold the same
+  machine lock as `ab.py run` and `extend` (`indrajala_ml/measurement/machine_lock.py`), so an A/B
+  started during a study is refused, naming it, and a study started during an A/B exits before it
+  trains. The lock also keeps `remote run` from fast-forwarding the checkout and rebuilding the
+  crate under a running study. Schedule A/Bs between studies (docs/study-runs-workplan.md, D4).
 - **Package jobs.** `unattended-upgrades` is enabled and snaps refresh on their own schedule; either
   can start a large job mid-run. Before a run, `systemctl is-active apt-daily.service
   apt-daily-upgrade.service` prints `inactive` twice when no apt job runs (`unattended-upgrades`
@@ -224,8 +230,9 @@ wait ends, and its message names the command that resumes it: `remote --host jeb
 **Other commands.** `status` prints one line (the pass running, how many are done, an ETA).
 `clean --worktrees` and `clean --wheels` remove the worktrees and crate builds no run of the last
 14 days refers to. `RUN` defaults to the most recent run everywhere. A machine runs one `run` or
-`extend` at a time: a second is refused while the first holds `~/code/ab-runs/run.lock`, which
-frees itself when its process ends, however it ends.
+`extend` at a time, and none while a study trains: a second is refused while the first holds
+`~/code/ab-runs/run.lock`, which frees itself when its process ends, however it ends. The refusal
+names the holder (`run` or `study`, its command, pid and start; §2).
 
 ## 5. Reading the report
 
@@ -544,6 +551,7 @@ the whole conversation. The repository's `CLAUDE.md` repeats these rules.
   files.
 - **Keep `jebel` quiet.** Nothing else runs there during an A/B: development stays on the laptop,
   where building and testing carry on. Check `jebel`'s load and close its browser and editor
-  yourself first ([§2](#2-preparing-the-machine)).
+  yourself first ([§2](#2-preparing-the-machine)). A refusal naming a study means wait for it to
+  end; don't stop it without the owner.
 - **Extend `ab.py` instead of working around it.** A measurement it can't express gets a probe or
   an adapter, not a new driver script.

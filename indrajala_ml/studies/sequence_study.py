@@ -44,6 +44,7 @@ from typing import Any
 import numpy as np
 
 from indrajala_ml.data import text_data
+from indrajala_ml.measurement import machine_lock
 from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
@@ -293,35 +294,36 @@ def main(argv: list[str] | None = None, description: str | None = None) -> None:
     parser.add_argument("--out", help="every run's raw result, as JSON")
     args = parser.parse_args(argv)
 
-    seeds = list(range(args.seeds))
-    if args.stage == "time":
-        epochs = 1
-        configs: list[Config] = [(args.corpus, args.arm, (args.rates or [0.001])[0])]
-        results: Results = {configs[0]: [run_config({"limit": args.limit, "epochs": 1}, configs[0], 0)]}
-    elif args.stage == "tune":
-        epochs = args.epochs or TUNE_EPOCHS
-        rates = args.rates or TUNE_RATES
-        configs = [(corpus, arm, rate) for corpus in args.corpora for arm in args.arms for rate in rates]
-        context = {"limit": args.limit, "epochs": epochs}
-        results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=args.workers)
-    else:
-        if args.tuned is None or args.epochs is None:
-            sys.exit("sweep needs --tuned, tune's --out, and --epochs")
-        tuned = best_rates(read_results(args.tuned))
-        missing = [(corpus, arm) for corpus in args.corpora for arm in args.arms if (corpus, arm) not in tuned]
-        if missing:
-            sys.exit(f"no finite tuned rate for {missing}")
-        epochs = args.epochs
-        configs = [(corpus, arm, tuned[(corpus, arm)]) for corpus in args.corpora for arm in args.arms]
-        context = {"limit": args.limit, "epochs": epochs}
-        results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=args.workers)
+    with machine_lock.study():
+        seeds = list(range(args.seeds))
+        if args.stage == "time":
+            epochs = 1
+            configs: list[Config] = [(args.corpus, args.arm, (args.rates or [0.001])[0])]
+            results: Results = {configs[0]: [run_config({"limit": args.limit, "epochs": 1}, configs[0], 0)]}
+        elif args.stage == "tune":
+            epochs = args.epochs or TUNE_EPOCHS
+            rates = args.rates or TUNE_RATES
+            configs = [(corpus, arm, rate) for corpus in args.corpora for arm in args.arms for rate in rates]
+            context = {"limit": args.limit, "epochs": epochs}
+            results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=args.workers)
+        else:
+            if args.tuned is None or args.epochs is None:
+                sys.exit("sweep needs --tuned, tune's --out, and --epochs")
+            tuned = best_rates(read_results(args.tuned))
+            missing = [(corpus, arm) for corpus in args.corpora for arm in args.arms if (corpus, arm) not in tuned]
+            if missing:
+                sys.exit(f"no finite tuned rate for {missing}")
+            epochs = args.epochs
+            configs = [(corpus, arm, tuned[(corpus, arm)]) for corpus in args.corpora for arm in args.arms]
+            context = {"limit": args.limit, "epochs": epochs}
+            results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=args.workers)
 
-    print(report(configs, results, epochs, args.limit))
-    if args.stage == "tune":
-        print()
-        for (corpus, arm), rate in best_rates(results).items():
-            mean = statistics.mean(_final(results[(corpus, arm, rate)]))
-            print(f"best rate for {corpus} {arm}: {rate:g} ({bits(mean):.3f} bits per character)")
-    if args.out:
-        with open(args.out, "w") as f:
-            json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
+        print(report(configs, results, epochs, args.limit))
+        if args.stage == "tune":
+            print()
+            for (corpus, arm), rate in best_rates(results).items():
+                mean = statistics.mean(_final(results[(corpus, arm, rate)]))
+                print(f"best rate for {corpus} {arm}: {rate:g} ({bits(mean):.3f} bits per character)")
+        if args.out:
+            with open(args.out, "w") as f:
+                json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
