@@ -44,7 +44,8 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
 - **Check `jebel`, then go; don't ask.** Before a run, check its `uptime` and `ps` over ssh;
   `pkill -x` Brave, Firefox and Zed there if they are running, and wait out a high load, an apt
   job or a snap refresh (measurement.md §2). Nothing else runs on `jebel` during the run;
-  development on `pyramidon` carries on.
+  development on `pyramidon` carries on. Studies hold the same machine lock as `ab.py`: an A/B
+  refused naming a study waits for it to end.
 - **A PR's tier decides its timing** (docs/measurement.md, §1): **0**, no timed path changed
   (new functionality that leaves existing timed paths alone, docs, pure-Python code, never timed):
   no A/B; **1**, a timed path (`learn*`, `classify_rows`, the crate) changed with no speedup

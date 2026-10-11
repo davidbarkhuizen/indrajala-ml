@@ -76,6 +76,7 @@ from typing import Any
 
 import numpy as np
 
+from indrajala_ml.measurement import machine_lock
 from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
@@ -232,22 +233,23 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--out", help="every run's raw result, as JSON")
     args = parser.parse_args(argv)
 
-    context = {
-        "train_path": bss.TRAIN_PATH,
-        "test_path": bss.TEST_PATH,
-        "limit": args.limit,
-        "epochs": args.epochs,
-    }
-    seeds = list(range(args.seeds))
-    if args.stage == "tune":
-        results = tune(context, seeds, args.rates)
-    else:
-        if args.rate is None:
-            sys.exit("sweep needs --rate, the rate tune chose")
-        results = sweep(context, seeds, args.rate, args.depths)
-    if args.out:
-        with open(args.out, "w") as f:
-            json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
+    with machine_lock.study():
+        context = {
+            "train_path": bss.TRAIN_PATH,
+            "test_path": bss.TEST_PATH,
+            "limit": args.limit,
+            "epochs": args.epochs,
+        }
+        seeds = list(range(args.seeds))
+        if args.stage == "tune":
+            results = tune(context, seeds, args.rates)
+        else:
+            if args.rate is None:
+                sys.exit("sweep needs --rate, the rate tune chose")
+            results = sweep(context, seeds, args.rate, args.depths)
+        if args.out:
+            with open(args.out, "w") as f:
+                json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
 
 
 if __name__ == "__main__":
