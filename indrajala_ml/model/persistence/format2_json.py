@@ -86,10 +86,10 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
     if isinstance(spec, PoolSpec):
         return {"kind": "pool", **asdict(spec)}
     if isinstance(spec, Attention):
-        # heads, key_size, causal and dropout only when not the default (the multi-head attention
-        # workplan; the sequence task workplan, D7; the attention-dropout workplan, D7), so a
-        # one-head unmasked entry without dropout is as before Attention had them and older
-        # checkouts load it
+        # heads, key_size, causal, dropout, positions and rotary_base only when not the default (the
+        # multi-head attention workplan; the sequence task workplan, D7; the attention-dropout
+        # workplan, D7; the rotary-positions workplan, D2), so a one-head unmasked entry without
+        # dropout or rotation is as before Attention had them and older checkouts load it
         default = Attention()
         fields = {key: value for key, value in asdict(spec).items() if value != getattr(default, key)}
         return {"kind": "attention", **fields}

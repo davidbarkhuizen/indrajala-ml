@@ -58,6 +58,11 @@ def _check_attention(spec: Attention) -> None:
     assert spec.heads >= 1, f"an Attention has at least one head; got {spec!r}"
     assert spec.key_size is None or spec.key_size >= 1, f"a key_size is at least 1; got {spec!r}"
     assert 0.0 <= spec.dropout < 1.0, f"an Attention's dropout is in [0.0, 1.0); got {spec!r}"
+    assert spec.positions in ("none", "rotary"), f'an Attention\'s positions are "none" or "rotary"; got {spec!r}'
+    assert spec.rotary_base > 0.0, f"a rotary_base is positive; got {spec!r}"
+    assert spec.positions == "rotary" or spec.rotary_base == Attention().rotary_base, (
+        f'a rotary_base is a rotary Attention\'s, positions="rotary" (the rotary-positions workplan, D2); got {spec!r}'
+    )
 
 
 def _check_dropout(spec: Dropout) -> None:
@@ -155,6 +160,11 @@ def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool) -> None:
                 f"a token-wise Dense is ReLU, or linear with bias=True, with no dropout (D4); got {spec!r}"
             )
     assert sum(isinstance(spec, Position) for spec in tokens) <= 1, f"one Position at most (D7); got {list(tokens)!r}"
+    rotary = next((s for s in expand_specs(tokens) if isinstance(s, Attention) and s.positions == "rotary"), None)
+    assert rotary is None or not any(isinstance(spec, Position) for spec in tokens), (
+        f"a token part's positions are a Position or rotary attention, not both (the rotary-positions workplan, D6); "
+        f"got {rotary!r} after a Position"
+    )
 
 
 def _check_no_tokens(specs: Sequence[LayerSpec], where: str) -> None:

@@ -28,9 +28,10 @@ network resumes training by bits, its dropout masks included.
   entries (the residual-connections workplan, stage 5), "patches", "position", "layer_norm",
   "attention" or "token_mean" (the layer-norm and attention workplan, stage 5), "embedding"
   (the sequence task workplan, stage 2), and "dropout", {"kind": "dropout", "p": p}, the token-wise
-  one (the attention-dropout workplan, D7). An attention entry has "heads", "key_size", "causal"
-  and "dropout" only when not the default. A ReLU conv entry leaves out its activation, as before ConvSpec had
-  one; a linear conv entry has "activation": "linear". A dense entry has "bias": true only for an
+  one (the attention-dropout workplan, D7). An attention entry has "heads", "key_size", "causal",
+  "dropout", "positions" and "rotary_base" (the rotary-positions workplan, D2) only when not the
+  default. A ReLU conv entry leaves out its activation, as before ConvSpec had one; a linear conv
+  entry has "activation": "linear". A dense entry has "bias": true only for an
   affine layer (a residual block's, or a token-wise embedding); a token-wise dense layer's entry,
   a token-wise output layer's included, is a dense one.
 - weights is the network's snapshot() as lists, one entry per layer, a residual block's flattened

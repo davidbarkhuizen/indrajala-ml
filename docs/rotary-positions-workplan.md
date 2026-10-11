@@ -1,6 +1,7 @@
 # Workplan: rotary position embedding (roadmap step 8)
 
-**Status: decisions D1-D9 settled by the owner (2026-10-10). Stage 1 (this plan) done. Added to
+**Status: decisions D1-D9 settled by the owner (2026-10-10). Stages 1 (this plan) and 2 (the
+specs) done. Added to
 the roadmap by the owner on 2026-10-10, before generation (now step 9), so that generation's
 key/value cache stays valid as its window slides.**
 
@@ -103,8 +104,10 @@ Settled by the owner (2026-10-10), as proposed:
 ## Stages
 
 1. **This workplan.**
-2. **Specs**: `Attention(positions, rotary_base)`, validation (D6), format 2's fields; builders
-   refuse rotation with "not yet" until their stages.
+2. **Specs** (done): `Attention(positions, rotary_base)`, validation (D6), format 2's fields;
+   builders refuse rotation with "not yet" until their stages (`refuse_rotary_specs_until`). A
+   `rotary_base` other than the default needs `positions="rotary"`, and the even head size is
+   checked by `spec_shapes`, which knows the token width.
 3. **numpy**: the table (D4), the rotation and its backward in project; tests by hand (a rotation
    preserves norms; the score depends on `t - u` only; one token at position 0 is the unrotated
    layer by bits); tier 1 A/B of numpy's attention case with rotation off.
