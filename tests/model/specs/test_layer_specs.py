@@ -31,7 +31,6 @@ from indrajala_ml.model.specs.layer_specs import (
     Residual,
     TokenMean,
     expand_specs,
-    refuse_rotary_specs_until,
     spec_paths,
     token_wise_output,
 )
@@ -922,14 +921,7 @@ def test_format_2_round_trips_rotary_specs(specs: list[LayerSpec]):
     assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
 
 
-@pytest.mark.parametrize(("backend", "stage"), [("python", "6")], ids=["python"])
-@pytest.mark.parametrize("specs", [ROTARY["a rotary decoder"], ROTARY["a patch model's"]], ids=["sequence", "patches"])
-def test_every_builder_refuses_rotary_attention_until_its_stage(specs: list[LayerSpec], backend: str, stage: str):
-    with pytest.raises(NotImplementedError, match=re.escape(f"not yet (the rotary-positions workplan, stage {stage})")):
-        _builds(specs, backend)
-
-
-def test_unrotated_attention_isnt_refused():
-    refuse_rotary_specs_until(SEQUENCE["a causal transformer"], "3", "here")
+@pytest.mark.parametrize("specs", ROTARY.values(), ids=ROTARY.keys())
+def test_all_three_implementations_build_rotary_specs(specs: list[LayerSpec]):
     for backend in ("numpy", "rust", "python"):
-        _builds([IDS, Position(), Residual((LayerNorm(), Attention(positions="none"))), TOKEN_OUTPUT], backend)
+        _builds(specs, backend)

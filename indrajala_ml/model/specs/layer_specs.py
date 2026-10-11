@@ -282,13 +282,6 @@ def refuse_token_wise_output(specs: Sequence[LayerSpec], shape: str) -> None:
     )
 
 
-def refuse_rotary_specs_until(specs: Sequence[LayerSpec], stage: str, where: str) -> None:
-    """A builder's refusal of a rotary Attention before the rotary-positions workplan's stage that builds it there."""
-    spec = next((s for s in expand_specs(specs) if isinstance(s, Attention) and s.positions != "none"), None)
-    if spec is not None:
-        raise NotImplementedError(f"{spec!r} {where}: not yet (the rotary-positions workplan, stage {stage})")
-
-
 def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:
     """
     Each expanded spec's place in specs as written, for messages: "layer 2", or inside a block

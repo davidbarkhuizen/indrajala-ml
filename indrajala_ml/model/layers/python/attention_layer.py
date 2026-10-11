@@ -27,6 +27,13 @@ drawing every example's masks in turn, so the draws are numpy's (N, h, T, T) row
 backward pass takes dV = P~^T dH and dP = (dH V^T) * M / keep, then the softmax's backward with the
 undropped P. In inference, and at dropout 0, nothing is drawn.
 
+A rotary layer (the rotary-positions workplan, D3, D4) ends project by rotating each head's Q and K
+rows, token t's by rotary_table's row t, feature j < d_k / 2 paired with j + d_k / 2: q'_j = q_j c -
+q_{j+d_k/2} s and q'_{j+d_k/2} = q_j s + q_{j+d_k/2} c, per scalar, numpy's expressions, so numpy's
+bits on the same Q and K. The backward pass rotates dQ and dK back, dq_j = dq'_j c + dq'_{j+d_k/2} s
+and dq_{j+d_k/2} = dq'_{j+d_k/2} c - dq'_j s, before project's products and the gradients. The
+caches _Q and _K are the rotated ones, _dQ and _dK the unrotated ones' gradients.
+
 The softmax's exp is this module's exp, which tests may replace, as attention_array_layer's.
 """
 
@@ -47,6 +54,7 @@ from indrajala_ml.model.layers.python.token_layer import (
     token_values,
 )
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.specs.rotary_table import rotary_table
 from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
 exp = math.exp
@@ -92,7 +100,8 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
     Over tokens tokens of features features (d), in heads heads (h) of key_size features (d_k,
     d / h when None): Q = X Wq^T + bq, K and V likewise, each head's P[i] =
     softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and H[i] = P[i] V[i], out = H Wo^T + bo with H the
-    heads side by side; a causal one masks S_ij for j > i. Its weight sets, also its draw and
+    heads side by side; a causal one masks S_ij for j > i, and a rotary one rotates Q's and K's
+    heads by their tokens' positions. Its weight sets, also its draw and
     snapshot order, are Wq's h * d_k rows of d weights, then Wk's and Wv's, then Wo's d rows of
     h * d_k weights, each row with its bias: the weights decayed and the biases not. Each projection
     is drawn as a dense layer, its rows' weights then its biases, Wq, Wk, Wv and Wo in turn. Hidden
@@ -113,6 +122,8 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         key_size: int | None = None,
         causal: bool = False,
         dropout: float = 0.0,
+        positions: str = "none",
+        rotary_base: float = 10000.0,
     ) -> None:
         assert len(input_layer.nodes) == tokens * features
         assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
@@ -130,6 +141,11 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         # set by set_training_mode and set_rng, as a dense dropout layer's nodes'
         self.training = False
         self.rng: Pcg64Generator = default_rng()
+        assert positions in ("none", "rotary"), f'an attention\'s positions are "none" or "rotary"; got {positions!r}'
+        self.positions = positions
+        self.rotary_base = rotary_base
+        # rotary_table's cos and sin, (T, d_k / 2) each, or None unrotated
+        self._table = rotary_table(tokens, self.key_size, rotary_base) if positions == "rotary" else None
         self.queries, self.keys, self.values = ([WeightRow(features) for _ in range(self.width)] for _ in range(3))
         self.outputs = [WeightRow(self.width) for _ in range(features)]
         self.nodes = [TokenNode() for _ in range(tokens * features)]
@@ -169,11 +185,32 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
     def _head(self, A: Matrix, i: int) -> Matrix:
         return _columns(A, i * self.key_size, self.key_size)
 
+    def _rotated(self, A: Matrix, inverse: bool = False) -> Matrix:
+        # (T, h * d_k), each head's features j and j + d_k / 2 of row t rotated by token t's angles,
+        # or back
+        assert self._table is not None
+        d_k, half = self.key_size, self.key_size // 2
+        out: Matrix = []
+        for row, cos, sin in zip(A, *self._table, strict=True):
+            new = list(row)
+            for i in range(self.heads):
+                for j in range(half):
+                    a, b, c, s = row[i * d_k + j], row[i * d_k + j + half], cos[j], sin[j]
+                    if inverse:
+                        new[i * d_k + j], new[i * d_k + j + half] = a * c + b * s, b * c - a * s
+                    else:
+                        new[i * d_k + j], new[i * d_k + j + half] = a * c - b * s, a * s + b * c
+            out.append(new)
+        return out
+
     # project, attend, combine: the forward pass's blocks
 
     def _project(self, X: Matrix) -> tuple[Matrix, Matrix, Matrix]:
-        # each over all heads, (T, h * d_k)
-        return _affine(X, self.queries), _affine(X, self.keys), _affine(X, self.values)
+        # each over all heads, (T, h * d_k); a rotary layer's Q and K then rotated
+        Q, K, V = _affine(X, self.queries), _affine(X, self.keys), _affine(X, self.values)
+        if self._table is not None:
+            return self._rotated(Q), self._rotated(K), V
+        return Q, K, V
 
     def _attend(self, Q: Matrix, K: Matrix, V: Matrix) -> tuple[Matrix, Matrix, Matrix | None]:
         # each head's weights, mix and mask: P (T, h * T), H (T, h * d_k) and M (T, h * T, or None
@@ -259,6 +296,9 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
             node.delta = next_layer.downstream_sum(own_index)
         dH = self._combine_backward(self._deltas())
         self._dQ, self._dK, self._dV = self._attend_backward(dH)
+        if self._table is not None:
+            # project's backward starts by rotating back: the gradients of the unrotated Q and K
+            self._dQ, self._dK = self._rotated(self._dQ, inverse=True), self._rotated(self._dK, inverse=True)
         self._dX = self._project_backward(self._dQ, self._dK, self._dV)
 
     def downstream_sum(self, own_index: int) -> float:
