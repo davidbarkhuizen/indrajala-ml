@@ -16,6 +16,7 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.array.array_parameters import AttentionProjections
 from indrajala_ml.model.specs.hidden_layers import Hidden
+from indrajala_ml.model.specs.rotary_table import rotary_table
 
 
 class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
@@ -31,8 +32,12 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     attention-dropout workplan, D3-D5) drops its weights in training: the forward ops draw the mask
     from rng, the network's crate Generator, in numpy's (N, h, T, T) order, so from generators in
     the same state it is AttentionArrayLayer's by bits, and the backward op takes it. In inference
-    and at dropout 0 nothing is drawn. Hidden only, ending a token block's body. The caches are packed as the crate's: Q, K, V, H (N * T, h * d_k) and P
-    (N * T, h * T), head i in columns i * T..
+    and at dropout 0 nothing is drawn. A rotary layer (the rotary-positions workplan, D4, D5) holds
+    rotary_table's cos and sin as crate arrays, built once, and passes them to the forward ops, which
+    rotate Q and K at the end of project, and to the backward op, which rotates dQ and dK back:
+    elementwise, so numpy's bits on the same Q and K. Hidden only, ending a token block's body. The
+    caches are packed as the crate's: Q, K (rotated), V, H (N * T, h * d_k) and P (N * T, h * T),
+    head i in columns i * T..
 
     The backward pass runs whole when the delta is computed (attention_downstream_batch), since the
     gradients need dQ, dK and dV and the layer before reads dX. A single example is the same ops on
@@ -50,9 +55,6 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         positions: str = "none",
         rotary_base: float = 10000.0,
     ) -> None:
-        # the rotary-positions workplan's stage 5; the builder refuses it before here
-        assert positions == "none", f"a rotary attention on the Rust backend: not yet; got {positions!r}"
-        del rotary_base
         assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
         self.causal = causal
         self.dropout = dropout
@@ -62,6 +64,14 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         self.training = False
         self.rng = pa.default_rng()
         self._M: pa.Array | None = None
+        assert positions in ("none", "rotary"), f'an attention\'s positions are "none" or "rotary"; got {positions!r}'
+        self.positions = positions
+        self.rotary_base = rotary_base
+        # the ops' cos and sin keywords: none for an unrotated layer
+        self._table: dict[str, pa.Array] = {}
+        if positions == "rotary":
+            cos, sin = rotary_table(tokens, self.key_size, rotary_base)
+            self._table = {"cos": pa.Array(cos), "sin": pa.Array(sin)}
 
     def set_rng(self, rng: pa.Generator) -> None:
         self.rng = rng
@@ -85,6 +95,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             dropout=self.dropout,
             training=self.training,
             rng=self.rng,
+            **self._table,
         )
         return self.a
 
@@ -97,6 +108,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             dropout=self.dropout,
             training=self.training,
             rng=self.rng,
+            **self._table,
         )
         return self.A
 
@@ -114,6 +126,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             heads=self.heads,
             mask=self._M,
             dropout=self.dropout,
+            **self._table,
         )
 
     def compute_hidden_delta(self, next_layer: Any) -> None:

@@ -71,7 +71,6 @@ from indrajala_ml.model.specs.layer_specs import (
     Position,
     TokenMean,
     expand_specs,
-    refuse_rotary_specs_until,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
@@ -242,8 +241,6 @@ def build_array_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    if backend_name != "numpy":
-        refuse_rotary_specs_until(specs, "5", f"on the {backend_name} backend")
     classes = LAYER_CLASSES[backend_name]
     token_classes = TOKEN_LAYER_CLASSES[backend_name]
 
