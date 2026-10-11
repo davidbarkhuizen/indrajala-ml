@@ -11,7 +11,10 @@ in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan
 [context-length-workplan.md](context-length-workplan.md),
 [ffn-activations-workplan.md](ffn-activations-workplan.md),
 [grouped-query-attention-workplan.md](grouped-query-attention-workplan.md),
-[cross-attention-workplan.md](cross-attention-workplan.md). The order
+[cross-attention-workplan.md](cross-attention-workplan.md),
+[addition-study-workplan.md](addition-study-workplan.md),
+[study-runs-workplan.md](study-runs-workplan.md),
+[arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -441,3 +444,32 @@ Still out of scope:
   as tier 1's pass count was.
 - Hosting results anywhere but the archive repository: no dashboards, no release assets.
 - Benchmarks in CI: GitHub's runners are shared and noisy, so no timing is ever taken there.
+
+## From the addition study (in progress)
+
+Recorded early, at the owner's request (2026-10-11), while the sweep (stage 5) runs; stage 6 adds
+the rest when the workplan retires. The figures are the sweep's (`scripts/addition_study.py
+report scripts/addition_sweep.json`), to be written into the study's docstring.
+
+- **The adders' threshold as a check for each new primitive.** The column transformers sit on a
+  sharp edge (at `n = 4`, d 4 fails at every candidate and shape, d 6 passes from 2 layers), and a
+  run near it takes a few epochs. Whether a change moves that edge is a cheap, quantitative check:
+  one harness config per question, no new study design. First uses:
+  - step 8's rotary positions, and no positions, against the learned `Position`;
+  - step 10's recipe (schedule, AdamW, clipping), including whether it smooths the non-monotone
+    ladders, where a size succeeds and the next one up doesn't (column-unordered, 1 layer, 2
+    heads at `n = 4`), which suggests the "too small" verdicts near the edge are partly the
+    optimiser's;
+  - steps 13 and 14 (FFN activations, grouped heads) at the sizes where each component matters
+    most.
+- **Milestone A's baseline** ([arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md),
+  H2). The saved models use a learned `Position` tied to their `T`, so they can't be run at
+  another length. Milestone A retrains the column transformers with rotary or no positions at the
+  sweep's threshold sizes, rates and budget: the sweep tells it what to train, not what to load.
+- **Probes of the passing adders.** Probing the smallest passing 2-layer networks against
+  near-misses one width below (d 4 at `n = 4`) could locate the carry lookahead: which layer
+  finds the deciding column below, and which head propagates the carry. This needs the accessor
+  for a layer's activations on a batch (the workplan's Excluded for missing infrastructure). The
+  probes don't need the sweep's exact files. When this is planned, it retrains the passing and
+  near-miss networks it needs (minutes for a few seeds), on the code of the day. Only the passing
+  models at each threshold and the width above are archived (the model archive, after the sweep).
