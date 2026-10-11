@@ -922,9 +922,7 @@ def test_format_2_round_trips_rotary_specs(specs: list[LayerSpec]):
     assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
 
 
-@pytest.mark.parametrize(
-    ("backend", "stage"), [("numpy", "3"), ("rust", "5"), ("python", "6")], ids=["numpy", "rust", "python"]
-)
+@pytest.mark.parametrize(("backend", "stage"), [("rust", "5"), ("python", "6")], ids=["rust", "python"])
 @pytest.mark.parametrize("specs", [ROTARY["a rotary decoder"], ROTARY["a patch model's"]], ids=["sequence", "patches"])
 def test_every_builder_refuses_rotary_attention_until_its_stage(specs: list[LayerSpec], backend: str, stage: str):
     with pytest.raises(NotImplementedError, match=re.escape(f"not yet (the rotary-positions workplan, stage {stage})")):

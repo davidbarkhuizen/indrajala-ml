@@ -47,7 +47,12 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         key_size: int | None = None,
         causal: bool = False,
         dropout: float = 0.0,
+        positions: str = "none",
+        rotary_base: float = 10000.0,
     ) -> None:
+        # the rotary-positions workplan's stage 5; the builder refuses it before here
+        assert positions == "none", f"a rotary attention on the Rust backend: not yet; got {positions!r}"
+        del rotary_base
         assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
         self.causal = causal
         self.dropout = dropout
