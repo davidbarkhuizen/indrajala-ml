@@ -100,7 +100,9 @@ def arm_specs(arm: str) -> list[LayerSpec]:
 
 
 def main(argv: list[str] | None = None) -> None:
-    patch_study.main(argv, __doc__, ARMS, arm_specs, len(SEEDS), EPOCHS, time_arm="attention-ffn")
+    patch_study.main(
+        argv, __doc__, ARMS, arm_specs, len(SEEDS), EPOCHS, time_arm="attention-ffn", study="patch-attention"
+    )
 
 
 if __name__ == "__main__":

@@ -33,12 +33,12 @@ study, not machines.
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import random
 import statistics
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -60,7 +60,8 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.studies import batch_size_scaling as bss
-from indrajala_ml.studies.common import mean_sd, table
+from indrajala_ml.studies.common import default_out, mean_sd, provenance, table, write_results
+from indrajala_ml.studies.common import read_results as read_result_entries
 from indrajala_ml.studies.patch_study import parameter_count
 from indrajala_ml.training.sequence_evaluate import SequenceEvaluation, sequence_evaluate
 
@@ -271,10 +272,10 @@ def best_rates(results: Results) -> dict[tuple[str, str], float]:
 
 
 def read_results(path: str) -> Results:
-    with open(path) as f:
-        return {
-            (entry["config"][0], entry["config"][1], float(entry["config"][2])): entry["runs"] for entry in json.load(f)
-        }
+    return {
+        (entry["config"][0], entry["config"][1], float(entry["config"][2])): entry["runs"]
+        for entry in read_result_entries(path)
+    }
 
 
 def main(argv: list[str] | None = None, description: str | None = None) -> None:
@@ -291,10 +292,13 @@ def main(argv: list[str] | None = None, description: str | None = None) -> None:
     parser.add_argument("--epochs", type=int, help=f"tune: default {TUNE_EPOCHS}; sweep: required")
     parser.add_argument("--workers", type=int, default=WORKERS)
     parser.add_argument("--limit", type=int, help="the first LIMIT windows of each split (a smoke run)")
-    parser.add_argument("--out", help="every run's raw result, as JSON")
+    parser.add_argument(
+        "--out", help="every run's raw result, as JSON (default: data/studies/<study>/<stage>-<time>.json)"
+    )
     args = parser.parse_args(argv)
 
     with machine_lock.study():
+        made_by = provenance(argv)
         seeds = list(range(args.seeds))
         if args.stage == "time":
             epochs = 1
@@ -324,6 +328,4 @@ def main(argv: list[str] | None = None, description: str | None = None) -> None:
             for (corpus, arm), rate in best_rates(results).items():
                 mean = statistics.mean(_final(results[(corpus, arm, rate)]))
                 print(f"best rate for {corpus} {arm}: {rate:g} ({bits(mean):.3f} bits per character)")
-        if args.out:
-            with open(args.out, "w") as f:
-                json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
+        write_results(Path(args.out) if args.out else default_out("sequence", args.stage), made_by, results)

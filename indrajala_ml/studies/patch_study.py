@@ -21,12 +21,12 @@ study, not machines.
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import random
 import statistics
 import sys
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -47,7 +47,7 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.studies import batch_size_scaling as bss
-from indrajala_ml.studies.common import load_mnist, mean_sd, table
+from indrajala_ml.studies.common import default_out, load_mnist, mean_sd, provenance, table, write_results
 from indrajala_ml.training.multiclass_evaluate import accuracy
 
 INPUT_SHAPE = (bss.SIDE, bss.SIDE, 1)
@@ -192,8 +192,9 @@ def main(
     seed_count: int,
     epochs: int,
     time_arm: str,
+    study: str,
 ) -> None:
-    """A study's command line: time, tune or sweep its arms."""
+    """A study's command line: time, tune or sweep its arms; study names its result files' directory."""
     parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("stage", choices=["time", "tune", "sweep"])
     parser.add_argument("--arm", default=time_arm, help="time: the arm to time")
@@ -207,10 +208,13 @@ def main(
     parser.add_argument("--seeds", type=int, help=f"tune and sweep: default {seed_count}")
     parser.add_argument("--epochs", type=int, help=f"tune: default {TUNE_EPOCHS}; sweep: default {epochs}")
     parser.add_argument("--limit", type=int, help="the first LIMIT rows of each dataset (a smoke run)")
-    parser.add_argument("--out", help="every run's raw result, as JSON")
+    parser.add_argument(
+        "--out", help="every run's raw result, as JSON (default: data/studies/<study>/<stage>-<time>.json)"
+    )
     args = parser.parse_args(argv)
 
     with machine_lock.study():
+        made_by = provenance(argv)
         context = {
             "train_path": bss.TRAIN_PATH,
             "test_path": bss.TEST_PATH,
@@ -227,6 +231,4 @@ def main(
             if args.rates is None or len(args.rates) != len(args.arms):
                 sys.exit("sweep needs --rates, one per arm, the rates tune chose")
             results = sweep(context, seeds, args.arms, args.rates)
-        if args.out:
-            with open(args.out, "w") as f:
-                json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
+        write_results(Path(args.out) if args.out else default_out(study, args.stage), made_by, results)

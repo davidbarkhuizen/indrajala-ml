@@ -191,3 +191,6 @@ data/attention/
 
 # the addition study's sweeps (scripts/addition_study.py): results and trained models
 data/addition/
+
+# the studies' result files, each with its provenance (indrajala_ml/studies/common.py, default_out)
+data/studies/

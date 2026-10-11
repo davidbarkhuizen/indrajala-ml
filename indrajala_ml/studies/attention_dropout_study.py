@@ -24,13 +24,18 @@ shows and the spread one doesn't is the text's shift from its start to its end, 
 
 The stages: `time` (one epoch of one cell, which sizes the grid) and `sweep` (every corpus, split
 and arm). OPENBLAS_NUM_THREADS=1 and --workers jobs at once, as the sequence study.
+
+The sweep's raw results (every run's per-epoch figures, a bare list from before result files had
+provenance) are on `jebel` at data/studies/attention-dropout/sweep-2026-10-10.json, sha256
+54f86f23da639049e2e325631cf87589fdf7aa81fcc8077bf5530de8c2a51291. Its contiguous controls are the
+sequence study's 2-layer runs, per seed (the rotary study's baseline; the study-runs workplan, D9).
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import statistics
+from pathlib import Path
 from typing import Any
 
 from indrajala_ml.data import text_data
@@ -47,7 +52,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Residual,
 )
 from indrajala_ml.studies import sequence_study as ss
-from indrajala_ml.studies.common import mean_sd, table
+from indrajala_ml.studies.common import default_out, mean_sd, provenance, table, write_results
 
 CORPORA = ["euclid-heath", "tinyshakespeare", "herodotus-rawlinson"]
 SPLITS: list[text_data.Split] = ["contiguous", "spread"]
@@ -168,10 +173,13 @@ def main(argv: list[str] | None = None, description: str | None = None) -> None:
     parser.add_argument("--epochs", type=int, default=10, help="sweep: the epochs per run")
     parser.add_argument("--workers", type=int, default=WORKERS)
     parser.add_argument("--limit", type=int, help="the first LIMIT windows of each split (a smoke run)")
-    parser.add_argument("--out", help="every run's raw result, as JSON")
+    parser.add_argument(
+        "--out", help="every run's raw result, as JSON (default: data/studies/<study>/<stage>-<time>.json)"
+    )
     args = parser.parse_args(argv)
 
     with machine_lock.study():
+        made_by = provenance(argv)
         if args.stage == "time":
             epochs = 1
             configs: list[Config] = [(args.corpus, args.split, args.arm)]
@@ -185,6 +193,4 @@ def main(argv: list[str] | None = None, description: str | None = None) -> None:
             )
 
         print(report(configs, results, epochs))
-        if args.out:
-            with open(args.out, "w") as f:
-                json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
+        write_results(Path(args.out) if args.out else default_out("attention-dropout", args.stage), made_by, results)
