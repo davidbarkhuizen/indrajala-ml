@@ -1,7 +1,7 @@
 # Workplan: studies and timing runs sharing `jebel`
 
 **Status: decisions D1-D9 settled (2026-10-11; the owner: "going with your recommendation on
-each decision point"). Stages 1 (this plan, #670), 2 (the lock) and 3 (the load refusal) done. Trimmed the same day at the owner's
+each decision point"). Stages 1 (this plan, #670), 2 (the lock), 3 (the load refusal) and 4 (result files) done. Trimmed the same day at the owner's
 request, for more focused benchmarking: D4 (b), D5, D6 and D7 deferred to
 next-steps, leaving the lock, the load refusal and the result files.**
 
@@ -142,10 +142,13 @@ while a study runs** until stage 2 is there: these stages merge to `main` any ti
    `--allow-load` passes and is recorded. As built: `--skip-profile` (tests, local diagnostics)
    skips the load check with the machine check, so the suite doesn't depend on the development
    machine's load; the preflight records `quiet` (the load, and the seconds waited or `allowed`).
-4. **Studies' result files (D8).** The default `--out` for every study, the provenance object,
+4. **Studies' result files (D8)** (done). The default `--out` for every study, the provenance object,
    `--tuned` accepting both forms, `data/studies/` gitignored, the attention-dropout file moved
    on `jebel` and its path and sha256 written into its docstring. Tests: the default path, the
-   object, the old list read back.
+   object, the old list read back. As built: the helpers are in `indrajala_ml/studies/common.py`
+   (`default_out`, `provenance`, `write_results`, `read_results`); provenance is taken when the
+   study starts and adds `dirty` (a tracked change against the commit); the patch studies name
+   theirs (`patch-attention`, `patch-geometry`, `multi-head-attention`).
 5. **Docs and retirement.** measurement.md's studies paragraph (the lock, result files);
    next-steps: the deferred D4 (b) with D5, D6 and D7, D5 (b) (resumable `run_parameter_sweep`)
    and D8 (b); retire this workplan.

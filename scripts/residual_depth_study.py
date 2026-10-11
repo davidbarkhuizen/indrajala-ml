@@ -67,11 +67,11 @@ from __future__ import annotations
 
 import argparse
 import copy
-import json
 import math
 import random
 import statistics
 import sys
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -84,7 +84,7 @@ from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec, Residual
 from indrajala_ml.model.specs.update_rules import Momentum
 from indrajala_ml.studies import batch_size_scaling as bss
-from indrajala_ml.studies.common import load_mnist, mean_sd, table
+from indrajala_ml.studies.common import default_out, load_mnist, mean_sd, provenance, table, write_results
 from indrajala_ml.training.multiclass_evaluate import accuracy
 
 WIDTH = 64
@@ -230,10 +230,13 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--seeds", type=int, default=len(SEEDS))
     parser.add_argument("--epochs", type=int, default=EPOCHS)
     parser.add_argument("--limit", type=int, help="the first LIMIT rows of each dataset (a smoke run)")
-    parser.add_argument("--out", help="every run's raw result, as JSON")
+    parser.add_argument(
+        "--out", help="every run's raw result, as JSON (default: data/studies/<study>/<stage>-<time>.json)"
+    )
     args = parser.parse_args(argv)
 
     with machine_lock.study():
+        made_by = provenance(argv)
         context = {
             "train_path": bss.TRAIN_PATH,
             "test_path": bss.TEST_PATH,
@@ -247,9 +250,7 @@ def main(argv: list[str] | None = None) -> None:
             if args.rate is None:
                 sys.exit("sweep needs --rate, the rate tune chose")
             results = sweep(context, seeds, args.rate, args.depths)
-        if args.out:
-            with open(args.out, "w") as f:
-                json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
+        write_results(Path(args.out) if args.out else default_out("residual-depth", args.stage), made_by, results)
 
 
 if __name__ == "__main__":

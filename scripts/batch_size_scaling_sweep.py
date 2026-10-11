@@ -22,15 +22,15 @@ it pickled through the pool.
 """
 
 import argparse
-import json
 import statistics
 import sys
+from pathlib import Path
 from typing import Any
 
 from indrajala_ml.measurement import machine_lock
 from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.studies import batch_size_scaling as bss
-from indrajala_ml.studies.common import load_mnist, mean_sd, table
+from indrajala_ml.studies.common import default_out, load_mnist, mean_sd, provenance, table, write_results
 
 BASELINE_RATES = {
     "dense": [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
@@ -173,7 +173,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--group-size", type=int, help="conv-bn: ghost groups of this many examples")
     parser.add_argument("--momenta", type=float, nargs="+", default=MOMENTA, help="baseline")
     parser.add_argument("--lr32", action="append", default=[], help="momentum=rate, once per momentum (scaling)")
-    parser.add_argument("--out", help="write every run's raw result here as JSON")
+    parser.add_argument(
+        "--out", help="write every run's raw result here as JSON (default: data/studies/<study>/<stage>-<time>.json)"
+    )
     parser.add_argument("--limit", type=int, help="use only the first LIMIT train and test rows (smoke runs)")
     parser.add_argument("--epochs", type=int, default=EPOCHS)
     parser.add_argument("--seeds", type=int, default=len(SEEDS))
@@ -183,6 +185,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--warmups", type=float, nargs="+", default=WARMUP_EPOCHS, help="warmup epochs (scaling)")
     args = parser.parse_args(argv)
     with machine_lock.study():
+        made_by = provenance(argv)
         if args.group_size is not None and args.architecture != "conv-bn":
             sys.exit("--group-size is for --architecture conv-bn only")
 
@@ -207,9 +210,7 @@ def main(argv: list[str] | None = None) -> None:
                 sys.exit(f"scaling needs batch size {bss.BASE_BATCH_SIZE} and warmup 0 for the batch-32 band")
             results = scaling(context, seeds, lr32, args.batch_sizes, args.warmups)
 
-        if args.out:
-            with open(args.out, "w") as f:
-                json.dump([{"config": list(config), "runs": runs} for config, runs in results.items()], f, indent=1)
+        write_results(Path(args.out) if args.out else default_out("batch-size-scaling", args.stage), made_by, results)
 
 
 if __name__ == "__main__":
