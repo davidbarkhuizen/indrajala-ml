@@ -197,7 +197,16 @@ def _token_layer(classes: TokenLayerClasses, spec: LayerSpec, shape: Shape) -> A
         return classes.layer_norm(*token_shape(shape), spec.epsilon)
     if isinstance(spec, Attention):
         tokens, features = token_shape(shape)
-        return classes.attention(tokens, features, spec.heads, spec.head_size(features), spec.causal, spec.dropout)
+        return classes.attention(
+            tokens,
+            features,
+            spec.heads,
+            spec.head_size(features),
+            spec.causal,
+            spec.dropout,
+            spec.positions,
+            spec.rotary_base,
+        )
     if isinstance(spec, Dropout):
         return classes.dropout(*token_shape(shape), spec.p)
     if isinstance(spec, Position | TokenMean):
@@ -233,7 +242,8 @@ def build_array_layers(
     """
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
-    refuse_rotary_specs_until(specs, "3" if backend_name == "numpy" else "5", f"on the {backend_name} backend")
+    if backend_name != "numpy":
+        refuse_rotary_specs_until(specs, "5", f"on the {backend_name} backend")
     classes = LAYER_CLASSES[backend_name]
     token_classes = TOKEN_LAYER_CLASSES[backend_name]
 

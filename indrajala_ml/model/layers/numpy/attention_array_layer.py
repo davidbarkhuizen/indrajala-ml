@@ -21,6 +21,14 @@ P~ = P * M / keep and H = P~ V. The backward pass takes dV = P~^T dH and dP = (d
 then the softmax's backward with the undropped P. In inference, and at dropout 0, nothing is
 drawn and the layer computes what it did before dropout.
 
+A rotary layer (the rotary-positions workplan, D3, D4) ends project by rotating each head's Q and K,
+after their biases, by their token's position t: feature j < d_k / 2 paired with j + d_k / 2,
+q'_j = q_j c - q_{j+d_k/2} s and q'_{j+d_k/2} = q_j s + q_{j+d_k/2} c, with c and s from
+rotary_table, read on the (N, T, h, d_k) view of the rows. Attend reads the rotated Q and K; the
+backward pass rotates dQ and dK back, dq_j = dq'_j c + dq'_{j+d_k/2} s and dq_{j+d_k/2} =
+dq'_{j+d_k/2} c - dq'_j s, before project's products and the gradients. V isn't rotated. An
+unrotated layer computes what it did before the rotation.
+
 The softmax's exp is this module's exp, which tests replace with another implementation's (it
 isn't correctly rounded), as batch norm's tests replace sigmoid.
 """
@@ -35,6 +43,7 @@ from indrajala_ml.model.layers.array.array_parameters import AttentionProjection
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
+from indrajala_ml.model.specs.rotary_table import rotary_table
 
 exp = np.exp
 
@@ -50,7 +59,8 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     features (d_k, d / h when None): Q = X Wq^T + bq, K and V likewise, each head's
     P[i] = softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and H[i] = P[i] V[i], out = H Wo^T + bo with H
     the heads side by side; a causal one masks S_ij for j > i, and one with dropout drops P's
-    entries in training. Its parameters, also its draw order,
+    entries in training, and a rotary one rotates Q's and K's heads by their tokens' positions.
+    Its parameters, also its draw order,
     are Wq, bq, Wk, bk, Wv, bv, Wo, bo: Wq, Wk, Wv (h * d_k, d) and Wo (d, h * d_k), heads as row
     (Wo: column) blocks, each drawn as a dense layer's W then b, the weights decayed and the biases
     not. Hidden only, ending a token block's body.
@@ -67,6 +77,8 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         key_size: int | None = None,
         causal: bool = False,
         dropout: float = 0.0,
+        positions: str = "none",
+        rotary_base: float = 10000.0,
     ) -> None:
         self._set_up(tokens, features, heads, key_size)
         # computed once and divided by, never multiplied by its reciprocal
@@ -82,6 +94,15 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         self.training = False
         self.rng = np.random.default_rng()
         self._M: FloatArray | None = None
+        assert positions in ("none", "rotary"), f'an attention\'s positions are "none" or "rotary"; got {positions!r}'
+        self.positions = positions
+        self.rotary_base = rotary_base
+        self._rotary = positions == "rotary"
+        if self._rotary:
+            cos, sin = rotary_table(tokens, self.key_size, rotary_base)
+            # (T, 1, d_k / 2): each token's row, the same for every example and head
+            self._cos = np.array(cos)[:, np.newaxis, :]
+            self._sin = np.array(sin)[:, np.newaxis, :]
 
     def set_rng(self, rng: np.random.Generator) -> None:
         self.rng = rng
@@ -104,11 +125,24 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         # _heads' inverse: (N, h, T, d_k) as (N * T, h * d_k) rows (a copy when h > 1)
         return heads.transpose(0, 2, 1, 3).reshape(-1, self.width)
 
+    def _rotated(self, rows: FloatArray, inverse: bool = False) -> FloatArray:
+        # (N * T, h * d_k) rows, each head's features j and j + d_k / 2 rotated by the row's token's
+        # angles, or back
+        x = rows.reshape(-1, self.tokens, self.heads, self.key_size)
+        half = self.key_size // 2
+        a, b, c, s = x[..., :half], x[..., half:], self._cos, self._sin
+        pairs = (a * c + b * s, b * c - a * s) if inverse else (a * c - b * s, a * s + b * c)
+        return np.concatenate(pairs, axis=-1).reshape(rows.shape)
+
     # project, attend, combine: the forward pass's blocks
 
     def _project(self, R: FloatArray) -> tuple[FloatArray, FloatArray, FloatArray]:
-        # each the product, then the bias, over all heads: (N * T, h * d_k) each
-        return R @ self.Wq.T + self.bq, R @ self.Wk.T + self.bk, R @ self.Wv.T + self.bv
+        # each the product, then the bias, over all heads: (N * T, h * d_k) each; a rotary layer's
+        # Q and K then rotated
+        Q, K, V = R @ self.Wq.T + self.bq, R @ self.Wk.T + self.bk, R @ self.Wv.T + self.bv
+        if self._rotary:
+            return self._rotated(Q), self._rotated(K), V
+        return Q, K, V
 
     def _attend(self, Q: FloatArray, K: FloatArray, V: FloatArray) -> tuple[FloatArray, FloatArray]:
         # per example and head, on (N, h, T, d_k) views: the weights P (N, h, T, T) and H
@@ -167,6 +201,9 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         dH = self._combine_backward(self._rows(downstream, self.features))
         dQ, dK, dV = self._attend_backward(self._heads(dH))
         self._dQ, self._dK, self._dV = self._side_by_side(dQ), self._side_by_side(dK), self._side_by_side(dV)
+        if self._rotary:
+            # project's backward starts by rotating back: the gradients of the unrotated Q and K
+            self._dQ, self._dK = self._rotated(self._dQ, inverse=True), self._rotated(self._dK, inverse=True)
         self._dX = self._project_backward(self._dQ, self._dK, self._dV).reshape(downstream.shape)
 
     def downstream_batch(self) -> FloatArray:
