@@ -19,6 +19,7 @@ from indrajala_ml.model.layers.numpy.dropout_array_layer import DropoutArrayLaye
 from indrajala_ml.model.layers.numpy.layer_norm_array_layer import LayerNormArrayLayer
 from indrajala_ml.model.layers.numpy.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.layers.numpy.max_pool_array_layer import MaxPoolArrayLayer
+from indrajala_ml.model.layers.numpy.recurrent_array_layer import StateInputArrayLayer
 from indrajala_ml.model.layers.numpy.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.layers.numpy.residual_array_layer import AddArrayLayer, AffineArrayLayer, ForkArrayLayer
 from indrajala_ml.model.layers.numpy.softmax_array_layer import SoftmaxArrayLayer
@@ -69,11 +70,16 @@ from indrajala_ml.model.specs.layer_specs import (
     LayerSpec,
     Patches,
     Position,
+    StateInput,
     TokenMean,
     expand_specs,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
-from indrajala_ml.model.specs.spec_validation import refuse_window_layers, validate_layer_specs
+from indrajala_ml.model.specs.spec_validation import (
+    refuse_window_layers,
+    validate_layer_specs,
+    validate_window_specs,
+)
 
 LayerClass = Callable[..., ArrayNetworkLayer[Any]]
 FrontEndLayerClass = Callable[..., ArrayFrontEndLayer[Any]]
@@ -142,7 +148,8 @@ class TokenLayerClasses:
     and attention workplan): the token-wise dense layer (ReLU or affine), patches, position, layer
     norm (over tokens or a flat layer), attention and the token mean; and a sequence model's (the
     sequence task workplan): the embedding and the token-wise softmax output layer; and the
-    token-wise dropout (the attention-dropout workplan).
+    token-wise dropout (the attention-dropout workplan); and a window's StateInput (the
+    window-recurrent adder workplan, stage 3), None where it isn't built yet.
     """
 
     token_dense: LayerClass
@@ -154,6 +161,7 @@ class TokenLayerClasses:
     embedding: LayerClass
     token_output: LayerClass
     dropout: LayerClass
+    state_input: LayerClass | None
 
 
 TOKEN_LAYER_CLASSES = {
@@ -167,6 +175,7 @@ TOKEN_LAYER_CLASSES = {
         embedding=EmbeddingArrayLayer,
         token_output=TokenSoftmaxArrayLayer,
         dropout=TokenDropoutArrayLayer,
+        state_input=StateInputArrayLayer,
     ),
     "rust": TokenLayerClasses(
         token_dense=TokenDenseRustArrayLayer,
@@ -178,12 +187,16 @@ TOKEN_LAYER_CLASSES = {
         embedding=EmbeddingRustArrayLayer,
         token_output=TokenSoftmaxRustArrayLayer,
         dropout=TokenDropoutRustArrayLayer,
+        state_input=None,
     ),
 }
 
 
-def _token_layer(classes: TokenLayerClasses, spec: LayerSpec, shape: Shape) -> ArrayNetworkLayer[Any] | None:
-    # spec's layer if it is one of a patch model's, a sequence model's or a layer norm, else None
+def _token_layer(
+    classes: TokenLayerClasses, spec: LayerSpec, shape: Shape, state_size: int | None
+) -> ArrayNetworkLayer[Any] | None:
+    # spec's layer if it is one of a patch model's, a sequence model's, a window's or a layer norm,
+    # else None
     if isinstance(spec, Dense) and len(shape) == 2 and spec.output:
         return classes.token_output(spec.size, shape[1], shape[0])
     if isinstance(spec, Dense) and len(shape) == 2:
@@ -208,6 +221,9 @@ def _token_layer(classes: TokenLayerClasses, spec: LayerSpec, shape: Shape) -> A
         )
     if isinstance(spec, Dropout):
         return classes.dropout(*token_shape(shape), spec.p)
+    if isinstance(spec, StateInput):
+        assert classes.state_input is not None and state_size is not None
+        return classes.state_input(*token_shape(shape), state_size)
     if isinstance(spec, Position | TokenMean):
         tokens, features = token_shape(shape)
         layer_class = {Position: classes.position, TokenMean: classes.token_mean}
@@ -232,18 +248,24 @@ def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> Ar
 
 
 def build_array_layers(
-    specs: Sequence[LayerSpec], input_shape: InputShape, backend_name: str
+    specs: Sequence[LayerSpec], input_shape: InputShape, backend_name: str, state_size: int | None = None
 ) -> list[ArrayNetworkLayer[Any]]:
     """
     specs, validated (validate_layer_specs), as backend_name's layers over input_shape: one per
     expanded spec (expand_specs), each residual block's fork wired to its add and to its body's
-    first layer. A window's StateInput isn't built yet (refuse_window_layers).
+    first layer. With a state_size, specs are a window-recurrent network's window
+    (validate_window_specs), its StateInputs that wide; Rust doesn't build them yet
+    (refuse_window_layers).
     """
-    refuse_window_layers(specs, backend_name)
-    validate_layer_specs(specs)
+    token_classes = TOKEN_LAYER_CLASSES[backend_name]
+    if token_classes.state_input is None:
+        refuse_window_layers(specs, backend_name)
+    if state_size is None:
+        validate_layer_specs(specs)
+    else:
+        validate_window_specs(specs, input_shape)
     shapes = spec_shapes(specs, input_shape)
     classes = LAYER_CLASSES[backend_name]
-    token_classes = TOKEN_LAYER_CLASSES[backend_name]
 
     layers: list[ArrayNetworkLayer[Any]] = []
     # each open block's fork, and the fork whose body's first layer comes next
@@ -261,7 +283,7 @@ def build_array_layers(
             fork.add = classes.add(fork)
             layers.append(fork.add)
             continue
-        token_layer = _token_layer(token_classes, spec, shape.input_shape)
+        token_layer = _token_layer(token_classes, spec, shape.input_shape, state_size)
         if token_layer is not None:
             layers.append(token_layer)
         elif isinstance(spec, Dense):

@@ -1,7 +1,8 @@
 """
 A window-recurrent network's specs (the window-recurrent adder workplan, stage 2): a window, a
 sequence model's specs holding StateInputs (W18), and its recurrence; their validation, the shape
-walk, format 2's entries, and every builder's refusal until its stage.
+walk, format 2's entries, and every builder's refusal until its stage (numpy's builds a window
+since stage 3).
 """
 
 import json
@@ -12,6 +13,7 @@ from typing import Any
 import pytest
 
 from indrajala_ml.model.layers.array.array_layer_builder import build_array_layers
+from indrajala_ml.model.layers.numpy.recurrent_array_layer import StateInputArrayLayer
 from indrajala_ml.model.layers.python.python_layer_builder import build_python_layers
 from indrajala_ml.model.layers.python.state_layer import StateLayer
 from indrajala_ml.model.persistence.checkpoint import OptimizerState
@@ -178,14 +180,25 @@ def test_an_unknown_cell_or_pooling_is_refused(part: str):
         recurrence_from_json(entry)
 
 
-@pytest.mark.parametrize(("implementation", "stage"), [("numpy", 3), ("rust", 5), ("python", 6)])
-def test_every_builder_refuses_a_window_not_yet(implementation: str, stage: int):
+@pytest.mark.parametrize(("implementation", "stage"), [("rust", 5), ("python", 6)])
+def test_a_builder_refuses_a_window_not_yet(implementation: str, stage: int):
     specs = WINDOWS["the state before every block"]
     with pytest.raises(AssertionError, match=f"isn't built in {implementation} yet .* stage {stage}"):
         if implementation == "python":
             build_python_layers(specs, WINDOW, StateLayer(3, [(0.0, 26.0)] * 3))
         else:
-            build_array_layers(specs, WINDOW, implementation)
+            build_array_layers(specs, WINDOW, implementation, state_size=4)
+
+
+def test_the_numpy_builder_builds_a_window_given_its_state_size():
+    specs = WINDOWS["the state before every block"]
+    layers = build_array_layers(specs, WINDOW, "numpy", state_size=4)
+    state_inputs = [layer for layer in layers if isinstance(layer, StateInputArrayLayer)]
+    assert [layer.P.shape for layer in state_inputs] == [(16, 4), (16, 4)]
+    with pytest.raises(AssertionError, match="validate_window_recurrent"):
+        build_array_layers(specs, WINDOW, "numpy")
+    with pytest.raises(AssertionError, match="at least one StateInput"):
+        build_array_layers([IDS, ATTENTION, DIGITS], WINDOW, "numpy", state_size=4)
 
 
 def _window_file(**changes: Any) -> dict[str, Any]:

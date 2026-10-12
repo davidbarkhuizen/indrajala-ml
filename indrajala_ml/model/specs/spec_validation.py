@@ -283,13 +283,14 @@ def _check_output(output: LayerSpec, token_wise: bool = False) -> None:
 
 
 # the window-recurrent adder workplan's stage that builds a window's layers, per implementation
-_WINDOW_STAGES = {"numpy": 3, "rust": 5, "python": 6}
+# that doesn't yet (numpy's at stage 3)
+_WINDOW_STAGES = {"rust": 5, "python": 6}
 
 
 def refuse_window_layers(specs: Sequence[LayerSpec], implementation: str) -> None:
     """
     A builder's refusal of a window's StateInput, which implementation doesn't build yet: the
-    window-recurrent adder workplan builds it at its stage 3 (numpy), 5 (Rust) and 6 (pure Python).
+    window-recurrent adder workplan builds it at its stage 5 (Rust) and 6 (pure Python).
     """
     state_input = next((spec for spec in expand_specs(specs) if isinstance(spec, StateInput)), None)
     assert state_input is None, (
@@ -303,12 +304,28 @@ def validate_window_recurrent(
 ) -> None:
     """
     Rejects a window-recurrent network (the window-recurrent adder workplan) that isn't one: a
-    window, specs over input_shape, that isn't a sequence model reading its k columns' token ids
-    through an Embedding and ending in a token-wise output layer, its sum digits (W9, W17); a window
-    without a StateInput, by which the state enters it (W1b-ii, W18); and a recurrence without a
-    state, with fewer than two codes, a negative commitment or an update bias that isn't finite.
-    Otherwise the window is checked as validate_layer_specs checks a sequence model, StateInputs
-    allowed, then by the shape walk.
+    window that validate_window_specs rejects, and a recurrence without a state, with fewer than
+    two codes, a negative commitment or an update bias that isn't finite.
+    """
+    validate_window_specs(specs, input_shape)
+    assert recurrence.state_size >= 1, f"a state has at least one feature; got {recurrence!r}"
+    assert recurrence.codes.count >= 2, (
+        f"a state of one code carries nothing: two codes at least (W4-i); got {recurrence!r}"
+    )
+    commitment = recurrence.codes.commitment
+    assert math.isfinite(commitment) and commitment >= 0.0, (
+        f"a commitment weight is finite and not negative (W14); got {recurrence!r}"
+    )
+    assert math.isfinite(recurrence.cell.update_bias), f"an update bias is finite (W13); got {recurrence!r}"
+
+
+def validate_window_specs(specs: Sequence[LayerSpec], input_shape: InputShape) -> None:
+    """
+    Rejects a window, specs over input_shape, that isn't a sequence model reading its k columns'
+    token ids through an Embedding and ending in a token-wise output layer, its sum digits (W9,
+    W17), or that has no StateInput, by which the state enters it (W1b-ii, W18). Otherwise the
+    window is checked as validate_layer_specs checks a sequence model, StateInputs allowed, then by
+    the shape walk. What a builder of a window checks (validate_window_recurrent checks the rest).
     """
     assert len(input_shape) == 1 and input_shape[0] >= 1, (
         f"a window's input is its k columns' token ids, k at least 1; got the input shape {input_shape}"
@@ -326,13 +343,4 @@ def validate_window_recurrent(
         "the state enters a window through at least one StateInput, right before a residual block (the "
         f"window-recurrent adder workplan, W1b-ii, W18); got {list(specs)!r}"
     )
-    assert recurrence.state_size >= 1, f"a state has at least one feature; got {recurrence!r}"
-    assert recurrence.codes.count >= 2, (
-        f"a state of one code carries nothing: two codes at least (W4-i); got {recurrence!r}"
-    )
-    commitment = recurrence.codes.commitment
-    assert math.isfinite(commitment) and commitment >= 0.0, (
-        f"a commitment weight is finite and not negative (W14); got {recurrence!r}"
-    )
-    assert math.isfinite(recurrence.cell.update_bias), f"an update bias is finite (W13); got {recurrence!r}"
     spec_shapes(specs, input_shape)

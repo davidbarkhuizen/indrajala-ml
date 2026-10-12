@@ -1,7 +1,8 @@
 # Workplan: a window-recurrent adder (milestone A, revised)
 
-**Status: decisions W1-W10 settled by the owner (2026-10-12), in dialogue; W11-W18 settled under
-the owner's standing delegation. Stage 1 (this plan) merged (#685); stage 2 (specs) done. It replaces
+**Status: decisions W1-W10 settled by the owner (2026-10-12), in dialogue; W11-W20 settled under
+the owner's standing delegation. Stage 1 (this plan) merged (#685); stage 2 (specs) merged (#686);
+stage 3 (numpy layers) done. It replaces
 `docs/length-generalisation-workplan.md`, which the owner terminated before its existence study
 (next-steps, From length generalisation).**
 
@@ -200,6 +201,25 @@ Settled under the owner's standing delegation:
     window's specs stay a plain sequence model's. Cons: the placement is hidden in the network's
     code; another placement is a new field value and new code; `P` lives outside the layers'
     weights and optimizer state.
+- **W19. The pooling's form. Settled: (a)** (stage 3).
+  - (a) *Chosen.* `s_t = q · x_t`, `p = softmax(s)`, `u = Σ_t p_t x_t`, over the tokens the output
+    layer reads; `q` starts at zero, so the pooling starts as the mean, and draws nothing. Pros: no
+    parameter without a function: a key projection only reparametrises `q` (`q · (W_k x + b_k)`,
+    whose `b_k` term cancels in the softmax), and a value projection is absorbed by the GRU's `W`.
+    Cons: no `1 / sqrt(d)` scale, harmless with a learned `q`; one query reads one mixture.
+  - (b) A full attention head (`q`, `W_k`, `b_k`, `W_v`, `b_v`). Pros: the familiar form. Cons: the
+    same functions with more parameters, and more code in three implementations and the crate.
+- **W20. Backpropagation through the windows (W5's how). Settled: (a)** (stage 3, used at stage 4).
+  - (a) *Chosen.* Recompute: the forward pass keeps only each window's state and generator state;
+    the backward pass runs from the last window, re-running each window's forward pass (its
+    generator restored, so its dropout masks repeat) before its backward pass. Pros: every
+    existing layer runs unchanged in all three implementations, each keeping one pass's values;
+    memory of one window's activations. Cons: a training step runs each window forward twice.
+  - (b) A copy of the window's layers per window, sharing parameters. Pros: no recompute. Cons:
+    parameters shared across layer objects (the optimizer, snapshots, Rust's rebinding), and the
+    copies' count changes with the curriculum's window count.
+  - (c) Layers that hand back their saved values. Cons: every layer rewritten in three
+    implementations.
 
 ## Stages
 
@@ -212,10 +232,13 @@ Settled under the owner's standing delegation:
    `WindowRecurrence(state_size, Codes(count, commitment), GRU(update_bias), AttentionPooling())`
    (`model/specs/window_recurrence.py`), checked by `validate_window_recurrent`; format 2 adds
    `"recurrence"` to a "window_recurrent" file; the builders and `load_network` refuse it.
-3. **numpy, the new layers**: `tanh` (W15), the GRU cell, the attention pooling, the discretiser
-   with its straight-through gradient and losses, the per-block state projection; each with a
-   gradient check (the discretiser's against its straight-through definition). Tier 0: no timed
-   path changes.
+3. **numpy, the new layers**: *Done.* `tanh` (W15), the GRU cell, the attention pooling, the
+   discretiser with its straight-through gradient and losses, the per-block state projection; each
+   with a gradient check (the discretiser's against its straight-through definition). Tier 0: no
+   timed path changes. Built as `model/layers/numpy/recurrent_array_layer.py`: the
+   `StateInputArrayLayer`, which the numpy builder builds given a window's `state_size`, and the
+   network's own parts (`AttentionPoolingArrayLayer`, `GRUArrayLayer`, `CodesArrayLayer`), each
+   with `forward_batch`, `backward_batch` and `draw`, keeping one pass's values (W20).
 4. **numpy, the network**: windows with random alignment, the state through the windows, the
    final window, backpropagation through all windows, `learn_batch`, save and load; a gradient
    check through two and three windows; with the state's projections at zero and one window, the
