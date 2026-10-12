@@ -1,7 +1,7 @@
 # Workplan: a window-recurrent adder (milestone A, revised)
 
-**Status: decisions W1-W10 settled by the owner (2026-10-12), in dialogue; W11-W17 settled under
-the owner's standing delegation. Stage 1 (this plan). It replaces
+**Status: decisions W1-W10 settled by the owner (2026-10-12), in dialogue; W11-W18 settled under
+the owner's standing delegation. Stage 1 (this plan) merged (#685); stage 2 (specs) done. It replaces
 `docs/length-generalisation-workplan.md`, which the owner terminated before its existence study
 (next-steps, From length generalisation).**
 
@@ -189,14 +189,29 @@ Settled under the owner's standing delegation:
 - **W17. The catalogue at long lengths. Settled: the terminated plan's D8**: sampled, with the
   carry strata (M3 every distance `L` from 1 to `n`, a fixed count each; M5 sampled past `n = 6`;
   B3 at the training lengths only), and test lengths 8, 10, 12, 16, 24, 32, 48, 64.
+- **W18. Where the state enters, as data. Settled: (a)** (stage 2).
+  - (a) *Chosen.* A layer spec, `StateInput`, standing among the window's tokens right before a
+    residual block, its weights `[P]`, `(d, s)`. W1b-ii's (c) is one before each block that reads
+    the state; W11's window has one before each of its 3 attention blocks, the `P_l` of The
+    network. Pros: where the state enters is explicit, validated, and saved as a layer like any
+    other, with no wiring special to the network; W1b-ii's (a) is the same spec, once. Cons: a spec
+    kind only a window may hold, so the token part's validation takes a window flag.
+  - (b) A field of the recurrence ("every block"), the network inserting the projections. Pros: the
+    window's specs stay a plain sequence model's. Cons: the placement is hidden in the network's
+    code; another placement is a new field value and new code; `P` lives outside the layers'
+    weights and optimizer state.
 
 ## Stages
 
 1. **This workplan**, with the length-generalisation workplan terminated (next-steps), the parent
    plan revised and the roadmap's exclusion of recurrent networks removed. Docs only.
-2. **Specs.** A window-recurrent network's spec: the window's token specs (as today), `k`, the
-   state width, the cell, the pooling, `m` and the code losses' β; validation; format 2's entry
-   (a shape "window_recurrent"); every builder refuses it "not yet" until its stage. Tier 0.
+2. **Specs.** *Done.* A window-recurrent network's spec: the window's token specs (as today), `k`,
+   the state width, the cell, the pooling, `m` and the code losses' β; validation; format 2's
+   entry (a shape "window_recurrent"); every builder refuses it "not yet" until its stage. Tier 0.
+   Built as: the window's specs with `StateInput`s (W18), over the input `(k,)`, beside a
+   `WindowRecurrence(state_size, Codes(count, commitment), GRU(update_bias), AttentionPooling())`
+   (`model/specs/window_recurrence.py`), checked by `validate_window_recurrent`; format 2 adds
+   `"recurrence"` to a "window_recurrent" file; the builders and `load_network` refuse it.
 3. **numpy, the new layers**: `tanh` (W15), the GRU cell, the attention pooling, the discretiser
    with its straight-through gradient and losses, the per-block state projection; each with a
    gradient check (the discretiser's against its straight-through definition). Tier 0: no timed

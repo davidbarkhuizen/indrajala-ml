@@ -29,6 +29,7 @@ from indrajala_ml.model.networks.sequential_array_network import SequentialArray
 from indrajala_ml.model.persistence.format2 import (
     ENSEMBLE,
     PYTHON,
+    WINDOW_RECURRENT,
     NetworkFile,
     ensemble_classifiers,
     is_format2,
@@ -70,6 +71,11 @@ def load_network(path: str) -> Any:
 
 
 def _sequential(file: NetworkFile) -> Any:
+    if file.shape == WINDOW_RECURRENT:
+        raise ValueError(
+            "a window-recurrent network isn't built yet (the window-recurrent adder workplan: numpy at stage 4, "
+            "Rust at stage 5, pure Python at stage 6)"
+        )
     network: Any
     if file.implementation == PYTHON:
         cls = _PYTHON_SHAPES[file.shape]

@@ -22,6 +22,7 @@ from indrajala_ml.model.specs.layer_specs import (
     LayerSpec,
     Patches,
     Position,
+    StateInput,
     TokenMean,
     expand_specs,
 )
@@ -75,7 +76,8 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
     input value, an id (the sequence task workplan, D5). A Dense over tokens acts on each (the
     layer-norm and attention workplan, D4), a token-wise output layer included (the sequence task
     workplan, D6), and a Position, a LayerNorm, an Attention and a Dropout keep their input's shape (a
-    LayerNorm after a conv front end normalizes the flat image as one token). The specs' own
+    LayerNorm after a conv front end normalizes the flat image as one token), as does a StateInput,
+    which reads tokens (the window-recurrent adder workplan, W18). The specs' own
     arguments are checked by the layers built from them, not here.
     """
     shapes: list[SpecShape] = []
@@ -122,6 +124,9 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
             )
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, Position | LayerNorm | Dropout):
+            shapes.append(SpecShape(shape, shape))
+        elif isinstance(spec, StateInput):
+            assert len(shape) == 2, f"a StateInput adds the state to each token, so it reads tokens; got {shape}"
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, TokenMean):
             assert len(shape) == 2, f"a TokenMean reads tokens; got {shape}"

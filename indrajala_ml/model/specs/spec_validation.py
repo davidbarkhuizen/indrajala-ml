@@ -1,10 +1,13 @@
 """
 validate_layer_specs: which lists of layer specs (layer_specs.py) every implementation builds. It
 accepts only the combinations every builder maps, so every accepted list is parity-testable.
+validate_window_recurrent: which windows and recurrences (window_recurrence.py) make a
+window-recurrent network.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
@@ -14,17 +17,21 @@ from indrajala_ml.model.specs.layer_specs import (
     BatchNorm,
     Dense,
     Dropout,
+    Embedding,
     LayerNorm,
     LayerSpec,
     Patches,
     Position,
     Residual,
+    StateInput,
     TokenMean,
     TokenSpec,
     TokenStart,
     expand_specs,
     token_wise_output,
 )
+from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
+from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
 
 
 def _check_batch_norm(spec: BatchNorm, before: LayerSpec | None) -> None:
@@ -107,7 +114,7 @@ def _check_dense_layers(dense: Sequence[LayerSpec], output: LayerSpec, in_body: 
         )
 
 
-def _check_token_residual(spec: Residual, in_body: bool) -> None:
+def _check_token_residual(spec: Residual, in_body: bool, window: bool) -> None:
     assert not in_body, f"a residual block's body holds no residual block (D6); got {spec!r}"
     assert spec.body, f"a residual block's body needs at least one layer; got {spec!r}"
     *layers, last = spec.body
@@ -125,12 +132,13 @@ def _check_token_residual(spec: Residual, in_body: bool) -> None:
         _check_hidden_dense(last)
     elif isinstance(last, Attention):
         _check_attention(last)
-    _check_token_layers(layers, in_body=True)
+    _check_token_layers(layers, in_body=True, window=window)
 
 
-def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool) -> None:
+def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool, window: bool) -> None:
     # a token part's layers, between Patches and TokenMean, or a token block's body before its last
-    # layer (the layer-norm and attention workplan, D1, D4, D7)
+    # layer (the layer-norm and attention workplan, D1, D4, D7); a window's may hold StateInputs
+    # (the window-recurrent adder workplan, W18)
     batch_norm = next((spec for spec in expand_specs(tokens) if isinstance(spec, BatchNorm)), None)
     assert batch_norm is None, f"a BatchNorm doesn't stand among the tokens, a LayerNorm does (D4); got {batch_norm!r}"
     blocks = 0
@@ -147,8 +155,17 @@ def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool) -> None:
             )
         elif isinstance(spec, LayerNorm):
             _check_layer_norm(spec)
+        elif isinstance(spec, StateInput):
+            assert window, (
+                "a StateInput is a window-recurrent network's, among its window's tokens (the window-recurrent adder "
+                f"workplan, W18): check it with validate_window_recurrent; got {list(tokens)!r}"
+            )
+            assert not in_body and i + 1 < len(tokens) and isinstance(tokens[i + 1], Residual), (
+                "a StateInput stands among a window's tokens right before a residual block, which reads the state "
+                f"(the window-recurrent adder workplan, W1b-ii, W18); got {list(tokens)!r}"
+            )
         elif isinstance(spec, Residual):
-            _check_token_residual(spec, in_body)
+            _check_token_residual(spec, in_body, window)
             blocks += 1
         else:
             assert isinstance(spec, Dense), (
@@ -196,19 +213,24 @@ def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:
     layer may. In place of a front end, a patch model has a token part (_check_token_layers), from
     Patches or an Embedding, the first layer, to TokenMean, or to the output layer, applied to each
     token, which is then softmax (the sequence task workplan, D6). Sizes are checked by spec_shapes.
+    A StateInput is refused: it is a window's (validate_window_recurrent).
     """
+    _validate_layer_specs(specs, window=False)
+
+
+def _validate_layer_specs(specs: Sequence[LayerSpec], window: bool) -> None:
     assert specs, "a network needs at least one layer"
     *hidden, output = specs
 
     if hidden and isinstance(hidden[0], TokenStart):
         _check_token_start(hidden[0])
         if token_wise_output(specs):
-            _check_token_layers(hidden[1:], in_body=False)
+            _check_token_layers(hidden[1:], in_body=False, window=window)
             _check_output(output, token_wise=True)
             return
         mean = next(i for i, spec in enumerate(hidden) if isinstance(spec, TokenMean))
         tokens, dense = hidden[1:mean], hidden[mean + 1 :]
-        _check_token_layers(tokens, in_body=False)
+        _check_token_layers(tokens, in_body=False, window=window)
         _check_no_tokens([*dense, output], "after TokenMean")
         assert not any(isinstance(spec, ConvSpec | PoolSpec) for spec in dense), (
             f"a patch model has no conv or pool layer (D3); got {list(specs)!r}"
@@ -258,3 +280,59 @@ def _check_output(output: LayerSpec, token_wise: bool = False) -> None:
         f"a softmax output layer's delta is the cross-entropy loss's; got {output!r}"
     )
     assert not output.bias, f"bias=True is a residual block's affine layer only (D4); got {output!r}"
+
+
+# the window-recurrent adder workplan's stage that builds a window's layers, per implementation
+_WINDOW_STAGES = {"numpy": 3, "rust": 5, "python": 6}
+
+
+def refuse_window_layers(specs: Sequence[LayerSpec], implementation: str) -> None:
+    """
+    A builder's refusal of a window's StateInput, which implementation doesn't build yet: the
+    window-recurrent adder workplan builds it at its stage 3 (numpy), 5 (Rust) and 6 (pure Python).
+    """
+    state_input = next((spec for spec in expand_specs(specs) if isinstance(spec, StateInput)), None)
+    assert state_input is None, (
+        f"a window's StateInput isn't built in {implementation} yet (the window-recurrent adder workplan, stage "
+        f"{_WINDOW_STAGES[implementation]}); got {list(specs)!r}"
+    )
+
+
+def validate_window_recurrent(
+    specs: Sequence[LayerSpec], recurrence: WindowRecurrence, input_shape: InputShape
+) -> None:
+    """
+    Rejects a window-recurrent network (the window-recurrent adder workplan) that isn't one: a
+    window, specs over input_shape, that isn't a sequence model reading its k columns' token ids
+    through an Embedding and ending in a token-wise output layer, its sum digits (W9, W17); a window
+    without a StateInput, by which the state enters it (W1b-ii, W18); and a recurrence without a
+    state, with fewer than two codes, a negative commitment or an update bias that isn't finite.
+    Otherwise the window is checked as validate_layer_specs checks a sequence model, StateInputs
+    allowed, then by the shape walk.
+    """
+    assert len(input_shape) == 1 and input_shape[0] >= 1, (
+        f"a window's input is its k columns' token ids, k at least 1; got the input shape {input_shape}"
+    )
+    assert specs and isinstance(specs[0], Embedding), (
+        f"a window starts with an Embedding of its columns' token ids (the window-recurrent adder workplan, The "
+        f"network); got {list(specs)!r}"
+    )
+    assert token_wise_output(specs), (
+        "a window ends in a token-wise output layer, a digit per column (the window-recurrent adder workplan, The "
+        f"network); got {list(specs)!r}"
+    )
+    _validate_layer_specs(specs, window=True)
+    assert any(isinstance(spec, StateInput) for spec in specs), (
+        "the state enters a window through at least one StateInput, right before a residual block (the "
+        f"window-recurrent adder workplan, W1b-ii, W18); got {list(specs)!r}"
+    )
+    assert recurrence.state_size >= 1, f"a state has at least one feature; got {recurrence!r}"
+    assert recurrence.codes.count >= 2, (
+        f"a state of one code carries nothing: two codes at least (W4-i); got {recurrence!r}"
+    )
+    commitment = recurrence.codes.commitment
+    assert math.isfinite(commitment) and commitment >= 0.0, (
+        f"a commitment weight is finite and not negative (W14); got {recurrence!r}"
+    )
+    assert math.isfinite(recurrence.cell.update_bias), f"an update bias is finite (W13); got {recurrence!r}"
+    spec_shapes(specs, input_shape)

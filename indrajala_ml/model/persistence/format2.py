@@ -17,8 +17,12 @@ network resumes training by bits, its dropout masks included.
       "rng": {"bit_generator": "PCG64", "state": "0x...", "inc": "0x...", "has_uint32": 0, "uinteger": 0}
     }
 
-- implementation is "python", "numpy" or "rust", and shape "multiclass", "single_output" or
-  "sequence" (a token-wise output layer, the sequence task workplan, stage 3).
+- implementation is "python", "numpy" or "rust", and shape "multiclass", "single_output",
+  "sequence" (a token-wise output layer, the sequence task workplan, stage 3) or
+  "window_recurrent" (the window-recurrent adder workplan, stage 2), whose layers are its window's
+  and whose input is the window's, its k columns' token ids. Its file adds "recurrence":
+  {"state_size": s, "codes": {"count": m, "commitment": 0.25}, "cell": {"kind": "gru",
+  "update_bias": 1.0}, "pooling": {"kind": "attention"}}. No network of the shape is built yet.
 - preset holds a preset's class and constructor arguments, from which its load rebuilds it. A
   Sequential network's file has none.
 - input is {"dimension": d} or {"height": h, "width": w, "channels": c}, with "input_bounds" in
@@ -27,8 +31,9 @@ network resumes training by bits, its dropout masks included.
   batch-norm workplan, Format 2) or "residual", {"kind": "residual", "body": [...]} with the body's
   entries (the residual-connections workplan, stage 5), "patches", "position", "layer_norm",
   "attention" or "token_mean" (the layer-norm and attention workplan, stage 5), "embedding"
-  (the sequence task workplan, stage 2), and "dropout", {"kind": "dropout", "p": p}, the token-wise
-  one (the attention-dropout workplan, D7). An attention entry has "heads", "key_size", "causal",
+  (the sequence task workplan, stage 2), "dropout", {"kind": "dropout", "p": p}, the token-wise
+  one (the attention-dropout workplan, D7), and "state_input", a window's (the window-recurrent
+  adder workplan, W18). An attention entry has "heads", "key_size", "causal",
   "dropout", "positions" and "rotary_base" (the rotary-positions workplan, D2) only when not the
   default. A ReLU conv entry leaves out its activation, as before ConvSpec had one; a linear conv
   entry has "activation": "linear". A dense entry has "bias": true only for an
@@ -37,8 +42,8 @@ network resumes training by bits, its dropout masks included.
 - weights is the network's snapshot() as lists, one entry per layer, a residual block's flattened
   into its fork, body and add (layer_specs.expand_specs). On numpy and Rust, per layer: [W, b] (an
   affine layer's too); [W] for a linear (bias-free) layer; [gamma, beta, running_mean, running_var]
-  for a batch-norm layer; [P] for a position; [E], the (vocabulary, size) table, for an embedding;
-  [gamma, beta] for a layer norm; [Wq, bq, Wk, bk, Wv, bv, Wo, bo] for attention; [] for a pool
+  for a batch-norm layer; [P] for a position, and for a state input, its (d, s) projection; [E],
+  the (vocabulary, size) table, for an embedding; [gamma, beta] for a layer norm; [Wq, bq, Wk, bk, Wv, bv, Wo, bo] for attention; [] for a pool
   layer, a fork, an add, patches, a dropout or a token mean. In pure Python, per node or kernel: [weights,
   bias]; [weights] for a linear one; [[gamma], beta, running_mean, running_var] per batch-norm
   channel; [weights] per position row (a token's) and per embedding row (a token id's); [[gamma],
@@ -79,6 +84,8 @@ from indrajala_ml.model.persistence.format2_json import (
     lists,
     optimizer_state_from_json,
     optimizer_state_to_json,
+    recurrence_from_json,
+    recurrence_to_json,
     rng_from_json,
     rng_to_json,
     rule_from_json,
@@ -87,6 +94,7 @@ from indrajala_ml.model.persistence.format2_json import (
 from indrajala_ml.model.specs.layer_specs import LayerSpec
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import UpdateRule
+from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
 from indrajala_ml.pcg64 import generator_state, set_generator_state
 
 FORMAT = 2
@@ -94,7 +102,9 @@ PYTHON = "python"
 ENSEMBLE = "ensemble"
 # the array backends' names (array_backend.py), which this module mustn't import
 IMPLEMENTATIONS = (PYTHON, "numpy", "rust")
-SHAPES = ("multiclass", "single_output", "sequence")
+# a window-recurrent network's (the window-recurrent adder workplan): its file adds its recurrence
+WINDOW_RECURRENT = "window_recurrent"
+SHAPES = ("multiclass", "single_output", "sequence", WINDOW_RECURRENT)
 
 
 class _Optimizer(Protocol):
@@ -154,6 +164,11 @@ def _input_bounds(network: Format2Network) -> list[tuple[float, float]] | None:
     return getattr(network, "input_bounds", None) if network.implementation == PYTHON else None
 
 
+def _recurrence(network: Format2Network) -> WindowRecurrence | None:
+    # a window-recurrent network's; every other network has none
+    return getattr(network, "recurrence", None)
+
+
 def network_to_json(network: Format2Network) -> dict[str, Any]:
     """network as a format-2 file's contents."""
     return checkpoint_to_json(
@@ -179,6 +194,9 @@ def checkpoint_to_json(network: Format2Network, checkpoint: Checkpoint[Any, Any]
         }
     state["input"] = input_to_json(network.input_shape, _input_bounds(network))
     state["layers"] = [layer_to_json(spec) for spec in network.layer_specs]
+    recurrence = _recurrence(network)
+    if recurrence is not None:
+        state["recurrence"] = recurrence_to_json(recurrence)
     state["update_rule"] = rule_to_json(rule)
     state["weights"] = lists(checkpoint.weights)
     state["optimizer_state"] = optimizer_state_to_json(rule, python, checkpoint.optimizer, network.layer_specs)
@@ -201,6 +219,8 @@ class NetworkFile:
     optimizer_state: OptimizerState[Any]
     # the generator's state as numpy's bit_generator.state; None in a file saved before it had one
     rng: dict[str, Any] | None
+    # a window-recurrent network's recurrence; None for every other shape
+    recurrence: WindowRecurrence | None = None
 
 
 def network_from_json(state: dict[str, Any]) -> NetworkFile:
@@ -215,6 +235,9 @@ def network_from_json(state: dict[str, Any]) -> NetworkFile:
     rule = rule_from_json(state["update_rule"])
     python = state["implementation"] == PYTHON
     layers = [layer_from_json(spec) for spec in state["layers"]]
+    window_recurrent = state["shape"] == WINDOW_RECURRENT
+    if window_recurrent != ("recurrence" in state):
+        raise ValueError(f"a {WINDOW_RECURRENT} file, and only one, has a recurrence: shape {state['shape']!r}")
     shape = state["input"]
     bounds = shape.get("input_bounds")
     return NetworkFile(
@@ -228,6 +251,7 @@ def network_from_json(state: dict[str, Any]) -> NetworkFile:
         weights=state["weights"],
         optimizer_state=optimizer_state_from_json(rule, python, state["optimizer_state"], layers),
         rng=rng_from_json(state["rng"]) if "rng" in state else None,
+        recurrence=recurrence_from_json(state["recurrence"]) if window_recurrent else None,
     )
 
 
@@ -288,6 +312,8 @@ def check_loadable(network: Format2Network, file: NetworkFile) -> None:
         differences.append(f"input bounds {file.input_bounds}, not {_input_bounds(network)}")
     if file.layers != network.layer_specs:
         differences.append(f"layers {file.layers}, not {network.layer_specs}")
+    if file.recurrence != _recurrence(network):
+        differences.append(f"recurrence {file.recurrence}, not {_recurrence(network)}")
     if file.update_rule != network.optimizer.rule:
         differences.append(f"update rule {file.update_rule}, not {network.optimizer.rule}")
     if differences:

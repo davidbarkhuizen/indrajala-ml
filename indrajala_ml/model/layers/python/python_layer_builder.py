@@ -49,7 +49,7 @@ from indrajala_ml.model.specs.layer_specs import (
     expand_specs,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
-from indrajala_ml.model.specs.spec_validation import validate_layer_specs
+from indrajala_ml.model.specs.spec_validation import refuse_window_layers, validate_layer_specs
 
 
 def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
@@ -105,8 +105,10 @@ def build_python_layers(
     """
     specs, validated (validate_layer_specs), as pure-Python layers reading input_layer, whose
     nodes are input_shape's flat layout: one per expanded spec (expand_specs), each residual block's
-    fork wired to its add and its body's first layer.
+    fork wired to its add and its body's first layer. A window's StateInput isn't built yet
+    (refuse_window_layers).
     """
+    refuse_window_layers(specs, "python")
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
     assert math.prod(input_shape) == len(input_layer.nodes), (
