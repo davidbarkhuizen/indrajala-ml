@@ -77,7 +77,9 @@ class BackpropNetworkBase[
 
         # every layer with trained weights (and any pool layer), in forward order: the forward and
         # backward passes and snapshot/restore walk it
-        self.trainable_layers: list[TrainableLayer] = build_python_layers(specs, input_shape, self.input_layer)
+        self.trainable_layers: list[TrainableLayer] = build_python_layers(
+            specs, input_shape, self.input_layer, self._window_state_size()
+        )
         # LayerT is what the specs build before the output layer: dense layers, unless conv and
         # pool layers come first
         self.hidden_layers = cast("list[LayerT]", self.trainable_layers[:-1])
@@ -117,6 +119,11 @@ class BackpropNetworkBase[
         self._rng = rng
         for layer in self._generator_layers:
             layer.set_rng(rng)
+
+    def _window_state_size(self) -> int | None:
+        # a window-recurrent network's state width, with which its specs are built as a window
+        # (build_python_layers); None for every other network
+        return None
 
     def _hidden_spec(self, size: int) -> Dense:
         # a dense hidden layer; the ReLU and dropout siblings return theirs

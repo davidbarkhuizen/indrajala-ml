@@ -232,6 +232,18 @@ Settled under the owner's standing delegation:
     numpy.
   - (c) Crate ops for the token-shaped parts only, the GRU composed. Cons: the GRU's gradient
     blocks need concatenation or slice writes, which `Array` lacks: a crate change anyway.
+- **W22. How pure Python runs a window. Settled: (a)** (stage 6).
+  - (a) *Chosen.* Every window through the layer-major batch path (`layer_major.py`), given two
+    small hooks: `begin_example`, so a StateInput adds its example's state, and a gradient beside
+    the output layer's, the pooling's. Pros: one path, with or without dropout; its masks are
+    numpy's (N, size) order, so seeded training matches numpy's draws; the batch is at hand for
+    the parts, which work on batches as numpy's do. Cons: the lanes' copying makes it slower than
+    the example-major loop (pure Python isn't timed).
+  - (b) The example-major loop, layer-major only with dropout, as the other pure-Python networks.
+    Pros: the faster path without dropout. Cons: two paths through each window to keep in step,
+    and the parts would still need the batch's rows gathered from the per-example passes.
+  - (c) A loop of the network's own over the window's layers. Cons: a second copy of the
+    layer-major path's residual and batch-norm handling.
 
 ## Stages
 
@@ -274,7 +286,18 @@ Settled under the owner's standing delegation:
    `WindowRecurrentArrayNetwork` on numpy and `WindowRecurrentRustArrayNetwork` on Rust. The two
    draw the same weights by bits, and training keeps numpy's weights within 5.8e-13 of each
    entry's scale after 20 steps (the products' rounding, the crate's against BLAS).
-6. **Pure Python**: the same, parity with numpy. Tier 0.
+6. **Pure Python**: *Done.* The same, parity with numpy. Tier 0. Built as
+   `model/layers/python/recurrent_layer.py`: the `StateInputLayer`, which the pure-Python builder
+   builds given a window's `state_size`, and the network's own parts (`AttentionPoolingLayer`,
+   `GRULayer`, `CodesLayer`, `InitialStateLayer`) on batches of rows, their weights weight sets
+   the optimizer steps as a layer's; then `WindowRecurrentBackpropNetwork`
+   (`model/networks/python/window_recurrent_backprop_network.py`), which runs every window through
+   the layer-major batch path (`layer_major.py`, which now tells a layer each example's index and
+   takes the pooling's gradient beside the output layer's), so its dropout masks are numpy's. It
+   draws numpy's weights by bits; training keeps numpy's weights within 4.4e-13 of each entry's
+   scale after 20 steps, and a step's gradients within 3.9e-15 (pure Python's folds against
+   BLAS); the codes and the initial state are numpy's by bits. `load_network` loads all three
+   implementations' files, and no builder refuses a window any more.
 7. **Fixtures, checkpoints and golden entries** for the new network in each implementation; the
    118 earlier golden entries bit-identical.
 8. **The harness**: the window-count curriculum, random alignment, the catalogue across lengths

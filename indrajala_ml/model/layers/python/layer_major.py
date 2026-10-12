@@ -12,10 +12,12 @@ state at a time (their example_fields: the activation, the delta, dropout's mask
 winning slot), so this path keeps each layer's per example, one "lane" per example, and loads a
 lane back before the layer or its neighbour reads it. A layer that reads more than its neighbours
 declares the others (a residual block's add reads its fork, and the fork its add: forward_reads and
-backward_reads, residual_layer.py), and their lanes are loaded too. A layer whose per-example state
-isn't its nodes' names its own fields in its example_fields (an attention layer's Q, K, V and P,
-attention_layer.py), and a lane keeps those too. A BatchNormLayer keeps its own per-example lists
-and is selected with select_example instead.
+backward_reads, residual_layer.py), and their lanes are loaded too. A layer that reads something of
+each example's besides its input (a window's StateInput, its state: recurrent_layer.py) has
+begin_example, which the forward pass calls with the example's index before the layer's
+forward(). A layer whose per-example state isn't its nodes' names its own fields in its
+example_fields (an attention layer's Q, K, V and P, attention_layer.py), and a lane keeps those
+too. A BatchNormLayer keeps its own per-example lists and is selected with select_example instead.
 
 The gradients accumulate per weight in example order, as the example-major loop's do.
 """
@@ -48,6 +50,17 @@ def _load(layer: TrainableLayer, lane: Lane) -> None:
     vars(layer).update(own)
     for node, fields in zip(layer.nodes, nodes):
         vars(node).update(fields)
+
+
+class _Beside:
+    """The output layer as the layer before it reads it, with another reader's gradient added."""
+
+    def __init__(self, output_layer: TrainableLayer, gradient: Sequence[float]) -> None:
+        self._output_layer = output_layer
+        self._gradient = gradient
+
+    def downstream_sum(self, own_index: int) -> float:
+        return self._output_layer.downstream_sum(own_index) + self._gradient[own_index]
 
 
 class LayerMajorBatch:
@@ -96,27 +109,37 @@ class LayerMajorBatch:
                 continue
             lanes: list[Lane] = []
             reads = self._reads(layer, "forward_reads")
+            begin_example: Callable[[int], None] | None = getattr(layer, "begin_example", None)
             for example in range(count):
                 self._select(index - 1, example)
                 for other in reads:
                     self._select(other, example)
+                if begin_example is not None:
+                    begin_example(example)
                 layer.forward()
                 lanes.append(_capture(layer))
             self.lanes.append(lanes)
 
     def outputs(self) -> list[list[float]]:
         """The output layer's values, example by example."""
-        last = len(self.layers) - 1
+        return self.values(len(self.layers) - 1)
+
+    def values(self, index: int) -> list[list[float]]:
+        """Layer index's values, example by example."""
         rows: list[list[float]] = []
         for example in range(len(self.states)):
-            self._select(last, example)
-            rows.append([node.value() for node in self.layers[last].nodes])
+            self._select(index, example)
+            rows.append([node.value() for node in self.layers[index].nodes])
         return rows
 
-    def backward(self, output_deltas: Callable[[int], None]) -> None:
+    def backward(
+        self, output_deltas: Callable[[int], None], beside_output: Sequence[Sequence[float]] | None = None
+    ) -> None:
         """
         The deltas of every layer, output_deltas(e) setting the output layer's for example e (the
-        network's shape: a one-hot class or a float target).
+        network's shape: a one-hot class or a float target). beside_output, if given, is the
+        gradient of the output layer's input from another reader of it, per example (a window's
+        pooling, recurrent_layer.py), added to the output layer's.
         """
         count = len(self.states)
         last = len(self.layers) - 1
@@ -140,7 +163,10 @@ class LayerMajorBatch:
                 for other in reads:
                     self._select(other, example)
                 self._select(index, example)
-                layer.compute_hidden_deltas(next_layer)
+                if beside_output is not None and index == last - 1:
+                    layer.compute_hidden_deltas(_Beside(next_layer, beside_output[example]))
+                else:
+                    layer.compute_hidden_deltas(next_layer)
                 self.lanes[index][example] = _capture(layer)
 
     def accumulate_gradients(self) -> None:

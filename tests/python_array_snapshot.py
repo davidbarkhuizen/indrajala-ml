@@ -17,6 +17,7 @@ from indrajala_ml.model.layers.python.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.layers.python.layer_norm_layer import LayerNormLayer
 from indrajala_ml.model.layers.python.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.layers.python.linear_layer import LinearLayer
+from indrajala_ml.model.layers.python.recurrent_layer import AttentionPoolingLayer, GRULayer, InitialStateLayer
 from indrajala_ml.pcg64 import generator_state
 
 
@@ -26,15 +27,25 @@ def projections(layer: AttentionLayer, entry: list[Any]) -> list[list[Any]]:
     return [entry[:w], entry[w : 2 * w], entry[2 * w : 3 * w], entry[3 * w :]]
 
 
-def as_array_snapshot(python: Any) -> list[tuple[Any, ...]]:
+def as_array_snapshot(python: Any, entries: list[Any] | None = None) -> list[tuple[Any, ...]]:
     """
     The pure-Python snapshot, per node, unit or feature, as the array networks', per parameter: a
     batch norm's (gamma, beta, mean, var), a layer norm's (gamma, beta), attention's (Wq, bq, Wk,
-    bk, Wv, bv, Wo, bo), a layer without a bias as (W,), and every other layer as (W, b).
+    bk, Wv, bv, Wo, bo), a layer without a bias as (W,), and every other layer as (W, b); then a
+    window-recurrent network's parts: the pooling's (q,), the cell's (W, U, b), the codes' (E,)
+    and the initial state's (c,). entries, if given, stand for python's snapshot (its gradients,
+    in the snapshot's shape).
     """
     snapshot: list[tuple[Any, ...]] = []
-    for layer, entry in zip(python.trainable_layers, python.snapshot(), strict=True):
-        if isinstance(layer, BatchNormLayer):
+    layers = [*python.trainable_layers, *getattr(python, "parts", [])]
+    for layer, entry in zip(layers, python.snapshot() if entries is None else entries, strict=True):
+        if isinstance(layer, AttentionPoolingLayer | InitialStateLayer):
+            ((values,),) = entry
+            snapshot.append((list(values),))
+        elif isinstance(layer, GRULayer):
+            d = layer.input_size
+            snapshot.append(([w[:d] for w, _ in entry], [w[d:] for w, _ in entry], [b for _, b in entry]))
+        elif isinstance(layer, BatchNormLayer):
             gamma, beta, mean, var = zip(*entry)
             snapshot.append(([g for (g,) in gamma], list(beta), list(mean), list(var)))
         elif isinstance(layer, LayerNormLayer):

@@ -22,7 +22,8 @@ network resumes training by bits, its dropout masks included.
   "window_recurrent" (the window-recurrent adder workplan, stage 2), whose layers are its window's
   and whose input is the window's, its k columns' token ids. Its file adds "recurrence":
   {"state_size": s, "codes": {"count": m, "commitment": 0.25}, "cell": {"kind": "gru",
-  "update_bias": 1.0}, "pooling": {"kind": "attention"}}. numpy builds it (stage 4).
+  "update_bias": 1.0}, "pooling": {"kind": "attention"}}. All three implementations build it
+  (stages 4-6).
 - preset holds a preset's class and constructor arguments, from which its load rebuilds it. A
   Sequential network's file has none.
 - input is {"dimension": d} or {"height": h, "width": w, "channels": c}, with "input_bounds" in
@@ -49,7 +50,10 @@ network resumes training by bits, its dropout masks included.
   layer, a fork, an add, patches, a dropout or a token mean. In pure Python, per node or kernel: [weights,
   bias]; [weights] for a linear one; [[gamma], beta, running_mean, running_var] per batch-norm
   channel; [weights] per position row (a token's) and per embedding row (a token id's); [[gamma],
-  beta] per layer-norm feature; [weights, bias] per attention row, Wq's, then Wk's, Wv's and Wo's.
+  beta] per layer-norm feature; [weights, bias] per attention row, Wq's, then Wk's, Wv's and Wo's;
+  [weights] per row of a state input's P (a feature's); and a window-recurrent network's parts per
+  row: [weights], the pooling's one row q; [weights, bias] per cell row, W's row then U's, and b's
+  value; [weights] per code; [weights], the initial state's one row c.
 - optimizer_state holds the step count t and, per layer (expanded, as weights), the rule's state or
   null: momentum's velocity, Adam's m and v. On numpy and Rust, per parameter (velocity_W,
   velocity_b; velocity_W alone for a linear layer; velocity_gamma, velocity_beta for batch norm and

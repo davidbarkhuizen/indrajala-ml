@@ -282,23 +282,6 @@ def _check_output(output: LayerSpec, token_wise: bool = False) -> None:
     assert not output.bias, f"bias=True is a residual block's affine layer only (D4); got {output!r}"
 
 
-# the window-recurrent adder workplan's stage that builds a window's layers, per implementation
-# that doesn't yet (numpy's at stage 3)
-_WINDOW_STAGES = {"python": 6}
-
-
-def refuse_window_layers(specs: Sequence[LayerSpec], implementation: str) -> None:
-    """
-    A builder's refusal of a window's StateInput, which implementation doesn't build yet: the
-    window-recurrent adder workplan builds it in pure Python at its stage 6.
-    """
-    state_input = next((spec for spec in expand_specs(specs) if isinstance(spec, StateInput)), None)
-    assert state_input is None, (
-        f"a window's StateInput isn't built in {implementation} yet (the window-recurrent adder workplan, stage "
-        f"{_WINDOW_STAGES[implementation]}); got {list(specs)!r}"
-    )
-
-
 def validate_window_recurrent(
     specs: Sequence[LayerSpec], recurrence: WindowRecurrence, input_shape: InputShape
 ) -> None:

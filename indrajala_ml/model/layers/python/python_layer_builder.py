@@ -20,6 +20,7 @@ from indrajala_ml.model.layers.python.layer_norm_layer import LayerNormLayer
 from indrajala_ml.model.layers.python.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.layers.python.linear_layer import LinearLayer
 from indrajala_ml.model.layers.python.max_pool_layer import MaxPoolLayer, PoolSpec
+from indrajala_ml.model.layers.python.recurrent_layer import StateInputLayer
 from indrajala_ml.model.layers.python.relu_layer import ReLULayer
 from indrajala_ml.model.layers.python.residual_layer import AddLayer, AffineLayer, ForkLayer
 from indrajala_ml.model.layers.python.softmax_output_layer import SoftmaxOutputLayer
@@ -45,11 +46,12 @@ from indrajala_ml.model.specs.layer_specs import (
     LayerSpec,
     Patches,
     Position,
+    StateInput,
     TokenMean,
     expand_specs,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
-from indrajala_ml.model.specs.spec_validation import refuse_window_layers, validate_layer_specs
+from indrajala_ml.model.specs.spec_validation import validate_layer_specs, validate_window_specs
 
 
 def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
@@ -100,16 +102,18 @@ def _token_layer(
 
 
 def build_python_layers(
-    specs: Sequence[LayerSpec], input_shape: InputShape, input_layer: InputLayer
+    specs: Sequence[LayerSpec], input_shape: InputShape, input_layer: InputLayer, state_size: int | None = None
 ) -> list[TrainableLayer]:
     """
     specs, validated (validate_layer_specs), as pure-Python layers reading input_layer, whose
     nodes are input_shape's flat layout: one per expanded spec (expand_specs), each residual block's
-    fork wired to its add and its body's first layer. A window's StateInput isn't built yet
-    (refuse_window_layers).
+    fork wired to its add and its body's first layer. With a state_size, specs are a
+    window-recurrent network's window (validate_window_specs), its StateInputs that wide.
     """
-    refuse_window_layers(specs, "python")
-    validate_layer_specs(specs)
+    if state_size is None:
+        validate_layer_specs(specs)
+    else:
+        validate_window_specs(specs, input_shape)
     shapes = spec_shapes(specs, input_shape)
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
@@ -128,6 +132,9 @@ def build_python_layers(
         elif isinstance(spec, Add):
             fork = forks.pop()
             layer = fork.add = AddLayer(previous, fork)
+        elif isinstance(spec, StateInput):
+            assert state_size is not None
+            layer = StateInputLayer(previous, *token_shape(shape.input_shape), state_size)
         elif isinstance(spec, Dense) and len(shape.input_shape) == 2 and spec.output:
             # the token-wise output layer (the sequence task workplan, D6): softmax per token
             layer = TokenSoftmaxLayer(previous, spec.size, shape.input_shape[0])

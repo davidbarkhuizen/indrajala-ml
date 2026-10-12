@@ -61,7 +61,7 @@ def test_legacy_file_loads(name: str) -> None:
 
 
 # a saveable class whose fixture comes later: the window-recurrent adder workplan's stage 7
-FIXTURE_LATER = {"WindowRecurrentArrayNetwork", "WindowRecurrentRustArrayNetwork"}
+FIXTURE_LATER = {"WindowRecurrentArrayNetwork", "WindowRecurrentRustArrayNetwork", "WindowRecurrentBackpropNetwork"}
 
 
 def test_every_saveable_class_has_a_fixture() -> None:
