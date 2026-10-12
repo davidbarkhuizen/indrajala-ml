@@ -146,5 +146,7 @@ before it.
 ## Out of scope
 
 - Recurrent networks (RNN, LSTM): attention covers the sequence case in the literature this
-  project follows.
+  project follows. One exception, the owner's (2026-10-12): the window-recurrent adder's GRU cell
+  over windows of columns (`docs/window-recurrent-adder-workplan.md`), a task-specific network kind,
+  not a general recurrent layer.
 - GPU backends.

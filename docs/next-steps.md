@@ -14,7 +14,8 @@ in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan
 [cross-attention-workplan.md](cross-attention-workplan.md),
 [addition-study-workplan.md](addition-study-workplan.md),
 [study-runs-workplan.md](study-runs-workplan.md),
-[arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md). The order
+[arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md),
+[window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -42,6 +43,7 @@ docs cite them by section:
 | A sequence task with causal masking (roadmap step 6) | #620 | crate #53, #621-#634, archive #14-#17 | `git show f6e843b:docs/sequence-task-workplan.md` |
 | Pure Python's random draws in numpy's order (RNG draw order) | #637 | #649-#652, archive #18-#19 | `git show 7a80858:docs/rng-draw-order-workplan.md` |
 | Dropout in attention (roadmap step 7) | #638 | crate #54, #654-#660, #666, archive #20-#21 | `git show 8d2019e:docs/attention-dropout-workplan.md` |
+| Length generalisation for the column adders (terminated by the owner before its existence study) | #683 | #684 | `git show c3d619b:docs/length-generalisation-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -444,6 +446,26 @@ Still out of scope:
   as tier 1's pass count was.
 - Hosting results anywhere but the archive repository: no dashboards, no release assets.
 - Benchmarks in CI: GitHub's runners are shared and noisy, so no timing is ever taken there.
+
+## From length generalisation (terminated)
+
+The owner terminated the plan (2026-10-12) after its reading (stage 2), for the window-recurrent
+design ([window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md), Why this design):
+a fixed-depth network that finds a carry's deciding column in one long hop needs position codes that
+stay distinguishable at any distance, which bounded codes can't give.
+
+- **Its literature section stands** (`git show c3d619b:docs/length-generalisation-workplan.md`,
+  What the literature found), and the window-recurrent plan builds on it.
+- **Length-free token networks (its P1) are parked.** Stage 3 (P1a: `(None,)` token ids in the
+  shape walk, `AnyInputShape`, format 2's `{"dimension": null}`) was built and passed (tests and
+  the golden run) but never opened as a PR: the local branch `length-free-shapes` (`bd13b16`).
+  A window has a fixed `T`, so the window-recurrent plan doesn't need it; generation (step 9) or
+  a later length study may.
+- **For any later fixed-depth length study:** rotary and no positions fail at long range by
+  construction (resolution and dilution); an additive distance bias (ALiBi, P2) is the scheme that
+  doesn't, and D12's start token is what a no-positions control needs.
+- **The result's `crate` field** hashes `indrajala_math_rust/__init__.py`, not the extension
+  module; the window-recurrent plan's stage 8 fixes it.
 
 ## From the addition study (in progress)
 
