@@ -309,17 +309,21 @@ Each lists the options considered, with pros and cons, and the choice.
 4. **Calibration** (done; `scripts/addition_calibration.json`) on `pyramidon`: every candidate at
    one middle size at `n = 4`, the rate probe, timing; the rates, budget and plateau rule written
    into D7.
-5. **The sweep** on `jebel`, unattended (`scripts/addition_sweep.json`: candidates 1-3, D12);
+5. **The sweep** (done) on `jebel`, unattended (`scripts/addition_sweep.json`: candidates 1-3, D12);
    the findings into the script's docstring (findings, the
-   tables, the protocol, as `sequence_study.py`'s); the PR with the report.
+   tables, the protocol, as `sequence_study.py`'s); the PR with the report. As run: 619 runs, 401
+   passing, 2026-10-11 04:16-09:15; the results and the threshold models archived in
+   `davidbarkhuizen/indrajala-models` (`addition/2026-10-11-sweep/`).
 6. **Docs**: a README section, next-steps (this plan's leftovers and the section below), the
    workplan retired.
 
 ## Findings (Stage 5)
 
-Per candidate: the smallest succeeding size (parameters, and its shape), the success rate per rung,
-`L*` per rung, each property's pass rate, epochs to pass; across candidates, one table of the
-thresholds. To be filled.
+In `scripts/addition_study.py`'s docstring: the thresholds per candidate, `n` and shape, every
+rung's seeds passing, epochs to pass, `L*` and which properties fail. In short: the smallest
+reliable adders are 2 layers at `d` 6 at `n = 4` (831 parameters, column-unordered; 933 causal and
+noncausal) and 3 layers at `d` 6 at `n = 6` (1,197; 1,299); one layer never passes at `n = 6` up to
+`d` 32; what fails is the carry over distance (M3, M5).
 
 ## Excluded for missing infrastructure
 
