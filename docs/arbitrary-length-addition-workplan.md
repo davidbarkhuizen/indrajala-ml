@@ -12,8 +12,9 @@ fixed-depth existence study), was terminated after its reading (next-steps, From
 generalisation). P1 is parked; P2, P3 and P7 are deferred; composing a fixed-length adder outside
 the network is parked (Parked, below).**
 
-The addition study (`docs/addition-study-workplan.md`) asks for the smallest network that adds
-base-3 numbers of a fixed `n` digits. This plan asks what the framework lacks for an adder trained
+The addition study (README, The addition study; its workplan `git show
+8990f74:docs/addition-study-workplan.md`) asks for the smallest network that adds base-3 numbers of
+a fixed `n` digits. This plan asks what the framework lacks for an adder trained
 on some lengths to add numbers of **any** length, including lengths it never saw and operands of
 unequal lengths, while meeting the same property catalogue.
 

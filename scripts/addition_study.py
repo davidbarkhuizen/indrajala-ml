@@ -1,8 +1,8 @@
 """
-The addition study (docs/addition-study-workplan.md): the smallest network, of eight candidates
-built from the package's layers, that adds base-3 numbers with every property of
-indrajala_ml/data/addition_data.py's catalogue, under indrajala_ml/studies/addition_study.py's
-harness.
+The addition study (its workplan retired: git show 8990f74:docs/addition-study-workplan.md): the
+smallest network, of eight candidates built from the package's layers, that adds base-3 numbers
+with every property of indrajala_ml/data/addition_data.py's catalogue, under
+indrajala_ml/studies/addition_study.py's harness.
 
     python scripts/addition_study.py run CONFIG.json
     python scripts/addition_study.py status CONFIG.json

@@ -875,6 +875,49 @@ closing. It fits faster rather than overfitting less. An epoch costs 3.5% more a
 sequence models default to rotary positions, the sequence example among them (the findings are in
 its docstring).
 
+## The addition study
+
+Which is the smallest network, built from the package's layers, that reliably adds? The task is
+base-3 addition of three `n`-digit operands (two-operand addition is a zero in one slot), and a
+network passes only when it meets every property of one catalogue, at 100% of its cases, on 4 of 5
+seeds.
+
+- **The catalogue** (`indrajala_ml/data/addition_data.py`) is addition's contract as code. Each
+  property has a generator of cases, a verifier (Python's `+`, or a relation among the network's
+  own answers) and a coverage, and a failing case shrinks to a minimal one. B1-B3 are the
+  definition (adds three, adds two, a hashed tenth never trained on), A1-A3 the algebra
+  (commutativity, associativity, identity), and M1-M5 the carry-lookahead algorithm's parts: the
+  column sum, the carry out of a reset column, the carry over a distance `L` (reporting `L*`, the
+  longest distance every case reaches), the final carry and every one of the `7^n` column-sum
+  patterns. Each check is exhaustive where it can be (every triple at `n = 4`, every pattern at
+  `n = 6`).
+- **The candidates** (`indrajala_ml/studies/addition_study.py`) are an encoder, a network spec
+  with its size knobs and a decoder: transformers with a token per column (causal, non-causal, or
+  each column's digits as an unordered multiset), a string-format transformer, an FFN-only
+  control, dense networks per sum digit, and two dense regressions. A new candidate, or a new
+  property, is one more entry.
+- **The harness** (`scripts/addition_study.py`) runs a JSON config unattended: it bisects each
+  shape's width, writes every run's result and trained model atomically, resumes a stopped sweep
+  and builds its report at any time.
+
+```bash
+OPENBLAS_NUM_THREADS=1 python scripts/addition_study.py run scripts/addition_sweep.json
+python scripts/addition_study.py report scripts/addition_sweep.json --md report.md
+python scripts/addition_study.py check data/addition/sweep/models/<run>
+```
+
+Only the column transformers passed the calibration, so the sweep (619 runs on `jebel`) searched
+those three, at `n` 4 and 6, with 1-3 layers and 1-2 heads. The smallest reliable adders are 2
+layers at `d` 6 at `n = 4` (831 parameters for the unordered encoding, 933 for the others), and 3
+layers at `d` 6 at `n = 6` (1,197; 1,299). `d` 4 fails everywhere. One layer passes at `n = 4`
+only wider and after many more epochs, and never at `n = 6` up to `d` 32. What fails is the carry
+over distance (M3, M5): failing runs mostly still pass the column sum, identity and carry out of
+a reset column whole.
+The causal mask neither helps nor hurts from 2 layers on (the findings are in the script's
+docstring; the results and threshold models are archived in `indrajala-models`). The
+window-recurrent adder ([docs/window-recurrent-adder-workplan.md](docs/window-recurrent-adder-workplan.md))
+checks the same catalogue at lengths up to 64.
+
 ## Refactoring
 
 A structural refactoring changes structure only, never numerics. Every stage keeps every parity

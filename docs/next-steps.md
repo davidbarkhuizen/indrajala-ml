@@ -12,7 +12,6 @@ in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan
 [ffn-activations-workplan.md](ffn-activations-workplan.md),
 [grouped-query-attention-workplan.md](grouped-query-attention-workplan.md),
 [cross-attention-workplan.md](cross-attention-workplan.md),
-[addition-study-workplan.md](addition-study-workplan.md),
 [arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md),
 [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md). The order
 of the next ML
@@ -45,6 +44,7 @@ docs cite them by section:
 | Length generalisation for the column adders (terminated by the owner before its existence study) | #683 | #684 | `git show c3d619b:docs/length-generalisation-workplan.md` |
 | Rotary position embedding (roadmap step 8) | #639 | crate #55, #668-#669, #678-#682, #688, archive #22-#23 | `git show 9b27175:docs/rotary-positions-workplan.md` |
 | Studies and timing runs sharing `jebel` (study-runs) | #670 | #673-#676, #695 | `git show 868838e:docs/study-runs-workplan.md` |
+| The smallest network that adds (the addition study) | #661 | #662-#665, #672, #677, #696, models `7748416` | `git show 8990f74:docs/addition-study-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -52,13 +52,14 @@ candidate optimizations) were retired the same way: `git show 0a04977:docs/optim
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention, The sequence task, Dropout among the
-tokens), [measurement.md](measurement.md)
+tokens, Rotary positions, The addition study), [measurement.md](measurement.md)
 and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/residual_depth_study.py`'s, the patch-attention study's in
 `scripts/patch_attention_study.py`'s, the multi-head attention study's in
 `scripts/multi_head_attention_study.py`'s, the sequence study's in `scripts/sequence_study.py`'s,
-the attention dropout study's in `scripts/attention_dropout_study.py`'s.
+the attention dropout study's in `scripts/attention_dropout_study.py`'s, the rotary study's in
+`scripts/rotary_study.py`'s, the addition study's in `scripts/addition_study.py`'s.
 
 ## From composable layers
 
@@ -530,11 +531,12 @@ stay distinguishable at any distance, which bounded codes can't give.
   module, so the addition sweep's results all show `639a07d4bc7d`; fixed by the window-recurrent
   plan's stage 8 (`studies.common.crate_hash`), for later results only.
 
-## From the addition study (in progress)
+## From the addition study
 
-Recorded early, at the owner's request (2026-10-11), while the sweep (stage 5) runs; stage 6 adds
-the rest when the workplan retires. The figures are the sweep's (`scripts/addition_study.py
-report scripts/addition_sweep.json`), to be written into the study's docstring.
+The catalogue, the eight candidates and the unattended harness are in the README (The addition
+study); the sweep's findings are in `scripts/addition_study.py`'s docstring. The first three entries
+were recorded while the sweep ran (2026-10-11); the rest are the workplan's leftovers: its
+decisions' unchosen options and its Excluded for missing infrastructure (`git show 8990f74:docs/addition-study-workplan.md`).
 
 - **The adders' threshold as a check for each new primitive.** The column transformers sit on a
   sharp edge (at `n = 4`, d 4 fails at every candidate and shape, d 6 passes from 2 layers), and a
@@ -554,7 +556,40 @@ report scripts/addition_sweep.json`), to be written into the study's docstring.
 - **Probes of the passing adders.** Probing the smallest passing 2-layer networks against
   near-misses one width below (d 4 at `n = 4`) could locate the carry lookahead: which layer
   finds the deciding column below, and which head propagates the carry. This needs the accessor
-  for a layer's activations on a batch (the workplan's Excluded for missing infrastructure). The
+  for a layer's activations on a batch (below). The
   probes don't need the sweep's exact files. When this is planned, it retrains the passing and
   near-miss networks it needs (minutes for a few seeds), on the code of the day. Only the passing
   models at each threshold and the width above are archived (the model archive, after the sweep).
+
+- **Thresholds for candidates 4-8** (D12): the sweep searched only the column transformers, the
+  calibration's passes. The string format (5), the FFN-only control (4), the dense networks per
+  sum digit (6) and the regressions (7, 8) failed at one middle size and the budget of 200 epochs,
+  patience 30 (4 must fail by construction). A sweep of the others wants a reason to expect a pass
+  first: step 10's recipe, step 11's answer-only loss for 5, or a larger budget for 7 and 8, whose
+  mean best screens reached 0.999 and 0.998, two seeds of each still rising when the budget stopped
+  them (D7 (f): a budget per candidate, as its own config).
+- **A third width** (D3 (c)): `n = 8` gives a curve of threshold against `n` (two points today:
+  `d` 6 from 2 layers at 4, from 3 at 6). Its `7^8` carry patterns (5.8 M) are sampled, not
+  exhaustive, and its runs are the costliest.
+- **An FFN-width knob** (D5): every ladder held the FFN at `2d`. Wanted if a threshold turns out to
+  be the FFN's rather than attention's; the probes below would say.
+- **Sample efficiency** (D7 (b)): one fixed training set instead of a fresh one each epoch, for a
+  curve of examples against passing. It mixes overfitting into the size question, so it is its own
+  study.
+- **Candidates the framework couldn't build** (the workplan's Excluded for missing
+  infrastructure), each a new candidate entry and a catalogue run once its piece exists:
+  - a recurrent adder (one column a step, the carry as state): the window-recurrent adder,
+    [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md);
+  - length generalisation (train at `n`, test at `n + k`): rotary positions exist (step 8), but
+    loading trained weights into a network of another `T` doesn't (the parked `length-free-shapes`
+    branch, From length generalisation); the window-recurrent adder sidesteps it with a fixed
+    window;
+  - the string format's loss on answer tokens only, and variable-length answers decoded
+    autoregressively: steps 11 (counted targets) and 9 (generation);
+  - schedules, AdamW and clipping, in case a "too small" verdict is the optimiser's: step 10;
+  - not planned yet: a weight-tied (looped) transformer, whose depth grows with `n` by iterating
+    one block (blocks sharing weights, a variable iteration count); one dense network for every
+    sum digit (several independent softmaxes on one flat network); supervised carries (auxiliary
+    output heads and losses for each column's carry); an accessor for a layer's activations on a
+    batch, for the probes above (it may be small); and a 1-D convolution along the tokens in the
+    `sequence` shape, a local, ripple-like bias against attention's.

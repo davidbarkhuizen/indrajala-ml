@@ -1,6 +1,6 @@
 """
 Base-3 addition of three operands, and the catalogue of properties a network that adds must have
-(the addition study workplan, docs/addition-study-workplan.md, Stage 2).
+(the addition study workplan's Stage 2, retired: git show 8990f74:docs/addition-study-workplan.md).
 
 An addition is a triple (a, b, c) of n-digit base-3 operands, 0 <= a, b, c < 3^n; its sum, under
 3^(n+1), has n + 1 digits. Two-operand addition is the case with a zero in one slot. Digits are
