@@ -30,8 +30,18 @@ from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
-from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, Position, Residual
+from indrajala_ml.model.specs.layer_specs import (
+    Attention,
+    Dense,
+    Dropout,
+    Embedding,
+    LayerNorm,
+    Position,
+    Residual,
+    StateInput,
+)
 from indrajala_ml.model.specs.update_rules import SGD
+from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
 from indrajala_ml.pcg64 import SeedSequence, generator_state
 from tests.array_network_contract import snapshot_bits
 from tests.helpers import all_subclasses, model_modules
@@ -95,6 +105,24 @@ SEQUENTIAL: dict[str, tuple[Any, ...]] = {
         ],
         SGD(),
     ),
+    # a window of 5 columns: the window's layers, its StateInputs' P among them, then the cell's
+    # gates and the codes; the dropout layers draw their masks in the recomputed windows too
+    "WindowRecurrentArrayNetwork": (
+        (5,),
+        [
+            Embedding(7, 6),
+            Position(),
+            Dropout(0.2),
+            StateInput(),
+            Residual((LayerNorm(), Attention(heads=2, causal=True, dropout=0.1))),
+            StateInput(),
+            Residual((LayerNorm(), Dense(8, activation="relu"), Dense(6, activation="linear", bias=True))),
+            LayerNorm(),
+            Dense(3, output=True, activation="softmax", loss="cross_entropy"),
+        ],
+        WindowRecurrence(4, Codes(5)),
+        SGD(),
+    ),
 }
 
 
@@ -114,13 +142,9 @@ def rust_counterpart(numpy_name: str) -> type[Any]:
     return RUST_CLASSES[numpy_name.replace("ArrayNetwork", "RustArrayNetwork")]
 
 
-# numpy only, until its Rust counterpart (the window-recurrent adder workplan, stage 5)
-NUMPY_ONLY = {"WindowRecurrentArrayNetwork"}
-
-
 def test_every_array_network_class_is_covered():
     covered = {*MULTICLASS, *CONV, *SINGLE_OUTPUT, *SEQUENTIAL}
-    assert covered | NUMPY_ONLY == set(NUMPY_CLASSES)
+    assert covered == set(NUMPY_CLASSES)
     assert {rust_counterpart(name) for name in covered} == set(RUST_CLASSES.values())
     assert set(NUMPY_CLASSES.values()) | set(RUST_CLASSES.values()) == set(all_subclasses(ArrayNetworkBase)) - {
         NumpyArrayNetworkBase,
@@ -145,7 +169,7 @@ def assert_seeded_randomized_identical(build: Callable[[type[Any], int], Any], n
 
 def _rows(width: int, network: Any) -> list[tuple[tuple[float, ...], Any]]:
     rng = random.Random(width)
-    if network.format2_shape == "sequence":
+    if network.format2_shape in ("sequence", "window_recurrent"):
         # token ids, and a class per token
         classes = network.class_count
         return [
@@ -163,7 +187,10 @@ def _rows(width: int, network: Any) -> list[tuple[tuple[float, ...], Any]]:
 
 
 def _mask_bits(network: Any) -> list[Any]:
-    return [np.array(layer._mask_batch.tolist()).tobytes() for layer in network.layers if hasattr(layer, "_mask_batch")]
+    # each dropout layer's last batch mask: a dense dropout's _mask_batch on either backend, a
+    # token-wise dropout's _mask_batch on numpy and _mask on Rust
+    masks = [getattr(layer, "_mask_batch", getattr(layer, "_mask", None)) for layer in network.layers]
+    return [np.array(mask.tolist()).tobytes() for mask in masks if mask is not None]
 
 
 SEEDS = [0, 1, 42, 2**32 - 1]

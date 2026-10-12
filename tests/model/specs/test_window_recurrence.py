@@ -16,6 +16,7 @@ from indrajala_ml.model.layers.array.array_layer_builder import build_array_laye
 from indrajala_ml.model.layers.numpy.recurrent_array_layer import StateInputArrayLayer
 from indrajala_ml.model.layers.python.python_layer_builder import build_python_layers
 from indrajala_ml.model.layers.python.state_layer import StateLayer
+from indrajala_ml.model.layers.rust.recurrent_rust_array_layer import StateInputRustArrayLayer
 from indrajala_ml.model.persistence.checkpoint import OptimizerState
 from indrajala_ml.model.persistence.format2 import network_from_json
 from indrajala_ml.model.persistence.format2_json import (
@@ -180,25 +181,24 @@ def test_an_unknown_cell_or_pooling_is_refused(part: str):
         recurrence_from_json(entry)
 
 
-@pytest.mark.parametrize(("implementation", "stage"), [("rust", 5), ("python", 6)])
-def test_a_builder_refuses_a_window_not_yet(implementation: str, stage: int):
+def test_the_python_builder_refuses_a_window_not_yet():
     specs = WINDOWS["the state before every block"]
-    with pytest.raises(AssertionError, match=f"isn't built in {implementation} yet .* stage {stage}"):
-        if implementation == "python":
-            build_python_layers(specs, WINDOW, StateLayer(3, [(0.0, 26.0)] * 3))
-        else:
-            build_array_layers(specs, WINDOW, implementation, state_size=4)
+    with pytest.raises(AssertionError, match="isn't built in python yet .* stage 6"):
+        build_python_layers(specs, WINDOW, StateLayer(3, [(0.0, 26.0)] * 3))
 
 
-def test_the_numpy_builder_builds_a_window_given_its_state_size():
+@pytest.mark.parametrize(
+    ("backend", "state_input_class"), [("numpy", StateInputArrayLayer), ("rust", StateInputRustArrayLayer)]
+)
+def test_an_array_builder_builds_a_window_given_its_state_size(backend: str, state_input_class: type[Any]):
     specs = WINDOWS["the state before every block"]
-    layers = build_array_layers(specs, WINDOW, "numpy", state_size=4)
-    state_inputs = [layer for layer in layers if isinstance(layer, StateInputArrayLayer)]
-    assert [layer.P.shape for layer in state_inputs] == [(16, 4), (16, 4)]
+    layers = build_array_layers(specs, WINDOW, backend, state_size=4)
+    state_inputs: list[Any] = [layer for layer in layers if isinstance(layer, state_input_class)]
+    assert [tuple(layer.P.shape) for layer in state_inputs] == [(16, 4), (16, 4)]
     with pytest.raises(AssertionError, match="validate_window_recurrent"):
-        build_array_layers(specs, WINDOW, "numpy")
+        build_array_layers(specs, WINDOW, backend)
     with pytest.raises(AssertionError, match="at least one StateInput"):
-        build_array_layers([IDS, ATTENTION, DIGITS], WINDOW, "numpy", state_size=4)
+        build_array_layers([IDS, ATTENTION, DIGITS], WINDOW, backend, state_size=4)
 
 
 def _window_file(**changes: Any) -> dict[str, Any]:
@@ -234,8 +234,8 @@ def test_only_a_window_recurrent_file_has_a_recurrence():
         network_from_json(_window_file(shape="sequence"))
 
 
-def test_load_network_refuses_a_rust_window_recurrent_file_not_yet(tmp_path: Path):
+def test_load_network_refuses_a_pure_python_window_recurrent_file_not_yet(tmp_path: Path):
     path = tmp_path / "window.json"
-    path.write_text(json.dumps(_window_file(implementation="rust")))
-    with pytest.raises(ValueError, match="isn't built in rust yet .* stage 5"):
+    path.write_text(json.dumps(_window_file(implementation="python")))
+    with pytest.raises(ValueError, match="isn't built in pure Python yet .* stage 6"):
         load_network(str(path))

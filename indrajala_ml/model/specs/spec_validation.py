@@ -284,13 +284,13 @@ def _check_output(output: LayerSpec, token_wise: bool = False) -> None:
 
 # the window-recurrent adder workplan's stage that builds a window's layers, per implementation
 # that doesn't yet (numpy's at stage 3)
-_WINDOW_STAGES = {"rust": 5, "python": 6}
+_WINDOW_STAGES = {"python": 6}
 
 
 def refuse_window_layers(specs: Sequence[LayerSpec], implementation: str) -> None:
     """
     A builder's refusal of a window's StateInput, which implementation doesn't build yet: the
-    window-recurrent adder workplan builds it at its stage 5 (Rust) and 6 (pure Python).
+    window-recurrent adder workplan builds it in pure Python at its stage 6.
     """
     state_input = next((spec for spec in expand_specs(specs) if isinstance(spec, StateInput)), None)
     assert state_input is None, (

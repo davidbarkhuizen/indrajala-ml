@@ -44,6 +44,7 @@ from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustA
 from indrajala_ml.model.layers.rust.layer_norm_rust_array_layer import LayerNormRustArrayLayer
 from indrajala_ml.model.layers.rust.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.layers.rust.max_pool_rust_array_layer import MaxPoolRustArrayLayer
+from indrajala_ml.model.layers.rust.recurrent_rust_array_layer import StateInputRustArrayLayer
 from indrajala_ml.model.layers.rust.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.layers.rust.residual_rust_array_layer import AddRustArrayLayer, ForkRustArrayLayer
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
@@ -76,7 +77,6 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import (
-    refuse_window_layers,
     validate_layer_specs,
     validate_window_specs,
 )
@@ -149,7 +149,7 @@ class TokenLayerClasses:
     norm (over tokens or a flat layer), attention and the token mean; and a sequence model's (the
     sequence task workplan): the embedding and the token-wise softmax output layer; and the
     token-wise dropout (the attention-dropout workplan); and a window's StateInput (the
-    window-recurrent adder workplan, stage 3), None where it isn't built yet.
+    window-recurrent adder workplan, stages 3 and 5).
     """
 
     token_dense: LayerClass
@@ -161,7 +161,7 @@ class TokenLayerClasses:
     embedding: LayerClass
     token_output: LayerClass
     dropout: LayerClass
-    state_input: LayerClass | None
+    state_input: LayerClass
 
 
 TOKEN_LAYER_CLASSES = {
@@ -187,7 +187,7 @@ TOKEN_LAYER_CLASSES = {
         embedding=EmbeddingRustArrayLayer,
         token_output=TokenSoftmaxRustArrayLayer,
         dropout=TokenDropoutRustArrayLayer,
-        state_input=None,
+        state_input=StateInputRustArrayLayer,
     ),
 }
 
@@ -222,7 +222,7 @@ def _token_layer(
     if isinstance(spec, Dropout):
         return classes.dropout(*token_shape(shape), spec.p)
     if isinstance(spec, StateInput):
-        assert classes.state_input is not None and state_size is not None
+        assert state_size is not None
         return classes.state_input(*token_shape(shape), state_size)
     if isinstance(spec, Position | TokenMean):
         tokens, features = token_shape(shape)
@@ -254,12 +254,9 @@ def build_array_layers(
     specs, validated (validate_layer_specs), as backend_name's layers over input_shape: one per
     expanded spec (expand_specs), each residual block's fork wired to its add and to its body's
     first layer. With a state_size, specs are a window-recurrent network's window
-    (validate_window_specs), its StateInputs that wide; Rust doesn't build them yet
-    (refuse_window_layers).
+    (validate_window_specs), its StateInputs that wide.
     """
     token_classes = TOKEN_LAYER_CLASSES[backend_name]
-    if token_classes.state_input is None:
-        refuse_window_layers(specs, backend_name)
     if state_size is None:
         validate_layer_specs(specs)
     else:
