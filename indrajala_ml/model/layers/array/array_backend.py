@@ -86,6 +86,14 @@ class NumpyBackend:
         return np.zeros(shape)
 
     @staticmethod
+    def columns(matrix: FloatArray, start: int, stop: int) -> FloatArray:
+        return matrix[:, start:stop]
+
+    @staticmethod
+    def concatenate_columns(matrices: Sequence[FloatArray]) -> FloatArray:
+        return np.concatenate(matrices, axis=1)
+
+    @staticmethod
     def argmax(vector: FloatArray) -> int:
         return int(np.argmax(vector))
 
@@ -146,6 +154,14 @@ class RustBackend:
     @staticmethod
     def zeros(shape: int | tuple[int, int]) -> pa.Array:
         return pa.Array.zeros(shape)
+
+    @staticmethod
+    def columns(matrix: pa.Array, start: int, stop: int) -> pa.Array:
+        return matrix[:, start:stop]
+
+    @staticmethod
+    def concatenate_columns(matrices: Sequence[pa.Array]) -> pa.Array:
+        return pa.concatenate_columns(list(matrices))
 
     @staticmethod
     def argmax(vector: pa.Array) -> int:

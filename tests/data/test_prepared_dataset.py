@@ -156,6 +156,7 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "SequentialSequenceArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
     "SequentialSequenceRustArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
     "WindowRecurrentArrayNetwork": lambda cls: cls((DIMENSION,), WINDOW, WindowRecurrence(2, Codes(3)), Adam()),
+    "WindowRecurrentRustArrayNetwork": lambda cls: cls((DIMENSION,), WINDOW, WindowRecurrence(2, Codes(3)), Adam()),
 }
 
 

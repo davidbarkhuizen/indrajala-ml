@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
-from indrajala_ml.model.networks.numpy.window_recurrent_array_network import WindowRecurrentArrayNetwork
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentArrayNetwork
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import (
     Attention,

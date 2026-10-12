@@ -220,6 +220,18 @@ Settled under the owner's standing delegation:
     copies' count changes with the curriculum's window count.
   - (c) Layers that hand back their saved values. Cons: every layer rewritten in three
     implementations.
+- **W21. The Rust parts. Settled: (a)** (stage 5).
+  - (a) *Chosen.* New crate ops, one call per pass of each part (`state_input_*`,
+    `attention_pooling_*`, `gru_*`, `codes_*`), composed of the crate's products, `array_softmax`
+    and numpy's elementwise grouping, and `concatenate_columns`. Pros: one boundary crossing per
+    pass, no per-example Python loops; attention's pattern; the codes' ops numpy's by bits. Cons:
+    a crate PR, and more Rust to test.
+  - (b) The parts composed in Python from `pa.Array`'s existing ops. Pros: no crate change. Cons:
+    `Array` is 2-D with no concatenation, no reduction but `sum_axis0` and no broadcast over
+    tokens, so the pooling and the StateInput would loop over the examples in Python, slower than
+    numpy.
+  - (c) Crate ops for the token-shaped parts only, the GRU composed. Cons: the GRU's gradient
+    blocks need concatenation or slice writes, which `Array` lacks: a crate change anyway.
 
 ## Stages
 
@@ -244,7 +256,7 @@ Settled under the owner's standing delegation:
    check through two and three windows; with the state's projections at zero and one window, the
    network's digits are the plain sequence network's by bits, so the wiring is checked apart from
    training. Tier 0. Built as `WindowRecurrentArrayNetwork`
-   (`model/networks/numpy/window_recurrent_array_network.py`): any window count per batch, the
+   (`model/networks/window_recurrent_array_network.py`): any window count per batch, the
    same for every example; the loss per example the mean of every column's cross-entropy plus 1 /
    W of each snap's code losses (the initial state's and each window's); W20's recompute, the
    generator restored per window. The gradient check, through 1, 2 and 3 windows, makes the codes
@@ -252,9 +264,16 @@ Settled under the owner's standing delegation:
    apart. Format 2 names the network's own parts after the window's layers
    (`RECURRENCE_PARAMETERS`); `load_network` loads a numpy file. Aligning the columns (W6-i) and
    the final zero window (W9) are the caller's: the harness's, at stage 8.
-5. **The crate, then the Rust layers and network**: any op the layers need (the GRU's and the
-   pooling's batch ops), indrajala-math-rust first, then a "Bump rust/" PR; parity with numpy.
-   Tier 0 for existing paths: their ops unchanged (an A/B only if a shared op changes).
+5. **The crate, then the Rust layers and network**: *Done.* Any op the layers need (the GRU's and
+   the pooling's batch ops), indrajala-math-rust first, then a "Bump rust/" PR; parity with numpy.
+   Tier 0 for existing paths: their ops unchanged (an A/B only if a shared op changes). Built as
+   the crate's `src/recurrent.rs` (indrajala-math-rust #56, W21): one call per pass of each part,
+   and `concatenate_columns`; then `model/layers/rust/recurrent_rust_array_layer.py`, and the
+   network as a shape mixin over either backend, `WindowRecurrentShape`
+   (`model/networks/window_recurrent_array_network.py`), whose parts are the backend's:
+   `WindowRecurrentArrayNetwork` on numpy and `WindowRecurrentRustArrayNetwork` on Rust. The two
+   draw the same weights by bits, and training keeps numpy's weights within 5.8e-13 of each
+   entry's scale after 20 steps (the products' rounding, the crate's against BLAS).
 6. **Pure Python**: the same, parity with numpy. Tier 0.
 7. **Fixtures, checkpoints and golden entries** for the new network in each implementation; the
    118 earlier golden entries bit-identical.
