@@ -305,7 +305,9 @@ def _assert_every_adam_step_has_numpys_gradients(
     # numpy's weights: Rust's gradients within 1e-10 of each layer's largest gradient (measured
     # 7e-13, the dense part after the mean). Attention's bk, rounding noise (D6), is compared apart:
     # on both sides within 1e-12 of attention's largest gradient (measured 6.9e-14; pure Python's
-    # folds against numpy's BLAS gave 4e-16, the crate's products against BLAS more)
+    # folds against numpy's BLAS gave 4e-16, the crate's products against BLAS more). A rotary
+    # layer's bk is not noise: rotated by each key's position, it no longer shifts a query's
+    # scores alike, so the softmax no longer cancels it (the rotary-positions workplan, stage 5)
     rust, numpy = build(specs, SGD()), build(specs, Adam(), backend=NUMPY)
     data = examples(specs, 40)
     for step, batch in enumerate(batches(data)):
@@ -318,7 +320,7 @@ def _assert_every_adam_step_has_numpys_gradients(
             scale = max((float(np.abs(np.asarray(g)).max()) for g in numpy_layer), default=0.0)
             for i, (values, rust_values) in enumerate(zip(numpy_layer, rust_layer, strict=True)):
                 values, rust_values = np.asarray(values), np.asarray(rust_values)
-                if type(layer).__name__ == "AttentionArrayLayer" and i == 3:
+                if type(layer).__name__ == "AttentionArrayLayer" and layer.positions == "none" and i == 3:
                     assert max(np.abs(values).max(), np.abs(rust_values).max()) <= 1e-12 * scale
                     continue
                 np.testing.assert_allclose(rust_values, values, rtol=0.0, atol=1e-10 * scale)

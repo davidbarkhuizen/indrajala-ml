@@ -112,9 +112,14 @@ Settled by the owner (2026-10-10), as proposed:
    its backward in project; tests by hand (a rotation preserves norms; the score depends on `t - u`
    only; one token at position 0 is the unrotated layer by bits); tier 1 A/B of numpy's attention
    case with rotation off.
-4. **The crate**: `cos` and `sin` through the four ops (D5), numpy's bits; then a "Bump rust/" PR
-   with the tier 1 A/B.
-5. **Rust layers**: through the ops; parity with numpy.
+4. **The crate** (done; indrajala-math-rust #55, then #678 here): `cos` and `sin` through the ops
+   (D5), numpy's bits; then a "Bump rust/" PR with the tier 1 A/B. As built: only the two forward
+   ops and the downstream op take the table; the downstream returns `dQ` and `dK` already rotated
+   back, so the gradient op needs none. The A/B came out faster on five Rust rows (7-18%,
+   unexplained, not claimed).
+5. **Rust layers** (done): through the ops; parity with numpy. Without a rotation the layer passes
+   no table; the Adam parity helpers treat `bk` as rounding noise only when `positions == "none"`
+   (rotated, a key bias no longer cancels in the softmax).
 6. **Pure Python**: the rotation in its project block; parity.
 7. **Fixtures, checkpoints and golden entries** (D7).
 8. **The study** (D8).
