@@ -2,7 +2,8 @@
 
 A workplan is deleted once its last stage merges, and never before: only when every stage and
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
-list, and the parts of its "Out of scope" that still bind later work) moves here. A workplan still
+list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
+"not planned yet" means only that no workplan has taken it up. A workplan still
 in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
 [rotary-positions-workplan.md](rotary-positions-workplan.md),
 [generation-workplan.md](generation-workplan.md),
@@ -14,7 +15,8 @@ in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan
 [cross-attention-workplan.md](cross-attention-workplan.md),
 [addition-study-workplan.md](addition-study-workplan.md),
 [study-runs-workplan.md](study-runs-workplan.md),
-[arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md). The order
+[arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md),
+[window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -42,6 +44,7 @@ docs cite them by section:
 | A sequence task with causal masking (roadmap step 6) | #620 | crate #53, #621-#634, archive #14-#17 | `git show f6e843b:docs/sequence-task-workplan.md` |
 | Pure Python's random draws in numpy's order (RNG draw order) | #637 | #649-#652, archive #18-#19 | `git show 7a80858:docs/rng-draw-order-workplan.md` |
 | Dropout in attention (roadmap step 7) | #638 | crate #54, #654-#660, #666, archive #20-#21 | `git show 8d2019e:docs/attention-dropout-workplan.md` |
+| Length generalisation for the column adders (terminated by the owner before its existence study) | #683 | #684 | `git show c3d619b:docs/length-generalisation-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -82,7 +85,7 @@ the attention dropout study's in `scripts/attention_dropout_study.py`'s.
 - **Demos for the new conv presets** (the presets workplan's D4), each with its own tuned,
   measured PR: a demo makes an accuracy claim.
 
-Still out of scope, for later workplans too (batch norm's included):
+Not planned yet (none of it is excluded; any later workplan may take it up):
 
 - Separate activation layers, which would add a crossing per layer on Rust. Activations stay fused.
 - Parameter groups and per-layer learning rates. (Schedulers beyond today's `lr_schedule.py` were
@@ -95,7 +98,7 @@ Still out of scope, for later workplans too (batch norm's included):
   `validate_layer_specs` today.
 - **Folding batch norm into the preceding weights** for inference: a speed change, measured.
 
-Still out of scope:
+Not planned yet:
 
 - Group norm and instance norm. They normalize within an example, a different layer (layer
   norm, the third, is built: README, Layer norm and attention).
@@ -131,7 +134,7 @@ The old conv plan's timing and demo stages were for a rule that holds, and stay 
 - **A `perf_region.py` adapter.** Its counters need `sudo` and a driver marking regions, so the
   harness has none yet.
 
-Still out of scope:
+Not planned yet:
 
 - Non-timing gates. The golden run, tests and lint are each already one command.
 - Significance tests (Mann-Whitney and the like). The protocol judges by ranges and agreement
@@ -182,7 +185,7 @@ Still out of scope:
   and the add, more indirection than its 12 lines are worth. Revisit if another layer kind that
   links layers arrives.
 
-Still out of scope:
+Not planned yet:
 
 - The crate (the workplan's D1), and scripts and demos (D5): they get their own audit if wanted.
 - The numpy and Rust layer twins' numerics (D3): they share identical methods only; their method
@@ -203,7 +206,7 @@ Still out of scope:
   at initialization grows tenfold from 2 to 16 hidden layers (the residual one's 1.8x), and at 16
   its seeds' standard deviation is 3 points in the first two epochs. Unexplained.
 
-Still out of scope:
+Not planned yet:
 
 - Nested blocks (D6). The design nests without change; only validation refuses it.
 - An activation after the add, `relu(x + F(x))` (D3), and a standalone activation layer.
@@ -214,7 +217,7 @@ Still out of scope:
   resuming mid-epoch, resuming `train_linear_classifier_network` (it returns no run checkpoint),
   and resuming an ensemble's run, whose sub-networks train as separate jobs.
 
-Still out of scope:
+Not planned yet:
 
 - Normal draws, integer draws and broadcast `low`/`high`. Nothing uses them.
 - Other bit generators (Philox, SFC64, PCG64DXSM).
@@ -265,7 +268,7 @@ moved to From multi-head attention. Besides those:
 - **A preset** (D12), if a patch model configuration is worth naming, under From composable
   layers' rule for presets.
 
-Still out of scope:
+Not planned yet:
 
 - A class token (D8 (b)), fixed sin-cos or drawn positions (D7 (b), (c)).
 - Conv-then-tokens hybrids.
@@ -309,7 +312,7 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
   task's mask touched the numpy layer's forward only and left this as it was. Still worth a look:
   a fix must keep the blocks and their bits.
 
-Still out of scope:
+Not planned yet:
 
 - A `TransformerLayer` spec (D5 (b)): a transformer layer is the attention and FFN blocks written
   again; a spec would freeze pre-LN against post-LN, the activation and where dropout goes.
@@ -352,7 +355,7 @@ non-overlapping windows of 65 characters, the last 10% held out (D4). The study
   and a task only attention over earlier tokens solves. The study's leak arm and the mask's own
   test (a future token can't change an earlier output) already cover what it would test.
 
-Still out of scope:
+Not planned yet:
 
 - A summed per-token loss (D6 (b)): with the mean, a step's size doesn't depend on `T`.
 - A separate `TokenOutput` spec (D6 (c)): inside a token part `Dense` already means "per token".
@@ -392,7 +395,7 @@ split (0.023 lower, every seed), which the spread split doesn't repeat.
   a larger model, which overfits more and leaves dropout something to remove; and whether
   attention dropout's gain across Euclid's shift is real or a 10-epoch accident.
 
-Still out of scope:
+Not planned yet:
 
 - Dropout fields on the layers that end a body (D2 (b)): `Dropout(p)` is the one token-wise form;
   a linear `Dense`'s dropout would need a linear variant of every fused `layer_dropout_*` op.
@@ -421,7 +424,7 @@ Still out of scope:
   are byte-identical (D5). A crate change for the i7 is A/B'd on the laptop too, preferably on one
   thread: its default-threading A/As are noisy (a 32% per-pass spread at the median row).
 
-Still out of scope:
+Not planned yet:
 
 - Claiming a cross-machine speedup from the laptop columns: they're context, and only their
   Rust/numpy ratios compare.
@@ -438,12 +441,32 @@ Still out of scope:
 - **Crate tuning on CPU attributes** ([i7-9700k-rust-optimization.md](i7-9700k-rust-optimization.md))
   uses the archive's profiles and runs from both machines.
 
-Still out of scope:
+Not planned yet:
 
 - Changing the timing protocol (the verdict rule, the noise rules per machine) except from data,
   as tier 1's pass count was.
 - Hosting results anywhere but the archive repository: no dashboards, no release assets.
 - Benchmarks in CI: GitHub's runners are shared and noisy, so no timing is ever taken there.
+
+## From length generalisation (terminated)
+
+The owner terminated the plan (2026-10-12) after its reading (stage 2), for the window-recurrent
+design ([window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md), Why this design):
+a fixed-depth network that finds a carry's deciding column in one long hop needs position codes that
+stay distinguishable at any distance, which bounded codes can't give.
+
+- **Its literature section stands** (`git show c3d619b:docs/length-generalisation-workplan.md`,
+  What the literature found), and the window-recurrent plan builds on it.
+- **Length-free token networks (its P1) are parked.** Stage 3 (P1a: `(None,)` token ids in the
+  shape walk, `AnyInputShape`, format 2's `{"dimension": null}`) was built and passed (tests and
+  the golden run) but never opened as a PR: the local branch `length-free-shapes` (`bd13b16`).
+  A window has a fixed `T`, so the window-recurrent plan doesn't need it; generation (step 9) or
+  a later length study may.
+- **For any later fixed-depth length study:** rotary and no positions fail at long range by
+  construction (resolution and dilution); an additive distance bias (ALiBi, P2) is the scheme that
+  doesn't, and D12's start token is what a no-positions control needs.
+- **The result's `crate` field** hashes `indrajala_math_rust/__init__.py`, not the extension
+  module; the window-recurrent plan's stage 8 fixes it.
 
 ## From the addition study (in progress)
 

@@ -5,6 +5,13 @@ their order and the decisions that frame them. Each piece gets its own detailed 
 any code, and this plan is revisited then. It isn't on the primitives roadmap yet; where its
 pieces meet roadmap steps, those steps are named.**
 
+**Revised by the owner (2026-10-12): milestone A is now a window-recurrent adder
+(`docs/window-recurrent-adder-workplan.md`), recurrence along the columns, H3's option (b); its
+first subplan, `docs/length-generalisation-workplan.md` (P1, P4, P5 and a
+fixed-depth existence study), was terminated after its reading (next-steps, From length
+generalisation). P1 is parked; P2, P3 and P7 are deferred; composing a fixed-length adder outside
+the network is parked (Parked, below).**
+
 The addition study (`docs/addition-study-workplan.md`) asks for the smallest network that adds
 base-3 numbers of a fixed `n` digits. This plan asks what the framework lacks for an adder trained
 on some lengths to add numbers of **any** length, including lengths it never saw and operands of
@@ -124,8 +131,8 @@ Each is a subplan of its own. "Step N" is the primitives roadmap's.
     implementations and the crate. Today each layer owns its parameters.
   - Needs a variable iteration count at inference, and memory for `k` steps' activations in
     training.
-  - The alternative is a recurrent cell over the columns with backpropagation through time.
-    The roadmap rules recurrence out of scope, so that one needs the owner.
+  - The alternative is a recurrent cell over the columns with backpropagation through time:
+    the window-recurrent adder, milestone A now (the owner, 2026-10-12).
 - **P8. The string format at any length (candidate 5).**
   - Answers of varying length decoded autoregressively need step 9 (generation).
   - Its loss on answer tokens only needs step 11's counted targets.
@@ -152,13 +159,16 @@ subplan revisits its own.
     Cons: rotary may extrapolate poorly; a negative result is still the baseline P2 is judged
     against.
   - (b) P2's new schemes first. Cons: chooses a scheme before seeing the failure it must fix.
-- **H3. The growing-depth mechanism. Settled: (a), at milestone B.**
+- **H3. The growing-depth mechanism. Settled: (a), at milestone B; superseded by the owner
+  (2026-10-12):** recurrence along the columns, windows of `k` with a discrete state between them,
+  is milestone A (`docs/window-recurrent-adder-workplan.md`). The looped block stays an option
+  for after it.
   - (a) *Chosen.* A looped transformer block (P7). Pros: reuses the blocks the framework has;
     the published route for addition (McLeish et al., Fan et al.); weight sharing is useful
     beyond this (tied embeddings, for one). Cons: shared parameters touch every implementation's
     parameter handling.
   - (b) A recurrent cell. Pros: the ripple-carry algorithm itself, linear cost. Cons: a new
-    family the roadmap rules out of scope; nothing else here uses it.
+    family; nothing else here uses it yet.
 - **H4. The encoding. Settled: (a).**
   - (a) *Chosen.* The column encoding (candidates 1-3) carries the milestones. It aligns digits
     by construction, so length is the only new variable.
@@ -167,9 +177,9 @@ subplan revisits its own.
 
 ## Order and dependencies
 
-1. **Milestone A, length generalisation** (its first subplan:
-   `docs/length-generalisation-workplan.md`, P1, P4 bucketed and P5 with an existence study at
-   `d` 16 and 16 layers, a curriculum over lengths 1-7, checked to 64):
+1. **Milestone A, now the window-recurrent adder** (`docs/window-recurrent-adder-workplan.md`).
+   As first planned (terminated, kept for the record): length generalisation, its subplan P1, P4
+   bucketed and P5 with an existence study at `d` 16 and 16 layers:
    - P1, then P4 (bucketed) and P5, then a study: the column transformers trained at
      `n_train` (say 4-8) and tested to 10× it, with rotary or no positions.
    - Then P2's schemes against that baseline, and P3 once step 11 lands (randomised offsets, digit
@@ -189,9 +199,17 @@ subplan revisits its own.
   three implementations.
 - The studies run on `jebel` under the study-runs workplan's lock.
 
+## Parked
+
+- **Composing a fixed-length adder outside the network** (the owner, 2026-10-12, for later
+  consideration): a fixed-`n` column adder outputs `n + 1` digits, the top one a carry; for two
+  operands, add chunk `k` as `(a_k, b_k, c = carry_{k-1})` and hand the top digit on, exact at any
+  length in `T / n` steps with the sweep's adders (three operands need a fourth slot or a second
+  pass). The network doesn't learn length; code composes it.
+
 ## Not in this plan
 
 - Other operations (multiplication, subtraction): each its own question once P1-P5 exist.
 - Bases other than 3, and more operands: parameters of the catalogue, not infrastructure.
-- Dense candidates 6-8 at other lengths: fixed input by construction; P7's recurrence alternative
-  covers a dense column cell if the owner admits recurrence.
+- Dense candidates 6-8 at other lengths: fixed input by construction; a recurrent cell over the
+  columns (P7's alternative, milestone A's design) covers a dense column cell.

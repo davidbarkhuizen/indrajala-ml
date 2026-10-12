@@ -143,8 +143,7 @@ The FFN activations and grouped heads refine the model steps 7 to 12 make, group
 step 9's cache at step 12's lengths; cross-attention is last as the largest, and needs everything
 before it.
 
-## Out of scope
+## Out of scope for now
 
-- Recurrent networks (RNN, LSTM): attention covers the sequence case in the literature this
-  project follows.
-- GPU backends.
+- GPU backends, for the moment (the owner, 2026-10-12). Nothing else is excluded: work with no
+  step yet is listed in next-steps as "not planned yet".
