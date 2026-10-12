@@ -5,6 +5,7 @@ break length against stand-in networks that add (or carry only inside a window),
 network's run, its steps saved and resumed.
 """
 
+import dataclasses
 import json
 import random
 from collections.abc import Sequence
@@ -179,6 +180,17 @@ def test_a_step_with_a_network_that_never_learns_stops_on_the_plateau():
     result = wr.run_step(AddingNetwork(window=1), spec, 2, [1, 2], SMALL)
     assert result["stop"] == "plateau" and result["epochs"] == 2 and not result["passes"]
     assert result["break"] == 0 and result["window_ratio"] == 0
+
+
+def test_without_tests_past_the_break_a_step_tests_up_to_its_first_failing_length():
+    spec = wr.RunSpec("curriculum", 1, 4, 8, 0)
+    settings = dataclasses.replace(SMALL, tests_past_break=False)
+    failing = wr.run_step(AddingNetwork(window=1), spec, 2, [1, 2], settings)
+    assert list(failing["tests"]) == ["8"] and not failing["tests"]["8"]["passes"]
+    assert failing["break"] == 0 and failing["window_ratio"] == 0
+    assert [wr._test_cell(failing, n, "reach", "{}") for n in SMALL.test_lengths][1:] == ["-", "-"]
+    passing = wr.run_step(AddingNetwork(), spec, 2, [1, 2], settings)
+    assert list(passing["tests"]) == [str(n) for n in SMALL.test_lengths] and passing["break"] == 16
 
 
 def test_the_arms_steps():

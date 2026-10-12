@@ -3,7 +3,8 @@
 **Status: decisions W1-W10 settled by the owner (2026-10-12), in dialogue; W11-W20 settled under
 the owner's standing delegation. Stage 1 (this plan) merged (#685); stage 2 (specs) merged (#686);
 stage 3 (numpy layers) merged (#687); stages 4-7 (the networks, fixtures and golden entries) done;
-W21-W29 settled at their stages; stage 8's harness done, its calibration next. It replaces
+W21-W29 settled at their stages; stage 8 (the harness and its calibration, W12) done; stage 9,
+the matrix on `jebel`, next. It replaces
 `docs/length-generalisation-workplan.md`, which the owner terminated before its existence study
 (next-steps, From length generalisation).**
 
@@ -157,10 +158,79 @@ Settled under the owner's standing delegation:
     blocks cover any in-window carry up to `k` 6; `d` 16 leaves room for the state's projection;
     one size keeps the matrix to `k`, `s` and `m`. Cons: at `k` 1 or 2 most of it is idle.
   - (b) A fourth matrix dimension. Cons: the matrix's cost, before anything is known to work.
-- **W12. The matrix's values and seeds. Settled at stage 8, from the calibration's cost.**
-  Provisional: `k` in {1, 2, 4}, `s` in {4, 16}, `m` in {4, 8, 16}, 5 seeds: 90 runs, and the
-  control (W16). Pros: settles the grid on measured cost, not a guess. Cons: one more decision
-  after the code.
+- **W12. The matrix's values, seeds and test pass. Settled at stage 8, from the calibration:
+  the provisional grid at the catalogue's default sizes, each step's test pass ending at its first
+  failing length** (`scripts/window_recurrent_matrix.json`).
+
+  **The calibration** (`scripts/window_recurrent_calibration.json`, `pyramidon`, `868838e`,
+  2026-10-12 19:52-21:13, 3 workers): `k` 1, 2, 4 at `s` 16, `m` 16, one seed, two steps, the
+  default settings (200 epochs, patience 30, the catalogue's default sizes).
+
+  | `k` | step | stop | epochs | break | ratio | codes | train + screen + check | test pass (all 8 lengths) | test s at 8 10 12 16 24 32 48 64 |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 1 | 1 | passed | 1 | 0 | 0 | 5 | 0.2 min | 29.3 min | 47 116 103 130 193 271 377 518 |
+  | 1 | 2 | passed | 2 | 0 | 0 | 5 | 0.4 min | 30.2 min | 53 117 115 140 195 280 389 523 |
+  | 2 | 1 | plateau | 39 | 0 | 0 | 4 | 5.3 min | 23.9 min | 48 105 86 106 168 206 303 413 |
+  | 2 | 2 | plateau | 110 | 0 | 0 | 9 | 20.5 min | 22.7 min | 48 102 87 109 158 198 278 380 |
+  | 4 | 1 | plateau | 47 | 0 | 0 | 3 | 10.6 min | 23.3 min | 51 114 106 106 148 189 282 399 |
+  | 4 | 2 | passed | 26 | 8 | 1.00 | 5 | 27.6 min | 19.2 min | 47 96 79 96 134 173 226 300 |
+
+  An epoch trained in 5-15 s (more windows, longer), screened in 0.4-6 s. Nothing extrapolated:
+  `k` 1 learnt one and two windows exactly within 2 epochs and failed at 8 columns; `k` 4 passed
+  its step 2 check (4 and 8 columns) and broke at 8, the window ratio 1; `k` 2 plateaued below its
+  check (best screen 0.988). **The test pass is the cost:** 19-30 minutes a step, against 0.2-28
+  for training, and the same whether the network passes or not (length 64 alone 300-520 s; 10
+  costs more than 12 and 16 because A3 and M1 are exhaustive there). At the provisional grid's
+  three steps a run spends 60-90 minutes on tests.
+
+  **Smaller samples (probed on the saved step 2 networks, every test length):** at `k` 2, which
+  fails everywhere, 10,000/1,000/100 (`sampled`/`relation_sampled`/`per_stratum`), 20,000/2,000/200
+  and 30,000/3,000/300 gave the full sizes' verdicts and `L*` at every length, in 7-11 minutes
+  against 23. At `k` 4, whose failures are rare, every reduced size got some length wrong: at a
+  tenth it passed 10 and 12, which the full sizes fail (a break of 12 for 8), and put `L*` at 16,
+  24 and 32 at the whole length for 7, 7 and 5; at three tenths it still called `L*` 16-32 whole.
+  The networks near working are the ones a short sample misreads.
+
+  - **The grid. Settled: (a).**
+    - (a) *Chosen.* The provisional grid: `k` in {1, 2, 4}, `s` in {4, 16}, `m` in {4, 8, 16}, 5
+      seeds, 3 steps (`Settings`' defaults): 90 runs. Pros: every axis the question names, at
+      the seeds W10's "works" is judged on; the calibration used 3-9 codes of 16, so `m` 4 and 8
+      bracket what a carry needs. Cons: the calibration measured one cell, so the grid's cost is
+      `s` and `m` held as cheap as 16 (the window's 9.8k parameters barely change with them).
+    - (b) `m` in {4, 16}: 60 runs. Pros: a third cheaper. Cons: drops the value between the
+      codes a carry needs (3) and those the calibration used.
+    - (c) 3 seeds: 54 runs. Pros: 40% cheaper. Cons: a cell's verdict on 3 seeds; W10's
+      "works" across seeds is the finding.
+    - (d) `k` 3 or 6 added. Pros: more window sizes. Cons: 30 runs each before any `k` is known
+      to work; stage 10's whittling is where a size between is tried.
+  - **The catalogue's sizes. Settled: (a).**
+    - (a) *Chosen.* The defaults (100,000 / 10,000 / 1,000). Pros: the verdicts the calibration
+      checked; a rare failure is what separates a working network from a near miss. Cons: the
+      full cost at every length tested.
+    - (b) 10,000 / 1,000 / 100. Pros: a quarter to a third of the time. Cons: wrong breaks and `L*` at `k` 4
+      (above).
+    - (c) 30,000 / 3,000 / 300. Pros: half the time. Cons: still wrong `L*` at `k` 4.
+  - **The test pass's extent. Settled: (b).**
+    - (a) Every test length after every step, as built. Pros: `L*` and the failing properties
+      at every length, past the break too. Cons: 60-90 minutes of a run's tests, mostly on
+      networks that fail at 8.
+    - (b) *Chosen.* Every step, up to its first failing length, which is tested whole
+      (`tests_past_break: false`). Pros: the break, the ratio and "works" are exactly (a)'s (the
+      break is the passing prefix); a failing step's tests take 1-2.5 minutes; a working network
+      still gets every length. Cons: no `L*` past the first failure, where `k` 4's step 2 showed
+      the carry reaching 21 columns at 48 while other properties failed, and the codes used are
+      counted over the lengths tested only; every step's network is saved, so stage 10's probes can
+      test any length again.
+    - (c) The test pass after the last step only. Pros: a third of (a)'s cost. Cons: loses the
+      break per step, the curriculum's measure; still (a)'s cost on that step.
+    - (d) Fewer test lengths (W17's). Pros: 48 and 64 are about half the time. Cons: the long lengths
+      are the claim.
+
+  **The estimate on `jebel`** (6 workers; per core, the calibration's figures): a run trains
+  15-110 minutes over 3 steps (step 3 adds a window count) and tests 3-7 minutes when it fails at
+  each step's first length, so the matrix takes about 5-30 hours, most likely 12-16; under (a)'s
+  test pass it would be about 20-50. The control (W16) is a second config at the matrix's best
+  cell once the matrix ends.
 - **W13. Gate initialisation. Settled: (a).**
   - (a) *Chosen.* The GRU's update gate biased toward keeping the old state at initialisation
     (`b_z` +1), its weights drawn small as a dense layer's. Pros: Hutchins et al.'s fix for the
@@ -381,7 +451,9 @@ Settled under the owner's standing delegation:
    `WindowRecurrentShape.state_codes` gives each state's code; `studies.common.crate_hash` hashes
    the extension module, for both studies. The calibration's config is
    `scripts/window_recurrent_calibration.json` (`k` 1, 2, 4 at the provisional grid's largest `s`
-   and `m`, 16 and 16, 1 seed, 2 steps); its figures and W12 follow in their own PR.
+   and `m`, 16 and 16, 1 seed, 2 steps). The calibration *done*: its figures and W12 above; the
+   setting `tests_past_break` (W12's test pass) and the matrix's config,
+   `scripts/window_recurrent_matrix.json`.
 9. **The matrix study on `jebel`** under the machine lock. Findings in the script's docstring.
 10. **What follows**, decided on the findings, each its own PR: if a cell works, whittle it down
     and run the control (W16); if none does, the probes say whether the codes, the cell or the
