@@ -94,6 +94,18 @@ Settled by the owner (2026-10-10), as proposed:
   `jebel` at the same protocol; about 2.5 hours, as the sequence sweep. (b) The 2-layer model on
   Tiny Shakespeare and Euclid only. Cons: no answer on Herodotus or the *Muqaddimah*. (c) Both
   arms rerun side by side. Pros: the same code and machine state for both. Cons: twice the cost.
+
+  **Amended by the study-runs workplan's D9 (c), 2026-10-11: the baseline is per seed.** Rotary and
+  learned share seeds and shuffles, so paired differences are tighter than either arm's spread. The
+  2-layer learned runs on Tiny Shakespeare, Herodotus and Euclid come from the attention-dropout
+  sweep's contiguous control (`--control`, pinned by sha256 `54f86f23...2a51291`); the sweep reruns
+  the 25 learned runs it lacks (the 1-layer arm on all four corpora, the 2-layer on the
+  *Muqaddimah*). Every learned row must reproduce the recorded means at epochs 1, 5 and 10, or the
+  study exits non-zero naming it (the control file's three rows do, to every digit). The report
+  gives rotary minus learned per seed, mean ± sd. Cost: about 1.4 h for the rotary arms and 0.7 h
+  for the reruns at 6 workers (the recorded seconds per epoch, 601.1 and 299.9 summed), about
+  2-2.5 h in all; the "about 2.5 hours" above was the sequence sweep's, with its ffn and unmasked
+  arms.
 - **D9. Default for new sequence models. Settled: (a).** (a) The README's sequence example and
   step 9's `train` use rotary attention, without `Position`, if the study shows it at least
   matching learned positions (within the seeds' spread); else they keep `Position`. Pros:
@@ -124,5 +136,7 @@ Settled by the owner (2026-10-10), as proposed:
    as the Rust one, treats `bk` as rounding noise only when `positions == "none"`.
 7. **Fixtures, checkpoints and golden entries** (done; D7): three golden entries, the sequence
    model with rotary attention in each implementation; the 115 earlier entries bit-identical.
-8. **The study** (D8).
+8. **The study** (D8, as amended): the study's code with `--control`, the machine lock and its
+   result file (this stage's first PR); then `time` and the sweep on `jebel`, its findings in the
+   script's docstring.
 9. **Docs**: README, roadmap, next-steps; the workplan retired.
