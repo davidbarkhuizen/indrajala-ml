@@ -22,7 +22,7 @@ network resumes training by bits, its dropout masks included.
   "window_recurrent" (the window-recurrent adder workplan, stage 2), whose layers are its window's
   and whose input is the window's, its k columns' token ids. Its file adds "recurrence":
   {"state_size": s, "codes": {"count": m, "commitment": 0.25}, "cell": {"kind": "gru",
-  "update_bias": 1.0}, "pooling": {"kind": "attention"}}. No network of the shape is built yet.
+  "update_bias": 1.0}, "pooling": {"kind": "attention"}}. numpy builds it (stage 4).
 - preset holds a preset's class and constructor arguments, from which its load rebuilds it. A
   Sequential network's file has none.
 - input is {"dimension": d} or {"height": h, "width": w, "channels": c}, with "input_bounds" in
@@ -40,7 +40,9 @@ network resumes training by bits, its dropout masks included.
   affine layer (a residual block's, or a token-wise embedding); a token-wise dense layer's entry,
   a token-wise output layer's included, is a dense one.
 - weights is the network's snapshot() as lists, one entry per layer, a residual block's flattened
-  into its fork, body and add (layer_specs.expand_specs). On numpy and Rust, per layer: [W, b] (an
+  into its fork, body and add (layer_specs.expand_specs); a window-recurrent network's window's
+  layers, then its own parts: [q], the pooling's query; [W, U, b], the cell's; [E], the codes;
+  [c], the initial state (format2_json.RECURRENCE_PARAMETERS, as in the optimizer state). On numpy and Rust, per layer: [W, b] (an
   affine layer's too); [W] for a linear (bias-free) layer; [gamma, beta, running_mean, running_var]
   for a batch-norm layer; [P] for a position, and for a state input, its (d, s) projection; [E],
   the (vocabulary, size) table, for an embedding; [gamma, beta] for a layer norm; [Wq, bq, Wk, bk, Wv, bv, Wo, bo] for attention; [] for a pool
@@ -199,7 +201,9 @@ def checkpoint_to_json(network: Format2Network, checkpoint: Checkpoint[Any, Any]
         state["recurrence"] = recurrence_to_json(recurrence)
     state["update_rule"] = rule_to_json(rule)
     state["weights"] = lists(checkpoint.weights)
-    state["optimizer_state"] = optimizer_state_to_json(rule, python, checkpoint.optimizer, network.layer_specs)
+    state["optimizer_state"] = optimizer_state_to_json(
+        rule, python, checkpoint.optimizer, network.layer_specs, _recurrence(network)
+    )
     state["rng"] = rng_to_json(checkpoint.rng)
     return state
 
@@ -238,6 +242,7 @@ def network_from_json(state: dict[str, Any]) -> NetworkFile:
     window_recurrent = state["shape"] == WINDOW_RECURRENT
     if window_recurrent != ("recurrence" in state):
         raise ValueError(f"a {WINDOW_RECURRENT} file, and only one, has a recurrence: shape {state['shape']!r}")
+    recurrence = recurrence_from_json(state["recurrence"]) if window_recurrent else None
     shape = state["input"]
     bounds = shape.get("input_bounds")
     return NetworkFile(
@@ -249,9 +254,9 @@ def network_from_json(state: dict[str, Any]) -> NetworkFile:
         layers=layers,
         update_rule=rule,
         weights=state["weights"],
-        optimizer_state=optimizer_state_from_json(rule, python, state["optimizer_state"], layers),
+        optimizer_state=optimizer_state_from_json(rule, python, state["optimizer_state"], layers, recurrence),
         rng=rng_from_json(state["rng"]) if "rng" in state else None,
-        recurrence=recurrence_from_json(state["recurrence"]) if window_recurrent else None,
+        recurrence=recurrence,
     )
 
 

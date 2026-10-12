@@ -20,6 +20,7 @@ from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_networ
     EnsembleRustArrayBackpropClassifierNetwork,
 )
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.networks.numpy.window_recurrent_array_network import WindowRecurrentArrayNetwork
 from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
@@ -71,12 +72,17 @@ def load_network(path: str) -> Any:
 
 
 def _sequential(file: NetworkFile) -> Any:
-    if file.shape == WINDOW_RECURRENT:
-        raise ValueError(
-            "a window-recurrent network isn't built yet (the window-recurrent adder workplan: numpy at stage 4, "
-            "Rust at stage 5, pure Python at stage 6)"
-        )
     network: Any
+    if file.shape == WINDOW_RECURRENT:
+        if file.implementation != NUMPY.name:
+            raise ValueError(
+                f"a window-recurrent network isn't built in {file.implementation} yet (the window-recurrent adder "
+                "workplan: Rust at stage 5, pure Python at stage 6)"
+            )
+        assert file.recurrence is not None
+        network = WindowRecurrentArrayNetwork(file.input_shape, file.layers, file.recurrence, file.update_rule)
+        restore_file(network, file)
+        return network
     if file.implementation == PYTHON:
         cls = _PYTHON_SHAPES[file.shape]
         network = cls(file.input_shape, file.layers, file.update_rule, file.input_bounds)

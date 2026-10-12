@@ -300,3 +300,37 @@ class CodesArrayLayer:
         differences = self._H - self._Q
         np.add.at(self.grad_E, self.indices, -2.0 * weight * differences)
         return dQ + (2.0 * weight * self.commitment) * differences
+
+
+class InitialStateArrayLayer:
+    """
+    The first window's state before it is snapped (the window-recurrent adder workplan, W8): a
+    learned vector c of state_size features, the same for every example, starting at zero and not
+    decayed. Its gradient is the snapped state's gradient summed over the examples.
+    """
+
+    decayed: ClassVar[tuple[bool, ...]] = (False,)
+
+    def __init__(self, state_size: int) -> None:
+        self.state_size = state_size
+        self.c: FloatArray = np.zeros(state_size)
+        self.grad_c: FloatArray = np.zeros(state_size)
+
+    def parameters(self) -> tuple[FloatArray, ...]:
+        return (self.c,)
+
+    def gradients(self) -> tuple[FloatArray, ...]:
+        return (self.grad_c,)
+
+    def set_parameters(self, parameters: Sequence[FloatArray]) -> None:
+        (self.c,) = parameters
+
+    def reset_gradient_accum(self) -> None:
+        self.grad_c = np.zeros(self.c.shape)
+
+    def forward_batch(self, examples: int) -> FloatArray:
+        """c for each of examples examples, (examples, state_size), a new array."""
+        return np.tile(self.c, (examples, 1))
+
+    def backward_batch(self, dC: FloatArray) -> None:
+        self.grad_c += sum_rows(dC)

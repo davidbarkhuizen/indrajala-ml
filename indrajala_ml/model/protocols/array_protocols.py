@@ -114,6 +114,18 @@ class EmbeddingTableLayer[A: BackendArray](Protocol):
 
 
 @runtime_checkable
+class StateProjectionLayer[A: BackendArray](Protocol):
+    """
+    A window's state input (the window-recurrent adder workplan, W18): its (features, state_size)
+    projection P, drawn as a weight matrix of fan-in state_size. A position's P isn't one: it has
+    no state_size.
+    """
+
+    state_size: int
+    P: A
+
+
+@runtime_checkable
 class RunningStateLayer[A: BackendArray](Protocol):
     """
     A layer with state that a training forward pass moves but no optimizer steps: batch norm's

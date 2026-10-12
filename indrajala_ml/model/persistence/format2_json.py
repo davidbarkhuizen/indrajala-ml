@@ -210,12 +210,28 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("W", "b")
 
 
+# a window-recurrent network's own parts' parameters, after its window's layers, in order: the
+# pooling's query, the cell's, the codes and the initial state (the window-recurrent adder
+# workplan, stage 4)
+RECURRENCE_PARAMETERS: tuple[tuple[str, ...], ...] = (("q",), ("W", "U", "b"), ("E",), ("c",))
+
+
+def _layer_parameter_names(specs: Sequence[LayerSpec], recurrence: WindowRecurrence | None) -> list[tuple[str, ...]]:
+    # each expanded layer's parameters' names, then a window-recurrent network's own parts'
+    names = [_parameter_names(spec) for spec in expand_specs(specs)]
+    return names if recurrence is None else [*names, *RECURRENCE_PARAMETERS]
+
+
 def optimizer_state_to_json(
-    rule: UpdateRule, python: bool, state: OptimizerState[Any], specs: Sequence[LayerSpec]
+    rule: UpdateRule,
+    python: bool,
+    state: OptimizerState[Any],
+    specs: Sequence[LayerSpec],
+    recurrence: WindowRecurrence | None = None,
 ) -> dict[str, Any]:
     names = _state_names(rule)
-    expanded = expand_specs(specs)
-    layers: list[Any] = [None] * len(expanded)
+    parameter_names = _layer_parameter_names(specs, recurrence)
+    layers: list[Any] = [None] * len(parameter_names)
     for index, layer_state in state.layers.items():
         if python:
             # per weight set: (a list per name, shaped as its weights; the bias's value per name,
@@ -231,17 +247,21 @@ def optimizer_state_to_json(
             # per parameter, an array shaped as it per name
             layers[index] = {
                 f"{name}_{parameter}": lists(layer_state[p * len(names) + i])
-                for p, parameter in enumerate(_parameter_names(expanded[index]))
+                for p, parameter in enumerate(parameter_names[index])
                 for i, name in enumerate(names)
             }
     return {"t": state.t, "layers": layers}
 
 
 def optimizer_state_from_json(
-    rule: UpdateRule, python: bool, state: dict[str, Any], specs: Sequence[LayerSpec]
+    rule: UpdateRule,
+    python: bool,
+    state: dict[str, Any],
+    specs: Sequence[LayerSpec],
+    recurrence: WindowRecurrence | None = None,
 ) -> OptimizerState[Any]:
     names = _state_names(rule)
-    expanded = expand_specs(specs)
+    parameter_names = _layer_parameter_names(specs, recurrence)
     layers: dict[int, Any] = {}
     for index, layer_state in enumerate(state["layers"]):
         if layer_state is None:
@@ -256,7 +276,7 @@ def optimizer_state_from_json(
             ]
         else:
             layers[index] = [
-                layer_state[f"{name}_{parameter}"] for parameter in _parameter_names(expanded[index]) for name in names
+                layer_state[f"{name}_{parameter}"] for parameter in parameter_names[index] for name in names
             ]
     return OptimizerState(state["t"], layers)
 

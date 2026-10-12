@@ -25,8 +25,9 @@ from indrajala_ml.model.networks.rust.dropout_rust_array_multiclass_backprop_cla
 )
 from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.protocols.classifier_protocols import Example
-from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, LayerSpec, Residual
+from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, LayerSpec, Residual, StateInput
 from indrajala_ml.model.specs.update_rules import Adam, Momentum
+from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
 from indrajala_ml.training.train import _training_accuracy
 from tests.helpers import all_subclasses, model_modules
 
@@ -61,6 +62,15 @@ SEQUENTIAL_SINGLE_OUTPUT = [Dense(5, activation="relu"), Dense(1, output=True, l
 # a sequence network (the sequence task workplan, stage 3) over DIMENSION ids of CLASS_COUNT tokens
 SEQUENCE: list[LayerSpec] = [
     Embedding(CLASS_COUNT, 4),
+    Residual((LayerNorm(), Attention(heads=2, causal=True))),
+    Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+]
+
+# a window-recurrent network's window (the window-recurrent adder workplan, stage 4), one window of
+# DIMENSION columns a row
+WINDOW: list[LayerSpec] = [
+    Embedding(CLASS_COUNT, 4),
+    StateInput(),
     Residual((LayerNorm(), Attention(heads=2, causal=True))),
     Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
 ]
@@ -145,6 +155,7 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "SequentialRustArrayBackpropClassifierNetwork": lambda cls: cls((DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT, Adam()),
     "SequentialSequenceArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
     "SequentialSequenceRustArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
+    "WindowRecurrentArrayNetwork": lambda cls: cls((DIMENSION,), WINDOW, WindowRecurrence(2, Codes(3)), Adam()),
 }
 
 
@@ -157,7 +168,8 @@ def _is_binary(cls: type[Any]) -> bool:
 
 
 def _is_sequence(cls: type[Any]) -> bool:
-    return cls.format2_shape == "sequence"
+    # a label per token: a sequence network's, or a window-recurrent network's per column
+    return cls.format2_shape in ("sequence", "window_recurrent")
 
 
 def _label_type(cls: type[Any]) -> type[Any]:

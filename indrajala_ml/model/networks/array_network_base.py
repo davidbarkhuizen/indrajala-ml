@@ -17,6 +17,7 @@ from indrajala_ml.model.protocols.array_protocols import (
     EmbeddingTableLayer,
     ProjectionsArrayLayer,
     RunningStateLayer,
+    StateProjectionLayer,
     TrainedArrayLayer,
     TrainingModeLayer,
     WeightedArrayLayer,
@@ -68,7 +69,10 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
     def __init__(self, specs: Sequence[LayerSpec], input_shape: InputShape) -> None:
         self.input_shape = input_shape
         self.layer_specs = list(specs)
-        self.layers = cast("list[ArrayNetworkLayer[A]]", build_array_layers(specs, input_shape, self.backend.name))
+        self.layers = cast(
+            "list[ArrayNetworkLayer[A]]",
+            build_array_layers(specs, input_shape, self.backend.name, self._window_state_size()),
+        )
         self.output_layer = cast("WeightedArrayLayer[A]", self.layers[-1])
         # the dropout and batch-norm layers, which _set_training_mode switches
         self._training_mode_layers = [layer for layer in self.layers if isinstance(layer, TrainingModeLayer)]
@@ -96,6 +100,11 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
         self._rng = rng
         for layer in self._generator_layers:
             layer.set_rng(rng)
+
+    def _window_state_size(self) -> int | None:
+        # a window-recurrent network's state width, with which its specs are built as a window
+        # (build_array_layers); None for every other network
+        return None
 
     def _hidden_spec(self, size: int) -> Dense:
         # a dense hidden layer; the ReLU and dropout siblings return theirs
@@ -276,8 +285,8 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
         # order; a W is (rows, fan_in), a dense layer's (size, input_size) and a conv layer's
         # (channel_count, input_channels * kernel_size**2). A linear layer draws its W only, an
         # embedding its E (vocabulary, size) as a W, an attention layer each projection's W then b
-        # in turn, and a pool, batch-norm, layer-norm, patches, position or token-mean layer draws
-        # nothing.
+        # in turn, a window's state input its P (features, state_size) as a W, and a pool,
+        # batch-norm, layer-norm, patches, position or token-mean layer draws nothing.
         for layer in self.layers:
             if isinstance(layer, WeightedArrayLayer):
                 rows, fan_in = layer.W.shape
@@ -290,6 +299,10 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
                 embedding = cast("EmbeddingTableLayer[A]", layer)
                 vocabulary, size = embedding.E.shape
                 embedding.E = self.backend.random_weights(self.rng, vocabulary, size)
+            elif isinstance(layer, StateProjectionLayer):
+                state_input = cast("StateProjectionLayer[A]", layer)
+                rows, fan_in = state_input.P.shape
+                state_input.P = self.backend.random_weights(self.rng, rows, fan_in)
             elif isinstance(layer, ProjectionsArrayLayer):
                 projections = cast("ProjectionsArrayLayer[A]", layer)
                 projections.set_parameters(
