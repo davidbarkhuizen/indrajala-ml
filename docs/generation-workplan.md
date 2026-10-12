@@ -1,9 +1,9 @@
 # Workplan: generation with a key/value cache (roadmap step 9)
 
 **Status: decisions D1-D9 settled by the owner (2026-10-10), building for extensibility and
-speed. Stage 1 (this plan) done. Starts after step 8 (rotary positions,
-[rotary-positions-workplan.md](rotary-positions-workplan.md)), whose rotated keys this plan's
-cache keeps valid as its window slides.**
+speed. Stage 1 (this plan) done. Starts after step 8 (rotary positions, done 2026-10-12;
+next-steps, From rotary positions), whose rotated keys this plan's cache keeps valid as its window
+slides. Its `train` builds rotary models by default (the rotary workplan's D9).**
 
 Roadmap step 9 ([primitives-roadmap.md](primitives-roadmap.md)): sampling text from a trained
 sequence model, character by character, through an incremental decoding path: each new character
