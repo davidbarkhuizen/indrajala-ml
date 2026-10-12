@@ -269,7 +269,8 @@ def assert_every_step_has_numpys_gradients(python: Any, array: Any, data: list[t
     50 of python's training steps, each first checked against array's gradients from the same
     weights and the same draws (dropout's masks): within 1e-10 of each layer's scale (_scales).
     Attention's bk, rounding noise (D6), is compared apart: within 1e-11 of attention's largest
-    gradient on both sides. The noise follows the terms that cancel, not the gradients, so once
+    gradient on both sides, unless the layer is rotary (a bk rotated by each key's position no
+    longer shifts a query's scores alike, so the softmax doesn't cancel it). The noise follows the terms that cancel, not the gradients, so once
     Adam's steps shrink attention's gradients it reaches 2.8e-12 of them (a dense part after the
     mean, over seeds 0 to 11), and under 6e-14 in every other model.
     """
@@ -282,7 +283,7 @@ def assert_every_step_has_numpys_gradients(python: Any, array: Any, data: list[t
         layers = zip(python.trainable_layers, expected, actual, _scales(python, expected), strict=True)
         for layer, python_layer, array_layer, scale in layers:
             for i, (values, array_values) in enumerate(zip(python_layer, array_layer, strict=True)):
-                if isinstance(layer, AttentionLayer) and i == 3:
+                if isinstance(layer, AttentionLayer) and layer.positions == "none" and i == 3:
                     assert max(np.abs(values).max(), np.abs(array_values).max()) <= 1e-11 * scale
                     continue
                 np.testing.assert_allclose(array_values, values, rtol=0.0, atol=1e-10 * scale)

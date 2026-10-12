@@ -120,7 +120,8 @@ Settled by the owner (2026-10-10), as proposed:
 5. **Rust layers** (done): through the ops; parity with numpy. Without a rotation the layer passes
    no table; the Adam parity helpers treat `bk` as rounding noise only when `positions == "none"`
    (rotated, a key bias no longer cancels in the softmax).
-6. **Pure Python**: the rotation in its project block; parity.
+6. **Pure Python** (done): the rotation in its project block; parity. Its Adam parity helper,
+   as the Rust one, treats `bk` as rounding noise only when `positions == "none"`.
 7. **Fixtures, checkpoints and golden entries** (D7).
 8. **The study** (D8).
 9. **Docs**: README, roadmap, next-steps; the workplan retired.
