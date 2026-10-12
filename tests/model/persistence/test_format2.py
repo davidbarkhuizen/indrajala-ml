@@ -30,6 +30,7 @@ from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialMultiClassBackpropClassifierNetwork,
     SequentialSequenceBackpropNetwork,
 )
+from indrajala_ml.model.networks.python.window_recurrent_backprop_network import WindowRecurrentBackpropNetwork
 from indrajala_ml.model.networks.sequential_array_network import (
     SequentialArrayBackpropClassifierNetwork,
     SequentialArrayNetwork,
@@ -38,6 +39,10 @@ from indrajala_ml.model.networks.sequential_array_network import (
     SequentialSequenceArrayNetwork,
     SequentialSequenceRustArrayNetwork,
     SequentialVectorizedMultiClassBackpropClassifierNetwork,
+)
+from indrajala_ml.model.networks.window_recurrent_array_network import (
+    WindowRecurrentArrayNetwork,
+    WindowRecurrentRustArrayNetwork,
 )
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Conv, Dense, LayerSpec, Pool
@@ -81,6 +86,9 @@ SEQUENTIAL = {
     ("python", "sequence"): SequentialSequenceBackpropNetwork,
     ("numpy", "sequence"): SequentialSequenceArrayNetwork,
     ("rust", "sequence"): SequentialSequenceRustArrayNetwork,
+    ("python", "window_recurrent"): WindowRecurrentBackpropNetwork,
+    ("numpy", "window_recurrent"): WindowRecurrentArrayNetwork,
+    ("rust", "window_recurrent"): WindowRecurrentRustArrayNetwork,
 }
 
 
@@ -302,6 +310,7 @@ def test_an_ensemble_saves_its_sub_networks_optimizer_state(name: str, tmp_path:
             "SequentialRustArrayMultiClassBackpropClassifierNetwork",
         ),
         ("EnsembleArrayBackpropClassifierNetwork", "EnsembleRustArrayBackpropClassifierNetwork"),
+        ("WindowRecurrentArrayNetwork", "WindowRecurrentRustArrayNetwork"),
     ],
 )
 @pytest.mark.parametrize("saved_by", ["numpy", "rust"])

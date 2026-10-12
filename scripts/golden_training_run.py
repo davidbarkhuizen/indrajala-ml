@@ -71,6 +71,14 @@ implementations, added after the attention-dropout ones: the sequence model with
 its attention rotary (two heads of 4 features, so rotary_table's pairs aren't trivial), on the
 sequence rows. No earlier entry moved when they were recorded.
 
+The window-recurrent entries (the window-recurrent adder workplan, stage 7) are each
+implementation's window-recurrent network, added after the rotary ones: WINDOW_SPECS, the sequence
+model as a window of 2 columns with a dropout after the Position and the state entering before each
+block, beside WINDOW_RECURRENCE, on the sequence rows read as 3 windows each, so a state passes
+through a middle window both ways. Its parts' weights (the pooling's query, the cell's gates, the
+codes and the initial state) are injected as the window's are, and its dropout masks repeat in each
+window's recomputed forward pass. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -233,6 +241,7 @@ from indrajala_ml.model.networks.python.softmax_conv_multiclass_backprop_classif
 from indrajala_ml.model.networks.python.softmax_multiclass_backprop_classifier_network import (
     SoftmaxMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.networks.python.window_recurrent_backprop_network import WindowRecurrentBackpropNetwork
 from indrajala_ml.model.networks.rust.adam_conv_rust_array_multiclass_backprop_classifier_network import (
     AdamConvRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -301,6 +310,10 @@ from indrajala_ml.model.networks.rust.softmax_rust_array_multiclass_backprop_cla
     SoftmaxRustArrayMultiClassBackpropClassifierNetwork,
 )
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.networks.window_recurrent_array_network import (
+    WindowRecurrentArrayNetwork,
+    WindowRecurrentRustArrayNetwork,
+)
 from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
@@ -312,11 +325,13 @@ from indrajala_ml.model.specs.layer_specs import (
     Patches,
     Position,
     Residual,
+    StateInput,
     TokenMean,
     token_wise_output,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule
+from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
 from indrajala_ml.pcg64 import default_rng
 
 # A network is typed Any here: the script drives the network classes, dense, conv, single-output
@@ -524,6 +539,27 @@ ROTARY_SPECS: list[LayerSpec] = [
     Dense(len(SEQUENCE_VOCABULARY), output=True, activation="softmax", loss="cross_entropy"),
 ]
 ROTARY_NETWORKS = ["numpy rotary model", "rust rotary model", "python rotary model"]
+# SEQUENCE_SPECS as a window of 2 columns, a dropout after the Position and the state entering
+# before each block, beside a state of 3 features snapped to 4 codes (the window-recurrent adder
+# workplan, stage 7); each sequence row is 3 windows
+WINDOW_COLUMNS = 2
+WINDOW_SPECS: list[LayerSpec] = [
+    Embedding(len(SEQUENCE_VOCABULARY), 4),
+    Position(),
+    Dropout(0.1),
+    StateInput(),
+    Residual((LayerNorm(), Attention(heads=2, key_size=3, causal=True))),
+    StateInput(),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
+    LayerNorm(),
+    Dense(len(SEQUENCE_VOCABULARY), output=True, activation="softmax", loss="cross_entropy"),
+]
+WINDOW_RECURRENCE = WindowRecurrence(3, Codes(4))
+WINDOW_NETWORKS = {
+    "numpy window recurrent model": WindowRecurrentArrayNetwork,
+    "rust window recurrent model": WindowRecurrentRustArrayNetwork,
+    "python window recurrent model": WindowRecurrentBackpropNetwork,
+}
 
 
 def _sequential_network(name: str, input_shape: InputShape, specs: list[LayerSpec], rule: UpdateRule) -> Any:
@@ -745,6 +781,9 @@ def run_all() -> dict[str, Any]:
         results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
     for name in ROTARY_NETWORKS:
         network = _sequential_network(name, (SEQUENCE_CONTEXT,), ROTARY_SPECS, Adam())
+        results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
+    for name, window_cls in WINDOW_NETWORKS.items():
+        network = window_cls((WINDOW_COLUMNS,), WINDOW_SPECS, WINDOW_RECURRENCE, Adam())
         results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
     return results
 
