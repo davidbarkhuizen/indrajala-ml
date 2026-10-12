@@ -657,7 +657,7 @@ trained on the mean of the `T` cross-entropies:
 from indrajala_ml.data.text_data import load_text_dataset
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, Position, Residual
+from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, Residual
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.training.sequence_evaluate import sequence_evaluate
 from indrajala_ml.training.train import train_backprop_network_mini_batch
@@ -665,9 +665,8 @@ from indrajala_ml.training.train import train_backprop_network_mini_batch
 train, held_out, vocabulary = load_text_dataset()  # Tiny Shakespeare, windows of 64 + 1 characters
 V = len(vocabulary)  # 65
 layers = [
-    Embedding(V, 64),  # 64 token ids -> 64 tokens of 64
-    Position(),
-    Residual((LayerNorm(), Attention(heads=4, causal=True))),
+    Embedding(V, 64),  # 64 token ids -> 64 tokens of 64; positions inside attention (Rotary positions)
+    Residual((LayerNorm(), Attention(heads=4, causal=True, positions="rotary"))),
     Residual((LayerNorm(), Dense(256, activation="relu"), Dense(64, activation="linear", bias=True))),
     LayerNorm(),
     Dense(V, activation="softmax", output=True, loss="cross_entropy"),  # a softmax per token
@@ -699,6 +698,9 @@ print(sequence_evaluate(network, held_out).bits_per_token)
   `"multiclass"` and `"single_output"`, which refuse it; `classify_state` gives the per-token argmax.
 - **`Attention(causal=True)`** masks each token's scores for the tokens after it, so token `t`
   attends to tokens `0` to `t` only.
+- **Positions**: the example's are rotary, inside attention, the default for new sequence models
+  since the rotary study (Rotary positions); a learned `Position()` after the `Embedding` is the
+  alternative, and the sequence study's recorded models use one.
 - **`sequence_evaluate(network, examples)`** gives the mean per-token cross-entropy in nats,
   `bits_per_token` (bits per character here) and the per-token accuracy.
 
@@ -808,6 +810,70 @@ narrows every gap by fitting the training text worse, and costs 0.01 to 0.35 bit
 everywhere except attention dropout on Euclid's contiguous split (0.02 lower, on every seed); on
 Herodotus, with no gap to close, it only costs. Attention dropout adds 10% to an epoch, the
 token-wise dropout 6-7% (the findings are in its docstring).
+
+## Rotary positions
+
+A token part's positions are either a learned `Position`, added to each token before the first
+block, or rotary positions inside attention (RoPE; Su et al. 2021, arXiv 2104.09864, the scheme of
+GPT-NeoX, PaLM and LLaMA), in all three implementations and the crate, under every update rule:
+
+```python
+layers = [
+    Embedding(V, 64),  # no Position
+    Residual((LayerNorm(), Attention(heads=4, causal=True, positions="rotary"))),
+    Residual((LayerNorm(), Dense(256, activation="relu"), Dense(64, activation="linear", bias=True))),
+    LayerNorm(),
+    Dense(V, activation="softmax", output=True, loss="cross_entropy"),
+]
+```
+
+- **`Attention(positions="rotary", rotary_base=10000.0)`** rotates each head's queries and keys by
+  their token's position, after their biases; values aren't rotated. A query at `t` and a key at
+  `u` then score by their contents and `t - u` alone, so a key cached at one position stays valid as
+  a window slides past it (the point of the change: generation's key/value cache). It has no
+  parameters. `positions="none"`, the default, rotates nothing and keeps a model's bits.
+- **Validation** refuses a token part with both a `Position` and a rotary attention (one scheme a
+  model), an odd head size (features pair up), and a `rotary_base` on an unrotated attention.
+  Rotary and unrotated attention may share a model; a causal and a non-causal one may both rotate.
+- **The pairs** are "rotate half", feature `j` with `j + d_k / 2`, as GPT-NeoX and LLaMA, so each
+  half is a contiguous slice; RoFormer's interleaved `2j, 2j + 1` is the same model up to a fixed
+  permutation of `Wq`'s and `Wk`'s rows.
+- **The angles** are one table per layer, `rotary_table(T, d_k, base)` in
+  `indrajala_ml/model/specs/rotary_table.py`: `cos` and `sin` of `t * base^(-2j / d_k)` from
+  Python's `math`, which every implementation reads, since `cos` and `sin` aren't correctly rounded
+  and numpy's, Rust's and `math`'s may differ in the last bit. It derives from the spec, so it isn't
+  saved; a longer table keeps a shorter one's rows.
+- **Saving.** Format 2 writes `"positions"` and `"rotary_base"` only when not the default, so
+  earlier files re-save unchanged.
+
+The exact expressions, in the forms of Layer norm and attention, per head, `c = cos(t theta_j)` and
+`s = sin(t theta_j)` for token `t`'s row, `j < d_k / 2`:
+
+```text
+rotary attention, the end of project, Q's and K's rows (each its own token's angles)
+  q'_j          = q_j c - q_{j+d_k/2} s
+  q'_{j+d_k/2}  = q_j s + q_{j+d_k/2} c                 k likewise; attend reads Q' and K'
+  backward, the start of project's: the transpose, on dQ' and dK'
+  dq_j          = dq'_j c + dq'_{j+d_k/2} s
+  dq_{j+d_k/2}  = dq'_{j+d_k/2} c - dq'_j s             then dX and the gradients as before
+```
+
+Each entry is two products and a sum, so the three implementations rotate the same `Q` by bits. A
+key bias is no longer cancelled by the softmax under rotation (it shifts each key's score by a
+position-dependent amount), so `bk`'s gradient, rounding noise unrotated, is a real one here.
+
+On Rust the crate's attention forward ops and downstream op take `cos` and `sin` keywords, the
+layer's table as arrays; the downstream returns `dQ` and `dK` rotated back, so the gradient op
+takes no table.
+
+`scripts/rotary_study.py` trained the sequence study's 1- and 2-layer models with rotary attention
+and no `Position` against the learned-position models, seed for seed, on all four corpora (Adam, 10
+epochs, 5 seeds, numpy). Rotary is lower held out on every corpus and arm, by 0.024 to 0.062 bits
+per character at epoch 10 (39 of 40 seeds lower), and 0.65 to 0.89 points more accurate, with
+4,096 fewer parameters; its lead is largest at epoch 1 (0.08 to 0.19 bits) and narrows without
+closing. It fits faster rather than overfitting less. An epoch costs 3.5% more alone. So new
+sequence models default to rotary positions, the sequence example among them (the findings are in
+its docstring).
 
 ## Refactoring
 

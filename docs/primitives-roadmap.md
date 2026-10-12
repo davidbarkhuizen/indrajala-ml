@@ -39,8 +39,8 @@ bits.
 7. **Dropout in attention**: done (2026-10-11), on the attention weights and token-wise, for the
    embedding and each block's output.
 8. **Rotary position embedding**: positions inside attention, so that a cached key stays valid
-   as a window slides; planned (2026-10-10,
-   [rotary-positions-workplan.md](rotary-positions-workplan.md)).
+   as a window slides; done (2026-10-12), and the default for new sequence models: lower held out
+   than learned positions on every corpus (next-steps, From rotary positions).
 9. **Generation**: sampling text from a trained sequence model, with a key/value cache; planned
    (2026-10-10, [generation-workplan.md](generation-workplan.md)).
 10. **The training recipe**: learning-rate schedules as data, AdamW and gradient clipping, with

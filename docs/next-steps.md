@@ -5,7 +5,6 @@ decision is resolved and only future work is left. Whatever it left open (its "A
 list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
 "not planned yet" means only that no workplan has taken it up. A workplan still
 in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
-[rotary-positions-workplan.md](rotary-positions-workplan.md),
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
 [segments-workplan.md](segments-workplan.md),
@@ -45,6 +44,7 @@ docs cite them by section:
 | Pure Python's random draws in numpy's order (RNG draw order) | #637 | #649-#652, archive #18-#19 | `git show 7a80858:docs/rng-draw-order-workplan.md` |
 | Dropout in attention (roadmap step 7) | #638 | crate #54, #654-#660, #666, archive #20-#21 | `git show 8d2019e:docs/attention-dropout-workplan.md` |
 | Length generalisation for the column adders (terminated by the owner before its existence study) | #683 | #684 | `git show c3d619b:docs/length-generalisation-workplan.md` |
+| Rotary position embedding (roadmap step 8) | #639 | crate #55, #668-#669, #678-#682, #688, archive #22-#23 | `git show 9b27175:docs/rotary-positions-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -400,6 +400,34 @@ Not planned yet:
 - Dropout fields on the layers that end a body (D2 (b)): `Dropout(p)` is the one token-wise form;
   a linear `Dense`'s dropout would need a linear variant of every fused `layer_dropout_*` op.
 - Renormalizing each row of `P` after dropping (D3 (b)): no reference uses it.
+
+## From rotary positions
+
+The workplan built rotary position embedding as an attention option, `Attention(positions="rotary",
+rotary_base=10000.0)` (D2), rotating half (feature `j` with `j + d_k / 2`, D3), its angles one
+table per layer from Python's `math` so all three implementations rotate by the same bits (D4), the
+crate's attention ops taking `cos` and `sin` (D5), and one position scheme per token part (D6).
+The study (D8; `scripts/rotary_study.py`'s docstring) found rotary lower held out than learned
+positions on every corpus and arm, 0.024 to 0.062 bits per character at epoch 10 (39 of 40 seeds),
+at +3.5% an epoch alone; so new sequence models default to rotary (D9, the README's sequence
+example).
+
+- **D9's other half: step 9's `train` builds rotary models by default.** The generation workplan
+  owns `train`; its stage that adds it takes the default.
+- **#678's unexplained Rust gain.** The tier 1 A/B of the crate bump (rotation off) came out 7 to
+  18% faster on five Rust rows, unexplained and not claimed: a codegen or layout shift, as #627's,
+  for the next baseline to measure against.
+- **The study's open questions.** `rotary_base` wasn't tuned (10,000 everywhere); every arm ran
+  at the learned arm's tuned rate, and rotary may prefer another; nothing had converged at 10 epochs; and rotary's gain at a longer
+  context, where generation's sliding window will run, is untested (the context-length workplan).
+
+Not planned yet:
+
+- ALiBi or T5's relative biases, beside rotary (D1 (c)): `positions` is a string so either can join
+  without a new spec.
+- A `Position()` and rotary attention in one token part (D6): refused today, one scheme a model.
+- Rotating only a fraction of each head's features (GPT-NeoX's `rotary_pct`), or the interleaved
+  pairing (D3 (b)), the same model up to a permutation.
 
 ## From the benchmark machine baseline
 
