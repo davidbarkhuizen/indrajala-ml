@@ -332,7 +332,7 @@ planned step provides it:
 
 | excluded option | why it matters | missing piece | planned? |
 | --- | --- | --- | --- |
-| **Recurrent adder** (one column a step, the carry as state) | the minimal algorithm (ripple carry); any length by construction | a recurrent layer with backpropagation through time, in all three implementations and the crate | no |
+| **Recurrent adder** (one column a step, the carry as state) | the minimal algorithm (ripple carry); any length by construction | a recurrent layer with backpropagation through time, in all three implementations and the crate | the window-recurrent adder (`docs/window-recurrent-adder-workplan.md`) |
 | **Weight-tied (looped) transformer** | depth that grows with `n`: ripple or prefix steps by iterating one block | blocks sharing weights, and a variable iteration count | no |
 | **Length generalisation** (train at `n`, test at `n + k`) | separates an algorithm from a fixed-width circuit | positions not tied to `T` (rotary, step 8; or no `Position()`, which validation allows today) **and** loading trained weights into a network of another `T` (format 2 records the input shape) | positions: step 8; the reload: no |
 | **Loss on answer tokens only** (candidate 5 cleanly) | the operand tokens' unpredictable loss is noise in 5's training and its reported loss | per-token counted targets | step 11 (segments, D6: uncounted targets) |

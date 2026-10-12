@@ -3,8 +3,7 @@
 **Status: decisions W1-W10 settled by the owner (2026-10-12), in dialogue; W11-W17 settled under
 the owner's standing delegation. Stage 1 (this plan). It replaces
 `docs/length-generalisation-workplan.md`, which the owner terminated before its existence study
-(next-steps, From length generalisation). It needs the owner's lifting of the roadmap's "recurrent
-networks out of scope" for this design (primitives-roadmap.md, Out of scope, amended here).**
+(next-steps, From length generalisation).**
 
 ## The question
 
@@ -194,7 +193,7 @@ Settled under the owner's standing delegation:
 ## Stages
 
 1. **This workplan**, with the length-generalisation workplan terminated (next-steps), the parent
-   plan revised and the roadmap's Out of scope amended. Docs only.
+   plan revised and the roadmap's exclusion of recurrent networks removed. Docs only.
 2. **Specs.** A window-recurrent network's spec: the window's token specs (as today), `k`, the
    state width, the cell, the pooling, `m` and the code losses' β; validation; format 2's entry
    (a shape "window_recurrent"); every builder refuses it "not yet" until its stage. Tier 0.

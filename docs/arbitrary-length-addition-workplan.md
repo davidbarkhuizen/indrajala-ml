@@ -6,8 +6,8 @@ any code, and this plan is revisited then. It isn't on the primitives roadmap ye
 pieces meet roadmap steps, those steps are named.**
 
 **Revised by the owner (2026-10-12): milestone A is now a window-recurrent adder
-(`docs/window-recurrent-adder-workplan.md`), recurrence along the columns, which H3 below had
-ruled out; its first subplan, `docs/length-generalisation-workplan.md` (P1, P4, P5 and a
+(`docs/window-recurrent-adder-workplan.md`), recurrence along the columns, H3's option (b); its
+first subplan, `docs/length-generalisation-workplan.md` (P1, P4, P5 and a
 fixed-depth existence study), was terminated after its reading (next-steps, From length
 generalisation). P1 is parked; P2, P3 and P7 are deferred; composing a fixed-length adder outside
 the network is parked (Parked, below).**
@@ -131,9 +131,8 @@ Each is a subplan of its own. "Step N" is the primitives roadmap's.
     implementations and the crate. Today each layer owns its parameters.
   - Needs a variable iteration count at inference, and memory for `k` steps' activations in
     training.
-  - The alternative is a recurrent cell over the columns with backpropagation through time.
-    The roadmap ruled recurrence out of scope; the owner admitted it for the window-recurrent
-    adder (2026-10-12), which is milestone A now.
+  - The alternative is a recurrent cell over the columns with backpropagation through time:
+    the window-recurrent adder, milestone A now (the owner, 2026-10-12).
 - **P8. The string format at any length (candidate 5).**
   - Answers of varying length decoded autoregressively need step 9 (generation).
   - Its loss on answer tokens only needs step 11's counted targets.
@@ -169,7 +168,7 @@ subplan revisits its own.
     beyond this (tied embeddings, for one). Cons: shared parameters touch every implementation's
     parameter handling.
   - (b) A recurrent cell. Pros: the ripple-carry algorithm itself, linear cost. Cons: a new
-    family the roadmap rules out of scope; nothing else here uses it.
+    family; nothing else here uses it yet.
 - **H4. The encoding. Settled: (a).**
   - (a) *Chosen.* The column encoding (candidates 1-3) carries the milestones. It aligns digits
     by construction, so length is the only new variable.
@@ -212,5 +211,5 @@ subplan revisits its own.
 
 - Other operations (multiplication, subtraction): each its own question once P1-P5 exist.
 - Bases other than 3, and more operands: parameters of the catalogue, not infrastructure.
-- Dense candidates 6-8 at other lengths: fixed input by construction; P7's recurrence alternative
-  covers a dense column cell if the owner admits recurrence.
+- Dense candidates 6-8 at other lengths: fixed input by construction; a recurrent cell over the
+  columns (P7's alternative, milestone A's design) covers a dense column cell.
