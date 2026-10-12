@@ -298,8 +298,16 @@ Settled under the owner's standing delegation:
    scale after 20 steps, and a step's gradients within 3.9e-15 (pure Python's folds against
    BLAS); the codes and the initial state are numpy's by bits. `load_network` loads all three
    implementations' files, and no builder refuses a window any more.
-7. **Fixtures, checkpoints and golden entries** for the new network in each implementation; the
-   118 earlier golden entries bit-identical.
+7. **Fixtures, checkpoints and golden entries**: *Done.* The new network in each implementation;
+   the 118 earlier golden entries bit-identical. Built as a saved-model fixture per implementation
+   (`tests/saved_model_fixtures.py`'s `WINDOW_MODEL`, a dropout and two StateInputs over 3 columns
+   beside a recurrence with every field off its default, its states two windows), which loads,
+   resumes, re-saves byte-identically and loads across numpy and Rust
+   (`tests/model/persistence/test_window_recurrent_format2.py`, `test_format2.py`); checkpoints
+   that resume training by bits under every rule, also as nested lists across a worker boundary,
+   and a run file that round trips and refuses another recurrence; and three golden entries
+   (121 in all), `WINDOW_SPECS` over 2 columns on the sequence rows read as 3 windows, with a
+   dropout whose masks repeat in each window's recomputed pass.
 8. **The harness**: the window-count curriculum, random alignment, the catalogue across lengths
    (W17), the report (break length in columns and the window ratio, `L*` per test length, codes
    used, examples and epochs per step); the result's `crate` field hashing the extension module,
@@ -333,6 +341,6 @@ Settled under the owner's standing delegation:
   op, that PR is tier 1.
 - Every stage that touches the package passes the golden run, bit-identical (118 entries), until
   stage 7 adds the new network's entries under owner approval of the new functionality
-  (measurement.md, §8).
+  (measurement.md, §8); from stage 7, 121 entries.
 - The study runs on `jebel` under the machine lock; results are written with provenance under
   `data/studies/`.

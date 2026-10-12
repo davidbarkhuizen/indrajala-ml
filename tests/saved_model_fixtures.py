@@ -32,6 +32,10 @@ tests/model/persistence/test_legacy_saved_models.py loads.
 - The pure-Python multiclass presets' fixtures (the presets workplan, stage 1) are format 2 only,
   like the single-output ones: those classes never wrote a legacy envelope.
 - So are the numpy and Rust one-output presets' fixtures (the presets workplan, stage 2).
+- The window-recurrent fixtures (the window-recurrent adder workplan, stage 7) are format-2 files
+  of each implementation's window-recurrent network: WINDOW_MODEL, a sequence model over a window
+  of WINDOW_COLUMNS token ids with a Dropout and two StateInputs, beside WINDOW_RECURRENCE, every
+  field off its default. Their states are WINDOW_COUNT windows, so a state passes between windows.
 
 Each fixture is two files in tests/fixtures/saved_models/: <name>.json, the file the class's
 own save() wrote, and <name>.expected.json, what the saved network held and predicted:
@@ -68,7 +72,13 @@ from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialMultiClassBackpropClassifierNetwork,
     SequentialSequenceBackpropNetwork,
 )
+from indrajala_ml.model.networks.python.window_recurrent_backprop_network import WindowRecurrentBackpropNetwork
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.networks.window_recurrent_array_network import (
+    WindowRecurrentArrayNetwork,
+    WindowRecurrentRustArrayNetwork,
+)
+from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
@@ -80,11 +90,13 @@ from indrajala_ml.model.specs.layer_specs import (
     Patches,
     Position,
     Residual,
+    StateInput,
     TokenMean,
     expand_specs,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.specs.window_recurrence import GRU, Codes, WindowRecurrence
 from indrajala_ml.pcg64 import default_rng
 from tests.helpers import bits, model_modules
 
@@ -198,6 +210,22 @@ ROTARY_MODEL: list[LayerSpec] = [
     LayerNorm(epsilon=1e-4),
     Dense(VOCABULARY, output=True, activation="softmax", loss="cross_entropy"),
 ]
+# a window of 3 columns of SEQUENCE_MODEL's token ids: a dropout after the Position, and the state
+# entering before each block; its recurrence's every field off its default
+WINDOW_COLUMNS = 3
+WINDOW_COUNT = 2
+WINDOW_MODEL: list[LayerSpec] = [
+    Embedding(VOCABULARY, 4),
+    Position(),
+    Dropout(0.1),
+    StateInput(),
+    Residual((LayerNorm(), Attention(heads=2, key_size=3, causal=True))),
+    StateInput(),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
+    LayerNorm(epsilon=1e-4),
+    Dense(VOCABULARY, output=True, activation="softmax", loss="cross_entropy"),
+]
+WINDOW_RECURRENCE = WindowRecurrence(3, Codes(4, commitment=0.5), GRU(update_bias=0.5))
 FORMAT_2_TRAINING_STEPS = 2
 
 
@@ -334,6 +362,18 @@ def _sequence(
         return SequentialArrayNetwork((TOKENS,), layers, Adam(**ADAM), "sequence", backend)
 
     return SavedModelFixture(implementation, build, "predict_probabilities", {}, format2=True, class_name=class_name)
+
+
+def _window(implementation: str) -> SavedModelFixture:
+    def build() -> Any:
+        cls = {
+            "python": WindowRecurrentBackpropNetwork,
+            "numpy": WindowRecurrentArrayNetwork,
+            "rust": WindowRecurrentRustArrayNetwork,
+        }[implementation]
+        return cls((WINDOW_COLUMNS,), WINDOW_MODEL, WINDOW_RECURRENCE, Adam(**ADAM))
+
+    return SavedModelFixture(implementation, build, "predict_probabilities", {}, format2=True)
 
 
 def _ensemble(name: str, implementation: str, classifier_name: str) -> SavedModelFixture:
@@ -518,6 +558,9 @@ FIXTURES: dict[str, SavedModelFixture] = {
             ("SequentialSequenceBackpropNetwork", "python"),
         )
     },
+    "WindowRecurrentArrayNetwork": _window("numpy"),
+    "WindowRecurrentRustArrayNetwork": _window("rust"),
+    "WindowRecurrentBackpropNetwork": _window("python"),
 }
 
 
@@ -606,8 +649,11 @@ def _write(name: str, fixture: SavedModelFixture) -> None:
 
 
 def random_state(rng: random.Random, network: Any) -> tuple[float, ...]:
-    """A state for network drawn from rng: uniform in [0, 1), or token ids below an Embedding's vocabulary."""
-    dimension = network_dimension(network)
+    """
+    A state for network drawn from rng: uniform in [0, 1), or token ids below an Embedding's
+    vocabulary, WINDOW_COUNT windows of them for a window-recurrent network.
+    """
+    dimension = WINDOW_COUNT * network.columns if _is_window(network) else network_dimension(network)
     specs = getattr(network, "layer_specs", None)
     if specs and isinstance(specs[0], Embedding):
         return tuple(float(rng.randrange(specs[0].vocabulary)) for _ in range(dimension))
@@ -615,10 +661,19 @@ def random_state(rng: random.Random, network: Any) -> tuple[float, ...]:
 
 
 def random_label(rng: random.Random, network: Any, predict: str) -> Any:
-    """A label for network drawn from rng: a class, 0.0 or 1.0, or a sequence network's class per token."""
+    """
+    A label for network drawn from rng: a class, 0.0 or 1.0, a sequence network's class per token,
+    or a window-recurrent network's per column of random_state's windows.
+    """
     if getattr(network, "format2_shape", None) == "sequence":
         return tuple(rng.randrange(network.class_count) for _ in range(network.tokens))
+    if _is_window(network):
+        return tuple(rng.randrange(network.class_count) for _ in range(WINDOW_COUNT * network.columns))
     return rng.randrange(CLASS_COUNT) if predict == "predict_probabilities" else float(rng.randrange(2))
+
+
+def _is_window(network: Any) -> bool:
+    return getattr(network, "format2_shape", None) == WINDOW_RECURRENT
 
 
 def network_dimension(network: Any) -> int:
