@@ -77,11 +77,20 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   the busy processes; `--allow-load` runs anyway and records the load in the manifest. Nothing else runs on `jebel` during a run: no tests,
   lint or builds there. A background IDE once spoiled a whole measurement.
 - **Studies and A/Bs take turns.** A study's training stages (every `*_study.py` and
-  `batch_size_scaling_sweep.py` stage that trains, and `addition_study.py run`) hold the same
-  machine lock as `ab.py run` and `extend` (`indrajala_ml/measurement/machine_lock.py`), so an A/B
-  started during a study is refused, naming it, and a study started during an A/B exits before it
-  trains. The lock also keeps `remote run` from fast-forwarding the checkout and rebuilding the
-  crate under a running study. Schedule A/Bs between studies (docs/study-runs-workplan.md, D4).
+  `batch_size_scaling_sweep.py` stage that trains, and the `run` of `addition_study.py` and
+  `window_recurrent_study.py`) hold the same machine lock as `ab.py run` and `extend`
+  (`indrajala_ml/measurement/machine_lock.py`), so an A/B started during a study is refused, naming
+  it, and a study started during an A/B exits before it trains. The lock also keeps `remote run`
+  from fast-forwarding the checkout and rebuilding the crate under a running study. Schedule A/Bs
+  between studies (the study-runs workplan's D4, retired: `git show
+  868838e:docs/study-runs-workplan.md`). Stopping a study (only with the owner's say) means its
+  whole process group: killed alone, its process frees the lock while its forkserver workers train
+  on to the end of their runs.
+- **Studies keep their raw results.** Every study's `--out` defaults to
+  `data/studies/<study>/<stage>-<YYYY-MM-DD-HHMM>.json` (gitignored): its results with the
+  provenance of the sweep (commit, crate hash, host, arguments, start, `dirty`). The addition and
+  window-recurrent harnesses keep their own directories, provenanced per run. A findings PR records
+  each file's path, host and sha256 in the study's docstring.
 - **Package jobs.** `unattended-upgrades` is enabled and snaps refresh on their own schedule; either
   can start a large job mid-run. Before a run, `systemctl is-active apt-daily.service
   apt-daily-upgrade.service` prints `inactive` twice when no apt job runs (`unattended-upgrades`

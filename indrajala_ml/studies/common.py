@@ -1,10 +1,10 @@
 """
 The studies' shared protocol helpers: a per-process cache of the MNIST train and test sets, the
 mean ± sd cells and Markdown tables their reports print, and their result files: every run's raw
-result with the provenance of the sweep that made it, by default under data/studies/<study>/
-(docs/study-runs-workplan.md, D8). Used by indrajala_ml/studies/patch_study.py,
-indrajala_ml/studies/sequence_study.py, scripts/residual_depth_study.py and
-scripts/batch_size_scaling_sweep.py.
+result with the provenance of the sweep that made it, by default under data/studies/<study>/ (the
+study-runs workplan's D8, retired: git show 868838e:docs/study-runs-workplan.md). Used by
+indrajala_ml/studies/patch_study.py, indrajala_ml/studies/sequence_study.py,
+scripts/residual_depth_study.py and scripts/batch_size_scaling_sweep.py.
 """
 
 from __future__ import annotations
