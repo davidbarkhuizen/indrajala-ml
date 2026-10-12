@@ -10,11 +10,13 @@ from indrajala_ml.data.addition_data import (
     CATALOGUE,
     COLUMN_SUMS,
     DEPENDENT,
+    EXHAUSTIVE_LIMIT,
     RESETS,
     Case,
     PropertyResult,
     Triple,
     carries,
+    catalogue,
     column_sums,
     digits,
     distance,
@@ -22,6 +24,7 @@ from indrajala_ml.data.addition_data import (
     from_digits,
     held_out,
     property_cases,
+    training_triple,
     training_triples,
 )
 from tests.data.addition_adders import correct, drops_third, no_carry, reach
@@ -109,6 +112,43 @@ def test_the_coverage_is_the_workplans():
     assert counts[6]["M3"] == 6 * 1_000
     assert counts[4]["M5"] == 7**4 * 4
     assert counts[6]["M5"] == 7**6
+
+
+def test_a_sized_catalogue_samples_wherever_a_space_is_past_the_limit():
+    # the window-recurrent adder's test lengths (W17): every property affordable at any n
+    sized = catalogue(sampled=300, relation_sampled=40, per_stratum=7)
+    for n in (12, 64):
+        counts = {prop.id: len(property_cases(prop, n)) for prop in sized}
+        assert counts == {
+            "B1": 300,
+            "B2": 300,
+            "B3": 300,
+            "A1": 40,
+            "A2": 40,
+            "A3": 300,
+            "M1": 300,
+            "M2": n * 3 * 16,
+            "M3": n * 7,
+            "M4": 3 * 7,
+            "M5": 300,
+        }
+    m5 = next(prop for prop in sized if prop.id == "M5")
+    assert 7**7 > EXHAUSTIVE_LIMIT and len(property_cases(m5, 7)) == 300
+    # the default sizes are CATALOGUE's
+    for mine, theirs in zip(catalogue(), CATALOGUE, strict=True):
+        assert property_cases(mine, 4) == property_cases(theirs, 4)
+
+
+def test_a_correct_adder_passes_a_sized_catalogue_at_a_long_length():
+    results = evaluate(correct, 40, catalogue(sampled=200, relation_sampled=20, per_stratum=5), shrink=False)
+    assert failing(results) == set()
+    assert by_id(results)["M3"].reach() == 40
+
+
+def test_training_draws_held_out_triples_only_when_asked():
+    rng = Random(2)
+    assert not any(held_out(training_triple(i, 2, rng), 2) for i in range(2000))
+    assert any(held_out(training_triple(i, 2, rng, hold_out=False), 2) for i in range(2000))
 
 
 def test_property_cases_are_the_same_on_every_call():

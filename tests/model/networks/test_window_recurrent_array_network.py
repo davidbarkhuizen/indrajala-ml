@@ -213,3 +213,18 @@ def test_a_saved_network_loads_and_resumes_training_by_bits(tmp_path: Path):
     for a, b in zip(network.snapshot(), loaded.snapshot(), strict=True):
         assert all(np.array_equal(x, y) for x, y in zip(a, b, strict=True))
     assert WindowRecurrentArrayNetwork.load(path).snapshot()[-1][0].shape == (RECURRENCE.state_size,)
+
+
+def test_state_codes_are_each_states_nearest_code_through_the_windows():
+    network = _network()
+    X, _ = _batch(3, examples=4)
+    codes = network.state_codes(X)
+    assert len(codes) == 4 and all(len(example) == 3 + 1 for example in codes)
+    # the same states, window by window, through the parts
+    C = network.initial_state.forward_batch(4)
+    expected = [network.codes.nearest(C).tolist()]
+    C = network.codes.forward_batch(C)
+    for w in range(3):
+        _, C = network._window_forward(network._window(X, w), C)
+        expected.append(network.codes.indices.tolist())
+    assert codes == [list(example) for example in zip(*expected, strict=True)]

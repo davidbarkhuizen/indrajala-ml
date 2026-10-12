@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import importlib
 import json
 import socket
 import statistics
@@ -63,18 +64,25 @@ def _git(*args: str) -> str:
     return subprocess.run(["git", *args], capture_output=True, text=True, check=False).stdout.strip()
 
 
+def crate_hash() -> str:
+    """
+    The first 12 hex digits of the crate's extension module's sha256: the build, which the
+    package's __init__.py (the same in every build) never identified.
+    """
+    extension = importlib.import_module("indrajala_math_rust.indrajala_math_rust")
+    return hashlib.sha256(Path(str(extension.__file__)).read_bytes()).hexdigest()[:12]
+
+
 def provenance(argv: Sequence[str] | None = None) -> dict[str, Any]:
     """
     What made a sweep's results, taken when it starts: the commit (and whether the tracked tree
     differed from it), the crate extension's hash, the machine, the command line and the time.
     """
-    import indrajala_math_rust
-
     words = sys.argv if argv is None else [sys.argv[0], *argv]
     return {
         "commit": _git("rev-parse", "--short", "HEAD"),
         "dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
-        "crate": hashlib.sha256(Path(indrajala_math_rust.__file__).read_bytes()).hexdigest()[:12],
+        "crate": crate_hash(),
         "machine": socket.gethostname(),
         "command": " ".join([Path(words[0]).name, *words[1:]]),
         "started": datetime.datetime.now(datetime.UTC).astimezone().isoformat(timespec="seconds"),

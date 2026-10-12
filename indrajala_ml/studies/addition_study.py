@@ -25,7 +25,6 @@ with its traceback and run once more.
 from __future__ import annotations
 
 import concurrent.futures
-import hashlib
 import itertools
 import json
 import math
@@ -49,7 +48,7 @@ from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, LayerSpec, Position, Residual
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.studies import batch_size_scaling as bss
-from indrajala_ml.studies.common import table
+from indrajala_ml.studies.common import crate_hash, table
 
 PASSING_SEEDS = 4  # D9: a size succeeds when this many of its seeds pass every property
 RETRIES = 1
@@ -369,13 +368,10 @@ def run_spec(candidate: str, n: int, rate: float, size: Mapping[str, int], seed:
 
 
 def _provenance() -> dict[str, str]:
-    import indrajala_math_rust
-
     commit = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False
     ).stdout.strip()
-    crate = hashlib.sha256(Path(indrajala_math_rust.__file__).read_bytes()).hexdigest()[:12]
-    return {"commit": commit, "crate": crate, "machine": socket.gethostname()}
+    return {"commit": commit, "crate": crate_hash(), "machine": socket.gethostname()}
 
 
 def _result_json(result: ad.PropertyResult) -> dict[str, Any]:

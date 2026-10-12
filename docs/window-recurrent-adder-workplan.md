@@ -2,7 +2,8 @@
 
 **Status: decisions W1-W10 settled by the owner (2026-10-12), in dialogue; W11-W20 settled under
 the owner's standing delegation. Stage 1 (this plan) merged (#685); stage 2 (specs) merged (#686);
-stage 3 (numpy layers) merged (#687); stage 4 (the numpy network) done. It replaces
+stage 3 (numpy layers) merged (#687); stages 4-7 (the networks, fixtures and golden entries) done;
+W21-W29 settled at their stages; stage 8's harness done, its calibration next. It replaces
 `docs/length-generalisation-workplan.md`, which the owner terminated before its existence study
 (next-steps, From length generalisation).**
 
@@ -244,6 +245,62 @@ Settled under the owner's standing delegation:
     and the parts would still need the batch's rows gathered from the per-example passes.
   - (c) A loop of the network's own over the window's layers. Cons: a second copy of the
     layer-major path's residual and batch-norm handling.
+- **W23. The alignment in a check. Settled: (a)** (stage 8).
+  - (a) *Chosen.* Each case's own, from the high half of a hash of the triple and `n` (the low
+    half decides D8's tenth), the same for every model and every order of the triple. Pros: across
+    a property's cases a carry crosses a window boundary at every column; deterministic, so every
+    model meets the same inputs; A1 still tests only the order. Cons: each case is seen at one
+    alignment only.
+  - (b) Every alignment for every case. Pros: no case escapes a bad alignment. Cons: `k` times the
+    check's cost, for what (a) covers across the cases.
+  - (c) `a` = 0. Cons: the boundaries fall at the same columns in every case: a carry across a
+    boundary is tested only there.
+- **W24. A step's check. Settled: (a)** (stage 8).
+  - (a) *Chosen.* The catalogue at each data window count's longest length, `n = w k` for `w` in
+    the step's counts; held-out triples (D8, B3) only from `n = 3`. Pros: one length per window
+    count, so `k` 4's third step checks 3 lengths, not 12; the test pass covers the lengths in
+    between. Below 3 a held-out tenth can't pass at all: at `k` 1 the first step trains on `n` 1
+    alone, and a held-out triple's column token would never be seen. Cons: a length between the
+    counts' longest is checked only through the test pass's sampled cases.
+  - (b) Every training length 1 to `j k`. Cons: at `k` 4 four times the check's cost, mostly on
+    lengths the longest's alignment already covers.
+  - (c) The longest length only. Cons: a step could pass while forgetting a shorter count.
+- **W25. Adam across the curriculum's steps. Settled: (a)** (stage 8).
+  - (a) *Chosen.* Carried: the network and its optimizer continue; each step's saved file holds
+    Adam's moments, so a resumed step continues the same. Pros: no loss spike at a step; no extra
+    code. Cons: the moments were estimated on fewer windows.
+  - (b) Fresh at each step (the terminated plan's D7, chosen when format 2 held no optimizer
+    state). Cons: a spike the patience must absorb; a choice made for a limit since removed.
+- **W26. An epoch's examples and batches. Settled: (a)** (stage 8).
+  - (a) *Chosen.* An equal share of the epoch per data window count (the terminated plan's D5);
+    within a count, `a` uniform, `n` uniform over the lengths that fill that many windows at `a`,
+    and D7's three kinds in turn; batches each of one window count (the network runs one count
+    per batch), their order shuffled. Pros: each count trained as much as the others; no padding.
+    Cons: within a count, short lengths are as likely as long ones.
+  - (b) Lengths drawn uniformly over 1 to `j k`. Cons: a count's share grows with `k`'s lengths in
+    it, unevenly at small counts.
+- **W27. A step's stop. Settled: (a)** (stage 8).
+  - (a) *Chosen.* The addition study's rule, per step: a screen each epoch (every k-th case of
+    each check), and on a passing screen the whole check; else a plateau (`patience` epochs
+    without more screen cases passed) or the budget (`max_epochs`). Pros: proven in the addition
+    sweep; a step that can't pass stops. Cons: a step that plateaus moves on unlearnt (recorded:
+    each step's `stop` and `passes`).
+  - (b) A fixed epoch count per step. Cons: wastes epochs after passing, or stops short.
+- **W28. The codes used. Settled: (a)** (stage 8).
+  - (a) *Chosen.* The codes every state snaps to over B1's first 1,000 cases at each check and
+    test length (`state_codes`, a forward pass of its own). Pros: every length's states, at a
+    small fixed cost. Cons: a code used only by rarer inputs could be missed.
+  - (b) Over every case of the test pass. Cons: a second forward pass over every case, doubling
+    the test pass.
+- **W29. The catalogue past `n` = 6. Settled: (a)** (stage 8).
+  - (a) *Chosen.* Every property whose space passes the exhaustive limit is sampled: A3 and M1
+    too (their spaces are `3 * 3^n` and `4 * 3^n`; W17 kept them "as now", which `n` 64 can't
+    afford), and M5 past 6; the samples' sizes are settings (B1-B3, A3, M1 and M5's count, A1 and
+    A2's, M3 and M4's per stratum), set by the calibration. Up to `n` 6 with the default sizes every
+    case is the addition study's (checked). Pros: any length affordable; the strata W17 names
+    unchanged. Cons: A3 and M1 sampled from `n` 12 and 11 (exhaustive until then, the larger
+    share of a check at 10 and 11).
+  - (b) A3 and M1 exhaustive. Cons: impossible past `n` about 12.
 
 ## Stages
 
@@ -313,7 +370,18 @@ Settled under the owner's standing delegation:
    used, examples and epochs per step); the result's `crate` field hashing the extension module,
    not `__init__.py` (the terminated plan's stage 7 fix). Then a **calibration on `pyramidon`**:
    one seed per `k` through two curriculum steps, timing an epoch and the test pass at 64, and W12
-   settled from it. Tier 0.
+   settled from it. Tier 0. The harness *done* (W23-W29), built as
+   `indrajala_ml/studies/window_recurrent_study.py` with `scripts/window_recurrent_study.py`
+   (`run`, `status`, `report`, `check`): a run is an arm, `k`, `s`, `m` and a seed on the Rust
+   network; each step is saved with its network as it finishes, so a stopped run resumes at its
+   next step; the report gives per cell the seeds working and per step the seeds passing and the
+   break lengths, per run and step the stop, epochs, examples, break, window ratio, `L*` at each
+   test length and codes used, and the cost (seconds per epoch training and screening, the check,
+   each test length). The catalogue's sizes are settings (`addition_data.catalogue`, W29);
+   `WindowRecurrentShape.state_codes` gives each state's code; `studies.common.crate_hash` hashes
+   the extension module, for both studies. The calibration's config is
+   `scripts/window_recurrent_calibration.json` (`k` 1, 2, 4 at the provisional grid's largest `s`
+   and `m`, 16 and 16, 1 seed, 2 steps); its figures and W12 follow in their own PR.
 9. **The matrix study on `jebel`** under the machine lock. Findings in the script's docstring.
 10. **What follows**, decided on the findings, each its own PR: if a cell works, whittle it down
     and run the control (W16); if none does, the probes say whether the codes, the cell or the
