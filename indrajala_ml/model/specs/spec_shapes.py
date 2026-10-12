@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import overload
 
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.specs.layer_specs import (
@@ -28,42 +29,73 @@ from indrajala_ml.model.specs.layer_specs import (
 from indrajala_ml.model.specs.window_geometry import output_size, pool_stride
 
 # a network's input: (dimension,) for a flat input, or (height, width, channels) for an image, whose
-# flat layout is channel-major (conv_layer.py, conv_array_layer.py)
+# flat layout is channel-major (conv_layer.py, conv_array_layer.py); (None,) for token ids of any
+# count, an Embedding's input in a length-free network (the length-generalisation workplan, P1),
+# which the shape walk and format 2 accept (AnyInputShape) and no network yet builds
 InputShape = tuple[int] | tuple[int, int, int]
+AnyInputShape = InputShape | tuple[None]
 ImageShape = tuple[int, int, int]
 # a token sequence inside a network, (tokens, features), flat and token-major (D2): never an input
 TokenShape = tuple[int, int]
 Shape = InputShape | TokenShape
+# tokens None in a length-free network, whose every batch has a count of its own
+AnyTokenShape = tuple[int | None, int]
+AnyShape = AnyInputShape | AnyTokenShape
 
 
-def image_shape(shape: Shape) -> ImageShape:
+def fixed_input_shape(shape: AnyInputShape) -> InputShape:
+    """
+    shape, which a network's layers are built over: not yet (None,), until each implementation's
+    token layers take their count from the batch (the length-generalisation workplan, stages 4-6).
+    """
+    assert shape[0] is not None, (
+        f"a network of any token count (None) needs token layers that take the count from each batch, "
+        f"which no implementation has yet (the length-generalisation workplan, stages 4-6); got {shape}"
+    )
+    return shape
+
+
+def image_shape(shape: AnyShape) -> ImageShape:
     """shape, which a conv or pool layer reads, as (height, width, channels)."""
     assert len(shape) == 3, f"a conv, pool or Patches layer needs a (height, width, channels) input; got {shape}"
     return shape
 
 
-def token_shape(shape: Shape) -> TokenShape:
+@overload
+def token_shape(shape: Shape) -> TokenShape: ...
+@overload
+def token_shape(shape: AnyShape) -> AnyTokenShape: ...
+def token_shape(shape: AnyShape) -> AnyTokenShape:
     """
     shape, which a layer norm or a patch model's token layer reads, as (tokens, features): a flat
     layer, or a conv front end's image, is one token.
     """
-    return (shape[0], shape[1]) if len(shape) == 2 else (1, math.prod(shape))
+    if len(shape) == 2:
+        return (shape[0], shape[1])
+    assert shape[0] is not None, f"token ids of any count are read by an Embedding (P1); got {shape}"
+    return (1, math.prod(shape))
 
 
 @dataclass(frozen=True)
-class SpecShape:
+class SpecShape[S: AnyShape = Shape]:
     """
     One spec's place in its list's shape walk (spec_shapes): the shape it reads, the shape it gives,
     and for a BatchNorm its positions, 1 after a dense layer or a conv layer's out_height *
     out_width (1 for every other spec).
     """
 
-    input_shape: Shape
-    output_shape: Shape
+    input_shape: S
+    output_shape: S
     positions: int = 1
 
 
-def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape) -> list[SpecShape]:
+@overload
+def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape) -> Sequence[SpecShape[Shape]]: ...
+@overload
+def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: tuple[None]) -> Sequence[SpecShape[AnyShape]]: ...
+def spec_shapes(
+    specs: Sequence[LayerSpec | Fork | Add], input_shape: AnyInputShape
+) -> Sequence[SpecShape[Shape]] | Sequence[SpecShape[AnyShape]]:
     """
     Each of expand_specs(specs)' shapes over input_shape, in forward order, each spec's input shape
     the previous one's output shape: what every builder needs besides the choice of class. A
@@ -71,18 +103,23 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
     input's. A residual block's input is flat (D2) or tokens, and its Add's input is its Fork's
     (D5): both are checked here, where the shapes are known, as is a patch size that doesn't divide
     the image, an Embedding over an input that isn't flat, and an Attention's heads that don't
-    divide its token width when it has no key_size. An Embedding gives a token of its size per
+    divide its token width when it has no key_size. Token ids of any count, (None,), are read by an
+    Embedding only, and its tokens, of any count, by no Position, whose table has a row per token
+    (the length-generalisation workplan, P1). An Embedding gives a token of its size per
     input value, an id (the sequence task workplan, D5). A Dense over tokens acts on each (the
     layer-norm and attention workplan, D4), a token-wise output layer included (the sequence task
     workplan, D6), and a Position, a LayerNorm, an Attention and a Dropout keep their input's shape (a
     LayerNorm after a conv front end normalizes the flat image as one token). The specs' own
     arguments are checked by the layers built from them, not here.
     """
-    shapes: list[SpecShape] = []
-    shape: Shape = input_shape
+    shapes: list[SpecShape[AnyShape]] = []
+    shape: AnyShape = input_shape
     # each open block's input shape, its Fork's
-    forks: list[Shape] = []
+    forks: list[AnyShape] = []
     for spec in expand_specs(specs):
+        assert shape != (None,) or isinstance(spec, Embedding), (
+            f"token ids of any count are read by an Embedding (P1); got {spec!r} over {shape}"
+        )
         if isinstance(spec, Dense):
             shapes.append(SpecShape(shape, (shape[0], spec.size) if len(shape) == 2 else (spec.size,)))
         elif isinstance(spec, BatchNorm):
@@ -121,7 +158,12 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
                 f"rotary-positions workplan, D6); got {spec!r} over tokens of {features} features"
             )
             shapes.append(SpecShape(shape, shape))
-        elif isinstance(spec, Position | LayerNorm | Dropout):
+        elif isinstance(spec, Position):
+            assert len(shape) != 2 or shape[0] is not None, (
+                f"a Position holds a row per token, so its tokens have a fixed count (P1); got {spec!r} over {shape}"
+            )
+            shapes.append(SpecShape(shape, shape))
+        elif isinstance(spec, LayerNorm | Dropout):
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, TokenMean):
             assert len(shape) == 2, f"a TokenMean reads tokens; got {shape}"

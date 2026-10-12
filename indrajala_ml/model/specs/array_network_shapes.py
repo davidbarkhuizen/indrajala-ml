@@ -11,7 +11,7 @@ from indrajala_ml.model.persistence.format2 import NetworkFile
 from indrajala_ml.model.protocols.array_protocols import BackendArray
 from indrajala_ml.model.specs.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, refuse_token_wise_output, token_wise_output
-from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
+from indrajala_ml.model.specs.spec_shapes import InputShape, fixed_input_shape, spec_shapes
 from indrajala_ml.model.specs.update_rules import UpdateRule
 
 if TYPE_CHECKING:
@@ -242,7 +242,7 @@ class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
         # any format-2 file of its shape, preset or not, numpy or Rust
-        return cls(file.input_shape, file.layers, file.update_rule)
+        return cls(fixed_input_shape(file.input_shape), file.layers, file.update_rule)
 
     @classmethod
     def _load_legacy(cls, state: dict[str, Any]) -> Self:
@@ -273,7 +273,7 @@ class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
         # any format-2 file of its shape, preset or not, numpy or Rust
-        return cls(file.input_shape, file.layers, file.update_rule)
+        return cls(fixed_input_shape(file.input_shape), file.layers, file.update_rule)
 
     @classmethod
     def _load_legacy(cls, state: dict[str, Any]) -> Self:
@@ -351,7 +351,7 @@ class SequentialSequenceShape[A: BackendArray](_ShapeBase[A]):
 
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
-        return cls(file.input_shape, file.layers, file.update_rule)
+        return cls(fixed_input_shape(file.input_shape), file.layers, file.update_rule)
 
     @classmethod
     def _load_legacy(cls, state: dict[str, Any]) -> Self:

@@ -115,11 +115,14 @@ length past 7 are what no network can have memorised.
    task, the encoding, the position scheme, the training lengths, the furthest length reached. A
    "What the literature found" section here, written before any code, and any decision it moves
    revisited in that PR (docs only).
-3. **P1a, specs and shapes.** A sequence network's input shape may have a variable token count;
-   validation refuses a `Position` in such a network (it needs a fixed one). Format 2 records the
-   variable count, and loads a file without `Position` at any `T`. Every existing network keeps
-   its fixed shape, so no saved file or fixture changes.
-4. **P1b, numpy.** `AttentionArrayLayer` takes `T` from each batch, not from construction: the
+3. **P1a, specs and shapes** (done). Token ids of any count are the input shape `(None,)`
+   (`AnyInputShape`), which only an `Embedding` reads; the shape walk carries `None` tokens through
+   and refuses a `Position` over them (it needs a fixed count). Format 2 records `{"dimension":
+   null}`. A network still takes a fixed `InputShape`, and loading a length-free file is refused,
+   naming the stage, until each implementation's token layers take `T` from the batch (stages
+   4-6). Every existing network keeps its fixed shape, so no saved file or fixture changes.
+4. **P1b, numpy.** The numpy network builds over `(None,)` and loads a length-free file.
+   `AttentionArrayLayer` takes `T` from each batch, not from construction: the
    causal mask and the rotary table are built for each `T` it meets and cached; a longer rotary
    table keeps the shorter one's rows (`rotary_table` already does). Every other token layer
    (`Embedding`, `LayerNorm`, the per-token `Dense`, `Residual`, the sequence output) audited for
@@ -128,8 +131,9 @@ length past 7 are what no network can have memorised.
    the attention case.
 5. **P1c, the crate and the Rust layers.** The crate's attention ops already read `T` from their
    arrays; tests that each op agrees with numpy at several `T` with one set of weights. The Rust
-   layer as numpy's. Tier 1 A/B of the attention case.
-6. **P1d, pure Python.** The same, parity with numpy at several `T`. Tier 0.
+   layer as numpy's, and the Rust network over `(None,)`. Tier 1 A/B of the attention case.
+6. **P1d, pure Python.** The same, the network over `(None,)`, parity with numpy at several `T`.
+   Tier 0.
 7. **P5 and P4, the harness across lengths.**
    - The catalogue at any `n` (D8): exhaustive where it is small, sampled where it isn't.
    - The column encoding with its start token (D12).

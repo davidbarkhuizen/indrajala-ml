@@ -36,6 +36,7 @@ from indrajala_ml.model.persistence.format2 import (
     restore_file,
 )
 from indrajala_ml.model.persistence.model_io import load_json
+from indrajala_ml.model.specs.spec_shapes import fixed_input_shape
 
 _ENSEMBLES: dict[str, Any] = {
     PYTHON: EnsembleBackpropClassifierNetwork,
@@ -73,11 +74,15 @@ def _sequential(file: NetworkFile) -> Any:
     network: Any
     if file.implementation == PYTHON:
         cls = _PYTHON_SHAPES[file.shape]
-        network = cls(file.input_shape, file.layers, file.update_rule, file.input_bounds)
+        network = cls(fixed_input_shape(file.input_shape), file.layers, file.update_rule, file.input_bounds)
     else:
         backend = NUMPY if file.implementation == NUMPY.name else RUST
         network = SequentialArrayNetwork(
-            file.input_shape, file.layers, file.update_rule, shape=_ARRAY_SHAPES[file.shape], backend=backend
+            fixed_input_shape(file.input_shape),
+            file.layers,
+            file.update_rule,
+            shape=_ARRAY_SHAPES[file.shape],
+            backend=backend,
         )
     restore_file(network, file)
     return network

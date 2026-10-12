@@ -31,7 +31,7 @@ from indrajala_ml.model.specs.layer_specs import (
     TokenMean,
     expand_specs,
 )
-from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.spec_shapes import AnyInputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
 _RULES: dict[str, type[UpdateRule]] = {"sgd": SGD, "momentum": Momentum, "adam": Adam, "weight_decay": WeightDecay}
@@ -127,7 +127,7 @@ def rule_from_json(rule: dict[str, Any]) -> UpdateRule:
     return _RULES[name](**{key: value for key, value in rule.items() if key != "rule"})
 
 
-def input_to_json(input_shape: InputShape, input_bounds: list[tuple[float, float]] | None) -> dict[str, Any]:
+def input_to_json(input_shape: AnyInputShape, input_bounds: list[tuple[float, float]] | None) -> dict[str, Any]:
     if len(input_shape) == 1:
         shape: dict[str, Any] = {"dimension": input_shape[0]}
     else:
@@ -138,7 +138,7 @@ def input_to_json(input_shape: InputShape, input_bounds: list[tuple[float, float
     return shape
 
 
-def input_shape_from_json(shape: dict[str, Any]) -> InputShape:
+def input_shape_from_json(shape: dict[str, Any]) -> AnyInputShape:
     if "dimension" in shape:
         return (shape["dimension"],)
     return (shape["height"], shape["width"], shape["channels"])

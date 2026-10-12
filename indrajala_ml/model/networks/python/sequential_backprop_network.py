@@ -27,7 +27,7 @@ from indrajala_ml.model.protocols.classification import argmax_first_occurrence
 from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
 from indrajala_ml.model.specs.bounds import validate_class_count
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, refuse_token_wise_output, token_wise_output
-from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
+from indrajala_ml.model.specs.spec_shapes import InputShape, fixed_input_shape, spec_shapes
 from indrajala_ml.model.specs.update_rules import UpdateRule
 
 
@@ -75,7 +75,7 @@ class SequentialMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifier
 
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
-        return cls(file.input_shape, file.layers, file.update_rule, file.input_bounds)
+        return cls(fixed_input_shape(file.input_shape), file.layers, file.update_rule, file.input_bounds)
 
     @classmethod
     def _load_legacy(cls, state: dict[str, Any]) -> Self:
@@ -115,7 +115,7 @@ class SequentialBackpropClassifierNetwork(BackpropClassifierNetwork[TrainableLay
 
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
-        return cls(file.input_shape, file.layers, file.update_rule, file.input_bounds)
+        return cls(fixed_input_shape(file.input_shape), file.layers, file.update_rule, file.input_bounds)
 
     @classmethod
     def _load_legacy(cls, state: dict[str, Any]) -> Self:
@@ -198,7 +198,7 @@ class SequentialSequenceBackpropNetwork(BackpropNetworkBase[TrainableLayer, Toke
 
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
-        return cls(file.input_shape, file.layers, file.update_rule, file.input_bounds)
+        return cls(fixed_input_shape(file.input_shape), file.layers, file.update_rule, file.input_bounds)
 
     @classmethod
     def _load_legacy(cls, state: dict[str, Any]) -> Self:

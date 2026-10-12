@@ -22,7 +22,9 @@ network resumes training by bits, its dropout masks included.
 - preset holds a preset's class and constructor arguments, from which its load rebuilds it. A
   Sequential network's file has none.
 - input is {"dimension": d} or {"height": h, "width": w, "channels": c}, with "input_bounds" in
-  pure Python. class_count is the output layer's size.
+  pure Python; {"dimension": null} for token ids of any count, a length-free network's (the
+  length-generalisation workplan, P1), which no network builds yet. class_count is the output
+  layer's size.
 - layers holds each spec's fields under its kind: "dense", "conv", "pool", "batch_norm" (the
   batch-norm workplan, Format 2) or "residual", {"kind": "residual", "body": [...]} with the body's
   entries (the residual-connections workplan, stage 5), "patches", "position", "layer_norm",
@@ -85,7 +87,7 @@ from indrajala_ml.model.persistence.format2_json import (
     rule_to_json,
 )
 from indrajala_ml.model.specs.layer_specs import LayerSpec
-from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.spec_shapes import AnyInputShape
 from indrajala_ml.model.specs.update_rules import UpdateRule
 from indrajala_ml.pcg64 import generator_state, set_generator_state
 
@@ -114,8 +116,10 @@ class Format2Network(Protocol):
     preset_arguments: ClassVar[tuple[str, ...] | None]
     hyperparameters: ClassVar[tuple[str, ...]]
     format2_shape: ClassVar[str]
-    input_shape: InputShape
     layer_specs: list[LayerSpec]
+
+    @property
+    def input_shape(self) -> AnyInputShape: ...
 
     @property
     def implementation(self) -> str: ...
@@ -193,7 +197,7 @@ class NetworkFile:
     implementation: str
     shape: str
     preset: dict[str, Any] | None
-    input_shape: InputShape
+    input_shape: AnyInputShape
     input_bounds: list[tuple[float, float]] | None
     layers: list[LayerSpec]
     update_rule: UpdateRule
