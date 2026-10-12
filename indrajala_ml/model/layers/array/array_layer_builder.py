@@ -73,7 +73,7 @@ from indrajala_ml.model.specs.layer_specs import (
     expand_specs,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
-from indrajala_ml.model.specs.spec_validation import validate_layer_specs
+from indrajala_ml.model.specs.spec_validation import refuse_window_layers, validate_layer_specs
 
 LayerClass = Callable[..., ArrayNetworkLayer[Any]]
 FrontEndLayerClass = Callable[..., ArrayFrontEndLayer[Any]]
@@ -237,8 +237,9 @@ def build_array_layers(
     """
     specs, validated (validate_layer_specs), as backend_name's layers over input_shape: one per
     expanded spec (expand_specs), each residual block's fork wired to its add and to its body's
-    first layer.
+    first layer. A window's StateInput isn't built yet (refuse_window_layers).
     """
+    refuse_window_layers(specs, backend_name)
     validate_layer_specs(specs)
     shapes = spec_shapes(specs, input_shape)
     classes = LAYER_CLASSES[backend_name]

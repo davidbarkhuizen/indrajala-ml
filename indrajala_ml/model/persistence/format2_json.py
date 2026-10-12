@@ -1,6 +1,7 @@
 """
-The JSON codecs of format 2 (format2.py): layer specs, update rules, a network's input, the
-optimizer's state and the generator's state, each to its file entry and back.
+The JSON codecs of format 2 (format2.py): layer specs, update rules, a network's input, a
+window-recurrent network's recurrence, the optimizer's state and the generator's state, each to its
+file entry and back.
 
 Backend-free: pure Python imports it, and arrays leave as lists through their tolist().
 """
@@ -28,23 +29,29 @@ from indrajala_ml.model.specs.layer_specs import (
     Patches,
     Position,
     Residual,
+    StateInput,
     TokenMean,
     expand_specs,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.specs.window_recurrence import GRU, AttentionPooling, Codes, WindowRecurrence
 
 _RULES: dict[str, type[UpdateRule]] = {"sgd": SGD, "momentum": Momentum, "adam": Adam, "weight_decay": WeightDecay}
 # the layer-norm and attention workplan's specs by kind (stage 5), and the sequence task workplan's
-# Embedding (stage 2) and the attention-dropout workplan's Dropout (D7); a token-wise dense layer's
-# entry, an output layer's included, is a "dense" one
-_TOKEN_SPECS: dict[str, type[Patches | Embedding | Position | LayerNorm | Attention | Dropout | TokenMean]] = {
+# Embedding (stage 2), the attention-dropout workplan's Dropout (D7) and the window-recurrent adder
+# workplan's StateInput (stage 2); a token-wise dense layer's entry, an output layer's included, is a
+# "dense" one
+_TOKEN_SPECS: dict[
+    str, type[Patches | Embedding | Position | LayerNorm | Attention | Dropout | StateInput | TokenMean]
+] = {
     "patches": Patches,
     "embedding": Embedding,
     "position": Position,
     "layer_norm": LayerNorm,
     "attention": Attention,
     "dropout": Dropout,
+    "state_input": StateInput,
     "token_mean": TokenMean,
 }
 _TOKEN_KINDS = {cls: kind for kind, cls in _TOKEN_SPECS.items()}
@@ -144,6 +151,31 @@ def input_shape_from_json(shape: dict[str, Any]) -> InputShape:
     return (shape["height"], shape["width"], shape["channels"])
 
 
+def recurrence_to_json(recurrence: WindowRecurrence) -> dict[str, Any]:
+    # the cell and the pooling under a kind, as layers are, so another cell or pooling can join them
+    return {
+        "state_size": recurrence.state_size,
+        "codes": asdict(recurrence.codes),
+        "cell": {"kind": "gru", **asdict(recurrence.cell)},
+        "pooling": {"kind": "attention", **asdict(recurrence.pooling)},
+    }
+
+
+def recurrence_from_json(recurrence: dict[str, Any]) -> WindowRecurrence:
+    cell = {key: value for key, value in recurrence["cell"].items() if key != "kind"}
+    pooling = {key: value for key, value in recurrence["pooling"].items() if key != "kind"}
+    if recurrence["cell"]["kind"] != "gru":
+        raise ValueError(f"unknown cell kind {recurrence['cell']['kind']!r}")
+    if recurrence["pooling"]["kind"] != "attention":
+        raise ValueError(f"unknown pooling kind {recurrence['pooling']['kind']!r}")
+    return WindowRecurrence(
+        state_size=recurrence["state_size"],
+        codes=Codes(**recurrence["codes"]),
+        cell=GRU(**cell),
+        pooling=AttentionPooling(**pooling),
+    )
+
+
 def _state_names(rule: UpdateRule) -> tuple[str, ...]:
     # the rule's state per parameter, in the optimizers' order
     match rule:
@@ -164,6 +196,8 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("P",)
         case Embedding():
             return ("E",)
+        case StateInput():
+            return ("P",)
         case Attention():
             return ("Wq", "bq", "Wk", "bk", "Wv", "bv", "Wo", "bo")
         case Fork() | Add() | PoolSpec() | Patches() | Dropout() | TokenMean():

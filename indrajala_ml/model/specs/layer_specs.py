@@ -33,6 +33,11 @@ a dense layer's dropout is fused with its sigmoid, because no activation stands 
 
 A token part's positions are a learned Position after its start, or rotary ones inside its
 attention, Attention(positions="rotary") (the rotary-positions workplan, D2, D6), not both.
+
+A window-recurrent network (the window-recurrent adder workplan) runs a sequence model's specs, its
+window, over each window of k columns, and hands a state from window to window (window_recurrence.py).
+The state enters the window through a StateInput, which stands among the window's tokens right
+before a residual block (W1b-ii, W18), and nowhere but in a window.
 """
 
 from __future__ import annotations
@@ -191,6 +196,17 @@ class Dropout:
 
 
 @dataclass(frozen=True)
+class StateInput:
+    """
+    A window-recurrent network's state entering its window (the window-recurrent adder workplan,
+    W1b-ii, W18): a learned (d, s) projection P of the window's state c, of the recurrence's
+    state_size s, added to every token, x_t + P c. It stands among a window's tokens, right before a
+    residual block, so the block reads the state; a window has one before each block that should.
+    Only a window holds one (validate_window_recurrent).
+    """
+
+
+@dataclass(frozen=True)
 class TokenMean:
     """The mean over the tokens, (T, d) to (d,) (D8): the token part's end."""
 
@@ -207,13 +223,14 @@ LayerSpec = (
     | LayerNorm
     | Attention
     | Dropout
+    | StateInput
     | TokenMean
 )
 
 # the specs that start a token part, as a network's first layer
 TokenStart = Patches | Embedding
 # the specs that act on tokens only, from the token part's start to its TokenMean, both included
-TokenSpec = Patches | Embedding | Position | Attention | Dropout | TokenMean
+TokenSpec = Patches | Embedding | Position | Attention | Dropout | StateInput | TokenMean
 
 
 @dataclass(frozen=True)
@@ -243,6 +260,7 @@ ExpandedSpec = (
     | LayerNorm
     | Attention
     | Dropout
+    | StateInput
     | TokenMean
 )
 
