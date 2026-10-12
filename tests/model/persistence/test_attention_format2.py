@@ -267,3 +267,20 @@ def test_a_dropout_sequence_fixture_re_saves_byte_identically(name: str, tmp_pat
     entries = json.loads(path.read_text())["layers"]
     assert {"kind": "dropout", "p": 0.1} in entries
     assert len(DROPOUT_FIXTURES) == 3
+
+
+# the rotary-positions workplan's (stage 7): the sequence model with rotary attention in place of
+# the Position, its attention entry's "positions" and "rotary_base" (D2)
+ROTARY_FIXTURES = [name for name in FIXTURES if name.startswith("SequenceRotary")]
+
+
+@pytest.mark.parametrize("name", ROTARY_FIXTURES)
+def test_a_rotary_sequence_fixture_re_saves_byte_identically(name: str, tmp_path: Path):
+    path = tmp_path / f"{name}.json"
+    fixture_class(name).load(str(FIXTURE_DIR / f"{name}.json")).save(str(path))
+    assert path.read_bytes() == (FIXTURE_DIR / f"{name}.json").read_bytes()
+    entries = json.loads(path.read_text())["layers"]
+    attention = entries[1]["body"][1]
+    assert attention["positions"] == "rotary" and attention["rotary_base"] == 500.0
+    assert not any(entry["kind"] == "position" for entry in entries)
+    assert len(ROTARY_FIXTURES) == 3

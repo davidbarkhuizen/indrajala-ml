@@ -66,6 +66,11 @@ a Dropout ending each block's body), on the sequence rows. Their masks draw from
 generator, seeded from SEED, so the three implementations draw the same masks. No earlier entry
 moved when they were recorded.
 
+The rotary entries (the rotary-positions workplan, stage 7, D7) are ROTARY_SPECS in all three
+implementations, added after the attention-dropout ones: the sequence model without its Position,
+its attention rotary (two heads of 4 features, so rotary_table's pairs aren't trivial), on the
+sequence rows. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -510,6 +515,15 @@ ATTENTION_DROPOUT_NETWORKS = [
     "rust attention dropout model",
     "python attention dropout model",
 ]
+# SEQUENCE_SPECS with rotary attention in place of the Position (the rotary-positions workplan, D7)
+ROTARY_SPECS: list[LayerSpec] = [
+    Embedding(len(SEQUENCE_VOCABULARY), 4),
+    Residual((LayerNorm(), Attention(heads=2, key_size=4, causal=True, positions="rotary"))),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
+    LayerNorm(),
+    Dense(len(SEQUENCE_VOCABULARY), output=True, activation="softmax", loss="cross_entropy"),
+]
+ROTARY_NETWORKS = ["numpy rotary model", "rust rotary model", "python rotary model"]
 
 
 def _sequential_network(name: str, input_shape: InputShape, specs: list[LayerSpec], rule: UpdateRule) -> Any:
@@ -728,6 +742,9 @@ def run_all() -> dict[str, Any]:
         results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
     for name in ATTENTION_DROPOUT_NETWORKS:
         network = _sequential_network(name, (SEQUENCE_CONTEXT,), ATTENTION_DROPOUT_SPECS, Adam())
+        results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
+    for name in ROTARY_NETWORKS:
+        network = _sequential_network(name, (SEQUENCE_CONTEXT,), ROTARY_SPECS, Adam())
         results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
     return results
 

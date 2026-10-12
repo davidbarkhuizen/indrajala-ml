@@ -26,6 +26,9 @@ tests/model/persistence/test_legacy_saved_models.py loads.
   each implementation's sequence class with GPT's three dropouts: a Dropout after the Position, an
   Attention with dropout and a Dropout ending each block's body, named SequenceDropout<class name>.
   Their two training steps draw masks from the network's seeded generator.
+- The rotary fixtures (the rotary-positions workplan, stage 7) are format-2 files of each
+  implementation's sequence class with rotary attention in place of the Position, named
+  SequenceRotary<class name>; their attention entries hold "positions" and a "rotary_base".
 - The pure-Python multiclass presets' fixtures (the presets workplan, stage 1) are format 2 only,
   like the single-output ones: those classes never wrote a legacy envelope.
 - So are the numpy and Rust one-output presets' fixtures (the presets workplan, stage 2).
@@ -183,6 +186,15 @@ ATTENTION_DROPOUT_MODEL: list[LayerSpec] = [
     Dropout(0.1),
     Residual((LayerNorm(), Attention(heads=2, key_size=3, causal=True, dropout=0.2), Dropout(0.1))),
     Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True), Dropout(0.1))),
+    LayerNorm(epsilon=1e-4),
+    Dense(VOCABULARY, output=True, activation="softmax", loss="cross_entropy"),
+]
+# SEQUENCE_MODEL with rotary attention in place of the Position, at its own base (the
+# rotary-positions workplan, D2, D6)
+ROTARY_MODEL: list[LayerSpec] = [
+    Embedding(VOCABULARY, 4),
+    Residual((LayerNorm(), Attention(heads=2, key_size=4, causal=True, positions="rotary", rotary_base=500.0))),
+    Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
     LayerNorm(epsilon=1e-4),
     Dense(VOCABULARY, output=True, activation="softmax", loss="cross_entropy"),
 ]
@@ -492,6 +504,14 @@ FIXTURES: dict[str, SavedModelFixture] = {
     "SequentialSequenceBackpropNetwork": _sequence("python"),
     **{
         f"SequenceDropout{name}": _sequence(implementation, name, ATTENTION_DROPOUT_MODEL)
+        for name, implementation in (
+            ("SequentialSequenceArrayNetwork", "numpy"),
+            ("SequentialSequenceRustArrayNetwork", "rust"),
+            ("SequentialSequenceBackpropNetwork", "python"),
+        )
+    },
+    **{
+        f"SequenceRotary{name}": _sequence(implementation, name, ROTARY_MODEL)
         for name, implementation in (
             ("SequentialSequenceArrayNetwork", "numpy"),
             ("SequentialSequenceRustArrayNetwork", "rust"),
