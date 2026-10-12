@@ -1,12 +1,15 @@
 """
-One heavy job at a time on a machine (docs/study-runs-workplan.md, D1, D2): an A/B's run or extend
-(scripts/ab.py) or a study's training stage. Each holds an flock on RUNS_ROOT/run.lock for as long
-as its process lives, so a killed job never leaves it held, and writes one JSON line naming itself
-(what, kind, pid, since); a second is refused with that line. RUNS_ROOT is ab.py's runs directory,
-AB_RUNS_ROOT or ~/code/ab-runs, read when the lock is taken.
+One heavy job at a time on a machine (the study-runs workplan's D1 and D2, retired: git show
+868838e:docs/study-runs-workplan.md): an A/B's run or extend (scripts/ab.py) or a study's training
+stage. Each holds an flock on RUNS_ROOT/run.lock for as long as its process lives, so a killed job
+never leaves it held, and writes one JSON line naming itself (what, kind, pid, since); a second is
+refused with that line. RUNS_ROOT is ab.py's runs directory, AB_RUNS_ROOT or ~/code/ab-runs, read
+when the lock is taken.
 
 The lock's file is opened non-inheritable (PEP 446), so a spawned or forkserver worker doesn't hold
-it: the job's own process does, and the lock ends with it.
+it: the job's own process does, and the lock ends with it. A study's workers don't: killed alone,
+its process frees the lock while each worker trains on to the end of the run it holds, so stop a
+study by its whole process group.
 """
 
 import contextlib

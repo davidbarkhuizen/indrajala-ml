@@ -13,7 +13,6 @@ in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan
 [grouped-query-attention-workplan.md](grouped-query-attention-workplan.md),
 [cross-attention-workplan.md](cross-attention-workplan.md),
 [addition-study-workplan.md](addition-study-workplan.md),
-[study-runs-workplan.md](study-runs-workplan.md),
 [arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md),
 [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md). The order
 of the next ML
@@ -45,6 +44,7 @@ docs cite them by section:
 | Dropout in attention (roadmap step 7) | #638 | crate #54, #654-#660, #666, archive #20-#21 | `git show 8d2019e:docs/attention-dropout-workplan.md` |
 | Length generalisation for the column adders (terminated by the owner before its existence study) | #683 | #684 | `git show c3d619b:docs/length-generalisation-workplan.md` |
 | Rotary position embedding (roadmap step 8) | #639 | crate #55, #668-#669, #678-#682, #688, archive #22-#23 | `git show 9b27175:docs/rotary-positions-workplan.md` |
+| Studies and timing runs sharing `jebel` (study-runs) | #670 | #673-#676, #695 | `git show 868838e:docs/study-runs-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -475,6 +475,39 @@ Not planned yet:
   as tier 1's pass count was.
 - Hosting results anywhere but the archive repository: no dashboards, no release assets.
 - Benchmarks in CI: GitHub's runners are shared and noisy, so no timing is ever taken there.
+
+## From studies sharing `jebel`
+
+The study-runs workplan built the machine lock that studies and A/Bs share, `ab.py`'s load
+refusal and studies' result files with provenance (measurement.md §2). The owner trimmed it to
+those three (#673); the rest waits here until a planned piece of work needs it.
+
+- **Draining a study for an A/B** (its D4 (b) and D5): `ab.py run --drain` stops a resumable study
+  at its next gap, runs the A/B and leaves the study to be resumed. The addition and
+  window-recurrent harnesses resume already; `run_parameter_sweep` (the patch, sequence and other
+  `*_study.py` sweeps) would need a resume of its own first. Today an A/B is refused and waits for
+  the study to end (D4 (a)). A variant has `ab.py` resume the study itself; it would start commands
+  read from the lock's record.
+- **A harness's end-time estimate** (D6): `status` with the rate over the last hour and an
+  end-time range, for the addition and window-recurrent harnesses. A sweep's average rate
+  overstates its later, slower ladders (the addition sweep: 2.5 runs a minute on average, 1.1 at
+  07:30), so until then an end time is quoted as a range from a measured epoch's cost.
+- **The addition harness's timing fields** (D7): its `train_seconds` includes the whole
+  catalogue on a passing run (16 s at `n = 4` for a column transformer, 213 s for the string
+  format), so seconds an epoch read 4-8 times the true 2.5-3 s. The window-recurrent harness
+  records training, screening, the check and each test length apart; the addition harness would
+  take the same split (`fit_seconds`, `screen_seconds`, `check_seconds`). Until then, cost its
+  budgets from failing runs' seconds an epoch.
+- **Archiving studies' raw results off the machine** (D8 (b)): in `indrajala-benchmarks`, which
+  would widen the archive past timing results (an owner's call). Today each file has one copy, recorded by path, host and sha256 in its
+  study's docstring and copied to `pyramidon` by hand; the addition sweep's results went to the
+  model archive (`indrajala-models`) with its threshold models.
+- **Stopping a study stops its workers.** A study's forkserver workers don't hold the lock
+  (`machine_lock`'s docstring): a SIGTERM to the study's process alone frees the lock while each
+  worker trains on to the end of the run it holds, and only then fails to report it. Today the
+  rule is to kill the whole process group. A fix: the harness traps SIGTERM and terminates its
+  pool before it exits (or each worker asks for `PR_SET_PDEATHSIG`), with a test that the lock
+  and the workers end together.
 
 ## From length generalisation (terminated)
 
