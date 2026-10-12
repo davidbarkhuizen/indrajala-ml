@@ -234,8 +234,8 @@ def test_only_a_window_recurrent_file_has_a_recurrence():
         network_from_json(_window_file(shape="sequence"))
 
 
-def test_load_network_refuses_a_window_recurrent_file_not_yet(tmp_path: Path):
+def test_load_network_refuses_a_rust_window_recurrent_file_not_yet(tmp_path: Path):
     path = tmp_path / "window.json"
-    path.write_text(json.dumps(_window_file()))
-    with pytest.raises(ValueError, match="isn't built yet"):
+    path.write_text(json.dumps(_window_file(implementation="rust")))
+    with pytest.raises(ValueError, match="isn't built in rust yet .* stage 5"):
         load_network(str(path))

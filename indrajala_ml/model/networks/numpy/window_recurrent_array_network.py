@@ -1,0 +1,281 @@
+# pyright: reportConstantRedefinition=false
+# (matrices are named as in the literature, X, Y, H, which strict mode takes for constants)
+"""
+A window-recurrent network in numpy (the window-recurrent adder workplan, stage 4; The network):
+its window, a sequence model's layers with StateInputs, run over each window of k columns in turn,
+and its own parts, which hand a state from window to window: the attention pooling over the tokens
+the output layer reads, the GRU cell and the codes, starting from the learned initial state,
+snapped (W8).
+
+    network = WindowRecurrentArrayNetwork((k,), window_specs, WindowRecurrence(4, Codes(8)), Adam())
+
+An input is W windows of k column token ids, flat, W * k of them, and its label the digit of each
+column, W * k of them; every example of a batch has the same W, and the network takes any W.
+Aligning the columns in their windows (W6-i) and the final window of zero columns (W9) are the
+caller's (the harness, stage 8).
+
+The loss per example (W14): the mean of every column's cross-entropy, over all W windows, plus, for
+each snapped state (the initial one and each window's), 1 / W times the codes' losses. A training
+step runs the windows forward, keeping each window's state and the generator's state before it,
+then backward from the last window, re-running each window's forward pass (its generator
+restored, so its dropout masks repeat) before its backward pass (W20); the gradient of a window's
+state flows into the window before it, through the codes, the cell and the StateInputs.
+
+The window's layers keep the indices they have in a sequence network; the network's own parts
+follow them, in the order pooling, cell, codes, initial state, for the optimizer, snapshot() and
+format 2 (format2_json.RECURRENCE_PARAMETERS).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator, Sequence
+from typing import Any, ClassVar, Self
+
+import numpy as np
+
+from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
+from indrajala_ml.model.layers.numpy.recurrent_array_layer import (
+    AttentionPoolingArrayLayer,
+    CodesArrayLayer,
+    GRUArrayLayer,
+    InitialStateArrayLayer,
+    StateInputArrayLayer,
+)
+from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
+from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT, NetworkFile
+from indrajala_ml.model.specs.bounds import validate_class_count
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
+from indrajala_ml.model.specs.spec_validation import validate_window_recurrent
+from indrajala_ml.model.specs.update_rules import UpdateRule
+from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
+from indrajala_ml.pcg64 import generator_state, set_generator_state
+
+
+class _WithPooling:
+    """
+    The output layer as the layer before it reads it, with the pooling's gradient of the same
+    tokens added: both read the tokens the output layer reads.
+    """
+
+    def __init__(self, output_layer: Any, pooled: FloatArray) -> None:
+        self._output_layer = output_layer
+        self._pooled = pooled
+
+    def downstream_batch(self) -> FloatArray:
+        return self._output_layer.downstream_batch() + self._pooled
+
+
+class WindowRecurrentArrayNetwork(NumpyArrayNetworkBase):
+    """The module's network: its window's layers (self.layers) and its own parts (self.parts)."""
+
+    format2_shape: ClassVar[str] = WINDOW_RECURRENT
+    preset_arguments: ClassVar[tuple[str, ...] | None] = None
+
+    def __init__(
+        self,
+        input_shape: InputShape,
+        layers: Sequence[LayerSpec],
+        recurrence: WindowRecurrence,
+        update_rule: UpdateRule,
+    ) -> None:
+        validate_window_recurrent(layers, recurrence, input_shape)
+        output = layers[-1]
+        assert isinstance(output, Dense)
+        validate_class_count(output.size)
+        self.recurrence = recurrence
+        self.update_rule = update_rule
+        self.class_count = output.size
+        self.columns = input_shape[0]
+        super().__init__(layers, input_shape)
+
+        # the token width the output layer reads, which the pooling reads too
+        _, features = token_shape(spec_shapes(layers, input_shape)[-1].input_shape)
+        s = recurrence.state_size
+        self.pooling = AttentionPoolingArrayLayer(self.columns, features)
+        self.cell = GRUArrayLayer(features, s, recurrence.cell.update_bias)
+        self.codes = CodesArrayLayer(recurrence.codes.count, s, recurrence.codes.commitment)
+        self.initial_state = InitialStateArrayLayer(s)
+        self.parts: list[Any] = [self.pooling, self.cell, self.codes, self.initial_state]
+        self._state_inputs = [layer for layer in self.layers if isinstance(layer, StateInputArrayLayer)]
+
+    def _window_state_size(self) -> int | None:
+        return self.recurrence.state_size
+
+    def _update_rule(self) -> UpdateRule:
+        return self.update_rule
+
+    def randomize(self) -> None:
+        # the window's layers as a sequence network's, its StateInputs' P among them in order;
+        # then the cell's gates and the codes. The pooling's query and the initial state start at
+        # zero and draw nothing.
+        super().randomize()
+        self.cell.draw(self.rng)
+        self.codes.draw(self.rng)
+
+    # the forward pass
+
+    def _windows(self, X: FloatArray) -> int:
+        count, remainder = divmod(X.shape[1], self.columns)
+        assert remainder == 0 and count >= 1, (
+            f"a window-recurrent network reads whole windows of {self.columns} columns; got {X.shape[1]} columns"
+        )
+        return count
+
+    def _window(self, X: FloatArray, w: int) -> FloatArray:
+        return X[:, w * self.columns : (w + 1) * self.columns]
+
+    def _first_state(self, examples: int) -> FloatArray:
+        return self.codes.forward_batch(self.initial_state.forward_batch(examples))
+
+    def _window_forward(self, X: FloatArray, C: FloatArray) -> tuple[FloatArray, FloatArray]:
+        # one window's digits' probabilities and its next state, from its columns X and state C
+        for state_input in self._state_inputs:
+            state_input.set_state(C)
+        self._activations = [X]
+        for layer in self.layers:
+            self._activations.append(layer.forward_batch(self._activations[-1]))
+        u = self.pooling.forward_batch(self._activations[-2])
+        return self._activations[-1], self.codes.forward_batch(self.cell.forward_batch(u, C))
+
+    def forward_windows(self, X: FloatArray) -> FloatArray:
+        """The inference forward pass: each column's digit probabilities, (N, W * k * classes)."""
+        C = self._first_state(X.shape[0])
+        outputs: list[FloatArray] = []
+        for w in range(self._windows(X)):
+            output, C = self._window_forward(self._window(X, w), C)
+            outputs.append(output)
+        return np.concatenate(outputs, axis=1)
+
+    def _forward_input(self, x: FloatArray) -> FloatArray:
+        return self.forward_windows(x[np.newaxis, :])[0]
+
+    def forward_rows(self, prepared: PreparedDataset) -> Iterator[FloatArray]:
+        states = self._prepared_states(prepared)
+        for start in range(0, len(prepared), CLASSIFY_CHUNK_ROWS):
+            yield self.forward_windows(states[start : min(start + CLASSIFY_CHUNK_ROWS, len(prepared))])
+
+    # the shape's hooks: a digit per column, as a sequence network's per token
+
+    def predict_probabilities(self, state: tuple[float, ...]) -> list[list[float]]:
+        """Each column's digit probabilities."""
+        values = self._forward(state).tolist()
+        width = self.class_count
+        return [values[i : i + width] for i in range(0, len(values), width)]
+
+    def classify_state(self, state: tuple[float, ...]) -> tuple[int, ...]:
+        return self._classify_output(self._forward(state))
+
+    def _classify_output(self, output: FloatArray) -> tuple[int, ...]:
+        return self._classify_output_batch(output[np.newaxis, :])[0]
+
+    def _classify_output_batch(self, output_batch: FloatArray) -> list[tuple[int, ...]]:
+        return self.backend.argmax_token_rows(output_batch, self.class_count)
+
+    def _target_batch_array(self, categories: Sequence[Sequence[int]]) -> FloatArray:
+        columns = len(categories[0])
+        target_batch = np.zeros((len(categories), columns * self.class_count))
+        for row, category in enumerate(categories):
+            assert len(category) == columns, (
+                f"a batch's labels are a digit per column, {columns} for every example; got {len(category)}"
+            )
+            for t, label in enumerate(category):
+                target_batch[row, t * self.class_count + label] = 1.0
+        return target_batch
+
+    def _target_array(self, category: Sequence[int]) -> FloatArray:
+        return self._target_batch_array([category])[0]
+
+    # the training step
+
+    def _learn_input(self, learning_rate: float, x: FloatArray, category: Any) -> None:
+        self._learn_batch_input(learning_rate, x[np.newaxis, :], [category])
+
+    def _learn_batch_input(self, learning_rate: float, X: FloatArray, categories: Sequence[Any]) -> None:
+        examples = len(categories)
+        self._accumulate_gradients(X, self._target_batch_array(categories))
+        optimizer = self.optimizer
+        optimizer.begin_step()
+        for index, layer in enumerate([*self.layers, *self.parts]):
+            optimizer.apply(index, layer, learning_rate, examples)
+
+    def _accumulate_gradients(self, X: FloatArray, Y: FloatArray) -> None:
+        # every layer's and part's gradient of the batch's loss, accumulated (W14, W20)
+        windows = self._windows(X)
+        weight = 1.0 / windows
+        width = self.columns * self.class_count
+        states: list[FloatArray] = []
+        generators: list[dict[str, Any]] = []
+        self._set_training_mode(True)
+        try:
+            C = self._first_state(X.shape[0])
+            for w in range(windows):
+                states.append(C)
+                generators.append(generator_state(self.rng))
+                _, C = self._window_forward(self._window(X, w), C)
+            after = generator_state(self.rng)
+
+            dC = np.zeros(C.shape)
+            for w in reversed(range(windows)):
+                set_generator_state(self.rng, generators[w])
+                self._window_forward(self._window(X, w), states[w])
+                dC = self._window_backward(Y[:, w * width : (w + 1) * width], dC, weight)
+            set_generator_state(self.rng, after)
+        finally:
+            self._set_training_mode(False)
+
+        self._first_state(X.shape[0])
+        self.initial_state.backward_batch(self.codes.backward_batch(dC, weight))
+
+    def _window_backward(self, Y: FloatArray, dC_next: FloatArray, weight: float) -> FloatArray:
+        # one window's backward pass after its forward pass: its gradients accumulated, and its
+        # state's gradient returned, from the next state's dC_next and its digits' targets Y
+        dU, dC = self.cell.backward_batch(self.codes.backward_batch(dC_next, weight))
+        pooled = self.pooling.backward_batch(dU)
+
+        output_layer: Any = self.layers[-1]
+        output_layer.compute_output_delta_batch(Y)
+        # the mean over every window's columns: each window's mean over its own, times 1 / W
+        output_layer.delta_batch = output_layer.delta_batch * weight
+        self.layers[-2].compute_hidden_delta_batch(_WithPooling(output_layer, pooled))
+        for i in reversed(range(len(self.layers) - 2)):
+            self.layers[i].compute_hidden_delta_batch(self.layers[i + 1])
+        for layer, input_activation_batch in zip(self.layers, self._activations):
+            layer.accumulate_gradient_batch(input_activation_batch)
+
+        for state_input in self._state_inputs:
+            dC = dC + state_input.state_delta
+        return dC
+
+    def loss_batch(self, X: FloatArray, categories: Sequence[Sequence[int]]) -> float:
+        """
+        The batch's digits' loss, summed over the examples, each the mean of its columns'
+        cross-entropies, in inference: the loss whose gradient a training step takes, but for
+        the codes' losses.
+        """
+        P = self.forward_windows(X).reshape(len(categories), -1, self.class_count)
+        labels = np.array(categories)
+        chosen = np.take_along_axis(P, labels[:, :, np.newaxis], axis=2)[:, :, 0]
+        return float(-np.sum(np.log(chosen)) / labels.shape[1])
+
+    # the weights: the window's layers', then the parts'
+
+    def snapshot(self) -> list[tuple[FloatArray, ...]]:
+        return [*super().snapshot(), *(tuple(array.copy() for array in part.parameters()) for part in self.parts)]
+
+    def restore(self, snapshot: Sequence[tuple[Any, ...]]) -> None:
+        count = len(self.layers)
+        assert len(snapshot) == count + len(self.parts), (
+            f"a window-recurrent network restores {count} layers and {len(self.parts)} parts; got {len(snapshot)} entries"
+        )
+        super().restore(snapshot[:count])
+        for part, entry in zip(self.parts, snapshot[count:]):
+            expected = len(part.parameters())
+            assert len(entry) == expected, f"a {type(part).__name__} restores {expected} arrays; got {entry!r}"
+            part.set_parameters([self.backend.owned(values) for values in entry])
+
+    @classmethod
+    def _from_file(cls, file: NetworkFile) -> Self:
+        assert file.recurrence is not None
+        return cls(file.input_shape, file.layers, file.recurrence, file.update_rule)

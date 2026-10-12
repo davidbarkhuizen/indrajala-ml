@@ -114,9 +114,13 @@ def rust_counterpart(numpy_name: str) -> type[Any]:
     return RUST_CLASSES[numpy_name.replace("ArrayNetwork", "RustArrayNetwork")]
 
 
+# numpy only, until its Rust counterpart (the window-recurrent adder workplan, stage 5)
+NUMPY_ONLY = {"WindowRecurrentArrayNetwork"}
+
+
 def test_every_array_network_class_is_covered():
     covered = {*MULTICLASS, *CONV, *SINGLE_OUTPUT, *SEQUENTIAL}
-    assert covered == set(NUMPY_CLASSES)
+    assert covered | NUMPY_ONLY == set(NUMPY_CLASSES)
     assert {rust_counterpart(name) for name in covered} == set(RUST_CLASSES.values())
     assert set(NUMPY_CLASSES.values()) | set(RUST_CLASSES.values()) == set(all_subclasses(ArrayNetworkBase)) - {
         NumpyArrayNetworkBase,

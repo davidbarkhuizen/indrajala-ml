@@ -2,7 +2,7 @@
 
 **Status: decisions W1-W10 settled by the owner (2026-10-12), in dialogue; W11-W20 settled under
 the owner's standing delegation. Stage 1 (this plan) merged (#685); stage 2 (specs) merged (#686);
-stage 3 (numpy layers) done. It replaces
+stage 3 (numpy layers) merged (#687); stage 4 (the numpy network) done. It replaces
 `docs/length-generalisation-workplan.md`, which the owner terminated before its existence study
 (next-steps, From length generalisation).**
 
@@ -239,11 +239,19 @@ Settled under the owner's standing delegation:
    `StateInputArrayLayer`, which the numpy builder builds given a window's `state_size`, and the
    network's own parts (`AttentionPoolingArrayLayer`, `GRUArrayLayer`, `CodesArrayLayer`), each
    with `forward_batch`, `backward_batch` and `draw`, keeping one pass's values (W20).
-4. **numpy, the network**: windows with random alignment, the state through the windows, the
-   final window, backpropagation through all windows, `learn_batch`, save and load; a gradient
+4. **numpy, the network**: *Done.* Windows with random alignment, the state through the windows,
+   the final window, backpropagation through all windows, `learn_batch`, save and load; a gradient
    check through two and three windows; with the state's projections at zero and one window, the
    network's digits are the plain sequence network's by bits, so the wiring is checked apart from
-   training. Tier 0.
+   training. Tier 0. Built as `WindowRecurrentArrayNetwork`
+   (`model/networks/numpy/window_recurrent_array_network.py`): any window count per batch, the
+   same for every example; the loss per example the mean of every column's cross-entropy plus 1 /
+   W of each snap's code losses (the initial state's and each window's); W20's recompute, the
+   generator restored per window. The gradient check, through 1, 2 and 3 windows, makes the codes
+   the identity (the straight-through surrogate); the codes' terms are checked through the network
+   apart. Format 2 names the network's own parts after the window's layers
+   (`RECURRENCE_PARAMETERS`); `load_network` loads a numpy file. Aligning the columns (W6-i) and
+   the final zero window (W9) are the caller's: the harness's, at stage 8.
 5. **The crate, then the Rust layers and network**: any op the layers need (the GRU's and the
    pooling's batch ops), indrajala-math-rust first, then a "Bump rust/" PR; parity with numpy.
    Tier 0 for existing paths: their ops unchanged (an A/B only if a shared op changes).
