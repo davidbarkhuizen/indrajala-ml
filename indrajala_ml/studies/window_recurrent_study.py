@@ -25,6 +25,9 @@ After every step the test pass (W17): the catalogue without B3 at each test leng
 length, the largest test length at which it and every shorter one pass (0 when the first fails),
 and the window ratio, the break's data windows at a = 0 over the step's most (W10); M3's L* at each
 test length; and the codes the states used, over every check length's first B1 cases (W4-i, W28).
+With tests_past_break off (W12) the pass ends at its first failing length, tested whole: the break
+and the ratio are the same, the codes used are counted over the lengths tested, and the lengths
+past it are left to the saved network.
 Every step records its examples and epochs (D10) and its seconds per epoch.
 
 A run's steps are saved as they finish, each with its network (format 2, Adam's moments with it),
@@ -245,6 +248,7 @@ class Settings:
     per_stratum: int = ad.PER_STRATUM
     codes_cases: int = 1_000  # B1's first cases at each check and test length, for the codes used
     seeds: int = 5
+    tests_past_break: bool = True  # False: a step's test pass ends at its first failing length (W12)
 
     def catalogue(self) -> tuple[ad.Property, ...]:
         return ad.catalogue(self.sampled, self.relation_sampled, self.per_stratum)
@@ -354,6 +358,8 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
             "properties": {r.id: _result_json(r) for r in results},
             "seconds": time.perf_counter() - start,
         }
+        if not passes[n] and not settings.tests_past_break:
+            break
     reached = break_length(passes)
     return {
         "step": step,
@@ -567,12 +573,18 @@ def _median(values: Sequence[float]) -> float:
     return ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
 
 
+def _test_cell(step: Mapping[str, Any], n: int, field: str, form: str) -> str:
+    """A test length's field in a report cell; "-" for a length past the break left untested."""
+    test = step["tests"].get(str(n))
+    return "-" if test is None else form.format(test[field])
+
+
 def report(study: Study) -> str:
     """
     Per cell (arm, k, s, m): the seeds whose last step works, and per step the seeds passing its
     check, the break lengths and window ratios; per run and step, its stop, epochs, examples,
     break, ratio, L* at each test length and codes used; and the cost: seconds per epoch (training,
-    screening) and each test length's pass.
+    screening) and each test length's pass; "-" for a length left untested (tests_past_break).
     """
     results = read_results(study.results) if study.results.exists() else {}
     seeds = study.settings.seeds
@@ -604,7 +616,7 @@ def report(study: Study) -> str:
         )
         for r in done:
             for step in r["steps"]:
-                reach = " ".join(str(step["tests"][str(n)]["reach"]) for n in lengths)
+                reach = " ".join(_test_cell(step, n, "reach", "{}") for n in lengths)
                 runs.append(
                     [
                         r["key"],
@@ -626,7 +638,7 @@ def report(study: Study) -> str:
                         f"{_median(step['train_seconds']):.1f}",
                         f"{_median(step['screen_seconds']):.1f}",
                         f"{step['check_seconds']:.1f}",
-                        " ".join(f"{step['tests'][str(n)]['seconds']:.0f}" for n in lengths),
+                        " ".join(_test_cell(step, n, "seconds", "{:.0f}") for n in lengths),
                     ]
                 )
     test_header = "L* at " + " ".join(str(n) for n in lengths)
