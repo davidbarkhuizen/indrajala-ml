@@ -167,7 +167,9 @@ subplan revisits its own.
 
 ## Order and dependencies
 
-1. **Milestone A, length generalisation:**
+1. **Milestone A, length generalisation** (its first subplan:
+   `docs/length-generalisation-workplan.md`, P1, P4 bucketed and P5 with an existence study at
+   `d` 16 and 16 layers, a curriculum over lengths 1-7, checked to 64):
    - P1, then P4 (bucketed) and P5, then a study: the column transformers trained at
      `n_train` (say 4-8) and tested to 10× it, with rotary or no positions.
    - Then P2's schemes against that baseline, and P3 once step 11 lands (randomised offsets, digit
