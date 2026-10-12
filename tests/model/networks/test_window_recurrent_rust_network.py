@@ -158,3 +158,9 @@ def test_a_saved_rust_network_loads_and_resumes_training_by_bits(tmp_path: Path)
     network.learn_batch(0.01, rows)
     loaded.learn_batch(0.01, rows)
     assert bits(loaded.snapshot()) == bits(network.snapshot())
+
+
+def test_state_codes_are_numpys():
+    rust, numpy = _pair(WINDOW, SGD())
+    X, _ = _batch(3, examples=5)
+    assert rust.state_codes(RUST.matrix(X.tolist())) == numpy.state_codes(X)

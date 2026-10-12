@@ -493,8 +493,9 @@ stay distinguishable at any distance, which bounded codes can't give.
 - **For any later fixed-depth length study:** rotary and no positions fail at long range by
   construction (resolution and dilution); an additive distance bias (ALiBi, P2) is the scheme that
   doesn't, and D12's start token is what a no-positions control needs.
-- **The result's `crate` field** hashes `indrajala_math_rust/__init__.py`, not the extension
-  module; the window-recurrent plan's stage 8 fixes it.
+- **The result's `crate` field** hashed `indrajala_math_rust/__init__.py`, not the extension
+  module, so the addition sweep's results all show `639a07d4bc7d`; fixed by the window-recurrent
+  plan's stage 8 (`studies.common.crate_hash`), for later results only.
 
 ## From the addition study (in progress)
 

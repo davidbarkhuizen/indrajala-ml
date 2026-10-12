@@ -79,11 +79,15 @@ def sum_digit(total: int, t: int) -> int:
     return (total // BASE**t) % BASE
 
 
+def triple_hash(triple: Triple, n: int) -> int:
+    """A 64-bit hash of a triple at n; every order of a triple alike."""
+    x, y, z = sorted(triple)
+    return _splitmix64(((x * BASE**n + y) * BASE**n + z) * 64 + n)
+
+
 def held_out(triple: Triple, n: int) -> bool:
     """D8: whether a triple is in the held-out tenth; every order of a triple alike."""
-    x, y, z = sorted(triple)
-    key = ((x * BASE**n + y) * BASE**n + z) * 64 + n
-    return _splitmix64(key) % 10 < HELD_OUT_TENTHS
+    return triple_hash(triple, n) % 10 < HELD_OUT_TENTHS
 
 
 def _splitmix64(x: int) -> int:
@@ -124,19 +128,24 @@ def two_operand_triple(n: int, rng: Random) -> Triple:
     return (pair[0], pair[1], pair[2])
 
 
+_KINDS = (uniform_triple, pattern_triple, two_operand_triple)
+
+
+def training_triple(kind: int, n: int, rng: Random, hold_out: bool = True) -> Triple:
+    """
+    One triple of D7's mixture: kind 0 uniform, 1 uniform over carry patterns, 2 two-operand (kind
+    taken mod 3); a held-out triple (D8) is drawn again, unless not hold_out.
+    """
+    draw = _KINDS[kind % 3]
+    triple = draw(n, rng)
+    while hold_out and held_out(triple, n):
+        triple = draw(n, rng)
+    return triple
+
+
 def training_triples(n: int, count: int, rng: Random) -> list[Triple]:
-    """
-    D7's mixture: a third uniform triples, a third uniform over carry patterns, a third two-operand
-    cases, in turn; a held-out triple (D8) is drawn again.
-    """
-    kinds = (uniform_triple, pattern_triple, two_operand_triple)
-    triples: list[Triple] = []
-    for i in range(count):
-        triple = kinds[i % 3](n, rng)
-        while held_out(triple, n):
-            triple = kinds[i % 3](n, rng)
-        triples.append(triple)
-    return triples
+    """D7's mixture: a third of each kind, in turn; a held-out triple (D8) is drawn again."""
+    return [training_triple(i, n, rng) for i in range(count)]
 
 
 @dataclass(frozen=True)
@@ -250,33 +259,33 @@ def _all_triples(n: int) -> Iterator[Triple]:
     return ((a, b, c) for a in r for b in r for c in r)
 
 
-def _adds_three(n: int, rng: Random) -> list[Case]:
+def _adds_three(n: int, rng: Random, sampled: int) -> list[Case]:
     if BASE ** (3 * n) <= EXHAUSTIVE_LIMIT:
         return [Case(t) for t in _all_triples(n)]
-    return [Case(uniform_triple(n, rng)) for _ in range(SAMPLED)]
+    return [Case(uniform_triple(n, rng)) for _ in range(sampled)]
 
 
-def _adds_two(n: int, rng: Random) -> list[Case]:
+def _adds_two(n: int, rng: Random, sampled: int) -> list[Case]:
     if 3 * BASE ** (2 * n) <= EXHAUSTIVE_LIMIT:
         r = range(BASE**n)
         return [Case(t) for x in r for y in r for t in ((0, x, y), (x, 0, y), (x, y, 0))]
-    return [Case(two_operand_triple(n, rng)) for _ in range(SAMPLED)]
+    return [Case(two_operand_triple(n, rng)) for _ in range(sampled)]
 
 
-def _held_out(n: int, rng: Random) -> list[Case]:
+def _held_out(n: int, rng: Random, sampled: int) -> list[Case]:
     if BASE ** (3 * n) <= EXHAUSTIVE_LIMIT:
         return [Case(t) for t in _all_triples(n) if held_out(t, n)]
     cases: list[Case] = []
-    while len(cases) < SAMPLED:
+    while len(cases) < sampled:
         triple = uniform_triple(n, rng)
         if held_out(triple, n):
             cases.append(Case(triple))
     return cases
 
 
-def _commutativity(n: int, rng: Random) -> list[Case]:
-    cases = [Case(uniform_triple(n, rng)) for _ in range(RELATION_SAMPLED // 2)]
-    for _ in range(RELATION_SAMPLED - len(cases)):
+def _commutativity(n: int, rng: Random, sampled: int) -> list[Case]:
+    cases = [Case(uniform_triple(n, rng)) for _ in range(sampled // 2)]
+    for _ in range(sampled - len(cases)):
         x, y = rng.randrange(BASE**n), rng.randrange(BASE**n)
         triple = [x, x, y]
         rng.shuffle(triple)
@@ -284,16 +293,25 @@ def _commutativity(n: int, rng: Random) -> list[Case]:
     return cases
 
 
-def _associativity(n: int, rng: Random) -> list[Case]:
-    return [Case(uniform_triple(n - 1, rng)) for _ in range(RELATION_SAMPLED)]
+def _associativity(n: int, rng: Random, sampled: int) -> list[Case]:
+    return [Case(uniform_triple(n - 1, rng)) for _ in range(sampled)]
 
 
-def _identity(n: int, rng: Random) -> list[Case]:
-    return [Case(t) for a in range(BASE**n) for t in ((a, 0, 0), (0, a, 0), (0, 0, a))]
+def _identity(n: int, rng: Random, sampled: int) -> list[Case]:
+    if 3 * BASE**n <= EXHAUSTIVE_LIMIT:
+        return [Case(t) for a in range(BASE**n) for t in ((a, 0, 0), (0, a, 0), (0, 0, a))]
+    cases: list[Case] = []
+    for _ in range(sampled):
+        triple = [rng.randrange(BASE**n), 0, 0]
+        rng.shuffle(triple)
+        cases.append(Case((triple[0], triple[1], triple[2])))
+    return cases
 
 
-def _column_sum(n: int, rng: Random) -> list[Case]:
-    return [Case(triple_of_sums(sums, rng)) for sums in itertools.product(range(BASE), repeat=n) for _ in range(4)]
+def _column_sum(n: int, rng: Random, sampled: int) -> list[Case]:
+    if 4 * BASE**n <= EXHAUSTIVE_LIMIT:
+        return [Case(triple_of_sums(sums, rng)) for sums in itertools.product(range(BASE), repeat=n) for _ in range(4)]
+    return [Case(triple_of_sums([rng.randrange(BASE) for _ in range(n)], rng)) for _ in range(sampled)]
 
 
 def _carry_from_reset(n: int, rng: Random) -> list[Case]:
@@ -307,12 +325,12 @@ def _carry_from_reset(n: int, rng: Random) -> list[Case]:
     ]
 
 
-def _carry_over_distance(n: int, rng: Random) -> list[Case]:
+def _carry_over_distance(n: int, rng: Random, per_stratum: int) -> list[Case]:
     # for each distance L in 1..n: the checked column t, a reset at t - 1 - L (column 0's carry in
     # when that is -1), L dependent columns between, every other column uniform
     cases: list[Case] = []
     for length in range(1, n + 1):
-        for _ in range(PER_STRATUM):
+        for _ in range(per_stratum):
             t = rng.randrange(length, n + 1)
             r = t - 1 - length
             sums = [
@@ -323,11 +341,11 @@ def _carry_over_distance(n: int, rng: Random) -> list[Case]:
     return cases
 
 
-def _final_carry(n: int, rng: Random) -> list[Case]:
+def _final_carry(n: int, rng: Random, per_stratum: int) -> list[Case]:
     cases: list[Case] = []
     for value in range(BASE):
         count = 0
-        while count < PER_STRATUM:
+        while count < per_stratum:
             triple = pattern_triple(n, rng)
             if carries(column_sums(triple, n))[n] == value:
                 cases.append(Case(triple, column=n, stratum=value))
@@ -335,48 +353,104 @@ def _final_carry(n: int, rng: Random) -> list[Case]:
     return cases
 
 
-def _every_pattern(n: int, rng: Random) -> list[Case]:
-    per_pattern = max(1, PATTERN_CASES // len(COLUMN_SUMS) ** n)
+def _every_pattern(n: int, rng: Random, sampled: int) -> list[Case]:
+    patterns = len(COLUMN_SUMS) ** n
+    if patterns > EXHAUSTIVE_LIMIT:  # past n = 6: sampled patterns (the terminated plan's D8)
+        return [Case(pattern_triple(n, rng)) for _ in range(sampled)]
+    per_pattern = max(1, PATTERN_CASES // patterns)
     return [
         Case(triple_of_sums(sums, rng)) for sums in itertools.product(COLUMN_SUMS, repeat=n) for _ in range(per_pattern)
     ]
 
 
-CATALOGUE: tuple[Property, ...] = (
-    Property("B1", "adds three: f(a, b, c) = a + b + c", _adds_three, oracle, "every triple, or 100,000 sampled"),
-    Property(
-        "B2", "adds two: a zero in any one slot", _adds_two, oracle, "every pair in every slot, or 100,000 sampled"
-    ),
-    Property("B3", "adds three on the held-out tenth (D8)", _held_out, oracle, "the whole tenth, or 100,000 sampled"),
-    Property("A1", "commutativity: the 6 orders give one answer", _commutativity, commutes, "10,000 triples × 6"),
-    Property(
-        "A2",
-        "associativity: f(f(a, b, 0), c, 0) = f(a, f(b, c, 0), 0) = f(a, b, c)",
-        _associativity,
-        associates,
-        "10,000 triples of n - 1 digits",
-    ),
-    Property("A3", "identity: f(a, 0, 0) = f(0, a, 0) = f(0, 0, a) = a", _identity, oracle, "every a, every slot"),
-    Property("M1", "column sum: with no carries, digit t is s_t", _column_sum, oracle, "every pattern over 0..2, × 4"),
-    Property(
-        "M2", "carry from a reset: the next column's digit", _carry_from_reset, oracle, "every column × reset × 16"
-    ),
-    Property(
-        "M3",
-        "carry over distance L: the digit at distance L above a reset",
-        _carry_over_distance,
-        oracle,
-        "1,000 per L in 1..n",
-    ),
-    Property("M4", "final carry: the sum's top digit, 0, 1 or 2", _final_carry, oracle, "1,000 per value"),
-    Property(
-        "M5",
-        "every carry pattern: every one of the 7^n",
-        _every_pattern,
-        oracle,
-        "every pattern × max(1, 10,000 // 7^n)",
-    ),
-)
+def catalogue(
+    sampled: int = SAMPLED, relation_sampled: int = RELATION_SAMPLED, per_stratum: int = PER_STRATUM
+) -> tuple[Property, ...]:
+    """
+    The catalogue, its samples sized: sampled cases for B1-B3, and past the exhaustive limit for A3,
+    M1 and M5 (so any n is affordable: the window-recurrent adder workplan, W17); relation_sampled
+    for A1 and A2; per_stratum per M3 distance and M4 final carry. At n <= 6 with the default sizes,
+    every property's cases are CATALOGUE's.
+    """
+    sized = functools.partial
+    return (
+        Property(
+            "B1",
+            "adds three: f(a, b, c) = a + b + c",
+            sized(_adds_three, sampled=sampled),
+            oracle,
+            f"every triple, or {sampled:,} sampled",
+        ),
+        Property(
+            "B2",
+            "adds two: a zero in any one slot",
+            sized(_adds_two, sampled=sampled),
+            oracle,
+            f"every pair in every slot, or {sampled:,} sampled",
+        ),
+        Property(
+            "B3",
+            "adds three on the held-out tenth (D8)",
+            sized(_held_out, sampled=sampled),
+            oracle,
+            f"the whole tenth, or {sampled:,} sampled",
+        ),
+        Property(
+            "A1",
+            "commutativity: the 6 orders give one answer",
+            sized(_commutativity, sampled=relation_sampled),
+            commutes,
+            f"{relation_sampled:,} triples × 6",
+        ),
+        Property(
+            "A2",
+            "associativity: f(f(a, b, 0), c, 0) = f(a, f(b, c, 0), 0) = f(a, b, c)",
+            sized(_associativity, sampled=relation_sampled),
+            associates,
+            f"{relation_sampled:,} triples of n - 1 digits",
+        ),
+        Property(
+            "A3",
+            "identity: f(a, 0, 0) = f(0, a, 0) = f(0, 0, a) = a",
+            sized(_identity, sampled=sampled),
+            oracle,
+            f"every a, every slot, or {sampled:,} sampled",
+        ),
+        Property(
+            "M1",
+            "column sum: with no carries, digit t is s_t",
+            sized(_column_sum, sampled=sampled),
+            oracle,
+            f"every pattern over 0..2 × 4, or {sampled:,} sampled",
+        ),
+        Property(
+            "M2", "carry from a reset: the next column's digit", _carry_from_reset, oracle, "every column × reset × 16"
+        ),
+        Property(
+            "M3",
+            "carry over distance L: the digit at distance L above a reset",
+            sized(_carry_over_distance, per_stratum=per_stratum),
+            oracle,
+            f"{per_stratum:,} per L in 1..n",
+        ),
+        Property(
+            "M4",
+            "final carry: the sum's top digit, 0, 1 or 2",
+            sized(_final_carry, per_stratum=per_stratum),
+            oracle,
+            f"{per_stratum:,} per value",
+        ),
+        Property(
+            "M5",
+            "every carry pattern: every one of the 7^n",
+            sized(_every_pattern, sampled=sampled),
+            oracle,
+            f"every pattern × max(1, 10,000 // 7^n), or {sampled:,} sampled",
+        ),
+    )
+
+
+CATALOGUE: tuple[Property, ...] = catalogue()
 
 
 def property_cases(prop: Property, n: int) -> list[Case]:

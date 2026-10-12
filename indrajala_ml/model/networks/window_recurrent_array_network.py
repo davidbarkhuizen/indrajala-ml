@@ -197,6 +197,18 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
             outputs.append(output)
         return self.backend.concatenate_columns(outputs)
 
+    def state_codes(self, X: A) -> list[list[int]]:
+        """
+        Each state's code, per example: the initial state's, then each window's next state's, W + 1
+        of them (the report's codes used, W4-i).
+        """
+        C = self._first_state(X.shape[0])
+        codes = [[int(i) for i in self.codes.indices]]
+        for w in range(self._windows(X)):
+            _, C = self._window_forward(self._window(X, w), C)
+            codes.append([int(i) for i in self.codes.indices])
+        return [list(example) for example in zip(*codes, strict=True)]
+
     def _forward_input(self, x: A) -> A:
         return self.backend.row(self.forward_windows(self.backend.matrix([x.tolist()])), 0)
 

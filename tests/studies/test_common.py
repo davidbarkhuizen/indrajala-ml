@@ -1,9 +1,18 @@
+import hashlib
 import json
 import re
 from pathlib import Path
 
 from indrajala_ml.studies import sequence_study
-from indrajala_ml.studies.common import default_out, mean_sd, provenance, read_results, table, write_results
+from indrajala_ml.studies.common import (
+    crate_hash,
+    default_out,
+    mean_sd,
+    provenance,
+    read_results,
+    table,
+    write_results,
+)
 
 
 def test_mean_sd_formats_the_mean_and_sample_sd():
@@ -30,7 +39,16 @@ def test_a_default_result_file_is_under_data_studies_by_study_stage_and_time():
 def test_provenance_names_the_commit_crate_machine_and_command():
     made_by = provenance(["sweep", "--epochs", "10"])
     assert set(made_by) == {"commit", "dirty", "crate", "machine", "command", "started"}
-    assert made_by["command"].endswith("sweep --epochs 10") and len(made_by["crate"]) == 12
+    assert made_by["command"].endswith("sweep --epochs 10") and made_by["crate"] == crate_hash()
+
+
+def test_the_crate_hash_is_the_extension_modules_not_the_packages():
+    import indrajala_math_rust
+
+    package = Path(indrajala_math_rust.__file__).parent
+    (extension,) = package.glob("indrajala_math_rust*.so")
+    assert crate_hash() == hashlib.sha256(extension.read_bytes()).hexdigest()[:12]
+    assert crate_hash() != hashlib.sha256((package / "__init__.py").read_bytes()).hexdigest()[:12]
 
 
 def test_a_result_file_holds_its_provenance_and_reads_back(tmp_path: Path):
