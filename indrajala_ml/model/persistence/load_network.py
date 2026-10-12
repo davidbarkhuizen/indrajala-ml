@@ -25,6 +25,7 @@ from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialMultiClassBackpropClassifierNetwork,
     SequentialSequenceBackpropNetwork,
 )
+from indrajala_ml.model.networks.python.window_recurrent_backprop_network import WindowRecurrentBackpropNetwork
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentArrayNetwork,
@@ -77,16 +78,16 @@ def load_network(path: str) -> Any:
 def _sequential(file: NetworkFile) -> Any:
     network: Any
     if file.shape == WINDOW_RECURRENT:
-        if file.implementation == PYTHON:
-            raise ValueError(
-                "a window-recurrent network isn't built in pure Python yet (the window-recurrent adder workplan, "
-                "stage 6)"
-            )
         assert file.recurrence is not None
-        window_class = (
-            WindowRecurrentArrayNetwork if file.implementation == NUMPY.name else WindowRecurrentRustArrayNetwork
-        )
-        network = window_class(file.input_shape, file.layers, file.recurrence, file.update_rule)
+        if file.implementation == PYTHON:
+            network = WindowRecurrentBackpropNetwork(
+                file.input_shape, file.layers, file.recurrence, file.update_rule, file.input_bounds
+            )
+        else:
+            window_class = (
+                WindowRecurrentArrayNetwork if file.implementation == NUMPY.name else WindowRecurrentRustArrayNetwork
+            )
+            network = window_class(file.input_shape, file.layers, file.recurrence, file.update_rule)
         restore_file(network, file)
         return network
     if file.implementation == PYTHON:

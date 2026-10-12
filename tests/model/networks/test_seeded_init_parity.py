@@ -314,6 +314,7 @@ PYTHON_SEQUENTIAL = {
     "SequentialMultiClassBackpropClassifierNetwork": "SequentialVectorizedMultiClassBackpropClassifierNetwork",
     "SequentialBackpropClassifierNetwork": "SequentialArrayBackpropClassifierNetwork",
     "SequentialSequenceBackpropNetwork": "SequentialSequenceArrayNetwork",
+    "WindowRecurrentBackpropNetwork": "WindowRecurrentArrayNetwork",
 }
 PYTHON_SINGLE_OUTPUT = {"FanInAwareBackpropClassifierNetwork": "ArrayBackpropClassifierNetwork"}
 # bounds-width randomize (BackpropClassifierNetwork.randomize), which no array network draws
