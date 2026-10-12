@@ -1,7 +1,8 @@
 # Workplan: rotary position embedding (roadmap step 8)
 
-**Status: decisions D1-D9 settled by the owner (2026-10-10). Stages 1 (this plan), 2 (the
-specs) and 3 (numpy) done. Added to
+**Status: decisions D1-D9 settled by the owner (2026-10-10). Stages 1-8 done; the study ran on
+2026-10-12, and rotary beat learned positions on every corpus and arm, so D9 (a) makes it the
+default for new sequence models. Stage 9 (docs) remains. Added to
 the roadmap by the owner on 2026-10-10, before generation (now step 9), so that generation's
 key/value cache stays valid as its window slides.**
 
@@ -109,7 +110,8 @@ Settled by the owner (2026-10-10), as proposed:
 - **D9. Default for new sequence models. Settled: (a).** (a) The README's sequence example and
   step 9's `train` use rotary attention, without `Position`, if the study shows it at least
   matching learned positions (within the seeds' spread); else they keep `Position`. Pros:
-  generation's cache works on default models; the data decides. (b) Rotary regardless. Cons:
+  generation's cache works on default models; the data decides. **Outcome (2026-10-12): rotary, lower held out on every
+  corpus and arm (stage 8).** (b) Rotary regardless. Cons:
   could ship a worse default on these corpora. (c) Keep `Position`. Cons: generation's cache then
   pays only for the first 64 characters on default models.
 
@@ -136,7 +138,8 @@ Settled by the owner (2026-10-10), as proposed:
    as the Rust one, treats `bk` as rounding noise only when `positions == "none"`.
 7. **Fixtures, checkpoints and golden entries** (done; D7): three golden entries, the sequence
    model with rotary attention in each implementation; the 115 earlier entries bit-identical.
-8. **The study** (D8, as amended): the study's code with `--control`, the machine lock and its
-   result file (this stage's first PR); then `time` and the sweep on `jebel`, its findings in the
-   script's docstring.
+8. **The study** (done; D8, as amended): the study's code with `--control`, the machine lock and
+   its result file (#682); then `time` and the sweep on `jebel`, its findings in the script's
+   docstring: rotary lower held out on every corpus and arm, -0.024 to -0.062 bits per character
+   (39 of 40 seeds), at +3.5% an epoch alone. D9: rotary is the default.
 9. **Docs**: README, roadmap, next-steps; the workplan retired.
