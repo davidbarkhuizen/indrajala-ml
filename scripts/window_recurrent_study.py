@@ -7,18 +7,21 @@ harness and indrajala_ml/data/addition_data.py's catalogue.
     python scripts/window_recurrent_study.py run CONFIG.json
     python scripts/window_recurrent_study.py status CONFIG.json
     python scripts/window_recurrent_study.py report CONFIG.json [--md FILE]
-    python scripts/window_recurrent_study.py check NETWORK.json --n N [N ...] [--properties ID ...]
+    python scripts/window_recurrent_study.py check NETWORK.json --n N [N ...] [--task T] [--properties ID ...]
         [--sampled S] [--per-stratum P] [--doubling] [--json FILE]
-    python scripts/window_recurrent_study.py certify NETWORK.json [...] [--out DIR] [--workers W] [--snap-ratio R]
+    python scripts/window_recurrent_study.py certify NETWORK.json [...] [--task T] [--out DIR] [--workers W]
+        [--snap-ratio R]
 
 A config names the study's directory (results/, one JSON file per run, and models/, each run's steps
 and their networks in format 2), its workers, its settings and its matrix (load_config's
-docstring). `run` resumes from what is on disk, a run from its last saved step, and prints a line
+docstring), its task among them (addition by default, or modular-division-5 or -7:
+indrajala_ml/studies/window_tasks.py). `run` resumes from what is on disk, a run from its last saved step, and prints a line
 per finished run, then the report; it holds the machine lock, as every study. `check` loads a saved
-step's network and runs the catalogue (without B3) at each length: its properties, B1-B3's,
-A3's, M1's and M5's samples, M3's and M4's cases per stratum and M3 at 1, 2, 4, ..., n only (the
-long tests of docs/window-recurrent-claims-workplan.md, D9) as given. `certify` writes each saved
-network's certificate (indrajala_ml/studies/window_recurrent_certificate.py) as
+step's network and runs its task's catalogue (without the held-out property, B3 or U2) at each
+length: its properties, the samples (addition's B1-B3, A3, M1 and M5; division's U1 and U2), the
+cases per stratum (M3, M4; S1, S2) and M3 or S2 at 1, 2, 4, ..., n only (the long tests of
+docs/window-recurrent-claims-workplan.md, D9) as given. `certify` writes each saved network's
+certificate against its task's machine (indrajala_ml/studies/window_recurrent_certificate.py) as
 DIR/<run>-<step>.json and prints a line for each, over W processes; --snap-ratio 1 certifies the
 network's own snaps only, branching no near tie (strict, D3 as first written).
 
@@ -220,6 +223,7 @@ from indrajala_ml.measurement import machine_lock
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
+from indrajala_ml.studies import window_tasks as wt
 
 
 def main(argv: list[str]) -> int:
@@ -233,13 +237,15 @@ def main(argv: list[str]) -> int:
     check = commands.add_parser("check")
     check.add_argument("network", type=Path)
     check.add_argument("--n", type=int, nargs="+", required=True, help="the lengths to check")
-    check.add_argument("--properties", nargs="+", help="these properties only (default: all but B3)")
-    check.add_argument("--sampled", type=int, default=ad.SAMPLED, help="B1-B3, A3, M1 and M5's sample")
-    check.add_argument("--per-stratum", type=int, default=ad.PER_STRATUM, help="M3's per distance, M4's per carry")
-    check.add_argument("--doubling", action="store_true", help="M3 at distances 1, 2, 4, ..., n only")
+    check.add_argument("--task", default=wt.ADDITION.name, help="the network's task (window_tasks.task_named)")
+    check.add_argument("--properties", nargs="+", help="these properties only (default: all but the held-out one)")
+    check.add_argument("--sampled", type=int, default=ad.SAMPLED, help="the sampled properties' sample")
+    check.add_argument("--per-stratum", type=int, default=ad.PER_STRATUM, help="the stratified properties' per stratum")
+    check.add_argument("--doubling", action="store_true", help="M3 (S2) at 1, 2, 4, ..., n only")
     check.add_argument("--json", type=Path, help="write each length's results and seconds to this file")
     certify = commands.add_parser("certify")
     certify.add_argument("networks", type=Path, nargs="+")
+    certify.add_argument("--task", default=wt.ADDITION.name, help="the networks' task (window_tasks.task_named)")
     certify.add_argument("--out", type=Path, help="write each certificate here, as <run>-<step>.json")
     certify.add_argument("--workers", type=int, default=1)
     certify.add_argument(
@@ -248,14 +254,17 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "check":
-        catalogue = ad.catalogue(args.sampled, ad.RELATION_SAMPLED, args.per_stratum, doubling=args.doubling)
-        properties = [p for p in wr.test_properties(catalogue) if args.properties is None or p.id in args.properties]
+        task = wt.task_named(args.task)
+        catalogue = task.catalogue(args.sampled, ad.RELATION_SAMPLED, args.per_stratum, doubling=args.doubling)
+        properties = [
+            p for p in wr.test_properties(task, catalogue) if args.properties is None or p.id in args.properties
+        ]
         network = load_network(str(args.network))
-        model = wr.WindowAdder(network, network.columns)
+        model = wr.WindowModel(network, network.columns, task)
         results: dict[str, object] = {}
         for n in args.n:
             start = time.perf_counter()
-            checked = ad.evaluate(model.adder(n), n, properties, shrink=False)
+            checked = model.evaluate(n, properties)
             for result in checked:
                 print(
                     f"n {n}, {result.id}: {result.passed}/{result.cases}"
@@ -263,7 +272,7 @@ def main(argv: list[str]) -> int:
                     flush=True,
                 )
             results[str(n)] = {
-                "properties": {r.id: wr.result_json(r) for r in checked},
+                "properties": {r.id: task.result_json(r) for r in checked},
                 "seconds": time.perf_counter() - start,
             }
         if args.json is not None:
@@ -276,7 +285,9 @@ def main(argv: list[str]) -> int:
         with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:
             for path, result in zip(
                 args.networks,
-                pool.map(functools.partial(wc.certify_file, snap_ratio=args.snap_ratio), args.networks),
+                pool.map(
+                    functools.partial(wc.certify_file, task_name=args.task, snap_ratio=args.snap_ratio), args.networks
+                ),
                 strict=True,
             ):
                 name = f"{path.parent.name}-{path.name.removesuffix('.network.json')}"

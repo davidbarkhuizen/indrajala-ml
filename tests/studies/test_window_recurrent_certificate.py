@@ -5,6 +5,7 @@ digit on a near tie, and against real networks, whose machine is checked against
 forward pass.
 """
 
+import math
 from collections.abc import Sequence
 from typing import Any
 
@@ -12,6 +13,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.data import addition_data as ad
+from indrajala_ml.data import modular_division_data as md
 from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentArrayNetwork,
     WindowRecurrentRustArrayNetwork,
@@ -20,6 +22,7 @@ from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
+from indrajala_ml.studies import window_tasks as wt
 
 ALL_TWOS = 26  # the column token of digits (2, 2, 2): column sum 6
 NEAR = 1.01  # a distance ratio inside SNAP_RATIO
@@ -50,7 +53,7 @@ class CarryMachine:
         return distances
 
     def step(self, code: int, windows: np.ndarray) -> wc.Steps:
-        want_digits, want_carry = wc.expected(windows)
+        want_digits, want_carry = wt.ADDITION.machine.windows(windows)
         digits, carry = want_digits[code % 3], want_carry[code % 3].copy()
         if self.fault == "drops":
             carry[carry == 2] = 1
@@ -70,9 +73,9 @@ class CarryMachine:
 
 
 class MachineNetwork:
-    """A WindowMachine as the network WindowAdder reads: each example's windows run in turn from the start."""
+    """A WindowMachine as the network WindowModel reads: each example's windows run in turn from the start."""
 
-    def __init__(self, machine: CarryMachine) -> None:
+    def __init__(self, machine: wc.WindowMachine) -> None:
         self.machine = machine
 
     def prepare_dataset(self, rows: Sequence[tuple[tuple[float, ...], object]]) -> list[tuple[float, ...]]:
@@ -98,7 +101,7 @@ def fails_as_said(counterexample: wc.Counterexample, machine: CarryMachine) -> b
         assert code == before
         steps = machine.step(code, np.array([window], dtype=np.int64))
         code, digits = int(steps.codes[0]), [int(d) for d in steps.digits[0]]
-    if counterexample.kind == "digits":
+    if counterexample.kind == "outputs":
         return digits == counterexample.got != counterexample.expected
     return counterexample.got != counterexample.expected
 
@@ -126,17 +129,17 @@ def test_copies_of_a_carry_are_certified_and_merged_by_the_minimised_machine():
 @pytest.mark.parametrize("k", [1, 2, 4])
 def test_a_machine_that_drops_a_carry_of_two_fails_on_the_first_all_twos_window(k: int):
     certificate = wc.certify(CarryMachine(k, fault="drops"), 3)
-    assert not certificate.certified and certificate.wrong_digits == 0 and certificate.wrong_carries > 0
+    assert not certificate.certified and certificate.wrong_outputs == 0 and certificate.wrong_states > 0
     assert certificate.wrong_ties == 0
     assert certificate.reachable == [0, 1]
     counterexample = certificate.counterexample
-    assert counterexample is not None and counterexample.kind == "carry"
+    assert counterexample is not None and counterexample.kind == "state"
     # the smallest: the first window in order whose carry out is 2, from the start
     assert counterexample.windows == [[0] * (k - 1) + [ALL_TWOS]] and counterexample.codes == [0]
     assert counterexample.expected == [2] and counterexample.got == [1]
     assert fails_as_said(counterexample, CarryMachine(k, fault="drops"))
-    triple, n = counterexample.addition()
-    assert triple == (2 * 3 ** (k - 1),) * 3 and n == 2 * k
+    assert counterexample.after == [0] * k  # the carries 2 and 1 differ on a zero column, a zero window
+    assert wt.ADDITION.case_json(counterexample.columns()) == {"triple": [2 * 3 ** (k - 1)] * 3, "n": 2 * k}
 
 
 @pytest.mark.parametrize("k", [1, 2, 4])
@@ -144,13 +147,13 @@ def test_a_machine_that_carries_only_inside_a_window_fails_on_the_first_carry_ou
     certificate = wc.certify(CarryMachine(k, fault="inside"), 3)
     assert not certificate.certified and certificate.reachable == [0]
     counterexample = certificate.counterexample
-    assert counterexample is not None and counterexample.kind == "carry"
+    assert counterexample is not None and counterexample.kind == "state"
     # token 5 is the digits (0, 1, 2), the first column sum of 3 in token order
     assert counterexample.windows == [[0] * (k - 1) + [5]]
     assert counterexample.expected == [1] and counterexample.got == [0]
     # as an addition at alignment 0, through the zero window, the network gets its sum wrong
-    triple, n = counterexample.addition()
-    tokens, labels = wr.example(triple, n - k, k, 0)
+    case = wt.ADDITION.case_json(counterexample.columns())
+    tokens, labels = wr.example(wt.ADDITION, tuple(case["triple"]), case["n"] - k, k, 0)
     network = MachineNetwork(CarryMachine(k, fault="inside"))
     assert network.classify_rows([tokens]) != [labels]
 
@@ -161,8 +164,8 @@ def test_a_snap_near_tie_branches_and_fails_when_the_other_code_carries_otherwis
     assert certificate.snap.smallest == pytest.approx(NEAR)
     counterexample = certificate.counterexample
     # the network's own snap is right; the near tie's other code isn't
-    assert certificate.wrong_ties == certificate.wrong_carries > 0
-    assert counterexample is not None and counterexample.kind == "carry"
+    assert certificate.wrong_ties == certificate.wrong_states > 0
+    assert counterexample is not None and counterexample.kind == "state"
     assert counterexample.windows == [[ALL_TWOS, ALL_TWOS]] and counterexample.expected == [2]
     assert counterexample.got == [0]
 
@@ -188,19 +191,94 @@ def test_a_digits_near_tie_fails_the_certificate_though_every_digit_is_right():
 def test_a_certified_machine_passes_the_long_tests():
     k = 4
     assert wc.certify(CarryMachine(k, copies=2), 6).certified
-    model = wr.WindowAdder(MachineNetwork(CarryMachine(k, copies=2)), k)
+    model = wr.WindowModel(MachineNetwork(CarryMachine(k, copies=2)), k, wt.ADDITION)
     catalogue = ad.catalogue(sampled=20, per_stratum=2, doubling=True)
     long = [p for p in catalogue if p.id in ("B1", "M3")]
-    results = ad.evaluate(model.adder(1024), 1024, long, shrink=False)
+    results = model.evaluate(1024, long)
     assert all(r.holds for r in results)
     assert {r.id: r.reach() for r in results}["M3"] == 1024
 
 
-def test_a_counterexample_is_json_with_its_addition():
+def test_a_counterexample_is_json_with_its_case():
     value = wc.certify(CarryMachine(1, fault="drops"), 3).to_json()
-    assert value["certified"] is False and value["phi"] == {"0": 0, "1": 1}
-    assert value["counterexample"]["addition"] == {"triple": [2, 2, 2], "n": 2}
+    assert value["certified"] is False and value["phi"] == {"0": 0, "1": 1} and value["task"] == "addition"
+    assert value["counterexample"]["case"] == {"triple": [2, 2, 2], "n": 2} and "case" not in value
     assert "fails" in wc.summary({**value, "seconds": 0.0})
+
+
+# against another target: modular division (D17)
+
+
+class TaskMachine:
+    """
+    A stand-in transducer for any task: code q holds the target state q % S (S the target's
+    states), copies of each (q = state + S * copy, the copy the window's last token's parity), each
+    window's labels and next code the target's. Its faults: "inside" hands on the start state (it
+    keeps nothing across windows); "forgets-b", for modular division, hands on B as 0.
+    """
+
+    def __init__(self, task: wt.Task, k: int, copies: int = 1, fault: str | None = None) -> None:
+        self.task, self.columns, self.copies, self.fault = task, k, copies, fault
+        self.states = task.machine.states
+        self.codes = self.states * copies
+
+    def start(self) -> tuple[int, np.ndarray]:
+        return 0, self._distances(np.zeros(1, dtype=np.int64))[0]
+
+    def _distances(self, codes: np.ndarray) -> np.ndarray:
+        distances = np.full((len(codes), self.codes), 2.0)
+        distances[np.arange(len(codes)), codes] = 1.0
+        return distances
+
+    def step(self, code: int, windows: np.ndarray) -> wc.Steps:
+        labels, after = self.task.machine.windows(windows)
+        state = code % self.states
+        following = after[state].copy()
+        if self.fault == "inside":
+            following[:] = self.task.machine.start
+        if self.fault == "forgets-b":
+            p = math.isqrt(self.states)
+            following = following // p * p
+        codes = following + self.states * (windows[:, -1] % self.copies)
+        return wc.Steps(labels[state], np.full(labels[state].shape, 5.0), codes, self._distances(codes))
+
+
+@pytest.mark.parametrize("p", md.PRIMES)
+@pytest.mark.parametrize("k", [1, 2])
+def test_a_dividing_machine_is_certified_against_the_modular_automaton(p: int, k: int):
+    task = wt.ModularDivision(p)
+    certificate = wc.certify(TaskMachine(task, k, copies=2), 2 * p * p, task)
+    assert certificate.certified and certificate.counterexample is None and certificate.task == task.name
+    assert sorted(certificate.reachable) == list(range(2 * p * p))
+    assert certificate.phi == {q: q % (p * p) for q in certificate.reachable}
+    assert len(certificate.minimised) == p * p
+    assert certificate.evaluations == len(certificate.reachable) * 9**k
+
+
+@pytest.mark.parametrize("fault", ["inside", "forgets-b"])
+@pytest.mark.parametrize("p", md.PRIMES)
+def test_a_faulty_dividing_machine_fails_with_a_case_it_gets_wrong(fault: str, p: int):
+    task, k = wt.ModularDivision(p), 2
+    machine = TaskMachine(task, k, fault=fault)
+    certificate = wc.certify(machine, p * p, task)
+    assert not certificate.certified and certificate.wrong_states > 0 and certificate.wrong_outputs == 0
+    counterexample = certificate.counterexample
+    assert counterexample is not None and counterexample.kind == "state"
+    assert len(counterexample.after) == k
+    case = certificate.to_json()["counterexample"]["case"]
+    assert case == task.case_json(counterexample.columns()) and case["n"] == len(counterexample.columns())
+    # the case at alignment 0, through the harness's encoding: the machine's answers aren't the task's
+    tokens, labels = wr.example(task, tuple(case["pair"]), case["n"], k, 0)
+    assert MachineNetwork(machine).classify_rows([tokens]) != [labels]
+
+
+def test_a_certified_dividing_machine_passes_the_long_tests():
+    task, k = wt.ModularDivision(7), 2
+    assert wc.certify(TaskMachine(task, k, copies=2), 98, task).certified
+    model = wr.WindowModel(MachineNetwork(TaskMachine(task, k, copies=2)), k, task)
+    catalogue = task.catalogue(sampled=20, relation_sampled=0, per_stratum=2, doubling=True)
+    results = {r.id: r for r in model.evaluate(256, [p for p in catalogue if p.id in ("U1", "S2")])}
+    assert all(r.holds for r in results.values()) and task.reach(results["S2"]) == 256
 
 
 # real networks
@@ -209,7 +287,9 @@ def test_a_counterexample_is_json_with_its_addition():
 @pytest.mark.parametrize("network_class", [WindowRecurrentArrayNetwork, WindowRecurrentRustArrayNetwork])
 def test_a_networks_machine_is_its_forward_pass_window_by_window(network_class: Any):
     k = 2
-    network: Any = network_class.randomized((k,), wr.window_specs(), WindowRecurrence(4, Codes(4)), Adam(), seed=3)
+    network: Any = network_class.randomized(
+        (k,), wr.window_specs(wt.ADDITION), WindowRecurrence(4, Codes(4)), Adam(), seed=3
+    )
     machine = wc.NetworkMachine(network)
     rng = np.random.default_rng(0)
     rows = rng.integers(0, 27, size=(40, 3 * k))
@@ -227,14 +307,23 @@ def test_a_networks_machine_is_its_forward_pass_window_by_window(network_class: 
         assert tuple(digits) == tuple(want)
 
 
+@pytest.mark.parametrize("network_class", [WindowRecurrentArrayNetwork, WindowRecurrentRustArrayNetwork])
+def test_a_continuous_network_has_no_machine_to_certify(network_class: Any):
+    network: Any = network_class.randomized(
+        (2,), wr.window_specs(wt.ADDITION), WindowRecurrence(4, codes=None), Adam(), seed=3
+    )
+    with pytest.raises(AssertionError, match="continuous"):
+        wc.NetworkMachine(network)
+
+
 def test_an_untrained_networks_counterexample_is_its_own_output():
     k = 2
-    network = wr.build(k, 4, 4, seed=1)
+    network = wr.build(wt.ADDITION, k, 4, 4, seed=1)
     certificate = wc.certify(wc.NetworkMachine(network), 4)
     assert not certificate.certified and set(certificate.reachable) <= set(range(4))
     counterexample = certificate.counterexample
     assert counterexample is not None
     tokens = [float(t) for window in counterexample.windows for t in window]
     (prediction,) = network.classify_rows(network.prepare_dataset([(tuple(tokens), (0,) * len(tokens))]))
-    if counterexample.kind == "digits":
+    if counterexample.kind == "outputs":
         assert list(prediction[-k:]) == counterexample.got != counterexample.expected

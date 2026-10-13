@@ -82,7 +82,7 @@ def sum_digit(total: int, t: int) -> int:
 def triple_hash(triple: Triple, n: int) -> int:
     """A 64-bit hash of a triple at n; every order of a triple alike."""
     x, y, z = sorted(triple)
-    return _splitmix64(((x * BASE**n + y) * BASE**n + z) * 64 + n)
+    return splitmix64(((x * BASE**n + y) * BASE**n + z) * 64 + n)
 
 
 def held_out(triple: Triple, n: int) -> bool:
@@ -90,7 +90,7 @@ def held_out(triple: Triple, n: int) -> bool:
     return triple_hash(triple, n) % 10 < HELD_OUT_TENTHS
 
 
-def _splitmix64(x: int) -> int:
+def splitmix64(x: int) -> int:
     mask = (1 << 64) - 1
     x = (x + 0x9E3779B97F4A7C15) & mask
     x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & mask

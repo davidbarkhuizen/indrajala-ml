@@ -15,7 +15,9 @@ from typing import Any
 import pytest
 
 from indrajala_ml.data import addition_data as ad
+from indrajala_ml.data import modular_division_data as md
 from indrajala_ml.studies import window_recurrent_study as wr
+from indrajala_ml.studies import window_tasks as wt
 
 # small catalogue sizes, and test lengths past A3's and M1's exhaustive spaces, so a check is quick
 SMALL = wr.Settings(
@@ -73,12 +75,26 @@ class AddingNetwork:
         self.batches.append(batch)
 
 
+class TaskNetwork(AddingNetwork):
+    """A stand-in that runs a task's target machine over the column tokens, the state kept across windows."""
+
+    def __init__(self, task: wt.Task) -> None:
+        super().__init__()
+        self.task = task
+
+    def classify_rows(self, prepared: Sequence[tuple[float, ...]]) -> list[tuple[int, ...]]:
+        return [self.task.machine.run([int(x) for x in tokens]) for tokens in prepared]
+
+
+DIVISION = wt.ModularDivision(5)
+
+
 # the encoding
 
 
 def test_an_example_is_its_columns_at_the_alignment_through_one_more_window():
     triple = (5, 1, 0)  # 12 + 01 + 00 in base 3, least significant first: (2, 1), (1, 0)
-    tokens, labels = wr.example(triple, 2, 3, 2)
+    tokens, labels = wr.example(wt.ADDITION, triple, 2, 3, 2)
     # 2 zero columns, the 2 columns, 2 more to fill 2 windows, then the final window
     assert wr.data_windows(2, 2, 3) == 2
     assert tokens == (0.0, 0.0, 9 * 2 + 3 * 1 + 0, 9 * 1 + 0 + 0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -98,17 +114,17 @@ def test_lengths_fill_exactly_their_window_count(k: int):
 def test_a_cases_alignment_is_its_own_whatever_the_order():
     rng = random.Random(3)
     triples = [ad.uniform_triple(8, rng) for _ in range(400)]
-    assert {wr.alignment(t, 8, 1) for t in triples} == {0}
-    assert {wr.alignment(t, 8, 4) for t in triples} == {0, 1, 2, 3}
+    assert {wr.alignment(wt.ADDITION, t, 8, 1) for t in triples} == {0}
+    assert {wr.alignment(wt.ADDITION, t, 8, 4) for t in triples} == {0, 1, 2, 3}
     for x, y, z in triples[:20]:
-        assert wr.alignment((x, y, z), 8, 4) == wr.alignment((z, x, y), 8, 4)
+        assert wr.alignment(wt.ADDITION, (x, y, z), 8, 4) == wr.alignment(wt.ADDITION, (z, x, y), 8, 4)
     # independent of D8's tenth: the held-out triples take every alignment too
     held = [t for t in (ad.uniform_triple(8, rng) for _ in range(4000)) if ad.held_out(t, 8)]
-    assert {wr.alignment(t, 8, 4) for t in held} == {0, 1, 2, 3}
+    assert {wr.alignment(wt.ADDITION, t, 8, 4) for t in held} == {0, 1, 2, 3}
 
 
 def test_an_epoch_shares_its_examples_equally_among_the_window_counts():
-    examples = wr.training_examples([1, 2, 3], 2, 300, random.Random(5))
+    examples = wr.training_examples(wt.ADDITION, [1, 2, 3], 2, 300, random.Random(5))
     widths = [len(tokens) for tokens, _labels in examples]
     # data windows w, then the final window: (w + 1) * k columns
     assert {width: widths.count(width) for width in set(widths)} == {4: 100, 6: 100, 8: 100}
@@ -120,7 +136,7 @@ def test_an_epoch_shares_its_examples_equally_among_the_window_counts():
 
 def test_an_epochs_batches_each_hold_one_window_count():
     network = AddingNetwork()
-    examples = wr.training_examples([1, 2, 3], 2, 300, random.Random(5))
+    examples = wr.training_examples(wt.ADDITION, [1, 2, 3], 2, 300, random.Random(5))
     wr.train_epoch(network, examples, 16, 0.01, random.Random(6))
     assert all(len({len(tokens) for tokens, _ in batch}) == 1 for batch in network.batches)
     assert sorted(map(str, (e for b in network.batches for e in b))) == sorted(map(str, examples))
@@ -128,7 +144,7 @@ def test_an_epochs_batches_each_hold_one_window_count():
 
 def test_short_lengths_train_on_every_triple():
     # below n = 3 nothing is held out, so B1 there can pass whole (W24)
-    examples = wr.training_examples([1], 1, 3000, random.Random(1))
+    examples = wr.training_examples(wt.ADDITION, [1], 1, 3000, random.Random(1))
     seen = {tokens for tokens, _labels in examples}
     assert len(seen) == 27
 
@@ -138,38 +154,69 @@ def test_short_lengths_train_on_every_triple():
 
 @pytest.mark.parametrize("k", [1, 3])
 def test_an_adding_network_passes_the_catalogue_at_any_alignment(k: int):
-    model = wr.WindowAdder(AddingNetwork(), k)
+    model = wr.WindowModel(AddingNetwork(), k, wt.ADDITION)
     for n in (2, 8):
-        results = ad.evaluate(model.adder(n), n, wr.check_properties(n, SMALL.catalogue()), shrink=False)
+        results = model.evaluate(n, wr.check_properties(wt.ADDITION, n, SMALL.catalogue(wt.ADDITION)))
         assert all(r.holds for r in results), [r.id for r in results if not r.holds]
 
 
 def test_a_network_carrying_nothing_across_windows_fails_the_carry_at_distance():
-    model = wr.WindowAdder(AddingNetwork(window=2), 2)
-    results = {r.id: r for r in ad.evaluate(model.adder(8), 8, wr.test_properties(SMALL.catalogue()), shrink=False)}
+    model = wr.WindowModel(AddingNetwork(window=2), 2, wt.ADDITION)
+    results = {r.id: r for r in model.evaluate(8, wr.test_properties(wt.ADDITION, SMALL.catalogue(wt.ADDITION)))}
     assert not results["M3"].holds and not results["B1"].holds
     assert results["M3"].reach() < 8
+
+
+def _sums(model: wr.WindowModel, n: int, triples: Sequence[ad.Triple]) -> list[int]:
+    return [ad.from_digits(labels) for labels in model.predict(n)(triples)]
 
 
 def test_the_adder_runs_in_chunks_of_bounded_tokens_with_the_same_sums(monkeypatch: pytest.MonkeyPatch):
     k, n = 3, 8
     rng = random.Random(0)
     triples = [(rng.randrange(3**n), rng.randrange(3**n), rng.randrange(3**n)) for _ in range(50)]
-    whole = wr.WindowAdder(AddingNetwork(), k)
-    sums, codes = whole.adder(n)(triples), whole.codes_used(triples, n)
+    whole = wr.WindowModel(AddingNetwork(), k, wt.ADDITION)
+    sums, codes = _sums(whole, n, triples), whole.codes_used(triples, n)
     monkeypatch.setattr(wr, "CHUNK_TOKENS", 40)  # 3 or 4 windows of 3 columns: 3 rows a pass
-    chunked = wr.WindowAdder(AddingNetwork(), k)
+    chunked = wr.WindowModel(AddingNetwork(), k, wt.ADDITION)
     widths = [len(rows[0][0]) * len(rows) for _, rows in chunked._chunks(triples, n)]
     assert max(widths) <= 40 and len(widths) > len(triples) // 4
-    assert chunked.adder(n)(triples) == sums == [sum(t) for t in triples]
+    assert _sums(chunked, n, triples) == sums == [sum(t) for t in triples]
     assert chunked.codes_used(triples, n) == codes
 
 
 def test_b3_is_checked_from_three_columns_and_never_at_a_test_length():
-    catalogue = SMALL.catalogue()
-    assert "B3" not in {p.id for p in wr.check_properties(2, catalogue)}
-    assert "B3" in {p.id for p in wr.check_properties(3, catalogue)}
-    assert "B3" not in {p.id for p in wr.test_properties(catalogue)}
+    catalogue = SMALL.catalogue(wt.ADDITION)
+    assert "B3" not in {p.id for p in wr.check_properties(wt.ADDITION, 2, catalogue)}
+    assert "B3" in {p.id for p in wr.check_properties(wt.ADDITION, 3, catalogue)}
+    assert "B3" not in {p.id for p in wr.test_properties(wt.ADDITION, catalogue)}
+
+
+def test_a_division_example_reads_most_significant_first_its_labels_the_running_quotients():
+    pair = (21, 5)  # 210 and 012 in base 3
+    tokens, labels = wr.example(DIVISION, pair, 3, 2, 1)
+    # 1 zero column (B 0: undefined), the 3 columns, then the final window
+    assert tokens == (0.0, 6.0, 4.0, 2.0, 0.0, 0.0)
+    answers = md.answers(pair, 3, 5)  # b = 5: undefined at the end
+    assert answers == (5, 2, 5) and labels == (5, *answers, 5, 5)
+
+
+@pytest.mark.parametrize("k", [1, 3])
+def test_a_dividing_network_passes_the_division_catalogue_at_any_alignment(k: int):
+    model = wr.WindowModel(TaskNetwork(DIVISION), k, DIVISION)
+    for n in (2, 8):
+        results = model.evaluate(n, wr.check_properties(DIVISION, n, SMALL.catalogue(DIVISION)))
+        assert {r.id for r in results} == ({"U1", "S1", "S2"} if n < 3 else {"U1", "U2", "S1", "S2"})
+        assert all(r.holds for r in results), [r.id for r in results if not r.holds]
+
+
+def test_a_division_step_passes_at_once_and_records_the_undefined_runs_reach():
+    spec = wr.RunSpec("curriculum", 1, 4, 32, 0, DIVISION.name)
+    assert spec.key == "modular-division-5-curriculum-k1-s4-m32-seed0"
+    result = wr.run_step(TaskNetwork(DIVISION), spec, 2, [1, 2], SMALL)
+    assert result["stop"] == "passed" and result["passes"] and result["break"] == 16
+    assert all(result["tests"][str(n)]["reach"] == n for n in SMALL.test_lengths)
+    assert set(result["tests"]["16"]["properties"]) == {"U1", "S1", "S2"}
 
 
 def test_the_break_length_is_the_last_of_the_passing_prefix():
@@ -216,7 +263,8 @@ def test_the_arms_steps():
 # a real network's run
 
 
-def test_a_run_trains_each_step_saves_it_and_resumes_after_the_last_saved(tmp_path: Path):
+@pytest.mark.parametrize("task", ["addition", "modular-division-5"])
+def test_a_run_trains_each_step_saves_it_and_resumes_after_the_last_saved(tmp_path: Path, task: str):
     settings = wr.Settings(
         epoch_examples=64,
         max_epochs=1,
@@ -230,12 +278,12 @@ def test_a_run_trains_each_step_saves_it_and_resumes_after_the_last_saved(tmp_pa
         codes_cases=20,
         seeds=1,
     )
-    study = wr.Study(tmp_path, settings, [wr.RunSpec("curriculum", 1, 4, 3, 0)], 0)
+    study = wr.Study(tmp_path, settings, [wr.RunSpec("curriculum", 1, 4, 3, 0, task)], 0)
     lines: list[str] = []
     results = wr.run(study, log=lines.append)
     key = study.runs[0].key
     result = results[key]
-    assert [s["counts"] for s in result["steps"]] == [[1], [1, 2]]
+    assert [s["counts"] for s in result["steps"]] == [[1], [1, 2]] and result["task"] == task
     assert result["parameters"] > 0 and len(result["crate"]) == 12
     assert set(result["steps"][1]["codes_used"]) <= set(range(3))
     assert len(lines) == 1 and lines[0].startswith(f"{key}: ") and "step 2 " in lines[0]
@@ -287,6 +335,20 @@ def test_a_config_names_the_matrix(tmp_path: Path):
     assert study.workers == 2 and study.settings.steps == 2 and study.settings.test_lengths == (8, 16)
     assert len(study.runs) == 2 * 2 * 2 + 2
     assert study.runs[-1].key == "all-at-once-k2-s4-m8-seed1"
+    assert {spec.task for spec in study.runs} == {"addition"}
+
+
+def test_a_config_names_its_task(tmp_path: Path):
+    path = tmp_path / "config.json"
+    config = {
+        "directory": str(tmp_path),
+        "task": "modular-division-7",
+        "seeds": 1,
+        "matrix": [{"k": [4], "s": [4], "m": [64]}],
+    }
+    path.write_text(json.dumps(config))
+    (spec,) = wr.load_config(path).runs
+    assert spec.task == "modular-division-7" and spec.key == "modular-division-7-curriculum-k4-s4-m64-seed0"
 
 
 def test_status_counts_each_running_runs_own_steps(tmp_path: Path):

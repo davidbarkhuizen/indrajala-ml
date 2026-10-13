@@ -3,8 +3,8 @@
 **Status: written 2026-10-13, at the owner's request ("the work we would need to do to substantiate
 our claims/findings"), after the matrix (stage 9 of
 [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md)) and while its control
-ran. Decisions D1-D12 settled under the owner's standing delegation, each with its options' pros
-and cons. Stages 1-4 done (stage 2 refined D3's snap margin: a near tie branches).** The literature it answers to is in
+ran. Decisions D1-D19 settled (D13 and D14 by the owner, the rest under the owner's standing
+delegation), each with its options' pros and cons. Stages 1-5 done (stage 2 refined D3's snap margin: a near tie branches).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -348,6 +348,32 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     arrays) becomes a table per machine.
   - (b) A second certificate for the modular task. Pros: no change to E1's. Cons: two copies of
     the enumeration and the margins.
+- **D18. Modular division's catalogue and training mixture (stage 5). Settled: (a).**
+  - (a) *Chosen.* Four properties, each checking every column's answer (the running quotient or
+    undefined): **U1**, every pair at `n` <= 6 (`9^n` <= 600,000), else 100,000 sampled; **U2**,
+    the held-out tenth (by hash, D8's), checked from `n` 3 and never at a test length (B3's
+    rules); **S1**, every final state `(a mod p, b mod p)` reachable at `n`, 1,000 each; **S2**,
+    `b`'s first `L` digits zero then a nonzero digit, 1,000 per `L` in 1..`n` (at 1, 2, 4, ...,
+    `n` in the long tests, D9), its `L*` the test pass's reach (M3's place). The training mixture,
+    in turn: a uniform pair, a zero prefix of `b`, a zero `a`; a held-out pair drawn again. Pros:
+    every target state is checked at the end of a case (S1), and the undefined class over runs of
+    any length (S2), the two ways the task differs from addition; the harness's checks, tests and
+    long tests keep their shape. Cons: no relation properties (addition's A1-A3).
+  - (b) Analogues of addition's eleven. Pros: comparable tables. Cons: most have none (the column
+    sum, the carry patterns), and relations such as `(3a, 3b)` giving `(a, b)`'s answer are
+    implied by the target machine, which the certificate checks whole.
+  - (c) U1 alone. Pros: simplest. Cons: a final state or a long undefined run a sample misses
+    goes unchecked by the tests (the certificate still catches it, but E7 compares the two).
+- **D19. The certificate's JSON over any target (stage 5). Settled: (a).**
+  - (a) *Chosen.* The target's terms for every task: `wrong_outputs` and `wrong_states` (stage
+    2's `wrong_digits`, `wrong_carries`), the counterexample's kinds `outputs` and `state`
+    (`digits`, `carry`), its `state_in` (`carry_in`) and `case` (`addition`), its `after` (the
+    window after: a word telling the two states apart, padded, or zeros), and the `task`. E1's
+    files keep stage 2's names; the certificate's docstring maps them. Pros: one schema for every
+    task; nothing called a carry that isn't one. Cons: E1's files and later ones differ in names.
+  - (b) Stage 2's names for every task. Pros: one schema with E1's files. Cons: a modular
+    certificate's "carries" are states of 25 or 49.
+  - (c) Stage 2's names for addition, the target's for others. Cons: two schemas, a special case.
 
 ## Stages
 
@@ -364,11 +390,14 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    three implementations skipping the snap, format 2 writing `"codes": null`, validation; parity
    tests, a fixture and a golden entry for each implementation (the golden run 121 entries to 124,
    the 121 bit-identical: checked).
-5. **The second task's harness and certificate** (D14-D17; tier 0, no timed path): a task in the
+5. **Done.** **The second task's harness and certificate** (D14-D19; tier 0, no timed path): a task in the
    harness (its column tokens, labels, reading order, catalogue of tests and target machine), the
    adder and modular division as instances; the certificate over a target machine (D17), E1's
    certificates reproduced bit for bit from the adder's instance. Tests: a modular fake
-   certifies at `p` 5 and 7, a faulty one fails with the right counterexample.
+   certifies at `p` 5 and 7, a faulty one fails with the right counterexample. **Done:** E1's
+   105 networks recertified by the new code (D18, D19), branched and strict, every field but the
+   timings equal under D19's names: 105 compared and 0 differ against `certificates/`, 105 and 0
+   against `certificates-strict/` (on `pyramidon`, 3 workers, 2026-10-13).
 6. **E7 on `jebel`:** the modular-division matrix, certified and long-tested: findings.
 7. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
    about 240 runs; C0's reruns compared first): findings; E1's certificate run on every network.
