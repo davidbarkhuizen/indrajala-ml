@@ -17,6 +17,9 @@ discretised or quantised recurrent states, segment- and block-recurrent transfor
 arithmetic, curricula for algorithmic learning, and recent (2025-2026) work on length
 generalisation in recurrent models. Eleven papers were read in the parts that bear on the
 findings; the window-recurrent workplan's own reading (twelve papers) is summarised beside them.
+The extension (after E1) searched grammatical inference with recurrent networks, discretised or
+clustered states trained in the loop, automaton extraction, proofs for learned arithmetic and
+verification of recurrent networks, and read twelve more.
 
 A search can't prove absence: preprints from the last weeks may not be indexed, and work under
 other names (neural automata, finite-state controllers, chunked state passing) can be missed. The
@@ -39,6 +42,12 @@ digits alone, by a curriculum of 1, then 1-2, then 1-3 windows:
 6. The control (all-at-once training, W16, W30) works as often as the curriculum: 12 of 15 runs
    against 12 of 15 at the same cells and seeds (10 of 10 at `k` 4), on about 16 times fewer
    examples at `k` 4. The curriculum isn't needed here.
+7. The certificate (E1, claims workplan; every network at its last step): of the 105 networks
+   (the matrix's 90 and the control's 15), 52 are certified (the network's own snaps) and 48
+   robustly (either snap of every near tie), every one a working run that passed every length to
+   64 columns, and every one minimising to the 3-state carry automaton while using 3-11 codes. No
+   failing network is certified. Two networks that passed every test length to 64 columns
+   (100,000 cases each) are wrong at 12, found by the certificate and confirmed on the networks.
 
 ## The papers
 
@@ -48,7 +57,7 @@ digits alone, by a curriculum of 1, then 1-2, then 1-3 windows:
 | --- | --- | --- | --- |
 | Kaiser & Sutskever 2016, Neural GPUs Learn Algorithms (1511.08228; `kaiser-2015-neural-gpu`) | a convolutional GRU applied as many times as the input is long | binary addition and multiplication: trained on up to 20 bits, no error on any input tested up to 2,000 bits; generalising models are rare among seeds, found with curriculum, noise and parameter sharing relaxation | the headline (a learned carry extrapolating 100x) is long established |
 | Price, Zaremba & Sutskever 2016, Extensions and Limitations of the Neural GPU (1611.00736; `price-2016-neural-gpu-extensions-limitations`) | the Neural GPU on decimal operations, a curriculum over bases, larger models | very sensitive to the seed: about 15 seeds a configuration; of 1,121 decimal-addition seeds, 94% fail by a carry of 7-9 digits, 5.5% reach 33 or more, the best 112; failures on unusual inputs (long runs of zeros) | finding 4 is known in kind; our rate (half the runs) is far higher, but the architecture differs |
-| Robinson 2020, Progress Extrapolating Algorithmic Learning to Arbitrary Sequence Lengths (2003.08494; `robinson-2020-extrapolating-algorithmic-learning`) | bins activations to discretise the state, adds a "digital" loss pulling them to the bins, and a localised memory | no extrapolation error detected within memory limits on copy, parentheses and binary addition; counts the distinct computational states a network uses, constant with length where it extrapolates and growing where it doesn't | the closest prior use of a discretised state for extrapolation, and of counting the states used (our "codes used") |
+| Robinson 2020, Progress Extrapolating Algorithmic Learning to Arbitrary Sequence Lengths (2003.08494; `robinson-2020-extrapolating-algorithmic-learning`) | bins activations to discretise the state, adds a "digital" loss pulling them to the bins, and a localised memory | no extrapolation error detected within memory limits on copy, parentheses and binary addition; counts the distinct computational states a network uses, constant with length where it extrapolates and growing where it doesn't | a later use of a discretised state for extrapolation (Zeng et al. 1993 is the first found, below), and of counting the states used (our "codes used") |
 | Papazov, D'Angelo & Flammarion 2025, Exact Learning of Arithmetic with Differentiable Agents (2511.22751; `papazov-2025-exact-learning-arithmetic-differentiable-agents`) | differentiable finite-state transducers trained on policy trajectories of an expert agent (intermediate steps supervised) | binary and decimal addition and multiplication with no error on inputs thousands of times longer than training | exact generalisation, but supervised on the algorithm's steps; ours sees only the sum's digits |
 | Mohri 2026, Rational Transductors (2602.07599; ICML 2026 oral; `mohri-2026-rational-transductors`) | a transformer beside a matrix-valued recurrence from weighted automata; for addition, column-stochastic transitions and no positional encodings | two-number decimal addition, trained on 10-40 digits (length sampled uniformly), 100% exact at 1,000 digits; 5 seeds, negligible variance; a standard transformer is 0% at 100 | the nearest recent result: a transformer with a recurrent state that learns the carry automaton; one digit a step, a continuous constrained state, no seed sensitivity reported |
 | Patriota 2024, Arbitrary-Length Generalization for Addition in a Tiny Transformer (2406.00075; `patriota-2024-arbitrary-length-addition-tiny-transformer`) | a tiny transformer trained on two-digit additions, run right to left, a digit and carry at a time | generalises to unseen lengths | recurrence by the decoding procedure, outside the network; the parked "compose outside the network" option of our parent plan |
@@ -57,7 +66,7 @@ digits alone, by a curriculum of 1, then 1-2, then 1-3 windows:
 
 | paper | what it does | result | bearing |
 | --- | --- | --- | --- |
-| Koul, Greydanus & Fern 2019, Learning Finite State Representations of Recurrent Policy Networks (1811.12530; `koul-2019-finite-state-recurrent-policies`) | inserts quantised bottlenecks (straight-through) into a trained RNN policy's memory and observations, then extracts a Moore machine | small machines, e.g. 3 memory states for Pong | snapping a recurrent state with a straight-through gradient is known; there it is inserted after training, for interpretation |
+| Koul, Greydanus & Fern 2019, Learning Finite State Representations of Recurrent Policy Networks (1811.12530; `koul-2019-finite-state-recurrent-policies`) | inserts quantised bottlenecks (straight-through) into a trained RNN policy's memory and observations, then extracts a Moore machine | small machines, e.g. 3 memory states for Pong | snapping a recurrent state with a straight-through gradient is known; there it is inserted after training, for interpretation (during training: Zeng et al. 1993, below) |
 | van den Oord et al. 2017, VQ-VAE (1711.00937; `van-den-oord-2017-vq-vae-neural-discrete-representation`) | learned codebook, nearest-code snapping, straight-through, codebook and commitment losses | | our discretiser (W4, W14) |
 | Brandoit et al. 2026, Length-Independent State Tracking under a Parallel Scan (2609.32447; `brandoit-2026-length-independent-state-tracking`) | formalises finite-state tracking at finite precision; proves tracking correct at every length needs contraction (against perturbation) and separation (between states); affine recurrences realise only definite automata | a non-affine scan-compatible RNN learns exact transition tables, which certifies correctness beyond the tested lengths | the theory for why snapping helps (it contracts every state onto a code and keeps codes apart), and the model for a certificate: an extracted exact transition table |
 
@@ -117,10 +126,12 @@ program execution).
 
 - A learned recurrent carry extrapolates far: 100x (Neural GPU), 25x and exact (Rational
   Transductors), thousands of times with supervised steps (DFSTs). Our 5-21x, tested to 64
-  columns, is weaker on length than all three.
-- Discretising a recurrent state to stop drift, and counting the states used (Robinson 2020);
-  snapping with a straight-through gradient (Koul et al. 2019; VQ-VAE); the theory that exact
-  tracking at every length needs contraction and separation (Brandoit et al. 2026).
+  columns, is weaker on length than all three as a test; for the certified networks the
+  certificate covers every length (E1).
+- Discretising a recurrent state to stop drift (Zeng et al. 1993, during training; Robinson 2020),
+  and counting the states used (Robinson 2020); snapping with a straight-through gradient (Zeng et
+  al.'s pseudo-gradient; Koul et al. 2019; VQ-VAE); the theory that exact tracking at every length
+  needs contraction and separation (Brandoit et al. 2026).
 - Seed sensitivity of learned algorithms (Kaiser & Sutskever; Price et al.: 5.5% of seeds).
 - Recurrent models failing past training when training leaves states unexplored (Buitrago Ruiz &
   Gu).
@@ -176,8 +187,11 @@ learned machine can be certified exactly and automatically over every window, at
 and alignment, with margins; and certification shows sampled long tests overstate working.
 E2 (the continuous ablation) and E6 (the cell without the transformer) say which part matters.
 
-**Weaker than the literature, to fix before any claim:** test lengths (64 against 1,000-2,000),
-seeds per cell (5 against Price's 15), and no ablation of the snapping itself.
+**Weaker than the literature, to fix before any claim:** seeds per cell (5 against Price's 15:
+E3 and E4 run 20), no ablation of the snapping itself (E2), no baseline without the transformer
+in the step (E6), and one task (base-3 addition). Test lengths (64 against 1,000-2,000) matter
+now only for networks that aren't certified: the certificate covers every length, and the long
+tests (D9, to 1,024 columns) check it.
 
 ## References (arXiv ids; local copies in `~/code/papers/`)
 
