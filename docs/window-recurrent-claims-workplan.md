@@ -558,7 +558,8 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    `m` 16 and 8 of those cells; seeds 0-19), the matrix's settings otherwise; 6 workers. Its
    seeds 0-4 at the matrix's cells (30 runs) and the control's (10) are those runs again, same
    keys and settings (a test checks it), so C0 compares their result files.
-7a. **E7' on `jebel`** (C7'; D23-D26), **before stage 7** (the owner, 2026-10-13: the second
+7a. **Done (2026-10-13): C7' refuted as registered, 0 of 80 working or certified; findings in the
+   study script's docstring.** **E7' on `jebel`** (C7'; D23-D26), **before stage 7** (the owner, 2026-10-13: the second
    task's answer first; E3/E4 wait about 5 h), as soon as E7 ends and D26's check is read from
    E7's step records. **Configs in:** `scripts/window_recurrent_e7_prime_p5.json` and `_p7.json`,
    80 runs at `k` 1 (40 a `p`), E7's settings with D24's codes and 10 seeds (a test checks them

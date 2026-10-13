@@ -259,6 +259,42 @@ dc612ff5...a5d4eff5); about 140 s a pass of 40 networks. No long tests: none cer
   working runs did (14 of 16).
 - E7' (the claims workplan) is the test E7 meant to be: `k` 1 at 5 and 10 times the states'
   codes, 10 seeds a cell.
+
+Findings (E7' of docs/window-recurrent-claims-workplan.md: modular division with enough codes,
+C7'), trained on jebel, indrajala-ml 9c50fe6, crate 8c20e510c9a9, 6 workers, 2026-10-13 20:45 to
+23:56 (`window_recurrent_e7_prime_p5.json` then `_p7.json`: 2 `p` x 2 arms x 2 `m` x 10 seeds,
+`k` 1, `s` 16, E7's settings; `m` 128 and 256 at `p` 5, 256 and 512 at `p` 7, about 5 and 10
+times the states). Results and models in `data/window-recurrent/e7-prime-p5/` and `-p7/`
+(`e7-prime-p5.sha256`, sha256 67f56ab0...05dc44d8; `e7-prime-p7.sha256`, 69c4efe2...4fd8c79e),
+copied to pyramidon and checked; logs `data/window-recurrent-e7-prime-p5.log` (eab06819...c7a1b8ac)
+and `-p7.log` (a258d10a...8da00eea). Certified on pyramidon at indrajala-ml cf6ac86, both verdicts
+(`certificates.sha256`: p 5 de4a138c...10c88e98, p 7 1453332d...d9b5cc27;
+`certificates-strict.sha256`: p 5 eb3530ac...3a9703aa, p 7 cd76b51e...aca8370f). No long tests:
+none certified.
+
+- **C7' is refuted as registered**: no run works and no network certifies, either way: 0 of 40
+  at `p` 5 and 0 of 40 at `p` 7 (Wilson 95%: 0.00-0.09 each), every cell 0 of 10.
+- **The codes are no longer the limit.** The networks now hold codes for (nearly) every state
+  of the automaton: the certificate's `phi` covers all 25 of `p` 5's states in every all-at-once
+  `m` 256 network, and 47-49 of `p` 7's 49 at all-at-once `m` 256, from 30-154 codes reached. Yet
+  79 of the 80 counterexamples are a wrong next state (76 after 2 windows, 2 after 1, 1 after 3),
+  and one a wrong output: the states are represented, the transitions between them aren't exact.
+- More codes cut the errors at length 3, the first to use every transition (U1, all 729 pairs),
+  but none reach zero. Median and best pairs wrong, `k` 1, against E7's `m` 64:
+
+| `p` | arm | E7 `m` 64 | E7' 5 times | E7' 10 times |
+|---|---|---|---|---|
+| 5 | all-at-once | 88 (best 10) | 25 (8) | 28 (4) |
+| 5 | curriculum | 79 (39) | 93 (43) | 38 (23) |
+| 7 | all-at-once | 195 (113) | 60 (24) | 51.5 (28) |
+| 7 | curriculum | 113 (67) | 106 (41) | 70 (27) |
+
+- The best network, `p` 5 all-at-once `m` 256, is 4 pairs of 729 from exact at length 3; from 5
+  to 10 times the codes the all-at-once medians stop improving (25 to 28, 60 to 51.5).
+- **6 of E7''s 160 steps stopped on the budget while still improving** (best screen within the
+  last 21 epochs of 200: five at `p` 7, four of them curriculum step 3 at `m` 256-512, best
+  screens 0.94-0.99). D26 kept E7's budget (no `k` 1 budget stop in E7); E7' shows a few runs it
+  cut short, none near exact (best screens under 0.99).
 """
 
 from __future__ import annotations
