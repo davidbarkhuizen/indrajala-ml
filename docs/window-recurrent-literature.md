@@ -35,8 +35,9 @@ digits alone, by a curriculum of 1, then 1-2, then 1-3 windows:
    the state's width barely matters (24 and 21 of 45 at `s` 4, 16).
 4. The seed decides within a cell (no cell works on every seed).
 5. Five `k` 1 runs were exact on every sum of 1-3 columns and still failed at 8.
-6. The control (all-at-once training, W16, W30) works about as often as the curriculum (at
-   06:02: 6 of 9 finished runs), so the curriculum may not be needed.
+6. The control (all-at-once training, W16, W30) works as often as the curriculum: 12 of 15 runs
+   against 12 of 15 at the same cells and seeds (10 of 10 at `k` 4), on about 16 times fewer
+   examples at `k` 4. The curriculum isn't needed here.
 
 ## The papers
 
@@ -118,8 +119,9 @@ program execution).
    against the carry automaton for every length at once. Brandoit et al. certify their NFSM's
    transition tables likewise; no certificate for a learned adder with a transformer inside the
    step was found.
-4. **A controlled curriculum comparison** for this design (the control is running; it may show
-   no effect).
+4. **A controlled curriculum comparison** for this design: the control found none at 5 seeds
+   (12 of 15 each way), so the finding is that this design needs no curriculum, against the
+   curricula of the Neural GPU (Price et al.) and looped transformers (Fan et al.).
 
 **Weaker than the literature, to fix before any claim:** test lengths (64 against 1,000-2,000),
 seeds per cell (5 against Price's 15), and no ablation of the snapping itself.
