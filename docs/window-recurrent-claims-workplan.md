@@ -539,7 +539,8 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    105 networks recertified by the new code (D18, D19), branched and strict, every field but the
    timings equal under D19's names: 105 compared and 0 differ against `certificates/`, 105 and 0
    against `certificates-strict/` (on `pyramidon`, 3 workers, 2026-10-13).
-6. **E7 on `jebel`:** the modular-division matrix (`scripts/window_recurrent_e7_p5.json` and
+6. **Done (2026-10-13): C7 refuted as registered, 0 of 80 working or certified; findings in the
+   study script's docstring, nothing to archive (D12: certified networks only).** **E7 on `jebel`:** the modular-division matrix (`scripts/window_recurrent_e7_p5.json` and
    `_p7.json`, `s` 16, D20), certified and long-tested: findings. **The findings' tables in**
    (for stages 6-8): `networks CONFIG` (each finished run's last network, for `certify` and
    `check`) and `verdicts CONFIG --certificates DIR --strict DIR [--long-tests DIR]` (per cell the

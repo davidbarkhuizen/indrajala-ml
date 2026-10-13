@@ -224,6 +224,41 @@ Per cell, its networks working (W10), certified and robustly certified, of 5:
 | all at once | 1 | 16 | 8 | 2 | 2 | 2 |
 | all at once | 4 | 4 | 16 | 5 | 4 | 4 |
 | all at once | 4 | 16 | 16 | 5 | 4 | 4 |
+
+Findings (E7 of docs/window-recurrent-claims-workplan.md: modular division, C7), trained on jebel
+(i7-9700K), indrajala-ml 67fc12f, crate 8c20e510c9a9, 6 workers, 2026-10-13 14:58 to 20:42
+(`window_recurrent_e7_p5.json` then `_p7.json`: 2 `p` x 2 arms x `k` 1 and 4 x `m` 32 and 64 x 5
+seeds, `s` 16, the matrix's settings). Results and models in `data/window-recurrent/e7-p5/` and
+`e7-p7/` (listed with their sha256 in `data/window-recurrent/e7-p5.sha256`, itself sha256
+6ca9ee8c...a992317f, and `e7-p7.sha256`, 10d0b5bd...0f5a2b7a), copied to pyramidon and checked;
+logs `data/window-recurrent-e7-p5.log` (196cd344...0776527a) and `-p7.log` (2c06d807...fbbc1349).
+Certified on pyramidon at indrajala-ml 9c50fe6, 3 workers, both verdicts (D13), in each
+directory's `certificates/` and `certificates-strict/` (`certificates.sha256`: p 5 6d0b3e11...46d4cb7d,
+p 7 4cae99c0...5426ada6; `certificates-strict.sha256`: p 5 43c9d4af...88c26033, p 7
+dc612ff5...a5d4eff5); about 140 s a pass of 40 networks. No long tests: none certified (D22).
+
+- **C7 is refuted as registered**: no run works and no network certifies, either way, at either
+  `p`: 0 of 40 at `p` 5 and 0 of 40 at `p` 7 (Wilson 95%: 0.00-0.09 each), every cell 0 of 5.
+- **E7's design was flawed** (found during its p 7 runs; the claims workplan's E7, D23): the
+  automata minimise to exactly 25 and 49 states, so `p` 7 at `m` 32 (20 runs) can't be the
+  automaton; they ran as registered, a negative control, and fail as they must. The other cells
+  had 1.3 and 2.6 times the states' codes, the low end of what worked on addition.
+- **At `k` 4 no run fits its training lengths**: best screens 0.11-0.34 at every `m` and `p`;
+  the certificates find a wrong next state in the first window of every network.
+- **At `k` 1 every run is a near miss at length 3**, the first length that uses every transition
+  (every state is reachable within 2 columns): the curriculum passed lengths 1 and 2 every time
+  and plateaued (never the budget: D26) on length 3, whose U1 is all 729 pairs; at `p` 5 the
+  networks got 10-342 of them wrong, median 172 at `m` 32 and 85 at `m` 64 (doubling the codes
+  about halved the errors; best, all-at-once `m` 64 seed 0, 10 wrong, a best screen of 0.996); at
+  `p` 7, 67-500, median about 136 at `m` 64. Every certificate's counterexample is a wrong next
+  state after 2 windows (one `p` 7 network's after 1).
+- The `k` 1 `m` 64 networks reach codes for most of the automaton's states (the certificate's
+  `phi` covers 23-25 of `p` 5's 25 and 31-46 of `p` 7's 49) from 37-60 codes, but their
+  transitions between them don't close: the codes are there, the dynamics aren't. Every run
+  used almost all its codes (a median of 31 of 32 and 62-63 of 64 per cell), as addition's
+  working runs did (14 of 16).
+- E7' (the claims workplan) is the test E7 meant to be: `k` 1 at 5 and 10 times the states'
+  codes, 10 seeds a cell.
 """
 
 from __future__ import annotations
