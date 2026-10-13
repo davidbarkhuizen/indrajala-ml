@@ -7,9 +7,12 @@ Per window, with state c of state_size features: the window's tokens, its StateI
 before their blocks, give the window's k digits; the pooling reads the tokens the output layer reads
 and gives the window's summary u; the cell gives h = cell(c, u); and the codes snap h to the
 nearest of their count learned codes, straight-through, the next window's state (W1, W4). The
-first window's state is a learned vector, snapped alike (W8).
+first window's state is a learned vector, snapped alike (W8). Without codes (codes=None) the state
+is continuous: h itself is the next window's state, and the codes' losses are gone (the
+window-recurrent claims workplan's ablation, E2, D3).
 
     WindowRecurrence(state_size=4, codes=Codes(8))
+    WindowRecurrence(state_size=4, codes=None)
 
 validate_window_recurrent (spec_validation.py) checks a window and its recurrence together.
 """
@@ -53,9 +56,12 @@ class Codes:
 
 @dataclass(frozen=True)
 class WindowRecurrence:
-    """What a window-recurrent network adds to its window's specs: the state's width, its codes, the cell and the pooling."""
+    """
+    What a window-recurrent network adds to its window's specs: the state's width, its codes (None:
+    a continuous state), the cell and the pooling.
+    """
 
     state_size: int
-    codes: Codes
+    codes: Codes | None
     cell: GRU = GRU()
     pooling: AttentionPooling = AttentionPooling()

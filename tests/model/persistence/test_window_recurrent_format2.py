@@ -28,6 +28,7 @@ from indrajala_ml.training.run_checkpoint import RunCheckpoint, run_from_json, r
 from tests.helpers import bits
 from tests.model.persistence.test_checkpoint import IMPLEMENTATIONS, RULES, _seeded, _state_bits, _train
 from tests.saved_model_fixtures import (
+    CONTINUOUS_RECURRENCE,
     FIXTURE_DIR,
     FIXTURES,
     WINDOW_COLUMNS,
@@ -39,6 +40,8 @@ from tests.saved_model_fixtures import (
 )
 
 WINDOW_FIXTURES = [name for name in FIXTURES if name.startswith("WindowRecurrent")]
+CONTINUOUS_FIXTURES = [name for name in FIXTURES if name.startswith("ContinuousWindow")]
+RECURRENCES = {"snapped": WINDOW_RECURRENCE, "continuous": CONTINUOUS_RECURRENCE}
 WINDOW_CLASSES: dict[str, Any] = {
     "python": WindowRecurrentBackpropNetwork,
     "numpy": WindowRecurrentArrayNetwork,
@@ -73,12 +76,42 @@ def test_a_window_fixture_re_saves_byte_identically(name: str, tmp_path: Path):
     assert len(WINDOW_FIXTURES) == 3
 
 
+@pytest.mark.parametrize("name", CONTINUOUS_FIXTURES)
+def test_a_continuous_fixture_re_saves_byte_identically_with_no_codes(name: str, tmp_path: Path):
+    # the window-recurrent claims workplan, stage 4
+    path = tmp_path / f"{name}.json"
+    fixture_class(name).load(str(FIXTURE_DIR / f"{name}.json")).save(str(path))
+    assert path.read_bytes() == (FIXTURE_DIR / f"{name}.json").read_bytes()
+    saved = json.loads(path.read_text())
+    assert saved["recurrence"]["codes"] is None
+    # the snapped fixture's weights but the codes' entry
+    snapped = json.loads((FIXTURE_DIR / f"{name.removeprefix('ContinuousWindow')}.json").read_text())
+    assert len(saved["weights"]) == len(snapped["weights"]) - 1
+    assert len(CONTINUOUS_FIXTURES) == 3
+
+
+@pytest.mark.parametrize("saved_by", ["numpy", "rust"])
+def test_numpy_and_rust_continuous_files_load_into_each_other(saved_by: str, tmp_path: Path):
+    loader = "rust" if saved_by == "numpy" else "numpy"
+    network = _seeded(_network(saved_by, Adam(), CONTINUOUS_RECURRENCE), 2)
+    network.randomize()
+    network.learn_batch(0.1, _rows(network, 8, seed=1))
+    path = str(tmp_path / "continuous.json")
+    network.save(path)
+    loaded = WINDOW_CLASSES[loader].load(path)
+    assert loaded.recurrence == CONTINUOUS_RECURRENCE and loaded.codes is None
+    assert bits(loaded.snapshot()) == bits(network.snapshot())
+
+
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
 @pytest.mark.parametrize("across_workers", [False, True], ids=["in_memory", "as_lists"])
-def test_a_restored_checkpoint_resumes_training_by_bits(implementation: str, rule: UpdateRule, across_workers: bool):
+@pytest.mark.parametrize("recurrence", RECURRENCES)
+def test_a_restored_checkpoint_resumes_training_by_bits(
+    implementation: str, rule: UpdateRule, across_workers: bool, recurrence: str
+):
     # as test_checkpoint.py's networks: the window's dropout draws from the checkpoint's generator
-    trained = _seeded(_network(implementation, rule), 2)
+    trained = _seeded(_network(implementation, rule, RECURRENCES[recurrence]), 2)
     trained.randomize()
     rows = _rows(trained, 8, seed=1)
     _train(trained, rows)
@@ -87,7 +120,9 @@ def test_a_restored_checkpoint_resumes_training_by_bits(implementation: str, rul
         checkpoint = pickle.loads(pickle.dumps(_picklable_checkpoint(checkpoint)))
     _train(trained, rows)
 
-    resumed = _seeded(_network(implementation, rule), 3)  # other weights and generator, overwritten
+    resumed = _seeded(
+        _network(implementation, rule, RECURRENCES[recurrence]), 3
+    )  # other weights and generator, overwritten
     resumed.randomize()
     resumed.restore_checkpoint(checkpoint)
     _train(resumed, rows)
@@ -116,8 +151,9 @@ def _run(network: Any) -> RunCheckpoint:
 
 
 @pytest.mark.parametrize("implementation", IMPLEMENTATIONS)
-def test_a_run_file_round_trips(implementation: str):
-    student = _seeded(_network(implementation, Adam()), 2)
+@pytest.mark.parametrize("recurrence", RECURRENCES)
+def test_a_run_file_round_trips(implementation: str, recurrence: str):
+    student = _seeded(_network(implementation, Adam(), RECURRENCES[recurrence]), 2)
     student.randomize()
     run = _run(student)
 
@@ -129,7 +165,7 @@ def test_a_run_file_round_trips(implementation: str):
         assert checkpoint.optimizer.t == saved.optimizer.t
         assert bits(checkpoint.optimizer.layers) == bits(saved.optimizer.layers)
         assert checkpoint.rng == saved.rng
-    resumed = _seeded(_network(implementation, Adam()), 3)
+    resumed = _seeded(_network(implementation, Adam(), RECURRENCES[recurrence]), 3)
     resumed.restore_checkpoint(loaded.network)
     assert _state_bits(resumed) == _state_bits(student)
 
@@ -138,7 +174,10 @@ def test_a_run_file_round_trips(implementation: str):
 def test_a_run_file_refuses_a_network_of_another_recurrence(implementation: str):
     student = _seeded(_network(implementation, Adam()), 2)
     student.randomize()
-    other = _network(implementation, Adam(), WindowRecurrence(3, Codes(5, commitment=0.5)))
-
-    with pytest.raises(ValueError, match="recurrence"):
-        run_from_json(run_to_json(_run(student), student), other)
+    saved = run_to_json(_run(student), student)
+    for other in (
+        _network(implementation, Adam(), WindowRecurrence(3, Codes(5, commitment=0.5))),
+        _network(implementation, Adam(), CONTINUOUS_RECURRENCE),
+    ):
+        with pytest.raises(ValueError, match="recurrence"):
+            run_from_json(saved, other)

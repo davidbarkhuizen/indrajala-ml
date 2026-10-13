@@ -32,7 +32,7 @@ def as_array_snapshot(python: Any, entries: list[Any] | None = None) -> list[tup
     The pure-Python snapshot, per node, unit or feature, as the array networks', per parameter: a
     batch norm's (gamma, beta, mean, var), a layer norm's (gamma, beta), attention's (Wq, bq, Wk,
     bk, Wv, bv, Wo, bo), a layer without a bias as (W,), and every other layer as (W, b); then a
-    window-recurrent network's parts: the pooling's (q,), the cell's (W, U, b), the codes' (E,)
+    window-recurrent network's parts: the pooling's (q,), the cell's (W, U, b), the codes' (E,), if any,
     and the initial state's (c,). entries, if given, stand for python's snapshot (its gradients,
     in the snapshot's shape).
     """

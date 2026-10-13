@@ -26,6 +26,7 @@ from indrajala_ml.model.networks.window_recurrent_array_network import (
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import Dropout, Embedding, LayerSpec, Position, StateInput
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
+from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
 from indrajala_ml.pcg64 import generator_state
 from tests.helpers import bits, exp_by_crate, patching, to_numpy
 from tests.model.networks.test_window_recurrent_array_network import (
@@ -164,3 +165,18 @@ def test_state_codes_are_numpys():
     rust, numpy = _pair(WINDOW, SGD())
     X, _ = _batch(3, examples=5)
     assert rust.state_codes(RUST.matrix(X.tolist())) == numpy.state_codes(X)
+
+
+@pytest.mark.usefixtures("crate_exp_attention", "crate_exp_parts")
+@pytest.mark.parametrize("windows", [1, 3])
+def test_a_continuous_state_trains_as_numpys(windows: int):
+    # the window-recurrent claims workplan, stage 4: no codes, the cell's output the next state
+    recurrence = WindowRecurrence(3, None)
+    rust = WindowRecurrentRustArrayNetwork.randomized((K,), DROPOUT_WINDOW, recurrence, Momentum(0.9), seed=7)
+    numpy = WindowRecurrentArrayNetwork.randomized((K,), DROPOUT_WINDOW, recurrence, Momentum(0.9), seed=7)
+    rows = _rows(windows, 4, windows)
+    for _ in range(20):
+        rust.learn_batch(0.1, rows)
+        numpy.learn_batch(0.1, rows)
+    _assert_close(numpy.snapshot(), rust.snapshot(), 1e-10)
+    assert rust.rng.state == numpy.rng.bit_generator.state

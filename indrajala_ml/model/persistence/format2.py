@@ -22,8 +22,8 @@ network resumes training by bits, its dropout masks included.
   "window_recurrent" (the window-recurrent adder workplan, stage 2), whose layers are its window's
   and whose input is the window's, its k columns' token ids. Its file adds "recurrence":
   {"state_size": s, "codes": {"count": m, "commitment": 0.25}, "cell": {"kind": "gru",
-  "update_bias": 1.0}, "pooling": {"kind": "attention"}}. All three implementations build it
-  (stages 4-6).
+  "update_bias": 1.0}, "pooling": {"kind": "attention"}}, "codes": null for a continuous state
+  (the window-recurrent claims workplan, stage 4). All three implementations build it (stages 4-6).
 - preset holds a preset's class and constructor arguments, from which its load rebuilds it. A
   Sequential network's file has none.
 - input is {"dimension": d} or {"height": h, "width": w, "channels": c}, with "input_bounds" in
@@ -42,8 +42,9 @@ network resumes training by bits, its dropout masks included.
   a token-wise output layer's included, is a dense one.
 - weights is the network's snapshot() as lists, one entry per layer, a residual block's flattened
   into its fork, body and add (layer_specs.expand_specs); a window-recurrent network's window's
-  layers, then its own parts: [q], the pooling's query; [W, U, b], the cell's; [E], the codes;
-  [c], the initial state (format2_json.RECURRENCE_PARAMETERS, as in the optimizer state). On numpy and Rust, per layer: [W, b] (an
+  layers, then its own parts: [q], the pooling's query; [W, U, b], the cell's; [E], the codes
+  (none for a continuous state); [c], the initial state (format2_json.recurrence_parameters, as in
+  the optimizer state). On numpy and Rust, per layer: [W, b] (an
   affine layer's too); [W] for a linear (bias-free) layer; [gamma, beta, running_mean, running_var]
   for a batch-norm layer; [P] for a position, and for a state input, its (d, s) projection; [E],
   the (vocabulary, size) table, for an embedding; [gamma, beta] for a layer norm; [Wq, bq, Wk, bk, Wv, bv, Wo, bo] for attention; [] for a pool

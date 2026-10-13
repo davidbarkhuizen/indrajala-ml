@@ -148,7 +148,7 @@ def test_the_codes_losses_count_every_snapped_state_once_at_one_over_the_windows
     expected = np.zeros(codes.E.shape)
     for H, Q, indices, dQ, dH in snaps:
         np.add.at(expected, indices, -2.0 * (H - Q) / windows)
-        np.testing.assert_allclose(dH, dQ + 2.0 * RECURRENCE.codes.commitment * (H - Q) / windows, rtol=1e-15)
+        np.testing.assert_allclose(dH, dQ + 2.0 * codes.commitment * (H - Q) / windows, rtol=1e-15)
     np.testing.assert_allclose(codes.grad_E, expected, rtol=1e-12, atol=1e-15)
 
 
@@ -228,3 +228,44 @@ def test_state_codes_are_each_states_nearest_code_through_the_windows():
         _, C = network._window_forward(network._window(X, w), C)
         expected.append(network.codes.indices.tolist())
     assert codes == [list(example) for example in zip(*expected, strict=True)]
+
+
+# a continuous state (the window-recurrent claims workplan, stage 4)
+
+CONTINUOUS = WindowRecurrence(3, None)
+
+
+@pytest.mark.parametrize("windows", [1, 3])
+def test_a_continuous_states_gradient_matches_central_differences(windows: int):
+    network = WindowRecurrentArrayNetwork.randomized((K,), WINDOW, CONTINUOUS, SGD(), seed=7)
+    assert network.codes is None and len(network.parts) == 3
+    rng = np.random.default_rng(3)
+    network.pooling.q = rng.normal(size=network.pooling.q.shape)
+    network.initial_state.c = rng.normal(size=network.initial_state.c.shape)
+    X, labels = _batch(windows)
+    for a, n in zip(_gradients(network, X, labels), _numeric(network, X, labels), strict=True):
+        np.testing.assert_allclose(a, n, rtol=1e-5, atol=1e-7)
+
+
+def test_a_continuous_state_is_the_snapped_networks_with_identity_codes_by_bits():
+    # the same weights but the codes': a training step and the digits after it agree by bits
+    snapped = _network(rule=Adam())
+    _identity_codes(snapped)
+    continuous = WindowRecurrentArrayNetwork((K,), WINDOW, CONTINUOUS, Adam())
+    codes_entry = len(snapped.layers) + snapped.parts.index(snapped.codes)
+    continuous.restore([entry for i, entry in enumerate(snapped.snapshot()) if i != codes_entry])
+    X, labels = _batch(3)
+    for network in (snapped, continuous):
+        network._learn_batch_input(0.01, X, labels)
+    kept = [entry for i, entry in enumerate(snapped.snapshot()) if i != codes_entry]
+    for a, b in zip(kept, continuous.snapshot(), strict=True):
+        assert all(np.array_equal(x, y) for x, y in zip(a, b, strict=True))
+    assert np.array_equal(snapped.forward_windows(X), continuous.forward_windows(X))
+
+
+def test_a_continuous_state_has_no_codes_to_report():
+    network = WindowRecurrentArrayNetwork.randomized((K,), WINDOW, CONTINUOUS, SGD(), seed=7)
+    X, _ = _batch(2)
+    for call in (lambda: network.state_codes(X), network.first_step):
+        with pytest.raises(AssertionError, match="no codes"):
+            call()

@@ -155,7 +155,7 @@ def recurrence_to_json(recurrence: WindowRecurrence) -> dict[str, Any]:
     # the cell and the pooling under a kind, as layers are, so another cell or pooling can join them
     return {
         "state_size": recurrence.state_size,
-        "codes": asdict(recurrence.codes),
+        "codes": None if recurrence.codes is None else asdict(recurrence.codes),
         "cell": {"kind": "gru", **asdict(recurrence.cell)},
         "pooling": {"kind": "attention", **asdict(recurrence.pooling)},
     }
@@ -170,7 +170,7 @@ def recurrence_from_json(recurrence: dict[str, Any]) -> WindowRecurrence:
         raise ValueError(f"unknown pooling kind {recurrence['pooling']['kind']!r}")
     return WindowRecurrence(
         state_size=recurrence["state_size"],
-        codes=Codes(**recurrence["codes"]),
+        codes=None if recurrence["codes"] is None else Codes(**recurrence["codes"]),
         cell=GRU(**cell),
         pooling=AttentionPooling(**pooling),
     )
@@ -210,16 +210,20 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("W", "b")
 
 
-# a window-recurrent network's own parts' parameters, after its window's layers, in order: the
-# pooling's query, the cell's, the codes and the initial state (the window-recurrent adder
-# workplan, stage 4)
-RECURRENCE_PARAMETERS: tuple[tuple[str, ...], ...] = (("q",), ("W", "U", "b"), ("E",), ("c",))
+def recurrence_parameters(recurrence: WindowRecurrence) -> tuple[tuple[str, ...], ...]:
+    """
+    A window-recurrent network's own parts' parameters, after its window's layers, in order: the
+    pooling's query, the cell's, the codes (none for a continuous state) and the initial state (the
+    window-recurrent adder workplan, stage 4).
+    """
+    codes: tuple[tuple[str, ...], ...] = () if recurrence.codes is None else (("E",),)
+    return (("q",), ("W", "U", "b"), *codes, ("c",))
 
 
 def _layer_parameter_names(specs: Sequence[LayerSpec], recurrence: WindowRecurrence | None) -> list[tuple[str, ...]]:
     # each expanded layer's parameters' names, then a window-recurrent network's own parts'
     names = [_parameter_names(spec) for spec in expand_specs(specs)]
-    return names if recurrence is None else [*names, *RECURRENCE_PARAMETERS]
+    return names if recurrence is None else [*names, *recurrence_parameters(recurrence)]
 
 
 def optimizer_state_to_json(

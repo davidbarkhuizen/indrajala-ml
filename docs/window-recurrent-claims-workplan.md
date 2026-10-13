@@ -4,7 +4,7 @@
 our claims/findings"), after the matrix (stage 9 of
 [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md)) and while its control
 ran. Decisions D1-D12 settled under the owner's standing delegation, each with its options' pros
-and cons. Stages 1, 2 and 3 done (stage 2 refined D3's snap margin: a near tie branches).** The literature it answers to is in
+and cons. Stages 1-4 done (stage 2 refined D3's snap margin: a near tie branches).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -360,9 +360,10 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    right counterexample; a certified fake passes B1 at 1,024.
 3. **Done.** **E1 on `pyramidon`:** every matrix and control network certified, long-tested; findings in
    the certificate script's docstring; the certified networks archived (D12).
-4. **The continuous state** (tier 0 unless a timed path changes): `codes: Codes | None`, the
+4. **Done.** **The continuous state** (tier 0: no timed path changed): `codes: Codes | None`, the
    three implementations skipping the snap, format 2 writing `"codes": null`, validation; parity
-   tests, a fixture and a golden entry (a new network, existing bits unchanged: checked).
+   tests, a fixture and a golden entry for each implementation (the golden run 121 entries to 124,
+   the 121 bit-identical: checked).
 5. **The second task's harness and certificate** (D14-D17; tier 0, no timed path): a task in the
    harness (its column tokens, labels, reading order, catalogue of tests and target machine), the
    adder and modular division as instances; the certificate over a target machine (D17), E1's
