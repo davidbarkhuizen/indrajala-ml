@@ -423,6 +423,42 @@ def test_explore_summary_compares_failing_with_working_runs():
     assert f"| 8 | 4/5 | 0/5 | {p:.3g} |" in summary
 
 
+def test_verdicts_count_each_cell_by_its_results_certificates_and_long_tests(tmp_path: Path):
+    """The findings' tables: works from the results, the class from both certificates, failures from the long tests."""
+    settings = dataclasses.replace(SMALL, seeds=3, steps=2)
+    specs = [wr.RunSpec("curriculum", 1, 4, 3, seed) for seed in range(3)]
+    study = wr.Study(tmp_path / "study", settings, specs, 0)
+    branched, strict, long_tests = tmp_path / "branched", tmp_path / "strict", tmp_path / "long"
+    for directory in (study.results, branched, strict, long_tests):
+        directory.mkdir(parents=True)
+    # seed 0 robustly certified, seed 1 strictly only (working, a long-test failure), seed 2 neither (failing)
+    for spec, works, b, s in zip(specs, (True, True, False), (True, False, False), (True, True, False), strict=True):
+        (study.results / f"{spec.key}.json").write_text(
+            json.dumps({"key": spec.key, "works": works, "steps": [{"step": 2}]})
+        )
+        name = f"{spec.key}-step-2"
+        (branched / f"{name}.json").write_text(json.dumps({"certified": b}))
+        (strict / f"{name}.json").write_text(json.dumps({"certified": s}))
+        passed = 9 if spec.seed == 1 else 10
+        lengths = {"128": {"properties": {"B1": {"cases": 10, "passed": passed}}}}
+        (long_tests / f"{name}.json").write_text(json.dumps({"lengths": lengths}))
+    assert wr.last_networks(study) == {spec.key: study.models / spec.key / "step-2.network.json" for spec in specs}
+    assert wr.network_name(study.models / specs[0].key / "step-2.network.json") == f"{specs[0].key}-step-2"
+    text = wr.verdicts(study, branched, strict, long_tests)
+    two, one = wr.rate(2, 3), wr.rate(1, 3)
+    assert f"| curriculum | 1 | 4 | 3 | 3 | {two} | {two} | {one} |" in text
+    assert "| robustly certified | 1 | 0 |" in text and "| not certified | 0 | 1 |" in text
+    assert f"| certified only strictly | 1 | 1 | 10 | {specs[1].key}-step-2: B1@128 1 |" in text
+    assert "| robustly certified | 1 | 0 | 10 | - |" in text
+    low, high = inference.wilson(2, 3)
+    assert two == f"2/3 ({low:.2f}-{high:.2f})" and wr.rate(0, 0) == "-"
+    # without certificates the cell's certified columns are empty; no long tests, no long-test table
+    for path in branched.iterdir():
+        path.unlink()
+    text = wr.verdicts(study, branched, strict)
+    assert f"| curriculum | 1 | 4 | 3 | 3 | {two} | - | - |" in text and "long-tested" not in text
+
+
 def test_e6s_windows_drop_the_attention_or_every_block():
     def inner(specs: list[Any]) -> list[Any]:
         return [part for spec in specs for part in (spec.body if isinstance(spec, Residual) else (spec,))]

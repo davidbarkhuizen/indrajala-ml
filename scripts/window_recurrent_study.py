@@ -13,6 +13,8 @@ harness and indrajala_ml/data/addition_data.py's catalogue.
         [--snap-ratio R]
     python scripts/window_recurrent_study.py explore CONFIG.json [--n N ...] [--json FILE] [--workers W]
     python scripts/window_recurrent_study.py compare ORIGINAL_DIR RERUN_DIR
+    python scripts/window_recurrent_study.py networks CONFIG.json
+    python scripts/window_recurrent_study.py verdicts CONFIG.json --certificates DIR --strict DIR [--long-tests DIR]
 
 A config names the study's directory (results/, one JSON file per run, and models/, each run's steps
 and their networks in format 2), its workers, its settings and its matrix (load_config's
@@ -30,7 +32,12 @@ network's own snaps only, branching no near tie (strict, D3 as first written). `
 provenance and each step's saved network, exactly; a line per run, exit 1 if any differ. `explore`
 is E5: for every finished snapped run of a study, the codes its last network reaches at its check
 lengths and at each N (8, 16 and 64 by default), the codes new past the check lengths, and how
-many failing and working runs whose check passed reach a new code (Fisher's exact test).
+many failing and working runs whose check passed reach a new code (Fisher's exact test). `networks`
+prints each finished run's last step's network, the one its result's works describes (to pass to
+`certify` and `check`). `verdicts` is the findings' tables: per cell, the runs working (W10),
+certified (the strict certificates' directory) and robustly certified (the branched one's), each with
+its Wilson interval (D4); the runs by works and class; and with the long tests' directory (each
+network's `check --json` as <run>-step-<j>.json), per class the networks tested and every failure.
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
@@ -236,7 +243,7 @@ from indrajala_ml.studies import window_tasks as wt
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("run", "status", "report"):
+    for name in ("run", "status", "report", "networks"):
         command = commands.add_parser(name)
         command.add_argument("config", type=Path)
         if name == "report":
@@ -268,6 +275,11 @@ def main(argv: list[str]) -> int:
     )
     explore.add_argument("--json", type=Path, help="write every run's codes to this file")
     explore.add_argument("--workers", type=int, default=1)
+    verdicts = commands.add_parser("verdicts")
+    verdicts.add_argument("config", type=Path)
+    verdicts.add_argument("--certificates", type=Path, required=True, help="certify's branched certificates")
+    verdicts.add_argument("--strict", type=Path, required=True, help="certify --snap-ratio 1's certificates")
+    verdicts.add_argument("--long-tests", type=Path, help="each network's check --json, as <run>-step-<j>.json")
     args = parser.parse_args(argv)
 
     if args.command == "check":
@@ -307,7 +319,7 @@ def main(argv: list[str]) -> int:
                 ),
                 strict=True,
             ):
-                name = f"{path.parent.name}-{path.name.removesuffix('.network.json')}"
+                name = wr.network_name(path)
                 print(f"{name}: {wc.summary(result)}", flush=True)
                 if args.out is not None:
                     (args.out / f"{name}.json").write_text(json.dumps(result, indent=1))
@@ -334,6 +346,13 @@ def main(argv: list[str]) -> int:
         print(wr.explore_summary(explored, args.n))
         if args.json is not None:
             args.json.write_text(json.dumps(explored, indent=1))
+        return 0
+    if args.command == "networks":
+        for path in wr.last_networks(study).values():
+            print(path)
+        return 0
+    if args.command == "verdicts":
+        print(wr.verdicts(study, args.certificates, args.strict, args.long_tests))
         return 0
     if args.command == "run":
         with machine_lock.study():
