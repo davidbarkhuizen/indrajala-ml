@@ -555,13 +555,14 @@ def status(study: Study) -> str:
     errors = [k for k, r in results.items() if "error" in r]
     running = sorted(p.stem for p in study.results.glob("*.running")) if study.results.exists() else []
     steps_done = {spec.key: len(list((study.models / spec.key).glob("step-*.network.json"))) for spec in study.runs}
+    steps = {spec.key: len(spec.step_counts(study.settings)) for spec in study.runs}
     works = sum(1 for r in results.values() if r.get("works"))
     lines = [
         (
             f"{len(results) - len(errors)} of {len(study.runs)} runs finished ({works} working), "
             f"{len(errors)} errors, {len(running)} running"
         ),
-        *(f"running: {key}, {steps_done.get(key, 0)} of {study.settings.steps} steps saved" for key in running),
+        *(f"running: {key}, {steps_done.get(key, 0)} of {steps.get(key, 0)} steps saved" for key in running),
         *(f"error: {key}" for key in errors),
     ]
     return "\n".join(lines)
