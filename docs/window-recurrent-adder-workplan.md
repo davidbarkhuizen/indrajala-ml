@@ -3,8 +3,9 @@
 **Status: decisions W1-W10 settled by the owner (2026-10-12), in dialogue; W11-W20 settled under
 the owner's standing delegation. Stage 1 (this plan) merged (#685); stage 2 (specs) merged (#686);
 stage 3 (numpy layers) merged (#687); stages 4-7 (the networks, fixtures and golden entries) done;
-W21-W29 settled at their stages; stage 8 (the harness and its calibration, W12) done; stage 9,
-the matrix on `jebel`, next. It replaces
+W21-W29 settled at their stages; stage 8 (the harness and its calibration, W12) done; stage 9
+(the matrix on `jebel`) done: 45 of 90 runs add to 64 columns or near it; stage 10 next. It
+replaces
 `docs/length-generalisation-workplan.md`, which the owner terminated before its existence study
 (next-steps, From length generalisation).**
 
@@ -455,6 +456,10 @@ Settled under the owner's standing delegation:
    setting `tests_past_break` (W12's test pass) and the matrix's config,
    `scripts/window_recurrent_matrix.json`.
 9. **The matrix study on `jebel`** under the machine lock. Findings in the script's docstring.
+   *Done* (2026-10-12 21:43 to 2026-10-13 05:14): 45 of 90 runs work, 43 of them passing every
+   property at every test length to 64 columns after training on at most 3 windows; none works
+   after step 1; `m` matters (10, 16, 19 of 30 at 4, 8, 16), `s` barely; no cell works on every
+   seed (the best, 4 of 5: `k` 1 `s` 16 `m` 8, `k` 4 `s` 4 `m` 16, `k` 4 `s` 16 `m` 16).
 10. **What follows**, decided on the findings, each its own PR: if a cell works, whittle it down
     and run the control (W16); if none does, the probes say whether the codes, the cell or the
     window failed.
