@@ -17,6 +17,7 @@ import pytest
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_division_data as md
 from indrajala_ml.model.persistence.load_network import load_network
+from indrajala_ml.studies import inference
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
 
@@ -376,6 +377,48 @@ def test_a_continuous_run_trains_without_codes(tmp_path: Path):
     assert network.recurrence.codes is None
     report = wr.report(study)
     assert "| curriculum | 1 | 4 | continuous |" in report and f"| {spec.key} | 2 |" in report
+
+
+def test_explore_counts_the_codes_past_the_check_lengths(tmp_path: Path):
+    """E5: a run's last network's codes at its check lengths and past them, the new ones apart."""
+    settings = wr.Settings(
+        epoch_examples=64,
+        max_epochs=1,
+        patience=1,
+        screen=20,
+        steps=2,
+        test_lengths=(3,),
+        sampled=50,
+        relation_sampled=10,
+        per_stratum=5,
+        codes_cases=20,
+        seeds=1,
+    )
+    spec, unrun = wr.RunSpec("curriculum", 1, 4, 3, 0), wr.RunSpec("curriculum", 1, 4, 3, 1)
+    study = wr.Study(tmp_path, settings, [spec], 0)
+    wr.run(study, log=lambda line: None)
+    explored = wr.explore_run(study, spec, (4, 8))
+    assert explored is not None and wr.explore_run(study, unrun) is None
+    assert set(explored["check_codes"]) == {"1", "2"} and set(explored["codes"]) == {"4", "8"}
+    seen = {code for used in explored["check_codes"].values() for code in used}
+    for n in ("4", "8"):
+        assert set(explored["codes"][n]) <= set(range(3))
+        assert explored["new"][n] == [code for code in explored["codes"][n] if code not in seen]
+
+
+def test_explore_summary_compares_failing_with_working_runs():
+    def run(works: bool, passes: bool, new: list[int]) -> dict[str, Any]:
+        return {"works": works, "passes": passes, "new": {"8": new}}
+
+    explored = [
+        *(run(False, True, [5]) for _ in range(4)),
+        run(False, True, []),
+        run(False, False, [5]),  # a failing check: not E5's
+        *(run(True, True, []) for _ in range(5)),
+    ]
+    summary = wr.explore_summary(explored, (8,))
+    p = inference.fisher_exact(4, 1, 0, 5)
+    assert f"| 8 | 4/5 | 0/5 | {p:.3g} |" in summary
 
 
 def test_a_run_that_raises_is_recorded_and_run_once_more(tmp_path: Path):
