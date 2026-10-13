@@ -13,7 +13,8 @@ in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan
 [grouped-query-attention-workplan.md](grouped-query-attention-workplan.md),
 [cross-attention-workplan.md](cross-attention-workplan.md),
 [arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md),
-[window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md). The order
+[window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md),
+[window-recurrent-claims-workplan.md](window-recurrent-claims-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
