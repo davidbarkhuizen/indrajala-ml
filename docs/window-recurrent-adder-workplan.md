@@ -477,7 +477,10 @@ Settled under the owner's standing delegation:
 10. **What follows**, decided on the findings, each its own PR: if a cell works, whittle it down
     and run the control (W16); if none does, the probes say whether the codes, the cell or the
     window failed. Cells work (stage 9), so first the control, at the three best cells (W30),
-    on `jebel`; its findings in the script's docstring beside the matrix's.
+    on `jebel`; its findings in the script's docstring beside the matrix's. The rest of this
+    stage is its own plan, [window-recurrent-claims-workplan.md](window-recurrent-claims-workplan.md)
+    (a certificate, the snapping ablation, the code count, the curriculum against all at once),
+    with its literature review, [window-recurrent-literature.md](window-recurrent-literature.md).
 11. **Docs**: README, roadmap, next-steps, the parent plan; this workplan retired.
 
 ## Known limits
