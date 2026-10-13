@@ -372,6 +372,20 @@ Settled under the owner's standing delegation:
     unchanged. Cons: A3 and M1 sampled from `n` 12 and 11 (exhaustive until then, the larger
     share of a check at 10 and 11).
   - (b) A3 and M1 exhaustive. Cons: impossible past `n` about 12.
+- **W30. The control's cell. Settled: (c)** (stage 10, from the matrix).
+  The matrix has no single best cell: three work on 4 of 5 seeds (`k` 1 `s` 16 `m` 8, `k` 4 `s`
+  4 `m` 16, `k` 4 `s` 16 `m` 16), and W16 names one. A control run is the all-at-once arm: one
+  step on window counts 1-3 together, checked as the curriculum's step 3, so its runs cost about
+  a curriculum run's (2-67 minutes on `jebel`).
+  - (a) `k` 4 `s` 4 `m` 16, the smallest of the three (7,779 parameters). Pros: one cell, as
+    W16 says, chosen by a rule (fewest parameters). Cons: the curriculum's effect at one `k`;
+    the rule is a tie-break, not a reason.
+  - (b) `k` 1 `s` 16 `m` 8, the longest extrapolation (a window ratio of 21.3). Pros: the
+    purest recurrence, one column a window. Cons: as (a), at `k` 1 only.
+  - (c) *Chosen.* All three: 15 runs (`scripts/window_recurrent_control.json`). Pros: no
+    tie-break; whether the curriculum mattered at `k` 1 and 4 and at both state widths, about 2-3
+    hours on `jebel` (15 runs on 6 workers). Cons: three times W16's one cell, and still not
+    every cell (W16 (b)).
 
 ## Stages
 
@@ -462,7 +476,8 @@ Settled under the owner's standing delegation:
    seed (the best, 4 of 5: `k` 1 `s` 16 `m` 8, `k` 4 `s` 4 `m` 16, `k` 4 `s` 16 `m` 16).
 10. **What follows**, decided on the findings, each its own PR: if a cell works, whittle it down
     and run the control (W16); if none does, the probes say whether the codes, the cell or the
-    window failed.
+    window failed. Cells work (stage 9), so first the control, at the three best cells (W30),
+    on `jebel`; its findings in the script's docstring beside the matrix's.
 11. **Docs**: README, roadmap, next-steps, the parent plan; this workplan retired.
 
 ## Known limits
