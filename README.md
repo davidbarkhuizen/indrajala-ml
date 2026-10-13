@@ -85,11 +85,11 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | Path | Contents |
 | --- | --- |
 | `indrajala_ml/model/` | classifier networks and their layers |
-| `indrajala_ml/demos/` | runnable demos in topic folders (linear, backprop, uci_digits, mnist, conv, benchmarks); `registry.py` lists them in menu order |
+| `indrajala_ml/demos/` | runnable demos in topic folders (linear, backprop, uci_digits, mnist, conv); `registry.py` lists them in menu order, with the measurement tools below |
 | `indrajala_ml/training/` | training loops (`train.py`), synthetic training data, run checkpoints, evaluation (disagreement rate, accuracy, confusion matrix), one-vs-rest ensemble training over multiprocessing (`ensemble_train.py`) |
 | `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; the text corpora's (`text_data.py`); `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
 | `indrajala_ml/capture/` | painted digits turned into UCI digits and MNIST inputs |
-| `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks |
+| `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks; the per-op timing (`layer_op_timing.py`) and the conv Rust/numpy comparison (`conv_comparison.py`) the timing scripts build on, and their timing helpers (`timing.py`) |
 | `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol; `sequence_study.py`, the sequence study's; `attention_dropout_study.py`, the attention-dropout study's |
 | `indrajala_ml/graphics/` | matplotlib plotting: figures, axes, legends and series (`chart.py`), classifier plots (`classifier_plots.py`) and evaluation plots (`evaluation_plots.py`) |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |

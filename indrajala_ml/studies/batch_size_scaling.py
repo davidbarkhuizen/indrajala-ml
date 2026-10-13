@@ -1,7 +1,7 @@
 """
 The pieces shared by the batch-size-scaling study (#365-#368): its sweep script
 (scripts/batch_size_scaling_sweep.py), its timing script (scripts/batch_size_timing.py) and its
-demo (demo_batch_size_scaling).
+runner (indrajala_ml/studies/batch_size_scaling_run.py).
 
 The question: does the linear learning-rate scaling rule (Goyal et al. 2017: multiply the rate
 by the factor the batch grows, with warmup) hold for the dense 784 -> 30 -> 10 network on full
@@ -123,7 +123,7 @@ SIDE = 28
 DIMENSION = SIDE * SIDE
 CLASS_COUNT = 10
 LAYER_SIZES = [30]  # the architecture every MNIST demo uses
-CONV_SPECS = [ConvSpec(3, 8)]  # the conv demo's (demo_conv_rust_vs_vectorized_digit_recognition)
+CONV_SPECS = [ConvSpec(3, 8)]  # the conv comparison's (indrajala_ml/measurement/conv_comparison.py)
 CONV_DENSE_LAYER_SIZES = [32]
 ARCHITECTURES = ["dense", "conv", "conv-bn"]
 BASE_BATCH_SIZE = 32

@@ -1,5 +1,5 @@
 from indrajala_ml.data.mnist_data import load_mnist_dataset, load_mnist_dataset_as_array
-from indrajala_ml.demos.timing import timed_call, timed_train
+from indrajala_ml.measurement.timing import timed_call, timed_train
 from indrajala_ml.model.networks.numpy.vectorized_multiclass_backprop_classifier_network import (
     VectorizedMultiClassBackpropClassifierNetwork,
 )

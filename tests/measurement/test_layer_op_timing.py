@@ -1,5 +1,5 @@
-from indrajala_ml.demos.benchmarks import demo_layer_op_timing as demo
 from indrajala_ml.demos.registry import DEMOS
+from indrajala_ml.measurement import layer_op_timing as demo
 
 
 def test_is_registered():
