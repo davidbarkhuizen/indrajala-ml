@@ -11,6 +11,7 @@ harness and indrajala_ml/data/addition_data.py's catalogue.
         [--sampled S] [--per-stratum P] [--doubling] [--json FILE]
     python scripts/window_recurrent_study.py certify NETWORK.json [...] [--task T] [--out DIR] [--workers W]
         [--snap-ratio R]
+    python scripts/window_recurrent_study.py compare ORIGINAL_DIR RERUN_DIR
 
 A config names the study's directory (results/, one JSON file per run, and models/, each run's steps
 and their networks in format 2), its workers, its settings and its matrix (load_config's
@@ -23,7 +24,9 @@ cases per stratum (M3, M4; S1, S2) and M3 or S2 at 1, 2, 4, ..., n only (the lon
 docs/window-recurrent-claims-workplan.md, D9) as given. `certify` writes each saved network's
 certificate against its task's machine (indrajala_ml/studies/window_recurrent_certificate.py) as
 DIR/<run>-<step>.json and prints a line for each, over W processes; --snap-ratio 1 certifies the
-network's own snaps only, branching no near tie (strict, D3 as first written).
+network's own snaps only, branching no near tie (strict, D3 as first written). `compare` is C0's check
+(the claims workplan): every run in both study directories, its result without timings and
+provenance and each step's saved network, exactly; a line per run, exit 1 if any differ.
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
@@ -251,6 +254,9 @@ def main(argv: list[str]) -> int:
     certify.add_argument(
         "--snap-ratio", type=float, default=wc.SNAP_RATIO, help="near ties branch under this ratio (1: strict)"
     )
+    compare = commands.add_parser("compare")
+    compare.add_argument("original", type=Path, help="a study's directory (results/ and models/)")
+    compare.add_argument("rerun", type=Path, help="another study's directory, rerunning some of its runs")
     args = parser.parse_args(argv)
 
     if args.command == "check":
@@ -295,6 +301,13 @@ def main(argv: list[str]) -> int:
                 if args.out is not None:
                     (args.out / f"{name}.json").write_text(json.dumps(result, indent=1))
         return 0
+    if args.command == "compare":
+        compared = wr.compare_runs(args.original, args.rerun)
+        for key, found in compared.items():
+            print(f"{key}: " + ("reproduced" if not found else f"{len(found)} differ, e.g. {', '.join(found[:5])}"))
+        differ = sum(bool(found) for found in compared.values())
+        print(f"{len(compared)} compared, {differ} differ")
+        return 1 if differ else 0
     study = wr.load_config(args.config)
     if args.command == "run":
         with machine_lock.study():

@@ -53,7 +53,7 @@ import traceback
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
@@ -482,6 +482,79 @@ def load_config(path: Path) -> Study:
 
 def read_results(results: Path) -> dict[str, dict[str, Any]]:
     return {path.stem: json.loads(path.read_text()) for path in sorted(results.glob("*.json"))}
+
+
+# C0: a rerun reproduces its run
+
+PROVENANCE = ("commit", "crate", "machine", "attempts")
+
+
+def comparable(result: dict[str, Any]) -> dict[str, Any]:
+    """
+    A result without what a rerun may change: its timings (every field named "seconds" or ending in
+    "_seconds"), its provenance and attempts; a result from before the task field (E1's) is addition's.
+    """
+
+    def strip(value: Any) -> Any:
+        if isinstance(value, dict):
+            fields = cast("dict[str, Any]", value)
+            return {k: strip(v) for k, v in fields.items() if k != "seconds" and not k.endswith("_seconds")}
+        if isinstance(value, list):
+            return [strip(v) for v in cast("list[Any]", value)]
+        return value
+
+    kept = strip({k: v for k, v in result.items() if k not in PROVENANCE})
+    kept.setdefault("task", wt.ADDITION.name)
+    return kept
+
+
+def differences(a: Any, b: Any, path: str = "") -> list[str]:
+    """Where two JSON values differ, as paths ("steps[2].break"); floats compared exactly."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        first, second = cast("dict[str, Any]", a), cast("dict[str, Any]", b)
+        return [
+            found
+            for key in sorted(first.keys() | second.keys())
+            for found in (
+                differences(first[key], second[key], f"{path}.{key}")
+                if key in first and key in second
+                else [f"{path}.{key}"]
+            )
+        ]
+    if isinstance(a, list) and isinstance(b, list):
+        first_items, second_items = cast("list[Any]", a), cast("list[Any]", b)
+        if len(first_items) != len(second_items):
+            return [f"{path} (length {len(first_items)} against {len(second_items)})"]
+        return [
+            found
+            for i, (x, y) in enumerate(zip(first_items, second_items, strict=True))
+            for found in differences(x, y, f"{path}[{i}]")
+        ]
+    same_type = type(cast("object", a)) is type(cast("object", b))
+    return [] if same_type and a == b else [path or "."]
+
+
+def compare_runs(original: Path, rerun: Path) -> dict[str, list[str]]:
+    """
+    C0: every run in both study directories, its result (comparable) and each step's saved network
+    (weights, optimizer state and generator, exactly), against the original's; per run, the
+    differences (none: reproduced).
+    """
+    first, second = read_results(original / "results"), read_results(rerun / "results")
+    compared: dict[str, list[str]] = {}
+    for key in sorted(first.keys() & second.keys()):
+        found = differences(comparable(first[key]), comparable(second[key]), "result")
+        networks = sorted((original / "models" / key).glob("step-*.network.json"))
+        for network in networks:
+            other = rerun / "models" / key / network.name
+            if not other.exists():
+                found.append(f"{network.name} (missing)")
+                continue
+            found += differences(
+                json.loads(network.read_text()), json.loads(other.read_text()), network.name.removesuffix(".json")
+            )
+        compared[key] = found
+    return compared
 
 
 def _run_job(

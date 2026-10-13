@@ -301,6 +301,55 @@ def test_a_run_trains_each_step_saves_it_and_resumes_after_the_last_saved(tmp_pa
 _TIMES = ("train_seconds", "screen_seconds", "check_seconds", "tests")
 
 
+def test_a_rerun_reproduces_its_run_and_a_change_shows(tmp_path: Path):
+    """C0: the same run in two directories matches but for timings and provenance; a changed weight or result shows."""
+    settings = wr.Settings(
+        epoch_examples=64,
+        max_epochs=1,
+        patience=1,
+        screen=20,
+        steps=2,
+        test_lengths=(3,),
+        sampled=50,
+        relation_sampled=10,
+        per_stratum=5,
+        codes_cases=20,
+        seeds=1,
+    )
+    spec = wr.RunSpec("curriculum", 1, 4, 3, 0)
+    original, rerun = tmp_path / "original", tmp_path / "rerun"
+    for directory in (original, rerun):
+        wr.run(wr.Study(directory, settings, [spec], 0), log=lambda line: None)
+    assert wr.compare_runs(original, rerun) == {spec.key: []}
+    # E1's results have no task field: addition's
+    result_file = original / "results" / f"{spec.key}.json"
+    result = json.loads(result_file.read_text())
+    del result["task"]
+    result["machine"], result["seconds"] = "elsewhere", 1.0e9
+    result_file.write_text(json.dumps(result))
+    assert wr.compare_runs(original, rerun) == {spec.key: []}
+    result["steps"][1]["break"] += 1
+    result_file.write_text(json.dumps(result))
+    network_file = rerun / "models" / spec.key / "step-2.network.json"
+    network = json.loads(network_file.read_text())
+    network["weights"][0][0][0][0] += 2.0**-40
+    network_file.write_text(json.dumps(network))
+    assert wr.compare_runs(original, rerun) == {
+        spec.key: ["result.steps[1].break", "step-2.network.weights[0][0][0][0]"]
+    }
+    (rerun / "models" / spec.key / "step-1.network.json").unlink()
+    assert "step-1.network.json (missing)" in wr.compare_runs(original, rerun)[spec.key]
+
+
+def test_differences_name_each_path():
+    assert wr.differences({"a": [1, 2.0], "b": 1}, {"a": [1, 2], "c": 1}) == [".a[1]", ".b", ".c"]
+    assert wr.differences([1], [1, 2], "x") == ["x (length 1 against 2)"]
+    assert wr.comparable({"steps": [{"check_seconds": 1, "tests": {"8": {"seconds": 2, "passes": True}}}]}) == {
+        "steps": [{"tests": {"8": {"passes": True}}}],
+        "task": "addition",
+    }
+
+
 def test_a_run_that_raises_is_recorded_and_run_once_more(tmp_path: Path):
     calls: list[str] = []
 
