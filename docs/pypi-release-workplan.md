@@ -1,6 +1,9 @@
 # Workplan: publish indrajala-math-rust to PyPI
 
-**Status: stage 0 needs the repo owner's PyPI and GitHub accounts; stages 1-5 are planned.**
+**Status: deferred to the 1.0 release (the owner, 2026-10-13): until then indrajala-ml and its
+dependents use the crate and each other as git submodules, and 1.0 starts semantic versioning.
+Stage 2's multi-platform CI (no publishing) is taken up earlier by the aarch64 workplan. Stage 0
+needs the repo owner's PyPI and GitHub accounts; stages 1-5 are planned.**
 
 The goal is to publish the Rust crate (the `rust/` submodule,
 [indrajala-math-rust](https://github.com/davidbarkhuizen/indrajala-math-rust)) on PyPI as
