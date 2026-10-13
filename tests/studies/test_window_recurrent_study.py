@@ -273,3 +273,14 @@ def test_a_config_names_the_matrix(tmp_path: Path):
     assert study.workers == 2 and study.settings.steps == 2 and study.settings.test_lengths == (8, 16)
     assert len(study.runs) == 2 * 2 * 2 + 2
     assert study.runs[-1].key == "all-at-once-k2-s4-m8-seed1"
+
+
+def test_status_counts_each_running_runs_own_steps(tmp_path: Path):
+    runs = [wr.RunSpec("curriculum", 1, 4, 3, 0), wr.RunSpec("all-at-once", 1, 4, 3, 0)]
+    study = wr.Study(tmp_path, SMALL, runs, 0)
+    study.results.mkdir(parents=True)
+    for spec in runs:
+        (study.results / f"{spec.key}.running").write_text("")
+    lines = wr.status(study).splitlines()
+    assert f"running: {runs[0].key}, 0 of 2 steps saved" in lines
+    assert f"running: {runs[1].key}, 0 of 1 steps saved" in lines
