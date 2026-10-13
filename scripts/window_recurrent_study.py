@@ -13,6 +13,8 @@ harness and indrajala_ml/data/addition_data.py's catalogue.
         [--snap-ratio R]
     python scripts/window_recurrent_study.py explore CONFIG.json [--n N ...] [--json FILE] [--workers W]
     python scripts/window_recurrent_study.py compare ORIGINAL_DIR RERUN_DIR
+    python scripts/window_recurrent_study.py long-test NETWORK.json [...] [--task T] [--n N ...] [--properties ID ...]
+        --out DIR [--workers W]
     python scripts/window_recurrent_study.py networks CONFIG.json
     python scripts/window_recurrent_study.py verdicts CONFIG.json --certificates DIR --strict DIR [--long-tests DIR]
 
@@ -24,7 +26,10 @@ per finished run, then the report; it holds the machine lock, as every study. `c
 step's network and runs its task's catalogue (without the held-out property, B3 or U2) at each
 length: its properties, the samples (addition's B1-B3, A3, M1 and M5; division's U1 and U2), the
 cases per stratum (M3, M4; S1, S2) and M3 or S2 at 1, 2, 4, ..., n only (the long tests of
-docs/window-recurrent-claims-workplan.md, D9) as given. `certify` writes each saved network's
+docs/window-recurrent-claims-workplan.md, D9) as given. `long-test` is those long tests over many
+networks and W processes (at 128, 256 and 1,024 by default, the stratified distances doubling), each
+network's results as DIR/<run>-step-<j>.json (`check --json`'s), a network already there skipped,
+a line each of its cases and failures. `certify` writes each saved network's
 certificate against its task's machine (indrajala_ml/studies/window_recurrent_certificate.py) as
 DIR/<run>-<step>.json and prints a line for each, over W processes; --snap-ratio 1 certifies the
 network's own snaps only, branching no near tie (strict, D3 as first written). `compare` is C0's check
@@ -229,12 +234,10 @@ import functools
 import json
 import multiprocessing
 import sys
-import time
 from pathlib import Path
 
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.measurement import machine_lock
-from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
@@ -257,6 +260,13 @@ def main(argv: list[str]) -> int:
     check.add_argument("--per-stratum", type=int, default=ad.PER_STRATUM, help="the stratified properties' per stratum")
     check.add_argument("--doubling", action="store_true", help="M3 (S2) at 1, 2, 4, ..., n only")
     check.add_argument("--json", type=Path, help="write each length's results and seconds to this file")
+    long = commands.add_parser("long-test")
+    long.add_argument("networks", type=Path, nargs="+")
+    long.add_argument("--task", default=wt.ADDITION.name, help="the networks' task (window_tasks.task_named)")
+    long.add_argument("--n", type=int, nargs="+", default=list(wr.LONG_LENGTHS), help="the lengths")
+    long.add_argument("--properties", nargs="+", help="these properties only (default: all but the held-out one)")
+    long.add_argument("--out", type=Path, required=True, help="write each network's results here")
+    long.add_argument("--workers", type=int, default=1)
     certify = commands.add_parser("certify")
     certify.add_argument("networks", type=Path, nargs="+")
     certify.add_argument("--task", default=wt.ADDITION.name, help="the networks' task (window_tasks.task_named)")
@@ -283,29 +293,28 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "check":
-        task = wt.task_named(args.task)
-        catalogue = task.catalogue(args.sampled, ad.RELATION_SAMPLED, args.per_stratum, doubling=args.doubling)
-        properties = [
-            p for p in wr.test_properties(task, catalogue) if args.properties is None or p.id in args.properties
-        ]
-        network = load_network(str(args.network))
-        model = wr.WindowModel(network, network.columns, task)
-        results: dict[str, object] = {}
-        for n in args.n:
-            start = time.perf_counter()
-            checked = model.evaluate(n, properties)
-            for result in checked:
-                print(
-                    f"n {n}, {result.id}: {result.passed}/{result.cases}"
-                    + ("" if result.holds else f", e.g. {result.failures[0]}"),
-                    flush=True,
-                )
-            results[str(n)] = {
-                "properties": {r.id: task.result_json(r) for r in checked},
-                "seconds": time.perf_counter() - start,
-            }
+        long = wr.long_test(
+            args.network,
+            wt.task_named(args.task),
+            args.n,
+            args.properties,
+            args.sampled,
+            args.per_stratum,
+            args.doubling,
+            log=lambda line: print(line, flush=True),
+        )
         if args.json is not None:
-            args.json.write_text(json.dumps({"network": str(args.network), "lengths": results}, indent=1))
+            args.json.write_text(json.dumps(long, indent=1))
+        return 0
+    if args.command == "long-test":
+        args.out.mkdir(parents=True, exist_ok=True)
+        context = multiprocessing.get_context("forkserver")
+        with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:
+            test = functools.partial(
+                wr.long_test_file, out=args.out, task_name=args.task, lengths=args.n, properties=args.properties
+            )
+            for line in pool.map(test, args.networks):
+                print(line, flush=True)
         return 0
     if args.command == "certify":
         if args.out is not None:

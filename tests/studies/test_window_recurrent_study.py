@@ -459,6 +459,29 @@ def test_verdicts_count_each_cell_by_its_results_certificates_and_long_tests(tmp
     assert f"| curriculum | 1 | 4 | 3 | 3 | {two} | - | - |" in text and "long-tested" not in text
 
 
+def test_a_long_test_writes_each_length_and_resumes(tmp_path: Path):
+    """long-test: a network's properties at each length, as check --json; a network done before is skipped."""
+    settings = dataclasses.replace(SMALL, max_epochs=1, test_lengths=(3,), sampled=50, per_stratum=5)
+    spec = wr.RunSpec("curriculum", 1, 4, 3, 0)
+    study = wr.Study(tmp_path / "study", settings, [spec], 0)
+    wr.run(study, log=lambda line: None)
+    path = wr.last_networks(study)[spec.key]
+    lines: list[str] = []
+    long = wr.long_test(path, wt.ADDITION, (8, 12), ["M3", "B1"], sampled=30, per_stratum=2, log=lines.append)
+    assert long["network"] == str(path) and set(long["lengths"]) == {"8", "12"}
+    m3 = long["lengths"]["8"]["properties"]["M3"]
+    assert set(long["lengths"]["8"]["properties"]) == {"B1", "M3"}
+    assert m3["cases"] == 2 * len(ad.doubling_distances(8)) and len(lines) == 4
+    out = tmp_path / "long"
+    out.mkdir()
+    line = wr.long_test_file(path, out, wt.ADDITION.name, (4,), ["M3"])
+    written = json.loads((out / f"{spec.key}-step-2.json").read_text())
+    cases, failures = wr.long_test_failures(written)
+    assert line.startswith(f"{spec.key}-step-2: {cases:,} cases, ") and cases == 1_000 * len(ad.doubling_distances(4))
+    assert ("every case passed" in line) == (not failures)
+    assert wr.long_test_file(path, out, wt.ADDITION.name, (4,), ["M3"]) == f"{spec.key}-step-2: done before"
+
+
 def test_e6s_windows_drop_the_attention_or_every_block():
     def inner(specs: list[Any]) -> list[Any]:
         return [part for spec in specs for part in (spec.body if isinstance(spec, Residual) else (spec,))]

@@ -734,6 +734,61 @@ def long_test_failures(long_test: Mapping[str, Any]) -> tuple[int, list[str]]:
     return cases, failures
 
 
+LONG_LENGTHS = (128, 256, 1024)  # D9
+
+
+def long_test(
+    path: Path,
+    task: wt.Task,
+    lengths: Sequence[int] = LONG_LENGTHS,
+    properties: Sequence[str] | None = None,
+    sampled: int = ad.SAMPLED,
+    per_stratum: int = ad.PER_STRATUM,
+    doubling: bool = True,
+    log: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """
+    A saved network's tests at each length: its task's catalogue (sized; the stratified distances
+    1, 2, 4, ..., n only when doubling, D9) without the held-out property, these properties only
+    when given; each length's results and seconds, a line a property to log.
+    """
+    catalogue = task.catalogue(sampled, ad.RELATION_SAMPLED, per_stratum, doubling=doubling)
+    tested = [p for p in test_properties(task, catalogue) if properties is None or p.id in properties]
+    network = load_network(str(path))
+    model = WindowModel(network, network.columns, task)
+    results: dict[str, Any] = {}
+    for n in lengths:
+        start = time.perf_counter()
+        checked = model.evaluate(n, tested)
+        if log is not None:
+            for result in checked:
+                failure = "" if result.holds else f", e.g. {result.failures[0]}"
+                log(f"n {n}, {result.id}: {result.passed}/{result.cases}{failure}")
+        results[str(n)] = {
+            "properties": {r.id: task.result_json(r) for r in checked},
+            "seconds": time.perf_counter() - start,
+        }
+    return {"network": str(path), "lengths": results}
+
+
+def long_test_file(
+    path: Path, out: Path, task_name: str, lengths: Sequence[int], properties: Sequence[str] | None
+) -> str:
+    """
+    The long tests of one network into out/<run>-step-<j>.json, unless that file is there already
+    (a stopped pass resumes); a line of its cases and failures.
+    """
+    name = network_name(path)
+    target = out / f"{name}.json"
+    if target.exists():
+        return f"{name}: done before"
+    long = long_test(path, wt.task_named(task_name), lengths, properties)
+    _write_json(target, long)
+    cases, failures = long_test_failures(long)
+    seconds = sum(length["seconds"] for length in long["lengths"].values())
+    return f"{name}: {cases:,} cases, " + (", ".join(failures) or "every case passed") + f"; {seconds:.0f} s"
+
+
 def verdicts(study: Study, branched: Path, strict: Path, long_tests: Path | None = None) -> str:
     """
     A study's findings tables from its results, its certificates (branched in one directory, strict
