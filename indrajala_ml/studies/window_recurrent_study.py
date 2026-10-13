@@ -7,7 +7,9 @@ A run is one task, arm, window size k, state width s, code count m and seed: W11
 causal attention blocks of 2 heads, each read the state through a StateInput, FFN width 32;
 embedding the task's tokens, an output of its classes) beside a WindowRecurrence(s, Codes(m)), on
 the Rust backend, under Adam. m None is a continuous state (WindowRecurrence(s, None), the claims
-workplan's E2): its run has no codes to count (codes_used None) and its key says "continuous".
+workplan's E2): its run has no codes to count (codes_used None) and its key says "continuous". A
+run's window may instead be one of E6's baselines (WINDOWS: "linear", no blocks; "ffn", the blocks
+without attention), its key and the report's cell naming it.
 
 A case of n columns is read at an alignment a (W6-i): a zero columns, the n column tokens in the
 task's reading order (addition's candidate 1's, 9 a_t + 3 b_t + c_t, least significant first), and
@@ -103,11 +105,52 @@ def window_specs(task: wt.Task) -> list[LayerSpec]:
     ]
 
 
-def build(task: wt.Task, k: int, s: int, m: int | None, seed: int) -> Any:
-    """A run's network: m codes, or a continuous state for m None (the claims workplan's E2)."""
+def _output(task: wt.Task) -> list[LayerSpec]:
+    return [LayerNorm(), Dense(task.machine.classes, output=True, activation="softmax", loss="cross_entropy")]
+
+
+def linear_window_specs(task: wt.Task) -> list[LayerSpec]:
+    """
+    E6's baseline (the claims workplan, D21): no blocks, the state added to the embedded tokens and
+    one linear residual (a StateInput stands before a residual block), then the output layer; no
+    nonlinearity but the LayerNorms, so the recurrence does the step's work.
+    """
+    return [
+        Embedding(task.machine.tokens, D),
+        Position(),
+        StateInput(),
+        Residual((LayerNorm(), Dense(D, activation="linear", bias=True))),
+        *_output(task),
+    ]
+
+
+def ffn_window_specs(task: wt.Task) -> list[LayerSpec]:
+    """E6's attention control (D21): W11's window without its attention, the state before each FFN."""
+    blocks: list[LayerSpec] = []
+    for _ in range(BLOCKS):
+        blocks += [
+            StateInput(),
+            Residual((LayerNorm(), Dense(FFN, activation="relu"), Dense(D, activation="linear", bias=True))),
+        ]
+    return [Embedding(task.machine.tokens, D), Position(), *blocks, *_output(task)]
+
+
+TRANSFORMER = "transformer"
+WINDOWS: dict[str, Callable[[wt.Task], list[LayerSpec]]] = {
+    TRANSFORMER: window_specs,
+    "linear": linear_window_specs,
+    "ffn": ffn_window_specs,
+}
+
+
+def build(task: wt.Task, k: int, s: int, m: int | None, seed: int, window: str = TRANSFORMER) -> Any:
+    """
+    A run's network: its window (WINDOWS: W11's transformer, or E6's), and m codes or a continuous
+    state for m None (the claims workplan's E2).
+    """
     codes = None if m is None else Codes(m)
     return WindowRecurrentRustArrayNetwork.randomized(
-        (k,), window_specs(task), WindowRecurrence(s, codes), Adam(), seed=seed
+        (k,), WINDOWS[window](task), WindowRecurrence(s, codes), Adam(), seed=seed
     )
 
 
@@ -270,13 +313,20 @@ class RunSpec:
     m: int | None  # None: a continuous state (E2)
     seed: int
     task: str = wt.ADDITION.name
+    window: str = TRANSFORMER
 
     @property
     def key(self) -> str:
-        """The run's name; an addition run's has no task (the matrix's keys)."""
+        """The run's name; an addition run's has no task, a transformer window's no window (the matrix's keys)."""
         prefix = "" if self.task == wt.ADDITION.name else f"{self.task}-"
+        window = "" if self.window == TRANSFORMER else f"{self.window}-"
         state = "continuous" if self.m is None else f"m{self.m}"
-        return f"{prefix}{self.arm}-k{self.k}-s{self.s}-{state}-seed{self.seed}"
+        return f"{prefix}{self.arm}-{window}k{self.k}-s{self.s}-{state}-seed{self.seed}"
+
+    @property
+    def label(self) -> str:
+        """The arm, with its window when it isn't the transformer (the report's cells)."""
+        return self.arm if self.window == TRANSFORMER else f"{self.arm} ({self.window} window)"
 
     def step_counts(self, settings: Settings) -> list[list[int]]:
         """Each step's data window counts."""
@@ -416,7 +466,7 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
             continue
         if network is None:
             network = (
-                build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed)
+                build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed, spec.window)
                 if step == 1
                 else load_network(str(steps_directory / f"step-{step - 1}.network.json"))
             )
@@ -429,11 +479,14 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
         "key": spec.key,
         "task": spec.task,
         "arm": spec.arm,
+        "window": spec.window,
         "k": spec.k,
         "s": spec.s,
         "m": spec.m,
         "seed": spec.seed,
-        "parameters": parameter_count(network or build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed)),
+        "parameters": parameter_count(
+            network or build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed, spec.window)
+        ),
         "steps": steps,
         "break": last["break"],
         "works": last["break"] >= WORKS,
@@ -466,8 +519,8 @@ def load_config(path: Path) -> Study:
     """
     A study's JSON config: "directory" (results/ and models/ under it), "workers", "task" (default
     addition; window_tasks.task_named), the Settings' fields, and "matrix", a list of {"arm" (default
-    "curriculum"), "k", "s", "m"}, each a list of values, every combination run with every seed;
-    an m of null is a continuous state.
+    "curriculum"), "window" (default "transformer"; WINDOWS), "k", "s", "m"}, each of the last three a
+    list of values, every combination run with every seed; an m of null is a continuous state.
     """
     config = json.loads(path.read_text())
     fields = {k: config[k] for k in Settings.__dataclass_fields__ if k in config}
@@ -479,8 +532,10 @@ def load_config(path: Path) -> Study:
     for cell in config["matrix"]:
         arm = cell.get("arm", "curriculum")
         assert arm in ARMS, f"an arm is one of {ARMS}; got {arm!r}"
+        window = cell.get("window", TRANSFORMER)
+        assert window in WINDOWS, f"a window is one of {tuple(WINDOWS)}; got {window!r}"
         runs += [
-            RunSpec(arm, k, s, m, seed, task)
+            RunSpec(arm, k, s, m, seed, task, window)
             for k in cell["k"]
             for s in cell["s"]
             for m in cell["m"]
@@ -501,7 +556,8 @@ PROVENANCE = ("commit", "crate", "machine", "attempts")
 def comparable(result: dict[str, Any]) -> dict[str, Any]:
     """
     A result without what a rerun may change: its timings (every field named "seconds" or ending in
-    "_seconds"), its provenance and attempts; a result from before the task field (E1's) is addition's.
+    "_seconds"), its provenance and attempts; a result from before the task field (E1's) is addition's,
+    and one from before the window field a transformer window's.
     """
 
     def strip(value: Any) -> Any:
@@ -514,6 +570,7 @@ def comparable(result: dict[str, Any]) -> dict[str, Any]:
 
     kept = strip({k: v for k, v in result.items() if k not in PROVENANCE})
     kept.setdefault("task", wt.ADDITION.name)
+    kept.setdefault("window", TRANSFORMER)
     return kept
 
 
@@ -745,7 +802,7 @@ def report(study: Study) -> str:
     for spec in study.runs:
         result = results.get(spec.key)
         if result is not None and "error" not in result:
-            cells.setdefault((spec.arm, spec.k, spec.s, spec.m), []).append(result)
+            cells.setdefault((spec.label, spec.k, spec.s, spec.m), []).append(result)
     summary: list[list[str]] = []
     runs: list[list[str]] = []
     cost: list[list[str]] = []
