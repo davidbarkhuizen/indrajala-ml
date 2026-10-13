@@ -157,7 +157,25 @@ branched, 2.9 h strict; a `k` 4 network 115-689 s branched, 74-759 s strict.
   windows (22, 18, 6 and 7 networks), so every failure shows within 4 windows. Their machines
   minimise to 2-9 states.
 
-LONG TESTS: to write when jebel's run ends.
+The long tests (D9), on jebel: `check --n 128 256 1024 --properties B1 M3 --doubling` on the 59
+networks certified or near a miss (a break of 12 or more): the 52 certified, the 2 counterexample
+networks and 5 more not certified. B1's 100,000 cases at each length and M3's 1,000 at each
+distance 1, 2, 4, ... `n`: 328,000 cases a network, 19.35 M in all. indrajala-ml e1b5be3 (#704's
+branch; its package as 35175ea's), 7 workers, 2026-10-13 09:38 to 14:00, in
+`data/window-recurrent/long-tests/` (a `.json` and a `.log` a network, listed with their sha256 in
+`data/window-recurrent/long-tests.sha256`, itself sha256 4f3542f4...9666ec77), log
+`data/window-recurrent-long-tests.log` (sha256 c5a5869d...35b49106; its "exit" figures are
+always 0, a shell slip: read each network's `.log` and `.json`).
+
+- **Every certified network passes every case**: the 48 robustly certified and the 4 certified
+  only strictly, 17.06 M cases, none wrong. The certificate is borne out where it can be tested.
+- Every network that fails a long test is one the certificate rejects: the 5 not certified fail
+  B1 at every length (1-453 of 100,000 at 1,024), but for matrix `k4-s4-m16-seed3` at 128,
+  and one of them an M3 case too (matrix `k4-s16-m16-seed1` at 256).
+- **The long tests miss what the certificate finds.** Of the 2 counterexample networks, control
+  `all-at-once-k4-s16-m16-seed2` fails 1 case of 328,000 (B1 at 1,024) and matrix
+  `curriculum-k4-s4-m8-seed2` passes all 328,000, though it is wrong at 12 columns: a sampled test,
+  however long, doesn't establish working.
 
 Per cell, its networks working (W10), certified and robustly certified, of 5:
 
