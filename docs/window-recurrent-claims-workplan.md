@@ -4,7 +4,9 @@
 our claims/findings"), after the matrix (stage 9 of
 [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md)) and while its control
 ran. Decisions D1-D20 settled (D13 and D14 by the owner, the rest under the owner's standing
-delegation), each with its options' pros and cons. Stages 1-5 done (stage 2 refined D3's snap margin: a near tie branches).** The literature it answers to is in
+delegation), each with its options' pros and cons. Stages 1-5 done (stage 2 refined D3's snap margin: a near tie branches). E7' (C7'; D23-D26)
+added 2026-10-13 at the owner's request, after E7's design flaw (p 7 at `m` 32 has fewer codes
+than states), with D23 making a feasibility check a rule for every cell.** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -42,6 +44,7 @@ any run.
 | **C4** | The curriculum isn't needed: training on 1-3 windows at once works as often (the control: 12 of 15 against 12 of 15, on about 16 times fewer examples at `k` 4), so the recurrence, not the schedule, generalises | E4, the arms | the arms' working rates differ by D4's test (then the claim is the difference, whichever way) |
 | **C5** | The seed decides: at a fixed configuration the working rate is a stable fraction, measured with its interval | E3 and E4's 20 seeds a cell | (a measurement, not a hypothesis: reported with intervals) |
 | **C7** | The method isn't addition's: the same design learns modular division, `(a / b) mod p` of two long base-3 numbers, and its learned machine certifies exactly against the modular automaton (`p^2` states), at every length | E7, the second task (D14-D17) | no network certifies at either `p` |
+| **C7'** | With enough codes the method learns modular division: at `k` 1 and about 5 and 10 times as many codes as the minimal automaton's states, some networks certify against it at every length, at both `p` | E7', modular division with enough codes (D23-D26) | no network certifies at either `p` |
 | **C6** | Exact on short sums isn't generalising: failing runs reach state codes at long lengths that training never produced (Buitrago Ruiz & Gu's unexplored states) | E5, from saved networks | failing runs' codes at 8 columns are all codes seen at the check lengths |
 
 C0, before all of them: **the runs reproduce.** The harness is deterministic (seeded generators,
@@ -180,6 +183,50 @@ modular automaton, both verdicts (D13), and the long tests on every certified ne
 
 **Analysis.** Per cell, the working rate and the certified rate; every certified machine's
 minimised size against `p^2`; the codes used against the states needed.
+
+**A flaw in E7's design (found 2026-10-13, during its p 7 runs).** "`m` 32 and 64 (more codes
+than states)" is false at `p` 7, `m` 32: the modular automaton minimises to exactly `p^2` states
+(25 at `p` 5, 49 at `p` 7; checked by partition refinement on `window_tasks.modular_machine`),
+so a 32-code network can't be it, and those 20 runs can't certify. D20's "room for 49 states and
+32-64 codes" missed it too. E7 runs to the end as registered (stopping it would have saved about
+as much as it lost); its findings report the cells as a negative control. The other cells have
+1.3 and 2.6 times the states' codes, the low end: on addition the matrix's pooled curriculum runs
+worked 10 of 30 at 1.3 times (`m` 4), 16 of 30 at 2.7 and 19 of 30 at 5.3 (post hoc, not C3's
+test: Cochran-Armitage p 0.028). D23 makes the check a rule; E7' is the test E7 meant to be.
+
+### E7'. Modular division with enough codes (C7'; D23-D26)
+
+**Design.** E7's task, harness, catalogue (D18), certificate (D17) and settings, changing only
+the codes and `k`: `p` 5 and 7; `k` 1; the curriculum and all-at-once arms; `s` 16 (D20); `m` at
+about 5 and 10 times the minimal automaton's states (D24); 10 seeds a cell: 2 x 2 x 2 x 10 = 80
+runs.
+
+**Feasibility (D23), stated per cell:**
+
+| `p` | minimal states | reachable within | told apart within | `m` (codes / states) |
+| --- | --- | --- | --- | --- |
+| 5 | 25 | 2 columns | 1 column | 128 (5.1), 256 (10.2) |
+| 7 | 49 | 2 columns | 1 column | 256 (5.2), 512 (10.4) |
+
+Every state is reachable and every pair of states gives different outputs within the first check
+length, so the check can see the whole automaton. A snap over 512 codes in 16 units has room
+(codes are free vectors; addition's working runs used 14 of 16). The budget: E7's epoch time
+doesn't depend on `m` (5.1 s at `m` 32 and 5.2 s at 64, `k` 1 all-at-once, `p` 5; 9.9 and 10.0 s
+at `k` 4 curriculum), so more codes cost epochs, not time per epoch.
+
+**Why `k` 1 only.** From E7's step records (2026-10-13 19:40: p 5 complete, p 7 part-way), every
+`k` 4 run failed to fit even its training lengths, at both `m`
+and both `p` (best screens 0.11-0.34), while `k` 1 nearly worked: the curriculum passed steps 1
+and 2 every time and plateaued at step 3 with best screens 0.83-1.0; all-at-once reached
+0.80-0.996. More codes can't help a window that can't fit four columns' transitions, so `k` 4 is
+a question about the window's capacity, not the codes' (D25).
+
+**Measures and analysis.** As E7's: works, the break, codes used; both certificates (D13);
+the long tests U1, S1 and S2 on every certified network (D22); per cell the working and
+certified rates with Wilson intervals; every certified machine's minimised size against `p^2`.
+C7' is refuted if no network certifies at either `p`. The 5 against 10 times comparison per `p`
+and arm is Fisher's exact test (D4), reported as a measurement on the second task (C3's
+question), not a registered claim.
 
 ## Decisions
 
@@ -425,6 +472,45 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     Cons: a final state a sample of 100,000 rarely ends in goes untested at long lengths.
   - (c) U1 alone. Pros: cheapest. Cons: neither the long undefined runs nor the final states
     tested past the check lengths.
+- **D23. Every cell must be able to succeed (the owner's rule, 2026-10-13: "always check that
+  our conditions could at least result in success... unless there is some other sensible
+  reason"). Settled: (a).**
+  - (a) *Chosen.* Before a cell is configured, its necessary conditions are computed and written
+    beside it: the target's minimal state count against `m`; that every state is reachable and
+    every pair told apart within the check lengths; the window and state width against the
+    columns a window must carry; the budget from measured epoch times. A cell below a bound is
+    dropped unless kept for a stated reason (a negative control, a threshold probe), recorded
+    with it. Pros: no compute spent on outcomes known in advance; the bound makes a failure
+    interpretable. Cons: a minimisation and a few probes per new task.
+  - (b) Check by eye at review. Pros: no procedure. Cons: what E7 did; it missed `m` 32 < 49.
+- **D24. E7''s code counts. Settled: (a).**
+  - (a) *Chosen.* About 5 and 10 times the minimal states (128 and 256 at `p` 5, 256 and 512 at
+    `p` 7). Pros: 5 times is where addition worked best (5.3 at `m` 16), 10 times asks whether
+    more still helps; both far above E7's 1.3-2.6, so a failure no longer reads as too few codes.
+    Cons: 512 codes is a large codebook (training's codes losses over more vectors).
+  - (b) 5 times only (40 runs). Pros: half the runs. Cons: a failure at 5 times would leave
+    open whether more codes help.
+  - (c) A ladder from 1.3 to 10 times. Pros: the whole curve on the second task. Cons: two to
+    three times the runs for a curve C7' doesn't need.
+- **D25. E7''s window: `k` 1 only. Settled: (a).**
+  - (a) *Chosen.* `k` 1, both arms. Pros: the `k` E7 shows can fit (D23's budget condition);
+    E7's runs at `k` 1 are the comparison; about 3-8 h of `jebel`. Cons: says nothing about
+    longer windows on this task.
+  - (b) Also `k` 4 at E7''s codes. Pros: comparable with E7 cell for cell. Cons: E7's `k` 4 runs
+    never fit their training lengths at any `m` (best screens 0.11-0.34): D23 drops them, since
+    more codes can't fix a window that can't fit.
+  - (c) Also `k` 4 with a larger window. Pros: asks the capacity question directly. Cons: a
+    different network, so a different claim; it belongs to its own experiment, after E7''s.
+- **D26. E7''s recipe and seeds. Settled: (a).**
+  - (a) *Chosen.* The matrix's and E7's settings unchanged (`max_epochs` 200, patience 30, rate
+    0.003, 3 steps), 10 seeds a cell. Pros: one change from E7 (the codes), so a difference is
+    the codes'; 10 seeds give intervals half as wide as E7's 5 at little cost (`k` 1 runs took
+    7-15 minutes in E7). Cons: if training needs more epochs at 49 states, E7' won't show it.
+  - (b) A longer budget (`max_epochs` 400, patience 60). Pros: rules out an early stop. Cons:
+    two changes at once; E7's `k` 1 runs stopped on plateaus, not the budget (two `budget` stops in
+    E7's step records, both at `k` 4), so the evidence doesn't ask for it.
+  - E7's final analysis (stage 6) may still change this: if its certificates or step records show
+    runs cut off while improving, (b) is adopted and recorded here before E7' starts, never after.
 
 ## Stages
 
@@ -467,6 +553,9 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    `m` 16 and 8 of those cells; seeds 0-19), the matrix's settings otherwise; 6 workers. Its
    seeds 0-4 at the matrix's cells (30 runs) and the control's (10) are those runs again, same
    keys and settings (a test checks it), so C0 compares their result files.
+7a. **E7' on `jebel`** (C7'; D23-D26), after stage 7 and E7's findings: `scripts/window_recurrent_e7_prime_p5.json` and `_p7.json`, 80 runs at `k` 1 (40 a `p`), E7's settings
+   with the codes of D24 and 10 seeds; a test checks every cell's `m` against its target's
+   minimal state count (D23). Then E7's analysis: certified and long-tested, findings.
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
    **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
    `s` 4 and `k` 1 `s` 16, a continuous state, seeds 0-19, E3's settings; its keys say
@@ -496,6 +585,7 @@ evaluation rate:
 | E2 + E6 | 40 continuous + 60 baseline runs | `jebel` | about 8 h (4-15) |
 | E5 | saved networks only | `pyramidon` | under 1 h |
 | E7 | 2 `p` x 2 `k` x 2 `m` x 2 arms x 5 seeds = 80 runs, certified | `jebel` | about 8 h (4-15), longer if 49 states train slowly |
+| E7' | 2 `p` x 2 `m` x 2 arms x 10 seeds at `k` 1 = 80 runs, certified | `jebel` | about 5 h (3-8): E7's `k` 1 runs took 7-15 minutes; more codes, more epochs |
 
 About 34 hours of `jebel` in three sittings, the package change of stage 4 and the harness
 change of stage 5.
