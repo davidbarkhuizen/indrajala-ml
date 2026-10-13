@@ -2,9 +2,8 @@
 
 **Status: D1-D3 settled by the owner (2026-10-13); D4-D9 settled (2026-10-13) for extensibility,
 speed and production; D10 settled by the owner (2026-10-13): the Pi is `litshe`, on wired Ethernet; its active
-cooler and NVMe drive are on the way. Not started. Stage 1's full test run needs the demo
-split's stage 2 ([demos-split-workplan.md](demos-split-workplan.md)), so the Pi needs no
-matplotlib; its build, golden run and comparison don't.**
+cooler and NVMe drive are on the way. Not started. The demo split
+([demos-split-workplan.md](demos-split-workplan.md)) is done, so the Pi needs no matplotlib.**
 
 indrajala-ml and the crate run on aarch64, tested and timed on a Raspberry Pi 5 (8 GB). The crate
 stays **bit-identical across architectures**: a Rust-backend network trains to the same bits on

@@ -7,7 +7,6 @@ option="${1:-}"
 venv_root=".venv"
 # Not cargo: rust/'s rust-toolchain.toml pins the Rust toolchain, which only rustup honours
 # (require_rustup).
-os_packages="python3-tk"
 rust_crate_root="rust"
 # Pinned here, not in requirements.txt (a pip-compile lock of the package's own dependencies):
 # the build tool for rust/, so CI's cached venv and wheel and a local setup all build with the
@@ -23,15 +22,7 @@ clean () {
 
     rm -rf .pytest_cache
     rm -rf indrajala_ml/__pycache__
-    find indrajala_ml/demos -name __pycache__ -type d -prune -exec rm -rf {} +
     rm -rf tests/__pycache__
-}
-
-install_os_packages () {
-
-    echo "installing os packages ..."
-    sudo apt-get install -y $os_packages
-    echo "... installed os packages"
 }
 
 create_venv () {
@@ -135,26 +126,19 @@ install_rust_wheel () {
 setup () {
 
     # The flags are for CI:
-    # --no-os-packages: python3-tk isn't used there (apt installs it into the system python,
-    #   not setup-python's), so CI skips apt.
     # --rust-wheel-dir <dir>: install rust/ from a cached wheel (see install_rust_wheel)
     #   instead of `maturin develop`.
     # --no-data: skip fetching the datasets (the lint job, which runs no tests).
-    local os_packages=true
     local rust_wheel_dir=""
     local data=true
     while [ "$#" -gt 0 ]; do
         case "$1" in
-            --no-os-packages) os_packages=false; shift ;;
             --rust-wheel-dir) rust_wheel_dir="$2"; shift 2 ;;
             --no-data) data=false; shift ;;
             *) usage; exit 1 ;;
         esac
     done
 
-    if [ "$os_packages" = true ]; then
-        install_os_packages
-    fi
     init_submodules
     create_venv
     activate_venv
@@ -202,15 +186,8 @@ lint () {
     deactivate_venv
 }
 
-demo () {
-
-    activate_venv
-    python3 -m indrajala_ml.demos.menu "$@"
-    deactivate_venv
-}
-
 usage () {
-    echo "usage: invoke [ clean | setup [--no-os-packages] [--rust-wheel-dir <dir>] [--no-data] | build-rust | fetch-data | test [pytest-path ...] | lint | demo [demo-number] ]"
+    echo "usage: invoke [ clean | setup [--rust-wheel-dir <dir>] [--no-data] | build-rust | fetch-data | test [pytest-path ...] | lint ]"
 }
 
 case "$option" in
@@ -244,11 +221,6 @@ case "$option" in
 
     lint)
         lint
-    ;;
-
-    demo)
-        shift
-        demo "$@"
     ;;
 
     *)

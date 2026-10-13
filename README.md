@@ -22,7 +22,7 @@ pinned submodule commit to the latest upstream `main`: `git submodule update --r
 
 ## Usage
 
-Requires Python >= 3.14, a Debian/Ubuntu host (`setup` apt-installs `python3-tk`) and
+Requires Python >= 3.14 and
 [rustup](https://rustup.rs): `rust/rust-toolchain.toml` pins the Rust toolchain, which rustup
 installs on the first build (a distro `cargo` ignores the pin).
 
@@ -30,11 +30,13 @@ installs on the first build (a distro `cargo` ignores the pin).
 ./cli setup          # submodule, .venv, pip deps, release build of rust/, fetch MNIST and the text corpora
 ./cli test           # pytest tests/ and rust/tests/ (or: ./cli test <path> ...)
 ./cli lint           # ruff check, ruff format --check, pyright
-./cli demo           # interactive demo menu
-./cli demo <n>       # run demo n directly
 ./cli build-rust     # rebuild rust/ after changing it
 ./cli fetch-data     # re-verify / re-fetch datasets
 ```
+
+The runnable demos (classifiers trained and plotted, digit recognition, drawing your own
+digits) are in [indrajala-demos](https://github.com/davidbarkhuizen/indrajala-demos), which uses
+this repository as a submodule; the library itself needs neither matplotlib nor tkinter.
 
 ## Testing
 
@@ -85,13 +87,10 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | Path | Contents |
 | --- | --- |
 | `indrajala_ml/model/` | classifier networks and their layers |
-| `indrajala_ml/demos/` | runnable demos in topic folders (linear, backprop, uci_digits, mnist, conv); `registry.py` lists them in menu order, with the measurement tools below |
 | `indrajala_ml/training/` | training loops (`train.py`), synthetic training data, run checkpoints, evaluation (disagreement rate, accuracy, confusion matrix), one-vs-rest ensemble training over multiprocessing (`ensemble_train.py`) |
 | `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; the text corpora's (`text_data.py`); `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
-| `indrajala_ml/capture/` | painted digits turned into UCI digits and MNIST inputs |
 | `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks; the per-op timing (`layer_op_timing.py`) and the conv Rust/numpy comparison (`conv_comparison.py`) the timing scripts build on, and their timing helpers (`timing.py`) |
 | `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol; `sequence_study.py`, the sequence study's; `attention_dropout_study.py`, the attention-dropout study's |
-| `indrajala_ml/graphics/` | matplotlib plotting: figures, axes, legends and series (`chart.py`), classifier plots (`classifier_plots.py`) and evaluation plots (`evaluation_plots.py`) |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
 | `scripts/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
@@ -156,8 +155,9 @@ numpy classes are the reference the Rust classes are tested against
 
 A preset is a named class for one fixed combination of specs and rule, with its own constructor
 arguments. It equals, by bits, the Sequential network of the same specs and rule
-(`tests/array_network_contract.py`, `tests/model/networks/python/test_sequential_backprop_network.py`). The demos,
-`ensemble_train.py` and saved files use the presets by name.
+(`tests/array_network_contract.py`, `tests/model/networks/python/test_sequential_backprop_network.py`). The demos
+([indrajala-demos](https://github.com/davidbarkhuizen/indrajala-demos)), `ensemble_train.py` and
+saved files use the presets by name.
 
 | Layers and rule | pure Python | numpy | Rust |
 | --- | --- | --- | --- |
@@ -931,7 +931,7 @@ test passing, and:
   implementations, pure Python included.
 - **No hot-path slowdown.** A stage that touches `learn*` or `classify_rows` is timed old against
   new with `scripts/ab.py` ([docs/measurement.md](docs/measurement.md)). It must be within noise.
-- **Public names stay.** Demos, `demos/registry.py`, `ensemble_train.py` and the tests construct
+- **Public names stay.** The demos (indrajala-demos), `ensemble_train.py` and the tests construct
   the concrete classes by name, and saved model files must still load:
   `tests/model/persistence/test_legacy_saved_models.py` loads a committed file for every class that has `save`
   (`tests/fixtures/saved_models/`, written once by `python -m tests.saved_model_fixtures`).

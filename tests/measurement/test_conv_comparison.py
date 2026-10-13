@@ -1,13 +1,7 @@
 import numpy as np
 
 from indrajala_ml.data.digits_data import load_digits_dataset
-from indrajala_ml.demos.registry import DEMOS
 from indrajala_ml.measurement import conv_comparison as demo
-
-
-def test_is_registered():
-
-    assert demo.__name__ in {info.module for info in DEMOS}
 
 
 def test_both_backends_start_from_the_same_weights_and_reach_the_same_accuracy():
