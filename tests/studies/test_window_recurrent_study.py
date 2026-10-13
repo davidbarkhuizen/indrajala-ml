@@ -17,6 +17,7 @@ import pytest
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_division_data as md
 from indrajala_ml.model.persistence.load_network import load_network
+from indrajala_ml.model.specs.layer_specs import Attention, Residual, StateInput
 from indrajala_ml.studies import inference
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
@@ -349,6 +350,7 @@ def test_differences_name_each_path():
     assert wr.comparable({"steps": [{"check_seconds": 1, "tests": {"8": {"seconds": 2, "passes": True}}}]}) == {
         "steps": [{"tests": {"8": {"passes": True}}}],
         "task": "addition",
+        "window": "transformer",
     }
 
 
@@ -419,6 +421,45 @@ def test_explore_summary_compares_failing_with_working_runs():
     summary = wr.explore_summary(explored, (8,))
     p = inference.fisher_exact(4, 1, 0, 5)
     assert f"| 8 | 4/5 | 0/5 | {p:.3g} |" in summary
+
+
+def test_e6s_windows_drop_the_attention_or_every_block():
+    def inner(specs: list[Any]) -> list[Any]:
+        return [part for spec in specs for part in (spec.body if isinstance(spec, Residual) else (spec,))]
+
+    for window in wr.WINDOWS:
+        network = wr.build(wt.ADDITION, 1, 16, 8, 0, window)
+        assert network.recurrence.codes is not None
+    transformer, linear, ffn = (inner(wr.WINDOWS[w](wt.ADDITION)) for w in ("transformer", "linear", "ffn"))
+    assert sum(isinstance(spec, Attention) for spec in transformer) == wr.BLOCKS
+    assert not any(isinstance(spec, Attention) for spec in linear + ffn)
+    assert sum(isinstance(spec, StateInput) for spec in ffn) == wr.BLOCKS
+    assert sum(isinstance(spec, StateInput) for spec in linear) == 1
+    assert all(getattr(spec, "activation", "linear") in ("linear", "softmax") for spec in linear)
+    assert wr.RunSpec("curriculum", 1, 16, 8, 0, window="linear").key == "curriculum-linear-k1-s16-m8-seed0"
+    assert wr.RunSpec("curriculum", 1, 16, 8, 0).key == "curriculum-k1-s16-m8-seed0"
+
+
+def test_a_baseline_window_run_names_its_window(tmp_path: Path):
+    settings = wr.Settings(
+        epoch_examples=64,
+        max_epochs=1,
+        patience=1,
+        screen=20,
+        steps=1,
+        test_lengths=(3,),
+        sampled=50,
+        relation_sampled=10,
+        per_stratum=5,
+        codes_cases=20,
+        seeds=1,
+    )
+    spec = wr.RunSpec("curriculum", 1, 4, 3, 0, window="ffn")
+    study = wr.Study(tmp_path, settings, [spec], 0)
+    result = wr.run(study, log=lambda line: None)[spec.key]
+    assert result["window"] == "ffn" and "| curriculum (ffn window) | 1 | 4 | 3 |" in wr.report(study)
+    # E1's results have no window field: a transformer's
+    assert wr.comparable({"key": "x"}) == {"key": "x", "task": "addition", "window": "transformer"}
 
 
 def test_a_run_that_raises_is_recorded_and_run_once_more(tmp_path: Path):
@@ -494,6 +535,15 @@ def test_e2_is_e3s_cells_with_a_continuous_state():
     e2, e3_e4 = (wr.load_config(scripts / f"window_recurrent_{name}.json") for name in ("e2", "e3_e4"))
     assert len(e2.runs) == 2 * 20 and all(spec.m is None and spec.arm == "curriculum" for spec in e2.runs)
     assert {(spec.k, spec.s) for spec in e2.runs} == {(4, 4), (1, 16)} and e2.settings == e3_e4.settings
+
+
+def test_e6_is_the_baseline_windows_at_e3s_k1_cell():
+    scripts = Path(__file__).parents[2] / "scripts"
+    e6, e3_e4 = (wr.load_config(scripts / f"window_recurrent_{name}.json") for name in ("e6", "e3_e4"))
+    cells = {(spec.window, spec.m) for spec in e6.runs}
+    assert cells == {("linear", 4), ("linear", 8), ("linear", 16), ("ffn", 8)} and len(e6.runs) == 4 * 20
+    assert all((spec.arm, spec.k, spec.s) == ("curriculum", 1, 16) for spec in e6.runs)
+    assert e6.settings == e3_e4.settings
 
 
 def test_status_counts_each_running_runs_own_steps(tmp_path: Path):

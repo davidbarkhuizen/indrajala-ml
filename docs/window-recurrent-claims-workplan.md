@@ -157,7 +157,8 @@ a candidate fix, an experiment for a later plan.
 **Design.** The recurrence alone: `k` 1, the window's transformer replaced by its embedding and
 output layer only (no attention blocks), so the GRU does the whole step, snapped, at `m` 4, 8
 and 16, 20 seeds each, the curriculum. Asks whether the transformer inside the window does
-anything at `k` 1, where it sees one column.
+anything at `k` 1, where it sees one column. As built (D21): the linear window at `m` 4, 8 and
+16, and the FFN window (the blocks without attention) at `m` 8, 80 runs.
 
 **Analysis.** Working rates against E3's `k` 1 runs at the same `m` (Fisher's exact test). The
 windows of `k` 2 and 4 need the transformer to add inside the window, so the baseline is at `k` 1
@@ -391,6 +392,26 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     ambiguous.
   - (c) Both: 160 runs. Pros: measures `s` on the second task. Cons: about 16 h of `jebel`, twice
     the plan, for a factor no claim rests on (C7 asks whether the design learns the task).
+- **D21. E6's window (stage 8). Settled: (c), under the owner's delegation.** D8's "embedding and
+  output layer only" can't stand as written: validation puts a StateInput right before a residual
+  block (W18), and at `k` 1 a window's attention reads one token, so it is a linear map. A probe
+  on `pyramidon` (2026-10-13; `k` 1 `s` 16 `m` 8, seeds 0 and 1, the matrix's settings) trained
+  each window: the full window's step 1 reproduced the matrix's bit for bit (seed 0), and the
+  matrix's runs work on both seeds (break 64); the linear window (2,835 parameters) passed steps
+  1-2 on seed 1 and reached a best screen of 0.95-0.98 at step 3, working on neither; the FFN
+  window (6,355) passed step 1 on both and failed steps 2-3 (best 0.98-0.99), working on neither.
+  Both train; neither fails for a trivial reason.
+  - (a) The linear window: the embedding, the state through one StateInput and one linear
+    residual (no nonlinearity but the LayerNorms), the output layer. Pros: D8's question as meant
+    (does the window's network do anything, or does the recurrence do the step?); no package
+    change. Cons: it removes the attention and the FFNs together, so a difference can't say which.
+  - (b) The FFN window: W11's blocks without their attention. Pros: removes exactly the
+    transformer's token mixing. Cons: at `k` 1 the attention is a linear map of one token, so (b)
+    alone barely tests the design's novel part.
+  - (c) *Chosen.* Both: (a) at `m` 4, 8 and 16 (D8's cells) and (b) at `m` 8 (the matrix's best at
+    `k` 1 `s` 16), 20 seeds each: 80 runs. Pros: (a) answers D8, (b) splits a difference between
+    the attention and the FFNs, at a quarter more runs; baseline runs that fail stop early on
+    plateaus. Cons: about 2 h more of `jebel` than (a) alone.
 
 ## Stages
 
@@ -428,7 +449,10 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
    `s` 4 and `k` 1 `s` 16, a continuous state, seeds 0-19, E3's settings; its keys say
    `continuous` where E3's say `m<m>`). The harness takes `m` null as a continuous state
-   (`WindowRecurrence(s, None)`) and records no codes for it (`codes_used` null).
+   (`WindowRecurrence(s, None)`) and records no codes for it (`codes_used` null). **E6's config
+   in:** `scripts/window_recurrent_e6.json` (D21), 80 runs at `k` 1 `s` 16, E3's settings; a cell's
+   `"window"` names its window (`WINDOWS`: `transformer`, the default; `linear`; `ffn`), and the
+   run's key carries it (`curriculum-linear-k1-s16-m8-seed0`).
 9. **E5 on `pyramidon`:** findings. **The tool in:** `scripts/window_recurrent_study.py explore
    CONFIG` (`explore_run`, `explore_summary`): every finished snapped run's last network, its codes
    over the codes property's first 1,000 cases at its check lengths and at 8, 16 and 64, the new
