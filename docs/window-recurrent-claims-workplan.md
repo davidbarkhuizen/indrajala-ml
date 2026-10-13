@@ -374,7 +374,8 @@ Settled under the owner's standing delegation, with each option's pros and cons:
   - (b) Stage 2's names for every task. Pros: one schema with E1's files. Cons: a modular
     certificate's "carries" are states of 25 or 49.
   - (c) Stage 2's names for addition, the target's for others. Cons: two schemas, a special case.
-- **D20. E7's state width `s` (stage 6). Settled: (a).** E7's design fixes `p`, the arms, `k` and
+- **D20. E7's state width `s` (stage 6). Settled: (a), the owner agreeing ("let's not run both
+  widths if we can avoid it").** E7's design fixes `p`, the arms, `k` and
   `m`, not `s`. On addition `s` made no clear difference (the matrix: 24 of 45 runs working at
   `s` 4, 21 at 16; robustly certified 21 and 17).
   - (a) *Chosen.* `s` 16 only: 80 runs. Pros: a state of 16 units has room for 49 states and 32-64
