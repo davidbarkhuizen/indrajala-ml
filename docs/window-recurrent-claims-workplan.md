@@ -5,7 +5,7 @@ our claims/findings"), after the matrix (stage 9 of
 [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md)) and while its control
 ran. Decisions D1-D20 settled (D13 and D14 by the owner, the rest under the owner's standing
 delegation), each with its options' pros and cons. Stages 1-5 done (stage 2 refined D3's snap margin: a near tie branches). E7' (C7'; D23-D26)
-added 2026-10-13 at the owner's request, after E7's design flaw (p 7 at `m` 32 has fewer codes
+added 2026-10-13 at the owner's request, to run before stage 7, after E7's design flaw (p 7 at `m` 32 has fewer codes
 than states), with D23 making a feasibility check a rule for every cell.** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
@@ -509,8 +509,9 @@ Settled under the owner's standing delegation, with each option's pros and cons:
   - (b) A longer budget (`max_epochs` 400, patience 60). Pros: rules out an early stop. Cons:
     two changes at once; E7's `k` 1 runs stopped on plateaus, not the budget (two `budget` stops in
     E7's step records, both at `k` 4), so the evidence doesn't ask for it.
-  - E7's final analysis (stage 6) may still change this: if its certificates or step records show
-    runs cut off while improving, (b) is adopted and recorded here before E7' starts, never after.
+  - Checked before E7' starts, from E7's step records (E7' runs before E7's certificates, stage
+    7a): if E7's `k` 1 steps stopped on the budget or with screens still rising at the stop, (b) is
+    adopted and recorded here first, never after.
 
 ## Stages
 
@@ -553,9 +554,14 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    `m` 16 and 8 of those cells; seeds 0-19), the matrix's settings otherwise; 6 workers. Its
    seeds 0-4 at the matrix's cells (30 runs) and the control's (10) are those runs again, same
    keys and settings (a test checks it), so C0 compares their result files.
-7a. **E7' on `jebel`** (C7'; D23-D26), after stage 7 and E7's findings: `scripts/window_recurrent_e7_prime_p5.json` and `_p7.json`, 80 runs at `k` 1 (40 a `p`), E7's settings
-   with the codes of D24 and 10 seeds; a test checks every cell's `m` against its target's
-   minimal state count (D23). Then E7's analysis: certified and long-tested, findings.
+7a. **E7' on `jebel`** (C7'; D23-D26), **before stage 7** (the owner, 2026-10-13: the second
+   task's answer first; E3/E4 wait about 5 h), as soon as E7 ends and D26's check is read from
+   E7's step records. **Configs in:** `scripts/window_recurrent_e7_prime_p5.json` and `_p7.json`,
+   80 runs at `k` 1 (40 a `p`), E7's settings with D24's codes and 10 seeds (a test checks them
+   against E7's). **D23's test in:** every committed study config's snapped cells have at least
+   their task's minimal state count of codes (each target machine is minimal with every state
+   reachable, `test_window_tasks`), E7's `p` 7 `m` 32 the one recorded exception. Then E7's
+   analysis: certified and long-tested, findings.
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
    **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
    `s` 4 and `k` 1 `s` 16, a continuous state, seeds 0-19, E3's settings; its keys say

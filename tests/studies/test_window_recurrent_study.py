@@ -605,6 +605,35 @@ def test_e6_is_the_baseline_windows_at_e3s_k1_cell():
     assert e6.settings == e3_e4.settings
 
 
+def test_e7_prime_is_e7s_k1_cells_with_five_and_ten_times_the_states_codes():
+    scripts = Path(__file__).parents[2] / "scripts"
+    for p, codes in ((5, {128, 256}), (7, {256, 512})):
+        e7_prime, e7 = (wr.load_config(scripts / f"window_recurrent_{name}_p{p}.json") for name in ("e7_prime", "e7"))
+        states = wt.task_named(f"modular-division-{p}").machine.states
+        assert {spec.m for spec in e7_prime.runs} == codes and all(5 * states <= m <= 11 * states for m in codes)
+        assert {(spec.arm, spec.k, spec.s) for spec in e7_prime.runs} == {("curriculum", 1, 16), ("all-at-once", 1, 16)}
+        assert len(e7_prime.runs) == 2 * 2 * 10 and e7_prime.settings == dataclasses.replace(e7.settings, seeds=10)
+
+
+# D23: a cell kept below its bound on purpose, and why
+BELOW_BOUND_ON_PURPOSE = {
+    ("window_recurrent_e7_p7.json", 32): "E7's design flaw, run as registered: the negative control",
+}
+
+
+def test_every_configs_codes_can_hold_its_tasks_machine():
+    """D23: every snapped cell has at least as many codes as its task's minimal machine has states
+    (each machine is minimal and every state reachable: test_window_tasks), or a recorded reason."""
+    for path in sorted((Path(__file__).parents[2] / "scripts").glob("window_recurrent_*.json")):
+        study = wr.load_config(path)
+        for spec in study.runs:
+            states = wt.task_named(spec.task).machine.states
+            if spec.m is not None and spec.m < states:
+                assert (path.name, spec.m) in BELOW_BOUND_ON_PURPOSE, (
+                    f"{path.name}: {spec.key} has {spec.m} codes for {states} states"
+                )
+
+
 def test_status_counts_each_running_runs_own_steps(tmp_path: Path):
     runs = [wr.RunSpec("curriculum", 1, 4, 3, 0), wr.RunSpec("all-at-once", 1, 4, 3, 0)]
     study = wr.Study(tmp_path, SMALL, runs, 0)
