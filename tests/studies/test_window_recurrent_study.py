@@ -151,6 +151,20 @@ def test_a_network_carrying_nothing_across_windows_fails_the_carry_at_distance()
     assert results["M3"].reach() < 8
 
 
+def test_the_adder_runs_in_chunks_of_bounded_tokens_with_the_same_sums(monkeypatch: pytest.MonkeyPatch):
+    k, n = 3, 8
+    rng = random.Random(0)
+    triples = [(rng.randrange(3**n), rng.randrange(3**n), rng.randrange(3**n)) for _ in range(50)]
+    whole = wr.WindowAdder(AddingNetwork(), k)
+    sums, codes = whole.adder(n)(triples), whole.codes_used(triples, n)
+    monkeypatch.setattr(wr, "CHUNK_TOKENS", 40)  # 3 or 4 windows of 3 columns: 3 rows a pass
+    chunked = wr.WindowAdder(AddingNetwork(), k)
+    widths = [len(rows[0][0]) * len(rows) for _, rows in chunked._chunks(triples, n)]
+    assert max(widths) <= 40 and len(widths) > len(triples) // 4
+    assert chunked.adder(n)(triples) == sums == [sum(t) for t in triples]
+    assert chunked.codes_used(triples, n) == codes
+
+
 def test_b3_is_checked_from_three_columns_and_never_at_a_test_length():
     catalogue = SMALL.catalogue()
     assert "B3" not in {p.id for p in wr.check_properties(2, catalogue)}

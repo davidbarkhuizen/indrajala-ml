@@ -9,7 +9,7 @@ harness and indrajala_ml/data/addition_data.py's catalogue.
     python scripts/window_recurrent_study.py report CONFIG.json [--md FILE]
     python scripts/window_recurrent_study.py check NETWORK.json --n N [N ...] [--properties ID ...]
         [--sampled S] [--per-stratum P] [--doubling] [--json FILE]
-    python scripts/window_recurrent_study.py certify NETWORK.json [...] [--out DIR] [--workers W]
+    python scripts/window_recurrent_study.py certify NETWORK.json [...] [--out DIR] [--workers W] [--snap-ratio R]
 
 A config names the study's directory (results/, one JSON file per run, and models/, each run's steps
 and their networks in format 2), its workers, its settings and its matrix (load_config's
@@ -19,7 +19,8 @@ step's network and runs the catalogue (without B3) at each length: its propertie
 A3's, M1's and M5's samples, M3's and M4's cases per stratum and M3 at 1, 2, 4, ..., n only (the
 long tests of docs/window-recurrent-claims-workplan.md, D9) as given. `certify` writes each saved
 network's certificate (indrajala_ml/studies/window_recurrent_certificate.py) as
-DIR/<run>-<step>.json and prints a line for each, over W processes.
+DIR/<run>-<step>.json and prints a line for each, over W processes; --snap-ratio 1 certifies the
+network's own snaps only, branching no near tie (strict, D3 as first written).
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
@@ -121,6 +122,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import functools
 import json
 import multiprocessing
 import sys
@@ -154,6 +156,9 @@ def main(argv: list[str]) -> int:
     certify.add_argument("networks", type=Path, nargs="+")
     certify.add_argument("--out", type=Path, help="write each certificate here, as <run>-<step>.json")
     certify.add_argument("--workers", type=int, default=1)
+    certify.add_argument(
+        "--snap-ratio", type=float, default=wc.SNAP_RATIO, help="near ties branch under this ratio (1: strict)"
+    )
     args = parser.parse_args(argv)
 
     if args.command == "check":
@@ -183,7 +188,11 @@ def main(argv: list[str]) -> int:
             args.out.mkdir(parents=True, exist_ok=True)
         context = multiprocessing.get_context("forkserver")
         with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:
-            for path, result in zip(args.networks, pool.map(wc.certify_file, args.networks), strict=True):
+            for path, result in zip(
+                args.networks,
+                pool.map(functools.partial(wc.certify_file, snap_ratio=args.snap_ratio), args.networks),
+                strict=True,
+            ):
                 name = f"{path.parent.name}-{path.name.removesuffix('.network.json')}"
                 print(f"{name}: {wc.summary(result)}", flush=True)
                 if args.out is not None:

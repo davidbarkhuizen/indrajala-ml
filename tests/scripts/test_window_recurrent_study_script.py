@@ -38,3 +38,10 @@ def test_certify_writes_each_networks_certificate(saved: Path, tmp_path: Path, c
     certificate = json.loads((out / "curriculum-k1-s4-m3-seed0-step-1.json").read_text())
     assert certificate["network"] == str(saved) and len(certificate["sha256"]) == 64
     assert certificate["codes"] == 3 and certificate["evaluations"] == 27 * len(certificate["reachable"])
+
+
+def test_certify_strict_records_its_snap_ratio(saved: Path, tmp_path: Path):
+    out = tmp_path / "strict"
+    assert script.main(["certify", str(saved), "--out", str(out), "--snap-ratio", "1"]) == 0
+    certificate = json.loads((out / "curriculum-k1-s4-m3-seed0-step-1.json").read_text())
+    assert certificate["snap_ratio"] == 1.0 and certificate["snap"]["short"] == 0

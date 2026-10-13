@@ -167,6 +167,11 @@ def test_a_snap_near_tie_branches_and_fails_when_the_other_code_carries_otherwis
     assert counterexample.got == [0]
 
 
+def test_strict_certifies_a_machine_wrong_only_on_a_near_tie():
+    certificate = wc.certify(CarryMachine(2, fault="snap-tie"), 3, snap_ratio=1.0)
+    assert certificate.certified and certificate.snap.short == 0 and certificate.wrong_ties == 0
+
+
 def test_a_snap_near_tie_between_copies_of_a_carry_is_certified_and_counted():
     certificate = wc.certify(CarryMachine(2, copies=2, fault="copy-tie"), 6)
     assert certificate.certified and certificate.snap.short > 0
