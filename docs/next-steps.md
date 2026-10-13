@@ -46,6 +46,7 @@ docs cite them by section:
 | Rotary position embedding (roadmap step 8) | #639 | crate #55, #668-#669, #678-#682, #688, archive #22-#23 | `git show 9b27175:docs/rotary-positions-workplan.md` |
 | Studies and timing runs sharing `jebel` (study-runs) | #670 | #673-#676, #695 | `git show 868838e:docs/study-runs-workplan.md` |
 | The smallest network that adds (the addition study) | #661 | #662-#665, #672, #677, #696, models `7748416` | `git show 8990f74:docs/addition-study-workplan.md` |
+| The demos in their own repository (the demo split) | #720 | #722-#724, indrajala-demos #1-#2 | `git show 9c50fe6:docs/demos-split-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -531,6 +532,17 @@ stay distinguishable at any distance, which bounded codes can't give.
 - **The result's `crate` field** hashed `indrajala_math_rust/__init__.py`, not the extension
   module, so the addition sweep's results all show `639a07d4bc7d`; fixed by the window-recurrent
   plan's stage 8 (`studies.common.crate_hash`), for later results only.
+
+## From the demo split
+
+The demos, the matplotlib plotting and the tkinter capture are in
+[indrajala-demos](https://github.com/davidbarkhuizen/indrajala-demos), which uses this repository
+as a submodule; the measurement tools they lived beside are in `indrajala_ml/measurement/` and
+`indrajala_ml/studies/` (`git show 9c50fe6:docs/demos-split-workplan.md`).
+
+- **At 1.0, indrajala-demos depends on the published package** (the plan's D2): until then a
+  "Bump indrajala-ml/" PR there carries each library change to the demos, and its CI runs their
+  tests against it.
 
 ## From the addition study
 
