@@ -6,7 +6,8 @@ addition, the matrix's, or modular division.
 A run is one task, arm, window size k, state width s, code count m and seed: W11's window (d 16, 3
 causal attention blocks of 2 heads, each read the state through a StateInput, FFN width 32;
 embedding the task's tokens, an output of its classes) beside a WindowRecurrence(s, Codes(m)), on
-the Rust backend, under Adam.
+the Rust backend, under Adam. m None is a continuous state (WindowRecurrence(s, None), the claims
+workplan's E2): its run has no codes to count (codes_used None) and its key says "continuous".
 
 A case of n columns is read at an alignment a (W6-i): a zero columns, the n column tokens in the
 task's reading order (addition's candidate 1's, 9 a_t + 3 b_t + c_t, least significant first), and
@@ -101,9 +102,11 @@ def window_specs(task: wt.Task) -> list[LayerSpec]:
     ]
 
 
-def build(task: wt.Task, k: int, s: int, m: int, seed: int) -> Any:
+def build(task: wt.Task, k: int, s: int, m: int | None, seed: int) -> Any:
+    """A run's network: m codes, or a continuous state for m None (the claims workplan's E2)."""
+    codes = None if m is None else Codes(m)
     return WindowRecurrentRustArrayNetwork.randomized(
-        (k,), window_specs(task), WindowRecurrence(s, Codes(m)), Adam(), seed=seed
+        (k,), window_specs(task), WindowRecurrence(s, codes), Adam(), seed=seed
     )
 
 
@@ -263,7 +266,7 @@ class RunSpec:
     arm: str
     k: int
     s: int
-    m: int
+    m: int | None  # None: a continuous state (E2)
     seed: int
     task: str = wt.ADDITION.name
 
@@ -271,7 +274,8 @@ class RunSpec:
     def key(self) -> str:
         """The run's name; an addition run's has no task (the matrix's keys)."""
         prefix = "" if self.task == wt.ADDITION.name else f"{self.task}-"
-        return f"{prefix}{self.arm}-k{self.k}-s{self.s}-m{self.m}-seed{self.seed}"
+        state = "continuous" if self.m is None else f"m{self.m}"
+        return f"{prefix}{self.arm}-k{self.k}-s{self.s}-{state}-seed{self.seed}"
 
     def step_counts(self, settings: Settings) -> list[list[int]]:
         """Each step's data window counts."""
@@ -346,8 +350,11 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
     tests: dict[str, Any] = {}
     passes: dict[int, bool] = {}
     used: set[int] = set()
+    snapped = spec.m is not None  # a continuous state has no codes to count
 
     def codes(n: int) -> set[int]:
+        if not snapped:
+            return set()
         return model.codes_used(task.property_cases(codes_property, n)[: settings.codes_cases], n)
 
     for n in lengths:
@@ -362,7 +369,7 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
         tests[str(n)] = {
             "passes": passes[n],
             "reach": task.reach(by_id[task.reach_id]),
-            "codes": sorted(test_codes),
+            "codes": sorted(test_codes) if snapped else None,
             "properties": {r.id: task.result_json(r) for r in results},
             "seconds": time.perf_counter() - start,
         }
@@ -382,7 +389,7 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
         "tests": tests,
         "break": reached,
         "window_ratio": data_windows(reached, 0, spec.k) / max(counts),
-        "codes_used": sorted(used),
+        "codes_used": sorted(used) if snapped else None,
         "train_seconds": train_seconds,
         "screen_seconds": screen_seconds,
         "check_seconds": check_seconds,
@@ -458,7 +465,8 @@ def load_config(path: Path) -> Study:
     """
     A study's JSON config: "directory" (results/ and models/ under it), "workers", "task" (default
     addition; window_tasks.task_named), the Settings' fields, and "matrix", a list of {"arm" (default
-    "curriculum"), "k", "s", "m"}, each a list of values, every combination run with every seed.
+    "curriculum"), "k", "s", "m"}, each a list of values, every combination run with every seed;
+    an m of null is a continuous state.
     """
     config = json.loads(path.read_text())
     fields = {k: config[k] for k in Settings.__dataclass_fields__ if k in config}
@@ -672,7 +680,7 @@ def report(study: Study) -> str:
     """
     results = read_results(study.results) if study.results.exists() else {}
     seeds = study.settings.seeds
-    cells: dict[tuple[str, int, int, int], list[dict[str, Any]]] = {}
+    cells: dict[tuple[str, int, int, int | None], list[dict[str, Any]]] = {}
     for spec in study.runs:
         result = results.get(spec.key)
         if result is not None and "error" not in result:
@@ -681,7 +689,7 @@ def report(study: Study) -> str:
     runs: list[list[str]] = []
     cost: list[list[str]] = []
     lengths = study.settings.test_lengths
-    for (arm, k, s, m), done in sorted(cells.items()):
+    for (arm, k, s, m), done in sorted(cells.items(), key=lambda cell: (*cell[0][:3], cell[0][3] or 0)):
         per_step = [
             f"{sum(r['steps'][j]['passes'] for r in done)} pass, breaks "
             + "/".join(str(r["steps"][j]["break"]) for r in done)
@@ -692,7 +700,7 @@ def report(study: Study) -> str:
                 arm,
                 str(k),
                 str(s),
-                str(m),
+                "continuous" if m is None else str(m),
                 str(done[0]["parameters"]),
                 f"{sum(r['works'] for r in done)}/{len(done)}" + ("" if len(done) == seeds else f" of {seeds}"),
                 "; ".join(f"step {j + 1}: {text}" for j, text in enumerate(per_step)),
@@ -712,7 +720,7 @@ def report(study: Study) -> str:
                         str(step["break"]),
                         f"{step['window_ratio']:.2f}",
                         reach,
-                        str(len(step["codes_used"])),
+                        "-" if step["codes_used"] is None else str(len(step["codes_used"])),
                     ]
                 )
                 cost.append(

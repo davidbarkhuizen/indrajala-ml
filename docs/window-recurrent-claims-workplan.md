@@ -425,6 +425,10 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    seeds 0-4 at the matrix's cells (30 runs) and the control's (10) are those runs again, same
    keys and settings (a test checks it), so C0 compares their result files.
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
+   **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
+   `s` 4 and `k` 1 `s` 16, a continuous state, seeds 0-19, E3's settings; its keys say
+   `continuous` where E3's say `m<m>`). The harness takes `m` null as a continuous state
+   (`WindowRecurrence(s, None)`) and records no codes for it (`codes_used` null).
 9. **E5 on `pyramidon`:** findings.
 10. **The report** (D11), the README section, the parent's stage 10 marked done; this workplan
    retired.

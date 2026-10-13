@@ -16,6 +16,7 @@ import pytest
 
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_division_data as md
+from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
 
@@ -350,6 +351,33 @@ def test_differences_name_each_path():
     }
 
 
+def test_a_continuous_run_trains_without_codes(tmp_path: Path):
+    """E2: m None builds a continuous state; its run counts no codes and the report says so."""
+    settings = wr.Settings(
+        epoch_examples=64,
+        max_epochs=1,
+        patience=1,
+        screen=20,
+        steps=2,
+        test_lengths=(3,),
+        sampled=50,
+        relation_sampled=10,
+        per_stratum=5,
+        codes_cases=20,
+        seeds=1,
+    )
+    spec = wr.RunSpec("curriculum", 1, 4, None, 0)
+    assert spec.key == "curriculum-k1-s4-continuous-seed0"
+    study = wr.Study(tmp_path, settings, [spec], 0)
+    result = wr.run(study, log=lambda line: None)[spec.key]
+    assert result["m"] is None and all(step["codes_used"] is None for step in result["steps"])
+    assert result["steps"][0]["tests"]["3"]["codes"] is None
+    network = load_network(str(tmp_path / "models" / spec.key / "step-2.network.json"))
+    assert network.recurrence.codes is None
+    report = wr.report(study)
+    assert "| curriculum | 1 | 4 | continuous |" in report and f"| {spec.key} | 2 |" in report
+
+
 def test_a_run_that_raises_is_recorded_and_run_once_more(tmp_path: Path):
     calls: list[str] = []
 
@@ -416,6 +444,13 @@ def test_e3_e4_reruns_the_matrix_and_control_at_their_cells():
         == dataclasses.replace(matrix.settings, seeds=20)
         == dataclasses.replace(control.settings, seeds=20)
     )
+
+
+def test_e2_is_e3s_cells_with_a_continuous_state():
+    scripts = Path(__file__).parents[2] / "scripts"
+    e2, e3_e4 = (wr.load_config(scripts / f"window_recurrent_{name}.json") for name in ("e2", "e3_e4"))
+    assert len(e2.runs) == 2 * 20 and all(spec.m is None and spec.arm == "curriculum" for spec in e2.runs)
+    assert {(spec.k, spec.s) for spec in e2.runs} == {(4, 4), (1, 16)} and e2.settings == e3_e4.settings
 
 
 def test_status_counts_each_running_runs_own_steps(tmp_path: Path):
