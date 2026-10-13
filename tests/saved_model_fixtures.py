@@ -36,6 +36,8 @@ tests/model/persistence/test_legacy_saved_models.py loads.
   of each implementation's window-recurrent network: WINDOW_MODEL, a sequence model over a window
   of WINDOW_COLUMNS token ids with a Dropout and two StateInputs, beside WINDOW_RECURRENCE, every
   field off its default. Their states are WINDOW_COUNT windows, so a state passes between windows.
+- The continuous-state fixtures (the window-recurrent claims workplan, stage 4) are the same
+  networks with CONTINUOUS_RECURRENCE, no codes, named ContinuousWindow<class name>.
 
 Each fixture is two files in tests/fixtures/saved_models/: <name>.json, the file the class's
 own save() wrote, and <name>.expected.json, what the saved network held and predicted:
@@ -226,6 +228,7 @@ WINDOW_MODEL: list[LayerSpec] = [
     Dense(VOCABULARY, output=True, activation="softmax", loss="cross_entropy"),
 ]
 WINDOW_RECURRENCE = WindowRecurrence(3, Codes(4, commitment=0.5), GRU(update_bias=0.5))
+CONTINUOUS_RECURRENCE = WindowRecurrence(3, None, GRU(update_bias=0.5))
 FORMAT_2_TRAINING_STEPS = 2
 
 
@@ -364,16 +367,18 @@ def _sequence(
     return SavedModelFixture(implementation, build, "predict_probabilities", {}, format2=True, class_name=class_name)
 
 
-def _window(implementation: str) -> SavedModelFixture:
+def _window(
+    implementation: str, recurrence: WindowRecurrence = WINDOW_RECURRENCE, class_name: str | None = None
+) -> SavedModelFixture:
     def build() -> Any:
         cls = {
             "python": WindowRecurrentBackpropNetwork,
             "numpy": WindowRecurrentArrayNetwork,
             "rust": WindowRecurrentRustArrayNetwork,
         }[implementation]
-        return cls((WINDOW_COLUMNS,), WINDOW_MODEL, WINDOW_RECURRENCE, Adam(**ADAM))
+        return cls((WINDOW_COLUMNS,), WINDOW_MODEL, recurrence, Adam(**ADAM))
 
-    return SavedModelFixture(implementation, build, "predict_probabilities", {}, format2=True)
+    return SavedModelFixture(implementation, build, "predict_probabilities", {}, format2=True, class_name=class_name)
 
 
 def _ensemble(name: str, implementation: str, classifier_name: str) -> SavedModelFixture:
@@ -561,6 +566,14 @@ FIXTURES: dict[str, SavedModelFixture] = {
     "WindowRecurrentArrayNetwork": _window("numpy"),
     "WindowRecurrentRustArrayNetwork": _window("rust"),
     "WindowRecurrentBackpropNetwork": _window("python"),
+    **{
+        f"ContinuousWindow{name}": _window(implementation, CONTINUOUS_RECURRENCE, name)
+        for name, implementation in (
+            ("WindowRecurrentArrayNetwork", "numpy"),
+            ("WindowRecurrentRustArrayNetwork", "rust"),
+            ("WindowRecurrentBackpropNetwork", "python"),
+        )
+    },
 }
 
 
@@ -601,8 +614,10 @@ def _random_like(rng: random.Random, value: Any) -> Any:
 def _positive_running_variances(network: Any, snapshot: list[Any]) -> list[Any]:
     # a batch-norm layer's running variance as |drawn|, so inference takes a real square root: the
     # last of [gamma, beta, running_mean, running_var] per layer on numpy and Rust, and per channel
-    # in pure Python; the snapshot is per expanded layer, a residual block's body's included
-    for spec, entry in zip(expand_specs(network.layer_specs), snapshot, strict=True):
+    # in pure Python; the snapshot is per expanded layer, a residual block's body's included, then
+    # a window-recurrent network's own parts
+    specs = expand_specs(network.layer_specs)
+    for spec, entry in zip(specs, snapshot[: len(specs)], strict=True):
         if isinstance(spec, BatchNorm):
             for values in [entry] if network.implementation != "python" else entry:
                 values[3] = [abs(value) for value in values[3]] if isinstance(values[3], list) else abs(values[3])

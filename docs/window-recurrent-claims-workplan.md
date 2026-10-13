@@ -281,9 +281,10 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    right counterexample; a certified fake passes B1 at 1,024.
 3. **E1 on `pyramidon`:** every matrix and control network certified, long-tested; findings in
    the certificate script's docstring; the certified networks archived (D12).
-4. **The continuous state** (tier 0 unless a timed path changes): `codes: Codes | None`, the
+4. **Done.** **The continuous state** (tier 0: no timed path changed): `codes: Codes | None`, the
    three implementations skipping the snap, format 2 writing `"codes": null`, validation; parity
-   tests, a fixture and a golden entry (a new network, existing bits unchanged: checked).
+   tests, a fixture and a golden entry for each implementation (the golden run 121 entries to 124,
+   the 121 bit-identical: checked).
 5. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
    about 240 runs; C0's reruns compared first): findings; E1's certificate run on every network.
 6. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.

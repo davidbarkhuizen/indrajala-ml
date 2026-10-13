@@ -26,6 +26,7 @@ from indrajala_ml.model.persistence.format2 import network_to_json
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import Dropout, Embedding, LayerSpec, Position, StateInput
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
+from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
 from indrajala_ml.pcg64 import default_rng, generator_state
 from tests.helpers import bits, exp_by_math, patching
 from tests.model.networks.test_window_recurrent_array_network import (
@@ -287,3 +288,19 @@ def test_the_cells_tanh_and_sigmoid_take_numpys_values_where_exp_overflows():
     assert bits([recurrent_layer.tanh(v) for v in z.tolist()]) == bits(recurrent_array_layer.tanh(z).tolist())
     assert bits([recurrent_layer.sigmoid(v) for v in z.tolist()]) == bits(recurrent_array_layer.sigmoid(z).tolist())
     assert [recurrent_layer.tanh(v) for v in z.tolist()] == [1.0, -1.0, 1.0, -1.0]
+
+
+@pytest.mark.usefixtures("attention_exp", "token_exp", "parts_exp")
+@pytest.mark.parametrize("windows", [1, 3])
+def test_a_continuous_state_trains_as_numpys(windows: int):
+    # the window-recurrent claims workplan, stage 4: no codes, the cell's output the next state
+    recurrence = WindowRecurrence(3, None)
+    python = WindowRecurrentBackpropNetwork.randomized((K,), DROPOUT_WINDOW, recurrence, Momentum(0.9), seed=7)
+    numpy = WindowRecurrentArrayNetwork.randomized((K,), DROPOUT_WINDOW, recurrence, Momentum(0.9), seed=7)
+    assert_seeded_alike(python, numpy)
+    rows = _rows(windows, 4, windows)
+    for _ in range(20):
+        python.learn_batch(0.1, rows)
+        numpy.learn_batch(0.1, rows)
+    _assert_close(numpy.snapshot(), as_array_snapshot(python), 1e-10)
+    assert generator_state(python.rng) == generator_state(numpy.rng)

@@ -25,6 +25,7 @@ from indrajala_ml.model.persistence.format2_json import (
     optimizer_state_from_json,
     optimizer_state_to_json,
     recurrence_from_json,
+    recurrence_parameters,
     recurrence_to_json,
     rule_to_json,
 )
@@ -170,6 +171,17 @@ def test_a_recurrence_has_its_entry():
     }
     assert recurrence_to_json(RECURRENCE) == entry
     assert recurrence_from_json(json.loads(json.dumps(entry))) == RECURRENCE
+
+
+def test_a_continuous_state_is_accepted_and_its_entry_has_no_codes():
+    # the window-recurrent claims workplan, stage 4: codes null, and no E among the parts' parameters
+    continuous = WindowRecurrence(4, None)
+    validate_window_recurrent(WINDOWS["the state before every block"], continuous, WINDOW)
+    entry = recurrence_to_json(continuous)
+    assert entry["codes"] is None
+    assert recurrence_from_json(json.loads(json.dumps(entry))) == continuous
+    assert recurrence_parameters(continuous) == (("q",), ("W", "U", "b"), ("c",))
+    assert recurrence_parameters(RECURRENCE) == (("q",), ("W", "U", "b"), ("E",), ("c",))
 
 
 @pytest.mark.parametrize("part", ["cell", "pooling"])

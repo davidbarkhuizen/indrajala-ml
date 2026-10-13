@@ -6,7 +6,9 @@ and 5; The network):
 its window, a sequence model's layers with StateInputs, run over each window of k columns in turn,
 and its own parts, which hand a state from window to window: the attention pooling over the tokens
 the output layer reads, the GRU cell and the codes, starting from the learned initial state,
-snapped (W8).
+snapped (W8). Without codes (WindowRecurrence(s, None)) the state is continuous: the network has
+no codes part, the cell's output is the next state, and the codes' losses are gone (the
+window-recurrent claims workplan, stage 4).
 
     network = WindowRecurrentArrayNetwork((k,), window_specs, WindowRecurrence(4, Codes(8)), Adam())
     network = WindowRecurrentRustArrayNetwork((k,), window_specs, WindowRecurrence(4, Codes(8)), Adam())
@@ -24,8 +26,8 @@ restored, so its dropout masks repeat) before its backward pass (W20); the gradi
 state flows into the window before it, through the codes, the cell and the StateInputs.
 
 The window's layers keep the indices they have in a sequence network; the network's own parts
-follow them, in the order pooling, cell, codes, initial state, for the optimizer, snapshot() and
-format 2 (format2_json.RECURRENCE_PARAMETERS).
+follow them, in the order pooling, cell, codes (if any), initial state, for the optimizer,
+snapshot() and format 2 (format2_json.recurrence_parameters).
 
 WindowRecurrentShape is the network over ArrayNetworkBase, for either backend; its parts are the
 backend's (recurrent_array_layer.py, recurrent_rust_array_layer.py), whose products are their
@@ -144,9 +146,12 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         parts = _PARTS[self.backend.name]
         self.pooling = parts.pooling(self.columns, features)
         self.cell = parts.cell(features, s, recurrence.cell.update_bias)
-        self.codes = parts.codes(recurrence.codes.count, s, recurrence.codes.commitment)
+        codes = recurrence.codes
+        self.codes: Any = None if codes is None else parts.codes(codes.count, s, codes.commitment)
         self.initial_state = parts.initial_state(s)
-        self.parts: list[Any] = [self.pooling, self.cell, self.codes, self.initial_state]
+        self.parts: list[Any] = [
+            part for part in (self.pooling, self.cell, self.codes, self.initial_state) if part is not None
+        ]
         self._state_inputs: list[Any] = [layer for layer in self.layers if isinstance(layer, parts.state_input)]
 
     def _window_state_size(self) -> int | None:
@@ -161,9 +166,22 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         # zero and draw nothing.
         super().randomize()
         self.cell.draw(self.rng)
-        self.codes.draw(self.rng)
+        if self.codes is not None:
+            self.codes.draw(self.rng)
 
     # the forward pass
+
+    def _snap(self, H: Any) -> Any:
+        # the next state: H snapped to its code, or H itself for a continuous state
+        return H if self.codes is None else self.codes.forward_batch(H)
+
+    def _snap_backward(self, dQ: Any, weight: float) -> Any:
+        # the next state's gradient to H's: straight through and the codes' losses', or dQ itself
+        return dQ if self.codes is None else self.codes.backward_batch(dQ, weight)
+
+    def _snapped(self) -> Any:
+        assert self.codes is not None, "a continuous state has no codes (WindowRecurrence(s, None))"
+        return self.codes
 
     def _windows(self, X: Any) -> int:
         count, remainder = divmod(X.shape[1], self.columns)
@@ -176,7 +194,7 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         return self.backend.columns(X, w * self.columns, (w + 1) * self.columns)
 
     def _first_state(self, examples: int) -> Any:
-        return self.codes.forward_batch(self.initial_state.forward_batch(examples))
+        return self._snap(self.initial_state.forward_batch(examples))
 
     def _window_forward(self, X: Any, C: Any) -> tuple[Any, Any]:
         # one window's digits' probabilities and its next state, from its columns X and state C
@@ -186,7 +204,7 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         for layer in self.layers:
             self._activations.append(layer.forward_batch(self._activations[-1]))
         u = self.pooling.forward_batch(self._activations[-2])
-        return self._activations[-1], self.codes.forward_batch(self.cell.forward_batch(u, C))
+        return self._activations[-1], self._snap(self.cell.forward_batch(u, C))
 
     def forward_windows(self, X: A) -> A:
         """The inference forward pass: each column's digit probabilities, (N, W * k * classes)."""
@@ -200,19 +218,21 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
     def state_codes(self, X: A) -> list[list[int]]:
         """
         Each state's code, per example: the initial state's, then each window's next state's, W + 1
-        of them (the report's codes used, W4-i).
+        of them (the report's codes used, W4-i). A snapped state's only.
         """
+        snapped = self._snapped()
         C = self._first_state(X.shape[0])
-        codes = [[int(i) for i in self.codes.indices]]
+        codes = [[int(i) for i in snapped.indices]]
         for w in range(self._windows(X)):
             _, C = self._window_forward(self._window(X, w), C)
-            codes.append([int(i) for i in self.codes.indices])
+            codes.append([int(i) for i in snapped.indices])
         return [list(example) for example in zip(*codes, strict=True)]
 
     def first_step(self) -> tuple[A, list[int]]:
         """The initial state before it is snapped (1, state_size), and the code it snaps to."""
+        snapped = self._snapped()
         self._first_state(1)
-        return self.codes._H, [int(i) for i in self.codes.indices]
+        return snapped._H, [int(i) for i in snapped.indices]
 
     def window_step(self, X: A, C: A) -> tuple[A, A, list[int]]:
         """
@@ -220,8 +240,9 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         probabilities (N, k * classes), the cell's output before it is snapped (N, state_size) and
         the codes it snaps to (the window-recurrent claims workplan's certificate, E1).
         """
+        snapped = self._snapped()
         output, _ = self._window_forward(X, C)
-        return output, self.codes._H, [int(i) for i in self.codes.indices]
+        return output, snapped._H, [int(i) for i in snapped.indices]
 
     def _forward_input(self, x: A) -> A:
         return self.backend.row(self.forward_windows(self.backend.matrix([x.tolist()])), 0)
@@ -303,12 +324,12 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
             self._set_training_mode(False)
 
         self._first_state(X.shape[0])
-        self.initial_state.backward_batch(self.codes.backward_batch(dC, weight))
+        self.initial_state.backward_batch(self._snap_backward(dC, weight))
 
     def _window_backward(self, Y: Any, dC_next: Any, weight: float) -> Any:
         # one window's backward pass after its forward pass: its gradients accumulated, and its
         # state's gradient returned, from the next state's dC_next and its digits' targets Y
-        dU, dC = self.cell.backward_batch(self.codes.backward_batch(dC_next, weight))
+        dU, dC = self.cell.backward_batch(self._snap_backward(dC_next, weight))
         pooled = self.pooling.backward_batch(dU)
 
         output_layer: Any = self.layers[-1]

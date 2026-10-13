@@ -79,6 +79,11 @@ through a middle window both ways. Its parts' weights (the pooling's query, the 
 codes and the initial state) are injected as the window's are, and its dropout masks repeat in each
 window's recomputed forward pass. No earlier entry moved when they were recorded.
 
+The continuous-state entries (the window-recurrent claims workplan, stage 4) are the same window
+networks with CONTINUOUS_RECURRENCE, no codes, added after the window-recurrent ones: the cell's
+output is the next state, and the parts' weights are the pooling's, the cell's and the initial
+state's. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -560,6 +565,13 @@ WINDOW_NETWORKS = {
     "rust window recurrent model": WindowRecurrentRustArrayNetwork,
     "python window recurrent model": WindowRecurrentBackpropNetwork,
 }
+# the window networks with a continuous state (the window-recurrent claims workplan, stage 4)
+CONTINUOUS_RECURRENCE = WindowRecurrence(3, None)
+CONTINUOUS_NETWORKS = {
+    "numpy continuous window model": WindowRecurrentArrayNetwork,
+    "rust continuous window model": WindowRecurrentRustArrayNetwork,
+    "python continuous window model": WindowRecurrentBackpropNetwork,
+}
 
 
 def _sequential_network(name: str, input_shape: InputShape, specs: list[LayerSpec], rule: UpdateRule) -> Any:
@@ -784,6 +796,9 @@ def run_all() -> dict[str, Any]:
         results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
     for name, window_cls in WINDOW_NETWORKS.items():
         network = window_cls((WINDOW_COLUMNS,), WINDOW_SPECS, WINDOW_RECURRENCE, Adam())
+        results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
+    for name, window_cls in CONTINUOUS_NETWORKS.items():
+        network = window_cls((WINDOW_COLUMNS,), WINDOW_SPECS, CONTINUOUS_RECURRENCE, Adam())
         results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
     return results
 

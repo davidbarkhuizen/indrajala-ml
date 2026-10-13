@@ -288,17 +288,19 @@ def validate_window_recurrent(
     """
     Rejects a window-recurrent network (the window-recurrent adder workplan) that isn't one: a
     window that validate_window_specs rejects, and a recurrence without a state, with fewer than
-    two codes, a negative commitment or an update bias that isn't finite.
+    two codes, a negative commitment or an update bias that isn't finite. A continuous state (no
+    codes) has neither codes nor a commitment to check.
     """
     validate_window_specs(specs, input_shape)
     assert recurrence.state_size >= 1, f"a state has at least one feature; got {recurrence!r}"
-    assert recurrence.codes.count >= 2, (
-        f"a state of one code carries nothing: two codes at least (W4-i); got {recurrence!r}"
-    )
-    commitment = recurrence.codes.commitment
-    assert math.isfinite(commitment) and commitment >= 0.0, (
-        f"a commitment weight is finite and not negative (W14); got {recurrence!r}"
-    )
+    if recurrence.codes is not None:
+        assert recurrence.codes.count >= 2, (
+            f"a state of one code carries nothing: two codes at least (W4-i); got {recurrence!r}"
+        )
+        commitment = recurrence.codes.commitment
+        assert math.isfinite(commitment) and commitment >= 0.0, (
+            f"a commitment weight is finite and not negative (W14); got {recurrence!r}"
+        )
     assert math.isfinite(recurrence.cell.update_bias), f"an update bias is finite (W13); got {recurrence!r}"
 
 
