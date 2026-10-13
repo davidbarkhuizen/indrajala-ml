@@ -683,6 +683,121 @@ def explore_summary(explored: Sequence[dict[str, Any]], lengths: Sequence[int] =
     return table(["n", "failing runs with a new code", "working runs with a new code", "Fisher p"], rows)
 
 
+# the findings' verdicts: works (W10), certified, robustly certified, the long tests
+
+
+def network_name(path: Path) -> str:
+    """A saved step's name, <run>-step-<j>: certify's and the long tests' file stem."""
+    return f"{path.parent.name}-{path.name.removesuffix('.network.json')}"
+
+
+def last_networks(study: Study) -> dict[str, Path]:
+    """Each finished run's last step's network (the one its result's works describes), by run key."""
+    results = read_results(study.results) if study.results.exists() else {}
+    networks: dict[str, Path] = {}
+    for spec in study.runs:
+        result = results.get(spec.key)
+        if result is not None and "error" not in result:
+            networks[spec.key] = study.models / spec.key / f"step-{result['steps'][-1]['step']}.network.json"
+    return networks
+
+
+ROBUST, CERTIFIED, NOT_CERTIFIED = "robustly certified", "certified only strictly", "not certified"
+
+
+def certificate_class(branched: Mapping[str, Any], strict: Mapping[str, Any]) -> str:
+    """A network's class by its two certificates (D3): branched certified, strict only, or neither."""
+    return ROBUST if branched["certified"] else CERTIFIED if strict["certified"] else NOT_CERTIFIED
+
+
+def rate(successes: int, trials: int) -> str:
+    """A rate with its Wilson 95% interval (D4); "-" without trials."""
+    if trials == 0:
+        return "-"
+    low, high = inference.wilson(successes, trials)
+    return f"{successes}/{trials} ({low:.2f}-{high:.2f})"
+
+
+def _read_json(path: Path) -> dict[str, Any] | None:
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def long_test_failures(long_test: Mapping[str, Any]) -> tuple[int, list[str]]:
+    """A long test's cases in all, and each failing property and length with its cases wrong ("B1@1024 3")."""
+    cases = 0
+    failures: list[str] = []
+    for n, length in long_test["lengths"].items():
+        for property_id, result in length["properties"].items():
+            cases += result["cases"]
+            if result["passed"] != result["cases"]:
+                failures.append(f"{property_id}@{n} {result['cases'] - result['passed']}")
+    return cases, failures
+
+
+def verdicts(study: Study, branched: Path, strict: Path, long_tests: Path | None = None) -> str:
+    """
+    A study's findings tables from its results, its certificates (branched in one directory, strict
+    in another, as certify writes them: <run>-step-<j>.json) and, when given, its long tests' JSON
+    (check --json, the same names): per cell, the runs working (W10), certified and robustly
+    certified, each with its Wilson interval, over the runs with a certificate; the runs by works
+    and class; and per class the networks long-tested, with every failure.
+    """
+    results = read_results(study.results) if study.results.exists() else {}
+    networks = last_networks(study)
+    cells: dict[tuple[str, int, int, int | None], list[tuple[bool, str | None]]] = {}
+    classes: dict[str, str] = {}
+    for spec in study.runs:
+        if spec.key not in networks:
+            continue
+        name = network_name(networks[spec.key])
+        b, s = _read_json(branched / f"{name}.json"), _read_json(strict / f"{name}.json")
+        kind = None if b is None or s is None else certificate_class(b, s)
+        if kind is not None:
+            classes[name] = kind
+        cells.setdefault((spec.label, spec.k, spec.s, spec.m), []).append((results[spec.key]["works"], kind))
+
+    def counts(done: Sequence[tuple[bool, str | None]]) -> list[str]:
+        certified = [kind for _, kind in done if kind is not None]
+        return [
+            str(len(done)),
+            rate(sum(works for works, _ in done), len(done)),
+            rate(sum(kind != NOT_CERTIFIED for kind in certified), len(certified)),
+            rate(sum(kind == ROBUST for kind in certified), len(certified)),
+        ]
+
+    ordered = sorted(cells.items(), key=lambda cell: (*cell[0][:3], cell[0][3] or 0))
+    every = [run for _, done in ordered for run in done]
+    rows = [
+        [arm, str(k), str(s), "continuous" if m is None else str(m), *counts(done)] for (arm, k, s, m), done in ordered
+    ]
+    rows.append(["all", "", "", "", *counts(every)])
+    sections = [table(["arm", "k", "s", "m", "runs", "working", "certified", "robustly certified"], rows)]
+    by_works = [
+        [kind, *(str(sum(1 for w, c in every if w is works and c == kind)) for works in (True, False))]
+        for kind in (ROBUST, CERTIFIED, NOT_CERTIFIED)
+    ]
+    sections.append(table(["class", "working", "failing"], by_works))
+    if long_tests is not None:
+        tested: dict[str, list[tuple[str, int, list[str]]]] = {}
+        for name, kind in classes.items():
+            long_test = _read_json(long_tests / f"{name}.json")
+            if long_test is not None:
+                tested.setdefault(kind, []).append((name, *long_test_failures(long_test)))
+        long_rows = [
+            [
+                kind,
+                str(len(done)),
+                str(sum(bool(failures) for _, _, failures in done)),
+                f"{sum(cases for _, cases, _ in done):,}",
+                "; ".join(f"{name}: {', '.join(failures)}" for name, _, failures in done if failures) or "-",
+            ]
+            for kind in (ROBUST, CERTIFIED, NOT_CERTIFIED)
+            for done in [tested.get(kind, [])]
+        ]
+        sections.append(table(["class", "long-tested", "with a failure", "cases", "failures"], long_rows))
+    return "\n\n".join(sections)
+
+
 def _run_job(
     spec: RunSpec,
     directory: Path,

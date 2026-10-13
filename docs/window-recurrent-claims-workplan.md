@@ -437,7 +437,12 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    timings equal under D19's names: 105 compared and 0 differ against `certificates/`, 105 and 0
    against `certificates-strict/` (on `pyramidon`, 3 workers, 2026-10-13).
 6. **E7 on `jebel`:** the modular-division matrix (`scripts/window_recurrent_e7_p5.json` and
-   `_p7.json`, `s` 16, D20), certified and long-tested: findings.
+   `_p7.json`, `s` 16, D20), certified and long-tested: findings. **The findings' tables in**
+   (for stages 6-8): `networks CONFIG` (each finished run's last network, for `certify` and
+   `check`) and `verdicts CONFIG --certificates DIR --strict DIR [--long-tests DIR]` (per cell the
+   runs working, certified and robustly certified with Wilson intervals; the runs by works and
+   class; per class the networks long-tested and every failure). E1's tables and long-test
+   figures come out of it unchanged.
 7. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
    about 240 runs; C0's reruns compared first): findings; E1's certificate run on every network.
    **Config in:** `scripts/window_recurrent_e3_e4.json`, 240 runs (the curriculum arm at `k` 4
