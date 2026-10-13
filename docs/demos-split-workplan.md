@@ -1,7 +1,6 @@
 # Workplan: move the demos to their own repository
 
-**Status: decisions D1-D6 settled (2026-10-13); D7 (the new repository's visibility and who
-creates it) waits for the owner before stage 2. Stage 1 not started.**
+**Status: decisions D1-D7 settled (2026-10-13). Stage 1 not started.**
 
 The demos, the matplotlib plotting and the tkinter digit capture move to a new repository,
 `indrajala-demos`, which uses indrajala-ml as a git submodule. indrajala-ml keeps the library,
@@ -87,9 +86,9 @@ recorded.
   recursively and building the crate as indrajala-ml's CI does. Settled. Pros: a library change
   that breaks a demo shows up on the bump PR. Cons: its CI builds the crate too (minutes per
   run).
-- **D7: visibility and creation** (owner). The other repositories are public; the plan assumes
-  `davidbarkhuizen/indrajala-demos`, public, created with `gh repo create` by the agent, unless
-  the owner says otherwise.
+- **D7: visibility and creation.** Settled by the owner (2026-10-13): public, as the other
+  repositories, created by the agent; `davidbarkhuizen/indrajala-demos` exists (empty) since
+  2026-10-13.
 
 ## Stages
 
@@ -114,7 +113,7 @@ Done when nothing under `scripts/` or `docs/measurement.md` names `indrajala_ml.
 
 ### Stage 2: indrajala-demos
 
-1. Create the repository (D7). A fresh clone of indrajala-ml, `git filter-repo` keeping
+1. The repository exists (D7). A fresh clone of indrajala-ml, `git filter-repo` keeping
    `indrajala_ml/demos`, `indrajala_ml/graphics`, `indrajala_ml/capture`, `tests/graphics`,
    `tests/capture`, the conv depth sweep's test and `tests/training/test_training_pipeline.py`,
    renamed into D4's layout. Check the result: the file list, `git log --follow` on two files.

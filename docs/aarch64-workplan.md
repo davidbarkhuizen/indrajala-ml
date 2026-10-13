@@ -1,9 +1,10 @@
 # Workplan: aarch64 (a Raspberry Pi 5), and one set of bits on every machine
 
 **Status: D1-D3 settled by the owner (2026-10-13); D4-D9 settled (2026-10-13) for extensibility,
-speed and production; D10 (the machine's name and hardware) waits for the owner before stage 1.
-Not started. Stage 1 needs the demo split's stage 2 ([demos-split-workplan.md](demos-split-workplan.md)),
-so the Pi needs no matplotlib.**
+speed and production; D10 settled by the owner (2026-10-13): the Pi is `litshe`, on wired Ethernet; its active
+cooler and NVMe drive are on the way. Not started. Stage 1's full test run needs the demo
+split's stage 2 ([demos-split-workplan.md](demos-split-workplan.md)), so the Pi needs no
+matplotlib; its build, golden run and comparison don't.**
 
 indrajala-ml and the crate run on aarch64, tested and timed on a Raspberry Pi 5 (8 GB). The crate
 stays **bit-identical across architectures**: a Rust-backend network trains to the same bits on
@@ -139,9 +140,13 @@ Every option's pros and cons, as settled.
 - **D9: the Pi is a timing machine like jebel**, with studies and development elsewhere.
   Settled. Pros: one role per machine; its timings stay clean. Cons: it can't take a study's
   overflow without breaking that (a later decision if needed).
-- **D10: the machine** (owner): its name (the plan says `<pi>`), active cooling (the official
-  Active Cooler or better: a Pi 5 without one throttles within minutes of all-core load),
-  storage (NVMe or a USB SSD, not an SD card), and an ssh key for the agent as on jebel.
+- **D10: the machine.** Settled by the owner (2026-10-13): **`litshe`**, on wired Ethernet
+  (steadier ssh, no radio interrupts while timing), with a fixed address or DHCP reservation
+  (jebel's mDNS name sometimes fails to resolve). Storage: an NVMe drive (being set up), not an
+  SD card. Cooling: an active cooler, to be bought; until it is fitted litshe runs in a passive
+  case, which is enough for stages 1-4 (throttling slows a run but never changes its bits) and
+  not for stage 5 onward. The cooler, the M.2 board and the case must fit together. An ssh key
+  for the agent as on jebel.
 
 ## Stages
 
@@ -150,7 +155,7 @@ One PR per stage; a crate stage lands in `indrajala-math-rust` first, then a "Bu
 ### Stage 0: the machine (owner)
 
 Ubuntu Server 26.04 LTS arm64 on the Pi 5 from SSD or NVMe, the cooler fitted, the user and ssh
-key, and the name D10 gives. The agent then checks `uptime`, `free -m`, `vcgencmd
+key, and the name D10 gives (`litshe`). The agent then checks `uptime`, `free -m`, `vcgencmd
 get_throttled` (or sysfs) and the kernel over ssh.
 
 ### Stage 1: bring-up, and the measurement that decides how much stage 2 has to do
@@ -193,7 +198,7 @@ there.
 ### Stage 5: the Pi's timing setup (D8)
 
 `benchmark_machine_setup.sh` and `install_benchmark_setup.sh` for the Pi (or one script that reads
-the machine), the machine profile, `ab.py remote --host <pi>`, and an A/A run to measure the Pi's
+the machine), the machine profile, `ab.py remote --host litshe`, and an A/A run to measure the Pi's
 noise, as stage 2 of the benchmark machine workplan did for jebel.
 
 ### Stage 6: the baseline, crate against numpy on the Pi
