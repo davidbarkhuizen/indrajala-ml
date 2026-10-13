@@ -116,6 +116,74 @@ beside them in `models/` (9.2 MB), and the log in `data/window-recurrent-control
 | `k` 1 `s` 16 `m` 8 | 2/5, 0/64/0/64/0 | 42, 1, 3, 3, 46 | 4/5, 64/64/64/0/64 |
 | `k` 4 `s` 4 `m` 16 | 5/5, 64/64/64/48/64 | 13, 6, 7, 5, 6 | 4/5, 64/64/12/32/64 |
 | `k` 4 `s` 16 `m` 16 | 5/5, 64/64/64/64/64 | 5, 4, 16, 6, 9 | 4/5, 64/24/64/64/0 |
+
+Findings (E1 of docs/window-recurrent-claims-workplan.md: the certificate and the long tests), on
+pyramidon: `certify` over every network the matrix and the control tested (the matrix's step 3, the
+control's step 1: 105), 4-7 workers. Two verdicts (the claims workplan's D3): **robustly
+certified**, every near tie (snap ratio under 1.05) branched both ways, indrajala-ml 094a7b1
+(#703), 2026-10-13 about 07:50 to 08:26, in `data/window-recurrent/certificates/` (105 files,
+listed with their sha256 in `data/window-recurrent/certificates.sha256`, itself sha256
+67a4e6b7...9550f05d), log `data/window-recurrent-certificates.log` (sha256 f8c38080...56ae98a1); and
+**certified**, the network's own snaps only (`--snap-ratio 1`), indrajala-ml 35175ea (#704; the
+certificate unchanged but for the option), 08:30 to 09:22 in two parts, in
+`data/window-recurrent/certificates-strict/` (`certificates-strict.sha256`, sha256
+299675b8...a924fc18), log `data/window-recurrent-certificates-strict.all.log` (the two parts
+joined; sha256 e1b8e612...3dcce757). 105.9 M window evaluations each way; 3.4 h of worker time
+branched, 2.9 h strict; a `k` 4 network 115-689 s branched, 74-759 s strict.
+
+- No failing network is certified, either way: of the 48 networks that break before 16 columns
+  (W10's failing), none: here the certificate passes nothing the tests fail.
+- Of the 57 working networks (W10), 52 are certified and 48 robustly certified (matrix 42 and 38
+  of 45, control 10 and 10 of 12). Every working `k` 1 network is certified both ways; by `k` 1, 2
+  and 4, working 18, 11 and 28, certified 18, 11 and 23, robustly 18, 8 and 22.
+- Every certified network's machine minimises to 3 states, the carry automaton, while reaching 3-11
+  codes (median 5; exactly 3 in 9 certified networks, 8 robustly): the extra codes are equivalent
+  copies of a carry value. The smallest digit lead of a certified network
+  is 0.153 (a logit difference).
+- 16 robust certificates rest on near ties, up to 116,944 a network, at snap ratios down to
+  1.0000002: real, not duplicate codes (each codebook's closest pair is 0.02-0.3 apart). The 4
+  networks certified but not robustly (matrix `k2-s16-m16-seed3` and `seed4`, `k2-s4-m8-seed2`,
+  `k4-s16-m4-seed1`) are correct as they compute and wrong only when a near tie (ratio
+  1.006-1.03) snaps the other way.
+- **The sampled tests overstate working (C1 refuted for W10's "works", D13).** 5 working networks
+  aren't certified: 3 break before 64 columns, as their tests said (matrix `k4-s16-m16-seed1` at
+  24, `k4-s4-m16-seed3` at 32, control `k4-s4-m16-seed3` at 48), and **2 passed every test to 64
+  columns and are wrong**: control `all-at-once-k4-s16-m16-seed2` (1559 + 6329 + 5231 = 13,119
+  at 8 columns; the network says 19,680) and matrix `curriculum-k4-s4-m8-seed2` (514107 + 167355
+  + 27153 = 708,615 at 12; it says 531,468), each confirmed by running the network on
+  `wr.example(triple, n - k, k, 0)`, `n` the certificate's length (a carry counterexample shows only at alignment 0, which the
+  harness's hash picks for few cases).
+- The failing networks' counterexamples (strict): 42 a wrong carry, 11 a wrong digit, after 1-4
+  windows (22, 18, 6 and 7 networks), so every failure shows within 4 windows. Their machines
+  minimise to 2-9 states.
+
+LONG TESTS: to write when jebel's run ends.
+
+Per cell, its networks working (W10), certified and robustly certified, of 5:
+
+| arm | k | s | m | working | certified | robustly certified |
+|---|---|---|---|---|---|---|
+| curriculum | 1 | 4 | 4 | 2 | 2 | 2 |
+| curriculum | 1 | 4 | 8 | 3 | 3 | 3 |
+| curriculum | 1 | 4 | 16 | 2 | 2 | 2 |
+| curriculum | 1 | 16 | 4 | 2 | 2 | 2 |
+| curriculum | 1 | 16 | 8 | 4 | 4 | 4 |
+| curriculum | 1 | 16 | 16 | 3 | 3 | 3 |
+| curriculum | 2 | 4 | 4 | 1 | 1 | 1 |
+| curriculum | 2 | 4 | 8 | 3 | 3 | 2 |
+| curriculum | 2 | 4 | 16 | 3 | 3 | 3 |
+| curriculum | 2 | 16 | 4 | 0 | 0 | 0 |
+| curriculum | 2 | 16 | 8 | 1 | 1 | 1 |
+| curriculum | 2 | 16 | 16 | 3 | 3 | 1 |
+| curriculum | 4 | 4 | 4 | 3 | 3 | 3 |
+| curriculum | 4 | 4 | 8 | 3 | 2 | 2 |
+| curriculum | 4 | 4 | 16 | 4 | 3 | 3 |
+| curriculum | 4 | 16 | 4 | 2 | 2 | 1 |
+| curriculum | 4 | 16 | 8 | 2 | 2 | 2 |
+| curriculum | 4 | 16 | 16 | 4 | 3 | 3 |
+| all at once | 1 | 16 | 8 | 2 | 2 | 2 |
+| all at once | 4 | 4 | 16 | 5 | 4 | 4 |
+| all at once | 4 | 16 | 16 | 5 | 4 | 4 |
 """
 
 from __future__ import annotations

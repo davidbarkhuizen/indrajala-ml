@@ -4,7 +4,7 @@
 our claims/findings"), after the matrix (stage 9 of
 [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md)) and while its control
 ran. Decisions D1-D12 settled under the owner's standing delegation, each with its options' pros
-and cons. Stages 1 and 2 done (stage 2 refined D3's snap margin: a near tie branches).** The literature it answers to is in
+and cons. Stages 1, 2 and 3 done (stage 2 refined D3's snap margin: a near tie branches).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -41,6 +41,7 @@ any run.
 | **C3** | More codes than the automaton needs make training find it more often | E3, the code count | no monotone trend over `m` (D4's trend test) |
 | **C4** | The curriculum isn't needed: training on 1-3 windows at once works as often (the control: 12 of 15 against 12 of 15, on about 16 times fewer examples at `k` 4), so the recurrence, not the schedule, generalises | E4, the arms | the arms' working rates differ by D4's test (then the claim is the difference, whichever way) |
 | **C5** | The seed decides: at a fixed configuration the working rate is a stable fraction, measured with its interval | E3 and E4's 20 seeds a cell | (a measurement, not a hypothesis: reported with intervals) |
+| **C7** | The method isn't addition's: the same design learns modular division, `(a / b) mod p` of two long base-3 numbers, and its learned machine certifies exactly against the modular automaton (`p^2` states), at every length | E7, the second task (D14-D17) | no network certifies at either `p` |
 | **C6** | Exact on short sums isn't generalising: failing runs reach state codes at long lengths that training never produced (Buitrago Ruiz & Gu's unexplored states) | E5, from saved networks | failing runs' codes at 8 columns are all codes seen at the check lengths |
 
 C0, before all of them: **the runs reproduce.** The harness is deterministic (seeded generators,
@@ -162,6 +163,23 @@ anything at `k` 1, where it sees one column.
 windows of `k` 2 and 4 need the transformer to add inside the window, so the baseline is at `k` 1
 only.
 
+### E7. Modular division, the second task (C7; D14-D17)
+
+**Design.** Two base-3 numbers `a` and `b`, read most significant digit first a column at a time
+(a column's token is `3 a_i + b_i`, 9 values), and at every column the running answer
+`(A * B^-1) mod p` of the prefixes read so far, or "undefined" while `B mod p` is 0: `p + 1`
+classes. The last column's output is the answer. A finite transducer of `p^2` states
+(`(A mod p, B mod p)`), with an output per column, the adder's shape, so the network is the
+adder's with a 9-token embedding and `p + 1` output classes. `p` in {5, 7} (25 and 49 states);
+the curriculum and the all-at-once arms; `k` 1 and 4; `m` 32 and 64 (more codes than states,
+C3); 5 seeds a cell to start, as the matrix.
+
+**Measures.** As the matrix's (works, the break, codes used), and E1's certificate against the
+modular automaton, both verdicts (D13), and the long tests on every certified network.
+
+**Analysis.** Per cell, the working rate and the certified rate; every certified machine's
+minimised size against `p^2`; the codes used against the states needed.
+
 ## Decisions
 
 Settled under the owner's standing delegation, with each option's pros and cons:
@@ -205,6 +223,17 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     - (ii) Fail every near tie (D3 as first written). Pros: simplest. Cons: fails networks that
       are correct under every rounding.
     - A digit's near tie can't branch (one of its two digits is wrong): it fails.
+  - **Settled again in stage 3, by the owner, on E1's data: (iii), two named verdicts.** 105
+    networks certified both ways (`certify --snap-ratio 1` is strict): 52 strictly, 48 with
+    branching; the 4 between are correct as they compute and wrong only when a near tie (ratio
+    1.006-1.03) snaps the other way. Options:
+    - (i) Branching decides, strict reported beside. Pros: a pass holds whatever the rounding (another
+      batch, another BLAS). Cons: fails networks correct as they run.
+    - (ii) Strict decides, branching reported beside. Pros: the network as it runs. Cons: a proof
+      resting on snaps at ratios down to 1.0000002, which another rounding could flip.
+    - (iii) *Chosen.* Both, named: **certified** (strict: the network's own snaps) and **robustly
+      certified** (branched: either snap of every near tie). Pros: nothing hidden; each claim says
+      which it rests on. Cons: two figures where one would do.
 - **D4. Seeds and statistics, fixed before any run. Settled: (a).**
   - (a) *Chosen.* 20 seeds a cell and arm (seeds 0-19; 0-4 rerun the matrix's, which is C0's
     check). Rates with Wilson 95% intervals; two arms by Fisher's exact test, two-sided; a trend
@@ -269,6 +298,56 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     can be rechecked by anyone; small (about 0.5 MB a network). Cons: a PR to the archive per
     experiment.
   - (b) On the two machines only. Cons: a certified adder lost with a disk.
+  - **Which networks, settled in stage 3 by the owner: (ii).** (i) The 48 robustly certified.
+    Pros: smallest; every one a rounding-proof adder. Cons: loses the evidence of the other
+    claims. (ii) *Chosen.* The 52 certified and the 2 networks whose tests passed to 64 columns
+    with a counterexample at 12, each with both certificates. Pros: every E1 claim can be
+    rechecked from the archive. Cons: a few MB more; the archive's README explains the classes.
+    (iii) All 105. Pros: E1 rerunnable whole. Cons: about 50 MB, mostly failing networks, against
+    the archive's convention.
+- **D13. C1 against E1's result. Settled in stage 3 by the owner: (c).** C1's prediction ("every
+  working network certified") fails: 9 of W10's 57 working networks aren't robustly certified
+  (3 break before 64 columns, 4 only on a near tie, and 2 whose tests passed to 64 columns are
+  wrong at 12). Options:
+  - (a) Report C1 refuted for W10's "works" and restate it: a certified network adds at every
+    length, and the sampled tests overstate working. Pros: the pre-registered rule kept. Cons: no
+    exact criterion for the later experiments.
+  - (b) Redefine "works" as certified from E3 on. Pros: exact. Cons: a definition changed after
+    the data; E3/E4's rates no longer comparable with the matrix's.
+  - (c) *Chosen.* (a) for E1, and E3/E4 report the sampled "works" and the certificates' verdicts
+    side by side. Pros: honest and comparable. Cons: a column more; every E3/E4 network certified
+    (already planned).
+- **D14. A second task. Settled by the owner (2026-10-13): modular division, in this plan's one
+  paper.** Options put: (a) multiplication by a constant (the adder's shape; the carry's states
+  as a dial; cheapest); (b) modular division (finite-state where general multiplication isn't; a
+  non-trivial function, modular inverses; its own state size); (c) none (the adder alone); and a
+  second paper on several tasks. The owner chose one paper, the adder and modular division only.
+  Pros: the method shown on a second automaton, of 25-49 states against the carry's 3, with an
+  inverse to learn. Cons: a harness generalisation and a second matrix on `jebel`.
+- **D15. How the task answers. Settled: (b).**
+  - (a) One answer, after the last column. Pros: the textbook statement. Cons: a new output path
+    in all three implementations and a new certificate mode; one label a sequence, a weak signal.
+  - (b) *Chosen.* The running answer at every column, the last column's the answer. Pros: a
+    finite transducer with an output per column, the adder's shape: no package change (the
+    network takes any embedding size and class count); a label a column; the certificate checks
+    every output. Cons: an "undefined" class while `B mod p` is 0; a less usual statement.
+  - (c) A readout from the final state. Pros: explicit. Cons: (a)'s costs and a new part.
+- **D16. The reading order and `p`. Settled: most significant first; `p` 5 and 7.**
+  Most significant first, the state is `(A mod p, B mod p)`, `p^2` states; least significant
+  first it needs `3^i mod p` too (100 states at `p` 5, 294 at 7). `p` 3 is trivial (the last
+  digit decides) and 2 a digit-sum parity; 5 and 7 give 25 and 49 states. Pros: small enough to
+  certify (`9^k` windows, 6,561 at `k` 4, times the reachable codes), large enough to test C3's
+  codes against states. Cons: the opposite order to the adder's, so the harness's reading order
+  becomes the task's.
+- **D17. The certificate. Settled: (a).**
+  - (a) *Chosen.* `phi` maps codes to any target Mealy machine's states (its start, transition
+    and output functions over the task's column tokens), the carry automaton one instance and the
+    modular automaton another; the margins, the branching, the minimisation and the
+    counterexample unchanged. Pros: one certificate, the stage 2 tests carried over; a third
+    task would be a new target only. Cons: the carry's specialisation (digits and carries as
+    arrays) becomes a table per machine.
+  - (b) A second certificate for the modular task. Pros: no change to E1's. Cons: two copies of
+    the enumeration and the margins.
 
 ## Stages
 
@@ -279,16 +358,22 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    harness's adding fake certifies at `k` 1, 2 and 4; a fake that drops a carry at a window
    boundary, one that carries only inside a window, and one with a near-tie each fail with the
    right counterexample; a certified fake passes B1 at 1,024.
-3. **E1 on `pyramidon`:** every matrix and control network certified, long-tested; findings in
+3. **Done.** **E1 on `pyramidon`:** every matrix and control network certified, long-tested; findings in
    the certificate script's docstring; the certified networks archived (D12).
 4. **The continuous state** (tier 0 unless a timed path changes): `codes: Codes | None`, the
    three implementations skipping the snap, format 2 writing `"codes": null`, validation; parity
    tests, a fixture and a golden entry (a new network, existing bits unchanged: checked).
-5. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
+5. **The second task's harness and certificate** (D14-D17; tier 0, no timed path): a task in the
+   harness (its column tokens, labels, reading order, catalogue of tests and target machine), the
+   adder and modular division as instances; the certificate over a target machine (D17), E1's
+   certificates reproduced bit for bit from the adder's instance. Tests: a modular fake
+   certifies at `p` 5 and 7, a faulty one fails with the right counterexample.
+6. **E7 on `jebel`:** the modular-division matrix, certified and long-tested: findings.
+7. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
    about 240 runs; C0's reruns compared first): findings; E1's certificate run on every network.
-6. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
-7. **E5 on `pyramidon`:** findings.
-8. **The report** (D11), the README section, the parent's stage 10 marked done; this workplan
+8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
+9. **E5 on `pyramidon`:** findings.
+10. **The report** (D11), the README section, the parent's stage 10 marked done; this workplan
    retired.
 
 ## Cost
@@ -302,8 +387,10 @@ evaluation rate:
 | E3 + E4 | 200 curriculum + 40 all-at-once runs | `jebel` | about 18 h (10-30) |
 | E2 + E6 | 40 continuous + 60 baseline runs | `jebel` | about 8 h (4-15) |
 | E5 | saved networks only | `pyramidon` | under 1 h |
+| E7 | 2 `p` x 2 `k` x 2 `m` x 2 arms x 5 seeds = 80 runs, certified | `jebel` | about 8 h (4-15), longer if 49 states train slowly |
 
-About 26 hours of `jebel` in two sittings, and the package change of stage 4.
+About 34 hours of `jebel` in three sittings, the package change of stage 4 and the harness
+change of stage 5.
 
 ## Known limits
 
