@@ -4,8 +4,9 @@
 the owner's standing delegation. Stage 1 (this plan) merged (#685); stage 2 (specs) merged (#686);
 stage 3 (numpy layers) merged (#687); stages 4-7 (the networks, fixtures and golden entries) done;
 W21-W29 settled at their stages; stage 8 (the harness and its calibration, W12) done; stage 9
-(the matrix on `jebel`) done: 45 of 90 runs add to 64 columns or near it; stage 10 next. It
-replaces
+(the matrix on `jebel`) done: 45 of 90 runs add to 64 columns or near it; stage 10 begun: the
+control (W30) done, all at once working as often as the curriculum (12 of 15 each) on about 16
+times fewer examples. It replaces
 `docs/length-generalisation-workplan.md`, which the owner terminated before its existence study
 (next-steps, From length generalisation).**
 
