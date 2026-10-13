@@ -154,7 +154,7 @@ def test_a_network_carrying_nothing_across_windows_fails_the_carry_at_distance()
 def test_the_adder_runs_in_chunks_of_bounded_tokens_with_the_same_sums(monkeypatch: pytest.MonkeyPatch):
     k, n = 3, 8
     rng = random.Random(0)
-    triples = [tuple(rng.randrange(3**n) for _ in range(3)) for _ in range(50)]
+    triples = [(rng.randrange(3**n), rng.randrange(3**n), rng.randrange(3**n)) for _ in range(50)]
     whole = wr.WindowAdder(AddingNetwork(), k)
     sums, codes = whole.adder(n)(triples), whole.codes_used(triples, n)
     monkeypatch.setattr(wr, "CHUNK_TOKENS", 40)  # 3 or 4 windows of 3 columns: 3 rows a pass
