@@ -4,7 +4,7 @@
 our claims/findings"), after the matrix (stage 9 of
 [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md)) and while its control
 ran. Decisions D1-D12 settled under the owner's standing delegation, each with its options' pros
-and cons. No stage started.** The literature it answers to is in
+and cons. Stages 1 and 2 done (stage 2 refined D3's snap margin: a near tie branches).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -76,14 +76,17 @@ should be the 3-state carry automaton, with the codes mapping onto carries many 
 **Numerical margin.** The certificate evaluates the windows in batches; the network in use may
 evaluate them in other batches, and rounding can differ between them (BLAS order). So the
 certificate also records, for every `(q, w)`, the snapping margin (the distance to the second
-nearest code over the distance to the nearest) and each digit's logit margin, and passes only
-when every margin exceeds a tolerance (D3). A near-tie is reported as such, never passed.
+nearest code over the distance to the nearest) and each digit's logit margin (D3). A digit's
+near tie fails the certificate. A snap's near tie branches (stage 2): every code within the ratio
+is a next code too, explored and checked as the snapped one is, so a pass holds whichever way
+rounding snaps the tie; the near ties are counted apart. No certificate rests on a tie.
 
 **Cost** (measured on `pyramidon`, one core, 2026-10-13): about 31,000 window evaluations a
 second (B1's 100,000 cases at 128 columns in 106 s, 33 windows each). A `k` 4 network is at most
 16 x 531,441 = 8.5 M evaluations, about 5 minutes; `k` 1 and 2 take seconds. All 105 networks
 (the matrix's 90 and the control's 15, each at its last step), about 3 hours on one core, under
-an hour on six.
+an hour on six. Measured in stage 2: a `k` 4 network reaching 7 codes in 100 s, one reaching 9 in
+127 s (about 37,000 evaluations a second); a `k` 1 network in under a second.
 
 **Long tests, as an independent check.** On every certified network and every near miss (a break
 of 12 or more), B1 (100,000 cases) at 128, 256 and 1,024 columns, and M3 at distances 1, 2, 4,
@@ -188,10 +191,20 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     a network never trained to its codes; not the design's counterfactual.
   - (c) Robinson's binning. Pros: a published discretiser. Cons: a second discretiser, not an
     ablation of ours.
-  - The margins: a snap passes when the second-nearest code is at least 1.05 times as far as the
+  - The margins: a snap holds when the second-nearest code is at least 1.05 times as far as the
     nearest, a digit when its logit leads the next by at least 1e-6 (both far above rounding
     error). Pros: no certificate rests on a tie. Cons: a network can fail on margin
     alone; reported apart from a wrong output.
+  - **Refined in stage 2: a snap's near tie branches** rather than failing. Options:
+    - (i) *Chosen.* Branch: every code within 1.05 of the snapped one is a next code too, explored
+      and checked. Pros: a proof for either snap, so still no certificate rests on a tie; a network
+      whose ties fall between copies of one carry is certified, as it should be (a working network
+      of the matrix, `k` 1 `s` 16 `m` 16 seed 0, has 3 snaps at a ratio of 1.001, between codes of
+      one carry). Cons: a few more codes to explore; the count of near ties is reported, not a
+      verdict.
+    - (ii) Fail every near tie (D3 as first written). Pros: simplest. Cons: fails networks that
+      are correct under every rounding.
+    - A digit's near tie can't branch (one of its two digits is wrong): it fails.
 - **D4. Seeds and statistics, fixed before any run. Settled: (a).**
   - (a) *Chosen.* 20 seeds a cell and arm (seeds 0-19; 0-4 rerun the matrix's, which is C0's
     check). Rates with Wilson 95% intervals; two arms by Fisher's exact test, two-sided; a trend
@@ -260,7 +273,7 @@ Settled under the owner's standing delegation, with each option's pros and cons:
 ## Stages
 
 1. **This workplan and the literature review.** Docs only.
-2. **The certificate and the long tests** (tier 0): `indrajala_ml/studies/window_recurrent_certificate.py`
+2. **Done.** **The certificate and the long tests** (tier 0): `indrajala_ml/studies/window_recurrent_certificate.py`
    (the enumeration, `phi`, the margins, the minimised machine) and a `certify` command and
    `check --properties`/`--sampled` options in `scripts/window_recurrent_study.py`. Tests: the
    harness's adding fake certifies at `k` 1, 2 and 4; a fake that drops a carry at a window
