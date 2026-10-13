@@ -77,6 +77,38 @@ the codes the working seeds used:
 | 4 | 16 | 4 | 9,699 | 2/5 | 0/0/0/0/8 | 0/64/0/0/64 | 3,3 |
 | 4 | 16 | 8 | 9,763 | 2/5 | 64/0/0/0/0 | 64/0/0/64/0 | 4,3 |
 | 4 | 16 | 16 | 9,891 | 4/5 | 8/0/0/0/0 | 64/24/64/64/0 | 5,6,4,6 |
+
+Findings (the control, W16 and W30), on jebel, indrajala-ml 1dd22f9, crate 8c20e510c9a9,
+`scripts/window_recurrent_control.json`: the all-at-once arm (one step on window counts 1-3
+together, at most 200 epochs) at the matrix's three best cells, seeds 0-4, the matrix's settings
+otherwise. 15 runs, none raised. Wall time 2026-10-13 05:28 to about 06:29 (5.3 h of runs; a run
+took 1-33 minutes, median 23). The results are on jebel and pyramidon in
+`data/window-recurrent/control/results/` (15 files, listed with their sha256 in
+`data/window-recurrent/control/results.sha256`, itself sha256 6eed795f...a6facf9b), the networks
+beside them in `models/` (9.2 MB), and the log in `data/window-recurrent-control.log` (sha256
+913e996f...c52662dd).
+
+- The curriculum isn't needed here: the control works as often, 12 of 15 runs against the
+  curriculum's 12 of 15 at the same cells and seeds. At `k` 4 it works on all 10 (curriculum 8 of
+  10; Fisher's exact test p 0.47); at `k` 1 `s` 16 `m` 8 on 2 of 5 (curriculum 4 of 5; p 0.52).
+  At 5 seeds neither difference is decided; the claims workplan's E4 measures it at 20.
+- It needs far fewer examples where it works: at `k` 4 it passes its check within 4-16 epochs,
+  0.26-1.05 M examples (median 0.39 M), against the curriculum's 4.8-12.3 M over its three steps
+  for the runs that work (median 6.4 M), about 16 times fewer. The curriculum spends 78-99% of
+  its examples on its first two steps (one window, then one or two; 61 of the matrix's 90 runs
+  stop step 1 on the plateau), and once it trains on 1-3 windows it passes in a few epochs, as the
+  control does from the start.
+- Which seeds work isn't shared between the arms: at `k` 4 the curriculum's two failing seeds
+  (seed 2 of `s` 4, seed 4 of `s` 16) work all at once, and at `k` 1 the arms fail on different
+  seeds (all at once: 0, 2, 4; curriculum: 3).
+- Exact on short sums still isn't generalising: `k` 1's seed 2 passed its check (every sum of 1-3
+  columns) in 3 epochs and failed at 8, as five of the matrix's `k` 1 runs did.
+
+| cell | all at once: working, breaks (seeds 0-4) | epochs | curriculum: working, breaks after step 3 |
+|---|---|---|---|
+| `k` 1 `s` 16 `m` 8 | 2/5, 0/64/0/64/0 | 42, 1, 3, 3, 46 | 4/5, 64/64/64/0/64 |
+| `k` 4 `s` 4 `m` 16 | 5/5, 64/64/64/48/64 | 13, 6, 7, 5, 6 | 4/5, 64/64/12/32/64 |
+| `k` 4 `s` 16 `m` 16 | 5/5, 64/64/64/64/64 | 5, 4, 16, 6, 9 | 4/5, 64/24/64/64/0 |
 """
 
 from __future__ import annotations
