@@ -512,6 +512,9 @@ Settled under the owner's standing delegation, with each option's pros and cons:
   - Checked before E7' starts, from E7's step records (E7' runs before E7's certificates, stage
     7a): if E7's `k` 1 steps stopped on the budget or with screens still rising at the stop, (b) is
     adopted and recorded here first, never after.
+    **Checked (2026-10-13, E7's 40 `k` 1 runs, all finished): (a) stands.** 80 steps: 40 passed,
+    40 stopped on a plateau, none on the budget, and every plateau's best screen came at least
+    the patience's 30 epochs before its stop.
 
 ## Stages
 
