@@ -325,11 +325,18 @@ def _carry_from_reset(n: int, rng: Random) -> list[Case]:
     ]
 
 
-def _carry_over_distance(n: int, rng: Random, per_stratum: int) -> list[Case]:
-    # for each distance L in 1..n: the checked column t, a reset at t - 1 - L (column 0's carry in
-    # when that is -1), L dependent columns between, every other column uniform
+def doubling_distances(n: int) -> list[int]:
+    """1, 2, 4, ... up to n, and n: M3's distances at a long length (the claims workplan's D9)."""
+    distances = [2**i for i in range(n.bit_length()) if 2**i <= n]
+    return distances if distances[-1] == n else [*distances, n]
+
+
+def _carry_over_distance(n: int, rng: Random, per_stratum: int, doubling: bool = False) -> list[Case]:
+    # for each distance L in 1..n (or doubling_distances(n)): the checked column t, a reset at
+    # t - 1 - L (column 0's carry in when that is -1), L dependent columns between, every other
+    # column uniform
     cases: list[Case] = []
-    for length in range(1, n + 1):
+    for length in doubling_distances(n) if doubling else range(1, n + 1):
         for _ in range(per_stratum):
             t = rng.randrange(length, n + 1)
             r = t - 1 - length
@@ -364,13 +371,16 @@ def _every_pattern(n: int, rng: Random, sampled: int) -> list[Case]:
 
 
 def catalogue(
-    sampled: int = SAMPLED, relation_sampled: int = RELATION_SAMPLED, per_stratum: int = PER_STRATUM
+    sampled: int = SAMPLED,
+    relation_sampled: int = RELATION_SAMPLED,
+    per_stratum: int = PER_STRATUM,
+    doubling: bool = False,
 ) -> tuple[Property, ...]:
     """
     The catalogue, its samples sized: sampled cases for B1-B3, and past the exhaustive limit for A3,
     M1 and M5 (so any n is affordable: the window-recurrent adder workplan, W17); relation_sampled
-    for A1 and A2; per_stratum per M3 distance and M4 final carry. At n <= 6 with the default sizes,
-    every property's cases are CATALOGUE's.
+    for A1 and A2; per_stratum per M3 distance and M4 final carry; M3 at doubling_distances only when
+    doubling. At n <= 6 with the default sizes, every property's cases are CATALOGUE's.
     """
     sized = functools.partial
     return (
@@ -429,9 +439,9 @@ def catalogue(
         Property(
             "M3",
             "carry over distance L: the digit at distance L above a reset",
-            sized(_carry_over_distance, per_stratum=per_stratum),
+            sized(_carry_over_distance, per_stratum=per_stratum, doubling=doubling),
             oracle,
-            f"{per_stratum:,} per L in 1..n",
+            f"{per_stratum:,} per L in " + ("1, 2, 4, ..., n" if doubling else "1..n"),
         ),
         Property(
             "M4",

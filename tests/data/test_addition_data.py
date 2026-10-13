@@ -20,6 +20,7 @@ from indrajala_ml.data.addition_data import (
     column_sums,
     digits,
     distance,
+    doubling_distances,
     evaluate,
     from_digits,
     held_out,
@@ -143,6 +144,20 @@ def test_a_correct_adder_passes_a_sized_catalogue_at_a_long_length():
     results = evaluate(correct, 40, catalogue(sampled=200, relation_sampled=20, per_stratum=5), shrink=False)
     assert failing(results) == set()
     assert by_id(results)["M3"].reach() == 40
+
+
+def test_doubling_takes_m3_at_powers_of_two_and_the_length():
+    assert doubling_distances(1) == [1]
+    assert doubling_distances(8) == [1, 2, 4, 8]
+    assert doubling_distances(12) == [1, 2, 4, 8, 12]
+    doubled = next(prop for prop in catalogue(per_stratum=5, doubling=True) if prop.id == "M3")
+    cases = property_cases(doubled, 1024)
+    assert len(cases) == 11 * 5 and {case.stratum for case in cases} == set(doubling_distances(1024))
+    for case in cases:
+        assert case.column is not None
+        assert distance(column_sums(case.triple, 1024), case.column) == case.stratum
+    results = evaluate(correct, 1024, [doubled], shrink=False)
+    assert failing(results) == set() and by_id(results)["M3"].reach() == 1024
 
 
 def test_training_draws_held_out_triples_only_when_asked():

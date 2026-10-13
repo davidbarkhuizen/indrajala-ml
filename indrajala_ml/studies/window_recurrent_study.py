@@ -203,7 +203,7 @@ def test_properties(catalogue: Sequence[ad.Property]) -> list[ad.Property]:
     return [p for p in catalogue if p.id != "B3"]
 
 
-def _result_json(result: ad.PropertyResult) -> dict[str, Any]:
+def result_json(result: ad.PropertyResult) -> dict[str, Any]:
     return {
         "cases": result.cases,
         "passed": result.passed,
@@ -355,7 +355,7 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
             "passes": passes[n],
             "reach": by_id["M3"].reach(),
             "codes": sorted(test_codes),
-            "properties": {r.id: _result_json(r) for r in results},
+            "properties": {r.id: result_json(r) for r in results},
             "seconds": time.perf_counter() - start,
         }
         if not passes[n] and not settings.tests_past_break:
@@ -370,7 +370,7 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
         "stop": stop,
         "passes": all(r.holds for results in trained.values() for r in results),
         "screens": screens,
-        "checks": {str(n): {r.id: _result_json(r) for r in results} for n, results in trained.items()},
+        "checks": {str(n): {r.id: result_json(r) for r in results} for n, results in trained.items()},
         "tests": tests,
         "break": reached,
         "window_ratio": data_windows(reached, 0, spec.k) / max(counts),

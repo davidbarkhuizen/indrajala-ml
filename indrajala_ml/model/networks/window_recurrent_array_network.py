@@ -209,6 +209,20 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
             codes.append([int(i) for i in self.codes.indices])
         return [list(example) for example in zip(*codes, strict=True)]
 
+    def first_step(self) -> tuple[A, list[int]]:
+        """The initial state before it is snapped (1, state_size), and the code it snaps to."""
+        self._first_state(1)
+        return self.codes._H, [int(i) for i in self.codes.indices]
+
+    def window_step(self, X: A, C: A) -> tuple[A, A, list[int]]:
+        """
+        One window in inference, from its columns X (N, k) and states C (N, state_size): its digits'
+        probabilities (N, k * classes), the cell's output before it is snapped (N, state_size) and
+        the codes it snaps to (the window-recurrent claims workplan's certificate, E1).
+        """
+        output, _ = self._window_forward(X, C)
+        return output, self.codes._H, [int(i) for i in self.codes.indices]
+
     def _forward_input(self, x: A) -> A:
         return self.backend.row(self.forward_windows(self.backend.matrix([x.tolist()])), 0)
 
