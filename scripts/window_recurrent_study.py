@@ -11,6 +11,7 @@ harness and indrajala_ml/data/addition_data.py's catalogue.
         [--sampled S] [--per-stratum P] [--doubling] [--json FILE]
     python scripts/window_recurrent_study.py certify NETWORK.json [...] [--task T] [--out DIR] [--workers W]
         [--snap-ratio R]
+    python scripts/window_recurrent_study.py explore CONFIG.json [--n N ...] [--json FILE] [--workers W]
     python scripts/window_recurrent_study.py compare ORIGINAL_DIR RERUN_DIR
 
 A config names the study's directory (results/, one JSON file per run, and models/, each run's steps
@@ -26,7 +27,10 @@ certificate against its task's machine (indrajala_ml/studies/window_recurrent_ce
 DIR/<run>-<step>.json and prints a line for each, over W processes; --snap-ratio 1 certifies the
 network's own snaps only, branching no near tie (strict, D3 as first written). `compare` is C0's check
 (the claims workplan): every run in both study directories, its result without timings and
-provenance and each step's saved network, exactly; a line per run, exit 1 if any differ.
+provenance and each step's saved network, exactly; a line per run, exit 1 if any differ. `explore`
+is E5: for every finished snapped run of a study, the codes its last network reaches at its check
+lengths and at each N (8, 16 and 64 by default), the codes new past the check lengths, and how
+many failing and working runs whose check passed reach a new code (Fisher's exact test).
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
@@ -257,6 +261,13 @@ def main(argv: list[str]) -> int:
     compare = commands.add_parser("compare")
     compare.add_argument("original", type=Path, help="a study's directory (results/ and models/)")
     compare.add_argument("rerun", type=Path, help="another study's directory, rerunning some of its runs")
+    explore = commands.add_parser("explore")
+    explore.add_argument("config", type=Path)
+    explore.add_argument(
+        "--n", type=int, nargs="+", default=list(wr.EXPLORED_LENGTHS), help="the lengths past training"
+    )
+    explore.add_argument("--json", type=Path, help="write every run's codes to this file")
+    explore.add_argument("--workers", type=int, default=1)
     args = parser.parse_args(argv)
 
     if args.command == "check":
@@ -309,6 +320,21 @@ def main(argv: list[str]) -> int:
         print(f"{len(compared)} compared, {differ} differ")
         return 1 if differ else 0
     study = wr.load_config(args.config)
+    if args.command == "explore":
+        context = multiprocessing.get_context("forkserver")
+        with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:
+            explored = [
+                run
+                for run in pool.map(functools.partial(wr.explore_run, study, lengths=args.n), study.runs)
+                if run is not None
+            ]
+        for run in explored:
+            new = ", ".join(f"{n}: {run['new'][str(n)]}" for n in args.n)
+            print(f"{run['key']}: works {run['works']}, check passes {run['passes']}, new codes {new}", flush=True)
+        print(wr.explore_summary(explored, args.n))
+        if args.json is not None:
+            args.json.write_text(json.dumps(explored, indent=1))
+        return 0
     if args.command == "run":
         with machine_lock.study():
             wr.run(study, log=lambda line: print(line, flush=True))

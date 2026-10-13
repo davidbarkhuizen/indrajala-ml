@@ -71,6 +71,7 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
+from indrajala_ml.studies import inference
 from indrajala_ml.studies import window_tasks as wt
 from indrajala_ml.studies.common import crate_hash, table
 
@@ -563,6 +564,66 @@ def compare_runs(original: Path, rerun: Path) -> dict[str, list[str]]:
             )
         compared[key] = found
     return compared
+
+
+# E5: the codes a run's states reach past its training lengths (C6, unexplored states)
+
+EXPLORED_LENGTHS = (8, 16, 64)
+
+
+def explore_run(study: Study, spec: RunSpec, lengths: Sequence[int] = EXPLORED_LENGTHS) -> dict[str, Any] | None:
+    """
+    E5 for one finished, snapped run: the codes its last step's network snaps to over the first
+    settings.codes_cases cases of the task's codes property (B1 for addition) at each of that step's
+    check lengths and at each of lengths, and at each of lengths the codes never used at a check
+    length ("new"); with whether the run works and whether its last check passed. None for a run
+    without a result, one that raised, or a continuous one.
+    """
+    result_file = study.results / f"{spec.key}.json"
+    if spec.m is None or not result_file.exists():
+        return None
+    result = json.loads(result_file.read_text())
+    if "error" in result:
+        return None
+    last = result["steps"][-1]
+    task = wt.task_named(spec.task)
+    network = load_network(str(study.models / spec.key / f"step-{last['step']}.network.json"))
+    model = WindowModel(network, spec.k, task)
+    codes_property = next(p for p in study.settings.catalogue(task) if p.id == task.codes_id)
+
+    def codes(n: int) -> list[int]:
+        return sorted(model.codes_used(task.property_cases(codes_property, n)[: study.settings.codes_cases], n))
+
+    checked = {n: codes(n) for n in last["lengths"]}
+    seen = {code for used in checked.values() for code in used}
+    reached = {n: codes(n) for n in lengths}
+    return {
+        "key": spec.key,
+        "works": result["works"],
+        "passes": last["passes"],
+        "check_codes": {str(n): used for n, used in checked.items()},
+        "codes": {str(n): used for n, used in reached.items()},
+        "new": {str(n): [code for code in used if code not in seen] for n, used in reached.items()},
+    }
+
+
+def explore_summary(explored: Sequence[dict[str, Any]], lengths: Sequence[int] = EXPLORED_LENGTHS) -> str:
+    """
+    E5's comparison: of the runs whose last check passed, the working and the failing runs with a
+    new code at each length, and Fisher's exact test between them (D4).
+    """
+    rows: list[list[str]] = []
+    passing = [run for run in explored if run["passes"]]
+    for n in lengths:
+        counts = {
+            works: (sum(bool(run["new"][str(n)]) for run in group), len(group))
+            for works in (True, False)
+            for group in [[run for run in passing if run["works"] is works]]
+        }
+        (working_new, working), (failing_new, failing) = counts[True], counts[False]
+        p = inference.fisher_exact(failing_new, failing - failing_new, working_new, working - working_new)
+        rows.append([str(n), f"{failing_new}/{failing}", f"{working_new}/{working}", f"{p:.3g}"])
+    return table(["n", "failing runs with a new code", "working runs with a new code", "Fisher p"], rows)
 
 
 def _run_job(

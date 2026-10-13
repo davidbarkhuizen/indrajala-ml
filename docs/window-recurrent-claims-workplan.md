@@ -429,7 +429,12 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    `s` 4 and `k` 1 `s` 16, a continuous state, seeds 0-19, E3's settings; its keys say
    `continuous` where E3's say `m<m>`). The harness takes `m` null as a continuous state
    (`WindowRecurrence(s, None)`) and records no codes for it (`codes_used` null).
-9. **E5 on `pyramidon`:** findings.
+9. **E5 on `pyramidon`:** findings. **The tool in:** `scripts/window_recurrent_study.py explore
+   CONFIG` (`explore_run`, `explore_summary`): every finished snapped run's last network, its codes
+   over the codes property's first 1,000 cases at its check lengths and at 8, 16 and 64, the new
+   ones, and failing against working runs whose check passed (Fisher's exact test). At `k` 4 the
+   check lengths are 4, 8 and 12, so 8 is no length past training there: read 16 for it. About
+   4.5 s and 145 MB a run on `pyramidon`.
 10. **The report** (D11), the README section, the parent's stage 10 marked done; this workplan
    retired.
 
