@@ -1,16 +1,20 @@
 """
 The window-recurrent adder's harness (docs/window-recurrent-adder-workplan.md, stage 8;
-scripts/window_recurrent_study.py).
+scripts/window_recurrent_study.py), for any of window_tasks' tasks (the claims workplan's stage 5):
+addition, the matrix's, or modular division.
 
-A run is one arm, window size k, state width s, code count m and seed: W11's window (d 16, 3
-causal attention blocks of 2 heads, each read the state through a StateInput, FFN width 32) beside
-a WindowRecurrence(s, Codes(m)), on the Rust backend, under Adam.
+A run is one task, arm, window size k, state width s, code count m and seed: W11's window (d 16, 3
+causal attention blocks of 2 heads, each read the state through a StateInput, FFN width 32;
+embedding the task's tokens, an output of its classes) beside a WindowRecurrence(s, Codes(m)), on
+the Rust backend, under Adam.
 
-An addition of n columns is read at an alignment a (W6-i): a zero columns, the n column tokens
-(candidate 1's, 9 a_t + 3 b_t + c_t), and zero columns up to whole windows, then one window more
-(W9): ceil((n + a) / k) + 1 windows, a's data windows ceil((n + a) / k). Its labels are the sum's
-digits from column a, the zero columns below labelled 0. In training a is uniform in 0..k - 1;
-in a check it is the case's own, from a hash of the triple (W23), the same for every model.
+A case of n columns is read at an alignment a (W6-i): a zero columns, the n column tokens in the
+task's reading order (addition's candidate 1's, 9 a_t + 3 b_t + c_t, least significant first), and
+zero columns up to whole windows, then one window more (W9): ceil((n + a) / k) + 1 windows, a's
+data windows ceil((n + a) / k). Its labels are the task's machine's outputs over those tokens (for
+addition, the sum's digits from column a, the zero columns below labelled 0). In training a is
+uniform in 0..k - 1; in a check it is the case's own, from the task's hash of the case (W23), the
+same for every model.
 
 The curriculum (W6) is steps of data window counts: step j trains on counts 1..j together
 (cumulative), warm-started, the network and its Adam carried (W25); the all-at-once arm (W16) is
@@ -52,7 +56,6 @@ from pathlib import Path
 from typing import Any
 
 from indrajala_ml.data import addition_data as ad
-from indrajala_ml.data.addition_data import BASE, Triple
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import (
@@ -67,11 +70,11 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
-from indrajala_ml.studies.addition_study import column_tokens
+from indrajala_ml.studies import window_tasks as wt
 from indrajala_ml.studies.common import crate_hash, table
 
 D, BLOCKS, HEADS, FFN = 16, 3, 2, 32  # W11
-HOLD_OUT_FROM = 3  # W24: below it every triple is trained on, and B3 isn't checked
+HOLD_OUT_FROM = 3  # W24: below it every case is trained on, and the held-out property (B3) isn't checked
 RETRIES = 1
 WORKS = 16  # W10: a model works when its break length is at least this
 ARMS = ("curriculum", "all-at-once")
@@ -80,8 +83,8 @@ CHUNK_TOKENS = 1 << 20  # tokens a forward pass at most: memory bounded at any l
 Example = tuple[tuple[float, ...], tuple[int, ...]]
 
 
-def window_specs() -> list[LayerSpec]:
-    """W11's window: the state entering before each attention block (W18)."""
+def window_specs(task: wt.Task) -> list[LayerSpec]:
+    """W11's window for a task: the state entering before each attention block (W18)."""
     blocks: list[LayerSpec] = []
     for _ in range(BLOCKS):
         blocks += [
@@ -90,17 +93,17 @@ def window_specs() -> list[LayerSpec]:
             Residual((LayerNorm(), Dense(FFN, activation="relu"), Dense(D, activation="linear", bias=True))),
         ]
     return [
-        Embedding(BASE**3, D),
+        Embedding(task.machine.tokens, D),
         Position(),
         *blocks,
         LayerNorm(),
-        Dense(BASE, output=True, activation="softmax", loss="cross_entropy"),
+        Dense(task.machine.classes, output=True, activation="softmax", loss="cross_entropy"),
     ]
 
 
-def build(k: int, s: int, m: int, seed: int) -> Any:
+def build(task: wt.Task, k: int, s: int, m: int, seed: int) -> Any:
     return WindowRecurrentRustArrayNetwork.randomized(
-        (k,), window_specs(), WindowRecurrence(s, Codes(m)), Adam(), seed=seed
+        (k,), window_specs(task), WindowRecurrence(s, Codes(m)), Adam(), seed=seed
     )
 
 
@@ -111,17 +114,17 @@ def data_windows(n: int, a: int, k: int) -> int:
     return -(-(n + a) // k)
 
 
-def alignment(triple: Triple, n: int, k: int) -> int:
+def alignment(task: wt.Task, case: Any, n: int, k: int) -> int:
     """W23: a case's alignment, from the high half of its hash (the low half decides D8's tenth)."""
-    return (ad.triple_hash(triple, n) >> 32) % k
+    return (task.hash(case, n) >> 32) % k
 
 
-def example(triple: Triple, n: int, k: int, a: int) -> Example:
-    """The triple's columns at alignment a, through its final zero window, and their sum digits."""
+def example(task: wt.Task, case: Any, n: int, k: int, a: int) -> Example:
+    """The case's columns at alignment a, through its final zero window, and the task's labels for them."""
     width = (data_windows(n, a, k) + 1) * k
-    columns = (0,) * a + column_tokens(triple, n)[:n]
+    columns = (0,) * a + task.column_tokens(case, n)
     tokens = columns + (0,) * (width - len(columns))
-    return tuple(float(t) for t in tokens), (0,) * a + ad.digits(sum(triple), width - a)
+    return tuple(float(t) for t in tokens), task.machine.run(tokens)
 
 
 def lengths_for(windows: int, a: int, k: int) -> range:
@@ -129,15 +132,15 @@ def lengths_for(windows: int, a: int, k: int) -> range:
     return range(max(1, (windows - 1) * k - a + 1), windows * k - a + 1)
 
 
-def training_examples(counts: Sequence[int], k: int, count: int, rng: random.Random) -> list[Example]:
-    """count examples, an equal share per data window count, D7's three kinds in turn within each."""
+def training_examples(task: wt.Task, counts: Sequence[int], k: int, count: int, rng: random.Random) -> list[Example]:
+    """count examples, an equal share per data window count, the task's three kinds in turn within each (D7)."""
     examples: list[Example] = []
     for i in range(count):
         windows = counts[i % len(counts)]
         a = rng.randrange(k)
         n = rng.choice(lengths_for(windows, a, k))
-        triple = ad.training_triple(i // len(counts), n, rng, hold_out=n >= HOLD_OUT_FROM)
-        examples.append(example(triple, n, k, a))
+        case = task.training_case(i // len(counts), n, rng, n >= HOLD_OUT_FROM)
+        examples.append(example(task, case, n, k, a))
     return examples
 
 
@@ -159,18 +162,18 @@ def train_epoch(network: Any, examples: Sequence[Example], batch_size: int, rate
         network.learn_batch(rate, batch)
 
 
-class WindowAdder:
-    """A window-recurrent network as the catalogue's Adder at a length n."""
+class WindowModel:
+    """A window-recurrent network as its task's catalogue reads it at a length n."""
 
-    def __init__(self, network: Any, k: int) -> None:
-        self.network, self.k = network, k
+    def __init__(self, network: Any, k: int, task: wt.Task) -> None:
+        self.network, self.k, self.task = network, k, task
 
-    def _chunks(self, triples: Sequence[Triple], n: int) -> Iterator[tuple[list[int], list[Example]]]:
+    def _chunks(self, cases: Sequence[Any], n: int) -> Iterator[tuple[list[int], list[Example]]]:
         """
-        The triples' indices and examples, a width at a time in runs of at most CHUNK_TOKENS tokens,
+        The cases' indices and examples, a width at a time in runs of at most CHUNK_TOKENS tokens,
         each run's examples built only when it comes: memory bounded at any length.
         """
-        alignments = [alignment(t, n, self.k) for t in triples]
+        alignments = [alignment(self.task, c, n, self.k) for c in cases]
         groups: dict[int, list[int]] = {}
         for i, a in enumerate(alignments):
             groups.setdefault(data_windows(n, a, self.k), []).append(i)
@@ -178,23 +181,29 @@ class WindowAdder:
             rows = max(1, CHUNK_TOKENS // ((windows + 1) * self.k))
             for j in range(0, len(indices), rows):
                 chunk = indices[j : j + rows]
-                yield chunk, [example(triples[i], n, self.k, alignments[i]) for i in chunk]
+                yield chunk, [example(self.task, cases[i], n, self.k, alignments[i]) for i in chunk]
 
-    def adder(self, n: int) -> ad.Adder:
-        def add(triples: Sequence[Triple]) -> list[int]:
-            sums = [0] * len(triples)
-            for indices, rows in self._chunks(triples, n):
+    def predict(self, n: int) -> wt.Predict:
+        """Each case's labels from its first column (past its alignment) through its final window."""
+
+        def labels(cases: Sequence[Any]) -> list[wt.Labels]:
+            result: list[wt.Labels] = [() for _ in cases]
+            for indices, rows in self._chunks(cases, n):
                 predictions = self.network.classify_rows(self.network.prepare_dataset(rows))
                 for i, prediction in zip(indices, predictions, strict=True):
-                    sums[i] = ad.from_digits(prediction[alignment(triples[i], n, self.k) :])
-            return sums
+                    result[i] = tuple(prediction[alignment(self.task, cases[i], n, self.k) :])
+            return result
 
-        return add
+        return labels
 
-    def codes_used(self, triples: Sequence[Triple], n: int) -> set[int]:
-        """The codes every state of these additions snaps to, the initial state's among them."""
+    def evaluate(self, n: int, properties: Sequence[Any], limit: int | None = None) -> list[Any]:
+        """The task's properties at n against the network (a screen of each when limit)."""
+        return self.task.evaluate(self.predict(n), n, properties, limit)
+
+    def codes_used(self, cases: Sequence[Any], n: int) -> set[int]:
+        """The codes every state of these cases snaps to, the initial state's among them."""
         used: set[int] = set()
-        for _, rows in self._chunks(triples, n):
+        for _, rows in self._chunks(cases, n):
             states = self.network.backend.matrix([tokens for tokens, _labels in rows])
             used.update(code for codes in self.network.state_codes(states) for code in codes)
         return used
@@ -203,29 +212,14 @@ class WindowAdder:
 # the checks
 
 
-def check_properties(n: int, catalogue: Sequence[ad.Property]) -> list[ad.Property]:
-    """The catalogue at a check length: B3 only from HOLD_OUT_FROM (W24)."""
-    return [p for p in catalogue if p.id != "B3" or n >= HOLD_OUT_FROM]
+def check_properties(task: wt.Task, n: int, catalogue: Sequence[Any]) -> list[Any]:
+    """The catalogue at a check length: the held-out property (B3) only from HOLD_OUT_FROM (W24)."""
+    return [p for p in catalogue if p.id != task.held_out_id or n >= HOLD_OUT_FROM]
 
 
-def test_properties(catalogue: Sequence[ad.Property]) -> list[ad.Property]:
-    """The catalogue at a test length: every test length is unseen whole, so no B3 (W17)."""
-    return [p for p in catalogue if p.id != "B3"]
-
-
-def result_json(result: ad.PropertyResult) -> dict[str, Any]:
-    return {
-        "cases": result.cases,
-        "passed": result.passed,
-        "strata": {str(k): list(v) for k, v in sorted(result.strata.items())},
-        "failures": [{"triple": list(c.triple), "column": c.column} for c in result.failures],
-    }
-
-
-def _evaluate(
-    model: WindowAdder, n: int, properties: Sequence[ad.Property], limit: int | None = None
-) -> list[ad.PropertyResult]:
-    return ad.evaluate(model.adder(n), n, properties, limit=limit, shrink=False)
+def test_properties(task: wt.Task, catalogue: Sequence[Any]) -> list[Any]:
+    """The catalogue at a test length: every test length is unseen whole, so no held-out property (W17)."""
+    return [p for p in catalogue if p.id != task.held_out_id]
 
 
 def break_length(passes: Mapping[int, bool]) -> int:
@@ -260,8 +254,8 @@ class Settings:
     seeds: int = 5
     tests_past_break: bool = True  # False: a step's test pass ends at its first failing length (W12)
 
-    def catalogue(self) -> tuple[ad.Property, ...]:
-        return ad.catalogue(self.sampled, self.relation_sampled, self.per_stratum)
+    def catalogue(self, task: wt.Task) -> tuple[Any, ...]:
+        return task.catalogue(self.sampled, self.relation_sampled, self.per_stratum)
 
 
 @dataclass(frozen=True)
@@ -271,10 +265,13 @@ class RunSpec:
     s: int
     m: int
     seed: int
+    task: str = wt.ADDITION.name
 
     @property
     def key(self) -> str:
-        return f"{self.arm}-k{self.k}-s{self.s}-m{self.m}-seed{self.seed}"
+        """The run's name; an addition run's has no task (the matrix's keys)."""
+        prefix = "" if self.task == wt.ADDITION.name else f"{self.task}-"
+        return f"{prefix}{self.arm}-k{self.k}-s{self.s}-m{self.m}-seed{self.seed}"
 
     def step_counts(self, settings: Settings) -> list[list[int]]:
         """Each step's data window counts."""
@@ -303,22 +300,23 @@ def parameter_count(network: Any) -> int:
 
 def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], settings: Settings) -> dict[str, Any]:
     """One curriculum step: training to its stop, then its whole check and the test pass."""
-    model = WindowAdder(network, spec.k)
-    catalogue = settings.catalogue()
+    task = wt.task_named(spec.task)
+    model = WindowModel(network, spec.k, task)
+    catalogue = settings.catalogue(task)
     lengths = [w * spec.k for w in counts]
-    checks = {n: check_properties(n, catalogue) for n in lengths}
-    b1 = next(p for p in catalogue if p.id == "B1")
+    checks = {n: check_properties(task, n, catalogue) for n in lengths}
+    codes_property = next(p for p in catalogue if p.id == task.codes_id)
     screens: list[float] = []
     train_seconds: list[float] = []
     screen_seconds: list[float] = []
     best, since_best, stop, epochs = -1, 0, "budget", 0
-    whole: dict[int, list[ad.PropertyResult]] | None = None
+    whole: dict[int, list[Any]] | None = None
     for epoch in range(settings.max_epochs):
         rng = random.Random(f"window-train-{spec.key}-{step}-{epoch}")
         start = time.perf_counter()
         train_epoch(
             network,
-            training_examples(counts, spec.k, settings.epoch_examples, rng),
+            training_examples(task, counts, spec.k, settings.epoch_examples, rng),
             settings.batch_size,
             settings.rate,
             rng,
@@ -326,11 +324,11 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
         train_seconds.append(time.perf_counter() - start)
         epochs = epoch + 1
         start = time.perf_counter()
-        screen = [r for n in lengths for r in _evaluate(model, n, checks[n], settings.screen)]
+        screen = [r for n in lengths for r in model.evaluate(n, checks[n], settings.screen)]
         passed = sum(r.passed for r in screen)
         screens.append(passed / sum(r.cases for r in screen))
         # a passing screen triggers the whole check: a spread of cases can miss a rare failure
-        whole = {n: _evaluate(model, n, checks[n]) for n in lengths} if all(r.holds for r in screen) else None
+        whole = {n: model.evaluate(n, checks[n]) for n in lengths} if all(r.holds for r in screen) else None
         screen_seconds.append(time.perf_counter() - start)
         if whole is not None and all(r.holds for results in whole.values() for r in results):
             stop = "passed"
@@ -343,29 +341,29 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
                 stop = "plateau"
                 break
     start = time.perf_counter()
-    trained = whole if stop == "passed" and whole is not None else {n: _evaluate(model, n, checks[n]) for n in lengths}
+    trained = whole if stop == "passed" and whole is not None else {n: model.evaluate(n, checks[n]) for n in lengths}
     check_seconds = time.perf_counter() - start
     tests: dict[str, Any] = {}
     passes: dict[int, bool] = {}
     used: set[int] = set()
 
     def codes(n: int) -> set[int]:
-        return model.codes_used([c.triple for c in ad.property_cases(b1, n)[: settings.codes_cases]], n)
+        return model.codes_used(task.property_cases(codes_property, n)[: settings.codes_cases], n)
 
     for n in lengths:
         used |= codes(n)
     for n in settings.test_lengths:
         start = time.perf_counter()
-        results = _evaluate(model, n, test_properties(catalogue))
+        results = model.evaluate(n, test_properties(task, catalogue))
         by_id = {r.id: r for r in results}
         test_codes = codes(n)
         used |= test_codes
         passes[n] = all(r.holds for r in results)
         tests[str(n)] = {
             "passes": passes[n],
-            "reach": by_id["M3"].reach(),
+            "reach": task.reach(by_id[task.reach_id]),
             "codes": sorted(test_codes),
-            "properties": {r.id: result_json(r) for r in results},
+            "properties": {r.id: task.result_json(r) for r in results},
             "seconds": time.perf_counter() - start,
         }
         if not passes[n] and not settings.tests_past_break:
@@ -380,7 +378,7 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
         "stop": stop,
         "passes": all(r.holds for results in trained.values() for r in results),
         "screens": screens,
-        "checks": {str(n): {r.id: result_json(r) for r in results} for n, results in trained.items()},
+        "checks": {str(n): {r.id: task.result_json(r) for r in results} for n, results in trained.items()},
         "tests": tests,
         "break": reached,
         "window_ratio": data_windows(reached, 0, spec.k) / max(counts),
@@ -410,7 +408,7 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
             continue
         if network is None:
             network = (
-                build(spec.k, spec.s, spec.m, spec.seed)
+                build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed)
                 if step == 1
                 else load_network(str(steps_directory / f"step-{step - 1}.network.json"))
             )
@@ -421,12 +419,13 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
     last = steps[-1]
     return {
         "key": spec.key,
+        "task": spec.task,
         "arm": spec.arm,
         "k": spec.k,
         "s": spec.s,
         "m": spec.m,
         "seed": spec.seed,
-        "parameters": parameter_count(network or build(spec.k, spec.s, spec.m, spec.seed)),
+        "parameters": parameter_count(network or build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed)),
         "steps": steps,
         "break": last["break"],
         "works": last["break"] >= WORKS,
@@ -457,21 +456,22 @@ class Study:
 
 def load_config(path: Path) -> Study:
     """
-    A study's JSON config: "directory" (results/ and models/ under it), "workers", the Settings'
-    fields, and "matrix", a list of {"arm" (default "curriculum"), "k", "s", "m"}, each a list of
-    values, every combination run with every seed.
+    A study's JSON config: "directory" (results/ and models/ under it), "workers", "task" (default
+    addition; window_tasks.task_named), the Settings' fields, and "matrix", a list of {"arm" (default
+    "curriculum"), "k", "s", "m"}, each a list of values, every combination run with every seed.
     """
     config = json.loads(path.read_text())
     fields = {k: config[k] for k in Settings.__dataclass_fields__ if k in config}
     if "test_lengths" in fields:
         fields["test_lengths"] = tuple(fields["test_lengths"])
     settings = Settings(**fields)
+    task = wt.task_named(config.get("task", wt.ADDITION.name)).name
     runs: list[RunSpec] = []
     for cell in config["matrix"]:
         arm = cell.get("arm", "curriculum")
         assert arm in ARMS, f"an arm is one of {ARMS}; got {arm!r}"
         runs += [
-            RunSpec(arm, k, s, m, seed)
+            RunSpec(arm, k, s, m, seed, task)
             for k in cell["k"]
             for s in cell["s"]
             for m in cell["m"]

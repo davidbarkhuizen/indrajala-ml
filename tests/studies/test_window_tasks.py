@@ -1,0 +1,97 @@
+"""
+The window-recurrent study's tasks (indrajala_ml/studies/window_tasks.py): each target machine's
+labels are its task's answers, the machines are minimal, and a word of columns reads back as its case.
+"""
+
+import itertools
+import random
+
+import numpy as np
+import pytest
+
+from indrajala_ml.data import addition_data as ad
+from indrajala_ml.data import modular_division_data as md
+from indrajala_ml.studies import window_recurrent_certificate as wc
+from indrajala_ml.studies import window_tasks as wt
+
+
+def reachable(machine: wt.Mealy) -> list[int]:
+    seen, queue = {machine.start}, [machine.start]
+    for s in queue:
+        for t in range(machine.tokens):
+            r = int(machine.transition[s, t])
+            if r not in seen:
+                seen.add(r)
+                queue.append(r)
+    return queue
+
+
+def test_the_carry_machines_labels_are_the_sums_digits_at_any_alignment():
+    rng = random.Random(0)
+    for _ in range(500):
+        n, a, padding = rng.randrange(1, 12), rng.randrange(4), rng.randrange(1, 6)
+        triple = ad.uniform_triple(n, rng)
+        tokens = (0,) * a + wt.ADDITION.column_tokens(triple, n) + (0,) * padding
+        assert wt.ADDITION.machine.run(tokens) == (0,) * a + ad.digits(sum(triple), n + padding)
+
+
+@pytest.mark.parametrize("p", md.PRIMES)
+def test_the_modular_machines_labels_are_the_running_quotients_unchanged_by_zero_columns(p: int):
+    task = wt.ModularDivision(p)
+    rng = random.Random(p)
+    for _ in range(500):
+        n, a, padding = rng.randrange(1, 12), rng.randrange(4), rng.randrange(6)
+        pair = md.uniform_pair(n, rng)
+        labels = task.machine.run((0,) * a + task.column_tokens(pair, n) + (0,) * padding)
+        answers = md.answers(pair, n, p)
+        assert labels == (md.undefined(p),) * a + answers + (answers[-1],) * padding
+
+
+@pytest.mark.parametrize(
+    ("task", "states"), [(wt.ADDITION, 3), (wt.ModularDivision(5), 25), (wt.ModularDivision(7), 49)]
+)
+def test_each_machine_is_minimal_every_state_reachable(task: wt.Task, states: int):
+    machine = task.machine
+    assert machine.states == states and len(reachable(machine)) == states
+    D = {s: machine.output[s].astype(np.int8) for s in range(states)}
+    G = {s: machine.transition[s].astype(np.int16) for s in range(states)}
+    assert len(wc.minimise(list(range(states)), D, G)) == states
+
+
+def labels_from(machine: wt.Mealy, state: int, word: list[int]) -> list[int]:
+    labels: list[int] = []
+    for token in word:
+        labels.append(int(machine.output[state, token]))
+        state = int(machine.transition[state, token])
+    return labels
+
+
+def test_two_states_are_told_apart_by_the_shortest_word():
+    carry = wt.ADDITION.machine
+    assert carry.distinguishing(0, 2) == [0]  # a zero column's digit is the carry
+    machine = wt.ModularDivision(5).machine
+    for s, r in itertools.combinations(range(machine.states), 2):
+        word = machine.distinguishing(s, r)
+        mine, theirs = labels_from(machine, s, word), labels_from(machine, r, word)
+        assert mine[:-1] == theirs[:-1] and mine[-1] != theirs[-1]
+        shorter = itertools.product(range(machine.tokens), repeat=len(word) - 1)
+        assert all(labels_from(machine, s, list(w)) == labels_from(machine, r, list(w)) for w in shorter)
+
+
+def test_a_word_reads_back_as_its_case():
+    rng = random.Random(4)
+    triple = ad.uniform_triple(7, rng)
+    assert wt.ADDITION.case_json(wt.ADDITION.column_tokens(triple, 7)) == {"triple": list(triple), "n": 7}
+    task = wt.ModularDivision(7)
+    pair = md.uniform_pair(7, rng)
+    assert task.case_json(task.column_tokens(pair, 7)) == {"pair": list(pair), "n": 7}
+
+
+def test_tasks_are_named():
+    assert wt.task_named("addition") is wt.ADDITION
+    assert wt.task_named("modular-division-7") == wt.ModularDivision(7)
+    assert wt.ModularDivision(5).name == "modular-division-5"
+    assert (wt.ADDITION.machine.tokens, wt.ADDITION.machine.classes) == (27, 3)
+    assert (wt.ModularDivision(7).machine.tokens, wt.ModularDivision(7).machine.classes) == (9, 8)
+    with pytest.raises(AssertionError):
+        wt.task_named("modular-division-4")
