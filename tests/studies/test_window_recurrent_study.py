@@ -351,6 +351,24 @@ def test_a_config_names_its_task(tmp_path: Path):
     assert spec.task == "modular-division-7" and spec.key == "modular-division-7-curriculum-k4-s4-m64-seed0"
 
 
+def test_e3_e4_reruns_the_matrix_and_control_at_their_cells():
+    """C0: E3 and E4's seeds 0-4 at the matrix's and the control's cells are those runs again, same keys and settings."""
+    scripts = Path(__file__).parents[2] / "scripts"
+    e3_e4, matrix, control = (
+        wr.load_config(scripts / f"window_recurrent_{name}.json") for name in ("e3_e4", "matrix", "control")
+    )
+    keys = {spec.key for spec in e3_e4.runs}
+    assert len(keys) == len(e3_e4.runs) == (6 + 4) * 20 + 2 * 20
+    cells = {("curriculum", 4, 4), ("curriculum", 1, 16), ("all-at-once", 4, 4), ("all-at-once", 1, 16)}
+    reruns = [spec for spec in matrix.runs + control.runs if (spec.arm, spec.k, spec.s) in cells]
+    assert len(reruns) == 6 * 5 + 2 * 5 and {spec.key for spec in reruns} <= keys
+    assert (
+        e3_e4.settings
+        == dataclasses.replace(matrix.settings, seeds=20)
+        == dataclasses.replace(control.settings, seeds=20)
+    )
+
+
 def test_status_counts_each_running_runs_own_steps(tmp_path: Path):
     runs = [wr.RunSpec("curriculum", 1, 4, 3, 0), wr.RunSpec("all-at-once", 1, 4, 3, 0)]
     study = wr.Study(tmp_path, SMALL, runs, 0)

@@ -415,6 +415,11 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    `_p7.json`, `s` 16, D20), certified and long-tested: findings.
 7. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
    about 240 runs; C0's reruns compared first): findings; E1's certificate run on every network.
+   **Config in:** `scripts/window_recurrent_e3_e4.json`, 240 runs (the curriculum arm at `k` 4
+   `s` 4, `m` 3, 4, 6, 8, 16, 32, and at `k` 1 `s` 16, `m` 3, 4, 8, 16; the all-at-once arm at
+   `m` 16 and 8 of those cells; seeds 0-19), the matrix's settings otherwise; 6 workers. Its
+   seeds 0-4 at the matrix's cells (30 runs) and the control's (10) are those runs again, same
+   keys and settings (a test checks it), so C0 compares their result files.
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
 9. **E5 on `pyramidon`:** findings.
 10. **The report** (D11), the README section, the parent's stage 10 marked done; this workplan
