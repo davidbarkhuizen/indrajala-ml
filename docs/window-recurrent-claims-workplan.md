@@ -3,7 +3,7 @@
 **Status: written 2026-10-13, at the owner's request ("the work we would need to do to substantiate
 our claims/findings"), after the matrix (stage 9 of
 [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md)) and while its control
-ran. Decisions D1-D19 settled (D13 and D14 by the owner, the rest under the owner's standing
+ran. Decisions D1-D20 settled (D13 and D14 by the owner, the rest under the owner's standing
 delegation), each with its options' pros and cons. Stages 1-5 done (stage 2 refined D3's snap margin: a near tie branches).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
@@ -163,7 +163,7 @@ anything at `k` 1, where it sees one column.
 windows of `k` 2 and 4 need the transformer to add inside the window, so the baseline is at `k` 1
 only.
 
-### E7. Modular division, the second task (C7; D14-D17)
+### E7. Modular division, the second task (C7; D14-D20)
 
 **Design.** Two base-3 numbers `a` and `b`, read most significant digit first a column at a time
 (a column's token is `3 a_i + b_i`, 9 values), and at every column the running answer
@@ -374,6 +374,19 @@ Settled under the owner's standing delegation, with each option's pros and cons:
   - (b) Stage 2's names for every task. Pros: one schema with E1's files. Cons: a modular
     certificate's "carries" are states of 25 or 49.
   - (c) Stage 2's names for addition, the target's for others. Cons: two schemas, a special case.
+- **D20. E7's state width `s` (stage 6). Settled: (a), the owner agreeing ("let's not run both
+  widths if we can avoid it").** E7's design fixes `p`, the arms, `k` and
+  `m`, not `s`. On addition `s` made no clear difference (the matrix: 24 of 45 runs working at
+  `s` 4, 21 at 16; robustly certified 21 and 17).
+  - (a) *Chosen.* `s` 16 only: 80 runs. Pros: a state of 16 units has room for 49 states and 32-64
+    codes kept well apart (the snap's margins), so a failure says more about the design than about
+    a cramped cell; the cost as planned (about 8 h). Cons: `s`'s effect on a 25-49-state task
+    unmeasured.
+  - (b) `s` 4 only. Pros: the matrix's slightly better width on addition; smaller networks. Cons:
+    4 units carrying up to 49 states, 64 codes crowded in 4 dimensions: a failure would be
+    ambiguous.
+  - (c) Both: 160 runs. Pros: measures `s` on the second task. Cons: about 16 h of `jebel`, twice
+    the plan, for a factor no claim rests on (C7 asks whether the design learns the task).
 
 ## Stages
 
@@ -398,7 +411,8 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    105 networks recertified by the new code (D18, D19), branched and strict, every field but the
    timings equal under D19's names: 105 compared and 0 differ against `certificates/`, 105 and 0
    against `certificates-strict/` (on `pyramidon`, 3 workers, 2026-10-13).
-6. **E7 on `jebel`:** the modular-division matrix, certified and long-tested: findings.
+6. **E7 on `jebel`:** the modular-division matrix (`scripts/window_recurrent_e7_p5.json` and
+   `_p7.json`, `s` 16, D20), certified and long-tested: findings.
 7. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
    about 240 runs; C0's reruns compared first): findings; E1's certificate run on every network.
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
