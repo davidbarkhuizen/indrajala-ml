@@ -1,6 +1,7 @@
 # Workplan: move the demos to their own repository
 
-**Status: decisions D1-D7 settled (2026-10-13). Stage 1 not started.**
+**Status: decisions D1-D7 settled (2026-10-13). Stage 1 done (2026-10-13): the four modules and their
+tests moved, every script and doc updated; its jebel probe (step 3) runs once E7 has ended.**
 
 The demos, the matplotlib plotting and the tkinter digit capture move to a new repository,
 `indrajala-demos`, which uses indrajala-ml as a git submodule. indrajala-ml keeps the library,

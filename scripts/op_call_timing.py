@@ -38,7 +38,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from process_runs import interleaved_runs, run_json_worker
 
-from indrajala_ml.demos.conv import demo_conv_rust_vs_vectorized_digit_recognition as demo
+from indrajala_ml.measurement import conv_comparison as demo
 
 DEFAULT_OPS = ["conv_accumulate_gradient_batch"]
 DEFAULT_OVERRIDES = "0:0"

@@ -261,7 +261,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.conv.demo_conv_rust_vs_vectorized_digit_recognition",
+        module="indrajala_ml.measurement.conv_comparison",
         title="Rust vs vectorized conv networks",
         summary="Headless - numpy vs Rust conv network training time from identical weights, UCI digits and MNIST.",
         description=(
@@ -276,7 +276,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.benchmarks.demo_layer_op_timing",
+        module="indrajala_ml.measurement.layer_op_timing",
         title="Per-op layer timing, numpy vs Rust",
         summary="Headless - microseconds per call of every dense and conv layer op, numpy vs Rust.",
         description=(
@@ -291,7 +291,7 @@ DEMOS: list[DemoInfo] = [
         ),
     ),
     DemoInfo(
-        module="indrajala_ml.demos.benchmarks.demo_batch_size_scaling",
+        module="indrajala_ml.studies.batch_size_scaling_run",
         title="Batch-size scaling (linear LR rule)",
         summary="Headless - does scaling the learning rate with the batch hold from batch 32 to 1024 on full MNIST?",
         description=(

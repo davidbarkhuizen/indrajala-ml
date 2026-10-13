@@ -12,7 +12,7 @@ import numpy as np
 
 from indrajala_ml.data.digits_data import load_digits_dataset, split_train_test
 from indrajala_ml.data.mnist_data import load_mnist_dataset
-from indrajala_ml.demos.timing import timed_call, timed_train
+from indrajala_ml.measurement.timing import timed_call, timed_train
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
