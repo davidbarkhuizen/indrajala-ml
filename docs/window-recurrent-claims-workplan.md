@@ -412,6 +412,19 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     `k` 1 `s` 16), 20 seeds each: 80 runs. Pros: (a) answers D8, (b) splits a difference between
     the attention and the FFNs, at a quarter more runs; baseline runs that fail stop early on
     plateaus. Cons: about 2 h more of `jebel` than (a) alone.
+- **D22. E7's long tests (stage 6). Settled: (a), under the owner's delegation.** D9 names
+  addition's properties (B1, M3); division's catalogue (D18) has U1 (B1's place), S2 (M3's) and
+  S1, and U2 is never checked at a test length. Lengths and sizes as D9: 128, 256 and 1,024,
+  100,000 sampled, 1,000 per stratum, S2 at 1, 2, 4, ..., `n`.
+  - (a) *Chosen.* U1, S1 and S2: every property a test pass reads. Pros: every reachable final
+    state checked at 1,024 (25 or 49 strata), the one thing division's tests check that addition's
+    long tests had no counterpart for; the long tests then test what the certificate certifies, state
+    by state. Cons: 136,000-160,000 cases a network at each length against E1's 111,000, about 1.2-1.5
+    times E1's cost a network.
+  - (b) U1 and S2, D9's two in division's terms. Pros: E1's cost; the same shape as E1's table.
+    Cons: a final state a sample of 100,000 rarely ends in goes untested at long lengths.
+  - (c) U1 alone. Pros: cheapest. Cons: neither the long undefined runs nor the final states
+    tested past the check lengths.
 
 ## Stages
 
@@ -443,6 +456,10 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    runs working, certified and robustly certified with Wilson intervals; the runs by works and
    class; per class the networks long-tested and every failure). E1's tables and long-test
    figures come out of it unchanged.
+   **The long tests' tool in:** `long-test NETWORK ... --task T [--properties ...] --out DIR
+   --workers W` (D9's lengths and sizes, a network done before skipped), `check`'s results file
+   for each; for E7, `--properties U1 S1 S2` (D22). It reproduces E1's results at 128 exactly (two
+   networks, on `pyramidon`).
 7. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
    about 240 runs; C0's reruns compared first): findings; E1's certificate run on every network.
    **Config in:** `scripts/window_recurrent_e3_e4.json`, 240 runs (the curriculum arm at `k` 4
