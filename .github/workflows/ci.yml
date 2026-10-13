@@ -52,7 +52,7 @@ jobs:
           workspaces: rust -> target
 
       - name: Setup
-        run: ./cli setup --no-os-packages --rust-wheel-dir .rust-wheel --no-data
+        run: ./cli setup --rust-wheel-dir .rust-wheel --no-data
 
       - name: Lint
         run: ./cli lint
@@ -133,7 +133,7 @@ jobs:
           workspaces: rust -> target
 
       - name: Setup
-        run: ./cli setup --no-os-packages --rust-wheel-dir .rust-wheel
+        run: ./cli setup --rust-wheel-dir .rust-wheel
 
       - name: Test
         run: ./cli test ${{ matrix.suite }}

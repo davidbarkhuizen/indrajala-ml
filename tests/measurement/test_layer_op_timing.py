@@ -1,10 +1,4 @@
-from indrajala_ml.demos.registry import DEMOS
 from indrajala_ml.measurement import layer_op_timing as demo
-
-
-def test_is_registered():
-
-    assert demo.__name__ in {info.module for info in DEMOS}
 
 
 def test_every_case_runs_on_both_backends():

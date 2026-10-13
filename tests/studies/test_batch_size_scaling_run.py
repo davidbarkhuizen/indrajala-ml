@@ -1,12 +1,6 @@
 from indrajala_ml.data.mnist_data import load_mnist_dataset
-from indrajala_ml.demos.registry import DEMOS
 from indrajala_ml.studies import batch_size_scaling as bss
 from indrajala_ml.studies import batch_size_scaling_run as demo
-
-
-def test_is_registered():
-
-    assert demo.__name__ in {info.module for info in DEMOS}
 
 
 def test_runs_on_a_small_subset_with_the_scaled_rate():

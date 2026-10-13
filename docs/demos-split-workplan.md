@@ -1,7 +1,12 @@
 # Workplan: move the demos to their own repository
 
 **Status: decisions D1-D7 settled (2026-10-13). Stage 1 done (2026-10-13): the four modules and their
-tests moved, every script and doc updated; its jebel probe (step 3) runs once E7 has ended.**
+tests moved, every script and doc updated; its jebel probe (step 3) runs once E7 has ended.
+Stage 2 done (2026-10-13): [indrajala-demos](https://github.com/davidbarkhuizen/indrajala-demos)
+holds the demos, plotting and capture with their history (106 commits, PR references rewritten to
+`davidbarkhuizen/indrajala-ml#N`); indrajala-ml no longer depends on matplotlib or tkinter. The
+three measurement tests' registry checks moved there as one test; the library-only training
+test stayed. The plan retires once the jebel probe is recorded.**
 
 The demos, the matplotlib plotting and the tkinter digit capture move to a new repository,
 `indrajala-demos`, which uses indrajala-ml as a git submodule. indrajala-ml keeps the library,
