@@ -46,7 +46,7 @@ import socket
 import subprocess
 import time
 import traceback
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -75,6 +75,7 @@ HOLD_OUT_FROM = 3  # W24: below it every triple is trained on, and B3 isn't chec
 RETRIES = 1
 WORKS = 16  # W10: a model works when its break length is at least this
 ARMS = ("curriculum", "all-at-once")
+CHUNK_TOKENS = 1 << 20  # tokens a forward pass at most: memory bounded at any length (1,024 rows at 1,024 columns)
 
 Example = tuple[tuple[float, ...], tuple[int, ...]]
 
@@ -164,15 +165,25 @@ class WindowAdder:
     def __init__(self, network: Any, k: int) -> None:
         self.network, self.k = network, k
 
-    def _examples(self, triples: Sequence[Triple], n: int) -> list[Example]:
-        return [example(t, n, self.k, alignment(t, n, self.k)) for t in triples]
+    def _chunks(self, triples: Sequence[Triple], n: int) -> Iterator[tuple[list[int], list[Example]]]:
+        """
+        The triples' indices and examples, a width at a time in runs of at most CHUNK_TOKENS tokens,
+        each run's examples built only when it comes: memory bounded at any length.
+        """
+        alignments = [alignment(t, n, self.k) for t in triples]
+        groups: dict[int, list[int]] = {}
+        for i, a in enumerate(alignments):
+            groups.setdefault(data_windows(n, a, self.k), []).append(i)
+        for windows, indices in groups.items():
+            rows = max(1, CHUNK_TOKENS // ((windows + 1) * self.k))
+            for j in range(0, len(indices), rows):
+                chunk = indices[j : j + rows]
+                yield chunk, [example(triples[i], n, self.k, alignments[i]) for i in chunk]
 
     def adder(self, n: int) -> ad.Adder:
         def add(triples: Sequence[Triple]) -> list[int]:
-            examples = self._examples(triples, n)
             sums = [0] * len(triples)
-            for indices in _by_width(examples).values():
-                rows = [examples[i] for i in indices]
+            for indices, rows in self._chunks(triples, n):
                 predictions = self.network.classify_rows(self.network.prepare_dataset(rows))
                 for i, prediction in zip(indices, predictions, strict=True):
                     sums[i] = ad.from_digits(prediction[alignment(triples[i], n, self.k) :])
@@ -182,10 +193,9 @@ class WindowAdder:
 
     def codes_used(self, triples: Sequence[Triple], n: int) -> set[int]:
         """The codes every state of these additions snaps to, the initial state's among them."""
-        examples = self._examples(triples, n)
         used: set[int] = set()
-        for indices in _by_width(examples).values():
-            states = self.network.backend.matrix([examples[i][0] for i in indices])
+        for _, rows in self._chunks(triples, n):
+            states = self.network.backend.matrix([tokens for tokens, _labels in rows])
             used.update(code for codes in self.network.state_codes(states) for code in codes)
         return used
 

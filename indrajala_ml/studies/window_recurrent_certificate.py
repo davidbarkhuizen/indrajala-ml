@@ -383,13 +383,17 @@ def certify(
     )
 
 
-def certify_file(path: Path) -> dict[str, Any]:
-    """A saved network's certificate as JSON, with the file's path and sha256."""
+def certify_file(path: Path, snap_ratio: float = SNAP_RATIO) -> dict[str, Any]:
+    """
+    A saved network's certificate as JSON, with the file's path, sha256 and snap ratio (1.0: strict,
+    the network's own snaps only, no near tie branched).
+    """
     network = load_network(str(path))
-    certificate = certify(NetworkMachine(network), network.recurrence.codes.count)
+    certificate = certify(NetworkMachine(network), network.recurrence.codes.count, snap_ratio)
     return {
         "network": str(path),
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "snap_ratio": snap_ratio,
         **certificate.to_json(),
     }
 
