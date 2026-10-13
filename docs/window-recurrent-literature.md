@@ -1,9 +1,10 @@
 # Literature review: learned recurrent adders and length generalisation
 
 **Status: written 2026-10-13, after the window-recurrent matrix (stage 9) and while its control ran,
-to judge which findings are new. It backs
-[window-recurrent-claims-workplan.md](window-recurrent-claims-workplan.md), which plans the work to
-substantiate them.** Every paper read is kept in `~/code/papers/` as PDF and text, under the file
+to judge which findings are new; extended the same day, after the certificate (E1), to the older
+literature on discretised recurrent states and automaton extraction, which the first searches
+missed. It backs [window-recurrent-claims-workplan.md](window-recurrent-claims-workplan.md), which
+plans the work to substantiate them.** Every paper read is kept in `~/code/papers/` as PDF and text, under the file
 name given; arXiv ids are given for each.
 
 ## Scope and method
@@ -60,6 +61,27 @@ digits alone, by a curriculum of 1, then 1-2, then 1-3 windows:
 | van den Oord et al. 2017, VQ-VAE (1711.00937; `van-den-oord-2017-vq-vae-neural-discrete-representation`) | learned codebook, nearest-code snapping, straight-through, codebook and commitment losses | | our discretiser (W4, W14) |
 | Brandoit et al. 2026, Length-Independent State Tracking under a Parallel Scan (2609.32447; `brandoit-2026-length-independent-state-tracking`) | formalises finite-state tracking at finite precision; proves tracking correct at every length needs contraction (against perturbation) and separation (between states); affine recurrences realise only definite automata | a non-affine scan-compatible RNN learns exact transition tables, which certifies correctness beyond the tested lengths | the theory for why snapping helps (it contracts every state onto a code and keeps codes apart), and the model for a certificate: an extracted exact transition table |
 
+### Discretised states during training, and automaton extraction (the extension)
+
+The first searches looked for length generalisation and discrete states in recent work; this line,
+from grammatical inference with recurrent networks (1990s onward), is the closest prior work to the
+snap and the certificate.
+
+| paper | what it does | result | bearing |
+| --- | --- | --- | --- |
+| Zeng, Goodman & Smyth 1993, Learning Finite State Machines with Self-Clustering Recurrent Networks (Neural Computation 5:976; `zeng-1993-self-clustering-recurrent-networks`) | a second-order RNN's state hard-thresholded **during training**, trained by a pseudo-gradient (the sigmoid's gradient through the threshold: straight-through in all but name) | the analog network's clusters drift and merge on long strings (14 of 15 networks, some at 1.3x the training length); the discretised network's states are isolated points, so it "behaves exactly like a state machine": the machine read off it, Moore-minimised, is the target (Tomita 4: 6 points to 4 states), and it classifies correctly "independent of the lengths" | **the snap, the drift it cures, and reading the exact machine off and minimising it are all here**, for binary-input acceptors of a few states |
+| Das & Mozer 1993, A Unified Gradient-Descent/Clustering Architecture for Finite State Machine Induction (NeurIPS 6; `das-1993-unified-gradient-clustering-fsm-induction`) | DOLCE: an RNN with an adaptive clustering of its state space learned with the weights; the state recovered as the most probable cluster | better generalisation than unclustered and rigidly quantised nets on the Tomita languages | **a learned codebook in the loop**, VQ's ancestor for recurrent states |
+| Kolen 1993, Fool's Gold: Extracting Finite State Machines from Recurrent Network Dynamics (NeurIPS 6; `kolen-1993-fools-gold-extracting-fsm`) | shows that extraction by partitioning a continuous state space can return illusory machines (sensitivity to initial conditions, the measurement's granularity) | | the critique a snapped state escapes: our machine isn't inferred from a partition, it is the network |
+| Omlin & Giles 1996, Extraction of Rules from Discrete-Time Recurrent Neural Networks (Neural Networks 9:41; `omlin-1996-extraction-rules-discrete-time-rnn`) | DFAs extracted by quantising a trained second-order RNN's state space, then minimised | the smallest consistent extracted DFA generalises better than the network it came from | certifying the extracted machine, not sampling the network, is the old lesson too |
+| Weiss, Goldberg & Yahav 2018, Extracting Automata from Recurrent Neural Networks Using Queries and Counterexamples (ICML; 1711.09576; `weiss-2018-extracting-automata-queries-counterexamples`) | Angluin's L* with the RNN as teacher, an abstraction of its state space refined on conflict | on networks at 100% train and test accuracy, extraction finds words the network misclassifies, outside both sets | **"high test accuracy, still wrong" is known in kind**; our certificate's two networks passing to 64 columns and wrong at 12 are a case of it |
+| Wang & Niepert 2019, State-Regularized Recurrent Neural Networks (ICML; 1901.08817; `wang-2019-state-regularized-rnns`) | a GRU/LSTM whose state is a softmax-weighted mix of `k` learnable centroids, nearest-centroid as the temperature goes to 0, trained end to end | the minimal correct DFA recovered for every Tomita grammar; with `k` 50 available the network uses only the minimal number; better extrapolation on balanced parentheses; mentions Zeng's drift | **the modern learned-centroid state**, the nearest to our codes; it reports the minimal machine used, where ours use 3-11 codes and minimise to 3 |
+| Oliva & Lago-Fernández 2020, Separation of Memory and Processing in Dual Recurrent Neural Networks (2005.13971; `oliva-2020-dual-recurrent-memory-processing`) | noise in the recurrent units' activation drives them to a binary regime; regular languages and **addition in bases 2 and 10** | the minimal Moore machine extracted for base-2 addition is the carry automaton; tested on strings of 200,000 digits | **a gradient-trained, effectively discrete RNN that learns the carry automaton, extracted**: tested, not certified; one digit a step, no transformer |
+| Lan, Geyer, Chemla & Katzir 2022, Minimum Description Length Recurrent Neural Networks (TACL 10; 2111.00600; `lan-2022-minimum-description-length-rnns`) | networks found by evolutionary search under an MDL objective (no gradient), with floor and other units | a binary adder from 400 pairs, **proved correct for every input by hand** (induction on the carry); "no other RNN has been proven to hold a carry-over ... for an unbounded number of digits" | **a proof for all lengths of a learned adder exists**: by hand, of one network found by search |
+| Michalenko et al. 2019, Representing Formal Languages: A Comparison between Finite Automata and Recurrent Neural Networks (ICLR; 1902.10297; `michalenko-2019-representing-formal-languages-fa-rnn`) | whether a simple decoding maps a trained RNN's states to the minimal DFA's | one exists, but onto an abstraction of the minimal DFA (its states clustered into "superstates"), not its states | background: a continuous state needn't hold the minimal machine's states apart, which a snapped one is trained to |
+| Delétang et al. 2023, Neural Networks and the Chomsky Hierarchy (ICLR; 2207.02098; `deletang-2022-neural-networks-chomsky-hierarchy`) | 20,910 models over 15 tasks, the Chomsky hierarchy as the predictor of length generalisation | its binary addition feeds the operands one after the other (context-sensitive): only a tape-augmented RNN generalises | not our task: aligned columns make addition a finite transducer, which is why a finite state can do it |
+| Liu et al. 2023, Transformers Learn Shortcuts to Automata (ICLR; 2210.10749; `liu-2022-transformers-shortcuts-automata`) | shallow transformers simulate automata by parallel "shortcuts" | standard training finds such shortcuts; the paper studies their brittleness and mitigations | why a transformer alone (fixed depth) doesn't give every length, and a recurrence does |
+| Ahuja & Mansouri 2024, On Provable Length and Compositional Generalization (2402.04875; `ahuja-2024-provable-length-compositional-generalization`) | sufficient conditions for length generalisation of limited-capacity sequence models | provable, under assumptions on the hypothesis class and the training distribution | a theory of when, not a check of a given network |
+
 ### Length generalisation in recurrent models
 
 | paper | what it does | result | bearing |
@@ -104,24 +126,55 @@ program execution).
   Gu).
 - Curricula helping algorithmic learning (Price et al.; Fan et al.); Rational Transductors'
   "curriculum" is uniform length sampling, close to our all-at-once arm.
+- **From the extension:** discretising the recurrent state during training with a straight-through
+  style gradient, so that it stops drifting and *is* a finite machine, read off exactly and
+  minimised to the target (Zeng et al. 1993); a learned clustering or codebook of the state
+  trained with the weights (Das & Mozer 1993; Wang & Niepert 2019, who recover the minimal DFA);
+  extracting the carry automaton from an effectively discrete gradient-trained adder (Oliva &
+  Lago-Fernández 2020, tested to 200,000 digits); a hand proof that one learned (evolved) adder
+  is correct for every input (Lan et al. 2022); networks at 100% test accuracy that extraction
+  shows wrong elsewhere (Weiss et al. 2018). Extraction from a continuous state can mislead
+  (Kolen 1993), and an extracted machine can be better than its network (Omlin & Giles 1996).
 
-**Not found.**
+**Not found** (revised after the extension: the snap's idea and the extraction are 1993's; what
+stays new is narrower and stated so).
 
 1. **The design:** a transformer over a window of columns with a VQ-snapped GRU state handed
    between windows, trained end to end from input-output pairs, for exact arithmetic. The nearest
    are Rational Transductors (a recurrence per token, continuous and constrained) and register
-   tokens (chunks with a continuous carried state, which doesn't extrapolate).
+   tokens (chunks with a continuous carried state, which doesn't extrapolate); the discretised
+   RNNs above (Zeng; Das & Mozer; Wang & Niepert; Oliva) read one symbol a step with a small cell
+   and no transformer, on acceptors or binary addition.
 2. **An effect of the codebook's size on whether training finds the solution** when a codebook of
-   the solution's size (3) would do: more codes, more working runs.
+   the solution's size (3) would do: more codes, more working runs. Wang & Niepert give their
+   networks spare centroids (`k` 50) and find the minimal number used; they report no success
+   rate against `k`. Ours differ in both: the working networks use 3-11 codes (redundant copies
+   of a carry, minimised away), and the rate of working runs rises with `m`.
 3. **A certificate for a learned window-recurrent adder:** because the state is snapped, the
    next state is an exact function of (code, window contents), and both sets are finite (`m`
    codes; `27^k` windows, 531,441 at `k` 4), so the learned machine can be enumerated and checked
    against the carry automaton for every length at once. Brandoit et al. certify their NFSM's
    transition tables likewise; no certificate for a learned adder with a transformer inside the
-   step was found.
+   step was found. **Revised:** reading the exact machine off a discretised network and
+   minimising it is Zeng et al.'s (1993), and a learned adder proved for every input is Lan et
+   al.'s (2022, by hand, one evolved network). What stays new: the check is automatic and
+   complete over an input alphabet far too large to read off training data (every one of `27^k`
+   windows from every reachable code), it carries numerical margins (a near tie branches, so a
+   pass holds for either rounding), it compares against a transducer's outputs (digits and
+   carries) rather than an acceptor's verdict, and it ran on 105 gradient-trained networks (48
+   certified robustly, 52 strictly, every one minimising to the 3-state carry automaton). That it
+   catches networks that pass 100,000-case tests at every length to 64 columns (two, wrong at
+   12) is Weiss et al.'s phenomenon, shown here with a complete check rather than a search.
 4. **A controlled curriculum comparison** for this design: the control found none at 5 seeds
    (12 of 15 each way), so the finding is that this design needs no curriculum, against the
    curricula of the Neural GPU (Price et al.) and looped transformers (Fan et al.).
+
+**Positioning, after the extension.** The claim to make is not "a discretised state makes a
+network a finite machine that can be read off" (1993), but: a transformer-in-the-step,
+window-recurrent network with a VQ-snapped state learns base-3 addition from examples, and its
+learned machine can be certified exactly and automatically over every window, at every length
+and alignment, with margins; and certification shows sampled long tests overstate working.
+E2 (the continuous ablation) and E6 (the cell without the transformer) say which part matters.
 
 **Weaker than the literature, to fix before any claim:** test lengths (64 against 1,000-2,000),
 seeds per cell (5 against Price's 15), and no ablation of the snapping itself.
@@ -130,4 +183,7 @@ seeds per cell (5 against Price's 15), and no ablation of the snapping itself.
 
 1511.08228, 1611.00736, 2003.08494, 2511.22751, 2602.07599, 2406.00075, 1811.12530, 1711.00937,
 2609.32447, 2507.02782, 2609.09157, 2609.16372; and, from the window-recurrent workplan,
-2207.06881, 2203.07852, 1406.1078, 2108.12409, 2212.10554.
+2207.06881, 2203.07852, 1406.1078, 2108.12409, 2212.10554. The extension: 1711.09576, 1901.08817,
+2005.13971, 2111.00600, 1902.10297, 2207.02098, 2210.10749, 2402.04875; Zeng, Goodman & Smyth,
+Neural Computation 5(6):976-990, 1993 (doi 10.1162/neco.1993.5.6.976); Das & Mozer, NeurIPS 6,
+19-26, 1993; Kolen, NeurIPS 6, 501-508, 1993; Omlin & Giles, Neural Networks 9(1):41-52, 1996.
