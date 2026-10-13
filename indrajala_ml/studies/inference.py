@@ -1,0 +1,137 @@
+"""
+The statistics the window-recurrent claims are analysed by, fixed before any run
+(docs/window-recurrent-claims-workplan.md, D4): a rate's Wilson 95% interval, Fisher's exact test of
+two arms, the Cochran-Armitage test of a trend over a cell's code counts, the Mann-Whitney test of
+two samples (examples to pass), and Holm's correction over a family of tests. By hand (no scipy):
+Fisher's test and Mann-Whitney's without ties are exact, in integers; Cochran-Armitage and
+Mann-Whitney with ties take the normal approximation.
+"""
+
+from __future__ import annotations
+
+import math
+from collections.abc import Sequence
+from dataclasses import dataclass
+from fractions import Fraction
+from statistics import NormalDist
+
+Z95 = NormalDist().inv_cdf(0.975)
+
+
+def _two_sided(z: float) -> float:
+    """A standard normal statistic's two-sided p value."""
+    return math.erfc(abs(z) / math.sqrt(2))
+
+
+def wilson(successes: int, trials: int, z: float = Z95) -> tuple[float, float]:
+    """A rate's Wilson score interval (95% by default); no trials, the whole of [0, 1]."""
+    assert 0 <= successes <= trials
+    if trials == 0:
+        return 0.0, 1.0
+    rate = successes / trials
+    centre = rate + z * z / (2 * trials)
+    spread = z * math.sqrt(rate * (1 - rate) / trials + z * z / (4 * trials * trials))
+    scale = 1 + z * z / trials
+    low = 0.0 if successes == 0 else (centre - spread) / scale  # exact at the ends, not 1e-17 off
+    high = 1.0 if successes == trials else (centre + spread) / scale
+    return low, high
+
+
+def fisher_exact(a: int, b: int, c: int, d: int) -> float:
+    """
+    The two-sided p value of Fisher's exact test of the table [[a, b], [c, d]] (rows: the arms;
+    columns: working, not): the probability, under the margins fixed, of a table no more likely
+    than this one, its terms compared exactly as integers.
+    """
+    assert min(a, b, c, d) >= 0
+    first, second, working = a + b, c + d, a + c
+    low, high = max(0, working - second), min(working, first)
+    weights = {x: math.comb(first, x) * math.comb(second, working - x) for x in range(low, high + 1)}
+    observed = weights[a]
+    return float(Fraction(sum(w for w in weights.values() if w <= observed), sum(weights.values())))
+
+
+@dataclass(frozen=True)
+class Trend:
+    z: float  # positive: the rate rises with the score
+    p: float  # two-sided
+
+
+def cochran_armitage(successes: Sequence[int], trials: Sequence[int], scores: Sequence[float]) -> Trend:
+    """
+    The Cochran-Armitage test of a linear trend in a rate over ordered groups (each with its
+    successes, trials and score: the code count, say), two-sided, by the normal approximation.
+    """
+    assert len(successes) == len(trials) == len(scores) >= 2
+    total, rate = sum(trials), sum(successes) / sum(trials)
+    statistic = sum(t * (x - n * rate) for x, n, t in zip(successes, trials, scores, strict=True))
+    spread = sum(n * t * t for n, t in zip(trials, scores, strict=True)) - (
+        sum(n * t for n, t in zip(trials, scores, strict=True)) ** 2 / total
+    )
+    variance = rate * (1 - rate) * spread
+    if variance == 0:  # every group at 0 or every one at 1, or a single score: no evidence of a trend
+        return Trend(0.0, 1.0)
+    z = statistic / math.sqrt(variance)
+    return Trend(z, _two_sided(z))
+
+
+@dataclass(frozen=True)
+class RankTest:
+    u: float  # the first sample's U: pairs where it is larger, a tie counting a half
+    p: float  # two-sided
+    exact: bool
+
+
+def _u_counts(m: int, n: int) -> list[int]:
+    """How many of the C(m + n, m) orderings of two samples without ties give each U, 0 to m n."""
+    # counts[i][j][u]: arrangements of i of the first and j of the second with statistic u
+    previous = [[1] for _ in range(n + 1)]  # i = 0: U is 0
+    for i in range(1, m + 1):
+        current: list[list[int]] = [[1]]  # j = 0: U is 0
+        for j in range(1, n + 1):
+            # the largest value is from the first sample (it beats all j) or from the second
+            row = [0] * (i * j + 1)
+            for u, count in enumerate(previous[j]):
+                row[u + j] += count
+            for u, count in enumerate(current[j - 1]):
+                row[u] += count
+            current.append(row)
+        previous = current
+    return previous[n]
+
+
+def mann_whitney(first: Sequence[float], second: Sequence[float]) -> RankTest:
+    """
+    The Mann-Whitney U test, two-sided: exact (the U distribution counted) when no value is shared
+    between or within the samples; with ties, the normal approximation with the tie correction and
+    a continuity correction of a half.
+    """
+    m, n = len(first), len(second)
+    assert m > 0 and n > 0
+    u = sum(1.0 if x > y else 0.5 if x == y else 0.0 for x in first for y in second)
+    values = [*first, *second]
+    if len(set(values)) == len(values):
+        counts = _u_counts(m, n)
+        total = sum(counts)
+        below = sum(counts[: int(u) + 1])  # P(U <= u)
+        above = sum(counts[int(u) :])  # P(U >= u)
+        return RankTest(u, min(1.0, float(Fraction(2 * min(below, above), total))), True)
+    mean = m * n / 2
+    tied = [values.count(v) for v in set(values)]
+    size = m + n
+    variance = m * n / 12 * (size + 1 - sum(t**3 - t for t in tied) / (size * (size - 1)))
+    if variance == 0:  # every value the same
+        return RankTest(u, 1.0, False)
+    z = max(0.0, abs(u - mean) - 0.5) / math.sqrt(variance)
+    return RankTest(u, _two_sided(z), False)
+
+
+def holm(p_values: Sequence[float]) -> list[float]:
+    """Holm's step-down adjusted p values, in the order given: reject where adjusted <= alpha."""
+    order = sorted(range(len(p_values)), key=lambda i: p_values[i])
+    adjusted = [0.0] * len(p_values)
+    running = 0.0
+    for rank, i in enumerate(order):
+        running = max(running, min(1.0, (len(p_values) - rank) * p_values[i]))
+        adjusted[i] = running
+    return adjusted

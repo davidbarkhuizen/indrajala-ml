@@ -241,6 +241,10 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     and C6 corrected together by Holm's method at 0.05. Pros: 20 seeds tell 0.8 from 0.4 (Fisher,
     p 0.023); fixed rules, no choice after the data. Cons: 0.75 against 0.5 stays undecided at
     20 seeds (p 0.19).
+  - **Implemented** in `indrajala_ml/studies/inference.py`, by hand (no scipy): `wilson`,
+    `fisher_exact` (exact, in integers), `cochran_armitage` (the normal approximation),
+    `mann_whitney` (exact without ties; with ties, normal with tie and continuity corrections) and
+    `holm`.
   - (b) 10 seeds. Pros: half the cost. Cons: tells only differences near 0.6.
   - (c) 50 seeds. Pros: differences near 0.25. Cons: 2.5 times the cost; worth it only for a
     result that 20 leaves open, as a follow-up.
