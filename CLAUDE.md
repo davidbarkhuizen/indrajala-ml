@@ -11,6 +11,9 @@
   `indrajala-math-rust` first, then a "Bump rust/" PR here.
 - **Retire a workplan only when it is complete** (every stage and decision resolved); its leftover
   work moves into [docs/next-steps.md](docs/next-steps.md).
+- **Gotchas live in [docs/working-notes.md](docs/working-notes.md)**: read it before working with
+  worktrees, CI, studies or the machines; add a note there when you meet a new trap, not only in a
+  session's handover.
 - **"Bit-identical" is claimed only when checked** (golden run, parity tests). The golden run may
   be re-recorded only for an owner-approved change that is more correct or fundamentally better
   structured (docs/measurement.md, §8); never to avoid a special case's cost alone, never for style.
