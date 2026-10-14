@@ -9,6 +9,7 @@ import dataclasses
 import json
 import math
 import random
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -738,12 +739,17 @@ def test_every_new_config_trains_long_enough_to_rule_out_a_wrong_machine():
                 assert longest >= m + states - 1, f"{path.name}: {spec.key} trains to {longest} columns"
 
 
-@pytest.mark.parametrize(("name", "codes", "cap"), [("factored_p5", 8, 88), ("factored_p5_fallback", 6, 60)])
-def test_c9_is_one_factored_division_cell_capped_at_the_product_bound(name: str, codes: int, cap: int):
-    """The factored-state workplan's C9 (D7, D8, D10, D11): division at p 5, k 1, the curriculum, two
-    independent factors of width 16, each with codes for its residue (A or B, 5 states), 6 seeds,
-    trained to the cap m_1 m_2 + q - 1, each step certified and the study stopped at its first
-    certified run."""
+@pytest.mark.parametrize(
+    ("name", "codes", "cap", "budget"),
+    [("factored_p5", 8, 88, None), ("factored_p5_fallback", 6, 60, None), ("factored_p5_m16", 16, 280, 4)],
+)
+def test_c9_is_one_factored_division_cell_capped_at_the_product_bound(
+    name: str, codes: int, cap: int, budget: float | None
+):
+    """The factored-state workplan's C9 (D7, D8, D10, D11) and C9' (D13): division at p 5, k 1, the
+    curriculum, two independent factors of width 16, each with codes for its residue (A or B, 5
+    states), 6 seeds, trained to the cap m_1 m_2 + q - 1, each step certified and the study stopped
+    at its first certified run; C9' with E8c's counter (16 codes) and a wall-clock budget."""
     study = wr.load_config(Path(__file__).parents[2] / "scripts" / f"window_recurrent_{name}.json")
     task = wt.task_named("modular-division-5")
     assert {(s.arm, s.k, s.state, s.cross, s.reads, s.task) for s in study.runs} == {
@@ -759,6 +765,7 @@ def test_c9_is_one_factored_division_cell_capped_at_the_product_bound(name: str,
         steps=cap,
         certify_steps=True,
         stop_at_certified=True,
+        budget_hours=budget,
     )
 
 
@@ -861,6 +868,44 @@ def test_the_first_certified_run_stops_the_study(tmp_path: Path, monkeypatch: py
     assert wr.stop_file(study.models).exists() and "the first certified run" in lines[-1]
     # run again: the existence is found, nothing more runs
     assert list(wr.run(study, log=lines.append)) == [specs[0].key]
+
+
+def test_a_spent_budget_stops_the_study_and_a_resumed_study_keeps_its_deadline(tmp_path: Path):
+    """The factored-state workplan's D13: the first launch sets the deadline; past it nothing runs."""
+    settings = dataclasses.replace(TINY, certify_steps=True, stop_at_certified=True, budget_hours=1)
+    specs = [dataclasses.replace(FACTORED, seed=seed) for seed in range(2)]
+    study = wr.Study(tmp_path, settings, specs, 0)
+    study.models.mkdir(parents=True)
+    spent = time.time() - 1
+    wr.deadline_file(study.models).write_text(repr(spent))
+    assert wr.run(study, log=lambda line: None) == {}
+    assert float(wr.deadline_file(study.models).read_text()) == spent
+    assert "stopped: the budget is spent" in wr.status(study)
+
+    fresh = wr.Study(tmp_path / "fresh", settings, specs[:1], 0)
+    before = time.time()
+    assert list(wr.run(fresh, log=lambda line: None)) == [specs[0].key]
+    deadline = float(wr.deadline_file(fresh.models).read_text())
+    assert before + 3600 <= deadline <= time.time() + 3600
+    assert "budget: until" in wr.status(fresh)
+
+
+def test_a_spent_budget_stops_a_run_at_its_next_epoch(tmp_path: Path):
+    settings = dataclasses.replace(TINY, certify_steps=True, budget_hours=1)
+    tmp_path.mkdir(exist_ok=True)
+    wr.deadline_file(tmp_path).write_text(repr(time.time() - 1))
+    result = wr.train_run(FACTORED, settings, tmp_path)
+    assert result["stopped"] and [s["stop"] for s in result["steps"]] == ["stopped"]
+    assert "certificate" not in result["steps"][0]
+
+
+def test_status_reads_the_stop_files_reason(tmp_path: Path):
+    study = wr.Study(tmp_path, TINY, [FACTORED], 0)
+    study.models.mkdir(parents=True)
+    wr.stop_file(study.models).write_text("stopped by the owner (D13)")
+    assert "stopped: stopped by the owner (D13)" in wr.status(study).splitlines()
+    wr.stop_file(study.models).write_text("")
+    assert f"stopped: {wr.FIRST_CERTIFIED}" in wr.status(study).splitlines()
 
 
 def test_the_report_reads_runs_stopped_at_different_steps(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -34,8 +34,15 @@ threshold probe), recorded with it. (The owner's rule, 2026-10-13; the claims pl
 - **Surplus capacity is kept, and paid for in training length** (the owner, 2026-10-14). Spare
   codes help training (addition worked best at about 5 times its states; E8's one certified
   network used 8 of its 32 codes; in E8b's one probe run, a codebook at exactly the state count
-  didn't fit its training lengths), so `m` stays at about 3-5 times the states and `L` grows to meet the bound, rather than
-  `m` shrinking to it.
+  didn't fit its training lengths; E8c's certified counters at `m` 16 reached 7-13 codes for 5
+  states before minimising: learning used about twice the states), so `m` stays at about 3-5 times
+  the states and `L` grows to meet the bound, rather than `m` shrinking to it.
+- **An existence test takes its cell from what worked, and a wall-clock budget** (the owner,
+  2026-10-14: "existence first, then refine"; "when this architecture works, it tends to be
+  clear-cut and early"). Reuse the settings of the nearest certified networks (their codes used,
+  not only their `m`); shrinking toward the minimum is the refinement after a network exists. The
+  cap stays at the bound (feasibility), and `budget_hours` stops the study at a deadline a few
+  times past the step where the evidence says it certifies (the factored-state workplan's D13).
 - **The budget is measured before launch:** epoch time and memory from a probe run (one seed, one
   cell), then the study's estimate as a range. No study long enough to matter starts on a guess.
 

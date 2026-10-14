@@ -317,6 +317,9 @@ class Settings:
     # stopped at its first certified step; and every run stopped at the study's first certified run
     certify_steps: bool = False
     stop_at_certified: bool = False
+    # an existence test's wall-clock budget (the factored-state workplan, D13): the study's deadline
+    # is set at its first launch, and past it every run stops at its next epoch
+    budget_hours: float | None = None
 
     def catalogue(self, task: wt.Task) -> tuple[Any, ...]:
         return task.catalogue(self.sampled, self.relation_sampled, self.per_stratum)
@@ -425,7 +428,7 @@ def run_step(
     """
     One curriculum step: training to its stop, then its whole check and the test pass. stopped()
     true before an epoch ends the step there, "stopped", unchecked and untested (the study's first
-    certified run found, D8).
+    certified run found, D8, or its budget spent, D13).
     """
     task = wt.task_named(spec.task)
     model = WindowModel(network, spec.k, task)
@@ -542,8 +545,25 @@ def run_step(
 
 
 def stop_file(models: Path) -> Path:
-    """The study's marker that its first certified run is found (D8): runs stop at their next epoch."""
+    """
+    The study's marker that its runs stop at their next epoch, its text the reason: the first
+    certified run found (D8), or the owner's (a run predicted to yield nothing: the claims workplan's
+    D33).
+    """
     return models / "stop"
+
+
+FIRST_CERTIFIED = "the first certified run is found (D8)"
+
+
+def deadline_file(models: Path) -> Path:
+    """The study's deadline (settings.budget_hours, D13), seconds since the epoch, set at its first launch."""
+    return models / "deadline"
+
+
+def budget_spent(models: Path) -> bool:
+    deadline = deadline_file(models)
+    return deadline.exists() and time.time() >= float(deadline.read_text())
 
 
 def certify_step(network: Any, spec: RunSpec, path: Path) -> dict[str, Any]:
@@ -569,7 +589,7 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
     step-<j>.network.json); a run stopped part way resumes from its last saved step. With
     settings.certify_steps, each step's network is certified too (step-<j>.certificate.json, its
     summary the step's "certificate"), and the run ends at its first certified step (D7); a step
-    stopped by the study's stop file (D8) ends it too.
+    stopped by the study's stop file (D8) or its spent budget (D13) ends it too.
     """
     steps_directory = directory / spec.key
     steps_directory.mkdir(parents=True, exist_ok=True)
@@ -579,7 +599,7 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
     certify = settings.certify_steps and spec.snapped
 
     def stopped() -> bool:
-        return settings.stop_at_certified and stop_file(directory).exists()
+        return (settings.stop_at_certified and stop_file(directory).exists()) or budget_spent(directory)
 
     for step, counts in enumerate(spec.step_counts(settings), start=1):
         saved = steps_directory / f"step-{step}.json"
@@ -1093,7 +1113,8 @@ def _run_job(
 def run(study: Study, log: Callable[[str], None] = print) -> dict[str, dict[str, Any]]:
     """
     Every run without a finished result, over study.workers processes (0: in this process); a run
-    that raised is run once more.
+    that raised is run once more. With settings.budget_hours, the first launch sets the study's
+    deadline, and a resumed study keeps it (D13).
     """
     study.results.mkdir(parents=True, exist_ok=True)
     study.models.mkdir(parents=True, exist_ok=True)
@@ -1103,11 +1124,17 @@ def run(study: Study, log: Callable[[str], None] = print) -> dict[str, dict[str,
 
     stop = stop_file(study.models)
     if study.settings.stop_at_certified and any(r.get("certified") for r in results.values()):
-        stop.touch()
+        stop.write_text(FIRST_CERTIFIED)
+    deadline = deadline_file(study.models)
+    if study.settings.budget_hours is not None and not deadline.exists():
+        deadline.write_text(repr(time.time() + study.settings.budget_hours * 3600))
+
+    def ended() -> bool:
+        return (study.settings.stop_at_certified and stop.exists()) or budget_spent(study.models)
 
     def todo(spec: RunSpec) -> bool:
-        if study.settings.stop_at_certified and stop.exists():
-            return False  # the study's first certified run is found (D8)
+        if ended():
+            return False  # the study's first certified run is found (D8), or its budget spent (D13)
         result = results.get(spec.key)
         return result is None or ("error" in result and result.get("attempts", 1) <= RETRIES)
 
@@ -1122,7 +1149,7 @@ def run(study: Study, log: Callable[[str], None] = print) -> dict[str, dict[str,
         verdict = "certified" if result.get("certified") else "works" if result["works"] else "fails"
         log(f"{result['key']}: {verdict}; {steps}")
         if study.settings.stop_at_certified and result.get("certified"):
-            stop.touch()
+            stop.write_text(FIRST_CERTIFIED)
             log(f"{result['key']}: the first certified run; the others stop at their next epoch")
 
     while pending := [spec for spec in study.runs if todo(spec)]:
@@ -1141,7 +1168,7 @@ def run(study: Study, log: Callable[[str], None] = print) -> dict[str, dict[str,
                     continue
                 try:
                     record(future.result())
-                    if stop.exists() and study.settings.stop_at_certified:
+                    if ended():
                         for other in futures:
                             other.cancel()  # those not started; the running stop at their next epoch
                 except Exception:  # noqa: BLE001 - a worker that died: recorded, so the retry rule applies
@@ -1167,13 +1194,23 @@ def status(study: Study) -> str:
     steps = {spec.key: len(spec.step_counts(study.settings)) for spec in study.runs}
     works = sum(1 for r in results.values() if r.get("works"))
     certified = sum(1 for r in results.values() if r.get("certified"))
+    stop, deadline = stop_file(study.models), deadline_file(study.models)
+    budget: list[str] = []
+    if deadline.exists():
+        until = time.strftime("%Y-%m-%d %H:%M", time.localtime(float(deadline.read_text())))
+        budget = [
+            f"stopped: the budget is spent at {until} (D13)"
+            if budget_spent(study.models)
+            else f"budget: until {until} (D13)"
+        ]
     lines = [
         (
             f"{len(results) - len(errors)} of {len(study.runs)} runs finished ({works} working"
             + (f", {certified} certified" if certified else "")
             + f"), {len(errors)} errors, {len(running)} running"
         ),
-        *(["stopped: the first certified run is found (D8)"] if stop_file(study.models).exists() else []),
+        *([f"stopped: {stop.read_text() or FIRST_CERTIFIED}"] if stop.exists() else []),
+        *budget,
         *(f"running: {key}, {steps_done.get(key, 0)} of {steps.get(key, 0)} steps saved" for key in running),
         *(f"error: {key}" for key in errors),
     ]
