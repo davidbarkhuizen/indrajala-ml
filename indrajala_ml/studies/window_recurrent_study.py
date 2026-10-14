@@ -49,6 +49,7 @@ import math
 import multiprocessing
 import os
 import random
+import resource
 import socket
 import subprocess
 import time
@@ -625,8 +626,73 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
         "certified_step": certified[0] if certified else None,
         "stopped": last["stop"] == "stopped",
         "seconds": time.perf_counter() - start,
+        "peak_mb": peak_mb(),
         **_provenance(),
     }
+
+
+def peak_mb() -> float:
+    """
+    This process's peak resident memory so far, in MB: a run's worker's (a pool's workers run several
+    runs, so the figure bounds the run's own), for sizing a study's workers (measurement.md, section 2).
+    """
+    return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)
+
+
+def probe(spec: RunSpec, settings: Settings, steps: Sequence[int], epochs: int = 2) -> dict[str, Any]:
+    """
+    A run's cost before its launch (experiment-design.md: a budget from a probe): from the run's
+    initial network, epochs training epochs at each of steps (the curriculum's data window counts
+    1..j), each with its screen; then the whole check at the last step's longest length (a passing
+    step checks every length 1..j) and, for a snapped state, a certificate (certify_steps's); this
+    process's peak memory after each. Training moves the network from step to step, as a run would.
+    """
+    task = wt.task_named(spec.task)
+    network = build(task, spec.k, spec.s, spec.m, spec.seed, spec.window, spec.recurrence)
+    model = WindowModel(network, spec.k, task)
+    catalogue = settings.catalogue(task)
+    rows: list[dict[str, Any]] = []
+    for step in steps:
+        counts = list(range(1, step + 1))
+        lengths = [w * spec.k for w in counts]
+        checks = {n: check_properties(task, n, catalogue) for n in lengths}
+        for epoch in range(epochs):
+            rng = random.Random(f"window-probe-{spec.key}-{step}-{epoch}")
+            start = time.perf_counter()
+            examples = training_examples(task, counts, spec.k, settings.epoch_examples, rng)
+            built = time.perf_counter()
+            train_epoch(network, examples, settings.batch_size, settings.rate, rng)
+            trained = time.perf_counter()
+            screen = [r for n in lengths for r in model.evaluate(n, checks[n], settings.screen)]
+            rows.append(
+                {
+                    "step": step,
+                    "epoch": epoch + 1,
+                    "examples_seconds": built - start,
+                    "train_seconds": trained - built,
+                    "screen_seconds": time.perf_counter() - trained,
+                    "screen": sum(r.passed for r in screen) / sum(r.cases for r in screen),
+                    "peak_mb": peak_mb(),
+                }
+            )
+    longest = steps[-1] * spec.k
+    start = time.perf_counter()
+    model.evaluate(longest, check_properties(task, longest, catalogue))
+    result: dict[str, Any] = {
+        "key": spec.key,
+        "parameters": parameter_count(network),
+        "epochs": rows,
+        "check": {"n": longest, "seconds": time.perf_counter() - start, "peak_mb": peak_mb()},
+    }
+    if spec.snapped:
+        certificate = wc.certify(wc.NetworkMachine(network), task)
+        result["certificate"] = {
+            "seconds": certificate.seconds,
+            "certified": certificate.certified,
+            "states": len(certificate.reachable),
+            "peak_mb": peak_mb(),
+        }
+    return {**result, **_provenance()}
 
 
 # the study
@@ -698,7 +764,7 @@ def read_results(results: Path) -> dict[str, dict[str, Any]]:
 
 # C0: a rerun reproduces its run
 
-PROVENANCE = ("commit", "crate", "machine", "attempts")
+PROVENANCE = ("commit", "crate", "machine", "attempts", "peak_mb")
 
 
 def comparable(result: dict[str, Any]) -> dict[str, Any]:

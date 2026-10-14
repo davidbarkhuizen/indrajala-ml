@@ -870,6 +870,20 @@ def test_the_report_reads_runs_stopped_at_different_steps(tmp_path: Path, monkey
     assert "| 1/2 | step 1: 0 pass, breaks 0/0; step 2: 0 pass of 1, breaks 0 |" in report
 
 
+def test_a_probe_times_each_steps_epochs_the_check_and_a_certificate():
+    figures = wr.probe(FACTORED, TINY, [1, 2], epochs=2)
+    assert [(row["step"], row["epoch"]) for row in figures["epochs"]] == [(1, 1), (1, 2), (2, 1), (2, 2)]
+    assert all(row["train_seconds"] > 0 and 0 <= row["screen"] <= 1 and row["peak_mb"] > 0 for row in figures["epochs"])
+    assert figures["check"]["n"] == 2 and figures["check"]["seconds"] > 0
+    assert figures["certificate"]["states"] >= 1 and figures["machine"]
+
+
+def test_a_results_peak_memory_is_recorded_and_not_compared(tmp_path: Path):
+    result = wr.run(wr.Study(tmp_path, TINY, [FACTORED], 0), log=lambda line: None)[FACTORED.key]
+    assert result["peak_mb"] > 0
+    assert wr.comparable(result) == wr.comparable({**result, "peak_mb": result["peak_mb"] * 2})
+
+
 def test_a_step_stopped_by_the_study_ends_unchecked():
     spec = wr.RunSpec("curriculum", 1, 4, 8, 0)
     result = wr.run_step(AddingNetwork(), spec, 1, [1], SMALL, stopped=lambda: True)
