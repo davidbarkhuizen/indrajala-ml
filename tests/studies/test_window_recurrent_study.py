@@ -7,6 +7,7 @@ network's run, its steps saved and resumed.
 
 import dataclasses
 import json
+import math
 import random
 from collections.abc import Sequence
 from pathlib import Path
@@ -651,16 +652,22 @@ BELOW_BOUND_ON_PURPOSE = {
 }
 
 
+def network_states(spec: wr.RunSpec) -> int | None:
+    """A snapped run's machine states, the product of its factors' codes (the factored-state
+    workplan's D7); None for a continuous state."""
+    return math.prod(m for _, m in spec.state if m is not None) if spec.snapped else None
+
+
 def test_every_configs_codes_can_hold_its_tasks_machine():
     """D23: every snapped cell has at least as many codes as its task's minimal machine has states
     (each machine is minimal and every state reachable: test_window_tasks), or a recorded reason."""
     for path in sorted((Path(__file__).parents[2] / "scripts").glob("window_recurrent_*.json")):
         study = wr.load_config(path)
         for spec in study.runs:
-            states = wt.task_named(spec.task).machine.states
-            if spec.m is not None and spec.m < states:
-                assert (path.name, spec.m) in BELOW_BOUND_ON_PURPOSE, (
-                    f"{path.name}: {spec.key} has {spec.m} codes for {states} states"
+            states, m = wt.task_named(spec.task).machine.states, network_states(spec)
+            if m is not None and m < states:
+                assert (path.name, m) in BELOW_BOUND_ON_PURPOSE, (
+                    f"{path.name}: {spec.key} has {m} codes for {states} states"
                 )
 
 
@@ -704,10 +711,34 @@ def test_every_new_config_trains_long_enough_to_rule_out_a_wrong_machine():
             continue
         study = wr.load_config(path)
         for spec in study.runs:
-            states = wt.task_named(spec.task).machine.states
-            if spec.m is not None:
+            states, m = wt.task_named(spec.task).machine.states, network_states(spec)
+            if m is not None:
                 longest = study.settings.steps * spec.k
-                assert longest >= spec.m + states - 1, f"{path.name}: {spec.key} trains to {longest} columns"
+                assert longest >= m + states - 1, f"{path.name}: {spec.key} trains to {longest} columns"
+
+
+@pytest.mark.parametrize(("name", "codes", "cap"), [("factored_p5", 8, 88), ("factored_p5_fallback", 6, 60)])
+def test_c9_is_one_factored_division_cell_capped_at_the_product_bound(name: str, codes: int, cap: int):
+    """The factored-state workplan's C9 (D7, D8, D10, D11): division at p 5, k 1, the curriculum, two
+    independent factors of width 16, each with codes for its residue (A or B, 5 states), 6 seeds,
+    trained to the cap m_1 m_2 + q - 1, each step certified and the study stopped at its first
+    certified run."""
+    study = wr.load_config(Path(__file__).parents[2] / "scripts" / f"window_recurrent_{name}.json")
+    task = wt.task_named("modular-division-5")
+    assert {(s.arm, s.k, s.state, s.cross, s.reads, s.task) for s in study.runs} == {
+        ("curriculum", 1, ((16, codes), (16, codes)), False, BEFORE_STATE, task.name)
+    }
+    assert sorted(spec.seed for spec in study.runs) == list(range(6)) and study.workers == 6
+    assert codes >= 5 and task.machine.states == 25
+    assert study.settings.steps == cap == codes * codes + task.machine.states - 1
+    assert study.settings.certify_steps and study.settings.stop_at_certified
+    assert study.settings == dataclasses.replace(
+        wr.load_config(Path(__file__).parents[2] / "scripts" / "window_recurrent_e8b_q5.json").settings,
+        seeds=6,
+        steps=cap,
+        certify_steps=True,
+        stop_at_certified=True,
+    )
 
 
 def test_status_counts_each_running_runs_own_steps(tmp_path: Path):

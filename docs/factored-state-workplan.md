@@ -203,6 +203,20 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
     and every result's; the golden run re-recorded for no gain at G = 1.
 
   **C9's cell reads `BEFORE_STATE`** (registered here, before any data).
+- **D11. Each factor's state width. Settled in stage 8: (b).** D8 named the codes, not the width
+  `s_g`.
+  - (a) 8 a factor, 16 in all. Pros: E7's and E8's total width. Cons: each factor half the width
+    E8 gave a single counter; C9's factors not comparable with C8's cell.
+  - (b) *Chosen.* **16 a factor**: each factor is E8b's counter cell (`s` 16), with 8 codes for
+    its 5 residues. Pros: a C9 failure can't be laid on narrower factors; C9 and C8 read side by
+    side. Cons: twice (a)'s state; the cell is a small part of a step, and the probe measures it.
+  - (c) 4 a factor (stage 7's example). Pros: cheapest. Cons: narrower than any counter trained
+    so far, a variable no run has tested.
+
+  The rest of C9's settings are E8b's (rate, epoch examples, batch, patience, checks), with steps
+  88 (the cap, `k` 1), 6 seeds, `certify_steps` and `stop_at_certified`
+  (`scripts/window_recurrent_factored_p5.json`; the fallback,
+  `scripts/window_recurrent_factored_p5_fallback.json`, 6 codes a factor and steps 60).
 
 ## Stages
 
@@ -254,6 +268,11 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    `BEFORE_STATE`, D10), a test checking it
    against D7-D8 (cells, cap = `m_1 m_2 + p^2 - 1`), and the probe: two epochs at 88 columns on
    `jebel`, its epoch time giving the batch's estimate. Over a day: the 6-code fallback, its probe.
+   *Built:* both configs (D11: `s` 16 a factor; the fallback registered beside it), and the
+   configs' feasibility tests counting a factored cell's states as the product of its codes (they
+   read only `m` before, so skipped factored cells); C9's own test pins the cell, seeds, cap and
+   E8b's settings. The probe waits for `jebel` (E8b's curriculum arm holds it); its figures go
+   into stage 9's launch.
 9. **C9's run on `jebel`** (6 workers, memory measured first), then the findings: the certified
    network's factors (D9), its long tests (U1, S1), or "not found within the budget".
 10. **Retire this workplan**; leftovers to next-steps.md.
