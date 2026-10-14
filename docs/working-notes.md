@@ -165,6 +165,27 @@ where you meet a new trap; delete one that no longer holds.
   processes run the module's `CANDIDATES` only; `patch_study.parameter_count` is numpy-only; don't
   test its catalogue's generalisation at `n` 2; a screen passing isn't a pass.
 
+## Code internals
+
+- **The window study's API** (`indrajala_ml/studies/window_recurrent_study.py` as `wr`):
+  `wr.example(task, case, n, k, a)`, `wr.alignment(task, case, n, k)`, `wr.build(task, k, s, m,
+  seed)`, `wr.window_specs(task)`, `wr.WindowModel(network, k, task)` with `.evaluate(n,
+  properties[, limit])` and `.predict(n)`; `wr.check_properties(task, n, cat)`,
+  `wr.test_properties(task, cat)`; `settings.catalogue(task)`.
+- **The certificate's JSON names:** `wrong_outputs`, `wrong_states`, kinds `outputs`/`state`,
+  `state_in`, `case`, `after`, `task`. E1's files keep the older `wrong_digits`, `wrong_carries`,
+  `digits`/`carry`, `carry_in`, `addition`.
+- **`WindowRecurrence(factors, cross, cell, pooling)`:** `cell` is the third field; pass `cell=` by
+  keyword. Machine states are tuples (one code per factor) everywhere, a single factor included.
+- **Window networks have `columns`, not `dimension`;** their labels are a class per column of the
+  whole `W * k` state.
+- **A pure-Python window keeps per-example state in lanes:** `StateInputLayer`'s `example_fields`
+  (`_example`, `_state`, `_token_sum`) are captured after each example's forward and backward; its
+  `state_deltas` list is reset in `begin_example(0)`, so read it after the window's backward pass,
+  before the next window's forward.
+- **The Python network's parts aren't `TrainableLayer`s** (no `forward`): the optimiser needs only
+  `weight_sets()`, and `snapshot()`/`restore()` append the parts after `trainable_layers`.
+
 ## Machines
 
 - **Development on `pyramidon`, timing and long studies on `jebel`** (measurement.md section 4).
