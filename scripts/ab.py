@@ -818,8 +818,8 @@ def wait_for_quiet(high_load: float, allow: bool) -> dict[str, Any]:
 def _preflight(
     run_dir: Path, manifest: dict[str, Any], skip_profile: bool, allow_change: bool, allow_load: bool = False
 ) -> dict[str, Any]:
-    """The machine check, the load (wait_for_quiet), thread settings, and the data symlink; returns
-    the record. --skip-profile skips the load check with the machine check."""
+    """The machine check, then the load (wait_for_quiet), thread settings, and the data symlink;
+    returns the record. --skip-profile skips the load check with the machine check."""
     record: dict[str, Any] = {
         "at": _now(),
         "load": list(os.getloadavg()),
@@ -839,7 +839,7 @@ def _preflight(
     if skip_profile:
         record["profile"] = "skipped"
         return record
-    record["quiet"] = wait_for_quiet(manifest["noise_rules"]["high_load"], allow_load)
+    # the profile first: it needs no waiting, so a wrong machine is refused at once, not after the load
     if profile is None:
         if not allow_change:
             raise AbError(
@@ -869,6 +869,7 @@ def _preflight(
             f"machine profile: identity changed from {record['profile_path']} (--allow-profile-change to run anyway)",
             lines,
         )
+    record["quiet"] = wait_for_quiet(manifest["noise_rules"]["high_load"], allow_load)
     return record
 
 
