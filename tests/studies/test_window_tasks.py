@@ -72,9 +72,10 @@ def test_the_sum_machines_labels_are_the_running_sums(q: int):
 def test_each_machine_is_minimal_every_state_reachable(task: wt.Task, states: int):
     machine = task.machine
     assert machine.states == states and len(reachable(machine)) == states
-    D = {s: machine.output[s].astype(np.int8) for s in range(states)}
-    G = {s: machine.transition[s].astype(np.int16) for s in range(states)}
-    assert len(wc.minimise(list(range(states)), D, G)) == states
+    # as the certificate's machine of one factor: a state a tuple of one code
+    D = {(s,): machine.output[s].astype(np.int8) for s in range(states)}
+    G = {(s,): machine.transition[s].astype(np.int16)[:, np.newaxis] for s in range(states)}
+    assert len(wc.minimise([(s,) for s in range(states)], D, G)) == states
 
 
 def labels_from(machine: wt.Mealy, state: int, word: list[int]) -> list[int]:

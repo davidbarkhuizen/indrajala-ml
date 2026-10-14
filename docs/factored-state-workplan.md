@@ -233,7 +233,13 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
 6. **The certificate**: tuple states (D4), per-factor near ties, the per-factor readout (D9); tests
    on a hand-built factored machine for division `p` 5 (certifies, its factors read `A` and `B`),
    one holding `A + B` and `A - B` (certifies, named so), and faulty ones (a wrong next code in one
-   factor, named in the counterexample).
+   factor, named in the counterexample). *Built:* `State` tuples through the search (no flat
+   encoding: `np.unique` over each window's next-state rows), `next_states` branching every
+   combination of the factors' near-tied codes, `FactorReadout` per factor, and
+   `window_tasks.Coordinates` naming the target's states (division's `A`, `B`; the carry; the sum's
+   total). The JSON: `codes` a list per factor, a state a list of codes, `phi` a list of
+   `[state, target]` pairs (stage 5 migrates the old certificates to it). A `k` 4 certificate takes
+   no longer (49 s against 56 s, one network).
 7. **The harness**: factored cells in configs (`factors`, `cross` in a run's key), tuples in
    `codes_used` and `state_codes`, **certification after every curriculum step with a stop on
    passing** (D7) and **the pool stopped at the first certified run** (D8).

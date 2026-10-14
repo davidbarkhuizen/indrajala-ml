@@ -46,6 +46,15 @@ The certificate's JSON names what stage 2 named for addition in the target's ter
 (stage 2's wrong_digits), wrong_states (wrong_carries), the counterexample's kinds "outputs" and
 "state" ("digits", "carry"), its state_in (carry_in) and its case (addition), with the task's name.
 
+A factored state (the factored-state workplan, stage 6) is a machine of tuples: a state is a code
+per factor (State, D4), m_1 ... m_G of them at most; "code" above reads "state", and the search,
+the map phi and the minimised machine are over tuples. A snap's margin is per factor: a near tie in
+any factor branches, to every combination of the factors' snapped and near-tied codes (next_states).
+Each factor's readout (D9, FactorReadout) says what it holds over the reachable states: whether its
+code is a function of the target's state, the target's states grouped by its codes, and that
+grouping's name, a linear form of the target's coordinates (window_tasks.Coordinates: "A", "B",
+"A + B", ...). The JSON writes a state as a list of codes, and phi as [state, target] pairs.
+
 A WindowMachine is what certify reads: WindowRecurrentShape's networks through NetworkMachine, or a
 stand-in (the tests').
 """
@@ -55,7 +64,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, NamedTuple, Protocol
@@ -74,30 +83,39 @@ IntArray = npt.NDArray[np.int64]
 FloatArray = npt.NDArray[np.float64]
 
 
+# a machine's state: a code per factor of the network's state (the factored-state workplan, D4)
+State = tuple[int, ...]
+
+
 class Steps(NamedTuple):
     """
-    A batch of windows from one code: each window's k labels and their logit leads, the code it
-    snaps to and its state's distance to every code.
+    A batch of windows from one state: each window's k labels and their logit leads, the state it
+    snaps to, a code per factor, and each factor's distance to every one of its codes.
     """
 
     digits: IntArray  # (N, k)
     leads: FloatArray  # (N, k)
-    codes: IntArray  # (N,)
-    distances: FloatArray  # (N, m)
+    states: IntArray  # (N, G)
+    distances: list[FloatArray]  # per factor, (N, m_g)
 
 
 class WindowMachine(Protocol):
-    """A network as a transducer over its codes: its window size, its start and its windows from a code."""
+    """A network as a transducer over its states: its window size, its codes, its start and its windows from a state."""
 
     @property
     def columns(self) -> int: ...
 
-    def start(self) -> tuple[int, FloatArray]:
-        """The initial state's code and its distance to every code (m,)."""
+    @property
+    def codes(self) -> list[int]:
+        """Each factor's code count."""
         ...
 
-    def step(self, code: int, windows: IntArray) -> Steps:
-        """windows (N, k) of column tokens, each run from the code's state."""
+    def start(self) -> tuple[State, list[FloatArray]]:
+        """The initial state, and each factor's distance to every one of its codes (m_g,)."""
+        ...
+
+    def step(self, state: State, windows: IntArray) -> Steps:
+        """windows (N, k) of column tokens, each run from the state."""
         ...
 
 
@@ -134,35 +152,42 @@ def logit_leads(probabilities: FloatArray, classes: int) -> tuple[IntArray, Floa
 
 class NetworkMachine:
     """
-    A window-recurrent array network (WindowRecurrentShape, either backend) of one snapped factor as
-    a WindowMachine; its machine's states (a tuple of one code) are their codes. A factored state's
-    machine is the factored-state workplan's stage 6.
+    A window-recurrent array network (WindowRecurrentShape, either backend) as a WindowMachine: its
+    states a code per factor, every factor snapped.
     """
 
     def __init__(self, network: Any) -> None:
-        factors = network.recurrence.factors
-        assert len(factors) == 1, f"the certificate reads a state of one factor (until stage 6); got {len(factors)}"
-        assert network.recurrence.snapped, "a continuous state (codes=None) isn't a finite machine"
+        assert network.recurrence.snapped, "a continuous factor (codes=None) isn't a finite machine"
         self.network = network
-        self.E = np.array(network.recurrence_layer.factors[0].codes.E.tolist(), dtype=np.float64)
+        self.E = [np.array(f.codes.E.tolist(), dtype=np.float64) for f in network.recurrence_layer.factors]
+        sizes = [f.state_size for f in network.recurrence.factors]
+        self._blocks = [(sum(sizes[:g]), sum(sizes[: g + 1])) for g in range(len(sizes))]
 
     @property
     def columns(self) -> int:
         return int(self.network.columns)
 
-    def start(self) -> tuple[int, FloatArray]:
-        H, states = self.network.first_step()
-        (code,) = states[0]
-        return code, distances_to(np.array(H.tolist(), dtype=np.float64), self.E)[0]
+    @property
+    def codes(self) -> list[int]:
+        return [len(E) for E in self.E]
 
-    def step(self, code: int, windows: IntArray) -> Steps:
+    def _distances(self, H: Any) -> list[FloatArray]:
+        # each factor's columns of H against its codes
+        values = np.array(H.tolist(), dtype=np.float64)
+        return [distances_to(values[:, a:b], E) for (a, b), E in zip(self._blocks, self.E, strict=True)]
+
+    def start(self) -> tuple[State, list[FloatArray]]:
+        H, states = self.network.first_step()
+        return states[0], [d[0] for d in self._distances(H)]
+
+    def step(self, state: State, windows: IntArray) -> Steps:
         backend = self.network.backend
         X = backend.matrix(windows.astype(np.float64).tolist())
-        C = backend.matrix(np.repeat(self.E[code][np.newaxis, :], len(windows), axis=0).tolist())
+        c = np.concatenate([E[i] for E, i in zip(self.E, state, strict=True)])
+        C = backend.matrix(np.repeat(c[np.newaxis, :], len(windows), axis=0).tolist())
         output, H, states = self.network.window_step(X, C)
         digits, leads = logit_leads(np.array(output.tolist(), dtype=np.float64), self.network.class_count)
-        distances = distances_to(np.array(H.tolist(), dtype=np.float64), self.E)
-        return Steps(digits, leads, np.array([code for (code,) in states], dtype=np.int64), distances)
+        return Steps(digits, leads, np.array(states, dtype=np.int64).reshape(len(windows), -1), self._distances(H))
 
 
 def all_windows(k: int, tokens: int) -> IntArray:
@@ -174,14 +199,14 @@ def all_windows(k: int, tokens: int) -> IntArray:
 class Counterexample:
     """
     The first failure in breadth-first order: kind "outputs" (D(q, w) wrong for phi(q)) or "state"
-    (a next code of (q, w) whose state isn't the target's after w); the windows from the start
-    through w, the codes before each, the target's state in to w, the labels expected and given, or
-    the states, and the window after (the word telling the states apart, padded; or zeros).
+    (a next state of (q, w) whose target state isn't the target's after w); the windows from the
+    start through w, the states before each, the target's state in to w, the labels expected and
+    given, or the states, and the window after (the word telling the states apart, padded; or zeros).
     """
 
     kind: str
     windows: list[list[int]]
-    codes: list[int]
+    codes: list[State]
     state_in: int
     expected: list[int]
     got: list[int]
@@ -194,12 +219,26 @@ class Counterexample:
 
 @dataclass(frozen=True)
 class Margin:
-    """The smallest margin of a kind, where it is (the code and window), and how many fall short of it."""
+    """The smallest margin of a kind, where it is (the state and window), and how many fall short of it."""
 
     smallest: float
-    code: int | None
+    code: State | None
     window: list[int] | None
     short: int
+
+
+@dataclass(frozen=True)
+class FactorReadout:
+    """
+    What a factor holds (the factored-state workplan, D9): whether its code is a function of the
+    target's state over the reachable states; the reached target states grouped by its codes (two
+    states joined when one code holds both); and that partition's name from the target's
+    coordinates (window_tasks.Coordinates: "A", "B", "A + 4B", ...), None when none fits.
+    """
+
+    function: bool
+    partition: list[list[int]]
+    name: str | None
 
 
 @dataclass(frozen=True)
@@ -207,17 +246,18 @@ class Certificate:
     """certify's result for one network."""
 
     columns: int
-    codes: int
-    start: int
-    reachable: list[int]  # in breadth-first order, near ties' codes among them
-    phi: dict[int, int]  # each reachable code's target state, as first fixed
-    wrong_outputs: int  # (code, window) pairs whose labels are wrong for the code's state
-    wrong_states: int  # (code, window) pairs with a next code whose state is wrong
-    wrong_ties: int  # of those, the pairs whose snapped next code is right: wrong only on a near tie
+    codes: list[int]  # each factor's code count
+    start: State
+    reachable: list[State]  # in breadth-first order, near ties' states among them
+    phi: dict[State, int]  # each reachable state's target state, as first fixed
+    wrong_outputs: int  # (state, window) pairs whose labels are wrong for the state's target state
+    wrong_states: int  # (state, window) pairs with a next state whose target state is wrong
+    wrong_ties: int  # of those, the pairs whose snapped next state is right: wrong only on a near tie
     counterexample: Counterexample | None
-    snap: Margin  # short: the near ties, branched
+    snap: Margin  # short: the near ties, each factor's, branched
     lead: Margin  # short: the labels' near ties, each a failure
-    minimised: list[list[int]]  # the minimised machine's states (over G), each the reachable codes it merges
+    minimised: list[list[State]]  # the minimised machine's states (over G), each the reachable states it merges
+    factors: list[FactorReadout]  # what each factor holds (D9)
     evaluations: int
     seconds: float
     task: str
@@ -233,7 +273,8 @@ class Certificate:
 
     def to_json(self) -> dict[str, Any]:
         value = asdict(self)
-        value["phi"] = {str(code): state for code, state in self.phi.items()}
+        # a state is a list of codes, so phi is a list of [state, target state] pairs
+        value["phi"] = [[list(state), target] for state, target in self.phi.items()]
         case = value.pop("case")
         if self.counterexample is not None:
             value["counterexample"]["case"] = case
@@ -247,11 +288,11 @@ class _Smallest:
     def __init__(self, tolerance: float) -> None:
         self.tolerance = tolerance
         self.value = np.inf
-        self.code: int | None = None
+        self.code: State | None = None
         self.window: list[int] | None = None
         self.short = 0
 
-    def add(self, values: FloatArray, code: int, windows: IntArray | None) -> None:
+    def add(self, values: FloatArray, code: State, windows: IntArray | None) -> None:
         self.short += int((values < self.tolerance).sum())
         i = int(np.argmin(values))
         if values[i] < self.value:
@@ -263,37 +304,128 @@ class _Smallest:
         return Margin(self.value, self.code, self.window, self.short)
 
 
+def _state(row: npt.NDArray[np.integer[Any]]) -> State:
+    return tuple(int(v) for v in row)
+
+
+def _lookup(table: Mapping[State, int], rows: IntArray) -> IntArray:
+    """Each row's value in table, -1 where it has none, through the rows' distinct states."""
+    unique, inverse = np.unique(rows, axis=0, return_inverse=True)
+    values = np.array([table.get(_state(row), -1) for row in unique], dtype=np.int64)
+    return values[inverse.reshape(-1)]
+
+
+def next_states(states: IntArray, near: Sequence[npt.NDArray[np.bool_]]) -> tuple[IntArray, IntArray]:
+    """
+    Every window's next states (windows (M,), states (M, G)): its snapped state, then, where a
+    factor's snap is a near tie, every other state of its factors' snapped and near-tied codes.
+    """
+    windows, rows = [np.arange(len(states))], [states]
+    tied = np.flatnonzero(np.any([n.any(axis=1) for n in near], axis=0))
+    for w in tied:
+        options = [[int(states[w, g]), *(int(c) for c in np.flatnonzero(n[w]))] for g, n in enumerate(near)]
+        others = list(itertools.product(*options))[1:]  # the first is the snapped state
+        windows.append(np.full(len(others), w, dtype=np.int64))
+        rows.append(np.array(others, dtype=np.int64).reshape(-1, states.shape[1]))
+    return np.concatenate(windows), np.concatenate(rows)
+
+
 def minimise(
-    reachable: Sequence[int], D: Mapping[int, npt.NDArray[np.int8]], G: Mapping[int, npt.NDArray[np.int16]]
-) -> list[list[int]]:
+    reachable: Sequence[State], D: Mapping[State, npt.NDArray[np.int8]], G: Mapping[State, npt.NDArray[np.int16]]
+) -> list[list[State]]:
     """
-    The coarsest partition of the reachable codes in which equivalent codes give the same digits
-    and move to equivalent codes on every window (Moore's refinement).
+    The coarsest partition of the reachable states in which equivalent states give the same digits
+    and move to equivalent states on every window (Moore's refinement).
     """
+    following = {q: np.unique(G[q], axis=0, return_inverse=True) for q in reachable}
     block = {q: D[q].tobytes() for q in reachable}
     while True:
         ids = {key: i for i, key in enumerate(dict.fromkeys(block.values()))}
-        number = np.zeros(max(reachable) + 1, dtype=np.int64)
+        number = {q: ids[block[q]] for q in reachable}
+        refined: dict[State, bytes] = {}
         for q in reachable:
-            number[q] = ids[block[q]]
-        refined = {q: block[q] + number[G[q]].tobytes() for q in reachable}
+            unique, inverse = following[q]
+            numbers = np.array([number[_state(row)] for row in unique], dtype=np.int64)
+            refined[q] = block[q] + numbers[inverse.reshape(-1)].tobytes()
         if len(set(refined.values())) == len(ids):
             break
         block = refined
-    classes: dict[bytes, list[int]] = {}
+    classes: dict[bytes, list[State]] = {}
     for q in sorted(reachable):
         classes.setdefault(block[q], []).append(q)
     return sorted(classes.values())
 
 
+def _joined(states: Sequence[int], groups: Iterable[set[int]]) -> list[list[int]]:
+    """The states, those in one group joined, as connected components: sorted blocks."""
+    parent = {s: s for s in states}
+
+    def find(s: int) -> int:
+        while parent[s] != s:
+            s = parent[s]
+        return s
+
+    for group in groups:
+        first, *rest = sorted(group)
+        for s in rest:
+            parent[find(s)] = find(first)
+    blocks: dict[int, list[int]] = {}
+    for s in states:
+        blocks.setdefault(find(s), []).append(s)
+    return sorted(blocks.values())
+
+
+def readout(reachable: Sequence[State], phi: Mapping[State, int], target: wt.Mealy) -> list[FactorReadout]:
+    """Each factor's readout (D9) over the reachable states."""
+    readouts: list[FactorReadout] = []
+    for g in range(len(reachable[0])):
+        by_state: dict[int, set[int]] = {}
+        by_code: dict[int, set[int]] = {}
+        for q in reachable:
+            by_state.setdefault(phi[q], set()).add(q[g])
+            by_code.setdefault(q[g], set()).add(phi[q])
+        partition = _joined(sorted(by_state), by_code.values())
+        function = all(len(codes) == 1 for codes in by_state.values())
+        readouts.append(FactorReadout(function, partition, name_partition(partition, target.coordinates)))
+    return readouts
+
+
+def name_partition(partition: Sequence[Sequence[int]], coordinates: wt.Coordinates | None) -> str | None:
+    """
+    The linear form over the target's coordinates (mod their modulus) whose values group the
+    partition's states as it does, its first coefficient 1, the forms in order (A, then B, then
+    A + B, A + 2B, ...); None without coordinates or when no form fits.
+    """
+    if coordinates is None:
+        return None
+    states = sorted(s for block in partition for s in block)
+    want = sorted(sorted(block) for block in partition)
+    m = coordinates.modulus
+    forms = itertools.product(range(m), repeat=len(coordinates.names))
+    # the forms of fewer terms first, then by their coefficients: A, B, A + B, A + 2B, ...
+    for coefficients in sorted(forms, key=lambda c: (sum(1 for x in c if x), [not x for x in c], c)):
+        nonzero = [x for x in coefficients if x]
+        if not nonzero or nonzero[0] != 1:
+            continue
+        groups: dict[int, list[int]] = {}
+        for s in states:
+            value = sum(int(c) * int(v) for c, v in zip(coefficients, coordinates.values[s], strict=True)) % m
+            groups.setdefault(value, []).append(s)
+        if sorted(groups.values()) == want:
+            terms = [
+                name if c == 1 else f"{c}{name}" for c, name in zip(coefficients, coordinates.names, strict=True) if c
+            ]
+            return " + ".join(terms)
+    return None
+
+
 def certify(
     machine: WindowMachine,
-    codes: int,
     task: wt.Task = wt.ADDITION,
     snap_ratio: float = SNAP_RATIO,
     logit_lead: float = LOGIT_LEAD,
 ) -> Certificate:
-    """The certificate of a machine of codes codes against its task's (the module's docstring)."""
+    """The certificate of a machine against its task's (the module's docstring)."""
     begun = time.perf_counter()
     k = machine.columns
     target = task.machine
@@ -301,44 +433,49 @@ def certify(
     want_labels, want_state = target.windows(windows)
     snap, lead = _Smallest(snap_ratio), _Smallest(logit_lead)
     start, start_distances = machine.start()
-    ratios, near = snap_margins(np.array([start]), start_distances[np.newaxis, :], snap_ratio)
-    snap.add(ratios, start, None)
-    starts = [start, *(int(r) for r in np.flatnonzero(near[0]))]
+    near_start: list[npt.NDArray[np.bool_]] = []
+    for g, distances in enumerate(start_distances):
+        ratios, near = snap_margins(np.array([start[g]]), distances[np.newaxis, :], snap_ratio)
+        snap.add(ratios, start, None)
+        near_start.append(near)
+    _, start_rows = next_states(np.array([start], dtype=np.int64), near_start)
+    starts = [_state(row) for row in start_rows]
     phi = dict.fromkeys(starts, target.start)
-    parent: dict[int, tuple[int, int] | None] = dict.fromkeys(starts)
+    parent: dict[State, tuple[State, int] | None] = dict.fromkeys(starts)
     queue = list(starts)
-    D: dict[int, npt.NDArray[np.int8]] = {}
-    G: dict[int, npt.NDArray[np.int16]] = {}
+    D: dict[State, npt.NDArray[np.int8]] = {}
+    G: dict[State, npt.NDArray[np.int16]] = {}
     wrong_outputs = wrong_states = wrong_ties = 0
-    first: tuple[str, int, int, int] | None = None  # kind, code, window, the next code that failed
-    for q in queue:  # breadth first: the queue grows as codes are reached
+    first: tuple[str, State, int, State | None] | None = None  # kind, state, window, the next state that failed
+    for q in queue:  # breadth first: the queue grows as states are reached
         parts = [machine.step(q, windows[i : i + BATCH]) for i in range(0, len(windows), BATCH)]
-        # narrow: at k 4, 531,441 windows a code
+        # narrow: at k 4, 531,441 windows a state
         D[q] = np.concatenate([p.digits for p in parts]).astype(np.int8)
-        G[q] = np.concatenate([p.codes for p in parts]).astype(np.int16)
-        ties: list[npt.NDArray[np.bool_]] = []
+        G[q] = np.concatenate([p.states for p in parts]).astype(np.int16)
+        nears: list[list[npt.NDArray[np.bool_]]] = []
         for i, p in enumerate(parts):
             batch = windows[i * BATCH : (i + 1) * BATCH]
-            ratios, near = snap_margins(p.codes, p.distances, snap_ratio)
-            snap.add(ratios, q, batch)
+            factor_near: list[npt.NDArray[np.bool_]] = []
+            for g, distances in enumerate(p.distances):
+                ratios, near = snap_margins(p.states[:, g], distances, snap_ratio)
+                snap.add(ratios, q, batch)
+                factor_near.append(near)
             lead.add(p.leads.min(axis=1), q, batch)
-            ties.append(near)
-        # every next code, (window, code), G's then the near ties', in window order
-        tie_windows, tie_codes = np.nonzero(np.concatenate(ties))
-        nexts = np.concatenate([np.arange(len(windows)), tie_windows]), np.concatenate([G[q], tie_codes])
+            nears.append(factor_near)
+        near_by_factor = [np.concatenate([n[g] for n in nears]) for g in range(G[q].shape[1])]
+        # every next state, (window, state), the snapped ones then the near ties', in window order
+        next_windows, next_rows = next_states(G[q].astype(np.int64), near_by_factor)
         state = phi[q]
-        order = np.lexsort((nexts[1], nexts[0]))
-        _, firsts = np.unique(nexts[1][order], return_index=True)  # each next code's first window
+        order = np.lexsort((*(next_rows[:, g] for g in reversed(range(next_rows.shape[1]))), next_windows))
+        _, firsts = np.unique(next_rows[order], axis=0, return_index=True)  # each next state's first window
         for j in order[np.sort(firsts)]:
-            w, r = int(nexts[0][j]), int(nexts[1][j])
+            w, r = int(next_windows[j]), _state(next_rows[j])
             if r not in phi:
                 phi[r], parent[r] = int(want_state[state][w]), (q, w)
                 queue.append(r)
-        mapped = np.full(codes, -1, dtype=np.int64)
-        mapped[list(phi)] = list(phi.values())
         bad_outputs = np.flatnonzero((D[q] != want_labels[state]).any(axis=1))
-        wrong_next = mapped[nexts[1]] != want_state[state][nexts[0]]
-        bad_states = np.unique(nexts[0][wrong_next])
+        wrong_next = _lookup(phi, next_rows) != want_state[state][next_windows]
+        bad_states = np.unique(next_windows[wrong_next])
         wrong_outputs += len(bad_outputs)
         wrong_states += len(bad_states)
         wrong_ties += len(bad_states) - int(wrong_next[: len(windows)].sum())
@@ -346,20 +483,20 @@ def certify(
             d = int(bad_outputs[0]) if len(bad_outputs) else len(windows)
             c = int(bad_states[0]) if len(bad_states) else len(windows)
             if d <= c:
-                first = ("outputs", q, d, -1)
+                first = ("outputs", q, d, None)
             else:
-                failed = nexts[1][wrong_next & (nexts[0] == c)]
-                first = ("state", q, c, int(failed[0]))
+                failed = next_rows[wrong_next & (next_windows == c)]
+                first = ("state", q, c, _state(failed[0]))
     counterexample = None
     if first is not None:
         kind, q, w, r = first
-        path: list[tuple[int, int]] = [(q, w)]
+        path: list[tuple[State, int]] = [(q, w)]
         while (step := parent[path[-1][0]]) is not None:
             path.append(step)
         path.reverse()
         state = phi[q]
         after = [0] * k
-        if kind == "state":
+        if r is not None:
             word = target.distinguishing(int(want_state[state][w]), phi[r])
             after = word + [0] * (-len(word) % k)
         counterexample = Counterexample(
@@ -368,12 +505,12 @@ def certify(
             [code for code, _ in path],
             state,
             [int(x) for x in want_labels[state][w]] if kind == "outputs" else [int(want_state[state][w])],
-            [int(x) for x in D[q][w]] if kind == "outputs" else [phi[r]],
+            [int(x) for x in D[q][w]] if r is None else [phi[r]],
             after,
         )
     return Certificate(
         k,
-        codes,
+        list(machine.codes),
         start,
         list(queue),
         dict(phi),
@@ -384,6 +521,7 @@ def certify(
         snap.margin(),
         lead.margin(),
         minimise(queue, D, G),
+        readout(queue, phi, target),
         len(queue) * len(windows),
         time.perf_counter() - begun,
         task.name,
@@ -397,8 +535,7 @@ def certify_file(path: Path, task_name: str = wt.ADDITION.name, snap_ratio: floa
     and snap ratio (1.0: strict, the network's own snaps only, no near tie branched).
     """
     network = load_network(str(path))
-    machine = NetworkMachine(network)
-    certificate = certify(machine, len(machine.E), wt.task_named(task_name), snap_ratio)
+    certificate = certify(NetworkMachine(network), wt.task_named(task_name), snap_ratio)
     return {
         "network": str(path),
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
