@@ -1186,6 +1186,11 @@ def _median(values: Sequence[float]) -> float:
     return ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
 
 
+def _median_cell(values: Sequence[float]) -> str:
+    """A report cell's median of a step's per-epoch seconds; "-" for a step stopped before its first epoch."""
+    return f"{_median(values):.1f}" if values else "-"
+
+
 def _test_cell(step: Mapping[str, Any], n: int, field: str, form: str) -> str:
     """A test length's field in a report cell; "-" for a length past the break left untested."""
     test = step["tests"].get(str(n))
@@ -1257,8 +1262,8 @@ def report(study: Study) -> str:
                     [
                         r["key"],
                         str(step["step"]),
-                        f"{_median(step['train_seconds']):.1f}",
-                        f"{_median(step['screen_seconds']):.1f}",
+                        _median_cell(step["train_seconds"]),
+                        _median_cell(step["screen_seconds"]),
                         f"{step['check_seconds']:.1f}",
                         " ".join(_test_cell(step, n, "seconds", "{:.0f}") for n in lengths),
                     ]

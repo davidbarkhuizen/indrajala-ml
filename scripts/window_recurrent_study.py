@@ -376,6 +376,30 @@ are raw.
   3-6 they never fit (all three steps plateau, 36 of the 38 failures there), at `m` 8-16 they mostly
   fit (12 of 16 pass step 3) and break at 8-12 columns: memorising, as the exclusion bound (D23)
   predicts for training to 3 windows (12 columns) with 8-16 codes.
+
+Findings (E6 of docs/window-recurrent-claims-workplan.md, re-registered by D37: the window without
+its transformer, as an existence test), trained on pyramidon (Ryzen 7 3700U), indrajala-ml 9114f21,
+crate abcba3d7a30e, 3 workers (memory: E8c's long tests ran beside it), 2026-10-14 17:06 to 17:26
+(`window_recurrent_e6_linear.json`: the linear window, the embedding and output layer only, at `k`
+1 `s` 16 `m` 16 on addition, the curriculum capped at 18 columns, the bound `m + q - 1`, each step
+certified, the study stopped at its first certified run, 6 seeds). Results, models and per-step
+certificates in `data/window-recurrent/e6-linear/` (56 files, `e6-linear.sha256`, sha256
+716761f3...62f2e5da, run from `data/window-recurrent`), log `data/window-recurrent/e6-linear.log`
+(9a6c848b...cba8648d; its run ended in the report's crash on runs stopped before their first epoch,
+fixed with these findings, after every result was written). Strict certificates of the two
+certified networks in `e6-linear/certificates-strict/` (listed in the same manifest).
+
+- **The window's transformer isn't needed at `k` 1: at least 2 of 6 runs certify.** Seed 1 at step
+  3 (trained to 3 columns) and seed 2 at step 4 (4 columns), both verdicts (the harness's per-step
+  certificate branches near ties; the strict one, `--snap-ratio 1`, agrees), each minimised to the
+  3-state carry automaton from 5 and 8 codes reached, 0 wrong outputs and states, no near ties, snap
+  ratios at least 2.99 and 1.37, logit leads at least 5.01 and 2.29. Both pass every test length to
+  64 columns. "At least": seeds 1 and 2 certified in parallel before the stop reached them.
+- **A network of 2,963 parameters** (the transformer window's `k` 1 networks: 9,651-9,843 at `s`
+  16) certifies, so at one column a window the GRU does the whole step; the FFN window (D37's
+  fallback) wasn't run.
+- The others: seed 0 fitted steps 1-3 and plateaued from step 4 until stopped at step 7; seeds 3-5
+  were stopped before their first epoch (3 workers). No rate is claimed (D37).
 """
 
 from __future__ import annotations
