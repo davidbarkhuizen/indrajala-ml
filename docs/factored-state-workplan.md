@@ -254,10 +254,22 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    crate's fused step, and pure Python's `RecurrenceLayer`), the poolings' reading point (D10), and
    `scripts/migrate_factored_state.py`, which migrates the saved-model fixtures here and stage 5's
    files later. The certificate and the harness read one-factor states (asserted) until stages 6-7.
-5. **Unblocked (E8b stopped, stage 7 ran); after stage 7's analysis.** **The migration** (after the claims workplan's stage 7 and E8b finish): saved networks, results
+5. **Code done (this PR); the run after stage 7's analysis.** **The migration** (after the claims workplan's stage 7 and E8b finish): saved networks, results
    and certificates rewritten (D9); the hash table committed with it; the docstrings' hashes
    updated. Check: every migrated E1 and E8 certified network certifies again, the same
    verdicts.
+   *Built (the code; the run waits for stage 7's analysis):* `migrate_factored_state.py tree ROOT...
+   --table FILE` migrates every network, step record, result and certificate under the roots
+   (networks first: a certificate's `sha256` becomes its migrated network's), then each manifest
+   listing a migrated file (the old one kept as `<name>.before-factored-state.sha256`), and writes
+   the hash table; a second run changes nothing. A certificate's per-factor readout is computed
+   from its own reachable states and `phi`, as `certify` computes it; E1's keep their names. An
+   old result gains what today's harness writes for a run without per-step certificates
+   (`certified` false, `certified_step` null, `stopped` false). The check is stronger than the
+   verdicts: `recertify CERTIFICATE...` certifies each network again and compares the whole
+   certificate but its seconds. On copies of E1 (with the control and matrix networks) and E8 `q`
+   4, 1,032 files migrated, every manifest verified, and all 110 `k` 1 certificates came out the
+   same as certificates made now, field by field.
 6. **Done (#742).** **The certificate**: tuple states (D4), per-factor near ties, the per-factor readout (D9); tests
    on a hand-built factored machine for division `p` 5 (certifies, its factors read `A` and `B`),
    one holding `A + B` and `A - B` (certifies, named so), and faulty ones (a wrong next code in one
