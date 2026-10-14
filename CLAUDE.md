@@ -18,6 +18,20 @@
   golden bits would need a special case, a duplicate path or a design that blocks known later
   work, prefer the better structure and re-record (§8).
 
+## Studies
+
+A study that trains networks and makes claims from them follows
+[docs/experiment-design.md](docs/experiment-design.md); read it before designing one or writing its
+workplan.
+
+- **Every cell must be able to succeed, and its training must exclude memorising:** the model can
+  represent the target (codes at least its minimal states), and the longest training length is at
+  least `m + q - 1` (the exclusion bound), each bound written beside the cell and tested against
+  the config. An impossible cell only with a stated reason.
+- **Claims and their refutations are registered before the data; no setting changes after it.** A
+  flaw found mid-study is recorded and fixed in a new registered experiment.
+- **Certify where a model admits proof**; sampled tests overstate "works".
+
 ## Timing
 
 Timing a change follows [docs/measurement.md](docs/measurement.md); read it before any benchmark.
