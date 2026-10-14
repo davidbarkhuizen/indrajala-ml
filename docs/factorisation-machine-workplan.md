@@ -11,7 +11,7 @@ owner: **the controllers' state is factored, one factor per register**, R1 the c
 first test. The owner granted the
 study one multi-day run, the concluding one (D14). D11 revised by the owner (2026-10-14): F1 keeps
 the calls given; F2's second arm learns them, factored per call level, in place of the inlined
-flat controller (which multiplies control states as a single codebook multiplied division's). F1 reversed by the owner (2026-10-14, evening; D15-D17): no traces and no given decomposition; the network learns from inputs and outputs only and finds its own decomposition ("we can't hand the network the decomposition, it should learn it itself"), trained with the exact machine forward and straight-through gradients backward (D16), and claimed in tiers, the main route a modular certificate against the specifications of the subroutines it learned (D17). Items superseded by the reversal are marked so where they stand. No stage started.** It follows
+flat controller (which multiplies control states as a single codebook multiplied division's). F1 reversed by the owner (2026-10-14, evening; D15-D17): no traces and no given decomposition; the network learns from inputs and outputs only and finds its own decomposition ("we can't hand the network the decomposition, it should learn it itself"), trained with the exact machine forward and straight-through gradients backward (D16), and claimed in tiers, the main route a modular certificate against the specifications of the subroutines it learned (D17). Items superseded by the reversal are marked so where they stand. Stages 4-7 and the cost then restated for D15-D17, with D18 (the learned call structure's shape) and D19 (the training executor, batched) settled under delegation, and a capacity row added to each rung's feasibility (2026-10-14). No stage started.** It follows
 [factorisation-note.md](factorisation-note.md), which states why the window-recurrent network
 can't factor and what a machine that can would need (P1-P5); this plan builds that machine. It
 reuses the window-recurrent network, its target-machine certificate (the claims workplan's
@@ -276,6 +276,14 @@ calls produce. The bound then makes memorising unlikely rather than impossible; 
 over every window of the domain from every reachable code, is the proof (as the factored-state
 workplan's D7).
 
+**The capacity row (D15-D17, D18).** Learned from inputs and outputs, a rung's whole machine has
+no exclusion bound (D17), so each rung's row adds: the shape (`J`, `L`, each factor's codes, `S`
+their product), at least the reference's (D18); the table's bits, `S x 343 x` the bits of an
+entry's actions; and the curriculum's cap, the smallest input size at which some `T` inputs'
+answers hold more bits than the table, with `T` written (the cost's table for R7). A row whose
+inputs all together hold fewer bits than the table at every size its budget allows is an
+impossible cell, not launched. A test checks each config against its row.
+
 ## Decisions
 
 Settled under the owner's standing delegation, with each option's pros and cons; revisions of
@@ -513,6 +521,39 @@ Settled under the owner's standing delegation, with each option's pros and cons;
   per certified sweep subroutine; the whole machine has unbounded memory and no such bound, so at
   the top level the defence is capacity (a training set of `N` holding far more answers than a
   controller's table of `S` states x 343 windows can store), written beside each rung.
+- **D18. The learned call structure's shape. Settled: (a), under the owner's delegation
+  (2026-10-14).** D15 leaves the decomposition to the network, but the network needs a shape to
+  hold one: call slots, a depth, and codes per factor.
+  - (a) *Chosen.* **One network for every level, `J` call slots, depth `L`, sized from the rung's
+    reference program with one spare of each:** `J` at least the reference's subroutines plus
+    one, `L` its call depth plus one, each slot its own learned start state (so the slot is in the
+    state), the stack holding the suspended levels' state tuples (D11 (b)'s level factors), the
+    state `G` factors with codes at least the largest register range plus one (Feasibility).
+    Column 2's classes: continue, return and one call per slot. Pros: every cell able to succeed
+    (the reference's decomposition fits, with room for another); one network, so its table and the
+    capacity row stay small; the reference gives sizes only, never which slot does what. Cons: the
+    sizes are a hint from our program; a decomposition needing more slots than the reference's
+    can't be found.
+  - (b) A large fixed shape for every rung (8 slots, depth 6). Pros: no hint at all. Cons: more
+    control classes and codes, so a larger table, a larger `T` (the cost table) and more to search;
+    unused slots cost training.
+  - (c) One level, no calls (factored, inlined). Pros: simplest. Cons: inlining's product (D11
+    (a)): R7's 100-300 states, far past the frontier.
+  - (d) A network per slot. Pros: each subroutine its own weights. Cons: the slots' networks
+    multiply the parameters and the table; which network a slot gets is itself a given
+    decomposition.
+- **D19. The training executor. Settled: (a), under the owner's delegation (2026-10-14).**
+  - (a) *Chosen.* **The window network on the Rust array backend, `B` inputs stepped in lockstep**
+    (one `window_step` of `B` rows a machine step), the tapes, heads and stack in Python (an array
+    of symbols per row), inputs of a batch drawn at one size so they halt near together, halted
+    rows masked. Pros: the network and its backward reused as the studies train them; batching
+    amortises Python's per-step cost; no crate change to start. Cons: Python's loop per step
+    remains; rows halting early idle their slots.
+  - (b) Per input, unbatched (the pure-Python lanes). Pros: simplest. Cons: about `10^4` steps a
+    second: E-F1 at 12 days a pass (the cost table). Kept for the parity test only.
+  - (c) The training executor in the crate (forward and backward through the machine). Pros: the
+    fastest. Cons: a crate change and its parity with (a) before anything learns; taken only if
+    stage 5's probe makes E-F1 infeasible with (a) (the cost).
 
 ## Stages
 
@@ -523,31 +564,81 @@ Settled under the owner's standing delegation, with each option's pros and cons;
    2022; Ellis et al. 2021; Mankowitz et al. 2023; Jang et al. 2017; Bengio et al. 2013), each
    paper kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as
    `~/code/indrajala-literature/`): **all fetched and read (2026-10-14)**; their bearing is in
-   D15-D17. The workplan is done (#708, revised; reversed by D15-D17). **Still to do: restate
-   stages 4-7 and the cost for D15-D17** (the learning layers, the verifier loss, expert iteration,
-   the modular certificate) before any of them starts.
+   D15-D17. The workplan is done (#708, revised; reversed by D15-D17; stages 4-7 and the cost
+   restated for D15-D17, with D18-D19, on 2026-10-14).
 2. **I1's tape model, the call stack and the reference executor; I2's DSL compiling both ways;
    rungs R1-R3** (tier 0): programs tested exhaustively; each table's minimal states computed and
    R1-R3's feasibility rows written.
 3. **I3's oracle and catalogues; rungs R4-R7** (tier 0): R7 checked against the oracle to `3^12`
    (I6), and the flat table against the composed tables on the same; R4-R7's feasibility rows.
-4. **I5: the controller certificate** over a reference table: windows restricted to the table's
-   domain, reachability, calls and returns, the tables' export. Tests: a stand-in controller equal
-   to R2's table certifies; faulty ones (a wrong write, a wrong move, a missed return, a wrong
-   call) fail with a counterexample input the executor runs wrong.
-5. **I1's network executor, I4's traces and the harness's controller task** (tier 0): a tiny
-   network trained on R1 end to end on `pyramidon`.
-6. **E-R: rungs R1-R6 trained and certified** on `jebel`, one at a time (D14), each registered
-   with its feasibility row and probe; each certified controller run by the network executor on
-   long inputs. Waits for D12's gate.
-7. **E-F1: R7's controller trained and certified**, with R1-R6's certified controllers called:
-   F1's experiment, the study's one multi-day run if its probe needs it (D14). The composed
-   machine checked against the flat table to `3^12`. Findings.
+Stages 4-7 restated for D15-D17 (2026-10-14). *As first written (superseded):* 4, I5's controller
+certificate against a given reference table; 5, I4's traces and a network trained on R1's; 6-7,
+each rung's controller trained on its traces, R7 calling R1-R6's certified controllers.
+
+4. **I5': the modular certificate (D17 (b))** (tier 0), built and tested on stand-ins before any
+   network learns:
+   - **The call structure read off** a snapped network: run on a rung's catalogue by the network
+     executor, the call slots it uses (D18), each slot's call sites, and each call's tape contents
+     before and after (its observed input-output behaviour).
+   - **A sweep's certificate:** a slot whose heads each move one way only (a sweep) is a finite
+     transducer over columns; its machine, extracted from the slot's start code over every window
+     of its domain, is checked against a **specification**, a DSL program (I2) named by us after
+     reading its behaviour, by the target-machine certificate (states mapped by a breadth-first
+     search of the product, `phi` many-to-one, actions and next states checked; a mismatch gives
+     a counterexample input). A slot that isn't a sweep is reported as such: it falls to a lower
+     tier, it doesn't fail the certificate.
+   - **The loop:** with every slot certified, the outer program (the top level's machine over the
+     slots' specifications) is checked to a bound (every `N < 3^12` on the compiled tables) and
+     its invariant written (D7).
+   - **The export** of each certified slot's table for the compiled executor (I1), as before.
+   - Tests: stand-in networks whose machines equal R1's and R2's tables certify against their own
+     programs, and one composed of R2's and R3's tables certifies slot by slot; faulty stand-ins (a
+     wrong write, a wrong move, a missed return, a wrong call) fail with a counterexample the
+     executor runs wrong; a non-sweep stand-in reports its tier.
+5. **I9: learning through the machine (D16) and the network executor** (tier 0), on `pyramidon`:
+   - **The executor, batched** (D19): `B` inputs run in lockstep, one `window_step` of `B` rows a
+     machine step, each row its own tapes, heads and stack; a halted row masked. It records each
+     step's window, state and sampled actions: the hard forward.
+   - **The backward:** the recorded windows replayed through the window network's existing
+     backward (W20's re-run), plus the new gradient routed through the tapes: an action's
+     straight-through Gumbel-softmax (Jang et al. 2017; Bengio et al. 2013); **a read's gradient to
+     the write that put that symbol in the cell** (the cell's last writer, a hard pointer, so
+     nothing soft in the forward); a move's through the three cells it could have brought under
+     the head, weighted by the move's probabilities. Needs the window's input gradient per token
+     (the embedding's backward, exposed).
+   - **The loss on the answer only:** each output-tape cell's cross-entropy against the answer's
+     symbol there (dense, on the answer, not the method); for R7, D16's verifier terms (each factor
+     scored as written: divides `N`, is prime, the product so far divides `N`); a run out of its
+     budget scores its unwritten cells wrong.
+   - **Expert iteration** (D16): `K` runs sampled per input; a run whose whole output verifies
+     becomes a trace of the network's own actions, trained on with each step's cross-entropy
+     alongside the answer's loss.
+   - **The curriculum over input size** (D16): from the smallest inputs, the network and its
+     optimiser carried (W25), capped at the rung's capacity row (Feasibility).
+   - **The call structure** (D18): the level factors, the call slots' classes on column 2, the
+     exact stack holding the suspended levels' codes.
+   - **The harness's machine task**: a run of rung, shape (D18) and seed; steps saved and resumed;
+     `certify_steps` running stage 4's certificate after each curriculum step and
+     `stop_at_certified`; status and report.
+   - Tests: the batched executor equals a one-input executor step for step; the routed gradients
+     against finite differences of a relaxed run on a tiny network; and **R1's copy learned from
+     inputs and outputs** by a tiny network on `pyramidon` and certified by stage 4: the method's
+     smoke test, not a registered claim.
+6. **E-R: rungs R1-R6 learned and certified** on `jebel`, one at a time (D14), **each from scratch
+   on its own inputs and outputs** (D15: no trained subroutine carried into a later rung), each
+   registered with its feasibility row (D18's capacity, the exclusion bound per expected sweep,
+   the capacity row) and a 2-epoch probe for its budget; each rung reported in D17's tiers, its
+   call structure as learned (the slots it uses against the reference program's subroutines).
+   Waits for D12's gate.
+7. **E-F1: R7 learned from `N` and its factors and certified in D17's tiers:** F1's experiment, the
+   study's one multi-day run if its probe needs it (D14; the cost below says it likely will). The
+   certified machine checked against the oracle to `3^12`. Findings.
 8. **I1's compiled executor in the crate** (`indrajala-math-rust`, then "Bump rust/"); parity with
    the network executor; the certified R7 machine run to its budget: every `N` to `3^12`, strata
    to 24 digits, each batch within a day.
-9. **Stretch: R8-R10**, rho with Miller-Rabin, each controller a rung (D14), run to 40 digits.
-10. **E-F2: the arms** (D11). Findings.
+9. **Stretch: R8-R10**, rho with Miller-Rabin, each task a rung (D14, D15), run to 40 digits.
+10. *Superseded by D15:* E-F2's arms are F1 itself (inputs and outputs only, the call structure
+    learned).
 11. **The report**; this workplan retired.
 
 ## Cost
@@ -562,12 +653,32 @@ shuttling included), `n` the input's base-3 digits:
 | 24 (38) | about 3 x 10^9 | about 10^7 | 1 day | 30 s |
 | 40 (63) | about 6 x 10^13 | about 3 x 10^9 | - | not run (7 days a number); rho 30 s |
 
-Training: a rung per controller, each within a day of `jebel` (D14), set by its probe. For scale,
-E8b's curriculum runs to 20 windows were estimated at 1-3 h each at `k` 1; a controller's cap of
-`m + q - 1` steps at `k` 3 grows with its `q`, which is why D3 keeps controllers small. E-F1 may
-take the study's one multi-day run. Certification of a controller of tens of codes over at most
-343 windows is seconds, so it runs every step. The dominant costs are engineering (I1-I5, stages
-2-5) and the long runs of stage 8.
+**Training (restated for D15-D16, 2026-10-14).** With inputs and outputs only, a training example
+is a whole run of the machine on one input, forward and backward through every step, and `K`
+more sampled runs for expert iteration: a pass costs `T (1 + K)` runs, `T` the inputs it trains
+on. `T` is set by the capacity defence (D17; Feasibility's capacity row): the answers trained on
+must hold more bits than a table of the network's `S` states (all its factors' codes, every level)
+over 343 windows can store, at about 15.8 bits an entry (3 heads x 21 actions, x 6 control classes
+with 4 call slots, D18). The rate: E1's 31,000 window evaluations a second forward, about `10^4`
+steps a second with the backward on one worker unbatched; batching (D19) raises it by a factor
+the probe measures. R7's average steps a number below `3^n` are computed (trial division's
+divisibility tests times `10 n^2`); for `K` 8:
+
+| R7's `S` | table, bits | `n` | inputs `N < 3^n` | `T` needed | average steps a run | a pass at `10^4` steps/s | at `10^5` steps/s |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 16 | 86,710 | 8 | 6,559 | 6,860: **more than exist** | 1.4 x 10^4 | - | - |
+| 16 | 86,710 | 10 | 59,047 | 5,488 | 5.3 x 10^4 | 3.0 days | 7.3 h |
+| 64 | 346,842 | 10 | 59,047 | 21,952 | 5.3 x 10^4 | 12 days | 29 h |
+
+So **R7's training must reach inputs of 10 digits** (below that every `N` together holds fewer
+bits than a 16-state table), **a pass there takes days unbatched**, and E-F1 fits the one
+multi-day run only if batching reaches about `10^5` steps a second and a few passes suffice;
+fewer states (`S`) shorten it in proportion. Stage 5's probe measures the batched rate before E-R
+is registered; if it is far below `10^5`, the training executor's forward moves into the crate
+(D19 (c)) before E-F1. The lower rungs are cheap by comparison (R1-R3's runs are `O(n)` steps,
+R5-R6's `O(n^2)`), each within a day (D14), their rows computed in stages 2-3. Certification of a
+slot of tens of codes over at most 343 windows is seconds, so it runs every step. The dominant
+costs: engineering (stages 2-5, stage 5's learning layers the largest) and E-F1's training.
 
 ## Known limits
 
@@ -578,16 +689,23 @@ take the study's one multi-day run. Certification of a controller of tens of cod
   where, and why (its counterexamples).
 - **The cross-term is untested.** C9 learns factors with it off; every controller here needs it
   on (Feasibility), so R1 is its first test.
-- **The call structure is given** (D3): F1 learns each controller, not the program's
-  decomposition; F2's learned-calls arm asks for that.
-- **With full traces a controller is close to a fitted table.** What's learned beyond the table is
-  the state: codes for each controller's reference states, found from its calls.
+- *Superseded by D15:* "the call structure is given" and "with full traces a controller is close
+  to a fitted table": the network now learns from inputs and outputs only.
+- **Inputs-and-outputs learning has stalled short of this before** (Zaremba & Sutskever 2015;
+  Kurach et al. 2016; Déletang et al. 2022): R1 may be where the ladder stops, and that is a
+  finding.
+- **Straight-through over thousands of steps is biased** (D16); expert iteration needs a
+  near-random controller to succeed sometimes on the smallest inputs to start.
+- **A learned subroutine may not be a sweep**, or may compute no function we can name: it then
+  falls to a lower tier (D17), never to "certified".
 - **The reference program's correctness is tested and argued, not proved** (D7).
 - **A step budget bounds every run**; a correct program on a large input may run out of it.
 
 ## Timing and checks
 
 Tier 0 for stages 1-7 and 9-10 (new code, no timed path changed); stage 8 changes the crate: its
-own A/B is not needed (a new function, no existing timed path), but its parity tests are. Every
+own A/B is not needed (a new function, no existing timed path), but its parity tests are. If
+stage 5's input gradient changes the window network's `learn` path rather than adding beside it,
+that PR is tier 1; D19 (c), if taken, is a crate change with its parity tests. Every
 stage that changes the package passes the golden run. Studies on `jebel` under the machine lock,
 workers sized by a measured peak RSS, PL1 at 65 W.
