@@ -1128,8 +1128,9 @@ def _test_cell(step: Mapping[str, Any], n: int, field: str, form: str) -> str:
 
 def report(study: Study) -> str:
     """
-    Per cell (arm, k, s, m): the seeds whose last step works, and per step the seeds passing its
-    check, the break lengths and window ratios; per run and step, its stop, epochs, examples,
+    Per cell (arm, k, s, m): the seeds whose last step works (and, with certify_steps, the seeds
+    certified), and per step the seeds passing its check among those that reached it, and the break
+    lengths; per run and step, its stop, epochs, examples,
     break, ratio, L* at each test length and codes used; and the cost: seconds per epoch (training,
     screening) and each test length's pass; "-" for a length left untested (tests_past_break).
     """
@@ -1146,11 +1147,16 @@ def report(study: Study) -> str:
     runs: list[list[str]] = []
     cost: list[list[str]] = []
     lengths = study.settings.test_lengths
+    certifies = study.settings.certify_steps
     for (arm, k, s, m), done in sorted(cells.items(), key=lambda cell: order[cell[0]]):
+        # each step over the runs that reached it: an existence test's runs end at different steps
+        reached = [[r for r in done if len(r["steps"]) > j] for j in range(max(len(r["steps"]) for r in done))]
         per_step = [
-            f"{sum(r['steps'][j]['passes'] for r in done)} pass, breaks "
-            + "/".join(str(r["steps"][j]["break"]) for r in done)
-            for j in range(len(done[0]["steps"]))
+            f"{sum(r['steps'][j]['passes'] for r in at)} pass"
+            + ("" if len(at) == len(done) else f" of {len(at)}")
+            + ", breaks "
+            + "/".join(str(r["steps"][j]["break"]) for r in at)
+            for j, at in enumerate(reached)
         ]
         summary.append(
             [
@@ -1160,6 +1166,7 @@ def report(study: Study) -> str:
                 m,
                 str(done[0]["parameters"]),
                 f"{sum(r['works'] for r in done)}/{len(done)}" + ("" if len(done) == seeds else f" of {seeds}"),
+                *([f"{sum(bool(r.get('certified')) for r in done)}/{len(done)}"] if certifies else []),
                 "; ".join(f"step {j + 1}: {text}" for j, text in enumerate(per_step)),
             ]
         )
@@ -1193,7 +1200,19 @@ def report(study: Study) -> str:
     test_header = "L* at " + " ".join(str(n) for n in lengths)
     return "\n\n".join(
         [
-            table(["arm", "k", "s", "m", "parameters", "seeds working", "per step"], summary),
+            table(
+                [
+                    "arm",
+                    "k",
+                    "s",
+                    "m",
+                    "parameters",
+                    "seeds working",
+                    *(["certified"] if certifies else []),
+                    "per step",
+                ],
+                summary,
+            ),
             table(
                 ["run", "step", "stop", "epochs", "examples", "check passes", "break", "ratio", test_header, "codes"],
                 runs,
