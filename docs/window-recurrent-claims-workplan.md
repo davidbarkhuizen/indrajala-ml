@@ -264,6 +264,27 @@ certified network (D22's lengths), per cell the working and certified rates with
 every certified machine's minimised size against `q`. C8 is refuted if no network certifies at
 either `q`.
 
+**Outcome (2026-10-14).** C8 held weakly at `q` 4 (1 of 20 certified, the 4-state automaton, every
+long test passed) and not at `q` 5 (0 of 20); 37 of 40 runs fitted their training lengths
+exactly and then failed at 8 columns: they had memorised (D23's exclusion bound; findings in the
+study script's docstring). E8b trains past the bound.
+
+### E8b. The modular sum, trained past the exclusion bound (C8; D31)
+
+**Design.** E8's task, rungs and settings but two: `m` 16 at both rungs (4 and 3.2 times the
+states, a surplus kept for learning: the owner, 2026-10-14) and 20 steps, so training reaches 20
+columns at `k` 1, the bound `m + q - 1` (19 at `q` 4, 20 at `q` 5); both arms, 10 seeds: 2 x 2 x 10
+= 40 runs. No wrong machine of at most 16 states then agrees with the automaton on every input up
+to 20 columns, so memorising can't pass training exactly; training and its checks see a sample of
+those inputs (exhaustive only to 6 columns), so the certificate still decides.
+
+**Feasibility (D23):** `m` 16 against 4 and 5 states; every state reached and told apart within 1
+column; longest training length 20 against the exclusion bound's 19 and 20; the budget from a
+probe on `pyramidon` before launch (a one-run probe at 12 columns was running at 2026-10-14
+07:07, over 6 minutes for its one step; E8b's 20 columns cost more: the launch waits for it).
+
+**Measures and analysis.** As E8's, and C8 refuted at a rung if no network certifies there.
+
 ## Decisions
 
 Settled under the owner's standing delegation, with each option's pros and cons:
@@ -519,6 +540,15 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     with it. Pros: no compute spent on outcomes known in advance; the bound makes a failure
     interpretable. Cons: a minimisation and a few probes per new task.
   - (b) Check by eye at review. Pros: no procedure. Cons: what E7 did; it missed `m` 32 < 49.
+  - **The exclusion bound (added 2026-10-14, after E8, with the owner).** The conditions above make
+    the target checkable, not wrong machines excluded. Two machines of `n` and `n'` states that
+    agree on every input up to length `n + n' - 1` are equivalent, so a network of `m` codes exactly
+    right on every training length up to `L` is the target's `q`-state machine when
+    `L >= m + q - 1`; below it, a wrong machine of up to `m` states can fit every training case,
+    and E8's networks found such machines (memorising lengths 1-3 with 6-22 states). So a cell
+    also states its longest training length (steps x `k` columns) against `m + q - 1`, and meets
+    it unless the plan says why not. Every config before E8b falls short (addition's `k` 1 trained
+    to 3 columns against 6-18 needed; E7 and E7' to 3 against 56-560), recorded in its test's list.
 - **D24. E7''s code counts. Settled: (a).**
   - (a) *Chosen.* About 5 and 10 times the minimal states (128 and 256 at `p` 5, 256 and 512 at
     `p` 7). Pros: 5 times is where addition worked best (5.3 at `m` 16), 10 times asks whether
@@ -585,6 +615,20 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     a time.
   - (b) Widen the window now. Pros: possibly faster to division. Cons: two changes at once, and
     no rung to say whether width was the limit.
+- **D31. E8b's codes and training length (the exclusion bound). Settled: (a), with the owner.**
+  - (a) *Chosen.* `m` 16 at `q` 4 and 5 (a surplus of 3-4 times the states), trained to 20 columns.
+    Pros: the owner's surplus for flexible learning (addition worked best with spare codes; E8's
+    certified network used 8 of 32); past the bound, so memorising can't fit. Cons: 20 steps at
+    `k` 1, the longest training yet (cost from the probe).
+  - (b) `m` at the states (`q`), trained to `2q - 1` columns (7 and 9). Pros: the cheapest bound.
+    Cons: no surplus: the owner prefers one, and a codebook at the bound may train badly.
+  - (c) E8's 32 codes, trained to 36 columns. Pros: E8's codes unchanged. Cons: nearly twice (a)'s
+    training length for a surplus (a) already gives.
+- **D32. Modular division waits for a factored state (the owner, 2026-10-14).** E7 and E7' failed
+  at fitting: one codebook must learn division's 25- or 49-state table flat, while its state is two
+  independent residues `(A mod p, B mod p)`, each a modular sum's counter. Division resumes once
+  the recurrence has a factored state (a codebook per residue, product quantisation), a package
+  change with its own plan; until then the ladder is the modular sum.
 
 ## Stages
 
@@ -642,6 +686,10 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    the data module renamed from `modular_division_data`, division's cases unchanged),
    `scripts/window_recurrent_e8_q4.json` and `_q5.json` (a test checks them), `run --workers`.
    Then E7's analysis, and the next rung (D30).
+7c. **E8b on `pyramidon`** (C8; D23's exclusion bound, D31): `scripts/window_recurrent_e8b_q4.json`
+   and `_q5.json` (a test checks them, and every config after E8 is tested against the bound),
+   then E8's analysis. If a rung works, the next (D30) is registered at the bound; division waits
+   for the factored state (D32).
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
    **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
    `s` 4 and `k` 1 `s` 16, a continuous state, seeds 0-19, E3's settings; its keys say
@@ -673,6 +721,7 @@ evaluation rate:
 | E7 | 2 `p` x 2 `k` x 2 `m` x 2 arms x 5 seeds = 80 runs, certified | `jebel` | about 8 h (4-15), longer if 49 states train slowly |
 | E7' | 2 `p` x 2 `m` x 2 arms x 10 seeds at `k` 1 = 80 runs, certified | `jebel` | about 5 h (3-8): E7's `k` 1 runs took 7-15 minutes; more codes, more epochs |
 | E8 | 2 `q` x 2 arms x 10 seeds at `k` 1 = 40 runs a pair of rungs, certified | `pyramidon`, then `jebel` | about 2.5-5.5 h a pair on `pyramidon`, about half that on `jebel` |
+| E8b | 2 `q` x 2 arms x 10 seeds at `k` 1, 20 steps = 40 runs, certified | `pyramidon` | from the probe, before launch |
 
 About 34 hours of `jebel` in three sittings, the package change of stage 4 and the harness
 change of stage 5.
