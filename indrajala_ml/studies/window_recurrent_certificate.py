@@ -133,29 +133,36 @@ def logit_leads(probabilities: FloatArray, classes: int) -> tuple[IntArray, Floa
 
 
 class NetworkMachine:
-    """A window-recurrent array network (WindowRecurrentShape, either backend) as a WindowMachine."""
+    """
+    A window-recurrent array network (WindowRecurrentShape, either backend) of one snapped factor as
+    a WindowMachine; its machine's states (a tuple of one code) are their codes. A factored state's
+    machine is the factored-state workplan's stage 6.
+    """
 
     def __init__(self, network: Any) -> None:
-        assert network.recurrence.codes is not None, "a continuous state (codes=None) isn't a finite machine"
+        factors = network.recurrence.factors
+        assert len(factors) == 1, f"the certificate reads a state of one factor (until stage 6); got {len(factors)}"
+        assert network.recurrence.snapped, "a continuous state (codes=None) isn't a finite machine"
         self.network = network
-        self.E = np.array(network.codes.E.tolist(), dtype=np.float64)
+        self.E = np.array(network.recurrence_layer.factors[0].codes.E.tolist(), dtype=np.float64)
 
     @property
     def columns(self) -> int:
         return int(self.network.columns)
 
     def start(self) -> tuple[int, FloatArray]:
-        H, indices = self.network.first_step()
-        return int(indices[0]), distances_to(np.array(H.tolist(), dtype=np.float64), self.E)[0]
+        H, states = self.network.first_step()
+        (code,) = states[0]
+        return code, distances_to(np.array(H.tolist(), dtype=np.float64), self.E)[0]
 
     def step(self, code: int, windows: IntArray) -> Steps:
         backend = self.network.backend
         X = backend.matrix(windows.astype(np.float64).tolist())
         C = backend.matrix(np.repeat(self.E[code][np.newaxis, :], len(windows), axis=0).tolist())
-        output, H, indices = self.network.window_step(X, C)
+        output, H, states = self.network.window_step(X, C)
         digits, leads = logit_leads(np.array(output.tolist(), dtype=np.float64), self.network.class_count)
         distances = distances_to(np.array(H.tolist(), dtype=np.float64), self.E)
-        return Steps(digits, leads, np.array(indices, dtype=np.int64), distances)
+        return Steps(digits, leads, np.array([code for (code,) in states], dtype=np.int64), distances)
 
 
 def all_windows(k: int, tokens: int) -> IntArray:
@@ -390,7 +397,8 @@ def certify_file(path: Path, task_name: str = wt.ADDITION.name, snap_ratio: floa
     and snap ratio (1.0: strict, the network's own snaps only, no near tie branched).
     """
     network = load_network(str(path))
-    certificate = certify(NetworkMachine(network), network.recurrence.codes.count, wt.task_named(task_name), snap_ratio)
+    machine = NetworkMachine(network)
+    certificate = certify(machine, len(machine.E), wt.task_named(task_name), snap_ratio)
     return {
         "network": str(path),
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),

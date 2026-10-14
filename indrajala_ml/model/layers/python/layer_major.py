@@ -133,13 +133,13 @@ class LayerMajorBatch:
         return rows
 
     def backward(
-        self, output_deltas: Callable[[int], None], beside_output: Sequence[Sequence[float]] | None = None
+        self, output_deltas: Callable[[int], None], beside: tuple[int, Sequence[Sequence[float]]] | None = None
     ) -> None:
         """
         The deltas of every layer, output_deltas(e) setting the output layer's for example e (the
-        network's shape: a one-hot class or a float target). beside_output, if given, is the
-        gradient of the output layer's input from another reader of it, per example (a window's
-        pooling, recurrent_layer.py), added to the output layer's.
+        network's shape: a one-hot class or a float target). beside, if given, is a layer's index
+        and the gradient of that layer's input from another reader of it, per example (a window's
+        poolings, recurrent_layer.py), added to that layer's.
         """
         count = len(self.states)
         last = len(self.layers) - 1
@@ -163,8 +163,8 @@ class LayerMajorBatch:
                 for other in reads:
                     self._select(other, example)
                 self._select(index, example)
-                if beside_output is not None and index == last - 1:
-                    layer.compute_hidden_deltas(_Beside(next_layer, beside_output[example]))
+                if beside is not None and index == beside[0] - 1:
+                    layer.compute_hidden_deltas(_Beside(next_layer, beside[1][example]))
                 else:
                     layer.compute_hidden_deltas(next_layer)
                 self.lanes[index][example] = _capture(layer)

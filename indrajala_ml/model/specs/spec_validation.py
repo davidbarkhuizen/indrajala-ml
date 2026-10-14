@@ -31,7 +31,7 @@ from indrajala_ml.model.specs.layer_specs import (
     token_wise_output,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
-from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE, OUTPUT, Factor, WindowRecurrence
 
 
 def _check_batch_norm(spec: BatchNorm, before: LayerSpec | None) -> None:
@@ -287,21 +287,33 @@ def validate_window_recurrent(
 ) -> None:
     """
     Rejects a window-recurrent network (the window-recurrent adder workplan) that isn't one: a
-    window that validate_window_specs rejects, and a recurrence without a state, with fewer than
-    two codes, a negative commitment or an update bias that isn't finite. A continuous state (no
-    codes) has neither codes nor a commitment to check.
+    window that validate_window_specs rejects, and a recurrence without factors (a tuple of
+    Factors), a factor without a state, with fewer than two codes or a negative commitment, a
+    cross-term with one factor (the factored-state workplan, D1), or an update bias that isn't
+    finite. A continuous factor (no codes) has neither codes nor a commitment to check.
     """
     validate_window_specs(specs, input_shape)
-    assert recurrence.state_size >= 1, f"a state has at least one feature; got {recurrence!r}"
-    if recurrence.codes is not None:
-        assert recurrence.codes.count >= 2, (
-            f"a state of one code carries nothing: two codes at least (W4-i); got {recurrence!r}"
-        )
-        commitment = recurrence.codes.commitment
-        assert math.isfinite(commitment) and commitment >= 0.0, (
-            f"a commitment weight is finite and not negative (W14); got {recurrence!r}"
-        )
+    factors = recurrence.factors
+    assert isinstance(factors, tuple) and factors and all(isinstance(f, Factor) for f in factors), (
+        f"a recurrence's factors are a tuple of one or more Factors; got {recurrence!r}"
+    )
+    for factor in factors:
+        assert factor.state_size >= 1, f"a factor's state has at least one feature; got {recurrence!r}"
+        if factor.codes is not None:
+            assert factor.codes.count >= 2, (
+                f"a factor of one code carries nothing: two codes at least (W4-i); got {recurrence!r}"
+            )
+            commitment = factor.codes.commitment
+            assert math.isfinite(commitment) and commitment >= 0.0, (
+                f"a commitment weight is finite and not negative (W14); got {recurrence!r}"
+            )
+    assert not recurrence.cross or len(factors) >= 2, (
+        f"a cross-term reads the other factors' states: two factors at least; got {recurrence!r}"
+    )
     assert math.isfinite(recurrence.cell.update_bias), f"an update bias is finite (W13); got {recurrence!r}"
+    assert recurrence.pooling.reads in (OUTPUT, BEFORE_STATE), (
+        f"a pooling reads the output layer's tokens or those before the first StateInput (D10); got {recurrence!r}"
+    )
 
 
 def validate_window_specs(specs: Sequence[LayerSpec], input_shape: InputShape) -> None:

@@ -41,7 +41,7 @@ from indrajala_ml.model.specs.layer_specs import (
     StateInput,
 )
 from indrajala_ml.model.specs.update_rules import SGD
-from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import Codes, Factor, WindowRecurrence
 from indrajala_ml.pcg64 import SeedSequence, generator_state
 from tests.array_network_contract import snapshot_bits
 from tests.helpers import all_subclasses, model_modules
@@ -120,7 +120,8 @@ SEQUENTIAL: dict[str, tuple[Any, ...]] = {
             LayerNorm(),
             Dense(3, output=True, activation="softmax", loss="cross_entropy"),
         ],
-        WindowRecurrence(4, Codes(5)),
+        # factored (the factored-state workplan, stage 4): every factor's draws, in factor order
+        WindowRecurrence((Factor(4, Codes(5)), Factor(2, None), Factor(3, Codes(4))), cross=True),
         SGD(),
     ),
 }

@@ -26,13 +26,14 @@ from indrajala_ml.model.networks.window_recurrent_array_network import (
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import Dropout, Embedding, LayerSpec, Position, StateInput
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
-from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import Factor, WindowRecurrence
 from indrajala_ml.pcg64 import generator_state
 from tests.helpers import bits, exp_by_crate, patching, to_numpy
 from tests.model.networks.test_window_recurrent_array_network import (
     ATTENTION,
     DIGITS,
     RECURRENCE,
+    RECURRENCES,
     WINDOW,
     K,
     _batch,
@@ -47,10 +48,12 @@ crate_exp_attention = patching(attention_array_layer, "exp", exp_by_crate)
 crate_exp_parts = patching(recurrent_array_layer, "exp", exp_by_crate)
 
 
-def _pair(window: list[LayerSpec], rule: UpdateRule, seed: int = 7) -> tuple[Any, Any]:
+def _pair(
+    window: list[LayerSpec], rule: UpdateRule, seed: int = 7, recurrence: WindowRecurrence = RECURRENCE
+) -> tuple[Any, Any]:
     return (
-        WindowRecurrentRustArrayNetwork.randomized((K,), window, RECURRENCE, rule, seed=seed),
-        WindowRecurrentArrayNetwork.randomized((K,), window, RECURRENCE, rule, seed=seed),
+        WindowRecurrentRustArrayNetwork.randomized((K,), window, recurrence, rule, seed=seed),
+        WindowRecurrentArrayNetwork.randomized((K,), window, recurrence, rule, seed=seed),
     )
 
 
@@ -75,9 +78,12 @@ def _assert_close(expected: list[tuple[Any, ...]], actual: list[tuple[Any, ...]]
 @pytest.mark.parametrize("rule", [SGD(), Momentum(0.9)], ids=lambda rule: type(rule).__name__)
 @pytest.mark.parametrize("windows", [1, 2, 3])
 @pytest.mark.parametrize("name", WINDOWS)
-def test_training_keeps_numpys_weights_within_the_products_rounding(name: str, windows: int, rule: UpdateRule):
+@pytest.mark.parametrize("recurrence", RECURRENCES)
+def test_training_keeps_numpys_weights_within_the_products_rounding(
+    recurrence: str, name: str, windows: int, rule: UpdateRule
+):
     # measured: within 5.8e-13 of each entry's scale after 20 steps
-    rust, numpy = _pair(WINDOWS[name], rule)
+    rust, numpy = _pair(WINDOWS[name], rule, recurrence=RECURRENCES[recurrence])
     rows = _rows(windows, 4, windows)
     for _ in range(20):
         rust.learn_batch(0.1, rows)
@@ -89,14 +95,15 @@ def test_training_keeps_numpys_weights_within_the_products_rounding(name: str, w
 
 @pytest.mark.usefixtures("crate_exp_attention", "crate_exp_parts")
 @pytest.mark.parametrize("name", WINDOWS)
-def test_every_step_under_adam_has_numpys_gradients(name: str):
+@pytest.mark.parametrize("recurrence", RECURRENCES)
+def test_every_step_under_adam_has_numpys_gradients(recurrence: str, name: str):
     # Adam's trajectory is chaotic near its epsilon, so each step's gradients are compared from
     # numpy's weights, on networks fresh from them, from generators in one state
-    trainer = WindowRecurrentArrayNetwork.randomized((K,), WINDOWS[name], RECURRENCE, Adam(), seed=3)
+    trainer = WindowRecurrentArrayNetwork.randomized((K,), WINDOWS[name], RECURRENCES[recurrence], Adam(), seed=3)
     for step in range(10):
         rows = _rows(1 + step % 3, 4, step)
         X, labels = np.array([x for x, _ in rows]), [label for _, label in rows]
-        rust, numpy = _pair(WINDOWS[name], SGD())
+        rust, numpy = _pair(WINDOWS[name], SGD(), recurrence=RECURRENCES[recurrence])
         for network in (rust, numpy):
             network.restore(trainer.snapshot())
         rust.rng, numpy.rng = RUST.default_rng(step), NUMPY.default_rng(step)
@@ -161,8 +168,9 @@ def test_a_saved_rust_network_loads_and_resumes_training_by_bits(tmp_path: Path)
     assert bits(loaded.snapshot()) == bits(network.snapshot())
 
 
-def test_state_codes_are_numpys():
-    rust, numpy = _pair(WINDOW, SGD())
+@pytest.mark.parametrize("recurrence", ["one factor", "two factors"])
+def test_state_codes_are_numpys(recurrence: str):
+    rust, numpy = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
     X, _ = _batch(3, examples=5)
     assert rust.state_codes(RUST.matrix(X.tolist())) == numpy.state_codes(X)
 
@@ -171,7 +179,7 @@ def test_state_codes_are_numpys():
 @pytest.mark.parametrize("windows", [1, 3])
 def test_a_continuous_state_trains_as_numpys(windows: int):
     # the window-recurrent claims workplan, stage 4: no codes, the cell's output the next state
-    recurrence = WindowRecurrence(3, None)
+    recurrence = WindowRecurrence((Factor(3, None),))
     rust = WindowRecurrentRustArrayNetwork.randomized((K,), DROPOUT_WINDOW, recurrence, Momentum(0.9), seed=7)
     numpy = WindowRecurrentArrayNetwork.randomized((K,), DROPOUT_WINDOW, recurrence, Momentum(0.9), seed=7)
     rows = _rows(windows, 4, windows)

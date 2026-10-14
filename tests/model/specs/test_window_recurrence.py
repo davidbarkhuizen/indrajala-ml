@@ -45,7 +45,7 @@ from indrajala_ml.model.specs.layer_specs import (
 from indrajala_ml.model.specs.spec_shapes import InputShape, SpecShape, spec_shapes
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs, validate_window_recurrent
 from indrajala_ml.model.specs.update_rules import Adam
-from indrajala_ml.model.specs.window_recurrence import GRU, AttentionPooling, Codes, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import GRU, AttentionPooling, Codes, Factor, WindowRecurrence
 
 # a window of 3 columns, their 27 token ids as tokens of 16, a digit of 10 per column
 IDS = Embedding(27, 16)
@@ -54,7 +54,7 @@ FFN = Residual((LayerNorm(), Dense(32, activation="relu"), Dense(16, activation=
 DIGITS = Dense(10, output=True, activation="softmax", loss="cross_entropy")
 STATE = StateInput()
 WINDOW: InputShape = (3,)
-RECURRENCE = WindowRecurrence(state_size=4, codes=Codes(8))
+RECURRENCE = WindowRecurrence((Factor(4, Codes(8)),))
 
 WINDOWS: dict[str, list[LayerSpec]] = {
     "W11's: the state before each attention block": [
@@ -111,11 +111,16 @@ def test_a_windows_sizes_are_checked_by_the_shape_walk():
 
 
 RECURRENCES_INVALID: dict[str, WindowRecurrence] = {
-    "no state": WindowRecurrence(0, Codes(8)),
-    "one code": WindowRecurrence(4, Codes(1)),
-    "a negative commitment": WindowRecurrence(4, Codes(8, commitment=-0.25)),
-    "a commitment of nan": WindowRecurrence(4, Codes(8, commitment=math.nan)),
-    "an infinite update bias": WindowRecurrence(4, Codes(8), GRU(update_bias=math.inf)),
+    "no state": WindowRecurrence((Factor(0, Codes(8)),)),
+    "one code": WindowRecurrence((Factor(4, Codes(1)),)),
+    "a negative commitment": WindowRecurrence((Factor(4, Codes(8, commitment=-0.25)),)),
+    "a commitment of nan": WindowRecurrence((Factor(4, Codes(8, commitment=math.nan)),)),
+    "an infinite update bias": WindowRecurrence((Factor(4, Codes(8)),), cell=GRU(update_bias=math.inf)),
+    "no factors": WindowRecurrence(()),
+    "factors in a list": WindowRecurrence([Factor(4, Codes(8))]),  # pyright: ignore[reportArgumentType]
+    "a factor without a state": WindowRecurrence((Factor(4, Codes(8)), Factor(0, None))),
+    "a factor of one code": WindowRecurrence((Factor(4, Codes(8)), Factor(4, Codes(1)))),
+    "a cross-term with one factor": WindowRecurrence((Factor(4, Codes(8)),), cross=True),
 }
 
 
@@ -126,12 +131,16 @@ def test_a_malformed_recurrence_is_rejected(recurrence: WindowRecurrence):
 
 
 def test_a_commitment_of_zero_is_accepted():
-    validate_window_recurrent(WINDOWS["the state before every block"], WindowRecurrence(4, Codes(2, 0.0)), WINDOW)
+    validate_window_recurrent(
+        WINDOWS["the state before every block"], WindowRecurrence((Factor(4, Codes(2, 0.0)),)), WINDOW
+    )
 
 
 def test_the_recurrence_defaults_are_the_workplans():
     # W13's update bias toward keeping the state, W14's commitment of VQ-VAE's 0.25, W1b-i's pooling
-    assert RECURRENCE == WindowRecurrence(4, Codes(8, commitment=0.25), GRU(update_bias=1.0), AttentionPooling())
+    assert RECURRENCE == WindowRecurrence(
+        (Factor(4, Codes(8, commitment=0.25)),), False, GRU(update_bias=1.0), AttentionPooling()
+    )
 
 
 def test_a_state_input_outside_a_window_is_rejected():
@@ -164,8 +173,8 @@ def test_a_state_input_has_its_entry_and_its_projection_p():
 
 def test_a_recurrence_has_its_entry():
     entry = {
-        "state_size": 4,
-        "codes": {"count": 8, "commitment": 0.25},
+        "factors": [{"state_size": 4, "codes": {"count": 8, "commitment": 0.25}}],
+        "cross": False,
         "cell": {"kind": "gru", "update_bias": 1.0},
         "pooling": {"kind": "attention"},
     }
@@ -175,13 +184,38 @@ def test_a_recurrence_has_its_entry():
 
 def test_a_continuous_state_is_accepted_and_its_entry_has_no_codes():
     # the window-recurrent claims workplan, stage 4: codes null, and no E among the parts' parameters
-    continuous = WindowRecurrence(4, None)
+    continuous = WindowRecurrence((Factor(4, None),))
     validate_window_recurrent(WINDOWS["the state before every block"], continuous, WINDOW)
     entry = recurrence_to_json(continuous)
-    assert entry["codes"] is None
+    assert entry["factors"][0]["codes"] is None
     assert recurrence_from_json(json.loads(json.dumps(entry))) == continuous
     assert recurrence_parameters(continuous) == (("q",), ("W", "U", "b"), ("c",))
     assert recurrence_parameters(RECURRENCE) == (("q",), ("W", "U", "b"), ("E",), ("c",))
+    assert RECURRENCE.snapped and not continuous.snapped
+
+
+# the factored state (the factored-state workplan, stage 4): two factors of their own sizes, one continuous
+FACTORED = WindowRecurrence((Factor(4, Codes(8)), Factor(2, None), Factor(3, Codes(5, 0.5))), cross=True)
+
+
+def test_a_factored_state_is_accepted_its_width_the_factors_together():
+    validate_window_recurrent(WINDOWS["the state before every block"], FACTORED, WINDOW)
+    assert FACTORED.state_size == 9
+    assert not FACTORED.snapped
+    assert WindowRecurrence((Factor(4, Codes(8)), Factor(3, Codes(5)))).snapped
+
+
+def test_a_factored_states_entry_round_trips_and_its_parts_are_factor_by_factor():
+    entry = recurrence_to_json(FACTORED)
+    assert entry["factors"] == [
+        {"state_size": 4, "codes": {"count": 8, "commitment": 0.25}},
+        {"state_size": 2, "codes": None},
+        {"state_size": 3, "codes": {"count": 5, "commitment": 0.5}},
+    ]
+    assert entry["cross"] is True
+    assert recurrence_from_json(json.loads(json.dumps(entry))) == FACTORED
+    q, cell, E, c = ("q",), ("W", "U", "b"), ("E",), ("c",)
+    assert recurrence_parameters(FACTORED) == (q, cell, E, c, q, cell, c, q, cell, E, c)
 
 
 @pytest.mark.parametrize("part", ["cell", "pooling"])

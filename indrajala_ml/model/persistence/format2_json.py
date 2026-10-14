@@ -35,7 +35,7 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
-from indrajala_ml.model.specs.window_recurrence import GRU, AttentionPooling, Codes, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import GRU, AttentionPooling, Codes, Factor, WindowRecurrence
 
 _RULES: dict[str, type[UpdateRule]] = {"sgd": SGD, "momentum": Momentum, "adam": Adam, "weight_decay": WeightDecay}
 # the layer-norm and attention workplan's specs by kind (stage 5), and the sequence task workplan's
@@ -154,10 +154,22 @@ def input_shape_from_json(shape: dict[str, Any]) -> InputShape:
 def recurrence_to_json(recurrence: WindowRecurrence) -> dict[str, Any]:
     # the cell and the pooling under a kind, as layers are, so another cell or pooling can join them
     return {
-        "state_size": recurrence.state_size,
-        "codes": None if recurrence.codes is None else asdict(recurrence.codes),
+        "factors": [
+            {"state_size": factor.state_size, "codes": None if factor.codes is None else asdict(factor.codes)}
+            for factor in recurrence.factors
+        ],
+        "cross": recurrence.cross,
         "cell": {"kind": "gru", **asdict(recurrence.cell)},
-        "pooling": {"kind": "attention", **asdict(recurrence.pooling)},
+        # a pooling's fields only when not the default (the factored-state workplan, D10), as
+        # attention's, so files from before them don't change
+        "pooling": {
+            "kind": "attention",
+            **{
+                key: value
+                for key, value in asdict(recurrence.pooling).items()
+                if value != getattr(AttentionPooling(), key)
+            },
+        },
     }
 
 
@@ -169,8 +181,11 @@ def recurrence_from_json(recurrence: dict[str, Any]) -> WindowRecurrence:
     if recurrence["pooling"]["kind"] != "attention":
         raise ValueError(f"unknown pooling kind {recurrence['pooling']['kind']!r}")
     return WindowRecurrence(
-        state_size=recurrence["state_size"],
-        codes=None if recurrence["codes"] is None else Codes(**recurrence["codes"]),
+        factors=tuple(
+            Factor(factor["state_size"], None if factor["codes"] is None else Codes(**factor["codes"]))
+            for factor in recurrence["factors"]
+        ),
+        cross=recurrence["cross"],
         cell=GRU(**cell),
         pooling=AttentionPooling(**pooling),
     )
@@ -212,12 +227,16 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
 
 def recurrence_parameters(recurrence: WindowRecurrence) -> tuple[tuple[str, ...], ...]:
     """
-    A window-recurrent network's own parts' parameters, after its window's layers, in order: the
-    pooling's query, the cell's, the codes (none for a continuous state) and the initial state (the
-    window-recurrent adder workplan, stage 4).
+    A window-recurrent network's own parts' parameters, after its window's layers, in order: each
+    factor's in turn (the factored-state workplan, D2), its pooling's query, its cell's, its codes
+    (none for a continuous factor) and its initial state (the window-recurrent adder workplan,
+    stage 4).
     """
-    codes: tuple[tuple[str, ...], ...] = () if recurrence.codes is None else (("E",),)
-    return (("q",), ("W", "U", "b"), *codes, ("c",))
+    return tuple(
+        names
+        for factor in recurrence.factors
+        for names in (("q",), ("W", "U", "b"), *([] if factor.codes is None else [("E",)]), ("c",))
+    )
 
 
 def _layer_parameter_names(specs: Sequence[LayerSpec], recurrence: WindowRecurrence | None) -> list[tuple[str, ...]]:

@@ -4,20 +4,22 @@
 The window-recurrent network in pure Python (the window-recurrent adder workplan, stage 6),
 WindowRecurrentShape's counterpart (window_recurrent_array_network.py): its window, a sequence
 model's layers with StateInputs (recurrent_layer.StateInputLayer), run over each window of k
-columns in turn, and its own parts, which hand a state from window to window: the attention
-pooling over the tokens the output layer reads, the GRU cell and the codes, starting from the
-learned initial state, snapped (W8); without codes (WindowRecurrence(s, None)), a continuous state,
-as the array network's.
+columns in turn, and its own parts, which hand a state from window to window: for each of the
+state's factors (the factored-state workplan, stage 4), the attention pooling over the tokens the
+output layer reads, the GRU cell and the codes, starting from the learned initial state, snapped
+(W8), run by recurrent_layer.RecurrenceLayer; a factor without codes (Factor(s, None)) is
+continuous, as the array network's.
 
-    network = WindowRecurrentBackpropNetwork.randomized((k,), window_specs, WindowRecurrence(4, Codes(8)), Adam(), seed=7)
+    recurrence = WindowRecurrence((Factor(4, Codes(8)),))
+    network = WindowRecurrentBackpropNetwork.randomized((k,), window_specs, recurrence, Adam(), seed=7)
 
 An input is W windows of k column token ids, flat, W * k of them, and its label the digit of each
 column, W * k of them; every example of a batch has the same W. The loss, the training step and the
 order of the weights are the array network's: the mean of every column's cross-entropy plus 1 / W
 of each snapped state's code losses (W14); the windows forward, then backward from the last, each
 window's forward pass re-run, its generator restored, before its backward pass (W20); the window's
-layers, then the pooling, the cell, the codes (if any) and the initial state, for the optimizer, snapshot()
-and format 2.
+layers, then each factor's pooling, cell, codes (if any) and initial state, factor by factor, for the
+optimizer, snapshot() and format 2.
 
 Every window runs through the layer-major batch path (layer_major.py), as a pure-Python network
 with dropout trains, so the dropout layers draw numpy's masks, and the network draws the array
@@ -33,14 +35,7 @@ from typing import Any, ClassVar, Self
 
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.layer_major import LayerMajorBatch
-from indrajala_ml.model.layers.python.recurrent_layer import (
-    AttentionPoolingLayer,
-    CodesLayer,
-    GRULayer,
-    InitialStateLayer,
-    Rows,
-    StateInputLayer,
-)
+from indrajala_ml.model.layers.python.recurrent_layer import RecurrenceLayer, Rows, StateInputLayer
 from indrajala_ml.model.layers.python.token_layer import TokenSoftmaxLayer
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase, randomize_fan_in_aware
 from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT, NetworkFile
@@ -51,7 +46,7 @@ from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_window_recurrent
 from indrajala_ml.model.specs.update_rules import UpdateRule
-from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import WindowRecurrence, pooling_reads
 from indrajala_ml.pcg64 import generator_state, set_generator_state
 
 Batch = Sequence[tuple[tuple[float, ...], Sequence[int]]]
@@ -88,18 +83,21 @@ class WindowRecurrentBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSo
         bounds = [(0.0, 1.0)] * math.prod(input_shape) if input_bounds is None else input_bounds
         super().__init__(layers, input_shape, bounds)
 
-        # the token width the output layer reads, which the pooling reads too
-        _, features = token_shape(spec_shapes(layers, input_shape)[-1].input_shape)
-        s = recurrence.state_size
-        self.pooling = AttentionPoolingLayer(self.columns, features)
-        self.cell = GRULayer(features, s, recurrence.cell.update_bias)
-        codes = recurrence.codes
-        self.codes = None if codes is None else CodesLayer(codes.count, s, codes.commitment)
-        self.initial_state = InitialStateLayer(s)
-        self.parts: list[Any] = [
-            part for part in (self.pooling, self.cell, self.codes, self.initial_state) if part is not None
+        # the layer whose input tokens the poolings read (D10), and their width
+        reads = pooling_reads(layers, recurrence)
+        _, features = token_shape(spec_shapes(layers, input_shape)[reads].input_shape)
+        sizes = [
+            (f.state_size, None, 0.0) if f.codes is None else (f.state_size, f.codes.count, f.codes.commitment)
+            for f in recurrence.factors
         ]
+        self.recurrence_layer = RecurrenceLayer(
+            sizes, self.columns, features, recurrence.cross, recurrence.cell.update_bias
+        )
+        self.parts: list[Any] = self.recurrence_layer.parts()
         self._state_inputs = [layer for layer in self.trainable_layers if isinstance(layer, StateInputLayer)]
+        # that layer among the built layers: the output layer, or the first StateInput
+        last = len(self.trainable_layers) - 1
+        self._pooling_reads = last if reads == len(layers) - 1 else self.trainable_layers.index(self._state_inputs[0])
 
     def _window_state_size(self) -> int | None:
         return self.recurrence.state_size
@@ -109,22 +107,12 @@ class WindowRecurrentBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSo
 
     def randomize(self) -> None:
         # the window's layers as a sequence network's, its StateInputs' P among them in order;
-        # then the cell's gates and the codes. The pooling's query and the initial state start at
-        # zero and draw nothing.
+        # then each factor's cell's gates and codes, factor by factor. The poolings' queries and
+        # the initial states start at zero and draw nothing.
         randomize_fan_in_aware(self)
-        self.cell.draw(self.rng)
-        if self.codes is not None:
-            self.codes.draw(self.rng)
+        self.recurrence_layer.draw(self.rng)
 
     # the forward pass
-
-    def _snap(self, H: Rows) -> Rows:
-        # the next state: H snapped to its code, or H itself for a continuous state
-        return H if self.codes is None else self.codes.forward_batch(H)
-
-    def _snap_backward(self, dQ: Rows, weight: float) -> Rows:
-        # the next state's gradient to H's: straight through and the codes' losses', or dQ itself
-        return dQ if self.codes is None else self.codes.backward_batch(dQ, weight)
 
     def _windows(self, states: Sequence[Sequence[float]]) -> int:
         widths = {len(state) for state in states}
@@ -140,7 +128,7 @@ class WindowRecurrentBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSo
         return [tuple(state[w * k : (w + 1) * k]) for state in states]
 
     def _first_state(self, examples: int) -> Rows:
-        return self._snap(self.initial_state.forward_batch(examples))
+        return self.recurrence_layer.first_state(examples)
 
     def _window_forward(self, window: Sequence[tuple[float, ...]], C: Rows) -> tuple[LayerMajorBatch, Rows]:
         # one window's pass through its layers, and its next state, from its columns and state C
@@ -148,8 +136,7 @@ class WindowRecurrentBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSo
             state_input.states = C
         batch = LayerMajorBatch(self.input_layer, self.trainable_layers, window)
         batch.forward()
-        u = self.pooling.forward_batch(batch.values(len(self.trainable_layers) - 2))
-        return batch, self._snap(self.cell.forward_batch(u, C))
+        return batch, self.recurrence_layer.forward_batch(batch.values(self._pooling_reads - 1), C)
 
     def forward_windows(self, states: Sequence[Sequence[float]]) -> list[list[float]]:
         """The inference forward pass: each column's digit probabilities, W * k * classes per example."""
@@ -216,15 +203,14 @@ class WindowRecurrentBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSo
             self._set_training_mode(False)
 
         self._first_state(len(states))
-        self.initial_state.backward_batch(self._snap_backward(dC, weight))
+        self.recurrence_layer.first_state_backward(dC, weight)
 
     def _window_backward(
         self, batch: LayerMajorBatch, labels: Sequence[Sequence[int]], dC_next: Rows, weight: float
     ) -> Rows:
         # one window's backward pass after its forward pass: its gradients accumulated, and its
         # state's gradient returned, from the next state's dC_next and its digits' labels
-        dU, dC = self.cell.backward_batch(self._snap_backward(dC_next, weight))
-        pooled = self.pooling.backward_batch(dU)
+        pooled, dC = self.recurrence_layer.backward_batch(dC_next, weight)
 
         width = self.class_count
 
@@ -237,7 +223,7 @@ class WindowRecurrentBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSo
                 node.compute_output_delta(1.0 if c == label[t] else 0.0)
                 node.delta = node.delta * weight
 
-        batch.backward(output_deltas, pooled)
+        batch.backward(output_deltas, (self._pooling_reads, pooled))
         batch.accumulate_gradients()
 
         for state_input in self._state_inputs:

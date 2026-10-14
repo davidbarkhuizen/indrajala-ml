@@ -22,7 +22,14 @@ from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentRustArrayNetwork,
 )
 from indrajala_ml.model.specs.update_rules import Adam, UpdateRule
-from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import (
+    BEFORE_STATE,
+    GRU,
+    AttentionPooling,
+    Codes,
+    Factor,
+    WindowRecurrence,
+)
 from indrajala_ml.training.ensemble_train import _picklable_checkpoint  # pyright: ignore[reportPrivateUsage]
 from indrajala_ml.training.run_checkpoint import RunCheckpoint, run_from_json, run_to_json
 from tests.helpers import bits
@@ -41,7 +48,15 @@ from tests.saved_model_fixtures import (
 
 WINDOW_FIXTURES = [name for name in FIXTURES if name.startswith("WindowRecurrent")]
 CONTINUOUS_FIXTURES = [name for name in FIXTURES if name.startswith("ContinuousWindow")]
-RECURRENCES = {"snapped": WINDOW_RECURRENCE, "continuous": CONTINUOUS_RECURRENCE}
+# a factored state (the factored-state workplan, stage 4): factors of their own sizes, one
+# continuous, each cell reading the others' states
+FACTORED_RECURRENCE = WindowRecurrence(
+    (Factor(2, Codes(4, commitment=0.5)), Factor(1, None), Factor(3, Codes(3))),
+    cross=True,
+    cell=GRU(update_bias=0.5),
+    pooling=AttentionPooling(BEFORE_STATE),
+)
+RECURRENCES = {"snapped": WINDOW_RECURRENCE, "continuous": CONTINUOUS_RECURRENCE, "factored": FACTORED_RECURRENCE}
 WINDOW_CLASSES: dict[str, Any] = {
     "python": WindowRecurrentBackpropNetwork,
     "numpy": WindowRecurrentArrayNetwork,
@@ -67,8 +82,8 @@ def test_a_window_fixture_re_saves_byte_identically(name: str, tmp_path: Path):
     saved = json.loads(path.read_text())
     assert saved["shape"] == "window_recurrent"
     assert saved["recurrence"] == {
-        "state_size": 3,
-        "codes": {"count": 4, "commitment": 0.5},
+        "factors": [{"state_size": 3, "codes": {"count": 4, "commitment": 0.5}}],
+        "cross": False,
         "cell": {"kind": "gru", "update_bias": 0.5},
         "pooling": {"kind": "attention"},
     }
@@ -83,7 +98,7 @@ def test_a_continuous_fixture_re_saves_byte_identically_with_no_codes(name: str,
     fixture_class(name).load(str(FIXTURE_DIR / f"{name}.json")).save(str(path))
     assert path.read_bytes() == (FIXTURE_DIR / f"{name}.json").read_bytes()
     saved = json.loads(path.read_text())
-    assert saved["recurrence"]["codes"] is None
+    assert saved["recurrence"]["factors"][0]["codes"] is None
     # the snapped fixture's weights but the codes' entry
     snapped = json.loads((FIXTURE_DIR / f"{name.removeprefix('ContinuousWindow')}.json").read_text())
     assert len(saved["weights"]) == len(snapped["weights"]) - 1
@@ -99,7 +114,7 @@ def test_numpy_and_rust_continuous_files_load_into_each_other(saved_by: str, tmp
     path = str(tmp_path / "continuous.json")
     network.save(path)
     loaded = WINDOW_CLASSES[loader].load(path)
-    assert loaded.recurrence == CONTINUOUS_RECURRENCE and loaded.codes is None
+    assert loaded.recurrence == CONTINUOUS_RECURRENCE and loaded.recurrence_layer.factors[0].codes is None
     assert bits(loaded.snapshot()) == bits(network.snapshot())
 
 
@@ -176,7 +191,7 @@ def test_a_run_file_refuses_a_network_of_another_recurrence(implementation: str)
     student.randomize()
     saved = run_to_json(_run(student), student)
     for other in (
-        _network(implementation, Adam(), WindowRecurrence(3, Codes(5, commitment=0.5))),
+        _network(implementation, Adam(), WindowRecurrence((Factor(3, Codes(5, commitment=0.5)),))),
         _network(implementation, Adam(), CONTINUOUS_RECURRENCE),
     ):
         with pytest.raises(ValueError, match="recurrence"):

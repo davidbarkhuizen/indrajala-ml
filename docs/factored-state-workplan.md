@@ -2,7 +2,9 @@
 
 **Status: written 2026-10-14, at the owner's request (the claims workplan's D32: "division resumes
 once the recurrence has a factored state, a package change with its own plan"). Decisions D1-D9
-settled with the owner in dialog, each with its options' pros and cons. No stage started.** The
+settled with the owner in dialog, each with its options' pros and cons; D10 settled in stage 4,
+when its test showed the factors weren't independent as first described. Stages 2 and 3 done
+(indrajala-math-rust #57, #738); stage 4 is this PR.** The
 infrastructure stages (2-7) are development on `pyramidon` and can start now; the migration
 (stage 5) waits for stage 7 and E8b of the claims workplan to finish writing their files; the
 study (stages 8-9) waits for `jebel`.
@@ -39,8 +41,9 @@ running out of budget records "not found within the budget", not a refutation.
 A factor `g` has a state `c_g` of width `s_g` and, if snapped, a codebook of `m_g` codes. Per
 window:
 
-- **pooling** `g`: its own learned query over the tokens the output layer reads, giving `u_g`
-  (D2: a factor attends to the tokens it needs, `A`'s to `a`, `B`'s to `b`);
+- **pooling** `g`: its own learned query over the window's tokens, giving `u_g` (D2: a factor
+  attends to the tokens it needs, `A`'s to `a`, `B`'s to `b`): the tokens the output layer reads,
+  or those before the first `StateInput` (D10);
 - **cell** `g`: a GRU, `h_g = GRU_g(c_g, u_g)`, or with the **cross-term** on (D1),
   `GRU_g(c_g, [u_g, c_other])`, the other factors' states in its input;
 - **codes** `g`: `h_g` snapped to the nearest of its `m_g` codes, straight-through (W4), the next
@@ -48,14 +51,18 @@ window:
 - **initial state** `g`: learned, snapped by its own codes (W8).
 
 The window's `StateInput`s read the whole state, the factors' concatenation `[c_1, ..., c_G]`, so
-the outputs see every factor. With the cross-term off (the default), **factor `g`'s next state is
-a function of its own state and the window only**: the independence division has. With G = 1 the
-network is today's.
+the outputs see every factor. With the cross-term off (the default) and the poolings reading the
+tokens before the first `StateInput` (D10), **factor `g`'s next state is a function of its own
+state and the window's columns only**: the independence division has. (Pooling the tokens the
+output layer reads, the default, a factor sees the others through the `StateInput`s; stage 4's
+test found this.) With G = 1 the network is today's.
 
 The spec:
 
 ```python
-WindowRecurrence(factors=(Factor(4, Codes(8)), Factor(4, Codes(8))), cross=False)
+WindowRecurrence(
+    factors=(Factor(4, Codes(8)), Factor(4, Codes(8))), cross=False, pooling=AttentionPooling(BEFORE_STATE)
+)
 WindowRecurrence(factors=(Factor(4, Codes(8)),))  # today's network
 ```
 
@@ -173,6 +180,29 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
   - **Old files are migrated, not shimmed** (the owner): results, certificates and saved networks
     of E1-E8 rewritten to the tuple and factored layouts by a script that records each file's old
     and new sha256; the study docstrings' recorded hashes updated, the old ones kept beside them.
+- **D10. Where the poolings read. Settled in stage 4: (b).** Stage 4's test showed that with the
+  poolings over the tokens the output layer reads (the section above, as first written), a
+  factor's next state moves when another factor's state does, the cross-term off: every
+  `StateInput` adds the whole state to the tokens before the poolings read them. D1's enforced
+  independence didn't hold.
+  - (a) Keep the output layer's tokens; independence stated only at the cell. Pros: nothing to
+    build. Cons: D1's reason for (b)/(d) void; C9 tests a network that can tangle its factors
+    again through the window, the failure E7' showed.
+  - (b) *Chosen.* **An option on the pooling, `AttentionPooling(reads=...)`: `OUTPUT` (the
+    default, today's network) or `BEFORE_STATE`, the tokens the first `StateInput` reads**, so a
+    factor's next state is a function of its own state and the window's columns. Pros: D1's
+    independence enforced; G = 1 and every saved file unchanged (format 2 writes `reads` only when
+    not the default, as attention's fields); one more reading point, not a second network. Cons:
+    a factor's cell sees the window's columns before any block, so a window's computation beyond
+    a pooling of its embeddings must happen in the cell (division's counters need only the digit,
+    `x' = 3x + a`).
+  - (c) Run the window once per factor, its `StateInput`s reading that factor's state alone. Pros:
+    each factor sees the blocks' computation. Cons: G window passes a step; the outputs no longer
+    see every factor at once.
+  - (d) Pool before the first `StateInput` always, G = 1 included. Cons: changes today's network
+    and every result's; the golden run re-recorded for no gain at G = 1.
+
+  **C9's cell reads `BEFORE_STATE`** (registered here, before any data).
 
 ## Stages
 
@@ -181,7 +211,10 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    forward and backward over G codebooks of their own sizes and widths; the G GRU cells, the
    cross-term an optional input; the G attention poolings; a fused recurrence step over them;
    numpy mirrors; parity tests, stubtest. Bit-parity at G = 1 unless the PR gives a good reason to
-   drop it (D6); a fusion that measurably speeds the step is one.
+   drop it (D6); a fusion that measurably speeds the step is one. *Done (#57):* the fused step
+   (`recurrence_step_*`) and the codes over G codebooks (`factored_codes_*`); no separate grouped
+   pooling or cell ops, which nothing would call. Each factor runs the single-factor ops, so G = 1
+   is today's step by bits. The fusion measured 0-10% over per-factor calls (the kernels dominate).
 3. **Bump `rust/`.**
 4. **The package**: `Factor` and `WindowRecurrence(factors, cross)` with their validation; the
    network on numpy, Rust and pure Python over the grouped ops; format 2's `factors` and parts
@@ -189,6 +222,10 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    The golden run passes, or (if stage 2 dropped parity, D6) its window entries are re-recorded
    (§8) and archived on both machines; a tier 2
    A/B of a window network's `learn` (G = 1, old against new), since the grouped ops claim speed.
+   *Built:* each backend's recurrence (`RecurrenceArrayLayer`, `RecurrenceRustArrayLayer`, the
+   crate's fused step, and pure Python's `RecurrenceLayer`), the poolings' reading point (D10), and
+   `scripts/migrate_factored_state.py`, which migrates the saved-model fixtures here and stage 5's
+   files later. The certificate and the harness read one-factor states (asserted) until stages 6-7.
 5. **The migration** (after the claims workplan's stage 7 and E8b finish): saved networks, results
    and certificates rewritten (D9); the hash table committed with it; the docstrings' hashes
    updated. Check: every migrated E1 and E8 certified network certifies again, the same
@@ -200,7 +237,8 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
 7. **The harness**: factored cells in configs (`factors`, `cross` in a run's key), tuples in
    `codes_used` and `state_codes`, **certification after every curriculum step with a stop on
    passing** (D7) and **the pool stopped at the first certified run** (D8).
-8. **C9 registered**: the config (`scripts/window_recurrent_factored_p5.json`), a test checking it
+8. **C9 registered**: the config (`scripts/window_recurrent_factored_p5.json`, its poolings
+   `BEFORE_STATE`, D10), a test checking it
    against D7-D8 (cells, cap = `m_1 m_2 + p^2 - 1`), and the probe: two epochs at 88 columns on
    `jebel`, its epoch time giving the batch's estimate. Over a day: the 6-code fallback, its probe.
 9. **C9's run on `jebel`** (6 workers, memory measured first), then the findings: the certified

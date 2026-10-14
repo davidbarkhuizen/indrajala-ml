@@ -2,12 +2,14 @@
 # (matrices are named as in the literature, W, U, X, H, which strict mode takes for constants)
 """
 A window-recurrent network's layers on the Rust backend (the window-recurrent adder workplan,
-stage 5): recurrent_array_layer.py's StateInputArrayLayer, AttentionPoolingArrayLayer,
-GRUArrayLayer, CodesArrayLayer and InitialStateArrayLayer, with the same methods, each pass one
-call of the crate's recurrent.rs. Their products are the crate's, so they match numpy's to within
-rounding; every other step, and the codes' ops entirely, are numpy's by bits. Each draws what its
-numpy twin draws, in the same order, from the crate's Generator (numpy's default_rng), so the same
-seed gives the same weights by bits.
+stage 5; the factored-state workplan, stage 4): recurrent_array_layer.py's StateInputArrayLayer,
+each pass one call of the crate's recurrent.rs, and RecurrenceArrayLayer, a window's recurrence
+over its state's factors, one call of the crate's factored.rs each way. The factors' parts hold
+their parameters and gradients: the pooling's query, the cell's weights, the codes and the initial
+state. The crate's products are its own, so they match numpy's to within rounding; every other
+step, and the codes' entirely, are numpy's by bits. Each part draws what its numpy twin draws, in
+the same order, from the crate's Generator (numpy's default_rng), so the same seed gives the same
+weights by bits.
 """
 
 from __future__ import annotations
@@ -97,7 +99,7 @@ class StateInputRustArrayLayer:
 
 
 class AttentionPoolingRustArrayLayer:
-    """AttentionPoolingArrayLayer on the Rust backend (attention_pooling_forward, attention_pooling_backward)."""
+    """AttentionPoolingArrayLayer's query on the Rust backend: RecurrenceRustArrayLayer runs it."""
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
 
@@ -119,22 +121,11 @@ class AttentionPoolingRustArrayLayer:
     def reset_gradient_accum(self) -> None:
         self.grad_q = pa.Array.zeros(self.features)
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
-        """X (N, T * d), the tokens, to u (N, d)."""
-        self._X = X
-        u, self._p = pa.attention_pooling_forward(X, self.q, self.tokens)
-        return u
-
-    def backward_batch(self, dU: pa.Array) -> pa.Array:
-        """u's gradient (N, d) to the tokens' (N, T * d); q's gradient accumulated."""
-        dX, self.grad_q = pa.attention_pooling_backward(self._X, self._p, self.q, dU, self.grad_q, self.tokens)
-        return dX
-
-
 class GRURustArrayLayer:
     """
-    GRUArrayLayer on the Rust backend (gru_forward, gru_backward). Each gate's [W U] and b are
-    drawn as GRUArrayLayer draws them, then split into W's and U's columns and stacked by gate.
+    GRUArrayLayer's weights on the Rust backend: RecurrenceRustArrayLayer runs it. Each gate's [W U]
+    and b are drawn as GRUArrayLayer draws them, then split into W's and U's columns and stacked by
+    gate.
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (True, True, False)
@@ -174,23 +165,8 @@ class GRURustArrayLayer:
         biases[s : 2 * s] = [self.update_bias] * s
         self.b = pa.Array(biases)
 
-    def forward_batch(self, U_in: pa.Array, C: pa.Array) -> pa.Array:
-        """u (N, d) and c (N, s) to h (N, s)."""
-        self._u, self._c = U_in, C
-        H, *self._saved = pa.gru_forward(U_in, C, self.W, self.U, self.b)
-        return H
-
-    def backward_batch(self, dH: pa.Array) -> tuple[pa.Array, pa.Array]:
-        """h's gradient (N, s) to u's (N, d) and c's (N, s); the gradients of W, U and b accumulated."""
-        r, z, h_tilde, rc = self._saved
-        dU_in, dC, self.grad_W, self.grad_U, self.grad_b = pa.gru_backward(
-            dH, self._u, self._c, r, z, h_tilde, rc, self.W, self.U, self.grad_W, self.grad_U, self.grad_b
-        )
-        return dU_in, dC
-
-
 class CodesRustArrayLayer:
-    """CodesArrayLayer on the Rust backend (codes_forward, codes_backward): numpy's by bits."""
+    """CodesArrayLayer's codes on the Rust backend: RecurrenceRustArrayLayer snaps to them, numpy's by bits."""
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
 
@@ -216,36 +192,8 @@ class CodesRustArrayLayer:
     def draw(self, rng: pa.Generator) -> None:
         self.E = fan_in_aware_random_rust_weights(rng, self.count, self.size)
 
-    def nearest(self, H: pa.Array) -> list[int]:
-        """Each row of H's nearest code's index."""
-        return pa.codes_forward(H, self.E)[1]
-
-    def forward_batch(self, H: pa.Array) -> pa.Array:
-        """h (N, size) to its nearest code (N, size), a new array."""
-        self._H = H
-        self._Q, self.indices = pa.codes_forward(H, self.E)
-        return self._Q
-
-    def loss_batch(self, weight: float) -> float:
-        """CodesArrayLayer.loss_batch: the squares a left fold over each row, then over the rows."""
-        total = 0.0
-        for h_row, q_row in zip(self._H.tolist(), self._Q.tolist(), strict=True):
-            row = 0.0
-            for h, q in zip(h_row, q_row, strict=True):
-                row += (h - q) * (h - q)
-            total += row
-        return float(weight * (1.0 + self.commitment) * total)
-
-    def backward_batch(self, dQ: pa.Array, weight: float) -> pa.Array:
-        """The code's gradient (N, size) to h's: straight through, plus the commitment loss's; E's accumulated."""
-        dH, self.grad_E = pa.codes_backward(
-            dQ, self._H, self._Q, self.indices, self.grad_E, weight, self.commitment
-        )
-        return dH
-
-
 class InitialStateRustArrayLayer:
-    """InitialStateArrayLayer on the Rust backend: its gradient the snapped state's summed over the examples."""
+    """InitialStateArrayLayer's vector on the Rust backend: RecurrenceRustArrayLayer starts from it."""
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
 
@@ -266,10 +214,130 @@ class InitialStateRustArrayLayer:
     def reset_gradient_accum(self) -> None:
         self.grad_c = pa.Array.zeros(self.state_size)
 
-    def forward_batch(self, examples: int) -> pa.Array:
-        """c for each of examples examples, (examples, state_size), a new array."""
-        return pa.Array.zeros((examples, self.state_size)) + self.c
 
-    def backward_batch(self, dC: pa.Array) -> None:
-        self.grad_c = self.grad_c + pa.sum_axis0(dC)
+class _FactorParts:
+    """One factor's parts: its pooling, cell, codes (None: continuous) and initial state."""
 
+    def __init__(
+        self,
+        pooling: AttentionPoolingRustArrayLayer,
+        cell: GRURustArrayLayer,
+        codes: CodesRustArrayLayer | None,
+        initial_state: InitialStateRustArrayLayer,
+    ) -> None:
+        self.pooling = pooling
+        self.cell = cell
+        self.codes = codes
+        self.initial_state = initial_state
+
+
+class RecurrenceRustArrayLayer:
+    """
+    RecurrenceArrayLayer on the Rust backend: a window's every factor in one call each way
+    (recurrence_step_forward, recurrence_step_backward), the initial state's codes in one
+    (factored_codes_forward, factored_codes_backward), its factors' parts holding their parameters
+    and gradients. The crate's ops are the single-factor ops factor by factor, so with one factor
+    this is the window's step as it was before factors, by bits.
+    """
+
+    def __init__(
+        self, sizes: Sequence[tuple[int, int | None, float]], tokens: int, features: int, cross: bool, update_bias: float
+    ) -> None:
+        """sizes: each factor's (state size, code count or None, commitment)."""
+        self.sizes = [s for s, _, _ in sizes]
+        self.tokens = tokens
+        self.cross = cross
+        self.state_size = sum(self.sizes)
+        self.starts = [sum(self.sizes[:g]) for g in range(len(self.sizes))]
+        self.factors = [
+            _FactorParts(
+                AttentionPoolingRustArrayLayer(tokens, features),
+                GRURustArrayLayer(features + (self.state_size - s if cross else 0), s, update_bias),
+                None if m is None else CodesRustArrayLayer(m, s, commitment),
+                InitialStateRustArrayLayer(s),
+            )
+            for s, m, commitment in sizes
+        ]
+        self._commitments = [0.0 if f.codes is None else f.codes.commitment for f in self.factors]
+
+    def parts(self) -> list[Any]:
+        """The parts with parameters, factor by factor: pooling, cell, codes (if any), initial state."""
+        return [
+            part for f in self.factors for part in (f.pooling, f.cell, f.codes, f.initial_state) if part is not None
+        ]
+
+    def draw(self, rng: pa.Generator) -> None:
+        """Each factor's cell's gates, then its codes, factor by factor."""
+        for f in self.factors:
+            f.cell.draw(rng)
+            if f.codes is not None:
+                f.codes.draw(rng)
+
+    def _codes(self) -> list[pa.Array | None]:
+        return [None if f.codes is None else f.codes.E for f in self.factors]
+
+    def _grad_codes(self) -> list[pa.Array | None]:
+        return [None if f.codes is None else f.codes.grad_E for f in self.factors]
+
+    def _set_grad_codes(self, grads: list[pa.Array | None]) -> None:
+        for f, grad in zip(self.factors, grads, strict=True):
+            if f.codes is not None:
+                assert grad is not None
+                f.codes.grad_E = grad
+
+    def first_state(self, examples: int) -> pa.Array:
+        """The initial state, snapped, for each of examples examples, (examples, state_size)."""
+        starts = [pa.Array.zeros((examples, f.initial_state.state_size)) + f.initial_state.c for f in self.factors]
+        self.H = starts[0] if len(starts) == 1 else pa.concatenate_columns(starts)
+        self._Q, self.indices = pa.factored_codes_forward(self.H, self.sizes, self._codes())
+        return self._Q
+
+    def first_state_backward(self, dC: pa.Array, weight: float) -> None:
+        """After first_state: the initial states' gradients accumulated, through the codes."""
+        dH, grads = pa.factored_codes_backward(
+            dC, self.H, self._Q, self.sizes, self.indices, self._grad_codes(), weight, self._commitments
+        )
+        self._set_grad_codes(grads)
+        for f, start, size in zip(self.factors, self.starts, self.sizes, strict=True):
+            initial = f.initial_state
+            initial.grad_c = initial.grad_c + pa.sum_axis0(dH[:, start : start + size])
+
+    def forward_batch(self, X: pa.Array, C: pa.Array) -> pa.Array:
+        """The tokens the output layer reads, X (N, T * d), and the state C (N, S), to the next state (N, S)."""
+        factors = self.factors
+        self._step = pa.recurrence_step_forward(
+            X,
+            C,
+            [f.pooling.q for f in factors],
+            [f.cell.W for f in factors],
+            [f.cell.U for f in factors],
+            [f.cell.b for f in factors],
+            self._codes(),
+            self.tokens,
+            cross=self.cross,
+        )
+        self.H, self.indices = self._step.h, self._step.indices
+        return self._step.state
+
+    def backward_batch(self, dQ: pa.Array, weight: float) -> tuple[pa.Array, pa.Array]:
+        """The next state's gradient (N, S) to the tokens' (N, T * d) and the state's (N, S); the parts' accumulated."""
+        factors = self.factors
+        dX, dC, grad_q, grad_W, grad_U, grad_b, grad_E = pa.recurrence_step_backward(
+            self._step,
+            dQ,
+            [f.pooling.q for f in factors],
+            [f.cell.W for f in factors],
+            [f.cell.U for f in factors],
+            [f.pooling.grad_q for f in factors],
+            [f.cell.grad_W for f in factors],
+            [f.cell.grad_U for f in factors],
+            [f.cell.grad_b for f in factors],
+            self._grad_codes(),
+            weight,
+            self._commitments,
+        )
+        for f, gq, gW, gU, gb in zip(factors, grad_q, grad_W, grad_U, grad_b, strict=True):
+            f.pooling.grad_q = gq
+            f.cell.grad_W, f.cell.grad_U, f.cell.grad_b = gW, gU, gb
+        self._set_grad_codes(grad_E)
+        return dX, dC

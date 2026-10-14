@@ -336,7 +336,7 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule
-from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import Codes, Factor, WindowRecurrence
 from indrajala_ml.pcg64 import default_rng
 
 # A network is typed Any here: the script drives the network classes, dense, conv, single-output
@@ -559,14 +559,14 @@ WINDOW_SPECS: list[LayerSpec] = [
     LayerNorm(),
     Dense(len(SEQUENCE_VOCABULARY), output=True, activation="softmax", loss="cross_entropy"),
 ]
-WINDOW_RECURRENCE = WindowRecurrence(3, Codes(4))
+WINDOW_RECURRENCE = WindowRecurrence((Factor(3, Codes(4)),))
 WINDOW_NETWORKS = {
     "numpy window recurrent model": WindowRecurrentArrayNetwork,
     "rust window recurrent model": WindowRecurrentRustArrayNetwork,
     "python window recurrent model": WindowRecurrentBackpropNetwork,
 }
 # the window networks with a continuous state (the window-recurrent claims workplan, stage 4)
-CONTINUOUS_RECURRENCE = WindowRecurrence(3, None)
+CONTINUOUS_RECURRENCE = WindowRecurrence((Factor(3, None),))
 CONTINUOUS_NETWORKS = {
     "numpy continuous window model": WindowRecurrentArrayNetwork,
     "rust continuous window model": WindowRecurrentRustArrayNetwork,
