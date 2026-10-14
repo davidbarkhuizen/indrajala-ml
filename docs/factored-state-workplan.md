@@ -4,9 +4,10 @@
 once the recurrence has a factored state, a package change with its own plan"). Decisions D1-D9
 settled with the owner in dialog, each with its options' pros and cons; D10 settled in stage 4,
 when its test showed the factors weren't independent as first described; D11 in stage 8; D12 (the
-owner) in stage 9, from the probe. Stages 1-4 and 6-8 done; stage 9's budget and tools done, C9's
-run next (the 6-code fallback, D12); stage 5 (the migration) unblocked, after stage 7's analysis
-of the claims workplan reads the old files.**
+owner) in stage 9, from the probe; D13 (the owner) in stage 9, from E8c's codes used. Stages 1-4
+and 6-8 done; stage 9: C9 (the 6-code fallback, D12) ran from 15:46, stopped for **C9'** (16 codes
+a factor, a 4 h budget, D13); stage 5 (the migration) unblocked, after stage 7's analysis of the
+claims workplan reads the old files.**
 
 ## Why
 
@@ -34,6 +35,14 @@ The claim, registered here before any run:
 
 C9 is an **existence** claim (D7): no rate, no arms, no controls. A certified network proves it;
 running out of budget records "not found within the budget", not a refutation.
+
+Registered in stage 9 (D13), before its data:
+
+> **C9'.** As C9, with E8c's counter for each factor: some network with two independent factors
+> of 16 codes each, trained by the curriculum at `k` 1, is certified against division's machine
+> (every length) within a 4 h budget on `jebel`.
+
+C9' is an existence claim too; its refutation, as C9's, is none: "not found within the budget".
 
 ## The factored state
 
@@ -231,6 +240,33 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
   - (c) 8 codes, cap 30. Pros: about 4 h. Cons: further below the bound; a failure says least.
   - (d) The fallback's own probe first. Pros: measured, not modelled. Cons: codes barely move the
     cost; it would confirm the model.
+- **D13. C9 stops for C9': each factor E8c's counter, a wall-clock budget (the owner,
+  2026-10-14: "existence first, then refine"; "don't add too many codes").** E8c's curriculum
+  counters at `m` 16 certified 6 of 6 at `q` 5 and 3 of 6 at `q` 4, every one at step 4 or 5, in
+  about 5 minutes a run; **their certified networks reached 7-13 codes (median 10 at `q` 5) and
+  minimised to the 5 or 4 states**. Learning a counter used about twice its states in codes. C9's
+  6 codes a factor leave one spare, and at 4.3 h its runs were at steps 17-19, none certified:
+  a run predicted to yield nothing (the claims workplan's D33).
+  - (a) *Chosen.* **16 codes a factor**, 6 seeds, the cap at the product bound (`16 x 16 + 25 - 1
+    = 280`), and a **4 h budget**: the study stops at its first certified run or at the deadline,
+    "not found within the budget". Pros: each factor is the one cell with direct evidence (6 of
+    6); every network E8c certified fits its codes; the bound kept, so the cell is feasible; a step
+    costs about the same with more codes (D12 (d)), so 4 h reaches about steps 15-20, three or four
+    times the step where E8c's counters certified. Cons: 16 is 3.2 times the states, the owner's
+    floor (experiment-design.md, section 1), not a minimum: fewer codes are the refinement, after a
+    network exists; the bound (280) is never reached, so a failure says only "not found by the
+    budget's step".
+  - (b) 12 codes a factor (2.4 times), bound 168. Pros: fewer codes. Cons: untested; below the
+    owner's 3-5 times; one E8c network reached 13.
+  - (c) 8 codes a factor (1.6 times), bound 88, the registered C9. Pros: the registered cell.
+    Cons: can't hold the 9-13 codes half E8c's `q` 5 networks reached; 38-84 h to its cap.
+  - (d) Let C9 finish (16-27 h). Pros: no compute discarded; the registration kept. Cons: the
+    evidence above predicts nothing found, and `jebel` held for a day.
+
+  C9 is stopped through its stop file (its text the reason), its runs ending at their next epoch;
+  its results are its findings ("not found; stopped at steps ..."). *Built for it:* the
+  `budget_hours` setting (the deadline set at the study's first launch and kept on a resume;
+  `status` shows it) and the stop file's reason.
 
 ## Stages
 
@@ -304,6 +340,8 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    **Launch (D12):** the fallback config, 6 workers (592 MB peak each, 3.6 GB of `jebel`'s 31 GB).
    *Built for it:* `probe` (the budget's figures, `--json` keeps them) and `peak_mb` in every
    result (its worker's peak memory, for sizing the next study's workers; measurement.md, section 2).
+   **C9' (D13):** `scripts/window_recurrent_factored_p5_m16.json`, 6 workers on `jebel`, C9 stopped
+   first; then its findings, as C9's.
 10. **Retire this workplan**; leftovers to next-steps.md.
 
 ## Cells and budget
@@ -312,6 +350,7 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
 | --- | --- | --- | --- | --- | --- | --- |
 | C9 | 5 | 1 | 8 | 64 | 25 | 88 |
 | C9, fallback | 5 | 1 | 6 | 36 | 25 | 60 |
+| C9' | 5 | 1 | 16 | 256 | 25 | 280 (a 4 h budget) |
 
 Feasibility: each factor holds a residue (5 states) in 8 or 6 codes, so the cell can represent
 division (A in factor 1, B in factor 2); the cap is the product bound, past which no network of
@@ -330,6 +369,13 @@ peak memory 592 MB (the check). Training grows with the step, the screen and the
 square. Modelled to the cap: **88 is 38 h** for a run that plateaus every step (31 epochs a step,
 E8b's), 61 h at 50 epochs, 84 h for one passing every step in 3 epochs; **60 is 16 h, 25 h and
 27 h**. So the batch at 88 exceeds a day, and D7's fallback applies (D12).
+
+**C9''s probe (2026-10-14, `pyramidon`, beside E8c's long tests; `probe
+scripts/window_recurrent_factored_p5_m16.json --steps 4 12`):** seed 0, two epochs at steps 4 and
+12. Training 7 s an epoch at step 4 and 15 s at 12; the screen 0.3-0.5 s and 2-15 s; the whole
+check at 12 columns 39 s; peak memory 240 MB (6 workers: 1.5 GB of `jebel`'s 31 GB). A step that
+plateaus (31 epochs) is about 9-10 minutes at step 12; one that certifies at step 4 or 5, as
+E8c's, a few minutes. The budget (D13) bounds the batch at 4 h whatever the steps reach.
 
 ## Not in this plan
 
