@@ -7,7 +7,9 @@ when its test showed the factors weren't independent as first described; D11 in 
 owner) in stage 9, from the probe; D13 (the owner) in stage 9, from E8c's codes used. Stages 1-4
 and 6-8 done; stage 9: C9 (the 6-code fallback, D12) ran from 15:46, stopped for **C9'** (16 codes
 a factor, a 4 h budget, D13); stage 5 (the migration) unblocked, after stage 7's analysis of the
-claims workplan reads the old files.**
+claims workplan reads the old files. C9' found nothing by step 10 and its diagnosis showed why (the
+factors learn only "is it zero": D14); **C9''** registered (stage 9b, D14-D17, the owner,
+2026-10-14 evening): a spare third factor and the factors' learning staggered, on both machines.**
 
 ## Why
 
@@ -43,6 +45,16 @@ Registered in stage 9 (D13), before its data:
 > (every length) within a 4 h budget on `jebel`.
 
 C9' is an existence claim too; its refutation, as C9's, is none: "not found within the budget".
+
+Registered in stage 9b (D14-D17), before its data:
+
+> **C9''.** As C9', with three independent factors of 16 codes each and their learning staggered
+> (D14): one factor learning at a time at the rate, those that have had a turn at a tenth of it,
+> the rest frozen, the turn passing to the next factor at each plateau. Some such network, trained
+> by the curriculum at `k` 1, is certified against division's machine (every length) within a 4 h
+> budget on `jebel` (seeds 0-5) and `pyramidon` (seeds 6-8).
+
+C9'' is an existence claim; its refutation, as for C9', is none: "not found within the budget".
 
 ## The factored state
 
@@ -268,6 +280,71 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
   `budget_hours` setting (the deadline set at the study's first launch and kept on a resume;
   `status` shows it) and the stop file's reason.
 
+- **D14. How the factors learn: staggered (the owner, 2026-10-14 evening, from the diagnosis of C9').**
+  C9' networks plateaued from step 2: "0" and "undefined" 74-89% right, the nonzero quotients
+  27-44% (25% is a guess among them); each factor's code carried at most 0.41 of `A` or `B` but
+  0.48-0.67 of "is it zero" (`diagnose`). The reason is in the task: alone, a residue tells the
+  quotient only whether it is 0 (`A`) or undefined (`B`): I(q; A) = 0.58 bits = I(q; A = 0),
+  I(q; B) = 0.72 = I(q; B = 0), of H(q) = 2.58; the other 1.28 bits (50%) only the pair gives
+  (23% at `p` 3, 63% at 7). Trained together, the factors settle on the zero tests. Yet predicting
+  "undefined" exactly needs all of `B` (whether the next `B` is 0 depends on all of it), so one
+  factor given the whole gradient can learn its residue; then the other's residue is worth 1.86
+  bits, a strong signal.
+  - (a) *Chosen.* **One factor learns at a time.** The active factor at the rate, the factors that
+    have had a turn in the background at a fraction of it (D16; the owner: "keep the first factor
+    in the background at a low frequency ... to keep it memorised"), the rest frozen (rate 0: their
+    weights unchanged, their gradients cleared). **The turn passes at a plateau** (the harness's,
+    on the answer's screen), to the next factor in order, round and round, and the step is tried
+    again; a step ends at its check passing, at its epoch budget, or at a plateau once every
+    factor's turn there has plateaued. The turns carry from step to step and are recorded in each
+    (`turns`, `active`, `started`). Built in the harness, not the network: the optimizer is
+    wrapped while an epoch trains, scaling each factor's parts' rate (`FactorRates`); with every
+    factor at the rate it trains bit for bit as the network alone (a test). Pros: the active
+    factor has the whole gradient; nothing of the decomposition given (which factor learns what
+    is the gradient's choice; the schedule only says when); the pattern extends to any `G`; no
+    timed path changed. Cons: a schedule's parameters (D16); a frozen factor feeds the output
+    fixed features of the input until its turn; retried steps cost epochs.
+  - (b) Joint training, C9'. Cons: the diagnosis above.
+  - (c) The background by frequency, a factor stepped every `N`th batch. Pros: the owner's word
+    literally. Cons: Adam's moments go stale between steps; on average the same as a fraction of
+    the rate, which Adam doesn't undo (it normalises the gradient, not the rate).
+  - (d) The turn passed on the diagnosis's shares. Cons: they read the target's `A` and `B`: the
+    decomposition handed over. Never; `diagnose` only reads the runs.
+  - (e) A fixed schedule (a turn every `N` epochs). Pros: simplest. Cons: arbitrary; cuts a factor
+    off while it learns, or idles it after it plateaus.
+- **D15. Three factors, one spare (the owner, 2026-10-14 evening: "one more than we need ... to
+  give the learning process flexibility").**
+  - (a) *Chosen.* **Three factors of 16 codes**, E8c's counter each. Pros: if a factor's turn ends
+    in a useless mixture, the rotation has a fresh codebook, not a dead end; any two can pair.
+    Cons: the cap at the product bound is `16^3 + 25 - 1 = 4,120` columns, never reached in the
+    budget, so a failure says only "not found within the budget" (as for C9'); a third more of the
+    state's compute; the certificate over 3-tuples (its map is many-to-one, a spare factor
+    allowed).
+  - (b) Two factors. Pros: C9' cell, the smallest change. Cons: no spare.
+  - (c) Three factors of 10 codes (the bound 1,024). Pros: a smaller bound. Cons: under E8c's
+    counters (7-13 codes reached at `q` 5) and the owner's floor (3 times the states).
+- **D16. The background's fraction: 0.1.** The rest as C9' (E8b's settings: patience 30, at most
+  200 epochs a step, so three turns of at least 31 epochs fit a step).
+  - (a) *Chosen.* **0.1.** Pros: a learned factor follows the others' changes without being
+    retrained by them. Cons: a guess; untested.
+  - (b) 0.01. Pros: nearly frozen. Cons: can't adapt to the factor now learning.
+  - (c) 0.3. Pros: adapts. Cons: closer to joint training, the trap.
+- **D17. Both machines (the owner: "as much as is useful of our available resources on both
+  machines").**
+  - (a) *Chosen.* **Seeds 0-5 on `jebel` (6 workers), 6-8 on `pyramidon` (3 workers)**, one config
+    each (`window_recurrent_factored_p5_stagger.json`, `_stagger_pyramidon.json`; `first_seed`
+    numbers the second's seeds), the same directory name, each machine's study stopping at its own
+    first certified run or its 4 h; results copied together after, with manifests. Pros: 9 seeds
+    in the budget; a certified network on either proves C9''. Cons: `pyramidon`'s runs are slower
+    (Ryzen 7 3700U) and memory-bound (5.3 GB, one memory-heavy job at a time); each machine stops
+    only its own runs.
+  - (b) `jebel` only. Cons: 6 seeds.
+  **The stop rule** (registered here, before the data): at 2 h from launch, each machine's study
+  continues only if one of its runs has, in `diagnose`, a factor sharing at least 0.6 of `A` or of
+  `B` and rising over its last two steps, or nonzero quotients at least 0.55; otherwise it is
+  stopped through its stop file: "not found; stopped at 2 h by the registered rule". `diagnose
+  --follow` runs beside each study.
+
 ## Stages
 
 1. **Done (#737).** **This workplan** (docs).
@@ -342,6 +419,14 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    result (its worker's peak memory, for sizing the next study's workers; measurement.md, section 2).
    **C9' (D13):** `scripts/window_recurrent_factored_p5_m16.json`, 6 workers on `jebel`, C9 stopped
    first; then its findings, as C9's.
+9b. **C9'' (D14-D17): built (this PR); the run next.** *Built:* a factored cell's `stagger` (in
+   its run's key and label, `-stagger0.1`), `Turns` and `FactorRates` in the harness, the turn at
+   each plateau and the step's retry, the turns recorded in each step and carried on a resume;
+   `first_seed`; the curriculum's steps as ranges (a cap of 4,120 steps costs nothing). Tests: the
+   turns, a frozen factor's weights bit for bit, every factor at the rate bit for bit the network
+   alone, a step's rotation, a run's turns resumed, the configs against the cell. *Next:* the
+   launch on both machines with `diagnose --follow`, the stop rule at 2 h, then C9, C9' and C9''
+   findings together.
 10. **Retire this workplan**; leftovers to next-steps.md.
 
 ## Cells and budget
@@ -351,10 +436,12 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
 | C9 | 5 | 1 | 8 | 64 | 25 | 88 |
 | C9, fallback | 5 | 1 | 6 | 36 | 25 | 60 |
 | C9' | 5 | 1 | 16 | 256 | 25 | 280 (a 4 h budget) |
+| C9'' | 5 | 1 | 16, 3 factors | 4,096 | 25 | 4,120 (a 4 h budget) |
 
 Feasibility: each factor holds a residue (5 states) in 8 or 6 codes, so the cell can represent
 division (A in factor 1, B in factor 2); the cap is the product bound, past which no network of
-these codes can fit the training lengths without being division's machine.
+these codes can fit the training lengths without being division's machine. C9'' needs two of its
+three factors for the residues, one spare (D15); its codes multiply to 4,096.
 
 Budget: one day on `jebel`, one batch of 6 seeds. Scaled from E8b's estimate (1-3 h a curriculum
 run at 20 columns), a run to the cap is 4-13 h at 88 and 4-9 h at 60, before the grouped ops'
@@ -370,12 +457,21 @@ square. Modelled to the cap: **88 is 38 h** for a run that plateaus every step (
 E8b's), 61 h at 50 epochs, 84 h for one passing every step in 3 epochs; **60 is 16 h, 25 h and
 27 h**. So the batch at 88 exceeds a day, and D7's fallback applies (D12).
 
-**C9''s probe (2026-10-14, `pyramidon`, beside E8c's long tests; `probe
+**The probe of C9' (2026-10-14, `pyramidon`, beside E8c's long tests; `probe
 scripts/window_recurrent_factored_p5_m16.json --steps 4 12`):** seed 0, two epochs at steps 4 and
 12. Training 7 s an epoch at step 4 and 15 s at 12; the screen 0.3-0.5 s and 2-15 s; the whole
 check at 12 columns 39 s; peak memory 240 MB (6 workers: 1.5 GB of `jebel`'s 31 GB). A step that
 plateaus (31 epochs) is about 9-10 minutes at step 12; one that certifies at step 4 or 5, as
 E8c's, a few minutes. The budget (D13) bounds the batch at 4 h whatever the steps reach.
+
+**The probe of C9'' (2026-10-14, `pyramidon`, beside the recertify check; `probe
+scripts/window_recurrent_factored_p5_stagger.json --steps 4 12`):** seed 0, two epochs at steps 4
+and 12. Training 12.6 s an epoch at step 4 and 28-31 s at 12 (about twice C9' figures, a third factor
+and the recertify check beside it); the screen 0.4-0.5 s and 3-21 s; the whole check at 12 columns
+72 s; peak memory 238 MB (`jebel`'s 6 workers 1.4 GB of 31 GB; `pyramidon`'s 3, 0.7 GB). A step
+whose three turns plateau (at least 93 epochs) is about 45 minutes at step 12 on `pyramidon`, less
+on `jebel`; a run that certifies early, as E8c's at steps 4-5, stops in under an hour. The budget
+(4 h) bounds each machine whatever the steps reach.
 
 ## Not in this plan
 

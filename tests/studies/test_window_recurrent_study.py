@@ -263,8 +263,8 @@ def test_without_tests_past_the_break_a_step_tests_up_to_its_first_failing_lengt
 
 def test_the_arms_steps():
     curriculum, control = wr.RunSpec("curriculum", 2, 4, 8, 0), wr.RunSpec("all-at-once", 2, 4, 8, 0)
-    assert curriculum.step_counts(SMALL) == [[1], [1, 2]]
-    assert control.step_counts(SMALL) == [[1, 2]]
+    assert [list(c) for c in curriculum.step_counts(SMALL)] == [[1], [1, 2]]
+    assert [list(c) for c in control.step_counts(SMALL)] == [[1, 2]]
 
 
 # a real network's run
@@ -767,6 +767,27 @@ def test_c9_is_one_factored_division_cell_capped_at_the_product_bound(
         stop_at_certified=True,
         budget_hours=budget,
     )
+
+
+@pytest.mark.parametrize(
+    ("name", "seeds", "workers"),
+    [("factored_p5_stagger", range(6), 6), ("factored_p5_stagger_pyramidon", range(6, 9), 3)],
+)
+def test_c9_double_prime_is_c9_prime_with_a_spare_factor_staggered(name: str, seeds: range, workers: int):
+    """The factored-state workplan's C9'' (D14-D17): C9''s cell with a third factor of 16 codes,
+    the factors staggered at 0.1 of the rate, the cap the product bound 16^3 + 25 - 1, a 4 h budget;
+    seeds 0-5 on jebel and 6-8 on pyramidon, one directory."""
+    scripts = Path(__file__).parents[2] / "scripts"
+    study = wr.load_config(scripts / f"window_recurrent_{name}.json")
+    c9_prime = wr.load_config(scripts / "window_recurrent_factored_p5_m16.json")
+    task = wt.task_named("modular-division-5")
+    assert {(s.arm, s.k, s.state, s.cross, s.reads, s.task, s.stagger) for s in study.runs} == {
+        ("curriculum", 1, ((16, 16),) * 3, False, BEFORE_STATE, task.name, 0.1)
+    }
+    assert [spec.seed for spec in study.runs] == list(seeds) and study.workers == workers
+    assert study.settings.steps == 16**3 + task.machine.states - 1 == 4120
+    assert study.settings == dataclasses.replace(c9_prime.settings, steps=4120, seeds=len(seeds), first_seed=seeds[0])
+    assert study.directory.name == "factored-p5-stagger"
 
 
 def test_status_counts_each_running_runs_own_steps(tmp_path: Path):

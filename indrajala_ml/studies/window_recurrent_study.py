@@ -39,11 +39,17 @@ Every step records its examples and epochs (D10) and its seconds per epoch.
 
 A run's steps are saved as they finish, each with its network (format 2, Adam's moments with it),
 so a stopped run resumes at its next step; its result is written once its last step is done.
+
+A factored run may be staggered (the factored-state workplan, D14): one factor learns at a time at
+the rate, the factors that have had a turn at stagger times it, the rest frozen; at a plateau the
+next factor's turn begins and the step is tried again, the step ending at a plateau only when every
+factor's turn there has plateaued. The turns carry from step to step and are recorded in each.
 """
 
 from __future__ import annotations
 
 import concurrent.futures
+import contextlib
 import json
 import math
 import multiprocessing
@@ -54,7 +60,7 @@ import socket
 import subprocess
 import time
 import traceback
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -219,6 +225,77 @@ def train_epoch(network: Any, examples: Sequence[Example], batch_size: int, rate
         network.learn_batch(rate, batch)
 
 
+# staggered factors (the factored-state workplan, D14)
+
+
+@dataclass(frozen=True)
+class Turns:
+    """Which factor learns now and which have had a turn, carried from step to step (D14)."""
+
+    active: int = 0
+    started: tuple[int, ...] = (0,)
+
+    def rates(self, factors: int, background: float) -> list[float]:
+        """Each factor's fraction of the rate: the active one's 1, the others that have had a turn background, the rest 0."""
+        return [1.0 if g == self.active else background if g in self.started else 0.0 for g in range(factors)]
+
+    def next(self, factors: int) -> Turns:
+        """The next factor's turn, in order, round and round."""
+        active = (self.active + 1) % factors
+        return Turns(active, tuple(sorted({*self.started, active})))
+
+
+def factor_indices(network: Any) -> list[list[int]]:
+    """Each factor's parts' indices among those the optimizer steps (the window's layers, then the parts)."""
+    start = len(network.layers)
+    indices: list[list[int]] = []
+    for f in network.recurrence_layer.factors:
+        count = sum(part is not None for part in (f.pooling, f.cell, f.codes, f.initial_state))
+        indices.append(list(range(start, start + count)))
+        start += count
+    assert start == len(network.layers) + len(network.parts), "a factor's parts are pooling, cell, codes, initial state"
+    return indices
+
+
+class FactorRates:
+    """
+    The network's optimizer, each factor's parts stepped at its own fraction of the rate, every other
+    index at the rate. A fraction of 0 leaves the parts' weights as they are (each step still clears
+    their gradient and keeps Adam's moments current).
+    """
+
+    def __init__(self, inner: Any, scales: Mapping[int, float]) -> None:
+        self.inner, self.scales = inner, scales
+
+    @property
+    def rule(self) -> Any:
+        return self.inner.rule
+
+    def begin_step(self) -> None:
+        self.inner.begin_step()
+
+    def state(self) -> Any:
+        return self.inner.state()
+
+    def load_state(self, state: Any, /) -> None:
+        self.inner.load_state(state)
+
+    def apply(self, index: int, layer: Any, learning_rate: float, batch_size: int) -> None:
+        self.inner.apply(index, layer, learning_rate * self.scales.get(index, 1.0), batch_size)
+
+
+@contextlib.contextmanager
+def factor_rates(network: Any, rates: Sequence[float]) -> Generator[None]:
+    """The network trains with each factor at its fraction of the rate for as long as the block runs."""
+    scales = {i: rate for indices, rate in zip(factor_indices(network), rates, strict=True) for i in indices}
+    inner = network.optimizer
+    network.optimizer = FactorRates(inner, scales)
+    try:
+        yield
+    finally:
+        network.optimizer = inner
+
+
 class WindowModel:
     """A window-recurrent network as its task's catalogue reads it at a length n."""
 
@@ -312,6 +389,7 @@ class Settings:
     per_stratum: int = ad.PER_STRATUM
     codes_cases: int = 1_000  # B1's first cases at each check and test length, for the codes used
     seeds: int = 5
+    first_seed: int = 0  # the runs' seeds are first_seed.. (a study split between machines, D17)
     tests_past_break: bool = True  # False: a step's test pass ends at its first failing length (W12)
     # existence tests (the factored-state workplan, D7, D8): each step's network certified, a run
     # stopped at its first certified step; and every run stopped at the study's first certified run
@@ -339,6 +417,9 @@ class RunSpec:
     factors: tuple[tuple[int, int | None], ...] = ()
     cross: bool = False
     reads: str = OUTPUT
+    # the factored-state workplan's D14: one factor learning at a time, those that have had a turn
+    # at this fraction of the rate, the rest frozen; None, every factor at the rate
+    stagger: float | None = None
 
     @property
     def state(self) -> tuple[tuple[int, int | None], ...]:
@@ -366,6 +447,7 @@ class RunSpec:
         window = "" if self.window == TRANSFORMER else f"{self.window}-"
         state = "-".join(f"s{s}-" + ("continuous" if m is None else f"m{m}") for s, m in self.state)
         state += ("-cross" if self.cross else "") + ("" if self.reads == OUTPUT else f"-{self.reads.replace('_', '-')}")
+        state += "" if self.stagger is None else f"-stagger{self.stagger:g}"
         return f"{prefix}{self.arm}-{window}k{self.k}-{state}-seed{self.seed}"
 
     @property
@@ -377,6 +459,7 @@ class RunSpec:
         extras = [f"{self.window} window"] if self.window != TRANSFORMER else []
         extras += ["cross"] if self.cross else []
         extras += [self.reads.replace("_", " ")] if self.reads != OUTPUT else []
+        extras += [f"stagger {self.stagger:g}"] if self.stagger is not None else []
         return self.arm if not extras else f"{self.arm} ({', '.join(extras)})"
 
     @property
@@ -392,11 +475,11 @@ class RunSpec:
         label, k, widths, codes = self.cell
         return label, k, sum(s for s, _ in self.state), sum(m or 0 for _, m in self.state), widths, codes
 
-    def step_counts(self, settings: Settings) -> list[list[int]]:
-        """Each step's data window counts."""
+    def step_counts(self, settings: Settings) -> list[range]:
+        """Each step's data window counts (ranges: a cap of thousands of steps costs nothing)."""
         if self.arm == "all-at-once":
-            return [list(range(1, settings.steps + 1))]
-        return [list(range(1, j + 1)) for j in range(1, settings.steps + 1)]
+            return [range(1, settings.steps + 1)]
+        return [range(1, j + 1) for j in range(1, settings.steps + 1)]
 
 
 def _provenance() -> dict[str, str]:
@@ -424,11 +507,13 @@ def run_step(
     counts: Sequence[int],
     settings: Settings,
     stopped: Callable[[], bool] = lambda: False,
+    turns: Turns | None = None,
 ) -> dict[str, Any]:
     """
     One curriculum step: training to its stop, then its whole check and the test pass. stopped()
     true before an epoch ends the step there, "stopped", unchecked and untested (the study's first
-    certified run found, D8, or its budget spent, D13).
+    certified run found, D8, or its budget spent, D13). A staggered run's turns (D14) start at turns;
+    the step records each turn's first epoch and factor, and the turns it hands on.
     """
     task = wt.task_named(spec.task)
     model = WindowModel(network, spec.k, task)
@@ -441,19 +526,29 @@ def run_step(
     screen_seconds: list[float] = []
     best, since_best, stop, epochs = -1, 0, "budget", 0
     whole: dict[int, list[Any]] | None = None
+    factors = len(spec.state)
+    staggered = spec.stagger is not None
+    turns = (turns or Turns()) if staggered else None
+    turned = [] if turns is None else [[0, turns.active]]
+    plateaus = 0
     for epoch in range(settings.max_epochs):
         if stopped():
             stop = "stopped"
             break
         rng = random.Random(f"window-train-{spec.key}-{step}-{epoch}")
         start = time.perf_counter()
-        train_epoch(
-            network,
-            training_examples(task, counts, spec.k, settings.epoch_examples, rng),
-            settings.batch_size,
-            settings.rate,
-            rng,
-        )
+        with (
+            contextlib.nullcontext()
+            if turns is None or spec.stagger is None
+            else factor_rates(network, turns.rates(factors, spec.stagger))
+        ):
+            train_epoch(
+                network,
+                training_examples(task, counts, spec.k, settings.epoch_examples, rng),
+                settings.batch_size,
+                settings.rate,
+                rng,
+            )
         train_seconds.append(time.perf_counter() - start)
         epochs = epoch + 1
         start = time.perf_counter()
@@ -471,8 +566,18 @@ def run_step(
         else:
             since_best += 1
             if since_best >= settings.patience:
-                stop = "plateau"
-                break
+                if turns is None:
+                    stop = "plateau"
+                    break
+                # D14: the next factor's turn; the step plateaus once every factor's turn here has
+                plateaus += 1
+                turns = turns.next(factors)
+                if plateaus >= factors:
+                    stop = "plateau"
+                    break
+                turned.append([epochs, turns.active])
+                best, since_best = -1, 0
+    stagger = {} if turns is None else {"turns": turned, "active": turns.active, "started": list(turns.started)}
     if stop == "stopped":
         return {
             "step": step,
@@ -491,6 +596,7 @@ def run_step(
             "train_seconds": train_seconds,
             "screen_seconds": screen_seconds,
             "check_seconds": 0.0,
+            **stagger,
         }
     start = time.perf_counter()
     trained = whole if stop == "passed" and whole is not None else {n: model.evaluate(n, checks[n]) for n in lengths}
@@ -541,6 +647,7 @@ def run_step(
         "train_seconds": train_seconds,
         "screen_seconds": screen_seconds,
         "check_seconds": check_seconds,
+        **stagger,
     }
 
 
@@ -597,6 +704,7 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
     network: Any = None
     steps: list[dict[str, Any]] = []
     certify = settings.certify_steps and spec.snapped
+    turns = Turns() if spec.stagger is not None else None  # D14's, carried from step to step
 
     def stopped() -> bool:
         return (settings.stop_at_certified and stop_file(directory).exists()) or budget_spent(directory)
@@ -607,6 +715,8 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
         if saved.exists() and network_file.exists():
             steps.append(json.loads(saved.read_text()))
             network = None  # loaded when a later step needs it
+            if turns is not None:
+                turns = Turns(steps[-1]["active"], tuple(steps[-1]["started"]))
         else:
             if network is None:
                 network = (
@@ -614,7 +724,9 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
                     if step == 1
                     else load_network(str(steps_directory / f"step-{step - 1}.network.json"))
                 )
-            result = run_step(network, spec, step, counts, settings, stopped)
+            result = run_step(network, spec, step, counts, settings, stopped, turns)
+            if turns is not None:
+                turns = Turns(result["active"], tuple(result["started"]))
             if certify and result["stop"] != "stopped":
                 result["certificate"] = certify_step(network, spec, steps_directory / f"step-{step}.certificate.json")
             network.save(str(network_file))
@@ -635,6 +747,7 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
         "factors": [list(factor) for factor in spec.state],
         "cross": spec.cross,
         "reads": spec.reads,
+        "stagger": spec.stagger,
         "seed": spec.seed,
         "parameters": parameter_count(
             network or build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed, spec.window, spec.recurrence)
@@ -743,7 +856,8 @@ def load_config(path: Path) -> Study:
     list of values, every combination run with every seed; an m of null is a continuous state. A
     factored cell (the factored-state workplan, stage 7) has "factors", each factor's [s, m], in
     place of "s" and "m", and may have "cross" (default false); any cell may have "reads", where
-    its poolings read (default "output"; "before_state", D10).
+    its poolings read (default "output"; "before_state", D10). A factored cell may have "stagger",
+    the background factors' fraction of the rate (D14). The seeds are first_seed (default 0) on.
     """
     config = json.loads(path.read_text())
     fields = {k: config[k] for k in Settings.__dataclass_fields__ if k in config}
@@ -758,14 +872,19 @@ def load_config(path: Path) -> Study:
         window = cell.get("window", TRANSFORMER)
         assert window in WINDOWS, f"a window is one of {tuple(WINDOWS)}; got {window!r}"
         cross, reads = cell.get("cross", False), cell.get("reads", OUTPUT)
+        stagger = cell.get("stagger")
+        assert stagger is None or ("factors" in cell and len(cell["factors"]) > 1), (
+            f"a staggered cell is factored: {cell}"
+        )
+        seeds = range(settings.first_seed, settings.first_seed + settings.seeds)
         if "factors" in cell:
             assert "s" not in cell and "m" not in cell, f"a factored cell gives each factor's s and m; got {cell}"
             factors = tuple((int(s), None if m is None else int(m)) for s, m in cell["factors"])
             total = sum(s for s, _ in factors)
             runs += [
-                RunSpec(arm, k, total, None, seed, task, window, factors, cross, reads)
+                RunSpec(arm, k, total, None, seed, task, window, factors, cross, reads, stagger)
                 for k in cell["k"]
-                for seed in range(settings.seeds)
+                for seed in seeds
             ]
             continue
         runs += [
@@ -773,7 +892,7 @@ def load_config(path: Path) -> Study:
             for k in cell["k"]
             for s in cell["s"]
             for m in cell["m"]
-            for seed in range(settings.seeds)
+            for seed in seeds
         ]
     return Study(Path(config["directory"]), settings, runs, config.get("workers", 1))
 
