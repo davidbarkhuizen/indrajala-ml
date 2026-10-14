@@ -346,11 +346,11 @@ What to do next:
 
 ## 7. Gotchas
 
-- **`ab.py run` checks the load before the machine profile.** On a busy machine a host with no
-  profile waits out the load (up to 5 minutes) and is refused for the load, not the profile;
-  `tests/scripts/test_ab.py::test_a_host_without_a_profile_is_refused` fails that way when the
-  test machine is loaded (2026-10-14, `pyramidon` at a load of 11). Not fixed yet: the profile
-  check should come first, as it needs no waiting.
+- **`ab.py run` checks the machine profile before the load** (fixed 2026-10-14; it was the other
+  way round): a host with no profile, or a changed identity, is refused at once, not after waiting
+  out a high load (up to 5 minutes) and being refused for the load.
+  `tests/scripts/test_ab.py::test_a_host_without_a_profile_is_refused` failed that way on a loaded
+  test machine (`pyramidon` at a load of 11).
 - **The namespace package** (above): an A/B run from the repository's own directory once came
   out right only because of the order `PYTHONPATH` gave, and nothing checked it.
 - **`data/` is relative to the working directory** (`prepared_dataset_timing.py` reads
