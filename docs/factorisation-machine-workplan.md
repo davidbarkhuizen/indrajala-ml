@@ -9,7 +9,9 @@ D30-D34, the factored-state workplan): D1, D3, D4, D6, D9, D10, D11 and D12 revi
 added, F1 restated as an existence claim, the stages and the cost redone. D13 then set by the
 owner: **the controllers' state is factored, one factor per register**, R1 the cross-term's
 first test. The owner granted the
-study one multi-day run, the concluding one (D14). No stage started.** It follows
+study one multi-day run, the concluding one (D14). D11 revised by the owner (2026-10-14): F1 keeps
+the calls given; F2's second arm learns them, factored per call level, in place of the inlined
+flat controller (which multiplies control states as a single codebook multiplied division's). No stage started.** It follows
 [factorisation-note.md](factorisation-note.md), which states why the window-recurrent network
 can't factor and what a machine that can would need (P1-P5); this plan builds that machine. It
 reuses the window-recurrent network, its target-machine certificate (the claims workplan's
@@ -42,7 +44,8 @@ records "not found within the budget", not a refutation, and stops the ladder th
 And, as the research step beyond it:
 
 > **F2.** The same holds with less than full traces per subroutine (inputs and outputs only), or
-> for one flat controller learning the whole program without its call structure.
+> for one network that learns the call structure itself, its state factored per register and per
+> call level (bounded depth), never inlined (D11).
 
 F1 is engineering plus E1's method, *if* the method reaches controllers of the rungs' sizes:
 today it has certified machines of 3 states (addition, E1) and 4 (the modular sum, E8, 1 of 20),
@@ -100,7 +103,7 @@ trains on segments of `m + q - 1`, 400-1,800 steps, a machine 25-75 times larger
 method has certified, and E7' showed one codebook failing to fit a 25-state table. Split at its
 subroutines, each controller is a few to a few tens of states, each trained, certified and run
 alone, the smallest first: the ladder of experiment-design.md's "small case first". The call
-structure is then given, not learned; learning it is F2's flat arm. Within a controller, the
+structure is then given, not learned; learning it is F2's learned-calls arm (D11). Within a controller, the
 factored state gives each register its own codebook (D13), the structure E7' lacked: a program
 counter and a carry learned as two small counters, not their product as one table.
 
@@ -130,7 +133,7 @@ counter and each flag or digit a subroutine carries, each with its own range: th
 network's factors, D13), and for each state and the symbols under the heads, the writes, moves, and next state, call or return. It compiles each
 program two ways: **a table per subroutine** (the units trained and certified, called through the
 stack), and **one flat table** with every subroutine inlined (the whole program as one machine:
-the composition's check, and F2's flat arm). Each program gets its own tests: exhaustive at short
+the composition's check). Each program gets its own tests: exhaustive at short
 lengths against Python's integers, sampled at long ones.
 
 **Each table's size is computed, not estimated** (experiment-design.md, section 1): its minimal
@@ -308,11 +311,11 @@ Settled under the owner's standing delegation, with each option's pros and cons;
     controllers. Cons: no flat table for the composition check or F2's flat arm.
   - (d) *Chosen.* **The DSL compiles each program both ways**: a table per subroutine, each
     learned and certified as its own controller, composed by the exact stack (D1); and the flat
-    inlined table, the composition's check (I5) and F2's flat arm (D11). Pros: each controller
+    inlined table, the composition's check (I5). Pros: each controller
     near the method's frontier, so the ladder starts where networks are known to certify and
     steps up one controller at a time; short bounds, so runs fit a day; R3's certified controller
     serves R5, R6 and R7 alike. Cons: the call structure is given, not learned, so F1 claims less
-    than a flat controller would (F2 asks for that); more compiler (two outputs).
+    than a learned call structure would (F2 asks for that, D11); more compiler (two outputs).
 - **D4. The controller. Settled: (a) (revised 2026-10-14: one per subroutine).**
   - (a) *Chosen.* The window-recurrent network, `k` = 3 heads, a column per head, unchanged, its
     snapped state the controller's state; **one network per subroutine** (D3). Pros: no package
@@ -367,13 +370,26 @@ Settled under the owner's standing delegation, with each option's pros and cons;
   so a call's control actions count as much as its other steps together. Pros: the network
   decides its calls and when to stop (P5). Cons: a weight to choose. (b) The executor calls and
   returns on reference states the certificate names. Cons: the network doesn't decide: not P5.
-- **D11. F2's arms. Settled: (a) (revised 2026-10-14).** (a) *Chosen.* After F1, two existence
-  tests, each registered with its feasibility row and probe: **inputs and outputs only** per
-  controller (no trace), and **one flat controller** for R7 on full traces (the call structure
-  learned). Each is "found" or "not found within the budget", as F1. Pros: measures what the
-  method needs beyond F1's supervision; each test small. Cons: both likely fail (Déletang et al.;
-  the flat table's size); reported as they come out. The flat arm's cap is likely over a day, and
-  D14's one multi-day run belongs to F1, so the flat arm needs the owner's say before it runs.
+- **D11. F2's arms. Settled: (b), by the owner (revised 2026-10-14; was (a)).** After F1, two
+  existence tests, each registered with its feasibility row and probe, each "found" or "not found
+  within the budget", as F1. The first is the same in every option: **inputs and outputs only** per
+  controller (no trace). The second asks for the call structure learned:
+  - (a) **One flat controller** for R7 on full traces, every subroutine inlined. Pros: no
+    decomposition given at all. Cons: inlining multiplies control states (subroutine x position x
+    return point: 100-300 for R7, 25-75 times past the certified frontier), the same blow-up as
+    one codebook for division's A x B (the claims workplan's D32); its cap likely over a day.
+  - (b) *Chosen.* **One network that learns its calls, factored**: a state factor per register (as
+    D13) and a factor per call level up to the stack's bounded depth (D1), the network deciding
+    call and return itself (D10's classes); certified as a product machine (the factored-state
+    certificate). Pros: the structure learned without inlining's product: state sizes add across
+    levels instead of multiplying, each factor near the frontier; the strongest claim within
+    reach. Cons: new design (a D entry for the level factors and the trace's call/return labels);
+    the factors must coordinate through the cross-term, which C9 and R1 test first.
+  - (c) Inputs and outputs only; no second arm. Pros: smallest. Cons: the call structure stays
+    given everywhere; F2 asks less.
+  The owner first chose F1 itself as the flat controller, then, on the distinction between a flat
+  program and a flat state, chose (b) here with F1 unchanged: "surely the controller needs to be
+  multi-factor and not flat".
 - **D12. Where the plan sits. Settled: (b) (revised 2026-10-14; was (a)).**
   - (a) Everything after the claims workplan's report. Cons: the infrastructure, which needs no
     `jebel` and answers nothing about the method, waits for nothing.
@@ -482,7 +498,7 @@ take the study's one multi-day run. Certification of a controller of tens of cod
 - **The cross-term is untested.** C9 learns factors with it off; every controller here needs it
   on (Feasibility), so R1 is its first test.
 - **The call structure is given** (D3): F1 learns each controller, not the program's
-  decomposition; F2's flat arm asks for that.
+  decomposition; F2's learned-calls arm asks for that.
 - **With full traces a controller is close to a fitted table.** What's learned beyond the table is
   the state: codes for each controller's reference states, found from its calls.
 - **The reference program's correctness is tested and argued, not proved** (D7).

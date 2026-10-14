@@ -11,7 +11,7 @@ modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refute
 2026-10-14 17:00: stages 1-7, 7a and 7b done (stage 7: C0 and C3 hold as registered, C4 refuted:
 all at once works more often; certified, neither the codes nor the arm changes the rate); E8b
 stopped (D33, D35); E8c (D35) ran, C8 certified at both rungs, findings next; stages 8-10 to come
-(stage 8 to be put to the owner for trimming to existence tests first).** The literature it answers to is in
+(stage 8 revised by the owner: D36, D37).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -736,6 +736,31 @@ Settled under the owner's standing delegation, with each option's pros and cons:
 
   (A different "E8c", E8b's cells trained short with 100 seeds, was proposed on 2026-10-14 and
   declined, never registered; the name is this experiment's.)
+- **D36. E2 trimmed to `k` 4 `s` 4 (the owner, 2026-10-14).** D34 dropped E3's `k` 1 cells, E2's
+  `k` 1 comparator, so half of E2 compares against nothing.
+  - (a) *Chosen.* **`k` 4 `s` 4 only, the test as registered**: 20 continuous runs against E3's
+    curriculum at `m` 16 (13 of 20 working, 8 of 20 certified), Fisher's exact test at 64 and 1,024
+    columns. Pros: C2's registered test intact; consistent with D34; a third of stage 8's cost; 0
+    of 20 at 1,024 against 8 of 20 would be p about 0.003. Cons: one cell; nothing on `k` 1.
+  - (b) Both cells, as registered (40 runs). Cons: the `k` 1 half needs E3's `k` 1 cell rerun, and
+    `k` 1 at 3 columns breaks the exclusion bound.
+  - (c) An existence test only (6 seeds, stop at the first continuous network exact at 1,024).
+    Pros: cheapest. Cons: C2 is a rate claim; "none in 6" is weak; the registered test given up.
+  - (d) Drop E2. Cons: C2, the "why it works" claim, untested; Holm's family short a member.
+- **D37. E6 re-registered as existence tests (the owner, 2026-10-14).** E6 compares against E3's
+  `k` 1 runs (dropped by D34), and its cells train `k` 1 to 3 columns, short of the exclusion bound
+  (`m + 2`: 6-18), so as registered it breaks D23 and has no comparator.
+  - (a) *Chosen.* **Existence, past the bound:** the linear window (D21) at `k` 1 `s` 16 `m` 16
+    (a surplus over the carry automaton's 3 states), the curriculum capped at 18 columns (`m + q -
+    1`), `certify_steps` and `stop_at_certified`, 6 seeds in parallel; the FFN window the same way
+    only if the linear window finds none within its day. The question "does the window's
+    transformer do anything at `k` 1?" becomes "does a window without it certify?": one certified
+    network says the transformer isn't needed. Pros: feasible under D23; a proof, not a rate;
+    `k` 1 runs are short (E8c's took about 13 minutes). Cons: a new registration; no rate
+    comparison.
+  - (b) Drop E6, recorded, for the strategy review. Pros: no compute. Cons: the baseline question
+    open in the report.
+  - (c) Run as registered. Cons: infeasible (memorising not excluded) and nothing to compare.
 
 ## Stages
 
@@ -813,7 +838,7 @@ Settled under the owner's standing delegation, with each option's pros and cons:
 7d. **Ran (2026-10-14): `q` 4 3 of 6 certified at step 4, `q` 5 6 of 6 at step 4-5; findings next.** **E8c on `jebel`** (C8 as an existence test; D35): `scripts/window_recurrent_e8c_q4.json` and
    `_q5.json` (a test checks them against E8b's), from `main`, `q` 4 then `q` 5, each stopped at its
    first certified run; then the certified networks' long tests and findings.
-8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
+8. **E2 and E6 on `jebel`, revised by D36 and D37** (E2: 20 continuous runs at `k` 4 `s` 4; E6: existence tests, the linear window first): findings. The configs below are as first registered; D36 and D37's configs replace them before the run.
    **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
    `s` 4 and `k` 1 `s` 16, a continuous state, seeds 0-19, E3's settings; its keys say
    `continuous` where E3's say `m<m>`). The harness takes `m` null as a continuous state
