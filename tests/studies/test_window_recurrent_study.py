@@ -589,6 +589,21 @@ def test_e3_e4_reruns_the_matrix_and_control_at_their_cells():
     )
 
 
+def test_e3_e4_trimmed_is_e3_e4s_k4_cells_without_m32():
+    """D34: the trimmed stage 7 is a subset of E3 and E4's runs, in their directory, and keeps C0's reruns at k 4."""
+    scripts = Path(__file__).parents[2] / "scripts"
+    trimmed, e3_e4, matrix, control = (
+        wr.load_config(scripts / f"window_recurrent_{name}.json")
+        for name in ("e3_e4_trimmed", "e3_e4", "matrix", "control")
+    )
+    keys = {spec.key for spec in trimmed.runs}
+    assert len(keys) == len(trimmed.runs) == 6 * 20 and keys <= {spec.key for spec in e3_e4.runs}
+    assert (trimmed.directory, trimmed.settings, trimmed.workers) == (e3_e4.directory, e3_e4.settings, e3_e4.workers)
+    assert {(spec.k, spec.s) for spec in trimmed.runs} == {(4, 4)} and 32 not in {spec.m for spec in trimmed.runs}
+    reruns = {spec.key for spec in matrix.runs + control.runs if (spec.k, spec.s) == (4, 4)}
+    assert len(reruns) == 3 * 5 + 5 and reruns <= keys
+
+
 def test_e2_is_e3s_cells_with_a_continuous_state():
     scripts = Path(__file__).parents[2] / "scripts"
     e2, e3_e4 = (wr.load_config(scripts / f"window_recurrent_{name}.json") for name in ("e2", "e3_e4"))
@@ -667,6 +682,7 @@ BEFORE_THE_EXCLUSION_BOUND = {
     "window_recurrent_control.json",
     "window_recurrent_e2.json",
     "window_recurrent_e3_e4.json",
+    "window_recurrent_e3_e4_trimmed.json",  # a subset of e3_e4's cells, the same runs (D34)
     "window_recurrent_e6.json",
     "window_recurrent_e7_p5.json",
     "window_recurrent_e7_p7.json",

@@ -133,6 +133,8 @@ work says the extra codes help the search, not the solution. The codes used by w
 against `m`: if working runs use more codes than 3 and the minimised machines are all the 3-state
 automaton, the extra codes are redundant copies of carries.
 
+**Trimmed (D34):** `k` 4 `s` 4 at `m` 3, 4, 6, 8 and 16 only; `m` 32 and the `k` 1 cells dropped.
+
 ### E4. Curriculum against all at once (C4, C5)
 
 **Design.** The all-at-once arm (W16) at D5's cells, at the matrix's best `m` (16 at `k` 4 `s` 4,
@@ -144,6 +146,8 @@ control's in its one, D7).
 **Analysis.** Working rates and Fisher's exact test per cell; examples to pass compared by the
 Mann-Whitney test over the working runs (D4). C4 holds if the rates don't differ; whatever the
 result, the claim is written as the data show.
+
+**Trimmed (D34):** `k` 4 `s` 4 `m` 16 only; the `k` 1 `s` 16 `m` 8 cell dropped.
 
 ### E5. Unexplored states (C6)
 
@@ -657,6 +661,21 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     of 10 at both rungs, as registered.
   - (b) Let it finish. Pros: E8b exactly as registered. Cons: hours for a result the probe
     predicts, against the owner's existence-first strategy.
+- **D34. Stage 7 trimmed to the cells that answer a question (the owner, 2026-10-14).** Under D33's
+  existence-first strategy, the 161 runs left were weighed by the question each answers.
+  - (a) *Chosen.* Keep `k` 4 `s` 4: the curriculum at `m` 3, 4, 6, 8, 16 (C3's trend, from exactly
+    the automaton's 3 states to 5 times them) and the all-at-once arm at `m` 16 (C4 where both arms
+    are known to work, and E8b's question: the curriculum is needed at 20 windows; is it at 3?).
+    Drop `m` 32 (past the curve's informative range; `m` 16 is 5 times the states) and every `k` 1
+    cell (curriculum `m` 3-16, all-at-once `m` 8): training there reaches 3 columns, far short of the
+    exclusion bound (5-18), so their rates measure how often memorising lands on the machine. C0's
+    reruns at `k` 4 (20 runs) stay; those at `k` 1 go. Pros: about 41 runs (4-5 h) left instead of
+    161 (17 h or more); `jebel` free for E8b's curriculum arm a day sooner. Cons: C3's trend and C5's
+    rates at `k` 4 only; C4 at one cell; C0 at `k` 4 only.
+  - (b) Finish as registered. Pros: every claim at both cells. Cons: about 12 more hours of `jebel`,
+    mostly on `k` 1 rates the exclusion bound makes hard to read.
+  - (c) Stop stage 7 now. Pros: `jebel` free at once. Cons: C3 without `m` 16 and C4 without its
+    all-at-once arm: two registered questions left unanswered for 4-5 h.
 
 ## Stages
 
@@ -700,6 +719,10 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    `m` 16 and 8 of those cells; seeds 0-19), the matrix's settings otherwise; 6 workers. Its
    seeds 0-4 at the matrix's cells (30 runs) and the control's (10) are those runs again, same
    keys and settings (a test checks it), so C0 compares their result files.
+   **Trimmed (D34, 2026-10-14):** at 79 of 240 runs, stopped and resumed at `cf6ac86` with
+   `scripts/window_recurrent_e3_e4_trimmed.json` (the same directory and settings; a test checks it
+   is a subset keeping C0's `k` 4 reruns): the `k` 4 `s` 4 cells only, the curriculum at `m` 3, 4, 6,
+   8 and 16 and the all-at-once arm at `m` 16, 120 runs; `m` 32 and every `k` 1 cell dropped.
 7a. **Done (2026-10-13): C7' refuted as registered, 0 of 80 working or certified; findings in the
    study script's docstring.** **E7' on `jebel`** (C7'; D23-D26), **before stage 7** (the owner, 2026-10-13: the second
    task's answer first; E3/E4 wait about 5 h), as soon as E7 ends and D26's check is read from
@@ -744,7 +767,7 @@ evaluation rate:
 | experiment | runs or networks | where | estimate |
 | --- | --- | --- | --- |
 | E1 | 105 networks: certificate and long tests | `pyramidon` | 3-6 h on one core; under 2 h on six |
-| E3 + E4 | 200 curriculum + 40 all-at-once runs | `jebel` | about 18 h (10-30) |
+| E3 + E4 | 100 curriculum + 20 all-at-once runs (trimmed from 240, D34) | `jebel` | about 13 h (79 runs before the trim, about 4-5 h after) |
 | E2 + E6 | 40 continuous + 60 baseline runs | `jebel` | about 8 h (4-15) |
 | E5 | saved networks only | `pyramidon` | under 1 h |
 | E7 | 2 `p` x 2 `k` x 2 `m` x 2 arms x 5 seeds = 80 runs, certified | `jebel` | about 8 h (4-15), longer if 49 states train slowly |
