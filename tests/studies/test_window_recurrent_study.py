@@ -607,20 +607,30 @@ def test_e3_e4_trimmed_is_e3_e4s_k4_cells_without_m32():
     assert len(reruns) == 3 * 5 + 5 and reruns <= keys
 
 
-def test_e2_is_e3s_cells_with_a_continuous_state():
+def test_e2_is_e3s_curriculum_m16_cell_with_a_continuous_state():
+    """The claims workplan's D36: E2 at k 4 s 4 only, E3's settings and seeds, so its runs compare
+    with E3's curriculum runs at m 16 seed by seed."""
     scripts = Path(__file__).parents[2] / "scripts"
-    e2, e3_e4 = (wr.load_config(scripts / f"window_recurrent_{name}.json") for name in ("e2", "e3_e4"))
-    assert len(e2.runs) == 2 * 20 and all(spec.m is None and spec.arm == "curriculum" for spec in e2.runs)
-    assert {(spec.k, spec.s) for spec in e2.runs} == {(4, 4), (1, 16)} and e2.settings == e3_e4.settings
+    e3 = wr.load_config(scripts / "window_recurrent_e3_e4_trimmed.json")
+    e2 = wr.load_config(scripts / "window_recurrent_e2.json")
+    assert e2.runs == [
+        dataclasses.replace(spec, m=None) for spec in e3.runs if spec.arm == "curriculum" and spec.m == 16
+    ]
+    assert len(e2.runs) == 20 and e2.settings == e3.settings and e2.directory != e3.directory
 
 
-def test_e6_is_the_baseline_windows_at_e3s_k1_cell():
+@pytest.mark.parametrize("window", ["linear", "ffn"])
+def test_e6_is_an_existence_test_past_the_exclusion_bound(window: str):
+    """The claims workplan's D37: E6's window (D21) at k 1 s 16 m 16 on addition, trained to the cap
+    m + states - 1, E8c's protocol (6 seeds, each step certified, stopped at the first certified run)."""
     scripts = Path(__file__).parents[2] / "scripts"
-    e6, e3_e4 = (wr.load_config(scripts / f"window_recurrent_{name}.json") for name in ("e6", "e3_e4"))
-    cells = {(spec.window, spec.m) for spec in e6.runs}
-    assert cells == {("linear", 4), ("linear", 8), ("linear", 16), ("ffn", 8)} and len(e6.runs) == 4 * 20
-    assert all((spec.arm, spec.k, spec.s) == ("curriculum", 1, 16) for spec in e6.runs)
-    assert e6.settings == e3_e4.settings
+    e6 = wr.load_config(scripts / f"window_recurrent_e6_{window}.json")
+    states = wt.ADDITION.machine.states
+    assert e6.runs == [wr.RunSpec("curriculum", 1, 16, 16, seed, window=window) for seed in range(6)]
+    assert 16 >= states and e6.settings.steps == 16 + states - 1
+    e8c = wr.load_config(scripts / "window_recurrent_e8c_q4.json")
+    assert e6.settings == dataclasses.replace(e8c.settings, steps=e6.settings.steps)
+    assert e6.workers == 6 and e6.directory == Path(f"data/window-recurrent/e6-{window}")
 
 
 def test_e7_prime_is_e7s_k1_cells_with_five_and_ten_times_the_states_codes():
@@ -692,7 +702,6 @@ BEFORE_THE_EXCLUSION_BOUND = {
     "window_recurrent_e2.json",
     "window_recurrent_e3_e4.json",
     "window_recurrent_e3_e4_trimmed.json",  # a subset of e3_e4's cells, the same runs (D34)
-    "window_recurrent_e6.json",
     "window_recurrent_e7_p5.json",
     "window_recurrent_e7_p7.json",
     "window_recurrent_e7_prime_p5.json",
