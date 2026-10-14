@@ -846,6 +846,20 @@ Settled under the owner's standing delegation, with each option's pros and cons:
 7d. **Ran (2026-10-14): `q` 4 3 of 6 certified at step 4, `q` 5 6 of 6 at step 4-5; findings next.** **E8c on `jebel`** (C8 as an existence test; D35): `scripts/window_recurrent_e8c_q4.json` and
    `_q5.json` (a test checks them against E8b's), from `main`, `q` 4 then `q` 5, each stopped at its
    first certified run; then the certified networks' long tests and findings.
+   **Recorded so far (2026-10-14; findings next):** E8c's results copied from `jebel` with
+   manifests (`data/window-recurrent/e8c-q4.sha256`, e285e4cb...72b1d83c; `e8c-q5.sha256`,
+   14f9395b...1b1a139c; 85 files each). Strict certificates on `pyramidon`
+   (`e8c-q4-strict/`, `e8c-q5-strict/`; manifests `e8c-q4-strict.sha256` 2503c79c...12901741 and
+   `e8c-q5-strict.sha256` 09ef995d...23b425a6, run from `data/window-recurrent`): **all 9
+   networks certified strictly** (q 4 seeds 1, 3, 5 at step 4; q 5 seeds 0, 2, 4, 5 at step 4,
+   seeds 1, 3 at step 5), each minimised to exactly `q` states (codes reached: q 4 7-9, q 5
+   7-13), 0 wrong outputs and states, no near ties, snap ratios 1.02-7.9, logit leads 1.99-7.92;
+   about 2 s and 45 MB each. Counts are "at least" (parallel runs certified before the stop).
+   Long tests (U1 and S1 at 128, 256 and 1,024, one worker, from 15:52 at `3b6cb12`, into
+   `e8c-q{4,5}/long-tests/`): q 4 seed 1 passed all 312,000 cases (3,674 s); the rest running,
+   about an hour a network. E8b's exploratory per-step certificates
+   (`data/window-recurrent/e8b-q4-steps/`, manifest `e8b-q4-steps.sha256`) were migrated by the
+   factored-state stage 5: now f9167e65...ef9099f4, was de4c49be...142b227e.
 8. **E2 and E6, revised by D36 and D37** (E2: 20 continuous runs at `k` 4 `s` 4; E6: existence tests,
    the linear window first): findings. **D36 and D37's configs in** (they replace the first
    registration, which never ran: `git show 9b8b2b6:scripts/window_recurrent_e6.json`, and E2's

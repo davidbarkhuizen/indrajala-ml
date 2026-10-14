@@ -119,9 +119,9 @@ factors in polynomial time, a different machine model altogether.
   Computer and System Sciences* 50(1).
 - A. Graves, G. Wayne and I. Danihelka, 2014. Neural Turing machines. arXiv:1410.5401.
 - A. Graves, 2016. Adaptive computation time for recurrent neural networks. arXiv:1603.08983.
-- Ł. Kaiser and I. Sutskever, 2016. Neural GPUs learn algorithms. ICLR (`~/code/papers/kaiser-2015-neural-gpu`).
+- Ł. Kaiser and I. Sutskever, 2016. Neural GPUs learn algorithms. ICLR (`indrajala-literature/kaiser-2015-neural-gpu`).
 - A. Blumensath and E. Grädel, 2000. Automatic structures. LICS (cited by Kaiser & Sutskever for
   long multiplication's representations not being regular).
 - G. Déletang et al., 2022. Neural networks and the Chomsky hierarchy. arXiv:2207.02098
-  (`~/code/papers/deletang-2022-neural-networks-chomsky-hierarchy`).
+  (`indrajala-literature/deletang-2022-neural-networks-chomsky-hierarchy`).
 - P. W. Shor, 1994. Algorithms for quantum computation: discrete logarithms and factoring. FOCS.

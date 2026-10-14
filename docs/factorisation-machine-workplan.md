@@ -443,7 +443,7 @@ Settled under the owner's standing delegation, with each option's pros and cons;
 
 1. **This workplan and a literature review** (docs only): neural program induction and
    verification (Reed & de Freitas 2016; Cai et al. 2017; Graves et al. 2014; Kaiser & Sutskever
-   2016; Déletang et al. 2022; Graves 2016), each paper kept in `~/code/papers/` (Déletang 2022
+   2016; Déletang et al. 2022; Graves 2016), each paper kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`) (Déletang 2022
    and Kaiser & Sutskever are there; the rest to fetch). The workplan is done (#708, revised).
 2. **I1's tape model, the call stack and the reference executor; I2's DSL compiling both ways;
    rungs R1-R3** (tier 0): programs tested exhaustively; each table's minimal states computed and

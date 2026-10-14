@@ -4,7 +4,7 @@
 to judge which findings are new; extended the same day, after the certificate (E1), to the older
 literature on discretised recurrent states and automaton extraction, which the first searches
 missed. It backs [window-recurrent-claims-workplan.md](window-recurrent-claims-workplan.md), which
-plans the work to substantiate them.** Every paper read is kept in `~/code/papers/` as PDF and text, under the file
+plans the work to substantiate them.** Every paper read is kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`) as PDF and text, under the file
 name given; arXiv ids are given for each.
 
 ## Scope and method
@@ -193,7 +193,7 @@ in the step (E6), and one task (base-3 addition). Test lengths (64 against 1,000
 now only for networks that aren't certified: the certificate covers every length, and the long
 tests (D9, to 1,024 columns) check it.
 
-## References (arXiv ids; local copies in `~/code/papers/`)
+## References (arXiv ids; local copies in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`))
 
 1511.08228, 1611.00736, 2003.08494, 2511.22751, 2602.07599, 2406.00075, 1811.12530, 1711.00937,
 2609.32447, 2507.02782, 2609.09157, 2609.16372; and, from the window-recurrent workplan,
