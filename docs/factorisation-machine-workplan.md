@@ -6,7 +6,9 @@ prime-factor decomposition"). Decisions D1-D12 settled under the owner's standin
 with its options' pros and cons. Revised 2026-10-14 against
 [experiment-design.md](experiment-design.md) and the work since (the claims workplan's E7-E8b and
 D30-D34, the factored-state workplan): D1, D3, D4, D6, D9, D10, D11 and D12 revised, D13-D14
-added, F1 restated as an existence claim, the stages and the cost redone. The owner granted the
+added, F1 restated as an existence claim, the stages and the cost redone. D13 then set by the
+owner: **the controllers' state is factored, one factor per register**, R1 the cross-term's
+first test. The owner granted the
 study one multi-day run, the concluding one (D14). No stage started.** It follows
 [factorisation-note.md](factorisation-note.md), which states why the window-recurrent network
 can't factor and what a machine that can would need (P1-P5); this plan builds that machine. It
@@ -27,9 +29,10 @@ integer. Its cost would be that algorithm's.
 
 That is the claim this plan works towards, registered here before any data:
 
-> **F1.** Networks trained on execution traces of a factoring program, one network per subroutine,
-> each run as its subroutine's controller on a tape machine with an exact call stack, are each
-> certified equal to that subroutine's controller; so the machine factors every integer
+> **F1.** Networks with a factored state, one factor per register of the program, trained on
+> execution traces of a factoring program, one network per subroutine, each run as its
+> subroutine's controller on a tape machine with an exact call stack, are each certified equal to
+> that subroutine's controller; so the machine factors every integer
 > correctly, at any length, in the program's number of steps.
 
 F1 is an **existence** claim (experiment-design.md, section 2): one certified network per
@@ -74,14 +77,17 @@ halts). The tapes, heads and stack are exact by construction: plain memory, not 
 P4). The machine runs until it halts or a step budget runs out (P2, P5).
 
 **Each controller is the window-recurrent network as it is** (D4): a window of `k = 3` columns,
-one per head, each column's token the symbol under that head (7 tokens), the state a snapped code,
-and each column's output that head's action, a write symbol and a move (7 x 3 = 21 classes),
+one per head, each column's token the symbol under that head (7 tokens), the state **factored**
+(D13): one factor per register of the reference program (its program counter, a carry or borrow,
+a comparison's result), each its own cell and codebook, the cross-term on, the state a tuple of
+codes; and each column's output that head's action, a write symbol and a move (7 x 3 = 21 classes),
 column 2's also the control action (continue, call a named subroutine, return; D10). What changes
 is where the next window comes from: from the tapes after the actions, not from a fixed row of
-tokens. So each controller is a finite machine of `m` states over `7^3 = 343` windows, **and the
-target-machine certificate applies to it**: enumerate every reachable code against every window
-the reference can see, map codes to the reference controller's states (`phi`), and check every
-action and next state. A certified controller **is** its reference controller; the machine around
+tokens. So each controller is a finite machine of `m = m_1 ... m_G` states over `7^3 = 343`
+windows, **and the target-machine certificate applies to it**, over the factored state's tuples:
+enumerate every reachable state against every window the reference can see, map states to the
+reference controller's (`phi`), check every action and next state, and read which register each
+factor holds (the factored-state workplan's D9). A certified controller **is** its reference controller; the machine around
 the controllers is exact; so if every controller is certified, the network-machine computes what
 the reference program computes, on every input.
 
@@ -94,7 +100,9 @@ trains on segments of `m + q - 1`, 400-1,800 steps, a machine 25-75 times larger
 method has certified, and E7' showed one codebook failing to fit a 25-state table. Split at its
 subroutines, each controller is a few to a few tens of states, each trained, certified and run
 alone, the smallest first: the ladder of experiment-design.md's "small case first". The call
-structure is then given, not learned; learning it is F2's flat arm.
+structure is then given, not learned; learning it is F2's flat arm. Within a controller, the
+factored state gives each register its own codebook (D13), the structure E7' lacked: a program
+counter and a carry learned as two small counters, not their product as one table.
 
 ## The missing infrastructure
 
@@ -117,8 +125,9 @@ Eight pieces, each a stage or part of one. None exists in the package now.
 
 ### I2. Reference programs: the algorithm ladder
 
-A small language for tape-machine controllers (D3): named states, and for each state and the
-symbols under the heads, the writes, moves, and next state, call or return. It compiles each
+A small language for tape-machine controllers (D3): **a state of named registers** (the program
+counter and each flag or digit a subroutine carries, each with its own range: these become the
+network's factors, D13), and for each state and the symbols under the heads, the writes, moves, and next state, call or return. It compiles each
 program two ways: **a table per subroutine** (the units trained and certified, called through the
 stack), and **one flat table** with every subroutine inlined (the whole program as one machine:
 the composition's check, and F2's flat arm). Each program gets its own tests: exhaustive at short
@@ -127,7 +136,8 @@ lengths against Python's integers, sampled at long ones.
 **Each table's size is computed, not estimated** (experiment-design.md, section 1): its minimal
 state count by partition refinement over the table's domain (the windows it can see; a window
 outside it given a sink output, so the count is an upper bound on a partial machine's minimum),
-its states' reachability and distinguishability within the trace lengths. These fill the
+its states' reachability and distinguishability within the trace lengths, and each register's
+range (its factor's minimal codes). These fill the
 feasibility table (below) when each rung is written.
 
 The ladder (D6), each rung a program, each later one calling earlier ones:
@@ -183,8 +193,9 @@ are certified.
 
 The target-machine certificate (the claims workplan's D17), with the factored-state workplan's
 tuple states, per-factor readout and `window_tasks.Coordinates` (its stage 6), already does nearly
-everything: the controller's windows are the heads' symbols, its outputs the actions, and the
-reference table's state names its coordinates. What's added:
+everything: the controller's windows are the heads' symbols, its outputs the actions, its states
+tuples of codes, and the reference's registers its coordinates, so the readout names the register
+each factor holds (or a mixture of them). What's added:
 
 - **Windows that can't occur are left out:** the input tape's head never reads a work symbol, so
   the enumeration is over the windows the reference can see from each state (its table's domain),
@@ -227,7 +238,7 @@ mechanised proof (Lean) is a later option, not this plan.
   network executors; the compiled executor in the crate (`indrajala-math-rust` first, then a
   "Bump rust/" PR); parity tests between them.
 - The controller network: the window-recurrent network, unchanged (format 2, its golden entries),
-  one or more factors (D13). A new class only if D4's reuse fails (per-head classes the window
+  one factor per register, the cross-term on (D13). A new class only if D4's reuse fails (per-head classes the window
   network can't express).
 - Certified tables saved beside the network (format 2's JSON or a sidecar), with the
   certificate's sha256; certified networks archived in `davidbarkhuizen/indrajala-models`.
@@ -236,13 +247,21 @@ mechanised proof (Lean) is a later option, not this plan.
 
 Written per rung when its table is compiled (stages 2-3), and a test checks each committed config
 against it (experiment-design.md, sections 1 and 6). For a controller of reference size `q`
-(minimal states, computed):
+(minimal states, computed) and registers of ranges `q_1 ... q_G`, factor `g` gets `m_g` codes,
+at least `q_g + 1` and about `2 q_g` (a surplus per factor costs its product, `r^G`, so it is
+smaller than a flat codebook's 3-5 times), and the network's states are `m = m_1 ... m_G`:
 
-| rung | controller | `q` | reached / told apart within | `m` (about 3-5 `q`) | cap `m + q - 1` steps | inputs giving calls that long | probe: estimate |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| R1 | copy, compare | computed | computed | | | | |
-| ... | | | | | | | |
-| R7 | the loop over `d` | computed | computed | | | | |
+| rung | controller | `q` | registers `q_g` | reached / told apart within | codes `m_g` | `m` | cap `m + q - 1` steps | inputs giving calls that long | probe: estimate |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| R1 | copy, compare | computed | computed | computed | | | | | |
+| ... | | | | | | | | | |
+| R7 | the loop over `d` | computed | computed | computed | | | | | |
+
+**Representable only with the cross-term.** A program counter's next value reads the carry (and
+the carry's, the counter), so the registers don't update independently: with the cross-term off
+(C9's cell) a factored controller can't represent its table, and the cell would fail D23's rule.
+Every controller runs with it on; the poolings read the output layer's tokens (the default, D10 of
+the factored-state workplan), the independence `BEFORE_STATE` enforces not being wanted here.
 
 **The bound on a tape.** A controller's inputs are its windows, but on a tape they aren't free
 words: the tapes answer the controller's own moves, so training sees the words the reference's
@@ -362,23 +381,30 @@ Settled under the owner's standing delegation, with each option's pros and cons;
     `pyramidon`, tier 0. **The experiments (stage 6 on) start after the planned experimental work
     ends** (the claims workplan's stages 7-9 and E8b, the factored-state workplan's C9) **and the
     owner's strategy review that follows it** (memory: finish what is planned, then reconsider).
-    E8b and C9 say where the method stands (5 states; a product of two counters), which sets the
-    first rungs' codes and whether controllers use a factored state (D13). Pros: no `jebel` time
+    E8b and C9 say where the method stands (5 states; a product of two counters learned), which
+    sets the first rungs' codes. Pros: no `jebel` time
     taken from registered work; the ladder registered on the newest evidence. Cons: infrastructure
     built before it is known whether the method reaches R1's size.
   - (c) Experiments too, beside the claims work. Cons: competes for `jebel`; against finishing
     what's planned first.
-- **D13. The controller's state: flat or factored. Settled: (a) (added 2026-10-14).**
-  - (a) *Chosen.* **One factor (today's network) first**; a factored state (a factor for the
-    program counter, one per flag or digit carried, the cross-term on, since a controller's parts
-    interact) registered as a rung's follow-up only when its failures read as fitting (wrong next
-    states at training lengths, E7''s signature) and C9 has shown factored states learnable.
-    Pros: one change at a time; the small controllers of D3 may not need it. Cons: a rung may fail
-    once before the factored follow-up.
-  - (b) Factored from the start. Pros: a counter-and-flags state is the controller's natural
-    shape. Cons: the cross-term on is untested in any study; the exclusion bound counts the
-    product of the factors' codes (the factored-state workplan's D7), so it doesn't shorten
-    training; two unknowns in the first rung.
+- **D13. The controller's state. Settled: (b), by the owner (2026-10-14; first settled (a)
+  under delegation). A cross-term existence test before R1 (a known task, the carry automaton split
+  into a counter and a carry, 6 seeds, a day) was put and declined: R1 is its first test.**
+  - (a) One factor (today's network) first; a factored state as a rung's follow-up when its
+    failures read as fitting. Pros: one change at a time. Cons: misses the study's point; a
+    controller's state is registers, and E7' showed one codebook failing to fit a product table.
+  - (b) *Chosen.* **Factored from the start: one factor per register the DSL declares, the
+    cross-term on** (the factored-state workplan's D1 (d) and D2 (b), which named this plan's
+    registers among G factors' uses). Pros: each register its own small codebook, the shape of a
+    controller's state; the readout names what each factor holds; the certificate and harness
+    already take tuples. Cons: the cross-term on is untested in any study (C9 runs it off), so
+    R1 is its first test; the exclusion bound counts the product of the factors' codes (the
+    factored-state workplan's D7), so it doesn't shorten training and a surplus is kept small per
+    factor (Feasibility).
+  - (c) Factored, a fixed G (the program counter and one data factor) for every controller. Pros:
+    one network shape. Cons: arbitrary; a controller with two flags tangles them in one factor.
+  - (d) Factored, the cross-term off. Cons: the registers interact, so it can't represent a
+    controller (Feasibility): every cell impossible.
 - **D14. The experiments' design: an existence ladder (added 2026-10-14).**
   - (a) *Chosen.* **Each controller a rung, one configuration** (`k` 3, `m` about 3-5 times its
     `q`, the curriculum capped at `m + q - 1`), **6 seeds in parallel on `jebel`**, each certified
@@ -453,6 +479,8 @@ take the study's one multi-day run. Certification of a controller of tens of cod
 - **The method's frontier is small.** Certified machines so far have 3 and 4 states; R1's
   controllers are near that, R5-R7's likely past it. The ladder may stop early; it then says
   where, and why (its counterexamples).
+- **The cross-term is untested.** C9 learns factors with it off; every controller here needs it
+  on (Feasibility), so R1 is its first test.
 - **The call structure is given** (D3): F1 learns each controller, not the program's
   decomposition; F2's flat arm asks for that.
 - **With full traces a controller is close to a fitted table.** What's learned beyond the table is
