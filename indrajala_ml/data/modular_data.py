@@ -1,7 +1,13 @@
 """
-Modular division of two base-3 numbers read most significant digit first, and the catalogue of
-properties a network that divides must have (docs/window-recurrent-claims-workplan.md, E7 and
-D14-D18).
+Modular arithmetic on two base-3 numbers read most significant digit first: division (the
+window-recurrent claims workplan's E7, D14-D18) and the sum (its E8, a ladder of machine sizes
+between addition's and division's), and the catalogue of properties a network that computes each
+must have.
+
+The sum: after each column the answer is (A + B) mod q of the prefixes read so far, q classes, a
+finite transducer of exactly q states; its catalogue is U1, U2 and S1 below, each verified against
+the running sums (it has no undefined class, so no S2). Everything else, the pairs, tokens, hash,
+held-out tenth and training mixture, is division's.
 
 A case is a pair (a, b) of n-digit base-3 numbers, 0 <= a, b < 3^n, read a column at a time from
 the most significant digit, a column's token 3 a_i + b_i (9 values). After each column the answer
@@ -60,6 +66,16 @@ def column_tokens(pair: Pair, n: int) -> tuple[int, ...]:
 def quotient(A: int, B: int, p: int) -> int:
     """(A * B^-1) mod p, or undefined(p) when B mod p is 0."""
     return undefined(p) if B % p == 0 else A * pow(B, -1, p) % p
+
+
+def sums(pair: Pair, n: int, q: int) -> Answers:
+    """The running sum (A + B) mod q after each of the n columns, most significant first."""
+    total = 0  # the prefixes' sum mod q
+    result: list[int] = []
+    for token in column_tokens(pair, n):
+        total = (BASE * total + token // BASE + token % BASE) % q
+        result.append(total)
+    return tuple(result)
 
 
 def answers(pair: Pair, n: int, p: int) -> Answers:
@@ -132,7 +148,8 @@ class Property:
     statement: str
     generate: Callable[[int, Random], list[Case]]
     coverage: str
-    p: int
+    p: int  # the modulus: division's p, the sum's q
+    operation: str = "division"  # or "sum": what every case is verified against (RUNNING)
 
 
 @dataclass
@@ -164,7 +181,7 @@ def _all_pairs(n: int) -> list[Case]:
     return [Case((a, b)) for a in r for b in r]
 
 
-def _divides(n: int, rng: Random, sampled: int) -> list[Case]:
+def _pairs(n: int, rng: Random, sampled: int) -> list[Case]:
     if BASE ** (2 * n) <= EXHAUSTIVE_LIMIT:
         return _all_pairs(n)
     return [Case(uniform_pair(n, rng)) for _ in range(sampled)]
@@ -198,6 +215,23 @@ def _every_state(n: int, rng: Random, per_stratum: int, p: int) -> list[Case]:
     return cases
 
 
+def _every_sum(n: int, rng: Random, per_stratum: int, q: int) -> list[Case]:
+    # uniform pairs bucketed by their final sum (a + b) mod q until every sum the numbers of n
+    # digits reach has per_stratum
+    reachable = {(a + b) % q for a in range(min(BASE**n, q)) for b in range(min(BASE**n, q))}
+    want = dict.fromkeys(reachable, per_stratum)
+    cases: list[Case] = []
+    while want:
+        pair = uniform_pair(n, rng)
+        total = (pair[0] + pair[1]) % q
+        if want.get(total, 0) > 0:
+            cases.append(Case(pair, stratum=total))
+            want[total] -= 1
+            if want[total] == 0:
+                del want[total]
+    return cases
+
+
 def _undefined_run(n: int, rng: Random, per_stratum: int, doubling: bool = False) -> list[Case]:
     lengths = doubling_distances(n) if doubling else range(1, n + 1)
     return [Case(zero_prefix_pair(n, rng, length), stratum=length) for length in lengths for _ in range(per_stratum)]
@@ -216,7 +250,7 @@ def catalogue(
         Property(
             "U1",
             "divides: every column's answer is the running quotient",
-            sized(_divides, sampled=sampled),
+            sized(_pairs, sampled=sampled),
             f"every pair, or {sampled:,} sampled",
             p,
         ),
@@ -244,9 +278,43 @@ def catalogue(
     )
 
 
+def sum_catalogue(q: int, sampled: int = SAMPLED, per_stratum: int = PER_STRATUM) -> tuple[Property, ...]:
+    """The sum's catalogue (E8): U1, U2 and S1 as division's, verified against the running sums."""
+    sized = functools.partial
+    return (
+        Property(
+            "U1",
+            "sums: every column's answer is the running sum",
+            sized(_pairs, sampled=sampled),
+            f"every pair, or {sampled:,} sampled",
+            q,
+            "sum",
+        ),
+        Property(
+            "U2",
+            "sums on the held-out tenth (D8)",
+            sized(_held_out, sampled=sampled),
+            f"the whole tenth, or {sampled:,} sampled",
+            q,
+            "sum",
+        ),
+        Property(
+            "S1",
+            "every final state: (a + b) mod q, each reachable one",
+            sized(_every_sum, per_stratum=per_stratum, q=q),
+            f"{per_stratum:,} per state",
+            q,
+            "sum",
+        ),
+    )
+
+
+RUNNING: dict[str, Callable[[Pair, int, int], Answers]] = {"division": answers, "sum": sums}
+
+
 def property_cases(prop: Property, n: int) -> list[Case]:
     """A property's cases at n: the same for every network and every run."""
-    return prop.generate(n, Random(f"modular-division-{prop.p}-{prop.id}-{n}"))
+    return prop.generate(n, Random(f"modular-{prop.operation}-{prop.p}-{prop.id}-{n}"))
 
 
 @functools.cache
@@ -264,7 +332,7 @@ def evaluate(f: Solver, n: int, properties: Sequence[Property], limit: int | Non
         got = f([case.pair for case in cases])
         result = PropertyResult(prop.id, len(cases), 0)
         for case, answer in zip(cases, got, strict=True):
-            ok = answer == answers(case.pair, n, prop.p)
+            ok = answer == RUNNING[prop.operation](case.pair, n, prop.p)
             result.passed += ok
             if case.stratum is not None:
                 passed, count = result.strata.get(case.stratum, (0, 0))

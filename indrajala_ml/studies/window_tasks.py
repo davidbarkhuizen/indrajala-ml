@@ -16,7 +16,9 @@ and B both 0), so an alignment's zero columns are part of the word like any othe
   catalogue.
 - **modular-division-p:** two base-3 numbers, most significant first, a column's token 3 a_i + b_i
   (9); the modular automaton, p^2 states (A mod p, B mod p), its output the running quotient or
-  undefined (p + 1 classes); modular_division_data's catalogue.
+  undefined (p + 1 classes); modular_data's catalogue.
+- **modular-sum-q:** the same pairs and tokens; the automaton of (A + B) mod q, q states, its output
+  the running sum (q classes); modular_data's sum catalogue (the claims workplan's E8).
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ import numpy as np
 import numpy.typing as npt
 
 from indrajala_ml.data import addition_data as ad
-from indrajala_ml.data import modular_division_data as md
+from indrajala_ml.data import modular_data as md
 from indrajala_ml.data.addition_data import BASE
 
 IntArray = npt.NDArray[np.int64]
@@ -131,6 +133,16 @@ def modular_machine(p: int) -> Mealy:
     return Mealy(transition, output)
 
 
+@functools.cache
+def modular_sum_machine(q: int) -> Mealy:
+    """Modular sum: state (A + B) mod q, a column's token 3 a + b, the output the running sum."""
+    transition = np.zeros((q, BASE * BASE), dtype=np.int64)
+    for total in range(q):
+        for t in range(BASE * BASE):
+            transition[total, t] = (BASE * total + t // BASE + t % BASE) % q
+    return Mealy(transition, transition.copy())
+
+
 CARRY = carry_machine()
 
 
@@ -165,8 +177,8 @@ class Task(Protocol):
         ...
 
     @property
-    def reach_id(self) -> str:
-        """The stratified property whose L* the test pass records."""
+    def reach_id(self) -> str | None:
+        """The stratified property whose L* the test pass records (None: the task has none)."""
         ...
 
     def column_tokens(self, case: Any, n: int) -> tuple[int, ...]: ...
@@ -262,7 +274,7 @@ class ModularDivision:
 
     held_out_id: str = "U2"
     codes_id: str = "U1"
-    reach_id: str = "S2"
+    reach_id: str | None = "S2"
 
     def column_tokens(self, case: md.Pair, n: int) -> tuple[int, ...]:
         return md.column_tokens(case, n)
@@ -308,15 +320,38 @@ class ModularDivision:
         return {"pair": [a, b], "n": len(columns)}
 
 
+@dataclass(frozen=True)
+class ModularSum(ModularDivision):
+    """(a + b) mod q of two base-3 numbers, most significant first, the running sum at every column (E8)."""
+
+    reach_id: str | None = None  # no undefined class, so no S2
+
+    @property
+    def name(self) -> str:
+        return f"modular-sum-{self.p}"
+
+    @property
+    def machine(self) -> Mealy:
+        return modular_sum_machine(self.p)
+
+    def catalogue(
+        self, sampled: int, relation_sampled: int, per_stratum: int, doubling: bool = False
+    ) -> tuple[md.Property, ...]:
+        return md.sum_catalogue(self.p, sampled, per_stratum)
+
+
 ADDITION = Addition()
 
 
 def task_named(name: str) -> Task:
-    """addition, or modular-division-p for p in md.PRIMES."""
+    """addition, modular-division-p for p in md.PRIMES, or modular-sum-q for q >= 2."""
     if name == ADDITION.name:
         return ADDITION
+    if found := re.fullmatch(r"modular-sum-(\d+)", name):
+        assert int(found[1]) >= 2, f"a modular sum's q is at least 2; got {found[1]}"
+        return ModularSum(int(found[1]))
     found = re.fullmatch(r"modular-division-(\d+)", name)
     assert found is not None and int(found[1]) in md.PRIMES, (
-        f"a task is addition or modular-division-p, p in {md.PRIMES}"
+        f"a task is addition, modular-division-p (p in {md.PRIMES}) or modular-sum-q"
     )
     return ModularDivision(int(found[1]))
