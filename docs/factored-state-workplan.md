@@ -242,7 +242,14 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    no longer (49 s against 56 s, one network).
 7. **The harness**: factored cells in configs (`factors`, `cross` in a run's key), tuples in
    `codes_used` and `state_codes`, **certification after every curriculum step with a stop on
-   passing** (D7) and **the pool stopped at the first certified run** (D8).
+   passing** (D7) and **the pool stopped at the first certified run** (D8). *Built:* a config cell
+   `{"k": [1], "factors": [[4, 8], [4, 8]], "reads": "before_state"}` (and `"cross"`), its key
+   naming each factor (`...-k1-s4-m8-s4-m8-before-state-seed0`; one factor's keys unchanged);
+   `factors`, `cross`, `reads`, `certified`, `certified_step` and `stopped` in every result; codes
+   as tuples, G = 1 included (stage 5 migrates the old files); Settings `certify_steps` (each step's
+   certificate, `step-<j>.certificate.json`, its summary in the step) and `stop_at_certified` (a
+   `models/stop` file: running workers end their step "stopped" at the next epoch, queued runs
+   are cancelled, a later `run` does nothing).
 8. **C9 registered**: the config (`scripts/window_recurrent_factored_p5.json`, its poolings
    `BEFORE_STATE`, D10), a test checking it
    against D7-D8 (cells, cap = `m_1 m_2 + p^2 - 1`), and the probe: two epochs at 88 columns on

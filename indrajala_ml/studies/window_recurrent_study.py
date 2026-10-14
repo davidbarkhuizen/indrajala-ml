@@ -72,8 +72,9 @@ from indrajala_ml.model.specs.layer_specs import (
     StateInput,
 )
 from indrajala_ml.model.specs.update_rules import Adam
-from indrajala_ml.model.specs.window_recurrence import Codes, Factor, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import OUTPUT, AttentionPooling, Codes, Factor, WindowRecurrence
 from indrajala_ml.studies import inference
+from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_tasks as wt
 from indrajala_ml.studies.common import crate_hash, table
 
@@ -143,15 +144,23 @@ WINDOWS: dict[str, Callable[[wt.Task], list[LayerSpec]]] = {
 }
 
 
-def build(task: wt.Task, k: int, s: int, m: int | None, seed: int, window: str = TRANSFORMER) -> Any:
+def build(
+    task: wt.Task,
+    k: int,
+    s: int,
+    m: int | None,
+    seed: int,
+    window: str = TRANSFORMER,
+    recurrence: WindowRecurrence | None = None,
+) -> Any:
     """
     A run's network: its window (WINDOWS: W11's transformer, or E6's), and m codes or a continuous
-    state for m None (the claims workplan's E2).
+    state for m None (the claims workplan's E2); or, given, a recurrence (a factored state, the
+    factored-state workplan, stage 7), s and m then unread.
     """
-    codes = None if m is None else Codes(m)
-    return WindowRecurrentRustArrayNetwork.randomized(
-        (k,), WINDOWS[window](task), WindowRecurrence((Factor(s, codes),)), Adam(), seed=seed
-    )
+    if recurrence is None:
+        recurrence = WindowRecurrence((Factor(s, None if m is None else Codes(m)),))
+    return WindowRecurrentRustArrayNetwork.randomized((k,), WINDOWS[window](task), recurrence, Adam(), seed=seed)
 
 
 # the encoding
@@ -247,15 +256,15 @@ class WindowModel:
         """The task's properties at n against the network (a screen of each when limit)."""
         return self.task.evaluate(self.predict(n), n, properties, limit)
 
-    def codes_used(self, cases: Sequence[Any], n: int) -> set[int]:
+    def codes_used(self, cases: Sequence[Any], n: int) -> set[tuple[int, ...]]:
         """
-        The codes every state of these cases snaps to, the initial state's among them: a state of
-        one factor's (factored states are the factored-state workplan's stage 7).
+        The states every state of these cases snaps to, the initial state's among them: each a code
+        per factor (the factored-state workplan, D4).
         """
-        used: set[int] = set()
+        used: set[tuple[int, ...]] = set()
         for _, rows in self._chunks(cases, n):
             states = self.network.backend.matrix([tokens for tokens, _labels in rows])
-            used.update(code for example in self.network.state_codes(states) for (code,) in example)
+            used.update(state for example in self.network.state_codes(states) for state in example)
         return used
 
 
@@ -303,6 +312,10 @@ class Settings:
     codes_cases: int = 1_000  # B1's first cases at each check and test length, for the codes used
     seeds: int = 5
     tests_past_break: bool = True  # False: a step's test pass ends at its first failing length (W12)
+    # existence tests (the factored-state workplan, D7, D8): each step's network certified, a run
+    # stopped at its first certified step; and every run stopped at the study's first certified run
+    certify_steps: bool = False
+    stop_at_certified: bool = False
 
     def catalogue(self, task: wt.Task) -> tuple[Any, ...]:
         return task.catalogue(self.sampled, self.relation_sampled, self.per_stratum)
@@ -317,19 +330,63 @@ class RunSpec:
     seed: int
     task: str = wt.ADDITION.name
     window: str = TRANSFORMER
+    # a factored state (the factored-state workplan, stage 7): each factor's (s, m), s and m then
+    # their total and None; empty for a state of one factor, (s, m)
+    factors: tuple[tuple[int, int | None], ...] = ()
+    cross: bool = False
+    reads: str = OUTPUT
+
+    @property
+    def state(self) -> tuple[tuple[int, int | None], ...]:
+        """Each factor's (s, m)."""
+        return self.factors or ((self.s, self.m),)
+
+    @property
+    def snapped(self) -> bool:
+        """Every factor has codes: the run's states are a machine's, codes to count and certify."""
+        return all(m is not None for _, m in self.state)
+
+    @property
+    def recurrence(self) -> WindowRecurrence:
+        factors = tuple(Factor(s, None if m is None else Codes(m)) for s, m in self.state)
+        return WindowRecurrence(factors, self.cross, pooling=AttentionPooling(self.reads))
 
     @property
     def key(self) -> str:
-        """The run's name; an addition run's has no task, a transformer window's no window (the matrix's keys)."""
+        """
+        The run's name; an addition run's has no task, a transformer window's no window (the
+        matrix's keys); a factored state's names each factor, then the cross-term and the
+        poolings' reading point when not the defaults.
+        """
         prefix = "" if self.task == wt.ADDITION.name else f"{self.task}-"
         window = "" if self.window == TRANSFORMER else f"{self.window}-"
-        state = "continuous" if self.m is None else f"m{self.m}"
-        return f"{prefix}{self.arm}-{window}k{self.k}-s{self.s}-{state}-seed{self.seed}"
+        state = "-".join(f"s{s}-" + ("continuous" if m is None else f"m{m}") for s, m in self.state)
+        state += ("-cross" if self.cross else "") + ("" if self.reads == OUTPUT else f"-{self.reads.replace('_', '-')}")
+        return f"{prefix}{self.arm}-{window}k{self.k}-{state}-seed{self.seed}"
 
     @property
     def label(self) -> str:
-        """The arm, with its window when it isn't the transformer (the report's cells)."""
-        return self.arm if self.window == TRANSFORMER else f"{self.arm} ({self.window} window)"
+        """
+        The arm, with its window when it isn't the transformer, and the cross-term and reading
+        point when not the defaults (the report's cells).
+        """
+        extras = [f"{self.window} window"] if self.window != TRANSFORMER else []
+        extras += ["cross"] if self.cross else []
+        extras += [self.reads.replace("_", " ")] if self.reads != OUTPUT else []
+        return self.arm if not extras else f"{self.arm} ({', '.join(extras)})"
+
+    @property
+    def cell(self) -> tuple[str, int, str, str]:
+        """The report's cell: label, k, and the state's widths and codes, a factored state's joined by +."""
+        widths = "+".join(str(s) for s, _ in self.state)
+        codes = "+".join("continuous" if m is None else str(m) for _, m in self.state)
+        return self.label, self.k, widths, codes
+
+    @property
+    def order(self) -> tuple[str, int, int, int, str, str]:
+        """The report's order of cells: label, k, then the widths' and codes' totals (numbers, not text)."""
+        label, k, widths, codes = self.cell
+        return label, k, sum(s for s, _ in self.state), sum(m or 0 for _, m in self.state), widths, codes
 
     def step_counts(self, settings: Settings) -> list[list[int]]:
         """Each step's data window counts."""
@@ -356,8 +413,19 @@ def parameter_count(network: Any) -> int:
     return sum(math.prod(array.shape) for part in network.snapshot() for array in part)
 
 
-def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], settings: Settings) -> dict[str, Any]:
-    """One curriculum step: training to its stop, then its whole check and the test pass."""
+def run_step(
+    network: Any,
+    spec: RunSpec,
+    step: int,
+    counts: Sequence[int],
+    settings: Settings,
+    stopped: Callable[[], bool] = lambda: False,
+) -> dict[str, Any]:
+    """
+    One curriculum step: training to its stop, then its whole check and the test pass. stopped()
+    true before an epoch ends the step there, "stopped", unchecked and untested (the study's first
+    certified run found, D8).
+    """
     task = wt.task_named(spec.task)
     model = WindowModel(network, spec.k, task)
     catalogue = settings.catalogue(task)
@@ -370,6 +438,9 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
     best, since_best, stop, epochs = -1, 0, "budget", 0
     whole: dict[int, list[Any]] | None = None
     for epoch in range(settings.max_epochs):
+        if stopped():
+            stop = "stopped"
+            break
         rng = random.Random(f"window-train-{spec.key}-{step}-{epoch}")
         start = time.perf_counter()
         train_epoch(
@@ -398,15 +469,34 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
             if since_best >= settings.patience:
                 stop = "plateau"
                 break
+    if stop == "stopped":
+        return {
+            "step": step,
+            "counts": list(counts),
+            "lengths": lengths,
+            "epochs": epochs,
+            "examples": epochs * settings.epoch_examples,
+            "stop": stop,
+            "passes": False,
+            "screens": screens,
+            "checks": {},
+            "tests": {},
+            "break": 0,
+            "window_ratio": 0.0,
+            "codes_used": None,
+            "train_seconds": train_seconds,
+            "screen_seconds": screen_seconds,
+            "check_seconds": 0.0,
+        }
     start = time.perf_counter()
     trained = whole if stop == "passed" and whole is not None else {n: model.evaluate(n, checks[n]) for n in lengths}
     check_seconds = time.perf_counter() - start
     tests: dict[str, Any] = {}
     passes: dict[int, bool] = {}
-    used: set[int] = set()
-    snapped = spec.m is not None  # a continuous state has no codes to count
+    used: set[tuple[int, ...]] = set()
+    snapped = spec.snapped  # a continuous factor: no codes to count
 
-    def codes(n: int) -> set[int]:
+    def codes(n: int) -> set[tuple[int, ...]]:
         if not snapped:
             return set()
         return model.codes_used(task.property_cases(codes_property, n)[: settings.codes_cases], n)
@@ -450,34 +540,69 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
     }
 
 
+def stop_file(models: Path) -> Path:
+    """The study's marker that its first certified run is found (D8): runs stop at their next epoch."""
+    return models / "stop"
+
+
+def certify_step(network: Any, spec: RunSpec, path: Path) -> dict[str, Any]:
+    """
+    A step's network certified against its task's machine, near ties branched (the factored-state
+    workplan, D7): the certificate written to path, and its summary for the step's result.
+    """
+    certificate = wc.certify(wc.NetworkMachine(network), wt.task_named(spec.task))
+    _write_json(path, certificate.to_json())
+    return {
+        "certified": certificate.certified,
+        "correct": certificate.correct,
+        "states": len(certificate.reachable),
+        "minimised": len(certificate.minimised),
+        "factors": [factor.name for factor in certificate.factors],
+        "seconds": certificate.seconds,
+    }
+
+
 def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, Any]:
     """
     One run's steps, each saved as it finishes under directory/<key>/ (step-<j>.json and its network,
-    step-<j>.network.json); a run stopped part way resumes from its last saved step.
+    step-<j>.network.json); a run stopped part way resumes from its last saved step. With
+    settings.certify_steps, each step's network is certified too (step-<j>.certificate.json, its
+    summary the step's "certificate"), and the run ends at its first certified step (D7); a step
+    stopped by the study's stop file (D8) ends it too.
     """
     steps_directory = directory / spec.key
     steps_directory.mkdir(parents=True, exist_ok=True)
     start = time.perf_counter()
     network: Any = None
     steps: list[dict[str, Any]] = []
+    certify = settings.certify_steps and spec.snapped
+
+    def stopped() -> bool:
+        return settings.stop_at_certified and stop_file(directory).exists()
+
     for step, counts in enumerate(spec.step_counts(settings), start=1):
         saved = steps_directory / f"step-{step}.json"
         network_file = steps_directory / f"step-{step}.network.json"
         if saved.exists() and network_file.exists():
             steps.append(json.loads(saved.read_text()))
             network = None  # loaded when a later step needs it
-            continue
-        if network is None:
-            network = (
-                build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed, spec.window)
-                if step == 1
-                else load_network(str(steps_directory / f"step-{step - 1}.network.json"))
-            )
-        result = run_step(network, spec, step, counts, settings)
-        network.save(str(network_file))
-        _write_json(saved, result)
-        steps.append(result)
+        else:
+            if network is None:
+                network = (
+                    build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed, spec.window, spec.recurrence)
+                    if step == 1
+                    else load_network(str(steps_directory / f"step-{step - 1}.network.json"))
+                )
+            result = run_step(network, spec, step, counts, settings, stopped)
+            if certify and result["stop"] != "stopped":
+                result["certificate"] = certify_step(network, spec, steps_directory / f"step-{step}.certificate.json")
+            network.save(str(network_file))
+            _write_json(saved, result)
+            steps.append(result)
+        if steps[-1]["stop"] == "stopped" or steps[-1].get("certificate", {}).get("certified", False):
+            break
     last = steps[-1]
+    certified = [s["step"] for s in steps if s.get("certificate", {}).get("certified", False)]
     return {
         "key": spec.key,
         "task": spec.task,
@@ -486,13 +611,19 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
         "k": spec.k,
         "s": spec.s,
         "m": spec.m,
+        "factors": [list(factor) for factor in spec.state],
+        "cross": spec.cross,
+        "reads": spec.reads,
         "seed": spec.seed,
         "parameters": parameter_count(
-            network or build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed, spec.window)
+            network or build(wt.task_named(spec.task), spec.k, spec.s, spec.m, spec.seed, spec.window, spec.recurrence)
         ),
         "steps": steps,
         "break": last["break"],
         "works": last["break"] >= WORKS,
+        "certified": bool(certified),
+        "certified_step": certified[0] if certified else None,
+        "stopped": last["stop"] == "stopped",
         "seconds": time.perf_counter() - start,
         **_provenance(),
     }
@@ -523,7 +654,10 @@ def load_config(path: Path) -> Study:
     A study's JSON config: "directory" (results/ and models/ under it), "workers", "task" (default
     addition; window_tasks.task_named), the Settings' fields, and "matrix", a list of {"arm" (default
     "curriculum"), "window" (default "transformer"; WINDOWS), "k", "s", "m"}, each of the last three a
-    list of values, every combination run with every seed; an m of null is a continuous state.
+    list of values, every combination run with every seed; an m of null is a continuous state. A
+    factored cell (the factored-state workplan, stage 7) has "factors", each factor's [s, m], in
+    place of "s" and "m", and may have "cross" (default false); any cell may have "reads", where
+    its poolings read (default "output"; "before_state", D10).
     """
     config = json.loads(path.read_text())
     fields = {k: config[k] for k in Settings.__dataclass_fields__ if k in config}
@@ -537,8 +671,19 @@ def load_config(path: Path) -> Study:
         assert arm in ARMS, f"an arm is one of {ARMS}; got {arm!r}"
         window = cell.get("window", TRANSFORMER)
         assert window in WINDOWS, f"a window is one of {tuple(WINDOWS)}; got {window!r}"
+        cross, reads = cell.get("cross", False), cell.get("reads", OUTPUT)
+        if "factors" in cell:
+            assert "s" not in cell and "m" not in cell, f"a factored cell gives each factor's s and m; got {cell}"
+            factors = tuple((int(s), None if m is None else int(m)) for s, m in cell["factors"])
+            total = sum(s for s, _ in factors)
+            runs += [
+                RunSpec(arm, k, total, None, seed, task, window, factors, cross, reads)
+                for k in cell["k"]
+                for seed in range(settings.seeds)
+            ]
+            continue
         runs += [
-            RunSpec(arm, k, s, m, seed, task, window)
+            RunSpec(arm, k, s, m, seed, task, window, (), cross, reads)
             for k in cell["k"]
             for s in cell["s"]
             for m in cell["m"]
@@ -640,7 +785,7 @@ def explore_run(study: Study, spec: RunSpec, lengths: Sequence[int] = EXPLORED_L
     without a result, one that raised, or a continuous one.
     """
     result_file = study.results / f"{spec.key}.json"
-    if spec.m is None or not result_file.exists():
+    if not spec.snapped or not result_file.exists():
         return None
     result = json.loads(result_file.read_text())
     if "error" in result:
@@ -651,7 +796,7 @@ def explore_run(study: Study, spec: RunSpec, lengths: Sequence[int] = EXPLORED_L
     model = WindowModel(network, spec.k, task)
     codes_property = next(p for p in study.settings.catalogue(task) if p.id == task.codes_id)
 
-    def codes(n: int) -> list[int]:
+    def codes(n: int) -> list[tuple[int, ...]]:
         return sorted(model.codes_used(task.property_cases(codes_property, n)[: study.settings.codes_cases], n))
 
     checked = {n: codes(n) for n in last["lengths"]}
@@ -802,7 +947,8 @@ def verdicts(study: Study, branched: Path, strict: Path, long_tests: Path | None
     """
     results = read_results(study.results) if study.results.exists() else {}
     networks = last_networks(study)
-    cells: dict[tuple[str, int, int, int | None], list[tuple[bool, str | None]]] = {}
+    cells: dict[tuple[str, int, str, str], list[tuple[bool, str | None]]] = {}
+    order: dict[tuple[str, int, str, str], tuple[Any, ...]] = {}
     classes: dict[str, str] = {}
     for spec in study.runs:
         if spec.key not in networks:
@@ -812,7 +958,8 @@ def verdicts(study: Study, branched: Path, strict: Path, long_tests: Path | None
         kind = None if b is None or s is None else certificate_class(b, s)
         if kind is not None:
             classes[name] = kind
-        cells.setdefault((spec.label, spec.k, spec.s, spec.m), []).append((results[spec.key]["works"], kind))
+        cells.setdefault(spec.cell, []).append((results[spec.key]["works"], kind))
+        order[spec.cell] = spec.order
 
     def counts(done: Sequence[tuple[bool, str | None]]) -> list[str]:
         certified = [kind for _, kind in done if kind is not None]
@@ -823,11 +970,9 @@ def verdicts(study: Study, branched: Path, strict: Path, long_tests: Path | None
             rate(sum(kind == ROBUST for kind in certified), len(certified)),
         ]
 
-    ordered = sorted(cells.items(), key=lambda cell: (*cell[0][:3], cell[0][3] or 0))
+    ordered = sorted(cells.items(), key=lambda cell: order[cell[0]])
     every = [run for _, done in ordered for run in done]
-    rows = [
-        [arm, str(k), str(s), "continuous" if m is None else str(m), *counts(done)] for (arm, k, s, m), done in ordered
-    ]
+    rows = [[arm, str(k), s, m, *counts(done)] for (arm, k, s, m), done in ordered]
     rows.append(["all", "", "", "", *counts(every)])
     sections = [table(["arm", "k", "s", "m", "runs", "working", "certified", "robustly certified"], rows)]
     by_works = [
@@ -890,7 +1035,13 @@ def run(study: Study, log: Callable[[str], None] = print) -> dict[str, dict[str,
         stale.unlink()
     results = read_results(study.results)
 
+    stop = stop_file(study.models)
+    if study.settings.stop_at_certified and any(r.get("certified") for r in results.values()):
+        stop.touch()
+
     def todo(spec: RunSpec) -> bool:
+        if study.settings.stop_at_certified and stop.exists():
+            return False  # the study's first certified run is found (D8)
         result = results.get(spec.key)
         return result is None or ("error" in result and result.get("attempts", 1) <= RETRIES)
 
@@ -902,12 +1053,17 @@ def run(study: Study, log: Callable[[str], None] = print) -> dict[str, dict[str,
         steps = ", ".join(
             f"step {s['step']} {s['stop']} after {s['epochs']} epochs, break {s['break']}" for s in result["steps"]
         )
-        log(f"{result['key']}: {'works' if result['works'] else 'fails'}; {steps}")
+        verdict = "certified" if result.get("certified") else "works" if result["works"] else "fails"
+        log(f"{result['key']}: {verdict}; {steps}")
+        if study.settings.stop_at_certified and result.get("certified"):
+            stop.touch()
+            log(f"{result['key']}: the first certified run; the others stop at their next epoch")
 
     while pending := [spec for spec in study.runs if todo(spec)]:
         if study.workers == 0:
             for spec in pending:
-                record(_run_job(spec, study.directory, study.settings, study.train))
+                if todo(spec):
+                    record(_run_job(spec, study.directory, study.settings, study.train))
             continue
         assert study.train is train_run, "worker processes run train_run; workers=0 for another"
         context = multiprocessing.get_context("forkserver")
@@ -915,8 +1071,13 @@ def run(study: Study, log: Callable[[str], None] = print) -> dict[str, dict[str,
             futures = {pool.submit(_run_job, spec, study.directory, study.settings): spec for spec in pending}
             for future in concurrent.futures.as_completed(futures):
                 spec = futures[future]
+                if future.cancelled():
+                    continue
                 try:
                     record(future.result())
+                    if stop.exists() and study.settings.stop_at_certified:
+                        for other in futures:
+                            other.cancel()  # those not started; the running stop at their next epoch
                 except Exception:  # noqa: BLE001 - a worker that died: recorded, so the retry rule applies
                     previous = results.get(spec.key, {})
                     error = {
@@ -939,11 +1100,14 @@ def status(study: Study) -> str:
     steps_done = {spec.key: len(list((study.models / spec.key).glob("step-*.network.json"))) for spec in study.runs}
     steps = {spec.key: len(spec.step_counts(study.settings)) for spec in study.runs}
     works = sum(1 for r in results.values() if r.get("works"))
+    certified = sum(1 for r in results.values() if r.get("certified"))
     lines = [
         (
-            f"{len(results) - len(errors)} of {len(study.runs)} runs finished ({works} working), "
-            f"{len(errors)} errors, {len(running)} running"
+            f"{len(results) - len(errors)} of {len(study.runs)} runs finished ({works} working"
+            + (f", {certified} certified" if certified else "")
+            + f"), {len(errors)} errors, {len(running)} running"
         ),
+        *(["stopped: the first certified run is found (D8)"] if stop_file(study.models).exists() else []),
         *(f"running: {key}, {steps_done.get(key, 0)} of {steps.get(key, 0)} steps saved" for key in running),
         *(f"error: {key}" for key in errors),
     ]
@@ -971,16 +1135,18 @@ def report(study: Study) -> str:
     """
     results = read_results(study.results) if study.results.exists() else {}
     seeds = study.settings.seeds
-    cells: dict[tuple[str, int, int, int | None], list[dict[str, Any]]] = {}
+    cells: dict[tuple[str, int, str, str], list[dict[str, Any]]] = {}
+    order: dict[tuple[str, int, str, str], tuple[Any, ...]] = {}
     for spec in study.runs:
         result = results.get(spec.key)
         if result is not None and "error" not in result:
-            cells.setdefault((spec.label, spec.k, spec.s, spec.m), []).append(result)
+            cells.setdefault(spec.cell, []).append(result)
+            order[spec.cell] = spec.order
     summary: list[list[str]] = []
     runs: list[list[str]] = []
     cost: list[list[str]] = []
     lengths = study.settings.test_lengths
-    for (arm, k, s, m), done in sorted(cells.items(), key=lambda cell: (*cell[0][:3], cell[0][3] or 0)):
+    for (arm, k, s, m), done in sorted(cells.items(), key=lambda cell: order[cell[0]]):
         per_step = [
             f"{sum(r['steps'][j]['passes'] for r in done)} pass, breaks "
             + "/".join(str(r["steps"][j]["break"]) for r in done)
@@ -990,8 +1156,8 @@ def report(study: Study) -> str:
             [
                 arm,
                 str(k),
-                str(s),
-                "continuous" if m is None else str(m),
+                s,
+                m,
                 str(done[0]["parameters"]),
                 f"{sum(r['works'] for r in done)}/{len(done)}" + ("" if len(done) == seeds else f" of {seeds}"),
                 "; ".join(f"step {j + 1}: {text}" for j, text in enumerate(per_step)),
