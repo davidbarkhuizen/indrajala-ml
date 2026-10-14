@@ -52,6 +52,16 @@ threshold probe), recorded with it. (The owner's rule, 2026-10-13; the claims pl
 - **Get a small case working before stepping up** (the owner, 2026-10-14): a ladder of task sizes
   (the modular sum at `q` 4, 5, ... before division's 25 states), each rung registered with its
   bounds, the next registered only after a rung works (D30).
+- **Existence first; spend compute where a working network can come out** (the owner,
+  2026-10-14; the claims plan's D33). A study first finds a configuration that yields a working
+  (certified) network, then searches for its bound (a binary search along the axis in question);
+  rates and wide matrices come after. A long run that the evidence says can't yield a working
+  network (a cheap probe of a few epochs and seeds is enough) isn't launched, or is stopped and
+  recorded. E8b's all-at-once arm was stopped after 6 runs: a probe showed its state stuck on one
+  code at training lengths 1-20.
+- **Short, focused experiments** (the owner, 2026-10-14): a matrix only where a question needs
+  one. After a lone working network, a short follow-up with more seeds of its configuration,
+  sized from the observed rate and labelled exploratory.
 
 ## 3. Statistics
 

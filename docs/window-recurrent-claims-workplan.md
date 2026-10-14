@@ -292,6 +292,17 @@ and checked), about 50 worker-hours in all.
 20 runs: about 4-12 h). Before the analysis, `jebel`'s `results/` and `models/` are copied into
 `pyramidon`'s directories (the arms' keys are disjoint), with their manifests (D8).
 
+**The all-at-once arm stopped (the owner, 2026-10-14, D33).** Launched on `pyramidon` at 07:27
+(`6febef4`), stopped at 08:30 with 6 of `q` 4's 10 runs finished, `q` 5 not started. All 6 failed
+alike: `plateau after 31 epochs`, break 0, an identical screen (0.026) every epoch, and every state
+on one code on real inputs, from the initial state through every window. A probe on fresh networks
+(seeds 0 and 1, 2 epochs, E8b's settings, only the training lengths changed; codes per state at 8
+columns): lengths 1-3 and 1-6 split the state (3-7 codes), 1-10 and 1-20 don't (1-2 codes). A fresh
+network's state starts on 1-2 codes; short lengths give the gradient that splits it, and at 1-20
+in equal shares they are a tenth of training. So the arm could produce no working network, and it
+was stopped (D33). The 6 runs stay in `data/window-recurrent/e8b-q4/`, recorded in the findings;
+the curriculum arm, which starts at 1 and 2 windows, runs as registered.
+
 **Measures and analysis.** As E8's, and C8 refuted at a rung if no network certifies there.
 
 ## Decisions
@@ -638,6 +649,14 @@ Settled under the owner's standing delegation, with each option's pros and cons:
   independent residues `(A mod p, B mod p)`, each a modular sum's counter. Division resumes once
   the recurrence has a factored state (a codebook per residue, product quantisation), a package
   change with its own plan; until then the ladder is the modular sum.
+- **D33. Stop a run that can produce no working network (the owner, 2026-10-14).** The studies aim
+  for existence first, a working network, and then search for its bound; compute is limited, so a
+  long run that the evidence says can't produce one is stopped and recorded, not finished.
+  - (a) *Chosen.* Stop E8b's all-at-once arm (above). Pros: about 4.5 h of `pyramidon` saved; 6
+    seeds and the probe already show the mechanism. Cons: the arm's rate is 0 of 6 at `q` 4, not
+    of 10 at both rungs, as registered.
+  - (b) Let it finish. Pros: E8b exactly as registered. Cons: hours for a result the probe
+    predicts, against the owner's existence-first strategy.
 
 ## Stages
 
@@ -698,7 +717,7 @@ Settled under the owner's standing delegation, with each option's pros and cons:
 7c. **E8b on `pyramidon`** (C8; D23's exclusion bound, D31): `scripts/window_recurrent_e8b_q4.json`
    and `_q5.json` (a test checks them, and every config after E8 is tested against the bound), the
    arms split by `run --arm` (all-at-once on `pyramidon`, curriculum on `jebel` after stage 7: E8b's
-   launch), then E8's analysis. If a rung works, the next (D30) is registered at the bound; division waits
+   launch; the all-at-once arm stopped after 6 runs, D33), then E8's analysis. If a rung works, the next (D30) is registered at the bound; division waits
    for the factored state (D32).
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
    **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
