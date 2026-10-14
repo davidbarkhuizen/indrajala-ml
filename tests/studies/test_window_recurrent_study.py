@@ -854,6 +854,22 @@ def test_the_first_certified_run_stops_the_study(tmp_path: Path, monkeypatch: py
     assert list(wr.run(study, log=lines.append)) == [specs[0].key]
 
 
+def test_the_report_reads_runs_stopped_at_different_steps(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Workers running in parallel end their runs at different steps when the study stops (D8)."""
+    settings = dataclasses.replace(TINY, certify_steps=True, stop_at_certified=True)
+    specs = [dataclasses.replace(FACTORED, seed=seed) for seed in range(2)]
+    monkeypatch.setattr(wr, "certify_step", _certified)
+    study = wr.Study(tmp_path, settings, specs, 0)
+    certified = wr.run(study)[specs[0].key]
+    # the first run in the report stopped a step later than the certified one (E8c's crash)
+    stopped = {**certified, "certified": False, "stopped": True}
+    stopped["steps"] = [*certified["steps"], {**certified["steps"][0], "step": 2, "stop": "stopped", "passes": False}]
+    (study.results / f"{specs[0].key}.json").write_text(json.dumps(stopped))
+    (study.results / f"{specs[1].key}.json").write_text(json.dumps({**certified, "key": specs[1].key, "seed": 1}))
+    report = wr.report(study)
+    assert "| 1/2 | step 1: 0 pass, breaks 0/0; step 2: 0 pass of 1, breaks 0 |" in report
+
+
 def test_a_step_stopped_by_the_study_ends_unchecked():
     spec = wr.RunSpec("curriculum", 1, 4, 8, 0)
     result = wr.run_step(AddingNetwork(), spec, 1, [1], SMALL, stopped=lambda: True)
