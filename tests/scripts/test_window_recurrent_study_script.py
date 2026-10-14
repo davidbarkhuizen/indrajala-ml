@@ -1,5 +1,6 @@
-"""scripts/window_recurrent_study.py's check and certify commands on a saved network."""
+"""scripts/window_recurrent_study.py's run, check and certify commands."""
 
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -70,3 +71,24 @@ def test_check_and_certify_a_division_network(saved_division: Path, tmp_path: Pa
     assert certificate["task"] == "modular-division-5" and certificate["evaluations"] == 9 * len(
         certificate["reachable"]
     )
+
+
+def test_run_arm_runs_that_arms_runs_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    config = tmp_path / "config.json"
+    matrix = [{"arm": arm, "k": [1], "s": [4], "m": [3]} for arm in wr.ARMS]
+    config.write_text(json.dumps({"directory": str(tmp_path / "study"), "seeds": 2, "matrix": matrix}))
+    ran: list[wr.Study] = []
+
+    def run(study: wr.Study, log: object) -> None:
+        ran.append(study)
+
+    def report(study: wr.Study) -> str:
+        return ""
+
+    monkeypatch.setattr(script.machine_lock, "study", contextlib.nullcontext)
+    monkeypatch.setattr(script.wr, "run", run)
+    monkeypatch.setattr(script.wr, "report", report)
+    assert script.main(["run", str(config), "--arm", "all-at-once", "--workers", "2"]) == 0
+    (study,) = ran
+    assert [spec.key for spec in study.runs] == ["all-at-once-k1-s4-m3-seed0", "all-at-once-k1-s4-m3-seed1"]
+    assert study.workers == 2 and study.directory == tmp_path / "study"

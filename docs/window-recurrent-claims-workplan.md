@@ -280,8 +280,17 @@ those inputs (exhaustive only to 6 columns), so the certificate still decides.
 
 **Feasibility (D23):** `m` 16 against 4 and 5 states; every state reached and told apart within 1
 column; longest training length 20 against the exclusion bound's 19 and 20; the budget from a
-probe on `pyramidon` before launch (a one-run probe at 12 columns was running at 2026-10-14
-07:07, over 6 minutes for its one step; E8b's 20 columns cost more: the launch waits for it).
+probe on `pyramidon` before launch. **The probe** (2026-10-14, `pyramidon`: `q` 5, `m` 5, 12
+columns, all-at-once, one run): 31 epochs at about 12 s each, a 187 s check, 652 s in all, stopped
+on a plateau without fitting (a codebook at the bound trained badly: D31's surplus). Scaled to 20
+columns: about 20-40 minutes an all-at-once run, 1-3 h a curriculum run (20 steps, each warm-started
+and checked), about 50 worker-hours in all.
+
+**Launch (the owner, 2026-10-14).** The arms split between machines, each config run once per arm
+(`run --arm`; keys and directories unchanged): the all-at-once arm on `pyramidon` at once
+(`--workers 3`, 20 runs: about 2.5-5 h), the curriculum arm on `jebel` after stage 7 ends (6 workers,
+20 runs: about 4-12 h). Before the analysis, `jebel`'s `results/` and `models/` are copied into
+`pyramidon`'s directories (the arms' keys are disjoint), with their manifests (D8).
 
 **Measures and analysis.** As E8's, and C8 refuted at a rung if no network certifies there.
 
@@ -687,8 +696,9 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    `scripts/window_recurrent_e8_q4.json` and `_q5.json` (a test checks them), `run --workers`.
    Then E7's analysis, and the next rung (D30).
 7c. **E8b on `pyramidon`** (C8; D23's exclusion bound, D31): `scripts/window_recurrent_e8b_q4.json`
-   and `_q5.json` (a test checks them, and every config after E8 is tested against the bound),
-   then E8's analysis. If a rung works, the next (D30) is registered at the bound; division waits
+   and `_q5.json` (a test checks them, and every config after E8 is tested against the bound), the
+   arms split by `run --arm` (all-at-once on `pyramidon`, curriculum on `jebel` after stage 7: E8b's
+   launch), then E8's analysis. If a rung works, the next (D30) is registered at the bound; division waits
    for the factored state (D32).
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
    **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
@@ -721,7 +731,7 @@ evaluation rate:
 | E7 | 2 `p` x 2 `k` x 2 `m` x 2 arms x 5 seeds = 80 runs, certified | `jebel` | about 8 h (4-15), longer if 49 states train slowly |
 | E7' | 2 `p` x 2 `m` x 2 arms x 10 seeds at `k` 1 = 80 runs, certified | `jebel` | about 5 h (3-8): E7's `k` 1 runs took 7-15 minutes; more codes, more epochs |
 | E8 | 2 `q` x 2 arms x 10 seeds at `k` 1 = 40 runs a pair of rungs, certified | `pyramidon`, then `jebel` | about 2.5-5.5 h a pair on `pyramidon`, about half that on `jebel` |
-| E8b | 2 `q` x 2 arms x 10 seeds at `k` 1, 20 steps = 40 runs, certified | `pyramidon` | from the probe, before launch |
+| E8b | 2 `q` x 2 arms x 10 seeds at `k` 1, 20 steps = 40 runs, certified | all-at-once on `pyramidon`, curriculum on `jebel` | about 2.5-5 h on `pyramidon` (3 workers), 4-12 h on `jebel` (6) |
 
 About 34 hours of `jebel` in three sittings, the package change of stage 4 and the harness
 change of stage 5.
