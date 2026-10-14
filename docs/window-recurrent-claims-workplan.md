@@ -652,7 +652,8 @@ Settled under the owner's standing delegation, with each option's pros and cons:
   at fitting: one codebook must learn division's 25- or 49-state table flat, while its state is two
   independent residues `(A mod p, B mod p)`, each a modular sum's counter. Division resumes once
   the recurrence has a factored state (a codebook per residue, product quantisation), a package
-  change with its own plan; until then the ladder is the modular sum.
+  change with its own plan ([factored-state-workplan.md](factored-state-workplan.md)); until then
+  the ladder is the modular sum.
 - **D33. Stop a run that can produce no working network (the owner, 2026-10-14).** The studies aim
   for existence first, a working network, and then search for its bound; compute is limited, so a
   long run that the evidence says can't produce one is stopped and recorded, not finished.
