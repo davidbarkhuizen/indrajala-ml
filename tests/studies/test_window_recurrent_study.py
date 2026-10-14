@@ -879,6 +879,35 @@ def test_the_report_reads_runs_stopped_at_different_steps(tmp_path: Path, monkey
     assert "| 1/2 | step 1: 0 pass, breaks 0/0; step 2: 0 pass of 1, breaks 0 |" in report
 
 
+def test_the_report_reads_a_run_stopped_before_its_first_epoch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A run the study stops before its first epoch has no epoch timings (E6's crash)."""
+    settings = dataclasses.replace(TINY, certify_steps=True, stop_at_certified=True)
+    specs = [dataclasses.replace(FACTORED, seed=seed) for seed in range(2)]
+    monkeypatch.setattr(wr, "certify_step", _certified)
+    study = wr.Study(tmp_path, settings, specs, 0)
+    certified = wr.run(study)[specs[0].key]
+    first = certified["steps"][0]
+    unstarted: dict[str, Any] = {
+        **first,
+        "stop": "stopped",
+        "epochs": 0,
+        "passes": False,
+        "train_seconds": [],
+        "screen_seconds": [],
+    }
+    stopped: dict[str, Any] = {
+        **certified,
+        "key": specs[1].key,
+        "seed": 1,
+        "certified": False,
+        "stopped": True,
+        "steps": [unstarted],
+    }
+    (study.results / f"{specs[1].key}.json").write_text(json.dumps(stopped))
+    cost = [line for line in wr.report(study).splitlines() if line.startswith(f"| {specs[1].key} | 1 |")]
+    assert len(cost) == 2 and "| - | - |" in cost[1]
+
+
 def test_a_probe_times_each_steps_epochs_the_check_and_a_certificate():
     figures = wr.probe(FACTORED, TINY, [1, 2], epochs=2)
     assert [(row["step"], row["epoch"]) for row in figures["epochs"]] == [(1, 1), (1, 2), (2, 1), (2, 2)]

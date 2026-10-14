@@ -11,7 +11,7 @@ modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refute
 2026-10-14 17:00: stages 1-7, 7a and 7b done (stage 7: C0 and C3 hold as registered, C4 refuted:
 all at once works more often; certified, neither the codes nor the arm changes the rate); E8b
 stopped (D33, D35); E8c (D35) ran, C8 certified at both rungs, findings next; stages 8-10 to come
-(stage 8 revised by the owner: D36, D37; its configs in).** The literature it answers to is in
+(stage 8 revised by the owner: D36, D37; E6 ran: the linear window certifies at `k` 1; E2 to run).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -874,7 +874,9 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    and the study stopped at its first certified run, E8c's settings otherwise (tests check both
    against D23 and E8c). A cell's `"window"` names its window (`WINDOWS`: `transformer`, the
    default; `linear`; `ffn`), and the run's key carries it (`curriculum-linear-k1-s16-m16-seed0`).
-   On `pyramidon` (`k` 1). **Probe** (`probe scripts/window_recurrent_e6_linear.json --epochs 2`,
+   **E6 ran (2026-10-14, `pyramidon`, 17:06-17:26): the linear window certifies at `k` 1**, at
+   least 2 of 6 seeds (step 3 and step 4, each the 3-state carry automaton, both verdicts), so
+   the FFN window wasn't needed; findings in the study script's docstring. On `pyramidon` (`k` 1). **Probe** (`probe scripts/window_recurrent_e6_linear.json --epochs 2`,
    `pyramidon`, `c5eca55`): an epoch at 18 columns trains in 4.7 s and screens in 8-75 s, the
    whole check at 18 takes 62 s, the certificate 0.01 s; peak 290 MB (6 workers about 1.8 GB,
    sized again from a worker's RSS a few minutes in). The probe's network, trained 2 epochs at 8
