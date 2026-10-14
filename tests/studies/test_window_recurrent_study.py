@@ -647,6 +647,51 @@ def test_every_configs_codes_can_hold_its_tasks_machine():
                 )
 
 
+def test_e8b_is_e8_trained_long_enough_that_no_smaller_wrong_machine_fits():
+    scripts = Path(__file__).parents[2] / "scripts"
+    e8 = wr.load_config(scripts / "window_recurrent_e8_q4.json")
+    for q in (4, 5):
+        e8b = wr.load_config(scripts / f"window_recurrent_e8b_q{q}.json")
+        assert {(spec.arm, spec.k, spec.s, spec.m) for spec in e8b.runs} == {
+            ("curriculum", 1, 16, 16),
+            ("all-at-once", 1, 16, 16),
+        }
+        assert len(e8b.runs) == 2 * 10 and e8b.settings == dataclasses.replace(e8.settings, steps=20)
+
+
+# D23's exclusion bound: configs registered before it, which train too short to rule out a wrong
+# machine of at most m states (two machines of n and n' states that agree on every input up to
+# length n + n' - 1 are equivalent)
+BEFORE_THE_EXCLUSION_BOUND = {
+    "window_recurrent_calibration.json",
+    "window_recurrent_control.json",
+    "window_recurrent_e2.json",
+    "window_recurrent_e3_e4.json",
+    "window_recurrent_e6.json",
+    "window_recurrent_e7_p5.json",
+    "window_recurrent_e7_p7.json",
+    "window_recurrent_e7_prime_p5.json",
+    "window_recurrent_e7_prime_p7.json",
+    "window_recurrent_e8_q4.json",
+    "window_recurrent_e8_q5.json",
+    "window_recurrent_matrix.json",
+}
+
+
+def test_every_new_config_trains_long_enough_to_rule_out_a_wrong_machine():
+    """D23: a snapped cell's longest training length (steps x k columns) is at least m + states - 1,
+    so a network exactly right on its training lengths is its task's machine."""
+    for path in sorted((Path(__file__).parents[2] / "scripts").glob("window_recurrent_*.json")):
+        if path.name in BEFORE_THE_EXCLUSION_BOUND:
+            continue
+        study = wr.load_config(path)
+        for spec in study.runs:
+            states = wt.task_named(spec.task).machine.states
+            if spec.m is not None:
+                longest = study.settings.steps * spec.k
+                assert longest >= spec.m + states - 1, f"{path.name}: {spec.key} trains to {longest} columns"
+
+
 def test_status_counts_each_running_runs_own_steps(tmp_path: Path):
     runs = [wr.RunSpec("curriculum", 1, 4, 3, 0), wr.RunSpec("all-at-once", 1, 4, 3, 0)]
     study = wr.Study(tmp_path, SMALL, runs, 0)

@@ -295,6 +295,33 @@ none certified.
   last 21 epochs of 200: five at `p` 7, four of them curriculum step 3 at `m` 256-512, best
   screens 0.94-0.99). D26 kept E7's budget (no `k` 1 budget stop in E7); E7' shows a few runs it
   cut short, none near exact (best screens under 0.99).
+
+Findings (E8 of docs/window-recurrent-claims-workplan.md: the modular-sum ladder's first rungs,
+C8), trained on pyramidon (Ryzen 7 3700U), indrajala-ml b886001, crate 8c20e510c9a9, 3 workers,
+2026-10-14 05:50 to 06:19 (`window_recurrent_e8_q4.json` then `_q5.json`: `q` 4 and 5 x 2 arms x
+10 seeds, `k` 1, `s` 16, `m` 32, E7''s settings). Results and models in
+`data/window-recurrent/e8-q4/` and `-q5/` (`e8-q4.sha256`, sha256 011ee2de...596754fd;
+`e8-q5.sha256`, 8ec6a2ae...ebb5ca80), logs `data/window-recurrent-e8-q4.log` (51504a22...646b3d13)
+and `-q5.log` (36923d55...d9b94fce). Certified on pyramidon, both verdicts
+(`certificates.sha256`: q 4 184bc355...1590b51e, q 5 0fc8b159...d3f8c535;
+`certificates-strict.sha256`: q 4 852c0b1b...90a1eafb, q 5 9ced897f...bd3031ff); the certified
+network long-tested (U1 and S1 at 128, 256 and 1,024; `e8-q4/long-tests.sha256`,
+a4ca4818...ee347172).
+
+- **C8 holds at `q` 4, weakly; not at `q` 5.** One network certifies (both verdicts), q 4
+  all-at-once seed 3: its 8 codes minimise to the 4-state automaton, and it passes all 312,000
+  long-test cases. 1 of 20 at `q` 4 (Wilson 0.01-0.24), 0 of 20 at `q` 5 (0.00-0.16).
+- **The failures are memorising, not fitting** (the opposite of E7's): 37 of the 40 runs passed
+  every check at lengths 1-3, most in 2-20 epochs, and failed at the first test length (8). Their
+  codes minimise to machines mostly larger than the task's: at `q` 4, 17 of the 19 failing
+  networks' machines have 6-15 states (one 2, one 4), at `q` 5 all 20 have 7-22, against 4 and 5;
+  the counterexamples come mostly after 3-4 windows, just past the training lengths.
+- **Why the design allowed it** (D23's exclusion bound, added after E8): a network of `m` codes
+  exactly right on every input up to length `L` is the `q`-state machine only if
+  `L >= m + q - 1` (two machines of `n` and `n'` states that agree on every input up to `n + n' - 1`
+  are equivalent). E8 trained to 3 columns with 32 codes, where 35-36 were needed; so did every
+  earlier experiment (addition's `k` 1 needed 6-18, its `k` 4 trained to 12). E8b is E8 trained
+  past the bound.
 """
 
 from __future__ import annotations
