@@ -18,6 +18,8 @@ harness and indrajala_ml/data/addition_data.py's catalogue.
     python scripts/window_recurrent_study.py networks CONFIG.json
     python scripts/window_recurrent_study.py verdicts CONFIG.json --certificates DIR --strict DIR [--long-tests DIR]
     python scripts/window_recurrent_study.py probe CONFIG.json [--steps J ...] [--epochs E] [--json FILE]
+    python scripts/window_recurrent_study.py diagnose CONFIG.json [--run KEY ...] [--n N ...] [--cases C]
+        [--follow] [--interval S]
 
 A config names the study's directory (results/, one JSON file per run, and models/, each run's steps
 and their networks in format 2), its workers, its settings and its matrix (load_config's
@@ -49,6 +51,12 @@ network's `check --json` as <run>-step-<j>.json), per class the networks tested 
 --epochs at each of --steps (default 8 and the last), each epoch's training and screen seconds, the
 whole check at the last step's longest length, a certificate for a snapped state, and the process's
 peak memory after each (measurement.md, section 2: size workers from it and from results' peak_mb).
+`diagnose` is what each saved step's network carries (indrajala_ml/studies/window_diagnostics.py):
+its accuracy per answer class and each factor's share of each of the target's coordinates, their
+zero tests and the answer, written as step-<j>.diagnosis.json beside the network and printed a line
+each, a step already diagnosed skipped; --follow keeps diagnosing each new step as it is saved
+until the machine's lock is free (the study ended), for deciding early whether a run is going
+anywhere. It takes no lock: run it beside the study, one core.
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
@@ -411,10 +419,13 @@ import functools
 import json
 import multiprocessing
 import sys
+import time
 from pathlib import Path
 
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.measurement import machine_lock
+from indrajala_ml.model.persistence.load_network import load_network
+from indrajala_ml.studies import window_diagnostics as wd
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
@@ -474,6 +485,13 @@ def main(argv: list[str]) -> int:
     probe.add_argument("--steps", type=int, nargs="+", help="curriculum steps to time (default: 8 and the last)")
     probe.add_argument("--epochs", type=int, default=2, help="training epochs at each step")
     probe.add_argument("--json", type=Path, help="write the probe's figures to this file")
+    diagnose = commands.add_parser("diagnose")
+    diagnose.add_argument("config", type=Path)
+    diagnose.add_argument("--run", nargs="+", help="these runs' keys only (default: every run)")
+    diagnose.add_argument("--n", type=int, nargs="+", default=list(wd.LENGTHS), help="the lengths drawn")
+    diagnose.add_argument("--cases", type=int, default=wd.CASES, help="cases drawn at each length")
+    diagnose.add_argument("--follow", action="store_true", help="diagnose each new step until the lock is free")
+    diagnose.add_argument("--interval", type=float, default=30.0, help="seconds between looks when following")
     verdicts = commands.add_parser("verdicts")
     verdicts.add_argument("config", type=Path)
     verdicts.add_argument("--certificates", type=Path, required=True, help="certify's branched certificates")
@@ -550,6 +568,18 @@ def main(argv: list[str]) -> int:
         if args.json is not None:
             args.json.write_text(json.dumps(figures, indent=1))
         return 0
+    if args.command == "diagnose":
+        runs = [spec for spec in study.runs if args.run is None or spec.key in args.run]
+        while True:
+            ending = args.follow and machine_lock.holder() is None  # looked at before the pass: none missed
+            for spec in runs:
+                if (study.models / spec.key).is_dir():
+                    task = wt.task_named(spec.task)
+                    for text in wd.diagnose_new(study.models / spec.key, task, load_network, args.n, args.cases):
+                        print(text, flush=True)
+            if not args.follow or ending:
+                return 0
+            time.sleep(args.interval)
     if args.command == "explore":
         context = multiprocessing.get_context("forkserver")
         with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:

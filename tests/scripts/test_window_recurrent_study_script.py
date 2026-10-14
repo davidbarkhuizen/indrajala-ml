@@ -118,3 +118,32 @@ def test_probe_prints_and_keeps_a_factored_studys_figures(tmp_path: Path, capsys
     assert [line.split(":")[0] for line in lines] == ["step 3 epoch 1", "whole check at 3", "certificate"]
     figures = json.loads(out.read_text())
     assert [row["step"] for row in figures["epochs"]] == [3] and not (tmp_path / "study").exists()
+
+
+def test_diagnose_writes_each_steps_diagnosis_once_and_follow_ends_with_the_lock_free(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("AB_RUNS_ROOT", str(tmp_path / "ab-runs"))  # no holder: --follow makes one pass
+    config = tmp_path / "study.json"
+    config.write_text(
+        json.dumps(
+            {
+                "directory": str(tmp_path / "study"),
+                "task": "modular-division-5",
+                "matrix": [{"k": [1], "factors": [[4, 8], [4, 8]], "reads": "before_state"}],
+            }
+        )
+    )
+    study = wr.load_config(config)
+    spec = study.runs[0]
+    run = study.models / spec.key
+    run.mkdir(parents=True)
+    wr.build(wt.task_named(spec.task), 1, 0, None, 0, recurrence=spec.recurrence).save(str(run / "step-1.network.json"))
+    (run / "step-1.json").write_text(json.dumps({"step": 1, "stop": "plateau", "epochs": 2, "break": 0}))
+    argv = ["diagnose", str(config), "--n", "3", "--cases", "20"]
+    assert script.main([*argv, "--follow", "--interval", "0"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [line.split(":")[0] for line in lines] == [f"{spec.key} step-1"]
+    assert "f1 A " in lines[0] and "| state " in lines[0]
+    assert json.loads((run / "step-1.diagnosis.json").read_text())["lengths"] == [3]
+    assert script.main(argv) == 0 and capsys.readouterr().out == ""
