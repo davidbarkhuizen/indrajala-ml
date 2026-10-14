@@ -86,6 +86,16 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   868838e:docs/study-runs-workplan.md`). Stopping a study (only with the owner's say) means its
   whole process group: killed alone, its process frees the lock while its forkserver workers train
   on to the end of their runs.
+- **Long jobs never swap; size their workers from memory, not from one probe.** A study, a
+  certificate pass or a long test runs a pool of workers, and the pool's total must fit in
+  available RAM with room to spare (`free -m`). Choose workers from the **largest** of: a probe's
+  peak RSS (`/usr/bin/time -f %M`), any recorded per-worker figure (the handover, a study's
+  docstring), and a worker's RSS a few minutes into the real run (`ps -o rss`). A probe can
+  understate a pool worker badly: on 2026-10-14 one `k` 4 `certify` measured 45 MB in process, but
+  each of 6 pool workers grew to about 620 MB and swapped `pyramidon` (5.3 GB); on 2026-10-13, 8
+  long-test workers swapped `jebel` (31 GB) into unreachability. Start with fewer workers, check
+  `free -m` after the first minutes, and stop the pool's process group at once if swap grows. On
+  `pyramidon`, `certify` at `k` 4 uses at most 3 workers.
 - **Studies keep their raw results.** Every study's `--out` defaults to
   `data/studies/<study>/<stage>-<YYYY-MM-DD-HHMM>.json` (gitignored): its results with the
   provenance of the sweep (commit, crate hash, host, arguments, start, `dirty`). The addition and

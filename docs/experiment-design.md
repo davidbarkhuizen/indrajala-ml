@@ -105,7 +105,7 @@ Fixed before any run (the claims plan's D4), implemented by hand in
 - **Records:** result files are gitignored; each study's findings go in its script's docstring
   with every file's path, host and sha256 (the study-runs workplan's D8), copied to both machines;
   certified networks are archived in `davidbarkhuizen/indrajala-models` (D12).
-- **Long jobs:** never let one swap (measure a worker's peak RSS before choosing workers);
+- **Long jobs:** never let one swap (size workers as measurement.md section 2 says);
   `jebel` at or below 65 W; studies hold `jebel`'s machine lock with `ab.py` (measurement.md).
 
 ## 6. Writing a study's workplan
