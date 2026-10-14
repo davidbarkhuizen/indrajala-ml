@@ -44,12 +44,29 @@ Predict = Callable[[Sequence[Any]], list[Labels]]
 
 
 @dataclass(frozen=True)
+class Coordinates:
+    """
+    A machine's states named by numbers mod modulus (the factored-state workplan, D9): values[s] the
+    coordinates of state s, one per name (division's A and B), so the certificate can name what a
+    factor of a network's state holds, as a linear form of them.
+    """
+
+    names: tuple[str, ...]
+    values: IntArray  # (S, len(names))
+    modulus: int
+
+
+@dataclass(frozen=True)
 class Mealy:
-    """A Mealy machine over tokens 0..T-1: transition[s, t] the next state, output[s, t] the label."""
+    """
+    A Mealy machine over tokens 0..T-1: transition[s, t] the next state, output[s, t] the label;
+    its states' coordinates, if named.
+    """
 
     transition: IntArray  # (S, T)
     output: IntArray  # (S, T)
     start: int = 0
+    coordinates: Coordinates | None = None
 
     @property
     def states(self) -> int:
@@ -116,7 +133,7 @@ def carry_machine() -> Mealy:
     """Base-3 addition of three operands: states the carry 0..2, a column's token 9 a + 3 b + c."""
     sums = np.array([t // (BASE * BASE) + t // BASE % BASE + t % BASE for t in range(BASE**3)])
     totals = np.arange(3)[:, np.newaxis] + sums[np.newaxis, :]
-    return Mealy(totals // BASE, totals % BASE)
+    return Mealy(totals // BASE, totals % BASE, coordinates=Coordinates(("carry",), np.arange(3)[:, np.newaxis], 3))
 
 
 @functools.cache
@@ -130,7 +147,8 @@ def modular_machine(p: int) -> Mealy:
                 A2, B2 = (BASE * A + t // BASE) % p, (BASE * B + t % BASE) % p
                 transition[A * p + B, t] = A2 * p + B2
                 output[A * p + B, t] = md.quotient(A2, B2, p)
-    return Mealy(transition, output)
+    coordinates = np.array([[A, B] for A in range(p) for B in range(p)], dtype=np.int64)
+    return Mealy(transition, output, coordinates=Coordinates(("A", "B"), coordinates, p))
 
 
 @functools.cache
@@ -140,7 +158,7 @@ def modular_sum_machine(q: int) -> Mealy:
     for total in range(q):
         for t in range(BASE * BASE):
             transition[total, t] = (BASE * total + t // BASE + t % BASE) % q
-    return Mealy(transition, transition.copy())
+    return Mealy(transition, transition.copy(), coordinates=Coordinates(("total",), np.arange(q)[:, np.newaxis], q))
 
 
 CARRY = carry_machine()
