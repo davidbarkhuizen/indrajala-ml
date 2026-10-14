@@ -72,7 +72,7 @@ from indrajala_ml.model.specs.layer_specs import (
     StateInput,
 )
 from indrajala_ml.model.specs.update_rules import Adam
-from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import Codes, Factor, WindowRecurrence
 from indrajala_ml.studies import inference
 from indrajala_ml.studies import window_tasks as wt
 from indrajala_ml.studies.common import crate_hash, table
@@ -150,7 +150,7 @@ def build(task: wt.Task, k: int, s: int, m: int | None, seed: int, window: str =
     """
     codes = None if m is None else Codes(m)
     return WindowRecurrentRustArrayNetwork.randomized(
-        (k,), WINDOWS[window](task), WindowRecurrence(s, codes), Adam(), seed=seed
+        (k,), WINDOWS[window](task), WindowRecurrence((Factor(s, codes),)), Adam(), seed=seed
     )
 
 
@@ -248,11 +248,14 @@ class WindowModel:
         return self.task.evaluate(self.predict(n), n, properties, limit)
 
     def codes_used(self, cases: Sequence[Any], n: int) -> set[int]:
-        """The codes every state of these cases snaps to, the initial state's among them."""
+        """
+        The codes every state of these cases snaps to, the initial state's among them: a state of
+        one factor's (factored states are the factored-state workplan's stage 7).
+        """
         used: set[int] = set()
         for _, rows in self._chunks(cases, n):
             states = self.network.backend.matrix([tokens for tokens, _labels in rows])
-            used.update(code for codes in self.network.state_codes(states) for code in codes)
+            used.update(code for example in self.network.state_codes(states) for (code,) in example)
         return used
 
 

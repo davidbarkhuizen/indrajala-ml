@@ -19,7 +19,7 @@ from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentRustArrayNetwork,
 )
 from indrajala_ml.model.specs.update_rules import Adam
-from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import Codes, Factor, WindowRecurrence
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
@@ -297,7 +297,7 @@ def test_a_certified_dividing_machine_passes_the_long_tests():
 def test_a_networks_machine_is_its_forward_pass_window_by_window(network_class: Any):
     k = 2
     network: Any = network_class.randomized(
-        (k,), wr.window_specs(wt.ADDITION), WindowRecurrence(4, Codes(4)), Adam(), seed=3
+        (k,), wr.window_specs(wt.ADDITION), WindowRecurrence((Factor(4, Codes(4)),)), Adam(), seed=3
     )
     machine = wc.NetworkMachine(network)
     rng = np.random.default_rng(0)
@@ -306,20 +306,20 @@ def test_a_networks_machine_is_its_forward_pass_window_by_window(network_class: 
     codes = network.state_codes(network.backend.matrix(rows.astype(float).tolist()))
     for row, want, want_codes in zip(rows, expected, codes, strict=True):
         code, distances = machine.start()
-        assert code == want_codes[0] and int(np.argmin(distances)) == code
+        assert (code,) == want_codes[0] and int(np.argmin(distances)) == code
         digits: list[int] = []
         for w, window in enumerate(row.reshape(-1, k)):
             steps = machine.step(code, window[np.newaxis, :])
             digits += [int(d) for d in steps.digits[0]]
             code = int(steps.codes[0])
-            assert code == want_codes[w + 1]
+            assert (code,) == want_codes[w + 1]
         assert tuple(digits) == tuple(want)
 
 
 @pytest.mark.parametrize("network_class", [WindowRecurrentArrayNetwork, WindowRecurrentRustArrayNetwork])
 def test_a_continuous_network_has_no_machine_to_certify(network_class: Any):
     network: Any = network_class.randomized(
-        (2,), wr.window_specs(wt.ADDITION), WindowRecurrence(4, codes=None), Adam(), seed=3
+        (2,), wr.window_specs(wt.ADDITION), WindowRecurrence((Factor(4, None),)), Adam(), seed=3
     )
     with pytest.raises(AssertionError, match="continuous"):
         wc.NetworkMachine(network)

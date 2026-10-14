@@ -98,7 +98,7 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule, WeightDecay
-from indrajala_ml.model.specs.window_recurrence import GRU, Codes, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import GRU, Codes, Factor, WindowRecurrence
 from indrajala_ml.pcg64 import default_rng
 from tests.helpers import bits, model_modules
 
@@ -227,8 +227,8 @@ WINDOW_MODEL: list[LayerSpec] = [
     LayerNorm(epsilon=1e-4),
     Dense(VOCABULARY, output=True, activation="softmax", loss="cross_entropy"),
 ]
-WINDOW_RECURRENCE = WindowRecurrence(3, Codes(4, commitment=0.5), GRU(update_bias=0.5))
-CONTINUOUS_RECURRENCE = WindowRecurrence(3, None, GRU(update_bias=0.5))
+WINDOW_RECURRENCE = WindowRecurrence((Factor(3, Codes(4, commitment=0.5)),), cell=GRU(update_bias=0.5))
+CONTINUOUS_RECURRENCE = WindowRecurrence((Factor(3, None),), cell=GRU(update_bias=0.5))
 FORMAT_2_TRAINING_STEPS = 2
 
 

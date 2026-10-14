@@ -27,7 +27,7 @@ from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNe
 from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, LayerSpec, Residual, StateInput
 from indrajala_ml.model.specs.update_rules import Adam, Momentum
-from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import Codes, Factor, WindowRecurrence
 from indrajala_ml.training.train import _training_accuracy
 from tests.helpers import all_subclasses, model_modules
 
@@ -155,8 +155,12 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "SequentialRustArrayBackpropClassifierNetwork": lambda cls: cls((DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT, Adam()),
     "SequentialSequenceArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
     "SequentialSequenceRustArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
-    "WindowRecurrentArrayNetwork": lambda cls: cls((DIMENSION,), WINDOW, WindowRecurrence(2, Codes(3)), Adam()),
-    "WindowRecurrentRustArrayNetwork": lambda cls: cls((DIMENSION,), WINDOW, WindowRecurrence(2, Codes(3)), Adam()),
+    "WindowRecurrentArrayNetwork": lambda cls: cls(
+        (DIMENSION,), WINDOW, WindowRecurrence((Factor(2, Codes(3)),)), Adam()
+    ),
+    "WindowRecurrentRustArrayNetwork": lambda cls: cls(
+        (DIMENSION,), WINDOW, WindowRecurrence((Factor(2, Codes(3)),)), Adam()
+    ),
 }
 
 

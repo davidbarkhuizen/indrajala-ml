@@ -71,8 +71,8 @@ class AddingNetwork:
             predictions.append(tuple(digits))
         return predictions
 
-    def state_codes(self, X: Sequence[Sequence[float]]) -> list[list[int]]:
-        return [[0, len(row) % 5] for row in X]
+    def state_codes(self, X: Sequence[Sequence[float]]) -> list[list[tuple[int, ...]]]:
+        return [[(0,), (len(row) % 5,)] for row in X]
 
     def learn_batch(self, rate: float, batch: list[Any]) -> None:
         self.batches.append(batch)
@@ -376,7 +376,7 @@ def test_a_continuous_run_trains_without_codes(tmp_path: Path):
     assert result["m"] is None and all(step["codes_used"] is None for step in result["steps"])
     assert result["steps"][0]["tests"]["3"]["codes"] is None
     network = load_network(str(tmp_path / "models" / spec.key / "step-2.network.json"))
-    assert network.recurrence.codes is None
+    assert not network.recurrence.snapped
     report = wr.report(study)
     assert "| curriculum | 1 | 4 | continuous |" in report and f"| {spec.key} | 2 |" in report
 
@@ -488,7 +488,7 @@ def test_e6s_windows_drop_the_attention_or_every_block():
 
     for window in wr.WINDOWS:
         network = wr.build(wt.ADDITION, 1, 16, 8, 0, window)
-        assert network.recurrence.codes is not None
+        assert network.recurrence.snapped
     transformer, linear, ffn = (inner(wr.WINDOWS[w](wt.ADDITION)) for w in ("transformer", "linear", "ffn"))
     assert sum(isinstance(spec, Attention) for spec in transformer) == wr.BLOCKS
     assert not any(isinstance(spec, Attention) for spec in linear + ffn)

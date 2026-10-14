@@ -379,3 +379,137 @@ class InitialStateLayer(_Part):
 
     def backward_batch(self, dC: Rows) -> None:
         _add_into(self.state.weight_gradient_accum, _column_sums(dC))
+
+
+class _FactorParts:
+    """One factor's parts: its pooling, cell, codes (None: continuous) and initial state."""
+
+    def __init__(
+        self, pooling: AttentionPoolingLayer, cell: GRULayer, codes: CodesLayer | None, initial_state: InitialStateLayer
+    ) -> None:
+        self.pooling = pooling
+        self.cell = cell
+        self.codes = codes
+        self.initial_state = initial_state
+
+
+class RecurrenceLayer:
+    """
+    RecurrenceArrayLayer in pure Python (the factored-state workplan, stage 4): a window's
+    recurrence over its state's factors, each factor's pooling, cell and codes, factor by factor,
+    on rows; factor g's state the row's s_g values after the factors before it, its cell's input
+    [u_g, c_(-g)] with cross. The factors' shared sums are in factor order from factor 1's term,
+    as numpy's.
+    """
+
+    def __init__(
+        self,
+        sizes: Sequence[tuple[int, int | None, float]],
+        tokens: int,
+        features: int,
+        cross: bool,
+        update_bias: float,
+    ) -> None:
+        """sizes: each factor's (state size, code count or None, commitment)."""
+        self.sizes = [s for s, _, _ in sizes]
+        self.cross = cross
+        self.features = features
+        self.state_size = sum(self.sizes)
+        self.starts = [sum(self.sizes[:g]) for g in range(len(self.sizes))]
+        self.factors = [
+            _FactorParts(
+                AttentionPoolingLayer(tokens, features),
+                GRULayer(features + (self.state_size - s if cross else 0), s, update_bias),
+                None if m is None else CodesLayer(m, s, commitment),
+                InitialStateLayer(s),
+            )
+            for s, m, commitment in sizes
+        ]
+
+    def parts(self) -> list[_Part]:
+        """The parts with weights, factor by factor: pooling, cell, codes (if any), initial state."""
+        return [
+            part for f in self.factors for part in (f.pooling, f.cell, f.codes, f.initial_state) if part is not None
+        ]
+
+    def draw(self, rng: Pcg64Generator) -> None:
+        """Each factor's cell's gates, then its codes, factor by factor."""
+        for f in self.factors:
+            f.cell.draw(rng)
+            if f.codes is not None:
+                f.codes.draw(rng)
+
+    def _block(self, C: Rows, g: int) -> Rows:
+        start, size = self.starts[g], self.sizes[g]
+        return [list(c[start : start + size]) for c in C]
+
+    def _others(self, c: Sequence[float], g: int) -> list[float]:
+        start, size = self.starts[g], self.sizes[g]
+        return [*c[:start], *c[start + size :]]
+
+    def _snapped(self, hs: list[Rows]) -> Rows:
+        self._hs = hs
+        qs = [h if f.codes is None else f.codes.forward_batch(h) for f, h in zip(self.factors, hs, strict=True)]
+        return [[v for q in rows for v in q] for rows in zip(*qs, strict=True)]
+
+    @property
+    def H(self) -> Rows:
+        """The last forward pass's cells' outputs (or initial states) before they were snapped."""
+        return [[v for h in rows for v in h] for rows in zip(*self._hs, strict=True)]
+
+    @property
+    def indices(self) -> list[list[int] | None]:
+        """The last forward pass's code indices, per factor; None for a continuous factor."""
+        return [None if f.codes is None else f.codes.indices for f in self.factors]
+
+    def _snap_backward(self, dQ: Rows, weight: float) -> list[Rows]:
+        return [
+            self._block(dQ, g) if f.codes is None else f.codes.backward_batch(self._block(dQ, g), weight)
+            for g, f in enumerate(self.factors)
+        ]
+
+    def first_state(self, examples: int) -> Rows:
+        """The initial state, snapped, for each of examples examples."""
+        return self._snapped([f.initial_state.forward_batch(examples) for f in self.factors])
+
+    def first_state_backward(self, dC: Rows, weight: float) -> None:
+        """After first_state: the initial states' gradients accumulated, through the codes."""
+        for f, dH in zip(self.factors, self._snap_backward(dC, weight), strict=True):
+            f.initial_state.backward_batch(dH)
+
+    def forward_batch(self, X: Rows, C: Rows) -> Rows:
+        """The tokens the output layer reads, X (T * d per example), and the state C, to the next state."""
+        hs: list[Rows] = []
+        for g, f in enumerate(self.factors):
+            U = f.pooling.forward_batch(X)
+            inputs = [[*u, *self._others(c, g)] for u, c in zip(U, C, strict=True)] if self.cross else U
+            hs.append(f.cell.forward_batch(inputs, self._block(C, g)))
+        return self._snapped(hs)
+
+    def backward_batch(self, dQ: Rows, weight: float) -> tuple[Rows, Rows]:
+        """The next state's gradient to the tokens' (T * d per example) and the state's; the parts' accumulated."""
+        d = self.features
+        dX: Rows | None = None
+        dC_own: list[Rows] = []
+        dC_cross: list[Rows] = []
+        for f, dH in zip(self.factors, self._snap_backward(dQ, weight), strict=True):
+            d_inputs, dC = f.cell.backward_batch(dH)
+            if self.cross:
+                dC_cross.append([row[d:] for row in d_inputs])
+                d_inputs = [row[:d] for row in d_inputs]
+            dX_g = f.pooling.backward_batch(d_inputs)
+            dX = (
+                dX_g
+                if dX is None
+                else [[a + b for a, b in zip(x, y, strict=True)] for x, y in zip(dX, dX_g, strict=True)]
+            )
+            dC_own.append(dC)
+        dC = [[v for block in rows for v in block] for rows in zip(*dC_own, strict=True)]
+        for g, piece in enumerate(dC_cross):
+            start, size = self.starts[g], self.sizes[g]
+            for row, values in zip(dC, piece, strict=True):
+                targets = [*range(start), *range(start + size, self.state_size)]
+                for j, value in zip(targets, values, strict=True):
+                    row[j] += value
+        assert dX is not None
+        return dX, dC

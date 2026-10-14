@@ -3,7 +3,8 @@
 """
 A window-recurrent network's layers in numpy (the window-recurrent adder workplan, stage 3):
 the StateInput, which stands in the window's layer list, and the parts the network owns beside
-it, the attention pooling, the GRU cell and the codes. Every sum but a product is a left fold
+it, the attention pooling, the GRU cell and the codes, which RecurrenceArrayLayer runs for each of
+the state's factors (the factored-state workplan, stage 4). Every sum but a product is a left fold
 through np.cumsum (tests/model/layers/test_summation_order.py), as attention's.
 
 The StateInput is a layer like the window's others, driven through the list (BatchShaped); the
@@ -20,7 +21,7 @@ another implementation's, as attention's.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import numpy.typing as npt
@@ -334,3 +335,143 @@ class InitialStateArrayLayer:
 
     def backward_batch(self, dC: FloatArray) -> None:
         self.grad_c += sum_rows(dC)
+
+
+class _FactorParts:
+    """One factor's parts: its pooling, cell, codes (None: continuous) and initial state."""
+
+    def __init__(
+        self,
+        pooling: AttentionPoolingArrayLayer,
+        cell: GRUArrayLayer,
+        codes: CodesArrayLayer | None,
+        initial_state: InitialStateArrayLayer,
+    ) -> None:
+        self.pooling = pooling
+        self.cell = cell
+        self.codes = codes
+        self.initial_state = initial_state
+
+
+class RecurrenceArrayLayer:
+    """
+    A window's recurrence over its state's factors (the factored-state workplan, stage 4;
+    window_recurrence.py): each factor's pooling, cell and codes, factor by factor, the crate's
+    recurrence_step_* in numpy (src/factored.rs). Factor g's state is the state's s_g columns after
+    the factors before it; with cross, its cell's input is [u_g, c_(-g)], the other factors'
+    states in factor order after its summary. The factors' shared sums are in factor order from
+    factor 1's term: the tokens' gradient, every factor's pooling's, and with cross, each factor's
+    state gradient, its own cell's, then each other factor's through its c_(-h) columns. With one
+    factor, this is the window's step as it was before factors, by bits.
+
+    forward_batch gives the next state, keeping each factor's indices (None for a continuous factor)
+    and the cells' outputs before snapping, H; backward_batch, after it, gives the tokens' and the
+    state's gradients and accumulates the parts'. first_state and first_state_backward do the same
+    for the learned initial state, snapped (W8).
+    """
+
+    def __init__(
+        self,
+        sizes: Sequence[tuple[int, int | None, float]],
+        tokens: int,
+        features: int,
+        cross: bool,
+        update_bias: float,
+    ) -> None:
+        """sizes: each factor's (state size, code count or None, commitment)."""
+        self.sizes = [s for s, _, _ in sizes]
+        self.cross = cross
+        self.features = features
+        self.state_size = sum(self.sizes)
+        self.starts = [sum(self.sizes[:g]) for g in range(len(self.sizes))]
+        self.factors = [
+            _FactorParts(
+                AttentionPoolingArrayLayer(tokens, features),
+                GRUArrayLayer(features + (self.state_size - s if cross else 0), s, update_bias),
+                None if m is None else CodesArrayLayer(m, s, commitment),
+                InitialStateArrayLayer(s),
+            )
+            for s, m, commitment in sizes
+        ]
+
+    def parts(self) -> list[Any]:
+        """The parts with parameters, factor by factor: pooling, cell, codes (if any), initial state."""
+        return [
+            part for f in self.factors for part in (f.pooling, f.cell, f.codes, f.initial_state) if part is not None
+        ]
+
+    def draw(self, rng: np.random.Generator) -> None:
+        """Each factor's cell's gates, then its codes, factor by factor."""
+        for f in self.factors:
+            f.cell.draw(rng)
+            if f.codes is not None:
+                f.codes.draw(rng)
+
+    def _block(self, C: FloatArray, g: int) -> FloatArray:
+        return C[:, self.starts[g] : self.starts[g] + self.sizes[g]]
+
+    def _others(self, C: FloatArray, g: int) -> FloatArray:
+        start, size = self.starts[g], self.sizes[g]
+        return np.concatenate([C[:, :start], C[:, start + size :]], axis=1)
+
+    def _snapped(self, hs: list[FloatArray]) -> FloatArray:
+        self._hs = hs
+        return np.concatenate(
+            [h if f.codes is None else f.codes.forward_batch(h) for f, h in zip(self.factors, hs, strict=True)], axis=1
+        )
+
+    @property
+    def H(self) -> FloatArray:
+        """The last forward pass's cells' outputs (or initial states) before they were snapped, (N, S)."""
+        return np.concatenate(self._hs, axis=1)
+
+    @property
+    def indices(self) -> list[npt.NDArray[np.intp] | None]:
+        """The last forward pass's code indices, per factor; None for a continuous factor."""
+        return [None if f.codes is None else f.codes.indices for f in self.factors]
+
+    def _snap_backward(self, dQ: FloatArray, weight: float) -> list[FloatArray]:
+        return [
+            self._block(dQ, g) if f.codes is None else f.codes.backward_batch(self._block(dQ, g), weight)
+            for g, f in enumerate(self.factors)
+        ]
+
+    def first_state(self, examples: int) -> FloatArray:
+        """The initial state, snapped, for each of examples examples, (examples, state_size)."""
+        return self._snapped([f.initial_state.forward_batch(examples) for f in self.factors])
+
+    def first_state_backward(self, dC: FloatArray, weight: float) -> None:
+        """After first_state: the initial states' gradients accumulated, through the codes."""
+        for f, dH in zip(self.factors, self._snap_backward(dC, weight), strict=True):
+            f.initial_state.backward_batch(dH)
+
+    def forward_batch(self, X: FloatArray, C: FloatArray) -> FloatArray:
+        """The tokens the output layer reads, X (N, T * d), and the state C (N, S), to the next state (N, S)."""
+        hs: list[FloatArray] = []
+        for g, f in enumerate(self.factors):
+            u = f.pooling.forward_batch(X)
+            inputs = np.concatenate([u, self._others(C, g)], axis=1) if self.cross else u
+            hs.append(f.cell.forward_batch(inputs, self._block(C, g)))
+        return self._snapped(hs)
+
+    def backward_batch(self, dQ: FloatArray, weight: float) -> tuple[FloatArray, FloatArray]:
+        """The next state's gradient (N, S) to the tokens' (N, T * d) and the state's (N, S); the parts' accumulated."""
+        d = self.features
+        dX: FloatArray | None = None
+        dC_own: list[FloatArray] = []
+        dC_cross: list[FloatArray] = []
+        for f, dH in zip(self.factors, self._snap_backward(dQ, weight), strict=True):
+            d_inputs, dC = f.cell.backward_batch(dH)
+            if self.cross:
+                dC_cross.append(d_inputs[:, d:])
+                d_inputs = d_inputs[:, :d]
+            dX_g = f.pooling.backward_batch(d_inputs)
+            dX = dX_g if dX is None else dX + dX_g
+            dC_own.append(dC)
+        dC = np.concatenate(dC_own, axis=1)
+        for g, piece in enumerate(dC_cross):
+            start, size = self.starts[g], self.sizes[g]
+            dC[:, :start] += piece[:, :start]
+            dC[:, start + size :] += piece[:, start:]
+        assert dX is not None
+        return dX, dC

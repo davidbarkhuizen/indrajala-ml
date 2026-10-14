@@ -29,7 +29,14 @@ from indrajala_ml.model.specs.layer_specs import (
     StateInput,
 )
 from indrajala_ml.model.specs.update_rules import SGD, Adam
-from indrajala_ml.model.specs.window_recurrence import Codes, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import (
+    BEFORE_STATE,
+    OUTPUT,
+    AttentionPooling,
+    Codes,
+    Factor,
+    WindowRecurrence,
+)
 from indrajala_ml.pcg64 import generator_state
 
 K = 2
@@ -46,12 +53,20 @@ WINDOW: list[LayerSpec] = [
     LayerNorm(),
     DIGITS,
 ]
-RECURRENCE = WindowRecurrence(3, Codes(4))
+RECURRENCE = WindowRecurrence((Factor(3, Codes(4)),))
+# factored states (the factored-state workplan, stage 4): two factors of their own sizes, pooling
+# the tokens before the first StateInput (D10); and three, one continuous, each cell reading the
+# others' states
+FACTORED = WindowRecurrence((Factor(2, Codes(4)), Factor(3, Codes(3))), pooling=AttentionPooling(BEFORE_STATE))
+FACTORED_CROSS = WindowRecurrence((Factor(2, Codes(4)), Factor(1, None), Factor(3, Codes(3))), cross=True)
+RECURRENCES = {"one factor": RECURRENCE, "two factors": FACTORED, "three factors, crossed": FACTORED_CROSS}
 STEP = 1e-6
 
 
-def _network(window: list[LayerSpec] = WINDOW, seed: int = 7, rule: Any = None) -> WindowRecurrentArrayNetwork:
-    return WindowRecurrentArrayNetwork.randomized((K,), window, RECURRENCE, rule or SGD(), seed=seed)
+def _network(
+    window: list[LayerSpec] = WINDOW, seed: int = 7, rule: Any = None, recurrence: WindowRecurrence = RECURRENCE
+) -> WindowRecurrentArrayNetwork:
+    return WindowRecurrentArrayNetwork.randomized((K,), window, recurrence, rule or SGD(), seed=seed)
 
 
 def _batch(windows: int, examples: int = 3, seed: int = 11) -> tuple[FloatArray, list[tuple[int, ...]]]:
@@ -72,6 +87,11 @@ def _trained(network: WindowRecurrentArrayNetwork) -> list[_Trained]:
     return [cast("_Trained", layer) for layer in [*network.layers, *network.parts] if hasattr(layer, "parameters")]
 
 
+def _factor(network: WindowRecurrentArrayNetwork) -> Any:
+    # the state's one factor's parts: its pooling, cell, codes and initial state
+    return network.recurrence_layer.factors[0]
+
+
 def _identity_codes(network: WindowRecurrentArrayNetwork) -> None:
     # the codes as the identity, so every state is the cell's output and the loss differentiable
     def forward(H: FloatArray) -> FloatArray:
@@ -80,9 +100,10 @@ def _identity_codes(network: WindowRecurrentArrayNetwork) -> None:
     def backward(dQ: FloatArray, weight: float) -> FloatArray:
         return dQ
 
-    codes: Any = network.codes
-    codes.forward_batch = forward
-    codes.backward_batch = backward
+    for factor in network.recurrence_layer.factors:
+        if factor.codes is not None:
+            factor.codes.forward_batch = forward
+            factor.codes.backward_batch = backward
 
 
 def _gradients(network: WindowRecurrentArrayNetwork, X: FloatArray, labels: list[tuple[int, ...]]) -> list[FloatArray]:
@@ -107,12 +128,14 @@ def _numeric(network: WindowRecurrentArrayNetwork, X: FloatArray, labels: list[t
 
 
 @pytest.mark.parametrize("windows", [1, 2, 3])
-def test_the_gradient_through_the_windows_matches_central_differences(windows: int):
-    network = _network()
+@pytest.mark.parametrize("recurrence", RECURRENCES)
+def test_the_gradient_through_the_windows_matches_central_differences(recurrence: str, windows: int):
+    network = _network(recurrence=RECURRENCES[recurrence])
     rng = np.random.default_rng(3)
     # every part away from its starting point, so no gradient is zero by symmetry
-    network.pooling.q = rng.normal(size=network.pooling.q.shape)
-    network.initial_state.c = rng.normal(size=network.initial_state.c.shape)
+    for factor in network.recurrence_layer.factors:
+        factor.pooling.q = rng.normal(size=factor.pooling.q.shape)
+        factor.initial_state.c = rng.normal(size=factor.initial_state.c.shape)
     _identity_codes(network)
     X, labels = _batch(windows)
     analytic = _gradients(network, X, labels)
@@ -121,7 +144,7 @@ def test_the_gradient_through_the_windows_matches_central_differences(windows: i
     for a, n in zip(analytic, numeric, strict=True):
         np.testing.assert_allclose(a, n, rtol=1e-5, atol=1e-7)
     # the state carries gradient back: the initial state's and the first StateInput's are not zero
-    assert np.any(network.initial_state.c != 0.0)
+    assert np.any(_factor(network).initial_state.c != 0.0)
 
 
 @pytest.mark.parametrize("windows", [1, 3])
@@ -130,7 +153,7 @@ def test_the_codes_losses_count_every_snapped_state_once_at_one_over_the_windows
     # the initial state's snap and each window's; and each snap passes its gradient straight
     # through plus the commitment's, 2 * commitment * (h - e) / W
     network = _network()
-    codes = network.codes
+    codes = _factor(network).codes
     backward = codes.backward_batch
     snaps: list[tuple[FloatArray, FloatArray, Any, FloatArray, FloatArray]] = []
 
@@ -221,27 +244,27 @@ def test_state_codes_are_each_states_nearest_code_through_the_windows():
     codes = network.state_codes(X)
     assert len(codes) == 4 and all(len(example) == 3 + 1 for example in codes)
     # the same states, window by window, through the parts
-    C = network.initial_state.forward_batch(4)
-    expected = [network.codes.nearest(C).tolist()]
-    C = network.codes.forward_batch(C)
+    C = _factor(network).initial_state.forward_batch(4)
+    expected = [_factor(network).codes.nearest(C).tolist()]
+    C = _factor(network).codes.forward_batch(C)
     for w in range(3):
         _, C = network._window_forward(network._window(X, w), C)
-        expected.append(network.codes.indices.tolist())
-    assert codes == [list(example) for example in zip(*expected, strict=True)]
+        expected.append(_factor(network).codes.indices.tolist())
+    assert codes == [[(code,) for code in example] for example in zip(*expected, strict=True)]
 
 
 # a continuous state (the window-recurrent claims workplan, stage 4)
 
-CONTINUOUS = WindowRecurrence(3, None)
+CONTINUOUS = WindowRecurrence((Factor(3, None),))
 
 
 @pytest.mark.parametrize("windows", [1, 3])
 def test_a_continuous_states_gradient_matches_central_differences(windows: int):
     network = WindowRecurrentArrayNetwork.randomized((K,), WINDOW, CONTINUOUS, SGD(), seed=7)
-    assert network.codes is None and len(network.parts) == 3
+    assert _factor(network).codes is None and len(network.parts) == 3
     rng = np.random.default_rng(3)
-    network.pooling.q = rng.normal(size=network.pooling.q.shape)
-    network.initial_state.c = rng.normal(size=network.initial_state.c.shape)
+    _factor(network).pooling.q = rng.normal(size=_factor(network).pooling.q.shape)
+    _factor(network).initial_state.c = rng.normal(size=_factor(network).initial_state.c.shape)
     X, labels = _batch(windows)
     for a, n in zip(_gradients(network, X, labels), _numeric(network, X, labels), strict=True):
         np.testing.assert_allclose(a, n, rtol=1e-5, atol=1e-7)
@@ -252,7 +275,7 @@ def test_a_continuous_state_is_the_snapped_networks_with_identity_codes_by_bits(
     snapped = _network(rule=Adam())
     _identity_codes(snapped)
     continuous = WindowRecurrentArrayNetwork((K,), WINDOW, CONTINUOUS, Adam())
-    codes_entry = len(snapped.layers) + snapped.parts.index(snapped.codes)
+    codes_entry = len(snapped.layers) + snapped.parts.index(_factor(snapped).codes)
     continuous.restore([entry for i, entry in enumerate(snapped.snapshot()) if i != codes_entry])
     X, labels = _batch(3)
     for network in (snapped, continuous):
@@ -269,3 +292,59 @@ def test_a_continuous_state_has_no_codes_to_report():
     for call in (lambda: network.state_codes(X), network.first_step):
         with pytest.raises(AssertionError, match="no codes"):
             call()
+
+
+# the factored state (the factored-state workplan, stage 4)
+
+
+def test_a_factored_states_codes_are_a_tuple_of_each_factors():
+    network = _network(recurrence=FACTORED)
+    X, _ = _batch(3, examples=4)
+    states = network.state_codes(X)
+    assert len(states) == 4 and all(len(example) == 3 + 1 for example in states)
+    first, second = network.recurrence_layer.factors
+    C = network.recurrence_layer.first_state(4)
+    expected = [list(zip(first.codes.indices.tolist(), second.codes.indices.tolist(), strict=True))]
+    for w in range(3):
+        _, C = network._window_forward(network._window(X, w), C)
+        expected.append(list(zip(first.codes.indices.tolist(), second.codes.indices.tolist(), strict=True)))
+    assert states == [list(example) for example in zip(*expected, strict=True)]
+    # each factor's codes are its own: its state's columns snapped to them
+    assert network.recurrence_layer.H.shape == (4, 5)
+    assert np.array_equal(C[:, :2], first.codes.E[first.codes.indices])
+    assert np.array_equal(C[:, 2:], second.codes.E[second.codes.indices])
+
+
+@pytest.mark.parametrize("cross", [False, True])
+@pytest.mark.parametrize("reads", [BEFORE_STATE, OUTPUT])
+def test_a_factors_next_state_reads_the_others_only_through_the_cross_term_or_the_output_layers_tokens(
+    reads: str, cross: bool
+):
+    # the cross-term off (D1's default) and the poolings before the first StateInput (D10), factor
+    # 1's next state is a function of its own state and the window's columns: the second factor's
+    # state changed leaves it by bits; with the cross-term, or pooling the tokens the StateInputs
+    # have added the whole state to, it moves
+    recurrence = WindowRecurrence((Factor(2, None), Factor(3, None)), cross=cross, pooling=AttentionPooling(reads))
+    network = _network(recurrence=recurrence)
+    rng = np.random.default_rng(5)
+    X, _ = _batch(1, examples=4)
+    C = rng.normal(size=(4, 5))
+    moved = C.copy()
+    moved[:, 2:] = rng.normal(size=(4, 3))
+    _, before = network._window_forward(X, C)
+    _, after = network._window_forward(X, moved)
+    assert np.array_equal(before[:, :2], after[:, :2]) == (reads == BEFORE_STATE and not cross)
+    assert not np.array_equal(before[:, 2:], after[:, 2:])
+
+
+def test_a_factored_network_saves_and_loads_by_bits(tmp_path: Path):
+    network = _network(rule=Adam(), recurrence=FACTORED_CROSS)
+    X, labels = _batch(2)
+    network._learn_batch_input(0.01, X, labels)
+    path = str(tmp_path / "factored.json")
+    network.save(path)
+    loaded = load_network(path)
+    assert loaded.recurrence == FACTORED_CROSS
+    for a, b in zip(network.snapshot(), loaded.snapshot(), strict=True):
+        assert all(np.array_equal(x, y) for x, y in zip(a, b, strict=True))
+    assert np.array_equal(loaded.forward_windows(X), network.forward_windows(X))
