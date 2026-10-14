@@ -11,7 +11,7 @@ modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refute
 2026-10-14 17:00: stages 1-7, 7a and 7b done (stage 7: C0 and C3 hold as registered, C4 refuted:
 all at once works more often; certified, neither the codes nor the arm changes the rate); E8b
 stopped (D33, D35); E8c (D35) ran, C8 certified at both rungs, findings next; stages 8-10 to come
-(stage 8 revised by the owner: D36, D37).** The literature it answers to is in
+(stage 8 revised by the owner: D36, D37; its configs in).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -122,6 +122,9 @@ doesn't apply to a continuous state; the long tests are the evidence.
 **Analysis.** Per cell, the working rate at 64 and at 1,024 columns of each arm, Fisher's exact
 test between arms (D4).
 
+**Trimmed (D36):** `k` 4 `s` 4 only, 20 runs against E3's curriculum `m` 16 cell; the `k` 1 `s` 16
+cell dropped with its comparator (D34).
+
 ### E3. The code count (C3, C5)
 
 **Design.** The curriculum arm at the cells of D5, `m` in {3, 4, 6, 8, 16, 32} at `k` 4 `s` 4,
@@ -176,6 +179,11 @@ anything at `k` 1, where it sees one column. As built (D21): the linear window a
 **Analysis.** Working rates against E3's `k` 1 runs at the same `m` (Fisher's exact test). The
 windows of `k` 2 and 4 need the transformer to add inside the window, so the baseline is at `k` 1
 only.
+
+**Re-registered (D37) as existence tests:** the linear window at `k` 1 `s` 16 `m` 16, the curriculum
+to 18 columns (the exclusion bound), 6 seeds, each step certified, stopped at the first certified
+run; the FFN window the same way only if the linear window certifies none within its day. One
+certified network says the window's transformer isn't needed at `k` 1; no rate is compared.
 
 ### E7. Modular division, the second task (C7; D14-D20)
 
@@ -838,14 +846,25 @@ Settled under the owner's standing delegation, with each option's pros and cons:
 7d. **Ran (2026-10-14): `q` 4 3 of 6 certified at step 4, `q` 5 6 of 6 at step 4-5; findings next.** **E8c on `jebel`** (C8 as an existence test; D35): `scripts/window_recurrent_e8c_q4.json` and
    `_q5.json` (a test checks them against E8b's), from `main`, `q` 4 then `q` 5, each stopped at its
    first certified run; then the certified networks' long tests and findings.
-8. **E2 and E6 on `jebel`, revised by D36 and D37** (E2: 20 continuous runs at `k` 4 `s` 4; E6: existence tests, the linear window first): findings. The configs below are as first registered; D36 and D37's configs replace them before the run.
-   **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
-   `s` 4 and `k` 1 `s` 16, a continuous state, seeds 0-19, E3's settings; its keys say
-   `continuous` where E3's say `m<m>`). The harness takes `m` null as a continuous state
-   (`WindowRecurrence(s, None)`) and records no codes for it (`codes_used` null). **E6's config
-   in:** `scripts/window_recurrent_e6.json` (D21), 80 runs at `k` 1 `s` 16, E3's settings; a cell's
-   `"window"` names its window (`WINDOWS`: `transformer`, the default; `linear`; `ffn`), and the
-   run's key carries it (`curriculum-linear-k1-s16-m8-seed0`).
+8. **E2 and E6, revised by D36 and D37** (E2: 20 continuous runs at `k` 4 `s` 4; E6: existence tests,
+   the linear window first): findings. **D36 and D37's configs in** (they replace the first
+   registration, which never ran: `git show 9b8b2b6:scripts/window_recurrent_e6.json`, and E2's
+   40-run config at the same commit). **E2:** `scripts/window_recurrent_e2.json`, 20 runs, the
+   curriculum arm at `k` 4 `s` 4 with a continuous state, seeds 0-19, E3's settings: E3's
+   curriculum `m` 16 cell run by run with `m` null (a test checks it); its keys say `continuous`
+   where E3's say `m16`. The harness takes `m` null as a continuous state (`WindowRecurrence(s,
+   None)`) and records no codes for it (`codes_used` null). On `jebel` after C9, or `pyramidon`
+   at 3 workers if its probe's memory fits. **E6:** `scripts/window_recurrent_e6_linear.json`,
+   then `_ffn.json` only if the linear window certifies none: each `k` 1 `s` 16 `m` 16 on
+   addition (3 states), the curriculum to 18 columns (`m + q - 1`), 6 seeds, each step certified
+   and the study stopped at its first certified run, E8c's settings otherwise (tests check both
+   against D23 and E8c). A cell's `"window"` names its window (`WINDOWS`: `transformer`, the
+   default; `linear`; `ffn`), and the run's key carries it (`curriculum-linear-k1-s16-m16-seed0`).
+   On `pyramidon` (`k` 1). **Probe** (`probe scripts/window_recurrent_e6_linear.json --epochs 2`,
+   `pyramidon`, `c5eca55`): an epoch at 18 columns trains in 4.7 s and screens in 8-75 s, the
+   whole check at 18 takes 62 s, the certificate 0.01 s; peak 290 MB (6 workers about 1.8 GB,
+   sized again from a worker's RSS a few minutes in). The probe's network, trained 2 epochs at 8
+   and 2 at 18 (not the curriculum), certified with 6 states: exploratory, not E6's result.
 9. **E5 on `pyramidon`:** findings. **The tool in:** `scripts/window_recurrent_study.py explore
    CONFIG` (`explore_run`, `explore_summary`): every finished snapped run's last network, its codes
    over the codes property's first 1,000 cases at its check lengths and at 8, 16 and 64, the new
@@ -864,7 +883,7 @@ evaluation rate:
 | --- | --- | --- | --- |
 | E1 | 105 networks: certificate and long tests | `pyramidon` | 3-6 h on one core; under 2 h on six |
 | E3 + E4 | 100 curriculum + 20 all-at-once runs (trimmed from 240, D34) | `jebel` | about 13 h (79 runs before the trim, about 4-5 h after) |
-| E2 + E6 | 40 continuous + 60 baseline runs | `jebel` | about 8 h (4-15) |
+| E2 + E6 | 20 continuous runs (D36) + 6 linear-window runs, 6 FFN-window only if needed (D37) | E2 `jebel`, E6 `pyramidon` | E2 about 2 h (1-5); E6 under 1 h a window (E8c's `k` 1 study took 13 minutes) |
 | E5 | saved networks only | `pyramidon` | under 1 h |
 | E7 | 2 `p` x 2 `k` x 2 `m` x 2 arms x 5 seeds = 80 runs, certified | `jebel` | about 8 h (4-15), longer if 49 states train slowly |
 | E7' | 2 `p` x 2 `m` x 2 arms x 10 seeds at `k` 1 = 80 runs, certified | `jebel` | about 5 h (3-8): E7's `k` 1 runs took 7-15 minutes; more codes, more epochs |
