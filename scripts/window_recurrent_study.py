@@ -4,7 +4,7 @@ window of k columns and hands a snapped state from window to window learns, thro
 window counts, to add base-3 numbers of any length, under indrajala_ml/studies/window_recurrent_study.py's
 harness and indrajala_ml/data/addition_data.py's catalogue.
 
-    python scripts/window_recurrent_study.py run CONFIG.json
+    python scripts/window_recurrent_study.py run CONFIG.json [--workers W] [--arm ARM]
     python scripts/window_recurrent_study.py status CONFIG.json
     python scripts/window_recurrent_study.py report CONFIG.json [--md FILE]
     python scripts/window_recurrent_study.py check NETWORK.json --n N [N ...] [--task T] [--properties ID ...]
@@ -22,7 +22,8 @@ A config names the study's directory (results/, one JSON file per run, and model
 and their networks in format 2), its workers, its settings and its matrix (load_config's
 docstring), its task among them (addition by default, or modular-division-5 or -7:
 indrajala_ml/studies/window_tasks.py). `run` resumes from what is on disk, a run from its last saved step, and prints a line
-per finished run, then the report; it holds the machine lock, as every study. `check` loads a saved
+per finished run, then the report; it holds the machine lock, as every study. `--arm` runs one arm's
+runs only (a study's arms split between machines; keys and directory unchanged). `check` loads a saved
 step's network and runs its task's catalogue (without the held-out property, B3 or U2) at each
 length: its properties, the samples (addition's B1-B3, A3, M1 and M5; division's U1 and U2), the
 cases per stratum (M3, M4; S1, S2) and M3 or S2 at 1, 2, 4, ..., n only (the long tests of
@@ -354,6 +355,9 @@ def main(argv: list[str]) -> int:
             command.add_argument(
                 "--workers", type=int, help="the config's worker count, overridden (a study moved between machines)"
             )
+            command.add_argument(
+                "--arm", choices=wr.ARMS, help="this arm's runs only (a study's arms split between machines)"
+            )
     check = commands.add_parser("check")
     check.add_argument("network", type=Path)
     check.add_argument("--n", type=int, nargs="+", required=True, help="the lengths to check")
@@ -469,6 +473,8 @@ def main(argv: list[str]) -> int:
     if args.command == "run":
         if args.workers is not None:
             study = dataclasses.replace(study, workers=args.workers)
+        if args.arm is not None:
+            study = dataclasses.replace(study, runs=[spec for spec in study.runs if spec.arm == args.arm])
         with machine_lock.study():
             wr.run(study, log=lambda line: print(line, flush=True))
         print(wr.report(study))
