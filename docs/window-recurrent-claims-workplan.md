@@ -10,7 +10,7 @@ than states), with D23 making a feasibility check a rule for every cell. E8 (C8;
 modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refuted. As of
 2026-10-14 17:00: stages 1-7, 7a and 7b done (stage 7: C0 and C3 hold as registered, C4 refuted:
 all at once works more often; certified, neither the codes nor the arm changes the rate); E8b
-stopped (D33, D35); E8c (D35) ran, C8 certified at both rungs, findings next; stages 8-10 to come
+stopped (D33, D35); E8c (D35): C8 holds at both rungs (at least 3 of 6 certified at `q` 4, 6 of 6 at `q` 5, every long-test case passed); stages 8-10 to come
 (stage 8 revised by the owner: D36, D37; E6 ran: the linear window certifies at `k` 1; E2 to run).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
@@ -843,7 +843,7 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    launch; the all-at-once arm stopped after 6 runs, D33), then E8's analysis. If a rung works, the next (D30) is registered at the bound; division waits
    for the factored state (D32). **The curriculum arm stopped too (D35, 2026-10-14)**, in `q` 4's
    first 6 runs: its question moved to E8c.
-7d. **Ran (2026-10-14): `q` 4 3 of 6 certified at step 4, `q` 5 6 of 6 at step 4-5; findings next.** **E8c on `jebel`** (C8 as an existence test; D35): `scripts/window_recurrent_e8c_q4.json` and
+7d. **Done (2026-10-14; findings in the study script's docstring): C8 holds at both rungs, at least 3 of 6 certified at `q` 4 (step 4) and 6 of 6 at `q` 5 (steps 4-5); all 9 pass every long-test case.** **E8c on `jebel`** (C8 as an existence test; D35): `scripts/window_recurrent_e8c_q4.json` and
    `_q5.json` (a test checks them against E8b's), from `main`, `q` 4 then `q` 5, each stopped at its
    first certified run; then the certified networks' long tests and findings.
    **Recorded so far (2026-10-14; findings next):** E8c's results copied from `jebel` with
@@ -856,8 +856,9 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    7-13), 0 wrong outputs and states, no near ties, snap ratios 1.02-7.9, logit leads 1.99-7.92;
    about 2 s and 45 MB each. Counts are "at least" (parallel runs certified before the stop).
    Long tests (U1 and S1 at 128, 256 and 1,024, one worker, from 15:52 at `3b6cb12`, into
-   `e8c-q{4,5}/long-tests/`): q 4 seed 1 passed all 312,000 cases (3,674 s); the rest running,
-   about an hour a network. E8b's exploratory per-step certificates
+   `e8c-q{4,5}/long-tests/`): **every network passed every case**, 312,000 each at `q` 4 and
+   315,000 each at `q` 5, 35-61 minutes a network (`e8c-long-tests.sha256`, a5405265...42e949af,
+   run from `data/window-recurrent`: the 9 results and the log). E8b's exploratory per-step certificates
    (`data/window-recurrent/e8b-q4-steps/`, manifest `e8b-q4-steps.sha256`) were migrated by the
    factored-state stage 5: now f9167e65...ef9099f4, was de4c49be...142b227e.
 8. **E2 and E6, revised by D36 and D37** (E2: 20 continuous runs at `k` 4 `s` 4; E6: existence tests,

@@ -377,6 +377,36 @@ are raw.
   fit (12 of 16 pass step 3) and break at 8-12 columns: memorising, as the exclusion bound (D23)
   predicts for training to 3 windows (12 columns) with 8-16 codes.
 
+Findings (E8c of docs/window-recurrent-claims-workplan.md: the modular sum as an existence test,
+C8, D35), trained on jebel (i7-9700K), indrajala-ml 713ff5f, crate abcba3d7a30e, 6 workers,
+2026-10-14 14:19 to 14:31 (`window_recurrent_e8c_q4.json` then `_q5.json`: E8b's curriculum cell,
+`k` 1, `s` 16, `m` 16, 20 steps, the cap the bound `m + q - 1`; each step's network certified, a
+run ended at its first certified step, the study at its first certified run; 6 seeds a rung).
+Results and models in `data/window-recurrent/e8c-q4/` and `-q5/` (`e8c-q4.sha256`, sha256
+e285e4cb...72b1d83c; `e8c-q5.sha256`, 14f9395b...1b1a139c; 85 files each, run from
+`data/window-recurrent`), log `data/window-recurrent-e8c.log` (4b583cb0...cde878; `q` 4's run
+ended in the report's crash on stopped runs, fixed in #747, after every result was written).
+Strict certificates in `e8c-q4-strict/` and `e8c-q5-strict/` (`e8c-q4-strict.sha256`,
+2503c79c...12901741; `e8c-q5-strict.sha256`, 09ef995d...23b425a6). Long tests (U1 and S1 at 128,
+256 and 1,024, one worker, on pyramidon: `q` 4 from 3b6cb12, `q` 5 from 867d356, the same
+package code) in `e8c-q4/long-tests/` and `e8c-q5/long-tests/`, log
+`e8c-long-tests.log` (`e8c-long-tests.sha256`, a5405265...42e949af, 10 files).
+
+- **C8 holds at both rungs, as an existence claim: at least 3 of 6 networks certify at `q` 4 and
+  6 of 6 at `q` 5.** `q` 4: seeds 1, 3 and 5 at step 4; `q` 5: seeds 0, 2, 4 and 5 at step 4,
+  seeds 1 and 3 at step 5; "at least", since parallel runs stop when the first certifies (the
+  three `q` 4 runs stopped were at steps 4-6). Each run took 4.5-7 minutes. Both verdicts: the
+  harness's per-step certificate (near ties branched) and the strict one (`--snap-ratio 1`).
+- **Each minimises to exactly the `q`-state automaton**, from 7-9 codes reached at `q` 4 and 7-13
+  at `q` 5, with 0 wrong outputs and states and no near tie; snap ratios 1.02-7.91 and logit leads
+  1.99-7.92 (the smallest each network's).
+- **The long tests agree:** every one of the 9 passes every case, 312,000 each at `q` 4 and
+  315,000 each at `q` 5 (35-61 minutes a network).
+- **What changed from E8 and E8b** (no network at `q` 5 in E8, 0 of 20): training past the
+  exclusion bound with the curriculum (E8b's cell), and certifying every step, so a run stops at
+  the machine it found instead of training on past it (E8b: training past a certified step can
+  destroy the network). Learning a counter used about twice its states in codes.
+
 Findings (E6 of docs/window-recurrent-claims-workplan.md, re-registered by D37: the window without
 its transformer, as an existence test), trained on pyramidon (Ryzen 7 3700U), indrajala-ml 9114f21,
 crate abcba3d7a30e, 3 workers (memory: E8c's long tests ran beside it), 2026-10-14 17:06 to 17:26
