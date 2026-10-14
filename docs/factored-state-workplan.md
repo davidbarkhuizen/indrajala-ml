@@ -115,20 +115,27 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
     calls per window; at `k` 1 the overhead shows in seconds per epoch.
   - (b) *Chosen.* **Grouped ops in the crate**: the codes over G codebooks, the G cells (block
     diagonal, the cross-term an input), the G poolings, each one call per window, with numpy
-    mirrors. Pros: fastest; reusable for any multi-factor machine. Cons: a crate stage and a bump
-    before the package.
+    mirrors. **Fused ops preferred** (the owner): where it pays, one op for a window's whole
+    recurrence step (every factor's pooling, cell and codes, forward and backward) over separate
+    grouped ops. Pros: fastest; reusable for any multi-factor machine. Cons: a crate stage and a
+    bump before the package; a fused op's operation order may differ from today's (D6).
   - (c) (a) now, measured; (b) if it matters. Cons: a possible second round of changes.
-- **D6. Persistence and the golden run. Settled: (b).** The owner: "we can't shackle our kernels'
-  futures - having them fast and extensible is one of our main assets".
-  - (a) G = 1 bit-identical: parts factor by factor, the grouped ops reducing to today's
-    arithmetic at G = 1. Pros: the golden run checks the refactor. Cons: constrains the kernels'
+- **D6. Persistence and the golden run. Settled: (c), widened.** The owner: "we can't shackle our
+  kernels' futures - having them fast and extensible is one of our main assets", and "we should
+  have some good reason for abandoning bit-parity, but we should be able to do it".
+  - (a) G = 1 bit-identical, always: parts factor by factor, the grouped ops reducing to today's
+    arithmetic at G = 1. Pros: the golden run checks the refactor. Cons: shackles the kernels'
     layout and operation order.
-  - (b) *Chosen.* **The kernels' layout is free; the golden run's window entries are re-recorded**
-    under measurement.md §8 (a better structure). Pros: the grouped ops are designed for speed and
-    extensibility. Cons: the refactor loses the golden run's check on its window entries, so
-    stages 4-5 carry their own: the numpy and Rust networks in parity, and every migrated certified
-    network (E1, E8) certifying again with the same verdicts (stage 5).
-  - (c) (a) unless it forces a special case.
+  - (b) The kernels' layout free from the start; the window entries re-recorded regardless. Pros:
+    no constraint. Cons: bit-parity, the refactor's strongest check, given up without a reason.
+  - (c) *Chosen.* **Bit-parity at G = 1 is the default; the grouped ops may abandon it for a good
+    reason**: a measured speed-up, or a layout that later work (more factors, the cross-term, other
+    multi-factor machines) needs. Stage 2's PR states the reason, with its measurement if it's
+    speed, and the window entries are then re-recorded under measurement.md §8 and archived.
+    Pros: the check kept when it costs nothing; the kernels never shackled. Cons: a judgement per
+    kernel. When parity goes, stages 4-5 carry the check instead: the numpy and Rust networks in
+    parity, and every migrated certified network (E1, E8) certifying again with the same verdicts
+    (stage 5).
 - **D7. The bound and the codes. Settled: (a) of the existence design.**
   - The exclusion bound `L >= m + q - 1` (experiment-design.md, section 1) counts the network's
     states: with factors, **`m = m_1 m_2`**. Independent factors don't lower it: two counters
@@ -170,14 +177,17 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
 ## Stages
 
 1. **This workplan** (docs).
-2. **The crate's grouped ops** (`indrajala-math-rust`): the codes' forward and backward over G
-   codebooks of their own sizes and widths; the G GRU cells, the cross-term an optional input; the
-   G attention poolings; numpy mirrors; parity tests, stubtest. Layout free (D6).
+2. **The crate's grouped ops** (`indrajala-math-rust`), fused where it pays (D5): the codes'
+   forward and backward over G codebooks of their own sizes and widths; the G GRU cells, the
+   cross-term an optional input; the G attention poolings; a fused recurrence step over them;
+   numpy mirrors; parity tests, stubtest. Bit-parity at G = 1 unless the PR gives a good reason to
+   drop it (D6); a fusion that measurably speeds the step is one.
 3. **Bump `rust/`.**
 4. **The package**: `Factor` and `WindowRecurrence(factors, cross)` with their validation; the
    network on numpy, Rust and pure Python over the grouped ops; format 2's `factors` and parts
    order; the seeded initialisation; the registry walks and fixtures; the cross-term tested.
-   **Golden run's window entries re-recorded** (§8, D6) and archived on both machines; a tier 2
+   The golden run passes, or (if stage 2 dropped parity, D6) its window entries are re-recorded
+   (§8) and archived on both machines; a tier 2
    A/B of a window network's `learn` (G = 1, old against new), since the grouped ops claim speed.
 5. **The migration** (after the claims workplan's stage 7 and E8b finish): saved networks, results
    and certificates rewritten (D9); the hash table committed with it; the docstrings' hashes
@@ -223,6 +233,6 @@ whose estimate exceeds a day.
 ## Timing and checks
 
 Stage 2 adds crate functions (parity tests, no A/B); stage 4 changes `learn` on the window
-network: a tier 2 A/B, and the golden run re-recorded and archived. Stages 5-7 are tier 0 but
+network: a tier 2 A/B, and the golden run passed or (D6) re-recorded and archived. Stages 5-7 are tier 0 but
 change saved data and readers: every migrated certified network re-certified. Studies on `jebel`
 under the machine lock, workers sized by memory, PL1 at 65 W.
