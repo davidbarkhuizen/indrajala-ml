@@ -104,7 +104,16 @@ where you meet a new trap; delete one that no longer holds.
 - **Background Python writing to a log is block-buffered:** a killed job leaves nothing. Use
   `python -u` or `PYTHONUNBUFFERED=1` for any log you may need mid-run.
 - **The harness log prints nothing within a step;** progress shows as `models/<key>/step-<j>.json`
-  files, and `status` (safe over ssh while a study runs) counts them.
+  files, and `status` (safe over ssh while a study runs) counts them. **To see whether a run is
+  going anywhere, `diagnose CONFIG --run KEY --follow`** beside it (one core, about a second a
+  step): each step's accuracy per answer class and each factor's share of the target's
+  coordinates, as each step is saved, until the study ends. Write the stop rule into the study's
+  log before the first diagnosis, not after (C9' seed 5).
+- **A stopped run doesn't resume:** its last step is saved with stop "stopped" and its result
+  written, so `run` skips it and `train_run` would end at that step again. To resume one run (within
+  its study's budget), move its `results/<key>.json` and its stopped step's `step-<j>.json` and
+  `.network.json` aside (not delete), and the stop file; `run` then trains only it, from step
+  `j - 1`'s network.
 - **Don't `git pull` on a machine while a study runs there:** its forkserver may import changed
   modules.
 - **Stopping a study** (only with the owner's say): kill its Python process's whole process group,
@@ -200,7 +209,7 @@ where you meet a new trap; delete one that no longer holds.
 - **`jebel`'s non-interactive shell lacks cargo:** `PATH=$HOME/.cargo/bin:$PATH ./cli build-rust`.
   **`gh` isn't authenticated on `jebel`:** open PRs for its branches from `pyramidon`.
 - **Studies and `ab.py` share `jebel`'s machine lock:** an A/B is refused while a study runs,
-  naming it. A stale line in `~/code/ab-runs/run.lock` means nothing (it's an `flock`).
+  naming it. The lock's record is cleared when the hold ends; a line left in `~/code/ab-runs/run.lock` by a killed job means nothing (it's an `flock`; `machine_lock.holder()` checks the pid).
 - **The permission classifier has blocked `pkill` and `kill` over ssh on `jebel`** at times; a kill
   of a named PID or process group the owner asked for went through. If blocked, ask the owner.
 - **Local `ab.py run` on `pyramidon`** needs `AB_CRATE_REPO=/home/david/code/indrajala-ml/rust` and

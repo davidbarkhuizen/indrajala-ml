@@ -57,7 +57,25 @@ def hold(what: str, kind: Literal["run", "study"], root: Path | None = None) -> 
         since = datetime.datetime.now(datetime.UTC).astimezone().isoformat(timespec="seconds")
         lock.write(json.dumps({"what": what, "kind": kind, "pid": os.getpid(), "since": since}) + "\n")
         lock.flush()
-        yield
+        try:
+            yield
+        finally:
+            lock.truncate(0)  # no record outlives the hold (holder)
+
+
+def holder(root: Path | None = None) -> dict[str, object] | None:
+    """
+    The recorded holder, if its process still lives: read without taking the lock, so a check never
+    refuses a job starting at that moment. A record left by an ended job (or an old plain-text line)
+    is None.
+    """
+    path = (runs_root() if root is None else root) / LOCK_NAME
+    try:
+        fields: dict[str, object] = json.loads(path.read_text())
+        os.kill(int(str(fields["pid"])), 0)
+    except OSError, ValueError, KeyError, TypeError:
+        return None
+    return fields
 
 
 @contextlib.contextmanager

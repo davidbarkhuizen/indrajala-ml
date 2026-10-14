@@ -118,3 +118,22 @@ def test_every_study_command_line_that_trains_is_refused_while_the_machine_is_ta
 ) -> None:
     with machine_lock.hold("run --bench cmd", "run"), pytest.raises(SystemExit, match="not started: "):
         main(argv)
+
+
+def test_the_holder_is_read_while_held_and_gone_after(root: Path) -> None:
+    assert machine_lock.holder() is None
+    with machine_lock.hold("sweep x", "study"):
+        held = machine_lock.holder()
+        assert held is not None and held["what"] == "sweep x"
+    assert machine_lock.holder() is None
+    assert (root / "run.lock").read_text() == ""
+
+
+def test_a_record_left_by_an_ended_process_has_no_holder(root: Path) -> None:
+    ended = subprocess.run(
+        [sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True, check=True
+    )
+    (root / "run.lock").write_text(json.dumps({"what": "x", "kind": "study", "pid": int(ended.stdout)}) + "\n")
+    assert machine_lock.holder() is None
+    (root / "run.lock").write_text("an old ab.py's plain-text line\n")
+    assert machine_lock.holder() is None
