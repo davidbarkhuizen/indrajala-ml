@@ -92,3 +92,29 @@ def test_run_arm_runs_that_arms_runs_only(tmp_path: Path, monkeypatch: pytest.Mo
     (study,) = ran
     assert [spec.key for spec in study.runs] == ["all-at-once-k1-s4-m3-seed0", "all-at-once-k1-s4-m3-seed1"]
     assert study.workers == 2 and study.directory == tmp_path / "study"
+
+
+def test_probe_prints_and_keeps_a_factored_studys_figures(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+    config = tmp_path / "study.json"
+    config.write_text(
+        json.dumps(
+            {
+                "directory": str(tmp_path / "study"),
+                "task": "modular-division-5",
+                "epoch_examples": 64,
+                "screen": 20,
+                "sampled": 30,
+                "relation_sampled": 30,
+                "per_stratum": 2,
+                "steps": 3,
+                "certify_steps": True,
+                "matrix": [{"k": [1], "factors": [[4, 8], [4, 8]], "reads": "before_state"}],
+            }
+        )
+    )
+    out = tmp_path / "probe.json"
+    assert script.main(["probe", str(config), "--epochs", "1", "--json", str(out)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [line.split(":")[0] for line in lines] == ["step 3 epoch 1", "whole check at 3", "certificate"]
+    figures = json.loads(out.read_text())
+    assert [row["step"] for row in figures["epochs"]] == [3] and not (tmp_path / "study").exists()

@@ -17,6 +17,7 @@ harness and indrajala_ml/data/addition_data.py's catalogue.
         --out DIR [--workers W]
     python scripts/window_recurrent_study.py networks CONFIG.json
     python scripts/window_recurrent_study.py verdicts CONFIG.json --certificates DIR --strict DIR [--long-tests DIR]
+    python scripts/window_recurrent_study.py probe CONFIG.json [--steps J ...] [--epochs E] [--json FILE]
 
 A config names the study's directory (results/, one JSON file per run, and models/, each run's steps
 and their networks in format 2), its workers, its settings and its matrix (load_config's
@@ -44,6 +45,10 @@ prints each finished run's last step's network, the one its result's works descr
 certified (the strict certificates' directory) and robustly certified (the branched one's), each with
 its Wilson interval (D4); the runs by works and class; and with the long tests' directory (each
 network's `check --json` as <run>-step-<j>.json), per class the networks tested and every failure.
+`probe` is a study's budget before its launch (wr.probe): its first run's network trained for
+--epochs at each of --steps (default 8 and the last), each epoch's training and screen seconds, the
+whole check at the last step's longest length, a certificate for a snapped state, and the process's
+peak memory after each (measurement.md, section 2: size workers from it and from results' peak_mb).
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
@@ -392,6 +397,11 @@ def main(argv: list[str]) -> int:
     )
     explore.add_argument("--json", type=Path, help="write every run's codes to this file")
     explore.add_argument("--workers", type=int, default=1)
+    probe = commands.add_parser("probe")
+    probe.add_argument("config", type=Path)
+    probe.add_argument("--steps", type=int, nargs="+", help="curriculum steps to time (default: 8 and the last)")
+    probe.add_argument("--epochs", type=int, default=2, help="training epochs at each step")
+    probe.add_argument("--json", type=Path, help="write the probe's figures to this file")
     verdicts = commands.add_parser("verdicts")
     verdicts.add_argument("config", type=Path)
     verdicts.add_argument("--certificates", type=Path, required=True, help="certify's branched certificates")
@@ -448,6 +458,26 @@ def main(argv: list[str]) -> int:
         print(f"{len(compared)} compared, {differ} differ")
         return 1 if differ else 0
     study = wr.load_config(args.config)
+    if args.command == "probe":
+        steps = args.steps or sorted({min(8, study.settings.steps), study.settings.steps})
+        figures = wr.probe(study.runs[0], study.settings, steps, args.epochs)
+        for row in figures["epochs"]:
+            print(
+                f"step {row['step']} epoch {row['epoch']}: train {row['train_seconds']:.1f} s, "
+                f"screen {row['screen_seconds']:.1f} s ({row['screen']:.3f}), peak {row['peak_mb']:.0f} MB",
+                flush=True,
+            )
+        check = figures["check"]
+        print(f"whole check at {check['n']}: {check['seconds']:.1f} s, peak {check['peak_mb']:.0f} MB")
+        if "certificate" in figures:
+            certificate = figures["certificate"]
+            print(
+                f"certificate: {certificate['seconds']:.1f} s, {certificate['states']} states, "
+                f"peak {certificate['peak_mb']:.0f} MB"
+            )
+        if args.json is not None:
+            args.json.write_text(json.dumps(figures, indent=1))
+        return 0
     if args.command == "explore":
         context = multiprocessing.get_context("forkserver")
         with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:

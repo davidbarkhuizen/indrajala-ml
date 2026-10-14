@@ -3,11 +3,10 @@
 **Status: written 2026-10-14, at the owner's request (the claims workplan's D32: "division resumes
 once the recurrence has a factored state, a package change with its own plan"). Decisions D1-D9
 settled with the owner in dialog, each with its options' pros and cons; D10 settled in stage 4,
-when its test showed the factors weren't independent as first described. Stages 2 and 3 done
-(indrajala-math-rust #57, #738); stage 4 is this PR.** The
-infrastructure stages (2-7) are development on `pyramidon` and can start now; the migration
-(stage 5) waits for stage 7 and E8b of the claims workplan to finish writing their files; the
-study (stages 8-9) waits for `jebel`.
+when its test showed the factors weren't independent as first described; D11 in stage 8; D12 (the
+owner) in stage 9, from the probe. Stages 1-4 and 6-8 done; stage 9's budget and tools done, C9's
+run next (the 6-code fallback, D12); stage 5 (the migration) unblocked, after stage 7's analysis
+of the claims workplan reads the old files.**
 
 ## Why
 
@@ -218,10 +217,25 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
   (`scripts/window_recurrent_factored_p5.json`; the fallback,
   `scripts/window_recurrent_factored_p5_fallback.json`, 6 codes a factor and steps 60).
 
+- **D12. C9 launches as the 6-code fallback (the owner, 2026-10-14).** The probe (Cells and
+  budget) puts the registered cell's batch at 38-84 h.
+  - (a) *Chosen.* **The fallback, as D7 registered it**: 6 codes a factor, cap 60
+    (`scripts/window_recurrent_factored_p5_fallback.json`); 16-27 h if no run certifies, far less
+    if one does (the study stops at the first; E8c's counters certified by step 5). Pros: the
+    registration unchanged; the cap is still the bound, so a failure means trained past memorising.
+    Cons: the worst case may pass a day; 6 codes for 5 residues is a thin surplus (1.2; E3 trained
+    well from 1.33).
+  - (b) 8 codes, cap 40, a new cap below the bound. Pros: 6.5-8.5 h; the better surplus; the
+    certificate is the proof at any training length. Cons: departs from D7's cap = bound; a failure
+    says only "not found by 40 columns".
+  - (c) 8 codes, cap 30. Pros: about 4 h. Cons: further below the bound; a failure says least.
+  - (d) The fallback's own probe first. Pros: measured, not modelled. Cons: codes barely move the
+    cost; it would confirm the model.
+
 ## Stages
 
-1. **This workplan** (docs).
-2. **The crate's grouped ops** (`indrajala-math-rust`), fused where it pays (D5): the codes'
+1. **Done (#737).** **This workplan** (docs).
+2. **Done (indrajala-math-rust #57).** **The crate's grouped ops** (`indrajala-math-rust`), fused where it pays (D5): the codes'
    forward and backward over G codebooks of their own sizes and widths; the G GRU cells, the
    cross-term an optional input; the G attention poolings; a fused recurrence step over them;
    numpy mirrors; parity tests, stubtest. Bit-parity at G = 1 unless the PR gives a good reason to
@@ -229,8 +243,8 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    (`recurrence_step_*`) and the codes over G codebooks (`factored_codes_*`); no separate grouped
    pooling or cell ops, which nothing would call. Each factor runs the single-factor ops, so G = 1
    is today's step by bits. The fusion measured 0-10% over per-factor calls (the kernels dominate).
-3. **Bump `rust/`.**
-4. **The package**: `Factor` and `WindowRecurrence(factors, cross)` with their validation; the
+3. **Done (#738).** **Bump `rust/`.**
+4. **Done (#739).** **The package**: `Factor` and `WindowRecurrence(factors, cross)` with their validation; the
    network on numpy, Rust and pure Python over the grouped ops; format 2's `factors` and parts
    order; the seeded initialisation; the registry walks and fixtures; the cross-term tested.
    The golden run passes, or (if stage 2 dropped parity, D6) its window entries are re-recorded
@@ -240,11 +254,11 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    crate's fused step, and pure Python's `RecurrenceLayer`), the poolings' reading point (D10), and
    `scripts/migrate_factored_state.py`, which migrates the saved-model fixtures here and stage 5's
    files later. The certificate and the harness read one-factor states (asserted) until stages 6-7.
-5. **The migration** (after the claims workplan's stage 7 and E8b finish): saved networks, results
+5. **Unblocked (E8b stopped, stage 7 ran); after stage 7's analysis.** **The migration** (after the claims workplan's stage 7 and E8b finish): saved networks, results
    and certificates rewritten (D9); the hash table committed with it; the docstrings' hashes
    updated. Check: every migrated E1 and E8 certified network certifies again, the same
    verdicts.
-6. **The certificate**: tuple states (D4), per-factor near ties, the per-factor readout (D9); tests
+6. **Done (#742).** **The certificate**: tuple states (D4), per-factor near ties, the per-factor readout (D9); tests
    on a hand-built factored machine for division `p` 5 (certifies, its factors read `A` and `B`),
    one holding `A + B` and `A - B` (certifies, named so), and faulty ones (a wrong next code in one
    factor, named in the counterexample). *Built:* `State` tuples through the search (no flat
@@ -254,7 +268,7 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    total). The JSON: `codes` a list per factor, a state a list of codes, `phi` a list of
    `[state, target]` pairs (stage 5 migrates the old certificates to it). A `k` 4 certificate takes
    no longer (49 s against 56 s, one network).
-7. **The harness**: factored cells in configs (`factors`, `cross` in a run's key), tuples in
+7. **Done (#743; the report's fix for stopped runs, #747).** **The harness**: factored cells in configs (`factors`, `cross` in a run's key), tuples in
    `codes_used` and `state_codes`, **certification after every curriculum step with a stop on
    passing** (D7) and **the pool stopped at the first certified run** (D8). *Built:* a config cell
    `{"k": [1], "factors": [[4, 8], [4, 8]], "reads": "before_state"}` (and `"cross"`), its key
@@ -264,7 +278,7 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    certificate, `step-<j>.certificate.json`, its summary in the step) and `stop_at_certified` (a
    `models/stop` file: running workers end their step "stopped" at the next epoch, queued runs
    are cancelled, a later `run` does nothing).
-8. **C9 registered**: the config (`scripts/window_recurrent_factored_p5.json`, its poolings
+8. **Done (#744; the probe in stage 9).** **C9 registered**: the config (`scripts/window_recurrent_factored_p5.json`, its poolings
    `BEFORE_STATE`, D10), a test checking it
    against D7-D8 (cells, cap = `m_1 m_2 + p^2 - 1`), and the probe: two epochs at 88 columns on
    `jebel`, its epoch time giving the batch's estimate. Over a day: the 6-code fallback, its probe.
@@ -273,8 +287,11 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    read only `m` before, so skipped factored cells); C9's own test pins the cell, seeds, cap and
    E8b's settings. The probe waits for `jebel` (E8b's curriculum arm holds it); its figures go
    into stage 9's launch.
-9. **C9's run on `jebel`** (6 workers, memory measured first), then the findings: the certified
+9. **Budget and tools done (this PR); the run next.** **C9's run on `jebel`** (6 workers, memory measured first), then the findings: the certified
    network's factors (D9), its long tests (U1, S1), or "not found within the budget".
+   **Launch (D12):** the fallback config, 6 workers (592 MB peak each, 3.6 GB of `jebel`'s 31 GB).
+   *Built for it:* `probe` (the budget's figures, `--json` keeps them) and `peak_mb` in every
+   result (its worker's peak memory, for sizing the next study's workers; measurement.md, section 2).
 10. **Retire this workplan**; leftovers to next-steps.md.
 
 ## Cells and budget
@@ -292,6 +309,15 @@ Budget: one day on `jebel`, one batch of 6 seeds. Scaled from E8b's estimate (1-
 run at 20 columns), a run to the cap is 4-13 h at 88 and 4-9 h at 60, before the grouped ops'
 speed; a run that certifies stops early. The probe (stage 8) sets the figure; nothing launches
 whose estimate exceeds a day.
+
+**The probe (2026-10-14, `jebel`, `713ff5f`; `scripts/window_recurrent_study.py probe` reproduces it):**
+C9's seed 0, two epochs at step 8 (windows 1-8) and at step 88 (1-88). Training 6.8 s an epoch at
+step 8 and 53.4 s at 88; the screen 0.6 s and 61 s (190 s in a step's first epoch, which builds
+its screen cases); the whole check at 88 columns 215 s (a passing step checks every length 1..j);
+peak memory 592 MB (the check). Training grows with the step, the screen and the checks with its
+square. Modelled to the cap: **88 is 38 h** for a run that plateaus every step (31 epochs a step,
+E8b's), 61 h at 50 epochs, 84 h for one passing every step in 3 epochs; **60 is 16 h, 25 h and
+27 h**. So the batch at 88 exceeds a day, and D7's fallback applies (D12).
 
 ## Not in this plan
 

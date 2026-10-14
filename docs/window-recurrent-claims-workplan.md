@@ -7,7 +7,10 @@ ran. Decisions D1-D20 settled (D13 and D14 by the owner, the rest under the owne
 delegation), each with its options' pros and cons. Stages 1-5 done (stage 2 refined D3's snap margin: a near tie branches). E7' (C7'; D23-D26)
 added 2026-10-13 at the owner's request, to run before stage 7, after E7's design flaw (p 7 at `m` 32 has fewer codes
 than states), with D23 making a feasibility check a rule for every cell. E8 (C8; D27-D30), the
-modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refuted.** The literature it answers to is in
+modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refuted. As of
+2026-10-14 15:30: stages 1-6, 7a and 7b done; stage 7 (E3, E4) ran, its analysis under way; E8b
+stopped (D33, D35); E8c (D35) ran, C8 certified at both rungs, findings next; stages 8-10 to come
+(stage 8 to be put to the owner for trimming to existence tests first).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -735,7 +738,7 @@ Settled under the owner's standing delegation, with each option's pros and cons:
 
 ## Stages
 
-1. **This workplan and the literature review.** Docs only.
+1. **Done.** **This workplan and the literature review.** Docs only.
 2. **Done.** **The certificate and the long tests** (tier 0): `indrajala_ml/studies/window_recurrent_certificate.py`
    (the enumeration, `phi`, the margins, the minimised machine) and a `certify` command and
    `check --properties`/`--sampled` options in `scripts/window_recurrent_study.py`. Tests: the
@@ -768,7 +771,7 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    --workers W` (D9's lengths and sizes, a network done before skipped), `check`'s results file
    for each; for E7, `--properties U1 S1 S2` (D22). It reproduces E1's results at 128 exactly (two
    networks, on `pyramidon`).
-7. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
+7. **Ran (2026-10-14, 120 of 120 runs, 65 working); analysis under way: C0 reproduced 15 of 15, certificates running.** **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
    about 240 runs; C0's reruns compared first): findings; E1's certificate run on every network.
    **Config in:** `scripts/window_recurrent_e3_e4.json`, 240 runs (the curriculum arm at `k` 4
    `s` 4, `m` 3, 4, 6, 8, 16, 32, and at `k` 1 `s` 16, `m` 3, 4, 8, 16; the all-at-once arm at
@@ -788,18 +791,18 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    their task's minimal state count of codes (each target machine is minimal with every state
    reachable, `test_window_tasks`), E7's `p` 7 `m` 32 the one recorded exception. Then E7's
    analysis: certified and long-tested, findings.
-7b. **E8 on `pyramidon`, then `jebel`** (C8; D27-D30), from 2026-10-14, beside stage 7.
+7b. **Done (2026-10-14, findings #731).** **E8 on `pyramidon`, then `jebel`** (C8; D27-D30), from 2026-10-14, beside stage 7.
    **In:** the modular sum (`modular-sum-q`: `window_tasks.ModularSum`, `modular_data.sum_catalogue`;
    the data module renamed from `modular_division_data`, division's cases unchanged),
    `scripts/window_recurrent_e8_q4.json` and `_q5.json` (a test checks them), `run --workers`.
    Then E7's analysis, and the next rung (D30).
-7c. **E8b on `pyramidon`** (C8; D23's exclusion bound, D31): `scripts/window_recurrent_e8b_q4.json`
+7c. **Stopped (D33, D35); both arms recorded above.** **E8b on `pyramidon`** (C8; D23's exclusion bound, D31): `scripts/window_recurrent_e8b_q4.json`
    and `_q5.json` (a test checks them, and every config after E8 is tested against the bound), the
    arms split by `run --arm` (all-at-once on `pyramidon`, curriculum on `jebel` after stage 7: E8b's
    launch; the all-at-once arm stopped after 6 runs, D33), then E8's analysis. If a rung works, the next (D30) is registered at the bound; division waits
    for the factored state (D32). **The curriculum arm stopped too (D35, 2026-10-14)**, in `q` 4's
    first 6 runs: its question moved to E8c.
-7d. **E8c on `jebel`** (C8 as an existence test; D35): `scripts/window_recurrent_e8c_q4.json` and
+7d. **Ran (2026-10-14): `q` 4 3 of 6 certified at step 4, `q` 5 6 of 6 at step 4-5; findings next.** **E8c on `jebel`** (C8 as an existence test; D35): `scripts/window_recurrent_e8c_q4.json` and
    `_q5.json` (a test checks them against E8b's), from `main`, `q` 4 then `q` 5, each stopped at its
    first certified run; then the certified networks' long tests and findings.
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.

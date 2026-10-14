@@ -96,6 +96,13 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   long-test workers swapped `jebel` (31 GB) into unreachability. Start with fewer workers, check
   `free -m` after the first minutes, and stop the pool's process group at once if swap grows. On
   `pyramidon`, `certify` at `k` 4 uses at most 3 workers.
+- **A study's budget comes from its probe, kept in the repo.** `window_recurrent_study.py probe
+  CONFIG` times the first run's network at chosen curriculum steps (training, screen, the whole
+  check at the longest length, a certificate) with the process's peak memory after each, and
+  `--json` keeps the figures for the workplan. Every window-recurrent result records `peak_mb`,
+  its worker's peak resident memory (a pool's workers run several runs, so it bounds the run's),
+  which the next study's worker count can be read from. Other studies have no such probe or field
+  yet: add them when a study of that kind is next planned.
 - **Studies keep their raw results.** Every study's `--out` defaults to
   `data/studies/<study>/<stage>-<YYYY-MM-DD-HHMM>.json` (gitignored): its results with the
   provenance of the sweep (commit, crate hash, host, arguments, start, `dirty`). The addition and
@@ -339,6 +346,11 @@ What to do next:
 
 ## 7. Gotchas
 
+- **`ab.py run` checks the load before the machine profile.** On a busy machine a host with no
+  profile waits out the load (up to 5 minutes) and is refused for the load, not the profile;
+  `tests/scripts/test_ab.py::test_a_host_without_a_profile_is_refused` fails that way when the
+  test machine is loaded (2026-10-14, `pyramidon` at a load of 11). Not fixed yet: the profile
+  check should come first, as it needs no waiting.
 - **The namespace package** (above): an A/B run from the repository's own directory once came
   out right only because of the order `PYTHONPATH` gave, and nothing checked it.
 - **`data/` is relative to the working directory** (`prepared_dataset_timing.py` reads
