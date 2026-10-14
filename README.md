@@ -916,7 +916,9 @@ a reset column whole.
 The causal mask neither helps nor hurts from 2 layers on (the findings are in the script's
 docstring; the results and threshold models are archived in `indrajala-models`). The
 window-recurrent adder ([docs/window-recurrent-adder-workplan.md](docs/window-recurrent-adder-workplan.md))
-checks the same catalogue at lengths up to 64.
+checks the same catalogue at lengths up to 64. What the adder studies have found so far, from
+this study to the window-recurrent claims, is summarised in
+[docs/adder-findings.md](docs/adder-findings.md).
 
 ## Refactoring
 
