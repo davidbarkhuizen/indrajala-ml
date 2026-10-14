@@ -328,6 +328,54 @@ a4ca4818...ee347172).
   are equivalent). E8 trained to 3 columns with 32 codes, where 35-36 were needed; so did every
   earlier experiment (addition's `k` 1 needed 6-18, its `k` 4 trained to 12). E8b is E8 trained
   past the bound.
+
+Findings (E3 and E4 of docs/window-recurrent-claims-workplan.md, its stage 7: the code count and the
+curriculum against all at once, C3-C5; C0's reruns), trained on jebel (i7-9700K), indrajala-ml
+cf6ac86, crate 8c20e510c9a9, 6 workers, finished 2026-10-14 12:41 (`window_recurrent_e3_e4_trimmed.json`,
+D34: `k` 4 `s` 4, the curriculum at `m` 3, 4, 6, 8 and 16 and all at once at `m` 16, seeds 0-19,
+120 runs). Results and models in `data/window-recurrent/e3-e4/` (`e3-e4.sha256`, sha256
+448dd136...652dda8a), log `data/window-recurrent-e3-e4.log` (52f0b1df...133d5f0a). Every run's
+last network certified on pyramidon at 9dce80e, both verdicts (`e3-e4/certificates.sha256`,
+37c1c694...42a38caa; `certificates-strict.sha256`, a68ed4f2...3b74f7a3; logs `certify-branched.log`
+60f328ea...b0d93bc8, `certify-strict.log` f8ffc9b7...7dc7a7f3). The registered tests are D4's on
+the working rate (W10, exact to 16 columns and past); the certified rate beside them is a
+measurement. Holm's correction over C2-C4 and C6 waits for C2 and C6 (stage 8); the p values here
+are raw.
+
+| arm | `m` | working | certified (strict) | robustly certified | working, not certified |
+| --- | --- | --- | --- | --- | --- |
+| curriculum | 3 | 3/20 (0.05-0.36) | 3/20 (0.05-0.36) | 2/20 | 0 |
+| curriculum | 4 | 11/20 (0.34-0.74) | 10/20 (0.30-0.70) | 10/20 | 1 |
+| curriculum | 6 | 8/20 (0.22-0.61) | 6/20 (0.15-0.52) | 6/20 | 2 |
+| curriculum | 8 | 11/20 (0.34-0.74) | 7/20 (0.18-0.57) | 6/20 | 4 |
+| curriculum | 16 | 13/20 (0.43-0.82) | 8/20 (0.22-0.61) | 8/20 | 5 |
+| all at once | 16 | 19/20 (0.76-0.99) | 12/20 (0.39-0.78) | 11/20 | 7 |
+
+- **C0 holds: 15 of 15 reruns reproduced exactly** (the matrix's `k` 4 `s` 4 runs, 6b94933,
+  against their reruns here: results up to timings, and every step's weights, optimizer state and
+  generator, `compare`).
+- **C3, as registered, holds: the working rate rises with `m`** (Cochran-Armitage over `m` 3-16,
+  scores `m`: z 2.45, p 0.014). **But the certified rate doesn't** (z 0.79, p 0.43): from `m` 4 on
+  it stays near 0.3-0.5, and the extra codes buy working networks that aren't the automaton
+  (working but not certified: 0, 1, 2, 4, 5 of 20 from `m` 3 to 16). Under C1's restatement
+  (certified is what works at every length), extra codes don't make training find the automaton
+  more often; `m` 3, exactly the automaton's size, is the one low cell (3 of 20).
+- **C4, as registered, is refuted: all at once works more often** (19 of 20 against the
+  curriculum's 13 of 20 at `m` 16, Fisher's exact p 0.044), on far fewer examples (working runs'
+  medians 393,216 against 7,798,784, Mann-Whitney p 2e-6, every all-at-once run below every
+  curriculum one). Certified, the arms don't differ (12 against 8 of 20, p 0.34): all at once's
+  extra working runs are mostly ones the certificate fails (7 of its 19).
+- **Every certified network, in every cell, minimises to the 3-state carry automaton**, from 3
+  reachable codes (at `m` 3) to 10 (all at once). Of the 19 working networks not certified, 14 give
+  a wrong digit and 5 a wrong carry on some reachable code and window that the sampled tests to 64
+  columns missed; none fails only on a label's margin.
+- **C5 (a measurement):** the rates above with their Wilson intervals; at 20 seeds a cell they
+  span about 0.4 each.
+- **The steps:** the curriculum's step 1 (one window) plateaus in all 100 runs; every working run
+  passes step 3 (lengths 1-3), 19 of the 46 at step 2 already. The failures differ with `m`: at `m`
+  3-6 they never fit (all three steps plateau, 36 of the 38 failures there), at `m` 8-16 they mostly
+  fit (12 of 16 pass step 3) and break at 8-12 columns: memorising, as the exclusion bound (D23)
+  predicts for training to 3 windows (12 columns) with 8-16 codes.
 """
 
 from __future__ import annotations

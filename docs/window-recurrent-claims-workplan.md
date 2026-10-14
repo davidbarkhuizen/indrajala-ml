@@ -8,7 +8,8 @@ delegation), each with its options' pros and cons. Stages 1-5 done (stage 2 refi
 added 2026-10-13 at the owner's request, to run before stage 7, after E7's design flaw (p 7 at `m` 32 has fewer codes
 than states), with D23 making a feasibility check a rule for every cell. E8 (C8; D27-D30), the
 modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refuted. As of
-2026-10-14 15:30: stages 1-6, 7a and 7b done; stage 7 (E3, E4) ran, its analysis under way; E8b
+2026-10-14 17:00: stages 1-7, 7a and 7b done (stage 7: C0 and C3 hold as registered, C4 refuted:
+all at once works more often; certified, neither the codes nor the arm changes the rate); E8b
 stopped (D33, D35); E8c (D35) ran, C8 certified at both rungs, findings next; stages 8-10 to come
 (stage 8 to be put to the owner for trimming to existence tests first).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
@@ -771,7 +772,14 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    --workers W` (D9's lengths and sizes, a network done before skipped), `check`'s results file
    for each; for E7, `--properties U1 S1 S2` (D22). It reproduces E1's results at 128 exactly (two
    networks, on `pyramidon`).
-7. **Ran (2026-10-14, 120 of 120 runs, 65 working); analysis under way: C0 reproduced 15 of 15, certificates running.** **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
+7. **Done (2026-10-14, 120 of 120 runs; findings in the study script's docstring).** **C0 holds**
+   (15 of 15 reproduced exactly). **C3 holds as registered** (the working rate rises with `m`:
+   Cochran-Armitage p 0.014) **but not certified** (p 0.43; the extra codes buy working networks
+   that aren't the automaton). **C4 is refuted: all at once works more often** (19 of 20 against 13
+   of 20, Fisher p 0.044, on about 20 times fewer examples, Mann-Whitney p 2e-6); certified, the
+   arms don't differ (12 against 8, p 0.34). Every certified network minimises to the carry
+   automaton. Holm's correction over C2-C4 and C6 waits for stage 8. C5: the rates with Wilson
+   intervals, about 0.4 wide at 20 seeds. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
    about 240 runs; C0's reruns compared first): findings; E1's certificate run on every network.
    **Config in:** `scripts/window_recurrent_e3_e4.json`, 240 runs (the curriculum arm at `k` 4
    `s` 4, `m` 3, 4, 6, 8, 16, 32, and at `k` 1 `s` 16, `m` 3, 4, 8, 16; the all-at-once arm at
