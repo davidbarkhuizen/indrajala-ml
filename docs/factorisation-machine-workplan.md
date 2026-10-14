@@ -11,7 +11,7 @@ owner: **the controllers' state is factored, one factor per register**, R1 the c
 first test. The owner granted the
 study one multi-day run, the concluding one (D14). D11 revised by the owner (2026-10-14): F1 keeps
 the calls given; F2's second arm learns them, factored per call level, in place of the inlined
-flat controller (which multiplies control states as a single codebook multiplied division's). No stage started.** It follows
+flat controller (which multiplies control states as a single codebook multiplied division's). F1 reversed by the owner (2026-10-14, evening; D15-D17): no traces and no given decomposition; the network learns from inputs and outputs only and finds its own decomposition ("we can't hand the network the decomposition, it should learn it itself"), trained with the exact machine forward and straight-through gradients backward (D16), and claimed in tiers, the main route a modular certificate against the specifications of the subroutines it learned (D17). Items superseded by the reversal are marked so where they stand. No stage started.** It follows
 [factorisation-note.md](factorisation-note.md), which states why the window-recurrent network
 can't factor and what a machine that can would need (P1-P5); this plan builds that machine. It
 reuses the window-recurrent network, its target-machine certificate (the claims workplan's
@@ -31,11 +31,16 @@ integer. Its cost would be that algorithm's.
 
 That is the claim this plan works towards, registered here before any data:
 
-> **F1.** Networks with a factored state, one factor per register of the program, trained on
-> execution traces of a factoring program, one network per subroutine, each run as its
-> subroutine's controller on a tape machine with an exact call stack, are each certified equal to
-> that subroutine's controller; so the machine factors every integer
-> correctly, at any length, in the program's number of steps.
+> **F1 (reversed, D15).** A network with a factored state (a factor per register and per call level,
+> bounded depth), run as the controller of a tape machine with an exact call stack and trained on
+> **inputs and outputs only** (`N` on the input tape; its prime factors on the output tape; no
+> traces, no reference states, no given subroutines), learns a program that factors every integer
+> correctly, shown in the tiers of D17: **certified** (a proof at every length, by mapping onto a
+> known program or by the modular certificate), **partially certified** (every learned subroutine
+> certified, the loop verified to a bound), or **verified to a bound** (never called certified).
+>
+> *As first registered (superseded):* networks trained on execution traces of a factoring program,
+> one per subroutine, each certified equal to that subroutine's controller.
 
 F1 is an **existence** claim (experiment-design.md, section 2): one certified network per
 controller proves it, however found; no rates, arms or controls. Running out of a rung's budget
@@ -43,11 +48,10 @@ records "not found within the budget", not a refutation, and stops the ladder th
 
 And, as the research step beyond it:
 
-> **F2.** The same holds with less than full traces per subroutine (inputs and outputs only), or
-> for one network that learns the call structure itself, its state factored per register and per
-> call level (bounded depth), never inlined (D11).
+> **F2 (superseded by D15).** Its two arms, inputs and outputs only, and the call structure learned
+> by one factored network, are both now part of F1.
 
-F1 is engineering plus E1's method, *if* the method reaches controllers of the rungs' sizes:
+*Before D15:* F1 was engineering plus E1's method, *if* the method reached controllers of the rungs' sizes:
 today it has certified machines of 3 states (addition, E1) and 4 (the modular sum, E8, 1 of 20),
 not 5 (E8 `q` 5, 0 of 20; E8b's curriculum arm pending), and not division's 25 (E7, E7'). The
 ladder (D14) is built to find where it stops. F2 is open (Déletang et al. 2022 found no
@@ -439,12 +443,89 @@ Settled under the owner's standing delegation, with each option's pros and cons;
   - (b) A matrix per rung (codes, arms, 20 seeds). Pros: rates with intervals. Cons: against the
     owner's short-focused rule; days of `jebel` for questions F1 doesn't ask.
 
+- **D15. What F1 learns from. Settled: (a), by the owner (2026-10-14, evening).** The owner: "we
+  need to reverse F1 - we can't hand the network the decomposition - it should learn it
+  unsupervised itself".
+  - (a) *Chosen.* **Inputs and outputs only; the decomposition learned.** The network is trained on
+    `N` and its factors; the trace, the reference states, the per-subroutine controllers and the
+    call structure are not given. "Unsupervised" is as to the method: the answer stays the
+    target, or nothing defines the task. One factored network (a factor per register and per call
+    level, as D11 (b)); every ladder rung (R1 copy and compare, R2 add, ...) learned from scratch
+    from its own inputs and outputs, no trained subroutine carried into a later rung (that would
+    hand the decomposition over again). Pros: the claim is discovery, not imitation; it subsumes
+    F2. Cons: the hardest form; inputs-and-outputs learning has stalled well short of this before
+    (RL-NTM solved copy, duplicate, reverse and repeat-copy, nothing superlinear, and only by a
+    curriculum: Zaremba & Sutskever 2015; NRAM generalised on its easier tasks: Kurach et al.
+    2016); the certificate loses its reference (D17).
+  - (b) Traces, as first registered. Cons: hands the network the decomposition (the owner's
+    objection); the method is NPI's (Reed & de Freitas 2016), and with recursion given, its proof
+    is Cai et al.'s (2017).
+  Superseded by it: D3's per-subroutine controllers as the learned objects (the DSL still compiles
+  the reference programs, now the oracle, the long runs' check and the tier-1 reference), D9's
+  examples (I4's traces become the reference executor's diagnostics, not training data), D11's
+  arms (both now F1), and D14's "each controller a rung" (now each task a rung).
+- **D16. How it learns. Settled: hard forward, soft backward, by the owner (2026-10-14, evening).**
+  - (a) *Chosen.* **The exact machine forward; straight-through gradients backward.** Every action
+    (a write, a move, a call, a return) is a hard choice in the forward pass, so the tapes, heads
+    and stack stay exact in training as at test, and the machine trained is the machine certified;
+    the backward pass is relaxed: straight-through Gumbel-softmax for the actions (Jang et al. 2017;
+    Bengio et al. 2013), soft attention over tape cells for the reads' gradients, as the snapped
+    state already trains (VQ's straight-through). With it: **a dense, verifiable loss on the answer,
+    not the method** (each factor written scored as it is written: divides `N`, is prime, the
+    product so far divides `N`); **expert iteration on its own verified runs** (Anthony et al.
+    2017; Zelikman et al. 2022: runs whose output verifies become its training traces, its own,
+    not ours); **a curriculum over input size** (small `N`, short runs, where a near-random
+    controller sometimes succeeds, which starts the iteration; RL-NTM needed one). More layers are
+    acceptable (the owner). Pros: a gradient through the whole run with no train/test mismatch;
+    reuses the straight-through machinery. Cons: straight-through over thousands of discrete steps
+    is biased and may not train; new layers (soft-read gradients, action heads).
+  - (b) Soft in training, hard at test (NTM, NRAM: Graves et al. 2014; Kurach et al. 2016). Cons:
+    the soft machine drifts and the hard one differs from what trained (NRAM's discretisation was
+    exact only on some tasks).
+  - (c) Reinforcement learning on the exact machine. Cons: sparse reward over thousands of steps;
+    RL-NTM's ceiling.
+  - (d) Search over snapped controllers (evolutionary or MDL, Lan et al. 2022). Cons: not gradient
+    learning; scales badly with 343 windows times states.
+- **D17. What F1 claims, and how it is proved. Settled: (b) as the main route, by the owner
+  (2026-10-14, evening).** A network that finds its own decomposition may compute no known
+  machine, so the certificate's `phi` onto a reference has nothing to map to, and correctness of
+  an arbitrary tape program on every input is undecidable in general. But a subroutine that sweeps
+  the heads monotonically over aligned digits (copy, compare, add, subtract, a division's step)
+  is a finite transducer over columns: the object the certificate already proves at every length.
+  - (a) `phi` onto a known program's flat table, the certificate as built. Pros: automatic.
+    Cons: only if the network learns the reference state for state.
+  - (b) *Chosen.* **The modular certificate against identified specifications.** Read the learned
+    call structure off the snapped network (its calls and returns are discrete); for each learned
+    subroutine, record its input-output behaviour, identify its function, and certify it as a
+    transducer against that specification at every length; prove the outer loop from the
+    certified specifications by an invariant proof, mechanised in Lean (D7 (b)) or written and
+    checked. Pros: the decomposition stays the network's, only named by us; every piece proved;
+    a stronger claim than with traces (a program it invented, proved); graceful (each certified
+    subroutine is a result). Cons: identifying a specification is manual per subroutine; a
+    non-monotone subroutine needs another certificate; a loop proof per algorithm. Cai et al.
+    (2017) prove generalisation from base cases and reductions given the recursion; here the
+    structure is the network's.
+  - (c) A mechanised proof of the whole extracted machine. Cons: a project per algorithm.
+  - (d) Verified to a bound only. Cons: what E1 showed overstates success; a fallback tier only.
+  **The tiers**, registered before any data: *certified* by (a) or (b); *partially certified*,
+  every learned subroutine certified and the loop verified to a bound; *verified to a bound*,
+  exhaustive to `N < 3^12` and sampled to 40 digits. **Memorising:** the exclusion bound applies
+  per certified sweep subroutine; the whole machine has unbounded memory and no such bound, so at
+  the top level the defence is capacity (a training set of `N` holding far more answers than a
+  controller's table of `S` states x 343 windows can store), written beside each rung.
+
 ## Stages
 
 1. **This workplan and a literature review** (docs only): neural program induction and
    verification (Reed & de Freitas 2016; Cai et al. 2017; Graves et al. 2014; Kaiser & Sutskever
-   2016; Déletang et al. 2022; Graves 2016), each paper kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`) (Déletang 2022
-   and Kaiser & Sutskever are there; the rest to fetch). The workplan is done (#708, revised).
+   2016; Déletang et al. 2022; Graves 2016) and, for D15-D16, learning from inputs and outputs and
+   its signal (Zaremba & Sutskever 2015; Kurach et al. 2016; Anthony et al. 2017; Zelikman et al.
+   2022; Ellis et al. 2021; Mankowitz et al. 2023; Jang et al. 2017; Bengio et al. 2013), each
+   paper kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as
+   `~/code/indrajala-literature/`): **all fetched and read (2026-10-14)**; their bearing is in
+   D15-D17. The workplan is done (#708, revised; reversed by D15-D17). **Still to do: restate
+   stages 4-7 and the cost for D15-D17** (the learning layers, the verifier loss, expert iteration,
+   the modular certificate) before any of them starts.
 2. **I1's tape model, the call stack and the reference executor; I2's DSL compiling both ways;
    rungs R1-R3** (tier 0): programs tested exhaustively; each table's minimal states computed and
    R1-R3's feasibility rows written.
