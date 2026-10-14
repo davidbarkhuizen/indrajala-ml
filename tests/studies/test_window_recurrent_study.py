@@ -703,6 +703,18 @@ BEFORE_THE_EXCLUSION_BOUND = {
 }
 
 
+def test_e8c_is_e8bs_curriculum_cell_as_an_existence_test():
+    """The claims workplan's D35: E8b's curriculum cell and settings, 6 seeds, each step certified and
+    each rung stopped at its first certified run."""
+    scripts = Path(__file__).parents[2] / "scripts"
+    for q in (4, 5):
+        e8b = wr.load_config(scripts / f"window_recurrent_e8b_q{q}.json")
+        e8c = wr.load_config(scripts / f"window_recurrent_e8c_q{q}.json")
+        assert e8c.runs == [spec for spec in e8b.runs if spec.arm == "curriculum" and spec.seed < 6]
+        assert e8c.settings == dataclasses.replace(e8b.settings, seeds=6, certify_steps=True, stop_at_certified=True)
+        assert e8c.workers == 6 and e8c.directory != e8b.directory
+
+
 def test_every_new_config_trains_long_enough_to_rule_out_a_wrong_machine():
     """D23: a snapped cell's longest training length (steps x k columns) is at least m + states - 1,
     so a network exactly right on its training lengths is its task's machine."""
