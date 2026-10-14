@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.data import addition_data as ad
-from indrajala_ml.data import modular_division_data as md
+from indrajala_ml.data import modular_data as md
 from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentArrayNetwork,
     WindowRecurrentRustArrayNetwork,
@@ -253,6 +253,15 @@ def test_a_dividing_machine_is_certified_against_the_modular_automaton(p: int, k
     assert certificate.phi == {q: q % (p * p) for q in certificate.reachable}
     assert len(certificate.minimised) == p * p
     assert certificate.evaluations == len(certificate.reachable) * 9**k
+
+
+@pytest.mark.parametrize("q", [4, 5])
+@pytest.mark.parametrize("k", [1, 2])
+def test_a_summing_machine_is_certified_against_the_sum_automaton(q: int, k: int):
+    task = wt.ModularSum(q)
+    certificate = wc.certify(TaskMachine(task, k, copies=2), 2 * q, task)
+    assert certificate.certified and certificate.counterexample is None and certificate.task == task.name
+    assert certificate.phi == {c: c % q for c in certificate.reachable} and len(certificate.minimised) == q
 
 
 @pytest.mark.parametrize("fault", ["inside", "forgets-b"])

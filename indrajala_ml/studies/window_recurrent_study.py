@@ -419,7 +419,7 @@ def run_step(network: Any, spec: RunSpec, step: int, counts: Sequence[int], sett
         passes[n] = all(r.holds for r in results)
         tests[str(n)] = {
             "passes": passes[n],
-            "reach": task.reach(by_id[task.reach_id]),
+            "reach": None if task.reach_id is None else task.reach(by_id[task.reach_id]),
             "codes": sorted(test_codes) if snapped else None,
             "properties": {r.id: task.result_json(r) for r in results},
             "seconds": time.perf_counter() - start,

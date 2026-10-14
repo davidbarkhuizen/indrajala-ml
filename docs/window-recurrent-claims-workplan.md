@@ -6,7 +6,8 @@ our claims/findings"), after the matrix (stage 9 of
 ran. Decisions D1-D20 settled (D13 and D14 by the owner, the rest under the owner's standing
 delegation), each with its options' pros and cons. Stages 1-5 done (stage 2 refined D3's snap margin: a near tie branches). E7' (C7'; D23-D26)
 added 2026-10-13 at the owner's request, to run before stage 7, after E7's design flaw (p 7 at `m` 32 has fewer codes
-than states), with D23 making a feasibility check a rule for every cell.** The literature it answers to is in
+than states), with D23 making a feasibility check a rule for every cell. E8 (C8; D27-D30), the
+modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refuted.** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -45,6 +46,7 @@ any run.
 | **C5** | The seed decides: at a fixed configuration the working rate is a stable fraction, measured with its interval | E3 and E4's 20 seeds a cell | (a measurement, not a hypothesis: reported with intervals) |
 | **C7** | The method isn't addition's: the same design learns modular division, `(a / b) mod p` of two long base-3 numbers, and its learned machine certifies exactly against the modular automaton (`p^2` states), at every length | E7, the second task (D14-D17) | no network certifies at either `p` |
 | **C7'** | With enough codes the method learns modular division: at `k` 1 and about 5 and 10 times as many codes as the minimal automaton's states, some networks certify against it at every length, at both `p` | E7', modular division with enough codes (D23-D26) | no network certifies at either `p` |
+| **C8** | The method learns a machine of a few states beyond addition's 3: the modular sum `(a + b) mod q` of two long base-3 numbers at `q` 4 and 5, certified exactly against its `q`-state automaton at every length; then, rung by rung, larger `q` | E8, the modular-sum ladder (D27-D30) | no network certifies at either `q` |
 | **C6** | Exact on short sums isn't generalising: failing runs reach state codes at long lengths that training never produced (Buitrago Ruiz & Gu's unexplored states) | E5, from saved networks | failing runs' codes at 8 columns are all codes seen at the check lengths |
 
 C0, before all of them: **the runs reproduce.** The harness is deterministic (seeded generators,
@@ -227,6 +229,40 @@ certified rates with Wilson intervals; every certified machine's minimised size 
 C7' is refuted if no network certifies at either `p`. The 5 against 10 times comparison per `p`
 and arm is Fisher's exact test (D4), reported as a measurement on the second task (C3's
 question), not a registered claim.
+
+### E8. The modular-sum ladder (C8; D27-D30)
+
+**Why.** E7 and E7' refuted C7 and C7': with codes for every state, the window still didn't learn
+a 25- or 49-state transition table exactly. Addition's machine has 3 states. E8 asks where between
+3 and 25 the current design stops, with a task of the same shape whose size is one parameter (the
+owner, 2026-10-14: "run that and get it to work, then step up").
+
+**The task.** The modular sum: E7's pairs, tokens (`3 a_i + b_i`, 9), reading order (most
+significant first), held-out tenth and training mixture; at every column the running
+`(A + B) mod q` of the prefixes, `q` classes. Its automaton has exactly `q` states (state
+`(A + B) mod q`; minimised by partition refinement, `test_window_tasks`), so it is the additive
+half of division, whose state is the pair. Catalogue: U1, U2 and S1 as division's, verified against
+the running sums (no undefined class, so no S2, and no reach).
+
+**Design (the first rungs).** `q` 4 and 5; both arms; `k` 1; `s` 16; W11's window; `m` 32;
+E7''s settings; 10 seeds a cell: 2 x 2 x 10 = 40 runs.
+
+**Feasibility (D23):**
+
+| `q` | minimal states | reachable within | told apart within | `m` (codes / states) |
+| --- | --- | --- | --- | --- |
+| 4 | 4 | 1 column | 1 column | 32 (8) |
+| 5 | 5 | 1 column | 1 column | 32 (6.4) |
+
+Every residue is a one-column answer and outputs equal states, so every state is reached and
+every pair told apart at the first check length. The budget: E7's `k` 1 runs took 7-15 minutes on
+`jebel`, the network here the same but for its classes; on `pyramidon`'s 3 workers about 2.5-5.5 h
+(measured once running).
+
+**Measures and analysis.** As E7's: works, both certificates (D13), long tests U1 and S1 on every
+certified network (D22's lengths), per cell the working and certified rates with Wilson intervals,
+every certified machine's minimised size against `q`. C8 is refuted if no network certifies at
+either `q`.
 
 ## Decisions
 
@@ -515,6 +551,40 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     **Checked (2026-10-13, E7's 40 `k` 1 runs, all finished): (a) stands.** 80 steps: 40 passed,
     40 stopped on a plateau, none on the budget, and every plateau's best screen came at least
     the patience's 30 epochs before its stop.
+- **D27. E8's task. Settled: (a), the owner choosing the modular sum (2026-10-14).**
+  - (a) *Chosen.* The modular sum `(A + B) mod q`, `q` states. Pros: division's shape exactly
+    (pairs, tokens, order, an output a column), so a working rung carries straight over to
+    division; one parameter sets the size; division's additive half. Cons: no undefined class,
+    so one of division's difficulties (S2) isn't on the ladder.
+  - (b) One number's residue `A mod q`, `q` states. Pros: the textbook divisibility automaton.
+    Cons: 3 tokens, not 9: a different embedding, so a result transfers less directly.
+  - (c) Division at `p` 2 (4 states). Pros: division itself. Cons: trivial in base 3 (3 = 1 mod 2:
+    a digit-sum parity), and one size only.
+- **D28. E8's first rungs and cells. Settled: (a).**
+  - (a) *Chosen.* `q` 4 and 5 (the owner: start there), both arms, `m` 32 (at least 5 times the
+    states, where E7' saw no gain from more), 10 seeds. Pros: the likeliest to work, so the ladder
+    starts from a working rung; both arms, because which one carries over is itself unknown
+    here. Cons: two rungs only before the next decision.
+  - (b) `q` 5, 7, 11, 13 at once. Pros: the whole lower ladder in one sitting. Cons: if `q` 5
+    fails, the rest is spent knowing nothing more.
+- **D29. Where E8 runs. Settled: (a), the owner's (2026-10-14).**
+  - (a) *Chosen.* Started on `pyramidon` (3 workers) while `jebel` runs stage 7, moved to `jebel`
+    when stage 7 ends: `run --workers W` overrides the config's count, the harness resumes from
+    the results on disk, and a run's result doesn't depend on the machine (the E6 probe reproduced
+    the matrix's runs bit for bit across the two). A run is moved only finished (an unfinished
+    all-at-once run restarts from its seed; a curriculum run's resume from a middle step isn't
+    checked for bits, so none is moved mid-run). Pros: the ladder starts at once. Cons:
+    `pyramidon` is slower and shared with development.
+  - (b) Wait for `jebel`. Pros: one machine. Cons: about 18 h of waiting.
+- **D30. Stepping up. Settled: (a).**
+  - (a) *Chosen.* A rung "works" when some network certifies (C8's test). After a working rung,
+    the next: `q` 7, then 11, 13 and 16, then division's 25, each a registered config with its
+    bound (D23). At the first rung that doesn't work, the window's capacity is tested there
+    (wider windows, `d` 32 and 64, kept on a branch until then) before going higher. Pros: each
+    step answers one question; the capacity change is tested where it's needed. Cons: a rung at
+    a time.
+  - (b) Widen the window now. Pros: possibly faster to division. Cons: two changes at once, and
+    no rung to say whether width was the limit.
 
 ## Stages
 
@@ -567,6 +637,11 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    their task's minimal state count of codes (each target machine is minimal with every state
    reachable, `test_window_tasks`), E7's `p` 7 `m` 32 the one recorded exception. Then E7's
    analysis: certified and long-tested, findings.
+7b. **E8 on `pyramidon`, then `jebel`** (C8; D27-D30), from 2026-10-14, beside stage 7.
+   **In:** the modular sum (`modular-sum-q`: `window_tasks.ModularSum`, `modular_data.sum_catalogue`;
+   the data module renamed from `modular_division_data`, division's cases unchanged),
+   `scripts/window_recurrent_e8_q4.json` and `_q5.json` (a test checks them), `run --workers`.
+   Then E7's analysis, and the next rung (D30).
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
    **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
    `s` 4 and `k` 1 `s` 16, a continuous state, seeds 0-19, E3's settings; its keys say
@@ -597,6 +672,7 @@ evaluation rate:
 | E5 | saved networks only | `pyramidon` | under 1 h |
 | E7 | 2 `p` x 2 `k` x 2 `m` x 2 arms x 5 seeds = 80 runs, certified | `jebel` | about 8 h (4-15), longer if 49 states train slowly |
 | E7' | 2 `p` x 2 `m` x 2 arms x 10 seeds at `k` 1 = 80 runs, certified | `jebel` | about 5 h (3-8): E7's `k` 1 runs took 7-15 minutes; more codes, more epochs |
+| E8 | 2 `q` x 2 arms x 10 seeds at `k` 1 = 40 runs a pair of rungs, certified | `pyramidon`, then `jebel` | about 2.5-5.5 h a pair on `pyramidon`, about half that on `jebel` |
 
 About 34 hours of `jebel` in three sittings, the package change of stage 4 and the harness
 change of stage 5.

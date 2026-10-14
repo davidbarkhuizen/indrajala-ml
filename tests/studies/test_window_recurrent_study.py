@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 
 from indrajala_ml.data import addition_data as ad
-from indrajala_ml.data import modular_division_data as md
+from indrajala_ml.data import modular_data as md
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import Attention, Residual, StateInput
 from indrajala_ml.studies import inference
@@ -266,7 +266,7 @@ def test_the_arms_steps():
 # a real network's run
 
 
-@pytest.mark.parametrize("task", ["addition", "modular-division-5"])
+@pytest.mark.parametrize("task", ["addition", "modular-division-5", "modular-sum-4"])
 def test_a_run_trains_each_step_saves_it_and_resumes_after_the_last_saved(tmp_path: Path, task: str):
     settings = wr.Settings(
         epoch_examples=64,
@@ -613,6 +613,19 @@ def test_e7_prime_is_e7s_k1_cells_with_five_and_ten_times_the_states_codes():
         assert {spec.m for spec in e7_prime.runs} == codes and all(5 * states <= m <= 11 * states for m in codes)
         assert {(spec.arm, spec.k, spec.s) for spec in e7_prime.runs} == {("curriculum", 1, 16), ("all-at-once", 1, 16)}
         assert len(e7_prime.runs) == 2 * 2 * 10 and e7_prime.settings == dataclasses.replace(e7.settings, seeds=10)
+
+
+def test_e8_is_the_modular_sum_at_e7_primes_settings_with_32_codes():
+    scripts = Path(__file__).parents[2] / "scripts"
+    e7_prime = wr.load_config(scripts / "window_recurrent_e7_prime_p5.json")
+    for q in (4, 5):
+        e8 = wr.load_config(scripts / f"window_recurrent_e8_q{q}.json")
+        assert {spec.task for spec in e8.runs} == {f"modular-sum-{q}"} and e8.settings == e7_prime.settings
+        assert {(spec.arm, spec.k, spec.s, spec.m) for spec in e8.runs} == {
+            ("curriculum", 1, 16, 32),
+            ("all-at-once", 1, 16, 32),
+        }
+        assert len(e8.runs) == 2 * 10 and wt.task_named(f"modular-sum-{q}").machine.states == q
 
 
 # D23: a cell kept below its bound on purpose, and why

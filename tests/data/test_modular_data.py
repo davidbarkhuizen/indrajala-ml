@@ -1,11 +1,11 @@
-"""Modular division's encoding, answers, training mixture and catalogue (indrajala_ml/data/modular_division_data.py)."""
+"""Modular division's and the sum's encoding, answers, training mixture and catalogues (indrajala_ml/data/modular_data.py)."""
 
 import random
 from collections.abc import Sequence
 
 import pytest
 
-from indrajala_ml.data import modular_division_data as md
+from indrajala_ml.data import modular_data as md
 
 
 def direct(pair: md.Pair, n: int, p: int) -> md.Answers:
@@ -84,3 +84,38 @@ def test_evaluate_counts_each_strata_and_keeps_the_first_failures():
     assert result.cases == 18 and not result.holds
     assert result.reach() == 3 and result.strata[4] == (0, 3)
     assert len(result.failures) == 3 and all(c.pair[1] < 9 for c in result.failures)
+
+
+@pytest.mark.parametrize("q", [2, 4, 5, 7, 11])
+def test_the_sums_are_the_running_sums_of_the_prefixes(q: int):
+    rng = random.Random(q)
+    for _ in range(500):
+        n = rng.randrange(1, 12)
+        pair = md.uniform_pair(n, rng)
+        a, b = pair
+        sums = md.sums(pair, n, q)
+        assert sums == tuple((a // 3 ** (n - i) + b // 3 ** (n - i)) % q for i in range(1, n + 1))
+
+
+@pytest.mark.parametrize("q", [4, 5])
+def test_the_sum_catalogue_checks_every_final_sum_against_the_running_sums(q: int):
+    u1, u2, s1 = md.sum_catalogue(q, sampled=200, per_stratum=7)
+    assert (u1.id, u2.id, s1.id) == ("U1", "U2", "S1") and all(p.operation == "sum" for p in (u1, u2, s1))
+    cases = md.property_cases(s1, 4)
+    assert {c.stratum for c in cases} == set(range(q)) and len(cases) == 7 * q
+    assert all((c.pair[0] + c.pair[1]) % q == c.stratum for c in cases)
+
+    def right(pairs: Sequence[md.Pair]) -> list[md.Answers]:
+        return [md.sums(pair, 4, q) for pair in pairs]
+
+    def wrong(pairs: Sequence[md.Pair]) -> list[md.Answers]:
+        return [tuple((x + 1) % q for x in md.sums(pair, 4, q)) for pair in pairs]  # every answer off by one
+
+    assert all(r.holds for r in md.evaluate(right, 4, (u1, u2, s1)))
+    assert not any(r.holds for r in md.evaluate(wrong, 4, (u1, s1)))
+
+
+def test_divisions_cases_are_drawn_as_before_the_sum():
+    # the seed string keeps E7's and E7''s cases: "modular-division-p-<id>-n"
+    prop = md.catalogue(5, sampled=50, per_stratum=3)[2]
+    assert md.property_cases(prop, 9) == prop.generate(9, random.Random("modular-division-5-S1-9"))

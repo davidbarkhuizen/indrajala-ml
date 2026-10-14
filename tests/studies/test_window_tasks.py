@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.data import addition_data as ad
-from indrajala_ml.data import modular_division_data as md
+from indrajala_ml.data import modular_data as md
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_tasks as wt
 
@@ -47,8 +47,27 @@ def test_the_modular_machines_labels_are_the_running_quotients_unchanged_by_zero
         assert labels == (md.undefined(p),) * a + answers + (answers[-1],) * padding
 
 
+@pytest.mark.parametrize("q", [4, 5, 13])
+def test_the_sum_machines_labels_are_the_running_sums(q: int):
+    task = wt.task_named(f"modular-sum-{q}")
+    assert isinstance(task, wt.ModularSum) and task.reach_id is None and task.machine.classes == q
+    rng = random.Random(q)
+    for _ in range(500):
+        n, a = rng.randrange(1, 12), rng.randrange(4)
+        pair = md.uniform_pair(n, rng)
+        assert task.machine.run((0,) * a + task.column_tokens(pair, n)) == (0,) * a + md.sums(pair, n, q)
+
+
 @pytest.mark.parametrize(
-    ("task", "states"), [(wt.ADDITION, 3), (wt.ModularDivision(5), 25), (wt.ModularDivision(7), 49)]
+    ("task", "states"),
+    [
+        (wt.ADDITION, 3),
+        (wt.ModularDivision(5), 25),
+        (wt.ModularDivision(7), 49),
+        (wt.ModularSum(4), 4),
+        (wt.ModularSum(5), 5),
+        (wt.ModularSum(13), 13),
+    ],
 )
 def test_each_machine_is_minimal_every_state_reachable(task: wt.Task, states: int):
     machine = task.machine

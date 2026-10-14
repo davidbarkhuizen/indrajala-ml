@@ -301,6 +301,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import dataclasses
 import functools
 import json
 import multiprocessing
@@ -322,6 +323,10 @@ def main(argv: list[str]) -> int:
         command.add_argument("config", type=Path)
         if name == "report":
             command.add_argument("--md", type=Path, help="write the report to this file too")
+        if name == "run":
+            command.add_argument(
+                "--workers", type=int, help="the config's worker count, overridden (a study moved between machines)"
+            )
     check = commands.add_parser("check")
     check.add_argument("network", type=Path)
     check.add_argument("--n", type=int, nargs="+", required=True, help="the lengths to check")
@@ -435,6 +440,8 @@ def main(argv: list[str]) -> int:
         print(wr.verdicts(study, args.certificates, args.strict, args.long_tests))
         return 0
     if args.command == "run":
+        if args.workers is not None:
+            study = dataclasses.replace(study, workers=args.workers)
         with machine_lock.study():
             wr.run(study, log=lambda line: print(line, flush=True))
         print(wr.report(study))
