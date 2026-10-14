@@ -309,6 +309,45 @@ the curriculum arm, which starts at 1 and 2 windows, runs as registered.
 
 **Measures and analysis.** As E8's, and C8 refuted at a rung if no network certifies there.
 
+**The curriculum arm stopped (the owner, 2026-10-14, D35).** Launched on `jebel` at 12:44
+(`9dce80e`), stopped at 13:58 in `q` 4's first 6 runs (12-15 of 20 steps each), `q` 5 not started.
+Exploratory, not E8b's registered measure (which reads each run's final network): seeds 1, 3 and
+5's every step network strictly certified on `pyramidon` (`data/window-recurrent/e8b-q4-steps/`,
+36 networks, manifest `e8b-q4-steps.sha256`). **All three certify from step 4** (training to 4
+columns, far below the bound of 19): the 4-state automaton, 0 wrong outputs, 0 wrong states.
+**Training on destroyed two:** seed 3 certified at steps 4-8 and fails from 9, seed 1 at 4-11 and
+fails at 12, each after a plateau, its state down to 3 codes; seed 5 certified at 4-13. Seeds 0, 2
+and 4 fitted steps 1-3 and plateaued from step 4 or 5. A run's final network undercounts what the
+curriculum finds, so the arm was stopped and its question moved to E8c.
+
+### E8c. The modular sum as an existence test (C8; D35)
+
+**Claim.** C8 as an existence claim at each rung: some network at `q` 4, and some at `q` 5, trained
+by the curriculum, is certified against the `q`-state automaton, near ties branched (the
+harness's per-step verdict; it implies the strict one, the actual snapping being one branch). None
+found at a rung is "not found within the budget", not a refutation (the factored-state workplan's
+C9 reads the same way). A certified network is the proof whatever its training length, so the
+bound is the cap, not the claim's support.
+
+**Design.** E8b's curriculum cell (`k` 1, `s` 16, `m` 16) and settings, at `q` 4 and 5, 20 steps
+(the bound `m + q - 1`, 19 and 20, is the cap), with the existence settings the factored-state
+workplan's stage 7 built: **`certify_steps`** (each step's network certified, a run ended at its
+first certified step) and **`stop_at_certified`** (each rung's study stopped at its first certified
+run). 6 seeds a rung (0-5, `jebel`'s 6 workers); the all-at-once arm left out (D33: its state
+collapses at 1-20). `scripts/window_recurrent_e8c_q4.json` and `_q5.json` (a test checks them
+against E8b's), run on `jebel` from `main` (results in the tuple layout), `q` 4 then `q` 5.
+
+**Feasibility (D23):** `m` 16 against 4 and 5 states; the cap 20 against the bound's 19 and 20.
+Seeds 0-5 at `q` 4 are E8b's runs again (C0: the harness is deterministic), so `q` 4 is expected to
+stop at step 4 (seed 1, 3 or 5), about 30 minutes; it checks the protocol before `q` 5.
+
+**Budget.** E8b's pace on `jebel`: 12-15 steps in 74 minutes a run (about 5-6 minutes a step, the
+step's certificate at `k` 1 a few seconds), so a run to the cap is about 2 h, and `q` 5's 6 seeds
+in parallel at most about 2-3 h. Within a day.
+
+**Measures and analysis.** Per rung: certified or "not found within the budget"; the certified
+network's step, codes reached and minimised; its long tests (U1, S1). E8's analysis otherwise.
+
 ## Decisions
 
 Settled under the owner's standing delegation, with each option's pros and cons:
@@ -677,6 +716,22 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     mostly on `k` 1 rates the exclusion bound makes hard to read.
   - (c) Stop stage 7 now. Pros: `jebel` free at once. Cons: C3 without `m` 16 and C4 without its
     all-at-once arm: two registered questions left unanswered for 4-5 h.
+- **D35. E8b's curriculum arm stopped; C8 re-registered as an existence test, E8c (the owner,
+  2026-10-14).** E8b's per-step certificates (above) showed certified networks at step 4 that later
+  steps destroyed, so its registered measure, the final network, can't see what training finds.
+  The flaw is recorded here and fixed in a new registered experiment (experiment-design.md).
+  - (a) Leave E8b as registered; certify every step as an exploratory measure. Pros: no setting
+    changed after data; every step's network is saved, so nothing is lost. Cons: the registered
+    verdict undercounts; `jebel` spends hours on steps after certification.
+  - (b) *Chosen.* **Stop E8b now; register E8c** with `certify_steps` and `stop_at_certified`, both
+    rungs. Pros: existence first (D33, the owner's strategy); the protocol matches C9's; `jebel`
+    free for C9 hours sooner. Cons: E8b's curriculum arm stays incomplete (recorded), and `q` 4 is
+    run again, briefly.
+  - (c) Finish `q` 4 as registered, then `q` 5 as E8c. Pros: `q` 4's registered result complete.
+    Cons: two protocols across the rungs; the verdicts don't compare.
+
+  (A different "E8c", E8b's cells trained short with 100 seeds, was proposed on 2026-10-14 and
+  declined, never registered; the name is this experiment's.)
 
 ## Stages
 
@@ -742,7 +797,11 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    and `_q5.json` (a test checks them, and every config after E8 is tested against the bound), the
    arms split by `run --arm` (all-at-once on `pyramidon`, curriculum on `jebel` after stage 7: E8b's
    launch; the all-at-once arm stopped after 6 runs, D33), then E8's analysis. If a rung works, the next (D30) is registered at the bound; division waits
-   for the factored state (D32).
+   for the factored state (D32). **The curriculum arm stopped too (D35, 2026-10-14)**, in `q` 4's
+   first 6 runs: its question moved to E8c.
+7d. **E8c on `jebel`** (C8 as an existence test; D35): `scripts/window_recurrent_e8c_q4.json` and
+   `_q5.json` (a test checks them against E8b's), from `main`, `q` 4 then `q` 5, each stopped at its
+   first certified run; then the certified networks' long tests and findings.
 8. **E2 and E6 on `jebel`** (the continuous arm and the baseline, about 100 runs): findings.
    **E2's config in:** `scripts/window_recurrent_e2.json`, 40 runs (the curriculum arm at `k` 4
    `s` 4 and `k` 1 `s` 16, a continuous state, seeds 0-19, E3's settings; its keys say
@@ -775,6 +834,7 @@ evaluation rate:
 | E7' | 2 `p` x 2 `m` x 2 arms x 10 seeds at `k` 1 = 80 runs, certified | `jebel` | about 5 h (3-8): E7's `k` 1 runs took 7-15 minutes; more codes, more epochs |
 | E8 | 2 `q` x 2 arms x 10 seeds at `k` 1 = 40 runs a pair of rungs, certified | `pyramidon`, then `jebel` | about 2.5-5.5 h a pair on `pyramidon`, about half that on `jebel` |
 | E8b | 2 `q` x 2 arms x 10 seeds at `k` 1, 20 steps = 40 runs, certified | all-at-once on `pyramidon`, curriculum on `jebel` | about 2.5-5 h on `pyramidon` (3 workers), 4-12 h on `jebel` (6) |
+| E8c | 2 `q` x 6 seeds at `k` 1, curriculum, 20 steps, each step certified, stopped at the first certified run | `jebel` | `q` 4 about 30 min (expected at step 4), `q` 5 at most about 2-3 h |
 
 About 34 hours of `jebel` in three sittings, the package change of stage 4 and the harness
 change of stage 5.
