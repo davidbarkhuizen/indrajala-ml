@@ -18,6 +18,7 @@ from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_data as md
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import Attention, Residual, StateInput
+from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE
 from indrajala_ml.studies import inference
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
@@ -236,7 +237,8 @@ def test_a_step_with_an_adding_network_passes_at_once_and_breaks_at_the_longest_
     assert result["break"] == 16 and result["window_ratio"] == 16 / 2
     assert result["examples"] == SMALL.epoch_examples
     assert all(result["tests"][str(n)]["reach"] == n for n in SMALL.test_lengths)
-    assert 0 in result["codes_used"] and set(result["codes_used"]) <= set(range(5))
+    # a state a code per factor (the factored-state workplan, D4), of one factor here
+    assert (0,) in result["codes_used"] and set(result["codes_used"]) <= {(c,) for c in range(5)}
 
 
 def test_a_step_with_a_network_that_never_learns_stops_on_the_plateau():
@@ -288,7 +290,7 @@ def test_a_run_trains_each_step_saves_it_and_resumes_after_the_last_saved(tmp_pa
     result = results[key]
     assert [s["counts"] for s in result["steps"]] == [[1], [1, 2]] and result["task"] == task
     assert result["parameters"] > 0 and len(result["crate"]) == 12
-    assert set(result["steps"][1]["codes_used"]) <= set(range(3))
+    assert set(result["steps"][1]["codes_used"]) <= {(c,) for c in range(3)}
     assert len(lines) == 1 and lines[0].startswith(f"{key}: ") and "step 2 " in lines[0]
     step_one = (tmp_path / "models" / key / "step-1.json").read_text()
     # a stopped run: its result and last step gone; the rerun keeps step 1 and trains step 2 again
@@ -404,7 +406,7 @@ def test_explore_counts_the_codes_past_the_check_lengths(tmp_path: Path):
     assert set(explored["check_codes"]) == {"1", "2"} and set(explored["codes"]) == {"4", "8"}
     seen = {code for used in explored["check_codes"].values() for code in used}
     for n in ("4", "8"):
-        assert set(explored["codes"][n]) <= set(range(3))
+        assert set(explored["codes"][n]) <= {(c,) for c in range(3)}
         assert explored["new"][n] == [code for code in explored["codes"][n] if code not in seen]
 
 
@@ -717,3 +719,99 @@ def test_status_counts_each_running_runs_own_steps(tmp_path: Path):
     lines = wr.status(study).splitlines()
     assert f"running: {runs[0].key}, 0 of 2 steps saved" in lines
     assert f"running: {runs[1].key}, 0 of 1 steps saved" in lines
+
+
+# factored states and existence tests (the factored-state workplan, stage 7)
+
+
+def _certified(network: Any, spec: wr.RunSpec, path: Path) -> dict[str, Any]:
+    # certify_step's summary for a step that certifies
+    return {"certified": True, "correct": True, "states": 25, "minimised": 25, "factors": ["A", "B"], "seconds": 0.0}
+
+
+TINY = wr.Settings(
+    epoch_examples=64,
+    max_epochs=1,
+    patience=1,
+    screen=20,
+    steps=2,
+    test_lengths=(3,),
+    sampled=50,
+    relation_sampled=10,
+    per_stratum=5,
+    codes_cases=20,
+    seeds=1,
+)
+FACTORED_TASK = wt.ModularDivision(5).name
+FACTORED = wr.RunSpec("curriculum", 1, 8, None, 0, FACTORED_TASK, factors=((4, 8), (4, 8)), reads=BEFORE_STATE)
+
+
+def test_a_factored_runs_key_names_each_factor_and_a_single_factors_is_unchanged():
+    assert FACTORED.key == "modular-division-5-curriculum-k1-s4-m8-s4-m8-before-state-seed0"
+    assert FACTORED.label == "curriculum (before state)" and FACTORED.cell[2:] == ("4+4", "8+8")
+    crossed = dataclasses.replace(FACTORED, cross=True, reads=wr.OUTPUT)
+    assert crossed.key == "modular-division-5-curriculum-k1-s4-m8-s4-m8-cross-seed0"
+    assert wr.RunSpec("curriculum", 4, 4, 16, 3).key == "curriculum-k4-s4-m16-seed3"
+    assert wr.RunSpec("curriculum", 4, 4, None, 3).cell == ("curriculum", 4, "4", "continuous")
+    assert FACTORED.snapped and not dataclasses.replace(FACTORED, factors=((4, 8), (4, None))).snapped
+
+
+def test_a_factored_cell_in_a_config_builds_its_factored_network(tmp_path: Path):
+    config = {
+        "directory": str(tmp_path),
+        "task": FACTORED_TASK,
+        "seeds": 2,
+        "matrix": [
+            {"k": [1], "factors": [[4, 8], [4, 8]], "reads": "before_state"},
+            {"k": [1], "s": [4], "m": [16]},
+        ],
+    }
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(config))
+    study = wr.load_config(path)
+    assert [spec.key for spec in study.runs] == [
+        "modular-division-5-curriculum-k1-s4-m8-s4-m8-before-state-seed0",
+        "modular-division-5-curriculum-k1-s4-m8-s4-m8-before-state-seed1",
+        "modular-division-5-curriculum-k1-s4-m16-seed0",
+        "modular-division-5-curriculum-k1-s4-m16-seed1",
+    ]
+    network = wr.build(wt.task_named(FACTORED_TASK), 1, 0, None, 0, recurrence=study.runs[0].recurrence)
+    assert network.recurrence == study.runs[0].recurrence and len(network.recurrence.factors) == 2
+
+
+def test_a_certified_step_ends_the_run_and_its_certificate_is_saved(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    settings = dataclasses.replace(TINY, certify_steps=True)
+    study = wr.Study(tmp_path, settings, [FACTORED], 0)
+    results = wr.run(study, log=lambda line: None)
+    result = results[FACTORED.key]
+    # untrained: neither step certifies, so both run, each certified as it ends
+    assert [s["certificate"]["certified"] for s in result["steps"]] == [False, False]
+    assert all(len(s["certificate"]["factors"]) == 2 for s in result["steps"])
+    assert (study.models / FACTORED.key / "step-1.certificate.json").exists()
+    assert result["factors"] == [[4, 8], [4, 8]] and result["reads"] == BEFORE_STATE and not result["certified"]
+    assert all(len(state) == 2 for state in result["steps"][0]["codes_used"])
+
+    # a step that certifies ends its run there
+    monkeypatch.setattr(wr, "certify_step", _certified)
+    other = dataclasses.replace(FACTORED, seed=1)
+    result = wr.run(wr.Study(tmp_path / "again", settings, [other], 0), log=lambda line: None)[other.key]
+    assert len(result["steps"]) == 1 and result["certified"] and result["certified_step"] == 1
+
+
+def test_the_first_certified_run_stops_the_study(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    settings = dataclasses.replace(TINY, certify_steps=True, stop_at_certified=True)
+    specs = [dataclasses.replace(FACTORED, seed=seed) for seed in range(3)]
+    monkeypatch.setattr(wr, "certify_step", _certified)
+    lines: list[str] = []
+    study = wr.Study(tmp_path, settings, specs, 0)
+    results = wr.run(study, log=lines.append)
+    assert list(results) == [specs[0].key] and results[specs[0].key]["certified"]
+    assert wr.stop_file(study.models).exists() and "the first certified run" in lines[-1]
+    # run again: the existence is found, nothing more runs
+    assert list(wr.run(study, log=lines.append)) == [specs[0].key]
+
+
+def test_a_step_stopped_by_the_study_ends_unchecked():
+    spec = wr.RunSpec("curriculum", 1, 4, 8, 0)
+    result = wr.run_step(AddingNetwork(), spec, 1, [1], SMALL, stopped=lambda: True)
+    assert result["stop"] == "stopped" and result["epochs"] == 0 and result["tests"] == {}
