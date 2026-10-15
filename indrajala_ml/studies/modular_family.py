@@ -12,7 +12,8 @@ quotient `A / B mod p` (or undefined, class `p`), each query's output its operat
 - sum: `(A + B) mod p`;
 - difference: `(A - B) mod p`.
 
-`QUOTIENT` alone (no queries) is division as the window studies train it, the probe's control.
+`QUOTIENT` alone (no queries) is division as the window studies train it, the probe's control;
+`SUM` the family without the difference (one dense counter).
 The probe trains one network by the curriculum (step `j` trains lengths `1..j`) within a
 wall-clock budget, diagnosing it as it goes: each operation's accuracy, the quotient's by class,
 and each factor's share of `A`, `B`, the sum, the difference and the zero tests
@@ -52,6 +53,7 @@ OPERATIONS: dict[str, Callable[[int, int, int], int]] = {
     "difference": lambda A, B, p: (A - B) % p,
 }
 FAMILY = ("sum", "difference")
+SUM = ("sum",)  # the family without the difference (the division workplan's stage 3 option)
 QUOTIENT: tuple[str, ...] = ()
 
 Example = wr.Example

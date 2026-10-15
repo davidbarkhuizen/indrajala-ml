@@ -87,7 +87,7 @@ from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 
-ARMS = {"family": mf.FAMILY, "quotient": mf.QUOTIENT}
+ARMS = {"family": mf.FAMILY, "quotient": mf.QUOTIENT, "sum": mf.SUM}
 
 
 def main(argv: list[str]) -> int:
@@ -117,6 +117,7 @@ def main(argv: list[str]) -> int:
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
     certify.add_argument("--task", required=True, help="modular-division-p (the quotient) or modular-sum-p (the sum)")
+    certify.add_argument("--arm", choices=sorted(ARMS), default="family")
     certify.add_argument("--snap-ratio", type=float, default=wc.SNAP_RATIO)
     certify.add_argument("--out", type=Path, required=True)
     long = commands.add_parser("long-test", help="saved family networks' long tests, one slot")
@@ -135,7 +136,7 @@ def main(argv: list[str]) -> int:
         return 0
     if args.command == "certify":
         p = int(args.task.rsplit("-", 1)[1])
-        result = mf.certify_file(args.network, mf.Encoding(p, mf.FAMILY), args.task, args.snap_ratio)
+        result = mf.certify_file(args.network, mf.Encoding(p, ARMS[args.arm]), args.task, args.snap_ratio)
         args.out.write_text(json.dumps(result, indent=1))
         print(wc.summary(result))
         return 0
