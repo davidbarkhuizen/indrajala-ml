@@ -40,6 +40,7 @@ from indrajala_ml.model.networks.window_recurrent_array_network import WindowRec
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE, AttentionPooling, Codes, Factor, WindowRecurrence
+from indrajala_ml.studies import inference
 from indrajala_ml.studies import window_diagnostics as wd
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
@@ -252,6 +253,74 @@ def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
         share = row.get("state_share", 0.0)
         lines.append(f"step {row['step']:>3} epoch {epoch:>3} codes {codes} share {share:.2f} {answers}{end}{mark}")
         before = codes
+    return lines
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """A run's end from its log.jsonl: the last step, how it ended, epochs trained in all, minutes."""
+
+    step: int
+    end: str  # certified, or the last step's end (passed, plateau, budget, spent)
+    epochs: int
+    minutes: float
+
+
+def outcome(rows: Sequence[Mapping[str, Any]]) -> Outcome:
+    """
+    A run's Outcome: certified at the first step's end that certified (the run stops there). A step
+    stopped by a budget (`spent`, `deadline`) logs as its epochs the loop's index at the stop, an
+    epoch not trained, so one less is counted for it.
+    """
+    ends = [row for row in rows if "end" in row]
+    last = next((row for row in ends if row.get("certified")), ends[-1] if ends else rows[-1])
+    epochs = sum(
+        int(row["epochs"]) - (row["end"] in ("spent", "deadline")) for row in ends if row["step"] <= last["step"]
+    )
+    end = "certified" if last.get("certified") else str(last.get("end", "running"))
+    return Outcome(int(last["step"]), end, epochs, round(float(last["seconds"]) / 60, 1))
+
+
+VERDICTS = (wc.SNAP_RATIO, 1.0)  # a certified network's two recertifications: the default snap ratio and strict
+
+
+def readout(root: Path, arms: Sequence[str], certify: Path) -> list[str]:
+    """
+    A registered comparison's readout (the division workplan's stage 5): each run in root/<arm>/seed<s>
+    by its log, a run counted as certified only when its saved network (matched by sha256) has a
+    certificate in `certify` in both verdicts (VERDICTS); each arm's count with its Wilson 95%
+    interval; Fisher's exact test, one-sided, that the first arm certifies more often than the second.
+    """
+    verdicts: dict[str, dict[float, bool]] = {}
+    for path in sorted(certify.glob("*.certificate.json")):
+        result = json.loads(path.read_text())
+        verdicts.setdefault(result["sha256"], {})[result["snap_ratio"]] = bool(result["certified"])
+    lines: list[str] = []
+    counts: list[tuple[int, int]] = []
+    for arm in arms:
+        seeds = sorted((root / arm).glob("seed*/log.jsonl"), key=lambda p: int(p.parent.name.removeprefix("seed")))
+        certified = 0
+        lines.append(f"== {arm}")
+        for log in seeds:
+            run = outcome([json.loads(line) for line in log.read_text().splitlines()])
+            note = ""
+            if run.end == "certified":
+                network = log.parent / f"certified-step-{run.step}.network.json"
+                found = verdicts.get(hashlib.sha256(network.read_bytes()).hexdigest(), {})
+                if all(found.get(ratio) for ratio in VERDICTS):
+                    certified += 1
+                else:
+                    note = f"  NOT RECERTIFIED (verdicts found: {found})"
+            lines.append(
+                f"{log.parent.name}: {run.end} at step {run.step}, {run.epochs} epochs, {run.minutes} min{note}"
+            )
+        low, high = inference.wilson(certified, len(seeds))
+        lines.append(f"{arm}: {certified} of {len(seeds)} certified (Wilson 95%: {low:.2f}-{high:.2f})")
+        counts.append((certified, len(seeds)))
+    if len(counts) == 2:
+        (a, n), (c, m) = counts
+        p = inference.fisher_exact_greater(a, n - a, c, m - c)
+        lines.append(f"Fisher's exact, one-sided ({arms[0]} more often than {arms[1]}): p {p:.3g}")
     return lines
 
 

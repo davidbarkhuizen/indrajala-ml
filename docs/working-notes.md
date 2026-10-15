@@ -180,6 +180,10 @@ where you meet a new trap; delete one that no longer holds.
   `window` = transformer; no `task` = addition).
 - **`addition_data.catalogue()` returns new Property objects:** `screen_cases` caches per Property,
   so build the catalogue once per step.
+- **A modular-family step stopped by a budget logs one epoch too many:** its end row's `epochs` is
+  the loop's index at the stop (`spent`, `deadline`), not trained, so a run of `--budget-epochs
+  400` sums to 401. `modular_family.outcome` (the `readout`) corrects it; sum the rows by hand and
+  you must too.
 - **A study's end can't be read from its average rate:** later ladders are slower; quote a range.
 - **Check every figure against the data before writing it into a doc.**
 - **The addition study's harness:** `train_seconds` include the whole catalogue whenever a screen
