@@ -184,6 +184,30 @@ runs):
   argues for 32 codes a factor (division workplan, D7 (b)) apart from any fix.
 - Not measured: the loss and the gradient's norm per batch around a collapse (the diagnosis is
   every 5 epochs); the next probe should log them.
+
+Findings (stage 5 of docs/division-workplan.md, the registered claim, D11-D14), 2026-10-15; p 5,
+two factors of 16, reading the output, the probe's settings, 400 epochs trained in all (180
+minutes only a guard; no run reached it), stop at certified, seeds 100-119 in each arm; ce4015d,
+OPENBLAS_NUM_THREADS=1; jebel seeds 100-113 (each arm 3 at once), pyramidon 114-119 (each arm 2 at
+once), 14:00-18:10. Every certified network recertified on pyramidon (f22a9f0, the same code) in
+both verdicts. Data in data/window-recurrent/division-claim/, manifest `division-claim.sha256`
+3b17c4ca...518ed4b49 (168 files, run from data/window-recurrent; the long tests apart), both
+machines. The readout is `readout data/window-recurrent/division-claim`.
+
+- **Works: the family helps.** The family 13 of 20 certified (Wilson 95%: 0.43-0.82), the quotient
+  alone 1 of 20 (0.01-0.24); Fisher's exact test, one-sided, p 6.9e-5 (registered: works at p <
+  0.05). The screens' difference (5 of 8 against 0 of 6) holds at 20 fresh seeds.
+- **The family's successes:** steps 6-12 (median 8), 99-257 epochs (median 177), 10-30 minutes on
+  jebel and 18-55 on pyramidon (the minutes are the machine's and its load's; the epochs are the
+  measure, D13). The quotient alone's one: seed 100, step 10, 202 epochs, 15.0 minutes.
+- **Every recertification agrees:** 14 of 14 certified in both verdicts against division's
+  25-state machine, 0 wrong outputs, 0 wrong states, each minimised to 25; 35-74 joint codes
+  reached; snap ratio >= 1.0002 (220 near ties in the branched verdict, none strict), logit lead
+  >= 0.10.
+- **Every failure spent its 400 epochs:** the family's 7 at steps 14-20, the quotient's 19 at
+  steps 13-25 (no run ended on the guard). Not yet traced for collapses (`trace`).
+- The long tests (D4) on all 14 networks: running (pyramidon, one at a time, about 90 minutes and
+  1.7 GB each); the claim isn't written up until they pass.
 """
 
 from __future__ import annotations
@@ -248,7 +272,14 @@ def main(argv: list[str]) -> int:
     long.add_argument("--out", type=Path, required=True)
     trace = commands.add_parser("trace", help="runs' logs, a line per diagnosis, collapses marked")
     trace.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
+    readout.add_argument("root", type=Path, help="the study's directory, a <arm>/seed<s> per run")
+    readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
+    readout.add_argument("--certify", type=Path, help="the recertifications (default: root/certify)")
     args = parser.parse_args(argv)
+    if args.command == "readout":
+        print("\n".join(mf.readout(args.root, args.arms, args.certify or args.root / "certify")))
+        return 0
     if args.command == "trace":
         for path in args.logs:
             print(f"== {path}")

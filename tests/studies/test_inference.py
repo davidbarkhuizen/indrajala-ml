@@ -32,6 +32,15 @@ def test_fisher_exact_two_sided():
     assert st.fisher_exact(4, 16, 12, 8) == st.fisher_exact(16, 4, 8, 12) == st.fisher_exact(16, 8, 4, 12)
 
 
+def test_fisher_exact_greater_one_sided():
+    assert st.fisher_exact_greater(3, 1, 1, 3) == pytest.approx(17 / 70)  # the lady tasting tea, one-sided
+    assert st.fisher_exact_greater(1, 3, 3, 1) == pytest.approx(69 / 70)  # the other direction
+    assert st.fisher_exact_greater(16, 4, 8, 12) == pytest.approx(0.0112, abs=1e-4)  # half D4's two-sided
+    assert st.fisher_exact_greater(0, 0, 0, 0) == 1.0 and st.fisher_exact_greater(0, 5, 0, 5) == 1.0
+    # a table and its mirror (arms swapped, columns swapped) are the same alternative
+    assert st.fisher_exact_greater(13, 7, 1, 19) == st.fisher_exact_greater(19, 1, 7, 13)
+
+
 def _enumerated_p(first: Sequence[float], second: Sequence[float]) -> float:
     """Mann-Whitney's two-sided exact p by every split of the pooled values."""
     pooled = [*first, *second]

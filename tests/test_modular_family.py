@@ -1,5 +1,6 @@
 """The modular family's encoding and probe (docs/modular-family-workplan.md, stage 2)."""
 
+import hashlib
 import json
 import random
 from pathlib import Path
@@ -175,3 +176,55 @@ def test_trace_marks_a_collapse_where_the_codes_in_use_halve():
     assert ["collapse" in line for line in lines] == [False, False, True, False]
     assert lines[0].startswith("step   1 epoch   5 codes [16, 15] share 0.00 sum 0.50")
     assert lines[-1].endswith("END plateau min 7")
+
+
+def test_outcome_stops_at_the_first_certified_step_and_counts_its_epochs():
+    rows = [
+        {"step": 0, "epoch": 0, "seconds": 0.2},
+        {"step": 1, "end": "passed", "epochs": 3, "certified": False, "seconds": 30.0},
+        {"step": 2, "end": "plateau", "epochs": 40, "certified": False, "seconds": 300.0},
+        {"step": 3, "end": "passed", "epochs": 2, "certified": True, "seconds": 330.0},
+    ]
+    assert mf.outcome(rows) == mf.Outcome(3, "certified", 45, 5.5)
+    assert mf.outcome(rows[:3]) == mf.Outcome(2, "plateau", 43, 5.0)
+    assert mf.outcome(rows[:1]).end == "running"
+    spent = {"step": 3, "end": "spent", "epochs": 6, "certified": False, "seconds": 330.0}  # 5 trained
+    assert mf.outcome([*rows[:3], spent]) == mf.Outcome(3, "spent", 48, 5.5)
+
+
+def test_readout_counts_a_run_only_when_recertified_in_both_verdicts(tmp_path: Path):
+    def run(arm: str, seed: int, certified: bool, network: bytes = b"") -> None:
+        out = tmp_path / arm / f"seed{seed}"
+        out.mkdir(parents=True)
+        end = {
+            "step": 4,
+            "end": "passed" if certified else "spent",
+            "epochs": 7,
+            "certified": certified,
+            "seconds": 60.0,
+        }
+        (out / "log.jsonl").write_text(json.dumps(end) + "\n")
+        if certified:
+            (out / "certified-step-4.network.json").write_bytes(network)
+
+    def certificate(name: str, network: bytes, ratio: float) -> None:
+        sha = hashlib.sha256(network).hexdigest()
+        result = {"sha256": sha, "snap_ratio": ratio, "certified": True}
+        (tmp_path / "certify" / f"{name}.certificate.json").write_text(json.dumps(result))
+
+    (tmp_path / "certify").mkdir()
+    run("family", 1, True, b"one")
+    run("family", 2, True, b"two")  # only one verdict: not counted
+    run("family", 10, False)
+    run("quotient", 1, False)
+    run("quotient", 2, False)
+    run("quotient", 3, False)
+    for ratio in mf.VERDICTS:
+        certificate(f"one-{ratio}", b"one", ratio)
+    certificate("two", b"two", 1.0)
+    lines = mf.readout(tmp_path, ["family", "quotient"], tmp_path / "certify")
+    assert lines[1] == "seed1: certified at step 4, 7 epochs, 1.0 min"
+    assert "NOT RECERTIFIED" in lines[2] and lines[3].startswith("seed10: spent")  # seeds in numeric order
+    assert lines[4].startswith("family: 1 of 3 certified (Wilson 95%: 0.06-0.79)")
+    assert lines[-2].startswith("quotient: 0 of 3 certified")
+    assert lines[-1] == "Fisher's exact, one-sided (family more often than quotient): p 0.5"

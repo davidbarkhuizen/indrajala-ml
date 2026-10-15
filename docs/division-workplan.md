@@ -6,7 +6,8 @@ D1-D10 settled (the owner delegates a workplan's decisions; each with its option
 Probe-driven ([experiment-design.md](experiment-design.md), section 2): each stage is short
 probes, its next step chosen from its result; one longer run, stage 5's, with its reason stated.
 Stages 1-4 done (2026-10-15; stage 4: 1 of 4 certified at `p` 7, every long-test case passed);
-stage 5 registered (D11-D14), its build done, running.**
+stage 5 run: **works**, the family 13 of 20 certified against the quotient alone's 1 of 20
+(Fisher's exact, one-sided, p 6.9e-5); its long tests running.**
 
 ## Where this starts
 
@@ -209,6 +210,11 @@ is reachable.
      0.05. **Fails:** otherwise; the screens' difference doesn't hold at 20 seeds. Then the long
      tests (D4) on every certified network: any failing case is a bug, found before the claim is
      written up.
+   - *Result (2026-10-15):* **works.** The family 13 of 20 (Wilson 95%: 0.43-0.82), the quotient
+     alone 1 of 20 (0.01-0.24); Fisher's exact, one-sided, p 6.9e-5. Every certified network
+     recertified in both verdicts (14 of 14). The family's successes at steps 6-12, 99-257 epochs
+     (median 177); every failure spent its 400 epochs. Details in the probe script's findings;
+     the readout is `scripts/modular_family_probe.py readout`. The long tests: running.
 6. **Write it up.** The findings in the probe script's docstring at each stage; the D10 finding,
    division's certified networks and the collapse past a solution as notes for the paper
    (`~/code/indrajala-papers`); next-steps.md for what stays open (factored readouts, D10 (a)/(c),

@@ -51,6 +51,19 @@ def fisher_exact(a: int, b: int, c: int, d: int) -> float:
     return float(Fraction(sum(w for w in weights.values() if w <= observed), sum(weights.values())))
 
 
+def fisher_exact_greater(a: int, b: int, c: int, d: int) -> float:
+    """
+    The one-sided p value of Fisher's exact test of the table [[a, b], [c, d]] (rows: the arms;
+    columns: working, not), the alternative that the first arm works more often: the probability,
+    under the margins fixed, of `a` or more working in the first arm, exactly as integers.
+    """
+    assert min(a, b, c, d) >= 0
+    first, second, working = a + b, c + d, a + c
+    low, high = max(0, working - second), min(working, first)
+    weights = {x: math.comb(first, x) * math.comb(second, working - x) for x in range(low, high + 1)}
+    return float(Fraction(sum(w for x, w in weights.items() if x >= a), sum(weights.values())))
+
+
 @dataclass(frozen=True)
 class Trend:
     z: float  # positive: the rate rises with the score
