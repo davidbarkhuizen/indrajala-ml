@@ -11,6 +11,13 @@ that solved or nearly solved collapsed when trained on (codes to 2-8, the answer
 while learning. If a later probe needs a run to keep training past a solution, the thermostat
 (D1 (a)) is the first thing to try; otherwise stopping at the first certified step suffices.
 
+**Later (2026-10-15 evening): traced, the division runs' collapse is abrupt** (within 5 epochs,
+mostly mid-step, no slow fall of the codes in use before it; `scripts/modular_family_probe.py`'s
+findings, "the collapse, traced"). That fits an optimiser instability better than the commitment's
+pull, so this plan stays deferred: the fix for the division runs is planned apart (the owner: not
+the commitment, unless it is shown to be the cause), its candidates in
+[next-steps.md](next-steps.md), "From the division work".
+
 ## Why
 
 Each code layer's loss, per window, is `weight * (||sg[h] - e||^2 + beta ||h - sg[e]||^2)`

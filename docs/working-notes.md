@@ -271,6 +271,10 @@ where you meet a new trap; delete one that no longer holds.
   one-line script in the worktree's `scripts/` printing a module's `__file__`): run as a script,
   the worktree's loads; `python -c` from the main checkout loads the main checkout's. E2 ran this
   way (`~/code/wt-e2`, launched by `~/code/e2-launch.sh` on `jebel`).
+- **Never develop in a worktree a queued or running study imports from:** a launcher that waits
+  imports the worktree as it is when the study starts (and records its commit then). Keep a separate
+  worktree for development (`~/code/wt-dev`); `~/code/wt-e2b` on `pyramidon` was nearly launched on a
+  development commit.
 - **A Monitor that polls remote files works** (`ssh -n` a listing or `grep` each minute, the lines
   already seen kept in a bash associative array): used for the modular-family probe's step ends.
 - **A Monitor reading `{ ssh host tail -F A & tail -F B; } | awk ...` delivered nothing** for 30

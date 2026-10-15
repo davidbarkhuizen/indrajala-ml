@@ -27,7 +27,7 @@ import json
 import math
 import random
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -212,6 +212,26 @@ def long_accuracy(net: Any, encoding: Encoding, settings: Settings) -> dict[str,
         q = [tally[k] for k in tally if k.startswith("quotient")]
         result[str(n)] = round(sum(c for c, _ in q) / sum(a for _, a in q), 4)
     return result
+
+
+def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
+    """
+    A run's log.jsonl, a line per diagnosis: step, epoch (or the step's end), each factor's codes in
+    use, the state's share of the pair, each answer's accuracy; marked where the codes in use fall
+    below `drop` of the diagnosis before (a collapse: the division workplan's stage 4 trace).
+    """
+    lines: list[str] = []
+    before: list[int] | None = None
+    for row in rows:
+        codes: list[int] = [int(factor["codes"]) for factor in row["factors"]]
+        answers = " ".join(f"{name} {value:.2f}" for name, value in sorted(row["accuracy"].items()))
+        end = f" END {row['end']} min {row.get('minimised')}" if "end" in row else ""
+        mark = " << collapse" if before is not None and sum(codes) < drop * sum(before) else ""
+        epoch = row.get("epoch", "-")
+        share = row.get("state_share", 0.0)
+        lines.append(f"step {row['step']:>3} epoch {epoch:>3} codes {codes} share {share:.2f} {answers}{end}{mark}")
+        before = codes
+    return lines
 
 
 def exclusion_bound(p: int, factors: Sequence[tuple[int, int]]) -> int:

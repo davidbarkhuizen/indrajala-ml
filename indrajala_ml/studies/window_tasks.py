@@ -24,6 +24,7 @@ and B both 0), so an alignment's zero columns are part of the word like any othe
 from __future__ import annotations
 
 import functools
+import itertools
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -107,6 +108,43 @@ class Mealy:
                 state = self.transition[state, windows[:, j]]
             after[s] = state
         return labels, after
+
+    def distinguishing_length(self) -> int | None:
+        """
+        The least k such that every pair of states is told apart by some word of k tokens (Chow 1978's
+        k-distinguishability: the outputs differ somewhere along it), or None if some pair never is.
+        """
+        classes, count = [0] * self.states, 1
+        for k in itertools.count(1):
+            keys = [
+                (
+                    classes[s],
+                    *((int(self.output[s, t]), classes[int(self.transition[s, t])]) for t in range(self.tokens)),
+                )
+                for s in range(self.states)
+            ]
+            index = {key: i for i, key in enumerate(dict.fromkeys(keys))}
+            classes = [index[key] for key in keys]
+            if len(index) == self.states:
+                return k
+            if len(index) == count:
+                return None
+            count = len(index)
+        raise AssertionError("unreachable")
+
+    def is_congruence(self, labels: IntArray | Sequence[int]) -> bool:
+        """
+        Whether the partition of the states by `labels` is respected by every transition: states with
+        one label go, on every token, to states with one label. Then the labels' machine is a
+        homomorphic image of this one (an approximation, in Egri-Nagy and Nehaniv's terms).
+        """
+        for t in range(self.tokens):
+            image: dict[int, int] = {}
+            for s in range(self.states):
+                after = int(labels[int(self.transition[s, t])])
+                if image.setdefault(int(labels[s]), after) != after:
+                    return False
+        return True
 
     def distinguishing(self, s: int, r: int) -> list[int]:
         """The shortest word (first in token order) whose last label differs from s and from r."""
