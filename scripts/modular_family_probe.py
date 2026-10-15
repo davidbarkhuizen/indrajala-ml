@@ -205,7 +205,41 @@ machines. The readout is `readout data/window-recurrent/division-claim`.
   reached; snap ratio >= 1.0002 (220 near ties in the branched verdict, none strict), logit lead
   >= 0.10.
 - **Every failure spent its 400 epochs:** the family's 7 at steps 14-20, the quotient's 19 at
-  steps 13-25 (no run ended on the guard). Not yet traced for collapses (`trace`).
+  steps 13-25 (no run ended on the guard).
+- **The family's failures mostly lost what they had; the quotient's mostly never had it**
+  (`readout`'s course of each run). The worst answer at its best: 4 of the family's 7 failures
+  reached >= 0.95 (seeds 101, 111, 113, 119 at 0.96-1.00, steps 6-8; 115 and 116 at 0.87 and 0.90),
+  against 2 of the quotient's 19 (their median 0.79). That is the sampled answers, not the states:
+  runs were right on every sampled answer, 48 columns included, with 160-177 states minimised (seed
+  104, steps 6-8) and certified a step or more later, the minimised count falling to 25 in one
+  step; seed 101, right on every sampled answer at step 6 with 67, never certified.
+- **Large drops are common and mostly recovered** (from the diagnoses, every 5 epochs: the worst
+  answer from >= 0.9 down by more than 0.3 within one interval): 16 in 10 of the family's runs (6
+  of the 13 that certified, 4 of the 7 failures) and 8 in 4 of the quotient's; 7 at a step's first
+  diagnosis, 17 mid-step. 17 of the 24 came back to >= 0.9 within 1-6 diagnoses. Whether the codes
+  collapsed didn't decide it: seed 100 fell to [7, 6] codes and certified, the quotient's 105 and
+  115 kept all 16 a factor and never came back. So a failure is a drop not recovered from, and the
+  family's successes survived theirs.
+- **The curriculum moves on while broken:** a step ends on a plateau after 10 epochs (`patience`)
+  without beating its best screen score, and a drop leaves that best at the peak before it, so a
+  run has 10 epochs to beat its own peak or takes on the next length broken. 13 of the family's 16
+  drops ended their step on a plateau; of all the steps ending on one, 119 of the family's 133 and
+  261 of the quotient's 262 ended with the worst answer below 0.9.
+- **seed 107 never came near:** the sum 0.98-1.00 at 9 of steps 8-17 (0.58 at 12), the difference
+  near chance (0.45-0.56) over steps 7-17 with 9-16 codes a factor in use: one counter learned, the
+  other stuck, as at p 7 (stage 4).
+- **For the fork (docs/collapse-fork-workplan.md):** its snapshot is the step's start (the step
+  before's network) and its best since, so it reaches drops at a boundary and mid-step alike; but it
+  fires only below 0.6 of the step's peak screen score (the share of every answer right, not the
+  worst answer). Of the 24 drops, from the logged screen scores (a diagnosis's; the fork sees every
+  epoch, so these are the fewest it would fire on): 6 below 0.6 of the step's logged peak (100,
+  111, 119, the quotient's 113 and 118 twice); 4 at a step's start below 0.6 of any start above
+  0.97 (102, 106, 113, the quotient's 118); 11 not, 8 above 0.6 of the logged peak (110 twice, 112,
+  113, 117, the quotient's 105 twice and 115) and 3 at a step's start above 0.6 of any start up to
+  1.0 (101 at 0.76, 119 at 0.90, the quotient's 118 at 0.61); 3 unknown (no screen logged). So
+  seed 101's loss, the clearest, is one it would miss. A restore doesn't reset the plateau count. Read the fork probe with this in
+  mind; a drop threshold on the worst answer, or a step that ends only when its peak is recovered,
+  are the alternatives the logs suggest.
 - The long tests (D4) on all 14 networks: running (pyramidon, one at a time, about 90 minutes and
   1.7 GB each); the claim isn't written up until they pass.
 """

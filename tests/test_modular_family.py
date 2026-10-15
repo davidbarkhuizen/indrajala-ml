@@ -179,17 +179,22 @@ def test_trace_marks_a_collapse_where_the_codes_in_use_halve():
 
 
 def test_outcome_stops_at_the_first_certified_step_and_counts_its_epochs():
+    def row(step: int, codes: int, worst: float, **extra: object) -> dict[str, object]:
+        accuracy = {"sum": 1.0, "quotient-0": worst}
+        return {"step": step, "accuracy": accuracy, "factors": [{"codes": codes}], **extra}
+
     rows = [
-        {"step": 0, "epoch": 0, "seconds": 0.2},
-        {"step": 1, "end": "passed", "epochs": 3, "certified": False, "seconds": 30.0},
-        {"step": 2, "end": "plateau", "epochs": 40, "certified": False, "seconds": 300.0},
-        {"step": 3, "end": "passed", "epochs": 2, "certified": True, "seconds": 330.0},
+        row(0, 1, 0.1, epoch=0, seconds=0.2),
+        row(1, 8, 0.6, end="passed", epochs=3, certified=False, seconds=30.0),
+        row(2, 16, 0.97, epoch=5, seconds=200.0),
+        row(2, 7, 0.3, end="plateau", epochs=40, certified=False, seconds=300.0),  # a collapse
+        row(3, 9, 1.0, end="passed", epochs=2, certified=True, seconds=330.0),
     ]
-    assert mf.outcome(rows) == mf.Outcome(3, "certified", 45, 5.5)
-    assert mf.outcome(rows[:3]) == mf.Outcome(2, "plateau", 43, 5.0)
+    assert mf.outcome(rows) == mf.Outcome(3, "certified", 45, 5.5, 1.0, 3, 1)
+    assert mf.outcome(rows[:4]) == mf.Outcome(2, "plateau", 43, 5.0, 0.97, 2, 1)
     assert mf.outcome(rows[:1]).end == "running"
-    spent = {"step": 3, "end": "spent", "epochs": 6, "certified": False, "seconds": 330.0}  # 5 trained
-    assert mf.outcome([*rows[:3], spent]) == mf.Outcome(3, "spent", 48, 5.5)
+    spent = row(3, 7, 0.4, end="spent", epochs=6, certified=False, seconds=330.0)  # 5 trained
+    assert mf.outcome([*rows[:4], spent]).epochs == 48
 
 
 def test_readout_counts_a_run_only_when_recertified_in_both_verdicts(tmp_path: Path):
@@ -202,6 +207,8 @@ def test_readout_counts_a_run_only_when_recertified_in_both_verdicts(tmp_path: P
             "epochs": 7,
             "certified": certified,
             "seconds": 60.0,
+            "accuracy": {"sum": 1.0 if certified or seed == 10 else 0.5},  # seed 10 came near, then failed
+            "factors": [{"codes": 9}],
         }
         (out / "log.jsonl").write_text(json.dumps(end) + "\n")
         if certified:
@@ -223,8 +230,9 @@ def test_readout_counts_a_run_only_when_recertified_in_both_verdicts(tmp_path: P
         certificate(f"one-{ratio}", b"one", ratio)
     certificate("two", b"two", 1.0)
     lines = mf.readout(tmp_path, ["family", "quotient"], tmp_path / "certify")
-    assert lines[1] == "seed1: certified at step 4, 7 epochs, 1.0 min"
+    assert lines[1] == "seed1: certified at step 4, 7 epochs, 1.0 min; worst answer at best 1.00 (step 4), collapses 0"
     assert "NOT RECERTIFIED" in lines[2] and lines[3].startswith("seed10: spent")  # seeds in numeric order
     assert lines[4].startswith("family: 1 of 3 certified (Wilson 95%: 0.06-0.79)")
-    assert lines[-2].startswith("quotient: 0 of 3 certified")
+    assert lines[5] == "family's 2 failures: 1 came near a solution (worst answer >= 0.95), 0 collapsed"
+    assert lines[-3].startswith("quotient: 0 of 3 certified")
     assert lines[-1] == "Fisher's exact, one-sided (family more often than quotient): p 0.5"
