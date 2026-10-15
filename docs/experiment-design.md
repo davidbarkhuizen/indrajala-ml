@@ -66,6 +66,12 @@ threshold probe), recorded with it. (The owner's rule, 2026-10-13; the claims pl
   network (a cheap probe of a few epochs and seeds is enough) isn't launched, or is stopped and
   recorded. E8b's all-at-once arm was stopped after 6 runs: a probe showed its state stuck on one
   code at training lengths 1-20.
+- **Probes first; long runs only with a stated reason** (the owner, 2026-10-15, after C9'': its
+  4 h on two machines told less than a 10-minute probe of its saved networks). Work by short
+  probes (minutes to about an hour, a few seeds, one question, success and failure written before
+  the data), the next chosen from each result, extended or varied as needed. A probe claims
+  nothing; a claim still needs its registered test and a certificate. Probes are kept as repo
+  tools and their results with manifests (the modular-family and commitment-control workplans).
 - **Short, focused experiments** (the owner, 2026-10-14): a matrix only where a question needs
   one. After a lone working network, a short follow-up with more seeds of its configuration,
   sized from the observed rate and labelled exploratory.
