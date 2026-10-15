@@ -620,6 +620,22 @@ def test_e2_is_e3s_curriculum_m16_cell_with_a_continuous_state():
     assert len(e2.runs) == 20 and e2.settings == e3.settings and e2.directory != e3.directory
 
 
+def test_e2b_is_e6s_linear_cell_snapped_against_continuous():
+    """The claims workplan's D38: E6's linear window at k 1 s 16, 20 seeds an arm, m 16 against a
+    continuous state, the curriculum capped at the exclusion bound, every snapped step certified and
+    no run stopped early; one study an arm, the same cell and settings but for m."""
+    scripts = Path(__file__).parents[2] / "scripts"
+    snapped = wr.load_config(scripts / "window_recurrent_e2b_snapped.json")
+    continuous = wr.load_config(scripts / "window_recurrent_e2b_continuous.json")
+    e6 = wr.load_config(scripts / "window_recurrent_e6_linear.json")
+    assert snapped.runs == [wr.RunSpec("curriculum", 1, 16, 16, seed, window="linear") for seed in range(20)]
+    assert continuous.runs == [dataclasses.replace(spec, m=None) for spec in snapped.runs]
+    assert snapped.settings == continuous.settings
+    assert snapped.settings == dataclasses.replace(e6.settings, seeds=20, stop_at_certified=False)
+    assert snapped.settings.steps == 16 + wt.ADDITION.machine.states - 1
+    assert snapped.directory != continuous.directory
+
+
 @pytest.mark.parametrize("window", ["linear", "ffn"])
 def test_e6_is_an_existence_test_past_the_exclusion_bound(window: str):
     """The claims workplan's D37: E6's window (D21) at k 1 s 16 m 16 on addition, trained to the cap
