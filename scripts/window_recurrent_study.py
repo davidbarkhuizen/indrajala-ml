@@ -486,17 +486,25 @@ within the budget"**, not refuted (D7).
 - **Staggering didn't reach the second factor: in 7 of 9 runs factors 1 and 2 never left one
   code.** Their turns came (at each plateau, from step 2) and their cells trained (seed 6, steps 1 to 2:
   the GRU's weights moved 1.6-6.7 times their norm, as factor 0's), but their codebooks barely
-  moved (0.19) and every window snapped to the same code: a state of one code passes nothing on,
-  so the turn has nothing to learn from. Factor 0 alone reached 7-12 codes and 0.17-0.33 of `A`,
+  moved (0.19) and every window snapped to the same code. **The cell's output itself collapsed
+  during its turn** (seed 6, a probe on the saved networks): factor 1's `h` before snapping varied
+  a little at initialisation (a feature's spread 0.018 across inputs, mean |h| 0.08) and after its
+  turn was one point for every input (spread under 0.001, |h| 0.005), its update gate's bias
+  pushed from 1.0 to 2.5 (the cell copying its state), its one code on that point; factor 2 the
+  same. A state of one code passes nothing on, so the answer's gradient through it averages out
+  and the commitment loss, pulling `h` onto its code, is what's left: the reading, not yet tested,
+  is that the turn taught the factor to be a constant. Re-seeding the unused codes onto `h` can't
+  split it (the probe: 15 codes moved, still 1 used). Factor 0 alone reached 7-12 codes and 0.17-0.33 of `A`,
   0.11-0.26 of `B`; "0" 79-91% right, "undefined" 69-86%, the nonzero quotients 11-44% a class.
 - **Two runs split a second factor, both on pyramidon, at step 2 (a step that ran its whole 200
   epochs):** seed 7's factor 1 (3 codes, then 13-16; at the end 0.12 of `A`, 0.24 of `B`) and seed
   8's factor 2 (5, then 11-14; 0.06 and 0.03). Neither carried a residue: the nonzero quotients
   stayed at 0.29-0.38.
 - **What it says:** C9' failed by the factors settling on the zero tests together; C9'' by the
-  factors after the first never starting. A factor has to have several codes before its turn can
-  teach it, so a next design must wake a collapsed codebook (or train jointly until each factor
-  splits, then stagger), or change the rung (division at `p` 3, where 23% of the answer needs the
+  factors after the first collapsing to a constant in their turn. A factor has to vary before its
+  turn can teach it, so a next design must start it (its cell re-drawn and its codes re-seeded at
+  its turn, its commitment off until it uses several codes; then a turn kept only if the answer
+  improved), or train jointly until each factor splits, then stagger, or change the rung (division at `p` 3, where 23% of the answer needs the
   pair, against 50% at `p` 5).
 """
 

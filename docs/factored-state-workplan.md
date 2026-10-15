@@ -446,10 +446,12 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    alone, a step's rotation, a run's turns resumed, the configs against the cell.
    *Result:* both machines ran the whole 4 h (2026-10-14 22:36 to 02:36; the 2 h rule wasn't
    applied, and at 2 h no run met it), none certified. In 7 of 9 runs factors 1 and 2 never left
-   one code: their turns trained their cells, but a state of one code passes nothing on, so
-   factor 0 learned alone (at most 0.33 of a residue). Two runs (pyramidon, seeds 7 and 8) split a
-   second factor at step 2, neither carrying a residue. A next design must wake a collapsed
-   codebook, or train jointly until each factor splits, then stagger; or change the rung.
+   one code: in its turn each one's cell collapsed to one output for every input (the update gate
+   copying its state, `h` on its code), so factor 0 learned alone (at most 0.33 of a residue).
+   Two runs (pyramidon, seeds 7 and 8) split a second factor at step 2, neither carrying a
+   residue. A next design must start a factor at its turn (re-drawn, re-seeded, its commitment
+   off until it splits; a turn kept only if the answer improved), or train jointly until each
+   factor splits, then stagger; or change the rung.
 10. **Retire this workplan**; leftovers to next-steps.md.
 
 ## Cells and budget
