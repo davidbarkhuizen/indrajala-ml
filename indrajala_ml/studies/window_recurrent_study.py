@@ -97,6 +97,11 @@ Example = tuple[tuple[float, ...], tuple[int, ...]]
 
 def window_specs(task: wt.Task) -> list[LayerSpec]:
     """W11's window for a task: the state entering before each attention block (W18)."""
+    return transformer_window(task.machine.tokens, task.machine.classes)
+
+
+def transformer_window(tokens: int, classes: int) -> list[LayerSpec]:
+    """W11's window over tokens tokens, classes output classes (a task's, or the modular family's)."""
     blocks: list[LayerSpec] = []
     for _ in range(BLOCKS):
         blocks += [
@@ -105,11 +110,11 @@ def window_specs(task: wt.Task) -> list[LayerSpec]:
             Residual((LayerNorm(), Dense(FFN, activation="relu"), Dense(D, activation="linear", bias=True))),
         ]
     return [
-        Embedding(task.machine.tokens, D),
+        Embedding(tokens, D),
         Position(),
         *blocks,
         LayerNorm(),
-        Dense(task.machine.classes, output=True, activation="softmax", loss="cross_entropy"),
+        Dense(classes, output=True, activation="softmax", loss="cross_entropy"),
     ]
 
 

@@ -4,7 +4,11 @@
 controls, is deferred behind it: [commitment-control-workplan.md](commitment-control-workplan.md)).
 Decisions D1-D6 settled (the owner delegates a workplan's decisions; each with its options' pros
 and cons). Probe-driven (the owner, 2026-10-15): short probes, the next chosen from each result; no
-long run without a stated reason. Stage 1 (this plan) done; stage 2 next.**
+long run without a stated reason. Stages 1-2 done (the probe: none works with D10's poolings; the
+poolings reading the window's output, the family certified 2 of 2 against division's machine, the
+quotient alone 0 of 2; the state not factored by residue). The follow-up is
+[division-workplan.md](division-workplan.md); this plan's stage 3 is done there (the certificate's
+adapter was built in stage 2).**
 
 ## Why
 
@@ -113,12 +117,25 @@ settings, the comparison says so.
 ## Stages
 
 1. **This plan.**
-2. **The probe tool and its run:** `scripts/modular_family_probe.py` (the family's examples, the
-   query-token encoding, the probe's curriculum, its diagnosis), with a test of the encoding
-   against `modular_data`'s machines; the run; its findings in its docstring with each file's
-   sha256, the data in `data/window-recurrent/modular-family-probe/` on both machines.
-3. **If it works: the certificate for the encoding:** the window machine with query tokens (the
-   quotient's readout certified; the sum's and difference's alongside), then the long tests.
+2. **Done (this PR). The probe tool and its run:** `scripts/modular_family_probe.py` and
+   `indrajala_ml/studies/modular_family.py` (the family's examples with the harness's final zero
+   column, the query-token encoding, the probe's curriculum, its diagnosis, `--reads`, each step's
+   quotient certified and the run stopped at the first certified, and `QueryMachine`, the
+   certificate's adapter: a column run with its queries, one slot read), tests against
+   `modular_data`'s machines; findings in the script's docstring.
+   *Result:* **as registered (D10's poolings), no `family` run works, nor the control**: the
+   nonzero quotients 0.33-0.37, every factor's share at most 0.18. **A check the probe prompted
+   (the harness, E8c's modular sum):** one factor reading before the state plateaus from step 3, 0
+   of 2 certified; reading the window's output, 2 of 2, as E8c. So D10 blocks even one counter.
+   **Reading the output (an unregistered variation, the same probe otherwise): the family certified
+   2 of 2 (seeds 0 and 1, the quotient and the sum, both verdicts, division's 25 states), the
+   quotient alone 0 of 2** (nonzero quotients at most 0.64). The registered success's factor clause
+   is not met: the certified states are spread over both codebooks, no factor a residue or any
+   `xA + yB`. Every run that got far collapsed when trained on past its solution; the tool now stops
+   at the first certified step. The outcome the plan didn't name (solved, not factored) leads to
+   [division-workplan.md](division-workplan.md).
+3. **The certificate for the encoding:** built in stage 2 (`QueryMachine`); its use (long tests,
+   more seeds) moves to [division-workplan.md](division-workplan.md).
 4. **Retire this plan;** leftovers to next-steps.md.
 
 Tier 0 throughout unless stage 3 touches the certificate's code path (a test-covered pure-Python
