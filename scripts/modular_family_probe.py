@@ -6,6 +6,14 @@ budget, diagnosed as it trains (indrajala_ml/studies/modular_family.py).
 
     OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/modular_family_probe.py run \\
         --arm family --seed 0 --budget-minutes 60 --out data/window-recurrent/modular-family-probe/family-seed0
+    OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/modular_family_probe.py run \\
+        --arm family --reads output --first-seed 2 --seeds 6 --budget-minutes 60 --out DIR
+    .venv/bin/python scripts/modular_family_probe.py long-test NETWORK.json [...] --task modular-division-5 --out DIR
+
+`--first-seed F --seeds N` runs seeds F..F+N-1 at once, a process each, into DIR/seed<s>/ (and
+its output and errors in DIR/seed<s>.log). `long-test` runs the long tests (docs/division-workplan.md, D4: U1
+and S1 at 128, 256 and 1,024 columns, the harness's sizes) on saved family networks, one slot (the
+task's), into DIR/<network>.json (skipped when there), a line each of its cases and failures.
 
 Each run writes `log.jsonl` (a line per diagnosis: each operation's accuracy, the quotient by
 class, each factor's codes used and its share of A, B, the sum S, the difference D and the zero
@@ -65,12 +73,17 @@ modular-family-probe/certify/ (in the first manifest); both machines.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
+import contextlib
+import functools
 import json
+import multiprocessing
 import sys
 from pathlib import Path
 
 from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_recurrent_certificate as wc
+from indrajala_ml.studies import window_recurrent_study as wr
 
 ARMS = {"family": mf.FAMILY, "quotient": mf.QUOTIENT}
 
@@ -80,7 +93,10 @@ def main(argv: list[str]) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="one probe run")
     run.add_argument("--arm", choices=sorted(ARMS), required=True)
-    run.add_argument("--seed", type=int, required=True)
+    seeds = run.add_mutually_exclusive_group(required=True)
+    seeds.add_argument("--seed", type=int, help="one run, into --out")
+    seeds.add_argument("--first-seed", type=int, help="--seeds runs from this seed, at once, into --out/seed<s>")
+    run.add_argument("--seeds", type=int, default=1)
     run.add_argument("--p", type=int, default=5)
     run.add_argument("--factors", type=int, default=2, help="factors of 16 codes, s 16 each")
     run.add_argument(
@@ -93,7 +109,20 @@ def main(argv: list[str]) -> int:
     certify.add_argument("--task", required=True, help="modular-division-p (the quotient) or modular-sum-p (the sum)")
     certify.add_argument("--snap-ratio", type=float, default=wc.SNAP_RATIO)
     certify.add_argument("--out", type=Path, required=True)
+    long = commands.add_parser("long-test", help="saved family networks' long tests, one slot")
+    long.add_argument("networks", type=Path, nargs="+")
+    long.add_argument("--task", required=True, help="modular-division-p (the quotient) or modular-sum-p (the sum)")
+    long.add_argument("--arm", choices=sorted(ARMS), default="family")
+    long.add_argument("--n", type=int, nargs="+", default=list(wr.LONG_LENGTHS))
+    long.add_argument("--properties", nargs="+", default=list(mf.LONG_PROPERTIES))
+    long.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
+    if args.command == "long-test":
+        args.out.mkdir(parents=True, exist_ok=True)
+        p = int(args.task.rsplit("-", 1)[1])
+        for path in args.networks:
+            print(long_test_file(path, mf.Encoding(p, ARMS[args.arm]), args), flush=True)
+        return 0
     if args.command == "certify":
         p = int(args.task.rsplit("-", 1)[1])
         result = mf.certify_file(args.network, mf.Encoding(p, mf.FAMILY), args.task, args.snap_ratio)
@@ -101,8 +130,42 @@ def main(argv: list[str]) -> int:
         print(wc.summary(result))
         return 0
     encoding = mf.Encoding(args.p, ARMS[args.arm])
-    mf.run(encoding, [(16, 16)] * args.factors, args.seed, args.budget_minutes * 60, args.out, reads=args.reads)
+    probe = functools.partial(
+        mf.run, encoding, [(16, 16)] * args.factors, budget_seconds=args.budget_minutes * 60, reads=args.reads
+    )
+    if args.seed is not None:
+        probe(seed=args.seed, out=args.out)
+        return 0
+    args.out.mkdir(parents=True, exist_ok=True)
+    seeds = range(args.first_seed, args.first_seed + args.seeds)
+    context = multiprocessing.get_context("forkserver")
+    with concurrent.futures.ProcessPoolExecutor(len(seeds), mp_context=context) as pool:
+        runs = {pool.submit(logged_run, probe, s, args.out): s for s in seeds}
+        for done in concurrent.futures.as_completed(runs):
+            print(f"seed {runs[done]}: {done.result()}", flush=True)
     return 0
+
+
+def logged_run(probe: functools.partial[None], seed: int, out: Path) -> str:
+    """One of several runs, into out/seed<s>/, its output and errors to out/seed<s>.log; how it ended."""
+    with (out / f"seed{seed}.log").open("w") as log, contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
+        probe(seed=seed, out=out / f"seed{seed}")
+    rows = [json.loads(line) for line in (out / f"seed{seed}" / "log.jsonl").read_text().splitlines()]
+    last = next(r for r in reversed(rows) if "end" in r)
+    verdict = "certified" if last["certified"] else last["end"]
+    return f"step {last['step']}, {verdict}, {last['seconds'] / 60:.1f} min"
+
+
+def long_test_file(path: Path, encoding: mf.Encoding, args: argparse.Namespace) -> str:
+    """One network's long tests into args.out/<network>.json, unless there; a line of its cases and failures."""
+    target = args.out / f"{path.stem}.json"
+    if target.exists():
+        return f"{path.stem}: done before"
+    long = mf.long_test(path, encoding, args.task, args.n, args.properties)
+    target.write_text(json.dumps(long, indent=1))
+    cases, failures = wr.long_test_failures(long)
+    seconds = sum(length["seconds"] for length in long["lengths"].values())
+    return f"{path.stem}: {cases:,} cases, " + (", ".join(failures) or "every case passed") + f"; {seconds:.0f} s"
 
 
 if __name__ == "__main__":

@@ -5,7 +5,8 @@ division at `p` 5 ([modular-family-workplan.md](modular-family-workplan.md), sta
 D1-D10 settled (the owner delegates a workplan's decisions; each with its options' pros and cons).
 Probe-driven ([experiment-design.md](experiment-design.md), section 2): each stage is short
 probes, its next step chosen from its result; one longer run, stage 5's, with its reason stated.
-Stage 1 (this plan) done; stage 2 next, in a new session.**
+Stage 1 (this plan) done; stage 2's build done (2026-10-15: `long-test`, `--first-seed`); its
+probes next.**
 
 ## Where this starts
 
@@ -115,7 +116,9 @@ about memorising, and every success is certified, which is exact at every length
 2. **Consolidate.**
    - *Build:* the probe tool's `long-test` (division's U1 and S1 cases at a length, the quotient
      slot read, chunked as the harness's `long_test`; JSON as `long-test`'s), with a test; the
-     probe's `--first-seed`.
+     probe's `--first-seed`. *Done:* the tool's `long-test` (about 19 µs a case-column on `pyramidon`,
+     so about 55 minutes a network at 128, 256 and 1,024) and `run --first-seed F --seeds N` (the
+     seeds at once, a process each).
    - *Probe 2a, registered:* family, reading the output, `p` 5, two factors of 16, seeds 2-7, 60
      minutes each, stop at certified, `jebel`. **Reports** the count certified (both verdicts) and
      each run's certified step and minutes. No success threshold: a screen of the rate (D2).
