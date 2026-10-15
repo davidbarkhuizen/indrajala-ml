@@ -5,8 +5,8 @@ division at `p` 5 ([modular-family-workplan.md](modular-family-workplan.md), sta
 D1-D10 settled (the owner delegates a workplan's decisions; each with its options' pros and cons).
 Probe-driven ([experiment-design.md](experiment-design.md), section 2): each stage is short
 probes, its next step chosen from its result; one longer run, stage 5's, with its reason stated.
-Stages 1-3 done (2026-10-15); stage 4's probe certified 1 of 4 at `p` 7 (its findings to
-follow); stage 5 registered (D11-D14), its build done.**
+Stages 1-4 done (2026-10-15; stage 4: 1 of 4 certified at `p` 7, every long-test case passed);
+stage 5 registered (D11-D14), its build done, running.**
 
 ## Where this starts
 
@@ -192,6 +192,10 @@ is reachable.
      minutes. **Works:** at least one certifies against division's 49-state machine. **Fails:**
      none. **Conditional rule (registered now):** if a run's screen is still rising when its hour
      ends, rerun that seed with 120 minutes; otherwise the next probe is D7 (b).
+     *Result: works,* 1 of 4: seed 2 at step 7 (11.2 minutes), both verdicts, 88 joint codes
+     minimised to 49; every one of its 447,000 long-test cases passes. Seeds 0, 1 and 3 collapsed
+     (minimised to 17, 5, 20; peaks 30-33% at 24 columns) and none was rising at the hour's end, so
+     no 120-minute rerun; D7 (b) waits on stage 5.
 5. **The registered claim** (the one longer run, its reason: a rate is the claim the project
    reports; a probe can't give one).
    - *Build:* `run --budget-epochs N` (the run stops when N epochs are trained in all, end

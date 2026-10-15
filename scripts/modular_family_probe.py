@@ -131,7 +131,31 @@ and 1.0) on pyramidon.
 - **Eleven certified networks for division at p 5, all certified in both verdicts and passing
   every long-test case** (archived in indrajala-models, window-recurrent/2026-10-15-division).
 - The feasibility table's cap of 152 for the one-factor cells isn't enforced: `run` passes no cap,
-  so the curriculum's default 280 applied; no run passed step 34.
+  so the curriculum's default 280 applied; no run passed step 34. (Since 8364a83 the cap defaults
+  to the cell's exclusion bound, `modular_family.exclusion_bound`.)
+
+Findings (stage 4 of docs/division-workplan.md, probe 4), 2026-10-15; p 7, the family, two factors
+of 16 (256 joint states for 49; the exclusion bound 304, the cap), reading the output, k 1 column,
+the probe's settings, 60 minutes a run, stop at certified, seeds 0-3; jebel (i7-9700K), the main
+checkout at 8364a83, a process each, OPENBLAS_NUM_THREADS=1, 12:41-13:42. Data in
+data/window-recurrent/division-probe-4/ (as stages 2-3's; the certificates on pyramidon, the long
+test on jebel), manifest `division-probe-4.sha256` 5de66ce4...2e131958 (20 files, run from
+data/window-recurrent), both machines.
+
+- **1 of 4 certified: division at p 7, 49 states, for the first time.** seed 2 at step 7 (11.2
+  minutes, 139 epochs, sha256 972d4699...fd929c4d), against division's 49-state machine in both
+  verdicts, 0 wrong outputs, 0 wrong states: branched 88 joint codes reached, minimised to 49, 34
+  near ties, logit lead >= 2.05; strict 87 reached, snap ratio >= 1.004, lead >= 2.33. It was right
+  on every sampled answer at 24 columns from step 5 (minimised to 72, then 50 at step 6) and
+  certified at step 7. Every p 7 attempt before (E7, E7': the quotient alone, one codebook) failed:
+  0 of 80.
+- **Its long test: every one of its 447,000 cases passes** (U1 and S1 at 128, 256 and 1,024
+  columns, `--task modular-division-7`; jebel, 8364a83, 5,054 s; `long_test_failures`: none).
+- **Seeds 0, 1 and 3 ran out the hour** (steps 19, 19, 18; 428-441 epochs), each **collapsed**:
+  peaks of 31%, 33% and 30% at 24 columns (steps 10, 7, 13; minimised to 81-117), ending minimised to
+  17, 5 and 20 at 19-21% at 24 columns. None was rising at the hour's end, so the registered
+  conditional rule calls no 120-minute rerun; the next probe for p 7 would be D7 (b), two factors
+  of 32, not yet decided against stage 5's needs.
 """
 
 from __future__ import annotations
