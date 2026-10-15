@@ -8,12 +8,14 @@ budget, diagnosed as it trains (indrajala_ml/studies/modular_family.py).
         --arm family --seed 0 --budget-minutes 60 --out data/window-recurrent/modular-family-probe/family-seed0
     OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/modular_family_probe.py run \\
         --arm family --reads output --first-seed 2 --seeds 6 --budget-minutes 60 --out DIR
+    OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/modular_family_probe.py run \\
+        --arm family --reads output --factor 32 128 --first-seed 0 --seeds 4 --budget-minutes 60 --out DIR
     .venv/bin/python scripts/modular_family_probe.py long-test NETWORK.json [...] --task modular-division-5 --out DIR
 
 `--first-seed F --seeds N` runs seeds F..F+N-1 at once, a process each, into DIR/seed<s>/ (and
 its output and errors in DIR/seed<s>.log). `long-test` runs the long tests (docs/division-workplan.md, D4: U1
 and S1 at 128, 256 and 1,024 columns, the harness's sizes) on saved family networks, one slot (the
-task's), into DIR/<network>.json (skipped when there), a line each of its cases and failures.
+task's), into DIR/<network>.long-test.json (skipped when there), a line each of its cases and failures.
 
 Each run writes `log.jsonl` (a line per diagnosis: each operation's accuracy, the quotient by
 class, each factor's codes used and its share of A, B, the sum S, the difference D and the zero
@@ -100,6 +102,14 @@ def main(argv: list[str]) -> int:
     run.add_argument("--p", type=int, default=5)
     run.add_argument("--factors", type=int, default=2, help="factors of 16 codes, s 16 each")
     run.add_argument(
+        "--factor",
+        type=int,
+        nargs=2,
+        action="append",
+        metavar=("S", "M"),
+        help="a factor of width S, M codes (for --factors)",
+    )
+    run.add_argument(
         "--reads", choices=["before_state", "output"], default="before_state", help="the poolings' tokens (D10)"
     )
     run.add_argument("--budget-minutes", type=float, default=60.0)
@@ -130,9 +140,8 @@ def main(argv: list[str]) -> int:
         print(wc.summary(result))
         return 0
     encoding = mf.Encoding(args.p, ARMS[args.arm])
-    probe = functools.partial(
-        mf.run, encoding, [(16, 16)] * args.factors, budget_seconds=args.budget_minutes * 60, reads=args.reads
-    )
+    factors = [tuple(f) for f in args.factor] if args.factor else [(16, 16)] * args.factors
+    probe = functools.partial(mf.run, encoding, factors, budget_seconds=args.budget_minutes * 60, reads=args.reads)
     if args.seed is not None:
         probe(seed=args.seed, out=args.out)
         return 0
@@ -157,8 +166,8 @@ def logged_run(probe: functools.partial[None], seed: int, out: Path) -> str:
 
 
 def long_test_file(path: Path, encoding: mf.Encoding, args: argparse.Namespace) -> str:
-    """One network's long tests into args.out/<network>.json, unless there; a line of its cases and failures."""
-    target = args.out / f"{path.stem}.json"
+    """One network's long tests into args.out/<network>.long-test.json, unless there; a line of its cases and failures."""
+    target = args.out / f"{path.stem}.long-test.json"
     if target.exists():
         return f"{path.stem}: done before"
     long = mf.long_test(path, encoding, args.task, args.n, args.properties)
