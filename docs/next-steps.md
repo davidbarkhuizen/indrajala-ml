@@ -78,12 +78,14 @@ Decided with the owner, each to become a workplan or a stage:
   an exponential moving average of the weights, certified in place of the raw weights; then the
   codebook's own remedies (code restarts, an EMA codebook) and, last, the commitment controls
   ([commitment-control-workplan.md](commitment-control-workplan.md)). Each probed on replays of
-  `p` 7 seeds 0, 1 and 3. **Division stage 5's failures** (the probe script's findings) add one:
-  4 of the family's 7 came near a solution and lost it over several steps (the answers sliding with
-  the codes in use, the collapse later), out of the fork's reach (it keeps the current step's best).
-  So: **keep the run's best network across steps** and return to it when a later step degrades it,
-  chosen by a signal the training sees (the screens of every length so far, say), not the long
-  lengths' accuracy. Most of the room above the 65% at `p` 5 is then retention, not search.
+  `p` 7 seeds 0, 1 and 3. **Division stage 5's runs** (the probe script's findings) sharpen it:
+  large drops are common (24 in 14 of 40 runs, in successes too) and 17 of 24 recovered, so a
+  failure is a drop not recovered from; the curriculum moves on after a plateau whatever the
+  accuracy (10 epochs without beating the step's peak), so an unrecovered drop meets longer lengths
+  broken; and the fork's trigger (the mean screen score below 0.6 of the peak) misses about half the
+  drops, seed 101's among them. Two candidates from this: **a step ends only when its peak is
+  recovered** (or the step's best network is restored before moving on), and **a drop threshold on
+  the worst answer**. Most of the room above the 65% at `p` 5 looks like retention, not search.
 - **Division at `p` 11 (121 states)**, the largest run for `jebel`: `p` 7 with two factors of 32
   (division D7 (b); the `p` 7 codebooks were saturated at 16), then `p` 11 with 32 or 64 a factor,
   probe-sized (4-6 seeds, 2-3 h). `k` stays 1: the certificate's cost is codes x 9 tokens there.
