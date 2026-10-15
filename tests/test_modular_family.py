@@ -40,6 +40,15 @@ def test_the_quotient_alone_is_division_one_token_a_window():
     assert encoding.tokens == 11 and encoding.classes == 6
 
 
+def test_the_sum_arm_asks_the_sum_alone_with_the_familys_token():
+    encoding = mf.Encoding(5, mf.SUM)
+    pair, n = (17, 40), 4
+    tokens, labels = encoding.example(md.column_tokens(pair, n))
+    assert encoding.width == 2 and len(tokens) == 2 * n
+    assert labels[0::2] == md.answers(pair, n, 5) and labels[1::2] == md.sums(pair, n, 5)
+    assert set(tokens[1::2]) == {9.0} and encoding.tokens == 11
+
+
 def test_a_probe_run_trains_diagnoses_and_saves(tmp_path: Path):
     settings = mf.Settings(
         epoch_examples=64, max_epochs=2, diagnose_every=1, screen=4, cases=8, lengths=(2,), long=(4,)

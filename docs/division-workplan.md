@@ -103,6 +103,7 @@ factors); whether it climbs to `p` 7 (49 states; E7 and E7', the quotient alone 
 | --- | --- | --- | --- | --- | --- |
 | family, `p` 5, two factors of 16 | 25 | 256 joint | 16 (a counter 5) | 280 | 280 |
 | family, `p` 5, one factor `m` 128 | 25 | 128 | - | 152 | 152 |
+| quotient and sum, `p` 5, one factor `m` 128 | 25 | 128 | - | 152 | 152 |
 | quotient alone, `p` 5, two of 16 | 25 | 256 joint | 16 | 280 | 280 |
 | family, `p` 7, two factors of 16 | 49 | 256 joint | 16 (a counter 7) | 304 | 304 |
 
@@ -134,6 +135,12 @@ about memorising, and every success is certified, which is exact at every length
      **If any certifies,** the family's part is a rate question for stage 5, not existence.
    - (Optional, if 3a works) the family without the difference (the sum and the quotient), 2
      seeds: is one dense counter enough.
+   - *Probe 3c, registered (3a worked: 4 of 4):* the quotient and the sum (`--arm sum`), reading
+     the output, 3a's factor (`s` 32, `m` 128; codes 5.1 times the 25 states; the exclusion
+     bound 128 + 25 - 1 = 152 columns, the feasibility table), seeds 0-1, 60 minutes, stop at
+     certified (the certificate against division's machine, both verdicts). **Works:** at least one certifies: one dense counter is
+     enough. **Fails:** none does: the difference's counter is part of what helps (a screen, 2
+     seeds).
 4. **Step up: `p` 7.**
    - *Probe 4, registered:* family, reading the output, `p` 7, the cell of D7, seeds 0-3, 60
      minutes. **Works:** at least one certifies against division's 49-state machine. **Fails:**
