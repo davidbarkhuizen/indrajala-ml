@@ -4,10 +4,9 @@
 once the recurrence has a factored state, a package change with its own plan"). Decisions D1-D9
 settled with the owner in dialog, each with its options' pros and cons; D10 settled in stage 4,
 when its test showed the factors weren't independent as first described; D11 in stage 8; D12 (the
-owner) in stage 9, from the probe; D13 (the owner) in stage 9, from E8c's codes used. Stages 1-4
-and 6-8 done; stage 9: C9 (the 6-code fallback, D12) ran from 15:46, stopped for **C9'** (16 codes
-a factor, a 4 h budget, D13); stage 5 (the migration) unblocked, after stage 7's analysis of the
-claims workplan reads the old files. C9' found nothing by step 10 and its diagnosis showed why (the
+owner) in stage 9, from the probe; D13 (the owner) in stage 9, from E8c's codes used. Stages 1-8
+done (5, the migration, on both machines: 290 of 290 certificates the same); stage 9: C9 (the 6-code fallback, D12) ran from 15:46, stopped for **C9'** (16 codes
+a factor, a 4 h budget, D13). C9' found nothing by step 10 and its diagnosis showed why (the
 factors learn only "is it zero": D14); **C9''** registered (stage 9b, D14-D17, the owner,
 2026-10-14 evening): a spare third factor and the factors' learning staggered, on both machines.**
 
@@ -367,7 +366,7 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    crate's fused step, and pure Python's `RecurrenceLayer`), the poolings' reading point (D10), and
    `scripts/migrate_factored_state.py`, which migrates the saved-model fixtures here and stage 5's
    files later. The certificate and the harness read one-factor states (asserted) until stages 6-7.
-5. **Code done (this PR); the run after stage 7's analysis.** **The migration** (after the claims workplan's stage 7 and E8b finish): saved networks, results
+5. **Done (code #749; the run on both machines, this PR).** **The migration** (after the claims workplan's stage 7 and E8b finish): saved networks, results
    and certificates rewritten (D9); the hash table committed with it; the docstrings' hashes
    updated. Check: every migrated E1 and E8 certified network certifies again, the same
    verdicts.
@@ -383,6 +382,20 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    certificate but its seconds. On copies of E1 (with the control and matrix networks) and E8 `q`
    4, 1,032 files migrated, every manifest verified, and all 110 `k` 1 certificates came out the
    same as certificates made now, field by field.
+   *Ran (2026-10-14, after stage 7's findings, #751):* `tree data/window-recurrent` on pyramidon
+   (backup `~/code/backups/window-recurrent.before-factored-state.tar`): 3,452 files migrated (E1's
+   certificates, the matrix, control and calibration, E3-E4, E7, E7', E8, E8b; E8c already in the
+   layout), a second run none, every manifest verified. **`recertify` over every E1 and E8
+   certificate: 290 of 290 the same, field by field** (E1's 210, both verdicts at `k` 1, 2 and 4;
+   E8's 80 at `q` 4 and 5): the 150 at `k` 1 in 6 s (`recertify-k1.log`), the 140 at `k` 2 and 4
+   in 2.7 h, one process, 986 MB peak (`recertify-k2-k4.log`, 2026-10-14 21:58 to 2026-10-15
+   00:47). The study script's docstring gives each manifest's new and old sha256.
+   *Ran on jebel (2026-10-15, after C9''):* the same `tree` at 740436d (backup
+   `~/code/backups/window-recurrent.before-factored-state.tar` there): 2,610 files migrated (jebel
+   holds fewer studies), a second run none, every manifest verified (14), and each manifest both
+   machines hold byte for byte the same as pyramidon's (14 of 14); its table
+   `factored-state-migration.tsv` (db181039...f130032). C9, C9' and C9'' wrote the layout
+   already.
 6. **Done (#742).** **The certificate**: tuple states (D4), per-factor near ties, the per-factor readout (D9); tests
    on a hand-built factored machine for division `p` 5 (certifies, its factors read `A` and `B`),
    one holding `A + B` and `A - B` (certifies, named so), and faulty ones (a wrong next code in one
