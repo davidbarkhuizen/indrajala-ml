@@ -70,6 +70,63 @@ modular-family-probe/certify/ (in the first manifest); both machines.
   suggestive, not shown. Before launch the probe's examples lacked the harness's final zero window
   and the state never split in either arm (the step at one column passed on the column alone); found
   in local checks, fixed in 9b4be51 before any registered run.
+
+Findings (stages 2 and 3 of docs/division-workplan.md), 2026-10-15; p 5, reading the output, k 1
+column, the probe's settings, 60 minutes a run, stop at certified; the runs on jebel (i7-9700K), a
+process each, OPENBLAS_NUM_THREADS=1. Data in data/window-recurrent/division-probe-<probe>/ (a
+directory a seed: log.jsonl, network.json, certified-step-<s>.network.json; seed<s>.log,
+probe.out, launch.txt; certificates in certify/, long tests in long-tests/), one manifest each,
+run from data/window-recurrent, both machines: `division-probe-2a.sha256` 159740f5...529d032d
+(29 files), `division-probe-2b.sha256` 785ecb08...4586bbd2 (14), `division-probe-3a.sha256`
+63fcbd13...6f70fff1 (35), `division-probe-3b.sha256` 89a1e28e...32efd627 (14),
+`division-probe-3c.sha256` 1e2dc84f...e42c0be5 (19). Certificates (both verdicts: snap ratio 1.05
+and 1.0) on pyramidon.
+
+- **Probe 2a (family, two factors of 16, seeds 2-7, c5378bc, 08:29-09:29): 3 of 6 certified;
+  with the first probe's two, 5 of 8** (Wilson 0.31-0.86, a screen). seed 5 at step 7 (6.3
+  minutes, sha256 141c25db...40610515), seed 7 at step 8 (19.7, 6e31fcec...e308dc9a), seed 4 at step
+  10 (24.1, 4529c5dc...b7ab6d66), each against division's 25-state machine in both verdicts, 0 wrong
+  outputs, 0 wrong states: branched 65, 57 and 88 codes reached, minimised to 25, 19, 13 and 35 near
+  ties, logit lead >= 1.41, 0.598 and 1.07 (seed 4's snap ratio >= 1.001); strict 63, 57 and 88
+  reached. Seeds 2, 3 and 6 ran out the hour (steps 17, 17, 21), each **collapsed**: the state
+  minimised to 7, 6 and 11, 23-25% at 24 columns. seed 3 was right on every sampled answer at steps
+  6-9 (100% at 24 columns, 99.99% at 48, minimised to 30 at step 9) without certifying, and
+  collapsed at step 10 (minimised to 2 by step 12): sampled tests overstate "works" again, and
+  training past a near-solution destroys it. Every success came within 25 minutes and every failure
+  is a collapse, so a longer budget wouldn't raise the rate; the collapse would (the
+  commitment-control workplan's thermostat).
+- **Probe 2b (the long tests, D4: U1 100,000 and S1 25,000 cases at each of 128, 256 and 1,024
+  columns): all five certified networks pass every one of their 375,000 cases**, read by
+  `long_test_failures` (the first probe's two on pyramidon, 4,276 and 4,284 s; 2a's three on jebel,
+  not pyramidon as D8 says, since jebel was free, 4,412-4,423 s, three at once). The certificate
+  and the long tests agree.
+- **Probe 3b (the quotient alone, two factors of 16, seeds 2-5, c5378bc, 09:30-10:30): 0 of 4; with
+  the first probe's two, 0 of 6.** Each ran out the hour (steps 20-34) at nonzero quotients
+  0.19-0.28, 21-27% at 24 columns; their best nonzero quotients 0.61-0.77, at 24 columns at most
+  46%; seed 3 collapsed to one code a factor. The family against the quotient alone: 5 of 8 against
+  0 of 6, Fisher's exact (two-sided) p 0.031, a screen across two probes (one per arm, not
+  interleaved seeds), so the family looks like a real ingredient, the question for stage 5.
+- **Probe 3a (family, one factor s 32 m 128, D5, seeds 0-3, 92b98da from a worktree, 10:30-10:48):
+  4 of 4 certified**, so the second codebook isn't needed at p 5 (D9's question). seed 0 at step 5
+  (8.2 minutes, 92677677...4385246b), seed 1 at step 6 (10.7, d50aad5a...1fb1452b), seed 3 at step 6
+  (14.5, 25ca3d32...443529da), seed 2 at step 8 (18.0, ed3f9f3a...233867b8); both verdicts, 0 wrong
+  outputs, 0 wrong states, 61-77 codes reached, minimised to 25, logit leads >= 2.27, 0.62, 2.41 and
+  0.103 (seed 3's thin, but both verdicts hold). Long tests: every one of each network's 375,000
+  cases passes (jebel, 92b98da, four at once, 4,336-4,349 s). Against two factors of 16 (5 of 8):
+  p 0.49, no difference shown; every 3a run finished within 18 minutes. The working
+  configuration stays factored (D9 (a)): the product state's sizes multiply in one codebook as `p`
+  grows, so stage 4 keeps D7's two factors.
+- **Probe 3c (the quotient and the sum, `--arm sum`, 3a's factor, seeds 0-1, ae2a09f from a
+  worktree, 11:05-11:18): 2 of 2 certified, so one dense counter is enough.** seed 1 at step 10
+  (9.4 minutes, 913daa16...ec78b606), seed 0 at step 9 (12.7, 4e9e5dd4...56c3a367); both verdicts, 0
+  wrong outputs, 0 wrong states, 41 and 51 codes reached, minimised to 25, snap ratio >= 1.006,
+  logit lead >= 4.7 and 4.14 (the widest margins yet). seed 1 minimised to 25 at steps 8 and 9 and
+  certified only at 10. Long tests: every one of each network's 375,000 cases passes (jebel,
+  ae2a09f, 3,534 and 3,539 s).
+- **Eleven certified networks for division at p 5, all certified in both verdicts and passing
+  every long-test case** (archived in indrajala-models, window-recurrent/2026-10-15-division).
+- The feasibility table's cap of 152 for the one-factor cells isn't enforced: `run` passes no cap,
+  so the curriculum's default 280 applied; no run passed step 34.
 """
 
 from __future__ import annotations
