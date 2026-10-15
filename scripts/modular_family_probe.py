@@ -205,7 +205,25 @@ machines. The readout is `readout data/window-recurrent/division-claim`.
   reached; snap ratio >= 1.0002 (220 near ties in the branched verdict, none strict), logit lead
   >= 0.10.
 - **Every failure spent its 400 epochs:** the family's 7 at steps 14-20, the quotient's 19 at
-  steps 13-25 (no run ended on the guard). Not yet traced for collapses (`trace`).
+  steps 13-25 (no run ended on the guard).
+- **The family's failures mostly lost a solution; the quotient's mostly never found one** (`readout`
+  gives each run's course; `trace` each diagnosis). The worst answer at its best: 4 of the family's
+  7 failures came near (>= 0.95; seeds 101, 111, 113, 119 at 0.96-1.00, steps 6-8; 115 and 116 at
+  0.87 and 0.90), against 2 of the quotient's 19 (its median 0.79). seed 101 was right on every
+  sampled answer at step 6 (99.2% at 48 columns, minimised to 67) and didn't certify.
+- **A lost solution slides before the codes collapse:** the answers fall at the next step or two
+  with the codes still in use (seed 119: every answer about 0.98 at step 6, the sum 0.84 at step 7
+  and 0.71-0.74 at steps 8-9, 16 codes a factor), the collapse (the codes halving) steps later
+  (101 at step 12, 119 at step 11); 113 fell and recovered once (the quotient 0.53 at step 6, 0.99
+  at step 8) before falling again. Collapses: 6 of the family's 7 failures, 10 of the quotient's 19, and 1
+  success (seed 100, at step 6, certified at 8). Stage 4's collapses looked abrupt from the 5-epoch
+  diagnoses; here the slide comes first, across steps, and the collapse ends it.
+- **seed 107 never came near:** the sum 0.98-1.00 at 9 of steps 8-17 (0.58 at 12), the difference
+  near chance (0.45-0.56) over steps 7-17 with 9-16 codes a factor in use: one counter learned, the
+  other stuck, as at p 7 (stage 4).
+- **For the fix:** the fork (docs/collapse-fork-workplan.md) restores the step's best network, so it
+  can't return to an earlier step's near solution; keeping the run's best network across steps
+  would, but choosing it needs a signal (the long lengths' accuracy isn't trained on).
 - The long tests (D4) on all 14 networks: running (pyramidon, one at a time, about 90 minutes and
   1.7 GB each); the claim isn't written up until they pass.
 """

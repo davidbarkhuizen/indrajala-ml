@@ -99,6 +99,12 @@ collapsed despite forks (then the fork's restore isn't enough: the measurement p
 the gradient's norm per batch, before anything else). Reports: each run's certified step, epochs,
 forks (count, steps, scores before and after), its trace.
 
+**Noted before the probe's data was read** (2026-10-15, from division stage 5's runs, the probe
+script's findings): stage 5's family failures lost near solutions over several steps, the codes
+collapsing only later, and the fork's snapshot is the current step's. So in reading the forks, note
+each one's step against the run's best step (`readout`'s peak): a fork after the best step restores
+a network already past it. This changes nothing registered.
+
 **Next, by outcome:** works: the `p` 11 ladder (two factors of 32, then 64; 4-6 seeds, the fork on);
 fails: the measurement probe, then clipping (next-steps.md).
 

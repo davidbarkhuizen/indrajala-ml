@@ -23,6 +23,7 @@ and each factor's share of `A`, `B`, the sum, the difference and the zero tests
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import math
 import random
@@ -236,6 +237,15 @@ def long_accuracy(net: Any, encoding: Encoding, settings: Settings) -> dict[str,
     return result
 
 
+def _codes(row: Mapping[str, Any]) -> list[int]:
+    return [int(factor["codes"]) for factor in row["factors"]]
+
+
+def _collapsed(before: Sequence[int] | None, codes: Sequence[int], drop: float) -> bool:
+    """The codes in use below `drop` of the diagnosis before's (a collapse, as `trace` marks it)."""
+    return before is not None and sum(codes) < drop * sum(before)
+
+
 def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
     """
     A run's log.jsonl, a line per diagnosis: step, epoch (or the step's end), each factor's codes in
@@ -245,10 +255,10 @@ def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
     lines: list[str] = []
     before: list[int] | None = None
     for row in rows:
-        codes: list[int] = [int(factor["codes"]) for factor in row["factors"]]
+        codes = _codes(row)
         answers = " ".join(f"{name} {value:.2f}" for name, value in sorted(row["accuracy"].items()))
         end = f" END {row['end']} min {row.get('minimised')}" if "end" in row else ""
-        mark = " << collapse" if before is not None and sum(codes) < drop * sum(before) else ""
+        mark = " << collapse" if _collapsed(before, codes, drop) else ""
         epoch = row.get("epoch", "-")
         share = row.get("state_share", 0.0)
         lines.append(f"step {row['step']:>3} epoch {epoch:>3} codes {codes} share {share:.2f} {answers}{end}{mark}")
@@ -258,15 +268,22 @@ def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
 
 @dataclass(frozen=True)
 class Outcome:
-    """A run's end from its log.jsonl: the last step, how it ended, epochs trained in all, minutes."""
+    """
+    A run's end from its log.jsonl: the last step, how it ended, epochs trained in all, minutes; and
+    its course: the best its worst answer reached at any diagnosis (`peak`, the accuracy of the
+    answer furthest behind) and at which step, and its collapses (as `trace` marks them).
+    """
 
     step: int
     end: str  # certified, or the last step's end (passed, plateau, budget, spent)
     epochs: int
     minutes: float
+    peak: float
+    peak_step: int
+    collapses: int
 
 
-def outcome(rows: Sequence[Mapping[str, Any]]) -> Outcome:
+def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
     """
     A run's Outcome: certified at the first step's end that certified (the run stops there). A step
     stopped by a budget (`spent`, `deadline`) logs as its epochs the loop's index at the stop, an
@@ -278,9 +295,21 @@ def outcome(rows: Sequence[Mapping[str, Any]]) -> Outcome:
         int(row["epochs"]) - (row["end"] in ("spent", "deadline")) for row in ends if row["step"] <= last["step"]
     )
     end = "certified" if last.get("certified") else str(last.get("end", "running"))
-    return Outcome(int(last["step"]), end, epochs, round(float(last["seconds"]) / 60, 1))
+    diagnoses = [row for row in rows if "accuracy" in row and row["step"] <= last["step"]]
+    best = max(diagnoses, key=lambda row: min(row["accuracy"].values()), default=last)
+    collapses = sum(_collapsed(_codes(before), _codes(row), drop) for before, row in itertools.pairwise(diagnoses))
+    return Outcome(
+        int(last["step"]),
+        end,
+        epochs,
+        round(float(last["seconds"]) / 60, 1),
+        round(min(best.get("accuracy", {"-": 0.0}).values()), 2),
+        int(best["step"]),
+        collapses,
+    )
 
 
+NEAR = 0.95  # a run's worst answer at least this at some diagnosis: it came near a solution
 VERDICTS = (wc.SNAP_RATIO, 1.0)  # a certified network's two recertifications: the default snap ratio and strict
 
 
@@ -290,6 +319,8 @@ def readout(root: Path, arms: Sequence[str], certify: Path) -> list[str]:
     by its log, a run counted as certified only when its saved network (matched by sha256) has a
     certificate in `certify` in both verdicts (VERDICTS); each arm's count with its Wilson 95%
     interval; Fisher's exact test, one-sided, that the first arm certifies more often than the second.
+    Each run's course too (Outcome), and how many of an arm's failures came near a solution (NEAR):
+    a failure near one lost it, one never near never found it.
     """
     verdicts: dict[str, dict[float, bool]] = {}
     for path in sorted(certify.glob("*.certificate.json")):
@@ -299,7 +330,7 @@ def readout(root: Path, arms: Sequence[str], certify: Path) -> list[str]:
     counts: list[tuple[int, int]] = []
     for arm in arms:
         seeds = sorted((root / arm).glob("seed*/log.jsonl"), key=lambda p: int(p.parent.name.removeprefix("seed")))
-        certified = 0
+        certified, near, collapsed = 0, 0, 0
         lines.append(f"== {arm}")
         for log in seeds:
             run = outcome([json.loads(line) for line in log.read_text().splitlines()])
@@ -311,11 +342,19 @@ def readout(root: Path, arms: Sequence[str], certify: Path) -> list[str]:
                     certified += 1
                 else:
                     note = f"  NOT RECERTIFIED (verdicts found: {found})"
+            if run.end != "certified":
+                near += run.peak >= NEAR
+                collapsed += run.collapses > 0
             lines.append(
-                f"{log.parent.name}: {run.end} at step {run.step}, {run.epochs} epochs, {run.minutes} min{note}"
+                f"{log.parent.name}: {run.end} at step {run.step}, {run.epochs} epochs, {run.minutes} min; "
+                f"worst answer at best {run.peak:.2f} (step {run.peak_step}), collapses {run.collapses}{note}"
             )
         low, high = inference.wilson(certified, len(seeds))
         lines.append(f"{arm}: {certified} of {len(seeds)} certified (Wilson 95%: {low:.2f}-{high:.2f})")
+        failures = len(seeds) - certified
+        lines.append(
+            f"{arm}'s {failures} failures: {near} came near a solution (worst answer >= {NEAR}), {collapsed} collapsed"
+        )
         counts.append((certified, len(seeds)))
     if len(counts) == 2:
         (a, n), (c, m) = counts
