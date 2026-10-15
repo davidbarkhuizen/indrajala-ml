@@ -5,8 +5,8 @@ division at `p` 5 ([modular-family-workplan.md](modular-family-workplan.md), sta
 D1-D10 settled (the owner delegates a workplan's decisions; each with its options' pros and cons).
 Probe-driven ([experiment-design.md](experiment-design.md), section 2): each stage is short
 probes, its next step chosen from its result; one longer run, stage 5's, with its reason stated.
-Stage 1 (this plan) done; stage 2's build done (2026-10-15: `long-test`, `--first-seed`); its
-probes next.**
+Stages 1-3 done (2026-10-15); stage 4's probe certified 1 of 4 at `p` 7 (its findings to
+follow); stage 5 registered (D11-D14), its build done.**
 
 ## Where this starts
 
@@ -96,6 +96,37 @@ factors); whether it climbs to `p` 7 (49 states; E7 and E7', the quotient alone 
     harness's `status`, `report`, resume or machine lock (a probe run is short: its log is enough;
     the lock: nothing else runs on `jebel` during a probe, checked by hand).
   - (b) Move the family into the harness first. Cons: a package change before it is needed.
+- **D11. The claim's comparison: the family against the quotient alone, `p` 5, two factors of 16,
+  reading the output** (the screens' cells: 5 of 8 against 0 of 6).
+  - (a) *Chosen.* Pros: the comparison the screens point to, with the most data; the working
+    configuration (D9 (a)); the quotient alone is the project's earlier division (C9-E7'), so the
+    claim says what the family adds. Cons: every failure is a collapse, so the rate is this
+    recipe's, not the architecture's.
+  - (b) At `p` 7 (1 of 4). Pros: the harder modulus. Cons: a rate near 0.25 needs more seeds to
+    separate from 0, and a `p` 7 run costs more.
+  - (c) One codebook of 128 (4 of 4). Pros: the highest screen. Cons: not the working configuration
+    (D9 (a), factored); the quotient alone wasn't screened on it.
+- **D12. Seeds: 20 a cell, fresh, 100-119 in both arms.**
+  - (a) *Chosen.* Pros: section 3's 20 a cell (tells 0.8 from 0.4); fresh seeds, so the claim isn't
+    measured on the seeds that chose its configuration. Cons: 40 runs.
+  - (b) 20 including the screens' 14. Pros: 14 fewer runs. Cons: the screens selected the
+    configuration on those seeds.
+- **D13. The budget: 400 epochs trained in all (`--budget-epochs 400`), 180 minutes of wall clock
+  only as a guard; stop at certified.**
+  - (a) *Chosen.* Pros: the same training in every run whatever the machine or its load, so seeds
+    can run on both machines; every success seen needed 73-215 epochs, and an hour's failures
+    reached 424-432 (family) and 417-599 (quotient alone), so 400 is about the screens' hour.
+    Cons: a build (`--budget-epochs`, with `--workers` to queue seeds); the arms are matched on
+    examples, not minutes (the quotient's windows are a third of the family's tokens).
+  - (b) 60 minutes, as the screens. Pros: no build. Cons: the result depends on the load and the
+    machine, so seeds couldn't be spread fairly.
+- **D14. Both machines, by seeds, each seed's two arms on the same machine:** `jebel` seeds 100-113
+  (each arm `--workers 3`, 6 processes), `pyramidon` 114-119 (each arm `--workers 2`, 4 processes;
+  about 160 MB a run). About 3-3.5 hours wall clock (a family run about 15 minutes when it
+  succeeds, 55 when it fails; a quotient run about 45, on `jebel`).
+  - (a) *Chosen.* Pros: about half `jebel`'s time alone; D13 makes the machines equivalent.
+    Cons: `pyramidon` busy for its share (development there slows).
+  - (b) `jebel` alone. Pros: one machine. Cons: about 5 hours.
 
 ## Feasibility (each cell; experiment-design.md, section 1)
 
@@ -106,6 +137,7 @@ factors); whether it climbs to `p` 7 (49 states; E7 and E7', the quotient alone 
 | quotient and sum, `p` 5, one factor `m` 128 | 25 | 128 | - | 152 | 152 |
 | quotient alone, `p` 5, two of 16 | 25 | 256 joint | 16 | 280 | 280 |
 | family, `p` 7, two factors of 16 | 49 | 256 joint | 16 (a counter 7) | 304 | 304 |
+| stage 5: family and quotient alone, `p` 5, two of 16 | 25 | 256 joint | 16 | 280 | 280 |
 
 No cap is reached in an hour (the certified runs stopped at steps 11-12); a probe claims nothing
 about memorising, and every success is certified, which is exact at every length. Through stage 3
@@ -150,9 +182,9 @@ is reachable.
    - *Probe 3c, registered (3a worked: 4 of 4):* the quotient and the sum (`--arm sum`), reading
      the output, 3a's factor (`s` 32, `m` 128; codes 5.1 times the 25 states; the exclusion
      bound 128 + 25 - 1 = 152 columns, the feasibility table), seeds 0-1, 60 minutes, stop at
-     certified (the certificate against division's machine, both verdicts). **Works:** at least one certifies: one dense counter is
-     enough. **Fails:** none does: the difference's counter is part of what helps (a screen, 2
-     seeds).
+     certified (the certificate against division's machine, both verdicts). **Works:** at least
+     one certifies: one dense counter is enough. **Fails:** none does: the difference's counter is
+     part of what helps (a screen, 2 seeds).
      *Result: works,* 2 of 2 (steps 9-10, within 13 minutes), both verdicts; every long-test
      case passes.
 4. **Step up: `p` 7.**
@@ -161,11 +193,18 @@ is reachable.
      none. **Conditional rule (registered now):** if a run's screen is still rising when its hour
      ends, rerun that seed with 120 minutes; otherwise the next probe is D7 (b).
 5. **The registered claim** (the one longer run, its reason: a rate is the claim the project
-   reports; a probe can't give one). Written into this plan before its data, from stages 2-4: the
-   configuration, the seeds a cell (20 for a comparison with Fisher's test, section 3), the
-   comparison (most likely the family against the quotient alone, reading the output), the test
-   (the certificate, both verdicts), the budget measured from the probes. Runs across both
-   machines by seeds.
+   reports; a probe can't give one).
+   - *Build:* `run --budget-epochs N` (the run stops when N epochs are trained in all, end
+     `spent`) and `--workers W` (W runs at once, the rest queued). *Done.*
+   - *Claim, registered:* the family against the quotient alone (D11), `p` 5, two factors of 16,
+     reading the output, seeds 100-119 in each arm (D12), 400 epochs (D13), stop at certified,
+     the certificate against division's 25-state machine in both verdicts (each certified network
+     recertified on `pyramidon`), the machines of D14. **Reports** each arm's count certified with
+     its Wilson interval (95%), and each success's step, epochs and minutes. **Works (the family
+     helps):** the family's count exceeds the quotient alone's, Fisher's exact test one-sided p <
+     0.05. **Fails:** otherwise; the screens' difference doesn't hold at 20 seeds. Then the long
+     tests (D4) on every certified network: any failing case is a bug, found before the claim is
+     written up.
 6. **Write it up.** The findings in the probe script's docstring at each stage; the D10 finding,
    division's certified networks and the collapse past a solution as notes for the paper
    (`~/code/indrajala-papers`); next-steps.md for what stays open (factored readouts, D10 (a)/(c),

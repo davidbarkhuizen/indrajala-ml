@@ -70,6 +70,15 @@ def test_a_probe_run_trains_diagnoses_and_saves(tmp_path: Path):
     assert (tmp_path / "network.json").exists()
 
 
+def test_a_probe_run_stops_when_its_epochs_are_spent(tmp_path: Path):
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=2, diagnose_every=10, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    mf.run(mf.Encoding(5, mf.QUOTIENT), [(4, 4)], 0, 1e9, tmp_path, settings, budget_epochs=3)
+    ends = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines() if '"end"' in line]
+    assert ends[-1]["end"] == "spent" and len(ends) <= 3
+
+
 def test_the_query_machine_runs_each_column_with_its_queries_and_reads_one_slot():
     from indrajala_ml.studies import window_recurrent_certificate as wc
 

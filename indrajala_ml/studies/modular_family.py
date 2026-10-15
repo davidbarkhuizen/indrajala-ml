@@ -228,11 +228,13 @@ def run(
     settings: Settings = PROBE,
     cap: int | None = None,
     reads: str = BEFORE_STATE,
+    budget_epochs: int | None = None,
 ) -> None:
     """
-    One probe run: the curriculum until the budget or the cap (by default the cell's exclusion
-    bound), a line of JSON per diagnosis to out/log.jsonl, the network saved at each step's end to
-    out/network.json.
+    One probe run: the curriculum until the budget (wall-clock seconds and, if given, epochs
+    trained in all, whichever is spent first: the epochs don't depend on the machine or its load)
+    or the cap (by default the cell's exclusion bound), a line of JSON per diagnosis to
+    out/log.jsonl, the network saved at each step's end to out/network.json.
     """
     if cap is None:
         cap = exclusion_bound(encoding.p, factors)
@@ -247,6 +249,7 @@ def run(
         log.flush()
 
     record({"step": 0, "epoch": 0, **diagnose(net, encoding, settings)})
+    spent = 0  # epochs trained in all
     for step in range(1, cap + 1):
         lengths = list(range(1, step + 1))
         screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{step}-{n}")[0] for n in lengths}
@@ -255,11 +258,15 @@ def run(
             if time.perf_counter() - start > budget_seconds:
                 stop = "deadline"
                 break
+            if budget_epochs is not None and spent >= budget_epochs:
+                stop = "spent"
+                break
             rng = random.Random(f"family-train-{seed}-{step}-{epoch}")
             examples = [
                 encoding.example(columns(lengths[i % len(lengths)], rng)) for i in range(settings.epoch_examples)
             ]
             wr.train_epoch(net, examples, settings.batch_size, settings.rate, rng)
+            spent += 1
             tallies = [accuracy(net, encoding, rows) for rows in screens.values()]
             correct = sum(c for t in tallies for c, _ in t.values())
             total = sum(a for t in tallies for _, a in t.values())
@@ -295,7 +302,7 @@ def run(
         if certificate.certified:
             net.save(str(out / f"certified-step-{step}.network.json"))
             break
-        if stop == "deadline":
+        if stop in ("deadline", "spent"):
             break
     log.close()
 

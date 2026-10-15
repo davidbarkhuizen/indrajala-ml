@@ -10,12 +10,17 @@ budget, diagnosed as it trains (indrajala_ml/studies/modular_family.py).
         --arm family --reads output --first-seed 2 --seeds 6 --budget-minutes 60 --out DIR
     OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/modular_family_probe.py run \\
         --arm family --reads output --factor 32 128 --first-seed 0 --seeds 4 --budget-minutes 60 --out DIR
+    OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/modular_family_probe.py run \\
+        --arm family --reads output --first-seed 100 --seeds 14 --workers 3 --budget-epochs 400 \\
+        --budget-minutes 180 --out DIR
     .venv/bin/python scripts/modular_family_probe.py long-test NETWORK.json [...] --task modular-division-5 --out DIR
 
-`--first-seed F --seeds N` runs seeds F..F+N-1 at once, a process each, into DIR/seed<s>/ (and
-its output and errors in DIR/seed<s>.log). `long-test` runs the long tests (docs/division-workplan.md, D4: U1
-and S1 at 128, 256 and 1,024 columns, the harness's sizes) on saved family networks, one slot (the
-task's), into DIR/<network>.long-test.json (skipped when there), a line each of its cases and failures.
+`--first-seed F --seeds N` runs seeds F..F+N-1, a process each, `--workers` at once (default
+all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--budget-epochs` stops a
+run when that many epochs are trained in all (or `--budget-minutes` pass, whichever first).
+`long-test` runs the long tests (docs/division-workplan.md, D4: U1 and S1 at 128, 256 and 1,024
+columns, the harness's sizes) on saved family networks, one slot (the task's), into
+DIR/<network>.long-test.json (skipped when there), a line each of its cases and failures.
 
 Each run writes `log.jsonl` (a line per diagnosis: each operation's accuracy, the quotient by
 class, each factor's codes used and its share of A, B, the sum S, the difference D and the zero
@@ -170,6 +175,8 @@ def main(argv: list[str]) -> int:
         "--reads", choices=["before_state", "output"], default="before_state", help="the poolings' tokens (D10)"
     )
     run.add_argument("--budget-minutes", type=float, default=60.0)
+    run.add_argument("--budget-epochs", type=int, help="epochs trained in all, whichever budget is spent first")
+    run.add_argument("--workers", type=int, help="runs at once (default: every seed at once)")
     run.add_argument("--out", type=Path, required=True)
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
@@ -199,14 +206,23 @@ def main(argv: list[str]) -> int:
         return 0
     encoding = mf.Encoding(args.p, ARMS[args.arm])
     factors = [tuple(f) for f in args.factor] if args.factor else [(16, 16)] * args.factors
-    probe = functools.partial(mf.run, encoding, factors, budget_seconds=args.budget_minutes * 60, reads=args.reads)
+    probe = functools.partial(
+        mf.run,
+        encoding,
+        factors,
+        budget_seconds=args.budget_minutes * 60,
+        reads=args.reads,
+        budget_epochs=args.budget_epochs,
+    )
     if args.seed is not None:
         probe(seed=args.seed, out=args.out)
         return 0
     args.out.mkdir(parents=True, exist_ok=True)
     seeds = range(args.first_seed, args.first_seed + args.seeds)
     context = multiprocessing.get_context("forkserver")
-    with concurrent.futures.ProcessPoolExecutor(len(seeds), mp_context=context) as pool:
+    with concurrent.futures.ProcessPoolExecutor(
+        min(args.workers or len(seeds), len(seeds)), mp_context=context
+    ) as pool:
         runs = {pool.submit(logged_run, probe, s, args.out): s for s in seeds}
         for done in concurrent.futures.as_completed(runs):
             print(f"seed {runs[done]}: {done.result()}", flush=True)
