@@ -7,8 +7,10 @@ when its test showed the factors weren't independent as first described; D11 in 
 owner) in stage 9, from the probe; D13 (the owner) in stage 9, from E8c's codes used. Stages 1-8
 done (5, the migration, on both machines: 290 of 290 certificates the same); stage 9: C9 (the 6-code fallback, D12) ran from 15:46, stopped for **C9'** (16 codes
 a factor, a 4 h budget, D13). C9' found nothing by step 10 and its diagnosis showed why (the
-factors learn only "is it zero": D14); **C9''** registered (stage 9b, D14-D17, the owner,
-2026-10-14 evening): a spare third factor and the factors' learning staggered, on both machines.**
+factors learn only "is it zero": D14); **C9''** (stage 9b, D14-D17, the owner, 2026-10-14
+evening: a spare third factor and the factors' learning staggered, on both machines) found nothing
+in its 4 h: the factors after the first never left one code (stage 9b's result). C9, C9' and C9''
+are each "not found within the budget"; division's next design is the owner's to choose.**
 
 ## Why
 
@@ -425,21 +427,29 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    read only `m` before, so skipped factored cells); C9's own test pins the cell, seeds, cap and
    E8b's settings. The probe waits for `jebel` (E8b's curriculum arm holds it); its figures go
    into stage 9's launch.
-9. **Budget and tools done (this PR); the run next.** **C9's run on `jebel`** (6 workers, memory measured first), then the findings: the certified
+9. **Done: C9 and C9' not found within the budget** (the findings in
+   `scripts/window_recurrent_study.py`'s docstring). **C9's run on `jebel`** (6 workers, memory measured first), then the findings: the certified
    network's factors (D9), its long tests (U1, S1), or "not found within the budget".
    **Launch (D12):** the fallback config, 6 workers (592 MB peak each, 3.6 GB of `jebel`'s 31 GB).
    *Built for it:* `probe` (the budget's figures, `--json` keeps them) and `peak_mb` in every
    result (its worker's peak memory, for sizing the next study's workers; measurement.md, section 2).
    **C9' (D13):** `scripts/window_recurrent_factored_p5_m16.json`, 6 workers on `jebel`, C9 stopped
    first; then its findings, as C9's.
-9b. **C9'' (D14-D17): built (this PR); the run next.** *Built:* a factored cell's `stagger` (in
+   *Result:* C9 stopped for C9' at steps 19-21 of 60 (4.7 h), none certified; C9' stopped by the
+   owner at steps 9-10 (seed 5 at 12), none certified, every run on the zero tests from step 2
+   (D14's diagnosis).
+9b. **Done: C9'' not found within the budget** (the findings beside C9's). *Built:* a factored cell's `stagger` (in
    its run's key and label, `-stagger0.1`), `Turns` and `FactorRates` in the harness, the turn at
    each plateau and the step's retry, the turns recorded in each step and carried on a resume;
    `first_seed`; the curriculum's steps as ranges (a cap of 4,120 steps costs nothing). Tests: the
    turns, a frozen factor's weights bit for bit, every factor at the rate bit for bit the network
-   alone, a step's rotation, a run's turns resumed, the configs against the cell. *Next:* the
-   launch on both machines with `diagnose --follow`, the stop rule at 2 h, then C9, C9' and C9''
-   findings together.
+   alone, a step's rotation, a run's turns resumed, the configs against the cell.
+   *Result:* both machines ran the whole 4 h (2026-10-14 22:36 to 02:36; the 2 h rule wasn't
+   applied, and at 2 h no run met it), none certified. In 7 of 9 runs factors 1 and 2 never left
+   one code: their turns trained their cells, but a state of one code passes nothing on, so
+   factor 0 learned alone (at most 0.33 of a residue). Two runs (pyramidon, seeds 7 and 8) split a
+   second factor at step 2, neither carrying a residue. A next design must wake a collapsed
+   codebook, or train jointly until each factor splits, then stagger; or change the rung.
 10. **Retire this workplan**; leftovers to next-steps.md.
 
 ## Cells and budget

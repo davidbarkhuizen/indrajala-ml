@@ -447,6 +447,57 @@ certified networks in `e6-linear/certificates-strict/` (listed in the same manif
   fallback) wasn't run.
 - The others: seed 0 fitted steps 1-3 and plateaued from step 4 until stopped at step 7; seeds 3-5
   were stopped before their first epoch (3 workers). No rate is claimed (D37).
+
+Findings (stage 9 and 9b of docs/factored-state-workplan.md: modular division `p` 5 with a factored
+state, C9, C9' and C9'', each an existence claim), crate abcba3d7a30e, the curriculum at `k` 1, `s`
+16 a factor, the state read before the first `StateInput` (D10), every step certified, a study
+stopping at its first certified run. No network certified in any of the three: each is **"not found
+within the budget"**, not refuted (D7).
+
+- **C9** (D12's fallback, `window_recurrent_factored_p5_fallback.json`: two factors of 6 codes, cap
+  60), jebel, indrajala-ml 3b6cb12, 6 workers, 2026-10-14 15:46 to 20:27, stopped by its stop file
+  for C9' (D13) at steps 19-21 of 60 (910-1,124 epochs a run, 429-445 MB peak). Data
+  `data/window-recurrent/factored-p5-fallback/` (`factored-p5-fallback.sha256`, 4c1ec2e7...15387d62,
+  360 files, run from `data/window-recurrent`), log `data/window-recurrent-c9.log`
+  (c56e0dc8...400ae428; it ends in the report's crash on a step stopped before its first epoch,
+  fixed in #758, after every result was written).
+- **C9'** (D13, `window_recurrent_factored_p5_m16.json`: two factors of 16 codes, a 4 h budget),
+  jebel, indrajala-ml 6abd961, 6 workers, 20:34 to 21:41, stopped by the owner for the diagnosis at
+  steps 9-10, then seed 5 alone (21:47 to 22:32, stopped by the owner at step 12, its steps 8-12
+  flat). Every run plateaued from step 2: "0" 81-86% right and "undefined" 74-85%, the nonzero
+  quotients 31-44% (25% a guess among four), each factor's code at most 0.41 of `A` or `B` but up to
+  0.67 of "is it zero" (D14). Data `factored-p5-m16/` (`factored-p5-m16.sha256`,
+  695545eb...65dfb97e, 188 files; the probes `signal-split.txt` a5475eee...58e9c0ae and
+  `signal-split-seed5.txt` 143ec450...d67fe843; seed 5's first stop in `stopped-2141/`), log
+  `data/window-recurrent-c9prime.log` (fb25e506...f4497369).
+- **C9''** (D14-D17, `window_recurrent_factored_p5_stagger.json` and `_stagger_pyramidon.json`:
+  three factors of 16 codes, learning staggered, the background at 0.1), indrajala-ml 740436d,
+  2026-10-14 22:36 to 2026-10-15 02:36, the whole 4 h budget: seeds 0-5 on jebel (6 workers, steps
+  10-13) and 6-8 on pyramidon (3 workers, steps 7-8), 362-392 MB peak. **The registered stop rule
+  at 2 h (D17) was not applied**: the check waited behind a question to the owner. At 2 h no run
+  met it (the largest factor share 0.33 of 0.6, the nonzero quotients at most 0.36 of 0.55), so it
+  would have stopped both machines; the last 2 h changed none of that. Data, both machines' runs
+  together, `factored-p5-stagger/` (`factored-p5-stagger.sha256`, 2eaa68e0...e42fde95, 344 files,
+  each step's `diagnose` beside it), logs `data/window-recurrent-c9pp.log` (jebel,
+  b253e781...6f034ea8), `-c9pp-pyramidon.log` (defced1e...e8f51ccc), and the diagnoses'
+  `-c9pp-diagnose.log` (0303eeac...04e48420) and `-c9pp-diagnose-pyramidon.log`
+  (4692c721...baf91c09).
+
+- **Staggering didn't reach the second factor: in 7 of 9 runs factors 1 and 2 never left one
+  code.** Their turns came (at each plateau, from step 2) and their cells trained (seed 6, steps 1 to 2:
+  the GRU's weights moved 1.6-6.7 times their norm, as factor 0's), but their codebooks barely
+  moved (0.19) and every window snapped to the same code: a state of one code passes nothing on,
+  so the turn has nothing to learn from. Factor 0 alone reached 7-12 codes and 0.17-0.33 of `A`,
+  0.11-0.26 of `B`; "0" 79-91% right, "undefined" 69-86%, the nonzero quotients 11-44% a class.
+- **Two runs split a second factor, both on pyramidon, at step 2 (a step that ran its whole 200
+  epochs):** seed 7's factor 1 (3 codes, then 13-16; at the end 0.12 of `A`, 0.24 of `B`) and seed
+  8's factor 2 (5, then 11-14; 0.06 and 0.03). Neither carried a residue: the nonzero quotients
+  stayed at 0.29-0.38.
+- **What it says:** C9' failed by the factors settling on the zero tests together; C9'' by the
+  factors after the first never starting. A factor has to have several codes before its turn can
+  teach it, so a next design must wake a collapsed codebook (or train jointly until each factor
+  splits, then stagger), or change the rung (division at `p` 3, where 23% of the answer needs the
+  pair, against 50% at `p` 5).
 """
 
 from __future__ import annotations
