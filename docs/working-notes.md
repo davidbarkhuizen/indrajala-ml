@@ -260,6 +260,17 @@ where you meet a new trap; delete one that no longer holds.
   process group (`setsid` forks): it is no waiter. Wait on the study's pid (`while kill -0 PID`).
   Over ssh it holds, as above. An ssh that starts a detached job with `&` holds on too: run that
   ssh in the background and kill only the local ssh (the remote job, `setsid`, survives).
+- **After a local `setsid nohup cmd &`, `$!` is `setsid`'s short-lived parent, not the run**
+  (`pyramidon`, from the Bash tool: the waiters on it exited at once); find the run with `pgrep -af`
+  after launch. Over ssh to `jebel`, `$!` was the run.
+- **`cd X && ... && cmd &` backgrounds the whole chain in a subshell:** variables set in it don't
+  reach the next command, and over ssh the session stays open until the chain ends.
+- **To run a study from a worktree's code into the main checkout's data** (so `main` can be pulled
+  while it runs): `cd` to the main checkout, `PYTHONPATH=<worktree>`, and the script and config by
+  the worktree's path. `indrajala_ml` is a namespace package, so check which copy loads (a
+  one-line script in the worktree's `scripts/` printing a module's `__file__`): run as a script,
+  the worktree's loads; `python -c` from the main checkout loads the main checkout's. E2 ran this
+  way (`~/code/wt-e2`, launched by `~/code/e2-launch.sh` on `jebel`).
 - **A Monitor that polls remote files works** (`ssh -n` a listing or `grep` each minute, the lines
   already seen kept in a bash associative array): used for the modular-family probe's step ends.
 - **A Monitor reading `{ ssh host tail -F A & tail -F B; } | awk ...` delivered nothing** for 30
