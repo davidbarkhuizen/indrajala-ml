@@ -49,6 +49,12 @@ def test_the_sum_arm_asks_the_sum_alone_with_the_familys_token():
     assert set(tokens[1::2]) == {9.0} and encoding.tokens == 11
 
 
+def test_the_cap_is_the_cells_exclusion_bound():
+    assert mf.exclusion_bound(5, [(16, 16), (16, 16)]) == 280  # the division workplan's table
+    assert mf.exclusion_bound(5, [(32, 128)]) == 152
+    assert mf.exclusion_bound(7, [(16, 16), (16, 16)]) == 304
+
+
 def test_a_probe_run_trains_diagnoses_and_saves(tmp_path: Path):
     settings = mf.Settings(
         epoch_examples=64, max_epochs=2, diagnose_every=1, screen=4, cases=8, lengths=(2,), long=(4,)
