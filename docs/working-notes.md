@@ -114,6 +114,8 @@ where you meet a new trap; delete one that no longer holds.
   its study's budget), move its `results/<key>.json` and its stopped step's `step-<j>.json` and
   `.network.json` aside (not delete), and the stop file; `run` then trains only it, from step
   `j - 1`'s network.
+- **A registered stop check runs at its time, never behind a question to the owner:** C9''s 2 h
+  rule waited on an unanswered question and both machines ran 2 h more. Apply the rule, then ask.
 - **Don't `git pull` on a machine while a study runs there:** its forkserver may import changed
   modules.
 - **Stopping a study** (only with the owner's say): kill its Python process's whole process group,
@@ -243,6 +245,13 @@ where you meet a new trap; delete one that no longer holds.
 - **An ssh that launches a nohup job holds on while the job runs** unless stdin is `/dev/null`;
   used on purpose it is the job's waiter (`setsid nohup ... < /dev/null`). Stopping a local
   background task doesn't kill its remote job.
+- **A local `setsid nohup ... < /dev/null` returns at once** when the calling shell leads its
+  process group (`setsid` forks): it is no waiter. Wait on the study's pid (`while kill -0 PID`).
+  Over ssh it holds, as above. An ssh that starts a detached job with `&` holds on too: run that
+  ssh in the background and kill only the local ssh (the remote job, `setsid`, survives).
+- **A Monitor reading `{ ssh host tail -F A & tail -F B; } | awk ...` delivered nothing** for 30
+  minutes while both logs grew; a loop that polls each log's line count (`wc -l`, then `tail -n
+  +N`, `ssh -n` for the remote one) every minute works.
 - **`cmd &` inside a foreground call gives no completion notice;** use the harness's background
   mode. Foreground `sleep` is blocked.
 - **`pkill -f <pattern>` kills its own shell** when the pattern is in the command line (exit 144):
