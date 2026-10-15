@@ -63,6 +63,37 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 the attention dropout study's in `scripts/attention_dropout_study.py`'s, the rotary study's in
 `scripts/rotary_study.py`'s, the addition study's in `scripts/addition_study.py`'s.
 
+## From the division work (2026-10-15; division-workplan.md is still open)
+
+Decided with the owner, each to become a workplan or a stage:
+
+- **The collapse fix first** (before larger `p`): the collapse is abrupt (the probe script's
+  findings, "the collapse, traced"). Candidates, cheapest first: log the loss and the gradient's
+  norm per batch around a collapse (a probe, to confirm the cause); clip the gradient's global
+  norm (none today); a rate that warms up at each curriculum step and decays; rollback and cool
+  (restore the step's best network and halve the rate on a sharp fall of the training answers);
+  an exponential moving average of the weights, certified in place of the raw weights; then the
+  codebook's own remedies (code restarts, an EMA codebook) and, last, the commitment controls
+  ([commitment-control-workplan.md](commitment-control-workplan.md)). Each probed on replays of
+  `p` 7 seeds 0, 1 and 3.
+- **Division at `p` 11 (121 states)**, the largest run for `jebel`: `p` 7 with two factors of 32
+  (division D7 (b); the `p` 7 codebooks were saturated at 16), then `p` 11 with 32 or 64 a factor,
+  probe-sized (4-6 seeds, 2-3 h). `k` stays 1: the certificate's cost is codes x 9 tokens there.
+- **A second composite task: the running affine map mod `p`** (`x' = a x + b`, `a != 0`; the
+  group AGL(1, p), `p (p - 1)` states when the output is the composed map). Its Krohn-Rhodes
+  decomposition is a cascade, not a direct product: the multipliers' running product is its one
+  approximation (a homomorphic image), the translations the dependent part, so no cover by
+  approximations exists: the test of whether one approximation helps where no cover does. Later,
+  `a = 0` adds resets.
+- **The approximation claim, registered:** the target alone, with one approximation (the sum),
+  with the cover (sum and difference), with the product `AB` (not an approximation;
+  `test_division_readouts_approximations_and_the_cover`), 20 seeds each at `p` 5.
+- **Terms** (settled with the owner, the division paper): target machine and its output function;
+  approximation (homomorphic image); cover (emulation); coordinates; k-distinguishable (Chow). Not
+  "family" (the code's arm name only), "basis", "ideal" (a semigroup term), "model". "Characteristic
+  sample" (grammatical inference) is unverified: no open copy of Oncina & García 1992 or de la
+  Higuera 1997 was found.
+
 ## From composable layers
 
 - **New combinations.** The Sequential networks build every spec list `validate_layer_specs`

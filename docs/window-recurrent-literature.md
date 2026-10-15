@@ -193,6 +193,49 @@ in the step (E6), and one task (base-3 addition). Test lengths (64 against 1,000
 now only for networks that aren't certified: the certificate covers every length, and the long
 tests (D9, to 1,024 columns) check it.
 
+## Extension (2026-10-15): for the division paper
+
+Searched after division certified (the modular family's probe, division stages 2-4): automaton
+decomposition terms, auxiliary and multi-task training, factored codebooks, codebook collapse, and
+loss of a learned solution. 22 papers read in the parts that bear on the findings, each in the
+literature repository; what they changed:
+
+- **Terms** (Egri-Nagy & Nehaniv 2024, `egri-nagy-2024-covering-lemma-transformation-semigroups`,
+  2404.11923; 2015, `egri-nagy-2015-computational-holonomy-decomposition`, 1508.06345; Chow 1978,
+  `chow-1978-testing-software-design-finite-state-machines`): an injective morphism is an
+  *emulation* or *covering* (the covering machine computes at least as much), a surjective one's
+  target an *approximation*; cascade components are *coordinates*; a machine is
+  *k-distinguishable* if every pair of states is told apart by some input of length k (Chow's
+  footnote), and his *characterization set* W tells every pair apart. So division's machine is
+  covered by the sum and difference counters (odd `p`), each an approximation; checked in
+  `test_division_readouts_approximations_and_the_cover`.
+- **Auxiliary outputs.** Caruana 1997 (`caruana-1997-multitask-learning`): multitask learning's
+  "eavesdropping", a feature easy to learn for one task and hard for another, our reading of the
+  cover. Dan et al. 2022 (`dan-2022-robust-generalization-regular-languages`, 2202.09717): supervising
+  an RNN's states with the target DFA's improves robust generalisation on modulo languages a lot
+  (e.g. 66 to 99%); their label-free count task helps 5-8% and records more than the state, where our
+  approximations record less: **the closest prior work**. The CLRS line (Velickovic et al. 2020,
+  2022; Ibarz et al. 2022) supervises every intermediate step ("hints") and finds positive transfer
+  between related algorithms; Wies et al. 2023 prove intermediate supervision can make a composite
+  learnable; Jaderberg et al. 2017, auxiliary tasks in RL. None trains on homomorphic images of a
+  target machine; none shows one approximation without a cover sufficing (not found).
+- **Modular arithmetic.** Power et al. 2022 include `x / y mod p` among grokking tasks (a symbol
+  table, not a transducer); Nanda et al. 2023 reverse-engineer modular addition; He et al. 2024
+  (`he-2024-learning-to-grok-modular-arithmetic`, 2406.02550) train on many `a x + b y mod p` (our sum
+  and difference are two) and find deeper models' out-of-distribution generalisation **transient,
+  needing early stopping**: a parallel to the collapse past a solution. Allchin 2026 (2607.11953):
+  RL agents rarely learn permutation automata's states; division's machine is one (so is the
+  modular sum, which we learn). Lee et al. 2023 (data formats for arithmetic): read, not cited.
+- **Codes.** Product quantisation (Jegou et al. 2011) is our factored state's codebook. Index
+  collapse (Kaiser et al. 2018, whose decomposed VQ partly answers it; Lancucki et al. 2020 and
+  Dhariwal et al. 2020, restarts; Zheng & Vedaldi 2023, dead codes; Huh et al. 2023, the embeddings'
+  drift from the codebook and the commitment loss's asymmetry). Our collapse is index collapse, but
+  late and abrupt, after the codebook was in full use.
+- **Late instability.** Thilak et al. 2022 (`thilak-2022-slingshot-mechanism-adaptive-optimizers`,
+  2206.04817): with Adam, after a network fits its data, the last layer's norm grows until training
+  examples are misclassified, in cycles: the best-fitting published account of the abrupt collapse
+  (the probe script's findings, "the collapse, traced").
+
 ## References (arXiv ids; local copies in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`))
 
 1511.08228, 1611.00736, 2003.08494, 2511.22751, 2602.07599, 2406.00075, 1811.12530, 1711.00937,

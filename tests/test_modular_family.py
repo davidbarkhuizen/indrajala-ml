@@ -135,3 +135,13 @@ def test_a_saved_networks_long_test_is_the_harness_json(tmp_path: Path):
     assert set(long["lengths"]["3"]["properties"]) == {"U1", "S1"}
     cases, _ = wr.long_test_failures(long)
     assert cases == 3**4 + 3**6 + 2 * 25 * 1000  # U1 every pair at 2 columns and at 3; S1 1,000 a state
+
+
+def test_trace_marks_a_collapse_where_the_codes_in_use_halve():
+    def row(step: int, codes: list[int], **extra: object) -> dict[str, object]:
+        return {"step": step, "epoch": 5, "accuracy": {"sum": 0.5}, "factors": [{"codes": c} for c in codes], **extra}
+
+    lines = mf.trace([row(1, [16, 15]), row(1, [14, 14]), row(2, [3, 4]), row(2, [4, 4], end="plateau", minimised=7)])
+    assert ["collapse" in line for line in lines] == [False, False, True, False]
+    assert lines[0].startswith("step   1 epoch   5 codes [16, 15] share 0.00 sum 0.50")
+    assert lines[-1].endswith("END plateau min 7")

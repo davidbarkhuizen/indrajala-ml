@@ -14,10 +14,13 @@ budget, diagnosed as it trains (indrajala_ml/studies/modular_family.py).
         --arm family --reads output --first-seed 100 --seeds 14 --workers 3 --budget-epochs 400 \\
         --budget-minutes 180 --out DIR
     .venv/bin/python scripts/modular_family_probe.py long-test NETWORK.json [...] --task modular-division-5 --out DIR
+    .venv/bin/python scripts/modular_family_probe.py trace DIR/seed<s>/log.jsonl [...]
 
 `--first-seed F --seeds N` runs seeds F..F+N-1, a process each, `--workers` at once (default
 all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--budget-epochs` stops a
 run when that many epochs are trained in all (or `--budget-minutes` pass, whichever first).
+`trace` prints runs' logs a line per diagnosis (each factor's codes in use, the state's share, each
+answer's accuracy), marking a collapse: the codes in use below half the diagnosis before.
 `long-test` runs the long tests (docs/division-workplan.md, D4: U1 and S1 at 128, 256 and 1,024
 columns, the harness's sizes) on saved family networks, one slot (the task's), into
 DIR/<network>.long-test.json (skipped when there), a line each of its cases and failures.
@@ -156,6 +159,27 @@ data/window-recurrent), both machines.
   17, 5 and 20 at 19-21% at 24 columns. None was rising at the hour's end, so the registered
   conditional rule calls no 120-minute rerun; the next probe for p 7 would be D7 (b), two factors
   of 32, not yet decided against stage 5's needs.
+
+Findings (the collapse, traced with `trace`; 2026-10-15, from the logs of every run above, no new
+runs):
+
+- **A collapse is abrupt.** Within one diagnosis interval (5 epochs) the codes in use fall to half
+  or less and every answer to about chance: 15 such events in 11 runs (the codes in use halving from
+  at least 8), 11 mid-step and 4 at a step's first diagnosis. p 7 seed 1, step 10, epochs 15 to 20:
+  codes [15, 14] to [1, 1], the difference 0.91 to 0.20; 2a seed 3: right on every answer at step
+  9, at chance at step 10's first diagnosis (codes 29 to 20 there, 3 by epoch 15). Runs partly
+  recover and collapse again (p 7 seed 0, steps 11-13), and a collapse isn't always the end: 3c
+  seed 0 collapsed at step 5 (codes 60 to 24) and certified at step 9.
+- **No slow drift precedes it:** the codes in use hold at 15-16 a factor up to the diagnosis before.
+  That fits an optimiser instability (a loss spike; Thilak et al. 2022's late instabilities of
+  Adam) better than the commitment loss's gradual pull, the deferred commitment-control plan's
+  premise. Training has no gradient clipping and a constant rate (Adam, 0.003), and the
+  back-propagated sequences lengthen with every curriculum step.
+- **At p 7 the codebooks are saturated:** both factors at 16 of 16 codes from step 2 to the
+  collapse, one counter learned (the difference or the sum at 0.95-1.00), the other near 0.5. That
+  argues for 32 codes a factor (division workplan, D7 (b)) apart from any fix.
+- Not measured: the loss and the gradient's norm per batch around a collapse (the diagnosis is
+  every 5 epochs); the next probe should log them.
 """
 
 from __future__ import annotations
@@ -215,7 +239,14 @@ def main(argv: list[str]) -> int:
     long.add_argument("--n", type=int, nargs="+", default=list(wr.LONG_LENGTHS))
     long.add_argument("--properties", nargs="+", default=list(mf.LONG_PROPERTIES))
     long.add_argument("--out", type=Path, required=True)
+    trace = commands.add_parser("trace", help="runs' logs, a line per diagnosis, collapses marked")
+    trace.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
     args = parser.parse_args(argv)
+    if args.command == "trace":
+        for path in args.logs:
+            print(f"== {path}")
+            print("\n".join(mf.trace([json.loads(line) for line in path.read_text().splitlines()])))
+        return 0
     if args.command == "long-test":
         args.out.mkdir(parents=True, exist_ok=True)
         p = int(args.task.rsplit("-", 1)[1])

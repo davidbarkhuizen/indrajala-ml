@@ -3,6 +3,7 @@ The window-recurrent study's tasks (indrajala_ml/studies/window_tasks.py): each 
 labels are its task's answers, the machines are minimal, and a word of columns reads back as its case.
 """
 
+import dataclasses
 import itertools
 import random
 
@@ -115,3 +116,36 @@ def test_tasks_are_named():
     assert (wt.ModularDivision(7).machine.tokens, wt.ModularDivision(7).machine.classes) == (9, 8)
     with pytest.raises(AssertionError):
         wt.task_named("modular-division-4")
+
+
+def readout(machine: wt.Mealy, *labels: np.ndarray) -> wt.Mealy:
+    """The machine with its outputs replaced by readouts of the state each token leads to."""
+    combined = np.zeros(machine.states, dtype=np.int64)
+    for label in labels:
+        combined = combined * (int(label.max()) + 1) + label
+    return dataclasses.replace(machine, output=combined[machine.transition])
+
+
+@pytest.mark.parametrize("p", [5, 7])
+def test_division_readouts_approximations_and_the_cover(p: int):
+    """
+    The division paper's algebra (P2, "The target machine and its cover"): the sum and difference
+    are congruences of division's machine (approximations), the quotient and the product aren't;
+    the sum and difference together are injective on states (they cover it, odd p), the quotient
+    with the sum isn't; every readout set trained on is 1-distinguishable, the sum alone never; each
+    column permutes the states (a permutation automaton).
+    """
+    machine = wt.modular_machine(p)
+    assert machine.coordinates is not None
+    A, B = machine.coordinates.values.T
+    total, difference, product = (A + B) % p, (A - B) % p, (A * B) % p
+    quotient = np.array([md.quotient(int(a), int(b), p) for a, b in zip(A, B, strict=True)])
+    assert machine.is_congruence(total) and machine.is_congruence(difference)
+    assert not machine.is_congruence(quotient) and not machine.is_congruence(product)
+    assert len(set(zip(total, difference, strict=True))) == p * p
+    assert len(set(zip(quotient, total, strict=True))) < p * p
+    assert machine.distinguishing_length() == 1
+    for labels in [(quotient,), (quotient, total), (total, difference), (quotient, total, difference), (product,)]:
+        assert readout(machine, *labels).distinguishing_length() == 1
+    assert readout(machine, total).distinguishing_length() is None
+    assert all(len(set(machine.transition[:, t])) == machine.states for t in range(machine.tokens))
