@@ -394,7 +394,7 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
    `~/code/backups/window-recurrent.before-factored-state.tar` there): 2,610 files migrated (jebel
    holds fewer studies), a second run none, every manifest verified (14), and each manifest both
    machines hold byte for byte the same as pyramidon's (14 of 14); its table
-   `factored-state-migration.tsv` (db181039...f130032). C9, C9' and C9'' wrote the layout
+   `factored-state-migration.tsv` (db181039...1f130032). C9, C9' and C9'' wrote the layout
    already.
 6. **Done (#742).** **The certificate**: tuple states (D4), per-factor near ties, the per-factor readout (D9); tests
    on a hand-built factored machine for division `p` 5 (certifies, its factors read `A` and `B`),

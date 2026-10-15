@@ -66,7 +66,7 @@ files; each certificate certified again the same, field by field), so each manif
 migrated one, its hash before in "(was ...)". Each old manifest is kept beside it as
 `<name>.before-factored-state.sha256`, and every file's old and new sha256 is in
 `data/window-recurrent/factored-state-migration.tsv` (7fdb7e79...0fe237e6). jebel's copies were
-migrated the same way on 2026-10-15 (2,610 files; its table db181039...f130032), each manifest
+migrated the same way on 2026-10-15 (2,610 files; its table db181039...1f130032), each manifest
 both machines hold byte for byte the same.
 
 Findings (stage 9), on jebel (i7-9700K), indrajala-ml 6b94933, crate 8c20e510c9a9,
