@@ -108,7 +108,10 @@ factors); whether it climbs to `p` 7 (49 states; E7 and E7', the quotient alone 
 | family, `p` 7, two factors of 16 | 49 | 256 joint | 16 (a counter 7) | 304 | 304 |
 
 No cap is reached in an hour (the certified runs stopped at steps 11-12); a probe claims nothing
-about memorising, and every success is certified, which is exact at every length.
+about memorising, and every success is certified, which is exact at every length. Through stage 3
+`run` capped every cell at 280 (the default, so 152 wasn't enforced; no run passed step 34); from
+stage 4 the cap is the cell's exclusion bound (`modular_family.exclusion_bound`), so `p` 7's 304
+is reachable.
 
 ## Stages
 

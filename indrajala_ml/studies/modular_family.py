@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import random
 import time
 from collections.abc import Callable, Sequence
@@ -213,6 +214,11 @@ def long_accuracy(net: Any, encoding: Encoding, settings: Settings) -> dict[str,
     return result
 
 
+def exclusion_bound(p: int, factors: Sequence[tuple[int, int]]) -> int:
+    """`m + q - 1` (experiment-design.md, section 1): the joint codes plus division's p * p states, less one."""
+    return math.prod(m for _, m in factors) + p * p - 1
+
+
 def run(
     encoding: Encoding,
     factors: Sequence[tuple[int, int]],
@@ -220,13 +226,16 @@ def run(
     budget_seconds: float,
     out: Path,
     settings: Settings = PROBE,
-    cap: int = 280,
+    cap: int | None = None,
     reads: str = BEFORE_STATE,
 ) -> None:
     """
-    One probe run: the curriculum until the budget or the cap, a line of JSON per diagnosis to
-    out/log.jsonl, the network saved at each step's end to out/network.json.
+    One probe run: the curriculum until the budget or the cap (by default the cell's exclusion
+    bound), a line of JSON per diagnosis to out/log.jsonl, the network saved at each step's end to
+    out/network.json.
     """
+    if cap is None:
+        cap = exclusion_bound(encoding.p, factors)
     out.mkdir(parents=True, exist_ok=True)
     net = network(encoding, factors, seed, reads)
     start = time.perf_counter()
