@@ -60,6 +60,15 @@ anywhere. It takes no lock: run it beside the study, one core.
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
+The files below are in the factored state's layout: on pyramidon, the factored-state workplan's
+stage 5 migrated them (2026-10-14, `migrate_factored_state.py tree data/window-recurrent`, 3,452
+files; each certificate certified again the same, field by field), so each manifest's sha256 is the
+migrated one, its hash before in "(was ...)". Each old manifest is kept beside it as
+`<name>.before-factored-state.sha256`, and every file's old and new sha256 is in
+`data/window-recurrent/factored-state-migration.tsv` (7fdb7e79...0fe237e6). jebel's copies were
+migrated the same way on 2026-10-15 (2,610 files; its table db181039...1f130032), each manifest
+both machines hold byte for byte the same.
+
 Findings (stage 9), on jebel (i7-9700K), indrajala-ml 6b94933, crate 8c20e510c9a9,
 `scripts/window_recurrent_matrix.json`: the curriculum arm, `k` 1, 2, 4 x `s` 4, 16 x `m` 4, 8,
 16, 5 seeds, 3 steps (1 window, then 1-2, then 1-3), at most 200 epochs a step, patience 30, the
@@ -67,7 +76,7 @@ catalogue's default sizes, each step's test pass up to its first failing length 
 90 runs, none raised. Wall time 2026-10-12 21:43 to 2026-10-13 05:14 (7.5 h; 43.4 h of runs, 24.6
 of them training and 18.8 testing); a run took 2-67 minutes (median 27). The results are on jebel
 and pyramidon in `data/window-recurrent/matrix/results/` (90 files, listed with their sha256 in
-`data/window-recurrent/matrix/results.sha256`, itself sha256 407d6ec3...7941cab9), every step's
+`data/window-recurrent/matrix/results.sha256`, itself sha256 a8130f8c...4d98fc38 (was 407d6ec3...7941cab9)), every step's
 network beside them in `models/` (156 MB), and the log in `data/window-recurrent-matrix.log`
 (sha256 b47626f0...68a7dd59).
 
@@ -127,7 +136,7 @@ together, at most 200 epochs) at the matrix's three best cells, seeds 0-4, the m
 otherwise. 15 runs, none raised. Wall time 2026-10-13 05:28 to about 06:29 (5.3 h of runs; a run
 took 1-33 minutes, median 23). The results are on jebel and pyramidon in
 `data/window-recurrent/control/results/` (15 files, listed with their sha256 in
-`data/window-recurrent/control/results.sha256`, itself sha256 6eed795f...a6facf9b), the networks
+`data/window-recurrent/control/results.sha256`, itself sha256 bbd0e9bb...a8e46949 (was 6eed795f...a6facf9b)), the networks
 beside them in `models/` (9.2 MB), and the log in `data/window-recurrent-control.log` (sha256
 913e996f...c52662dd).
 
@@ -159,11 +168,11 @@ control's step 1: 105), 4-7 workers. Two verdicts (the claims workplan's D3): **
 certified**, every near tie (snap ratio under 1.05) branched both ways, indrajala-ml 094a7b1
 (#703), 2026-10-13 about 07:50 to 08:26, in `data/window-recurrent/certificates/` (105 files,
 listed with their sha256 in `data/window-recurrent/certificates.sha256`, itself sha256
-67a4e6b7...9550f05d), log `data/window-recurrent-certificates.log` (sha256 f8c38080...56ae98a1); and
+38b1efee...116f32fd (was 67a4e6b7...9550f05d)), log `data/window-recurrent-certificates.log` (sha256 f8c38080...56ae98a1); and
 **certified**, the network's own snaps only (`--snap-ratio 1`), indrajala-ml 35175ea (#704; the
 certificate unchanged but for the option), 08:30 to 09:22 in two parts, in
 `data/window-recurrent/certificates-strict/` (`certificates-strict.sha256`, sha256
-299675b8...a924fc18), log `data/window-recurrent-certificates-strict.all.log` (the two parts
+f39c74b1...573ddb88 (was 299675b8...a924fc18)), log `data/window-recurrent-certificates-strict.all.log` (the two parts
 joined; sha256 e1b8e612...3dcce757). 105.9 M window evaluations each way; 3.4 h of worker time
 branched, 2.9 h strict; a `k` 4 network 115-689 s branched, 74-759 s strict.
 
@@ -244,12 +253,12 @@ Findings (E7 of docs/window-recurrent-claims-workplan.md: modular division, C7),
 (`window_recurrent_e7_p5.json` then `_p7.json`: 2 `p` x 2 arms x `k` 1 and 4 x `m` 32 and 64 x 5
 seeds, `s` 16, the matrix's settings). Results and models in `data/window-recurrent/e7-p5/` and
 `e7-p7/` (listed with their sha256 in `data/window-recurrent/e7-p5.sha256`, itself sha256
-6ca9ee8c...a992317f, and `e7-p7.sha256`, 10d0b5bd...0f5a2b7a), copied to pyramidon and checked;
+9d8fd606...70bd96e7 (was 6ca9ee8c...a992317f), and `e7-p7.sha256`, da982e22...25128a4a (was 10d0b5bd...0f5a2b7a)), copied to pyramidon and checked;
 logs `data/window-recurrent-e7-p5.log` (196cd344...0776527a) and `-p7.log` (2c06d807...fbbc1349).
 Certified on pyramidon at indrajala-ml 9c50fe6, 3 workers, both verdicts (D13), in each
-directory's `certificates/` and `certificates-strict/` (`certificates.sha256`: p 5 6d0b3e11...46d4cb7d,
-p 7 4cae99c0...5426ada6; `certificates-strict.sha256`: p 5 43c9d4af...88c26033, p 7
-dc612ff5...a5d4eff5); about 140 s a pass of 40 networks. No long tests: none certified (D22).
+directory's `certificates/` and `certificates-strict/` (`certificates.sha256`: p 5 cdf49604...57b9b420 (was 6d0b3e11...46d4cb7d),
+p 7 0fa7a105...153386c6 (was 4cae99c0...5426ada6); `certificates-strict.sha256`: p 5 d5d75c8c...a2b56e03 (was 43c9d4af...88c26033), p 7
+17588161...168d5f57 (was dc612ff5...a5d4eff5)); about 140 s a pass of 40 networks. No long tests: none certified (D22).
 
 - **C7 is refuted as registered**: no run works and no network certifies, either way, at either
   `p`: 0 of 40 at `p` 5 and 0 of 40 at `p` 7 (Wilson 95%: 0.00-0.09 each), every cell 0 of 5.
@@ -279,11 +288,11 @@ C7'), trained on jebel, indrajala-ml 9c50fe6, crate 8c20e510c9a9, 6 workers, 202
 23:56 (`window_recurrent_e7_prime_p5.json` then `_p7.json`: 2 `p` x 2 arms x 2 `m` x 10 seeds,
 `k` 1, `s` 16, E7's settings; `m` 128 and 256 at `p` 5, 256 and 512 at `p` 7, about 5 and 10
 times the states). Results and models in `data/window-recurrent/e7-prime-p5/` and `-p7/`
-(`e7-prime-p5.sha256`, sha256 67f56ab0...05dc44d8; `e7-prime-p7.sha256`, 69c4efe2...4fd8c79e),
+(`e7-prime-p5.sha256`, sha256 273f7b77...c788cf6f (was 67f56ab0...05dc44d8); `e7-prime-p7.sha256`, 4bad23ad...82834fe8 (was 69c4efe2...4fd8c79e)),
 copied to pyramidon and checked; logs `data/window-recurrent-e7-prime-p5.log` (eab06819...c7a1b8ac)
 and `-p7.log` (a258d10a...8da00eea). Certified on pyramidon at indrajala-ml cf6ac86, both verdicts
-(`certificates.sha256`: p 5 de4a138c...10c88e98, p 7 1453332d...d9b5cc27;
-`certificates-strict.sha256`: p 5 eb3530ac...3a9703aa, p 7 cd76b51e...aca8370f). No long tests:
+(`certificates.sha256`: p 5 1e889358...ac000655 (was de4a138c...10c88e98), p 7 948929fe...63f18945 (was 1453332d...d9b5cc27);
+`certificates-strict.sha256`: p 5 9e8d34c5...9e1bd422 (was eb3530ac...3a9703aa), p 7 e38b3bf2...59c3f8ab (was cd76b51e...aca8370f)). No long tests:
 none certified.
 
 - **C7' is refuted as registered**: no run works and no network certifies, either way: 0 of 40
@@ -314,11 +323,11 @@ Findings (E8 of docs/window-recurrent-claims-workplan.md: the modular-sum ladder
 C8), trained on pyramidon (Ryzen 7 3700U), indrajala-ml b886001, crate 8c20e510c9a9, 3 workers,
 2026-10-14 05:50 to 06:19 (`window_recurrent_e8_q4.json` then `_q5.json`: `q` 4 and 5 x 2 arms x
 10 seeds, `k` 1, `s` 16, `m` 32, E7''s settings). Results and models in
-`data/window-recurrent/e8-q4/` and `-q5/` (`e8-q4.sha256`, sha256 011ee2de...596754fd;
-`e8-q5.sha256`, 8ec6a2ae...ebb5ca80), logs `data/window-recurrent-e8-q4.log` (51504a22...646b3d13)
+`data/window-recurrent/e8-q4/` and `-q5/` (`e8-q4.sha256`, sha256 9d5ea06c...cdebfff2 (was 011ee2de...596754fd);
+`e8-q5.sha256`, 97f2466f...9500e30f (was 8ec6a2ae...ebb5ca80)), logs `data/window-recurrent-e8-q4.log` (51504a22...646b3d13)
 and `-q5.log` (36923d55...d9b94fce). Certified on pyramidon, both verdicts
-(`certificates.sha256`: q 4 184bc355...1590b51e, q 5 0fc8b159...d3f8c535;
-`certificates-strict.sha256`: q 4 852c0b1b...90a1eafb, q 5 9ced897f...bd3031ff); the certified
+(`certificates.sha256`: q 4 a5909738...c98d5c11 (was 184bc355...1590b51e), q 5 c246a596...5becea37 (was 0fc8b159...d3f8c535);
+`certificates-strict.sha256`: q 4 3871662f...402f020d (was 852c0b1b...90a1eafb), q 5 81e5b156...48aa8e9c (was 9ced897f...bd3031ff)); the certified
 network long-tested (U1 and S1 at 128, 256 and 1,024; `e8-q4/long-tests.sha256`,
 a4ca4818...ee347172).
 
@@ -342,9 +351,9 @@ curriculum against all at once, C3-C5; C0's reruns), trained on jebel (i7-9700K)
 cf6ac86, crate 8c20e510c9a9, 6 workers, finished 2026-10-14 12:41 (`window_recurrent_e3_e4_trimmed.json`,
 D34: `k` 4 `s` 4, the curriculum at `m` 3, 4, 6, 8 and 16 and all at once at `m` 16, seeds 0-19,
 120 runs). Results and models in `data/window-recurrent/e3-e4/` (`e3-e4.sha256`, sha256
-448dd136...652dda8a), log `data/window-recurrent-e3-e4.log` (52f0b1df...133d5f0a). Every run's
+1dc4d875...d9a54341 (was 448dd136...652dda8a)), log `data/window-recurrent-e3-e4.log` (52f0b1df...133d5f0a). Every run's
 last network certified on pyramidon at 9dce80e, both verdicts (`e3-e4/certificates.sha256`,
-37c1c694...42a38caa; `certificates-strict.sha256`, a68ed4f2...3b74f7a3; logs `certify-branched.log`
+7005c870...5745770c (was 37c1c694...42a38caa); `certificates-strict.sha256`, eb10292c...ef837eff (was a68ed4f2...3b74f7a3); logs `certify-branched.log`
 60f328ea...b0d93bc8, `certify-strict.log` f8ffc9b7...7dc7a7f3). The registered tests are D4's on
 the working rate (W10, exact to 16 columns and past); the certified rate beside them is a
 measurement. Holm's correction over C2-C4 and C6 waits for C2 and C6 (stage 8); the p values here
