@@ -16,6 +16,10 @@ budget, diagnosed as it trains (indrajala_ml/studies/modular_family.py).
     .venv/bin/python scripts/modular_family_probe.py long-test NETWORK.json [...] --task modular-division-5 --out DIR
     .venv/bin/python scripts/modular_family_probe.py trace DIR/seed<s>/log.jsonl [...]
 
+`--fork` turns on snapshot and fork on collapse (docs/collapse-fork-workplan.md): a step's epoch
+whose screen falls below 0.6 of the step's best goes back to that best network, halves the step's
+rate and takes new data, at most 4 times a step; each fork a line in the log, each step's end its
+count.
 `--first-seed F --seeds N` runs seeds F..F+N-1, a process each, `--workers` at once (default
 all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--budget-epochs` stops a
 run when that many epochs are trained in all (or `--budget-minutes` pass, whichever first).
@@ -225,6 +229,9 @@ def main(argv: list[str]) -> int:
     run.add_argument("--budget-minutes", type=float, default=60.0)
     run.add_argument("--budget-epochs", type=int, help="epochs trained in all, whichever budget is spent first")
     run.add_argument("--workers", type=int, help="runs at once (default: every seed at once)")
+    run.add_argument(
+        "--fork", action="store_true", help="snapshot and fork on collapse (docs/collapse-fork-workplan.md)"
+    )
     run.add_argument("--out", type=Path, required=True)
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
@@ -268,6 +275,7 @@ def main(argv: list[str]) -> int:
         budget_seconds=args.budget_minutes * 60,
         reads=args.reads,
         budget_epochs=args.budget_epochs,
+        fork=mf.Fork() if args.fork else None,
     )
     if args.seed is not None:
         probe(seed=args.seed, out=args.out)
