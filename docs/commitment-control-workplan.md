@@ -5,6 +5,12 @@
 fails, or if a later probe shows factors collapsing. Decisions D1-D5 settled (the owner delegates
 a workplan's decisions; each with its options' pros and cons). Probe-driven, as option 2.**
 
+**Since (2026-10-15):** option 2's probe certified division (2 of 2, the poolings reading the
+output), so this plan stays deferred. Collapse was seen again, but **after** a solution: every run
+that solved or nearly solved collapsed when trained on (codes to 2-8, the answer to chance), none
+while learning. If a later probe needs a run to keep training past a solution, the thermostat
+(D1 (a)) is the first thing to try; otherwise stopping at the first certified step suffices.
+
 ## Why
 
 Each code layer's loss, per window, is `weight * (||sg[h] - e||^2 + beta ||h - sg[e]||^2)`

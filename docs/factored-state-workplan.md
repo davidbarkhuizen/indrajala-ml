@@ -10,7 +10,9 @@ a factor, a 4 h budget, D13). C9' found nothing by step 10 and its diagnosis sho
 factors learn only "is it zero": D14); **C9''** (stage 9b, D14-D17, the owner, 2026-10-14
 evening: a spare third factor and the factors' learning staggered, on both machines) found nothing
 in its 4 h: the factors after the first never left one code (stage 9b's result). C9, C9' and C9''
-are each "not found within the budget"; division's next design is the owner's to choose.**
+are each "not found within the budget". **Later (2026-10-15): D10's poolings were the main
+blocker** (D10's later finding); with them reading the output, division at `p` 5 certified in the
+modular-family probe, continued in [division-workplan.md](division-workplan.md).**
 
 ## Why
 
@@ -224,6 +226,17 @@ Settled with the owner, 2026-10-14, each option's pros and cons as put:
     and every result's; the golden run re-recorded for no gain at G = 1.
 
   **C9's cell reads `BEFORE_STATE`** (registered here, before any data).
+
+  **Later finding (2026-10-15, the modular-family probe's D10 check,
+  `scripts/modular_family_probe.py`):** (b)'s cost decided C9, C9' and C9''. On E8c's own task and
+  cell (the modular sum at `q` 5, one factor), a pooling reading before the state passes steps 1-2
+  and plateaus at every step from 3, 0 of 2 certified; reading the output, 2 of 2 certify step for
+  step as E8c. "Division's counters need only the digit" holds for the function, not for learning
+  it: without the window's blocks, the cell learns the transition alone and doesn't. With the
+  poolings reading the output, the modular family certified division at `p` 5 (2 of 2), its state
+  spread over both factors rather than one residue a factor ([division-workplan.md](division-workplan.md)).
+  Independence by construction (b) and learning are at odds here; (a) or (c) are the options to
+  reopen if factored states are wanted again.
 - **D11. Each factor's state width. Settled in stage 8: (b).** D8 named the codes, not the width
   `s_g`.
   - (a) 8 a factor, 16 in all. Pros: E7's and E8's total width. Cons: each factor half the width

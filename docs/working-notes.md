@@ -131,6 +131,17 @@ where you meet a new trap; delete one that no longer holds.
 - **A state can collapse to one code at long training lengths:** a fresh `m` 16 network starts on
   1-2 codes; lengths 1-3 or 1-6 split it, 1-10 or 1-20 don't. A 2-epoch probe (about 20 s an epoch
   at 20 columns) shows it before a long launch.
+- **A hand-built training set needs the harness's final zero window** (`window_recurrent_study.
+  example`): its answer needs the state the data left, so even a one-column step trains the state.
+  Without it the modular-family probe's step 1 passed on the column alone and its state stayed on
+  one code in every arm.
+- **Every probe stops at its first certified step** (certify each step's end: under a second at
+  `k` 1): all four of the modular-family runs that solved or nearly solved division collapsed when
+  trained on (E8b's warning, seen again). Save the network before it is overwritten.
+- **To probe beside a running study on `jebel`, use a worktree there** (`git worktree add --detach
+  ~/code/wt-X origin/<branch>`, `.venv` and `data/window-recurrent` linked, `PYTHONPATH=$PWD`); don't
+  update its files while a harness study (forkserver workers) runs from it. A single-process probe
+  has its modules loaded and doesn't care.
 - **When trimming a stage, check which later experiments compare against the dropped cells**
   (D34 removed E2's and E6's `k` 1 comparators).
 - **Copying results between machines:** `sha256sum` on the source, `rsync`, `sha256sum -c` on
@@ -249,6 +260,8 @@ where you meet a new trap; delete one that no longer holds.
   process group (`setsid` forks): it is no waiter. Wait on the study's pid (`while kill -0 PID`).
   Over ssh it holds, as above. An ssh that starts a detached job with `&` holds on too: run that
   ssh in the background and kill only the local ssh (the remote job, `setsid`, survives).
+- **A Monitor that polls remote files works** (`ssh -n` a listing or `grep` each minute, the lines
+  already seen kept in a bash associative array): used for the modular-family probe's step ends.
 - **A Monitor reading `{ ssh host tail -F A & tail -F B; } | awk ...` delivered nothing** for 30
   minutes while both logs grew; a loop that polls each log's line count (`wc -l`, then `tail -n
   +N`, `ssh -n` for the remote one) every minute works.
