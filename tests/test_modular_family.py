@@ -79,6 +79,36 @@ def test_a_probe_run_stops_when_its_epochs_are_spent(tmp_path: Path):
     assert ends[-1]["end"] == "spent" and len(ends) <= 3
 
 
+def test_a_fork_restores_the_steps_best_network_cools_the_rate_and_stops_at_its_limit(tmp_path: Path):
+    """drop -1 calls every epoch that doesn't raise the peak a collapse (below twice it), so steps
+    fork, each fork halving the step's rate, at most `limit` times a step."""
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=8, patience=10, diagnose_every=10, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    fork = mf.Fork(drop=-1.0, cool=0.5, limit=2)
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 1e9, tmp_path, settings, cap=2, fork=fork)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    forks = [r for r in rows if "fork" in r]
+    ends = {r["step"]: r["forks"] for r in rows if "end" in r}
+    assert forks and set(ends) == {1, 2}
+    for step, count in ends.items():
+        mine = [r for r in forks if r["step"] == step]
+        assert len(mine) == count <= fork.limit
+        assert [(r["fork"], r["rate"]) for r in mine] == [(f, 0.003 * 0.5**f) for f in range(1, count + 1)]
+    assert all(r["screen"] < 2 * r["peak"] and r["restored"] == r["peak"] for r in forks)  # the peak's network back
+    assert (tmp_path / "snapshot.network.json").exists()
+
+
+def test_without_a_fork_a_run_logs_no_forks(tmp_path: Path):
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=2, diagnose_every=10, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 1e9, tmp_path, settings, cap=1)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    assert not any("fork" in r or "forks" in r for r in rows)
+    assert not (tmp_path / "snapshot.network.json").exists()
+
+
 def test_the_query_machine_runs_each_column_with_its_queries_and_reads_one_slot():
     from indrajala_ml.studies import window_recurrent_certificate as wc
 

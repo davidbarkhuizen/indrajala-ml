@@ -141,6 +141,27 @@ class Settings:
 PROBE = Settings()
 
 
+@dataclass(frozen=True)
+class Fork:
+    """
+    Snapshot and fork on collapse (docs/collapse-fork-workplan.md): within a step, the network at the
+    step's best screen score is kept; an epoch whose score falls below (1 - drop) of that peak is a
+    collapse, and the run goes back to the snapshot, cools the step's rate by `cool` and takes its
+    data from a new stream; at most `limit` forks a step.
+    """
+
+    drop: float = 0.4  # D1
+    cool: float = 0.5  # D3
+    limit: int = 4  # D4
+
+
+def screen_score(net: Any, encoding: Encoding, screens: Mapping[int, Sequence[Example]]) -> float:
+    """The share of every answer right over a step's screens (its training lengths)."""
+    tallies = [accuracy(net, encoding, rows) for rows in screens.values()]
+    correct = sum(c for t in tallies for c, _ in t.values())
+    return correct / sum(a for t in tallies for _, a in t.values())
+
+
 def _windows(encoding: Encoding, n: int, cases: int, seed: str) -> tuple[list[Example], list[list[int]]]:
     rng = random.Random(seed)
     drawn = [columns(n, rng) for _ in range(cases)]
@@ -249,12 +270,14 @@ def run(
     cap: int | None = None,
     reads: str = BEFORE_STATE,
     budget_epochs: int | None = None,
+    fork: Fork | None = None,
 ) -> None:
     """
     One probe run: the curriculum until the budget (wall-clock seconds and, if given, epochs
     trained in all, whichever is spent first: the epochs don't depend on the machine or its load)
     or the cap (by default the cell's exclusion bound), a line of JSON per diagnosis to
-    out/log.jsonl, the network saved at each step's end to out/network.json.
+    out/log.jsonl, the network saved at each step's end to out/network.json. With `fork`, a collapse
+    within a step goes back to the step's best network and forks (Fork; a log line each).
     """
     if cap is None:
         cap = exclusion_bound(encoding.p, factors)
@@ -274,6 +297,11 @@ def run(
         lengths = list(range(1, step + 1))
         screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{step}-{n}")[0] for n in lengths}
         best, since, stop, epoch = -1.0, 0, "budget", 0
+        rate, forks, snapshot = settings.rate, 0, out / "snapshot.network.json"
+        peak = 0.0
+        if fork is not None:
+            peak = screen_score(net, encoding, screens)
+            net.save(str(snapshot))
         for epoch in range(1, settings.max_epochs + 1):
             if time.perf_counter() - start > budget_seconds:
                 stop = "deadline"
@@ -281,19 +309,37 @@ def run(
             if budget_epochs is not None and spent >= budget_epochs:
                 stop = "spent"
                 break
-            rng = random.Random(f"family-train-{seed}-{step}-{epoch}")
+            rng = random.Random(f"family-train-{seed}-{step}-{epoch}" + (f"-fork{forks}" if forks else ""))
             examples = [
                 encoding.example(columns(lengths[i % len(lengths)], rng)) for i in range(settings.epoch_examples)
             ]
-            wr.train_epoch(net, examples, settings.batch_size, settings.rate, rng)
+            wr.train_epoch(net, examples, settings.batch_size, rate, rng)
             spent += 1
-            tallies = [accuracy(net, encoding, rows) for rows in screens.values()]
-            correct = sum(c for t in tallies for c, _ in t.values())
-            total = sum(a for t in tallies for _, a in t.values())
-            score = correct / total
+            score = screen_score(net, encoding, screens)
+            if fork is not None:
+                if score > peak:
+                    peak = score
+                    net.save(str(snapshot))
+                elif score < (1 - fork.drop) * peak and forks < fork.limit:
+                    forks += 1
+                    rate *= fork.cool
+                    net = load_network(str(snapshot))
+                    restored = screen_score(net, encoding, screens)
+                    record(
+                        {
+                            "step": step,
+                            "epoch": epoch,
+                            "fork": forks,
+                            "screen": round(score, 4),
+                            "peak": round(peak, 4),
+                            "restored": round(restored, 4),
+                            "rate": rate,
+                        }
+                    )
+                    continue
             if epoch % settings.diagnose_every == 0:
                 record({"step": step, "epoch": epoch, "screen": round(score, 4), **diagnose(net, encoding, settings)})
-            if correct == total:
+            if score == 1.0:
                 stop = "passed"
                 break
             if score > best:
@@ -313,6 +359,7 @@ def run(
                 "step": step,
                 "end": stop,
                 "epochs": epoch,
+                **({"forks": forks} if fork is not None else {}),
                 **diagnose(net, encoding, settings),
                 "long": long_accuracy(net, encoding, settings),
                 "certified": certificate.certified,
