@@ -45,6 +45,7 @@ any run.
 | --- | --- | --- | --- |
 | **C1** | A working network is a correct adder at **every** length: its snapped state makes it a finite transducer, and that transducer is the carry automaton | E1, the certificate | a working network fails the certificate (then C1 is "to 64 columns", as now) |
 | **C2** | The snapping is what makes the recurrence extrapolate: the same network with a continuous state works far less often past its training lengths | E2, the ablation | the continuous arm's working rate at 1,024 columns is within D4's test of the snapped arm's |
+| **C2b** | The same without the window's transformer: on the plain recurrence (the GRU alone, `k` 1), the snapped state works far more often at 1,024 columns than a continuous one | E2b, the ablation on the linear window (D38) | the continuous arm's working rate at 1,024 columns is not below the snapped arm's by Fisher's exact test, one-sided p < 0.05 |
 | **C3** | More codes than the automaton needs make training find it more often | E3, the code count | no monotone trend over `m` (D4's trend test) |
 | **C4** | The curriculum isn't needed: training on 1-3 windows at once works as often (the control: 12 of 15 against 12 of 15, on about 16 times fewer examples at `k` 4), so the recurrence, not the schedule, generalises | E4, the arms | the arms' working rates differ by D4's test (then the claim is the difference, whichever way) |
 | **C5** | The seed decides: at a fixed configuration the working rate is a stable fraction, measured with its interval | E3 and E4's 20 seeds a cell | (a measurement, not a hypothesis: reported with intervals) |
@@ -124,6 +125,33 @@ test between arms (D4).
 
 **Trimmed (D36):** `k` 4 `s` 4 only, 20 runs against E3's curriculum `m` 16 cell; the `k` 1 `s` 16
 cell dropped with its comparator (D34).
+
+### E2b. The snapping ablation without the transformer (C2b; D38)
+
+**Design.** E6's linear window (the embedding and output layer only, so the GRU does the whole step)
+at `k` 1 `s` 16 on addition, two arms: snapped (`m` 16) and continuous (`m` null, the codebook and
+commitment losses dropped), seeds 0-19 each, the curriculum capped at 18 columns, E2's settings
+otherwise (`tests_past_break` off). Every step of a snapped run is certified (`certify_steps`), and no
+run stops early: both arms train the same curriculum to its end, so the arms differ in the snap
+alone. Configs `scripts/window_recurrent_e2b_snapped.json` and `_continuous.json` (one study an arm,
+so the arms can run on different machines; a test checks they are the same cell but for `m`).
+
+**Feasibility.** Snapped: 16 codes against the carry automaton's 3 states; the exclusion bound
+`16 + 3 - 1 = 18` columns, the cap. Continuous: unbounded states, so no training length excludes
+memorising and no certificate applies: the long tests are its evidence, as in E2 (stated, not a
+flaw to fix: it is what the ablation removes).
+
+**Measures.** Per run: works at 64 columns (W10's break of 16 or more, the test pass to 64); for every
+run whose break is 64, the long tests' B1 at 256 and 1,024 columns (`long-test`), works at 1,024
+meaning every case passes; for snapped runs, the final network's certificate in both verdicts and
+the first certified step (exploratory: the steps' certificates).
+
+**Analysis.** Each arm's working rate at 64 and at 1,024 with its Wilson interval; Fisher's exact
+test between arms at 1,024, one-sided (C2b), and at 64 (reported). Snapped runs trained past a
+solution can collapse (E8b), which can only lower the snapped arm's rate, against C2b.
+
+**Probe** (`probe` on the continuous config, `--steps 3 18 --epochs 2`, `jebel`, 2026-10-15): an epoch at
+18 columns trains in 3.6 s, the whole check at 18 takes 48 s, peak 290 MB.
 
 ### E3. The code count (C3, C5)
 
@@ -770,6 +798,26 @@ Settled under the owner's standing delegation, with each option's pros and cons:
     open in the report.
   - (c) Run as registered. Cons: infeasible (memorising not excluded) and nothing to compare.
 
+- **D38. A plain recurrent baseline for C2: E2b (the owner, 2026-10-15).** E2 tests the snap with
+  the transformer window at `k` 4; E6 showed a snapped GRU alone certifies at `k` 1, but as an
+  existence test. A reviewer's first question is what a plain GRU does, snapped and not.
+  - (a) *Chosen.* **A rate comparison on E6's linear cell, snapped against continuous**, 20 seeds an
+    arm, the curriculum to the exclusion bound (18), every snapped step certified, no early stop.
+    Pros: C2 tested with the transformer out of the picture, on the most standard recurrent model;
+    the arms differ in the snap alone; `k` 1 is cheap (a run about 15-30 minutes); E6's cell, so its
+    certified networks are the same kind. Cons: training past a solution can destroy a snapped
+    network (E8b), lowering the snapped rate (conservative for C2b); only `k` 1 (a linear window
+    can't add inside a wider window).
+  - (b) Stop both arms at the first step that works by sampled tests at 64. Pros: protects solutions
+    in both arms alike. Cons: a new harness rule; stops on the sampled tests the papers argue
+    overstate; departs from E2's protocol.
+  - (c) The continuous arm as an existence test only (6 seeds, the first exact at 1,024). Pros:
+    cheapest. Cons: C2 is a rate claim.
+  - (d) Add the FFN window too. Cons: twice the cost; not the plain GRU.
+  **Where (D14's practice):** the snapped arm on `pyramidon` (3 workers, about 0.9 GB) once division
+  stage 5 ends there; the continuous arm on `jebel` (6 workers) after E2. Runs reproduce exactly across
+  the machines (C0), so the split doesn't confound the arms.
+
 ## Stages
 
 1. **Done.** **This workplan and the literature review.** Docs only.
@@ -882,6 +930,9 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    whole check at 18 takes 62 s, the certificate 0.01 s; peak 290 MB (6 workers about 1.8 GB,
    sized again from a worker's RSS a few minutes in). The probe's network, trained 2 epochs at 8
    and 2 at 18 (not the curriculum), certified with 6 states: exploratory, not E6's result.
+8b. **E2b (D38): registered**, configs `scripts/window_recurrent_e2b_snapped.json` and
+   `_continuous.json` (a test checks they are E6's linear cell at 20 seeds, differing in `m` only):
+   findings, then the long tests (B1 at 256 and 1,024) on every run whose break is 64.
 9. **E5 on `pyramidon`:** findings. **The tool in:** `scripts/window_recurrent_study.py explore
    CONFIG` (`explore_run`, `explore_summary`): every finished snapped run's last network, its codes
    over the codes property's first 1,000 cases at its check lengths and at 8, 16 and 64, the new
