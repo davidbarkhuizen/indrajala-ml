@@ -32,6 +32,7 @@ from typing import Any
 
 import numpy as np
 
+from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_data as md
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
 from indrajala_ml.model.persistence.load_network import load_network
@@ -54,6 +55,8 @@ FAMILY = ("sum", "difference")
 QUOTIENT: tuple[str, ...] = ()
 
 Example = wr.Example
+
+LONG_PROPERTIES = ("U1", "S1")  # the long tests' (the division workplan's D4)
 
 
 @dataclass(frozen=True)
@@ -332,4 +335,69 @@ def certify_file(path: Path, encoding: Encoding, task_name: str, snap_ratio: flo
         "slot": slot,
         "snap_ratio": snap_ratio,
         **certificate.to_json(),
+    }
+
+
+class QueryModel:
+    """
+    A family network as a task's catalogue reads it at a length n (the harness's WindowModel at k
+    1, so every alignment 0): each case's columns and the final zero column as the encoding's
+    windows, one slot's labels read, in runs of at most the harness's CHUNK_TOKENS tokens.
+    """
+
+    def __init__(self, network: Any, encoding: Encoding, task: wt.Task, slot: int) -> None:
+        assert network.columns == encoding.width, "the network's window is the encoding's"
+        self.network, self.encoding, self.task, self.slot = network, encoding, task, slot
+
+    def predict(self, n: int) -> wt.Predict:
+        width = self.encoding.width
+        rows = max(1, wr.CHUNK_TOKENS // ((n + 1) * width))
+
+        def labels(cases: Sequence[Any]) -> list[wt.Labels]:
+            result: list[wt.Labels] = []
+            for j in range(0, len(cases), rows):
+                chunk = [self.encoding.example((*self.task.column_tokens(c, n), 0)) for c in cases[j : j + rows]]
+                predictions = self.network.classify_rows(self.network.prepare_dataset(chunk))
+                result.extend(tuple(prediction[self.slot :: width]) for prediction in predictions)
+            return result
+
+        return labels
+
+
+def long_test(
+    path: Path,
+    encoding: Encoding,
+    task_name: str,
+    lengths: Sequence[int] = wr.LONG_LENGTHS,
+    properties: Sequence[str] = LONG_PROPERTIES,
+    log: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """
+    A saved family network's long tests (the division workplan's D4), one slot against its task's
+    catalogue at each length, sized as the harness's long_test, as its JSON (so
+    window_recurrent_study.long_test_failures reads it), with the network's sha256 and the slot.
+    """
+    task = wt.task_named(task_name)
+    slot = SLOTS[task_name.rsplit("-", 1)[0]]
+    catalogue = task.catalogue(ad.SAMPLED, ad.RELATION_SAMPLED, ad.PER_STRATUM, doubling=True)
+    tested = [p for p in wr.test_properties(task, catalogue) if p.id in properties]
+    model = QueryModel(load_network(str(path)), encoding, task, slot)
+    results: dict[str, Any] = {}
+    for n in lengths:
+        start = time.perf_counter()
+        checked = task.evaluate(model.predict(n), n, tested)
+        if log is not None:
+            for result in checked:
+                failure = "" if result.holds else f", e.g. {result.failures[0]}"
+                log(f"n {n}, {result.id}: {result.passed}/{result.cases}{failure}")
+        results[str(n)] = {
+            "properties": {r.id: task.result_json(r) for r in checked},
+            "seconds": time.perf_counter() - start,
+        }
+    return {
+        "network": str(path),
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "task": task_name,
+        "slot": slot,
+        "lengths": results,
     }

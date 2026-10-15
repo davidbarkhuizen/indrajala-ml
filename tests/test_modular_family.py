@@ -69,3 +69,45 @@ def test_the_query_machine_runs_each_column_with_its_queries_and_reads_one_slot(
         assert steps.digits.shape == (9, 1)
         assert (steps.digits[:, 0] == whole.digits[:, slot]).all()
         assert (steps.states == whole.states).all()
+
+
+class Oracle:
+    """A stand-in network answering every window right: its rows' own labels."""
+
+    def __init__(self, columns: int, shift: int = 0) -> None:
+        self.columns, self.shift = columns, shift
+
+    def prepare_dataset(self, rows: list[mf.Example]) -> list[mf.Example]:
+        return rows
+
+    def classify_rows(self, rows: list[mf.Example]) -> list[tuple[int, ...]]:
+        return [labels[self.shift :] + labels[: self.shift] for _, labels in rows]
+
+
+def test_the_query_model_reads_its_slot_so_a_right_network_passes_the_long_tests():
+    from indrajala_ml.studies import window_tasks as wt
+
+    encoding = mf.Encoding(5, mf.FAMILY)
+    for name, slot in (("modular-division-5", 0), ("modular-sum-5", 1)):
+        task = wt.task_named(name)
+        tested = [p for p in task.catalogue(50, 50, 4) if p.id in mf.LONG_PROPERTIES]
+        model = mf.QueryModel(Oracle(3), encoding, task, slot)
+        for n in (2, 9):
+            results = task.evaluate(model.predict(n), n, tested)
+            assert [r.id for r in results] == ["U1", "S1"] and all(r.holds for r in results)
+        # the wrong slot's labels fail
+        wrong = mf.QueryModel(Oracle(3, shift=1), encoding, task, slot)
+        assert not all(r.holds for r in task.evaluate(wrong.predict(9), 9, tested))
+
+
+def test_a_saved_networks_long_test_is_the_harness_json(tmp_path: Path):
+    from indrajala_ml.studies import window_recurrent_study as wr
+
+    encoding = mf.Encoding(5, mf.FAMILY)
+    path = tmp_path / "network.json"
+    mf.network(encoding, [(4, 4), (4, 4)], 0, reads="output").save(str(path))
+    long = mf.long_test(path, encoding, "modular-division-5", lengths=(2, 3))
+    assert set(long["lengths"]) == {"2", "3"} and long["slot"] == 0 and len(long["sha256"]) == 64
+    assert set(long["lengths"]["3"]["properties"]) == {"U1", "S1"}
+    cases, _ = wr.long_test_failures(long)
+    assert cases == 3**4 + 3**6 + 2 * 25 * 1000  # U1 every pair at 2 columns and at 3; S1 1,000 a state
