@@ -69,6 +69,22 @@ def test_a_probe_run_trains_diagnoses_and_saves(tmp_path: Path):
     assert set(ends[-1]["long"]) == {"4"}
     assert all(isinstance(r["certified"], bool) and r["minimised"] >= 1 for r in ends)  # each step's certificate
     assert (tmp_path / "network.json").exists()
+    assert (tmp_path / "step-1.network.json").exists() and (tmp_path / "step-2.network.json").exists()
+    starts = [r for r in rows if r.get("epoch") == 0 and r["step"] > 0]  # the step before's network, scored
+    assert [r["step"] for r in starts] == [1, 2] and all(
+        set(r) == {"step", "epoch", "screen", "seconds"} for r in starts
+    )
+
+
+def test_every_epoch_logs_its_screen_score(tmp_path: Path):
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=3, patience=10, diagnose_every=2, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    mf.run(mf.Encoding(5, mf.QUOTIENT), [(4, 4)], 0, 1e9, tmp_path, settings, cap=1)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    epochs = [(r["epoch"], "factors" in r) for r in rows if r["step"] == 1 and "epoch" in r and "screen" in r]
+    assert epochs[:4] == [(0, False), (1, False), (2, True), (3, False)]  # a diagnosis every 2 carries it too
+    assert mf.trace(rows)[1].startswith("step   1 epoch   2")  # trace shows the diagnoses alone
 
 
 def test_a_probe_run_stops_when_its_epochs_are_spent(tmp_path: Path):
@@ -176,6 +192,19 @@ def test_trace_marks_a_collapse_where_the_codes_in_use_halve():
     assert ["collapse" in line for line in lines] == [False, False, True, False]
     assert lines[0].startswith("step   1 epoch   5 codes [16, 15] share 0.00 sum 0.50")
     assert lines[-1].endswith("END plateau min 7")
+    fork = {"step": 2, "epoch": 3, "fork": 1, "screen": 0.3, "peak": 0.9, "restored": 0.9, "rate": 0.0015}
+    assert (
+        mf.trace([row(1, [16, 15]), fork])[1]
+        == "step   2 epoch   3 FORK 1: screen 0.30 peak 0.90 restored 0.90 rate 0.0015"
+    )
+
+
+def test_large_drops_and_whether_each_recovered():
+    def row(step: int, worst: float) -> dict[str, object]:
+        return {"step": step, "accuracy": {"sum": 1.0, "difference": worst}}
+
+    rows = [row(1, 0.95), row(1, 0.5), row(2, 0.92), row(2, 0.7), row(3, 0.91), row(3, 0.2), row(4, 0.4)]
+    assert mf.large_drops(rows) == [(1, True), (3, False)]  # 0.92 to 0.7 isn't large; 0.91 to 0.2 never back
 
 
 def test_outcome_stops_at_the_first_certified_step_and_counts_its_epochs():
@@ -190,8 +219,8 @@ def test_outcome_stops_at_the_first_certified_step_and_counts_its_epochs():
         row(2, 7, 0.3, end="plateau", epochs=40, certified=False, seconds=300.0),  # a collapse
         row(3, 9, 1.0, end="passed", epochs=2, certified=True, seconds=330.0),
     ]
-    assert mf.outcome(rows) == mf.Outcome(3, "certified", 45, 5.5, 1.0, 3, 1)
-    assert mf.outcome(rows[:4]) == mf.Outcome(2, "plateau", 43, 5.0, 0.97, 2, 1)
+    assert mf.outcome(rows) == mf.Outcome(3, "certified", 45, 5.5, 1.0, 3, 1, 1, 0)
+    assert mf.outcome(rows[:4]) == mf.Outcome(2, "plateau", 43, 5.0, 0.97, 2, 1, 1, 1)
     assert mf.outcome(rows[:1]).end == "running"
     spent = row(3, 7, 0.4, end="spent", epochs=6, certified=False, seconds=330.0)  # 5 trained
     assert mf.outcome([*rows[:4], spent]).epochs == 48
@@ -230,9 +259,15 @@ def test_readout_counts_a_run_only_when_recertified_in_both_verdicts(tmp_path: P
         certificate(f"one-{ratio}", b"one", ratio)
     certificate("two", b"two", 1.0)
     lines = mf.readout(tmp_path, ["family", "quotient"], tmp_path / "certify")
-    assert lines[1] == "seed1: certified at step 4, 7 epochs, 1.0 min; worst answer at best 1.00 (step 4), collapses 0"
+    assert lines[1] == (
+        "seed1: certified at step 4, 7 epochs, 1.0 min; worst answer at best 1.00 (step 4), collapses 0, "
+        "large drops 0 (0 unrecovered)"
+    )
     assert "NOT RECERTIFIED" in lines[2] and lines[3].startswith("seed10: spent")  # seeds in numeric order
     assert lines[4].startswith("family: 1 of 3 certified (Wilson 95%: 0.06-0.79)")
     assert lines[5] == "family's 2 failures: 1 came near a solution (worst answer >= 0.95), 0 collapsed"
-    assert lines[-3].startswith("quotient: 0 of 3 certified")
+    assert (
+        lines[-4].startswith("quotient: 0 of 3 certified")
+        and lines[-2] == "quotient: 0 large drops in 0 runs, 0 recovered"
+    )
     assert lines[-1] == "Fisher's exact, one-sided (family more often than quotient): p 0.5"
