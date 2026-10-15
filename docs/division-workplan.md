@@ -123,16 +123,25 @@ about memorising, and every success is certified, which is exact at every length
    - *Probe 2a, registered:* family, reading the output, `p` 5, two factors of 16, seeds 2-7, 60
      minutes each, stop at certified, `jebel`. **Reports** the count certified (both verdicts) and
      each run's certified step and minutes. No success threshold: a screen of the rate (D2).
+     *Result:* 3 of 6 (seeds 5, 7, 4 at steps 7, 8, 10, within 25 minutes); with the first
+     probe's two, 5 of 8. Every failure collapsed (the state minimised to 6-11); seed 3 was right
+     on every sampled answer for four steps without certifying, then collapsed.
    - *Probe 2b, registered:* the long tests (D4) on every certified network (the two saved and
      2a's). **Works:** every case passes. **Fails:** any case fails on a certified network: a bug
      in the certificate's adapter or the long test, to be found before anything else.
+     *Result: works.* All five networks pass every one of their 375,000 cases.
 3. **Isolate.**
    - *Probe 3a, registered:* family, reading the output, one factor `s` 32 `m` 128 (D5), seeds 0-3,
      60 minutes. **Works:** at least one certifies: the family is enough, the second codebook
      isn't needed. **Fails:** none does; then its variation, `m` 256 (D5 (b)), 2 seeds.
+     *Result: works,* 4 of 4 (steps 5-8, within 18 minutes), both verdicts; every long-test case
+     passes. The working configuration stays two factors (D9 (a)), so stage 4's cell (D7) is
+     unchanged.
    - *Probe 3b, registered:* the quotient alone, reading the output, two factors of 16, seeds 2-5
      (D6). **Reports** the count; with the first two, 6 seeds against the family's 8, a screen.
      **If any certifies,** the family's part is a rate question for stage 5, not existence.
+     *Result:* 0 of 4; with the first two, 0 of 6 against the family's 5 of 8 (Fisher's exact p
+     0.031, a screen).
    - (Optional, if 3a works) the family without the difference (the sum and the quotient), 2
      seeds: is one dense counter enough.
    - *Probe 3c, registered (3a worked: 4 of 4):* the quotient and the sum (`--arm sum`), reading
@@ -141,6 +150,8 @@ about memorising, and every success is certified, which is exact at every length
      certified (the certificate against division's machine, both verdicts). **Works:** at least one certifies: one dense counter is
      enough. **Fails:** none does: the difference's counter is part of what helps (a screen, 2
      seeds).
+     *Result: works,* 2 of 2 (steps 9-10, within 13 minutes), both verdicts; every long-test
+     case passes.
 4. **Step up: `p` 7.**
    - *Probe 4, registered:* family, reading the output, `p` 7, the cell of D7, seeds 0-3, 60
      minutes. **Works:** at least one certifies against division's 49-state machine. **Fails:**
