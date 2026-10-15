@@ -240,6 +240,11 @@ machines. The readout is `readout data/window-recurrent/division-claim`.
   seed 101's loss, the clearest, is one it would miss. A restore doesn't reset the plateau count. Read the fork probe with this in
   mind; a drop threshold on the worst answer, or a step that ends only when its peak is recovered,
   are the alternatives the logs suggest.
+- **Measured from here on** (after stage 5, the training unchanged: a 3-step run's network and
+  diagnoses identical before and after): every epoch's screen score and the step's start (the step
+  before's network on the new lengths), each step's network (`step-<j>.network.json`), and in
+  `readout` each run's large drops (`large_drops`) with how many recovered. Stage 5's logs have
+  the screen score at diagnoses only, and only the last network.
 - The long tests (D4) on all 14 networks: running (pyramidon, one at a time, about 90 minutes and
   1.7 GB each); the claim isn't written up until they pass.
 """

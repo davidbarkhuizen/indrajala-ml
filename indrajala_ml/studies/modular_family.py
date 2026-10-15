@@ -250,11 +250,20 @@ def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
     """
     A run's log.jsonl, a line per diagnosis: step, epoch (or the step's end), each factor's codes in
     use, the state's share of the pair, each answer's accuracy; marked where the codes in use fall
-    below `drop` of the diagnosis before (a collapse: the division workplan's stage 4 trace).
+    below `drop` of the diagnosis before (a collapse: the division workplan's stage 4 trace); and a
+    line per fork. An epoch's screen score alone (a row without codes) isn't shown.
     """
     lines: list[str] = []
     before: list[int] | None = None
     for row in rows:
+        if "fork" in row:
+            lines.append(
+                f"step {row['step']:>3} epoch {row['epoch']:>3} FORK {row['fork']}: screen {row['screen']:.2f} "
+                f"peak {row['peak']:.2f} restored {row['restored']:.2f} rate {row['rate']:.2g}"
+            )
+            continue
+        if "factors" not in row:  # an epoch's screen score alone
+            continue
         codes = _codes(row)
         answers = " ".join(f"{name} {value:.2f}" for name, value in sorted(row["accuracy"].items()))
         end = f" END {row['end']} min {row.get('minimised')}" if "end" in row else ""
@@ -271,7 +280,8 @@ class Outcome:
     """
     A run's end from its log.jsonl: the last step, how it ended, epochs trained in all, minutes; and
     its course: the best its worst answer reached at any diagnosis (`peak`, the accuracy of the
-    answer furthest behind) and at which step, and its collapses (as `trace` marks them).
+    answer furthest behind) and at which step, its collapses (as `trace` marks them) and its large
+    drops (`large_drops`), with how many it never recovered from.
     """
 
     step: int
@@ -281,6 +291,8 @@ class Outcome:
     peak: float
     peak_step: int
     collapses: int
+    drops: int  # large drops (large_drops)
+    unrecovered: int  # of them, never back to DROP_FROM
 
 
 def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
@@ -296,8 +308,9 @@ def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
     )
     end = "certified" if last.get("certified") else str(last.get("end", "running"))
     diagnoses = [row for row in rows if "accuracy" in row and row["step"] <= last["step"]]
-    best = max(diagnoses, key=lambda row: min(row["accuracy"].values()), default=last)
+    best = max(diagnoses, key=_worst, default=last)
     collapses = sum(_collapsed(_codes(before), _codes(row), drop) for before, row in itertools.pairwise(diagnoses))
+    falls = large_drops(diagnoses)
     return Outcome(
         int(last["step"]),
         end,
@@ -306,7 +319,29 @@ def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
         round(min(best.get("accuracy", {"-": 0.0}).values()), 2),
         int(best["step"]),
         collapses,
+        len(falls),
+        sum(not recovered for _, recovered in falls),
     )
+
+
+DROP_FROM, DROP_BY = 0.9, 0.3
+
+
+def _worst(row: Mapping[str, Any]) -> float:
+    return min(row["accuracy"].values())
+
+
+def large_drops(diagnoses: Sequence[Mapping[str, Any]]) -> list[tuple[int, bool]]:
+    """
+    A run's large drops (division stage 5's trace): its worst answer from at least DROP_FROM down by
+    more than DROP_BY between two diagnoses, each as the step it fell in and whether a later diagnosis
+    is back at DROP_FROM.
+    """
+    falls: list[tuple[int, bool]] = []
+    for i, (before, after) in enumerate(itertools.pairwise(diagnoses)):
+        if _worst(before) >= DROP_FROM and _worst(after) < _worst(before) - DROP_BY:
+            falls.append((int(after["step"]), any(_worst(row) >= DROP_FROM for row in diagnoses[i + 2 :])))
+    return falls
 
 
 NEAR = 0.95  # a run's worst answer at least this at some diagnosis: it came near a solution
@@ -330,7 +365,7 @@ def readout(root: Path, arms: Sequence[str], certify: Path) -> list[str]:
     counts: list[tuple[int, int]] = []
     for arm in arms:
         seeds = sorted((root / arm).glob("seed*/log.jsonl"), key=lambda p: int(p.parent.name.removeprefix("seed")))
-        certified, near, collapsed = 0, 0, 0
+        certified, near, collapsed, drops, unrecovered, dropped = 0, 0, 0, 0, 0, 0
         lines.append(f"== {arm}")
         for log in seeds:
             run = outcome([json.loads(line) for line in log.read_text().splitlines()])
@@ -345,9 +380,11 @@ def readout(root: Path, arms: Sequence[str], certify: Path) -> list[str]:
             if run.end != "certified":
                 near += run.peak >= NEAR
                 collapsed += run.collapses > 0
+            drops, unrecovered, dropped = drops + run.drops, unrecovered + run.unrecovered, dropped + (run.drops > 0)
             lines.append(
                 f"{log.parent.name}: {run.end} at step {run.step}, {run.epochs} epochs, {run.minutes} min; "
-                f"worst answer at best {run.peak:.2f} (step {run.peak_step}), collapses {run.collapses}{note}"
+                f"worst answer at best {run.peak:.2f} (step {run.peak_step}), collapses {run.collapses}, "
+                f"large drops {run.drops} ({run.unrecovered} unrecovered){note}"
             )
         low, high = inference.wilson(certified, len(seeds))
         lines.append(f"{arm}: {certified} of {len(seeds)} certified (Wilson 95%: {low:.2f}-{high:.2f})")
@@ -355,6 +392,7 @@ def readout(root: Path, arms: Sequence[str], certify: Path) -> list[str]:
         lines.append(
             f"{arm}'s {failures} failures: {near} came near a solution (worst answer >= {NEAR}), {collapsed} collapsed"
         )
+        lines.append(f"{arm}: {drops} large drops in {dropped} runs, {drops - unrecovered} recovered")
         counts.append((certified, len(seeds)))
     if len(counts) == 2:
         (a, n), (c, m) = counts
@@ -406,9 +444,11 @@ def run(
         screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{step}-{n}")[0] for n in lengths}
         best, since, stop, epoch = -1.0, 0, "budget", 0
         rate, forks, snapshot = settings.rate, 0, out / "snapshot.network.json"
+        start_score = screen_score(net, encoding, screens)  # the step before's network on this step's lengths
+        record({"step": step, "epoch": 0, "screen": round(start_score, 4)})
         peak = 0.0
         if fork is not None:
-            peak = screen_score(net, encoding, screens)
+            peak = start_score
             net.save(str(snapshot))
         for epoch in range(1, settings.max_epochs + 1):
             if time.perf_counter() - start > budget_seconds:
@@ -447,6 +487,8 @@ def run(
                     continue
             if epoch % settings.diagnose_every == 0:
                 record({"step": step, "epoch": epoch, "screen": round(score, 4), **diagnose(net, encoding, settings)})
+            else:
+                record({"step": step, "epoch": epoch, "screen": round(score, 4)})
             if score == 1.0:
                 stop = "passed"
                 break
@@ -458,6 +500,7 @@ def run(
                     stop = "plateau"
                     break
         net.save(str(out / "network.json"))
+        net.save(str(out / f"step-{step}.network.json"))  # every step's kept, to inspect what a run had
         # each step's quotient certified (under a second at one column a window); the run stops at
         # its first certified step: training past it can destroy the network (E8b; this probe's
         # first runs, both certified networks lost within 3 steps)
