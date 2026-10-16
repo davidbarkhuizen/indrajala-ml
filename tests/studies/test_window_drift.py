@@ -35,7 +35,7 @@ class CarryNetwork:
     def __init__(self, drift: float = 0.0, wrong_from: int | None = None) -> None:
         self.drift, self.wrong_from = drift, wrong_from
 
-    def window_states(self, X: np.ndarray) -> tuple[np.ndarray, list[np.ndarray]]:
+    def window_states(self, X: np.ndarray) -> tuple[np.ndarray, list[np.ndarray], list[np.ndarray]]:
         machine = ADDITION.machine
         rows, width = X.shape
         carry = np.zeros(rows, dtype=int)
@@ -49,7 +49,7 @@ class CarryNetwork:
             outputs[np.arange(rows), t * 3 + labels] = 1.0
             carry = machine.transition[carry, tokens]
             states.append(np.eye(3)[carry] + self.drift * (t + 1))
-        return outputs, states
+        return outputs, states, states
 
 
 def test_the_carry_machine_itself_neither_errs_nor_drifts():

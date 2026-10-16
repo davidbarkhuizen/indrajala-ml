@@ -62,6 +62,11 @@ moves from where it sat early on (indrajala_ml/studies/window_drift.py): over th
 first --cases at --n, the wrong digits by position (--bins equal bins) and by the target's state
 entering and leaving the column, and per target state each bin's state centroid's shift from
 the first bin's and its spread, beside the separation of the first bin's centroids. No lock; one core.
+`replay` is a step replayed from a saved network (indrajala_ml/studies/window_replay.py,
+docs/snap-wall-workplan.md): --epochs of --step's data of --run in --config, each epoch drawn by
+--generator; per batch the loss before and after and the update's norm, per epoch the screen, the
+certificate in both verdicts and the least snap ratio. --numpy converts the network first;
+--wall turns the snap wall on (numpy only). No lock; one core.
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
@@ -605,11 +610,13 @@ from typing import Any
 
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.measurement import machine_lock
+from indrajala_ml.model.layers.numpy.recurrent_array_layer import WALL_RATIO
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.studies import window_diagnostics as wd
 from indrajala_ml.studies import window_drift as wdr
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
+from indrajala_ml.studies import window_replay as wrp
 from indrajala_ml.studies import window_tasks as wt
 
 
@@ -681,6 +688,19 @@ def main(argv: list[str]) -> int:
     drift.add_argument("--cases", type=int, default=wdr.CASES, help="the codes property's first cases")
     drift.add_argument("--bins", type=int, default=wdr.BINS, help="equal bins of the columns")
     drift.add_argument("--json", type=Path, help="write each network's profile to this file")
+    replay = commands.add_parser("replay")
+    replay.add_argument("network", type=Path, help="a saved step's network")
+    replay.add_argument("--config", type=Path, required=True, help="the study whose run and settings the replay takes")
+    replay.add_argument("--run", required=True, help="the run's key")
+    replay.add_argument("--step", type=int, required=True, help="the step whose data is replayed")
+    replay.add_argument("--epochs", type=int, default=1)
+    replay.add_argument(
+        "--generator", required=True, help="each epoch's generator: random.Random(f'{generator}-{epoch}')"
+    )
+    replay.add_argument("--numpy", action="store_true", help="convert the network to numpy first")
+    replay.add_argument("--wall", type=float, default=0.0, help="the snap wall's weight (numpy only; 0: off)")
+    replay.add_argument("--wall-ratio", type=float, default=WALL_RATIO, help="the ratio the snap wall keeps")
+    replay.add_argument("--json", type=Path, help="write the replay's batches and epochs to this file")
     verdicts = commands.add_parser("verdicts")
     verdicts.add_argument("config", type=Path)
     verdicts.add_argument("--certificates", type=Path, required=True, help="certify's branched certificates")
@@ -739,6 +759,30 @@ def main(argv: list[str]) -> int:
             print("\n".join(wdr.lines(name, profiles[name])), flush=True)
         if args.json is not None:
             args.json.write_text(json.dumps(profiles, indent=1))
+        return 0
+    if args.command == "replay":
+        study = wr.load_config(args.config)
+        spec: wr.RunSpec = next(spec for spec in study.runs if spec.key == args.run)
+        network = wrp.load(args.network, numpy=args.numpy)
+        if args.wall > 0.0:
+            wrp.set_wall(network, args.wall, args.wall_ratio)
+        replayed = wrp.replay(
+            network,
+            wt.task_named(spec.task),
+            list(spec.step_counts(study.settings)[int(args.step) - 1]),
+            study.settings,
+            args.epochs,
+            args.generator,
+            log=lambda line: print(line, flush=True),
+        )
+        replayed |= {
+            "network": str(args.network),
+            "numpy": args.numpy,
+            "wall": args.wall,
+            "wall_ratio": args.wall_ratio,
+        }
+        if args.json is not None:
+            args.json.write_text(json.dumps(replayed, indent=1))
         return 0
     if args.command == "compare":
         compared = wr.compare_runs(args.original, args.rerun)

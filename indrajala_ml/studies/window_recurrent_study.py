@@ -219,14 +219,19 @@ def _by_width(examples: Sequence[Example]) -> dict[int, list[int]]:
     return groups
 
 
-def train_epoch(network: Any, examples: Sequence[Example], batch_size: int, rate: float, rng: random.Random) -> None:
-    """Batches of one window count each (a network batch's windows are the same), in shuffled order."""
+def epoch_batches(examples: Sequence[Example], batch_size: int, rng: random.Random) -> list[list[Example]]:
+    """An epoch's batches of one window count each (a network batch's windows are the same), in shuffled order."""
     batches: list[list[Example]] = []
     for indices in _by_width(examples).values():
         rng.shuffle(indices)
         batches += [[examples[i] for i in indices[j : j + batch_size]] for j in range(0, len(indices), batch_size)]
     rng.shuffle(batches)
-    for batch in batches:
+    return batches
+
+
+def train_epoch(network: Any, examples: Sequence[Example], batch_size: int, rate: float, rng: random.Random) -> None:
+    """An epoch of training on epoch_batches's batches."""
+    for batch in epoch_batches(examples, batch_size, rng):
         network.learn_batch(rate, batch)
 
 

@@ -241,6 +241,10 @@ class GRUArrayLayer:
         return dU_in, dC
 
 
+WALL_RATIO = 1.5  # the snap wall's ratio (docs/snap-wall-workplan.md, D4)
+WALL_EPS = 1e-12  # added to the wall's squared distances: a state on its code has a finite log ratio
+
+
 class CodesArrayLayer:
     """
     The state's discretiser (the window-recurrent adder workplan, W4, W14; van den Oord et al.
@@ -251,14 +255,25 @@ class CodesArrayLayer:
     loss's: per example and window, weight * (||sg[h] - e||^2 + commitment * ||h - sg[e]||^2),
     weight the network's (1 / its window count, W14). E is drawn as a dense layer's W of fan-in
     size, and not decayed.
+
+    With wall above 0, the snap wall too (docs/snap-wall-workplan.md): per state, with e1 its code
+    and e2 the next nearest, s = log((q2 + eps) / (q1 + eps)) of their squared distances, the loss
+    wall * weight * gate * max(0, log(wall_ratio^2) - s)^2, gate the state's example's (1 when its
+    every digit is right, set by the network before backward; None, every example's 1), its
+    gradient to h, e1 and e2. Off (wall 0), nothing of it is computed.
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
 
-    def __init__(self, count: int, size: int, commitment: float = 0.25) -> None:
+    def __init__(
+        self, count: int, size: int, commitment: float = 0.25, wall: float = 0.0, wall_ratio: float = WALL_RATIO
+    ) -> None:
         self.count = count
         self.size = size
         self.commitment = commitment
+        self.wall = wall
+        self.wall_ratio = wall_ratio
+        self.gate: FloatArray | None = None
         self.E: FloatArray = np.zeros((count, size))
         self.grad_E: FloatArray = np.zeros((count, size))
 
@@ -294,13 +309,52 @@ class CodesArrayLayer:
         """The batch's code losses, weighted, summed over the examples: what backward_batch differentiates."""
         differences = self._H - self._Q
         squared = _fold(_fold(differences * differences, axis=1), axis=0)
-        return float(weight * (1.0 + self.commitment) * squared)
+        return float(weight * (1.0 + self.commitment) * squared) + self.wall_loss_batch(weight)
+
+    def _wall_terms(self) -> tuple[FloatArray, npt.NDArray[np.intp], FloatArray, FloatArray] | None:
+        # each state's gated deficit below the wall's ratio, its next nearest code and both squared
+        # distances (each plus eps); None when the wall is off or there is no second code
+        if self.wall == 0.0 or self.count < 2:
+            return None
+        differences = self._H[:, np.newaxis, :] - self.E[np.newaxis, :, :]
+        distances = _fold(differences * differences, axis=2)
+        rows = np.arange(len(self._H))
+        q1 = distances[rows, self.indices] + WALL_EPS
+        others = distances.copy()
+        others[rows, self.indices] = np.inf
+        second = np.argmin(others, axis=1)
+        q2 = distances[rows, second] + WALL_EPS
+        deficit = np.maximum(0.0, 2.0 * np.log(self.wall_ratio) - np.log(q2 / q1))
+        gate = np.ones(len(rows)) if self.gate is None else self.gate
+        return deficit * gate, second, q1, q2
+
+    def wall_loss_batch(self, weight: float) -> float:
+        """The snap wall's loss over the batch, weighted, summed over the examples (0 when off)."""
+        terms = self._wall_terms()
+        if terms is None:
+            return 0.0
+        deficit = terms[0]
+        return float(self.wall * weight * np.sum(deficit * deficit))
 
     def backward_batch(self, dQ: FloatArray, weight: float) -> FloatArray:
-        """The code's gradient (N, size) to h's: straight through, plus the commitment loss's; E's accumulated."""
+        """
+        The code's gradient (N, size) to h's: straight through, plus the commitment loss's and the
+        wall's; E's accumulated.
+        """
         differences = self._H - self._Q
         np.add.at(self.grad_E, self.indices, -2.0 * weight * differences)
-        return dQ + (2.0 * weight * self.commitment) * differences
+        dH = dQ + (2.0 * weight * self.commitment) * differences
+        terms = self._wall_terms()
+        if terms is None:
+            return dH
+        deficit, second, q1, q2 = terms
+        # L = wall * weight * deficit^2, deficit = c - s, s = log q2 - log q1: dL/ds = -2 wall weight deficit
+        ds = (-2.0 * self.wall * weight * deficit)[:, np.newaxis]
+        to_first = 2.0 * differences / q1[:, np.newaxis]  # d log q1 / dh; d log q1 / de1 is its negative
+        to_second = 2.0 * (self._H - self.E[second]) / q2[:, np.newaxis]
+        np.add.at(self.grad_E, self.indices, ds * to_first)
+        np.add.at(self.grad_E, second, -ds * to_second)
+        return dH + ds * (to_second - to_first)
 
 
 class InitialStateArrayLayer:

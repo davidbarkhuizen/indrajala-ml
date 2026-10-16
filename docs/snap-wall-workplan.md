@@ -3,8 +3,8 @@
 **Status: written 2026-10-16, at the owner's request ("a margin term ... asymmetric so that it's
 easier to fall into a code boundary than out - making the process stable but dynamic"), after
 E2b' showed a certified network losing its proof. D1-D3 settled by the owner, D4-D8 under the
-owner's delegation, each with its options' pros and cons. Stage 1 (the reference implementation
-and the replay tool) next; P1 registered here, before its data.**
+owner's delegation, each with its options' pros and cons. P1 registered here, before its data
+(#787). Stage 1 done 2026-10-16: the wall in numpy's codes, the gate, `replay`. P1 next.**
 
 ## Why
 

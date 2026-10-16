@@ -199,21 +199,23 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
             outputs.append(output)
         return self.backend.concatenate_columns(outputs)
 
-    def window_states(self, X: A) -> tuple[A, list[A]]:
+    def window_states(self, X: A) -> tuple[A, list[A], list[A]]:
         """
         The inference forward pass with its states: each column's digit probabilities, as
-        forward_windows's, and the states (N, state_size), the initial state's then each window's
-        next state's, W + 1 of them; a snapped state as its code's vector (the claims workplan's
-        drift profile, E2b).
+        forward_windows's; the states (N, state_size), the initial state's then each window's
+        next state's, W + 1 of them, a snapped state as its code's vector (the claims workplan's
+        drift profile, E2b); and the cells' outputs before the snap, the same W + 1 (the snap
+        wall's margins, docs/snap-wall-workplan.md).
         """
         C = self._first_state(X.shape[0])
         outputs: list[Any] = []
-        states = [C]
+        states, cells = [C], [self.recurrence_layer.H]
         for w in range(self._windows(X)):
             output, C = self._window_forward(self._window(X, w), C)
             outputs.append(output)
             states.append(C)
-        return self.backend.concatenate_columns(outputs), states
+            cells.append(self.recurrence_layer.H)
+        return self.backend.concatenate_columns(outputs), states, cells
 
     def state_codes(self, X: A) -> list[list[tuple[int, ...]]]:
         """
@@ -302,14 +304,20 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         width = self.columns * self.class_count
         states: list[Any] = []
         generators: list[dict[str, Any]] = []
+        walled = self._walled_codes()
+        right: list[bool] = []
         self._set_training_mode(True)
         try:
             C = self._first_state(X.shape[0])
             for w in range(windows):
                 states.append(C)
                 generators.append(generator_state(self.rng))
-                _, C = self._window_forward(self._window(X, w), C)
+                output, C = self._window_forward(self._window(X, w), C)
+                if walled:
+                    right = self._all_right(right, output, self.backend.columns(Y, w * width, (w + 1) * width))
             after = generator_state(self.rng)
+            for codes in walled:
+                codes.gate = np.array(right, dtype=float)
 
             dC = self.backend.zeros((X.shape[0], self.recurrence.state_size))
             for w in reversed(range(windows)):
@@ -322,6 +330,20 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
 
         self._first_state(X.shape[0])
         self.recurrence_layer.first_state_backward(dC, weight)
+        for codes in walled:
+            codes.gate = None  # this batch's only
+
+    def _walled_codes(self) -> list[Any]:
+        # the factors' codes with the snap wall on (docs/snap-wall-workplan.md; numpy's only, D8)
+        factors = getattr(self.recurrence_layer, "factors", ())
+        return [f.codes for f in factors if f.codes is not None and getattr(f.codes, "wall", 0.0) > 0.0]
+
+    def _all_right(self, right: list[bool], output: Any, Y: Any) -> list[bool]:
+        # each example's every digit right so far, this window's columns included (the wall's gate, D1)
+        predicted = self.backend.argmax_token_rows(output, self.class_count)
+        targets = self.backend.argmax_token_rows(Y, self.class_count)
+        now = [p == t for p, t in zip(predicted, targets, strict=True)]
+        return now if not right else [a and b for a, b in zip(right, now, strict=True)]
 
     def _window_backward(self, Y: Any, dC_next: Any, weight: float) -> Any:
         # one window's backward pass after its forward pass: its gradients accumulated, and its
