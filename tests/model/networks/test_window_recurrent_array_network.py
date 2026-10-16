@@ -257,14 +257,38 @@ def test_state_codes_are_each_states_nearest_code_through_the_windows():
 def test_window_states_are_the_forward_pass_and_each_state_it_passes_on(recurrence: WindowRecurrence):
     network = _network(recurrence=recurrence)
     X, _ = _batch(3, examples=4)
-    outputs, states = network.window_states(X)
+    outputs, states, cells = network.window_states(X)
     assert np.array_equal(outputs, network.forward_windows(X))
     C = network._first_state(4)
-    expected = [C]
+    expected, expected_cells = [C], [network.recurrence_layer.H]
     for w in range(3):
         _, C = network._window_forward(network._window(X, w), C)
         expected.append(C)
-    assert len(states) == 3 + 1 and all(np.array_equal(s, e) for s, e in zip(states, expected, strict=True))
+        expected_cells.append(network.recurrence_layer.H)
+    assert len(states) == len(cells) == 3 + 1
+    assert all(np.array_equal(s, e) for s, e in zip(states, expected, strict=True))
+    assert all(np.array_equal(c, e) for c, e in zip(cells, expected_cells, strict=True))
+
+
+def test_the_snap_walls_gate_is_each_examples_every_digit_right_for_one_batch():
+    network = _network()
+    codes = _factor(network).codes
+    codes.wall = 1.0
+    X, _ = _batch(3, examples=6)
+    predicted = network.backend.argmax_token_rows(network.forward_windows(X), 3)
+    # half the examples labelled as the network answers, half with a digit changed
+    labels = [p if i % 2 == 0 else ((p[0] + 1) % 3, *p[1:]) for i, p in enumerate(predicted)]
+    gates: list[Any] = []
+    backward = codes.backward_batch
+
+    def recorded(dQ: FloatArray, weight: float) -> FloatArray:
+        gates.append(None if codes.gate is None else codes.gate.copy())
+        return backward(dQ, weight)
+
+    codes.backward_batch = recorded  # type: ignore[method-assign]
+    network._accumulate_gradients(X, network._target_batch_array(labels))
+    assert len(gates) == 3 + 1 and all(np.array_equal(g, [1.0, 0.0] * 3) for g in gates)
+    assert codes.gate is None
 
 
 # a continuous state (the window-recurrent claims workplan, stage 4)

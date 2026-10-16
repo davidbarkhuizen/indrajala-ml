@@ -6,6 +6,7 @@ codes (W14), each with a gradient check by central differences; the codes' again
 straight-through definition.
 """
 
+import itertools
 import warnings
 from collections.abc import Callable
 
@@ -259,3 +260,52 @@ def test_codes_scatter_their_gradient_to_the_codes_chosen_only():
     layer.forward_batch(np.array([[1.0], [2.0], [9.0]]))
     layer.backward_batch(np.zeros((3, 1)), 1.0)
     assert layer.grad_E.tolist() == [[-6.0], [2.0], [0.0]]
+
+
+# the snap wall (docs/snap-wall-workplan.md)
+
+WALLED = 6  # states, one at each pair of 4 codes' midpoint
+
+
+def _walled_pair(
+    rng: np.random.Generator, gate: FloatArray | None
+) -> tuple[CodesArrayLayer, CodesArrayLayer, FloatArray]:
+    # the same codes with the wall on and off, and states near boundaries: midpoints of code pairs, jittered
+    on, off = CodesArrayLayer(4, S, wall=1.0), CodesArrayLayer(4, S)
+    on.draw(rng)
+    off.E = on.E.copy()
+    pairs = np.array(list(itertools.combinations(range(4), 2)))  # every pair of distinct codes
+    H = (on.E[pairs[:, 0]] + on.E[pairs[:, 1]]) / 2 + 0.01 * rng.normal(size=(len(pairs), S))
+    on.gate = gate
+    return on, off, H
+
+
+@pytest.mark.parametrize("gated", [False, True])
+def test_the_snap_walls_gradient_matches_central_differences(rng: np.random.Generator, gated: bool):
+    gate = (np.arange(WALLED) % 2).astype(float) if gated else None
+    on, off, H = _walled_pair(rng, gate)
+    weight = 0.5
+    on.forward_batch(H)
+    off.forward_batch(H.copy())
+    assert on.wall_loss_batch(weight) > 0.0
+    zeros = np.zeros((WALLED, S))
+    dH = on.backward_batch(zeros, weight) - off.backward_batch(zeros, weight)
+    grad_E = on.grad_E - off.grad_E
+    _close(_numeric(lambda: on.wall_loss_batch(weight), on.E), grad_E)
+    _close(_numeric(lambda: on.wall_loss_batch(weight), H), dH)
+    if gate is not None:
+        assert np.all(dH[gate == 0.0] == 0.0)
+
+
+def test_the_snap_wall_is_silent_past_its_ratio_and_when_off(rng: np.random.Generator):
+    layer = CodesArrayLayer(2, 1, wall=1.0, wall_ratio=1.5)
+    layer.E = np.array([[0.0], [10.0]])
+    # distances 1 and 9 (ratio 9, past 1.5) and 4.5 and 5.5 (ratio 1.22, inside it)
+    layer.forward_batch(np.array([[1.0], [4.5]]))
+    assert layer.wall_loss_batch(1.0) == pytest.approx((np.log(1.5**2) - np.log(5.5**2 / 4.5**2)) ** 2)
+    dH = layer.backward_batch(np.zeros((2, 1)), 1.0) - 2.0 * 0.25 * (np.array([[1.0], [4.5]]) - layer._Q)
+    assert dH[0, 0] == 0.0 and dH[1, 0] > 0.0  # descent moves the near state back to its code at 0
+    off = CodesArrayLayer(2, 1)
+    off.E = layer.E.copy()
+    off.forward_batch(np.array([[4.5]]))
+    assert off.wall_loss_batch(1.0) == 0.0

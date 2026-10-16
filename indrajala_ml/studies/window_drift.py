@@ -102,7 +102,7 @@ def _tally_rows(
     tally: _Tally,
 ) -> None:
     k: int = network.columns
-    outputs, states = network.window_states(network.backend.matrix([tokens for tokens, _ in rows]))
+    outputs, states, _cells = network.window_states(network.backend.matrix([tokens for tokens, _ in rows]))
     predictions: list[tuple[int, ...]] = network.backend.argmax_token_rows(outputs, network.class_count)
     # the target's state before each token, each row's
     targets: list[list[int]] = []
