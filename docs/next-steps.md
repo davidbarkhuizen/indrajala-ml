@@ -4,7 +4,8 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
 "not planned yet" means only that no workplan has taken it up. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
+in progress keeps its own list: [p11-trigger-workplan.md](p11-trigger-workplan.md),
+[pypi-release-workplan.md](pypi-release-workplan.md),
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
 [segments-workplan.md](segments-workplan.md),
@@ -90,7 +91,8 @@ Decided with the owner, each to become a workplan or a stage:
   drops, seed 101's among them. Two candidates from this: **a step ends only when its peak is
   recovered** (or the step's best network is restored before moving on), and **a drop threshold on
   the worst answer**. Most of the room above the 65% at `p` 5 looks like retention, not search.
-- **Division at `p` 11 (121 states)**, the largest run for `jebel`, **the fork on** (its probe's
+- **Division at `p` 11 (121 states)**, **taken up with the collapse trigger in
+  [p11-trigger-workplan.md](p11-trigger-workplan.md)**: the largest run for `jebel`, **the fork on** (its probe's
   registered next step): `p` 7 with two factors of 32 is done (the fork probe: 5 certified 49-state
   networks in 8 runs, not yet long-tested), then `p` 11 with 32 or 64 a factor, probe-sized (4-6
   seeds, 2-3 h). `k` stays 1: the certificate's cost is codes x 9 tokens there.
