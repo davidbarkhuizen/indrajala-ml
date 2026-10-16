@@ -199,6 +199,22 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
             outputs.append(output)
         return self.backend.concatenate_columns(outputs)
 
+    def window_states(self, X: A) -> tuple[A, list[A]]:
+        """
+        The inference forward pass with its states: each column's digit probabilities, as
+        forward_windows's, and the states (N, state_size), the initial state's then each window's
+        next state's, W + 1 of them; a snapped state as its code's vector (the claims workplan's
+        drift profile, E2b).
+        """
+        C = self._first_state(X.shape[0])
+        outputs: list[Any] = []
+        states = [C]
+        for w in range(self._windows(X)):
+            output, C = self._window_forward(self._window(X, w), C)
+            outputs.append(output)
+            states.append(C)
+        return self.backend.concatenate_columns(outputs), states
+
     def state_codes(self, X: A) -> list[list[tuple[int, ...]]]:
         """
         Each state, per example, as a machine's, a code per factor: the initial state's, then each

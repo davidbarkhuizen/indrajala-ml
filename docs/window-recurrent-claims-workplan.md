@@ -987,6 +987,12 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    fail (seed 2 on 1 case of 100,000 at 256 and 16,756 at 1,024, seed 9 on 4 at each). So 20 of
    20 against 0 of 20 at 1,024 (Fisher's exact, one-sided, p 7.3e-12), exploratory; C2b's
    registered test is E2b'. Findings in the study script's docstring.
+   **The drift profile** (exploratory, after the data): the tool `window_recurrent_study.py drift`
+   (`indrajala_ml/studies/window_drift.py`; wrong digits by position and context, the state's shift
+   and spread by position). At 1,024 the failing continuous network's (seed 2) wrong digits are
+   absent from the first 384 columns and grow to the end, with its state's centroid moving
+   steadily (0.32 to 0.76 for carry 1, separation 2.36); the near-working one (seed 9) is
+   stationary past its first columns; a snapped one keeps one code per carry.
 8c. **E2b' (D39): registered**, config `scripts/window_recurrent_e2b_prime.json`; findings, long
    tests as E2b's, C2b against E2b's continuous arm.
 9. **E5 on `pyramidon`:** findings. **The tool in:** `scripts/window_recurrent_study.py explore

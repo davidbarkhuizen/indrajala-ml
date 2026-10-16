@@ -57,6 +57,11 @@ zero tests and the answer, written as step-<j>.diagnosis.json beside the network
 each, a step already diagnosed skipped; --follow keeps diagnosing each new step as it is saved
 until the machine's lock is free (the study ended), for deciding early whether a run is going
 anywhere. It takes no lock: run it beside the study, one core.
+`drift` is where saved networks' answers go wrong along a long input and how far each one's state
+moves from where it sat early on (indrajala_ml/studies/window_drift.py): over the codes property's
+first --cases at --n, the wrong digits by position (--bins equal bins) and by the target's state
+entering and leaving the column, and per target state each bin's state centroid's shift from
+the first bin's and its spread, beside the separation of the first bin's centroids. No lock; one core.
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
@@ -514,6 +519,16 @@ files, run from `data/window-recurrent`).
 - **The continuous GRU extrapolates a little past what it is shown, then drifts.** It trained all 18
   steps (to 18 columns); its break at the last step was at most 24 columns in 12 of 20 and reached
   64 in 2, at steps 16 and 17 (seeds 2 and 9). The same pattern as E2's, without the transformer.
+- **Its state moves along the input; its errors follow** (exploratory, after the data: `drift`, 3,000
+  of B1's cases at 1,024, `e2b-drift-1024.json`, a3d57ae6...2cf3971). Every long-test failure is one
+  or two wrong digits, not a run of them, and none follows a long run of one carry. Seed 2's
+  wrong digits by 128-column bin are 0, 0, 0, 7, 32, 166, 247, 474 (512 of 3,000 cases), and its
+  states' centroid for carry 1 moves from the first bin's by 0.32 in the second bin, then steadily
+  to 0.76 in the last (0.28-0.84 over the three carries), against a separation of 2.36 between
+  carries: the state is not stationary though the columns are drawn independently. Seed 9's moves
+  0.23 by the second bin (the first columns' transient) and then stays within 0.01 to the end: it
+  is stationary, 0 of 3,000 cases wrong, 4 of 100,000 in the long tests. A snapped network (seed 0,
+  step 10) keeps one code per carry from the second bin on (spread 0, no shift).
 
 Findings (stage 9 and 9b of docs/factored-state-workplan.md: modular division `p` 5 with a factored
 state, C9, C9' and C9'', each an existence claim), crate abcba3d7a30e, the curriculum at `k` 1, `s`
@@ -586,11 +601,13 @@ import multiprocessing
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.measurement import machine_lock
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.studies import window_diagnostics as wd
+from indrajala_ml.studies import window_drift as wdr
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
@@ -657,6 +674,13 @@ def main(argv: list[str]) -> int:
     diagnose.add_argument("--cases", type=int, default=wd.CASES, help="cases drawn at each length")
     diagnose.add_argument("--follow", action="store_true", help="diagnose each new step until the lock is free")
     diagnose.add_argument("--interval", type=float, default=30.0, help="seconds between looks when following")
+    drift = commands.add_parser("drift")
+    drift.add_argument("networks", type=Path, nargs="+")
+    drift.add_argument("--task", default=wt.ADDITION.name, help="the networks' task (window_tasks.task_named)")
+    drift.add_argument("--n", type=int, required=True, help="the length")
+    drift.add_argument("--cases", type=int, default=wdr.CASES, help="the codes property's first cases")
+    drift.add_argument("--bins", type=int, default=wdr.BINS, help="equal bins of the columns")
+    drift.add_argument("--json", type=Path, help="write each network's profile to this file")
     verdicts = commands.add_parser("verdicts")
     verdicts.add_argument("config", type=Path)
     verdicts.add_argument("--certificates", type=Path, required=True, help="certify's branched certificates")
@@ -704,6 +728,17 @@ def main(argv: list[str]) -> int:
                 print(f"{name}: {wc.summary(result)}", flush=True)
                 if args.out is not None:
                     (args.out / f"{name}.json").write_text(json.dumps(result, indent=1))
+        return 0
+    if args.command == "drift":
+        profiles: dict[str, Any] = {}
+        for path in args.networks:
+            name = wr.network_name(path)
+            profiles[name] = wdr.profile(
+                load_network(str(path)), wt.task_named(args.task), args.n, args.cases, args.bins
+            )
+            print("\n".join(wdr.lines(name, profiles[name])), flush=True)
+        if args.json is not None:
+            args.json.write_text(json.dumps(profiles, indent=1))
         return 0
     if args.command == "compare":
         compared = wr.compare_runs(args.original, args.rerun)

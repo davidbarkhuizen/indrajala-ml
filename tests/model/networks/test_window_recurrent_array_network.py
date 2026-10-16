@@ -253,6 +253,20 @@ def test_state_codes_are_each_states_nearest_code_through_the_windows():
     assert codes == [[(code,) for code in example] for example in zip(*expected, strict=True)]
 
 
+@pytest.mark.parametrize("recurrence", [RECURRENCE, WindowRecurrence((Factor(3, None),))])
+def test_window_states_are_the_forward_pass_and_each_state_it_passes_on(recurrence: WindowRecurrence):
+    network = _network(recurrence=recurrence)
+    X, _ = _batch(3, examples=4)
+    outputs, states = network.window_states(X)
+    assert np.array_equal(outputs, network.forward_windows(X))
+    C = network._first_state(4)
+    expected = [C]
+    for w in range(3):
+        _, C = network._window_forward(network._window(X, w), C)
+        expected.append(C)
+    assert len(states) == 3 + 1 and all(np.array_equal(s, e) for s, e in zip(states, expected, strict=True))
+
+
 # a continuous state (the window-recurrent claims workplan, stage 4)
 
 CONTINUOUS = WindowRecurrence((Factor(3, None),))
