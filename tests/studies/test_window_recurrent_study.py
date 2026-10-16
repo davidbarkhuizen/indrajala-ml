@@ -636,6 +636,17 @@ def test_e2b_is_e6s_linear_cell_snapped_against_continuous():
     assert snapped.directory != continuous.directory
 
 
+def test_e2b_prime_is_e2b_snapped_with_no_run_stopped_early():
+    """The claims workplan's D39: E2b's snapped arm again, every run trained to the cap past its first
+    certified step, so that it differs from E2b's continuous arm in the snap alone."""
+    scripts = Path(__file__).parents[2] / "scripts"
+    prime = wr.load_config(scripts / "window_recurrent_e2b_prime.json")
+    snapped = wr.load_config(scripts / "window_recurrent_e2b_snapped.json")
+    assert prime.runs == snapped.runs and prime.workers == snapped.workers
+    assert prime.settings == dataclasses.replace(snapped.settings, end_at_certified_step=False)
+    assert prime.directory not in (snapped.directory, Path("data/window-recurrent/e2b-continuous"))
+
+
 @pytest.mark.parametrize("window", ["linear", "ffn"])
 def test_e6_is_an_existence_test_past_the_exclusion_bound(window: str):
     """The claims workplan's D37: E6's window (D21) at k 1 s 16 m 16 on addition, trained to the cap
@@ -892,6 +903,15 @@ def test_a_certified_step_ends_the_run_and_its_certificate_is_saved(tmp_path: Pa
     other = dataclasses.replace(FACTORED, seed=1)
     result = wr.run(wr.Study(tmp_path / "again", settings, [other], 0), log=lambda line: None)[other.key]
     assert len(result["steps"]) == 1 and result["certified"] and result["certified_step"] == 1
+
+
+def test_without_end_at_certified_step_a_run_trains_every_step(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The claims workplan's D39: every step trained and certified, past the first certified one."""
+    settings = dataclasses.replace(TINY, certify_steps=True, end_at_certified_step=False)
+    monkeypatch.setattr(wr, "certify_step", _certified)
+    result = wr.run(wr.Study(tmp_path, settings, [FACTORED], 0), log=lambda line: None)[FACTORED.key]
+    assert len(result["steps"]) == settings.steps and all(s["certificate"]["certified"] for s in result["steps"])
+    assert result["certified"] and result["certified_step"] == 1 and result["last_certified"]
 
 
 def test_the_first_certified_run_stops_the_study(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

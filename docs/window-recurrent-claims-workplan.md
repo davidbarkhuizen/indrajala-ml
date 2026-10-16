@@ -12,7 +12,8 @@ modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refute
 all at once works more often; certified, neither the codes nor the arm changes the rate); E8b
 stopped (D33, D35); E8c (D35): C8 holds at both rungs (at least 3 of 6 certified at `q` 4, 6 of 6 at `q` 5, every long-test case passed); stages 8-10 to come
 (stage 8 revised by the owner: D36, D37; E6 ran: the linear window certifies at `k` 1; E2 done 2026-10-16: C2 holds, the continuous state
-works 0 of 20 at 1,024 columns against the snapped arm's 8 of 20, Fisher p 0.0033).** The literature it answers to is in
+works 0 of 20 at 1,024 columns against the snapped arm's 8 of 20, Fisher p 0.0033; E2b ran, and its snapped arm's early stop, a deviation, is recorded by D39,
+with E2b' registered as C2b's test).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -46,7 +47,7 @@ any run.
 | --- | --- | --- | --- |
 | **C1** | A working network is a correct adder at **every** length: its snapped state makes it a finite transducer, and that transducer is the carry automaton | E1, the certificate | a working network fails the certificate (then C1 is "to 64 columns", as now) |
 | **C2** | The snapping is what makes the recurrence extrapolate: the same network with a continuous state works far less often past its training lengths | E2, the ablation | the continuous arm's working rate at 1,024 columns is within D4's test of the snapped arm's |
-| **C2b** | The same without the window's transformer: on the plain recurrence (the GRU alone, `k` 1), the snapped state works far more often at 1,024 columns than a continuous one | E2b, the ablation on the linear window (D38) | the continuous arm's working rate at 1,024 columns is not below the snapped arm's by Fisher's exact test, one-sided p < 0.05 |
+| **C2b** | The same without the window's transformer: on the plain recurrence (the GRU alone, `k` 1), the snapped state works far more often at 1,024 columns than a continuous one | E2b', the ablation on the linear window (D38, D39) | the continuous arm's working rate at 1,024 columns is not below the snapped arm's by Fisher's exact test, one-sided p < 0.05 |
 | **C3** | More codes than the automaton needs make training find it more often | E3, the code count | no monotone trend over `m` (D4's trend test) |
 | **C4** | The curriculum isn't needed: training on 1-3 windows at once works as often (the control: 12 of 15 against 12 of 15, on about 16 times fewer examples at `k` 4), so the recurrence, not the schedule, generalises | E4, the arms | the arms' working rates differ by D4's test (then the claim is the difference, whichever way) |
 | **C5** | The seed decides: at a fixed configuration the working rate is a stable fraction, measured with its interval | E3 and E4's 20 seeds a cell | (a measurement, not a hypothesis: reported with intervals) |
@@ -153,6 +154,26 @@ solution can collapse (E8b), which can only lower the snapped arm's rate, agains
 
 **Probe** (`probe` on the continuous config, `--steps 3 18 --epochs 2`, `jebel`, 2026-10-15): an epoch at
 18 columns trains in 3.6 s, the whole check at 18 takes 48 s, peak 290 MB.
+
+### E2b'. The snapped arm with no run stopped early (C2b; D39)
+
+**Why.** E2b's snapped arm ran with `certify_steps`, and the harness then ends a run at its first
+certified step (D7, an existence test's rule), though E2b registered that no run stops early: its
+snapped runs ended at steps 3-15, the continuous runs trained all 18. Stopping at a proof protects
+a snapped network from being destroyed by training past it (E8b), so the deviation favours C2b.
+
+**Design.** E2b's snapped arm again, unchanged but for `end_at_certified_step` off: every run trains
+all 18 steps, each step certified (`scripts/window_recurrent_e2b_prime.json`, a test checks it is
+`window_recurrent_e2b_snapped.json` with only that setting changed). The comparator is E2b's
+continuous arm as run: it trained every step, so the arms differ in the snap alone. Feasibility as
+E2b (16 codes against 3 states, the cap at the exclusion bound 18).
+
+**Measures and analysis.** E2b's, on the last step's network: works at 64, and for every run whose
+break is 64 the long tests (B1 at 256 and 1,024), works at 1,024 meaning every case passes; the last
+network's certificate in both verdicts. **C2b's registered test is E2b' against E2b's continuous
+arm** (one-sided Fisher at 1,024). Exploratory: the first certified step, and the runs certified at
+some step but not at the last (a proof lost by training past it, E8b's collapse). E2b's snapped arm
+is reported beside, as exploratory (D39).
 
 ### E3. The code count (C3, C5)
 
@@ -819,6 +840,21 @@ Settled under the owner's standing delegation, with each option's pros and cons:
   stage 5 ends there; the continuous arm on `jebel` (6 workers) after E2. Runs reproduce exactly across
   the machines (C0), so the split doesn't confound the arms.
 
+- **D39. E2b's early stop (the owner, 2026-10-16).** E2b's snapped arm stopped each run at its first
+  certified step (the harness's D7 rule under `certify_steps`), against D38's "no early stop"; found
+  after its data, so by the registration rules it is recorded, not fixed in place.
+  - (a) Report E2b as run, the deviation stated. Pros: no cost; the gap at 1,024 is likely large.
+    Cons: not the comparison registered; the bias favours C2b, the claim tested.
+  - (b) Rerun the snapped arm with no early stop (E2b') as C2b's registered test, and drop E2b's
+    snapped arm. Pros: a clean test. Cons: E2b's data unused; about 10 h of `jebel`.
+  - (c) *Chosen.* **Both: E2b as run reported now as exploratory, E2b' registered as C2b's test.**
+    Pros: nothing lost, the registered test clean, and the two together measure what the early
+    stop changed (proofs lost past the first). Cons: two experiments to write up; C2b waits for
+    E2b'. **The harness:** `Settings.end_at_certified_step` (default on, D7's rule); off, a run
+    trains every step, each certified, and its result has `last_certified`.
+  **Where:** `jebel`, 6 workers, after stage 5's long tests there (runs reproduce across machines,
+  C0, so the continuous arm on `jebel` isn't confounded).
+
 ## Stages
 
 1. **Done.** **This workplan and the literature review.** Docs only.
@@ -941,6 +977,12 @@ Settled under the owner's standing delegation, with each option's pros and cons:
 8b. **E2b (D38): registered**, configs `scripts/window_recurrent_e2b_snapped.json` and
    `_continuous.json` (a test checks they are E6's linear cell at 20 seeds, differing in `m` only):
    findings, then the long tests (B1 at 256 and 1,024) on every run whose break is 64.
+   **E2b ran** (snapped `pyramidon`, continuous `jebel`, 2026-10-15/16): both arms 20 of 20 work at
+   64; the snapped all certified at their first certified step (steps 3-15, the deviation D39
+   records), the continuous breaks 16 (4), 24 (8), 32 (2), 48 (4) and 64 (2). Long tests on the 22
+   break-64 runs on `pyramidon` from 07:22, 2026-10-16. Reported as exploratory (D39).
+8c. **E2b' (D39): registered**, config `scripts/window_recurrent_e2b_prime.json`; findings, long
+   tests as E2b's, C2b against E2b's continuous arm.
 9. **E5 on `pyramidon`:** findings. **The tool in:** `scripts/window_recurrent_study.py explore
    CONFIG` (`explore_run`, `explore_summary`): every finished snapped run's last network, its codes
    over the codes property's first 1,000 cases at its check lengths and at 8, 16 and 64, the new
@@ -960,6 +1002,7 @@ evaluation rate:
 | E1 | 105 networks: certificate and long tests | `pyramidon` | 3-6 h on one core; under 2 h on six |
 | E3 + E4 | 100 curriculum + 20 all-at-once runs (trimmed from 240, D34) | `jebel` | about 13 h (79 runs before the trim, about 4-5 h after) |
 | E2 + E6 | 20 continuous runs (D36) + 6 linear-window runs, 6 FFN-window only if needed (D37) | E2 `jebel`, E6 `pyramidon` | E2 about 2 h (1-5); E6 under 1 h a window (E8c's `k` 1 study took 13 minutes) |
+| E2b' | 20 snapped runs, every step certified, all 18 steps (D39) | `jebel` | about 8-10 h at 6 workers (E2b's continuous runs, all 18 steps: 103-220 minutes, median 151) |
 | E5 | saved networks only | `pyramidon` | under 1 h |
 | E7 | 2 `p` x 2 `k` x 2 `m` x 2 arms x 5 seeds = 80 runs, certified | `jebel` | about 8 h (4-15), longer if 49 states train slowly |
 | E7' | 2 `p` x 2 `m` x 2 arms x 10 seeds at `k` 1 = 80 runs, certified | `jebel` | about 5 h (3-8): E7's `k` 1 runs took 7-15 minutes; more codes, more epochs |
