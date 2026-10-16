@@ -55,10 +55,14 @@ COLUMNS = BASE * BASE  # a column's tokens, 3 a + b
 OPERATIONS: dict[str, Callable[[int, int, int], int]] = {
     "sum": lambda A, B, p: (A + B) % p,
     "difference": lambda A, B, p: (A - B) % p,
+    "product": lambda A, B, p: (A * B) % p,  # not an approximation (docs/approximation-claim-workplan.md)
 }
 FAMILY = ("sum", "difference")
 SUM = ("sum",)  # the family without the difference (the division workplan's stage 3 option)
+PRODUCT = ("product",)
 QUOTIENT: tuple[str, ...] = ()
+VOCABULARY = ("sum", "difference")  # the operations with a token: every study's before the approximation claim
+WIDE = ("sum", "difference", "product")  # the approximation claim's, the same for its every arm
 
 Example = wr.Example
 
@@ -67,10 +71,20 @@ LONG_PROPERTIES = ("U1", "S1")  # the long tests' (the division workplan's D4)
 
 @dataclass(frozen=True)
 class Encoding:
-    """A window's layout: the column, then a query token per operation, each its own answer."""
+    """
+    A window's layout: the column, then a query token per operation, each its own answer. The
+    vocabulary is the operations with a token (the embedding's rows), so arms compared with each
+    other share it whatever they query; the default is every study's before the product's.
+    """
 
     p: int
     queries: tuple[str, ...]
+    vocabulary: tuple[str, ...] = VOCABULARY
+
+    def __post_init__(self) -> None:
+        assert set(self.queries) <= set(self.vocabulary) <= set(OPERATIONS), (
+            f"queries {self.queries} need tokens in the vocabulary {self.vocabulary}, of {tuple(OPERATIONS)}"
+        )
 
     @property
     def width(self) -> int:
@@ -78,14 +92,14 @@ class Encoding:
 
     @property
     def tokens(self) -> int:
-        return COLUMNS + len(OPERATIONS)
+        return COLUMNS + len(self.vocabulary)
 
     @property
     def classes(self) -> int:
         return self.p + 1  # residues and undefined
 
     def query_token(self, operation: str) -> int:
-        return COLUMNS + list(OPERATIONS).index(operation)
+        return COLUMNS + self.vocabulary.index(operation)
 
     def states(self, columns: Sequence[int]) -> list[tuple[int, int]]:
         """(A, B) mod p after each column."""

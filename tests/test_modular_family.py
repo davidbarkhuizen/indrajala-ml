@@ -6,6 +6,7 @@ import random
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from indrajala_ml.data import modular_data as md
 from indrajala_ml.studies import modular_family as mf
@@ -302,3 +303,17 @@ def test_the_trigger_scorer_counts_drops_catches_and_false_alarms_per_epoch():
     assert pooled.false_alarms == 0 and pooled.early == 0
     worst = mf.score_trigger(rows, mf.Trigger(signal="worst", rule="fall", threshold=0.3))
     assert (worst.drops, worst.caught, worst.unrecovered_caught) == (2, 2, 1)
+
+
+def test_the_vocabulary_keeps_every_earlier_studys_tokens_and_gives_the_product_its_own():
+    assert mf.Encoding(5, mf.FAMILY).tokens == mf.COLUMNS + 2  # the studies before the product's
+    assert mf.Encoding(5, mf.QUOTIENT).tokens == mf.Encoding(5, mf.FAMILY).tokens
+    wide = [mf.Encoding(5, arm, mf.WIDE) for arm in (mf.QUOTIENT, mf.SUM, mf.FAMILY, mf.PRODUCT)]
+    assert {e.tokens for e in wide} == {mf.COLUMNS + 3}
+    assert wide[0].query_token("sum") == mf.Encoding(5, mf.SUM).query_token("sum")
+    tokens, labels = mf.Encoding(5, mf.PRODUCT, mf.WIDE).example([7, 5])  # columns (2, 1) then (1, 2)
+    states = mf.Encoding(5, mf.PRODUCT, mf.WIDE).states([7, 5])
+    assert tokens[1::2] == (float(mf.COLUMNS + 2),) * 2
+    assert labels[1::2] == tuple((a * b) % 5 for a, b in states)
+    with pytest.raises(AssertionError):
+        mf.Encoding(5, mf.PRODUCT)  # the product has no token in the earlier vocabulary

@@ -325,7 +325,7 @@ from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies.collapse import RULES, SIGNALS, Trigger
 
-ARMS = {"family": mf.FAMILY, "quotient": mf.QUOTIENT, "sum": mf.SUM}
+ARMS = {"family": mf.FAMILY, "quotient": mf.QUOTIENT, "sum": mf.SUM, "product": mf.PRODUCT}
 
 
 def main(argv: list[str]) -> int:
@@ -357,12 +357,26 @@ def main(argv: list[str]) -> int:
         "--fork", action="store_true", help="snapshot and fork on collapse (the collapse-fork workplan, retired)"
     )
     _trigger_arguments(run)
+    run.add_argument(
+        "--vocabulary",
+        nargs="+",
+        choices=list(mf.OPERATIONS),
+        default=list(mf.VOCABULARY),
+        help="the operations with a token (the approximation claim's: sum difference product)",
+    )
     run.add_argument("--out", type=Path, required=True)
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
     certify.add_argument("--task", required=True, help="modular-division-p (the quotient) or modular-sum-p (the sum)")
     certify.add_argument("--arm", choices=sorted(ARMS), default="family")
     certify.add_argument("--snap-ratio", type=float, default=wc.SNAP_RATIO)
+    certify.add_argument(
+        "--vocabulary",
+        nargs="+",
+        choices=list(mf.OPERATIONS),
+        default=list(mf.VOCABULARY),
+        help="the operations with a token (the approximation claim's: sum difference product)",
+    )
     certify.add_argument("--out", type=Path, required=True)
     long = commands.add_parser("long-test", help="saved family networks' long tests, one slot")
     long.add_argument("networks", type=Path, nargs="+")
@@ -370,6 +384,13 @@ def main(argv: list[str]) -> int:
     long.add_argument("--arm", choices=sorted(ARMS), default="family")
     long.add_argument("--n", type=int, nargs="+", default=list(wr.LONG_LENGTHS))
     long.add_argument("--properties", nargs="+", default=list(mf.LONG_PROPERTIES))
+    long.add_argument(
+        "--vocabulary",
+        nargs="+",
+        choices=list(mf.OPERATIONS),
+        default=list(mf.VOCABULARY),
+        help="the operations with a token (the approximation claim's: sum difference product)",
+    )
     long.add_argument("--out", type=Path, required=True)
     trace = commands.add_parser("trace", help="runs' logs, a line per diagnosis, collapses marked")
     trace.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
@@ -413,15 +434,16 @@ def main(argv: list[str]) -> int:
         args.out.mkdir(parents=True, exist_ok=True)
         p = int(args.task.rsplit("-", 1)[1])
         for path in args.networks:
-            print(long_test_file(path, mf.Encoding(p, ARMS[args.arm]), args), flush=True)
+            print(long_test_file(path, mf.Encoding(p, ARMS[args.arm], tuple(args.vocabulary)), args), flush=True)
         return 0
     if args.command == "certify":
         p = int(args.task.rsplit("-", 1)[1])
-        result = mf.certify_file(args.network, mf.Encoding(p, ARMS[args.arm]), args.task, args.snap_ratio)
+        encoding = mf.Encoding(p, ARMS[args.arm], tuple(args.vocabulary))
+        result = mf.certify_file(args.network, encoding, args.task, args.snap_ratio)
         args.out.write_text(json.dumps(result, indent=1))
         print(wc.summary(result))
         return 0
-    encoding = mf.Encoding(args.p, ARMS[args.arm])
+    encoding = mf.Encoding(args.p, ARMS[args.arm], tuple(args.vocabulary))
     factors = [tuple(f) for f in args.factor] if args.factor else [(16, 16)] * args.factors
     probe = functools.partial(
         mf.run,
