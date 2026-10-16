@@ -4,7 +4,11 @@
 easier to fall into a code boundary than out - making the process stable but dynamic"), after
 E2b' showed a certified network losing its proof. D1-D3 settled by the owner, D4-D8 under the
 owner's delegation, each with its options' pros and cons. P1 registered here, before its data
-(#787). Stage 1 done 2026-10-16: the wall in numpy's codes, the gate, `replay`. P1 next.**
+(#787). Stage 1 done 2026-10-16: the wall in numpy's codes, the gate, `replay` (#788). **P1 ran
+2026-10-16: C1 refuted** (wall on lost the proof in 8 of 10 replays, wall off in 9 of 10). **Paused
+by the owner** (2026-10-16: "let's pause investigation of the mechanism for the moment"), the
+`p` 11 ladder with the fork going first; stages 3-5 wait, and this plan stays open until resumed
+or its leftovers move to next-steps.**
 
 ## Why
 
@@ -133,7 +137,31 @@ above 1 in one update, the update norms.
    a saved step's network, a step's data for some epochs, per batch the loss before and after and
    the update's norm, per epoch the screen and the certificate, the wall's settings and a
    conversion to numpy as options. Golden run bit-identical.
-2. **P1** (this plan): run, findings PR.
+2. **P1** (this plan): **ran 2026-10-16 13:56-14:10, C1 refuted.** `pyramidon`, code `~/code/wt-p1`
+   at b81affa, 2 workers; data `data/window-recurrent/snap-wall-p1/` (the start network,
+   35c36dd8...8c141a, the same as `jebel`'s; each replay's JSON; `p1.log`), manifest
+   `snap-wall-p1.sha256` (726fe6cc...e8807b, 22 files, run from `data/window-recurrent`).
+
+   | arm | proof kept both epochs | certified after epoch 1 | jumps past loss 1 (20 epochs) |
+   | --- | --- | --- | --- |
+   | wall off | 1/10 (replay 1) | 3/10 | 49 |
+   | wall on (weight 1, ratio 1.5) | 2/10 (replays 3, 7) | 3/10 | 16 |
+
+   - **Refuted, as registered:** wall on lost the proof in 8 of 10 (3 or more). The strict and the
+     branched verdicts agree in every epoch.
+   - **The baseline loses it in 9 of 10** (from the same certified network, in numpy, within 2
+     epochs): the collapse is very reproducible here, a testbed for any later fix.
+   - **The wall cuts the boundary jumps about 3-fold but not the loss of the proof;** the largest
+     updates in the first epoch are about 0.4 in both arms (the amplification is still there).
+   - **Replay 6 is the same in both arms through its first epoch** (least snap ratio 6.6: every
+     visited state past 1.5, so the wall exerted nothing) and loses its proof in its second in
+     both: a collapse can start where no visited state is near a boundary, which a wall on visited
+     states can't anticipate. Wall on, replay 4 collapsed to 1 state (codes merging).
+   - **Readings, for when this plan resumes** (each a new registered probe on this testbed; P1's
+     settings are not changed): (a) the crossing starts from states training doesn't visit, or from
+     the codebook moving; (b) the wall is too weak against Adam at weight 1; (c) the amplifier is the
+     target: cap or clip the update, or lower the rate once a step passes. The fork (the collapse-fork
+     workplan, retired) already rolls back and halves the rate, two of (c)'s remedies.
 3. If C1 works: the wall in the crate (`indrajala-math-rust` first, then a bump), `Factor`'s
    settings and format 2's, study configs' field; the golden run unchanged with the wall off.
 4. A registered comparison on E2b''s cell with only the wall changed: proofs lost past the first

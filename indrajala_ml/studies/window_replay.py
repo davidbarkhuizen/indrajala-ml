@@ -14,6 +14,9 @@ on), some epochs of a step's data drawn by a named generator, as a run's step dr
 
 E2b' seed 6's replay from step 7 found the first: an ordinary step at batch 977 of step 8 took its
 loss from 0.001 to 2.2, and the updates after it ran 6-8 times their size (the workplan's Why).
+P1 (the workplan's stage 2) replayed 2 epochs of step 8 from that network's step 7, 10 times with
+the snap wall off and 10 on: the proof was lost in 9 and in 8 (C1 refuted), the wall cutting the
+loss's jumps about 3-fold but not the loss of the proof.
 """
 
 from __future__ import annotations
