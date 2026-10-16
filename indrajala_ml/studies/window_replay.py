@@ -8,15 +8,20 @@ on), some epochs of a step's data drawn by a named generator, as a run's step dr
   parameter's change, the codebook's included), so a jump of the loss on an ordinary step (a state
   crossing a code boundary) and a run of large updates after it (Adam amplifying it) show;
 - **per epoch**: the screen at the step's lengths, the certificate in both verdicts (near ties
-  branched, and strict), and the least snap ratio over the screen's first cases' states (every
-  other code's distance over the snapped code's, per state; the certificate asks 1.05, the wall
-  keeps 1.5).
+  branched, and strict), and the code margins over the screen's first cases' states: the least
+  snap ratio (every other code's distance over the snapped code's, per state; the certificate
+  asks 1.05, the wall keeps 1.5) and per snapped factor the codes in use, the closest two of them
+  and the farthest state from its code;
+- **at the start**: the code margins of the network as loaded (with 0 epochs, only these).
 
 E2b' seed 6's replay from step 7 found the first: an ordinary step at batch 977 of step 8 took its
 loss from 0.001 to 2.2, and the updates after it ran 6-8 times their size (the workplan's Why).
 P1 (the workplan's stage 2) replayed 2 epochs of step 8 from that network's step 7, 10 times with
 the snap wall off and 10 on: the proof was lost in 9 and in 8 (C1 refuted), the wall cutting the
-loss's jumps about 3-fold but not the loss of the proof.
+loss's jumps about 3-fold but not the loss of the proof. The same replay, wall off, from the step-7
+networks of 4 seeds that never lost a proof (1, 3, 8, 9), 5 times each, lost it in none of 20:
+seed 6's collapse is its network's, not further training's in general, and neither its least snap
+ratio nor its closest codes in use set it apart (the workplan's stage 2).
 """
 
 from __future__ import annotations
@@ -73,10 +78,15 @@ def _parameters(network: Any) -> npt.NDArray[np.float64]:
     return np.concatenate(parts)
 
 
-def least_snap_ratio(network: Any, task: wt.Task, lengths: Sequence[int], cases: int = RATIO_CASES) -> float | None:
+def code_margins(
+    network: Any, task: wt.Task, lengths: Sequence[int], cases: int = RATIO_CASES
+) -> dict[str, Any] | None:
     """
-    The least ratio, over the states of each length's codes-property's first cases, of the next
-    nearest code's distance to the snapped code's, over every snapped factor; None if none is snapped.
+    Over the states of each length's codes-property's first cases: the least ratio of the next
+    nearest code's distance to the snapped code's, over every snapped factor (None if no factor has
+    two codes), and per factor (None if not snapped) the codes the states snap to, the least
+    distance between two of them (None if one) and the farthest state from its code; None if no
+    factor is snapped.
     """
     factors = network.recurrence_layer.factors
     sizes = [f.state_size for f in network.recurrence.factors]
@@ -87,6 +97,8 @@ def least_snap_ratio(network: Any, task: wt.Task, lengths: Sequence[int], cases:
     k: int = network.columns
     property_ = next(p for p in task.catalogue(cases, cases, 1) if p.id == task.codes_id)
     least = math.inf
+    used: list[set[int]] = [set() for _ in codes]
+    farthest = [0.0 for _ in codes]
     for n in lengths:
         drawn = task.property_cases(property_, n)[:cases]
         rows = [wr.example(task, case, n, k, wr.alignment(task, case, n, k)) for case in drawn]
@@ -96,13 +108,32 @@ def least_snap_ratio(network: Any, task: wt.Task, lengths: Sequence[int], cases:
             for cell in cells:
                 states = np.asarray(cell.tolist(), dtype=float)
                 for g, E in enumerate(codes):
-                    if E is None or len(E) < 2:
+                    if E is None:
                         continue
                     block = states[:, offsets[g] : offsets[g + 1]]
                     q = ((block[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2).sum(axis=2)
+                    used[g] |= {int(i) for i in q.argmin(axis=1)}
                     q.sort(axis=1)
-                    least = min(least, float(np.min(np.sqrt(q[:, 1] / np.maximum(q[:, 0], 1e-300)))))
-    return least
+                    farthest[g] = max(farthest[g], float(np.sqrt(q[:, 0].max())))
+                    if len(E) >= 2:
+                        least = min(least, float(np.min(np.sqrt(q[:, 1] / np.maximum(q[:, 0], 1e-300)))))
+    per_factor: list[dict[str, Any] | None] = []
+    for g, codebook in enumerate(codes):
+        if codebook is None:
+            per_factor.append(None)
+            continue
+        in_use = codebook[sorted(used[g])]
+        d = np.sqrt(((in_use[:, np.newaxis, :] - in_use[np.newaxis, :, :]) ** 2).sum(axis=2))[
+            np.triu_indices(len(in_use), 1)
+        ]
+        per_factor.append(
+            {
+                "codes_used": sorted(used[g]),
+                "closest_used": float(d.min()) if len(d) else None,
+                "farthest_state": farthest[g],
+            }
+        )
+    return {"least_snap_ratio": None if least == math.inf else least, "factors": per_factor}
 
 
 def replay(
@@ -125,6 +156,9 @@ def replay(
     lengths = [w * k for w in counts]
     checks = {n: wr.check_properties(task, n, catalogue) for n in lengths}
     result: dict[str, Any] = {"generator": generator, "counts": list(counts), "epochs": []}
+    result["start"] = code_margins(network, task, lengths)
+    if log is not None:
+        log(f"{generator} start: {margins_text(result['start'])}")
     for epoch in range(epochs):
         start = time.perf_counter()
         rng = random.Random(f"{generator}-{epoch}")
@@ -151,13 +185,15 @@ def replay(
         branched = wc.certify(wc.NetworkMachine(network), task)
         strict = wc.certify(wc.NetworkMachine(network), task, snap_ratio=1.0)
         updates = sorted(row["update"] for row in rows)
+        margins = code_margins(network, task, lengths)
         summary = {
             "epoch": epoch,
             "screen": sum(r.passed for r in screen) / sum(r.cases for r in screen),
             "certified": branched.certified,
             "certified_strict": strict.certified,
             "minimised": len(branched.minimised),
-            "least_snap_ratio": least_snap_ratio(network, task, lengths),
+            "least_snap_ratio": None if margins is None else margins["least_snap_ratio"],
+            "margins": None if margins is None else margins["factors"],
             "jumps": sum(row["loss_after"] > 1.0 >= row["loss_before"] for row in rows),
             "median_update": updates[len(updates) // 2],
             "max_update": updates[-1],
@@ -170,12 +206,32 @@ def replay(
     return result
 
 
+def margins_text(margins: dict[str, Any] | None) -> str:
+    """code_margins' result as text."""
+    if margins is None:
+        return "no snapped factor"
+    ratio = margins["least_snap_ratio"]
+    parts = [f"least snap ratio {'-' if ratio is None else f'{ratio:.3f}'}"]
+    for g, factor in enumerate(margins["factors"]):
+        if factor is not None:
+            closest = factor["closest_used"]
+            parts.append(
+                f"factor {g}: {len(factor['codes_used'])} codes used, closest pair "
+                f"{'-' if closest is None else f'{closest:.3f}'}, farthest state {factor['farthest_state']:.3f}"
+            )
+    return ", ".join(parts)
+
+
 def line(name: str, epoch: dict[str, Any]) -> str:
     """An epoch's summary as a line."""
-    ratio = epoch["least_snap_ratio"]
+    margins = (
+        None
+        if epoch["margins"] is None
+        else {"least_snap_ratio": epoch["least_snap_ratio"], "factors": epoch["margins"]}
+    )
     return (
         f"{name} epoch {epoch['epoch']}: screen {epoch['screen']:.3f}, "
         f"certified {epoch['certified']} (strict {epoch['certified_strict']}, {epoch['minimised']} states), "
-        f"least snap ratio {'-' if ratio is None else f'{ratio:.3f}'}, {epoch['jumps']} jumps past loss 1, "
+        f"{margins_text(margins)}, {epoch['jumps']} jumps past loss 1, "
         f"update median {epoch['median_update']:.3g} max {epoch['max_update']:.3g}; {epoch['seconds']:.0f} s"
     )
