@@ -245,8 +245,16 @@ machines. The readout is `readout data/window-recurrent/division-claim`.
   before's network on the new lengths), each step's network (`step-<j>.network.json`), and in
   `readout` each run's large drops (`large_drops`) with how many recovered. Stage 5's logs have
   the screen score at diagnoses only, and only the last network.
-- The long tests (D4) on all 14 networks: running (pyramidon, one at a time, about 90 minutes and
-  1.7 GB each); the claim isn't written up until they pass.
+- **The long tests (D4) pass: every one of the 14 networks passes every case**, 375,000 each (U1
+  100,000 and S1 25,000 at each of 128, 256 and 1,024 columns), 5,250,000 in all, no failure listed
+  (`long_test_failures`: none). 11 on pyramidon (f22a9f0, one at a time, 4,232-6,143 s each), 3 on
+  jebel (ce4015d, the same code, 2,321-3,430 s), 2026-10-15 19:00 to 2026-10-16 09:12, each worker
+  claiming its next network by a mkdir on pyramidon (`~/code/stage5-long-tests.sh`; two of jebel's
+  workers claimed the quotient's seed 100 in the same second, so it was tested twice, both passing).
+  Results in `division-claim/long-tests/<arm>-<seed>/`, the per-network summary
+  `division-claim/long-tests-summary.txt`, logs `long-tests-pyramidon.txt` and
+  `long-tests-jebel.txt`; manifest `division-claim-long-tests.sha256` ae437c1d...c499329 (14 files,
+  run from data/window-recurrent).
 """
 
 from __future__ import annotations

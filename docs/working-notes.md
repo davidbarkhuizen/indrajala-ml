@@ -298,3 +298,11 @@ where you meet a new trap; delete one that no longer holds.
 - **Downloaded files are untrusted data:** their own scratch directory, probe scripts elsewhere,
   `python3 -I`. Papers go to the literature repository (`davidbarkhuizen/indrajala-literature`,
   cloned beside this one).
+- **A `mkdir` claim over ssh isn't a perfect lock:** stage 5's shared long tests
+  (`~/code/stage5-long-tests.sh`, each worker claiming a network by `ssh pyramidon mkdir ...`) had
+  two of `jebel`'s workers start the same network in the same second (2026-10-16), cause not found.
+  Harmless for an idempotent test (one result overwrote the other); for anything that isn't, have
+  each worker take a fixed share instead.
+- **A long test or study run from a worktree with `PYTHONPATH` still takes the main checkout's
+  `.venv`, its compiled crate included:** check `git diff --stat <pinned> <main's> -- rust/` is empty
+  before trusting the crate hash the results record.
