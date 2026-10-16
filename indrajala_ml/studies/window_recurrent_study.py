@@ -400,6 +400,9 @@ class Settings:
     # stopped at its first certified step; and every run stopped at the study's first certified run
     certify_steps: bool = False
     stop_at_certified: bool = False
+    # False: with certify_steps, a run trains every step, each certified, past its first certified one
+    # (the claims workplan's D39: E2b', the registered rate comparison, no run stopped early)
+    end_at_certified_step: bool = True
     # an existence test's wall-clock budget (the factored-state workplan, D13): the study's deadline
     # is set at its first launch, and past it every run stops at its next epoch
     budget_hours: float | None = None
@@ -700,8 +703,9 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
     One run's steps, each saved as it finishes under directory/<key>/ (step-<j>.json and its network,
     step-<j>.network.json); a run stopped part way resumes from its last saved step. With
     settings.certify_steps, each step's network is certified too (step-<j>.certificate.json, its
-    summary the step's "certificate"), and the run ends at its first certified step (D7); a step
-    stopped by the study's stop file (D8) or its spent budget (D13) ends it too.
+    summary the step's "certificate"), and the run ends at its first certified step (D7) unless
+    settings.end_at_certified_step is off (D39); a step stopped by the study's stop file (D8) or its
+    spent budget (D13) ends it too.
     """
     steps_directory = directory / spec.key
     steps_directory.mkdir(parents=True, exist_ok=True)
@@ -737,7 +741,9 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
             network.save(str(network_file))
             _write_json(saved, result)
             steps.append(result)
-        if steps[-1]["stop"] == "stopped" or steps[-1].get("certificate", {}).get("certified", False):
+        if steps[-1]["stop"] == "stopped" or (
+            settings.end_at_certified_step and steps[-1].get("certificate", {}).get("certified", False)
+        ):
             break
     last = steps[-1]
     certified = [s["step"] for s in steps if s.get("certificate", {}).get("certified", False)]
@@ -762,6 +768,7 @@ def train_run(spec: RunSpec, settings: Settings, directory: Path) -> dict[str, A
         "works": last["break"] >= WORKS,
         "certified": bool(certified),
         "certified_step": certified[0] if certified else None,
+        "last_certified": last.get("certificate", {}).get("certified", False),
         "stopped": last["stop"] == "stopped",
         "seconds": time.perf_counter() - start,
         "peak_mb": peak_mb(),
@@ -1358,6 +1365,14 @@ def _test_cell(step: Mapping[str, Any], n: int, field: str, form: str) -> str:
     return "-" if test is None else form.format(test[field])
 
 
+def _certified_cell(done: Sequence[dict[str, Any]], settings: Settings) -> str:
+    """A cell's runs certified at some step, and, when runs train past it (D39), at their last step."""
+    text = f"{sum(bool(r.get('certified')) for r in done)}/{len(done)}"
+    if settings.end_at_certified_step:
+        return text
+    return text + f", last {sum(bool(r.get('last_certified')) for r in done)}"
+
+
 def report(study: Study) -> str:
     """
     Per cell (arm, k, s, m): the seeds whose last step works (and, with certify_steps, the seeds
@@ -1398,7 +1413,7 @@ def report(study: Study) -> str:
                 m,
                 str(done[0]["parameters"]),
                 f"{sum(r['works'] for r in done)}/{len(done)}" + ("" if len(done) == seeds else f" of {seeds}"),
-                *([f"{sum(bool(r.get('certified')) for r in done)}/{len(done)}"] if certifies else []),
+                *([_certified_cell(done, study.settings)] if certifies else []),
                 "; ".join(f"step {j + 1}: {text}" for j, text in enumerate(per_step)),
             ]
         )
