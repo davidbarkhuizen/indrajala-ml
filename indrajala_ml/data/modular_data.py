@@ -44,7 +44,7 @@ from indrajala_ml.data.addition_data import (
     splitmix64,
 )
 
-PRIMES = (5, 7)  # D16: 25 and 49 states
+PRIMES = (5, 7, 11)  # D16: 25 and 49 states; 11, 121 (the p11-trigger workplan, D3)
 
 Pair = tuple[int, int]
 Answers = tuple[int, ...]

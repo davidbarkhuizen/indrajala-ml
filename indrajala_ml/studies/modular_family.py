@@ -29,7 +29,7 @@ import math
 import random
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +46,7 @@ from indrajala_ml.studies import window_diagnostics as wd
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
+from indrajala_ml.studies.collapse import Trigger
 
 BASE = md.BASE
 COLUMNS = BASE * BASE  # a column's tokens, 3 a + b
@@ -147,22 +148,42 @@ PROBE = Settings()
 class Fork:
     """
     Snapshot and fork on collapse (the collapse-fork workplan, retired:
-    `git show 89cf3a3:docs/collapse-fork-workplan.md`): within a step, the network at the
-    step's best screen score is kept; an epoch whose score falls below (1 - drop) of that peak is a
-    collapse, and the run goes back to the snapshot, cools the step's rate by `cool` and takes its
-    data from a new stream; at most `limit` forks a step.
+    `git show 89cf3a3:docs/collapse-fork-workplan.md`): within a step, the network at the step's
+    best value of the trigger's signal is kept; an epoch the trigger calls a collapse
+    (collapse.Trigger; by default the screen below 0.6 of the step's peak, the workplan's D1) sends
+    the run back to the snapshot, cools the step's rate by `cool` and takes its data from a new
+    stream; at most `limit` forks a step.
     """
 
-    drop: float = 0.4  # D1
+    trigger: Trigger = field(default_factory=Trigger)
     cool: float = 0.5  # D3
     limit: int = 4  # D4
 
 
 def screen_score(net: Any, encoding: Encoding, screens: Mapping[int, Sequence[Example]]) -> float:
     """The share of every answer right over a step's screens (its training lengths)."""
+    return screen(net, encoding, screens)[0]
+
+
+def screen(net: Any, encoding: Encoding, screens: Mapping[int, Sequence[Example]]) -> tuple[float, dict[str, float]]:
+    """
+    A step's screen: the share of every answer right over its screens (its training lengths), and
+    each answer kind's share over them (the p11-trigger workplan's D4: a trigger's signals).
+    """
     tallies = [accuracy(net, encoding, rows) for rows in screens.values()]
     correct = sum(c for t in tallies for c, _ in t.values())
-    return correct / sum(a for t in tallies for _, a in t.values())
+    pooled = correct / sum(a for t in tallies for _, a in t.values())
+    kinds: dict[str, list[int]] = {}
+    for tally in tallies:
+        for name, (right, all_) in tally.items():
+            kind = kinds.setdefault(name, [0, 0])
+            kind[0] += right
+            kind[1] += all_
+    return pooled, {name: right / all_ for name, (right, all_) in sorted(kinds.items())}
+
+
+def _kinds(kinds: Mapping[str, float]) -> dict[str, float]:
+    return {name: round(share, 4) for name, share in kinds.items()}
 
 
 def _windows(encoding: Encoding, n: int, cases: int, seed: str) -> tuple[list[Example], list[list[int]]]:
@@ -326,6 +347,7 @@ def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
 
 
 DROP_FROM, DROP_BY = 0.9, 0.3
+RECOVERED = 0.05  # a drop recovered: a later point's worst answer back within this of its level before
 
 
 def _worst(row: Mapping[str, Any]) -> float:
@@ -343,6 +365,49 @@ def large_drops(diagnoses: Sequence[Mapping[str, Any]]) -> list[tuple[int, bool]
         if _worst(before) >= DROP_FROM and _worst(after) < _worst(before) - DROP_BY:
             falls.append((int(after["step"]), any(_worst(row) >= DROP_FROM for row in diagnoses[i + 2 :])))
     return falls
+
+
+@dataclass(frozen=True)
+class TriggerScore:
+    """A trigger read against one run's log (the p11-trigger workplan, D6)."""
+
+    points: int  # the logged points scored: each epoch's screen with its kinds, or else each diagnosis
+    drops: int  # large drops: the worst answer kind from DROP_FROM down by more than DROP_BY between points
+    caught: int  # drops at whose point the trigger fires
+    unrecovered: int  # drops after which no point is back within RECOVERED of the level before it
+    unrecovered_caught: int
+    false_alarms: int  # firings near a solution (the worst kind at DROP_FROM before) at no large drop
+    early: int  # firings while still learning (the worst kind below DROP_FROM before): a restore, a cooler rate
+
+
+def score_trigger(rows: Sequence[Mapping[str, Any]], trigger: Trigger) -> TriggerScore:
+    """
+    A trigger against a run's log, offline: at each logged point past a step's first, its signal
+    against the step's peak of it over the points before (D6). A log with each epoch's answer kinds
+    (D4) is scored every epoch, an older one at its diagnoses (every few epochs, on the diagnosis's
+    cases: a proxy). A fork arm's log is altered by its forks: score runs made without one.
+    """
+    epochs = [r for r in rows if "kinds" in r and "fork" not in r and r["step"] > 0]
+    points = (
+        [(r, r["kinds"]) for r in epochs]
+        if epochs
+        else [(r, r["accuracy"]) for r in rows if "accuracy" in r and isinstance(r.get("epoch"), int) and r["step"] > 0]
+    )
+    worst = [min(kinds.values()) for _, kinds in points]
+    drops = caught = unrecovered = unrecovered_caught = alarms = early = 0
+    for i in range(1, len(points)):
+        row, kinds = points[i]
+        prior = [trigger.value(r.get("screen", 0.0), k) for r, k in points[:i] if r["step"] == row["step"]]
+        fires = bool(prior) and trigger.fires(trigger.value(row.get("screen", 0.0), kinds), max(prior))
+        if worst[i - 1] >= DROP_FROM and worst[i] < worst[i - 1] - DROP_BY:
+            lost = not any(w >= worst[i - 1] - RECOVERED for w in worst[i + 1 :])
+            drops, caught = drops + 1, caught + fires
+            unrecovered, unrecovered_caught = unrecovered + lost, unrecovered_caught + (fires and lost)
+        elif worst[i - 1] >= DROP_FROM:
+            alarms += fires
+        else:
+            early += fires
+    return TriggerScore(len(points), drops, caught, unrecovered, unrecovered_caught, alarms, early)
 
 
 NEAR = 0.95  # a run's worst answer at least this at some diagnosis: it came near a solution
@@ -445,11 +510,11 @@ def run(
         screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{step}-{n}")[0] for n in lengths}
         best, since, stop, epoch = -1.0, 0, "budget", 0
         rate, forks, snapshot = settings.rate, 0, out / "snapshot.network.json"
-        start_score = screen_score(net, encoding, screens)  # the step before's network on this step's lengths
-        record({"step": step, "epoch": 0, "screen": round(start_score, 4)})
+        start_score, start_kinds = screen(net, encoding, screens)  # the step before's network on this step's lengths
+        record({"step": step, "epoch": 0, "screen": round(start_score, 4), "kinds": _kinds(start_kinds)})
         peak = 0.0
         if fork is not None:
-            peak = start_score
+            peak = fork.trigger.value(start_score, start_kinds)
             net.save(str(snapshot))
         for epoch in range(1, settings.max_epochs + 1):
             if time.perf_counter() - start > budget_seconds:
@@ -464,12 +529,13 @@ def run(
             ]
             wr.train_epoch(net, examples, settings.batch_size, rate, rng)
             spent += 1
-            score = screen_score(net, encoding, screens)
+            score, kinds = screen(net, encoding, screens)
             if fork is not None:
-                if score > peak:
-                    peak = score
+                value = fork.trigger.value(score, kinds)
+                if value > peak:
+                    peak = value
                     net.save(str(snapshot))
-                elif score < (1 - fork.drop) * peak and forks < fork.limit:
+                elif fork.trigger.fires(value, peak) and forks < fork.limit:
                     forks += 1
                     rate *= fork.cool
                     net = load_network(str(snapshot))
@@ -480,6 +546,7 @@ def run(
                             "epoch": epoch,
                             "fork": forks,
                             "screen": round(score, 4),
+                            "kinds": _kinds(kinds),
                             "peak": round(peak, 4),
                             "restored": round(restored, 4),
                             "rate": rate,
@@ -487,9 +554,17 @@ def run(
                     )
                     continue
             if epoch % settings.diagnose_every == 0:
-                record({"step": step, "epoch": epoch, "screen": round(score, 4), **diagnose(net, encoding, settings)})
+                record(
+                    {
+                        "step": step,
+                        "epoch": epoch,
+                        "screen": round(score, 4),
+                        "kinds": _kinds(kinds),
+                        **diagnose(net, encoding, settings),
+                    }
+                )
             else:
-                record({"step": step, "epoch": epoch, "screen": round(score, 4)})
+                record({"step": step, "epoch": epoch, "screen": round(score, 4), "kinds": _kinds(kinds)})
             if score == 1.0:
                 stop = "passed"
                 break

@@ -4,7 +4,8 @@
 then test an alternate trigger after that, to see the effect. In general we want a generic or
 task-tunable trigger, we don't want to tie it too tightly to the specific task." Decisions D1-D7
 settled (the owner delegates a workplan's decisions; each with its options' pros and cons).
-Probe-driven ([experiment-design.md](experiment-design.md), section 2). Stages 1-5 to come.**
+Probe-driven ([experiment-design.md](experiment-design.md), section 2). Stage 2 (the build) done
+2026-10-16; stage 3 (`p` 11) next, on `jebel` after E2b'.**
 
 ## Why
 
@@ -116,6 +117,27 @@ certified, which is exact at every length.
    none at 64. Reports: each run's certified step, epochs, forks, large drops, its trace. Every
    certified network recertified in both verdicts and long-tested (division's U1 and S1 at 128,
    256 and 1,024). Where: `jebel` (6 workers), after E2b'.
+   **Done 2026-10-16:** `p` 11 in `PRIMES` (the certificate's parametrised tests pass at 11);
+   each screen row logs `kinds`, every answer kind's share; `collapse.Trigger` and
+   `Fork(trigger=...)` (`--trigger-signal`, `-rule`, `-threshold`, `-floor`); `drops`. Checked: a
+   3-step fork-on run at `p` 5 and the fork test's always-firing run (6 forks) give the same logs but
+   for `seconds` and the new `kinds`, and byte-identical networks, before and after. **The scorer's
+   definitions** (the Why's figures came from an inline scoring not kept, with other definitions,
+   and this tool's supersede them): a large drop as the Why's; caught when the trigger fires at the
+   drop's point (its step's peak over the points before); unrecovered when no later point is back
+   within 0.05 of the level before; a false alarm a firing near a solution (the worst kind at 0.9
+   before) at no large drop; an early firing one while still learning. Over the same 72 runs (every
+   log but the fork arm's; at diagnoses, a proxy): 38 large drops, 14 never recovered.
+
+   | trigger | caught | never recovered caught | false alarms | early |
+   | --- | --- | --- | --- | --- |
+   | pooled, below 0.6 of the peak (today's) | 7 | 4 of 14 | 0 | 67 |
+   | pooled, 0.2 below | 16 | 6 | 1 | 104 |
+   | pooled, 0.2 below, floor 0.8 | 16 | 6 | 1 | 49 |
+   | mean of kinds, 0.2 below, floor 0.8 (D7's candidate) | 25 | 7 | 5 | 48 |
+   | worst kind, 0.3 below, floor 0.9 | 25 | 7 | 0 | 12 |
+
+   Descriptive only: D7 chooses after `p` 11, on every log, its per-epoch kinds included.
 4. **The alternate trigger** (D7): chosen with `drops`, registered here, then the replays (`p` 11's
    seeds and the fork probe's). Reported paired: per seed, both arms' certified step or failure,
    epochs, forks and unrecovered drops. **Better** if the alternate certifies more seeds, or as
