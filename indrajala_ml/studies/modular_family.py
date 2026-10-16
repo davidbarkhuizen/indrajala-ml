@@ -146,7 +146,8 @@ PROBE = Settings()
 @dataclass(frozen=True)
 class Fork:
     """
-    Snapshot and fork on collapse (docs/collapse-fork-workplan.md): within a step, the network at the
+    Snapshot and fork on collapse (the collapse-fork workplan, retired:
+    `git show 89cf3a3:docs/collapse-fork-workplan.md`): within a step, the network at the
     step's best screen score is kept; an epoch whose score falls below (1 - drop) of that peak is a
     collapse, and the run goes back to the snapshot, cools the step's rate by `cool` and takes its
     data from a new stream; at most `limit` forks a step.

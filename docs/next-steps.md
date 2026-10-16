@@ -4,8 +4,7 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
 "not planned yet" means only that no workplan has taken it up. A workplan still
-in progress keeps its own list: [collapse-fork-workplan.md](collapse-fork-workplan.md),
-[pypi-release-workplan.md](pypi-release-workplan.md),
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
 [segments-workplan.md](segments-workplan.md),
@@ -69,9 +68,14 @@ the attention dropout study's in `scripts/attention_dropout_study.py`'s, the rot
 Decided with the owner, each to become a workplan or a stage:
 
 - **The collapse fix first** (before larger `p`): the collapse is abrupt (the probe script's
-  findings, "the collapse, traced"). **Taken up: snapshot and fork on collapse,
-  [collapse-fork-workplan.md](collapse-fork-workplan.md)** (the owner's choice); the rest stay
-  candidates if it fails. Candidates, cheapest first: log the loss and the gradient's
+  findings, "the collapse, traced"). **Done: snapshot and fork on collapse** (the owner's
+  choice; the collapse-fork workplan, retired 2026-10-16: `git show 89cf3a3:docs/collapse-fork-workplan.md`).
+  **Its probe works as registered** (`p` 7, two factors of 32, 4 seeds an arm, the probe script's
+  findings): 3 of 4 certified with the fork against 2 of 4 without, no fork run ending collapsed;
+  the arms are paired (the same run until the first fork), and the one seed the fork rescued (3)
+  lost everything without it. A screen, not a rate. Left open: **the fork in the harness**
+  (`window_recurrent_study`; D5 built it in the probe tool only); **the cause** (the loss and the
+  gradient's norm per batch around a collapse, the probe below); and the rest stay candidates. Candidates, cheapest first: log the loss and the gradient's
   norm per batch around a collapse (a probe, to confirm the cause); clip the gradient's global
   norm (none today); a rate that warms up at each curriculum step and decays; rollback and cool
   (restore the step's best network and halve the rate on a sharp fall of the training answers);
@@ -86,9 +90,10 @@ Decided with the owner, each to become a workplan or a stage:
   drops, seed 101's among them. Two candidates from this: **a step ends only when its peak is
   recovered** (or the step's best network is restored before moving on), and **a drop threshold on
   the worst answer**. Most of the room above the 65% at `p` 5 looks like retention, not search.
-- **Division at `p` 11 (121 states)**, the largest run for `jebel`: `p` 7 with two factors of 32
-  (division D7 (b); the `p` 7 codebooks were saturated at 16), then `p` 11 with 32 or 64 a factor,
-  probe-sized (4-6 seeds, 2-3 h). `k` stays 1: the certificate's cost is codes x 9 tokens there.
+- **Division at `p` 11 (121 states)**, the largest run for `jebel`, **the fork on** (its probe's
+  registered next step): `p` 7 with two factors of 32 is done (the fork probe: 5 certified 49-state
+  networks in 8 runs, not yet long-tested), then `p` 11 with 32 or 64 a factor, probe-sized (4-6
+  seeds, 2-3 h). `k` stays 1: the certificate's cost is codes x 9 tokens there.
 - **A second composite task: the running affine map mod `p`** (`x' = a x + b`, `a != 0`; the
   group AGL(1, p), `p (p - 1)` states when the output is the composed map). Its Krohn-Rhodes
   decomposition is a cascade, not a direct product: the multipliers' running product is its one
