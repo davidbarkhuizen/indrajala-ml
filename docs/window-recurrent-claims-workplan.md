@@ -11,7 +11,8 @@ modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refute
 2026-10-14 17:00: stages 1-7, 7a and 7b done (stage 7: C0 and C3 hold as registered, C4 refuted:
 all at once works more often; certified, neither the codes nor the arm changes the rate); E8b
 stopped (D33, D35); E8c (D35): C8 holds at both rungs (at least 3 of 6 certified at `q` 4, 6 of 6 at `q` 5, every long-test case passed); stages 8-10 to come
-(stage 8 revised by the owner: D36, D37; E6 ran: the linear window certifies at `k` 1; E2 to run).** The literature it answers to is in
+(stage 8 revised by the owner: D36, D37; E6 ran: the linear window certifies at `k` 1; E2 done 2026-10-16: C2 holds, the continuous state
+works 0 of 20 at 1,024 columns against the snapped arm's 8 of 20, Fisher p 0.0033).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -930,6 +931,13 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    whole check at 18 takes 62 s, the certificate 0.01 s; peak 290 MB (6 workers about 1.8 GB,
    sized again from a worker's RSS a few minutes in). The probe's network, trained 2 epochs at 8
    and 2 at 18 (not the curriculum), certified with 6 states: exploratory, not E6's result.
+   **E2 ran (`jebel`, 2026-10-15 16:54-21:29): C2 holds.** The continuous state works 3 of 20 at
+   64 columns and none past 24, so 0 of 20 at 1,024, against E3's `m` 16 cell's 13 of 20 at 64
+   (p 0.0031) and 8 of 20 at 1,024 (p 0.0033, both two-sided, raw). E3's 9 runs breaking at 64
+   long-tested (B1 at 256 and 1,024; `e2-long-tests.sha256`, 9f91bb11...80957bd4): the 8
+   certified pass every case, the uncertified seed 10 fails 1 at 1,024. The continuous arm fits
+   its training lengths about as often (15 of 20 pass step 3) but breaks at the longest length
+   trained. Findings in the study script's docstring.
 8b. **E2b (D38): registered**, configs `scripts/window_recurrent_e2b_snapped.json` and
    `_continuous.json` (a test checks they are E6's linear cell at 20 seeds, differing in `m` only):
    findings, then the long tests (B1 at 256 and 1,024) on every run whose break is 64.

@@ -448,6 +448,37 @@ certified networks in `e6-linear/certificates-strict/` (listed in the same manif
 - The others: seed 0 fitted steps 1-3 and plateaued from step 4 until stopped at step 7; seeds 3-5
   were stopped before their first epoch (3 workers). No rate is claimed (D37).
 
+Findings (E2 of docs/window-recurrent-claims-workplan.md, trimmed by D36: the snapping ablation, C2),
+trained on jebel (i7-9700K), indrajala-ml ce4015d, crate abcba3d7a30e, 6 workers, 2026-10-15 16:54
+to 21:29 (`window_recurrent_e2.json`: E3's curriculum `m` 16 cell at `k` 4 `s` 4 run by run with a
+continuous state, `m` null, seeds 0-19; 7,715 parameters, 38-109 minutes a run, 379 MB peak).
+Results and models in `data/window-recurrent/e2/` (`e2.sha256`, sha256 a02fe6a5...0696d5d9d, 140
+files, run from `data/window-recurrent`), log `e2.out` (951b9516...0b7b507a). The snapped arm is
+E3's (above). Its 9 runs whose break is 64 long-tested (B1 at 256 and 1,024, 100,000 cases each)
+on jebel at ce4015d, 2 workers, into `e3-e4/long-tests/`, log `e2-long-tests.log`
+(`e2-long-tests.sha256`, 9f91bb11...80957bd4, 10 files, run from `data/window-recurrent`).
+
+| arm | working at 64 (W10) | break 64 | working at 1,024 |
+| --- | --- | --- | --- |
+| continuous (E2) | 3/20 (0.05-0.36) | 0/20 | 0/20 (0.00-0.16) |
+| snapped (E3, `m` 16) | 13/20 (0.43-0.82) | 9/20 | 8/20 (0.22-0.61) |
+
+- **C2 holds: the continuous state works far less often, at 1,024 columns and at 64.** At 1,024,
+  0 of 20 against 8 of 20 (Fisher's exact, two-sided, p 0.0033); at 64, 3 of 20 against 13
+  of 20 (p 0.0031). No continuous run got past 24 columns (breaks 16, 16 and 24 among the three
+  working), so none was long-tested: the registered measure needs a break of 64. Raw p values;
+  Holm's correction over C2-C4 and C6 waits for C6 (E5).
+- **The snap matters for extrapolating, not for fitting.** The continuous arm fits its training
+  lengths about as often (step 3, lengths 4-12, passed by 15 of 20 against E3's 19 of 20), but 12 of
+  those 15 break at 12 columns or below, exactly the longest length trained; the snapped arm's
+  fitted runs go on to 64 in 9 of 19. The continuous state fits what it is shown and drifts past it
+  (Robinson 2020; Brandoit et al. 2026).
+- **The long tests agree with the certificates exactly.** The snapped arm's 8 networks working at
+  1,024 are its 8 certified ones, each passing all 200,000 cases. The ninth, seed 10, works by the
+  sampled tests to 64 columns but isn't certified (25 wrong states, no wrong output, in the branched
+  verdict); it passes B1 at 256 and fails 1 case of 100,000 at 1,024. Sampled tests overstate
+  "works"; the certificate is what extrapolates.
+
 Findings (stage 9 and 9b of docs/factored-state-workplan.md: modular division `p` 5 with a factored
 state, C9, C9' and C9'', each an existence claim), crate abcba3d7a30e, the curriculum at `k` 1, `s`
 16 a factor, the state read before the first `StateInput` (D10), every step certified, a study
