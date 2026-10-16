@@ -12,7 +12,8 @@ modular-sum ladder, added 2026-10-14 at the owner's request after E7' was refute
 all at once works more often; certified, neither the codes nor the arm changes the rate); E8b
 stopped (D33, D35); E8c (D35): C8 holds at both rungs (at least 3 of 6 certified at `q` 4, 6 of 6 at `q` 5, every long-test case passed); stages 8-10 to come
 (stage 8 revised by the owner: D36, D37; E6 ran: the linear window certifies at `k` 1; E2 done 2026-10-16: C2 holds, the continuous state
-works 0 of 20 at 1,024 columns against the snapped arm's 8 of 20, Fisher p 0.0033; E2b ran, and its snapped arm's early stop, a deviation, is recorded by D39,
+works 0 of 20 at 1,024 columns against the snapped arm's 8 of 20, Fisher p 0.0033; E2b done 2026-10-16, exploratory (D39): at 1,024 columns the snapped arm works 20 of 20 and the
+continuous arm 0 of 20, Fisher p 7.3e-12; its snapped arm's early stop, a deviation, is recorded by D39,
 with E2b' registered as C2b's test).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
@@ -981,6 +982,11 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    64; the snapped all certified at their first certified step (steps 3-15, the deviation D39
    records), the continuous breaks 16 (4), 24 (8), 32 (2), 48 (4) and 64 (2). Long tests on the 22
    break-64 runs on `pyramidon` from 07:22, 2026-10-16. Reported as exploratory (D39).
+   **E2b done (2026-10-16): the long tests** (B1 at 256 and 1,024, 07:22-11:10;
+   `e2b-long-tests.sha256`, a8d38c01...2136dd84): the 20 snapped pass every case, both continuous
+   fail (seed 2 on 1 case of 100,000 at 256 and 16,756 at 1,024, seed 9 on 4 at each). So 20 of
+   20 against 0 of 20 at 1,024 (Fisher's exact, one-sided, p 7.3e-12), exploratory; C2b's
+   registered test is E2b'. Findings in the study script's docstring.
 8c. **E2b' (D39): registered**, config `scripts/window_recurrent_e2b_prime.json`; findings, long
    tests as E2b's, C2b against E2b's continuous arm.
 9. **E5 on `pyramidon`:** findings. **The tool in:** `scripts/window_recurrent_study.py explore
