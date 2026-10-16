@@ -24,6 +24,13 @@ count.
 `--first-seed F --seeds N` runs seeds F..F+N-1, a process each, `--workers` at once (default
 all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--budget-epochs` stops a
 run when that many epochs are trained in all (or `--budget-minutes` pass, whichever first).
+`--trigger-signal`, `--trigger-rule`, `--trigger-threshold` and `--trigger-floor` set the fork's
+trigger (indrajala_ml/studies/collapse.py; the default is the fork's first: pooled, below 0.6 of
+the peak, no floor). `drops LOG... [--trigger-...]` scores a trigger against runs' logs, offline
+(docs/p11-trigger-workplan.md, D6): each run's large drops (the worst answer kind from 0.9 down
+by more than 0.3), how many the trigger catches, of those never recovered how many, and its false
+alarms; at each epoch where the log has every answer kind's share (from the p11-trigger build on),
+else at each diagnosis (a proxy).
 `trace` prints runs' logs a line per diagnosis (each factor's codes in use, the state's share, each
 answer's accuracy), marking a collapse: the codes in use below half the diagnosis before.
 `long-test` runs the long tests (docs/division-workplan.md, D4: U1 and S1 at 128, 256 and 1,024
@@ -316,6 +323,7 @@ from pathlib import Path
 from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
+from indrajala_ml.studies.collapse import RULES, SIGNALS, Trigger
 
 ARMS = {"family": mf.FAMILY, "quotient": mf.QUOTIENT, "sum": mf.SUM}
 
@@ -348,6 +356,7 @@ def main(argv: list[str]) -> int:
     run.add_argument(
         "--fork", action="store_true", help="snapshot and fork on collapse (the collapse-fork workplan, retired)"
     )
+    _trigger_arguments(run)
     run.add_argument("--out", type=Path, required=True)
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
@@ -364,11 +373,34 @@ def main(argv: list[str]) -> int:
     long.add_argument("--out", type=Path, required=True)
     trace = commands.add_parser("trace", help="runs' logs, a line per diagnosis, collapses marked")
     trace.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    drops = commands.add_parser("drops", help="a collapse trigger scored against runs' logs, offline")
+    drops.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl (runs made without the fork)")
+    _trigger_arguments(drops)
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
     readout.add_argument("root", type=Path, help="the study's directory, a <arm>/seed<s> per run")
     readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
     readout.add_argument("--certify", type=Path, help="the recertifications (default: root/certify)")
     args = parser.parse_args(argv)
+    if args.command == "drops":
+        trigger = _trigger(args)
+        print(f"trigger: {trigger.describe()}")
+        scores = [
+            mf.score_trigger([json.loads(line) for line in path.read_text().splitlines()], trigger)
+            for path in args.logs
+        ]
+        for path, score in zip(args.logs, scores, strict=True):
+            print(
+                f"{path}: {score.points} points, {score.drops} large drops, {score.caught} caught, "
+                f"{score.unrecovered_caught}/{score.unrecovered} unrecovered caught, {score.false_alarms} false alarms, "
+                f"{score.early} early"
+            )
+        print(
+            f"{len(scores)} runs: {sum(s.drops for s in scores)} large drops, {sum(s.caught for s in scores)} caught; "
+            f"{sum(s.unrecovered_caught for s in scores)} of {sum(s.unrecovered for s in scores)} never recovered "
+            f"caught; {sum(s.false_alarms for s in scores)} false alarms near a solution, "
+            f"{sum(s.early for s in scores)} firings while still learning"
+        )
+        return 0
     if args.command == "readout":
         print("\n".join(mf.readout(args.root, args.arms, args.certify or args.root / "certify")))
         return 0
@@ -398,7 +430,7 @@ def main(argv: list[str]) -> int:
         budget_seconds=args.budget_minutes * 60,
         reads=args.reads,
         budget_epochs=args.budget_epochs,
-        fork=mf.Fork() if args.fork else None,
+        fork=mf.Fork(trigger=_trigger(args)) if args.fork else None,
     )
     if args.seed is not None:
         probe(seed=args.seed, out=args.out)
@@ -413,6 +445,25 @@ def main(argv: list[str]) -> int:
         for done in concurrent.futures.as_completed(runs):
             print(f"seed {runs[done]}: {done.result()}", flush=True)
     return 0
+
+
+def _trigger_arguments(command: argparse.ArgumentParser) -> None:
+    default = Trigger()
+    command.add_argument("--trigger-signal", choices=SIGNALS, default=default.signal, help="the trigger's signal")
+    command.add_argument(
+        "--trigger-rule",
+        choices=RULES,
+        default=default.rule,
+        help="ratio: below threshold x peak; fall: threshold below it",
+    )
+    command.add_argument("--trigger-threshold", type=float, default=default.threshold)
+    command.add_argument(
+        "--trigger-floor", type=float, default=default.floor, help="fire only once the step's peak is this"
+    )
+
+
+def _trigger(args: argparse.Namespace) -> Trigger:
+    return Trigger(args.trigger_signal, args.trigger_rule, args.trigger_threshold, args.trigger_floor)
 
 
 def logged_run(probe: functools.partial[None], seed: int, out: Path) -> str:

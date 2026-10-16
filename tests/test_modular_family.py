@@ -72,7 +72,7 @@ def test_a_probe_run_trains_diagnoses_and_saves(tmp_path: Path):
     assert (tmp_path / "step-1.network.json").exists() and (tmp_path / "step-2.network.json").exists()
     starts = [r for r in rows if r.get("epoch") == 0 and r["step"] > 0]  # the step before's network, scored
     assert [r["step"] for r in starts] == [1, 2] and all(
-        set(r) == {"step", "epoch", "screen", "seconds"} for r in starts
+        set(r) == {"step", "epoch", "screen", "kinds", "seconds"} for r in starts
     )
 
 
@@ -97,12 +97,12 @@ def test_a_probe_run_stops_when_its_epochs_are_spent(tmp_path: Path):
 
 
 def test_a_fork_restores_the_steps_best_network_cools_the_rate_and_stops_at_its_limit(tmp_path: Path):
-    """drop -1 calls every epoch that doesn't raise the peak a collapse (below twice it), so steps
-    fork, each fork halving the step's rate, at most `limit` times a step."""
+    """A threshold of 2 calls every epoch that doesn't raise the peak a collapse (below twice it), so
+    steps fork, each fork halving the step's rate, at most `limit` times a step."""
     settings = mf.Settings(
         epoch_examples=64, max_epochs=8, patience=10, diagnose_every=10, screen=4, cases=8, lengths=(2,), long=(4,)
     )
-    fork = mf.Fork(drop=-1.0, cool=0.5, limit=2)
+    fork = mf.Fork(trigger=mf.Trigger(threshold=2.0), cool=0.5, limit=2)
     mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 1e9, tmp_path, settings, cap=2, fork=fork)
     rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
     forks = [r for r in rows if "fork" in r]
@@ -271,3 +271,34 @@ def test_readout_counts_a_run_only_when_recertified_in_both_verdicts(tmp_path: P
         and lines[-2] == "quotient: 0 large drops in 0 runs, 0 recovered"
     )
     assert lines[-1] == "Fisher's exact, one-sided (family more often than quotient): p 0.5"
+
+
+def test_each_screen_row_logs_every_answer_kinds_share_beside_the_pooled_one(tmp_path: Path):
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=2, diagnose_every=10, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 1e9, tmp_path, settings, cap=1)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    screened = [r for r in rows if "screen" in r]
+    assert screened and all(set(r["kinds"]) >= {"quotient-nonzero"} for r in screened)
+    assert all(0.0 <= share <= 1.0 for r in screened for share in r["kinds"].values())
+
+
+def _point(step: int, epoch: int, screen: float, **kinds: float) -> dict[str, object]:
+    return {"step": step, "epoch": epoch, "screen": screen, "kinds": kinds}
+
+
+def test_the_trigger_scorer_counts_drops_catches_and_false_alarms_per_epoch():
+    rows = [
+        _point(1, 1, 0.5, a=0.4, b=0.6),  # still learning
+        _point(1, 2, 0.95, a=0.92, b=0.98),
+        _point(1, 3, 0.55, a=0.2, b=0.9),  # a large drop (0.92 to 0.2), pooled below 0.6 of 0.95
+        _point(1, 4, 0.97, a=0.95, b=0.99),  # recovered
+        _point(2, 1, 0.96, a=0.94, b=0.98),
+        _point(2, 2, 0.7, a=0.85, b=0.6),  # a large drop (the worst 0.94 to 0.6) the pooled screen misses; never back
+    ]
+    pooled = mf.score_trigger(rows, mf.Trigger())
+    assert (pooled.points, pooled.drops, pooled.caught, pooled.unrecovered) == (6, 2, 1, 1)
+    assert pooled.false_alarms == 0 and pooled.early == 0
+    worst = mf.score_trigger(rows, mf.Trigger(signal="worst", rule="fall", threshold=0.3))
+    assert (worst.drops, worst.caught, worst.unrecovered_caught) == (2, 2, 1)
