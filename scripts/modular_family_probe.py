@@ -16,7 +16,8 @@ budget, diagnosed as it trains (indrajala_ml/studies/modular_family.py).
     .venv/bin/python scripts/modular_family_probe.py long-test NETWORK.json [...] --task modular-division-5 --out DIR
     .venv/bin/python scripts/modular_family_probe.py trace DIR/seed<s>/log.jsonl [...]
 
-`--fork` turns on snapshot and fork on collapse (docs/collapse-fork-workplan.md): a step's epoch
+`--fork` turns on snapshot and fork on collapse (the collapse-fork workplan, retired:
+`git show 89cf3a3:docs/collapse-fork-workplan.md`): a step's epoch
 whose screen falls below 0.6 of the step's best goes back to that best network, halves the step's
 rate and takes new data, at most 4 times a step; each fork a line in the log, each step's end its
 count.
@@ -228,7 +229,7 @@ machines. The readout is `readout data/window-recurrent/division-claim`.
 - **seed 107 never came near:** the sum 0.98-1.00 at 9 of steps 8-17 (0.58 at 12), the difference
   near chance (0.45-0.56) over steps 7-17 with 9-16 codes a factor in use: one counter learned, the
   other stuck, as at p 7 (stage 4).
-- **For the fork (docs/collapse-fork-workplan.md):** its snapshot is the step's start (the step
+- **For the fork (the collapse-fork workplan):** its snapshot is the step's start (the step
   before's network) and its best since, so it reaches drops at a boundary and mid-step alike; but it
   fires only below 0.6 of the step's peak screen score (the share of every answer right, not the
   worst answer). Of the 24 drops, from the logged screen scores (a diagnosis's; the fork sees every
@@ -255,6 +256,50 @@ machines. The readout is `readout data/window-recurrent/division-claim`.
   `division-claim/long-tests-summary.txt`, logs `long-tests-pyramidon.txt` and
   `long-tests-jebel.txt`; manifest `division-claim-long-tests.sha256` ae437c1d...c499329 (14 files,
   run from data/window-recurrent).
+
+Findings (the fork probe, stage 3 of the collapse-fork workplan, D6, registered before its data;
+the workplan retired: `git show 89cf3a3:docs/collapse-fork-workplan.md`), 2026-10-16; p 7, the family, two factors of 32 codes (`s` 16), reading the output, seeds
+0-3, 400 epochs a run (`--budget-epochs`), stop at certified; two arms on the same seeds, with
+`--fork` (drop 0.4, cool 0.5, at most 4 forks a step) and without; jebel, ~/code/wt-fork at a55ef4c,
+8 runs at once, 06:35-07:38. Every certified network recertified on pyramidon in both verdicts
+(`certify/`, `certify.log`). Data in data/window-recurrent/fork-probe/, manifest
+`fork-probe.sha256` 7cdcacc0...75324e162 (47 files, run from data/window-recurrent). The readout
+is `readout data/window-recurrent/fork-probe --arms fork nofork`.
+
+| seed | fork | without |
+| --- | --- | --- |
+| 0 | certified, step 9, 149 epochs, 1 fork | certified, step 12, 208 epochs |
+| 1 | spent at step 15, 18 forks, the worst answer at best 0.85, 358 states minimised | spent at step 14, collapsed, at best 0.70 |
+| 2 | certified, step 11, 382 epochs, 6 forks | certified, step 12, 260 epochs |
+| 3 | certified, step 15, 328 epochs, 23 forks | spent at step 17: a drop at step 12 (1.00 to 0.19) never recovered |
+
+- **Works, as registered:** the fork arm certifies 3 of 4 (Wilson 95%: 0.30-0.95) against 2 of 4
+  (0.15-0.85), and no fork run ends collapsed (seed 1's last step minimised to 358 states, not
+  below half of 49). A screen (D6): one-sided Fisher p 0.5; the runs are paired, not a rate.
+- **Five certified 49-state networks** (stage 4 had one in 4 runs at 16 codes a factor): each
+  robustly certified against division's machine mod 7, 0 wrong outputs and states, minimised to
+  49 from 82-242 codes reached (79-225 strict); snap ratio >= 1.000, logit lead >= 0.028 (fork
+  seed 0's branched verdict; 2.63 strict). Not long-tested.
+- **The arms are the same run until the first fork** (the same seed, the fork off is unchanged):
+  seed 2's two arms are identical to step 6, epoch 53. So each seed is a paired comparison. Seed 3
+  is the fork's case: the run without lost everything at step 12 and spent its budget; with the
+  fork, 4 forks at step 12 (worst answer 0.81 after the first three, 1.00 after the fourth) and
+  certified at step 15. Seed 0 forked once, at step 9's first epoch, and certified there, 3 steps
+  and 59 epochs before the run without (which fell 1.00 to 0.25 at step 9 and recovered). Seed 2
+  certified in both, the fork a step sooner but 122 epochs later.
+- **Many forks are at a step's start:** 28 of the 48 at a step's epochs 1-3, the new length
+  dropping the screen below 0.6 of the step's peak (its start included); the fork restores the
+  start at half the rate. Seed 1 forked 3 times in each of steps 10-15 (at the start of 11-15) and
+  stayed near its best (the worst answer mostly 0.82-0.85) instead of collapsing as without; its last machine
+  minimises to 358 states, too many rather than too few.
+- **Drops the fork didn't catch:** 4 large drops (the worst answer from >= 0.9 down > 0.3 between
+  diagnoses) in the fork arm, all recovered: 2 forked in the next epochs (seed 2 at step 6, seed 3
+  at step 8), 2 never forked (seed 2, steps 6 and 7: the screen, every answer's share, stayed
+  above 0.6 of its peak while the worst answer fell). Without the fork, 8 drops in 3 runs (`readout`), 7
+  recovered; the lost one is seed 3's.
+- **Next, as registered:** the `p` 11 ladder, the fork on (two factors of 32, then 64; 4-6 seeds).
+  The alternatives the logs suggest (a trigger on the worst answer; a step that ends only when
+  its peak is recovered) stay in next-steps.md.
 """
 
 from __future__ import annotations
@@ -301,7 +346,7 @@ def main(argv: list[str]) -> int:
     run.add_argument("--budget-epochs", type=int, help="epochs trained in all, whichever budget is spent first")
     run.add_argument("--workers", type=int, help="runs at once (default: every seed at once)")
     run.add_argument(
-        "--fork", action="store_true", help="snapshot and fork on collapse (docs/collapse-fork-workplan.md)"
+        "--fork", action="store_true", help="snapshot and fork on collapse (the collapse-fork workplan, retired)"
     )
     run.add_argument("--out", type=Path, required=True)
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
