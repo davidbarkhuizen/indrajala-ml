@@ -65,7 +65,9 @@ the first bin's and its spread, beside the separation of the first bin's centroi
 `replay` is a step replayed from a saved network (indrajala_ml/studies/window_replay.py,
 docs/snap-wall-workplan.md): --epochs of --step's data of --run in --config, each epoch drawn by
 --generator; per batch the loss before and after and the update's norm, per epoch the screen, the
-certificate in both verdicts and the least snap ratio. --numpy converts the network first;
+certificate in both verdicts and the code margins (the least snap ratio; per snapped factor the
+codes in use, their closest pair, the farthest state), these also at the start (--epochs 0: only
+these). --numpy converts the network first;
 --wall turns the snap wall on (numpy only). No lock; one core.
 
 OPENBLAS_NUM_THREADS=1, as every study.

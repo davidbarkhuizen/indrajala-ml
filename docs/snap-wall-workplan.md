@@ -8,7 +8,9 @@ owner's delegation, each with its options' pros and cons. P1 registered here, be
 2026-10-16: C1 refuted** (wall on lost the proof in 8 of 10 replays, wall off in 9 of 10). **Paused
 by the owner** (2026-10-16: "let's pause investigation of the mechanism for the moment"), the
 `p` 11 ladder with the fork going first; stages 3-5 wait, and this plan stays open until resumed
-or its leftovers move to next-steps.**
+or its leftovers move to next-steps.** A stable-seed replay probe (exploratory, 2026-10-16, stage
+2b) found seed 6's collapse is its network's: from 4 other seeds' step-7 networks, wall off, 0 of
+20 replays lost the proof.
 
 ## Why
 
@@ -162,6 +164,36 @@ above 1 in one update, the update norms.
      the codebook moving; (b) the wall is too weak against Adam at weight 1; (c) the amplifier is the
      target: cap or clip the update, or lower the rate once a step passes. The fork (the collapse-fork
      workplan, retired) already rolls back and halves the rate, two of (c)'s remedies.
+2b. **Stable-seed replay probe** (exploratory, 2026-10-16 17:06-17:15, after P1; not a resumption of
+   the plan). `jebel`, code `~/code/wt-replay` pinned 7618dfe, 2 workers: P1's replay, wall off, in
+   numpy, 2 epochs of step 8, generators `snap-wall-p1-0..4` (seed 6's `off-0..4` data order), from
+   the step-7 networks of E2b' seeds 1, 3, 8 and 9 (certified, never lost a proof). Registered in
+   the launch script's header before the data: **stable networks** if 3 or more of the 4 keep the
+   proof in 4 or more of 5; **generic collapse** if 10 or more of the 20 lose it. Data
+   `data/window-recurrent/stable-replay/` (the start networks, each replay's JSON, `replay.log`,
+   the launch script, `margins/`), manifest `stable-replay.sha256` (5469465b...99fda6c, 31 files,
+   run from `data/window-recurrent`).
+
+   | start network (step 7) | proof kept both epochs | least snap ratio | codes in use | closest pair in use | farthest state |
+   | --- | --- | --- | --- | --- | --- |
+   | seed 1 | 5/5 | 107.6 | 5 | 1.875 | 0.015 |
+   | seed 3 | 5/5 | 2.85 | 3 | 1.730 | 0.536 |
+   | seed 8 | 5/5 | 51.7 | 5 | 1.637 | 0.031 |
+   | seed 9 | 5/5 | 1.18 | 5 | 0.887 | 0.408 |
+   | seed 6 (P1, wall off) | 1/10 | 4.22 | 8 | 0.904 | 0.243 |
+
+   - **Stable networks holds; generic collapse is refuted:** all 20 replays certified in both
+     verdicts after both epochs, with no jump past loss 1 (seed 6's wall-off arm: 49 in 20 epochs).
+     Seed 6's collapse is its network's, not further training's in general.
+   - **The registered margins don't set seed 6 apart** (the start networks' margins, `replay
+     --epochs 0`, after the data): seeds 3 and 9 start nearer a boundary (least snap ratio 2.85 and
+     1.18 against 4.22) and seed 9's closest codes in use are as close (0.887 against 0.904), yet
+     neither loses its proof. So a wall on the margin (C1) aimed at the wrong quantity, as P1's
+     replay 6 suggested.
+   - **A candidate, read after the data (one network against four):** seed 6 snaps its 3 minimised
+     states to 8 codes, the others to 3-5; spare codes in use beside each other could swap or merge
+     under an update. A probe of it would need networks with many codes in use, registered first.
+
 3. If C1 works: the wall in the crate (`indrajala-math-rust` first, then a bump), `Factor`'s
    settings and format 2's, study configs' field; the golden run unchanged with the wall off.
 4. A registered comparison on E2b''s cell with only the wall changed: proofs lost past the first
