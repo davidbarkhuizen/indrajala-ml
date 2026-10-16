@@ -479,6 +479,42 @@ on jebel at ce4015d, 2 workers, into `e3-e4/long-tests/`, log `e2-long-tests.log
   verdict); it passes B1 at 256 and fails 1 case of 100,000 at 1,024. Sampled tests overstate
   "works"; the certificate is what extrapolates.
 
+Findings (E2b of docs/window-recurrent-claims-workplan.md, D38: the snapping ablation on the plain
+recurrence, E6's linear window at `k` 1 `s` 16, the curriculum to 18 columns; **exploratory by D39**:
+the snapped arm's runs ended at their first certified step, against the registered "no early stop",
+so C2b's registered test is E2b'), crate abcba3d7a30e, code at eae605d (`~/code/wt-e2b`; the results'
+"commit" is the launching checkout's), 20 seeds an arm. Snapped (`window_recurrent_e2b_snapped.json`,
+2,963 parameters): `pyramidon`, 3 workers, 2026-10-15 18:11 to 22:32, 14-124 minutes a run, 589 MB
+peak, every step certified in both verdicts (`e2b-snapped.sha256`, 7d791033...4c43856b, run from
+`data/window-recurrent`; `certificates-strict/`, `certify-strict.log`), log `e2b-snapped.out`
+(2f0e07ac...c5234237). Continuous (`_continuous.json`, 2,707 parameters, no codebook): `jebel`, 6
+workers, 2026-10-15 21:30 to 2026-10-16 06:34, 103-220 minutes a run (median 151), 1,086 MB peak
+(`e2b-continuous.sha256`, 4e5bac78...4c97f8fb, 740 files), log `e2b-continuous.out`
+(43bc38c6...c3171a89). Long tests (B1 at 256 and 1,024, 100,000 cases each) on the 22 runs whose
+break is 64, `pyramidon` at 050757b, 2 workers, 2026-10-16 07:22 to 11:10, about 20 minutes a run, into
+`e2b-long-tests/`, log `e2b-long-tests.log` (`e2b-long-tests.sha256`, a8d38c01...2136dd84, 23
+files, run from `data/window-recurrent`).
+
+| arm | working at 64 (W10) | break 64 | certified (last step) | working at 1,024 |
+| --- | --- | --- | --- | --- |
+| snapped | 20/20 (0.84-1.00) | 20/20 | 20/20 | 20/20 (0.84-1.00) |
+| continuous | 20/20 (0.84-1.00) | 2/20 | - | 0/20 (0.00-0.16) |
+
+- **At 64 columns the arms don't differ; past it they do.** Every run of both arms works at 64 by
+  W10 (a break of 16 or more), but the continuous breaks are 16 (4 runs), 24 (8), 32 (2), 48 (4) and
+  64 (2): 18 of 20 fail before 64. At 1,024, the snapped arm works 20 of 20 (every one of
+  200,000 cases each) and the continuous arm 0 of 20: both its break-64 runs fail B1, seed 2 on 1
+  case of 100,000 at 256 and 16,756 at 1,024, seed 9 on 4 at each (Fisher's exact, one-sided, p
+  7.3e-12; exploratory, D39).
+- **The snapped GRU learns the carry automaton from a few columns.** Its runs certified at steps 3
+  (6 runs), 4 (7), 5 (2), 6, 7, 8, 10 and 15, step `j` training lengths 1 to `j`: 13 of 20 from at
+  most 4 columns, every network minimised to the 3-state carry automaton from 4-14 codes reached.
+  Below the exclusion bound (18) training can't exclude memorising; the certificate proves these
+  networks anyway, so the bound is sufficient, not necessary.
+- **The continuous GRU extrapolates a little past what it is shown, then drifts.** It trained all 18
+  steps (to 18 columns); its break at the last step was at most 24 columns in 12 of 20 and reached
+  64 in 2, at steps 16 and 17 (seeds 2 and 9). The same pattern as E2's, without the transformer.
+
 Findings (stage 9 and 9b of docs/factored-state-workplan.md: modular division `p` 5 with a factored
 state, C9, C9' and C9'', each an existence claim), crate abcba3d7a30e, the curriculum at `k` 1, `s`
 16 a factor, the state read before the first `StateInput` (D10), every step certified, a study
