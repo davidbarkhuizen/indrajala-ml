@@ -7,7 +7,8 @@ Probe-driven ([experiment-design.md](experiment-design.md), section 2): each sta
 probes, its next step chosen from its result; one longer run, stage 5's, with its reason stated.
 Stages 1-4 done (2026-10-15; stage 4: 1 of 4 certified at `p` 7, every long-test case passed);
 stage 5 run: **works**, the family 13 of 20 certified against the quotient alone's 1 of 20
-(Fisher's exact, one-sided, p 6.9e-5); its long tests running.**
+(Fisher's exact, one-sided, p 6.9e-5); its long tests pass (all 14 networks, every one of
+5,250,000 cases, 2026-10-16).**
 
 ## Where this starts
 
@@ -214,7 +215,8 @@ is reachable.
      alone 1 of 20 (0.01-0.24); Fisher's exact, one-sided, p 6.9e-5. Every certified network
      recertified in both verdicts (14 of 14). The family's successes at steps 6-12, 99-257 epochs
      (median 177); every failure spent its 400 epochs. Details in the probe script's findings;
-     the readout is `scripts/modular_family_probe.py readout`. The long tests: running.
+     the readout is `scripts/modular_family_probe.py readout`. **The long tests pass:** every one of
+     the 14 networks passes all 375,000 cases (`division-claim-long-tests.sha256`, ae437c1d...c499329).
 6. **Write it up.** The findings in the probe script's docstring at each stage; the D10 finding,
    division's certified networks and the collapse past a solution as notes for the paper
    (`~/code/indrajala-papers`); next-steps.md for what stays open (factored readouts, D10 (a)/(c),
