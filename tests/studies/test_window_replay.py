@@ -113,3 +113,35 @@ def test_one_flipped_transition_is_one_pair_changed_and_one_wrong():
     flipped = wrp.machine_table(CarryTable(flip=(0, window)), ADDITION)
     assert wrp.table_changes(wrp.machine_table(CarryTable(), ADDITION), flipped)["pairs_changed"] == 1
     assert flipped.wrong == 1
+
+
+def test_the_guard_undoes_an_update_that_makes_a_right_machine_wrong(monkeypatch: pytest.MonkeyPatch):
+    # a real network at k 1; the machine read off is stubbed: right at the start, wrong after the
+    # first update, right after every other, so the first batch is undone and the rest kept
+    from indrajala_ml.studies import window_recurrent_study as wr
+
+    network = wr.build(ADDITION, 1, 4, 4, seed=0, window="linear")
+    reads = iter([0, 5] + [0] * 100)
+
+    def stub_table(machine: object, task: object) -> wrp.Table:
+        return wrp.Table((0,), {}, next(reads))
+
+    monkeypatch.setattr(wrp, "machine_table", stub_table)
+    settings = wr.Settings(epoch_examples=6 * 64, batch_size=64, screen=5)
+    starts: list[tuple[np.ndarray, int, object]] = []
+    original = network.learn_batch
+
+    def learn_batch(rate: float, batch: object) -> None:
+        # each batch's starting weights, optimizer step and generator state
+        starts.append((wrp._parameters(network), network.optimizer.state().t, network.rng.state))
+        original(rate, batch)
+
+    network.learn_batch = learn_batch
+    result = wrp.replay(network, ADDITION, [1, 2], settings, 1, "guard-test", guard=True)
+    (epoch,) = result["epochs"]
+    assert epoch["rollbacks"] == 1
+    assert [row.get("rolled_back", 0.0) for row in epoch["batches"]] == [1.0] + [0.0] * 5
+    # the first batch undone: the second starts exactly where the first did, the third after one step
+    (w0, t0, g0), (w1, t1, g1), (w2, t2, _) = starts[:3]
+    assert np.array_equal(w1, w0) and t1 == t0 and g1 == g0
+    assert not np.array_equal(w2, w1) and t2 == t1 + 1

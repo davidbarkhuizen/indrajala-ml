@@ -70,7 +70,8 @@ codes in use, their closest pair, the farthest state), these also at the start (
 these). --numpy converts the network first;
 --wall turns the snap wall on (numpy only); --machines reads the machine off the network after
 every batch and logs each change against the last (pairs changed, states gained and lost, wrong
-pairs). No lock; one core.
+pairs); --guard undoes an update that makes a right machine wrong (weights, optimizer and generator
+restored) and skips its batch. No lock; one core.
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
@@ -743,6 +744,9 @@ def main(argv: list[str]) -> int:
     replay.add_argument(
         "--machines", action="store_true", help="read the machine off the network after every batch, against the last"
     )
+    replay.add_argument(
+        "--guard", action="store_true", help="undo an update that makes a right machine wrong, and skip its batch"
+    )
     verdicts = commands.add_parser("verdicts")
     verdicts.add_argument("config", type=Path)
     verdicts.add_argument("--certificates", type=Path, required=True, help="certify's branched certificates")
@@ -817,12 +821,14 @@ def main(argv: list[str]) -> int:
             args.generator,
             log=lambda line: print(line, flush=True),
             machines=args.machines,
+            guard=args.guard,
         )
         replayed |= {
             "network": str(args.network),
             "numpy": args.numpy,
             "wall": args.wall,
             "wall_ratio": args.wall_ratio,
+            "guard": args.guard,
         }
         if args.json is not None:
             args.json.write_text(json.dumps(replayed, indent=1))
