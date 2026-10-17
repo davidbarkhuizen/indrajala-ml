@@ -323,3 +323,28 @@ def test_the_vocabulary_keeps_every_earlier_studys_tokens_and_gives_the_product_
     assert labels[1::2] == tuple((a * b) % 5 for a, b in states)
     with pytest.raises(AssertionError):
         mf.Encoding(5, mf.PRODUCT)  # the product has no token in the earlier vocabulary
+
+
+def _example_by_the_states(encoding: mf.Encoding, columns: list[int]) -> tuple[tuple[float, ...], tuple[int, ...]]:
+    """Encoding.example as first written (before the window-program workplan's stage 1): the states and the operations."""
+    tokens: list[float] = []
+    labels: list[int] = []
+    for token, (A, B) in zip(columns, encoding.states(columns), strict=True):
+        tokens.append(float(token))
+        labels.append(md.quotient(A, B, encoding.p))
+        for operation in encoding.queries:
+            tokens.append(float(encoding.query_token(operation)))
+            labels.append(mf.OPERATIONS[operation](A, B, encoding.p))
+    return tuple(tokens), tuple(labels)
+
+
+@pytest.mark.parametrize("p", md.PRIMES)
+def test_an_example_is_the_states_answers_for_every_encoding_and_length(p: int):
+    rng = random.Random(p)
+    encodings = [mf.Encoding(p, queries) for queries in (mf.QUOTIENT, mf.SUM, mf.FAMILY)] + [
+        mf.Encoding(p, queries, mf.WIDE) for queries in (mf.QUOTIENT, mf.SUM, mf.PRODUCT, mf.FAMILY)
+    ]
+    for encoding in encodings:
+        for n in [*range(65), 1024]:
+            columns = mf.columns(n, rng)
+            assert encoding.example(columns) == _example_by_the_states(encoding, columns)

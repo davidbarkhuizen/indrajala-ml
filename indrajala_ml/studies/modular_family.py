@@ -22,6 +22,7 @@ and each factor's share of `A`, `B`, the sum, the difference and the zero tests
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import itertools
 import json
@@ -111,16 +112,42 @@ class Encoding:
         return states
 
     def example(self, columns: Sequence[int]) -> Example:
-        """The windows' tokens and each token's answer."""
+        """The windows' tokens and each token's answer (states' tables: as `states` and the answers per column)."""
         tokens: list[float] = []
         labels: list[int] = []
-        for token, (A, B) in zip(columns, self.states(columns), strict=True):
-            tokens.append(float(token))
-            labels.append(md.quotient(A, B, self.p))
-            for operation in self.queries:
-                tokens.append(float(self.query_token(operation)))
-                labels.append(OPERATIONS[operation](A, B, self.p))
+        windows, answers, successors = self._windows, self._answers, self._successors
+        state = 0  # (A, B) mod p as A p + B
+        for token in columns:
+            state = successors[state][token]
+            tokens += windows[token]
+            labels += answers[state]
         return tuple(tokens), tuple(labels)
+
+    @functools.cached_property
+    def _windows(self) -> tuple[tuple[float, ...], ...]:
+        """Each column token's window: the token, then a token per query."""
+        queries = tuple(float(self.query_token(operation)) for operation in self.queries)
+        return tuple((float(token), *queries) for token in range(COLUMNS))
+
+    @functools.cached_property
+    def _answers(self) -> tuple[tuple[int, ...], ...]:
+        """Each state's answers, A p + B: the quotient's, then each query's."""
+        p = self.p
+        return tuple(
+            (md.quotient(A, B, p), *(OPERATIONS[operation](A, B, p) for operation in self.queries))
+            for A in range(p)
+            for B in range(p)
+        )
+
+    @functools.cached_property
+    def _successors(self) -> tuple[tuple[int, ...], ...]:
+        """Each state's next, A p + B, after each column token (as `states`)."""
+        p = self.p
+        return tuple(
+            tuple((BASE * A + token // BASE) % p * p + (BASE * B + token % BASE) % p for token in range(COLUMNS))
+            for A in range(p)
+            for B in range(p)
+        )
 
 
 def columns(n: int, rng: random.Random) -> list[int]:
