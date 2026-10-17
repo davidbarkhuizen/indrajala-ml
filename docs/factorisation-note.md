@@ -3,7 +3,7 @@
 **Status: a note, 2026-10-13, written at the owner's question: "what properties would we require
 from a network-machine in order for it to be able to perform prime factorization, in theory?".
 Nothing here is planned work.** It places the window-recurrent study's networks
-([window-recurrent-claims-workplan.md](window-recurrent-claims-workplan.md)) against a task far
+([window-recurrent-report.md](window-recurrent-report.md)) against a task far
 outside what they can compute, so that the class they *can* compute is stated precisely.
 
 ## The short answer

@@ -64,8 +64,8 @@ section is `git show c3d619b:docs/length-generalisation-workplan.md`.*
 
 ## 4. A proof beats testing (E1, the certificate)
 
-*Recorded in the same docstring (Findings (E1)); the claims are in
-[window-recurrent-claims-workplan.md](window-recurrent-claims-workplan.md).*
+*Recorded in the same docstring (Findings (E1)); the claims and their verdicts are in
+[window-recurrent-report.md](window-recurrent-report.md).*
 
 - **A snapped network can be proved correct at every length:** enumerating its codes and windows
   gives the machine it computes, and minimising that machine compares it with the task's. The

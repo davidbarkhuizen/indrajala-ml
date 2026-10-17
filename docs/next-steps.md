@@ -14,8 +14,7 @@ in progress keeps its own list: [p11-trigger-workplan.md](p11-trigger-workplan.m
 [grouped-query-attention-workplan.md](grouped-query-attention-workplan.md),
 [cross-attention-workplan.md](cross-attention-workplan.md),
 [arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md),
-[window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md),
-[window-recurrent-claims-workplan.md](window-recurrent-claims-workplan.md). The order
+[window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -49,6 +48,7 @@ docs cite them by section:
 | The smallest network that adds (the addition study) | #661 | #662-#665, #672, #677, #696, models `7748416` | `git show 8990f74:docs/addition-study-workplan.md` |
 | The demos in their own repository (the demo split) | #720 | #722-#724, indrajala-demos #1-#2 | `git show 9c50fe6:docs/demos-split-workplan.md` |
 | The window loop in the crate (the window program) | #792 | #799-#802, crate #58-#59, archive #28-#30, #804 | `git show ad651d8:docs/window-program-workplan.md` |
+| Substantiating the window-recurrent adder's findings (the claims workplan, C0-C8, E1-E8) | #701 | #703-#808 (findings #712-#808), models #1; report [window-recurrent-report.md](window-recurrent-report.md) | `git show fea9de1:docs/window-recurrent-claims-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -84,6 +84,20 @@ linear window) and 34.1% (the `p` 7 family). Left:
   owner's approval and a re-recorded golden run (measurement.md, section 8).
 - **The attention window gains least** (14% forward, 31% training): its crate share is larger, so the
   next gain is in the attention kernels, not the loop.
+
+## From the window-recurrent claims (2026-10-17)
+
+Every claim decided ([window-recurrent-report.md](window-recurrent-report.md)): C0, C2, C2b, C3
+(working, not certified), C4 (after Holm) and C8 hold; C1 refuted for the sampled "works" and
+restated on the certificate; C6 not supported; C7 and C7' refuted (division learned later, with a
+factored state and a cover). Left:
+
+- **E3's dropped cells (D34):** `m` 32 and every `k` 1 cell; the curriculum against all at once at
+  more cells, if the curriculum's role is asked again (C4 holds, all at once leaning higher on far
+  fewer examples).
+- **The transformer against the linear window** at `k` 1 `s` 16 `m` 16, trained to the bound with
+  every step certified (E2b snapped's cell with only the window changed): a candidate, not
+  registered.
 
 ## From the division work (2026-10-15; division-workplan.md is still open)
 
