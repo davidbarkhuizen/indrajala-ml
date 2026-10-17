@@ -265,6 +265,9 @@ where you meet a new trap; delete one that no longer holds.
   data/refactoring/golden_run.json`; untracked, per machine) has 124 networks on both machines
   since #705, each version archived in `indrajala-benchmarks`; earlier versions are kept beside it
   as `golden_run.before-<change>.json`.
+- **A test module's basename must be unique across `tests/` and `rust/tests/`:** neither is a
+  package, so `./cli test` (both in one session) stops at collection on a clash, which CI's
+  per-suite jobs can't see. `tests/test_suite_layout.py` checks it.
 - **Crate builds:** `./cli build-rust`; after switching branches whose `rust/` differs, `git
   submodule update rust`, then rebuild.
 - **`scripts/fetch_datasets.py --help` fetches** (no argument parser); harmless when the files are
