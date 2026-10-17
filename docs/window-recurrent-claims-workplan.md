@@ -15,7 +15,11 @@ stopped (D33, D35); E8c (D35): C8 holds at both rungs (at least 3 of 6 certified
 works 0 of 20 at 1,024 columns against the snapped arm's 8 of 20, Fisher p 0.0033; E2b done 2026-10-16, exploratory (D39): at 1,024 columns the snapped arm works 20 of 20 and the
 continuous arm 0 of 20, Fisher p 7.3e-12; its snapped arm's early stop, a deviation, is recorded by D39,
 with E2b' registered as C2b's test; E2b' done 2026-10-17: C2b holds, the snapped arm with no early
-stop works 20 of 20 at 1,024 columns against the continuous arm's 0 of 20, Fisher's exact, one-sided, p 7.3e-12).** The literature it answers to is in
+stop works 20 of 20 at 1,024 columns against the continuous arm's 0 of 20, Fisher's exact, one-sided, p 7.3e-12;
+E5 done 2026-10-17 (stage 9): C6 not supported, 2 of 21 failing runs reach a code training never
+produced against 3 of 100 working runs, p 0.21; and Holm's correction over C2-C4 and C6 (D4): C2
+and C3 hold, **C4's refutation doesn't stand** (p 0.044 raw, 0.088 adjusted: the arms' working
+rates don't differ at 0.05). Stage 10, the report, next).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -898,7 +902,9 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    that aren't the automaton). **C4 is refuted: all at once works more often** (19 of 20 against 13
    of 20, Fisher p 0.044, on about 20 times fewer examples, Mann-Whitney p 2e-6); certified, the
    arms don't differ (12 against 8, p 0.34). Every certified network minimises to the carry
-   automaton. Holm's correction over C2-C4 and C6 waits for stage 8. C5: the rates with Wilson
+   automaton. Holm's correction over C2-C4 and C6 waits for stage 8. **Corrected at stage 9
+   (2026-10-17):** adjusted, C4's p is 0.088, so **C4 is not refuted** (the arms' working rates
+   don't differ at 0.05); C3's is 0.042 and holds. C5: the rates with Wilson
    intervals, about 0.4 wide at 20 seeds. **E3 and E4 on `jebel`** (one config, the curriculum arm at every `m` and the all-at-once arm,
    about 240 runs; C0's reruns compared first): findings; E1's certificate run on every network.
    **Config in:** `scripts/window_recurrent_e3_e4.json`, 240 runs (the curriculum arm at `k` 4
@@ -1009,6 +1015,15 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    ones, and failing against working runs whose check passed (Fisher's exact test). At `k` 4 the
    check lengths are 4, 8 and 12, so 8 is no length past training there: read 16 for it. About
    4.5 s and 145 MB a run on `pyramidon`.
+   **Done (2026-10-17, `pyramidon`):** `explore` now pools several configs (a network in two, a
+   rerun, counts once) and adds the registered row, each run at its first length past training
+   (8, 16 at `k` 4). Over the matrix and E3/E4, 195 networks, 121 passing their last check:
+   **C6 is not supported**, 2 of 21 failing runs reach a code training never produced against 3 of
+   100 working runs (Fisher's exact, two-sided, p 0.21); 19 of the 21 fail by wrong transitions
+   among the codes they trained on. The two exceptions are one matrix cell (`k` 1 `s` 4 `m` 16).
+   **Holm over C2-C4 and C6** (D4): C2 0.013 (holds), C3 0.042 (holds), C4 0.088 (**not refuted**:
+   stage 7's raw reading is corrected), C6 0.21. Data `e5/`, manifest `e5.sha256` c442c79e...;
+   findings in the study script's docstring.
 10. **The report** (D11), the README section, the parent's stage 10 marked done; this workplan
    retired.
 
