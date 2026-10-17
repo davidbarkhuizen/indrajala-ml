@@ -221,7 +221,7 @@ first, then stages 2-5 as planned; stage 6's end-to-end timing tells what they b
    `layer_specs`' kinds fails when a window kind has no op. A saved study network (E2b', a division
    family network) gives the same certificate and the same long-test answers on 2,000 cases.
    Golden run; A/B. **Done 2026-10-17:** `per_layer_windows` is the reference (numpy's path,
-   `per_layer_inference` for tests and `scripts/window_program_check.py`); 2,000 rows at 1,024 of
+   `per_layer_path` for tests and `scripts/window_program_check.py`); 2,000 rows at 1,024 of
    three saved networks (E2b', two family networks) the same by bits, outputs and codes; all 70
    stored certificates of E2b' and the approximation claim reproduced exactly; golden run
    bit-identical. On `jebel` (tier 2): the forward pass at 1,024 24.6% faster for the linear window,
@@ -233,11 +233,22 @@ first, then stages 2-5 as planned; stage 6's end-to-end timing tells what they b
    and masks (D5, D6), then backward from the last window, the gradients accumulated into the
    arrays passed and returned; the memory bound refused above its budget. Rust tests: against the
    per-layer forward and backward functions in sequence (with W20's recompute), exact equality of
-   every gradient and of the generator's end state.
+   every gradient and of the generator's end state. **Done 2026-10-17** (indrajala-math-rust #59):
+   the gradients accumulated onto the arrays given (each entry replaced), the initial state's
+   gradient returned (its codes' backward stays in Python, a call a batch); `recurrence_step_backward`'s
+   body `StepCore::backward`, shared. **The memory bound (D5), measured:** about 2.9 MiB at E2b''s
+   cell (B 64, W 19) and 21.7 MiB at the fork probe's (`p` 7, two factors of 32, B 64, W 16),
+   against the default budget of 2 GiB (`memory_budget`).
 5. **Bump rust/ and use it for training** (indrajala-ml, one PR, tier 2). `_accumulate_gradients`
    on Rust calls the program; the optimizer's per-layer apply unchanged; the snap wall's networks
    stay on numpy (D7). Tests: one training step's every gradient equal to the per-layer path's; a
    3-step study run byte-identical before and after (as #779 and #790 checked); golden run; A/B.
+   **Done 2026-10-17:** `per_layer_gradients` the reference (`per_layer_path` switches both
+   halves); every gradient and the generator's state the per-layer path's for every window kind
+   and recurrence, the weights after 4 Adam steps by bits; a 40-epoch `p` 5 family run (3 steps)
+   byte-identical networks and logs but for `seconds`; golden run bit-identical. On `jebel` (tier 2):
+   E2b''s training step 46.0% faster, the fork probe's (`p` 7 family) 30.8%; the family long test a
+   further 5.0% (11.7 s to 11.1 s).
 6. **Close** (indrajala-ml, one PR). A real long test and a short study run timed before and after
    on `jebel` (`ab.py`), the result here; working-notes (building a program, the memory bound);
    leftovers (D8 (b), D5 (c), a bits-changing kernel) to next-steps; this plan retired.

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable
+from contextlib import nullcontext
 from typing import Any
 
 import indrajala_math_rust as pa
@@ -30,6 +31,7 @@ from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
+from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork, per_layer_path
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,
@@ -163,7 +165,10 @@ def assert_seeded_randomized_identical(build: Callable[[type[Any], int], Any], n
     width = numpy_network.input_shape[0] if len(numpy_network.input_shape) == 1 else SIDE * SIDE
     rows = _rows(width, numpy_network)
     numpy_network.learn_batch(0.5, rows)
-    rust_network.learn_batch(0.5, rows)
+    # a window-recurrent network's window program keeps its masks in its own pass, not in the
+    # layers: its per-layer path (the program's reference, by bits: test_window_program.py) does
+    with per_layer_path(rust_network) if isinstance(rust_network, WindowRecurrentRustArrayNetwork) else nullcontext():
+        rust_network.learn_batch(0.5, rows)
     assert _mask_bits(rust_network) == _mask_bits(numpy_network)
     assert rust_network.rng.state == numpy_network.rng.bit_generator.state
 

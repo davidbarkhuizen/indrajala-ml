@@ -260,6 +260,11 @@ class RecurrenceRustArrayLayer:
         ]
         self._commitments = [0.0 if f.codes is None else f.codes.commitment for f in self.factors]
 
+    @property
+    def commitments(self) -> list[float]:
+        """Each factor's codes' commitment, 0 for a continuous factor."""
+        return self._commitments
+
     def parts(self) -> list[Any]:
         """The parts with parameters, factor by factor: pooling, cell, codes (if any), initial state."""
         return [

@@ -323,7 +323,16 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
             optimizer.apply(index, layer, learning_rate, examples)
 
     def _accumulate_gradients(self, X: Any, Y: Any) -> None:
-        # every layer's and part's gradient of the batch's loss, accumulated (W14, W20)
+        # every layer's and part's gradient of the batch's loss: the per-layer path here, the window
+        # program on Rust
+        self.per_layer_gradients(X, Y)
+
+    def per_layer_gradients(self, X: Any, Y: Any) -> None:
+        """
+        Every layer's and part's gradient of the batch's loss, accumulated (W14, W20), window by
+        window: numpy's training step, and the reference of the Rust network's window program
+        (docs/window-program-workplan.md, stage 5).
+        """
         windows = self._windows(X)
         weight = 1.0 / windows
         width = self.columns * self.class_count
@@ -428,17 +437,20 @@ class WindowRecurrentArrayNetwork(WindowRecurrentShape[FloatArray], NumpyArrayNe
 
 
 @contextmanager
-def per_layer_inference(network: Any) -> Generator[None]:
+def per_layer_path(network: Any) -> Generator[None]:
     """
-    A Rust network's inference passes through the per-layer path (per_layer_windows)
-    while open, the window program's reference: its parity tests and scripts/window_program_check.py.
+    A Rust network's inference passes and training steps through the per-layer path
+    (per_layer_windows, per_layer_gradients) while open, the window program's reference: its parity
+    tests and scripts/window_program_check.py.
     """
-    # an instance attribute shadows the class's method while open
+    # instance attributes shadow the class's methods while open
     setattr(network, "_run_windows", network.per_layer_windows)  # noqa: B010
+    setattr(network, "_accumulate_gradients", network.per_layer_gradients)  # noqa: B010
     try:
         yield
     finally:
         delattr(network, "_run_windows")
+        delattr(network, "_accumulate_gradients")
 
 
 def _program_op(layer: Any) -> tuple[Any, ...]:
@@ -471,10 +483,11 @@ def _program_op(layer: Any) -> tuple[Any, ...]:
 class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayNetworkBase):
     """
     WindowRecurrentShape on the Rust backend. Its inference passes (forward_windows,
-    window_states, state_codes, window_step, and so loss_batch and forward_rows) run every window
-    in one crate call, the window program built from its layers at construction
-    (docs/window-program-workplan.md, stage 3), by bits the per-layer path's
-    (per_layer_windows); training runs the per-layer path.
+    window_states, state_codes, window_step, and so loss_batch and forward_rows) and its training
+    step's gradients run every window in one crate call, the window program built from its layers
+    at construction (docs/window-program-workplan.md, stages 3 and 5), by bits the per-layer path's
+    (per_layer_windows, per_layer_gradients): one forward pass in training, each window's results
+    and dropout masks kept, so no window's forward pass is recomputed (D5, D6).
     """
 
     def __init__(
@@ -501,6 +514,31 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
             array for layer in self.layers if isinstance(layer, TrainedArrayLayer) for array in layer.parameters()
         ]
         return [*layers, *(array for part in self.parts for array in part.parameters())]
+
+    def _program_gradients(self) -> list[pa.Array]:
+        # each parameter's gradient, in _program_parameters' order
+        layers = [array for layer in self.layers if isinstance(layer, TrainedArrayLayer) for array in layer.gradients()]
+        return [*layers, *(array for part in self.parts for array in part.gradients())]
+
+    def _accumulate_gradients(self, X: Any, Y: Any) -> None:
+        # the windows forward in training and back in one call, each gradient accumulated in place;
+        # then the initial state's, through its codes (W14, W20; D5, D6)
+        assert not self._walled_codes(), "the snap wall is numpy's (docs/snap-wall-workplan.md, D8)"
+        windows = self._windows(X)
+        weight = 1.0 / windows
+        recurrence = self.recurrence_layer
+        dC = pa.window_program_learn(
+            self._program,
+            X,
+            Y,
+            self._program_parameters(),
+            self._program_gradients(),
+            self._first_state(X.shape[0]),
+            self.rng,
+            weight,
+            recurrence.commitments,
+        )
+        recurrence.first_state_backward(dC, weight)
 
     def _run_windows(self, X: Any, C: Any, states: bool, codes: bool) -> tuple[Any, list[Any], list[Any], list[Any]]:
         dropping = (AttentionRustArrayLayer, token_layers.TokenDropoutRustArrayLayer)

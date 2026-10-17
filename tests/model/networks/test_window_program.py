@@ -12,6 +12,7 @@ their certificates. Every layer class a window can hold has an op.
 import random
 from typing import Any
 
+import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
@@ -20,7 +21,7 @@ from indrajala_ml.model.layers.array.array_layer_builder import LAYER_CLASSES, T
 from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentRustArrayNetwork,
     _program_op,
-    per_layer_inference,
+    per_layer_path,
 )
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
@@ -38,6 +39,7 @@ from indrajala_ml.model.specs.layer_specs import (
 from indrajala_ml.model.specs.spec_validation import validate_window_specs
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.model.specs.window_recurrence import OUTPUT
+from indrajala_ml.pcg64 import generator_state
 from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_recurrent_certificate as cert
 from indrajala_ml.studies import window_recurrent_study as wrs
@@ -85,7 +87,7 @@ def _passes(network: Any, X: Any) -> dict[str, Any]:
 
 def _assert_program_is_per_layer(network: Any, X: Any) -> None:
     program = _passes(network, X)
-    with per_layer_inference(network):
+    with per_layer_path(network):
         per_layer = _passes(network, X)
     assert program == per_layer
 
@@ -120,7 +122,7 @@ def test_the_division_family_is_the_per_layer_path():
 def test_a_certificate_is_the_per_layer_paths():
     network = wrs.build(wt.ADDITION, 1, 4, 8, seed=4, window="linear")
     program = cert.certify(cert.NetworkMachine(network)).to_json()
-    with per_layer_inference(network):
+    with per_layer_path(network):
         per_layer = cert.certify(cert.NetworkMachine(network)).to_json()
     program.pop("seconds")
     per_layer.pop("seconds")
@@ -161,3 +163,90 @@ def test_every_layer_class_a_window_holds_has_an_op():
         validate_window_specs([Embedding(27, 8), StateInput(), TokenMean(), Dense(3, output=True)], (K,))
     with pytest.raises(AssertionError):
         validate_window_specs([Patches(2), StateInput(), DIGITS], (K,))
+
+
+def _twins(window: list[LayerSpec], recurrence: Any) -> tuple[Any, Any]:
+    return tuple(  # type: ignore[return-value]
+        WindowRecurrentRustArrayNetwork.randomized((K,), window, recurrence, Adam(), seed=7) for _ in range(2)
+    )
+
+
+def _gradients(network: Any) -> list[list[bytes]]:
+    return [bits(array) for array in network._program_gradients()]
+
+
+def _reset(network: Any) -> None:
+    for layer in [*network.layers, *network.parts]:
+        if hasattr(layer, "reset_gradient_accum"):
+            layer.reset_gradient_accum()
+
+
+@pytest.mark.parametrize("recurrence", RECURRENCES.values(), ids=list(RECURRENCES))
+@pytest.mark.parametrize("window", WINDOWS.values(), ids=list(WINDOWS))
+def test_a_training_steps_gradients_are_the_per_layer_paths(window: list[LayerSpec], recurrence: Any):
+    program, per_layer = _twins(window, recurrence)
+    for windows in (1, 3):
+        X, labels = _batch(windows, examples=4, seed=windows)
+        for network in (program, per_layer):
+            _reset(network)
+        X_rust = RUST.matrix(X.tolist())
+        program._accumulate_gradients(X_rust, program._target_batch_array(labels))
+        with per_layer_path(per_layer):
+            per_layer._accumulate_gradients(X_rust, per_layer._target_batch_array(labels))
+        assert _gradients(program) == _gradients(per_layer)
+        # the dropout masks drawn once, in the per-layer path's order (D6)
+        assert generator_state(program.rng) == generator_state(per_layer.rng)
+
+
+@pytest.mark.parametrize("window", WINDOWS.values(), ids=list(WINDOWS))
+def test_training_through_the_program_keeps_the_per_layer_paths_weights(window: list[LayerSpec]):
+    program, per_layer = _twins(window, RECURRENCES["two factors"])
+    for step in range(4):
+        X, labels = _batch(2 + step % 3, examples=5, seed=20 + step)
+        rows = [(tuple(x), label) for x, label in zip(X, labels, strict=True)]
+        program.learn_batch(0.01, rows)
+        with per_layer_path(per_layer):
+            per_layer.learn_batch(0.01, rows)
+    assert [[bits(a) for a in entry] for entry in program.snapshot()] == [
+        [bits(a) for a in entry] for entry in per_layer.snapshot()
+    ]
+    assert generator_state(program.rng) == generator_state(per_layer.rng)
+
+
+def test_the_studys_and_the_familys_training_steps_are_the_per_layer_paths():
+    encoding = mf.Encoding(7, ("sum", "difference"))
+    rng = random.Random(9)
+    family = [mf.network(encoding, [(16, 32), (16, 32)], seed=2, reads=OUTPUT) for _ in range(2)]
+    examples = [encoding.example(mf.columns(15, rng)) for _ in range(6)]
+    linear = [wrs.build(wt.ADDITION, 1, 16, 16, seed=3, window="linear") for _ in range(2)]
+    digits = np.random.default_rng(10)
+    sums = [
+        (tuple(float(v) for v in digits.integers(0, 27, 19)), tuple(int(v) for v in digits.integers(0, 3, 19)))
+        for _ in range(8)
+    ]
+    for (program, per_layer), rows in ((family, examples), (linear, sums)):
+        program.learn_batch(0.003, rows)
+        with per_layer_path(per_layer):
+            per_layer.learn_batch(0.003, rows)
+        assert [[bits(a) for a in entry] for entry in program.snapshot()] == [
+            [bits(a) for a in entry] for entry in per_layer.snapshot()
+        ]
+
+
+def test_the_program_refuses_a_step_past_its_memory_budget():
+    network = WindowRecurrentRustArrayNetwork.randomized((K,), WINDOW, RECURRENCES["one factor"], Adam(), seed=7)
+    X, labels = _batch(3)
+    X_rust = RUST.matrix(X.tolist())
+    with pytest.raises(ValueError, match="memory_budget"):
+        pa.window_program_learn(
+            network._program,
+            X_rust,
+            network._target_batch_array(labels),
+            network._program_parameters(),
+            network._program_gradients(),
+            network._first_state(X.shape[0]),
+            network.rng,
+            1 / 3,
+            network.recurrence_layer.commitments,
+            memory_budget=1000,
+        )
