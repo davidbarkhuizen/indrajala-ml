@@ -918,7 +918,11 @@ docstring; the results and threshold models are archived in `indrajala-models`).
 window-recurrent adder ([docs/window-recurrent-adder-workplan.md](docs/window-recurrent-adder-workplan.md))
 checks the same catalogue at lengths up to 64. What the adder studies have found so far, from
 this study to the window-recurrent claims, is summarised in
-[docs/adder-findings.md](docs/adder-findings.md).
+[docs/adder-findings.md](docs/adder-findings.md); the window-recurrent claims themselves, each
+registered before its data and decided (the snap is what extrapolates; a certified network adds
+at every length; more codes buy test-passing networks, not correct ones; all at once works at
+least as often as the curriculum; failures aren't unexplored states), are reported in
+[docs/window-recurrent-report.md](docs/window-recurrent-report.md).
 
 ## Refactoring
 

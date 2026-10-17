@@ -3,8 +3,8 @@
 **Status: written 2026-10-13, after the window-recurrent matrix (stage 9) and while its control ran,
 to judge which findings are new; extended the same day, after the certificate (E1), to the older
 literature on discretised recurrent states and automaton extraction, which the first searches
-missed. It backs [window-recurrent-claims-workplan.md](window-recurrent-claims-workplan.md), which
-plans the work to substantiate them.** Every paper read is kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`) as PDF and text, under the file
+missed. It backed the claims workplan, which planned the work to substantiate them
+(retired; its report, [window-recurrent-report.md](window-recurrent-report.md)).** Every paper read is kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`) as PDF and text, under the file
 name given; arXiv ids are given for each.
 
 ## Scope and method

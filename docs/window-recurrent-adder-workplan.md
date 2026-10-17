@@ -4,7 +4,8 @@
 the owner's standing delegation. Stage 1 (this plan) merged (#685); stage 2 (specs) merged (#686);
 stage 3 (numpy layers) merged (#687); stages 4-7 (the networks, fixtures and golden entries) done;
 W21-W29 settled at their stages; stage 8 (the harness and its calibration, W12) done; stage 9
-(the matrix on `jebel`) done: 45 of 90 runs add to 64 columns or near it; stage 10 begun: the
+(the matrix on `jebel`) done: 45 of 90 runs add to 64 columns or near it; stage 10 done
+(2026-10-17: the claims plan retired with its report, window-recurrent-report.md): the
 control (W30) done, all at once working as often as the curriculum (12 of 15 each) on about 16
 times fewer examples. It replaces
 `docs/length-generalisation-workplan.md`, which the owner terminated before its existence study
@@ -479,9 +480,10 @@ Settled under the owner's standing delegation:
     and run the control (W16); if none does, the probes say whether the codes, the cell or the
     window failed. Cells work (stage 9), so first the control, at the three best cells (W30),
     on `jebel`; its findings in the script's docstring beside the matrix's. The rest of this
-    stage is its own plan, [window-recurrent-claims-workplan.md](window-recurrent-claims-workplan.md)
-    (a certificate, the snapping ablation, the code count, the curriculum against all at once),
-    with its literature review, [window-recurrent-literature.md](window-recurrent-literature.md).
+    stage is its own plan, the claims workplan (a certificate, the snapping ablation, the code
+    count, the curriculum against all at once), with its literature review,
+    [window-recurrent-literature.md](window-recurrent-literature.md). **Done (2026-10-17):** the
+    claims plan retired with its report, [window-recurrent-report.md](window-recurrent-report.md).
 11. **Docs**: README, roadmap, next-steps, the parent plan; this workplan retired.
 
 ## Known limits

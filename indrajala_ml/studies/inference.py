@@ -1,6 +1,6 @@
 """
 The statistics the window-recurrent claims are analysed by, fixed before any run
-(docs/window-recurrent-claims-workplan.md, D4): a rate's Wilson 95% interval, Fisher's exact test of
+(docs/window-recurrent-report.md, D4): a rate's Wilson 95% interval, Fisher's exact test of
 two arms, the Cochran-Armitage test of a trend over a cell's code counts, the Mann-Whitney test of
 two samples (examples to pass), and Holm's correction over a family of tests. By hand (no scipy):
 Fisher's test and Mann-Whitney's without ties are exact, in integers; Cochran-Armitage and
