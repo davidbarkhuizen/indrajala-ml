@@ -249,8 +249,9 @@ above 1 in one update, the update norms.
      fork stays (the owner, 2026-10-17: a cause-agnostic backtrack from any fall, where the guard
      targets collapse from correctness; the p11-trigger workplan's status, retired: `git show
      28894cf:docs/p11-trigger-workplan.md`). Independent settings: the guard inside the batch
-     loop, the fork per epoch. **Taken up in [guard-training-workplan.md](guard-training-workplan.md)**
-     (2026-10-17, G1 registered there).
+     loop, the fork per epoch. **Taken up in the guard workplan**
+     (2026-10-17, G1 registered there; retired, its run deferred:
+     `git show ed0e378:docs/guard-training-workplan.md`).
 3. If C1 works: the wall in the crate (`indrajala-math-rust` first, then a bump), `Factor`'s
    settings and format 2's, study configs' field; the golden run unchanged with the wall off.
 4. A registered comparison on E2b''s cell with only the wall changed: proofs lost past the first
