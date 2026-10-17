@@ -68,7 +68,9 @@ docs/snap-wall-workplan.md): --epochs of --step's data of --run in --config, eac
 certificate in both verdicts and the code margins (the least snap ratio; per snapped factor the
 codes in use, their closest pair, the farthest state), these also at the start (--epochs 0: only
 these). --numpy converts the network first;
---wall turns the snap wall on (numpy only). No lock; one core.
+--wall turns the snap wall on (numpy only); --machines reads the machine off the network after
+every batch and logs each change against the last (pairs changed, states gained and lost, wrong
+pairs). No lock; one core.
 
 OPENBLAS_NUM_THREADS=1, as every study.
 
@@ -738,6 +740,9 @@ def main(argv: list[str]) -> int:
     replay.add_argument("--wall", type=float, default=0.0, help="the snap wall's weight (numpy only; 0: off)")
     replay.add_argument("--wall-ratio", type=float, default=WALL_RATIO, help="the ratio the snap wall keeps")
     replay.add_argument("--json", type=Path, help="write the replay's batches and epochs to this file")
+    replay.add_argument(
+        "--machines", action="store_true", help="read the machine off the network after every batch, against the last"
+    )
     verdicts = commands.add_parser("verdicts")
     verdicts.add_argument("config", type=Path)
     verdicts.add_argument("--certificates", type=Path, required=True, help="certify's branched certificates")
@@ -811,6 +816,7 @@ def main(argv: list[str]) -> int:
             args.epochs,
             args.generator,
             log=lambda line: print(line, flush=True),
+            machines=args.machines,
         )
         replayed |= {
             "network": str(args.network),

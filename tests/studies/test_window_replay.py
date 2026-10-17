@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_replay as wrp
 from indrajala_ml.studies import window_tasks as wt
 
@@ -66,3 +67,49 @@ def test_the_margins_read_the_codes_in_use_and_not_the_unused_one():
 def test_an_unsnapped_network_has_no_margins():
     assert wrp.code_margins(SnappedCarryNetwork(snapped=False), ADDITION, [4], cases=10) is None
     assert wrp.margins_text(None) == "no snapped factor"
+
+
+class CarryTable:
+    """The carry machine at k 1 as a WindowMachine, with flip (state, window) handing on the next carry instead."""
+
+    def __init__(self, flip: tuple[int, int] | None = None) -> None:
+        self.flip = flip
+
+    @property
+    def columns(self) -> int:
+        return 1
+
+    @property
+    def codes(self) -> list[int]:
+        return [3]
+
+    def start(self) -> tuple[tuple[int, ...], list[np.ndarray]]:
+        return (0,), [np.array([0.0, 1.0, 1.0])]
+
+    def step(self, state: tuple[int, ...], windows: np.ndarray) -> wc.Steps:
+        (carry,) = state
+        labels, after = ADDITION.machine.windows(windows)
+        digits, nexts = labels[carry], after[carry].copy()
+        if self.flip is not None and self.flip[0] == carry:
+            nexts[windows[:, 0] == self.flip[1]] = (nexts[windows[:, 0] == self.flip[1]] + 1) % 3
+        distances = np.ones((len(windows), 3))
+        distances[np.arange(len(windows)), nexts] = 0.0
+        return wc.Steps(digits, np.full(digits.shape, 5.0), nexts[:, np.newaxis], [distances])
+
+
+def test_the_machine_table_of_the_target_has_no_wrong_pair_and_no_change_against_itself():
+    table = wrp.machine_table(CarryTable(), ADDITION)
+    assert table.wrong == 0
+    assert len(table.rows) == len(ADDITION.machine.transition)
+    assert wrp.table_changes(table, wrp.machine_table(CarryTable(), ADDITION)) == {
+        "pairs_changed": 0,
+        "states_gained": 0,
+        "states_lost": 0,
+    }
+
+
+def test_one_flipped_transition_is_one_pair_changed_and_one_wrong():
+    window = 26  # (2, 2, 2) from carry 0, handed on as the next carry
+    flipped = wrp.machine_table(CarryTable(flip=(0, window)), ADDITION)
+    assert wrp.table_changes(wrp.machine_table(CarryTable(), ADDITION), flipped)["pairs_changed"] == 1
+    assert flipped.wrong == 1

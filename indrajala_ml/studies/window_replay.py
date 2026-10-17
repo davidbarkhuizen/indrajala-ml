@@ -12,7 +12,13 @@ on), some epochs of a step's data drawn by a named generator, as a run's step dr
   snap ratio (every other code's distance over the snapped code's, per state; the certificate
   asks 1.05, the wall keeps 1.5) and per snapped factor the codes in use, the closest two of them
   and the farthest state from its code;
-- **at the start**: the code margins of the network as loaded (with 0 epochs, only these).
+- **at the start**: the code margins of the network as loaded (with 0 epochs, only these);
+- **per batch, with machines on**: the machine the network is after the update, read off by
+  breadth first search over every window from every reachable state (snapped, no near ties
+  branched), against the last batch's: the (state, window) pairs whose labels or next state
+  changed, the states gained and lost, and the pairs wrong for the target (the certificate's
+  count without its near ties). Whether a collapse starts as one transition flipped and then
+  spreads, or as many at once. A change is logged as a line.
 
 E2b' seed 6's replay from step 7 found the first: an ordinary step at batch 977 of step 8 took its
 loss from 0.001 to 2.2, and the updates after it ran 6-8 times their size (the workplan's Why).
@@ -21,7 +27,10 @@ the snap wall off and 10 on: the proof was lost in 9 and in 8 (C1 refuted), the 
 loss's jumps about 3-fold but not the loss of the proof. The same replay, wall off, from the step-7
 networks of 4 seeds that never lost a proof (1, 3, 8, 9), 5 times each, lost it in none of 20:
 seed 6's collapse is its network's, not further training's in general, and neither its least snap
-ratio nor its closest codes in use set it apart (the workplan's stage 2).
+ratio nor its closest codes in use set it apart (the workplan's stage 2). With machines on, P1's
+10 wall-off replays show every collapse starting as 1-3 (state, window) pairs flipped by an
+ordinary update, silent to its batch's loss in 8, then Adam's amplified updates within 1-13
+batches in 9 (the workplan's stage 2c).
 """
 
 from __future__ import annotations
@@ -32,7 +41,7 @@ import tempfile
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import numpy.typing as npt
@@ -44,6 +53,57 @@ from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
 
 RATIO_CASES = 200  # the screen's first cases a length, for the least snap ratio
+
+
+class Table(NamedTuple):
+    """A machine read off a network: per reachable state each window's labels (N, k) and next state (N, G)."""
+
+    start: wc.State
+    rows: dict[wc.State, tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]]
+    wrong: int  # (state, window) pairs whose labels or next state is wrong for the target
+
+
+def machine_table(machine: wc.WindowMachine, task: wt.Task) -> Table:
+    """
+    The machine reachable from machine's start over every window, each state's target state fixed
+    where it is first reached (as the certificate fixes it), and its wrong (state, window) pairs.
+    """
+    target = task.machine
+    windows = wc.all_windows(machine.columns, target.tokens)
+    want_labels, want_state = target.windows(windows)
+    start, _ = machine.start()
+    phi = {start: target.start}
+    queue = [start]
+    rows: dict[wc.State, tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]] = {}
+    wrong = 0
+    for q in queue:  # breadth first: the queue grows as states are reached
+        parts = [machine.step(q, windows[i : i + wc.BATCH]) for i in range(0, len(windows), wc.BATCH)]
+        digits = np.concatenate([p.digits for p in parts]).astype(np.int64)
+        nexts = np.concatenate([p.states for p in parts]).astype(np.int64)
+        rows[q] = (digits, nexts)
+        unique, firsts, inverse = np.unique(nexts, axis=0, return_index=True, return_inverse=True)
+        for j in np.argsort(firsts):
+            r = tuple(int(c) for c in unique[j])
+            if r not in phi:
+                phi[r] = int(want_state[phi[q]][firsts[j]])
+                queue.append(r)
+        mapped = np.array([phi[tuple(int(c) for c in row)] for row in unique])[np.ravel(inverse)]
+        wrong += int(((digits != want_labels[phi[q]]).any(axis=1) | (mapped != want_state[phi[q]])).sum())
+    return Table(start, rows, wrong)
+
+
+def table_changes(before: Table, after: Table) -> dict[str, int]:
+    """The (state, window) pairs of the states both reach whose labels or next state differ, and the states gained and lost."""
+    shared = before.rows.keys() & after.rows.keys()
+    changed = 0
+    for q in shared:
+        (d0, n0), (d1, n1) = before.rows[q], after.rows[q]
+        changed += int(((d0 != d1).any(axis=1) | (n0 != n1).any(axis=1)).sum())
+    return {
+        "pairs_changed": changed,
+        "states_gained": len(after.rows.keys() - shared),
+        "states_lost": len(before.rows.keys() - shared),
+    }
 
 
 def load(path: Path, numpy: bool = False) -> Any:
@@ -144,11 +204,12 @@ def replay(
     epochs: int,
     generator: str,
     log: Callable[[str], None] | None = None,
+    machines: bool = False,
 ) -> dict[str, Any]:
     """
     epochs of the step whose data window counts are counts, from network (trained in place), each
     epoch's data and order drawn by random.Random(f"{generator}-{epoch}"); the batches' and epochs'
-    figures (see the module's docstring).
+    figures (see the module's docstring), with machines each batch's machine against the last's.
     """
     k: int = network.columns
     model = wr.WindowModel(network, k, task)
@@ -159,6 +220,11 @@ def replay(
     result["start"] = code_margins(network, task, lengths)
     if log is not None:
         log(f"{generator} start: {margins_text(result['start'])}")
+    table = machine_table(wc.NetworkMachine(network), task) if machines else None
+    if table is not None:
+        result["start_machine"] = {"reachable": len(table.rows), "wrong_pairs": table.wrong}
+        if log is not None:
+            log(f"{generator} start machine: {len(table.rows)} states reached, {table.wrong} wrong pairs")
     for epoch in range(epochs):
         start = time.perf_counter()
         rng = random.Random(f"{generator}-{epoch}")
@@ -166,7 +232,7 @@ def replay(
             wr.training_examples(task, counts, k, settings.epoch_examples, rng), settings.batch_size, rng
         )
         rows: list[dict[str, float]] = []
-        for batch in batches:
+        for b, batch in enumerate(batches):
             X = network.backend.matrix([tokens for tokens, _ in batch])
             labels = [labels for _, labels in batch]
             before: float = network.loss_batch(X, labels)
@@ -181,6 +247,16 @@ def replay(
                     "update": float(np.linalg.norm(_parameters(network) - kept)),
                 }
             )
+            if table is not None:
+                previous, table = table, machine_table(wc.NetworkMachine(network), task)
+                changes = table_changes(previous, table)
+                rows[-1] |= changes | {"reachable": len(table.rows), "wrong_pairs": table.wrong}
+                if log is not None and any(changes.values()):
+                    log(
+                        f"{generator} epoch {epoch} batch {b}: {changes['pairs_changed']} pairs changed, "
+                        f"+{changes['states_gained']} -{changes['states_lost']} states, {len(table.rows)} reached, "
+                        f"{table.wrong} wrong pairs; loss {before:.3g} -> {after:.3g}, update {rows[-1]['update']:.3g}"
+                    )
         screen = [r for n in lengths for r in model.evaluate(n, checks[n], settings.screen)]
         branched = wc.certify(wc.NetworkMachine(network), task)
         strict = wc.certify(wc.NetworkMachine(network), task, snap_ratio=1.0)
@@ -195,6 +271,9 @@ def replay(
             "least_snap_ratio": None if margins is None else margins["least_snap_ratio"],
             "margins": None if margins is None else margins["factors"],
             "jumps": sum(row["loss_after"] > 1.0 >= row["loss_before"] for row in rows),
+            "machine_changes": None
+            if table is None
+            else sum(bool(row["pairs_changed"] or row["states_gained"] or row["states_lost"]) for row in rows),
             "median_update": updates[len(updates) // 2],
             "max_update": updates[-1],
             "seconds": time.perf_counter() - start,

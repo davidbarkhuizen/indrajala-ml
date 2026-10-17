@@ -10,7 +10,9 @@ by the owner** (2026-10-16: "let's pause investigation of the mechanism for the 
 `p` 11 ladder with the fork going first; stages 3-5 wait, and this plan stays open until resumed
 or its leftovers move to next-steps.** A stable-seed replay probe (exploratory, 2026-10-16, stage
 2b) found seed 6's collapse is its network's: from 4 other seeds' step-7 networks, wall off, 0 of
-20 replays lost the proof.
+20 replays lost the proof. A machine-diff probe (exploratory, 2026-10-17, stage 2c) found every
+collapse begins as 1-3 (state, window) pairs flipped by an ordinary update, then cascades under
+Adam's amplified updates within 1-13 batches.
 
 ## Why
 
@@ -194,6 +196,31 @@ above 1 in one update, the update norms.
      states to 8 codes, the others to 3-5; spare codes in use beside each other could swap or merge
      under an update. A probe of it would need networks with many codes in use, registered first.
 
+2c. **Machine-diff probe** (exploratory, 2026-10-17, after the owner's question whether the
+   collapse is a property of the machine: a snapped network's machine changes only in jumps, and
+   one wrong transition spreads through the state). `pyramidon`, code `~/code/wt-machdiff` (base
+   91bf661, `replay --machines`: after every batch the machine read off by breadth first search, its
+   (state, window) pairs changed against the last batch's, and its pairs wrong for the target),
+   P1's 10 wall-off replays as run (seed 6's step 7, numpy, 2 epochs of step 8, generators
+   `snap-wall-p1-0..9`). Every epoch's screen and certificate reproduce P1's. Data
+   `data/window-recurrent/machine-diff/` (each replay's JSON and log), manifest
+   `machine-diff.sha256` (40450dcc...3f7ad805, 20 files, run from `data/window-recurrent`).
+   - **Every collapse starts as a minimal discrete event:** the first change from the certified
+     machine is 1 pair in 5 replays, 2 in 3, 3 in 2, every changed pair wrong, on an ordinary update
+     (norm 0.016-0.046, the epoch's median about 0.02). In 8 of 10 the batch's own loss didn't move
+     (in replays 0 and 5 it jumped, 0.0012 to 3.1 and 0.0017 to 2.3): the flip is silent to the
+     batch that makes it.
+   - **Then the cascade is training's:** in 9 of 10 the first update above 0.1 (5 times the median)
+     comes 1-13 batches after the first flip, then tens of pairs change a batch and up to 94-164
+     pairs are wrong. In replay 7 the first flip was repaired without amplification (the first
+     update above 0.1 only 1,512 batches later). Flips and repairs alternate: replays 1, 4, 7 and 9
+     are correct in 48-79% of the batches after their first flip, the others in 0-13%.
+   - **Reading:** the jump is the machine's (a snapped network changes its machine one transition
+     at a time, and one wrong transition is a wrong machine), so no loss on the outputs can warn
+     of it; the collapse is the optimizer's response to it, the first batch that exercises the
+     wrong pair taking a large loss to Adam's small second moments. A remedy acts on the response
+     (roll back, cap the update: reading (c)), not on the flip. The term "glitch" doesn't apply
+     (digital design's glitch is an asynchronous transient; these machines are synchronous).
 3. If C1 works: the wall in the crate (`indrajala-math-rust` first, then a bump), `Factor`'s
    settings and format 2's, study configs' field; the golden run unchanged with the wall off.
 4. A registered comparison on E2b''s cell with only the wall changed: proofs lost past the first
