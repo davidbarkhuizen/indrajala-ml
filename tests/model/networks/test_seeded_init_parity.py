@@ -166,7 +166,7 @@ def assert_seeded_randomized_identical(build: Callable[[type[Any], int], Any], n
     rows = _rows(width, numpy_network)
     numpy_network.learn_batch(0.5, rows)
     # a window-recurrent network's window program keeps its masks in its own pass, not in the
-    # layers: its per-layer path (the program's reference, by bits: test_window_program.py) does
+    # layers: its per-layer path (the program's reference, by bits: test_window_program_network.py) does
     with per_layer_path(rust_network) if isinstance(rust_network, WindowRecurrentRustArrayNetwork) else nullcontext():
         rust_network.learn_batch(0.5, rows)
     assert _mask_bits(rust_network) == _mask_bits(numpy_network)
