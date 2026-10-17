@@ -244,7 +244,11 @@ above 1 in one update, the update norms.
    - **Limits:** one network's replays, an existence test at one cell; its cost is a machine read a
      batch (cheap at `k` 1: every window from every reachable state, `|Σ|^k` times the states, so
      it grows with the window). Next: the guard in real training, registered (division, where
-     every run that neared a solution and trained on collapsed).
+     every run that neared a solution and trained on collapsed): **the fork alone against the
+     fork plus the guard**, at the same seeds (the guard alone a third arm if affordable). The
+     fork stays (the owner, 2026-10-17: a cause-agnostic backtrack from any fall, where the guard
+     targets collapse from correctness; the p11-trigger workplan's status). Independent settings:
+     the guard inside the batch loop, the fork per epoch.
 3. If C1 works: the wall in the crate (`indrajala-math-rust` first, then a bump), `Factor`'s
    settings and format 2's, study configs' field; the golden run unchanged with the wall off.
 4. A registered comparison on E2b''s cell with only the wall changed: proofs lost past the first

@@ -131,8 +131,11 @@ Decided with the owner, each to become a workplan or a stage:
   registered next step): `p` 7 with two factors of 32 is done (the fork probe: 5 certified 49-state
   networks in 8 runs, each passing every long-test case), and **`p` 11 works** (2026-10-16: 4 of 6
   certified 121-state networks at 32 a factor, each passing every long-test case; the probe's
-  findings). `k` stays 1: the certificate's cost is codes x 9 tokens there. Left: the plan's stage 4
-  (the alternate trigger), or the certificate guard in its place.
+  findings). `k` stays 1: the certificate's cost is codes x 9 tokens there. The plan's stage 4 (the
+  alternate trigger) waits for the beyond-arithmetic targets below, where a trigger can be tuned
+  across machine classes, not to division (the plan's status); today's trigger stays the default.
+  The certificate guard joins the fork, not replaces it, tested as the fork alone against the
+  fork plus the guard.
 - **A second composite task: the running affine map mod `p`** (`x' = a x + b`, `a != 0`; the
   group AGL(1, p), `p (p - 1)` states when the output is the composed map). Its Krohn-Rhodes
   decomposition is a cascade, not a direct product: the multipliers' running product is its one
@@ -160,7 +163,8 @@ whether the method needs that structure. Every one below is an explicit machine,
 certificate applies unchanged; only the tasks are new. Each cell keeps the feasibility rules
 (codes at least the minimal states; training to the exclusion bound `m + q - 1`), which for
 random machines with many states means long training lengths: the bound decides which sizes are
-worth running. In the order recommended:
+worth running. The fork's trigger is tuned here, across these machine classes, not on division
+alone (the p11-trigger workplan's stage 4, deferred). In the order recommended:
 
 1. **Machines with no arithmetic reading, split by their algebra (first).** Random Mealy machines
    over a range of state counts and alphabets are the plain generality test. Splitting them by
