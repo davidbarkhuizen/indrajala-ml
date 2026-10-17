@@ -1,6 +1,6 @@
 # pyright: reportPrivateUsage=false
 """
-The Rust window-recurrent network's window program (docs/window-program-workplan.md, stage 3):
+The Rust window-recurrent network's window program (the window-program workplan, stage 3):
 its inference passes, forward_windows, window_states, state_codes and window_step, run every
 window in one crate call, by bits the per-layer path's (per_layer_windows, the
 reference, which numpy's network runs): for every layer kind a window holds, one, two and three

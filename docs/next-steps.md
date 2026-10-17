@@ -48,6 +48,7 @@ docs cite them by section:
 | Studies and timing runs sharing `jebel` (study-runs) | #670 | #673-#676, #695 | `git show 868838e:docs/study-runs-workplan.md` |
 | The smallest network that adds (the addition study) | #661 | #662-#665, #672, #677, #696, models `7748416` | `git show 8990f74:docs/addition-study-workplan.md` |
 | The demos in their own repository (the demo split) | #720 | #722-#724, indrajala-demos #1-#2 | `git show 9c50fe6:docs/demos-split-workplan.md` |
+| The window loop in the crate (the window program) | #792 | #799-#802, crate #58-#59, archive #28-#30, #804 | `git show ad651d8:docs/window-program-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -63,6 +64,26 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/multi_head_attention_study.py`'s, the sequence study's in `scripts/sequence_study.py`'s,
 the attention dropout study's in `scripts/attention_dropout_study.py`'s, the rotary study's in
 `scripts/rotary_study.py`'s, the addition study's in `scripts/addition_study.py`'s.
+
+## From the window program (2026-10-17)
+
+The window-recurrent network's window loop runs in the crate on Rust, inference and training, by
+bits the per-layer path's (`per_layer_windows`, `per_layer_gradients`, `per_layer_path`;
+`scripts/window_program_check.py` checks saved networks). Before and after on `jebel` (stage 6,
+from before stage 1 to the end, tier 2): a real study run (a `p` 5 family probe run, 40 epochs) 32.9%
+faster (139 s to 93 s), the family long test 46.6% (21.1 s to 11.3 s), the training steps 43.9% (E2b''s
+linear window) and 34.1% (the `p` 7 family). Left:
+
+- **Threads in the program (D8 (b)):** split the examples across threads inside one call; rows are
+  independent, so the bits hold. Measure the crate's per-call thread spawn first; it competes with
+  the studies' and long tests' own processes.
+- **Checkpointing (D5 (c)):** keep every `r`-th window's forward pass and recompute the rest, if a
+  study trains windows long enough to pass the memory budget (2.9 MiB at E2b''s cell, 21.7 MiB at
+  the fork probe's, against 2 GiB).
+- **A bits-changing kernel (D3 (b)):** fused or reassociated arithmetic in the program; needs the
+  owner's approval and a re-recorded golden run (measurement.md, section 8).
+- **The attention window gains least** (14% forward, 31% training): its crate share is larger, so the
+  next gain is in the attention kernels, not the loop.
 
 ## From the division work (2026-10-15; division-workplan.md is still open)
 
