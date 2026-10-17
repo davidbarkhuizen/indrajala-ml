@@ -4,7 +4,8 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
 "not planned yet" means only that no workplan has taken it up. A workplan still
-in progress keeps its own list: [division-ladder-workplan.md](division-ladder-workplan.md),
+in progress keeps its own list: [general-algebras-workplan.md](general-algebras-workplan.md),
+[division-ladder-workplan.md](division-ladder-workplan.md),
 [pypi-release-workplan.md](pypi-release-workplan.md),
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
@@ -223,6 +224,9 @@ worth running. In the order recommended, after one item that runs across them:
 with the S5 word problem: it turns "arithmetic only" into a finding and tests whether the cover
 result generalises. When it is taken up: a workplan with a feasibility table per cell (states,
 alphabet, codes, the exclusion bound against the curriculum's cap).
+**Taken up (2026-10-17)** by [general-algebras-workplan.md](general-algebras-workplan.md): S_n, move-to-front
+and random machines over the same states at 6, 24 and 120, then the trigger and the guard tuned
+across them (the two items above).
 
 ## From composable layers
 
