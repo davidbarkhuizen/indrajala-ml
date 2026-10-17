@@ -4,7 +4,9 @@
 speed and production; D10 settled by the owner (2026-10-13, revised 2026-10-17): the Pi is
 `litshe`, on wired Ethernet, booting from its SD card with storage on a USB flash drive, and no
 active cooler. Stages 0 and 1 done (2026-10-17): the Pi's Rust and pure-Python golden entries
-already equal jebel's bit for bit (stage 1's findings). The demo split
+already equal jebel's bit for bit (stage 1's findings). Stage 2 done (2026-10-17): the crate's
+own `exp` and D6's rules. Stage 3 done (2026-10-17): the committed Rust reference, checked in
+CI. Stage 4 (CI on aarch64 and musl) next. The demo split
 (`git show 9c50fe6:docs/demos-split-workplan.md`) is done, so the Pi needs no matplotlib.**
 
 indrajala-ml and the crate run on aarch64, tested and timed on a Raspberry Pi 5 (8 GB). The crate
@@ -264,6 +266,14 @@ Done when the Pi's Rust entries equal jebel's bit for bit.
 ### Stage 3: the committed Rust reference (D7)
 
 `golden_run_rust.json`, its check mode, and CI's check on the x86_64 runner.
+
+**Done (2026-10-17):** `golden_training_run.py record --backend rust` writes the 41 Rust
+entries (1.7 MB, so the whole set is kept, not the smallest entries); `check` runs the
+implementations its file holds, and `--backend` limits either mode (the others' networks are
+never built). The file, recorded on pyramidon at main 6a460c0, equals litshe's and jebel's Rust
+entries; checking it takes 0.5 s, so CI runs it on the `rust/tests/` job. A full record is
+byte-identical to the per-machine file before and after the change (the entries now built
+lazily, in the same order).
 
 ### Stage 4: CI on aarch64 and musl
 

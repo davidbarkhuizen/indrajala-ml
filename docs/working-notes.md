@@ -264,7 +264,9 @@ where you meet a new trap; delete one that no longer holds.
 - **The golden run** (`.venv/bin/python scripts/golden_training_run.py check
   data/refactoring/golden_run.json`; untracked, per machine) has 124 networks on both machines
   since #705, each version archived in `indrajala-benchmarks`; earlier versions are kept beside it
-  as `golden_run.before-<change>.json`.
+  as `golden_run.before-<change>.json`. The one tracked file there is `golden_run_rust.json`
+  (the Rust entries, the same on every machine; CI checks it): after an approved re-record of the
+  Rust bits, re-record it too (`record --backend rust`), or CI fails.
 - **A test module's basename must be unique across `tests/` and `rust/tests/`:** neither is a
   package, so `./cli test` (both in one session) stops at collection on a clash, which CI's
   per-suite jobs can't see. `tests/test_suite_layout.py` checks it.
