@@ -12,7 +12,9 @@ or its leftovers move to next-steps.** A stable-seed replay probe (exploratory, 
 2b) found seed 6's collapse is its network's: from 4 other seeds' step-7 networks, wall off, 0 of
 20 replays lost the proof. A machine-diff probe (exploratory, 2026-10-17, stage 2c) found every
 collapse begins as 1-3 (state, window) pairs flipped by an ordinary update, then cascades under
-Adam's amplified updates within 1-13 batches.
+Adam's amplified updates within 1-13 batches. **The certificate guard works** (stage 2d, registered
+in its script before the data, 2026-10-17): undoing each update that makes a right machine wrong
+kept the proof in 10 of 10 of the same replays, against 1 of 10 without it.
 
 ## Why
 
@@ -221,6 +223,28 @@ above 1 in one update, the update norms.
      wrong pair taking a large loss to Adam's small second moments. A remedy acts on the response
      (roll back, cap the update: reading (c)), not on the flip. The term "glitch" doesn't apply
      (digital design's glitch is an asynchronous transient; these machines are synchronous).
+2d. **The certificate guard** (2026-10-17, after stage 2c's reading (c); the owner: "a collapse
+   remedy, based on P1's saved replays"). `replay --guard`: after every batch the machine read
+   off (as `--machines`), and an update that makes a right machine (no wrong pair) wrong undone,
+   the network's weights, its optimizer's state and its generator restored, the batch skipped.
+   `pyramidon`, code `~/code/wt-guard` (ad651d8 and the guard, as merged), P1's 10 replays as run
+   (seed 6's step 7, numpy, 2 epochs of step 8, generators `snap-wall-p1-0..9`, wall off).
+   **Registered** in `~/code/replay-guard.sh`'s header before the data: works if 8 or more of 10
+   end certified in both verdicts. Data `data/window-recurrent/replay-guard/`, manifest
+   `replay-guard.sha256` (7947cab8...d59d2646, 21 files, run from `data/window-recurrent`).
+   - **It works: 10 of 10 end certified in both verdicts** (without the guard 1 of 10), each after
+     both epochs, minimised to the carry automaton, screen 1.000, least snap ratio 2.3-12.5 at the
+     end (4.2 at the start).
+   - **It acts rarely:** 3-48 updates undone a replay, 174 of 20,480 batches (0.85%). With them
+     undone Adam never amplifies: the largest update of any epoch is 0.03-0.07 (the cascades of
+     stage 2c ran at 0.2-0.4), the median 0.011-0.019 as before.
+   - **The loss would miss them:** only 32 of the 174 undone updates took their batch's loss up
+     tenfold; the other 142 were silent to it, as stage 2c found. A guard on the loss would have
+     let 82% through; it takes reading the machine.
+   - **Limits:** one network's replays, an existence test at one cell; its cost is a machine read a
+     batch (cheap at `k` 1: every window from every reachable state, `|Σ|^k` times the states, so
+     it grows with the window). Next: the guard in real training, registered (division, where
+     every run that neared a solution and trained on collapsed).
 3. If C1 works: the wall in the crate (`indrajala-math-rust` first, then a bump), `Factor`'s
    settings and format 2's, study configs' field; the golden run unchanged with the wall off.
 4. A registered comparison on E2b''s cell with only the wall changed: proofs lost past the first

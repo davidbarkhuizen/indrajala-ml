@@ -19,6 +19,10 @@ on), some epochs of a step's data drawn by a named generator, as a run's step dr
   changed, the states gained and lost, and the pairs wrong for the target (the certificate's
   count without its near ties). Whether a collapse starts as one transition flipped and then
   spreads, or as many at once. A change is logged as a line.
+- **with the guard on** (machines implied): an update that makes a right machine (no wrong pair)
+  wrong is undone, the network's weights, its optimizer's state and its generator restored to
+  before the batch, and the batch skipped; per epoch the rollbacks counted. A remedy for the
+  collapse acting where it starts: the certificate as a training control at the grain of a batch.
 
 E2b' seed 6's replay from step 7 found the first: an ordinary step at batch 977 of step 8 took its
 loss from 0.001 to 2.2, and the updates after it ran 6-8 times their size (the workplan's Why).
@@ -30,7 +34,9 @@ seed 6's collapse is its network's, not further training's in general, and neith
 ratio nor its closest codes in use set it apart (the workplan's stage 2). With machines on, P1's
 10 wall-off replays show every collapse starting as 1-3 (state, window) pairs flipped by an
 ordinary update, silent to its batch's loss in 8, then Adam's amplified updates within 1-13
-batches in 9 (the workplan's stage 2c).
+batches in 9 (the workplan's stage 2c). With the guard on, the same 10 replays all kept the proof
+(registered: works if 8 of 10), 174 of 20,480 updates undone, 142 of them silent to their batch's
+loss (the workplan's stage 2d).
 """
 
 from __future__ import annotations
@@ -48,6 +54,7 @@ import numpy.typing as npt
 
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.persistence.load_network import load_network
+from indrajala_ml.pcg64 import generator_state, set_generator_state
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
@@ -128,6 +135,18 @@ def set_wall(network: Any, wall: float, ratio: float) -> None:
             factor.codes.wall, factor.codes.wall_ratio = wall, ratio
 
 
+def _training_state(network: Any) -> tuple[Any, Any, Any]:
+    # what a learn step changes: the weights, the optimizer's state and the generator's
+    return network.snapshot(), network.optimizer.state(), generator_state(network.rng)
+
+
+def _restore_training_state(network: Any, state: tuple[Any, Any, Any]) -> None:
+    weights, optimizer, rng = state
+    network.restore(weights)
+    network.optimizer.load_state(optimizer)
+    set_generator_state(network.rng, rng)
+
+
 def _parameters(network: Any) -> npt.NDArray[np.float64]:
     # every parameter, flattened, the codebook's included (numpy's or the crate's arrays)
     parts: list[Any] = []
@@ -205,12 +224,15 @@ def replay(
     generator: str,
     log: Callable[[str], None] | None = None,
     machines: bool = False,
+    guard: bool = False,
 ) -> dict[str, Any]:
     """
     epochs of the step whose data window counts are counts, from network (trained in place), each
     epoch's data and order drawn by random.Random(f"{generator}-{epoch}"); the batches' and epochs'
-    figures (see the module's docstring), with machines each batch's machine against the last's.
+    figures (see the module's docstring), with machines each batch's machine against the last's;
+    with guard, an update that makes a right machine wrong undone and its batch skipped.
     """
+    machines = machines or guard
     k: int = network.columns
     model = wr.WindowModel(network, k, task)
     catalogue = settings.catalogue(task)
@@ -232,11 +254,13 @@ def replay(
             wr.training_examples(task, counts, k, settings.epoch_examples, rng), settings.batch_size, rng
         )
         rows: list[dict[str, float]] = []
+        rollbacks = 0
         for b, batch in enumerate(batches):
             X = network.backend.matrix([tokens for tokens, _ in batch])
             labels = [labels for _, labels in batch]
             before: float = network.loss_batch(X, labels)
             kept = _parameters(network)
+            saved = _training_state(network) if guard else None
             network.learn_batch(settings.rate, batch)
             after: float = network.loss_batch(X, labels)
             rows.append(
@@ -249,6 +273,17 @@ def replay(
             )
             if table is not None:
                 previous, table = table, machine_table(wc.NetworkMachine(network), task)
+                if saved is not None and previous.wrong == 0 and table.wrong > 0:
+                    rollbacks += 1
+                    if log is not None:
+                        log(
+                            f"{generator} epoch {epoch} batch {b}: rolled back ({table.wrong} wrong pairs; loss "
+                            f"{before:.3g} -> {after:.3g}, update {rows[-1]['update']:.3g})"
+                        )
+                    _restore_training_state(network, saved)
+                    rows[-1] |= {"rolled_back": 1.0}
+                    table = previous
+                    continue
                 changes = table_changes(previous, table)
                 rows[-1] |= changes | {"reachable": len(table.rows), "wrong_pairs": table.wrong}
                 if log is not None and any(changes.values()):
@@ -273,7 +308,10 @@ def replay(
             "jumps": sum(row["loss_after"] > 1.0 >= row["loss_before"] for row in rows),
             "machine_changes": None
             if table is None
-            else sum(bool(row["pairs_changed"] or row["states_gained"] or row["states_lost"]) for row in rows),
+            else sum(
+                bool(row.get("pairs_changed") or row.get("states_gained") or row.get("states_lost")) for row in rows
+            ),
+            "rollbacks": rollbacks,
             "median_update": updates[len(updates) // 2],
             "max_update": updates[-1],
             "seconds": time.perf_counter() - start,
