@@ -137,3 +137,9 @@ jobs:
 
       - name: Test
         run: ./cli test ${{ matrix.suite }}
+
+      # The crate's bits are the same on every machine (the aarch64 workplan, D1), so its golden
+      # entries are a committed reference, checked here on the short job (about 1 s).
+      - name: Golden run (Rust)
+        if: matrix.suite == 'rust/tests/'
+        run: .venv/bin/python scripts/golden_training_run.py check data/refactoring/golden_run_rust.json

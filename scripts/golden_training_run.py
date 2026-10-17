@@ -6,6 +6,7 @@ within a tolerance.
 
     python scripts/golden_training_run.py record golden.json   # on main, before the first stage
     python scripts/golden_training_run.py check golden.json    # after each stage
+    python scripts/golden_training_run.py check data/refactoring/golden_run_rust.json  # any machine
     python scripts/golden_training_run.py compare a.json b.json  # two machines' runs, no training
     python scripts/golden_training_run.py archive golden.json --reason {material,new-functionality}
         --note TEXT [--commit REF] [--date YYYY-MM-DD] [--profile FILE] [--replaces PATH] [--no-pr]
@@ -35,6 +36,12 @@ Floats are recorded as float.hex, so check compares bits. check reports the firs
 value of every network that differs. numpy's products go through BLAS, so a golden file is only
 valid on the machine that recorded it; record one on main and check against it on the same
 machine.
+
+The Rust entries are the exception: the crate computes the same bits on every machine (the aarch64
+workplan, D1), so they are also one committed reference, data/refactoring/golden_run_rust.json
+(D7), recorded with record --backend rust and checked on every machine and in CI. --backend limits
+record and check to an implementation's entries, and the others' networks are never built; check
+without it runs the implementations its file holds.
 
 The residual entries (the residual-connections workplan, stage 5) are Sequential networks of
 RESIDUAL_SPECS, two residual blocks in a row, in all three implementations, added after the rest:
@@ -100,7 +107,8 @@ import random
 import socket
 import sys
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Callable, Collection, Iterator, Sequence
+from functools import partial
 from pathlib import Path
 from typing import Any, cast
 
@@ -591,6 +599,9 @@ def _residual_network(name: str) -> Any:
     return _sequential_network(name, (DIMENSION,), RESIDUAL_SPECS, Momentum(0.9))
 
 
+BACKENDS = ("python", "numpy", "rust")
+
+
 def _backend(name: str) -> str:
     return name.split()[0]
 
@@ -691,7 +702,8 @@ def _round_trip(network: Any, rows: Sequence[Example[Any]], predict: str) -> dic
     }
 
 
-def _run_network(name: str, network: Any, rows: Sequence[Example[Any]], predict: str) -> dict[str, Any]:
+def _run_network(name: str, build: Callable[[], Any], rows: Sequence[Example[Any]], predict: str) -> dict[str, Any]:
+    network = build()
     _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
     network.rng = default_rng(SEED) if _backend(name) == "python" else network.backend.default_rng(SEED)
     checkpoints, prepared = _train(network, rows, _backend(name))
@@ -738,70 +750,161 @@ def _run_ensemble(name: str, ensemble_cls: Any, classifier_cls: Any) -> dict[str
     }
 
 
-def run_all() -> dict[str, Any]:
-    results: dict[str, Any] = {}
+def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
+    """Every entry's name and the call that builds and runs it, in the golden file's order; a
+    caller that skips an entry never builds its network."""
     multiclass_rows = _rows(DIMENSION, list(range(CLASS_COUNT)))
     for name, (network_cls, hyperparameters) in DENSE_NETWORKS.items():
-        network = network_cls(LAYER_SIZES, DIMENSION, CLASS_COUNT, *hyperparameters)
-        results[name] = _run_network(name, network, multiclass_rows, "predict_probabilities")
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(network_cls, LAYER_SIZES, DIMENSION, CLASS_COUNT, *hyperparameters),
+                multiclass_rows,
+                "predict_probabilities",
+            ),
+        )
 
     conv_rows = _rows(CONV_HEIGHT * CONV_WIDTH, list(range(CLASS_COUNT)))
     for conv_name, (network_cls, hyperparameters) in CONV_NETWORKS.items():
         for name, conv_specs in ((conv_name, CONV_SPECS), (f"{conv_name} strided", STRIDED_CONV_SPECS)):
-            network = network_cls(
-                CONV_HEIGHT, CONV_WIDTH, conv_specs, CONV_DENSE_LAYER_SIZES, CLASS_COUNT, *hyperparameters
+            yield (
+                name,
+                partial(
+                    _run_network,
+                    name,
+                    partial(
+                        network_cls,
+                        CONV_HEIGHT,
+                        CONV_WIDTH,
+                        conv_specs,
+                        CONV_DENSE_LAYER_SIZES,
+                        CLASS_COUNT,
+                        *hyperparameters,
+                    ),
+                    conv_rows,
+                    "predict_probabilities",
+                ),
             )
-            results[name] = _run_network(name, network, conv_rows, "predict_probabilities")
 
     single_output_rows = _rows(DIMENSION, [0.0, 1.0])
     for name, (network_cls, hyperparameters) in SINGLE_OUTPUT_NETWORKS.items():
-        network = network_cls(LAYER_SIZES, DIMENSION, **hyperparameters)
-        results[name] = _run_network(name, network, single_output_rows, "predict_probability")
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(network_cls, LAYER_SIZES, DIMENSION, **hyperparameters),
+                single_output_rows,
+                "predict_probability",
+            ),
+        )
 
     for name, (network_cls, hyperparameters) in PYTHON_MULTICLASS_NETWORKS.items():
-        network = network_cls(LAYER_SIZES, DIMENSION, INPUT_BOUNDS, CLASS_COUNT, *hyperparameters)
-        results[name] = _run_network(name, network, multiclass_rows, "predict_probabilities")
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(network_cls, LAYER_SIZES, DIMENSION, INPUT_BOUNDS, CLASS_COUNT, *hyperparameters),
+                multiclass_rows,
+                "predict_probabilities",
+            ),
+        )
 
     for name, (network_cls, hyperparameters) in PYTHON_SINGLE_OUTPUT_NETWORKS.items():
-        network = network_cls(LAYER_SIZES, DIMENSION, INPUT_BOUNDS, *hyperparameters)
-        results[name] = _run_network(name, network, single_output_rows, "predict_probability")
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(network_cls, LAYER_SIZES, DIMENSION, INPUT_BOUNDS, *hyperparameters),
+                single_output_rows,
+                "predict_probability",
+            ),
+        )
 
     for name, (ensemble_cls, classifier_cls) in ENSEMBLES.items():
-        results[name] = _run_ensemble(name, ensemble_cls, classifier_cls)
+        yield name, partial(_run_ensemble, name, ensemble_cls, classifier_cls)
 
     for name in RESIDUAL_NETWORKS:
-        results[name] = _run_network(name, _residual_network(name), multiclass_rows, "predict_probabilities")
+        yield (
+            name,
+            partial(_run_network, name, partial(_residual_network, name), multiclass_rows, "predict_probabilities"),
+        )
 
     for name in PATCH_NETWORKS:
-        network = _sequential_network(name, (CONV_HEIGHT, CONV_WIDTH, 1), PATCH_SPECS, Adam())
-        results[name] = _run_network(name, network, conv_rows, "predict_probabilities")
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(_sequential_network, name, (CONV_HEIGHT, CONV_WIDTH, 1), PATCH_SPECS, Adam()),
+                conv_rows,
+                "predict_probabilities",
+            ),
+        )
 
     for name in LAYER_NORM_NETWORKS:
-        network = _sequential_network(name, (DIMENSION,), LAYER_NORM_SPECS, Momentum(0.9))
-        results[name] = _run_network(name, network, multiclass_rows, "predict_probabilities")
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(_sequential_network, name, (DIMENSION,), LAYER_NORM_SPECS, Momentum(0.9)),
+                multiclass_rows,
+                "predict_probabilities",
+            ),
+        )
 
     for name in MULTI_HEAD_PATCH_NETWORKS:
-        network = _sequential_network(name, (CONV_HEIGHT, CONV_WIDTH, 1), MULTI_HEAD_PATCH_SPECS, Adam())
-        results[name] = _run_network(name, network, conv_rows, "predict_probabilities")
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(_sequential_network, name, (CONV_HEIGHT, CONV_WIDTH, 1), MULTI_HEAD_PATCH_SPECS, Adam()),
+                conv_rows,
+                "predict_probabilities",
+            ),
+        )
 
     sequence_rows = windows(SEQUENCE_VOCABULARY.encode(TINY_SHAKESPEARE_OPENING), SEQUENCE_CONTEXT)
     assert len(sequence_rows) == ROW_COUNT, f"the excerpt is {ROW_COUNT} windows; got {len(sequence_rows)}"
-    for name in SEQUENCE_NETWORKS:
-        network = _sequential_network(name, (SEQUENCE_CONTEXT,), SEQUENCE_SPECS, Adam())
-        results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
-    for name in ATTENTION_DROPOUT_NETWORKS:
-        network = _sequential_network(name, (SEQUENCE_CONTEXT,), ATTENTION_DROPOUT_SPECS, Adam())
-        results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
-    for name in ROTARY_NETWORKS:
-        network = _sequential_network(name, (SEQUENCE_CONTEXT,), ROTARY_SPECS, Adam())
-        results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
-    for name, window_cls in WINDOW_NETWORKS.items():
-        network = window_cls((WINDOW_COLUMNS,), WINDOW_SPECS, WINDOW_RECURRENCE, Adam())
-        results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
-    for name, window_cls in CONTINUOUS_NETWORKS.items():
-        network = window_cls((WINDOW_COLUMNS,), WINDOW_SPECS, CONTINUOUS_RECURRENCE, Adam())
-        results[name] = _run_network(name, network, sequence_rows, "predict_probabilities")
-    return results
+    for names, specs in (
+        (SEQUENCE_NETWORKS, SEQUENCE_SPECS),
+        (ATTENTION_DROPOUT_NETWORKS, ATTENTION_DROPOUT_SPECS),
+        (ROTARY_NETWORKS, ROTARY_SPECS),
+    ):
+        for name in names:
+            yield (
+                name,
+                partial(
+                    _run_network,
+                    name,
+                    partial(_sequential_network, name, (SEQUENCE_CONTEXT,), specs, Adam()),
+                    sequence_rows,
+                    "predict_probabilities",
+                ),
+            )
+    for networks, recurrence in ((WINDOW_NETWORKS, WINDOW_RECURRENCE), (CONTINUOUS_NETWORKS, CONTINUOUS_RECURRENCE)):
+        for name, window_cls in networks.items():
+            yield (
+                name,
+                partial(
+                    _run_network,
+                    name,
+                    partial(window_cls, (WINDOW_COLUMNS,), WINDOW_SPECS, recurrence, Adam()),
+                    sequence_rows,
+                    "predict_probabilities",
+                ),
+            )
+
+
+def run_all(backends: Collection[str] = BACKENDS) -> dict[str, Any]:
+    """Every entry of the given implementations, run in the golden file's order."""
+    return {name: run() for name, run in _entries() if _backend(name) in backends}
 
 
 def _first_difference(expected: Any, actual: Any, path: str = "") -> str | None:
@@ -904,6 +1007,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("mode", choices=["record", "check", "compare", "archive"])
     parser.add_argument("path", help="the golden run's JSON file")
     parser.add_argument("other", nargs="?", help="compare: the run to compare it with")
+    parser.add_argument(
+        "--backend",
+        action="append",
+        choices=BACKENDS,
+        help="record, check: only this implementation's entries (repeatable); check's default is the file's",
+    )
     parser.add_argument("--reason", choices=["material", "new-functionality"], help="archive: why this version")
     parser.add_argument("--note", help="archive: what changed, and the PR")
     parser.add_argument("--commit", default="HEAD", help="archive: the commit it was recorded at")
@@ -931,8 +1040,8 @@ def main(argv: list[str] | None = None) -> None:
     elif args.other:
         parser.error(f"{args.mode} takes one file")
 
-    results = run_all()
     if args.mode == "record":
+        results = run_all(args.backend or BACKENDS)
         os.makedirs(os.path.dirname(args.path) or ".", exist_ok=True)
         with open(args.path, "w") as f:
             json.dump(results, f, indent=1)
@@ -940,7 +1049,9 @@ def main(argv: list[str] | None = None) -> None:
     else:
         with open(args.path) as f:
             golden = json.load(f)
-        sys.exit(0 if check(golden, results) else 1)
+        backends = args.backend or {_backend(name) for name in golden}
+        golden = {name: entry for name, entry in golden.items() if _backend(name) in backends}
+        sys.exit(0 if check(golden, run_all(backends)) else 1)
 
 
 if __name__ == "__main__":

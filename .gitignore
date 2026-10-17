@@ -182,8 +182,10 @@ data/euclid-heath/
 .rust-wheel/
 
 # refactoring's golden training run (scripts/golden_training_run.py) - valid only on the machine
-# that recorded it, since numpy's products go through BLAS
-data/refactoring/
+# that recorded it, since numpy's products go through BLAS; its Rust entries are the same on every
+# machine, so they are committed (the aarch64 workplan, D7)
+data/refactoring/*
+!data/refactoring/golden_run_rust.json
 
 # local outputs of the residual depth study (scripts/residual_depth_study.py --out)
 data/residual/

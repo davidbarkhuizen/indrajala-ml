@@ -934,7 +934,9 @@ test passing, and:
   git: numpy's BLAS makes the file valid only on the machine that recorded it). Each stage must
   pass `... check data/refactoring/golden_run.json`, the same bits, not within a tolerance. It
   catches a 1-ULP change to the learning rate. It trains the networks of all three
-  implementations, pure Python included.
+  implementations, pure Python included. The Rust entries are the same bits on every machine, so
+  they are also committed as `data/refactoring/golden_run_rust.json`, which CI checks on every
+  PR (`... check data/refactoring/golden_run_rust.json` checks it on any machine).
 - **No hot-path slowdown.** A stage that touches `learn*` or `classify_rows` is timed old against
   new with `scripts/ab.py` ([docs/measurement.md](docs/measurement.md)). It must be within noise.
 - **Public names stay.** The demos (indrajala-demos), `ensemble_train.py` and the tests construct
