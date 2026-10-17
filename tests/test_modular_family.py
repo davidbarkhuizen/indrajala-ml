@@ -272,6 +272,12 @@ def test_readout_counts_a_run_only_when_recertified_in_both_verdicts(tmp_path: P
         and lines[-2] == "quotient: 0 large drops in 0 runs, 0 recovered"
     )
     assert lines[-1] == "Fisher's exact, one-sided (family more often than quotient): p 0.5"
+    pairs = [("family", "quotient"), ("quotient", "family")]
+    lines = mf.readout(tmp_path, ["family", "quotient"], tmp_path / "certify", pairs)
+    assert lines[-2:] == [
+        "Fisher's exact, one-sided (family more often than quotient): p 0.5, Holm-adjusted over 2: 1",
+        "Fisher's exact, one-sided (quotient more often than family): p 1, Holm-adjusted over 2: 1",
+    ]
 
 
 def test_each_screen_row_logs_every_answer_kinds_share_beside_the_pooled_one(tmp_path: Path):

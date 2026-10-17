@@ -55,7 +55,7 @@ COLUMNS = BASE * BASE  # a column's tokens, 3 a + b
 OPERATIONS: dict[str, Callable[[int, int, int], int]] = {
     "sum": lambda A, B, p: (A + B) % p,
     "difference": lambda A, B, p: (A - B) % p,
-    "product": lambda A, B, p: (A * B) % p,  # not an approximation (docs/approximation-claim-workplan.md)
+    "product": lambda A, B, p: (A * B) % p,  # not an approximation (the approximation claim)
 }
 FAMILY = ("sum", "difference")
 SUM = ("sum",)  # the family without the difference (the division workplan's stage 3 option)
@@ -428,12 +428,16 @@ NEAR = 0.95  # a run's worst answer at least this at some diagnosis: it came nea
 VERDICTS = (wc.SNAP_RATIO, 1.0)  # a certified network's two recertifications: the default snap ratio and strict
 
 
-def readout(root: Path, arms: Sequence[str], certify: Path) -> list[str]:
+def readout(
+    root: Path, arms: Sequence[str], certify: Path, pairs: Sequence[tuple[str, str]] | None = None
+) -> list[str]:
     """
     A registered comparison's readout (the division workplan's stage 5): each run in root/<arm>/seed<s>
     by its log, a run counted as certified only when its saved network (matched by sha256) has a
     certificate in `certify` in both verdicts (VERDICTS); each arm's count with its Wilson 95%
-    interval; Fisher's exact test, one-sided, that the first arm certifies more often than the second.
+    interval; for each pair (better, other), Fisher's exact test, one-sided, that the first arm
+    certifies more often than the second (by default the first two arms of two), and with more than
+    one pair each p Holm-adjusted over the pairs (the approximation claim's D5).
     Each run's course too (Outcome), and how many of an arm's failures came near a solution (NEAR):
     a failure near one lost it, one never near never found it.
     """
@@ -442,7 +446,7 @@ def readout(root: Path, arms: Sequence[str], certify: Path) -> list[str]:
         result = json.loads(path.read_text())
         verdicts.setdefault(result["sha256"], {})[result["snap_ratio"]] = bool(result["certified"])
     lines: list[str] = []
-    counts: list[tuple[int, int]] = []
+    counts: dict[str, tuple[int, int]] = {}
     for arm in arms:
         seeds = sorted((root / arm).glob("seed*/log.jsonl"), key=lambda p: int(p.parent.name.removeprefix("seed")))
         certified, near, collapsed, drops, unrecovered, dropped = 0, 0, 0, 0, 0, 0
@@ -473,11 +477,17 @@ def readout(root: Path, arms: Sequence[str], certify: Path) -> list[str]:
             f"{arm}'s {failures} failures: {near} came near a solution (worst answer >= {NEAR}), {collapsed} collapsed"
         )
         lines.append(f"{arm}: {drops} large drops in {dropped} runs, {drops - unrecovered} recovered")
-        counts.append((certified, len(seeds)))
-    if len(counts) == 2:
-        (a, n), (c, m) = counts
-        p = inference.fisher_exact_greater(a, n - a, c, m - c)
-        lines.append(f"Fisher's exact, one-sided ({arms[0]} more often than {arms[1]}): p {p:.3g}")
+        counts[arm] = (certified, len(seeds))
+    if pairs is None:
+        pairs = [(arms[0], arms[1])] if len(arms) == 2 else []
+    ps: list[float] = []
+    for better, other in pairs:
+        (a, n), (c, m) = counts[better], counts[other]
+        ps.append(inference.fisher_exact_greater(a, n - a, c, m - c))
+    adjusted = inference.holm(ps)
+    for (better, other), p, held in zip(pairs, ps, adjusted, strict=True):
+        line = f"Fisher's exact, one-sided ({better} more often than {other}): p {p:.3g}"
+        lines.append(line if len(pairs) == 1 else f"{line}, Holm-adjusted over {len(pairs)}: {held:.3g}")
     return lines
 
 
