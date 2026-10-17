@@ -3,7 +3,8 @@
 **Status: written 2026-10-16 at the owner's request ("what network infrastructure is still missing
 in rust/numpy? we are probably now wasting time using python-only infra for long runs ... plan the
 work in detail"). D1-D10 settled under the owner's delegation, each with its options' pros and
-cons. Stage 0 not started.**
+cons. Stage 0 done 2026-10-17: D10's gate passes (below, "Stage 0's breakdown"), so stages 2-5
+go ahead after stage 1.**
 
 ## Why
 
@@ -155,13 +156,38 @@ the measurement.
 - **Where:** timing on `jebel` (`ab.py remote --host jebel run ...`), development on `pyramidon`.
   `jebel` is held by the chain until the approximation claim's share ends (about 2026-10-17
   midday); A/Bs queue behind its lock. Stage 0's breakdown is a profile, not an A/B, and runs on
-  `pyramidon` between studies.
+  `pyramidon` between studies (it ran on a quiet `jebel`: below).
 - **Tiers:** stage 1 claims a speedup: tier 2 (6 passes) with the `long-test` row. Stages 3 and 5
   change a timed path and claim a speedup: tier 2 with the `forward` and `learn` rows. Each tier 2
   run archived after its PR merges (§10).
 - **Correctness:** the golden run (it has each implementation's window-recurrent and continuous
   entries, dropout included) passes unchanged at every stage that touches the package; the parity
   tests below are exact equality.
+
+## Stage 0's breakdown (2026-10-17, `jebel` quiet, D10's gate)
+
+`scripts/window_recurrent_timing.py --breakdown` at 6f9145f, crate of main aea3212,
+`OPENBLAS_NUM_THREADS=1`, nothing else running; each case's step once unprofiled, once under
+cProfile (the learn cases repeated 5 times: within 1 point). The network call less the crate is
+the window loop's Python with each crate call's Python side. cProfile's overhead (profiled less
+unprofiled) is charged almost all to Python, so the share is an upper bound; the lower bound
+charges all of that overhead to the window loop.
+
+| case | unprofiled | crate | window loop's Python: upper (lower) | examples | the rest |
+| --- | --- | --- | --- | --- | --- |
+| `learn-linear-k1-s16-m16-B64-W19` (E2b''s cell) | 0.005 s | 64% | 36% (about 23%) | - | - |
+| `learn-family-p7-f32-B64-W16` (the fork probe's) | 0.035 s | 82% | 18% (about 10%) | - | - |
+| `forward-linear-k1-s16-m16-n1024` (a long-test chunk) | 1.73 s | 47% | 53% (26%) | - | - |
+| `forward-family-p7-f32-n1024` | 4.31 s | 65% | 35% (19%) | - | - |
+| `long-test-family-p7-f32-U1-n1024-c1023` | 21.2 s | 37% | 19% | 27% | 17% |
+
+**The gate passes:** the window loop's Python is at least about a quarter of the linear window's
+forward pass (the long tests of E2b' and every linear study) and of its training step, both at or
+above 20% even at the lower bound. The attention window is near the line (19-35% forward, 10-18%
+learning): its crate share is larger. In the family long test the examples (27%) and the rest
+(cases, read-back, checking: 17%) come first, which is stage 1; once they shrink, the window
+loop's share of what remains (19% of the profiled whole) grows to 27-30%. So stage 1
+first, then stages 2-5 as planned; stage 6's end-to-end timing tells what they bought.
 
 ## Stages
 
