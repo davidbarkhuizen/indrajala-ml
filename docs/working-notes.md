@@ -270,6 +270,16 @@ where you meet a new trap; delete one that no longer holds.
   per-suite jobs can't see. `tests/test_suite_layout.py` checks it.
 - **Crate builds:** `./cli build-rust`; after switching branches whose `rust/` differs, `git
   submodule update rust`, then rebuild.
+- **A worktree's `.venv` may be a symlink to the main checkout's** (`ls -la .venv`): building a
+  branch's crate into it replaces main's, and its editable install loads main's Python, so a
+  golden run or suite there tests main's code against the branch's crate. A branch with a crate
+  change gets a venv of its own (`python3 -m venv .venv`, `pip install -r requirements.txt
+  maturin==1.15.0`, `pip install --no-deps -e .`, `maturin develop --release` in `rust/`; ruff
+  and pyright at `./cli`'s pins for `./cli lint`); check with a one-line script in its
+  `scripts/` that prints a module's `__file__`.
+- **On `litshe` a worktree's `git submodule update --init rust` fails** with "transport 'file' not
+  allowed" (its submodule URL is the local crate repo): `git -c protocol.file.allow=always
+  submodule update --init rust`.
 - **`scripts/fetch_datasets.py --help` fetches** (no argument parser); harmless when the files are
   present.
 

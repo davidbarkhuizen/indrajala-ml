@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import numpy as np
-
-from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray
+from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray, relu
 
 
 class ReLUArrayLayer(ArrayLayer):
@@ -14,12 +12,12 @@ class ReLUArrayLayer(ArrayLayer):
 
     def forward(self, x: FloatArray) -> FloatArray:
         self.z = self.W @ x + self.b
-        self.a = np.maximum(0.0, self.z)  # relu_layer.relu_activation, vectorized
+        self.a = relu(self.z)  # relu_layer.relu_activation, vectorized
         return self.a
 
     def forward_batch(self, X: FloatArray) -> FloatArray:
         self.Z = X @ self.W.T + self.b
-        self.A = np.maximum(0.0, self.Z)
+        self.A = relu(self.Z)
         return self.A
 
     def compute_output_delta(self, reference: FloatArray) -> None:

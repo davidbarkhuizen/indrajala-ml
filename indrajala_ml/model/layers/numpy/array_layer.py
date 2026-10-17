@@ -22,6 +22,17 @@ def sigmoid(z: FloatArray) -> FloatArray:
         return 1.0 / (1.0 + np.exp(-z))
 
 
+def relu(z: FloatArray) -> FloatArray:
+    """
+    max(0, z) over arrays, by the crate's rule (docs/aarch64-workplan.md, D6): +0.0 for both
+    zeros, NaN propagated. np.maximum alone leaves the zero's sign to the machine (-0.0 on x86,
+    +0.0 on aarch64); adding +0.0 turns -0.0 into +0.0 and passes everything else through.
+    """
+    a = np.maximum(0.0, z)
+    a += 0.0
+    return a
+
+
 def fan_in_aware_random_layer(rng: np.random.Generator, size: int, previous_size: int) -> tuple[FloatArray, FloatArray]:
     """
     A layer's (W, b) drawn from rng uniformly from [-limit, limit], limit = 1/sqrt(fan_in), W

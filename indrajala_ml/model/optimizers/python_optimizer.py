@@ -125,8 +125,7 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
     def _apply_adam(self, index: int, weight_sets: Sequence[WeightSet], learning_rate: float, batch_size: int) -> None:
         rule = cast(Adam, self.rule)
         beta1, beta2, epsilon = rule.beta1, rule.beta2, rule.epsilon
-        bias_correction1 = 1 - beta1**self.t
-        bias_correction2 = 1 - beta2**self.t
+        bias_correction1, bias_correction2 = rule.bias_corrections(self.t)
 
         # state: the weights' m and v, the bias's m and v
         for weight_set, (weight_state, bias_state) in zip(weight_sets, self._zeros(index, weight_sets, 2)):

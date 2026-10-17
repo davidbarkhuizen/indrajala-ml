@@ -15,7 +15,7 @@ from typing import Any, Literal
 import numpy as np
 
 from indrajala_ml.model.layers.array.array_parameters import GammaAndBeta, RunningAverages
-from indrajala_ml.model.layers.numpy.array_layer import FloatArray, sigmoid
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray, relu, sigmoid
 from indrajala_ml.model.specs.single_example import ghost_groups, refuse_single_example
 
 # a group's (m, d, var, std): its value count per feature, and what the backward pass reads
@@ -95,7 +95,7 @@ class BatchNormArrayLayer(GammaAndBeta[FloatArray], RunningAverages[FloatArray])
         return R.reshape(n, self.positions, -1).transpose(0, 2, 1).reshape(n, self.size)
 
     def _activate(self, Y: FloatArray) -> FloatArray:
-        return sigmoid(Y) if self.activation == "sigmoid" else np.maximum(0.0, Y)
+        return sigmoid(Y) if self.activation == "sigmoid" else relu(Y)
 
     def _inference(self, X: FloatArray) -> FloatArray:
         xhat = (self._rows(X) - self.running_mean) / np.sqrt(self.running_var + self.epsilon)

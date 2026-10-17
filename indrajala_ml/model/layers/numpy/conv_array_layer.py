@@ -9,7 +9,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 from indrajala_ml.model.layers.array.array_parameters import WeightAndBias
-from indrajala_ml.model.layers.numpy.array_layer import FloatArray
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray, relu
 from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.specs.single_example import refuse_single_example
 from indrajala_ml.model.specs.window_geometry import output_size, validate_conv_arguments
@@ -128,7 +128,7 @@ class ConvArrayLayer(WeightAndBias[FloatArray], ConvGeometryArrayLayer):
         n = X.shape[0]
         Z = self._products(X) + self.b  # (N, P, channel_count)
         self.Z = Z.transpose(0, 2, 1).reshape(n, self.size)  # channel-major
-        self.A = np.maximum(0.0, self.Z)
+        self.A = relu(self.Z)
         return self.A
 
     def forward(self, x: FloatArray) -> FloatArray:
