@@ -4,8 +4,7 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
 "not planned yet" means only that no workplan has taken it up. A workplan still
-in progress keeps its own list: [guard-training-workplan.md](guard-training-workplan.md),
-[pypi-release-workplan.md](pypi-release-workplan.md),
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
 [segments-workplan.md](segments-workplan.md),
@@ -166,6 +165,22 @@ certificate applies unchanged; only the tasks are new. Each cell keeps the feasi
 random machines with many states means long training lengths: the bound decides which sizes are
 worth running. In the order recommended, after one item that runs across them:
 
+- **The certificate guard, softened and tested across these machine classes** (the guard
+  workplan, retired 2026-10-17: `git show ed0e378:docs/guard-training-workplan.md`; deferred by
+  the owner with the trigger, "fine tune when we can use genuinely divergent tasks"). Built and kept: `certificate_guard.py` (the read by levels,
+  `Guard`), `train_epoch(..., guard)`, the family's `--guard off|on|both` with its stop rule for a
+  frozen run, and `guard-epoch` (one epoch from a saved network, unguarded and guarded). Its
+  registered test, G1 (division at `p` 11, the fork alone against the fork plus the guard), was
+  never run: the plan's budget probe found that from 7 right `p` 11 networks one further epoch
+  lost the right machine in 7 of 7, and the guard held each only by undoing 66-100% of the updates
+  (98-100% where not yet certified in both verdicts), freezing learning. Before a test, softenings
+  to compare with `guard-epoch`: judge a flip only after N batches (stage 2c's flips often repaired
+  themselves); scale a flipping update down instead of undoing it; restore the last right machine
+  once an epoch (the fork with a correctness trigger); undo only updates that add wrong pairs;
+  guard only the states training visits; calm the optimizer once right (cap the update, reset
+  Adam's moments); shrink the codebook to the minimised machine once right. First the cause
+  probe: whether the undone flips land on rarely visited codes (`p` 11 reaches 210-456 codes for
+  121 states; stage 2d's network 8 for 3).
 - **The fork's trigger, tuned across these machine classes**, not on division alone (the
   p11-trigger workplan's stage 4, deferred; the owner, 2026-10-17: the trigger "would need to be
   either target machine agnostic, or we need a way to tune it in general"). The tools exist:

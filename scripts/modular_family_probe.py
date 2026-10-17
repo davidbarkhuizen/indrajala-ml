@@ -22,7 +22,8 @@ budget, diagnosed as it trains (indrajala_ml/studies/modular_family.py).
 whose screen falls below 0.6 of the step's best goes back to that best network, halves the step's
 rate and takes new data, at most 4 times a step; each fork a line in the log, each step's end its
 count.
-`--guard on` turns on the certificate guard (docs/guard-training-workplan.md;
+`--guard on` turns on the certificate guard (the guard workplan, retired:
+`git show ed0e378:docs/guard-training-workplan.md`;
 indrajala_ml/studies/certificate_guard.py): for an epoch whose screen before it got every quotient
 right, the quotient's machine is read after every batch and an update that makes a right machine
 wrong is undone; each epoch's row logs `armed` and `rollbacks`, each step's end its `rollbacks`.

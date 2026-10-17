@@ -1,10 +1,11 @@
 """
-The certificate guard (docs/guard-training-workplan.md; the snap-wall workplan's stage 2d): the
-network's machine read off after a training update, and an update that makes a right machine (no
-wrong (state, window) pair against the target) wrong undone, the network's weights, its
-optimizer's state and its generator restored, the batch skipped. A remedy for the collapse acting
-where it starts: a snapped network changes its machine one transition at a time, silently to the
-batch's loss, and the collapse is the optimizer's response to the first wrong one (stage 2c).
+The certificate guard (the guard workplan, retired: `git show
+ed0e378:docs/guard-training-workplan.md`; the snap-wall workplan's stage 2d): the network's machine
+read off after a training update, and an update that makes a right machine (no wrong (state, window)
+pair against the target) wrong undone, the network's weights, its optimizer's state and its
+generator restored, the batch skipped. A remedy for the collapse acting where it starts: a snapped
+network changes its machine one transition at a time, silently to the batch's loss, and the collapse
+is the optimizer's response to the first wrong one (stage 2c).
 
 The guard acts on a network once armed for it (`arm`), so a caller reads only where a right
 machine is possible: the family's run arms it for an epoch after a perfect quotient screen (the
