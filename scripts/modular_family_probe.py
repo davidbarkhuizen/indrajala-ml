@@ -286,7 +286,12 @@ is `readout data/window-recurrent/fork-probe --arms fork nofork`.
 - **Five certified 49-state networks** (stage 4 had one in 4 runs at 16 codes a factor): each
   robustly certified against division's machine mod 7, 0 wrong outputs and states, minimised to
   49 from 82-242 codes reached (79-225 strict); snap ratio >= 1.000, logit lead >= 0.028 (fork
-  seed 0's branched verdict; 2.63 strict). Not long-tested.
+  seed 0's branched verdict; 2.63 strict). **Every one passes all 447,000 long-test cases**
+  (U1 and S1 at 128, 256 and 1,024; `pyramidon`, the main checkout at 07d4cbd, one at a time
+  2-2.5 h each, `~/code/fork-long-tests.sh`): `fork-probe/long-tests/`, summary
+  `fork-probe/long-tests-summary.txt`, log `fork-probe/long-tests.log`; manifest
+  `fork-probe-long-tests.sha256` 4fc08d26...7e84ab (5 files, run from data/window-recurrent).
+  Archived in indrajala-models (window-recurrent/2026-10-15-division, `family-f2x32-p7-*`).
 - **The arms are the same run until the first fork** (the same seed, the fork off is unchanged):
   seed 2's two arms are identical to step 6, epoch 53. So each seed is a paired comparison. Seed 3
   is the fork's case: the run without lost everything at step 12 and spent its budget; with the
