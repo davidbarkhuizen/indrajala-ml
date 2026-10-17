@@ -4,7 +4,8 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
 "not planned yet" means only that no workplan has taken it up. A workplan still
-in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
+in progress keeps its own list: [division-ladder-workplan.md](division-ladder-workplan.md),
+[pypi-release-workplan.md](pypi-release-workplan.md),
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
 [segments-workplan.md](segments-workplan.md),
