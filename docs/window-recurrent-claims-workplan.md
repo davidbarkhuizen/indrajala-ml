@@ -14,7 +14,8 @@ stopped (D33, D35); E8c (D35): C8 holds at both rungs (at least 3 of 6 certified
 (stage 8 revised by the owner: D36, D37; E6 ran: the linear window certifies at `k` 1; E2 done 2026-10-16: C2 holds, the continuous state
 works 0 of 20 at 1,024 columns against the snapped arm's 8 of 20, Fisher p 0.0033; E2b done 2026-10-16, exploratory (D39): at 1,024 columns the snapped arm works 20 of 20 and the
 continuous arm 0 of 20, Fisher p 7.3e-12; its snapped arm's early stop, a deviation, is recorded by D39,
-with E2b' registered as C2b's test).** The literature it answers to is in
+with E2b' registered as C2b's test; E2b' done 2026-10-17: C2b holds, the snapped arm with no early
+stop works 20 of 20 at 1,024 columns against the continuous arm's 0 of 20, Fisher's exact, one-sided, p 7.3e-12).** The literature it answers to is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 This plan is the window-recurrent workplan's stage 10 ("what follows, decided on the findings"),
@@ -995,6 +996,13 @@ Settled under the owner's standing delegation, with each option's pros and cons:
    stationary past its first columns; a snapped one keeps one code per carry.
 8c. **E2b' (D39): registered**, config `scripts/window_recurrent_e2b_prime.json`; findings, long
    tests as E2b's, C2b against E2b's continuous arm.
+   **E2b' done (2026-10-17):** `jebel`, 2026-10-16 09:12-21:38; all 20 runs work at 64 with break
+   64, every last-step network certified in both verdicts (`e2b-prime.sha256`, d9cd390a...bfe46b7);
+   long tests (B1 at 256 and 1,024) on all 20, every case passed (`e2b-prime-long-tests.sha256`,
+   487751b4...1511cada, 21 files). **C2b holds:** 20 of 20 against 0 of 20, Fisher's exact, one-sided, p 7.3e-12. D39's comparison: training past
+   the first proof cost nothing at this cell (19 of 20 certified at every step from their first;
+   seed 6 lost its proof at steps 8-15 and regained it at 16), and E2b' reproduces E2b's 102 shared
+   step networks byte for byte. Findings in the study script's docstring.
 9. **E5 on `pyramidon`:** findings. **The tool in:** `scripts/window_recurrent_study.py explore
    CONFIG` (`explore_run`, `explore_summary`): every finished snapped run's last network, its codes
    over the codes property's first 1,000 cases at its check lengths and at 8, 16 and 64, the new
