@@ -44,7 +44,8 @@ from indrajala_ml.data.addition_data import (
     splitmix64,
 )
 
-PRIMES = (5, 7, 11)  # D16: 25 and 49 states; 11, 121 (the p11-trigger workplan, D3)
+# D16: 25 and 49 states; 11, 121 (the p11-trigger workplan, D3); 13-41 the division ladder
+PRIMES = (5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41)
 
 Pair = tuple[int, int]
 Answers = tuple[int, ...]

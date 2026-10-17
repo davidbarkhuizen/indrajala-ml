@@ -26,6 +26,9 @@ count.
 indrajala_ml/studies/certificate_guard.py): for an epoch whose screen before it got every quotient
 right, the quotient's machine is read after every batch and an update that makes a right machine
 wrong is undone; each epoch's row logs `armed` and `rollbacks`, each step's end its `rollbacks`.
+Several `--p` run in one pool, each seed's moduli in turn, into DIR/p<p>/seed<s>; `--codes-ratio
+R` gives each of `--factors` factors `ceil(R p)` codes (the division ladder, R 32/11:
+docs/division-ladder-workplan.md).
 `--guard both` runs each seed without and with it, in one pool, into DIR/unguarded/seed<s> and
 DIR/guarded/seed<s> (the readout's arms). `run` holds the machine lock (machine_lock.study), as
 the harness's studies do, so an A/B isn't started beside it.
@@ -425,6 +428,7 @@ import functools
 import json
 import multiprocessing
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 from indrajala_ml.measurement import machine_lock
@@ -446,7 +450,14 @@ def main(argv: list[str]) -> int:
     seeds.add_argument("--seed", type=int, help="one run, into --out")
     seeds.add_argument("--first-seed", type=int, help="--seeds runs from this seed, at once, into --out/seed<s>")
     run.add_argument("--seeds", type=int, default=1)
-    run.add_argument("--p", type=int, default=5)
+    run.add_argument(
+        "--p", type=int, nargs="+", default=[5], help="the modulus; several run in one pool, into --out/p<p>"
+    )
+    run.add_argument(
+        "--codes-ratio",
+        type=Fraction,
+        help="each of --factors factors ceil(R p) codes, width 16 (the division ladder's D2: 32/11)",
+    )
     run.add_argument("--factors", type=int, default=2, help="factors of 16 codes, s 16 each")
     run.add_argument(
         "--factor",
@@ -575,37 +586,46 @@ def main(argv: list[str]) -> int:
         args.out.write_text(json.dumps(result, indent=1))
         print(wc.summary(result))
         return 0
-    encoding = mf.Encoding(args.p, ARMS[args.arm], tuple(args.vocabulary))
-    factors = [tuple(f) for f in args.factor] if args.factor else [(16, 16)] * args.factors
-    probe = functools.partial(
-        mf.run,
-        encoding,
-        factors,
-        budget_seconds=args.budget_minutes * 60,
-        reads=args.reads,
-        budget_epochs=args.budget_epochs,
-        fork=mf.Fork(trigger=_trigger(args)) if args.fork else None,
-    )
+    if args.codes_ratio is not None and args.factor:
+        parser.error("--codes-ratio sets every factor's codes: not with --factor")
+
+    def probe(p: int) -> functools.partial[None]:
+        encoding = mf.Encoding(p, ARMS[args.arm], tuple(args.vocabulary))
+        if args.codes_ratio is not None:
+            factors = mf.scaled_factors(p, args.codes_ratio, args.factors)
+        else:
+            factors = [tuple(f) for f in args.factor] if args.factor else [(16, 16)] * args.factors
+        return functools.partial(
+            mf.run,
+            encoding,
+            factors,
+            budget_seconds=args.budget_minutes * 60,
+            reads=args.reads,
+            budget_epochs=args.budget_epochs,
+            fork=mf.Fork(trigger=_trigger(args)) if args.fork else None,
+        )
+
     guards = {"off": [False], "on": [True], "both": [False, True]}[args.guard]
     with machine_lock.study():
         if args.seed is not None:
-            if len(guards) > 1:
-                parser.error("--guard both runs --first-seed's seeds, not one --seed")
-            probe(seed=args.seed, out=args.out, guard=guards[0])
+            if len(guards) > 1 or len(args.p) > 1:
+                parser.error("--guard both and several --p run --first-seed's seeds, not one --seed")
+            probe(args.p[0])(seed=args.seed, out=args.out, guard=guards[0])
             return 0
         seeds = range(args.first_seed, args.first_seed + args.seeds)
-        # with both, each seed's two arms in turn, so a pair ends about together
-        jobs = [(s, guard) for s in seeds for guard in guards]
+        # each seed's moduli and arms in turn, so a round's rungs and pairs end about together
+        jobs = [(p, s, guard) for s in seeds for p in args.p for guard in guards]
         context = multiprocessing.get_context("forkserver")
         with concurrent.futures.ProcessPoolExecutor(
             min(args.workers or len(jobs), len(jobs)), mp_context=context
         ) as pool:
             runs: dict[concurrent.futures.Future[str], str] = {}
-            for s, guard in jobs:
-                out = args.out / GUARD_ARMS[guard] if len(guards) > 1 else args.out
+            for p, s, guard in jobs:
+                out = args.out / f"p{p}" if len(args.p) > 1 else args.out
+                out = out / GUARD_ARMS[guard] if len(guards) > 1 else out
                 out.mkdir(parents=True, exist_ok=True)
-                runs[pool.submit(logged_run, functools.partial(probe, guard=guard), s, out)] = (
-                    f"{out.name}/seed{s}" if len(guards) > 1 else f"seed {s}"
+                runs[pool.submit(logged_run, functools.partial(probe(p), guard=guard), s, out)] = (
+                    f"{out.relative_to(args.out)}/seed{s}" if out != args.out else f"seed {s}"
                 )
             for done in concurrent.futures.as_completed(runs):
                 print(f"{runs[done]}: {done.result()}", flush=True)
