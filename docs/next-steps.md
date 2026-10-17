@@ -102,9 +102,12 @@ Decided with the owner, each to become a workplan or a stage:
   approximation (a homomorphic image), the translations the dependent part, so no cover by
   approximations exists: the test of whether one approximation helps where no cover does. Later,
   `a = 0` adds resets.
-- **The approximation claim, registered:** the target alone, with one approximation (the sum),
-  with the cover (sum and difference), with the product `AB` (not an approximation;
-  `test_division_readouts_approximations_and_the_cover`), 20 seeds each at `p` 5.
+- **The approximation claim: done, A1-A3 hold** (2026-10-17; the workplan retired:
+  `git show c201622:docs/approximation-claim-workplan.md`; findings in `scripts/modular_family_probe.py`'s docstring).
+  The sum alone certifies 10 of 20 against the quotient alone's 1 and the product's 0, so one
+  approximation helps because it is one. Open: whether any approximation helps (one control,
+  the product, at one machine), and at larger `p`; the affine map above tests one
+  approximation where no cover exists.
 - **Terms** (settled with the owner, the division paper): target machine and its output function;
   approximation (homomorphic image); cover (emulation); coordinates; k-distinguishable (Chow). Not
   "family" (the code's arm name only), "basis", "ideal" (a semigroup term), "model". "Characteristic

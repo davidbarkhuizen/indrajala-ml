@@ -15,6 +15,7 @@ budget, diagnosed as it trains (indrajala_ml/studies/modular_family.py).
         --budget-minutes 180 --out DIR
     .venv/bin/python scripts/modular_family_probe.py long-test NETWORK.json [...] --task modular-division-5 --out DIR
     .venv/bin/python scripts/modular_family_probe.py trace DIR/seed<s>/log.jsonl [...]
+    .venv/bin/python scripts/modular_family_probe.py readout DIR --pairs family:quotient sum:quotient sum:product
 
 `--fork` turns on snapshot and fork on collapse (the collapse-fork workplan, retired:
 `git show 89cf3a3:docs/collapse-fork-workplan.md`): a step's epoch
@@ -312,6 +313,55 @@ is `readout data/window-recurrent/fork-probe --arms fork nofork`.
 - **Next, as registered:** the `p` 11 ladder, the fork on (two factors of 32, then 64; 4-6 seeds).
   The alternatives the logs suggest (a trigger on the worst answer; a step that ends only when
   its peak is recovered) stay in next-steps.md.
+
+Findings (the approximation claim, A1-A3 and D1-D6 registered before its data; the workplan
+retired: `git show c201622:docs/approximation-claim-workplan.md`), 2026-10-16/17; p 5, two factors of 16, reading the output, one vocabulary for every
+arm (`--vocabulary sum difference product`), stage 5's settings otherwise (400 epochs, 180 minutes
+only a guard, stop at certified, no fork), seeds 200-219 in each of four arms: `quotient` alone,
+`sum` (the quotient and the sum, one approximation), `family` (the cover) and `product` (the
+quotient and `A B mod p`, an extra output that is not an approximation). Code 7618dfe,
+OPENBLAS_NUM_THREADS=1: pyramidon seeds 214-219 (`~/code/wt-approx`, each arm 3 at once in turn),
+2026-10-16 15:13 to 00:46; jebel seeds 200-213 (`~/code/wt-p11`, two arms at once, 3 workers
+each), 23:38 to 06:21. Every certified network recertified in both verdicts (`certify/`,
+`post-jebel.txt`; on jebel at 7618dfe: pyramidon had no memory to spare beside its long tests, and
+the certificate is deterministic). Data in data/window-recurrent/approximation-claim/, manifest
+`approximation-claim.sha256` 9517dc2b...cf6f2772 (1,501 files). The readout is `readout data/window-recurrent/approximation-claim --pairs
+family:quotient sum:quotient sum:product` (`readout.txt`).
+
+| arm | certified (Wilson 95%) | successes: steps, epochs (median) | failures near a solution |
+| --- | --- | --- | --- |
+| family | 15/20 (0.53-0.89) | 6-12, 78-235 (136) | 4 of 5 |
+| sum | 10/20 (0.30-0.70) | 7-11, 64-160 (116) | 5 of 10 |
+| quotient | 1/20 (0.01-0.24) | 12, 279 | 4 of 19 |
+| product | 0/20 (0.00-0.16) | - | 0 of 20 |
+
+- **A1, A2 and A3 hold.** Fisher's exact, one-sided, Holm over the three (D5): A1 family more often
+  than quotient p 5.0e-6 (adjusted 1.5e-5); A3 sum more often than product p 2.2e-4 (4.4e-4); A2
+  sum more often than quotient p 0.0017 (0.0017). By the plan's reading: one approximation helps,
+  and because it is an approximation, not because it is one more output.
+- **Stage 5 replicates with the wider vocabulary:** the family 15 of 20 and the quotient 1 of 20
+  here against 13 and 1 there (A1), so the product's token, one more embedding row, changes neither.
+- **The cover does more than one approximation:** 15 of 20 against 10 (not a registered test).
+- **Every recertification agrees:** 26 of 26 certified in both verdicts against division's 25-state
+  machine, 0 wrong outputs, 0 wrong states, each minimised to 25; 36-137 joint codes reached (36-131
+  strict); snap ratio >= 1.000 (653 near ties branched, none strict), logit lead >= 0.32.
+- **Every failure spent its 400 epochs** (steps 14-22; no run ended on the guard).
+- **The product neither helps nor is learned** (exploratory, after the data: each run's step end
+  with the best worst answer). The quotient is the worst answer in all 20 product runs, at a
+  median 0.59 right against the quotient alone's 0.66, and the product itself 0.71; no product run
+  came near a solution (the quotient alone's 4 did), 11 of 20 collapsed. The sum and the cover's
+  runs are right on their extra outputs at a median 1.00. Read digit by digit, the sum's next value
+  is a function of the sum and the column, so it can be learned on its own; the product's needs
+  both residues, as the quotient's does: the extra output that doesn't help is one as hard as the
+  target. The family's worst answer at its best is the difference in 18 of 20.
+- **Large drops** (`readout`): the family 34 in 14 runs (29 recovered), the sum 14 in 7 (10), the
+  quotient 11 in 5 (9), the product none.
+- **Every certified network passes every long-test case:** 26 of 26, all 375,000 cases each
+  (division's U1 and S1 at 128, 256 and 1,024 columns; 9,750,000 in all), on jebel at 7618dfe,
+  6 at a time, 2026-10-17 06:37 to 11:32, 46-68 minutes a network (`long-tests/`,
+  `post-jebel.txt`; copied to pyramidon, manifest `approximation-claim-long-tests.sha256`
+  a1c41b20...4ebd4c05, 53 files). Archived in indrajala-models
+  (window-recurrent/2026-10-15-division, `*-approx-*`).
 """
 
 from __future__ import annotations
@@ -406,6 +456,12 @@ def main(argv: list[str]) -> int:
     readout.add_argument("root", type=Path, help="the study's directory, a <arm>/seed<s> per run")
     readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
     readout.add_argument("--certify", type=Path, help="the recertifications (default: root/certify)")
+    readout.add_argument(
+        "--pairs",
+        nargs="+",
+        metavar="BETTER:OTHER",
+        help="the registered tests, each arm against another (Holm over them); the arms are theirs, in order",
+    )
     args = parser.parse_args(argv)
     if args.command == "drops":
         trigger = _trigger(args)
@@ -428,7 +484,9 @@ def main(argv: list[str]) -> int:
         )
         return 0
     if args.command == "readout":
-        print("\n".join(mf.readout(args.root, args.arms, args.certify or args.root / "certify")))
+        pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
+        arms = list(dict.fromkeys(arm for pair in pairs for arm in pair)) if pairs else args.arms
+        print("\n".join(mf.readout(args.root, arms, args.certify or args.root / "certify", pairs)))
         return 0
     if args.command == "trace":
         for path in args.logs:
