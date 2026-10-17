@@ -6,6 +6,7 @@ within a tolerance.
 
     python scripts/golden_training_run.py record golden.json   # on main, before the first stage
     python scripts/golden_training_run.py check golden.json    # after each stage
+    python scripts/golden_training_run.py compare a.json b.json  # two machines' runs, no training
     python scripts/golden_training_run.py archive golden.json --reason {material,new-functionality}
         --note TEXT [--commit REF] [--date YYYY-MM-DD] [--profile FILE] [--replaces PATH] [--no-pr]
 
@@ -840,6 +841,27 @@ def check(golden: dict[str, Any], results: dict[str, Any]) -> bool:
     return identical
 
 
+def compare(first: dict[str, Any], second: dict[str, Any]) -> bool:
+    """Two recorded runs (two machines', say) entry by entry, grouped by backend: how many entries
+    match bit for bit, and the first difference of each that doesn't (aarch64 workplan, stage 1)."""
+    by_backend: dict[str, list[tuple[str, str | None]]] = {}
+    for name in sorted(first.keys() | second.keys()):
+        if name not in first or name not in second:
+            difference = f"only in the {'first' if name in first else 'second'} run"
+        else:
+            found = _first_difference(first[name], second[name])
+            difference = found and f"differs at {found}"
+        by_backend.setdefault(_backend(name), []).append((name, difference))
+    for backend, entries in by_backend.items():
+        differing = [(name, difference) for name, difference in entries if difference]
+        print(f"{backend}: {len(entries) - len(differing)} of {len(entries)} identical")
+        for name, difference in differing:
+            print(f"  {name}: {difference}")
+    identical = all(difference is None for entries in by_backend.values() for _, difference in entries)
+    print("bit-identical" if identical else "NOT bit-identical")
+    return identical
+
+
 def archive(args: argparse.Namespace) -> None:
     """The golden file as a new version in the benchmark archive, by an auto-merged PR (or, with
     --no-pr, a commit on a new branch of the archive's clone)."""
@@ -879,8 +901,9 @@ def archive(args: argparse.Namespace) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("mode", choices=["record", "check", "archive"])
+    parser.add_argument("mode", choices=["record", "check", "compare", "archive"])
     parser.add_argument("path", help="the golden run's JSON file")
+    parser.add_argument("other", nargs="?", help="compare: the run to compare it with")
     parser.add_argument("--reason", choices=["material", "new-functionality"], help="archive: why this version")
     parser.add_argument("--note", help="archive: what changed, and the PR")
     parser.add_argument("--commit", default="HEAD", help="archive: the commit it was recorded at")
@@ -899,6 +922,14 @@ def main(argv: list[str] | None = None) -> None:
             print(f"golden_training_run.py archive: {error}", file=sys.stderr)
             sys.exit(1)
         return
+
+    if args.mode == "compare":
+        if not args.other:
+            parser.error("compare needs two files")
+        with open(args.path) as f, open(args.other) as g:
+            sys.exit(0 if compare(json.load(f), json.load(g)) else 1)
+    elif args.other:
+        parser.error(f"{args.mode} takes one file")
 
     results = run_all()
     if args.mode == "record":
