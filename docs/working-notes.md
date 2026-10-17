@@ -211,6 +211,11 @@ where you meet a new trap; delete one that no longer holds.
   before the next window's forward.
 - **The Python network's parts aren't `TrainableLayer`s** (no `forward`): the optimiser needs only
   `weight_sets()`, and `snapshot()`/`restore()` append the parts after `trainable_layers`.
+- **Never `x // BASE**t` (or `d * BASE**t`) for every digit t of a long number:** each power and
+  division is a big-integer operation the size of the number, so a conversion is quadratic in the
+  length. At the long tests' 1,024 columns it was a quarter of a long test (the window-program
+  workplan's stage 1). Use `addition_data.digits` and `from_digits` (DIGIT_CHUNK digits a
+  big-integer step, the rest from a table or small ints).
 
 ## Machines
 

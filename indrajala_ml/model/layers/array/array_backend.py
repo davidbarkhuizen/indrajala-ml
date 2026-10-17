@@ -175,11 +175,18 @@ class RustBackend:
 
     @staticmethod
     def argmax_token_rows(matrix: pa.Array, classes: int) -> list[tuple[int, ...]]:
-        # argmax_rows per token: each row's runs of classes values
-        return [
-            tuple(token.index(max(token)) for token in (row[i : i + classes] for i in range(0, len(row), classes)))
-            for row in matrix.tolist()
-        ]
+        # argmax_rows per token: each row's runs of classes values, by numpy's argmax (the first of
+        # equal maxima, as max and index); a NaN, where the two differ, takes max and index's
+        rows = matrix.tolist()
+        if not rows:
+            return []
+        values = np.array(rows, dtype=np.float64).reshape(len(rows), -1, classes)
+        if np.isnan(values).any():
+            return [
+                tuple(token.index(max(token)) for token in (row[i : i + classes] for i in range(0, len(row), classes)))
+                for row in rows
+            ]
+        return [tuple(row) for row in np.argmax(values, axis=2).tolist()]
 
 
 NUMPY = NumpyBackend()

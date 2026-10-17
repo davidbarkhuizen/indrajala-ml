@@ -215,3 +215,16 @@ def test_a_limit_screens_a_spread_of_the_same_cases():
     results = evaluate(correct, 4, limit=500)
     assert all(result.cases <= 500 for result in results)
     assert by_id(results)["M3"].strata.keys() == {1, 2, 3, 4}
+
+
+def test_digits_and_from_digits_are_the_per_digit_formulas_at_every_length():
+    # the formulas they replaced (the window-program workplan's stage 1): quadratic in n
+    rng = Random(0)
+    for n in [*range(65), 127, 128, 129, 1024]:
+        for x in {0, BASE**n - 1, rng.randrange(BASE**n), rng.randrange(BASE**n)}:
+            ds = digits(x, n)
+            assert ds == tuple((x // BASE**t) % BASE for t in range(n))
+            assert from_digits(ds) == x
+        # any integers, not only digits (a prediction's labels)
+        free = [rng.randrange(-5, 9) for _ in range(n)]
+        assert from_digits(free) == sum(d * BASE**t for t, d in enumerate(free))

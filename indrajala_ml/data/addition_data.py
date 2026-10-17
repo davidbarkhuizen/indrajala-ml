@@ -44,14 +44,34 @@ Triple = tuple[int, int, int]
 Adder = Callable[[Sequence[Triple]], list[int]]
 
 
+DIGIT_CHUNK = 8  # digits split off x at a time
+_CHUNK_DIGITS = tuple(tuple((v // BASE**t) % BASE for t in range(DIGIT_CHUNK)) for v in range(BASE**DIGIT_CHUNK))
+
+
 def digits(x: int, n: int) -> tuple[int, ...]:
-    """x's n base-3 digits, least significant first."""
+    """
+    x's n base-3 digits, least significant first: DIGIT_CHUNK at a time, each chunk's digits from a
+    table (`x // BASE**t` for every t is quadratic in n, slow at the long tests' 1,024 columns).
+    """
     assert 0 <= x < BASE**n, f"{x} doesn't have {n} base-{BASE} digits"
-    return tuple((x // BASE**t) % BASE for t in range(n))
+    result: list[int] = []
+    for _ in range(-(-n // DIGIT_CHUNK)):
+        x, low = divmod(x, BASE**DIGIT_CHUNK)
+        result += _CHUNK_DIGITS[low]
+    return tuple(result[:n])
 
 
 def from_digits(ds: Sequence[int]) -> int:
-    return sum(d * BASE**t for t, d in enumerate(ds))
+    """The number of digits ds, least significant first: Horner's rule, DIGIT_CHUNK at a time (as
+    digits; any integers, not only 0-2, give sum(d * BASE**t))."""
+    value = 0
+    for start in reversed(range(0, len(ds), DIGIT_CHUNK)):
+        chunk = ds[start : start + DIGIT_CHUNK]
+        low = 0
+        for d in reversed(chunk):
+            low = low * BASE + d
+        value = value * BASE ** len(chunk) + low
+    return value
 
 
 def column_sums(triple: Triple, n: int) -> tuple[int, ...]:

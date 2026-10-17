@@ -198,6 +198,8 @@ first, then stages 2-5 as planned; stage 6's end-to-end timing tells what they b
    `column_tokens`, `Encoding.example`, the answers' read-back. Tests: old against new examples and
    labels equal on every task (addition, modular, the family's encodings) at lengths 1-64 and 1,024;
    golden run; A/B. A note in working-notes on the trap (`x // BASE**t` at long lengths).
+   **Done 2026-10-17:** the long test at 1,024 (1,023 cases) 36% faster on `jebel` (21.2 s to
+   13.6 s, tier 2, consistent); the forward rows within the control's movement (4.5%).
 2. **The window program, inference** (indrajala-math-rust, one PR). A `WindowProgram` built from op
    descriptors (one per layer kind a window may hold: Embedding, Position, StateInput, Dense with
    its activations, LayerNorm, Residual's body, Attention with its causal, dropout and rotary
