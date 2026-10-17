@@ -362,6 +362,46 @@ family:quotient sum:quotient sum:product` (`readout.txt`).
   `post-jebel.txt`; copied to pyramidon, manifest `approximation-claim-long-tests.sha256`
   a1c41b20...4ebd4c05, 53 files). Archived in indrajala-models
   (window-recurrent/2026-10-15-division, `*-approx-*`).
+
+Findings (the `p` 11 ladder: docs/p11-trigger-workplan.md, stage 3, registered before its data:
+works if at least one network certifies against division's 121-state machine in both verdicts),
+2026-10-16; p 11, the family, two factors of 32 codes (`s` 16), reading the output, the fork on
+with today's trigger (pooled screen below 0.6 of the step's peak), 600 epochs (900 minutes only a
+guard), stop at certified, seeds 0-5. Code 7618dfe, OPENBLAS_NUM_THREADS=1, jebel, 6 at once,
+21:38 to 23:38 (`~/code/jebel-chain.sh`, after E2b'). Data in data/window-recurrent/p11-ladder/,
+manifest `p11-ladder.sha256` ef3281cd...f460b7dc (155 files, run from data/window-recurrent). The
+readout is `readout data/window-recurrent/p11-ladder --arms family`.
+
+| seed | end | step | epochs | minutes | forks | worst answer at best | large drops |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | spent | 17 | 600 | 97.5 | 12 | 0.75 | 0 |
+| 1 | certified | 10 | 293 | 34.5 | 1 | 1.00 | 0 |
+| 2 | certified | 16 | 402 | 52.1 | 16 | 1.00 | 2 |
+| 3 | spent | 27 | 600 | 119.9 | 0 | 0.41 | 0 |
+| 4 | certified | 31 | 527 | 91.7 | 72 | 1.00 | 1 |
+| 5 | certified | 16 | 543 | 80.1 | 11 | 1.00 | 1 |
+
+- **Works: 4 of 6 certified** (Wilson 95%: 0.30-0.90) at the ladder's first rung, two factors of
+  32, so the second rung (64 a factor) doesn't run. The largest machine learned so far: 121 states
+  against `p` 7's 49.
+- **Every one robustly certified:** both verdicts against division's machine mod 11, 0 wrong
+  outputs, 0 wrong states, each minimised to 121; 210-428 joint codes reached strict (snap ratio
+  1.0), 212-448 at 1.05 (821 near ties branched, none strict); logit lead >= 0.26 (seed 4 at 1.05;
+  0.37 strict). `certify/`, `certify.log`, on pyramidon.
+- **Every one passes every long-test case:** all 663,000 each (division's U1 and S1 at 128, 256 and
+  1,024 columns), on pyramidon at c4a91e7 (`~/code/p11-long-tests.sh`), one at a time, 2026-10-17
+  04:02 to 14:11, 140-174 minutes a network (`long-tests/`, `long-tests.log`), manifest
+  `p11-ladder-long-tests.sha256` d0ab5c4e...6d0133250c49 (5 files). Archived in indrajala-models
+  (window-recurrent/2026-10-15-division, `family-f2x32-p11-*`).
+- **No run collapsed, and every large drop recovered:** 4 large drops in 3 runs (`readout`), all
+  certified runs. The two failures never came near a solution: seed 0's worst answer at best 0.75,
+  seed 3's 0.41 (at step 9, then 18 more steps without the fork firing once). Neither failure is the
+  collapse the trigger targets.
+- **The fork fires most where the run succeeds slowest:** 72 forks in seed 4 (certified at step 31,
+  the latest), 1 in seed 1 (the earliest, step 10). Exploratory: whether those forks rescued seed 4
+  or held it back isn't separable without the alternate trigger's paired replays (stage 4).
+- **Next:** stage 4, the alternate trigger (D7), is the plan's next step; the certificate guard
+  (`replay --guard`, the snap-wall workplan's stage 2d) may supersede it, decided there.
 """
 
 from __future__ import annotations
