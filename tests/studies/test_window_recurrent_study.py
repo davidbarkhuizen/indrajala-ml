@@ -6,6 +6,7 @@ network's run, its steps saved and resumed.
 """
 
 import dataclasses
+import hashlib
 import json
 import math
 import random
@@ -406,6 +407,9 @@ def test_explore_counts_the_codes_past_the_check_lengths(tmp_path: Path):
     explored = wr.explore_run(study, spec, (4, 8))
     assert explored is not None and wr.explore_run(study, unrun) is None
     assert set(explored["check_codes"]) == {"1", "2"} and set(explored["codes"]) == {"4", "8"}
+    assert explored["past"] == 4  # the first of the lengths past the check's longest, 2
+    network = study.models / spec.key / "step-2.network.json"
+    assert explored["network"] == hashlib.sha256(network.read_bytes()).hexdigest()
     seen = {code for used in explored["check_codes"].values() for code in used}
     for n in ("4", "8"):
         assert set(explored["codes"][n]) <= {(c,) for c in range(3)}
@@ -413,18 +417,19 @@ def test_explore_counts_the_codes_past_the_check_lengths(tmp_path: Path):
 
 
 def test_explore_summary_compares_failing_with_working_runs():
-    def run(works: bool, passes: bool, new: list[int]) -> dict[str, Any]:
-        return {"works": works, "passes": passes, "new": {"8": new}}
+    def run(works: bool, passes: bool, new: list[int], past: int = 8) -> dict[str, Any]:
+        return {"works": works, "passes": passes, "new": {"8": new, "16": []}, "past": past}
 
     explored = [
         *(run(False, True, [5]) for _ in range(4)),
         run(False, True, []),
+        run(False, True, [5], past=16),  # trained past 8 (`k` 4): read at 16, where it uses no new code
         run(False, False, [5]),  # a failing check: not E5's
         *(run(True, True, []) for _ in range(5)),
     ]
-    summary = wr.explore_summary(explored, (8,))
-    p = inference.fisher_exact(4, 1, 0, 5)
-    assert f"| 8 | 4/5 | 0/5 | {p:.3g} |" in summary
+    summary = wr.explore_summary(explored, (8, 16))
+    assert f"| 8 | 5/6 | 0/5 | {inference.fisher_exact(5, 1, 0, 5):.3g} |" in summary
+    assert f"| past | 4/6 | 0/5 | {inference.fisher_exact(4, 2, 0, 5):.3g} |" in summary
 
 
 def test_verdicts_count_each_cell_by_its_results_certificates_and_long_tests(tmp_path: Path):

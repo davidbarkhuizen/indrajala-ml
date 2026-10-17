@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import contextlib
+import hashlib
 import json
 import math
 import multiprocessing
@@ -1003,8 +1004,10 @@ def explore_run(study: Study, spec: RunSpec, lengths: Sequence[int] = EXPLORED_L
     E5 for one finished, snapped run: the codes its last step's network snaps to over the first
     settings.codes_cases cases of the task's codes property (B1 for addition) at each of that step's
     check lengths and at each of lengths, and at each of lengths the codes never used at a check
-    length ("new"); with whether the run works and whether its last check passed. None for a run
-    without a result, one that raised, or a continuous one.
+    length ("new"); with whether the run works and whether its last check passed, the first of
+    lengths past that check's longest length ("past": C6 reads 8 columns, 16 at `k` 4, whose check
+    reaches 12), and the network's sha256 (a rerun that reproduced a run exactly is one network).
+    None for a run without a result, one that raised, or a continuous one.
     """
     result_file = study.results / f"{spec.key}.json"
     if not spec.snapped or not result_file.exists():
@@ -1014,7 +1017,8 @@ def explore_run(study: Study, spec: RunSpec, lengths: Sequence[int] = EXPLORED_L
         return None
     last = result["steps"][-1]
     task = wt.task_named(spec.task)
-    network = load_network(str(study.models / spec.key / f"step-{last['step']}.network.json"))
+    network_file = study.models / spec.key / f"step-{last['step']}.network.json"
+    network = load_network(str(network_file))
     model = WindowModel(network, spec.k, task)
     codes_property = next(p for p in study.settings.catalogue(task) if p.id == task.codes_id)
 
@@ -1031,22 +1035,28 @@ def explore_run(study: Study, spec: RunSpec, lengths: Sequence[int] = EXPLORED_L
         "check_codes": {str(n): used for n, used in checked.items()},
         "codes": {str(n): used for n, used in reached.items()},
         "new": {str(n): [code for code in used if code not in seen] for n, used in reached.items()},
+        "past": next((n for n in sorted(lengths) if n > max(last["lengths"])), None),
+        "network": hashlib.sha256(network_file.read_bytes()).hexdigest(),
     }
 
 
 def explore_summary(explored: Sequence[dict[str, Any]], lengths: Sequence[int] = EXPLORED_LENGTHS) -> str:
     """
     E5's comparison: of the runs whose last check passed, the working and the failing runs with a
-    new code at each length, and Fisher's exact test between them (D4).
+    new code at each length, and Fisher's exact test between them (D4); then C6's registered row,
+    "past", each run at its first length past training (its "past", where recorded).
     """
     rows: list[list[str]] = []
     passing = [run for run in explored if run["passes"]]
-    for n in lengths:
+    for n in [*lengths, "past"]:
+        group_of = [run for run in passing if n != "past" or run.get("past") is not None]
         counts = {
-            works: (sum(bool(run["new"][str(n)]) for run in group), len(group))
+            works: (sum(bool(run["new"][str(run["past"] if n == "past" else n)]) for run in group), len(group))
             for works in (True, False)
-            for group in [[run for run in passing if run["works"] is works]]
+            for group in [[run for run in group_of if run["works"] is works]]
         }
+        if n == "past" and not group_of:
+            continue
         (working_new, working), (failing_new, failing) = counts[True], counts[False]
         p = inference.fisher_exact(failing_new, failing - failing_new, working_new, working - working_new)
         rows.append([str(n), f"{failing_new}/{failing}", f"{working_new}/{working}", f"{p:.3g}"])

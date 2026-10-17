@@ -371,8 +371,8 @@ last network certified on pyramidon at 9dce80e, both verdicts (`e3-e4/certificat
 7005c870...5745770c (was 37c1c694...42a38caa); `certificates-strict.sha256`, eb10292c...ef837eff (was a68ed4f2...3b74f7a3); logs `certify-branched.log`
 60f328ea...b0d93bc8, `certify-strict.log` f8ffc9b7...7dc7a7f3). The registered tests are D4's on
 the working rate (W10, exact to 16 columns and past); the certified rate beside them is a
-measurement. Holm's correction over C2-C4 and C6 waits for C2 and C6 (stage 8); the p values here
-are raw.
+measurement. The p values here are raw; Holm's correction over C2-C4 and C6, registered (D4),
+came with E5 (its findings): C3 0.042, still holding; C4 0.088, so C4's refutation doesn't stand.
 
 | arm | `m` | working | certified (strict) | robustly certified | working, not certified |
 | --- | --- | --- | --- | --- | --- |
@@ -392,8 +392,10 @@ are raw.
   (working but not certified: 0, 1, 2, 4, 5 of 20 from `m` 3 to 16). Under C1's restatement
   (certified is what works at every length), extra codes don't make training find the automaton
   more often; `m` 3, exactly the automaton's size, is the one low cell (3 of 20).
-- **C4, as registered, is refuted: all at once works more often** (19 of 20 against the
-  curriculum's 13 of 20 at `m` 16, Fisher's exact p 0.044), on far fewer examples (working runs'
+- **C4 holds as registered, after Holm's correction:** the arms' working rates don't differ at
+  0.05 (all at once 19 of 20 against the curriculum's 13 of 20 at `m` 16, Fisher's exact p 0.044
+  raw, 0.088 adjusted over C2-C4 and C6; read raw, before E5, this was reported as refuted, all at
+  once working more often). All at once leans higher, on far fewer examples (working runs'
   medians 393,216 against 7,798,784, Mann-Whitney p 2e-6, every all-at-once run below every
   curriculum one). Certified, the arms don't differ (12 against 8 of 20, p 0.34): all at once's
   extra working runs are mostly ones the certificate fails (7 of its 19).
@@ -482,7 +484,7 @@ on jebel at ce4015d, 2 workers, into `e3-e4/long-tests/`, log `e2-long-tests.log
   0 of 20 against 8 of 20 (Fisher's exact, two-sided, p 0.0033); at 64, 3 of 20 against 13
   of 20 (p 0.0031). No continuous run got past 24 columns (breaks 16, 16 and 24 among the three
   working), so none was long-tested: the registered measure needs a break of 64. Raw p values;
-  Holm's correction over C2-C4 and C6 waits for C6 (E5).
+  Holm-adjusted over C2-C4 and C6 (E5's findings), 0.013 at 1,024: C2 still holds.
 - **The snap matters for extrapolating, not for fitting.** The continuous arm fits its training
   lengths about as often (step 3, lengths 4-12, passed by 15 of 20 against E3's 19 of 20), but 12 of
   those 15 break at 12 columns or below, exactly the longest length trained; the snapped arm's
@@ -574,6 +576,35 @@ all 20 (every break is 64), `pyramidon` at c4a91e7 (`~/code/wt-dev2`), 2 workers
   P1's snap-wall work: an ordinary step across a code boundary, then Adam's amplification). So
   E8b's collapse past a solution, general at division, is rare at this cell (the stable-replay
   probe: 20 of 20 replays of 4 stable seeds kept the proof).
+
+Findings (E5 of docs/window-recurrent-claims-workplan.md: unexplored states, C6), from the saved
+networks, no training, on pyramidon, 2026-10-17: `explore scripts/window_recurrent_matrix.json
+scripts/window_recurrent_e3_e4_trimmed.json --workers 4`, about 2 minutes. Every finished snapped
+run's last network, the matrix's and E3/E4's pooled: 195 networks (E3's 15 reruns of the matrix are
+byte-identical, C0, and count once), 121 of them passing their last check. Codes over the codes
+property's first cases (B1) at the check lengths and at 8, 16 and 64 columns; "new" a code never
+used at a check length. Data `data/window-recurrent/e5/` (`e5.json`, every run's codes; `e5.log`),
+manifest `e5.sha256` c442c79e...fcd81059cf (2 files, run from data/window-recurrent).
+
+| columns | failing runs with a new code | working runs with a new code | Fisher's exact p |
+| --- | --- | --- | --- |
+| 8 | 2/21 | 1/100 | 0.078 |
+| 16 | 2/21 | 3/100 | 0.21 |
+| 64 | 4/21 | 5/100 | 0.048 |
+| past training (registered: 8, 16 at `k` 4) | 2/21 | 3/100 | 0.21 |
+
+- **C6 is not supported:** 2 of 21 failing runs reach a code training never produced, against 3 of
+  100 working runs (two-sided p 0.21; Holm-adjusted 0.21). 19 of the 21 fail using only codes they
+  used at their training lengths: they fail by wrong transitions among explored codes, not by
+  reaching unexplored ones. The two exceptions are one cell, the matrix's `k` 1 `s` 4 `m` 16 (seeds
+  0 and 4: codes 10, 11, 15 and 10). So Buitrago Ruiz & Gu's intervention (training from other
+  sequences' final states) isn't indicated as this method's fix.
+- **A new code isn't a failure by itself:** 3 working runs reach one by 16 columns, 5 by 64.
+- **At 64 columns** (exploratory, not the registered length): 4 of 21 against 5 of 100, p 0.048
+  raw.
+- **Holm's correction over C2-C4 and C6** (D4, registered; `inference.holm`): C2 0.0033 to 0.013
+  (holds), C3 0.014 to 0.042 (holds), C4 0.044 to 0.088 (**the arms don't differ at 0.05: C4's
+  refutation, reported raw at stage 7, doesn't stand**), C6 0.21 (not supported).
 
 Findings (stage 9 and 9b of docs/factored-state-workplan.md: modular division `p` 5 with a factored
 state, C9, C9' and C9'', each an existence claim), crate abcba3d7a30e, the curriculum at `k` 1, `s`
@@ -703,7 +734,9 @@ def main(argv: list[str]) -> int:
     compare.add_argument("original", type=Path, help="a study's directory (results/ and models/)")
     compare.add_argument("rerun", type=Path, help="another study's directory, rerunning some of its runs")
     explore = commands.add_parser("explore")
-    explore.add_argument("config", type=Path)
+    explore.add_argument(
+        "config", type=Path, nargs="+", help="one or more studies, pooled; a network in two (a rerun) counts once"
+    )
     explore.add_argument(
         "--n", type=int, nargs="+", default=list(wr.EXPLORED_LENGTHS), help="the lengths past training"
     )
@@ -840,6 +873,22 @@ def main(argv: list[str]) -> int:
         differ = sum(bool(found) for found in compared.values())
         print(f"{len(compared)} compared, {differ} differ")
         return 1 if differ else 0
+    if args.command == "explore":
+        context = multiprocessing.get_context("forkserver")
+        explored: list[dict[str, Any]] = []
+        with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:
+            for config in args.config:
+                pooled = wr.load_config(config)
+                for run in pool.map(functools.partial(wr.explore_run, pooled, lengths=args.n), pooled.runs):
+                    if run is not None and all(run["network"] != other["network"] for other in explored):
+                        explored.append(run)
+        for run in explored:
+            new = ", ".join(f"{n}: {run['new'][str(n)]}" for n in args.n)
+            print(f"{run['key']}: works {run['works']}, check passes {run['passes']}, new codes {new}", flush=True)
+        print(wr.explore_summary(explored, args.n))
+        if args.json is not None:
+            args.json.write_text(json.dumps(explored, indent=1))
+        return 0
     study = wr.load_config(args.config)
     if args.command == "probe":
         steps = args.steps or sorted({min(8, study.settings.steps), study.settings.steps})
@@ -873,21 +922,6 @@ def main(argv: list[str]) -> int:
             if not args.follow or ending:
                 return 0
             time.sleep(args.interval)
-    if args.command == "explore":
-        context = multiprocessing.get_context("forkserver")
-        with concurrent.futures.ProcessPoolExecutor(args.workers, mp_context=context) as pool:
-            explored = [
-                run
-                for run in pool.map(functools.partial(wr.explore_run, study, lengths=args.n), study.runs)
-                if run is not None
-            ]
-        for run in explored:
-            new = ", ".join(f"{n}: {run['new'][str(n)]}" for n in args.n)
-            print(f"{run['key']}: works {run['works']}, check passes {run['passes']}, new codes {new}", flush=True)
-        print(wr.explore_summary(explored, args.n))
-        if args.json is not None:
-            args.json.write_text(json.dumps(explored, indent=1))
-        return 0
     if args.command == "networks":
         for path in wr.last_networks(study).values():
             print(path)
