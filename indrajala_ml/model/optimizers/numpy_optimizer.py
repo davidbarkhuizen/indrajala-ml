@@ -71,8 +71,7 @@ class NumpyOptimizer(ArrayOptimizerBase[FloatArray, TrainedArrayLayer[FloatArray
         # state: m, then v, per parameter
         state = self._zeros(index, layer, 2)
 
-        bias_correction1 = 1 - beta1**self.t
-        bias_correction2 = 1 - beta2**self.t
+        bias_correction1, bias_correction2 = rule.bias_corrections(self.t)
 
         for i, (parameter, gradient) in enumerate(zip(layer.parameters(), layer.gradients())):
             g = gradient / batch_size

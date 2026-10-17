@@ -36,6 +36,26 @@ class Adam:
     beta2: float = DEFAULT_BETA2
     epsilon: float = DEFAULT_EPSILON
 
+    def bias_corrections(self, t: int) -> tuple[float, float]:
+        """1 - beta1^t and 1 - beta2^t, every implementation's (the crate's in src/fused.rs)."""
+        return 1.0 - powi(self.beta1, t), 1.0 - powi(self.beta2, t)
+
+
+def powi(base: float, exponent: int) -> float:
+    """
+    base^exponent for exponent >= 0 by square-and-multiply from the exponent's low bit, the crate's
+    order (src/scalar.rs; docs/aarch64-workplan.md, D6), so the three implementations agree; the C
+    library's pow, which ** calls, rounds differently.
+    """
+    result = 1.0
+    while True:
+        if exponent & 1:
+            result *= base
+        exponent >>= 1
+        if exponent == 0:
+            return result
+        base *= base
+
 
 @dataclass(frozen=True)
 class WeightDecay:

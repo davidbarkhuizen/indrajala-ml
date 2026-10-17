@@ -24,7 +24,7 @@ from typing import Any, ClassVar, Literal
 import numpy as np
 import numpy.typing as npt
 
-from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray
+from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray, relu
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 
 exp = np.exp
@@ -281,7 +281,7 @@ class TokenDenseArrayLayer(BatchShaped, ArrayLayer):
     def forward_batch(self, X: FloatArray) -> FloatArray:
         n = X.shape[0]
         Z = X.reshape(n * self.tokens, self.input_size) @ self.W.T + self.b
-        self.A = (np.maximum(0.0, Z) if self.activation == "relu" else Z).reshape(n, self.tokens * self.size)
+        self.A = (relu(Z) if self.activation == "relu" else Z).reshape(n, self.tokens * self.size)
         return self.A
 
     def _backward(self, downstream: FloatArray) -> None:
