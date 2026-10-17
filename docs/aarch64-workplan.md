@@ -1,8 +1,10 @@
 # Workplan: aarch64 (a Raspberry Pi 5), and one set of bits on every machine
 
 **Status: D1-D3 settled by the owner (2026-10-13); D4-D9 settled (2026-10-13) for extensibility,
-speed and production; D10 settled by the owner (2026-10-13): the Pi is `litshe`, on wired Ethernet; its active
-cooler and NVMe drive are on the way. Not started. The demo split
+speed and production; D10 settled by the owner (2026-10-13, revised 2026-10-17): the Pi is
+`litshe`, on wired Ethernet, booting from its SD card with storage on a USB flash drive, and no
+active cooler. Stages 0 and 1 done (2026-10-17): the Pi's Rust and pure-Python golden entries
+already equal jebel's bit for bit (stage 1's findings). The demo split
 (`git show 9c50fe6:docs/demos-split-workplan.md`) is done, so the Pi needs no matplotlib.**
 
 indrajala-ml and the crate run on aarch64, tested and timed on a Raspberry Pi 5 (8 GB). The crate
@@ -141,11 +143,13 @@ Every option's pros and cons, as settled.
   overflow without breaking that (a later decision if needed).
 - **D10: the machine.** Settled by the owner (2026-10-13): **`litshe`**, on wired Ethernet
   (steadier ssh, no radio interrupts while timing), with a fixed address or DHCP reservation
-  (jebel's mDNS name sometimes fails to resolve). Storage: an NVMe drive (being set up), not an
-  SD card. Cooling: an active cooler, to be bought; until it is fitted litshe runs in a passive
-  case, which is enough for stages 1-4 (throttling slows a run but never changes its bits) and
-  not for stage 5 onward. The cooler, the M.2 board and the case must fit together. An ssh key
-  for the agent as on jebel.
+  (jebel's mDNS name sometimes fails to resolve). An ssh key for the agent as on jebel.
+  **Revised by the owner (2026-10-17):** litshe boots from its SD card (59.7 GB) and keeps its
+  work on a USB flash drive "for the moment" (ext4, `/mnt/data`, mounted `nofail`; `~/code`
+  links there); the NVMe drive isn't fitted. **No active cooler**: a passive case. That is
+  enough for stages 1-4 (throttling slows a run but never changes its bits); for stage 5 on, see
+  stage 5. litshe has no GitHub credentials: code reaches it by `git push litshe:code/<repo>`
+  from pyramidon (its repos accept a push to the checked-out branch).
 
 ## Stages
 
@@ -153,9 +157,15 @@ One PR per stage; a crate stage lands in `indrajala-math-rust` first, then a "Bu
 
 ### Stage 0: the machine (owner)
 
-Ubuntu Server 26.04 LTS arm64 on the Pi 5 from SSD or NVMe, the cooler fitted, the user and ssh
-key, and the name D10 gives (`litshe`). The agent then checks `uptime`, `free -m`, `vcgencmd
-get_throttled` (or sysfs) and the kernel over ssh.
+Ubuntu Server 26.04 LTS arm64 on the Pi 5, the user and ssh key, and the name D10 gives
+(`litshe`). The agent then checks `uptime`, `free -m`, `vcgencmd get_throttled` (or sysfs) and the
+kernel over ssh.
+
+**Done (2026-10-17):** Ubuntu 26.04.1 LTS, kernel 7.0.0-1020-raspi, Python 3.14.4 (D2's parity
+with jebel and pyramidon holds), 4 x Cortex-A76 to 2.4 GHz, 7.9 GB, no swap; `get_throttled`
+0x0 after the first updates' reboot, 45 °C idle. First-boot fixes: systemd-networkd wasn't
+running (`sudo systemctl enable --now systemd-networkd`, then `netplan apply`); cloud-init's only
+error was installing avahi before the network was up.
 
 ### Stage 1: bring-up, and the measurement that decides how much stage 2 has to do
 
@@ -171,6 +181,35 @@ get_throttled` (or sysfs) and the kernel over ssh.
    each one that doesn't.
 
 Done when the findings are merged.
+
+**Findings (2026-10-17, main 893d216, crate ddc5e42; rustc 1.99.1 on litshe):**
+
+1. **Bring-up:** `./cli setup` and `./cli build-rust` work unchanged on aarch64 (rustup's
+   toolchain; apt's `build-essential`, `python3-venv`, `python3-dev`, `pkg-config`). The full
+   `./cli test`: **12,142 passed, 10 skipped (by design, as on x86), none failed**, in 11 min 16 s,
+   never throttled, under 50 °C. It first stopped at collection on every machine, not only the Pi:
+   two `test_window_program.py` modules (fixed in #805, with a check).
+2. **The golden run** (`golden_training_run.py compare`, new here): **Rust 41 of 41 and pure
+   Python 42 of 42 entries bit-identical to jebel's**; numpy 8 of 41, the other 33 a few
+   last-place bits apart from their first training step (OpenBLAS's ARM kernels and GCC's
+   contractions, as expected and not claimed, D1). jebel's and pyramidon's files are
+   byte-identical. Recording it takes 2 s on the Pi.
+3. **The per-op probes** (`scripts/parity_probe.py`, new here: `record` on each machine,
+   `compare` two records value by value as uint64; pyramidon, jebel and litshe):
+   - `exp`: the crate's and Python's `math.exp`, 2^20 inputs in [-20, 20] and 2^18 over the
+     whole finite range: **every value bit-identical** on all three machines. glibc 2.43 runs
+     one algorithm, with fused multiply-adds, on both architectures, so its rare last-bit
+     differences between machines, which D4 expected, don't occur here.
+   - Adam at every `t` from 1 to 64 and at powers of ten to 10^6 (`powi`): identical.
+   - relu at `±0.0`, NaN of both signs, `±inf` and the smallest subnormals: identical.
+   - **softmax: 18 of 21 values.** A row holding `+inf` gives NaN (inf - inf), and its sign
+     is the hardware's default NaN: x86 `0xfff8...` (negative), ARM `0x7ff8...` (positive).
+     The only Rust difference found; D6's "NaN's sign differs" source, outside any finite
+     training run.
+4. **So for stage 2:** its "done" condition, the Pi's Rust entries equal to jebel's, holds
+   already, on glibc. Its work keeps three reasons: D6's NaN rule (the softmax difference);
+   musl (stage 4), whose `exp` is another library; and a vector `exp` (stage 7), which needs a
+   definition to match that isn't one C library's code (D4).
 
 ### Stage 2: the crate's own rules (crate PR, then the bump)
 
@@ -199,6 +238,11 @@ there.
 `benchmark_machine_setup.sh` and `install_benchmark_setup.sh` for the Pi (or one script that reads
 the machine), the machine profile, `ab.py remote --host litshe`, and an A/A run to measure the Pi's
 noise, as stage 2 of the benchmark machine workplan did for jebel.
+
+litshe has **no active cooler** (D10, revised): before the A/A run, a sustained all-core load at
+the full clock shows whether a pass stays unthrottled (`get_throttled`, the temperature). If it
+doesn't, the machine profile caps the clock below throttling (the owner can set the cap) rather
+than refusing most passes; D8's throttle check stays either way.
 
 ### Stage 6: the baseline, crate against numpy on the Pi
 

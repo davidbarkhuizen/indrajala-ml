@@ -204,3 +204,25 @@ def test_golden_script_archives_onto_a_new_branch_without_training(archive: Path
             "INDEX.md",
         ]
     )
+
+
+def test_golden_script_compares_two_runs_by_backend(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    sys.path.insert(0, str(REPO / "scripts"))
+    import golden_training_run
+
+    first = _golden(tmp_path, {"numpy a": ["0x1p+0"], "rust a": ["0x1p+0", "0x1p+1"], "rust b": ["0x1p+0"]})
+    second = _golden(tmp_path, {"numpy a": ["0x1p+0"], "rust a": ["0x1p+0", "0x1p+2"], "rust c": ["0x1p+0"]})
+    with pytest.raises(SystemExit) as exit:
+        golden_training_run.main(["compare", str(first), str(first)])
+    assert exit.value.code == 0
+    with pytest.raises(SystemExit) as exit:
+        golden_training_run.main(["compare", str(first), str(second)])
+    assert exit.value.code == 1
+    assert capsys.readouterr().out.splitlines()[-6:] == [
+        "numpy: 1 of 1 identical",
+        "rust: 0 of 3 identical",
+        "  rust a: differs at [1]: expected '0x1p+1', got '0x1p+2'",
+        "  rust b: only in the first run",
+        "  rust c: only in the second run",
+        "NOT bit-identical",
+    ]
