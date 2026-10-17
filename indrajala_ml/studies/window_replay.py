@@ -23,6 +23,8 @@ on), some epochs of a step's data drawn by a named generator, as a run's step dr
   wrong is undone, the network's weights, its optimizer's state and its generator restored to
   before the batch, and the batch skipped; per epoch the rollbacks counted. A remedy for the
   collapse acting where it starts: the certificate as a training control at the grain of a batch.
+  Its training state is certificate_guard's; its machine is read by machine_table, a call a state,
+  as its records were (certificate_guard.Guard is the guard for training, read by levels).
 
 E2b' seed 6's replay from step 7 found the first: an ordinary step at batch 977 of step 8 took its
 loss from 0.001 to 2.2, and the updates after it ran 6-8 times their size (the workplan's Why).
@@ -54,7 +56,7 @@ import numpy.typing as npt
 
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.persistence.load_network import load_network
-from indrajala_ml.pcg64 import generator_state, set_generator_state
+from indrajala_ml.studies import certificate_guard as cg
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
@@ -133,18 +135,6 @@ def set_wall(network: Any, wall: float, ratio: float) -> None:
         if factor.codes is not None:
             assert hasattr(factor.codes, "wall"), "the snap wall is numpy's only: convert the network (numpy=True)"
             factor.codes.wall, factor.codes.wall_ratio = wall, ratio
-
-
-def _training_state(network: Any) -> tuple[Any, Any, Any]:
-    # what a learn step changes: the weights, the optimizer's state and the generator's
-    return network.snapshot(), network.optimizer.state(), generator_state(network.rng)
-
-
-def _restore_training_state(network: Any, state: tuple[Any, Any, Any]) -> None:
-    weights, optimizer, rng = state
-    network.restore(weights)
-    network.optimizer.load_state(optimizer)
-    set_generator_state(network.rng, rng)
 
 
 def _parameters(network: Any) -> npt.NDArray[np.float64]:
@@ -260,7 +250,7 @@ def replay(
             labels = [labels for _, labels in batch]
             before: float = network.loss_batch(X, labels)
             kept = _parameters(network)
-            saved = _training_state(network) if guard else None
+            saved = cg.training_state(network) if guard else None
             network.learn_batch(settings.rate, batch)
             after: float = network.loss_batch(X, labels)
             rows.append(
@@ -280,7 +270,7 @@ def replay(
                             f"{generator} epoch {epoch} batch {b}: rolled back ({table.wrong} wrong pairs; loss "
                             f"{before:.3g} -> {after:.3g}, update {rows[-1]['update']:.3g})"
                         )
-                    _restore_training_state(network, saved)
+                    cg.restore_training_state(network, saved)
                     rows[-1] |= {"rolled_back": 1.0}
                     table = previous
                     continue

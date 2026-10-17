@@ -42,6 +42,7 @@ from indrajala_ml.model.networks.window_recurrent_array_network import WindowRec
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE, AttentionPooling, Codes, Factor, WindowRecurrence
+from indrajala_ml.studies import certificate_guard as cg
 from indrajala_ml.studies import inference
 from indrajala_ml.studies import window_diagnostics as wd
 from indrajala_ml.studies import window_recurrent_certificate as wc
@@ -201,11 +202,6 @@ class Fork:
     limit: int = 4  # D4
 
 
-def screen_score(net: Any, encoding: Encoding, screens: Mapping[int, Sequence[Example]]) -> float:
-    """The share of every answer right over a step's screens (its training lengths)."""
-    return screen(net, encoding, screens)[0]
-
-
 def screen(net: Any, encoding: Encoding, screens: Mapping[int, Sequence[Example]]) -> tuple[float, dict[str, float]]:
     """
     A step's screen: the share of every answer right over its screens (its training lengths), and
@@ -221,6 +217,11 @@ def screen(net: Any, encoding: Encoding, screens: Mapping[int, Sequence[Example]
             kind[0] += right
             kind[1] += all_
     return pooled, {name: right / all_ for name, (right, all_) in sorted(kinds.items())}
+
+
+def quotient_right(kinds: Mapping[str, float]) -> bool:
+    """Every quotient kind of a screen right: necessary for the quotient's machine to be right."""
+    return all(share == 1.0 for name, share in kinds.items() if name.startswith("quotient"))
 
 
 def _kinds(kinds: Mapping[str, float]) -> dict[str, float]:
@@ -518,6 +519,9 @@ def readout(
     return lines
 
 
+STALL_SHARE, STALL_EPOCHS = 0.95, 10  # a guarded run frozen (the guard workplan's D9)
+
+
 def exclusion_bound(p: int, factors: Sequence[tuple[int, int]]) -> int:
     """`m + q - 1` (experiment-design.md, section 1): the joint codes plus division's p * p states, less one."""
     return math.prod(m for _, m in factors) + p * p - 1
@@ -534,13 +538,19 @@ def run(
     reads: str = BEFORE_STATE,
     budget_epochs: int | None = None,
     fork: Fork | None = None,
+    guard: bool = False,
 ) -> None:
     """
     One probe run: the curriculum until the budget (wall-clock seconds and, if given, epochs
     trained in all, whichever is spent first: the epochs don't depend on the machine or its load)
     or the cap (by default the cell's exclusion bound), a line of JSON per diagnosis to
     out/log.jsonl, the network saved at each step's end to out/network.json. With `fork`, a collapse
-    within a step goes back to the step's best network and forks (Fork; a log line each).
+    within a step goes back to the step's best network and forks (Fork; a log line each). With
+    `guard`, the certificate guard on the quotient against division's machine (certificate_guard),
+    armed for an epoch whose screen before it got every quotient right (the guard workplan's D5);
+    each epoch's row logs whether it was armed, its updates and those undone, each step's end the
+    undone's sum. A run whose guard undoes STALL_SHARE of the updates of STALL_EPOCHS armed epochs in
+    a row ends "stalled" (D9), its step's network certified as any step's.
     """
     if cap is None:
         cap = exclusion_bound(encoding.p, factors)
@@ -555,6 +565,9 @@ def run(
         log.flush()
 
     record({"step": 0, "epoch": 0, **diagnose(net, encoding, settings)})
+    task = wt.task_named(f"modular-division-{encoding.p}")
+    guarding = cg.Guard(lambda n: QueryMachine(n, encoding, 0), task) if guard else None
+    frozen = 0  # consecutive armed epochs with STALL_SHARE of their updates undone
     spent = 0  # epochs trained in all
     for step in range(1, cap + 1):
         lengths = list(range(1, step + 1))
@@ -563,6 +576,7 @@ def run(
         rate, forks, snapshot = settings.rate, 0, out / "snapshot.network.json"
         start_score, start_kinds = screen(net, encoding, screens)  # the step before's network on this step's lengths
         record({"step": step, "epoch": 0, "screen": round(start_score, 4), "kinds": _kinds(start_kinds)})
+        last_kinds, step_rollbacks = start_kinds, 0
         peak = 0.0
         if fork is not None:
             peak = fork.trigger.value(start_score, start_kinds)
@@ -578,9 +592,23 @@ def run(
             examples = [
                 encoding.example(columns(lengths[i % len(lengths)], rng)) for i in range(settings.epoch_examples)
             ]
-            wr.train_epoch(net, examples, settings.batch_size, rate, rng)
+            guarded: dict[str, Any] = {}
+            if guarding is not None:
+                if quotient_right(last_kinds):
+                    guarding.arm(net)
+                else:
+                    guarding.disarm()
+                updates, rollbacks = guarding.updates, guarding.rollbacks
+                wr.train_epoch(net, examples, settings.batch_size, rate, rng, guarding)
+                updates, rollbacks = guarding.updates - updates, guarding.rollbacks - rollbacks
+                guarded = {"armed": guarding.armed, "updates": updates, "rollbacks": rollbacks}
+                step_rollbacks += rollbacks
+                frozen = frozen + 1 if updates and rollbacks >= STALL_SHARE * updates else 0
+            else:
+                wr.train_epoch(net, examples, settings.batch_size, rate, rng)
             spent += 1
             score, kinds = screen(net, encoding, screens)
+            last_kinds = kinds
             if fork is not None:
                 value = fork.trigger.value(score, kinds)
                 if value > peak:
@@ -590,7 +618,7 @@ def run(
                     forks += 1
                     rate *= fork.cool
                     net = load_network(str(snapshot))
-                    restored = screen_score(net, encoding, screens)
+                    restored, last_kinds = screen(net, encoding, screens)
                     record(
                         {
                             "step": step,
@@ -601,6 +629,7 @@ def run(
                             "peak": round(peak, 4),
                             "restored": round(restored, 4),
                             "rate": rate,
+                            **guarded,
                         }
                     )
                     continue
@@ -611,11 +640,15 @@ def run(
                         "epoch": epoch,
                         "screen": round(score, 4),
                         "kinds": _kinds(kinds),
+                        **guarded,
                         **diagnose(net, encoding, settings),
                     }
                 )
             else:
-                record({"step": step, "epoch": epoch, "screen": round(score, 4), "kinds": _kinds(kinds)})
+                record({"step": step, "epoch": epoch, "screen": round(score, 4), "kinds": _kinds(kinds), **guarded})
+            if frozen >= STALL_EPOCHS:
+                stop = "stalled"
+                break
             if score == 1.0:
                 stop = "passed"
                 break
@@ -631,13 +664,14 @@ def run(
         # each step's quotient certified (under a second at one column a window); the run stops at
         # its first certified step: training past it can destroy the network (E8b; this probe's
         # first runs, both certified networks lost within 3 steps)
-        certificate = wc.certify(QueryMachine(net, encoding, 0), wt.task_named(f"modular-division-{encoding.p}"))
+        certificate = wc.certify(QueryMachine(net, encoding, 0), task)
         record(
             {
                 "step": step,
                 "end": stop,
                 "epochs": epoch,
                 **({"forks": forks} if fork is not None else {}),
+                **({"rollbacks": step_rollbacks} if guarding is not None else {}),
                 **diagnose(net, encoding, settings),
                 "long": long_accuracy(net, encoding, settings),
                 "certified": certificate.certified,
@@ -647,9 +681,42 @@ def run(
         if certificate.certified:
             net.save(str(out / f"certified-step-{step}.network.json"))
             break
-        if stop in ("deadline", "spent"):
+        if stop in ("deadline", "spent", "stalled"):
             break
     log.close()
+
+
+def guard_epoch(
+    path: Path, encoding: Encoding, step: int, settings: Settings = PROBE, generator: str = "guard-epoch"
+) -> dict[str, Any]:
+    """
+    One epoch of a step's training from a saved network, unguarded and with the guard armed, on the
+    same data: whether its quotient's machine is right before, and for each its seconds, whether
+    right after and the guard's updates and rollbacks (the guard workplan's budget probe).
+    """
+    task = wt.task_named(f"modular-division-{encoding.p}")
+    lengths = list(range(1, step + 1))
+    result: dict[str, Any] = {
+        "network": str(path),
+        "step": step,
+        "right_before": cg.right(QueryMachine(load_network(str(path)), encoding, 0), task),
+    }
+    for arm in ("unguarded", "guarded"):
+        net = load_network(str(path))
+        rng = random.Random(f"{generator}-{step}")
+        examples = [encoding.example(columns(lengths[i % len(lengths)], rng)) for i in range(settings.epoch_examples)]
+        guard = cg.Guard(lambda n: QueryMachine(n, encoding, 0), task) if arm == "guarded" else None
+        start = time.perf_counter()
+        if guard is not None:
+            guard.arm(net)
+        wr.train_epoch(net, examples, settings.batch_size, settings.rate, rng, guard)
+        result[arm] = {
+            "seconds": round(time.perf_counter() - start, 1),
+            "right_after": cg.right(QueryMachine(net, encoding, 0), task),
+            "updates": None if guard is None else guard.updates,
+            "rollbacks": None if guard is None else guard.rollbacks,
+        }
+    return result
 
 
 class QueryMachine:
@@ -677,9 +744,12 @@ class QueryMachine:
         return self.inner.start()
 
     def step(self, state: wc.State, windows: wc.IntArray) -> wc.Steps:
+        return self.step_states([state], windows)
+
+    def step_states(self, states: Sequence[wc.State], windows: wc.IntArray) -> wc.Steps:
         queries = np.array([self.encoding.query_token(q) for q in self.encoding.queries], dtype=np.int64)
         full = np.concatenate([windows, np.repeat(queries[np.newaxis, :], len(windows), axis=0)], axis=1)
-        steps = self.inner.step(state, full)
+        steps = self.inner.step_states(states, full)
         s = self.slot
         return wc.Steps(steps.digits[:, s : s + 1], steps.leads[:, s : s + 1], steps.states, steps.distances)
 

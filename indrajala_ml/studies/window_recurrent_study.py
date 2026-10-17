@@ -81,6 +81,7 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.model.specs.window_recurrence import OUTPUT, AttentionPooling, Codes, Factor, WindowRecurrence
+from indrajala_ml.studies import certificate_guard as cg
 from indrajala_ml.studies import inference
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_tasks as wt
@@ -230,10 +231,20 @@ def epoch_batches(examples: Sequence[Example], batch_size: int, rng: random.Rand
     return batches
 
 
-def train_epoch(network: Any, examples: Sequence[Example], batch_size: int, rate: float, rng: random.Random) -> None:
-    """An epoch of training on epoch_batches's batches."""
+def train_epoch(
+    network: Any,
+    examples: Sequence[Example],
+    batch_size: int,
+    rate: float,
+    rng: random.Random,
+    guard: cg.Guard | None = None,
+) -> None:
+    """An epoch of training on epoch_batches's batches, each update through guard if given (certificate_guard)."""
     for batch in epoch_batches(examples, batch_size, rng):
-        network.learn_batch(rate, batch)
+        if guard is None:
+            network.learn_batch(rate, batch)
+        else:
+            guard.learn_batch(network, rate, batch)
 
 
 # staggered factors (the factored-state workplan, D14)

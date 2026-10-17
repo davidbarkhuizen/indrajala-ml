@@ -22,6 +22,16 @@ budget, diagnosed as it trains (indrajala_ml/studies/modular_family.py).
 whose screen falls below 0.6 of the step's best goes back to that best network, halves the step's
 rate and takes new data, at most 4 times a step; each fork a line in the log, each step's end its
 count.
+`--guard on` turns on the certificate guard (docs/guard-training-workplan.md;
+indrajala_ml/studies/certificate_guard.py): for an epoch whose screen before it got every quotient
+right, the quotient's machine is read after every batch and an update that makes a right machine
+wrong is undone; each epoch's row logs `armed` and `rollbacks`, each step's end its `rollbacks`.
+`--guard both` runs each seed without and with it, in one pool, into DIR/unguarded/seed<s> and
+DIR/guarded/seed<s> (the readout's arms). `run` holds the machine lock (machine_lock.study), as
+the harness's studies do, so an A/B isn't started beside it.
+`guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
+and with the guard armed, on the same data, and prints each one's seconds, whether its quotient's
+machine is right before and after, and the guard's rollbacks (the guard workplan's budget probe).
 `--first-seed F --seeds N` runs seeds F..F+N-1, a process each, `--workers` at once (default
 all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--budget-epochs` stops a
 run when that many epochs are trained in all (or `--budget-minutes` pass, whichever first).
@@ -417,11 +427,13 @@ import multiprocessing
 import sys
 from pathlib import Path
 
+from indrajala_ml.measurement import machine_lock
 from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies.collapse import RULES, SIGNALS, Trigger
 
+GUARD_ARMS = {False: "unguarded", True: "guarded"}  # --guard both's directories
 ARMS = {"family": mf.FAMILY, "quotient": mf.QUOTIENT, "sum": mf.SUM, "product": mf.PRODUCT}
 
 
@@ -454,6 +466,13 @@ def main(argv: list[str]) -> int:
         "--fork", action="store_true", help="snapshot and fork on collapse (the collapse-fork workplan, retired)"
     )
     _trigger_arguments(run)
+    run.add_argument(
+        "--guard",
+        choices=["off", "on", "both"],
+        default="off",
+        help="the certificate guard on the quotient, armed after a perfect quotient screen (the guard workplan); "
+        "both: each seed with and without, into --out/unguarded and --out/guarded",
+    )
     run.add_argument(
         "--vocabulary",
         nargs="+",
@@ -494,6 +513,11 @@ def main(argv: list[str]) -> int:
     drops = commands.add_parser("drops", help="a collapse trigger scored against runs' logs, offline")
     drops.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl (runs made without the fork)")
     _trigger_arguments(drops)
+    epoch = commands.add_parser("guard-epoch", help="one epoch from a saved network, unguarded and guarded, timed")
+    epoch.add_argument("network", type=Path)
+    epoch.add_argument("--p", type=int, required=True)
+    epoch.add_argument("--step", type=int, required=True, help="the step whose lengths the epoch trains (1..step)")
+    epoch.add_argument("--arm", choices=sorted(ARMS), default="family")
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
     readout.add_argument("root", type=Path, help="the study's directory, a <arm>/seed<s> per run")
     readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
@@ -524,6 +548,9 @@ def main(argv: list[str]) -> int:
             f"caught; {sum(s.false_alarms for s in scores)} false alarms near a solution, "
             f"{sum(s.early for s in scores)} firings while still learning"
         )
+        return 0
+    if args.command == "guard-epoch":
+        print(json.dumps(mf.guard_epoch(args.network, mf.Encoding(args.p, ARMS[args.arm]), args.step)))
         return 0
     if args.command == "readout":
         pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
@@ -559,18 +586,29 @@ def main(argv: list[str]) -> int:
         budget_epochs=args.budget_epochs,
         fork=mf.Fork(trigger=_trigger(args)) if args.fork else None,
     )
-    if args.seed is not None:
-        probe(seed=args.seed, out=args.out)
-        return 0
-    args.out.mkdir(parents=True, exist_ok=True)
-    seeds = range(args.first_seed, args.first_seed + args.seeds)
-    context = multiprocessing.get_context("forkserver")
-    with concurrent.futures.ProcessPoolExecutor(
-        min(args.workers or len(seeds), len(seeds)), mp_context=context
-    ) as pool:
-        runs = {pool.submit(logged_run, probe, s, args.out): s for s in seeds}
-        for done in concurrent.futures.as_completed(runs):
-            print(f"seed {runs[done]}: {done.result()}", flush=True)
+    guards = {"off": [False], "on": [True], "both": [False, True]}[args.guard]
+    with machine_lock.study():
+        if args.seed is not None:
+            if len(guards) > 1:
+                parser.error("--guard both runs --first-seed's seeds, not one --seed")
+            probe(seed=args.seed, out=args.out, guard=guards[0])
+            return 0
+        seeds = range(args.first_seed, args.first_seed + args.seeds)
+        # with both, each seed's two arms in turn, so a pair ends about together
+        jobs = [(s, guard) for s in seeds for guard in guards]
+        context = multiprocessing.get_context("forkserver")
+        with concurrent.futures.ProcessPoolExecutor(
+            min(args.workers or len(jobs), len(jobs)), mp_context=context
+        ) as pool:
+            runs: dict[concurrent.futures.Future[str], str] = {}
+            for s, guard in jobs:
+                out = args.out / GUARD_ARMS[guard] if len(guards) > 1 else args.out
+                out.mkdir(parents=True, exist_ok=True)
+                runs[pool.submit(logged_run, functools.partial(probe, guard=guard), s, out)] = (
+                    f"{out.name}/seed{s}" if len(guards) > 1 else f"seed {s}"
+                )
+            for done in concurrent.futures.as_completed(runs):
+                print(f"{runs[done]}: {done.result()}", flush=True)
     return 0
 
 
