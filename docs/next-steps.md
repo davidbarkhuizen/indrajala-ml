@@ -132,7 +132,8 @@ Decided with the owner, each to become a workplan or a stage:
   networks in 8 runs, each passing every long-test case), and **`p` 11 works** (2026-10-16: 4 of 6
   certified 121-state networks at 32 a factor, each passing every long-test case; the probe's
   findings). `k` stays 1: the certificate's cost is codes x 9 tokens there. Left: the plan's stage 4
-  (the alternate trigger), or the certificate guard in its place.
+  (the alternate trigger); the certificate guard joins the fork, not replaces it (the plan's
+  status), tested as the fork alone against the fork plus the guard.
 - **A second composite task: the running affine map mod `p`** (`x' = a x + b`, `a != 0`; the
   group AGL(1, p), `p (p - 1)` states when the output is the composed map). Its Krohn-Rhodes
   decomposition is a cascade, not a direct product: the multipliers' running product is its one

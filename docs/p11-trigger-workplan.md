@@ -6,8 +6,13 @@ task-tunable trigger, we don't want to tie it too tightly to the specific task."
 settled (the owner delegates a workplan's decisions; each with its options' pros and cons).
 Probe-driven ([experiment-design.md](experiment-design.md), section 2). Stage 2 (the build) done
 2026-10-16; stage 3 (`p` 11) done 2026-10-17: works, 4 of 6 certified against the 121-state
-machine, every one passing all 663,000 long-test cases. Stage 4 (the alternate trigger) next, or
-superseded by the certificate guard.**
+machine, every one passing all 663,000 long-test cases. Stage 4 (the alternate trigger) next,
+not superseded by the certificate guard (the snap-wall workplan's stage 2d): the owner,
+2026-10-17, "although we now have a targeted guard for collapse from correctness, the agnostic
+snapshot, identify collapse, roll back then fork mechanism (basically a single back-track) may be
+useful because it allows recovery from falling down a slope in general, regardless if why it
+happened". The guard acts only on a machine with no wrong pair; the fork on any fall, before
+correctness too, so its trigger still matters (today's misses about half the large drops).**
 
 ## Why
 

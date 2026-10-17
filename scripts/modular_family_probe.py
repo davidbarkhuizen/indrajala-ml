@@ -401,7 +401,8 @@ readout is `readout data/window-recurrent/p11-ladder --arms family`.
   the latest), 1 in seed 1 (the earliest, step 10). Exploratory: whether those forks rescued seed 4
   or held it back isn't separable without the alternate trigger's paired replays (stage 4).
 - **Next:** stage 4, the alternate trigger (D7), is the plan's next step; the certificate guard
-  (`replay --guard`, the snap-wall workplan's stage 2d) may supersede it, decided there.
+  (`replay --guard`, the snap-wall workplan's stage 2d) joins the fork rather than superseding
+  it (the plan's status, 2026-10-17).
 """
 
 from __future__ import annotations
