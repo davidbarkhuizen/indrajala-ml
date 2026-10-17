@@ -34,14 +34,18 @@ where you meet a new trap; delete one that no longer holds.
 - **A second PR beside uncommitted work goes in a worktree:** `git worktree add -q -b <branch>
   <path> <start>` (path before start point; a swapped order fails and a following `cd` lands in
   the wrong checkout).
-- **A fresh worktree has no `.venv`, no data and no `rust/` checkout.** Link `.venv`
-  (`ln -s ../indrajala-ml/.venv .venv`) and every corpus: `for d in $(ls ../indrajala-ml/data); do
-  ln -s ../../indrajala-ml/data/$d data/$d; done`. A loop over `git check-ignore` skips
-  directories that don't exist yet (`data/<d>/` matches directories only). Without the corpora the
-  suites fail on MNIST and other files; without `rust/`, `./cli test` stops at once ("no tests
-  ran", exit 0): run `PYTHONPATH=. .venv/bin/python -m pytest tests/ -q -p no:cacheprovider` for a
-  package-only PR. `data/mnist`'s link isn't ignored, so stage files by name. `git worktree remove
-  --force` deletes only the links.
+- **A fresh worktree has no `.venv`, no data and no `rust/` checkout.** Link `.venv` (`ln -s
+  ../indrajala-ml/.venv .venv`) and every corpus: `for d in $(ls ../indrajala-ml/data); do [ -e
+  data/$d ] || ln -s ../../indrajala-ml/data/$d data/$d; done`, which skips `data/refactoring`: it
+  holds a tracked file (`golden_run_rust.json`), so it is a directory in every checkout; link its
+  untracked `golden_run.json` alone (`ln -s ../../../indrajala-ml/data/refactoring/golden_run.json
+  data/refactoring/`). Through a link to the main checkout's directory, a `rm` or a rebase in the
+  worktree reaches the main checkout's files (2026-10-17: a rebase refused, and an `rm` deleted the
+  main checkout's tracked copy). A loop over `git check-ignore` skips directories that don't exist
+  yet (`data/<d>/` matches directories only). Without the corpora the suites fail on MNIST and other
+  files; without `rust/`, `./cli test` stops at once ("no tests ran", exit 0): run `PYTHONPATH=.
+  .venv/bin/python -m pytest tests/ -q -p no:cacheprovider` for a package-only PR. `data/mnist`'s
+  link isn't ignored, so stage files by name. `git worktree remove --force` deletes only the links.
 - **Which package a worktree imports:** pytest imports the worktree's (rootdir); `python -c` and
   scripts import the main checkout's unless `PYTHONPATH=.` (the script's directory, not the cwd,
   is on `sys.path`; `indrajala_ml` is a namespace package with the editable finder). This holds

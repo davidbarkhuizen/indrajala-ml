@@ -3,7 +3,9 @@
 **Status: written 2026-10-17, the next step the snap-wall workplan's stage 2d registered ("the
 guard in real training, registered (division): the fork alone against the fork plus the guard, at
 the same seeds"). D1-D8 settled under the owner's delegation, each with its options' pros and
-cons. G1 registered here, before its data.**
+cons. G1 registered here, before its data (#814). Stage 2 done 2026-10-17: the build, and the
+budget probe, which found the guard undoing 66-100% of the updates from `p` 11's right machines
+(stage 2's result); D9, a stop rule for a frozen run, added after the probe and before any run.**
 
 ## Why
 
@@ -82,6 +84,21 @@ the screen, and a machine one or two pairs wrong (seed 4's step 22, 123 states) 
   between epochs. A fork restores its snapshot and the guard reads it afresh. Pros: each as
   tested; the owner's "the fork stays". Cons: a fork can restore a network that isn't right
   (its snapshot is the best screen, not the right machine); counted, not prevented.
+- **D9. A guarded run frozen for 10 armed epochs in a row (at least 95% of each epoch's updates
+  undone) ends "stalled"**, its step's network certified as any step's end, and counts as not
+  certified unless that certificate passes. Added after stage 2's budget probe, before any run (a
+  conditional rule registered beforehand, experiment-design.md, section 2; E8b's stopped arm the
+  precedent).
+  - (a) *Chosen.* Pros: from a strictly right machine the guard undid 98-100% of an epoch's
+    updates (stage 2), and a frozen network passes each step in one epoch on ever longer lengths,
+    so without a rule a frozen run spends its 600 epochs at about a minute each (up to the 15 h
+    wall-clock guard) and tells nothing more than 10 epochs do; the rule keeps the run inside a
+    night. Cons: a guarded run that would thaw after 10 frozen epochs is cut (counted against the
+    guard, so the rule can only make G1 harder to pass).
+  - (b) No rule. Pros: the plan as first written. Cons: up to 15 h a frozen seed.
+  - (c) Don't run. Pros: no cost. Cons: the probe's networks were trained on the crate before its
+    `exp` changed, one epoch each; today's runs are new trajectories, and the kept 0-33% of updates
+    may still resolve near ties.
 
 ## The claim (registered before the data)
 
@@ -89,14 +106,15 @@ the screen, and a machine one or two pairs wrong (seed 4's step 22, 123 states) 
 compare the arms: **better** if the guard arm certifies (both verdicts) and the fork alone doesn't,
 or both certify and the guard arm in fewer epochs; **worse** the reverse. **Works:** better on at
 least one such seed and worse on none. **Refuted:** worse on any. **Undecided:** neither (equal
-everywhere). If it acts on no seed after D3's extension, G1 is untested.
+everywhere). If it acts on no seed after D3's extension, G1 is untested. A run ended "stalled"
+(D9) counts as not certified unless its step's certificate passes.
 
 Checked, not claimed: on a seed where the guard never acts, the two arms' logs are identical but
 for timings and the guard's fields (determinism; a failure there is a bug, found and recorded).
 
 **Reported per seed, both arms:** certified or not, step, epochs, forks, large drops; the guard
-arm's armed epochs, rollbacks, its first rollback (step, epoch, batch), and the strict verdict at
-each step's end. Every certified network recertified in both verdicts and long-tested (U1 and S1
+arm's armed epochs, updates and rollbacks, its first rollback (step and epoch: batches aren't
+logged), whether it stalled, and the strict verdict of each step's saved network. Every certified network recertified in both verdicts and long-tested (U1 and S1
 at 128, 256 and 1,024). Statistics: none beyond the pairs (experiment-design.md, section 3: a
 screen).
 
@@ -117,6 +135,43 @@ Stage 3's cell unchanged: 4 of its 6 seeds certified within 600 epochs.
    guard off, the golden run and a 3-step `p` 5 fork-on run byte-identical before and after.
    **The budget probe:** an armed epoch's time on `jebel` from stage 3's seed-4 step-17 network,
    so the study's estimate is a range before launch.
+   **Done 2026-10-17:** `certificate_guard.py` (the read, `Guard`, the training state moved from
+   `window_replay`), `step_states` on `NetworkMachine` and `QueryMachine` (`step` is one state's,
+   bit-identical to a state stepped alone, tested), `train_epoch(..., guard)`, `run(..., guard)`
+   with D9, the probe's `--guard off|on|both` (both: one pool, each seed's two arms in turn, into
+   `unguarded/` and `guarded/`) and `guard-epoch`; the probe's `run` now holds `jebel`'s machine
+   lock, as the harness's studies do. Checked: the golden run bit-identical; a 3-step `p` 5 fork-on
+   run's log and networks byte-identical before and after with the guard off; armed every epoch
+   and reading after every batch (nothing undone), a run's logs and networks are the unguarded
+   run's but for the guard's fields.
+   **The budget probe** (`guard-epoch`, `jebel`, aa93942, 7 at once, one thread each): one epoch
+   of the next step from stage 3's networks, unguarded and with the guard armed, on the same data.
+   Data `data/window-recurrent/guard-training/budget/`, manifest `guard-training-budget.sha256`
+   (6938dad6...b77402aa, 8 files, run from data/window-recurrent).
+
+   | network (seed, step) | verdicts at the start | unguarded: right after | guarded: undone of updates | seconds, unguarded / guarded |
+   | --- | --- | --- | --- | --- |
+   | 4, 17 | strict only | no | 522 of 522 | 11.3 / 64.6 |
+   | 4, 21 | strict only | no | 521 of 528 | 13.3 / 54.7 |
+   | 4, 24 | strict only | no | 520 of 525 | 14.9 / 46.0 |
+   | 4, 26 | strict only | no | 509 of 513 | 16.0 / 78.9 |
+   | 4, 31 (certified) | both | no | 501 of 512 | 18.7 / 58.5 |
+   | 1, 10 (certified) | both | no | 348 of 517 | 7.6 / 48.7 |
+   | 2, 16 (certified) | both | no | 480 of 527 | 10.7 / 60.9 |
+
+   - **Every right machine is lost in one epoch of further training, certified ones included** (7
+     of 7). At E2b''s cell the replays' network lost its proof in 9 of 10 replays, over 2 epochs.
+   - **The guard holds every one, by undoing most updates:** 66-100%, against 0.85% at stage 2d.
+     From the strictly right machines it undid 98-100%: training there is frozen. A reading, not
+     measured: `p` 11's runs reach 210-456 codes for 121 states, many visited rarely, and a small
+     update flips one of their transitions; stage 2d's network had 8 codes for 3 states.
+   - **The cost:** an armed epoch takes 3-6 times an unguarded one (46-79 s against 8-19 s, 7 at
+     once). Stage 3's runs took 35-120 min; a guarded run pays this only in armed epochs, and D9
+     ends a frozen one within 10. The estimate for stage 3's 12 runs, 6 at once: 3-5 h.
 3. **The run:** `jebel`, 6 workers, the 12 runs, seeds paired; then D3's extension if it applies.
+   From a worktree pinned at the build's merge, holding the machine lock:
+   `modular_family_probe.py run --p 11 --arm family --factor 16 32 --factor 16 32 --reads output
+   --fork --guard both --budget-epochs 600 --budget-minutes 900 --first-seed 0 --seeds 6 --workers 6
+   --out data/window-recurrent/guard-training`.
 4. **Findings** in `modular_family_probe.py`'s docstring, the snap-wall workplan's stage 2d and
    the papers' notes (P1: the guard); certified networks to indrajala-models; this plan retired.

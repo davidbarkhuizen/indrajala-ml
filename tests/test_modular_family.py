@@ -4,6 +4,7 @@ import hashlib
 import json
 import random
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -348,3 +349,69 @@ def test_an_example_is_the_states_answers_for_every_encoding_and_length(p: int):
         for n in [*range(65), 1024]:
             columns = mf.columns(n, rng)
             assert encoding.example(columns) == _example_by_the_states(encoding, columns)
+
+
+def _rows(path: Path) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in (path / "log.jsonl").read_text().splitlines()]
+
+
+def test_a_guarded_run_logs_each_epochs_arming_and_rollbacks_and_each_steps_sum(tmp_path: Path):
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=2, diagnose_every=10, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 1e9, tmp_path, settings, cap=2, guard=True)
+    rows = _rows(tmp_path)
+    epochs = [r for r in rows if r.get("epoch", 0) > 0 and "end" not in r]
+    assert epochs and all(isinstance(r["armed"], bool) and r["rollbacks"] == 0 for r in epochs)
+    assert all(r["updates"] == (1 if r["armed"] else 0) for r in epochs)  # one batch an epoch, counted when armed
+    assert all(r["rollbacks"] == 0 for r in rows if "end" in r)
+
+
+def _always_right(kinds: object) -> bool:
+    return True
+
+
+def test_the_guards_reads_leave_training_unchanged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Armed every epoch, the machine read after every batch (never right, so nothing undone): the
+    networks and logs are the unguarded run's, but for timings and the guard's fields."""
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=2, diagnose_every=1, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    encoding = mf.Encoding(5, mf.FAMILY)
+    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path / "off", settings, cap=2, fork=mf.Fork())
+    monkeypatch.setattr(mf, "quotient_right", _always_right)
+    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path / "on", settings, cap=2, fork=mf.Fork(), guard=True)
+    on = _rows(tmp_path / "on")
+    assert all(r["armed"] for r in on if r.get("epoch", 0) > 0 and "end" not in r)
+    guard_fields = {"seconds", "armed", "updates", "rollbacks"}
+    strip = [
+        [{k: v for k, v in r.items() if k not in guard_fields} for r in rows] for rows in (_rows(tmp_path / "off"), on)
+    ]
+    assert strip[0] == strip[1]
+    for name in ("step-1.network.json", "step-2.network.json"):
+        assert (tmp_path / "off" / name).read_bytes() == (tmp_path / "on" / name).read_bytes()
+
+
+def test_a_guard_that_undoes_nearly_every_update_for_its_stall_epochs_ends_the_run_stalled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Armed every epoch and every update undone (right before, wrong after): the run stops
+    "stalled" at its STALL_EPOCHS-th epoch, the step's network certified as any step's end."""
+    from indrajala_ml.studies import certificate_guard as cg
+
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=20, patience=30, diagnose_every=30, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    reads = iter([True, False] * 100)  # each epoch: right when armed, wrong after its one update
+    monkeypatch.setattr(mf, "quotient_right", _always_right)
+
+    def stub(machine: object, task: object) -> bool:
+        return next(reads)
+
+    monkeypatch.setattr(cg, "right", stub)
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 1e9, tmp_path, settings, cap=3, guard=True)
+    rows = _rows(tmp_path)
+    ends = [r for r in rows if "end" in r]
+    assert [(r["step"], r["end"], r["epochs"]) for r in ends] == [(1, "stalled", mf.STALL_EPOCHS)]
+    assert ends[0]["rollbacks"] == mf.STALL_EPOCHS and isinstance(ends[0]["certified"], bool)
+    assert mf.outcome(rows).epochs == mf.STALL_EPOCHS

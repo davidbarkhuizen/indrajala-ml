@@ -181,13 +181,35 @@ class NetworkMachine:
         return states[0], [d[0] for d in self._distances(H)]
 
     def step(self, state: State, windows: IntArray) -> Steps:
+        return self.step_states([state], windows)
+
+    def step_states(self, states: Sequence[State], windows: IntArray) -> Steps:
+        """The windows from each of states in one forward pass, state by state (step_states)."""
         backend = self.network.backend
-        X = backend.matrix(windows.astype(np.float64).tolist())
-        c = np.concatenate([E[i] for E, i in zip(self.E, state, strict=True)])
-        C = backend.matrix(np.repeat(c[np.newaxis, :], len(windows), axis=0).tolist())
-        output, H, states = self.network.window_step(X, C)
+        X = backend.matrix(np.tile(windows, (len(states), 1)).astype(np.float64).tolist())
+        codes = [np.concatenate([E[i] for E, i in zip(self.E, state, strict=True)]) for state in states]
+        C = backend.matrix(np.repeat(np.array(codes), len(windows), axis=0).tolist())
+        output, H, after = self.network.window_step(X, C)
         digits, leads = logit_leads(np.array(output.tolist(), dtype=np.float64), self.network.class_count)
-        return Steps(digits, leads, np.array(states, dtype=np.int64).reshape(len(windows), -1), self._distances(H))
+        return Steps(digits, leads, np.array(after, dtype=np.int64).reshape(len(after), -1), self._distances(H))
+
+
+def step_states(machine: WindowMachine, states: Sequence[State], windows: IntArray) -> Steps:
+    """
+    The windows from each of states, stacked state by state (row i * len(windows) + j is window j
+    from states[i]): in one forward pass where the machine has its own step_states, else a step a
+    state.
+    """
+    batched = getattr(machine, "step_states", None)
+    if batched is not None:
+        return batched(states, windows)
+    parts = [machine.step(state, windows) for state in states]
+    return Steps(
+        np.concatenate([p.digits for p in parts]),
+        np.concatenate([p.leads for p in parts]),
+        np.concatenate([p.states for p in parts]),
+        [np.concatenate([p.distances[g] for p in parts]) for g in range(len(parts[0].distances))],
+    )
 
 
 def all_windows(k: int, tokens: int) -> IntArray:
