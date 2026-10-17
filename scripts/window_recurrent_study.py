@@ -537,6 +537,41 @@ files, run from `data/window-recurrent`).
   is stationary, 0 of 3,000 cases wrong, 4 of 100,000 in the long tests. A snapped network (seed 0,
   step 10) keeps one code per carry from the second bin on (spread 0, no shift).
 
+Findings (E2b' of docs/window-recurrent-claims-workplan.md, D39: E2b's snapped arm with no run
+stopped early, **C2b's registered test**), `scripts/window_recurrent_e2b_prime.json` (E2b's snapped
+config but for `end_at_certified_step` off), crate abcba3d7a30e, code at cea696f (`~/code/wt-e2bp`;
+the results' "commit" is the launching checkout's, ce4015d), 20 seeds, 2,963 parameters: `jebel`,
+6 workers, 2026-10-16 09:12 to 21:38, 131-206 minutes a run (median 196), 1,103 MB peak, every
+step's network certified (`e2b-prime.sha256`, d9cd390a...bfe46b7, 1,100 files, run from
+`data/window-recurrent`), log `e2b-prime.out` (038e59a0...afe44). The last step's networks
+recertified in both verdicts on `pyramidon` (`e2b-prime-certificates/`, `-strict/`,
+`e2b-prime-certify.log`, `-strict.log`). Long tests (B1 at 256 and 1,024, 100,000 cases each) on
+all 20 (every break is 64), `pyramidon` at c4a91e7 (`~/code/wt-dev2`), 2 workers, 2026-10-17 04:01 to 07:49, about
+22 minutes a run, into `e2b-prime-long-tests/`, log `e2b-prime-long-tests.log`
+(`e2b-prime-long-tests.sha256`, 487751b4...1511cada, 21 files, run from `data/window-recurrent`).
+
+| arm | working at 64 (W10) | break 64 | certified (last step) | working at 1,024 |
+| --- | --- | --- | --- | --- |
+| snapped, no early stop (E2b') | 20/20 (0.84-1.00) | 20/20 | 20/20 | 20/20 |
+| continuous (E2b, as run) | 20/20 (0.84-1.00) | 2/20 | - | 0/20 (0.00-0.16) |
+
+- **C2b holds** (registered: refuted unless the continuous arm's rate at 1,024 is below the
+  snapped arm's by Fisher's exact test, one-sided, p < 0.05): Fisher's exact, one-sided, p 7.3e-12.
+- **Training past the first proof cost nothing here:** every run trained all 18 steps (to 18
+  columns, the exclusion bound), and every last-step network is certified in both verdicts,
+  minimised to the 3-state carry automaton from 3-14 codes reached, snap ratio >= 1.059 and logit
+  lead >= 3.9 (no near tie in either verdict).
+- **D39's comparison (exploratory): the early stop didn't change the rate.** E2b's snapped arm,
+  stopped at its first proof, worked 20 of 20 at 1,024; E2b', trained on, also 20 of 20 certified
+  at the last step. The runs are E2b's until then: all 102 step networks the two studies share (to
+  each run's first certified step) are byte-identical, and the first certified steps are E2b's (3 in
+  6 runs, 4 in 7, 5 in 2, then 6, 7, 8, 10 and 15).
+- **One proof lost and regained, none lost for good:** 19 of 20 runs are certified at every step
+  from their first; seed 6 at steps 5-7, not at 8-15, and again at 16-18 (its loss replayed in
+  P1's snap-wall work: an ordinary step across a code boundary, then Adam's amplification). So
+  E8b's collapse past a solution, general at division, is rare at this cell (the stable-replay
+  probe: 20 of 20 replays of 4 stable seeds kept the proof).
+
 Findings (stage 9 and 9b of docs/factored-state-workplan.md: modular division `p` 5 with a factored
 state, C9, C9' and C9'', each an existence claim), crate abcba3d7a30e, the curriculum at `k` 1, `s`
 16 a factor, the state read before the first `StateInput` (D10), every step certified, a study
