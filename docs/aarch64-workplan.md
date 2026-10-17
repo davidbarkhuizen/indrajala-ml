@@ -100,8 +100,10 @@ Every option's pros and cons, as settled.
     path. Cons: the definition is our code: a vector version must replicate it operation by
     operation, and "is it right" has no external answer.
   - (c) Keep the C library's. Pros: nothing to do. Cons: breaks D1.
-  The exact reference for the tests is Python's integers (`fractions`, no new dependency):
-  every test input's `exp` to more than enough bits, then rounded.
+  The exact reference for the tests is Python's `decimal` at 60 significant digits (no new
+  dependency), rounded to binary64 by `float()`: `exp`'s hardest cases sit about 2^-120 from a
+  rounding boundary, well inside 60 digits. **Done in stage 2** (CORE-MATH's `cr_exp`, MIT, its
+  notice kept).
 - **D5: the canonical order is a rule for every kernel**, written into the crate's README and
   each kernel's comment: products in four `mul_add` lanes combined `(l0 + l1) + (l2 + l3)`, tails
   in order; reductions as left folds; no operation whose result the hardware chooses. A NEON
@@ -121,6 +123,10 @@ Every option's pros and cons, as settled.
     found; `t` is small.
   - The alternative, leaving these to the hardware and compiler: Pros: nothing to do. Cons:
     breaks D1 on exactly the inputs that are hardest to debug.
+  - **Refined in stage 2:** a NaN that an invalid operation creates (`inf - inf`, `0 * inf`)
+    keeps the hardware's default sign (x86 negative, ARM positive) and isn't claimed; fixing it
+    would cost a check on every operation for inputs no finite training run reaches. The row
+    maximum's fold keeps a row's last NaN.
 - **D7: the Rust golden entries become one committed, machine-independent reference.** Settled.
   - (a) After stage 3, `data/refactoring/golden_run_rust.json` (41 entries, committed, a few MB
     at most: checked before committing), checked by `golden_training_run.py check` on every
@@ -221,6 +227,39 @@ Done when the findings are merged.
 4. The golden run re-recorded on every machine (§8, approved by D1), archived.
 
 Done when the Pi's Rust entries equal jebel's bit for bit.
+
+**Result (2026-10-17):**
+
+1. **`exp`:** `src/cr_exp.rs` passes its tests against the reference (random inputs over the
+   whole domain, every binade, CORE-MATH's hard-case database and its neighbours, the overflow
+   and underflow edges). On 8M inputs it differs from glibc 2.43's `exp` in 5,913, glibc's
+   result the misrounded one each time: glibc rounds about 0.075% of inputs to the neighbouring
+   double (worst 0.504 ulp, within its documented bound; not a glibc bug). The accurate path
+   runs once in about 690 calls (98,515 of 2^26 in [-20, 20], 95,858 of 2^26 over the finite
+   range; a counting copy of `cr_exp.rs`, not the crate), more often than D4's "thousands"
+   guessed; the timings below include it.
+2. **D6** in the crate (`src/scalar.rs`: relu, the softmax row maximum, `powi`), numpy's
+   `relu()` in `array_layer.py`, Python's `relu_activation` keeping NaN, and
+   `Adam.bias_corrections` by `powi` in `update_rules.py`. The crate's suite 2,872 passed;
+   indrajala-ml's `./cli test` 12,223 passed, 10 skipped.
+3. **Timed on jebel** (tier 1, `--order ONNO` extended by `NO`, 6 passes a side;
+   `2026-10-17-cr-exp-focused`, `2026-10-17-cr-exp-window`). The Rust forward passes that call
+   `exp` are slower: dense `forward_batch` +17% to +32% (sigmoid), conv `forward` +9% to +20%,
+   attention `forward_batch` +6.8%. Rows the change doesn't touch moved as far (Rust
+   `transpose` -35% to -49%, numpy `add` +30%, the window run's `matmul` control -8%): the
+   rebuilt extension's layout, which sets this A/B's resolution. End to end, the window
+   program's `learn` step +6.1%, inside that resolution, its other cases within 0.8%. Weighed
+   against D1: accepted, the price of one definition of `exp`; stage 7's vector `exp` is where
+   it is won back, matching this one by construction.
+4. **The golden run, re-recorded (§8, approved by D1):** against the previous version, Rust 33
+   of 41 entries unchanged (8 move by `exp`'s last bits; Rust's Adam unchanged), numpy 30 of
+   41 and Python 31 of 42 (Adam's `powi`). jebel's and pyramidon's files are byte-identical;
+   **litshe against jebel: Rust 41 of 41 and Python 42 of 42 bit-identical**, the stage's done
+   condition; numpy 7 of 41 (not claimed, D1).
+5. **`scripts/parity_probe.py`** on all three: jebel's and pyramidon's records identical;
+   litshe against jebel, `exp` (the crate's and `math.exp`,
+   2^20 + 2^18 inputs), Adam, relu all identical; softmax 18 of 21, the three a NaN from
+   `inf - inf` (D6, refined).
 
 ### Stage 3: the committed Rust reference (D7)
 
