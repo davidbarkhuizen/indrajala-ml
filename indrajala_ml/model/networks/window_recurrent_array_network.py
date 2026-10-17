@@ -39,7 +39,8 @@ backend's, so the two networks agree to within those products' rounding.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Iterator, Sequence
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Self
 
 import indrajala_math_rust as pa
@@ -50,10 +51,14 @@ from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.layers.numpy import recurrent_array_layer as numpy_parts
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.rust import recurrent_rust_array_layer as rust_parts
+from indrajala_ml.model.layers.rust import residual_rust_array_layer as residual_layers
+from indrajala_ml.model.layers.rust import token_rust_array_layer as token_layers
+from indrajala_ml.model.layers.rust.attention_rust_array_layer import AttentionRustArrayLayer
+from indrajala_ml.model.layers.rust.layer_norm_rust_array_layer import LayerNormRustArrayLayer
 from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT, NetworkFile
-from indrajala_ml.model.protocols.array_protocols import BackendArray
+from indrajala_ml.model.protocols.array_protocols import BackendArray, TrainedArrayLayer
 from indrajala_ml.model.specs.bounds import validate_class_count
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
@@ -161,12 +166,14 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
 
     # the forward pass
 
-    def _machine_states(self) -> list[tuple[int, ...]]:
-        # each example's state as a machine's, a code per factor, from the last snap
+    def _machine_states(self, indices: Sequence[Any] | None = None) -> list[tuple[int, ...]]:
+        # each example's state as a machine's, a code per factor, from a snap's indices (each
+        # factor's), the last snap's by default
         assert self.recurrence.snapped, (
             "a continuous factor has no codes (Factor(s, None)): the state isn't a machine's"
         )
-        return [tuple(int(i) for i in codes) for codes in zip(*self.recurrence_layer.indices, strict=True)]
+        snap: Sequence[Any] = self.recurrence_layer.indices if indices is None else indices
+        return [tuple(int(i) for i in codes) for codes in zip(*snap, strict=True)]
 
     def _windows(self, X: Any) -> int:
         count, remainder = divmod(X.shape[1], self.columns)
@@ -190,14 +197,38 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
             self._activations.append(layer.forward_batch(self._activations[-1]))
         return self._activations[-1], self.recurrence_layer.forward_batch(self._activations[self._pooling_reads], C)
 
-    def forward_windows(self, X: A) -> A:
-        """The inference forward pass: each column's digit probabilities, (N, W * k * classes)."""
-        C = self._first_state(X.shape[0])
+    def _run_windows(self, X: Any, C: Any, states: bool, codes: bool) -> tuple[Any, list[Any], list[Any], list[Any]]:
+        # the inference passes' windows: the per-layer path here, the window program on Rust
+        return self.per_layer_windows(X, C, states, codes)
+
+    def per_layer_windows(
+        self, X: Any, C: Any, states: bool, codes: bool
+    ) -> tuple[Any, list[Any], list[Any], list[Any]]:
+        """
+        The inference forward pass over every window of X from the snapped state C: the outputs
+        (N, W * k * classes), and, as kept, each window's next state and its cells' outputs before
+        the snap (states) and each factor's code indices (codes), W of each; what isn't kept is an
+        empty list. The per-layer path, window by window; the Rust network's window program runs it
+        in one call (docs/window-program-workplan.md, stage 3), and this stays its reference.
+        """
         outputs: list[Any] = []
+        kept_states: list[Any] = []
+        kept_cells: list[Any] = []
+        kept_indices: list[Any] = []
         for w in range(self._windows(X)):
             output, C = self._window_forward(self._window(X, w), C)
             outputs.append(output)
-        return self.backend.concatenate_columns(outputs)
+            if states:
+                kept_states.append(C)
+                kept_cells.append(self.recurrence_layer.H)
+            if codes:
+                kept_indices.append(list(self.recurrence_layer.indices))
+        return self.backend.concatenate_columns(outputs), kept_states, kept_cells, kept_indices
+
+    def forward_windows(self, X: A) -> A:
+        """The inference forward pass: each column's digit probabilities, (N, W * k * classes)."""
+        outputs, _, _, _ = self._run_windows(X, self._first_state(X.shape[0]), False, False)
+        return outputs
 
     def window_states(self, X: A) -> tuple[A, list[A], list[A]]:
         """
@@ -208,14 +239,9 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         wall's margins, docs/snap-wall-workplan.md).
         """
         C = self._first_state(X.shape[0])
-        outputs: list[Any] = []
-        states, cells = [C], [self.recurrence_layer.H]
-        for w in range(self._windows(X)):
-            output, C = self._window_forward(self._window(X, w), C)
-            outputs.append(output)
-            states.append(C)
-            cells.append(self.recurrence_layer.H)
-        return self.backend.concatenate_columns(outputs), states, cells
+        H = self.recurrence_layer.H
+        outputs, states, cells, _ = self._run_windows(X, C, True, False)
+        return outputs, [C, *states], [H, *cells]
 
     def state_codes(self, X: A) -> list[list[tuple[int, ...]]]:
         """
@@ -223,10 +249,9 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         window's next state's, W + 1 of them (the report's codes used, W4-i). Every factor snapped.
         """
         C = self._first_state(X.shape[0])
-        states = [self._machine_states()]
-        for w in range(self._windows(X)):
-            _, C = self._window_forward(self._window(X, w), C)
-            states.append(self._machine_states())
+        first = self._machine_states()
+        _, _, _, indices = self._run_windows(X, C, False, True)
+        states = [first, *(self._machine_states(window) for window in indices)]
         return [list(example) for example in zip(*states, strict=True)]
 
     def first_step(self) -> tuple[A, list[tuple[int, ...]]]:
@@ -240,8 +265,8 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         probabilities (N, k * classes), the cells' outputs before they are snapped (N, state_size)
         and the states they snap to (the window-recurrent claims workplan's certificate, E1).
         """
-        output, _ = self._window_forward(X, C)
-        return output, self.recurrence_layer.H, self._machine_states()
+        output, _, cells, indices = self._run_windows(X, C, True, True)
+        return output, cells[0], self._machine_states(indices[0])
 
     def _forward_input(self, x: A) -> A:
         return self.backend.row(self.forward_windows(self.backend.matrix([x.tolist()])), 0)
@@ -402,5 +427,85 @@ class WindowRecurrentArrayNetwork(WindowRecurrentShape[FloatArray], NumpyArrayNe
     """WindowRecurrentShape on the numpy backend."""
 
 
+@contextmanager
+def per_layer_inference(network: Any) -> Generator[None]:
+    """
+    A Rust network's inference passes through the per-layer path (per_layer_windows)
+    while open, the window program's reference: its parity tests and scripts/window_program_check.py.
+    """
+    # an instance attribute shadows the class's method while open
+    setattr(network, "_run_windows", network.per_layer_windows)  # noqa: B010
+    try:
+        yield
+    finally:
+        delattr(network, "_run_windows")
+
+
+def _program_op(layer: Any) -> tuple[Any, ...]:
+    # a window's Rust layer as the window program's op (the crate's program.rs); every layer kind a
+    # window can hold has one (a window holds neither Patches nor TokenMean: validate_window_specs)
+    if isinstance(layer, token_layers.EmbeddingRustArrayLayer):
+        return ("embedding",)
+    if isinstance(layer, token_layers.PositionRustArrayLayer):
+        return ("position",)
+    if isinstance(layer, rust_parts.StateInputRustArrayLayer):
+        return ("state_input", layer.tokens)
+    if isinstance(layer, residual_layers.ForkRustArrayLayer):
+        return ("fork",)
+    if isinstance(layer, residual_layers.AddRustArrayLayer):
+        return ("add",)
+    if isinstance(layer, LayerNormRustArrayLayer):
+        return ("layer_norm", layer.epsilon)
+    # the softmax output layer is a token-wise dense layer too: it goes first
+    if isinstance(layer, token_layers.TokenSoftmaxRustArrayLayer):
+        return ("token_output", layer.tokens)
+    if isinstance(layer, token_layers.TokenDenseRustArrayLayer):
+        return ("token_dense", layer.tokens, layer.activation)
+    if isinstance(layer, AttentionRustArrayLayer):
+        return ("attention", layer.heads, layer.causal, layer.dropout, *layer.rotary_table)
+    if isinstance(layer, token_layers.TokenDropoutRustArrayLayer):
+        return ("dropout", layer.drop_probability)
+    raise ValueError(f"the window program has no op for a window's {type(layer).__name__}")
+
+
 class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayNetworkBase):
-    """WindowRecurrentShape on the Rust backend."""
+    """
+    WindowRecurrentShape on the Rust backend. Its inference passes (forward_windows,
+    window_states, state_codes, window_step, and so loss_batch and forward_rows) run every window
+    in one crate call, the window program built from its layers at construction
+    (docs/window-program-workplan.md, stage 3), by bits the per-layer path's
+    (per_layer_windows); training runs the per-layer path.
+    """
+
+    def __init__(
+        self,
+        input_shape: InputShape,
+        layers: Sequence[LayerSpec],
+        recurrence: WindowRecurrence,
+        update_rule: UpdateRule,
+    ) -> None:
+        super().__init__(input_shape, layers, recurrence, update_rule)
+        self._program = pa.WindowProgram(
+            [_program_op(layer) for layer in self.layers],
+            self.columns,
+            self._pooling_reads,
+            [f.state_size for f in recurrence.factors],
+            [f.codes is not None for f in recurrence.factors],
+            cross=recurrence.cross,
+        )
+
+    def _program_parameters(self) -> list[pa.Array]:
+        # the network's parameters in order, as the program reads them: the window's layers', then
+        # the parts' (each factor's pooling, cell, codes and initial state)
+        layers = [
+            array for layer in self.layers if isinstance(layer, TrainedArrayLayer) for array in layer.parameters()
+        ]
+        return [*layers, *(array for part in self.parts for array in part.parameters())]
+
+    def _run_windows(self, X: Any, C: Any, states: bool, codes: bool) -> tuple[Any, list[Any], list[Any], list[Any]]:
+        dropping = (AttentionRustArrayLayer, token_layers.TokenDropoutRustArrayLayer)
+        assert not any(layer.training for layer in self.layers if isinstance(layer, dropping)), (
+            "the window program runs inference only: training's forward pass is the per-layer path"
+        )
+        self._windows(X)  # whole windows, refused as the per-layer path refuses them
+        return pa.window_program_forward(self._program, X, self._program_parameters(), C, states=states, codes=codes)

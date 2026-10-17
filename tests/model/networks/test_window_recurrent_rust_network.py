@@ -121,8 +121,10 @@ def test_a_recomputed_window_draws_its_dropout_masks_again():
     forward = WindowRecurrentRustArrayNetwork.randomized((K,), window, RECURRENCE, SGD(), seed=7)
     X, labels = _batch(3)
     trained._accumulate_gradients(RUST.matrix(X.tolist()), trained._target_batch_array(labels))
+    # the per-layer path in training (the window program runs inference only)
     forward._set_training_mode(True)
-    forward.forward_windows(RUST.matrix(X.tolist()))
+    X_rust = RUST.matrix(X.tolist())
+    forward.per_layer_windows(X_rust, forward._first_state(3), False, False)
     assert generator_state(trained.rng) == generator_state(forward.rng)
 
 

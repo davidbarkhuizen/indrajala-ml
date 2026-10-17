@@ -217,6 +217,13 @@ where you meet a new trap; delete one that no longer holds.
   workplan's stage 1). Use `addition_data.digits` and `from_digits` (DIGIT_CHUNK digits a
   big-integer step, the rest from a table or small ints).
 
+- **Developing the crate beside running jobs:** never `maturin develop` into the main `.venv` while a
+  study or long test runs from it (or from a worktree whose `.venv` links to it). Build in the
+  crate worktree's own venv, then `maturin build --release -o DIR` and `pip install --no-deps
+  --target SITE` the wheel, and run indrajala-ml's tests with `PYTHONPATH=SITE:.`; pyright needs
+  SITE in a temporary `pyrightconfig.json`'s `extraPaths` to see the new stub. Don't replace SITE
+  while a suite runs: tests that start subprocesses import it again.
+
 ## Machines
 
 - **Development on `pyramidon`, timing and long studies on `jebel`** (measurement.md section 4).

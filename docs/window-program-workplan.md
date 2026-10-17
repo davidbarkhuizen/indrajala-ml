@@ -210,6 +210,8 @@ first, then stages 2-5 as planned; stage 6's end-to-end timing tells what they b
    and `state_codes`). Also `argmax_token_rows` as a crate op (ties to the first, as today).
    Rust tests: the program against the per-layer functions called in sequence, exact equality,
    one test per op kind and the composed windows the studies use.
+   **Done 2026-10-17** (indrajala-math-rust #58): `recurrence_step_forward`'s body is `step_forward`,
+   shared with the program; 25 parity tests, `==` throughout.
 3. **Bump rust/ and use it for inference** (indrajala-ml, one PR, tier 2).
    `WindowRecurrentRustArrayNetwork` builds its program from its specs at construction (and on
    load); `forward_windows`, `window_states`, `state_codes`, `window_step`, `loss_batch` and
@@ -218,7 +220,14 @@ first, then stages 2-5 as planned; stage 6's end-to-end timing tells what they b
    per-layer path's exactly (the per-layer path kept as a test helper); a test enumerating
    `layer_specs`' kinds fails when a window kind has no op. A saved study network (E2b', a division
    family network) gives the same certificate and the same long-test answers on 2,000 cases.
-   Golden run; A/B.
+   Golden run; A/B. **Done 2026-10-17:** `per_layer_windows` is the reference (numpy's path,
+   `per_layer_inference` for tests and `scripts/window_program_check.py`); 2,000 rows at 1,024 of
+   three saved networks (E2b', two family networks) the same by bits, outputs and codes; all 70
+   stored certificates of E2b' and the approximation claim reproduced exactly; golden run
+   bit-identical. On `jebel` (tier 2): the forward pass at 1,024 24.6% faster for the linear window,
+   14.2% for the `p` 7 family's, the family long test 14.1% (13.6 s to 11.7 s; 36% with stage 1's,
+   21.2 s to 11.7 s); E2b''s training step 1.0% slower (consistent, small: the per-layer path, through
+   the refactored `step_forward`; stage 5 replaces it).
 4. **The window program, training** (indrajala-math-rust, one PR). `window_program_learn(program,
    X, Y, parameters, gradients, C0, rng, weight)`: forward over every window keeping its results
    and masks (D5, D6), then backward from the last window, the gradients accumulated into the

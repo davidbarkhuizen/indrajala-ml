@@ -73,6 +73,11 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             cos, sin = rotary_table(tokens, self.key_size, rotary_base)
             self._table = {"cos": pa.Array(cos), "sin": pa.Array(sin)}
 
+    @property
+    def rotary_table(self) -> tuple[pa.Array, pa.Array] | tuple[None, None]:
+        """The ops' cos and sin, or None for both when the layer isn't rotary."""
+        return (self._table["cos"], self._table["sin"]) if self._table else (None, None)
+
     def set_rng(self, rng: pa.Generator) -> None:
         self.rng = rng
 

@@ -88,6 +88,10 @@ class TokenDropoutRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], 
         self.rng = pa.default_rng()
         self._mask: pa.Array | None = None
 
+    @property
+    def drop_probability(self) -> float:
+        return self._drop_probability
+
     def set_rng(self, rng: pa.Generator) -> None:
         self.rng = rng
 
