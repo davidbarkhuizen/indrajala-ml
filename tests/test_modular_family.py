@@ -53,9 +53,9 @@ def test_the_sum_arm_asks_the_sum_alone_with_the_familys_token():
 
 
 def test_the_cap_is_the_cells_exclusion_bound():
-    assert mf.exclusion_bound(5, [(16, 16), (16, 16)]) == 280  # the division workplan's table
-    assert mf.exclusion_bound(5, [(32, 128)]) == 152
-    assert mf.exclusion_bound(7, [(16, 16), (16, 16)]) == 304
+    assert mf.exclusion_bound(25, [(16, 16), (16, 16)]) == 280  # the division workplan's table
+    assert mf.exclusion_bound(25, [(32, 128)]) == 152
+    assert mf.exclusion_bound(49, [(16, 16), (16, 16)]) == 304
 
 
 def test_a_probe_run_trains_diagnoses_and_saves(tmp_path: Path):
@@ -367,7 +367,7 @@ def test_a_guarded_run_logs_each_epochs_arming_and_rollbacks_and_each_steps_sum(
     assert all(r["rollbacks"] == 0 for r in rows if "end" in r)
 
 
-def _always_right(kinds: object) -> bool:
+def _always_right(encoding: object, kinds: object) -> bool:
     return True
 
 
@@ -379,7 +379,7 @@ def test_the_guards_reads_leave_training_unchanged(tmp_path: Path, monkeypatch: 
     )
     encoding = mf.Encoding(5, mf.FAMILY)
     mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path / "off", settings, cap=2, fork=mf.Fork())
-    monkeypatch.setattr(mf, "quotient_right", _always_right)
+    monkeypatch.setattr(mf, "certified_right", _always_right)
     mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path / "on", settings, cap=2, fork=mf.Fork(), guard=True)
     on = _rows(tmp_path / "on")
     assert all(r["armed"] for r in on if r.get("epoch", 0) > 0 and "end" not in r)
@@ -403,7 +403,7 @@ def test_a_guard_that_undoes_nearly_every_update_for_its_stall_epochs_ends_the_r
         epoch_examples=64, max_epochs=20, patience=30, diagnose_every=30, screen=4, cases=8, lengths=(2,), long=(4,)
     )
     reads = iter([True, False] * 100)  # each epoch: right when armed, wrong after its one update
-    monkeypatch.setattr(mf, "quotient_right", _always_right)
+    monkeypatch.setattr(mf, "certified_right", _always_right)
 
     def stub(machine: object, task: object) -> bool:
         return next(reads)
@@ -435,8 +435,8 @@ def test_the_ladders_cells_are_feasible_with_the_surplus_held(p: int):
     from fractions import Fraction
 
     codes, cap = LADDER[p]
-    factors = mf.scaled_factors(p, Fraction(32, 11), 2)
+    factors = mf.scaled_factors(p * p, Fraction(32, 11), 2)
     assert p in md.PRIMES and factors == [(16, codes), (16, codes)]
     assert codes >= p and codes * codes >= 8 * p * p  # a counter fits each factor; joint codes 8.5x the states
-    assert mf.exclusion_bound(p, factors) == cap
-    assert mf.scaled_factors(11, Fraction(32, 11), 2) == [(16, 32), (16, 32)]  # p 11's cell, exactly
+    assert mf.exclusion_bound(p * p, factors) == cap
+    assert mf.scaled_factors(121, Fraction(32, 11), 2) == [(16, 32), (16, 32)]  # p 11's cell, exactly

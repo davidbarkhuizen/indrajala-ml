@@ -18,6 +18,13 @@ The probe trains one network by the curriculum (step `j` trains lengths `1..j`) 
 wall-clock budget, diagnosing it as it goes: each operation's accuracy, the quotient's by class,
 and each factor's share of `A`, `B`, the sum, the difference and the zero tests
 (window_diagnostics.share).
+
+The probe runs any target the same way (the general algebras, docs/general-algebras-workplan.md,
+D6): a target is an encoding (`Target`), division's `Encoding` one, `MachineEncoding` (any
+window_tasks machine, its own task, one token a window) another. The fork, the trigger, the guard
+and the readouts read only what a Target gives: its windows and answers, each answer's kind (D7:
+a machine's by its token), which kinds are the certified answer's (the quotient's for division,
+every kind for a machine), its task and the quantities its diagnosis shares.
 """
 
 from __future__ import annotations
@@ -28,12 +35,13 @@ import itertools
 import json
 import math
 import random
+import re
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -104,6 +112,51 @@ class Encoding:
     def query_token(self, operation: str) -> int:
         return COLUMNS + self.vocabulary.index(operation)
 
+    @property
+    def query_tokens(self) -> tuple[int, ...]:
+        return tuple(self.query_token(operation) for operation in self.queries)
+
+    @property
+    def task(self) -> wt.Task:
+        return wt.task_named(f"modular-division-{self.p}")
+
+    @property
+    def target_states(self) -> int:
+        return self.p * self.p
+
+    def draw(self, n: int, rng: random.Random) -> list[int]:
+        return columns(n, rng)
+
+    def kinds(self, tokens: Sequence[float], labels: Sequence[int]) -> list[str]:
+        """Each answer's kind: the quotient by class (0, undefined, nonzero), each query by its operation."""
+        names: list[str] = []
+        for i, label in enumerate(labels):
+            slot = i % self.width
+            if slot == 0:
+                names.append(
+                    "quotient-0" if label == 0 else "quotient-undefined" if label == self.p else "quotient-nonzero"
+                )
+            else:
+                names.append(self.queries[slot - 1])
+        return names
+
+    def certified(self, kind: str) -> bool:
+        """Whether a kind is the quotient's, the answer certified."""
+        return kind.startswith("quotient")
+
+    @property
+    def quantities(self) -> dict[str, Callable[[Any], int]]:
+        """What the diagnosis shares each factor with, of a state (A, B)."""
+        p = self.p
+        return {
+            "A": lambda s: s[0],
+            "B": lambda s: s[1],
+            "S": lambda s: (s[0] + s[1]) % p,
+            "D": lambda s: (s[0] - s[1]) % p,
+            "A=0": lambda s: int(s[0] == 0),
+            "B=0": lambda s: int(s[1] == 0),
+        }
+
     def states(self, columns: Sequence[int]) -> list[tuple[int, int]]:
         """(A, B) mod p after each column."""
         a = b = 0  # the prefixes mod p
@@ -152,13 +205,102 @@ class Encoding:
         )
 
 
+@dataclass(frozen=True)
+class MachineEncoding:
+    """
+    Any machine's own task as the probe's target (D6): a window is one token, its answer the
+    machine's output, its kind its token (D7), every kind the certified answer's; the diagnosis
+    shares each factor with each coordinate of the state (window_diagnostics.coordinates).
+    """
+
+    task: wt.Task
+    width: int = 1
+    query_tokens: tuple[int, ...] = ()
+
+    @property
+    def tokens(self) -> int:
+        return self.task.machine.tokens
+
+    @property
+    def classes(self) -> int:
+        return self.task.machine.classes
+
+    @property
+    def target_states(self) -> int:
+        return self.task.machine.states
+
+    def draw(self, n: int, rng: random.Random) -> list[int]:
+        """n uniform tokens, then the identity (token 0), as division's final zero column: its answer
+        needs the state the word left, so even one token trains the state (a probe without it,
+        2026-10-17: 5 of 6 runs at 6 states kept one code from step 1, where no answer needs the state)."""
+        return [rng.randrange(self.tokens) for _ in range(n)] + [0]
+
+    def example(self, columns: Sequence[int]) -> Example:
+        return tuple(float(token) for token in columns), self.task.machine.run(columns)
+
+    def kinds(self, tokens: Sequence[float], labels: Sequence[int]) -> list[str]:
+        return [f"token-{int(token)}" for token in tokens]
+
+    def certified(self, kind: str) -> bool:
+        return True
+
+    @property
+    def quantities(self) -> dict[str, Callable[[Any], int]]:
+        return dict(wd.coordinates(self.task.machine))
+
+    def states(self, columns: Sequence[int]) -> list[int]:
+        return self.task.machine.path(columns)
+
+
+class Target(Protocol):
+    """What the probe needs of a target (D6): Encoding's and MachineEncoding's members, documented there."""
+
+    @property
+    def width(self) -> int: ...
+
+    @property
+    def tokens(self) -> int: ...
+
+    @property
+    def classes(self) -> int: ...
+
+    @property
+    def query_tokens(self) -> tuple[int, ...]: ...
+
+    @property
+    def task(self) -> wt.Task: ...
+
+    @property
+    def target_states(self) -> int: ...
+
+    @property
+    def quantities(self) -> Mapping[str, Callable[[Any], int]]: ...
+
+    def draw(self, n: int, rng: random.Random) -> list[int]: ...
+
+    def example(self, columns: Sequence[int]) -> Example: ...
+
+    def kinds(self, tokens: Sequence[float], labels: Sequence[int]) -> list[str]: ...
+
+    def certified(self, kind: str) -> bool: ...
+
+    def states(self, columns: Sequence[int]) -> Sequence[Hashable]: ...
+
+
+def target_named(name: str, queries: tuple[str, ...] = (), vocabulary: tuple[str, ...] = VOCABULARY) -> Target:
+    """modular-division-p's Encoding (with queries and vocabulary), or any other task's MachineEncoding."""
+    if found := re.fullmatch(r"modular-division-(\d+)", name):
+        return Encoding(int(found[1]), queries, vocabulary)
+    return MachineEncoding(wt.task_named(name))
+
+
 def columns(n: int, rng: random.Random) -> list[int]:
     """n uniform columns, then the final zero column (the window studies' final zero window, at
     k 1: its answer needs the state the data left, so even one column trains the state)."""
     return [rng.randrange(COLUMNS) for _ in range(n)] + [0]
 
 
-def network(encoding: Encoding, factors: Sequence[tuple[int, int]], seed: int, reads: str = BEFORE_STATE) -> Any:
+def network(encoding: Target, factors: Sequence[tuple[int, int]], seed: int, reads: str = BEFORE_STATE) -> Any:
     """The transformer window (W11) over the encoding's tokens, a factored state (D3), Adam; the
     poolings reading before the first StateInput (D10) or, with reads OUTPUT, the window's output."""
     recurrence = WindowRecurrence(
@@ -203,7 +345,7 @@ class Fork:
     limit: int = 4  # D4
 
 
-def screen(net: Any, encoding: Encoding, screens: Mapping[int, Sequence[Example]]) -> tuple[float, dict[str, float]]:
+def screen(net: Any, encoding: Target, screens: Mapping[int, Sequence[Example]]) -> tuple[float, dict[str, float]]:
     """
     A step's screen: the share of every answer right over its screens (its training lengths), and
     each answer kind's share over them (the p11-trigger workplan's D4: a trigger's signals).
@@ -220,44 +362,37 @@ def screen(net: Any, encoding: Encoding, screens: Mapping[int, Sequence[Example]
     return pooled, {name: right / all_ for name, (right, all_) in sorted(kinds.items())}
 
 
-def quotient_right(kinds: Mapping[str, float]) -> bool:
-    """Every quotient kind of a screen right: necessary for the quotient's machine to be right."""
-    return all(share == 1.0 for name, share in kinds.items() if name.startswith("quotient"))
+def certified_right(encoding: Target, kinds: Mapping[str, float]) -> bool:
+    """Every kind of the certified answer right on a screen: necessary for its machine to be right."""
+    return all(share == 1.0 for name, share in kinds.items() if encoding.certified(name))
 
 
 def _kinds(kinds: Mapping[str, float]) -> dict[str, float]:
     return {name: round(share, 4) for name, share in kinds.items()}
 
 
-def _windows(encoding: Encoding, n: int, cases: int, seed: str) -> tuple[list[Example], list[list[int]]]:
+def _windows(encoding: Target, n: int, cases: int, seed: str) -> tuple[list[Example], list[list[int]]]:
     rng = random.Random(seed)
-    drawn = [columns(n, rng) for _ in range(cases)]
+    drawn = [encoding.draw(n, rng) for _ in range(cases)]
     return [encoding.example(c) for c in drawn], drawn
 
 
-def accuracy(net: Any, encoding: Encoding, rows: Sequence[Example]) -> dict[str, list[int]]:
-    """Each answer's [correct, all], the quotient by class (0, undefined, nonzero)."""
+def accuracy(net: Any, encoding: Target, rows: Sequence[Example]) -> dict[str, list[int]]:
+    """Each answer kind's [correct, all] (division's quotient by class, 0, undefined, nonzero)."""
     tally: dict[str, list[int]] = {}
     predictions: list[Sequence[int]] = net.classify_rows(net.prepare_dataset(rows))
-    for (_, labels), predicted in zip(rows, predictions, strict=True):
-        for i, (label, guess) in enumerate(zip(labels, predicted, strict=True)):
-            slot = i % encoding.width
-            if slot == 0:
-                name = (
-                    "quotient-0" if label == 0 else "quotient-undefined" if label == encoding.p else "quotient-nonzero"
-                )
-            else:
-                name = encoding.queries[slot - 1]
+    for (tokens, labels), predicted in zip(rows, predictions, strict=True):
+        for name, label, guess in zip(encoding.kinds(tokens, labels), labels, predicted, strict=True):
             t = tally.setdefault(name, [0, 0])
             t[0] += int(label == guess)
             t[1] += 1
     return tally
 
 
-def diagnose(net: Any, encoding: Encoding, settings: Settings) -> dict[str, Any]:
+def diagnose(net: Any, encoding: Target, settings: Settings) -> dict[str, Any]:
     """Each answer's accuracy and each factor's codes used and shares, at the diagnosis's lengths."""
     tally: dict[str, list[int]] = {}
-    samples: list[tuple[tuple[int, ...], int, int]] = []  # codes, A, B per window
+    samples: list[tuple[tuple[int, ...], Hashable]] = []  # codes, the target's state per window
     for n in settings.lengths:
         rows, drawn = _windows(encoding, n, settings.cases, f"family-diagnose-{n}")
         for name, (c, a) in accuracy(net, encoding, rows).items():
@@ -266,38 +401,32 @@ def diagnose(net: Any, encoding: Encoding, settings: Settings) -> dict[str, Any]
             t[1] += a
         codes: list[list[tuple[int, ...]]] = net.state_codes(net.backend.matrix([tokens for tokens, _ in rows]))
         for states, cols in zip(codes, drawn, strict=True):
-            for w, (A, B) in enumerate(encoding.states(cols)):
-                samples.append((states[w + 1], A, B))
-    p = encoding.p
-    quantities: dict[str, Callable[[int, int], int]] = {
-        "A": lambda A, B: A,
-        "B": lambda A, B: B,
-        "S": lambda A, B: (A + B) % p,
-        "D": lambda A, B: (A - B) % p,
-        "A=0": lambda A, B: int(A == 0),
-        "B=0": lambda A, B: int(B == 0),
-    }
+            for w, state in enumerate(encoding.states(cols)):
+                samples.append((states[w + 1], state))
     factors = [
         {
-            "codes": len({c[g] for c, _, _ in samples}),
-            "shares": {q: round(wd.share([(c[g], f(A, B)) for c, A, B in samples]), 3) for q, f in quantities.items()},
+            "codes": len({c[g] for c, _ in samples}),
+            "shares": {
+                q: round(wd.share([(c[g], f(state)) for c, state in samples]), 3)
+                for q, f in encoding.quantities.items()
+            },
         }
         for g in range(len(samples[0][0]))
     ]
     return {
         "accuracy": {name: round(c / a, 3) for name, (c, a) in sorted(tally.items())},
         "factors": factors,
-        "state_share": round(wd.share([(c, (A, B)) for c, A, B in samples]), 3),
+        "state_share": round(wd.share([(c, state) for c, state in samples]), 3),
     }
 
 
-def long_accuracy(net: Any, encoding: Encoding, settings: Settings) -> dict[str, float]:
-    """The quotient's accuracy over every window at each long length."""
+def long_accuracy(net: Any, encoding: Target, settings: Settings) -> dict[str, float]:
+    """The certified answer's accuracy (division's quotient) over every window at each long length."""
     result: dict[str, float] = {}
     for n in settings.long:
         rows, _ = _windows(encoding, n, settings.cases, f"family-long-{n}")
         tally = accuracy(net, encoding, rows)
-        q = [tally[k] for k in tally if k.startswith("quotient")]
+        q = [tally[k] for k in tally if encoding.certified(k)]
         result[str(n)] = round(sum(c for c, _ in q) / sum(a for _, a in q), 4)
     return result
 
@@ -523,18 +652,26 @@ def readout(
 STALL_SHARE, STALL_EPOCHS = 0.95, 10  # a guarded run frozen (the guard workplan's D9)
 
 
-def scaled_factors(p: int, ratio: Fraction, count: int, width: int = 16) -> list[tuple[int, int]]:
-    """count factors of width, each ceil(ratio p) codes: the surplus over a p-counter held at ratio (the division ladder's D2)."""
-    return [(width, math.ceil(ratio * p))] * count
+def scaled_factors(q: int, ratio: Fraction, count: int, width: int = 16) -> list[tuple[int, int]]:
+    """
+    count factors of width, each ceil(ratio sqrt(q)) codes for a target of q states, computed exactly:
+    the surplus held at ratio (the division ladder's D2, ceil(ratio p) for division's p * p states;
+    the general algebras' D3).
+    """
+    bound = ratio * ratio * q
+    codes = math.isqrt(math.floor(bound))
+    while codes * codes < bound:
+        codes += 1
+    return [(width, codes)] * count
 
 
-def exclusion_bound(p: int, factors: Sequence[tuple[int, int]]) -> int:
-    """`m + q - 1` (experiment-design.md, section 1): the joint codes plus division's p * p states, less one."""
-    return math.prod(m for _, m in factors) + p * p - 1
+def exclusion_bound(q: int, factors: Sequence[tuple[int, int]]) -> int:
+    """`m + q - 1` (experiment-design.md, section 1): the joint codes plus the target's q states, less one."""
+    return math.prod(m for _, m in factors) + q - 1
 
 
 def run(
-    encoding: Encoding,
+    encoding: Target,
     factors: Sequence[tuple[int, int]],
     seed: int,
     budget_seconds: float,
@@ -552,14 +689,15 @@ def run(
     or the cap (by default the cell's exclusion bound), a line of JSON per diagnosis to
     out/log.jsonl, the network saved at each step's end to out/network.json. With `fork`, a collapse
     within a step goes back to the step's best network and forks (Fork; a log line each). With
-    `guard`, the certificate guard on the quotient against division's machine (certificate_guard),
-    armed for an epoch whose screen before it got every quotient right (the guard workplan's D5);
+    `guard`, the certificate guard on the certified answer against its task's machine
+    (certificate_guard), armed for an epoch whose screen before it got every one right (the guard
+    workplan's D5);
     each epoch's row logs whether it was armed, its updates and those undone, each step's end the
     undone's sum. A run whose guard undoes STALL_SHARE of the updates of STALL_EPOCHS armed epochs in
     a row ends "stalled" (D9), its step's network certified as any step's.
     """
     if cap is None:
-        cap = exclusion_bound(encoding.p, factors)
+        cap = exclusion_bound(encoding.target_states, factors)
     out.mkdir(parents=True, exist_ok=True)
     net = network(encoding, factors, seed, reads)
     start = time.perf_counter()
@@ -571,7 +709,7 @@ def run(
         log.flush()
 
     record({"step": 0, "epoch": 0, **diagnose(net, encoding, settings)})
-    task = wt.task_named(f"modular-division-{encoding.p}")
+    task = encoding.task
     guarding = cg.Guard(lambda n: QueryMachine(n, encoding, 0), task) if guard else None
     frozen = 0  # consecutive armed epochs with STALL_SHARE of their updates undone
     spent = 0  # epochs trained in all
@@ -596,11 +734,11 @@ def run(
                 break
             rng = random.Random(f"family-train-{seed}-{step}-{epoch}" + (f"-fork{forks}" if forks else ""))
             examples = [
-                encoding.example(columns(lengths[i % len(lengths)], rng)) for i in range(settings.epoch_examples)
+                encoding.example(encoding.draw(lengths[i % len(lengths)], rng)) for i in range(settings.epoch_examples)
             ]
             guarded: dict[str, Any] = {}
             if guarding is not None:
-                if quotient_right(last_kinds):
+                if certified_right(encoding, last_kinds):
                     guarding.arm(net)
                 else:
                     guarding.disarm()
@@ -667,7 +805,7 @@ def run(
                     break
         net.save(str(out / "network.json"))
         net.save(str(out / f"step-{step}.network.json"))  # every step's kept, to inspect what a run had
-        # each step's quotient certified (under a second at one column a window); the run stops at
+        # each step's certified answer (the quotient) certified (under a second at one column a window); the run stops at
         # its first certified step: training past it can destroy the network (E8b; this probe's
         # first runs, both certified networks lost within 3 steps)
         certificate = wc.certify(QueryMachine(net, encoding, 0), task)
@@ -693,14 +831,14 @@ def run(
 
 
 def guard_epoch(
-    path: Path, encoding: Encoding, step: int, settings: Settings = PROBE, generator: str = "guard-epoch"
+    path: Path, encoding: Target, step: int, settings: Settings = PROBE, generator: str = "guard-epoch"
 ) -> dict[str, Any]:
     """
     One epoch of a step's training from a saved network, unguarded and with the guard armed, on the
-    same data: whether its quotient's machine is right before, and for each its seconds, whether
+    same data: whether its certified answer's machine is right before, and for each its seconds, whether
     right after and the guard's updates and rollbacks (the guard workplan's budget probe).
     """
-    task = wt.task_named(f"modular-division-{encoding.p}")
+    task = encoding.task
     lengths = list(range(1, step + 1))
     result: dict[str, Any] = {
         "network": str(path),
@@ -710,7 +848,9 @@ def guard_epoch(
     for arm in ("unguarded", "guarded"):
         net = load_network(str(path))
         rng = random.Random(f"{generator}-{step}")
-        examples = [encoding.example(columns(lengths[i % len(lengths)], rng)) for i in range(settings.epoch_examples)]
+        examples = [
+            encoding.example(encoding.draw(lengths[i % len(lengths)], rng)) for i in range(settings.epoch_examples)
+        ]
         guard = cg.Guard(lambda n: QueryMachine(n, encoding, 0), task) if arm == "guarded" else None
         start = time.perf_counter()
         if guard is not None:
@@ -729,11 +869,11 @@ class QueryMachine:
     """
     A family network as the certificate's WindowMachine over one column a window (stage 3): each
     window c is run as the network's window [c, queries...], and one slot's label read, slot 0 the
-    quotient (against division's machine), slot i the i-th query's operation (the sum against the
-    modular sum's). The states, their snaps and margins are the network's own, as NetworkMachine's.
+    quotient (against division's machine) or a machine's own output, slot i the i-th query's operation
+    (the sum against the modular sum's). The states, their snaps and margins are the network's own, as NetworkMachine's.
     """
 
-    def __init__(self, network: Any, encoding: Encoding, slot: int) -> None:
+    def __init__(self, network: Any, encoding: Target, slot: int) -> None:
         assert network.columns == encoding.width, "the network's window is the encoding's"
         self.inner = wc.NetworkMachine(network)
         self.encoding, self.slot = encoding, slot
@@ -753,25 +893,30 @@ class QueryMachine:
         return self.step_states([state], windows)
 
     def step_states(self, states: Sequence[wc.State], windows: wc.IntArray) -> wc.Steps:
-        queries = np.array([self.encoding.query_token(q) for q in self.encoding.queries], dtype=np.int64)
+        queries = np.array(self.encoding.query_tokens, dtype=np.int64)
         full = np.concatenate([windows, np.repeat(queries[np.newaxis, :], len(windows), axis=0)], axis=1)
         steps = self.inner.step_states(states, full)
         s = self.slot
         return wc.Steps(steps.digits[:, s : s + 1], steps.leads[:, s : s + 1], steps.states, steps.distances)
 
 
-SLOTS = {"modular-division": 0, "modular-sum": 1}  # the task each slot is certified against
+SLOTS = {"modular-sum": 1}  # the task each slot is certified against; any other task, slot 0
 
 
-def certify_file(path: Path, encoding: Encoding, task_name: str, snap_ratio: float = wc.SNAP_RATIO) -> dict[str, Any]:
+def slot(task_name: str) -> int:
+    """The window slot a task is certified and long-tested on: the modular sum's 1, any other task's 0."""
+    return SLOTS.get(task_name.rsplit("-", 1)[0], 0)
+
+
+def certify_file(path: Path, encoding: Target, task_name: str, snap_ratio: float = wc.SNAP_RATIO) -> dict[str, Any]:
     """A saved family network's certificate, one slot against its task's machine, as certify_file's JSON."""
     net = load_network(str(path))
-    slot = SLOTS[task_name.rsplit("-", 1)[0]]
-    certificate = wc.certify(QueryMachine(net, encoding, slot), wt.task_named(task_name), snap_ratio)
+    index = slot(task_name)
+    certificate = wc.certify(QueryMachine(net, encoding, index), wt.task_named(task_name), snap_ratio)
     return {
         "network": str(path),
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-        "slot": slot,
+        "slot": index,
         "snap_ratio": snap_ratio,
         **certificate.to_json(),
     }
@@ -784,7 +929,7 @@ class QueryModel:
     windows, one slot's labels read, in runs of at most the harness's CHUNK_TOKENS tokens.
     """
 
-    def __init__(self, network: Any, encoding: Encoding, task: wt.Task, slot: int) -> None:
+    def __init__(self, network: Any, encoding: Target, task: wt.Task, slot: int) -> None:
         assert network.columns == encoding.width, "the network's window is the encoding's"
         self.network, self.encoding, self.task, self.slot = network, encoding, task, slot
 
@@ -805,7 +950,7 @@ class QueryModel:
 
 def long_test(
     path: Path,
-    encoding: Encoding,
+    encoding: Target,
     task_name: str,
     lengths: Sequence[int] = wr.LONG_LENGTHS,
     properties: Sequence[str] = LONG_PROPERTIES,
@@ -817,10 +962,10 @@ def long_test(
     window_recurrent_study.long_test_failures reads it), with the network's sha256 and the slot.
     """
     task = wt.task_named(task_name)
-    slot = SLOTS[task_name.rsplit("-", 1)[0]]
+    index = slot(task_name)
     catalogue = task.catalogue(ad.SAMPLED, ad.RELATION_SAMPLED, ad.PER_STRATUM, doubling=True)
     tested = [p for p in wr.test_properties(task, catalogue) if p.id in properties]
-    model = QueryModel(load_network(str(path)), encoding, task, slot)
+    model = QueryModel(load_network(str(path)), encoding, task, index)
     results: dict[str, Any] = {}
     for n in lengths:
         start = time.perf_counter()
@@ -837,6 +982,6 @@ def long_test(
         "network": str(path),
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "task": task_name,
-        "slot": slot,
+        "slot": index,
         "lengths": results,
     }

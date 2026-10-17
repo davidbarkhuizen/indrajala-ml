@@ -30,6 +30,11 @@ wrong is undone; each epoch's row logs `armed` and `rollbacks`, each step's end 
 Several `--p` run in one pool, each seed's moduli in turn, into DIR/p<p>/seed<s>; `--codes-ratio
 R` gives each of `--factors` factors `ceil(R p)` codes (the division ladder, R 32/11:
 docs/division-ladder-workplan.md).
+`--task NAME ...` runs a general algebra's machines in place of division (the general-algebras
+workplan, D6: `word-problem-s<n>`, `move-to-front-<n>`, `random-<n>-<seed>`; window_tasks), each
+its own task, one token a window, several in one pool into DIR/<task>/seed<s>; `--codes-ratio R`
+gives each factor `ceil(R sqrt(q))` codes for `q` states (the workplan's D3, R 32/11). `certify`,
+`long-test` and `guard-epoch` take any such `--task` too (slot 0, the machine's output).
 `--guard both` runs each seed without and with it, in one pool, into DIR/unguarded/seed<s> and
 DIR/guarded/seed<s> (the readout's arms). `run` holds the machine lock (machine_lock.study), as
 the harness's studies do, so an A/B isn't started beside it.
@@ -418,6 +423,20 @@ readout is `readout data/window-recurrent/p11-ladder --arms family`.
   a trigger can be tuned across machine classes (the plan's status, 2026-10-17); the certificate
   guard (`replay --guard`, the snap-wall workplan's stage 2d) joins the fork rather than
   superseding it.
+
+Findings (the general algebras' build probes, stage 2 of docs/general-algebras-workplan.md; probes,
+no claim), 2026-10-17, pyramidon, the workplan's cell (two factors, `--codes-ratio 32/11`, reading
+the output, the fork), OPENBLAS_NUM_THREADS=1, in a scratch directory (not kept):
+
+- **Budget:** 20 epochs each of S5, move-to-front 5, random-5-0 and division `p` 11 in one pool, 4
+  at once: a machine's epoch about 2.6 s at steps 1-3 against division's 5.5 s (its window three
+  tokens, a machine's one); under 80 MB a process.
+- **The final identity token is needed:** without it (words of n tokens alone), 6-state cells,
+  seeds 0-1, 150 epochs: 1 of 6 certified (move-to-front 3), the other 5 keeping one code from
+  step 1, where no answer needs the state (state share 0). With it (MachineEncoding.draw, as
+  division's final zero column), the same seeds: move-to-front 3 certified 2 of 2 (step 8, 3-7
+  minutes); S3 0 of 2, 2-4 codes in use, its answers about half right at 150 epochs; random-3-0 0
+  of 2, still one code. Round 1 (E1, 600 epochs, 6 seeds) runs as registered.
 """
 
 from __future__ import annotations
@@ -446,7 +465,7 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="one probe run")
-    run.add_argument("--arm", choices=sorted(ARMS), required=True)
+    run.add_argument("--arm", choices=sorted(ARMS), default="family", help="division's queries (not with --task)")
     seeds = run.add_mutually_exclusive_group(required=True)
     seeds.add_argument("--seed", type=int, help="one run, into --out")
     seeds.add_argument("--first-seed", type=int, help="--seeds runs from this seed, at once, into --out/seed<s>")
@@ -455,9 +474,16 @@ def main(argv: list[str]) -> int:
         "--p", type=int, nargs="+", default=[5], help="the modulus; several run in one pool, into --out/p<p>"
     )
     run.add_argument(
+        "--task",
+        nargs="+",
+        help="a general algebra's machines in place of division (word-problem-s<n>, move-to-front-<n>, "
+        "random-<n>-<seed>); several run in one pool, into --out/<task>",
+    )
+    run.add_argument(
         "--codes-ratio",
         type=Fraction,
-        help="each of --factors factors ceil(R p) codes, width 16 (the division ladder's D2: 32/11)",
+        help="each of --factors factors ceil(R sqrt(q)) codes for q target states, width 16: ceil(R p) for "
+        "division (the division ladder's D2, the general algebras' D3: 32/11)",
     )
     run.add_argument("--factors", type=int, default=2, help="factors of 16 codes, s 16 each")
     run.add_argument(
@@ -495,7 +521,9 @@ def main(argv: list[str]) -> int:
     run.add_argument("--out", type=Path, required=True)
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
-    certify.add_argument("--task", required=True, help="modular-division-p (the quotient) or modular-sum-p (the sum)")
+    certify.add_argument(
+        "--task", required=True, help="modular-division-p (the quotient), modular-sum-p (the sum) or a machine's"
+    )
     certify.add_argument("--arm", choices=sorted(ARMS), default="family")
     certify.add_argument("--snap-ratio", type=float, default=wc.SNAP_RATIO)
     certify.add_argument(
@@ -508,7 +536,9 @@ def main(argv: list[str]) -> int:
     certify.add_argument("--out", type=Path, required=True)
     long = commands.add_parser("long-test", help="saved family networks' long tests, one slot")
     long.add_argument("networks", type=Path, nargs="+")
-    long.add_argument("--task", required=True, help="modular-division-p (the quotient) or modular-sum-p (the sum)")
+    long.add_argument(
+        "--task", required=True, help="modular-division-p (the quotient), modular-sum-p (the sum) or a machine's"
+    )
     long.add_argument("--arm", choices=sorted(ARMS), default="family")
     long.add_argument("--n", type=int, nargs="+", default=list(wr.LONG_LENGTHS))
     long.add_argument("--properties", nargs="+", default=list(mf.LONG_PROPERTIES))
@@ -527,7 +557,9 @@ def main(argv: list[str]) -> int:
     _trigger_arguments(drops)
     epoch = commands.add_parser("guard-epoch", help="one epoch from a saved network, unguarded and guarded, timed")
     epoch.add_argument("network", type=Path)
-    epoch.add_argument("--p", type=int, required=True)
+    target = epoch.add_mutually_exclusive_group(required=True)
+    target.add_argument("--p", type=int)
+    target.add_argument("--task", help="a general algebra's machine")
     epoch.add_argument("--step", type=int, required=True, help="the step whose lengths the epoch trains (1..step)")
     epoch.add_argument("--arm", choices=sorted(ARMS), default="family")
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
@@ -562,7 +594,8 @@ def main(argv: list[str]) -> int:
         )
         return 0
     if args.command == "guard-epoch":
-        print(json.dumps(mf.guard_epoch(args.network, mf.Encoding(args.p, ARMS[args.arm]), args.step)))
+        encoding = _target(args.task or f"modular-division-{args.p}", args)
+        print(json.dumps(mf.guard_epoch(args.network, encoding, args.step)))
         return 0
     if args.command == "readout":
         pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
@@ -576,24 +609,24 @@ def main(argv: list[str]) -> int:
         return 0
     if args.command == "long-test":
         args.out.mkdir(parents=True, exist_ok=True)
-        p = int(args.task.rsplit("-", 1)[1])
         for path in args.networks:
-            print(long_test_file(path, mf.Encoding(p, ARMS[args.arm], tuple(args.vocabulary)), args), flush=True)
+            print(long_test_file(path, _target(args.task, args), args), flush=True)
         return 0
     if args.command == "certify":
-        p = int(args.task.rsplit("-", 1)[1])
-        encoding = mf.Encoding(p, ARMS[args.arm], tuple(args.vocabulary))
-        result = mf.certify_file(args.network, encoding, args.task, args.snap_ratio)
+        result = mf.certify_file(args.network, _target(args.task, args), args.task, args.snap_ratio)
         args.out.write_text(json.dumps(result, indent=1))
         print(wc.summary(result))
         return 0
     if args.codes_ratio is not None and args.factor:
         parser.error("--codes-ratio sets every factor's codes: not with --factor")
+    # the targets by name: the machines', or division's at each p, and each one's directory when several
+    names = args.task or [f"modular-division-{p}" for p in args.p]
+    folders = dict(zip(names, args.task or [f"p{p}" for p in args.p], strict=True))
 
-    def probe(p: int) -> functools.partial[None]:
-        encoding = mf.Encoding(p, ARMS[args.arm], tuple(args.vocabulary))
+    def probe(name: str) -> functools.partial[None]:
+        encoding = _target(name, args)
         if args.codes_ratio is not None:
-            factors = mf.scaled_factors(p, args.codes_ratio, args.factors)
+            factors = mf.scaled_factors(encoding.target_states, args.codes_ratio, args.factors)
         else:
             factors = [tuple(f) for f in args.factor] if args.factor else [(16, 16)] * args.factors
         return functools.partial(
@@ -609,28 +642,36 @@ def main(argv: list[str]) -> int:
     guards = {"off": [False], "on": [True], "both": [False, True]}[args.guard]
     with machine_lock.study():
         if args.seed is not None:
-            if len(guards) > 1 or len(args.p) > 1:
-                parser.error("--guard both and several --p run --first-seed's seeds, not one --seed")
-            probe(args.p[0])(seed=args.seed, out=args.out, guard=guards[0])
+            if len(guards) > 1 or len(names) > 1:
+                parser.error("--guard both and several --p or --task run --first-seed's seeds, not one --seed")
+            probe(names[0])(seed=args.seed, out=args.out, guard=guards[0])
             return 0
         seeds = range(args.first_seed, args.first_seed + args.seeds)
-        # each seed's moduli and arms in turn, so a round's rungs and pairs end about together
-        jobs = [(p, s, guard) for s in seeds for p in args.p for guard in guards]
+        # each seed's targets and arms in turn, so a round's rungs and pairs end about together
+        jobs = [(name, s, guard) for s in seeds for name in names for guard in guards]
         context = multiprocessing.get_context("forkserver")
         with concurrent.futures.ProcessPoolExecutor(
             min(args.workers or len(jobs), len(jobs)), mp_context=context
         ) as pool:
             runs: dict[concurrent.futures.Future[str], str] = {}
-            for p, s, guard in jobs:
-                out = args.out / f"p{p}" if len(args.p) > 1 else args.out
+            for name, s, guard in jobs:
+                out = args.out / folders[name] if len(names) > 1 else args.out
                 out = out / GUARD_ARMS[guard] if len(guards) > 1 else out
                 out.mkdir(parents=True, exist_ok=True)
-                runs[pool.submit(logged_run, functools.partial(probe(p), guard=guard), s, out)] = (
+                runs[pool.submit(logged_run, functools.partial(probe(name), guard=guard), s, out)] = (
                     f"{out.relative_to(args.out)}/seed{s}" if out != args.out else f"seed {s}"
                 )
             for done in concurrent.futures.as_completed(runs):
                 print(f"{runs[done]}: {done.result()}", flush=True)
     return 0
+
+
+def _target(task: str, args: argparse.Namespace) -> mf.Target:
+    """A task's target: division's or the modular sum's family encoding at its p (the arm's queries), else the machine's own."""
+    if task.startswith("modular-"):
+        p = int(task.rsplit("-", 1)[1])
+        return mf.Encoding(p, ARMS[args.arm], tuple(getattr(args, "vocabulary", mf.VOCABULARY)))
+    return mf.target_named(task)
 
 
 def _trigger_arguments(command: argparse.ArgumentParser) -> None:
@@ -662,7 +703,7 @@ def logged_run(probe: functools.partial[None], seed: int, out: Path) -> str:
     return f"step {last['step']}, {verdict}, {last['seconds'] / 60:.1f} min"
 
 
-def long_test_file(path: Path, encoding: mf.Encoding, args: argparse.Namespace) -> str:
+def long_test_file(path: Path, encoding: mf.Target, args: argparse.Namespace) -> str:
     """One network's long tests into args.out/<network>.long-test.json, unless there; a line of its cases and failures."""
     target = args.out / f"{path.stem}.long-test.json"
     if target.exists():
