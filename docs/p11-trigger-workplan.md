@@ -5,7 +5,9 @@ then test an alternate trigger after that, to see the effect. In general we want
 task-tunable trigger, we don't want to tie it too tightly to the specific task." Decisions D1-D7
 settled (the owner delegates a workplan's decisions; each with its options' pros and cons).
 Probe-driven ([experiment-design.md](experiment-design.md), section 2). Stage 2 (the build) done
-2026-10-16; stage 3 (`p` 11) next, on `jebel` after E2b'.**
+2026-10-16; stage 3 (`p` 11) done 2026-10-17: works, 4 of 6 certified against the 121-state
+machine, every one passing all 663,000 long-test cases. Stage 4 (the alternate trigger) next, or
+superseded by the certificate guard.**
 
 ## Why
 
@@ -138,6 +140,14 @@ certified, which is exact at every length.
    | worst kind, 0.3 below, floor 0.9 | 25 | 7 | 0 | 12 |
 
    Descriptive only: D7 chooses after `p` 11, on every log, its per-epoch kinds included.
+
+   **Stage 3 run 2026-10-16 (jebel, 7618dfe, 21:38 to 23:38): works.** 4 of 6 certified at two
+   factors of 32 (seeds 1, 2, 4, 5 at steps 10, 16, 31, 16; 293-543 epochs; 1-72 forks), so the
+   ladder's second rung doesn't run. Every one recertified in both verdicts (minimised to 121,
+   210-448 codes reached) and passing all 663,000 long-test cases (pyramidon, c4a91e7). No run
+   collapsed; 4 large drops, all recovered; the two failures (seeds 0 and 3) never came near a
+   solution (worst answer at best 0.75, 0.41). The findings, the table and the manifests are in
+   `scripts/modular_family_probe.py`'s docstring; the networks in indrajala-models.
 4. **The alternate trigger** (D7): chosen with `drops`, registered here, then the replays (`p` 11's
    seeds and the fork probe's). Reported paired: per seed, both arms' certified step or failure,
    epochs, forks and unrecovered drops. **Better** if the alternate certifies more seeds, or as

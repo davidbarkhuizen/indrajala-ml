@@ -115,8 +115,10 @@ Decided with the owner, each to become a workplan or a stage:
 - **Division at `p` 11 (121 states)**, **taken up with the collapse trigger in
   [p11-trigger-workplan.md](p11-trigger-workplan.md)**: the largest run for `jebel`, **the fork on** (its probe's
   registered next step): `p` 7 with two factors of 32 is done (the fork probe: 5 certified 49-state
-  networks in 8 runs, each passing every long-test case), then `p` 11 with 32 or 64 a factor, probe-sized (4-6
-  seeds, 2-3 h). `k` stays 1: the certificate's cost is codes x 9 tokens there.
+  networks in 8 runs, each passing every long-test case), and **`p` 11 works** (2026-10-16: 4 of 6
+  certified 121-state networks at 32 a factor, each passing every long-test case; the probe's
+  findings). `k` stays 1: the certificate's cost is codes x 9 tokens there. Left: the plan's stage 4
+  (the alternate trigger), or the certificate guard in its place.
 - **A second composite task: the running affine map mod `p`** (`x' = a x + b`, `a != 0`; the
   group AGL(1, p), `p (p - 1)` states when the output is the composed map). Its Krohn-Rhodes
   decomposition is a cascade, not a direct product: the multipliers' running product is its one
