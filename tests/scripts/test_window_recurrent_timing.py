@@ -36,6 +36,7 @@ def test_every_default_case_parses() -> None:
         "forward-linear-k1-s16-m16-n8-r4",
         "forward-family-p5-f16-n8-r4",
         "long-test-family-p5-f16-U1-n8-c5",
+        "study-family-p5-f16-e2",
     ],
 )
 def test_each_kind_runs_and_its_breakdown_accounts_for_the_step(case: str) -> None:

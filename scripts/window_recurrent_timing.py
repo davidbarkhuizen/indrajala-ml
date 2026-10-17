@@ -16,6 +16,9 @@ long test (the window-program workplan's stage 0). A case is a name, its kind fi
 - `long-test-family-p<p>-f<m>-U1-n<n>-c<c>`: the long test end to end at n columns, c cases of U1
   through `QueryModel.predict` and `task.evaluate` (the examples, the network, the labels, the
   checking), the network built from seed 0 (the time doesn't depend on its answers).
+- `study-family-p<p>-f<m>-e<e>`: a short study run end to end, `modular_family.run` of the family
+  arm (two factors of m codes, the window's output read) from seed 0 for e epochs in all, into a
+  temporary directory (the window-program workplan's stage 6: a real run, not one step).
 
 Each case is built from a fixed seed, warmed up, then timed in repeats of loops steps (a learn
 case's loops `--loops`; a forward or long-test case's 1, each step seconds long); each repeat prints
@@ -76,7 +79,7 @@ DEFAULT_CASES = [
     "long-test-family-p7-f32-U1-n1024-c1023",
 ]
 
-KINDS = ("learn", "forward", "long-test")
+KINDS = ("learn", "forward", "long-test", "study")
 FAMILY_QUERIES = ("sum", "difference")
 FAMILY_STATE = 16  # s of each factor, the division studies'
 
@@ -190,6 +193,24 @@ def long_test_step(fields: dict[str, int], prop: str) -> Callable[[], object]:
     return lambda: task.evaluate(model.predict(n), n, tested)
 
 
+def study_step(fields: dict[str, int]) -> Callable[[], object]:
+    """A short family probe run of e epochs, each run into its own temporary directory."""
+    import tempfile
+    from pathlib import Path
+
+    from indrajala_ml.model.specs.window_recurrence import OUTPUT
+    from indrajala_ml.studies import modular_family as mf
+
+    encoding = mf.Encoding(fields["p"], FAMILY_QUERIES)
+    factors = [(16, fields["f"]), (16, fields["f"])]
+
+    def step() -> None:
+        with tempfile.TemporaryDirectory() as out:
+            mf.run(encoding, factors, 0, 1e9, Path(out), reads=OUTPUT, budget_epochs=fields["e"])
+
+    return step
+
+
 def case_step(case: str) -> tuple[Callable[[], object], bool]:
     """A case's step, and whether it is an inference step (one loop a repeat)."""
     kind, window, fields, prop = parse_case(case)
@@ -197,6 +218,8 @@ def case_step(case: str) -> tuple[Callable[[], object], bool]:
         return learn_step(window, fields), False
     if kind == "forward":
         return forward_step(window, fields), True
+    if kind == "study":
+        return study_step(fields), True
     assert prop is not None, f"{case}: a long test names its property"
     return long_test_step(fields, prop), True
 
