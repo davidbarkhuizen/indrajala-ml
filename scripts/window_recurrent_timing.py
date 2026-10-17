@@ -188,7 +188,7 @@ def long_test_step(fields: dict[str, int], prop: str) -> Callable[[], object]:
     task = wt.task_named(f"modular-division-{fields['p']}")
     catalogue = task.catalogue(fields["c"], ad.RELATION_SAMPLED, ad.PER_STRATUM, doubling=True)
     tested = [p for p in wr.test_properties(task, catalogue) if p.id == prop]
-    model = mf.QueryModel(network, encoding, task, mf.SLOTS["modular-division"])
+    model = mf.QueryModel(network, encoding, task, mf.slot(task.name))
     n = fields["n"]
     return lambda: task.evaluate(model.predict(n), n, tested)
 

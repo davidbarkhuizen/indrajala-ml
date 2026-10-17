@@ -19,15 +19,28 @@ and B both 0), so an alignment's zero columns are part of the word like any othe
   undefined (p + 1 classes); modular_data's catalogue.
 - **modular-sum-q:** the same pairs and tokens; the automaton of (A + B) mod q, q states, its output
   the running sum (q classes); modular_data's sum catalogue (the claims workplan's E8).
+
+The general algebras (docs/general-algebras-workplan.md, D1, D2): three machines over the n!
+orderings of n items, n + 1 tokens, token 0 the identity, each output the label of the state
+after the token in n classes, hiding most of the state; a case is a word of tokens (MachineTask).
+
+- **word-problem-s<n>:** S_n's word problem, its tokens the star transpositions (positions 1 and
+  i) and the n-cycle acting on the ordering's positions; its output the item at position 1.
+- **move-to-front-<n>:** an LRU's recency order, token i moving item i - 1 to the front (a left
+  regular band: no group part); its output the last item, the one an eviction takes.
+- **random-<n>-<seed>:** n random maps of n! states, redrawn until every state is reachable, its
+  output a random label per state, redrawn until the machine is minimal.
 """
 
 from __future__ import annotations
 
 import functools
+import hashlib
 import itertools
+import math
 import re
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from random import Random
 from typing import Any, Protocol
 
@@ -108,6 +121,25 @@ class Mealy:
                 state = self.transition[state, windows[:, j]]
             after[s] = state
         return labels, after
+
+    def reachable(self) -> list[int]:
+        """The states reachable from the start, breadth first."""
+        seen, queue = {self.start}, [self.start]
+        for s in queue:
+            for r in self.transition[s]:
+                if int(r) not in seen:
+                    seen.add(int(r))
+                    queue.append(int(r))
+        return queue
+
+    def path(self, tokens: Sequence[int]) -> list[int]:
+        """The states after each token of a word from the start."""
+        table, state = self._table, self.start
+        states: list[int] = []
+        for token in tokens:
+            state = table[state][token][0]
+            states.append(state)
+        return states
 
     def distinguishing_length(self) -> int | None:
         """
@@ -200,6 +232,96 @@ def modular_sum_machine(q: int) -> Mealy:
 
 
 CARRY = carry_machine()
+
+
+def orderings(n: int) -> list[tuple[int, ...]]:
+    """The n! orderings of items 0..n-1, the identity first."""
+    return list(itertools.permutations(range(n)))
+
+
+def _ordering_machine(
+    n: int, actions: Sequence[Callable[[tuple[int, ...]], tuple[int, ...]]], label: Callable[[tuple[int, ...]], int]
+) -> Mealy:
+    """A machine over the orderings of n, a token per action, its output the label of the ordering after it;
+    its coordinates each position's item."""
+    states = orderings(n)
+    index = {s: i for i, s in enumerate(states)}
+    transition = np.array([[index[act(s)] for act in actions] for s in states], dtype=np.int64)
+    output = np.array([[label(states[int(r)]) for r in row] for row in transition], dtype=np.int64)
+    names = tuple(f"position-{j + 1}" for j in range(n))
+    return Mealy(transition, output, coordinates=Coordinates(names, np.array(states, dtype=np.int64), n))
+
+
+def _identity(s: tuple[int, ...]) -> tuple[int, ...]:
+    return s
+
+
+@functools.cache
+def word_problem_machine(n: int) -> Mealy:
+    """S_n's word problem: the identity, the star transpositions of positions 1 and i, the n-cycle; the output the item at position 1."""
+
+    def swap(i: int) -> Callable[[tuple[int, ...]], tuple[int, ...]]:
+        return lambda s: (s[i], *s[1:i], s[0], *s[i + 1 :])
+
+    def rotate(s: tuple[int, ...]) -> tuple[int, ...]:
+        return (*s[1:], s[0])
+
+    actions: list[Callable[[tuple[int, ...]], tuple[int, ...]]] = [_identity, *(swap(i) for i in range(1, n)), rotate]
+    return _ordering_machine(n, actions, lambda s: s[0])
+
+
+@functools.cache
+def move_to_front_machine(n: int) -> Mealy:
+    """An LRU's recency order: token 0 no access, token i moving item i - 1 to the front; the output the last item."""
+
+    def access(x: int) -> Callable[[tuple[int, ...]], tuple[int, ...]]:
+        return lambda s: (x, *(y for y in s if y != x))
+
+    return _ordering_machine(n, [_identity, *(access(x) for x in range(n))], lambda s: s[-1])
+
+
+@functools.cache
+def random_machine(n: int, seed: int) -> Mealy:
+    """
+    n random maps of n! states and the identity (token 0), redrawn until every state is reachable from
+    state 0; the output a random label in n classes per state (the label of the state after a
+    token), redrawn until the machine is minimal.
+    """
+    rng, q = Random(f"random-machine-{n}-{seed}"), math.factorial(n)
+    while True:
+        transition = np.array([[s, *(rng.randrange(q) for _ in range(n))] for s in range(q)], dtype=np.int64)
+        if len(Mealy(transition, transition).reachable()) == q:
+            break
+    while True:
+        labels = np.array([rng.randrange(n) for _ in range(q)], dtype=np.int64)
+        machine = Mealy(transition, labels[transition])
+        if machine.distinguishing_length() is not None:
+            return machine
+
+
+Word = tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class WordProperty:
+    """A machine task's property: its cases, words of n tokens, each with its stratum (or None)."""
+
+    id: str
+    statement: str
+    generate: Callable[[int, Random], list[tuple[Word, int | None]]]
+
+
+@dataclass
+class WordResult:
+    id: str
+    cases: int
+    passed: int
+    strata: dict[int, tuple[int, int]] = field(default_factory=dict[int, tuple[int, int]])
+    failures: list[Word] = field(default_factory=list[Word])  # the first ad.FAILURES_KEPT
+
+    @property
+    def holds(self) -> bool:
+        return self.passed == self.cases
 
 
 class Outcome(Protocol):
@@ -396,13 +518,120 @@ class ModularSum(ModularDivision):
         return md.sum_catalogue(self.p, sampled, per_stratum)
 
 
+@dataclass(frozen=True)
+class MachineTask:
+    """
+    Any machine's own task (the general algebras, D6): a case is a word of its tokens, its labels the
+    machine's outputs. U1 is uniform words; S1 the shortest word to each reachable state (its
+    stratum) then uniform tokens to n, so every state's behaviour is tested whatever the words
+    visit. No held-out tenth: the probe draws every word.
+    """
+
+    name: str
+    machine: Mealy
+    held_out_id: str = "U2"  # in no catalogue
+    codes_id: str = "U1"
+    reach_id: str | None = None
+
+    def column_tokens(self, case: Word, n: int) -> tuple[int, ...]:
+        return case
+
+    def training_case(self, kind: int, n: int, rng: Random, hold_out: bool) -> Word:
+        return tuple(rng.randrange(self.machine.tokens) for _ in range(n))
+
+    def hash(self, case: Word, n: int) -> int:
+        return int.from_bytes(hashlib.sha256(bytes(case) + n.to_bytes(4)).digest()[:8])
+
+    def catalogue(
+        self, sampled: int, relation_sampled: int, per_stratum: int, doubling: bool = False
+    ) -> tuple[WordProperty, ...]:
+        tokens = self.machine.tokens
+
+        def uniform(n: int, rng: Random) -> list[tuple[Word, int | None]]:
+            return [(tuple(rng.randrange(tokens) for _ in range(n)), None) for _ in range(sampled)]
+
+        def every_state(n: int, rng: Random) -> list[tuple[Word, int | None]]:
+            cases: list[tuple[Word, int | None]] = []
+            for state, prefix in self._prefixes.items():
+                if len(prefix) <= n:
+                    for _ in range(per_stratum):
+                        cases.append(((*prefix, *(rng.randrange(tokens) for _ in range(n - len(prefix)))), state))
+            return cases
+
+        return (
+            WordProperty("U1", f"every token's answer, {sampled:,} uniform words", uniform),
+            WordProperty("S1", f"from every reachable state, {per_stratum:,} uniform words each", every_state),
+        )
+
+    @functools.cached_property
+    def _prefixes(self) -> dict[int, Word]:
+        """The shortest word (first in token order) to each reachable state."""
+        prefixes: dict[int, Word] = {self.machine.start: ()}
+        for s in self.machine.reachable():
+            for t in range(self.machine.tokens):
+                prefixes.setdefault(int(self.machine.transition[s, t]), (*prefixes[s], t))
+        return prefixes
+
+    def property_cases(self, prop: WordProperty, n: int) -> list[Word]:
+        return [word for word, _ in self._cases(prop, n)]
+
+    def _cases(self, prop: WordProperty, n: int) -> list[tuple[Word, int | None]]:
+        return prop.generate(n, Random(f"{self.name}-{prop.id}-{n}"))
+
+    def evaluate(
+        self, predict: Predict, n: int, properties: Sequence[WordProperty], limit: int | None = None
+    ) -> list[WordResult]:
+        results: list[WordResult] = []
+        for prop in properties:
+            cases = self._cases(prop, n)
+            if limit is not None and len(cases) > limit:
+                cases = cases[:: -(-len(cases) // limit)]
+            got = predict([word for word, _ in cases])
+            result = WordResult(prop.id, len(cases), 0)
+            for (word, stratum), labels in zip(cases, got, strict=True):
+                ok = labels[:n] == self.machine.run(word)
+                result.passed += ok
+                if stratum is not None:
+                    passed, count = result.strata.get(stratum, (0, 0))
+                    result.strata[stratum] = (passed + ok, count + 1)
+                if not ok and len(result.failures) < ad.FAILURES_KEPT:
+                    result.failures.append(word)
+            results.append(result)
+        return results
+
+    def reach(self, result: WordResult) -> int:
+        return 0
+
+    def result_json(self, result: WordResult) -> dict[str, Any]:
+        return {
+            "cases": result.cases,
+            "passed": result.passed,
+            "strata": {str(k): list(v) for k, v in sorted(result.strata.items())},
+            "failures": [{"word": list(word)} for word in result.failures],
+        }
+
+    def case_json(self, columns: Sequence[int]) -> dict[str, Any]:
+        return {"word": [int(t) for t in columns], "n": len(columns)}
+
+
 ADDITION = Addition()
 
 
+MACHINES: dict[str, Callable[..., Mealy]] = {
+    r"word-problem-s(\d+)": word_problem_machine,
+    r"move-to-front-(\d+)": move_to_front_machine,
+    r"random-(\d+)-(\d+)": random_machine,
+}
+
+
 def task_named(name: str) -> Task:
-    """addition, modular-division-p for p in md.PRIMES, or modular-sum-q for q >= 2."""
+    """addition, modular-division-p for p in md.PRIMES, modular-sum-q for q >= 2, or a general algebra's machine."""
     if name == ADDITION.name:
         return ADDITION
+    for pattern, machine in MACHINES.items():
+        if found := re.fullmatch(pattern, name):
+            assert int(found[1]) >= 2, f"a machine's n is at least 2; got {found[1]}"
+            return MachineTask(name, machine(*(int(x) for x in found.groups())))
     if found := re.fullmatch(r"modular-sum-(\d+)", name):
         assert int(found[1]) >= 2, f"a modular sum's q is at least 2; got {found[1]}"
         return ModularSum(int(found[1]))

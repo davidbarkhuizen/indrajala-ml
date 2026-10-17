@@ -95,6 +95,8 @@ existence runs supply those tasks and their logs.
   coordinates). Division's `Encoding` becomes one implementation and `MachineEncoding` (any
   `window_tasks.Mealy`, `k` 1) another; `window_tasks` gains a `MachineTask` for the certificate,
   named `word-problem-s<n>`, `move-to-front-<n>` and `random-<n>-<seed>`.
+  A machine's training words end with the identity token, as division's end with a zero column, so
+  even one token trains the state (the build's probe: without it 5 of 6 runs kept one code).
   - (a) *Chosen.* Pros: the fork, the trigger, `drops`, the guard and `guard-epoch` run unchanged
     on every class, which is what tuning them across classes needs; division's runs stay
     reproducible (its encoding's examples unchanged, tested); new classes later (Tomita, UTF-8,
