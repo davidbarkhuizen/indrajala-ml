@@ -415,3 +415,28 @@ def test_a_guard_that_undoes_nearly_every_update_for_its_stall_epochs_ends_the_r
     assert [(r["step"], r["end"], r["epochs"]) for r in ends] == [(1, "stalled", mf.STALL_EPOCHS)]
     assert ends[0]["rollbacks"] == mf.STALL_EPOCHS and isinstance(ends[0]["certified"], bool)
     assert mf.outcome(rows).epochs == mf.STALL_EPOCHS
+
+
+# the division ladder's feasibility table (docs/division-ladder-workplan.md): p, codes a factor, the cap
+LADDER = {
+    13: (38, 1612),
+    17: (50, 2788),
+    19: (56, 3496),
+    23: (67, 5017),
+    29: (85, 8065),
+    31: (91, 9241),
+    37: (108, 13032),
+    41: (120, 16080),
+}
+
+
+@pytest.mark.parametrize("p", sorted(LADDER))
+def test_the_ladders_cells_are_feasible_with_the_surplus_held(p: int):
+    from fractions import Fraction
+
+    codes, cap = LADDER[p]
+    factors = mf.scaled_factors(p, Fraction(32, 11), 2)
+    assert p in md.PRIMES and factors == [(16, codes), (16, codes)]
+    assert codes >= p and codes * codes >= 8 * p * p  # a counter fits each factor; joint codes 8.5x the states
+    assert mf.exclusion_bound(p, factors) == cap
+    assert mf.scaled_factors(11, Fraction(32, 11), 2) == [(16, 32), (16, 32)]  # p 11's cell, exactly

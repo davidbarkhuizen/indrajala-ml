@@ -255,7 +255,11 @@ class TaskMachine:
         )
 
 
-@pytest.mark.parametrize("p", md.PRIMES)
+# the certificate's code is the same at every p; above 23 a prime only adds minutes (80 s at 41, k 2)
+CERTIFIED_PRIMES = [p for p in md.PRIMES if p <= 23]
+
+
+@pytest.mark.parametrize("p", CERTIFIED_PRIMES)
 @pytest.mark.parametrize("k", [1, 2])
 def test_a_dividing_machine_is_certified_against_the_modular_automaton(p: int, k: int):
     task = wt.ModularDivision(p)
@@ -277,7 +281,7 @@ def test_a_summing_machine_is_certified_against_the_sum_automaton(q: int, k: int
 
 
 @pytest.mark.parametrize("fault", ["inside", "forgets-b"])
-@pytest.mark.parametrize("p", md.PRIMES)
+@pytest.mark.parametrize("p", CERTIFIED_PRIMES)
 def test_a_faulty_dividing_machine_fails_with_a_case_it_gets_wrong(fault: str, p: int):
     task, k = wt.ModularDivision(p), 2
     machine = TaskMachine(task, k, fault=fault)

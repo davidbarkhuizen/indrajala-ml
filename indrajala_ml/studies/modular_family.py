@@ -31,6 +31,7 @@ import random
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -520,6 +521,11 @@ def readout(
 
 
 STALL_SHARE, STALL_EPOCHS = 0.95, 10  # a guarded run frozen (the guard workplan's D9)
+
+
+def scaled_factors(p: int, ratio: Fraction, count: int, width: int = 16) -> list[tuple[int, int]]:
+    """count factors of width, each ceil(ratio p) codes: the surplus over a p-counter held at ratio (the division ladder's D2)."""
+    return [(width, math.ceil(ratio * p))] * count
 
 
 def exclusion_bound(p: int, factors: Sequence[tuple[int, int]]) -> int:
