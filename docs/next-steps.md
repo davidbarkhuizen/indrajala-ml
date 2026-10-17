@@ -111,6 +111,46 @@ Decided with the owner, each to become a workplan or a stage:
   sample" (grammatical inference) is unverified: no open copy of Oncina & García 1992 or de la
   Higuera 1997 was found.
 
+## Beyond arithmetic: other finite-state targets (the owner and Claude, 2026-10-17)
+
+The owner asked which domains to examine once the papers' work is wrapped up. Every target so far
+is an arithmetic transducer (the carry automaton, modular sums, division), the weakness
+`~/code/indrajala-papers/contribution.md` names under "Breadth": the next targets should test
+whether the method needs that structure. Every one below is an explicit machine, so the
+certificate applies unchanged; only the tasks are new. Each cell keeps the feasibility rules
+(codes at least the minimal states; training to the exclusion bound `m + q - 1`), which for
+random machines with many states means long training lengths: the bound decides which sizes are
+worth running. In the order recommended:
+
+1. **Machines with no arithmetic reading, split by their algebra (first).** Random Mealy machines
+   over a range of state counts and alphabets are the plain generality test. Splitting them by
+   Krohn-Rhodes makes it a study rather than a demonstration: pure permutation (group) machines,
+   the word problems of S3, A5 and S5, against aperiodic (reset, flip-flop) machines, the two
+   extremes of the decomposition. Does the snapped recurrence learn one kind more easily? It
+   extends the cover result: P2's terms are already Krohn-Rhodes's (Egri-Nagy's covering lemma:
+   approximation, cover, coordinates), and the general claim is that **training on the coordinates
+   of a machine's holonomy decomposition helps**, not only for division; that would make P2's
+   training signal a method. It meets the literature: Liu et al. 2023 ("Transformers learn
+   shortcuts to automata") and Merrill's circuit-complexity results make S5 the hard case for
+   transformers, so a certified recurrence exact on S5 at every length is a sharp contrast. The
+   running affine map (above) is the cascade case within arithmetic, a bridge to this.
+2. **The standard regular-language benchmarks:** the Tomita grammars, parity, bounded-depth Dyck.
+   The extraction literature uses them (Weiss et al. 2018; Wang et al. 2019), so results are
+   directly comparable; cheap, but they fill tables rather than change the story.
+3. **Real-world transducers**, for practical relevance: a UTF-8 decoder or validator (about 9
+   states, Hoehrmann's DFA); finite-state phonology and morphology, the field whose native formalism
+   transducers are (Kaplan and Kay's rewrite rules compiled to transducers, a fragment of an HFST
+   morphological analyser); protocol and controller machines (TCP's connection states, a lexer, a
+   vending-machine or traffic-light controller); sequential circuits (Gray and BCD converters,
+   LFSRs and CRCs, the last linear over GF(2): arithmetic again, in another algebra).
+4. **Later, beyond finite state:** counters and pushdown languages (unbounded Dyck). Nothing excludes
+   them; the certificate as it stands wouldn't apply.
+
+**Recommended first:** item 1, a random-machine study split into group and aperiodic machines,
+with the S5 word problem: it turns "arithmetic only" into a finding and tests whether the cover
+result generalises. When it is taken up: a workplan with a feasibility table per cell (states,
+alphabet, codes, the exclusion bound against the curriculum's cap).
+
 ## From composable layers
 
 - **New combinations.** The Sequential networks build every spec list `validate_layer_specs`
