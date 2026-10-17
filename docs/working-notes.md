@@ -217,6 +217,14 @@ where you meet a new trap; delete one that no longer holds.
   workplan's stage 1). Use `addition_data.digits` and `from_digits` (DIGIT_CHUNK digits a
   big-integer step, the rest from a table or small ints).
 
+- **A new window layer kind needs a window-program op:** the Rust window network builds a
+  `WindowProgram` from its layers (`_program_op`), and a layer with no op refuses to build;
+  `test_every_layer_class_a_window_holds_has_an_op` fails first. Add the op to the crate's
+  `program.rs` (forward, its cache, its downstream and gradients) with a parity test, as stages 2
+  and 4 did, then the descriptor here.
+- **The program's training step keeps every window's forward pass:** past `memory_budget` (2 GiB)
+  `window_program_learn` refuses with that name; its own masks aren't the layers', so a test that
+  reads a dropout layer's last mask reads it through `per_layer_path`.
 - **Developing the crate beside running jobs:** never `maturin develop` into the main `.venv` while a
   study or long test runs from it (or from a worktree whose `.venv` links to it). Build in the
   crate worktree's own venv, then `maturin build --release -o DIR` and `pip install --no-deps

@@ -1,6 +1,6 @@
 """
 Saved window-recurrent networks' inference through the window program against the per-layer path
-(docs/window-program-workplan.md, stage 3): for each network, rows of random tokens from its
+(the window-program workplan, stage 3): for each network, rows of random tokens from its
 embedding's vocabulary at n columns, in the long tests' chunks (`CHUNK_TOKENS // ((n + 1) * k)`
 rows of n + 1 windows), every output compared by bits, and each window's states' codes. Prints a
 line a network and exits 1 if any differs.

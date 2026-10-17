@@ -209,7 +209,7 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         (N, W * k * classes), and, as kept, each window's next state and its cells' outputs before
         the snap (states) and each factor's code indices (codes), W of each; what isn't kept is an
         empty list. The per-layer path, window by window; the Rust network's window program runs it
-        in one call (docs/window-program-workplan.md, stage 3), and this stays its reference.
+        in one call (the window-program workplan, stage 3), and this stays its reference.
         """
         outputs: list[Any] = []
         kept_states: list[Any] = []
@@ -331,7 +331,7 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         """
         Every layer's and part's gradient of the batch's loss, accumulated (W14, W20), window by
         window: numpy's training step, and the reference of the Rust network's window program
-        (docs/window-program-workplan.md, stage 5).
+        (the window-program workplan, stage 5).
         """
         windows = self._windows(X)
         weight = 1.0 / windows
@@ -485,7 +485,7 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
     WindowRecurrentShape on the Rust backend. Its inference passes (forward_windows,
     window_states, state_codes, window_step, and so loss_batch and forward_rows) and its training
     step's gradients run every window in one crate call, the window program built from its layers
-    at construction (docs/window-program-workplan.md, stages 3 and 5), by bits the per-layer path's
+    at construction (the window-program workplan, stages 3 and 5), by bits the per-layer path's
     (per_layer_windows, per_layer_gradients): one forward pass in training, each window's results
     and dropout masks kept, so no window's forward pass is recomputed (D5, D6).
     """
