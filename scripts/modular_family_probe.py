@@ -28,7 +28,7 @@ run when that many epochs are trained in all (or `--budget-minutes` pass, whiche
 `--trigger-signal`, `--trigger-rule`, `--trigger-threshold` and `--trigger-floor` set the fork's
 trigger (indrajala_ml/studies/collapse.py; the default is the fork's first: pooled, below 0.6 of
 the peak, no floor). `drops LOG... [--trigger-...]` scores a trigger against runs' logs, offline
-(docs/p11-trigger-workplan.md, D6): each run's large drops (the worst answer kind from 0.9 down
+(the p11-trigger workplan, D6; retired: `git show 28894cf:docs/p11-trigger-workplan.md`): each run's large drops (the worst answer kind from 0.9 down
 by more than 0.3), how many the trigger catches, of those never recovered how many, and its false
 alarms; at each epoch where the log has every answer kind's share (from the p11-trigger build on),
 else at each diagnosis (a proxy).
@@ -363,7 +363,7 @@ family:quotient sum:quotient sum:product` (`readout.txt`).
   a1c41b20...4ebd4c05, 53 files). Archived in indrajala-models
   (window-recurrent/2026-10-15-division, `*-approx-*`).
 
-Findings (the `p` 11 ladder: docs/p11-trigger-workplan.md, stage 3, registered before its data:
+Findings (the `p` 11 ladder: the p11-trigger workplan, stage 3, registered before its data:
 works if at least one network certifies against division's 121-state machine in both verdicts),
 2026-10-16; p 11, the family, two factors of 32 codes (`s` 16), reading the output, the fork on
 with today's trigger (pooled screen below 0.6 of the step's peak), 600 epochs (900 minutes only a

@@ -1,7 +1,7 @@
 """
-A collapse trigger, generic over tasks (docs/p11-trigger-workplan.md, D5): when a step's screen has
-fallen far enough from the step's peak to call the fall a collapse. Three choices, none of them
-about a task:
+A collapse trigger, generic over tasks (the p11-trigger workplan, D5; retired:
+`git show 28894cf:docs/p11-trigger-workplan.md`): when a step's screen has fallen far enough from
+the step's peak to call the fall a collapse. Three choices, none of them about a task:
 
 - **the signal**: the screen's share of every answer right ("pooled"), the mean over answer kinds
   of each kind's share ("mean"), or the worst kind's share ("worst"); the kinds are whatever the

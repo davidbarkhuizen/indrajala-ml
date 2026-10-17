@@ -4,8 +4,7 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
 "not planned yet" means only that no workplan has taken it up. A workplan still
-in progress keeps its own list: [p11-trigger-workplan.md](p11-trigger-workplan.md),
-[pypi-release-workplan.md](pypi-release-workplan.md),
+in progress keeps its own list: [pypi-release-workplan.md](pypi-release-workplan.md),
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
 [segments-workplan.md](segments-workplan.md),
@@ -126,14 +125,15 @@ Decided with the owner, each to become a workplan or a stage:
   drops, seed 101's among them. Two candidates from this: **a step ends only when its peak is
   recovered** (or the step's best network is restored before moving on), and **a drop threshold on
   the worst answer**. Most of the room above the 65% at `p` 5 looks like retention, not search.
-- **Division at `p` 11 (121 states)**, **taken up with the collapse trigger in
-  [p11-trigger-workplan.md](p11-trigger-workplan.md)**: the largest run for `jebel`, **the fork on** (its probe's
+- **Division at `p` 11 (121 states)**, **done with the collapse trigger in the p11-trigger
+  workplan** (retired 2026-10-17: `git show 28894cf:docs/p11-trigger-workplan.md`): the largest run for `jebel`, **the fork on** (its probe's
   registered next step): `p` 7 with two factors of 32 is done (the fork probe: 5 certified 49-state
   networks in 8 runs, each passing every long-test case), and **`p` 11 works** (2026-10-16: 4 of 6
   certified 121-state networks at 32 a factor, each passing every long-test case; the probe's
   findings). `k` stays 1: the certificate's cost is codes x 9 tokens there. The plan's stage 4 (the
   alternate trigger) waits for the beyond-arithmetic targets below, where a trigger can be tuned
-  across machine classes, not to division (the plan's status); today's trigger stays the default.
+  across machine classes, not to division; today's trigger stays the default (its stage 5's
+  decision).
   The certificate guard joins the fork, not replaces it, tested as the fork alone against the
   fork plus the guard.
 - **A second composite task: the running affine map mod `p`** (`x' = a x + b`, `a != 0`; the
@@ -163,8 +163,20 @@ whether the method needs that structure. Every one below is an explicit machine,
 certificate applies unchanged; only the tasks are new. Each cell keeps the feasibility rules
 (codes at least the minimal states; training to the exclusion bound `m + q - 1`), which for
 random machines with many states means long training lengths: the bound decides which sizes are
-worth running. The fork's trigger is tuned here, across these machine classes, not on division
-alone (the p11-trigger workplan's stage 4, deferred). In the order recommended:
+worth running. In the order recommended, after one item that runs across them:
+
+- **The fork's trigger, tuned across these machine classes**, not on division alone (the
+  p11-trigger workplan's stage 4, deferred; the owner, 2026-10-17: the trigger "would need to be
+  either target machine agnostic, or we need a way to tune it in general"). The tools exist:
+  `collapse.Trigger` (signal, rule, threshold, floor; today's, pooled below 0.6 of the peak, the
+  default), every screen's per-kind shares in the logs, and `modular_family_probe.py drops`,
+  which scores a trigger offline against any logs. The plan's candidate from division's logs: the
+  mean over answer kinds more than 0.2 below the step's peak, floor 0.8 (the worst kind, 0.3
+  below, floor 0.9, had no false alarms there). The test as the plan set it: a trigger chosen with
+  `drops` over every class's logs, registered, then paired replays (the same seeds, only the
+  trigger changed); **better** if it certifies more seeds, or as many with fewer epochs, losing
+  none today's trigger certified.
+
 
 1. **Machines with no arithmetic reading, split by their algebra (first).** Random Mealy machines
    over a range of state counts and alphabets are the plain generality test. Splitting them by
