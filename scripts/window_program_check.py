@@ -20,7 +20,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
 
 from indrajala_ml.model.layers.array.array_backend import RUST
-from indrajala_ml.model.networks.window_recurrent_array_network import per_layer_inference
+from indrajala_ml.model.networks.window_recurrent_array_network import per_layer_path
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.studies.window_recurrent_study import CHUNK_TOKENS
 
@@ -38,7 +38,7 @@ def check(path: str, n: int, rows: int, seed: int) -> tuple[bool, str]:
         begun = time.perf_counter()
         program = network.forward_windows(X).tolist(), network.state_codes(X)
         times["program"] += time.perf_counter() - begun
-        with per_layer_inference(network):
+        with per_layer_path(network):
             begun = time.perf_counter()
             per_layer = network.forward_windows(X).tolist(), network.state_codes(X)
             times["per layer"] += time.perf_counter() - begun
