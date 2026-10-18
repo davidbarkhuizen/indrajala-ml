@@ -67,11 +67,12 @@ def test_an_extra_code_that_breaks_is_counted_apart_from_the_first_codes():
     assert exact[:2] == [1.0, 1.0] and exact[-1] < exact[2] < 1.0
 
 
-def test_a_factor_s_partition_is_named_only_over_every_state_and_in_two_blocks_or_more():
-    coordinates = wt.Coordinates(("A",), np.array([[0], [1], [0], [1]]), 2)
-    assert wc.name_partition([[0, 2], [1, 3]], coordinates) == "A"
-    assert wc.name_partition([[0, 1, 2, 3]], coordinates) is None  # one block: a constant form fits
-    assert wc.name_partition([[0], [1]], coordinates) is None  # only some states reached
+def test_a_factor_s_partition_is_named_only_over_half_the_states_or_more_and_in_two_blocks_or_more():
+    coordinates = wt.Coordinates(("A",), np.array([[0], [1], [0], [1], [0], [1]]), 2)
+    assert wc.name_partition([[0, 2, 4], [1, 3, 5]], coordinates) == "A"
+    assert wc.name_partition([[0, 2], [1, 3]], coordinates) == "A"  # 4 of 6 states reached
+    assert wc.name_partition([[0, 1, 2, 3, 4, 5]], coordinates) is None  # one block: a constant form fits
+    assert wc.name_partition([[0], [1]], coordinates) is None  # 2 of 6 reached: too few to say
 
 
 @pytest.mark.parametrize("name", ["word-problem-s4", "random-4-0", "modular-division-5"])
