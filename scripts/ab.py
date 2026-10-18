@@ -1811,6 +1811,7 @@ def machine_check(repo: Path) -> tuple[Path, list[str] | None]:
     profile = host_profile(repo, hostname)
     if profile is None:
         raise AbError(f"machine profile: none in {PROFILES_DIR} for host {hostname}")
+    RUNS_ROOT.mkdir(parents=True, exist_ok=True)  # the comparison's cwd, absent on a new machine
     result = subprocess.run(
         [sys.executable, str(repo / "scripts/machine_profile.py"), "compare", str(profile)],
         check=False,
