@@ -6,7 +6,7 @@ speed and production; D10 settled by the owner (2026-10-13, revised 2026-10-17):
 active cooler. Stages 0 and 1 done (2026-10-17): the Pi's Rust and pure-Python golden entries
 already equal jebel's bit for bit (stage 1's findings). Stage 2 done (2026-10-17): the crate's
 own `exp` and D6's rules. Stage 3 done (2026-10-17): the committed Rust reference, checked in
-CI. Stage 4 done (2026-10-18): CI on aarch64 and musl. Stage 5 done (2026-10-18): the Pi's timing setup, its thermal limits and its A/A. Stage 6 (the baseline) next; stage 7's first kernel begun (the matrix products). The demo split
+CI. Stage 4 done (2026-10-18): CI on aarch64 and musl. Stage 5 done (2026-10-18): the Pi's timing setup, its thermal limits and its A/A. Stage 7's first two kernels done (2026-10-18): the matrix products and the dot products, with the conv downstream per example (their bump); stage 6 (the baseline) next. The demo split
 (`git show 9c50fe6:docs/demos-split-workplan.md`) is done, so the Pi needs no matplotlib.**
 
 indrajala-ml and the crate run on aarch64, tested and timed on a Raspberry Pi 5 (8 GB). The crate
@@ -361,6 +361,31 @@ so no run-time detection), with:
 - a tier 2 timing on the Pi (the full protocol); jebel's timing unaffected (tier 1, since x86 code
   doesn't change);
 - where the canonical order costs speed against a freer one, the cost measured and recorded.
+
+**The first two kernels (2026-10-18; one bump, three tier 2 A/Bs on `litshe`, one per change;
+`focused_benchmark`, ONNONO).** Every A/B's two `.so` hashes differ; every crate test, D7's
+reference and the golden run hold their bits.
+
+- **The matrix products** (`tiled_row_range` in NEON, crate #63;
+  `2026-10-18-neon-tiled-row-range-2`): 85 Rust rows consistently faster, the matrix products
+  60-87%. But conv `downstream_batch` at large batches was 30-65% slower (26x26x8 b32 +60%, b512
+  +65%). **Its cause:** the whole batch's `D @ W` (10.6 MB at 26x26x8, N = 32), threaded over rows,
+  was memory-bound on the Pi (4 threads no faster than one, 5.0 against 5.4 ms), and col2im then
+  read it back from memory. **Fixed in the crate (#65):** the downstream per example, as the
+  forward already was, threaded over examples, its product read from cache. Same bits.
+- **The dot products** (matrix @ vector and `matmul_nt`, crate #64;
+  `2026-10-18-neon-dot-products`): 43 rows consistently faster (dense `forward_batch` b32 -84%,
+  conv-tail `forward_batch` b32 -79%, attention `forward_batch` b32 -69%).
+- **The conv downstream per example** (crate #65; `2026-10-18-conv-downstream-per-example`):
+  conv `downstream_batch` 24-87% faster (26x26x8 b512 256 → 56 ms, 13x13x8 b512 54 → 7 ms), 2.3-5.4x
+  the scalar crate's speed at large batches. The passes peaked at 57.9-60.0 C.
+- **Small rows that moved where no code changed:** in the dot products' A/B, conv
+  `accumulate_gradient` +3-7% (it runs `matmul_long_k`, untouched); in the conv one, conv
+  `forward` +9-13% and dense 10x30's ops +5-17%, all microsecond calls. Most likely the build's
+  code placement moving small hot loops. Part may be real: the per-example downstream adds a little
+  per-example setup (conv 8x8 `downstream_batch` b32 +12%, single-example `downstream` +12%). **Open:**
+  a probe with functions aligned (`-C llvm-args=-align-all-functions=6`) to tell the two apart,
+  before the next kernel's A/B.
 
 ## After this plan
 
