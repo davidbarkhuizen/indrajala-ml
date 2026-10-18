@@ -80,3 +80,25 @@ def test_d_is_the_target_s_distinguishing_length_plus_one(name: str):
     machine = wt.task_named(name).machine
     distinguishing = machine.distinguishing_length()
     assert distinguishing is not None and mr.word_length(machine) == distinguishing + 1
+
+
+def test_a_code_that_behaves_as_another_at_every_depth_is_its_duplicate_and_pulled_to_it():
+    # code 3 is code 0 again (count 0 after 1 1 1), the same outputs and next codes
+    walk = mr.walk(Table([[0, 1], [1, 2], [2, 3], [3, 1]], [[0, 1], [1, 2], [2, 0], [0, 1]]), 2)
+    assert walk.codes == [(0,), (1,), (2,), (3,)] and walk.outputs.shape == (4, 2, 1)
+    for d in (1, 2, 5):
+        assert mr.groups(walk, d) == [[0, 3], [1], [2]]
+    assert mr.consolidation(walk, mr.groups(walk, 2)) == {(3,): (0,)}
+
+
+def test_codes_are_grouped_only_as_far_as_d_tokens_tell_them_apart():
+    # code 3 answers as code 0 for one token, but its token 1 goes to code 2, not code 1
+    walk = mr.walk(Table([[0, 1], [1, 2], [2, 3], [3, 2]], [[0, 1], [1, 2], [2, 0], [0, 1]]), 2)
+    assert mr.groups(walk, 1) == [[0, 3], [1], [2]]
+    assert mr.groups(walk, 2) == [[0], [1], [2], [3]]
+    assert mr.consolidation(walk, mr.groups(walk, 2)) == {}
+
+
+def test_the_product_s_codes_are_the_walk_s():
+    table = Table([[0, 1], [1, 2], [2, 3], [3, 2]], [[0, 1], [1, 2], [2, 0], [0, 1]])
+    assert mr.product(table, COUNTER).codes == mr.walk(table, 2).codes

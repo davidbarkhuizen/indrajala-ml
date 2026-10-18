@@ -42,6 +42,14 @@ again, takes each run on from its checkpoint (DIR/seed<s>/checkpoint.json, left 
 and each epoch's end): a stopped run goes on as if it hadn't stopped (every network and log row but
 the seconds), an ended one is skipped, one not begun starts (the code-consolidation workplan's stage
 3, so `stone`'s runs pause at 07:00 and go on at 18:00).
+The code-consolidation workplan's arms (stage 3): every run's curriculum starts at `s0`, the
+shortest length a stateless network can't pass (D3; 1 for every round-1 machine but random-3-0's 2),
+a step named by its longest length; `--long-tail F` (B, D4) trains every other example at lengths
+j+1..F j, capped at the exclusion bound; `--consolidate` (A, D1) groups the network's own codes at
+each diagnosis by `d`-equivalence (D2's `d`) and pulls each duplicate to its representative, each
+diagnosis row logging `consolidation` (codes reached, groups, duplicates pulled). `run` prints each
+target's feasibility line first (q, codes, m, the cap, s0, d) and refuses a cell whose joint codes
+can't hold its states.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
 and with the guard armed, on the same data, and prints each one's seconds, whether its quotient's
 machine is right before and after, and the guard's rollbacks (the guard workplan's budget probe).
@@ -456,6 +464,7 @@ import concurrent.futures
 import contextlib
 import functools
 import json
+import math
 import multiprocessing
 import sys
 from fractions import Fraction
@@ -537,6 +546,19 @@ def main(argv: list[str]) -> int:
         action="store_true",
         help="the same command again: each run goes on from its checkpoint, an ended one is skipped, one not "
         "begun starts (the code-consolidation workplan's stage 3)",
+    )
+    run.add_argument(
+        "--long-tail",
+        type=int,
+        metavar="F",
+        help="B (the code-consolidation workplan's D4): every other example at lengths j+1..F j, capped at the "
+        "exclusion bound",
+    )
+    run.add_argument(
+        "--consolidate",
+        action="store_true",
+        help="A (the code-consolidation workplan's D1): at each diagnosis, the network's d-equivalent codes "
+        "pulled to their representatives",
     )
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
@@ -658,12 +680,14 @@ def main(argv: list[str]) -> int:
     names = args.task or [f"modular-division-{p}" for p in args.p]
     folders = dict(zip(names, args.task or [f"p{p}" for p in args.p], strict=True))
 
-    def probe(name: str) -> functools.partial[None]:
+    def cell(name: str) -> tuple[mf.Target, list[tuple[int, int]]]:
         encoding = _target(name, args)
         if args.codes_ratio is not None:
-            factors = mf.scaled_factors(encoding.target_states, args.codes_ratio, args.factors)
-        else:
-            factors = [tuple(f) for f in args.factor] if args.factor else [(16, 16)] * args.factors
+            return encoding, mf.scaled_factors(encoding.target_states, args.codes_ratio, args.factors)
+        return encoding, [tuple(f) for f in args.factor] if args.factor else [(16, 16)] * args.factors
+
+    def probe(name: str) -> functools.partial[None]:
+        encoding, factors = cell(name)
         return functools.partial(
             mf.run,
             encoding,
@@ -673,8 +697,12 @@ def main(argv: list[str]) -> int:
             budget_epochs=args.budget_epochs,
             fork=mf.Fork(trigger=_trigger(args)) if args.fork else None,
             resume=args.resume,
+            long_tail=args.long_tail,
+            consolidate=args.consolidate,
         )
 
+    for name in names:
+        print(feasibility(name, *cell(name), args.long_tail, args.consolidate), flush=True)
     guards = {"off": [False], "on": [True], "both": [False, True]}[args.guard]
     with machine_lock.study():
         if args.seed is not None:
@@ -700,6 +728,27 @@ def main(argv: list[str]) -> int:
             for done in concurrent.futures.as_completed(runs):
                 print(f"{runs[done]}: {done.result()}", flush=True)
     return 0
+
+
+def feasibility(
+    name: str, encoding: mf.Target, factors: list[tuple[int, int]], long_tail: int | None, consolidate: bool
+) -> str:
+    """
+    A cell's feasibility line against its config (experiment-design.md, section 1), refused when the
+    joint codes can't hold the target's states: q, codes a factor, m, the cap (the exclusion bound,
+    the longest training length), s0 (D3) and, with --consolidate, A's d (D2).
+    """
+    q = encoding.target_states
+    m = math.prod(codes for _, codes in factors)
+    assert m >= q, f"{name}: {m} joint codes can't hold {q} states"
+    machine = encoding.task.machine
+    line = (
+        f"{name}: q {q}, codes {' x '.join(str(codes) for _, codes in factors)}, m {m} ({m / q:.1f} q), "
+        f"cap {mf.exclusion_bound(q, factors)}, s0 {mf.first_length(machine)}"
+    )
+    if long_tail is not None:
+        line += f", long tail to {long_tail} j"
+    return line + (f", d {mr.word_length(machine)}" if consolidate else "")
 
 
 def read_network(path: Path, args: argparse.Namespace) -> str:

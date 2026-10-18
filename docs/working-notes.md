@@ -108,7 +108,9 @@ where you meet a new trap; delete one that no longer holds.
   `certify` (about 620 MB) beside it the machine swapped. A `certify` pool worker at `k` 4 takes
   about 440-620 MB though one in-process probe measured 45 MB; at most 3 such workers on
   `pyramidon`.
-- **`/tmp` on `pyramidon` is RAM-backed (tmpfs):** scratch copies of study data cost memory.
+- **`/tmp` on `pyramidon` is RAM-backed (tmpfs) with a per-user quota:** scratch copies of study
+  data cost memory, and a test writing many run directories filled the quota (2026-10-18). Remove
+  each one's files as it goes (the resume test does).
 - **Background Python writing to a log is block-buffered:** a killed job leaves nothing. Use
   `python -u` or `PYTHONUNBUFFERED=1` for any log you may need mid-run.
 - **The harness log prints nothing within a step;** progress shows as `models/<key>/step-<j>.json`
@@ -248,6 +250,9 @@ where you meet a new trap; delete one that no longer holds.
 - **`jebel` at or below 65 W.** After a reboot PL1 comes back at 95 W: `ssh jebel 'cd
   ~/code/indrajala-ml && .venv/bin/python scripts/ab.py check --apply-setup'`, then check
   `/sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw` is 65000000.
+- **`jebel` shares its power supply with the wifi access point:** a power cut (2026-10-18, about
+  45 minutes) takes both down, so `stone` loses its network too and moves to another wifi. After one,
+  re-apply `jebel`'s setup (PL1) and relaunch its study; `stone`'s runs go on.
 - **`jebel.local` sometimes doesn't resolve** (mDNS): try its address (it was `192.168.1.88`). A
   connection that opens but times out "during banner exchange" means `jebel` is thrashing, not
   down.

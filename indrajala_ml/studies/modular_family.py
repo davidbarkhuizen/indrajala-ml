@@ -54,6 +54,7 @@ from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE, AttentionPooling, Codes, Factor, WindowRecurrence
 from indrajala_ml.studies import certificate_guard as cg
 from indrajala_ml.studies import inference
+from indrajala_ml.studies import machine_reading as mr
 from indrajala_ml.studies import window_diagnostics as wd
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
@@ -671,6 +672,53 @@ def exclusion_bound(q: int, factors: Sequence[tuple[int, int]]) -> int:
     return math.prod(m for _, m in factors) + q - 1
 
 
+def first_length(machine: wt.Mealy) -> int:
+    """
+    `s0`, the curriculum's first step (the code-consolidation workplan's D3): the least n at which the
+    answers of every training word of lengths 1..n (n tokens, then token 0, as `draw` makes them)
+    aren't a function of the token alone, so a network with no state can't pass the first step.
+    Exact, from the states reached at each depth: a word's i-th token leaves a state reached in i - 1
+    tokens, its final token 0 one reached in n. 1 for a machine whose answers never need the state.
+    """
+    seen: list[set[int]] = [set() for _ in range(machine.tokens)]  # each token's answers so far
+    level = {machine.start}  # the states n - 1 tokens reach
+    for n in range(1, machine.states + 2):  # by n = q + 1 every reachable state has been a level
+        for s in level:
+            for t in range(machine.tokens):
+                seen[t].add(int(machine.output[s, t]))
+        level = {int(machine.transition[s, t]) for s in level for t in range(machine.tokens)}
+        seen[0].update(int(machine.output[s, 0]) for s in level)
+        if any(len(answers) > 1 for answers in seen):
+            return n
+    return 1
+
+
+def epoch_lengths(step: int, examples: int, long_tail: int | None = None, cap: int | None = None) -> list[int]:
+    """
+    Each of an epoch's examples' lengths at a step: 1..step in turn; with `long_tail` F (the
+    workplan's D4, B), every other example's in turn over step + 1..F step instead, capped at `cap`
+    (all of them 1..step when that's empty), so half the examples are the curriculum's as before.
+    """
+    short = range(1, step + 1)
+    if long_tail is None:
+        return [short[i % len(short)] for i in range(examples)]
+    long = range(step + 1, min(long_tail * step, cap if cap is not None else long_tail * step) + 1)
+    if not long:
+        return [short[i % len(short)] for i in range(examples)]
+    return [short[i // 2 % len(short)] if i % 2 == 0 else long[i // 2 % len(long)] for i in range(examples)]
+
+
+def consolidation(net: Any, encoding: Target, d: int) -> tuple[dict[tuple[int, ...], tuple[int, ...]], int, int]:
+    """
+    A's table from the network alone (the workplan's D1): its reachable joint codes grouped by
+    d-equivalence over every slot's outputs, each duplicate to its group's representative (the code
+    its shortest word reaches; machine_reading.groups); with the codes reached and the groups.
+    """
+    walk = mr.walk(QueryMachine(net, encoding, None), encoding.task.machine.tokens)
+    found = mr.groups(walk, d)
+    return mr.consolidation(walk, found), len(walk.codes), len(found)
+
+
 CHECKPOINT = "checkpoint.json"
 
 
@@ -680,7 +728,8 @@ class Place:
     Where a run is, as its checkpoint keeps it (run's resume): the step and the last epoch trained
     in it (0: the step just begun), the epochs trained in all, the step's best screen and epochs
     since, its rate, forks and the fork's peak, the last screen's answer kinds, the step's undone
-    updates and the guard's frozen epochs; the seconds trained, and the log's length in bytes.
+    updates and the guard's frozen epochs; the seconds trained, and the log's length in bytes; and
+    A's table, (duplicate, representative) pairs (training state, not saved with the network).
     """
 
     step: int
@@ -696,6 +745,7 @@ class Place:
     frozen: int
     seconds: float
     log_bytes: int
+    consolidation: list[tuple[list[int], list[int]]] = field(default_factory=list[tuple[list[int], list[int]]])
 
 
 def _run_identity(
@@ -709,8 +759,12 @@ def _run_identity(
     budget_epochs: int | None,
     fork: Fork | None,
     guard: bool,
+    first: int,
+    long_tail: int | None,
+    consolidate: bool,
 ) -> dict[str, Any]:
-    # what a resumed run must share with the run it resumes
+    # what a resumed run must share with the run it resumes; the consolidation workplan's settings
+    # only when not their defaults, so a checkpoint from before them still resumes
     return {
         "target_states": encoding.target_states,
         "tokens": encoding.tokens,
@@ -723,6 +777,9 @@ def _run_identity(
         "budget_epochs": budget_epochs,
         "fork": None if fork is None else repr(fork),
         "guard": guard,
+        **({"first": first} if first != 1 else {}),
+        **({"long_tail": long_tail} if long_tail is not None else {}),
+        **({"consolidate": True} if consolidate else {}),
     }
 
 
@@ -755,11 +812,14 @@ def run(
     fork: Fork | None = None,
     guard: bool = False,
     resume: bool = False,
+    long_tail: int | None = None,
+    consolidate: bool = False,
 ) -> None:
     """
-    One probe run: the curriculum until the budget (wall-clock seconds and, if given, epochs
-    trained in all, whichever is spent first: the epochs don't depend on the machine or its load)
-    or the cap (by default the cell's exclusion bound), a line of JSON per diagnosis to
+    One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
+    network could pass it; a step named by its longest length) until the budget (wall-clock seconds
+    and, if given, epochs trained in all, whichever is spent first: the epochs don't depend on the
+    machine or its load) or the cap (by default the cell's exclusion bound), a line of JSON per diagnosis to
     out/log.jsonl, the network saved at each step's end to out/network.json. With `fork`, a collapse
     within a step goes back to the step's best network and forks (Fork; a log line each). With
     `guard`, the certificate guard on the certified answer against its task's machine
@@ -768,6 +828,13 @@ def run(
     each epoch's row logs whether it was armed, its updates and those undone, each step's end the
     undone's sum. A run whose guard undoes STALL_SHARE of the updates of STALL_EPOCHS armed epochs in
     a row ends "stalled" (D9), its step's network certified as any step's.
+
+    The code-consolidation workplan's arms: `long_tail` F (B, D4) trains every other example at
+    lengths step + 1..F step, capped at `cap` (epoch_lengths); `consolidate` (A, D1) reads the
+    network's groups at each diagnosis, at D2's `d`, and holds each duplicate code's states to its
+    representative's codes until the next (network.consolidate), a fork's restored network
+    regrouped; each such row logs `consolidation`, the codes reached, the groups and the duplicates
+    pulled.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -779,7 +846,24 @@ def run(
     if cap is None:
         cap = exclusion_bound(encoding.target_states, factors)
     out.mkdir(parents=True, exist_ok=True)
-    identity = _run_identity(encoding, factors, seed, budget_seconds, settings, cap, reads, budget_epochs, fork, guard)
+    first = first_length(encoding.task.machine)
+    identity = _run_identity(
+        encoding,
+        factors,
+        seed,
+        budget_seconds,
+        settings,
+        cap,
+        reads,
+        budget_epochs,
+        fork,
+        guard,
+        first,
+        long_tail,
+        consolidate,
+    )
+    d = mr.word_length(encoding.task.machine) if consolidate else 0
+    table: dict[tuple[int, ...], tuple[int, ...]] = {}  # A's, from the last diagnosis
     place: Place | None = None
     saved = json.loads((out / CHECKPOINT).read_text()) if resume and (out / CHECKPOINT).exists() else None
     if saved is not None:
@@ -789,6 +873,8 @@ def run(
     if saved is not None and saved["place"] != BEGUN:
         place = Place(**saved["place"])
         net = network_from_state(saved["network"])
+        table = {tuple(duplicate): tuple(representative) for duplicate, representative in place.consolidation}
+        net.consolidate(table)
         with (out / "log.jsonl").open("r+") as kept:
             kept.truncate(place.log_bytes)
     else:
@@ -834,10 +920,18 @@ def run(
             frozen,
             time.perf_counter() - start,
             log.tell(),
+            [(list(duplicate), list(representative)) for duplicate, representative in table.items()],
         )
         _write_checkpoint(out, identity, place, net)
 
-    for step in range(place.step if place is not None else 1, cap + 1):
+    def regroup() -> dict[str, int]:
+        # A's table read from the network as it stands and held until the next; the row's record of it
+        nonlocal table
+        table, codes, groups = consolidation(net, encoding, d)
+        net.consolidate(table)
+        return {"codes": codes, "groups": groups, "duplicates": len(table)}
+
+    for step in range(place.step if place is not None else first, cap + 1):
         lengths = list(range(1, step + 1))
         screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{step}-{n}")[0] for n in lengths}
         stop, epoch = "budget", 0
@@ -870,7 +964,8 @@ def run(
                 break
             rng = random.Random(f"family-train-{seed}-{step}-{epoch}" + (f"-fork{forks}" if forks else ""))
             examples = [
-                encoding.example(encoding.draw(lengths[i % len(lengths)], rng)) for i in range(settings.epoch_examples)
+                encoding.example(encoding.draw(n, rng))
+                for n in epoch_lengths(step, settings.epoch_examples, long_tail, cap)
             ]
             guarded: dict[str, Any] = {}
             if guarding is not None:
@@ -899,6 +994,7 @@ def run(
                     rate *= fork.cool
                     net = load_network(str(snapshot))
                     restored, last_kinds = screen(net, encoding, screens)
+                    grouped = {"consolidation": regroup()} if consolidate else {}
                     record(
                         {
                             "step": step,
@@ -910,6 +1006,7 @@ def run(
                             "restored": round(restored, 4),
                             "rate": rate,
                             **guarded,
+                            **grouped,
                         }
                     )
                     checkpoint(step, epoch)
@@ -923,6 +1020,7 @@ def run(
                         "kinds": _kinds(kinds),
                         **guarded,
                         **diagnose(net, encoding, settings),
+                        **({"consolidation": regroup()} if consolidate else {}),
                     }
                 )
             else:
@@ -978,7 +1076,6 @@ def guard_epoch(
     right after and the guard's updates and rollbacks (the guard workplan's budget probe).
     """
     task = encoding.task
-    lengths = list(range(1, step + 1))
     result: dict[str, Any] = {
         "network": str(path),
         "step": step,
@@ -987,9 +1084,7 @@ def guard_epoch(
     for arm in ("unguarded", "guarded"):
         net = load_network(str(path))
         rng = random.Random(f"{generator}-{step}")
-        examples = [
-            encoding.example(encoding.draw(lengths[i % len(lengths)], rng)) for i in range(settings.epoch_examples)
-        ]
+        examples = [encoding.example(encoding.draw(n, rng)) for n in epoch_lengths(step, settings.epoch_examples)]
         guard = cg.Guard(lambda n: QueryMachine(n, encoding, 0), task) if arm == "guarded" else None
         start = time.perf_counter()
         if guard is not None:
@@ -1009,10 +1104,11 @@ class QueryMachine:
     A family network as the certificate's WindowMachine over one column a window (stage 3): each
     window c is run as the network's window [c, queries...], and one slot's label read, slot 0 the
     quotient (against division's machine) or a machine's own output, slot i the i-th query's operation
-    (the sum against the modular sum's). The states, their snaps and margins are the network's own, as NetworkMachine's.
+    (the sum against the modular sum's), or with slot None every slot's (A's groups, read on all
+    the network's outputs). The states, their snaps and margins are the network's own, as NetworkMachine's.
     """
 
-    def __init__(self, network: Any, encoding: Target, slot: int) -> None:
+    def __init__(self, network: Any, encoding: Target, slot: int | None) -> None:
         assert network.columns == encoding.width, "the network's window is the encoding's"
         self.inner = wc.NetworkMachine(network)
         self.encoding, self.slot = encoding, slot
@@ -1036,6 +1132,8 @@ class QueryMachine:
         full = np.concatenate([windows, np.repeat(queries[np.newaxis, :], len(windows), axis=0)], axis=1)
         steps = self.inner.step_states(states, full)
         s = self.slot
+        if s is None:
+            return steps
         return wc.Steps(steps.digits[:, s : s + 1], steps.leads[:, s : s + 1], steps.states, steps.distances)
 
 

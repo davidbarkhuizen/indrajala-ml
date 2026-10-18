@@ -449,7 +449,7 @@ RESUMED = mf.Settings(
     epoch_examples=64, max_epochs=4, patience=10, diagnose_every=2, screen=4, cases=8, lengths=(2,), long=(4,)
 )
 RESUMED_FORK = mf.Fork(trigger=mf.Trigger(threshold=2.0), cool=0.5, limit=1)
-# two runs: one forking, ending on its epochs; one guarded, ending steps at a plateau
+# three runs: one forking, ending on its epochs; one guarded, ending steps at a plateau; one consolidated
 RESUMABLE: dict[str, dict[str, Any]] = {
     "forked": {
         "encoding": mf.Encoding(5, mf.FAMILY),
@@ -466,6 +466,16 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "cap": 3,
         "budget_epochs": 10,
         "guard": True,
+    },
+    # the consolidation workplan's arms together: s0 2, the long tail, A's groups regrouped at a fork
+    "consolidated": {
+        "encoding": mf.target_named("random-3-0"),
+        "settings": RESUMED,
+        "cap": 3,
+        "budget_epochs": 6,
+        "fork": RESUMED_FORK,
+        "long_tail": 4,
+        "consolidate": True,
     },
 }
 
@@ -528,6 +538,9 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     ends = [(r["step"], r["end"]) for r in whole[0] if "end" in r]
     if kind == "forked":
         assert any("fork" in r for r in whole[0]) and ends == [(1, "budget"), (2, "spent")]
+    elif kind == "consolidated":
+        assert [step for step, _ in ends] == [2, 3]  # from s0
+        assert any("fork" in r and "consolidation" in r for r in whole[0])
     else:
         assert any(r.get("armed") for r in whole[0]) and ("plateau" in dict(ends).values())
     stops = [("_write_checkpoint", n, after) for n in range(1, writes[0] + 1) for after in (False, True)]
@@ -558,3 +571,123 @@ def test_resuming_refuses_another_runs_checkpoint_and_a_log_without_one(tmp_path
     (tmp_path / "run" / mf.CHECKPOINT).unlink()
     with pytest.raises(AssertionError, match="no checkpoint"):
         _resumable(tmp_path / "run", resume=True)
+
+
+# the code-consolidation workplan's stage 3: D3's s0, D4's long tail (B), A's groups and pull
+
+# the general algebras' round-1 machines (E1), each s0 1 but random-3-0's
+ROUND_1 = [f.format(n=n) for n in (3, 4, 5) for f in ("word-problem-s{n}", "move-to-front-{n}", "random-{n}-0")]
+
+
+@pytest.mark.parametrize("name", [*ROUND_1, "modular-division-5", "modular-division-7"])
+def test_s0_is_1_for_every_round_1_machine_but_random_3_0_s(name: str):
+    from indrajala_ml.studies import window_tasks as wt
+
+    assert mf.first_length(wt.task_named(name).machine) == (2 if name == "random-3-0" else 1)
+
+
+def test_random_3_0_s_one_token_words_answer_alike_so_a_stateless_network_passes_them():
+    from indrajala_ml.studies import window_tasks as wt
+
+    machine = wt.task_named("random-3-0").machine
+    assert {label for t in range(machine.tokens) for label in machine.run([t, 0])} == {2}
+    two = {
+        (t, label)
+        for u in range(machine.tokens)
+        for t in range(machine.tokens)
+        for t_, label in zip((u, t, 0), machine.run([u, t, 0]), strict=True)
+        if t_ == t
+    }
+    assert len(two) > len({t for t, _ in two})  # some token answers two ways: s0 is 2
+
+
+# the plan's feasibility tables (docs/code-consolidation-workplan.md): codes a factor, joint codes,
+# the cap (the exclusion bound), s0 (D3), d (D2); and stage 2b's probes
+CONSOLIDATION_CELLS = {
+    "random-3-0": (8, 64, 69, 2, 3),
+    "word-problem-s4": (15, 225, 248, 1, 2),
+    "random-4-0": (15, 225, 248, 1, 2),
+}
+B_PROBES = {
+    "random-q8-1": (9, 81, 88),
+    "random-q12-0": (11, 121, 132),
+    "random-q16-0": (12, 144, 159),
+    "random-perm-4-0": (15, 225, 248),
+}
+
+
+@pytest.mark.parametrize("name", sorted(CONSOLIDATION_CELLS))
+def test_the_consolidation_cells_are_as_the_plan_s_table(name: str):
+    from fractions import Fraction
+
+    from indrajala_ml.studies import machine_reading as mr
+    from indrajala_ml.studies import window_tasks as wt
+
+    codes, joint, cap, s0, d = CONSOLIDATION_CELLS[name]
+    machine = wt.task_named(name).machine
+    factors = mf.scaled_factors(machine.states, Fraction(32, 11), 2)
+    assert factors == [(16, codes)] * 2 and codes * codes == joint >= machine.states
+    assert mf.exclusion_bound(machine.states, factors) == cap
+    assert mf.first_length(machine) == s0 and mr.word_length(machine) == d
+
+
+@pytest.mark.parametrize("name", sorted(B_PROBES))
+def test_the_b_probes_are_as_the_plan_s_table(name: str):
+    from fractions import Fraction
+
+    from indrajala_ml.studies import window_tasks as wt
+
+    codes, joint, cap = B_PROBES[name]
+    machine = wt.task_named(name).machine
+    factors = mf.scaled_factors(machine.states, Fraction(32, 11), 2)
+    assert factors == [(16, codes)] * 2 and codes * codes == joint >= machine.states
+    assert mf.exclusion_bound(machine.states, factors) == cap
+
+
+def test_without_a_long_tail_an_epoch_s_lengths_are_the_curriculum_s_in_turn():
+    assert mf.epoch_lengths(3, 7) == [1, 2, 3, 1, 2, 3, 1]
+
+
+def test_the_long_tail_takes_every_other_example_beyond_the_step_to_its_factor_capped():
+    lengths = mf.epoch_lengths(3, 16, long_tail=4, cap=10)
+    assert lengths[::2] == [1, 2, 3, 1, 2, 3, 1, 2]  # half as before
+    assert lengths[1::2] == [4, 5, 6, 7, 8, 9, 10, 4]  # 4..12, capped at 10
+    assert mf.epoch_lengths(3, 16, long_tail=4, cap=40)[1::2] == [4, 5, 6, 7, 8, 9, 10, 11]
+    assert mf.epoch_lengths(10, 4, long_tail=4, cap=10) == [1, 2, 3, 4]  # at the cap: the curriculum's alone
+
+
+def test_a_networks_groups_count_its_reached_codes_and_its_table_is_what_it_consolidates():
+    from indrajala_ml.studies import machine_reading as mr
+
+    encoding = mf.target_named("random-3-0")
+    net = mf.network(encoding, [(4, 4), (4, 4)], 0, "output")
+    table, codes, groups = mf.consolidation(net, encoding, 1)
+    assert codes >= groups >= 1 and len(table) == codes - groups
+    assert all(duplicate != representative for duplicate, representative in table.items())
+    net.consolidate(table)
+    assert dict(net.consolidation) == table
+    assert mf.consolidation(net, encoding, mr.word_length(encoding.task.machine))[1] == codes  # the same walk
+
+
+def test_a_consolidated_run_starts_at_s0_and_logs_its_groups_at_each_diagnosis(tmp_path: Path):
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=4, patience=10, diagnose_every=2, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    mf.run(mf.target_named("random-3-0"), [(4, 4)], 0, 1e9, tmp_path, settings, cap=3, long_tail=4, consolidate=True)
+    rows = _rows(tmp_path)
+    assert [r["step"] for r in rows if "end" in r] == [2, 3]
+    diagnoses = [r for r in rows if "factors" in r and isinstance(r.get("epoch"), int) and r["epoch"] > 0]
+    assert diagnoses and all(set(r["consolidation"]) == {"codes", "groups", "duplicates"} for r in diagnoses)
+    assert all(
+        r["consolidation"]["codes"] == r["consolidation"]["groups"] + r["consolidation"]["duplicates"]
+        for r in diagnoses
+    )
+    assert not any("consolidation" in r for r in rows if r not in diagnoses)
+    saved = json.loads((tmp_path / mf.CHECKPOINT).read_text())
+    assert saved["run"]["first"] == 2 and saved["run"]["long_tail"] == 4 and saved["run"]["consolidate"]
+
+
+def test_a_run_without_the_plan_s_arms_keeps_its_identity_as_before(tmp_path: Path):
+    _resumable(tmp_path / "run")
+    identity = json.loads((tmp_path / "run" / mf.CHECKPOINT).read_text())["run"]
+    assert not {"first", "long_tail", "consolidate"} & set(identity)

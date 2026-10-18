@@ -301,6 +301,9 @@ The old conv plan's timing and demo stages were for a rule that holds, and stay 
 - **Waiting on CI** (`gh pr checks --watch` loops) is worth a similar treatment.
 - **A `perf_region.py` adapter.** Its counters need `sudo` and a driver marking regions, so the
   harness has none yet.
+- **`ab.py run --old-crate X --new-crate X` installs neither wheel:** given the same crate on both
+  sides, it times the venv's crate on both (found in the consolidation plan's stage 3, #834, timing
+  the crate alone). It should build and install that crate, or refuse.
 
 Not planned yet:
 
