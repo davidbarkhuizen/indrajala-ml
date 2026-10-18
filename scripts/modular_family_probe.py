@@ -455,6 +455,50 @@ the output, the fork), OPENBLAS_NUM_THREADS=1, in a scratch directory (not kept)
   division's final zero column), the same seeds: move-to-front 3 certified 2 of 2 (step 8, 3-7
   minutes); S3 0 of 2, 2-4 codes in use, its answers about half right at 150 epochs; random-3-0 0
   of 2, still one code. Round 1 (E1, 600 epochs, 6 seeds) runs as registered.
+
+Findings (round 1 of the general algebras, stage 3 of docs/general-algebras-workplan.md, E1
+registered before its data), 2026-10-17/18; `n` 3 and 4, three classes, the workplan's cell (two
+factors, `--codes-ratio 32/11`, reading the output, the fork with today's trigger, the guard off),
+600 epochs, stop at certified, seeds 0-5. Code 5a89bfe, OPENBLAS_NUM_THREADS=1; seeds 0-4 on
+pyramidon (21:46 to 09:22), seed 5 on jebel (06:22 to 07:42; runs are bit-identical across the
+machines). Data in data/window-recurrent/general-algebras/round1/ (jebel's seed 5 merged in;
+`readout.txt` is the per-run readout, `certify/` the recertifications), manifest `round1.sha256`
+71f54433...e13a3a (1,239 files, run from general-algebras/); jebel's seed 5 as copied,
+`round1-seed5-jebel.sha256` c9f635ff...c9ed0f (239 files, run from inside
+round1-seed5-jebel/).
+
+| cell | certified (Wilson 95%) | E1 | slowest success's epochs | joint codes reached | smallest lead |
+| --- | --- | --- | --- | --- | --- |
+| move-to-front-3 | 6 of 6 (0.61-1.00) | works | 87 | 12-21 | 1.59 |
+| word-problem-s3 | 1 of 6 (0.03-0.56) | works, a decline, undecided | 13 | 10 | 3.56 |
+| random-3-0 | 0 of 6 (0.00-0.39) | fails | - | - | - |
+| move-to-front-4 | 4 of 6 (0.30-0.90) | works | 398 | 56-72 | 2.25 |
+| word-problem-s4 | 4 of 6 (0.30-0.90) | works | 576 | 38-65 | 2.59 |
+| random-4-0 | 0 of 6 (0.00-0.39) | fails | - | - | - |
+
+- **Every certified network passes both verdicts** (snap ratio 1.0 and 1.05): 0 wrong outputs,
+  0 wrong states, each minimised to its machine's states (6 or 24); joint codes reached are the
+  same in both verdicts but S4 seed 1 (49 strict, 54 at 1.05). No factor reads as one of the
+  machine's coordinates; the names these certificates carry ("position-1 + ... + position-n") are
+  the trivial one-block partition that stage 2 of the consolidation workplan stopped naming.
+- **E1 is refuted for the random class at `n` 3 and 4** (it fails where the other two work), but
+  random-3-0's failure is a flaw of the cell, not a reading of the class: every one-token word
+  answers label 2, so step 1 passes on one code and all six runs stay there, spent at step 56 with
+  the worst answer 0.633 from step 1. Recorded, not fixed here; the fix (D3, `s0`) is in the
+  consolidation workplan's arms, a new registered experiment.
+- **Random-4-0's six failures are one mechanism** (D9, docs/code-consolidation-workplan.md, "Why"):
+  an inexact core of first codes and extra codes reached by longer words, whose transitions break
+  far more often; best steps 8-15, worst answer at best 0.86-0.96, four of six collapsing after it.
+  S4's near miss (seed 0, 0.999 at step 13) has the same signature around an exact 24-code core;
+  its other failure (seed 5, 0.958) wasn't diagnosed.
+- **S3's five failures are a state that never forms** (worst answer at best 0.44-0.61 at steps
+  2-5; at most 6 codes on 2-6 of 6 states), as is move-to-front-4 seed 3 (0.785 at step 3);
+  move-to-front-4 seed 5 came near (0.999 at step 14).
+- **The budget crowds at `n` 4:** S4's slowest success took 576 of the 600 epochs, move-to-front-4's
+  398; at `n` 3 every success took 87 epochs or fewer.
+- **Next:** round 2 (`n` 5) is deferred until the random class passes round 1 (D5, the owner); the
+  consolidation workplan tests both remedies (A, consolidation; B, longer words) with D3 in every
+  arm, after its B-origins probes (stage 2b).
 """
 
 from __future__ import annotations
