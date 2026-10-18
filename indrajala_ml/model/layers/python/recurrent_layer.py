@@ -29,6 +29,7 @@ from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weig
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer
 from indrajala_ml.model.layers.python.token_layer import EmbeddingRow, PositionRow, TokenNode, WeightRow
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
+from indrajala_ml.model.specs.window_recurrence import Consolidation, commitment_targets
 from indrajala_ml.pcg64 import Pcg64Generator
 
 exp = math.exp
@@ -312,7 +313,9 @@ class CodesLayer(_Part):
     gives e; backward_batch passes the gradient straight through to h, plus the commitment loss's,
     and gives the codes the codebook loss's: per example and window, weight * (||sg[h] - e||^2 +
     commitment * ||h - sg[e]||^2). The codes are drawn as a linear layer's nodes of fan-in size,
-    and not decayed.
+    and not decayed. With targets (a code index per example, the consolidation's, D1 of the
+    code-consolidation workplan), the commitment holds h to the target's code instead: commitment *
+    ||h - sg[e_target]||^2; None, to its own.
     """
 
     def __init__(self, count: int, size: int, commitment: float = 0.25) -> None:
@@ -320,6 +323,7 @@ class CodesLayer(_Part):
         self.size = size
         self.commitment = commitment
         self.codes = [EmbeddingRow(size) for _ in range(count)]
+        self.targets: list[int] | None = None
 
     def weight_sets(self) -> Sequence[EmbeddingRow]:
         return self.codes
@@ -343,19 +347,27 @@ class CodesLayer(_Part):
     def loss_batch(self, weight: float) -> float:
         """The batch's code losses, weighted, summed over the examples: what backward_batch differentiates."""
         squared = fold([fold([(h_j - q_j) * (h_j - q_j) for h_j, q_j in zip(h, q)]) for h, q in zip(self._H, self._Q)])
-        return weight * (1.0 + self.commitment) * squared
+        if self.targets is None:
+            return weight * (1.0 + self.commitment) * squared
+        committed = fold(
+            [
+                fold([(h_j - e_j) * (h_j - e_j) for h_j, e_j in zip(h, self.codes[t].weights)])
+                for h, t in zip(self._H, self.targets, strict=True)
+            ]
+        )
+        return weight * squared + weight * self.commitment * committed
 
     def backward_batch(self, dQ: Rows, weight: float) -> Rows:
         """The code's gradient to h's: straight through, plus the commitment loss's; the codes' accumulated."""
         dH: Rows = []
-        for h, q, index, dq in zip(self._H, self._Q, self.indices, dQ, strict=True):
+        targets = self.indices if self.targets is None else self.targets
+        for h, q, index, target, dq in zip(self._H, self._Q, self.indices, targets, dQ, strict=True):
             differences = [h_j - q_j for h_j, q_j in zip(h, q)]
             accum = self.codes[index].weight_gradient_accum
             for j, difference in enumerate(differences):
                 accum[j] += -2.0 * weight * difference
-            dH.append(
-                [dq_j + (2.0 * weight * self.commitment) * difference for dq_j, difference in zip(dq, differences)]
-            )
+            pulled = differences if target == index else [h_j - e_j for h_j, e_j in zip(h, self.codes[target].weights)]
+            dH.append([dq_j + (2.0 * weight * self.commitment) * difference for dq_j, difference in zip(dq, pulled)])
         return dH
 
 
@@ -416,6 +428,7 @@ class RecurrenceLayer:
         self.features = features
         self.state_size = sum(self.sizes)
         self.starts = [sum(self.sizes[:g]) for g in range(len(self.sizes))]
+        self.consolidation: Consolidation = {}
         self.factors = [
             _FactorParts(
                 AttentionPoolingLayer(tokens, features),
@@ -450,7 +463,23 @@ class RecurrenceLayer:
     def _snapped(self, hs: list[Rows]) -> Rows:
         self._hs = hs
         qs = [h if f.codes is None else f.codes.forward_batch(h) for f, h in zip(self.factors, hs, strict=True)]
+        self._set_targets()
         return [[v for q in rows for v in q] for rows in zip(*qs, strict=True)]
+
+    def _set_targets(self) -> None:
+        # each factor's commitment targets after the snap, from the consolidation (None: its own)
+        codes = [f.codes for f in self.factors]
+        if not self.consolidation:
+            for c in codes:
+                if c is not None:
+                    c.targets = None
+            return
+        assert all(c is not None for c in codes), "a consolidation needs every factor snapped"
+        targets = commitment_targets(self.consolidation, [c.indices for c in codes if c is not None])
+        assert targets is not None
+        for c, t in zip(codes, targets, strict=True):
+            assert c is not None
+            c.targets = t
 
     @property
     def H(self) -> Rows:

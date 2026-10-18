@@ -33,6 +33,7 @@ from indrajala_ml.model.layers.numpy.array_layer import (
 )
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
+from indrajala_ml.model.specs.window_recurrence import Consolidation, commitment_targets
 
 exp = np.exp
 
@@ -254,7 +255,9 @@ class CodesArrayLayer:
     the gradient straight through to h, plus the commitment loss's, and gives E the codebook
     loss's: per example and window, weight * (||sg[h] - e||^2 + commitment * ||h - sg[e]||^2),
     weight the network's (1 / its window count, W14). E is drawn as a dense layer's W of fan-in
-    size, and not decayed.
+    size, and not decayed. With targets (code indices, one per row; the recurrence's consolidation,
+    the code-consolidation workplan, D1), the commitment holds h to E[targets] instead of its own
+    code: commitment * ||h - sg[E[targets]]||^2; None, to its own.
 
     With wall above 0, the snap wall too (docs/snap-wall-workplan.md): per state, with e1 its code
     and e2 the next nearest, s = log((q2 + eps) / (q1 + eps)) of their squared distances, the loss
@@ -274,6 +277,7 @@ class CodesArrayLayer:
         self.wall = wall
         self.wall_ratio = wall_ratio
         self.gate: FloatArray | None = None
+        self.targets: npt.NDArray[np.intp] | None = None
         self.E: FloatArray = np.zeros((count, size))
         self.grad_E: FloatArray = np.zeros((count, size))
 
@@ -309,7 +313,11 @@ class CodesArrayLayer:
         """The batch's code losses, weighted, summed over the examples: what backward_batch differentiates."""
         differences = self._H - self._Q
         squared = _fold(_fold(differences * differences, axis=1), axis=0)
-        return float(weight * (1.0 + self.commitment) * squared) + self.wall_loss_batch(weight)
+        if self.targets is None:
+            return float(weight * (1.0 + self.commitment) * squared) + self.wall_loss_batch(weight)
+        pulled = self._H - self.E[self.targets]
+        committed = _fold(_fold(pulled * pulled, axis=1), axis=0)
+        return float(weight * squared + weight * self.commitment * committed) + self.wall_loss_batch(weight)
 
     def _wall_terms(self) -> tuple[FloatArray, npt.NDArray[np.intp], FloatArray, FloatArray] | None:
         # each state's gated deficit below the wall's ratio, its next nearest code and both squared
@@ -343,7 +351,8 @@ class CodesArrayLayer:
         """
         differences = self._H - self._Q
         np.add.at(self.grad_E, self.indices, -2.0 * weight * differences)
-        dH = dQ + (2.0 * weight * self.commitment) * differences
+        pulled = differences if self.targets is None else self._H - self.E[self.targets]
+        dH = dQ + (2.0 * weight * self.commitment) * pulled
         terms = self._wall_terms()
         if terms is None:
             return dH
@@ -438,6 +447,7 @@ class RecurrenceArrayLayer:
         self.features = features
         self.state_size = sum(self.sizes)
         self.starts = [sum(self.sizes[:g]) for g in range(len(self.sizes))]
+        self.consolidation: Consolidation = {}
         self.factors = [
             _FactorParts(
                 AttentionPoolingArrayLayer(tokens, features),
@@ -470,9 +480,26 @@ class RecurrenceArrayLayer:
 
     def _snapped(self, hs: list[FloatArray]) -> FloatArray:
         self._hs = hs
-        return np.concatenate(
+        Q = np.concatenate(
             [h if f.codes is None else f.codes.forward_batch(h) for f, h in zip(self.factors, hs, strict=True)], axis=1
         )
+        self._set_targets()
+        return Q
+
+    def _set_targets(self) -> None:
+        # each factor's commitment targets after the snap, from the consolidation (None: its own)
+        codes = [f.codes for f in self.factors]
+        if not self.consolidation:
+            for c in codes:
+                if c is not None:
+                    c.targets = None
+            return
+        assert all(c is not None for c in codes), "a consolidation needs every factor snapped"
+        targets = commitment_targets(self.consolidation, [c.indices.tolist() for c in codes if c is not None])
+        assert targets is not None
+        for c, t in zip(codes, targets, strict=True):
+            assert c is not None
+            c.targets = np.array(t, dtype=np.intp)
 
     @property
     def H(self) -> FloatArray:

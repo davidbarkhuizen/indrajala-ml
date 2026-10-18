@@ -27,7 +27,7 @@ validate_window_recurrent (spec_validation.py) checks a window and its recurrenc
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from indrajala_ml.model.specs.layer_specs import LayerSpec, StateInput
@@ -73,6 +73,43 @@ class Codes:
 
     count: int
     commitment: float = 0.25
+
+
+# A consolidation (the code-consolidation workplan, D1): each duplicate joint code, a code index per
+# factor, to its representative's. Training holds a state snapped to a duplicate to its
+# representative's codes by the commitment, commitment * ||h - sg[e_rep]||^2 per factor, instead of
+# to its own; the codebook's loss, the snap and the network are unchanged. Empty, training is as
+# without one. Every factor snapped.
+type Consolidation = Mapping[tuple[int, ...], tuple[int, ...]]
+
+
+def validate_consolidation(recurrence: WindowRecurrence, consolidation: Consolidation) -> None:
+    """A consolidation fits recurrence: every factor snapped, each code a code index per factor."""
+    if not consolidation:
+        return
+    codes = [f.codes for f in recurrence.factors]
+    assert all(c is not None for c in codes), (
+        "a consolidation needs every factor snapped: a continuous factor has no codes"
+    )
+    counts = [c.count for c in codes if c is not None]
+    for duplicate, representative in consolidation.items():
+        for code in (duplicate, representative):
+            assert len(code) == len(counts) and all(0 <= i < m for i, m in zip(code, counts, strict=True)), (
+                f"a consolidation's codes are a code index per factor, below the code counts {counts}; got {code}"
+            )
+
+
+def commitment_targets(consolidation: Consolidation, indices: Sequence[Sequence[int]]) -> list[list[int]] | None:
+    """
+    Each factor's commitment target, a code index per example, after a snap to indices (each
+    factor's, one per example): its representative's where the example's joint code is a
+    duplicate, its own elsewhere. None when consolidation is empty: every target is its own code.
+    """
+    if not consolidation:
+        return None
+    joint = [tuple(int(i) for i in code) for code in zip(*indices, strict=True)]
+    chosen = [consolidation.get(code, code) for code in joint]
+    return [[code[g] for code in chosen] for g in range(len(indices))]
 
 
 @dataclass(frozen=True)
