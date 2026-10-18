@@ -2,7 +2,8 @@
 
 **Status: drafted 2026-10-18 at the owner's request ("we need to test both options"), from the D9
 diagnosis of general-algebras round 1 (below). D1-D8 settled under the owner's delegation, each with
-its options' pros and cons. C1-C3 registered here, before their data.**
+its options' pros and cons; the owner confirmed D2 and made a search of B's settings an optional,
+later follow-up (D4; 2026-10-18). C1-C3 registered here, before their data.**
 
 ## Why
 
@@ -61,9 +62,9 @@ frozen for 56 steps). The final identity token can't help when the one-token ans
   `Mealy.distinguishing_length`; 1 for S4 and random-4-0, so `d` 2; 2 for random-3-0, so `d` 3).
   Pros: just enough to split every pair of the target's states when the network's outputs are right,
   plus a margin against a one-token coincidence; a property of the task, like its window, not of
-  any state. Cons: uses one number from the target. (b) A fixed `d` (2) everywhere. Cons: too small
-  for targets that need longer words to tell states apart (division's), and silently merges their
-  states.
+  any state. Cons: uses one number from the target. *Confirmed by the owner (2026-10-18).* (b) A
+  fixed `d` (2) everywhere. Cons: too small for targets that need longer words to tell states apart
+  (division's), and silently merges their states.
 - **D3. Every arm starts the curriculum where a stateless network can't pass.** Step 1 trains
   lengths `1..s0`, where `s0` is the least length at which the answers aren't a function of the token
   alone (computed from the task's answers, exhaustively at these sizes). The other steps follow as
@@ -82,6 +83,10 @@ frozen for 56 steps). The final identity token can't help when the one-token ans
     phase whose cores were right; step 1 already at 4 tokens.
   - (c) The same tokens an epoch (fewer examples). Pros: equal compute. Cons: two things change
     (lengths and examples), and fewer short words.
+
+  **B's settings space afterwards, optional (the owner, 2026-10-18):** the factor (4), the long
+  share (a half) and the schedule ((a)-(c)) are searched only after this plan's round, and only if
+  it's worth it: a later, separately registered experiment, not a stage here.
 - **D5. The arms: control, A, B, each against the same control rerun on this plan's commit.** Pros:
   one change between each arm and the control (with D3 in all three), on the same code. Cons:
   re-running a control costs a third of the runs. A+B only if both help (D8).
@@ -141,7 +146,8 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
 - A rests on the network's outputs being right at the representatives. Where they aren't, A pulls
   toward a wrong code: C2 shows it.
 - B's factor 4 and its half are untested choices; a B that fails isn't evidence against longer
-  words in general, only against this schedule.
+  words in general, only against this schedule. Its settings space is the optional follow-up
+  (D4).
 
 ## Stages
 
@@ -166,7 +172,7 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
    certified one.
 6. **Findings** in the probe's docstring; certified networks to indrajala-models; if A and B both
    help, A+B registered as its own experiment (D8); this plan retired, its leftovers to
-   next-steps.md.
+   next-steps.md, among them the optional search of B's settings (D4).
 
 Related: [commitment-control-workplan.md](commitment-control-workplan.md) (deferred) controls the
 commitment's *weight*; A changes only its *target*, with the weight unchanged.
