@@ -23,6 +23,7 @@ from indrajala_ml.model.layers.rust.rust_array_layer import (
     fan_in_aware_random_rust_layer,
     fan_in_aware_random_rust_weights,
 )
+from indrajala_ml.model.specs.window_recurrence import Consolidation, commitment_targets
 
 
 class StateInputRustArrayLayer:
@@ -259,6 +260,7 @@ class RecurrenceRustArrayLayer:
             for s, m, commitment in sizes
         ]
         self._commitments = [0.0 if f.codes is None else f.codes.commitment for f in self.factors]
+        self.consolidation: Consolidation = {}
 
     @property
     def commitments(self) -> list[float]:
@@ -284,6 +286,17 @@ class RecurrenceRustArrayLayer:
     def _grad_codes(self) -> list[pa.Array | None]:
         return [None if f.codes is None else f.codes.grad_E for f in self.factors]
 
+    def _targets(self) -> list[pa.Array | None] | None:
+        # each factor's commitment target rows after the last snap, from the consolidation (None:
+        # every factor's own code)
+        if not self.consolidation:
+            return None
+        codes = self._codes()
+        assert all(e is not None for e in codes), "a consolidation needs every factor snapped"
+        targets = commitment_targets(self.consolidation, [i for i in self.indices if i is not None])
+        assert targets is not None
+        return [e.take_rows(t) for e, t in zip(codes, targets, strict=True) if e is not None]
+
     def _set_grad_codes(self, grads: list[pa.Array | None]) -> None:
         for f, grad in zip(self.factors, grads, strict=True):
             if f.codes is not None:
@@ -300,7 +313,7 @@ class RecurrenceRustArrayLayer:
     def first_state_backward(self, dC: pa.Array, weight: float) -> None:
         """After first_state: the initial states' gradients accumulated, through the codes."""
         dH, grads = pa.factored_codes_backward(
-            dC, self.H, self._Q, self.sizes, self.indices, self._grad_codes(), weight, self._commitments
+            dC, self.H, self._Q, self.sizes, self.indices, self._grad_codes(), weight, self._commitments, self._targets()
         )
         self._set_grad_codes(grads)
         for f, start, size in zip(self.factors, self.starts, self.sizes, strict=True):
@@ -340,6 +353,7 @@ class RecurrenceRustArrayLayer:
             self._grad_codes(),
             weight,
             self._commitments,
+            self._targets(),
         )
         for f, gq, gW, gU, gb in zip(factors, grad_q, grad_W, grad_U, grad_b, strict=True):
             f.pooling.grad_q = gq

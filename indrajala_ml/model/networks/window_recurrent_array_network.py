@@ -64,7 +64,12 @@ from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_window_recurrent
 from indrajala_ml.model.specs.update_rules import UpdateRule
-from indrajala_ml.model.specs.window_recurrence import WindowRecurrence, pooling_reads
+from indrajala_ml.model.specs.window_recurrence import (
+    Consolidation,
+    WindowRecurrence,
+    pooling_reads,
+    validate_consolidation,
+)
 from indrajala_ml.pcg64 import generator_state, set_generator_state
 
 if TYPE_CHECKING:
@@ -156,6 +161,20 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
 
     def _update_rule(self) -> UpdateRule:
         return self.update_rule
+
+    @property
+    def consolidation(self) -> Consolidation:
+        """The consolidation training holds the states to (empty: none; consolidate)."""
+        return self.recurrence_layer.consolidation
+
+    def consolidate(self, consolidation: Consolidation) -> None:
+        """
+        From the next training step on, a state snapped to a duplicate joint code is held by the
+        commitment to its representative's codes (the code-consolidation workplan, D1); empty, to
+        its own, as without one. Training state, not the network's: not saved with it.
+        """
+        validate_consolidation(self.recurrence, consolidation)
+        self.recurrence_layer.consolidation = dict(consolidation)
 
     def randomize(self) -> None:
         # the window's layers as a sequence network's, its StateInputs' P among them in order;
@@ -506,6 +525,8 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
             [f.codes is not None for f in recurrence.factors],
             cross=recurrence.cross,
         )
+        # the consolidation as the program takes it, (duplicate, representative) pairs
+        self._consolidation: list[tuple[list[int], list[int]]] = []
 
     def _program_parameters(self) -> list[pa.Array]:
         # the network's parameters in order, as the program reads them: the window's layers', then
@@ -537,8 +558,13 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
             self.rng,
             weight,
             recurrence.commitments,
+            consolidation=self._consolidation,
         )
         recurrence.first_state_backward(dC, weight)
+
+    def consolidate(self, consolidation: Consolidation) -> None:
+        super().consolidate(consolidation)
+        self._consolidation = [(list(d), list(r)) for d, r in consolidation.items()]
 
     def _run_windows(self, X: Any, C: Any, states: bool, codes: bool) -> tuple[Any, list[Any], list[Any], list[Any]]:
         dropping = (AttentionRustArrayLayer, token_layers.TokenDropoutRustArrayLayer)

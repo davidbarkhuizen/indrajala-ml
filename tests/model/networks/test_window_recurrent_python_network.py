@@ -34,9 +34,11 @@ from tests.model.networks.test_window_recurrent_array_network import (
     DIGITS,
     RECURRENCE,
     RECURRENCES,
+    SNAPPED,
     WINDOW,
     K,
     _batch,
+    covering_consolidation,
 )
 from tests.python_array_snapshot import as_array_snapshot, assert_seeded_alike
 
@@ -126,6 +128,33 @@ def test_every_step_under_adam_has_numpys_gradients(recurrence: str, name: str):
         python, numpy = _pair(WINDOWS[name], SGD(), recurrence=RECURRENCES[recurrence])
         python.restore(trainer.snapshot())
         numpy.restore(as_array_snapshot(trainer))
+        python.rng, numpy.rng = default_rng(step), np.random.default_rng(step)
+        python._accumulate_batch_gradients([x for x, _ in rows], labels)
+        numpy._accumulate_gradients(X, numpy._target_batch_array(labels))
+        expected = [
+            tuple(layer.gradients()) if hasattr(layer, "gradients") else () for layer in [*numpy.layers, *numpy.parts]
+        ]
+        _assert_close(expected, _gradients(python), 1e-10)
+        trainer.learn_batch(0.01, rows)
+
+
+@pytest.mark.usefixtures("attention_exp", "token_exp", "parts_exp")
+@pytest.mark.parametrize("name", WINDOWS)
+@pytest.mark.parametrize("recurrence", SNAPPED)
+def test_consolidated_steps_have_numpys_gradients(recurrence: str, name: str):
+    # the code-consolidation workplan's D1 on rows, against numpy's, each step from the trainer's
+    # weights as test_every_step_under_adam_has_numpys_gradients compares them
+    table = covering_consolidation(RECURRENCES[recurrence])
+    trainer = WindowRecurrentBackpropNetwork.randomized((K,), WINDOWS[name], RECURRENCES[recurrence], Adam(), seed=3)
+    trainer.consolidate(table)
+    for step in range(6):
+        rows = _rows(1 + step % 3, 4, step)
+        X, labels = np.array([x for x, _ in rows]), [label for _, label in rows]
+        python, numpy = _pair(WINDOWS[name], SGD(), recurrence=RECURRENCES[recurrence])
+        python.restore(trainer.snapshot())
+        numpy.restore(as_array_snapshot(trainer))
+        for network in (python, numpy):
+            network.consolidate(table)
         python.rng, numpy.rng = default_rng(step), np.random.default_rng(step)
         python._accumulate_batch_gradients([x for x, _ in rows], labels)
         numpy._accumulate_gradients(X, numpy._target_batch_array(labels))

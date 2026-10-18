@@ -254,6 +254,45 @@ def test_the_codes_losses_match_central_differences(rng: np.random.Generator):
     assert layer.loss_batch(weight) == pytest.approx(codebook() + commitment(), rel=1e-14)
 
 
+def test_a_target_moves_the_commitments_pull_and_leaves_the_codebooks(rng: np.random.Generator):
+    # the code-consolidation workplan, D1: commitment * ||h - sg[e_target]||^2 moves h; the
+    # codebook loss still moves each chosen code toward its h
+    layer = CodesArrayLayer(4, S, commitment=0.25)
+    layer.draw(rng)
+    H = rng.normal(size=(N, S))
+    weight = 0.5
+    layer.forward_batch(H)
+    indices = layer.indices.copy()
+    layer.targets = (indices + 1) % 4
+    targets = layer.targets.copy()
+
+    def codebook() -> float:
+        return float(weight * np.sum((H - layer.E[indices]) ** 2))
+
+    def commitment() -> float:
+        return float(weight * 0.25 * np.sum((H - layer.E[targets]) ** 2))
+
+    dQ = rng.normal(size=(N, S))
+    dH = layer.backward_batch(np.zeros((N, S)), weight)
+    _close(_numeric(codebook, layer.E), layer.grad_E)
+    _close(_numeric(commitment, H), dH)
+    assert layer.loss_batch(weight) == pytest.approx(codebook() + commitment(), rel=1e-14)
+    assert np.array_equal(layer.backward_batch(dQ, weight), dQ + (2.0 * weight * 0.25) * (H - layer.E[targets]))
+
+
+def test_its_own_code_as_the_target_is_no_target_by_bits(rng: np.random.Generator):
+    layer = CodesArrayLayer(4, S, commitment=0.25)
+    layer.draw(rng)
+    H, dQ = rng.normal(size=(N, S)), rng.normal(size=(N, S))
+    layer.forward_batch(H)
+    untargeted = (layer.backward_batch(dQ, 0.5), layer.grad_E.copy(), layer.loss_batch(0.5))
+    layer.reset_gradient_accum()
+    layer.targets = layer.indices.copy()
+    targeted = (layer.backward_batch(dQ, 0.5), layer.grad_E.copy(), layer.loss_batch(0.5))
+    assert np.array_equal(untargeted[0], targeted[0]) and np.array_equal(untargeted[1], targeted[1])
+    assert untargeted[2] == targeted[2]
+
+
 def test_codes_scatter_their_gradient_to_the_codes_chosen_only():
     layer = CodesArrayLayer(3, 1)
     layer.E = np.array([[0.0], [10.0], [20.0]])

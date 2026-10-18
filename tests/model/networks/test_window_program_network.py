@@ -45,7 +45,15 @@ from indrajala_ml.studies import window_recurrent_certificate as cert
 from indrajala_ml.studies import window_recurrent_study as wrs
 from indrajala_ml.studies import window_tasks as wt
 from tests.helpers import bits
-from tests.model.networks.test_window_recurrent_array_network import DIGITS, RECURRENCES, WINDOW, K, _batch
+from tests.model.networks.test_window_recurrent_array_network import (
+    DIGITS,
+    RECURRENCES,
+    SNAPPED,
+    WINDOW,
+    K,
+    _batch,
+    covering_consolidation,
+)
 
 # every layer kind a window holds: dropout outside and inside attention, a token-wise ReLU and
 # affine pair in a residual block; and rotary attention, which stands in for a Position
@@ -195,6 +203,26 @@ def test_a_training_steps_gradients_are_the_per_layer_paths(window: list[LayerSp
             per_layer._accumulate_gradients(X_rust, per_layer._target_batch_array(labels))
         assert _gradients(program) == _gradients(per_layer)
         # the dropout masks drawn once, in the per-layer path's order (D6)
+        assert generator_state(program.rng) == generator_state(per_layer.rng)
+
+
+@pytest.mark.parametrize("recurrence", SNAPPED.values(), ids=list(SNAPPED))
+@pytest.mark.parametrize("window", WINDOWS.values(), ids=list(WINDOWS))
+def test_a_consolidated_training_step_is_the_per_layer_paths(window: list[LayerSpec], recurrence: Any):
+    # the program's lookup of each window's commitment targets against the per-layer path's (D1 of
+    # the code-consolidation workplan), the initial state's through the same codes
+    program, per_layer = _twins(window, recurrence)
+    for network in (program, per_layer):
+        network.consolidate(covering_consolidation(recurrence))
+    for windows in (1, 3):
+        X, labels = _batch(windows, examples=6, seed=windows + 30)
+        for network in (program, per_layer):
+            _reset(network)
+        X_rust = RUST.matrix(X.tolist())
+        program._accumulate_gradients(X_rust, program._target_batch_array(labels))
+        with per_layer_path(per_layer):
+            per_layer._accumulate_gradients(X_rust, per_layer._target_batch_array(labels))
+        assert _gradients(program) == _gradients(per_layer)
         assert generator_state(program.rng) == generator_state(per_layer.rng)
 
 

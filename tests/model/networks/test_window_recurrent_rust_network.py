@@ -34,9 +34,11 @@ from tests.model.networks.test_window_recurrent_array_network import (
     DIGITS,
     RECURRENCE,
     RECURRENCES,
+    SNAPPED,
     WINDOW,
     K,
     _batch,
+    covering_consolidation,
 )
 
 # the window with dropout before the state's first input and in its attention
@@ -113,6 +115,36 @@ def test_every_step_under_adam_has_numpys_gradients(recurrence: str, name: str):
         actual = [tuple(layer.gradients()) for layer in [*rust.layers, *rust.parts] if hasattr(layer, "gradients")]
         _assert_close(expected, actual, 1e-10)
         trainer.learn_batch(0.01, rows)
+
+
+@pytest.mark.usefixtures("crate_exp_attention", "crate_exp_parts")
+@pytest.mark.parametrize("name", WINDOWS)
+@pytest.mark.parametrize("recurrence", SNAPPED)
+def test_consolidated_training_keeps_numpys_weights_within_the_products_rounding(recurrence: str, name: str):
+    # the code-consolidation workplan's D1 through the program, against numpy's per-layer path
+    rust, numpy = _pair(WINDOWS[name], Adam(), recurrence=RECURRENCES[recurrence])
+    for network in (rust, numpy):
+        network.consolidate(covering_consolidation(RECURRENCES[recurrence]))
+    for step in range(10):
+        rows = _rows(1 + step % 3, 4, step)
+        X, labels = np.array([x for x, _ in rows]), [label for _, label in rows]
+        fresh_rust, fresh_numpy = _pair(WINDOWS[name], SGD(), recurrence=RECURRENCES[recurrence])
+        for network in (fresh_rust, fresh_numpy):
+            network.restore(numpy.snapshot())
+            network.consolidate(covering_consolidation(RECURRENCES[recurrence]))
+        fresh_rust.rng, fresh_numpy.rng = RUST.default_rng(step), NUMPY.default_rng(step)
+        fresh_numpy._accumulate_gradients(X, fresh_numpy._target_batch_array(labels))
+        fresh_rust._accumulate_gradients(RUST.matrix(X.tolist()), fresh_rust._target_batch_array(labels))
+        expected = [
+            tuple(layer.gradients())
+            for layer in [*fresh_numpy.layers, *fresh_numpy.parts]
+            if hasattr(layer, "gradients")
+        ]
+        actual = [
+            tuple(layer.gradients()) for layer in [*fresh_rust.layers, *fresh_rust.parts] if hasattr(layer, "gradients")
+        ]
+        _assert_close(expected, actual, 1e-10)
+        numpy.learn_batch(0.01, rows)
 
 
 def test_a_recomputed_window_draws_its_dropout_masks_again():

@@ -46,7 +46,12 @@ from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_window_recurrent
 from indrajala_ml.model.specs.update_rules import UpdateRule
-from indrajala_ml.model.specs.window_recurrence import WindowRecurrence, pooling_reads
+from indrajala_ml.model.specs.window_recurrence import (
+    Consolidation,
+    WindowRecurrence,
+    pooling_reads,
+    validate_consolidation,
+)
 from indrajala_ml.pcg64 import generator_state, set_generator_state
 
 Batch = Sequence[tuple[tuple[float, ...], Sequence[int]]]
@@ -104,6 +109,16 @@ class WindowRecurrentBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSo
 
     def _update_rule(self) -> UpdateRule:
         return self.update_rule
+
+    @property
+    def consolidation(self) -> Consolidation:
+        """The consolidation training holds the states to (empty: none; consolidate)."""
+        return self.recurrence_layer.consolidation
+
+    def consolidate(self, consolidation: Consolidation) -> None:
+        """WindowRecurrentShape.consolidate's: a duplicate code's state held to its representative's codes."""
+        validate_consolidation(self.recurrence, consolidation)
+        self.recurrence_layer.consolidation = dict(consolidation)
 
     def randomize(self) -> None:
         # the window's layers as a sequence network's, its StateInputs' P among them in order;

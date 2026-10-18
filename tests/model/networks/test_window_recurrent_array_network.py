@@ -7,6 +7,7 @@ recomputed window draws again; the plain sequence network's digits by bits with 
 projections at zero and one window; and saving, loading and resuming by bits.
 """
 
+import itertools
 from pathlib import Path
 from typing import Any, Protocol, cast
 
@@ -60,6 +61,18 @@ RECURRENCE = WindowRecurrence((Factor(3, Codes(4)),))
 FACTORED = WindowRecurrence((Factor(2, Codes(4)), Factor(3, Codes(3))), pooling=AttentionPooling(BEFORE_STATE))
 FACTORED_CROSS = WindowRecurrence((Factor(2, Codes(4)), Factor(1, None), Factor(3, Codes(3))), cross=True)
 RECURRENCES = {"one factor": RECURRENCE, "two factors": FACTORED, "three factors, crossed": FACTORED_CROSS}
+SNAPPED = {"one factor": RECURRENCE, "two factors": FACTORED}
+
+
+def covering_consolidation(recurrence: WindowRecurrence) -> dict[tuple[int, ...], tuple[int, ...]]:
+    # a consolidation for the tests (the code-consolidation workplan, D1): every joint code onto the
+    # next in its first factor, but those at the first factor's last code, which keep their own, so
+    # a fresh network's states, on one code or a few, are held elsewhere
+    counts = [f.codes.count for f in recurrence.factors if f.codes is not None]
+    last = counts[0] - 1
+    return {code: (code[0] + 1, *code[1:]) for code in itertools.product(*map(range, counts)) if code[0] != last}
+
+
 STEP = 1e-6
 
 
@@ -145,6 +158,50 @@ def test_the_gradient_through_the_windows_matches_central_differences(recurrence
         np.testing.assert_allclose(a, n, rtol=1e-5, atol=1e-7)
     # the state carries gradient back: the initial state's and the first StateInput's are not zero
     assert np.any(_factor(network).initial_state.c != 0.0)
+
+
+def _fresh_gradients(
+    network: WindowRecurrentArrayNetwork, X: FloatArray, labels: list[tuple[int, ...]]
+) -> list[FloatArray]:
+    for layer in _trained(network):
+        for gradient in layer.gradients():
+            gradient.fill(0.0)
+    return _gradients(network, X, labels)
+
+
+@pytest.mark.parametrize("recurrence", SNAPPED)
+def test_a_consolidation_holds_each_duplicates_state_to_its_representatives_codes(recurrence: str):
+    # after each snap, every factor's codes hold their commitment targets: a duplicate joint code's
+    # representative's index, every other code's own (the code-consolidation workplan, D1)
+    network = _network(recurrence=RECURRENCES[recurrence])
+    table = covering_consolidation(network.recurrence)
+    X, labels = _batch(3, examples=8)
+    plain = _fresh_gradients(network, X, labels)
+    network.consolidate(table)
+    assert network.consolidation == table
+    layer = network.recurrence_layer
+    network.state_codes(X)  # the last window's snap
+    joint = list(zip(*layer.indices, strict=True))
+    for g, f in enumerate(layer.factors):
+        assert f.codes.targets.tolist() == [table.get(tuple(map(int, c)), c)[g] for c in joint]
+    assert any(tuple(map(int, c)) in table for c in joint)
+    consolidated = _fresh_gradients(network, X, labels)
+    assert any(not np.array_equal(a, b) for a, b in zip(plain, consolidated, strict=True))
+    # an empty consolidation clears the targets: training as without one, by bits
+    network.consolidate({})
+    network.state_codes(X)
+    assert all(f.codes.targets is None for f in layer.factors)
+    assert all(np.array_equal(a, b) for a, b in zip(plain, _fresh_gradients(network, X, labels), strict=True))
+
+
+def test_a_consolidation_is_refused_unless_it_fits_the_recurrence():
+    with pytest.raises(AssertionError, match="every factor snapped"):
+        _network(recurrence=FACTORED_CROSS).consolidate({(1, 0, 0): (0, 0, 0)})
+    network = _network(recurrence=FACTORED)
+    for table in ({(1,): (0,)}, {(1, 3): (0, 0)}, {(4, 0): (0, 0)}, {(1, 0): (0, -1)}):
+        with pytest.raises(AssertionError, match="a code index per factor"):
+            network.consolidate(table)
+    assert network.consolidation == {}
 
 
 @pytest.mark.parametrize("windows", [1, 3])
