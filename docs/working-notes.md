@@ -148,6 +148,8 @@ where you meet a new trap; delete one that no longer holds.
 - **Every probe stops at its first certified step** (certify each step's end: under a second at
   `k` 1): all four of the modular-family runs that solved or nearly solved division collapsed when
   trained on (E8b's warning, seen again). Save the network before it is overwritten.
+- **`modular_family_probe.py run` with one `--task` writes `DIR/seed<s>`**, not
+  `DIR/<task>/seed<s>` as several tasks do: read and `readout` such a run as `--arms .`.
 - **To probe beside a running study on `jebel`, use a worktree there** (`git worktree add --detach
   ~/code/wt-X origin/<branch>`, `.venv` and `data/window-recurrent` linked, `PYTHONPATH=$PWD`); don't
   update its files while a harness study (forkserver workers) runs from it. A single-process probe

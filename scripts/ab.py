@@ -99,6 +99,7 @@ import socket
 import statistics
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -137,6 +138,12 @@ DEFAULT_RULES = {
 BRIEF_LINES = 15
 LOAD_WAIT_S = 300  # how long the pre-flight waits for a high load to fall before refusing
 LOAD_POLL_S = 15
+# a profile's thermal limits (litshe's: the owner's rule for the Raspberry Pi 5): each pass waits
+# for the CPU to cool below start_below_c, fails over max_c, and is stopped over abort_c (the
+# limits are inclusive: a pass at exactly abort_c runs on)
+THERMAL_ZONE = Path("/sys/class/thermal/thermal_zone0/temp")
+THERMAL_WAIT_S = 900
+THERMAL_POLL_S = 1.0
 STDERR_TAIL = 20
 CLEAN_DAYS = 14
 
@@ -731,11 +738,80 @@ def _run_step(
             manifest["extension"] = {"file": provenance["extension"], "sha256": provenance["sha256"]}
     script_tree = Path(manifest[manifest["script_from"]]["tree"])
     command = [sys.executable, *adapter.command(script_tree, args, run_dir / f"{stem}.json")]
-    with open(run_dir / f"{stem}.stdout", "w") as out, open(run_dir / f"{stem}.stderr", "w") as err:
-        code = subprocess.run(command, check=False, cwd=run_dir, env=env, stdout=out, stderr=err).returncode
+    with (
+        open(run_dir / f"{stem}.stdout", "w") as out,
+        open(run_dir / f"{stem}.stderr", "w") as err,
+        thermal_watch(manifest.get("thermal"), stem) as watched,
+    ):
+        process = subprocess.Popen(command, cwd=run_dir, env=env, stdout=out, stderr=err)
+        watched.append(process)
+        code = process.wait()
     if code:
         raise AbError(f"{stem} ({side}) exited {code}: {' '.join(command)}", _tail(run_dir / f"{stem}.stderr"))
     return provenance, command
+
+
+def cpu_temp_c() -> float | None:
+    """The CPU's temperature now, in degrees C, or None where the machine doesn't expose it."""
+    try:
+        return int(THERMAL_ZONE.read_text()) / 1000
+    except OSError, ValueError:
+        return None
+
+
+def thermal_limits(profile: Path | None) -> dict[str, Any] | None:
+    """The profile's thermal limits (max_c, abort_c, start_below_c), or None: most machines have
+    none, and their passes run unwatched."""
+    return json.loads(profile.read_text()).get("thermal") if profile else None
+
+
+def wait_until_cool(limits: dict[str, Any]) -> dict[str, Any]:
+    """Wait, up to THERMAL_WAIT_S, for the CPU to fall below the limits' start_below_c, so every
+    pass starts from the same temperature; refuse past it."""
+    start = time.monotonic()
+    while (temp := cpu_temp_c()) is not None and temp >= limits["start_below_c"]:
+        if time.monotonic() - start >= THERMAL_WAIT_S:
+            raise AbError(
+                f"the CPU is at {temp:.1f} C, not below this machine's {limits['start_below_c']:g} C, "
+                f"after waiting {THERMAL_WAIT_S // 60} minutes"
+            )
+        time.sleep(LOAD_POLL_S)
+    return {"temp_c": temp, "waited_s": round(time.monotonic() - start)}
+
+
+@contextlib.contextmanager
+def thermal_watch(limits: dict[str, Any] | None, stem: str) -> Generator[list[subprocess.Popen[bytes]]]:
+    """Watch the CPU's temperature through a pass, under a profile's thermal limits: the pass is
+    stopped over abort_c, and fails at its end if it went over max_c. The caller appends the pass's
+    process to the yielded list. Without limits, nothing is watched."""
+    processes: list[subprocess.Popen[bytes]] = []
+    if limits is None:
+        yield processes
+        return
+    peak: list[float] = []
+    stopped = threading.Event()
+
+    def sample() -> None:
+        while not stopped.wait(THERMAL_POLL_S):
+            if (temp := cpu_temp_c()) is None:
+                continue
+            peak.append(max([temp, *peak[-1:]]))
+            if temp > limits["abort_c"]:  # every poll, so a process started after the reading is stopped too
+                for process in processes:
+                    if process.poll() is None:
+                        process.terminate()
+
+    thread = threading.Thread(target=sample, daemon=True)
+    thread.start()
+    try:
+        yield processes
+    finally:
+        stopped.set()
+        thread.join()
+    hottest = peak[-1] if peak else cpu_temp_c()
+    if hottest is not None and hottest > limits["max_c"]:
+        stop = " and was stopped" if hottest > limits["abort_c"] else ""
+        raise AbError(f"{stem}: the CPU reached {hottest:.1f} C, over this machine's {limits['max_c']:g} C{stop}")
 
 
 def noise_rules(profile: Path | None) -> dict[str, float]:
@@ -754,7 +830,7 @@ def reference_policy(manifest: dict[str, Any], preflight: dict[str, Any]) -> dic
 
 
 def policy_changes(reference: dict[str, Any]) -> list[str]:
-    """Each frequency-policy or power-limit field that differs from reference now."""
+    """Each frequency-policy, power-limit or firmware-throttle field that differs from reference now."""
     return [str(change) for change in compare({"identity": reference}, {"identity": power_policy()})]
 
 
@@ -771,17 +847,21 @@ def _run_passes(run_dir: Path, manifest: dict[str, Any], sides: list[str], polic
             "load": list(os.getloadavg()),
             "busy": busy_processes(),
         }
+        if manifest.get("thermal"):  # before the pass's clock starts
+            record["cooled"] = wait_until_cool(manifest["thermal"])
+            record["start"] = _now()
         manifest["passes"].append(record)
         _write_json(run_dir / "manifest.json", manifest)
         _append_progress(run_dir, {"event": "start", **record})
         try:
             record["provenance"], record["command"] = _run_step(manifest, run_dir, side, stem, manifest["args"])
-            # after the pass, so a change during it fails it: thermald can reset PL1 mid-run
+            # after the pass, so a change during it fails it: thermald can reset PL1 mid-run, and
+            # a Pi's firmware flags a throttle (kept until the next boot)
             if policy is not None and (changes := policy_changes(policy)):
                 record["policy_changes"] = changes
                 raise AbError(
-                    f"{stem}: the machine's frequency policy or power limits changed during the pass "
-                    "(re-run the setup script, then ab.py extend)",
+                    f"{stem}: the machine's frequency policy, power limits or throttle flags changed during "
+                    "the pass (re-run the setup script, or after a throttle reboot, then ab.py extend)",
                     changes,
                 )
             record["status"] = "ok"
@@ -836,6 +916,8 @@ def _preflight(
     record["hostname"] = hostname
     profile = host_profile(tree, hostname)
     manifest["noise_rules"] = noise_rules(profile)
+    # the thermal limits hold even with the machine check skipped: they protect the machine
+    manifest["thermal"] = thermal_limits(profile)
     if skip_profile:
         record["profile"] = "skipped"
         return record

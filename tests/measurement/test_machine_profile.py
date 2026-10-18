@@ -166,3 +166,12 @@ def test_profile_out_onto_a_profile_keeps_its_noise_rules(tmp_path: Path):
     out.write_text(json.dumps({**recorded, "noise_rules": rules}))
     assert run_script("profile", "--out", str(out)).returncode == 0
     assert json.loads(out.read_text())["noise_rules"] == rules
+
+
+def test_profile_out_onto_a_profile_keeps_its_thermal_limits(tmp_path: Path):
+    out = tmp_path / "profile.json"
+    assert run_script("profile", "--out", str(out)).returncode == 0
+    limits = {"max_c": 65, "abort_c": 70, "start_below_c": 55, "set_by": "a test"}
+    out.write_text(json.dumps({**json.loads(out.read_text()), "thermal": limits}))
+    assert run_script("profile", "--out", str(out)).returncode == 0
+    assert json.loads(out.read_text())["thermal"] == limits

@@ -306,12 +306,44 @@ def test_a_policy_change_during_a_pass_fails_it_and_stops_the_run(
 
     assert _run(toy_repo, "run", "--bench", "cmd", "--old", "HEAD~1", "--order", "ONNO", "--", "scripts/probe.py") == 1
     err = capsys.readouterr().err
-    assert "pass-02-new: the machine's frequency policy or power limits changed during the pass" in err
+    assert "pass-02-new: the machine's frequency policy, power limits or throttle flags changed during the pass" in err
     assert "identity.power_limits.long_term_w: 65 -> 95" in err
     manifest = json.loads((ab.find_run(None) / "manifest.json").read_text())
     assert manifest["state"] == "failed"
     assert [(p["number"], p["status"]) for p in manifest["passes"]] == [(1, "ok"), (2, "failed")]
     assert manifest["passes"][1]["policy_changes"] == ["identity.power_limits.long_term_w: 65 -> 95"]
+
+
+def test_a_throttle_during_a_pass_fails_it(
+    toy_repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # a Pi's policy: no RAPL, the firmware's flags 0 until it throttles (0x80000: the soft
+    # temperature limit hit since boot, kept after the clock recovers)
+    reference: dict[str, object] = {
+        "frequency": {"governor": "performance", "scaling_max_mhz": 2400},
+        "power_limits": None,
+        "firmware_throttled": 0,
+    }
+    readings = iter([reference, {**reference, "firmware_throttled": 0x80000}])
+
+    def preflight(*_: object) -> dict[str, object]:
+        return {"profile": "identity matches"}
+
+    def reference_policy(*_: object) -> dict[str, object]:
+        return reference
+
+    def power_policy() -> dict[str, object]:
+        return next(readings)
+
+    monkeypatch.setattr(ab, "_preflight", preflight)
+    monkeypatch.setattr(ab, "reference_policy", reference_policy)
+    monkeypatch.setattr(ab, "power_policy", power_policy)
+
+    assert _run(toy_repo, "run", "--bench", "cmd", "--old", "HEAD~1", "--order", "ONNO", "--", "scripts/probe.py") == 1
+    manifest = json.loads((ab.find_run(None) / "manifest.json").read_text())
+    assert [(p["number"], p["status"]) for p in manifest["passes"]] == [(1, "ok"), (2, "failed")]
+    assert manifest["passes"][1]["policy_changes"] == ["identity.firmware_throttled: 0 -> 524288"]
+    assert "throttle flags changed during the pass" in capsys.readouterr().err
 
 
 def test_a_pass_whose_tree_lacks_the_module_aborts(toy_repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -1172,3 +1204,83 @@ def test_remote_report_writes_the_markdown_here(
 def test_report_md_to_stdout_is_the_file_alone(capsys: pytest.CaptureFixture[str]) -> None:
     assert ab.main(["report", str(FIXTURES / "pr480"), "--md", "-"]) == 0
     assert capsys.readouterr().out == ab.markdown_report(ab.report_data(FIXTURES / "pr480"))
+
+
+LIMITS = {"max_c": 65.0, "abort_c": 70.0, "start_below_c": 55.0, "set_by": "a test"}
+
+
+def test_thermal_watch_without_limits_watches_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    def hot() -> float:
+        return 99.0
+
+    monkeypatch.setattr(ab, "cpu_temp_c", hot)
+    with ab.thermal_watch(None, "pass-01-old") as processes:
+        assert processes == []
+
+
+def test_a_pass_over_max_c_fails_at_its_end(monkeypatch: pytest.MonkeyPatch) -> None:
+    readings = iter([60.0, 66.5])
+
+    def temp() -> float:
+        return next(readings, 66.5)
+
+    monkeypatch.setattr(ab, "cpu_temp_c", temp)
+    monkeypatch.setattr(ab, "THERMAL_POLL_S", 0.01)
+    with (
+        pytest.raises(ab.AbError, match=r"pass-01-old: the CPU reached 66.5 C, over this machine's 65 C$"),
+        ab.thermal_watch(LIMITS, "pass-01-old"),
+    ):
+        time.sleep(0.1)
+
+
+def test_a_pass_at_exactly_abort_c_runs_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    # the limits are inclusive: 70.0 is within the hard limit, so the pass isn't stopped
+    def temp() -> float:
+        return 70.0
+
+    monkeypatch.setattr(ab, "cpu_temp_c", temp)
+    monkeypatch.setattr(ab, "THERMAL_POLL_S", 0.01)
+    process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.3)"])
+    with (
+        pytest.raises(ab.AbError, match=r"over this machine's 65 C$"),
+        ab.thermal_watch(LIMITS, "pass-01-old") as processes,
+    ):
+        processes.append(process)
+        assert process.wait() == 0
+
+
+def test_a_pass_over_abort_c_is_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
+    def temp() -> float:
+        return 70.5
+
+    monkeypatch.setattr(ab, "cpu_temp_c", temp)
+    monkeypatch.setattr(ab, "THERMAL_POLL_S", 0.01)
+    process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    with (
+        pytest.raises(ab.AbError, match=r"reached 70.5 C, over this machine's 65 C and was stopped"),
+        ab.thermal_watch(LIMITS, "pass-01-old") as processes,
+    ):
+        processes.append(process)
+        assert process.wait(timeout=10) != 0
+
+
+def test_wait_until_cool_waits_for_start_below_c(monkeypatch: pytest.MonkeyPatch) -> None:
+    readings = iter([58.0, 56.0, 54.5])
+
+    def temp() -> float:
+        return next(readings)
+
+    monkeypatch.setattr(ab, "cpu_temp_c", temp)
+    monkeypatch.setattr(ab, "LOAD_POLL_S", 0)
+    assert ab.wait_until_cool(LIMITS)["temp_c"] == 54.5
+
+
+def test_wait_until_cool_refuses_after_its_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    def temp() -> float:
+        return 60.0
+
+    monkeypatch.setattr(ab, "cpu_temp_c", temp)
+    monkeypatch.setattr(ab, "LOAD_POLL_S", 0)
+    monkeypatch.setattr(ab, "THERMAL_WAIT_S", 0)
+    with pytest.raises(ab.AbError, match=r"the CPU is at 60.0 C, not below this machine's 55 C"):
+        ab.wait_until_cool(LIMITS)

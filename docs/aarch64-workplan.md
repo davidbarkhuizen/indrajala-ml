@@ -306,6 +306,31 @@ the full clock shows whether a pass stays unthrottled (`get_throttled`, the temp
 doesn't, the machine profile caps the clock below throttling (the owner can set the cap) rather
 than refusing most passes; D8's throttle check stays either way.
 
+**The thermal limits (the owner, 2026-10-18, for the Pi 5 only):** at most 70 C, inclusive (a
+hard limit), and ideally at or below 65 C, for any load on litshe.
+
+**The load tests (2026-10-18, litshe in its passive case; each run timing 20-matmul chunks of
+the crate per worker, single-threaded; from the second on, each stopped itself at 65 C):**
+- **4 cores at 2.4 GHz, 15 minutes** (before the limits were set): 65 C at about 2.5 minutes,
+  70 C at about 6, 83.7 C at the end, still rising about 1 C a minute. The firmware throttled from
+  about 80 C (its sticky flag `0x80000`; chunks 1.6% slower) while the kernel's
+  `scaling_cur_freq` read 2400 throughout: only the firmware's flags show it.
+- **4 cores at 2.0 GHz:** 65 C at 3.5 minutes, the curve barely below 2.4 GHz's, at 20% less speed.
+  The firmware's DVFS gives 0.849 V there under load against 0.904 V at 2.4 GHz, so the cores'
+  switching power falls by about a quarter, yet the curve hardly moves.
+- **1 core at 2.4 GHz, 20 minutes:** levels at 58-60 C, within the ideal limit throughout.
+- **An undervolt** (`arm_freq=2000`, `over_voltage_delta=-25000` in `config.txt`, the
+  community's method; Raspberry Pi documents the parameter but no safe negative range): on its
+  first boot the USB drive holding litshe's work, plugged in throughout, didn't enumerate at all;
+  the stock `config.txt` restored, it did at once. One boot each way, but at only -25 mV a
+  peripheral failure is the instability a parity machine can't have, and the clock's own effect
+  was small: not pursued. litshe stays at stock (the trial's `config.txt` is kept as
+  `config.txt.undervolt-m25` beside the original's backup).
+
+So the Pi times at its full 2.4 GHz with one busy core (a pass is single-threaded), held to the
+limits by the profile's `thermal` section (below); sustained all-core work within them needs an
+active cooler, the owner's decision.
+
 ### Stage 6: the baseline, crate against numpy on the Pi
 
 `focused_benchmark.py` with both backends over every op and shape, and the conv comparison end to

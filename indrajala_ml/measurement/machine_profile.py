@@ -109,8 +109,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         profile = capture()
         if args.out and Path(args.out).is_file():
             existing = json.loads(Path(args.out).read_text())
-            if "noise_rules" in existing:
-                profile["noise_rules"] = existing["noise_rules"]
+            for hand_set in ("noise_rules", "thermal"):  # set by hand, never captured
+                if hand_set in existing:
+                    profile[hand_set] = existing[hand_set]
         validate(profile)
         text = json.dumps(profile, indent=2) + "\n"
         if args.out:

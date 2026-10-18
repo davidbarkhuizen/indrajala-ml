@@ -11,7 +11,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 4
+      "const": 5
     },
     "identity": {
       "type": "object",
@@ -38,7 +38,8 @@
             "caches",
             "isa",
             "frequency",
-            "power_limits"
+            "power_limits",
+            "firmware_throttled"
           ],
           "properties": {
             "vendor": {
@@ -116,31 +117,10 @@
               }
             },
             "isa": {
+              "description": "the architecture's ISA extensions a kernel could select (machine_profile_capture.ISA_FLAGS), each present or not",
               "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "sse4_2",
-                "avx",
-                "avx2",
-                "fma",
-                "avx512f"
-              ],
-              "properties": {
-                "sse4_2": {
-                  "type": "boolean"
-                },
-                "avx": {
-                  "type": "boolean"
-                },
-                "avx2": {
-                  "type": "boolean"
-                },
-                "fma": {
-                  "type": "boolean"
-                },
-                "avx512f": {
-                  "type": "boolean"
-                }
+              "additionalProperties": {
+                "type": "boolean"
               }
             },
             "frequency": {
@@ -154,6 +134,8 @@
                 "governor",
                 "min_mhz",
                 "max_mhz",
+                "scaling_min_mhz",
+                "scaling_max_mhz",
                 "boost_enabled",
                 "energy_performance_preference",
                 "intel_pstate_status"
@@ -178,6 +160,20 @@
                   ]
                 },
                 "max_mhz": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "scaling_min_mhz": {
+                  "description": "cpu0's cpufreq/scaling_min_freq: the policy's lower limit",
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "scaling_max_mhz": {
+                  "description": "cpu0's cpufreq/scaling_max_freq: the policy's upper limit, below max_mhz when the clock is capped",
                   "type": [
                     "integer",
                     "null"
@@ -230,6 +226,13 @@
                   ]
                 }
               }
+            },
+            "firmware_throttled": {
+              "description": "the Raspberry Pi firmware's throttle flags (vcgencmd get_throttled; bits 0-3 now, 16-19 since boot); 0 is never throttled since boot, null on any other machine",
+              "type": [
+                "integer",
+                "null"
+              ]
             }
           }
         },
@@ -582,6 +585,31 @@
         "measured_by": {
           "type": "string",
           "description": "where the values come from"
+        }
+      }
+    },
+    "thermal": {
+      "description": "optional, set by hand: the machine's thermal limits, which scripts/ab.py holds every pass to (litshe's: the owner's rule for the Raspberry Pi 5). A pass waits for the CPU to cool below start_below_c, is stopped over abort_c and fails over max_c; the limits are inclusive.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_c",
+        "abort_c",
+        "start_below_c",
+        "set_by"
+      ],
+      "properties": {
+        "max_c": {
+          "type": "number"
+        },
+        "abort_c": {
+          "type": "number"
+        },
+        "start_below_c": {
+          "type": "number"
+        },
+        "set_by": {
+          "type": "string"
         }
       }
     }
