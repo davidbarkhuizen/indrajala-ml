@@ -6,7 +6,7 @@ speed and production; D10 settled by the owner (2026-10-13, revised 2026-10-17):
 active cooler. Stages 0 and 1 done (2026-10-17): the Pi's Rust and pure-Python golden entries
 already equal jebel's bit for bit (stage 1's findings). Stage 2 done (2026-10-17): the crate's
 own `exp` and D6's rules. Stage 3 done (2026-10-17): the committed Rust reference, checked in
-CI. Stage 4 (CI on aarch64 and musl) next. The demo split
+CI. Stage 4 done (2026-10-18): CI on aarch64 and musl. Stage 5 (the Pi's timing setup) next. The demo split
 (`git show 9c50fe6:docs/demos-split-workplan.md`) is done, so the Pi needs no matplotlib.**
 
 indrajala-ml and the crate run on aarch64, tested and timed on a Raspberry Pi 5 (8 GB). The crate
@@ -281,6 +281,19 @@ From [pypi-release-workplan.md](pypi-release-workplan.md)'s stage 2, without pub
 crate's CI builds and tests on `ubuntu-24.04-arm` (glibc) and in Alpine containers on both
 architectures (musl); indrajala-ml's CI runs its tests on `ubuntu-24.04-arm` and D7's check
 there.
+
+**Done (2026-10-18):** the crate's `test` job (fmt, clippy, ruff, the build, stubtest, pyright,
+pytest) on `ubuntu-latest` and `ubuntu-24.04-arm`, and a `musl` job on both building and testing
+in `python:3.14-alpine` by `docker run` after the host's checkout (GitHub's JavaScript actions
+don't run inside Alpine containers on arm runners; indrajala-math-rust #62). indrajala-ml's test
+matrix on both architectures, the x86_64 jobs keeping their names, so D7's committed Rust
+reference is checked on aarch64 on every PR; the cache keys gained `runner.arch` (#841). Both
+musl jobs and every indrajala-ml arm job passed on their first run. The crate's arm job found
+x86-only items dead on aarch64 at clippy, fixed by attributes only (x86_64's release `.text`
+byte-identical before and after); `cargo clippy --target aarch64-unknown-linux-gnu` (with
+`PYO3_CROSS_PYTHON_VERSION`) reproduces it on an x86 machine. The golden run is bit-identical at
+the bump, and the musl build ran the crate's tests, not the golden reference: that is a later
+check if musl becomes a target.
 
 ### Stage 5: the Pi's timing setup (D8)
 
