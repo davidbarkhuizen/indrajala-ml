@@ -80,8 +80,11 @@ has it too. Without the flag a run is unchanged, by bits against `main` and with
     codes in use at steps 6-10, against step 5's).
 - **Feasibility:** round 1's (S3: 6 states, 8 codes a factor, `m` 64, cap 69; move-to-front 4: 24,
   15, 225, 248; `s0` 1 for both).
-- **Where:** `jebel` after the general algebras' round 2. Six runs at once, about an hour at most
-  (round 1's runs at `n` 3 and 4).
+- **Where:** `jebel` after the general algebras' round 2, the six runs at once in one pool (`run
+  --runs word-problem-s3:0 word-problem-s3:1 word-problem-s3:3 word-problem-s3:4 word-problem-s3:5
+  move-to-front-4:3 ... --commitment-from 6`). **Corrected before the data (2026-10-18):** up to
+  about 4 h, not an hour. Round 1's six failing runs took 80-250 minutes each (6 at once on
+  `pyramidon`), since a failure spends its 600 epochs.
 
 ## Why
 
