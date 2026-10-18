@@ -6,7 +6,7 @@ speed and production; D10 settled by the owner (2026-10-13, revised 2026-10-17):
 active cooler. Stages 0 and 1 done (2026-10-17): the Pi's Rust and pure-Python golden entries
 already equal jebel's bit for bit (stage 1's findings). Stage 2 done (2026-10-17): the crate's
 own `exp` and D6's rules. Stage 3 done (2026-10-17): the committed Rust reference, checked in
-CI. Stage 4 done (2026-10-18): CI on aarch64 and musl. Stage 5 (the Pi's timing setup) next. The demo split
+CI. Stage 4 done (2026-10-18): CI on aarch64 and musl. Stage 5 done (2026-10-18): the Pi's timing setup, its thermal limits and its A/A. Stage 6 (the baseline) next; stage 7's first kernel begun (the matrix products). The demo split
 (`git show 9c50fe6:docs/demos-split-workplan.md`) is done, so the Pi needs no matplotlib.**
 
 indrajala-ml and the crate run on aarch64, tested and timed on a Raspberry Pi 5 (8 GB). The crate
@@ -330,6 +330,20 @@ the crate per worker, single-threaded; from the second on, each stopped itself a
 So the Pi times at its full 2.4 GHz with one busy core (a pass is single-threaded), held to the
 limits by the profile's `thermal` section (below); sustained all-core work within them needs an
 active cooler, the owner's decision.
+
+**Done (2026-10-18, #843 and this PR):** the profile (`docs/machine_profiles/raspberry-pi-5.json`,
+schema 5) with the Pi's identity, clock policy and firmware throttle flags; the setup script and
+its installed copy on litshe (and jebel, re-installed); `thermal` (max 65, abort 70, start below
+50 C), which `ab.py` holds every pass to; `ab.py remote --host litshe`; cargo held to one job on
+litshe (`~/.cargo/config.toml`), so a build stays a single-core load. **The A/A**
+(`2026-10-18-aa-litshe-focused_benchmark`, `focused_benchmark` at e9ab957, ONNONO): every pass
+cooled below 50 C first (0-7 minutes), none stopped or failed; pass shifts 0.0-0.1%; 2 of 270
+rows consistent by chance, 0.2% each; the spread of per-pass medians median 2.5%, 90th
+percentile 27.4%, max 598% (jebel's: 2.8%, 5.9%, 54%), its worst rows memory-bound (numpy's
+`accumulate_gradient` 80%). The noise rules in the profile come from it (`shifted_pass` 2%,
+`small_consistent` 1%), one benchmark's A/A, so stage 6's baseline A/As of the others revisit
+them. It already shows stage 7's order: the crate's scalar `X @ W.T` (`forward_batch` b32) 10x
+numpy's, its scalar matrix product (`downstream_batch` b32) 5x.
 
 ### Stage 6: the baseline, crate against numpy on the Pi
 

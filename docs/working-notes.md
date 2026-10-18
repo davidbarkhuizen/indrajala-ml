@@ -316,6 +316,10 @@ where you meet a new trap; delete one that no longer holds.
   maturin==1.15.0`, `pip install --no-deps -e .`, `maturin develop --release` in `rust/`; ruff
   and pyright at `./cli`'s pins for `./cli lint`); check with a one-line script in its
   `scripts/` that prints a module's `__file__`.
+- **`litshe` fetches from GitHub anonymously** (the repos are public): its checkout's `rust/`
+  submodule URL and its crate repo `~/code/indrajala-math-rust` (`ab.py`'s `CRATE_REPO`) both point
+  at GitHub, so `ab.py remote --host litshe run --sync` and a crate A/B work unchanged. Cargo there
+  runs one job (`~/.cargo/config.toml`), a single-core load under the owner's thermal limits.
 - **On `litshe` a worktree's `git submodule update --init rust` fails** with "transport 'file' not
   allowed" (its submodule URL is the local crate repo): `git -c protocol.file.allow=always
   submodule update --init rust`.
