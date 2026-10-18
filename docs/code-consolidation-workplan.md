@@ -239,6 +239,27 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
      or share).
    - **Both arms certify some seeds:** random-q16-0 is near the edge; read C2 (B's exact prefix
      against the control's) before choosing.
+
+   **B's result (2026-10-18; the runs in the probe's docstring):** 0 of 6, every run spent (130-174
+   minutes against the control's 49-58). Worst answer at best 0.937-0.999 (the control's
+   0.895-0.995), each at steps 4-14, every run collapsing after its best and plateauing after; C2's
+   reading (the exact prefix, the failures' kinds) follows A's. So by the rule above, the one more
+   probe: A.
+
+   **A on random-q16-0, the one more probe (the owner, 2026-10-18: "test Remedy A - and probably
+   abandon random machines for the moment").** Registered before its data: `--consolidate` (D1, D2's
+   `d` 2), random-q16-0, seeds 0-5, 600 epochs, on `jebel` from the same worktree and commit as B
+   (0b4a6b9), so B's control is A's (one change, D5); 6 at once, about 1 h (A's epochs cost as the
+   control's, stage 3). Read with `breaks` and `by-length` at `d` 1 and 2, and A's per-diagnosis log
+   of groups and pulls.
+   - **A certifies at least one seed (the control none):** consolidation cures random-q16-0's
+     exact-core failures; random machines stay in the studies with A in their cell, and the next
+     probe is random-4-0 with A.
+   - **A 0 of 6:** random machines are set aside (the owner): our method, at round 1's cell with
+     either remedy, handles random machines to about 12 states, a recorded limit, not a test cell.
+     The general algebras go on without the random class, its change registered in that plan before
+     round 2's data. C2 is still read (A's extra codes and how often they break, against the
+     control's), for the structured cells A is tested on next (S4, move-to-front 4).
 3. **The build.** The crate first (indrajala-math-rust): the commitment's target per window,
    defaulting to the nearest code, with parity tests against the Python reference. The golden run is
    bit-identical (an empty table is today's training); tier 1 A/B on the training path. Then the
