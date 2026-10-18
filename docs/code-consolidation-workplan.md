@@ -260,6 +260,41 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
      The general algebras go on without the random class, its change registered in that plan before
      round 2's data. C2 is still read (A's extra codes and how often they break, against the
      control's), for the structured cells A is tested on next (S4, move-to-front 4).
+2c. **Retention: keeping a near solution (the owner, 2026-10-18: "let's register both").** On
+   random-q16-0 the control, B and A all found near solutions and lost them: B's seeds 2 and 4 had
+   an exact core and exact accuracy 0.916 at length 64, A's six reached worst answers 0.976-0.999,
+   and every run collapsed after its best step, the fork on throughout. Two probes, each question's
+   answers written before its data; probes claim nothing.
+   - **P1, A with the certificate guard on S4 and move-to-front 4.** The guard (`--guard`, the
+     snap-wall plan's stage 2d: 10 of 10 replays kept their proof against 1 of 10) arms only after
+     an epoch whose screen got every answer right, so it protects a machine already right: these
+     structured cells reach perfect screens (S4's round-1 control certified 4 of 6), random-q16-0's
+     near misses rarely do. `--consolidate --guard both` (each seed unguarded and guarded, one
+     change between them), word-problem-s4 and move-to-front-4, seeds 0-5, round 1's cell (two
+     factors, `--codes-ratio 32/11`, reading the output, the fork), 600 epochs; 24 runs, 6 at once
+     on `stone` (round 1's runs on `jebel` took 50-170 minutes, the guard adds a machine read per
+     armed batch: about 4-7 h). Feasibility as round 1's (24 states, 15 codes a factor, `m` 225,
+     cap 248, `s0` 1, `d` 2). Read: the count per arm and cell, each run's armed epochs and
+     rollbacks, and C2 on every best network.
+     - **The guarded arm certifies more seeds than the unguarded on either cell:** the guard keeps
+       A's solutions; A with the guard is the round's candidate (registered then, D8).
+     - **The same counts:** the guard adds nothing to A here; read whether it armed at all.
+     - Beside it, descriptively only (another commit): A unguarded against round 1's control (S4 4
+       of 6, move-to-front 4 4 of 6).
+   - **P2, A with the step's best network restored, on random-q16-0.** Built first, its own PR
+     (tier 0): `run --restore-best`, at each step's end that isn't a pass, the step's best network
+     (the highest worst answer the diagnosis saw this step) restored, with its optimizer state,
+     before the next step; off by default, a run's identity unchanged without it, tested (a run
+     without it bit-identical to today's on a small cell, and a restored step's network equal to
+     its snapshot). Then `--consolidate --restore-best`, random-q16-0, seeds 0-5, 600 epochs, on
+     `jebel` (about 1 h), against this stage's A arm (2b), which is the control if a by-bits check
+     of its first epochs on the build's commit holds; else A alone is rerun beside it.
+     - **At least one seed certifies:** keeping the step's best is what random-q16-0 lacked;
+       random machines can return to the studies (the owner's decision) with A and the restore in
+       their cell.
+     - **0 of 6:** the limit recorded in 2b stands (near solutions not retained, about 12 states at
+       this cell); read whether the restore kept the near solutions (each step's start against its
+       best) or they broke again within the step.
 3. **The build.** The crate first (indrajala-math-rust): the commitment's target per window,
    defaulting to the nearest code, with parity tests against the Python reference. The golden run is
    bit-identical (an empty table is today's training); tier 1 A/B on the training path. Then the
