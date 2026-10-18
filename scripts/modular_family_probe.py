@@ -49,7 +49,9 @@ j+1..F j, capped at the exclusion bound; `--consolidate` (A, D1) groups the netw
 each diagnosis by `d`-equivalence (D2's `d`) and pulls each duplicate to its representative, each
 diagnosis row logging `consolidation` (codes reached, groups, duplicates pulled); `--restore-best`
 (stage 2c's P2) ends a step stopped by a plateau on its best screen's network, saved at each new
-best, before the step's certificate and the next step, a row logging it. `run` prints each
+best, before the step's certificate and the next step, a row logging it; `--commitment-from J`
+(the commitment-control workplan's diagnostic) trains the steps before J with every factor's
+commitment 0. `run` prints each
 target's feasibility line first (q, codes, m, the cap, s0, d) and refuses a cell whose joint codes
 can't hold its states.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
@@ -682,6 +684,13 @@ def main(argv: list[str]) -> int:
         help="P2 (the code-consolidation workplan's stage 2c): a step ending on a plateau goes back to the network "
         "at its best screen before the step's end and the next step",
     )
+    run.add_argument(
+        "--commitment-from",
+        type=int,
+        metavar="J",
+        help="the commitment-control workplan's diagnostic: every factor's commitment 0 for the steps before J, "
+        "its specs' from J",
+    )
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
     certify.add_argument(
@@ -822,6 +831,7 @@ def main(argv: list[str]) -> int:
             long_tail=args.long_tail,
             consolidate=args.consolidate,
             restore_best=args.restore_best,
+            commitment_from=args.commitment_from,
         )
 
     for name in names:

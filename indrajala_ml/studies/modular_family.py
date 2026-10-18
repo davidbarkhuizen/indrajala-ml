@@ -769,6 +769,7 @@ def _run_identity(
     long_tail: int | None,
     consolidate: bool,
     restore_best: bool,
+    commitment_from: int | None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -788,6 +789,7 @@ def _run_identity(
         **({"long_tail": long_tail} if long_tail is not None else {}),
         **({"consolidate": True} if consolidate else {}),
         **({"restore_best": True} if restore_best else {}),
+        **({"commitment_from": commitment_from} if commitment_from is not None else {}),
     }
 
 
@@ -823,6 +825,7 @@ def run(
     long_tail: int | None = None,
     consolidate: bool = False,
     restore_best: bool = False,
+    commitment_from: int | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -847,6 +850,9 @@ def run(
     (out/best.network.json) and, when the step ends on a plateau, restores it before the step's end
     (its save and certificate) and the next step, regrouped with A, as a fork restores its snapshot;
     a row logs the step's best screen (`restore`) and the restored network's (`restored`).
+    `commitment_from` J (the commitment-control workplan's diagnostic, D1 (b)) trains every step
+    before J with each factor's commitment 0 and from J with its specs' (set before each epoch, so a
+    fork's or a restore's loaded network has it too).
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -874,6 +880,7 @@ def run(
         long_tail,
         consolidate,
         restore_best,
+        commitment_from,
     )
     d = mr.word_length(encoding.task.machine) if consolidate else 0
     table: dict[tuple[int, ...], tuple[int, ...]] = {}  # A's, from the last diagnosis
@@ -916,6 +923,7 @@ def run(
     spent = place.spent if place is not None else 0  # epochs trained in all
     snapshot = out / "snapshot.network.json"
     step_best = out / "best.network.json"  # restore_best's
+    commitments = [0.0 if f.codes is None else f.codes.commitment for f in net.recurrence.factors]  # the specs'
 
     def checkpoint(step: int, epoch: int) -> None:
         # the run's place after epoch of step (0: its start), every count read as it stands
@@ -981,6 +989,8 @@ def run(
                 encoding.example(encoding.draw(n, rng))
                 for n in epoch_lengths(step, settings.epoch_examples, long_tail, cap)
             ]
+            if commitment_from is not None:
+                net.set_commitments([0.0 if step < commitment_from else c for c in commitments])
             guarded: dict[str, Any] = {}
             if guarding is not None:
                 if certified_right(encoding, last_kinds):

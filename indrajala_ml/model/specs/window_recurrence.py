@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from indrajala_ml.model.specs.layer_specs import LayerSpec, StateInput
 
@@ -97,6 +98,19 @@ def validate_consolidation(recurrence: WindowRecurrence, consolidation: Consolid
             assert len(code) == len(counts) and all(0 <= i < m for i, m in zip(code, counts, strict=True)), (
                 f"a consolidation's codes are a code index per factor, below the code counts {counts}; got {code}"
             )
+
+
+def set_commitments(factors: Sequence[Any], commitments: Sequence[float]) -> None:
+    """
+    Each factor's codes' commitment, on a recurrence layer's factor parts (either backend's): the
+    commitment controlled while training (the commitment-control workplan), the specs unchanged. A
+    continuous factor has none, so its value must be 0.
+    """
+    for factor, commitment in zip(factors, commitments, strict=True):
+        if factor.codes is None:
+            assert commitment == 0.0, "a continuous factor has no commitment"
+        else:
+            factor.codes.commitment = float(commitment)
 
 
 def commitment_targets(consolidation: Consolidation, indices: Sequence[Sequence[int]]) -> list[list[int]] | None:

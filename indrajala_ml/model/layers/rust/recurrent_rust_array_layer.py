@@ -23,7 +23,7 @@ from indrajala_ml.model.layers.rust.rust_array_layer import (
     fan_in_aware_random_rust_layer,
     fan_in_aware_random_rust_weights,
 )
-from indrajala_ml.model.specs.window_recurrence import Consolidation, commitment_targets
+from indrajala_ml.model.specs.window_recurrence import Consolidation, commitment_targets, set_commitments
 
 
 class StateInputRustArrayLayer:
@@ -266,6 +266,11 @@ class RecurrenceRustArrayLayer:
     def commitments(self) -> list[float]:
         """Each factor's codes' commitment, 0 for a continuous factor."""
         return self._commitments
+
+    def set_commitments(self, commitments: Sequence[float]) -> None:
+        """Each coded factor's commitment from the next training step on (a continuous factor's 0)."""
+        set_commitments(self.factors, commitments)
+        self._commitments = [0.0 if f.codes is None else f.codes.commitment for f in self.factors]
 
     def parts(self) -> list[Any]:
         """The parts with parameters, factor by factor: pooling, cell, codes (if any), initial state."""

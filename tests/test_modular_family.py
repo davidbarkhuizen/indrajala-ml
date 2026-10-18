@@ -453,8 +453,8 @@ PLATEAUS = mf.Settings(
     epoch_examples=64, max_epochs=6, patience=2, diagnose_every=2, screen=4, cases=8, lengths=(2,), long=(4,)
 )
 RESUMED_FORK = mf.Fork(trigger=mf.Trigger(threshold=2.0), cool=0.5, limit=1)
-# four runs: one forking, ending on its epochs; one guarded, ending steps at a plateau; one consolidated;
-# one consolidated restoring its plateaued step's best
+# five runs: one forking, ending on its epochs; one guarded, ending steps at a plateau; one consolidated;
+# one consolidated restoring its plateaued step's best; one forking without the commitment at step 1
 RESUMABLE: dict[str, dict[str, Any]] = {
     "forked": {
         "encoding": mf.Encoding(5, mf.FAMILY),
@@ -489,6 +489,14 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "budget_epochs": 10,
         "consolidate": True,
         "restore_best": True,
+    },
+    "uncommitted": {
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 2,
+        "budget_epochs": 6,
+        "fork": RESUMED_FORK,
+        "commitment_from": 2,
     },
 }
 
@@ -554,6 +562,8 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "consolidated":
         assert [step for step, _ in ends] == [2, 3]  # from s0
         assert any("fork" in r and "consolidation" in r for r in whole[0])
+    elif kind == "uncommitted":
+        assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":
         assert ends == [(2, "passed"), (3, "plateau")] and any("restore" in r for r in whole[0])
     else:
@@ -705,7 +715,7 @@ def test_a_consolidated_run_starts_at_s0_and_logs_its_groups_at_each_diagnosis(t
 def test_a_run_without_the_plan_s_arms_keeps_its_identity_as_before(tmp_path: Path):
     _resumable(tmp_path / "run")
     identity = json.loads((tmp_path / "run" / mf.CHECKPOINT).read_text())["run"]
-    assert not {"first", "long_tail", "consolidate", "restore_best"} & set(identity)
+    assert not {"first", "long_tail", "consolidate", "restore_best", "commitment_from"} & set(identity)
 
 
 # run --restore-best (the code-consolidation workplan's stage 2c, P2)
@@ -751,3 +761,35 @@ def test_a_plateaued_step_ends_on_its_best_network_regrouped(tmp_path: Path):
     assert (on / "step-3.network.json").read_bytes() != (tmp_path / "off" / "step-3.network.json").read_bytes()
     assert any("RESTORE" in line for line in mf.trace(rows))
     assert json.loads((on / mf.CHECKPOINT).read_text())["run"]["restore_best"]
+
+
+# run --commitment-from (the commitment-control workplan's diagnostic)
+
+
+def test_the_commitment_from_the_first_step_is_the_run_without_it(tmp_path: Path):
+    configs: dict[str, dict[str, Any]] = {"off": {}, "on": {"commitment_from": 1}}
+    for name, config in configs.items():
+        mf.run(
+            mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 1e9, tmp_path / name, RESUMED, cap=2, fork=RESUMED_FORK, **config
+        )
+    assert _outcome(tmp_path / "on") == _outcome(tmp_path / "off")
+
+
+def test_the_steps_before_commitment_from_train_without_the_commitment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # every epoch's training (a fork's too) reads the commitments its step should have
+    seen: list[list[float]] = []
+    train_epoch = mf.wr.train_epoch
+
+    def recording(net: Any, *args: Any) -> None:
+        seen.append(list(net.recurrence_layer.commitments))
+        train_epoch(net, *args)
+
+    monkeypatch.setattr(mf.wr, "train_epoch", recording)
+    out = tmp_path / "run"
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 1e9, out, RESUMED, cap=2, fork=RESUMED_FORK, commitment_from=2)
+    rows = _rows(out)
+    trained = [r["step"] for r in rows if r.get("epoch", 0) > 0 and "screen" in r]  # an epoch's row or its fork's
+    assert len(trained) == len(seen) and set(trained) == {1, 2}
+    assert [c for step, c in zip(trained, seen, strict=True) if step == 1] == [[0.0]] * trained.count(1)
+    assert [c for step, c in zip(trained, seen, strict=True) if step == 2] == [[0.25]] * trained.count(2)
+    assert json.loads((out / mf.CHECKPOINT).read_text())["run"]["commitment_from"] == 2

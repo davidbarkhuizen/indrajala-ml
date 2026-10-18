@@ -147,6 +147,23 @@ def test_consolidated_training_keeps_numpys_weights_within_the_products_rounding
         numpy.learn_batch(0.01, rows)
 
 
+@pytest.mark.usefixtures("crate_exp_attention", "crate_exp_parts")
+@pytest.mark.parametrize("recurrence", SNAPPED)
+def test_training_without_the_commitment_has_numpys_gradients(recurrence: str):
+    # set_commitments through the program (the commitment-control workplan's diagnostic)
+    rust, numpy = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
+    for network in (rust, numpy):
+        network.set_commitments([0.0] * len(network.recurrence.factors))
+    assert rust.recurrence_layer.commitments == [0.0] * len(rust.recurrence.factors)
+    X, labels = _batch(3, examples=4)
+    rust.rng, numpy.rng = RUST.default_rng(5), NUMPY.default_rng(5)
+    numpy._accumulate_gradients(X, numpy._target_batch_array(labels))
+    rust._accumulate_gradients(RUST.matrix(X.tolist()), rust._target_batch_array(labels))
+    expected = [tuple(layer.gradients()) for layer in [*numpy.layers, *numpy.parts] if hasattr(layer, "gradients")]
+    actual = [tuple(layer.gradients()) for layer in [*rust.layers, *rust.parts] if hasattr(layer, "gradients")]
+    _assert_close(expected, actual, 1e-10)
+
+
 def test_a_recomputed_window_draws_its_dropout_masks_again():
     window: list[LayerSpec] = [Embedding(27, 8), Position(), Dropout(0.3), StateInput(), ATTENTION, DIGITS]
     trained = WindowRecurrentRustArrayNetwork.randomized((K,), window, RECURRENCE, SGD(), seed=7)

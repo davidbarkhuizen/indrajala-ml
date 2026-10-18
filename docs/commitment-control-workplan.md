@@ -53,6 +53,36 @@ step a diagnostic probe rather than a build.**
 - **The quantiser (D1 (d))** stays behind the thermostat: a crate change across three
   implementations, for a failure not yet shown to be the commitment's.
 
+**The diagnostic, registered 2026-10-18 before its data (a probe; it claims nothing).** Built in
+this PR: `run --commitment-from J` sets every factor's commitment to 0 for the steps before J and to
+its specs' 0.25 from J. The value is set before each epoch's training, so a fork's restored network
+has it too. Without the flag a run is unchanged, by bits against `main` and with the golden run.
+
+- **The runs:** round 1's failure-A runs, word-problem-s3 seeds 0, 1, 3, 4 and 5 and move-to-front-4
+  seed 3. Round 1's cell (two factors, `--codes-ratio 32/11`, reading the output, the fork, 600
+  epochs) with **one change, `--commitment-from 6`:** steps 1-5 without the commitment. Five,
+  because round 1's certified S3 seed formed its state by then (seed 2's state share 0.96 at step
+  4's end, 1.0 at step 5's), while the six failures spent 47-86 epochs in steps 1-5 and never
+  passed a share of 0.06-0.38.
+- **The control:** the same seeds' round-1 runs, if the first epochs of one of them (word-problem-s3
+  seed 0) repeat by bits on the build's commit; else they are rerun beside the probe.
+- **A run forms a state** if its state share at step 5's end is at least 0.5, above every failure's
+  steps 1-5 and below the certified seed's 0.96 at step 4.
+- **Answers, written before the data:**
+  - **3 or more of 6 form a state (or any certifies):** the commitment's pull is failure A's cause.
+    The thermostat (D1 (a), stage 2) is worth building, its probes on failure A's cells instead of
+    D5's.
+  - **1 or 2 of 6:** suggestive. Read the codes in use and whether the state survives the
+    commitment's return at step 6, and choose one more probe from that.
+  - **0 of 6:** the commitment isn't failure A's cause. This plan retires and its idea moves to
+    next-steps.md.
+  - Read in every case: whether a state formed in steps 1-5 survives step 6 (the state share and
+    codes in use at steps 6-10, against step 5's).
+- **Feasibility:** round 1's (S3: 6 states, 8 codes a factor, `m` 64, cap 69; move-to-front 4: 24,
+  15, 225, 248; `s0` 1 for both).
+- **Where:** `jebel` after the general algebras' round 2. Six runs at once, about an hour at most
+  (round 1's runs at `n` 3 and 4).
+
 ## Why
 
 Each code layer's loss, per window, is `weight * (||sg[h] - e||^2 + beta ||h - sg[e]||^2)`

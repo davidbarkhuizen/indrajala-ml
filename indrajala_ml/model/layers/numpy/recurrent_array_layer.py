@@ -33,7 +33,7 @@ from indrajala_ml.model.layers.numpy.array_layer import (
 )
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
-from indrajala_ml.model.specs.window_recurrence import Consolidation, commitment_targets
+from indrajala_ml.model.specs.window_recurrence import Consolidation, commitment_targets, set_commitments
 
 exp = np.exp
 
@@ -463,6 +463,10 @@ class RecurrenceArrayLayer:
         return [
             part for f in self.factors for part in (f.pooling, f.cell, f.codes, f.initial_state) if part is not None
         ]
+
+    def set_commitments(self, commitments: Sequence[float]) -> None:
+        """Each coded factor's commitment from the next training step on (a continuous factor's 0)."""
+        set_commitments(self.factors, commitments)
 
     def draw(self, rng: np.random.Generator) -> None:
         """Each factor's cell's gates, then its codes, factor by factor."""
