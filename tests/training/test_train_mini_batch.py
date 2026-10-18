@@ -7,6 +7,7 @@ from indrajala_ml.model.networks.python.backprop_classifier_network import Backp
 from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
     MultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.training.train import (
     _chunk_into_batches,
     train_backprop_network_mini_batch,
@@ -68,13 +69,20 @@ def test_batch_size_one_no_reshuffle_matches_train_linear_classifier_network_exa
 
 def test_larger_batch_size_still_trains_and_reports_epoch_accuracies():
 
-    _reference, training_data = reachable_reference_and_training_data(1, 2, square_bounds(10.0), 200)
-    student = BackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0))
+    # the last epoch's weights, not the student's: when no epoch beats the untrained network, the
+    # pocket restores it (about 1 draw in 360 unseeded)
+    _reference, training_data = reachable_reference_and_training_data(
+        1, 2, square_bounds(10.0), 200, rng=default_rng(7), data_rng=random.Random(7)
+    )
+    student = BackpropClassifierNetwork.randomized([4], 2, square_bounds(10.0), seed=7)
     before = student.snapshot()
 
-    result = train_backprop_network_mini_batch(student, training_data, batch_size=16, learning_rate=0.5, epochs=5)
+    result = train_backprop_network_mini_batch(
+        student, training_data, batch_size=16, learning_rate=0.5, epochs=5, rng=random.Random(7)
+    )
 
-    assert student.snapshot() != before
+    assert result.run_checkpoint is not None
+    assert result.run_checkpoint.network.weights != before
     assert len(result.diagnostic.epoch_training_accuracies) == 5
     assert all(0.0 <= accuracy <= 1.0 for accuracy in result.diagnostic.epoch_training_accuracies)
 
