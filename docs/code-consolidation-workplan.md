@@ -324,6 +324,16 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
      the restored network's, equal by test). Without it, four runs (forked, guarded, consolidated,
      A on a plateau) are `main`'s by bits (logs, networks, identity); a restoring run resumes by
      bits from any stop.
+
+     **P2's result (2026-10-18; the runs in the probe's docstring): 0 of 6, so the limit recorded in
+     2b stands** (near solutions not retained, about 12 states at this cell). The control is 2b's A
+     arm (A's first 15 epochs repeat by bits on b5f9a05). **The restore kept each step's best**: a
+     plateaued step had fallen a median 4-11 points of screen below its best, and its end regained
+     them. Without A's collapses the best came later (steps 10-25, against A's 7-14), and two runs
+     never collapsed. Every run came near (worst answer at best 0.976-1.000). **But the step's best
+     was never a solution:** the best steps' networks minimise to 37-62 states against 16, so none
+     certified. Seed 4's best step passed its screens perfectly and still minimised to 57. Within
+     each later step the near solution broke again before its plateau.
 3. **The build.** The crate first (indrajala-math-rust): the commitment's target per window,
    defaulting to the nearest code, with parity tests against the Python reference. The golden run is
    bit-identical (an empty table is today's training); tier 1 A/B on the training path. Then the

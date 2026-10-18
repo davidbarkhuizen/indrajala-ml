@@ -574,6 +574,27 @@ both run from consolidation/; the readouts and `reading/` added on pyramidon aft
 - **Next:** stage 2c's retention probes, registered before their data: P1 (A with the certificate
   guard on S4 and move-to-front 4, on `stone`) and P2 (A with the step's best restored on
   random-q16-0, on `jebel`).
+
+Findings (P2, A with the step's best restored, stage 2c of docs/code-consolidation-workplan.md; a
+probe, its answers written before the data), 2026-10-18; random-q16-0, 2b's cell with `--consolidate
+--restore-best`, seeds 0-5, 600 epochs. Code b5f9a05 (~/code/wt-p2, its own venv, crate 40a2761),
+OPENBLAS_NUM_THREADS=1, jebel, 6 at once, 17:44 to 18:46. Its control is 2b's A arm: A's first 15
+epochs repeat by bits on b5f9a05. Data in data/window-recurrent/consolidation/b-q16/p2/ (and
+`p2.out`, `p2.readout.txt`), manifest `b-q16-p2.sha256` b24d3d97... (209 files, run from
+consolidation/; the readout added on pyramidon after it).
+
+- **0 of 6 (Wilson 95%: 0.00-0.39), so the limit recorded in 2b stands:** near solutions aren't
+  retained at random-q16-0. Every run spent its 600 epochs (51-62 minutes) and came near (worst
+  answer at best 0.976-1.000).
+- **The restore kept each step's best:** 21-27 restores a run. A plateaued step had fallen a
+  median 4-11 points of screen below its best (at most 26-35), and its end regained them. The best
+  came later than A's (steps 10-25 against 7-14), with fewer collapses (0 in two runs, 3 and 5 in
+  the worst; A had 1-4 in every run).
+- **But the step's best was never a solution:** the best steps' networks minimise to 37-62 states
+  against 16, so none certified. Seed 4's best step passed its screens perfectly and its machine
+  still minimised to 57. Within each later step the near solution broke again before its plateau.
+  Keeping a near solution doesn't make it a machine. The extra codes are wrong, as A's reading
+  found.
 """
 
 from __future__ import annotations
