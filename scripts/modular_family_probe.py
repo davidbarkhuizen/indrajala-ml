@@ -532,6 +532,45 @@ consolidation/; `certify/` and `reading/` added on pyramidon after it).
   0.89 and 0.85 at 16, 0.43 and 0.33 at 64; every random-q16-0 run collapsed after its best step.
 - **Next:** remedy B (`--long-tail 4`) against the control on random-q16-0, seeds 0-5, registered in
   the plan's stage 2b before its data.
+
+Findings (B and then A on random-q16-0, stage 2b of docs/code-consolidation-workplan.md; probes,
+their answers written before the data), 2026-10-18; round 1's cell, 600 epochs, seeds 0-5, three
+arms on one commit (D5): the control, B (`--long-tail 4`) and A (`--consolidate`, `d` 2). Code
+0b4a6b9 (~/code/wt-bq16, its own venv), OPENBLAS_NUM_THREADS=1, jebel, 6 at once: the control 12:39
+to 13:37, B to 16:31, A 16:37 to 17:37. Data in data/window-recurrent/consolidation/b-q16/
+(`control/`, `b/`, `a/`, each with its `.out` and `.readout.txt`; `reading/` with `breaks` at `d` 1
+and 2 and `by-length` on each run's best step network, A's in `reading/a/`), manifests
+`b-q16-control-b.sha256` 4d2136a6...  (460 files) and `b-q16-a.sha256` 0e449fc6... (204 files),
+both run from consolidation/; the readouts and `reading/` added on pyramidon after them.
+
+| arm | certified (Wilson 95%) | worst answer at best | came near (>= 0.95) | minutes |
+| --- | --- | --- | --- | --- |
+| control | 0 of 6 (0.00-0.39) | 0.895-0.995 | 4 | 49-58 |
+| B | 0 of 6 (0.00-0.39) | 0.937-0.999 | 4 | 130-174 |
+| A | 0 of 6 (0.00-0.39) | 0.976-0.999 | 6 | 48-60 |
+
+- **Random machines set aside** (the plan's rule at A 0 of 6, the owner's direction): at round 1's
+  cell, with either remedy, the method certifies random machines to about 12 states. At 16 the
+  runs found near solutions and didn't keep them: every run of all three arms collapsed after its
+  best step (steps 4-14). That isn't a capacity limit (9 times the states in joint codes). The
+  general algebras go on without the random class (general-algebras-workplan.md, D5).
+- **The control repeats 2b by bits:** seeds 0-2, every log row but the seconds.
+- **B lengthens the exact prefix where a core forms, and only there:** seeds 2 and 4 reached an exact
+  core at `d` 2 (first codes breaking 1-3%) with extra codes breaking 2-3% (the control's best 6-7%),
+  exact accuracy 0.98 at length 16 and 0.916 at 64 (the control's best 0.89 and 0.43). Seeds 1 and 5
+  never formed a state (1 right code at `d` 2, failure A); seeds 0 and 3 had no exact core.
+- **A brings every run near, but doesn't move C2:** codes reached 21-64 (median 52; the control's
+  25-63, median 50); extra codes break more often from right codes at `d` 2 (0.30-0.56 in five
+  seeds, the control's median 0.17). Seed 0 is the exception and the nearest run of the three arms:
+  at step 14, 21 codes on 16 states, its first codes breaking 0-1%, exact accuracy 0.996 at 16 and
+  0.975 at 64. It collapsed after that step.
+- **Why A pulls little:** at the best steps the network's own groups number 22-63, against 16
+  states, and duplicates pulled are a median 6-13% of the codes over a run. An extra code's
+  outputs are wrong, so within `d` tokens they differ from its state's first code, and A's grouping
+  (the network's own `d`-equivalence) can't merge them.
+- **Next:** stage 2c's retention probes, registered before their data: P1 (A with the certificate
+  guard on S4 and move-to-front 4, on `stone`) and P2 (A with the step's best restored on
+  random-q16-0, on `jebel`).
 """
 
 from __future__ import annotations
