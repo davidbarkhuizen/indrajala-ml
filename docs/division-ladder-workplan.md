@@ -81,6 +81,15 @@ certifies (both verdicts); **it stands at three times the budget** at 0 of 6. Re
 the slowest success's epochs against 1,800 and each run's step at 600 and at its end. A 1-3 of 6
 result is read as a rate below `p` 11's, undecided.
 
+**L2's result (2026-10-18): 0 of 6, so the failure at 13 stands at three times the budget.** Every
+run spent its 1,800 epochs (668-961 minutes on `stone`), ending at steps 54-85 (15-29 at 600). Each
+seed's first 600 epochs repeat L1's round 2 by bits (jebel then, stone now: 630-658 log rows a
+seed). The extra 1,200 epochs added nothing: the best worst answer is L1's in five seeds (0.394-0.818),
+reached in the first 600, and seed 1's rose only from 0.916 to 0.936. Afterwards five runs collapsed,
+their last machines minimising to 1-96 states (L1's ended at 74-663). So the edge lies between `p`
+11 (121 states, 4 of 6) and 13 (169), and it isn't the budget. **The width probe (L3, agreed with
+the owner 2026-10-18) is registered here before this plan retires.**
+
 ## Feasibility (experiment-design.md, section 1)
 
 Two factors of width 16, each `ceil(32 p / 11)` codes (a counter needs `p`); the cap is the
