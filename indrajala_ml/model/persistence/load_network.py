@@ -69,6 +69,12 @@ def load_network(path: str) -> Any:
     state = load_json(path)
     if not is_format2(state):
         raise ValueError(f"{path} isn't a format-2 file; a legacy file loads with its class's load()")
+    return network_from_state(state)
+
+
+def network_from_state(state: dict[str, Any]) -> Any:
+    """load_network's network or ensemble from a format-2 file's contents already read (network_to_json's)."""
+    assert is_format2(state), "a format-2 file's contents"
     if state["shape"] == ENSEMBLE:
         classifiers = [_sequential(network_from_json(classifier)) for classifier in ensemble_classifiers(state)]
         return _ENSEMBLES[state["implementation"]](classifiers)

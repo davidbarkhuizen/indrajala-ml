@@ -37,7 +37,11 @@ gives each factor `ceil(R sqrt(q))` codes for `q` states (the workplan's D3, R 3
 `long-test` and `guard-epoch` take any such `--task` too (slot 0, the machine's output).
 `--guard both` runs each seed without and with it, in one pool, into DIR/unguarded/seed<s> and
 DIR/guarded/seed<s> (the readout's arms). `run` holds the machine lock (machine_lock.study), as
-the harness's studies do, so an A/B isn't started beside it.
+the harness's studies do, so an A/B isn't started beside it. `run ... --resume`, the same command
+again, takes each run on from its checkpoint (DIR/seed<s>/checkpoint.json, left at each step's start
+and each epoch's end): a stopped run goes on as if it hadn't stopped (every network and log row but
+the seconds), an ended one is skipped, one not begun starts (the code-consolidation workplan's stage
+3, so `stone`'s runs pause at 07:00 and go on at 18:00).
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
 and with the guard armed, on the same data, and prints each one's seconds, whether its quotient's
 machine is right before and after, and the guard's rollbacks (the guard workplan's budget probe).
@@ -528,6 +532,12 @@ def main(argv: list[str]) -> int:
         help="the operations with a token (the approximation claim's: sum difference product)",
     )
     run.add_argument("--out", type=Path, required=True)
+    run.add_argument(
+        "--resume",
+        action="store_true",
+        help="the same command again: each run goes on from its checkpoint, an ended one is skipped, one not "
+        "begun starts (the code-consolidation workplan's stage 3)",
+    )
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
     certify.add_argument(
@@ -662,6 +672,7 @@ def main(argv: list[str]) -> int:
             reads=args.reads,
             budget_epochs=args.budget_epochs,
             fork=mf.Fork(trigger=_trigger(args)) if args.fork else None,
+            resume=args.resume,
         )
 
     guards = {"off": [False], "on": [True], "both": [False, True]}[args.guard]
@@ -683,7 +694,7 @@ def main(argv: list[str]) -> int:
                 out = args.out / folders[name] if len(names) > 1 else args.out
                 out = out / GUARD_ARMS[guard] if len(guards) > 1 else out
                 out.mkdir(parents=True, exist_ok=True)
-                runs[pool.submit(logged_run, functools.partial(probe(name), guard=guard), s, out)] = (
+                runs[pool.submit(logged_run, functools.partial(probe(name), guard=guard), s, out, args.resume)] = (
                     f"{out.relative_to(args.out)}/seed{s}" if out != args.out else f"seed {s}"
                 )
             for done in concurrent.futures.as_completed(runs):
@@ -747,9 +758,13 @@ def _trigger(args: argparse.Namespace) -> Trigger:
     return Trigger(args.trigger_signal, args.trigger_rule, args.trigger_threshold, args.trigger_floor)
 
 
-def logged_run(probe: functools.partial[None], seed: int, out: Path) -> str:
-    """One of several runs, into out/seed<s>/, its output and errors to out/seed<s>.log; how it ended."""
-    with (out / f"seed{seed}.log").open("w") as log, contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
+def logged_run(probe: functools.partial[None], seed: int, out: Path, resume: bool = False) -> str:
+    """
+    One of several runs, into out/seed<s>/, its output and errors to out/seed<s>.log (added to when
+    resuming); how it ended.
+    """
+    mode = "a" if resume else "w"
+    with (out / f"seed{seed}.log").open(mode) as log, contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
         probe(seed=seed, out=out / f"seed{seed}")
     rows = [json.loads(line) for line in (out / f"seed{seed}" / "log.jsonl").read_text().splitlines()]
     last = next(r for r in reversed(rows) if "end" in r)

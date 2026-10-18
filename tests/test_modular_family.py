@@ -3,6 +3,7 @@
 import hashlib
 import json
 import random
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -440,3 +441,120 @@ def test_the_ladders_cells_are_feasible_with_the_surplus_held(p: int):
     assert codes >= p and codes * codes >= 8 * p * p  # a counter fits each factor; joint codes 8.5x the states
     assert mf.exclusion_bound(p * p, factors) == cap
     assert mf.scaled_factors(121, Fraction(32, 11), 2) == [(16, 32), (16, 32)]  # p 11's cell, exactly
+
+
+# run --resume (the code-consolidation workplan's stage 3)
+
+RESUMED = mf.Settings(
+    epoch_examples=64, max_epochs=4, patience=10, diagnose_every=2, screen=4, cases=8, lengths=(2,), long=(4,)
+)
+RESUMED_FORK = mf.Fork(trigger=mf.Trigger(threshold=2.0), cool=0.5, limit=1)
+# two runs: one forking, ending on its epochs; one guarded, ending steps at a plateau
+RESUMABLE: dict[str, dict[str, Any]] = {
+    "forked": {
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 2,
+        "budget_epochs": 6,
+        "fork": RESUMED_FORK,
+    },
+    "guarded": {
+        "encoding": mf.Encoding(5, mf.QUOTIENT),
+        "settings": mf.Settings(
+            epoch_examples=64, max_epochs=6, patience=2, diagnose_every=2, screen=4, cases=8, lengths=(2,), long=(4,)
+        ),
+        "cap": 3,
+        "budget_epochs": 10,
+        "guard": True,
+    },
+}
+
+
+class Stop(Exception):
+    """A run stopped from outside, as a kill would stop it."""
+
+
+def _resumable(out: Path, resume: bool = False, kind: str = "forked") -> None:
+    config = dict(RESUMABLE[kind])
+    encoding, settings = config.pop("encoding"), config.pop("settings")
+    mf.run(encoding, [(4, 4)], 0, 1e9, out, settings, resume=resume, **config)
+
+
+def _outcome(out: Path) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    # every row but its seconds, and every network's file
+    rows = [json.loads(line) for line in (out / "log.jsonl").read_text().splitlines()]
+    for row in rows:
+        row.pop("seconds")
+    return rows, {path.name: path.read_text() for path in sorted(out.glob("*.network.json"))}
+
+
+def _stopped_at(monkeypatch: pytest.MonkeyPatch, module: Any, name: str, call: int, after: bool) -> None:
+    # module.name raises Stop on its call-th call, before its work or after it
+    original, calls = getattr(module, name), [0]
+
+    def stopping(*args: Any, **kwargs: Any) -> Any:
+        calls[0] += 1
+        if calls[0] == call and not after:
+            raise Stop
+        result = original(*args, **kwargs)
+        if calls[0] == call:
+            raise Stop
+        return result
+
+    monkeypatch.setattr(module, name, stopping)
+
+
+@pytest.mark.parametrize("kind", RESUMABLE)
+def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str):
+    # stopped just before and just after each checkpoint is written (the rows past the one before
+    # cut back, or none), so within a step, at a fork and at a step's start and end; and part way
+    # through an epoch
+    # the guard armed by a looser rule than a perfect screen, so the kinds carried over a stop decide it
+    def armed(_encoding: Any, kinds: dict[str, float]) -> bool:
+        return max(kinds.values()) >= 0.6
+
+    monkeypatch.setattr(mf, "certified_right", armed)
+    writes = [0]
+    write = mf._write_checkpoint
+
+    def counted_write(*args: Any) -> None:
+        writes[0] += 1
+        write(*args)
+
+    with monkeypatch.context() as counted:
+        counted.setattr(mf, "_write_checkpoint", counted_write)
+        _resumable(tmp_path / "whole", kind=kind)
+    whole = _outcome(tmp_path / "whole")
+    ends = [(r["step"], r["end"]) for r in whole[0] if "end" in r]
+    if kind == "forked":
+        assert any("fork" in r for r in whole[0]) and ends == [(1, "budget"), (2, "spent")]
+    else:
+        assert any(r.get("armed") for r in whole[0]) and ("plateau" in dict(ends).values())
+    stops = [("_write_checkpoint", n, after) for n in range(1, writes[0] + 1) for after in (False, True)]
+    stops += [("screen", 3, False), ("diagnose", 4, False)]
+    for name, call, after in stops[:-3] + stops[-2:]:  # stopped after the last write, the run had ended
+        out = tmp_path / f"{name}-{call}-{after}"
+        with monkeypatch.context() as patched:
+            _stopped_at(patched, mf, name, call, after)
+            with pytest.raises(Stop):
+                _resumable(out, kind=kind)
+        _resumable(out, resume=True, kind=kind)
+        assert _outcome(out) == whole, (name, call, after)
+        shutil.rmtree(out)  # /tmp may be memory: one stopped run's files at a time
+
+
+def test_resuming_skips_an_ended_run_and_starts_one_not_begun(tmp_path: Path):
+    _resumable(tmp_path / "new", resume=True)  # nothing to resume: it starts
+    rows = (tmp_path / "new" / "log.jsonl").read_text()
+    _resumable(tmp_path / "new", resume=True)  # it ended: nothing trains
+    assert (tmp_path / "new" / "log.jsonl").read_text() == rows
+    assert json.loads((tmp_path / "new" / mf.CHECKPOINT).read_text())["place"] == mf.ENDED
+
+
+def test_resuming_refuses_another_runs_checkpoint_and_a_log_without_one(tmp_path: Path):
+    _resumable(tmp_path / "run")
+    with pytest.raises(AssertionError, match="another run"):
+        mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 1, 1e9, tmp_path / "run", RESUMED, cap=2, resume=True)
+    (tmp_path / "run" / mf.CHECKPOINT).unlink()
+    with pytest.raises(AssertionError, match="no checkpoint"):
+        _resumable(tmp_path / "run", resume=True)
