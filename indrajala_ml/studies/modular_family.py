@@ -447,7 +447,7 @@ def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
     A run's log.jsonl, a line per diagnosis: step, epoch (or the step's end), each factor's codes in
     use, the state's share of the pair, each answer's accuracy; marked where the codes in use fall
     below `drop` of the diagnosis before (a collapse: the division workplan's stage 4 trace); and a
-    line per fork. An epoch's screen score alone (a row without codes) isn't shown.
+    line per fork and per restored best. An epoch's screen score alone (a row without codes) isn't shown.
     """
     lines: list[str] = []
     before: list[int] | None = None
@@ -456,6 +456,12 @@ def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
             lines.append(
                 f"step {row['step']:>3} epoch {row['epoch']:>3} FORK {row['fork']}: screen {row['screen']:.3f} "
                 f"peak {row['peak']:.3f} restored {row['restored']:.3f} rate {row['rate']:.2g}"
+            )
+            continue
+        if "restore" in row:
+            lines.append(
+                f"step {row['step']:>3} epoch {row['epoch']:>3} RESTORE the step's best: screen {row['restore']:.3f} "
+                f"restored {row['restored']:.3f}"
             )
             continue
         if "factors" not in row:  # an epoch's screen score alone
@@ -762,6 +768,7 @@ def _run_identity(
     first: int,
     long_tail: int | None,
     consolidate: bool,
+    restore_best: bool,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -780,6 +787,7 @@ def _run_identity(
         **({"first": first} if first != 1 else {}),
         **({"long_tail": long_tail} if long_tail is not None else {}),
         **({"consolidate": True} if consolidate else {}),
+        **({"restore_best": True} if restore_best else {}),
     }
 
 
@@ -814,6 +822,7 @@ def run(
     resume: bool = False,
     long_tail: int | None = None,
     consolidate: bool = False,
+    restore_best: bool = False,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -834,7 +843,10 @@ def run(
     network's groups at each diagnosis, at D2's `d`, and holds each duplicate code's states to its
     representative's codes until the next (network.consolidate), a fork's restored network
     regrouped; each such row logs `consolidation`, the codes reached, the groups and the duplicates
-    pulled.
+    pulled. `restore_best` (stage 2c's P2) saves the network at each new best screen of a step
+    (out/best.network.json) and, when the step ends on a plateau, restores it before the step's end
+    (its save and certificate) and the next step, regrouped with A, as a fork restores its snapshot;
+    a row logs the step's best screen (`restore`) and the restored network's (`restored`).
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -861,6 +873,7 @@ def run(
         first,
         long_tail,
         consolidate,
+        restore_best,
     )
     d = mr.word_length(encoding.task.machine) if consolidate else 0
     table: dict[tuple[int, ...], tuple[int, ...]] = {}  # A's, from the last diagnosis
@@ -902,6 +915,7 @@ def run(
     )  # consecutive armed epochs with STALL_SHARE of their updates undone
     spent = place.spent if place is not None else 0  # epochs trained in all
     snapshot = out / "snapshot.network.json"
+    step_best = out / "best.network.json"  # restore_best's
 
     def checkpoint(step: int, epoch: int) -> None:
         # the run's place after epoch of step (0: its start), every count read as it stands
@@ -1033,12 +1047,19 @@ def run(
                 break
             if score > best:
                 best, since = score, 0
+                if restore_best:
+                    net.save(str(step_best))
             else:
                 since += 1
                 if since >= settings.patience:
                     stop = "plateau"
                     break
             checkpoint(step, epoch)
+        if restore_best and stop == "plateau":
+            net = load_network(str(step_best))
+            restored = screen(net, encoding, screens)[0]
+            grouped = {"consolidation": regroup()} if consolidate else {}
+            record({"step": step, "epoch": epoch, "restore": round(best, 4), "restored": round(restored, 4), **grouped})
         net.save(str(out / "network.json"))
         net.save(str(out / f"step-{step}.network.json"))  # every step's kept, to inspect what a run had
         # each step's certified answer (the quotient) certified (under a second at one column a window); the run stops at

@@ -448,8 +448,13 @@ def test_the_ladders_cells_are_feasible_with_the_surplus_held(p: int):
 RESUMED = mf.Settings(
     epoch_examples=64, max_epochs=4, patience=10, diagnose_every=2, screen=4, cases=8, lengths=(2,), long=(4,)
 )
+# random-3-0 with A under it: step 2 passes, step 3 ends on a plateau
+PLATEAUS = mf.Settings(
+    epoch_examples=64, max_epochs=6, patience=2, diagnose_every=2, screen=4, cases=8, lengths=(2,), long=(4,)
+)
 RESUMED_FORK = mf.Fork(trigger=mf.Trigger(threshold=2.0), cool=0.5, limit=1)
-# three runs: one forking, ending on its epochs; one guarded, ending steps at a plateau; one consolidated
+# four runs: one forking, ending on its epochs; one guarded, ending steps at a plateau; one consolidated;
+# one consolidated restoring its plateaued step's best
 RESUMABLE: dict[str, dict[str, Any]] = {
     "forked": {
         "encoding": mf.Encoding(5, mf.FAMILY),
@@ -476,6 +481,14 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "fork": RESUMED_FORK,
         "long_tail": 4,
         "consolidate": True,
+    },
+    "restored": {
+        "encoding": mf.target_named("random-3-0"),
+        "settings": PLATEAUS,
+        "cap": 3,
+        "budget_epochs": 10,
+        "consolidate": True,
+        "restore_best": True,
     },
 }
 
@@ -541,6 +554,8 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "consolidated":
         assert [step for step, _ in ends] == [2, 3]  # from s0
         assert any("fork" in r and "consolidation" in r for r in whole[0])
+    elif kind == "restored":
+        assert ends == [(2, "passed"), (3, "plateau")] and any("restore" in r for r in whole[0])
     else:
         assert any(r.get("armed") for r in whole[0]) and ("plateau" in dict(ends).values())
     stops = [("_write_checkpoint", n, after) for n in range(1, writes[0] + 1) for after in (False, True)]
@@ -690,4 +705,49 @@ def test_a_consolidated_run_starts_at_s0_and_logs_its_groups_at_each_diagnosis(t
 def test_a_run_without_the_plan_s_arms_keeps_its_identity_as_before(tmp_path: Path):
     _resumable(tmp_path / "run")
     identity = json.loads((tmp_path / "run" / mf.CHECKPOINT).read_text())["run"]
-    assert not {"first", "long_tail", "consolidate"} & set(identity)
+    assert not {"first", "long_tail", "consolidate", "restore_best"} & set(identity)
+
+
+# run --restore-best (the code-consolidation workplan's stage 2c, P2)
+
+
+def _restoring(out: Path, cap: int, restore_best: bool) -> None:
+    mf.run(
+        mf.target_named("random-3-0"),
+        [(4, 4)],
+        0,
+        1e9,
+        out,
+        PLATEAUS,
+        cap=cap,
+        consolidate=True,
+        restore_best=restore_best,
+    )
+
+
+def test_restoring_the_best_leaves_a_run_without_a_plateau_as_it_was(tmp_path: Path):
+    _restoring(tmp_path / "off", 2, False)
+    _restoring(tmp_path / "on", 2, True)
+    off, on = _outcome(tmp_path / "off"), _outcome(tmp_path / "on")
+    assert [(r["step"], r["end"]) for r in on[0] if "end" in r] == [(2, "passed")]
+    assert on[0] == off[0]
+    assert {name: text for name, text in on[1].items() if name != "best.network.json"} == off[1]
+
+
+def test_a_plateaued_step_ends_on_its_best_network_regrouped(tmp_path: Path):
+    _restoring(tmp_path / "off", 3, False)
+    _restoring(tmp_path / "on", 3, True)
+    rows = _rows(tmp_path / "on")
+    assert [(r["step"], r["end"]) for r in rows if "end" in r] == [(2, "passed"), (3, "plateau")]
+    (restore,) = [r for r in rows if "restore" in r]
+    assert restore["step"] == 3 and restore["restored"] == restore["restore"]
+    assert restore["restore"] == max(
+        r["screen"] for r in rows if r["step"] == 3 and r.get("epoch", 0) > 0 and "screen" in r
+    )
+    assert set(restore["consolidation"]) == {"codes", "groups", "duplicates"}
+    # the step's saved network is its best, which the run without the restore didn't end on
+    on = tmp_path / "on"
+    assert (on / "step-3.network.json").read_bytes() == (on / "best.network.json").read_bytes()
+    assert (on / "step-3.network.json").read_bytes() != (tmp_path / "off" / "step-3.network.json").read_bytes()
+    assert any("RESTORE" in line for line in mf.trace(rows))
+    assert json.loads((on / mf.CHECKPOINT).read_text())["run"]["restore_best"]

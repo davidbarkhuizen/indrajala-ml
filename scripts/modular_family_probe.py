@@ -47,7 +47,9 @@ shortest length a stateless network can't pass (D3; 1 for every round-1 machine 
 a step named by its longest length; `--long-tail F` (B, D4) trains every other example at lengths
 j+1..F j, capped at the exclusion bound; `--consolidate` (A, D1) groups the network's own codes at
 each diagnosis by `d`-equivalence (D2's `d`) and pulls each duplicate to its representative, each
-diagnosis row logging `consolidation` (codes reached, groups, duplicates pulled). `run` prints each
+diagnosis row logging `consolidation` (codes reached, groups, duplicates pulled); `--restore-best`
+(stage 2c's P2) ends a step stopped by a plateau on its best screen's network, saved at each new
+best, before the step's certificate and the next step, a row logging it. `run` prints each
 target's feasibility line first (q, codes, m, the cap, s0, d) and refuses a cell whose joint codes
 can't hold its states.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
@@ -635,6 +637,12 @@ def main(argv: list[str]) -> int:
         help="A (the code-consolidation workplan's D1): at each diagnosis, the network's d-equivalent codes "
         "pulled to their representatives",
     )
+    run.add_argument(
+        "--restore-best",
+        action="store_true",
+        help="P2 (the code-consolidation workplan's stage 2c): a step ending on a plateau goes back to the network "
+        "at its best screen before the step's end and the next step",
+    )
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
     certify.add_argument(
@@ -774,6 +782,7 @@ def main(argv: list[str]) -> int:
             resume=args.resume,
             long_tail=args.long_tail,
             consolidate=args.consolidate,
+            restore_best=args.restore_best,
         )
 
     for name in names:

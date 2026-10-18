@@ -295,6 +295,13 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
      - **0 of 6:** the limit recorded in 2b stands (near solutions not retained, about 12 states at
        this cell); read whether the restore kept the near solutions (each step's start against its
        best) or they broke again within the step.
+
+     **P2's build (2026-10-18, tier 0): built as above.** At each new best screen of a step the
+     network is saved (`best.network.json`); a step ending on a plateau loads it before the step's
+     save and certificate, regrouped with A, and logs a `restore` row (the step's best screen and
+     the restored network's, equal by test). Without it, four runs (forked, guarded, consolidated,
+     A on a plateau) are `main`'s by bits (logs, networks, identity); a restoring run resumes by
+     bits from any stop.
 3. **The build.** The crate first (indrajala-math-rust): the commitment's target per window,
    defaulting to the nearest code, with parity tests against the Python reference. The golden run is
    bit-identical (an empty table is today's training); tier 1 A/B on the training path. Then the
