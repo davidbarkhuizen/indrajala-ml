@@ -58,13 +58,24 @@ jobs:
         run: ./cli lint
 
   test:
-    # One job per pytest suite, run in parallel: each job pays its own setup, but the short
-    # rust/tests/ job finishes inside the long tests/ one instead of adding to it.
+    # Parallel jobs: rust/tests/ whole, and tests/ split into 8 shards (tests/conftest.py's
+    # --shard I/N: every Nth test in collection order, so the slow parametrized tests spread across
+    # them). Each job pays its own setup (about 20 s on a cache hit); the wall-clock is the slowest
+    # shard's, not the suite's.
     strategy:
       fail-fast: false
       matrix:
-        suite: [tests/, rust/tests/]
-    name: test (${{ matrix.suite }})
+        include:
+          - {suite: rust/tests/, shard: ""}
+          - {suite: tests/, shard: 0/8}
+          - {suite: tests/, shard: 1/8}
+          - {suite: tests/, shard: 2/8}
+          - {suite: tests/, shard: 3/8}
+          - {suite: tests/, shard: 4/8}
+          - {suite: tests/, shard: 5/8}
+          - {suite: tests/, shard: 6/8}
+          - {suite: tests/, shard: 7/8}
+    name: test (${{ matrix.suite }}${{ matrix.shard && format(' {0}', matrix.shard) || '' }})
     runs-on: ubuntu-latest
 
     steps:
@@ -136,7 +147,7 @@ jobs:
         run: ./cli setup --rust-wheel-dir .rust-wheel
 
       - name: Test
-        run: ./cli test ${{ matrix.suite }}
+        run: ./cli test ${{ matrix.suite }} ${{ matrix.shard && format('--shard {0}', matrix.shard) || '' }}
 
       # The crate's bits are the same on every machine (the aarch64 workplan, D1), so its golden
       # entries are a committed reference, checked here on the short job (about 1 s).
