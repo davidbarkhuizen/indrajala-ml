@@ -18,6 +18,41 @@ pull, so this plan stays deferred: the fix for the division runs is planned apar
 the commitment, unless it is shown to be the cause), its candidates in
 [next-steps.md](next-steps.md), "From the division work".
 
+**Revisited (2026-10-18, at the owner's request: is it still relevant, would it still be
+useful?). As written, no; re-aimed at failure A, possibly; it stays deferred, re-aimed, its first
+step a diagnostic probe rather than a build.**
+
+- **Both of its reasons are gone.** It was written for C9'''s staggered factors, each collapsing
+  to one code in its turn; the factored-state plan is retired (`git show
+  e45944e:docs/factored-state-workplan.md`), and the factors that train today (the modular family,
+  the general algebras) spread over their codes from the start. Collapse **after** a solution is
+  an optimiser cascade, not the commitment: the snap-wall plan's machine-diff probe found every
+  collapse beginning as 1-3 (state, window) pairs flipped by an ordinary update, amplified by Adam
+  within 1-13 batches, and its certificate guard kept the proof in 10 of 10 replays against 1 of
+  10 without; the fork restores the network after one. D5's probe cells (the C9'' networks, a C9'
+  cell) no longer exist.
+- **Where it still fits: failure A, a state that never forms.** General-algebras round 1:
+  word-problem-s3 failed 5 of 6 and move-to-front-4 seed 3 the same way, peaking at a state share of
+  0.06-0.32 on at most 6 codes for 2-6 of 6 states, **and ending on one code**
+  (docs/code-consolidation-workplan.md, "Why", the second reading). That is this plan's mechanism:
+  with nothing yet distinguishing the states, the commitment's pull is met most cheaply by a
+  constant; and the restart probe kept 14-16 codes with the commitment off against 2-8 with it on.
+  It is the one open failure the plan fits, in the algebras the work returns to. Unshown: the runs'
+  codes in use over time haven't been read against this.
+- **A new constraint: remedy A works through the commitment.** The consolidation plan's A
+  (`--consolidate`) re-points the commitment's target from a code to its group's representative,
+  with `beta` unchanged; a thermostat setting `beta` to 0 switches A off with it. A control of the
+  commitment's weight and A's control of its target are designed together, or not both used.
+- **So the next step is a diagnostic, not stage 2's build:** replay word-problem-s3's failed
+  seeds with the commitment off for their first steps (D1 (b), a phase schedule: a probe's
+  setting, nothing to build beyond a flag) and read whether a state forms (codes in use, the
+  state's share, the exact prefix) against the same seeds with it on. A state forming where it
+  didn't makes the thermostat (D1 (a), stage 2) worth building, its probes on failure A's cells
+  instead of D5's; no change retires this plan, its idea to next-steps.md. Registered with its
+  probe, before its data, when the general algebras take it up.
+- **The quantiser (D1 (d))** stays behind the thermostat: a crate change across three
+  implementations, for a failure not yet shown to be the commitment's.
+
 ## Why
 
 Each code layer's loss, per window, is `weight * (||sg[h] - e||^2 + beta ||h - sg[e]||^2)`
