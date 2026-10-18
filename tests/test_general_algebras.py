@@ -106,3 +106,40 @@ def test_a_probe_run_trains_a_machine_and_certifies_each_step_against_it(tmp_pat
     assert all(isinstance(r["certified"], bool) and r["minimised"] >= 1 for r in ends)
     certificate = mf.certify_file(tmp_path / "network.json", mf.target_named("move-to-front-3"), "move-to-front-3")
     assert certificate["task"] == "move-to-front-3" and certificate["slot"] == 0
+
+
+# the random-class workplan's E1b: n 3's machines (D3: two random draws whose stateless guess is at
+# most halfway from chance to 1), at the general algebras' cell, the curriculum from length 2 (D2)
+E1B = ("word-problem-s3", "move-to-front-3", "random-3-1", "random-3-2")
+
+
+@pytest.mark.parametrize("name", E1B)
+def test_e1b_s_machines_are_reachable_minimal_and_feasible_at_n_3_s_cell(name: str):
+    machine = wt.task_named(name).machine
+    assert machine.states == 6 and machine.tokens == 4 and machine.classes == 3
+    assert len(machine.reachable()) == 6 and machine.distinguishing_length() is not None
+    codes, cap = FEASIBILITY[3]
+    factors = mf.scaled_factors(machine.states, Fraction(32, 11), 2)
+    assert factors == [(16, codes), (16, codes)] and mf.exclusion_bound(6, factors) == cap
+
+
+def test_the_stateless_guess_is_chance_on_the_group_and_e1b_s_draws_are_within_the_bound():
+    bound = 1 / 3 + (1 - 1 / 3) / 2
+    assert wt.stateless_accuracy(wt.task_named("word-problem-s3").machine) == pytest.approx(1 / 3)
+    assert wt.stateless_accuracy(wt.task_named("random-3-0").machine) > bound  # round 1's: little state needed
+    assert wt.stateless_accuracy(wt.random_machine(3, 4)) == pytest.approx(1.0)  # none at all
+    # the first two seeds from 1 within the bound
+    assert [s for s in range(1, 4) if wt.stateless_accuracy(wt.random_machine(3, s)) <= bound][:2] == [1, 2]
+
+
+def test_the_curriculum_starts_at_first_length_and_its_last_step_trains_to_the_cap(tmp_path: Path):
+    assert mf.step_lengths(3, mf.PROBE) == [1, 2, 3]  # the default, as before
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=2, diagnose_every=1, screen=4, cases=8, lengths=(2,), long=(4,), first_length=2
+    )
+    assert mf.step_lengths(1, settings) == [1, 2]
+    mf.run(mf.target_named("move-to-front-3"), [(4, 4), (4, 4)], 0, 1e9, tmp_path, settings, cap=3)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    starts = [r for r in rows if r.get("epoch") == 0 and r["step"] > 0]
+    assert [(r["step"], r["longest"]) for r in starts][:2] == [(1, 2), (2, 3)]
+    assert max(r["step"] for r in rows if "end" in r) <= 2  # step 2 trains to the cap, 3

@@ -41,6 +41,8 @@ the harness's studies do, so an A/B isn't started beside it.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
 and with the guard armed, on the same data, and prints each one's seconds, whether its quotient's
 machine is right before and after, and the guard's rollbacks (the guard workplan's budget probe).
+`--first-length L` starts the curriculum at length L (step `j` trains `1..j+L-1`; the random-class
+workplan's D2, 2: one code answers every length-1 word from the start, so step 1 then needs a state).
 `--first-seed F --seeds N` runs seeds F..F+N-1, a process each, `--workers` at once (default
 all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--budget-epochs` stops a
 run when that many epochs are trained in all (or `--budget-minutes` pass, whichever first).
@@ -444,6 +446,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import contextlib
+import dataclasses
 import functools
 import json
 import multiprocessing
@@ -496,6 +499,12 @@ def main(argv: list[str]) -> int:
     )
     run.add_argument(
         "--reads", choices=["before_state", "output"], default="before_state", help="the poolings' tokens (D10)"
+    )
+    run.add_argument(
+        "--first-length",
+        type=int,
+        default=1,
+        help="step j trains lengths 1..j+L-1 (the random-class workplan's D2: 2, so step 1 needs a state)",
     )
     run.add_argument("--budget-minutes", type=float, default=60.0)
     run.add_argument("--budget-epochs", type=int, help="epochs trained in all, whichever budget is spent first")
@@ -634,6 +643,7 @@ def main(argv: list[str]) -> int:
             encoding,
             factors,
             budget_seconds=args.budget_minutes * 60,
+            settings=dataclasses.replace(mf.PROBE, first_length=args.first_length),
             reads=args.reads,
             budget_epochs=args.budget_epochs,
             fork=mf.Fork(trigger=_trigger(args)) if args.fork else None,

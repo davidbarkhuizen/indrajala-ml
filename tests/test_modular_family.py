@@ -74,7 +74,8 @@ def test_a_probe_run_trains_diagnoses_and_saves(tmp_path: Path):
     assert (tmp_path / "step-1.network.json").exists() and (tmp_path / "step-2.network.json").exists()
     starts = [r for r in rows if r.get("epoch") == 0 and r["step"] > 0]  # the step before's network, scored
     assert [r["step"] for r in starts] == [1, 2] and all(
-        set(r) == {"step", "epoch", "screen", "kinds", "seconds"} for r in starts
+        set(r) == {"step", "epoch", "longest", "screen", "kinds", "seconds"} and r["longest"] == r["step"]
+        for r in starts
     )
 
 

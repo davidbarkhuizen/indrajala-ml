@@ -299,6 +299,25 @@ def random_machine(n: int, seed: int) -> Mealy:
             return machine
 
 
+def stateless_accuracy(machine: Mealy) -> float:
+    """
+    The best stateless guess's accuracy on long uniform words: each token's majority label over the
+    states' limiting distribution from the start (token 0 the identity, so the chain is aperiodic),
+    averaged over the tokens (the random-class workplan's D3).
+    """
+    states, tokens = machine.transition.shape
+    step = np.zeros((states, states))
+    np.add.at(step, (np.repeat(np.arange(states), tokens), machine.transition.ravel()), 1 / tokens)
+    share = np.zeros(states)
+    share[machine.start] = 1.0
+    while True:
+        after = share @ step
+        if np.abs(after - share).max() < 1e-13:
+            break
+        share = after
+    return float(np.mean([np.bincount(machine.output[:, t], share, machine.classes).max() for t in range(tokens)]))
+
+
 Word = tuple[int, ...]
 
 

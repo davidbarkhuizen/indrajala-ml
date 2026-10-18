@@ -324,9 +324,15 @@ class Settings:
     lengths: tuple[int, ...] = (3, 6, 12)  # the diagnosis's
     cases: int = 200  # a diagnosis length's
     long: tuple[int, ...] = (24, 48)  # the quotient's, at a step's end
+    first_length: int = 1  # step j trains lengths 1..j+first_length-1 (the random-class workplan's D2)
 
 
 PROBE = Settings()
+
+
+def step_lengths(step: int, settings: Settings) -> list[int]:
+    """The lengths step `step` trains and screens: 1 to `step + first_length - 1`."""
+    return list(range(1, step + settings.first_length))
 
 
 @dataclass(frozen=True)
@@ -713,13 +719,21 @@ def run(
     guarding = cg.Guard(lambda n: QueryMachine(n, encoding, 0), task) if guard else None
     frozen = 0  # consecutive armed epochs with STALL_SHARE of their updates undone
     spent = 0  # epochs trained in all
-    for step in range(1, cap + 1):
-        lengths = list(range(1, step + 1))
+    for step in range(1, cap - settings.first_length + 2):  # the last step's longest length the cap
+        lengths = step_lengths(step, settings)
         screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{step}-{n}")[0] for n in lengths}
         best, since, stop, epoch = -1.0, 0, "budget", 0
         rate, forks, snapshot = settings.rate, 0, out / "snapshot.network.json"
         start_score, start_kinds = screen(net, encoding, screens)  # the step before's network on this step's lengths
-        record({"step": step, "epoch": 0, "screen": round(start_score, 4), "kinds": _kinds(start_kinds)})
+        record(
+            {
+                "step": step,
+                "epoch": 0,
+                "longest": lengths[-1],
+                "screen": round(start_score, 4),
+                "kinds": _kinds(start_kinds),
+            }
+        )
         last_kinds, step_rollbacks = start_kinds, 0
         peak = 0.0
         if fork is not None:
@@ -839,7 +853,7 @@ def guard_epoch(
     right after and the guard's updates and rollbacks (the guard workplan's budget probe).
     """
     task = encoding.task
-    lengths = list(range(1, step + 1))
+    lengths = step_lengths(step, settings)
     result: dict[str, Any] = {
         "network": str(path),
         "step": step,
