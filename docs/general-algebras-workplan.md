@@ -89,7 +89,7 @@ existence runs supply those tasks and their logs.
   **Owner, 2026-10-18: round 2 is deferred, not dropped, until the random class passes round 1**
   (a working cell at `n` 3 and 4): its failures are read first (D9), and a fix is registered as a
   new experiment (round 1's settings stay as registered). Stages 5-7 replay round 2's `n` 5 cells,
-  so they wait with it. The random class's failures and their fix: docs/random-class-workplan.md.
+  so they wait with it. The random class's failures and their fix: docs/code-consolidation-workplan.md.
   - (a) *Chosen.* Pros: experiment-design.md section 2, a small case working before stepping up;
     the small rungs cost little. Cons: one round more than running all three sizes at once.
   - (b) Every size in one round. Pros: one launch. Cons: 120-state runs spent on a class that may not
