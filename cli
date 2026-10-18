@@ -166,8 +166,9 @@ run_tests () {
     # from the repo root (no testpaths config restricts it), which is how some past PRs' own
     # test-plan counts (~1650+) included both without anyone noticing only one was ever run
     # here or in CI. Listed explicitly so both actually run every time, not by accident.
-    # Paths given (e.g. `./cli test rust/tests/`) run just those - CI runs each suite as its own
-    # parallel job this way, so the short rust/tests/ job finishes inside the long tests/ one.
+    # Paths given (e.g. `./cli test rust/tests/`) run just those, and pytest's options pass through:
+    # CI runs rust/tests/ as one job and tests/ as 8 parallel shards (`./cli test tests/ --shard 3/8`,
+    # tests/conftest.py).
     if [ "$#" -eq 0 ]; then
         set -- tests/ "$rust_crate_root/tests/"
     fi

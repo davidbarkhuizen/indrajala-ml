@@ -18,6 +18,10 @@ where you meet a new trap; delete one that no longer holds.
 - **`gh pr checks --watch` can exit with a check still pending.** Merge only when every printed
   line says `pass`. A push to an open PR restarts CI: a watch started before the push watches the
   old run. A short `sleep 15;` before `--watch` avoids "no checks reported" just after a push.
+  Gate the merge in the command, never by reading: `gh pr checks N | awk -F'\t' '$2!="pass"{bad=1}
+  END{exit !(NR>0 && !bad)}' && gh pr merge N --squash --delete-branch` merges only when there are
+  checks and every one is `pass` (#829 merged with `tests/` failing when a merge followed a `cat`
+  of the checks). `awk`, not `grep -v`: an agent's shell may wrap `grep`.
 - **One watcher per PR.** Check for a running `gh pr checks` before starting another.
 - **CI checks out only HEAD** (no fetch depth): a test can't use past commits.
 - **A PR body is limited to 65 KB.** Write PR comments with a quoted heredoc (`cat <<'EOF'`): a `%`
@@ -292,6 +296,10 @@ where you meet a new trap; delete one that no longer holds.
 - **A test module's basename must be unique across `tests/` and `rust/tests/`:** neither is a
   package, so `./cli test` (both in one session) stops at collection on a clash, which CI's
   per-suite jobs can't see. `tests/test_suite_layout.py` checks it.
+- **CI splits `tests/` into 8 shards by test, not by file** (`--shard I/N` in `tests/conftest.py`:
+  every Nth test in collection order). A test must not rely on another test of its file having run
+  first, and a module- or session-scoped fixture is built once per shard, not once in all. A shard
+  run locally: `./cli test tests/ --shard 3/8`.
 - **Crate builds:** `./cli build-rust`; after switching branches whose `rust/` differs, `git
   submodule update rust`, then rebuild.
 - **A worktree's `.venv` may be a symlink to the main checkout's** (`ls -la .venv`): building a
