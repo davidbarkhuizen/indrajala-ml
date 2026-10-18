@@ -305,9 +305,10 @@ def stateless_accuracy(machine: Mealy) -> float:
     states' limiting distribution from the start (token 0 the identity, so the chain is aperiodic),
     averaged over the tokens (the random-class workplan's D3).
     """
-    states, tokens = machine.transition.shape
+    states, tokens = machine.states, machine.tokens
     step = np.zeros((states, states))
-    np.add.at(step, (np.repeat(np.arange(states), tokens), machine.transition.ravel()), 1 / tokens)
+    for t in range(tokens):
+        np.add.at(step, (np.arange(states), machine.transition[:, t]), 1 / tokens)
     share = np.zeros(states)
     share[machine.start] = 1.0
     while True:
