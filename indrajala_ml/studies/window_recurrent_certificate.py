@@ -418,12 +418,13 @@ def name_partition(partition: Sequence[Sequence[int]], coordinates: wt.Coordinat
     partition's states as it does, its first coefficient 1, the forms in order (A, then B, then
     A + B, A + 2B, ...); None without coordinates, when no form fits, and when a fit says nothing:
     one block (some form is constant on every state: a permutation's positions sum to the same
-    value), or a partition of only some of the target's states.
+    value), or a partition of fewer than half the target's states (where many forms fit by chance:
+    a network on 1-5 of 24 states).
     """
     if coordinates is None or len(partition) < 2:
         return None
     states = sorted(s for block in partition for s in block)
-    if len(states) < len(coordinates.values):
+    if 2 * len(states) < len(coordinates.values):
         return None
     want = sorted(sorted(block) for block in partition)
     m = coordinates.modulus
