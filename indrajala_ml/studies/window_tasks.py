@@ -30,6 +30,9 @@ after the token in n classes, hiding most of the state; a case is a word of toke
   regular band: no group part); its output the last item, the one an eviction takes.
 - **random-<n>-<seed>:** n random maps of n! states, redrawn until every state is reachable, its
   output a random label per state, redrawn until the machine is minimal.
+- **random-perm-<n>-<seed>, random-q<q>-<seed>:** probes of the random class's failure B (the
+  code-consolidation workplan's stage 2b): random-n with every token a bijection, and random-4's
+  tokens and classes at q states.
 """
 
 from __future__ import annotations
@@ -297,6 +300,44 @@ def random_machine(n: int, seed: int) -> Mealy:
         machine = Mealy(transition, labels[transition])
         if machine.distinguishing_length() is not None:
             return machine
+
+
+def _random_labels(transition: IntArray, classes: int, rng: Random) -> Mealy:
+    """A random label in `classes` per state (the label of the state after a token), redrawn until minimal."""
+    while True:
+        labels = np.array([rng.randrange(classes) for _ in range(len(transition))], dtype=np.int64)
+        machine = Mealy(transition, labels[transition])
+        if machine.distinguishing_length() is not None:
+            return machine
+
+
+@functools.cache
+def random_permutation_machine(n: int, seed: int) -> Mealy:
+    """
+    random-perm-<n>-<seed>, a probe of B's origins (the code-consolidation workplan): random-n's
+    machine with every token a bijection, so no two states merge: n random permutations of n! states
+    and the identity, redrawn until every state is reachable; labels as random-n's.
+    """
+    rng, q = Random(f"random-permutation-machine-{n}-{seed}"), math.factorial(n)
+    while True:
+        maps = [rng.sample(range(q), q) for _ in range(n)]
+        transition = np.array([[s, *(m[s] for m in maps)] for s in range(q)], dtype=np.int64)
+        if len(Mealy(transition, transition).reachable()) == q:
+            return _random_labels(transition, n, rng)
+
+
+@functools.cache
+def random_sized_machine(q: int, seed: int) -> Mealy:
+    """
+    random-q<q>-<seed>, a probe of B's origins (the code-consolidation workplan): random-4's
+    machine at q states, its tokens (the identity and 4 random maps) and 4 classes unchanged, so only
+    the size differs; redrawn as random-n's.
+    """
+    rng = Random(f"random-sized-machine-{q}-{seed}")
+    while True:
+        transition = np.array([[s, *(rng.randrange(q) for _ in range(4))] for s in range(q)], dtype=np.int64)
+        if len(Mealy(transition, transition).reachable()) == q:
+            return _random_labels(transition, 4, rng)
 
 
 Word = tuple[int, ...]
@@ -621,6 +662,8 @@ MACHINES: dict[str, Callable[..., Mealy]] = {
     r"word-problem-s(\d+)": word_problem_machine,
     r"move-to-front-(\d+)": move_to_front_machine,
     r"random-(\d+)-(\d+)": random_machine,
+    r"random-perm-(\d+)-(\d+)": random_permutation_machine,
+    r"random-q(\d+)-(\d+)": random_sized_machine,
 }
 
 
