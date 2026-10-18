@@ -86,6 +86,10 @@ existence runs supply those tasks and their logs.
 - **D5. The rungs in order, smallest first:** round 1 is `n` 3 and 4 together (36 runs, minutes
   each), round 2 is `n` 5 (18 runs). Round 2 runs only once round 1 has a working cell in every
   class; a class failing at `n` 3 or 4 gets its failures read (D9) before anything at `n` 5.
+  **Owner, 2026-10-18: round 2 is deferred, not dropped, until the random class passes round 1**
+  (a working cell at `n` 3 and 4): its failures are read first (D9), and a fix is registered as a
+  new experiment (round 1's settings stay as registered). Stages 5-7 replay round 2's `n` 5 cells,
+  so they wait with it.
   - (a) *Chosen.* Pros: experiment-design.md section 2, a small case working before stepping up;
     the small rungs cost little. Cons: one round more than running all three sizes at once.
   - (b) Every size in one round. Pros: one launch. Cons: 120-state runs spent on a class that may not
@@ -167,8 +171,8 @@ Every success is certified, so it's exact at every length. No run reaches its ca
    time and memory for round 2's budget.
 3. **Round 1** (`n` 3 and 4, three classes, 36 runs) on `pyramidon`; certified in both verdicts;
    E1's readout per cell.
-4. **Round 2** (`n` 5, 18 runs) on `jebel`, if D5 allows, from a worktree pinned at the build's
-   merge. Budget from `p` 11's runs (35-120 minutes each at 6 at once) and stage 2's probe: 18 runs
+4. **Round 2** (`n` 5, 18 runs) on `jebel`, if D5 allows (deferred until the random class passes
+   round 1, D5), from a worktree pinned at the build's merge. Budget from `p` 11's runs (35-120 minutes each at 6 at once) and stage 2's probe: 18 runs
    at 8 workers is three waves, about 2-6 h. Long tests (uniform words at 128, 256 and 1,024) on one certified network a
    cell (the ladder's D6). Findings in the probe's docstring; the networks to indrajala-models.
 5. **The fork's trigger, tuned across the classes (T1, registered in this stage's PR before its
