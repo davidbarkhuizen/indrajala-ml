@@ -67,6 +67,19 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   without a password: the owner installs both once with `sudo scripts/install_benchmark_setup.sh`
   on `jebel`, and again whenever the setup script changes (`ab.py` refuses to run a copy that
   differs from the checkout's). By hand on `jebel`: `ab.py check --apply-setup`.
+- **The Raspberry Pi 5 (`litshe`) is the aarch64 timing machine** (the aarch64 workplan, stage 5),
+  driven the same way (`ab.py remote --host litshe`). The same setup script reads which machine it
+  is on: on the Pi it sets the `performance` governor at a fixed maximum clock (no RAPL, no
+  turbo), `perf_event_paranoid` 2 and the snap hold, and stops apt's daily timers for the boot.
+  The installer also adds a udev rule giving the `video` group the firmware's mailbox
+  (`/dev/vcio`, root-only on Ubuntu), so `vcgencmd get_throttled` runs as the benchmarking user.
+  **The Pi's firmware throttles past about 80 C without the kernel's clock showing it**
+  (`scaling_cur_freq` stays at the maximum): the profile records its throttle flags
+  (`firmware_throttled`, which keep a throttle since boot), so a run is refused, and a pass
+  failed, after any throttle until a reboot. **Its thermal limits are the owner's, for the Pi 5
+  only:** at most 70 C, inclusive, and ideally at or below 65 C. The profile's `thermal` section
+  holds every pass to them: a pass waits for the CPU to cool below `start_below_c`, fails over
+  `max_c` (65) and is stopped at once over `abort_c` (70). It has no active cooler.
 - **Check the machine yourself, then go.** Before a timing run or a long sweep, read `jebel`'s
   1-minute load and its running processes (`ssh jebel uptime`, `ssh jebel ps -eo pcpu,comm
   --sort=-pcpu`). If a browser (Brave, Firefox) or the editor (Zed) is running there, close it

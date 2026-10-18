@@ -14,11 +14,16 @@
 # The repository's copy is never what sudo runs: anyone who can edit the checkout could otherwise
 # run anything as root. `ab.py remote` refuses to re-apply an installed copy that differs from the
 # checkout's, and names this command.
+#
+# On a Raspberry Pi it also lets the video group read the firmware's mailbox (/dev/vcio, root-only
+# on Ubuntu), so `vcgencmd get_throttled` runs as the benchmarking user: ab.py reads the throttle
+# flags before a run and after every pass (the aarch64 workplan's D8).
 
 set -euo pipefail
 
 target="/usr/local/sbin/indrajala-benchmark-setup"
 sudoers="/etc/sudoers.d/indrajala-benchmark-setup"
+vcio_rule="/etc/udev/rules.d/99-indrajala-vcio.rules"
 source="$(dirname "$(readlink -f "$0")")/benchmark_machine_setup.sh"
 
 if [[ $EUID -ne 0 || -z "${SUDO_USER:-}" || "$SUDO_USER" == "root" ]]; then
@@ -37,3 +42,10 @@ install -o root -g root -m 0440 "$entry" "$sudoers"
 
 echo "installed $target ($(sha256sum "$target" | cut -c1-12)) and $sudoers for $SUDO_USER"
 echo "check: sudo -n $target"
+
+if [[ -e /dev/vcio ]]; then
+    echo 'KERNEL=="vcio", GROUP="video", MODE="0660"' > "$vcio_rule"
+    udevadm control --reload
+    udevadm trigger --name-match=vcio
+    echo "installed $vcio_rule ($(stat -c '%G %a' /dev/vcio)); $SUDO_USER in video: $(id -nG "$SUDO_USER" | grep -qw video && echo yes || echo 'no: sudo usermod -aG video '"$SUDO_USER")"
+fi

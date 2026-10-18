@@ -17,11 +17,16 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUST_ROOT = REPO_ROOT / "rust"
 
-ISA_FLAGS = ["sse4_2", "avx", "avx2", "fma", "avx512f"]
+# the instruction-set extensions a kernel could select, per architecture (/proc/cpuinfo's flags on
+# x86_64, its Features on aarch64); an architecture not listed records none
+ISA_FLAGS = {
+    "x86_64": ["sse4_2", "avx", "avx2", "fma", "avx512f"],
+    "aarch64": ["asimd", "asimddp", "asimdhp", "fphp", "sve"],
+}
 THREAD_ENV_VARS = ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "RAYON_NUM_THREADS"]
 GPU_CLASSES = {"VGA compatible controller", "3D controller", "Display controller"}
 
@@ -51,9 +56,10 @@ def run_command(args: Sequence[str], cwd: str | Path | None = None) -> str | Non
 # --- collectors (text in, fields out) ---
 
 
-def parse_cpuinfo(text: str) -> JSONObject:
-    """vendor, model_name, sockets, physical_cores, logical_cpus and ISA flags from
-    /proc/cpuinfo. Fields the text lacks are None."""
+def parse_cpuinfo(text: str, architecture: str = "x86_64") -> JSONObject:
+    """vendor, model_name, sockets, physical_cores, logical_cpus and the architecture's ISA flags
+    from /proc/cpuinfo. Fields the text lacks are None (aarch64's has no vendor, model name or
+    core ids: parse_lscpu and the sysfs topology fill them)."""
     processors: list[dict[str, str]] = []
     current: dict[str, str] = {}
     for line in text.splitlines():
@@ -69,7 +75,7 @@ def parse_cpuinfo(text: str) -> JSONObject:
     processors = [p for p in processors if "processor" in p]
 
     first: dict[str, str] = processors[0] if processors else {}
-    flags = set(first.get("flags", "").split())
+    flags = set(first.get("flags", first.get("Features", "")).split())
     packages = {p.get("physical id") for p in processors if "physical id" in p}
     cores = {(p.get("physical id"), p.get("core id")) for p in processors if "core id" in p}
     return {
@@ -78,8 +84,24 @@ def parse_cpuinfo(text: str) -> JSONObject:
         "sockets": len(packages) or None,
         "physical_cores": len(cores) or None,
         "logical_cpus": len(processors) or None,
-        "isa": {flag: flag in flags for flag in ISA_FLAGS},
+        "isa": {flag: flag in flags for flag in ISA_FLAGS.get(architecture, [])},
     }
+
+
+def parse_lscpu(text: str) -> JSONObject:
+    """vendor and model_name from lscpu's output, which names ARM cores from /proc/cpuinfo's
+    implementer and part numbers (ARM, Cortex-A76). Fields it lacks are None."""
+    fields = {key.strip(): value.strip() for key, _, value in (line.partition(":") for line in text.splitlines())}
+    return {"vendor": fields.get("Vendor ID"), "model_name": fields.get("Model name")}
+
+
+def parse_throttled(text: str | None) -> int | None:
+    """The Raspberry Pi firmware's throttle flags from `vcgencmd get_throttled` (`throttled=0x0`):
+    bits 0-3 now (under-voltage, the clock capped, throttled, the soft temperature limit), bits
+    16-19 the same since boot. None without the command or its device (any machine but a Pi)."""
+    if text is None or not text.startswith("throttled="):
+        return None
+    return int(text.removeprefix("throttled="), 16)
 
 
 def parse_cpu_list(text: str) -> int:
@@ -154,6 +176,9 @@ def parse_frequency(files: Mapping[str, str | None]) -> JSONObject | None:
         "governor": governor.strip() if (governor := files.get("scaling_governor")) else None,
         "min_mhz": mhz("cpuinfo_min_freq"),
         "max_mhz": mhz("cpuinfo_max_freq"),
+        # the policy's limits within the hardware's: a clock cap is a lowered scaling_max_freq
+        "scaling_min_mhz": mhz("scaling_min_freq"),
+        "scaling_max_mhz": mhz("scaling_max_freq"),
         "boost_enabled": boost_enabled,
         "energy_performance_preference": stripped("energy_performance_preference"),
         "intel_pstate_status": stripped("intel_pstate_status"),
@@ -264,6 +289,8 @@ def _frequency_files() -> dict[str, str | None]:
         "scaling_governor",
         "cpuinfo_min_freq",
         "cpuinfo_max_freq",
+        "scaling_min_freq",
+        "scaling_max_freq",
         "cpb",
         "energy_performance_preference",
     ]
@@ -284,6 +311,16 @@ def _power_limit_constraints() -> dict[str, dict[str, str | None]]:
         files = {name: read_text(zone / f"constraint_{index}_{name}") for name in ("name", "power_limit_uw")}
         constraints[str(index)] = files
     return constraints
+
+
+def _physical_cores() -> int | None:
+    """Distinct (package, core) pairs in the sysfs topology, where /proc/cpuinfo has no core ids."""
+    cores = {
+        (read_text(cpu / "topology" / "physical_package_id"), read_text(cpu / "topology" / "core_id"))
+        for cpu in _cpu_dirs()
+    }
+    cores.discard((None, None))
+    return len(cores) or None
 
 
 def _cpu_mhz_now() -> dict[str, int] | None:
@@ -331,12 +368,14 @@ def _perf_event_paranoid() -> int | None:
 
 
 def power_policy() -> JSONObject:
-    """The frequency policy and package power limits as they are now: the part of
-    identity.cpu that software can change while the machine is up (thermald rewrites RAPL's
-    PL1), so ab.py re-reads it after every pass."""
+    """The frequency policy, package power limits and firmware throttle flags as they are now:
+    the part of identity.cpu that can change while the machine is up (thermald rewrites RAPL's
+    PL1; a Pi's firmware throttles when hot), so ab.py re-reads it after every pass. The flags
+    keep a throttle since boot, so one during a pass fails it even after the clock recovers."""
     return {
         "frequency": parse_frequency(_frequency_files()),
         "power_limits": parse_power_limits(_power_limit_constraints()),
+        "firmware_throttled": parse_throttled(run_command(["vcgencmd", "get_throttled"])),
     }
 
 
@@ -344,9 +383,13 @@ def capture() -> JSONObject:
     """The profile of the machine this runs on."""
     # clocks first: the rest (numpy's import, git, rustc, lspci) boosts the cores within ms
     cpu_mhz_now = _cpu_mhz_now()
-    cpuinfo = parse_cpuinfo(read_text("/proc/cpuinfo") or "")
+    cpuinfo = parse_cpuinfo(read_text("/proc/cpuinfo") or "", platform.machine())
+    if cpuinfo["vendor"] is None or cpuinfo["model_name"] is None:
+        named = parse_lscpu(run_command(["lscpu"]) or "")
+        cpuinfo["vendor"] = cpuinfo["vendor"] or named["vendor"]
+        cpuinfo["model_name"] = cpuinfo["model_name"] or named["model_name"]
     logical: int | None = cpuinfo["logical_cpus"] or os.cpu_count()
-    physical: int | None = cpuinfo["physical_cores"]
+    physical: int | None = cpuinfo["physical_cores"] or _physical_cores()
     meminfo = parse_meminfo(read_text("/proc/meminfo") or "")
     lspci = run_command(["lspci", "-mm"])
     os_release = read_text("/etc/os-release")

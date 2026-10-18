@@ -12,10 +12,12 @@ from indrajala_ml.measurement import machine_profile_capture as mpc
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts/machine_profile.py"
-# the benchmark machine (ab.py's PROFILE_REFERENCE) and the laptop before it (an AMD cpufreq policy)
+# the benchmark machine (ab.py's PROFILE_REFERENCE), the laptop before it (an AMD cpufreq policy)
+# and the aarch64 timing machine (cpufreq-dt, no RAPL, thermal limits)
 PROFILE_PATHS = [
     REPO_ROOT / "docs/machine_profiles/i7-9700k.json",
     REPO_ROOT / "docs/machine_profiles/ryzen7-3700u.json",
+    REPO_ROOT / "docs/machine_profiles/raspberry-pi-5.json",
 ]
 
 
@@ -77,8 +79,7 @@ def test_identical_identities_give_no_differences(reference: mpc.JSONObject):
 @pytest.mark.parametrize(
     "path, value",
     [
-        (["cpu", "frequency", "governor"], "performance"),
-        (["cpu", "isa", "avx512f"], True),
+        (["cpu", "frequency", "governor"], "userspace"),
         (["software", "numpy", "blas", "version"], "0.3.30"),
         (["software", "thread_env", "OPENBLAS_NUM_THREADS"], "1"),
     ],
@@ -93,6 +94,15 @@ def test_a_changed_identity_field_reports_exactly_its_path(reference: mpc.JSONOb
     parent[path[-1]] = value
 
     assert mp.compare(reference, current) == [mp.Difference("identity." + ".".join(path), old, value)]
+
+
+def test_a_changed_isa_flag_reports_exactly_its_path(reference: mpc.JSONObject):
+    # each architecture lists its own flags (machine_profile_capture.ISA_FLAGS)
+    current = copy.deepcopy(reference)
+    flag, present = next(iter(current["identity"]["cpu"]["isa"].items()))
+    current["identity"]["cpu"]["isa"][flag] = not present
+
+    assert mp.compare(reference, current) == [mp.Difference(f"identity.cpu.isa.{flag}", present, not present)]
 
 
 def test_a_changed_cache_inside_the_list_reports_its_index(reference: mpc.JSONObject):
@@ -166,3 +176,12 @@ def test_profile_out_onto_a_profile_keeps_its_noise_rules(tmp_path: Path):
     out.write_text(json.dumps({**recorded, "noise_rules": rules}))
     assert run_script("profile", "--out", str(out)).returncode == 0
     assert json.loads(out.read_text())["noise_rules"] == rules
+
+
+def test_profile_out_onto_a_profile_keeps_its_thermal_limits(tmp_path: Path):
+    out = tmp_path / "profile.json"
+    assert run_script("profile", "--out", str(out)).returncode == 0
+    limits = {"max_c": 65, "abort_c": 70, "start_below_c": 55, "set_by": "a test"}
+    out.write_text(json.dumps({**json.loads(out.read_text()), "thermal": limits}))
+    assert run_script("profile", "--out", str(out)).returncode == 0
+    assert json.loads(out.read_text())["thermal"] == limits

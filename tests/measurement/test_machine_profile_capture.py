@@ -115,6 +115,8 @@ def test_parse_frequency():
         "scaling_governor": "schedutil\n",
         "cpuinfo_min_freq": "1400000\n",
         "cpuinfo_max_freq": "2300000\n",
+        "scaling_min_freq": "1400000\n",
+        "scaling_max_freq": "2300000\n",
         "cpb": None,
         "energy_performance_preference": None,
         "boost": "1\n",
@@ -127,6 +129,8 @@ def test_parse_frequency():
         "governor": "schedutil",
         "min_mhz": 1400,
         "max_mhz": 2300,
+        "scaling_min_mhz": 1400,
+        "scaling_max_mhz": 2300,
         "boost_enabled": True,
         "energy_performance_preference": None,
         "intel_pstate_status": None,
@@ -142,6 +146,8 @@ def test_parse_frequency_under_intel_pstate_reads_turbo_from_no_turbo(no_turbo: 
         "scaling_governor": "powersave\n",
         "cpuinfo_min_freq": "800000\n",
         "cpuinfo_max_freq": "4900000\n",
+        "scaling_min_freq": "800000\n",
+        "scaling_max_freq": "4900000\n",
         "cpb": None,
         "energy_performance_preference": "balance_performance\n",
         "boost": None,
@@ -154,6 +160,8 @@ def test_parse_frequency_under_intel_pstate_reads_turbo_from_no_turbo(no_turbo: 
         "governor": "powersave",
         "min_mhz": 800,
         "max_mhz": 4900,
+        "scaling_min_mhz": 800,
+        "scaling_max_mhz": 4900,
         "boost_enabled": boost_enabled,
         "energy_performance_preference": "balance_performance",
         "intel_pstate_status": "active",
@@ -168,6 +176,8 @@ def test_parse_frequency_without_cpufreq_is_null():
             "scaling_governor",
             "cpuinfo_min_freq",
             "cpuinfo_max_freq",
+            "scaling_min_freq",
+            "scaling_max_freq",
             "cpb",
             "energy_performance_preference",
             "boost",
@@ -266,3 +276,71 @@ def test_parse_power_limits_without_rapl_is_null():
 
     assert mpc.parse_power_limits({}) is None
     assert mpc.parse_power_limits({"0": {"name": None, "power_limit_uw": None}}) is None
+
+
+def test_parse_frequency_records_a_capped_clock():
+
+    # litshe's cpufreq-dt with the clock capped below the hardware's 2.4 GHz
+    files = dict.fromkeys(["cpb", "energy_performance_preference", "intel_pstate_status", "no_turbo"])
+    files |= {
+        "scaling_driver": "cpufreq-dt\n",
+        "scaling_governor": "performance\n",
+        "cpuinfo_min_freq": "1500000\n",
+        "cpuinfo_max_freq": "2400000\n",
+        "scaling_min_freq": "1500000\n",
+        "scaling_max_freq": "2200000\n",
+        "boost": "0\n",
+    }
+
+    frequency = mpc.parse_frequency(files)
+
+    assert frequency is not None
+    assert (frequency["max_mhz"], frequency["scaling_max_mhz"]) == (2400, 2200)
+
+
+CPUINFO_AARCH64 = """\
+processor\t: 0
+BogoMIPS\t: 108.00
+Features\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp
+CPU implementer\t: 0x41
+CPU part\t: 0xd0b
+
+processor\t: 1
+BogoMIPS\t: 108.00
+Features\t: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp
+CPU implementer\t: 0x41
+CPU part\t: 0xd0b
+
+Model\t\t: Raspberry Pi 5 Model B Rev 1.0
+"""
+
+
+def test_parse_cpuinfo_on_aarch64_reads_features_and_leaves_names_to_lscpu():
+
+    cpuinfo = mpc.parse_cpuinfo(CPUINFO_AARCH64, "aarch64")
+
+    assert cpuinfo["isa"] == {"asimd": True, "asimddp": True, "asimdhp": True, "fphp": True, "sve": False}
+    assert (cpuinfo["vendor"], cpuinfo["model_name"], cpuinfo["physical_cores"]) == (None, None, None)
+    assert cpuinfo["logical_cpus"] == 2
+
+
+def test_parse_cpuinfo_of_an_unlisted_architecture_records_no_isa():
+
+    assert mpc.parse_cpuinfo(CPUINFO, "riscv64")["isa"] == {}
+
+
+def test_parse_lscpu():
+
+    text = "Architecture:          aarch64\nVendor ID:             ARM\nModel name:            Cortex-A76\n"
+
+    assert mpc.parse_lscpu(text) == {"vendor": "ARM", "model_name": "Cortex-A76"}
+    assert mpc.parse_lscpu("") == {"vendor": None, "model_name": None}
+
+
+@pytest.mark.parametrize(
+    "text, flags",
+    [("throttled=0x0", 0), ("throttled=0x50005", 0x50005), (None, None), ("VCHI initialization failed", None)],
+)
+def test_parse_throttled(text: str | None, flags: int | None):
+
+    assert mpc.parse_throttled(text) == flags

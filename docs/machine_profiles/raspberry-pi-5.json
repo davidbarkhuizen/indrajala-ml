@@ -1,0 +1,126 @@
+{
+  "schema_version": 5,
+  "identity": {
+    "cpu": {
+      "vendor": "ARM",
+      "model_name": "Cortex-A76",
+      "architecture": "aarch64",
+      "sockets": null,
+      "physical_cores": 4,
+      "logical_cpus": 4,
+      "threads_per_core": 1,
+      "caches": [
+        {
+          "level": 1,
+          "type": "Data",
+          "size_kib": 64,
+          "shared_by_logical_cpus": 1,
+          "instances": 4
+        },
+        {
+          "level": 1,
+          "type": "Instruction",
+          "size_kib": 64,
+          "shared_by_logical_cpus": 1,
+          "instances": 4
+        },
+        {
+          "level": 2,
+          "type": "Unified",
+          "size_kib": 512,
+          "shared_by_logical_cpus": 1,
+          "instances": 4
+        },
+        {
+          "level": 3,
+          "type": "Unified",
+          "size_kib": 2048,
+          "shared_by_logical_cpus": 4,
+          "instances": 1
+        }
+      ],
+      "isa": {
+        "asimd": true,
+        "asimddp": true,
+        "asimdhp": true,
+        "fphp": true,
+        "sve": false
+      },
+      "frequency": {
+        "driver": "cpufreq-dt",
+        "governor": "performance",
+        "min_mhz": 1500,
+        "max_mhz": 2400,
+        "scaling_min_mhz": 1500,
+        "scaling_max_mhz": 2400,
+        "boost_enabled": false,
+        "energy_performance_preference": null,
+        "intel_pstate_status": null
+      },
+      "power_limits": null,
+      "firmware_throttled": 0
+    },
+    "memory": {
+      "total_mib": 7931,
+      "swap_total_mib": 0
+    },
+    "gpus": [],
+    "os": {
+      "system": "Linux",
+      "kernel_release": "7.0.0-1020-raspi",
+      "distribution": "Ubuntu 26.04.1 LTS",
+      "perf_event_paranoid": 2
+    },
+    "software": {
+      "python": {
+        "implementation": "CPython",
+        "version": "3.14.4"
+      },
+      "numpy": {
+        "version": "2.5.3",
+        "blas": {
+          "name": "scipy-openblas",
+          "version": "0.3.34.106.0",
+          "configuration": "OpenBLAS 0.3.34.106.0  USE64BITINT DYNAMIC_ARCH NO_AFFINITY neoversev2 MAX_THREADS=64"
+        }
+      },
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+      "crate_release_profile": "default",
+      "thread_env": {
+        "OPENBLAS_NUM_THREADS": null,
+        "OMP_NUM_THREADS": null,
+        "MKL_NUM_THREADS": null,
+        "RAYON_NUM_THREADS": null
+      }
+    }
+  },
+  "state": {
+    "captured_at": "2026-10-18T13:35:56Z",
+    "hostname": "litshe",
+    "load_average": [
+      0.16,
+      0.27,
+      0.15
+    ],
+    "memory_available_mib": 7510,
+    "cpu_mhz_now": {
+      "min": 2400,
+      "max": 2400
+    },
+    "power": {
+      "on_ac": null,
+      "battery_percent": null
+    },
+    "commits": {
+      "repo": "8408acf639134ffb2588b44060bca468f15f5859",
+      "repo_dirty": false,
+      "rust": "40a2761cdc907efa28f8707510b3b4969ac1247f"
+    }
+  },
+  "thermal": {
+    "max_c": 65,
+    "abort_c": 70,
+    "start_below_c": 50,
+    "set_by": "the owner, 2026-10-18, for the Raspberry Pi 5: at most 70 C inclusive, ideally at most 65 C; start_below_c from its idle 44-50 C (the aarch64 workplan, stage 5)"
+  }
+}
