@@ -575,6 +575,36 @@ both run from consolidation/; the readouts and `reading/` added on pyramidon aft
   guard on S4 and move-to-front 4, on `stone`) and P2 (A with the step's best restored on
   random-q16-0, on `jebel`).
 
+Findings (the division ladder, docs/division-ladder-workplan.md: L1 registered before its data, and
+L2, the budget), 2026-10-17 and 18; `p` 11's cell (two factors of width 16, `ceil(32 p / 11)` codes
+each, reading the output, the fork, 600 epochs) at higher primes, seeds 0-5 a rung. Code 440a680,
+OPENBLAS_NUM_THREADS=1. L1 round 1 (`p` 17 and 23) on jebel, 8 at once, 2026-10-17 19:53 to 22:29;
+round 2 (`p` 13) on jebel 2026-10-18 04:32 to 06:03; L2 (`p` 13 at 1,800 epochs) on stone, 6 at once,
+06:39 to 22:40. Data in data/window-recurrent/division-ladder/ (`round1/p17`, `round1/p23`,
+`round2`, `l2`), manifests `round1.sha256` 2b6a9a3a... (288 files), `round2.sha256` ab734b02...
+(160) and `l2.sha256` c453dbc5... (453, run from division-ladder/; L2's `readout.txt` added on
+pyramidon after it).
+
+| `p` | states | epochs | certified (Wilson 95%) | worst answer at best |
+| --- | --- | --- | --- | --- |
+| 11 (the p11 ladder, above) | 121 | 600 | 4 of 6 (0.30-0.90) | - |
+| 13 | 169 | 600 | 0 of 6 (0.00-0.39) | 0.394-0.916 |
+| 13 (L2) | 169 | 1,800 | 0 of 6 (0.00-0.39) | 0.394-0.936 |
+| 17 | 289 | 600 | 0 of 6 (0.00-0.39) | 0.609-0.774 |
+| 23 | 529 | 600 | 0 of 6 (0.00-0.39) | 0.360-0.386 |
+
+- **L1: the failure point lies between `p` 11 and 13** (121 and 169 states), D4's search ending at
+  adjacent primes. No run at 13, 17 or 23 came near (worst answer >= 0.95). Every one spent its
+  600 epochs, at steps 15-29.
+- **L2: not the budget.** At three times the epochs, 0 of 6 again. Each seed's first 600 epochs
+  repeat round 2's by bits (across machines: jebel, then stone). The best worst answer is round 2's
+  in five seeds, reached in the first 600 (seed 1: 0.916 to 0.936). Afterwards five runs collapsed,
+  their last machines minimising to 1-96 states.
+- **Noted, not explained:** `p` 17's runs came nearer (0.61-0.77) than most at 13 (0.39-0.42 in four
+  seeds), so the worst answer at best isn't monotone in `p`.
+- **Next:** L3, the width probe: `p` 13 with factors 32 wide instead of 16, nothing else changed
+  (agreed with the owner 2026-10-18; registered in the plan before its data).
+
 Findings (P2, A with the step's best restored, stage 2c of docs/code-consolidation-workplan.md; a
 probe, its answers written before the data), 2026-10-18; random-q16-0, 2b's cell with `--consolidate
 --restore-best`, seeds 0-5, 600 epochs. Code b5f9a05 (~/code/wt-p2, its own venv, crate 40a2761),
