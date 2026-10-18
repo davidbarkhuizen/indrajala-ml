@@ -34,6 +34,23 @@ A third finding goes into every arm: **random-3-0's step 1 passes with no state.
 word answers label 2, so a one-code network scores 1.0, and every run stays on one code (4 of 4,
 frozen for 56 steps). The final identity token can't help when the one-token answers agree (D3).
 
+A second reading (2026-10-18, every run of round 1 including `jebel`'s seed 5; a scratch reader of
+each run's best-share step network and its last network) adds three findings:
+
+- **S3's failures are a state that never forms, and step 1 isn't why:** word-problem-s3's five
+  failures peak at a state share of 0.06-0.32, at most 6 codes on 2-6 of 6 states, and end on one
+  code; move-to-front-4 seed 3 the same. Step 1 needs a state on every round-1 machine but
+  random-3-0 (the final identity's answer depends on the token before it), so D3 doesn't touch
+  them: undiagnosed, read again in stage 2.
+- **A random draw can need little or no state:** the best stateless guess (each token's majority
+  label over the states' limiting distribution) is right 0.720 of the time on random-3-0 against
+  chance 0.333, 18th of the first 20 draws at `n` 3 (median 0.589; draw 4 is 1.000). Random-4-0 is
+  typical (0.422, 13th of 20). The generator checks reachability and minimality only; D3 handles
+  the first step's trap, not a draw that needs little state overall.
+- **The readout names trivial partitions as coordinates:** one block is named "position-1 + ... +
+  position-n" (a permutation's positions always sum to the same value), and partitions over a few
+  reached states get names too. Fixed in stage 2.
+
 ## Decisions
 
 - **D1. A's signal comes from the network's own behaviour, never the target's states.** At each
@@ -157,7 +174,7 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
    each length, and how often the code names the state) and `breaks` (which transitions break, from
    right codes, by first and extra codes, by depth) as `modular_family_probe.py` subcommands. They
    generalise "a right code" from one token's outputs to D2's `d`-token outputs, so division
-   qualifies. One PR, tier 0. Then `p` 17's and S3's best networks read. D6's rule decides whether
+   qualifies. The readout's naming fixed (no name for one block or a few states). One PR, tier 0. Then `p` 17's and S3's best networks read. D6's rule decides whether
    each joins, recorded in this plan before stage 3.
 3. **The build.** The crate first (indrajala-math-rust): the commitment's target per window,
    defaulting to the nearest code, with parity tests against the Python reference. The golden run is
