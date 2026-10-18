@@ -79,7 +79,9 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   failed, after any throttle until a reboot. **Its thermal limits are the owner's, for the Pi 5
   only:** at most 70 C, inclusive, and ideally at or below 65 C. The profile's `thermal` section
   holds every pass to them: a pass waits for the CPU to cool below `start_below_c`, fails over
-  `max_c` (65) and is stopped at once over `abort_c` (70). It has no active cooler.
+  `max_c` (65) and is stopped at once over `abort_c` (70); each pass's peak is kept in the
+  manifest (`peak_c`) and the report's machine line gives the passes' range. It has no active
+  cooler.
 - **Check the machine yourself, then go.** Before a timing run or a long sweep, read `jebel`'s
   1-minute load and its running processes (`ssh jebel uptime`, `ssh jebel ps -eo pcpu,comm
   --sort=-pcpu`). If a browser (Brave, Firefox) or the editor (Zed) is running there, close it

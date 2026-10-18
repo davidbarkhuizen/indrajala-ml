@@ -722,9 +722,10 @@ def check_provenance(run_dir: Path, tree: Path, env: dict[str, str], extension_s
 
 
 def _run_step(
-    manifest: dict[str, Any], run_dir: Path, side: str, stem: str, args: list[str]
+    manifest: dict[str, Any], run_dir: Path, side: str, stem: str, args: list[str], record: dict[str, Any] | None = None
 ) -> tuple[dict[str, Any], list[str]]:
-    """Provenance, then the benchmark once on side, writing stem.{json,stdout,stderr}."""
+    """Provenance, then the benchmark once on side, writing stem.{json,stdout,stderr}; the pass's
+    peak temperature into record, under thermal limits."""
     adapter = ADAPTERS[manifest["bench"]]
     tree = Path(manifest[side]["tree"])
     site = manifest[side].get("site")
@@ -741,7 +742,7 @@ def _run_step(
     with (
         open(run_dir / f"{stem}.stdout", "w") as out,
         open(run_dir / f"{stem}.stderr", "w") as err,
-        thermal_watch(manifest.get("thermal"), stem) as watched,
+        thermal_watch(manifest.get("thermal"), stem, record) as watched,
     ):
         process = subprocess.Popen(command, cwd=run_dir, env=env, stdout=out, stderr=err)
         watched.append(process)
@@ -780,10 +781,13 @@ def wait_until_cool(limits: dict[str, Any]) -> dict[str, Any]:
 
 
 @contextlib.contextmanager
-def thermal_watch(limits: dict[str, Any] | None, stem: str) -> Generator[list[subprocess.Popen[bytes]]]:
+def thermal_watch(
+    limits: dict[str, Any] | None, stem: str, record: dict[str, Any] | None = None
+) -> Generator[list[subprocess.Popen[bytes]]]:
     """Watch the CPU's temperature through a pass, under a profile's thermal limits: the pass is
-    stopped over abort_c, and fails at its end if it went over max_c. The caller appends the pass's
-    process to the yielded list. Without limits, nothing is watched."""
+    stopped over abort_c, and fails at its end if it went over max_c; its peak goes into record's
+    peak_c (a failed pass's too). The caller appends the pass's process to the yielded list. Without
+    limits, nothing is watched."""
     processes: list[subprocess.Popen[bytes]] = []
     if limits is None:
         yield processes
@@ -809,6 +813,8 @@ def thermal_watch(limits: dict[str, Any] | None, stem: str) -> Generator[list[su
         stopped.set()
         thread.join()
     hottest = peak[-1] if peak else cpu_temp_c()
+    if record is not None and hottest is not None:
+        record["peak_c"] = round(hottest, 1)
     if hottest is not None and hottest > limits["max_c"]:
         stop = " and was stopped" if hottest > limits["abort_c"] else ""
         raise AbError(f"{stem}: the CPU reached {hottest:.1f} C, over this machine's {limits['max_c']:g} C{stop}")
@@ -854,7 +860,7 @@ def _run_passes(run_dir: Path, manifest: dict[str, Any], sides: list[str], polic
         _write_json(run_dir / "manifest.json", manifest)
         _append_progress(run_dir, {"event": "start", **record})
         try:
-            record["provenance"], record["command"] = _run_step(manifest, run_dir, side, stem, manifest["args"])
+            record["provenance"], record["command"] = _run_step(manifest, run_dir, side, stem, manifest["args"], record)
             # after the pass, so a change during it fails it: thermald can reset PL1 mid-run, and
             # a Pi's firmware flags a throttle (kept until the next boot)
             if policy is not None and (changes := policy_changes(policy)):
@@ -1559,6 +1565,8 @@ def _machine_line(manifest: dict[str, Any]) -> str:
         | {b.split("(")[0] for p in manifest["passes"] for b in p.get("busy", [])}
     )
     line = f"profile: {', '.join(profiles)}"
+    if peaks := [p["peak_c"] for p in manifest["passes"] if "peak_c" in p]:
+        line += f"; passes peaked at {min(peaks):.1f}-{max(peaks):.1f} C"
     if loads:
         line += f"; max 1-min load {max(loads):.2f}" + (" (HIGH)" if max(loads) > high_load else "")
         if any(c.get("after_builds") for c in checks):

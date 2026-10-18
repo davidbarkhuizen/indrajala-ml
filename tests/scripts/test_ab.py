@@ -14,6 +14,7 @@ import sys
 import time
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -1262,6 +1263,38 @@ def test_a_pass_over_abort_c_is_stopped(monkeypatch: pytest.MonkeyPatch) -> None
     ):
         processes.append(process)
         assert process.wait(timeout=10) != 0
+
+
+def test_thermal_watch_records_the_pass_peak(monkeypatch: pytest.MonkeyPatch) -> None:
+    readings = iter([60.0, 63.2, 61.0])
+
+    def temp() -> float:
+        return next(readings, 61.0)
+
+    monkeypatch.setattr(ab, "cpu_temp_c", temp)
+    monkeypatch.setattr(ab, "THERMAL_POLL_S", 0.01)
+    record: dict[str, Any] = {}
+    with ab.thermal_watch(LIMITS, "pass-01-old", record):
+        time.sleep(0.1)
+    assert record == {"peak_c": 63.2}
+
+
+def test_a_failed_pass_keeps_its_peak(monkeypatch: pytest.MonkeyPatch) -> None:
+    def temp() -> float:
+        return 66.54
+
+    monkeypatch.setattr(ab, "cpu_temp_c", temp)
+    monkeypatch.setattr(ab, "THERMAL_POLL_S", 0.01)
+    record: dict[str, Any] = {}
+    with pytest.raises(ab.AbError, match="over this machine's 65 C"), ab.thermal_watch(LIMITS, "pass-01-old", record):
+        time.sleep(0.05)
+    assert record == {"peak_c": 66.5}
+
+
+def test_the_machine_line_gives_the_passes_peak_range() -> None:
+    manifest: dict[str, Any] = {"extends": [], "passes": [{"peak_c": 58.0}, {"peak_c": 61.3}, {"status": "ok"}]}
+    assert "; passes peaked at 58.0-61.3 C" in ab._machine_line(manifest)
+    assert "peaked" not in ab._machine_line({"extends": [], "passes": [{"status": "ok"}]})
 
 
 def test_wait_until_cool_waits_for_start_below_c(monkeypatch: pytest.MonkeyPatch) -> None:
