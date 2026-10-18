@@ -81,7 +81,9 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   holds every pass to them: a pass waits for the CPU to cool below `start_below_c`, fails over
   `max_c` (65) and is stopped at once over `abort_c` (70); each pass's peak is kept in the
   manifest (`peak_c`) and the report's machine line gives the passes' range. It has no active
-  cooler.
+  cooler: one busy core holds 51-60 C, and two pass 65 C after about 15 minutes
+  (`scripts/thermal_probe.py`, 2026-10-18: from 49.6 C, 59-61 C by minute 4, 62-64 C by minute 10,
+  stopped at 65.55 C after 885 s, no throttle), so sustained work there is one core.
 - **Check the machine yourself, then go.** Before a timing run or a long sweep, read `jebel`'s
   1-minute load and its running processes (`ssh jebel uptime`, `ssh jebel ps -eo pcpu,comm
   --sort=-pcpu`). If a browser (Brave, Firefox) or the editor (Zed) is running there, close it
