@@ -1,4 +1,4 @@
-"""The modular family's encoding and probe (docs/modular-family-workplan.md, stage 2)."""
+"""The modular family's encoding and probe (the modular-family workplan, stage 2)."""
 
 import hashlib
 import json

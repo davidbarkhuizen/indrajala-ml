@@ -6,7 +6,7 @@ any code, and this plan is revisited then. It isn't on the primitives roadmap ye
 pieces meet roadmap steps, those steps are named.**
 
 **Revised by the owner (2026-10-12): milestone A is now a window-recurrent adder
-(`docs/window-recurrent-adder-workplan.md`), recurrence along the columns, H3's option (b); its
+(`git show e45944e:docs/window-recurrent-adder-workplan.md`), recurrence along the columns, H3's option (b); its
 first subplan, `docs/length-generalisation-workplan.md` (P1, P4, P5 and a
 fixed-depth existence study), was terminated after its reading (next-steps, From length
 generalisation). P1 is parked; P2, P3 and P7 are deferred; composing a fixed-length adder outside
@@ -162,7 +162,7 @@ subplan revisits its own.
   - (b) P2's new schemes first. Cons: chooses a scheme before seeing the failure it must fix.
 - **H3. The growing-depth mechanism. Settled: (a), at milestone B; superseded by the owner
   (2026-10-12):** recurrence along the columns, windows of `k` with a discrete state between them,
-  is milestone A (`docs/window-recurrent-adder-workplan.md`). The looped block stays an option
+  is milestone A (`git show e45944e:docs/window-recurrent-adder-workplan.md`). The looped block stays an option
   for after it.
   - (a) *Chosen.* A looped transformer block (P7). Pros: reuses the blocks the framework has;
     the published route for addition (McLeish et al., Fan et al.); weight sharing is useful
@@ -178,7 +178,9 @@ subplan revisits its own.
 
 ## Order and dependencies
 
-1. **Milestone A, now the window-recurrent adder** (`docs/window-recurrent-adder-workplan.md`).
+1. **Milestone A, now the window-recurrent adder: done** (retired 2026-10-18,
+   `git show e45944e:docs/window-recurrent-adder-workplan.md`; its claims in
+   [window-recurrent-report.md](window-recurrent-report.md)).
    As first planned (terminated, kept for the record): length generalisation, its subplan P1, P4
    bucketed and P5 with an existence study at `d` 16 and 16 layers:
    - P1, then P4 (bucketed) and P5, then a study: the column transformers trained at

@@ -16,7 +16,7 @@ flat controller (which multiplies control states as a single codebook multiplied
 can't factor and what a machine that can would need (P1-P5); this plan builds that machine. It
 reuses the window-recurrent network, its target-machine certificate (the claims workplan's
 stage 5, D17), the factored state's tuple certificate and harness
-([factored-state-workplan.md](factored-state-workplan.md), stages 6-7), and the study rules of
+(`git show e45944e:docs/factored-state-workplan.md`, stages 6-7), and the study rules of
 experiment-design.md.
 
 ## Why

@@ -38,7 +38,7 @@ section is `git show c3d619b:docs/length-generalisation-workplan.md`.*
   distinguishable at any distance, which bounded codes can't give: rotary positions lose
   resolution, and no positions dilute attention as the length grows.
 - The owner terminated the length-generalisation plan (2026-10-12) for the **window-recurrent
-  adder** ([window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md)): a network
+  adder** (`git show e45944e:docs/window-recurrent-adder-workplan.md`): a network
   reads a window of `k` columns and hands a state of width `s`, snapped to a codebook of `m` codes,
   from window to window. The recurrence, not depth, carries the carry.
 

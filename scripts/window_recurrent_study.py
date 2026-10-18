@@ -1,5 +1,5 @@
 """
-The window-recurrent adder (docs/window-recurrent-adder-workplan.md): whether a network that reads a
+The window-recurrent adder (the window-recurrent adder workplan): whether a network that reads a
 window of k columns and hands a snapped state from window to window learns, through a curriculum of
 window counts, to add base-3 numbers of any length, under indrajala_ml/studies/window_recurrent_study.py's
 harness and indrajala_ml/data/addition_data.py's catalogue.
@@ -606,7 +606,7 @@ manifest `e5.sha256` c442c79e...fcd81059cf (2 files, run from data/window-recurr
   (holds), C3 0.014 to 0.042 (holds), C4 0.044 to 0.088 (**the arms don't differ at 0.05: C4's
   refutation, reported raw at stage 7, doesn't stand**), C6 0.21 (not supported).
 
-Findings (stage 9 and 9b of docs/factored-state-workplan.md: modular division `p` 5 with a factored
+Findings (stage 9 and 9b of the factored-state workplan: modular division `p` 5 with a factored
 state, C9, C9' and C9'', each an existence claim), crate abcba3d7a30e, the curriculum at `k` 1, `s`
 16 a factor, the state read before the first `StateInput` (D10), every step certified, a study
 stopping at its first certified run. No network certified in any of the three: each is **"not found

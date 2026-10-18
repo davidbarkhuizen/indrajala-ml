@@ -1,5 +1,5 @@
 """
-The window-recurrent adder's harness (docs/window-recurrent-adder-workplan.md, stage 8;
+The window-recurrent adder's harness (the window-recurrent adder workplan, stage 8;
 scripts/window_recurrent_study.py), for any of window_tasks' tasks (the claims workplan's stage 5):
 addition, the matrix's, or modular division.
 

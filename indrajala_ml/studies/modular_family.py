@@ -1,5 +1,5 @@
 """
-The modular family (docs/modular-family-workplan.md): one window-recurrent network answering
+The modular family (the modular-family workplan): one window-recurrent network answering
 several modular operations on the same columns at every window, so a factor of its state gets a
 dense signal for a residue (the sum's and difference's counters) where division alone gives only
 its zero tests.

@@ -10,7 +10,7 @@ docstring (E1's certificate also in
 paper is P1, `snapped-window-recurrence.tex` in indrajala-papers; the literature is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
-The question: the window-recurrent adder ([window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md))
+The question: the window-recurrent adder (`git show e45944e:docs/window-recurrent-adder-workplan.md`)
 added two long base-3 numbers to 64 columns in about half its runs. The claims say what that
 result is and why, each registered with its refutation before its data (D4: 20 seeds a cell;
 Wilson intervals; Fisher's exact test; Cochran-Armitage for a trend; Holm over C2-C4 and C6).
