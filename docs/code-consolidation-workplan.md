@@ -174,8 +174,42 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
    each length, and how often the code names the state) and `breaks` (which transitions break, from
    right codes, by first and extra codes, by depth) as `modular_family_probe.py` subcommands. They
    generalise "a right code" from one token's outputs to D2's `d`-token outputs, so division
-   qualifies. The readout's naming fixed (no name for one block or a few states). One PR, tier 0. Then `p` 17's and S3's best networks read. D6's rule decides whether
-   each joins, recorded in this plan before stage 3.
+   qualifies. The readout's naming fixed (no name for one block or a few states). One PR, tier 0
+   (#829, #830). Then `p` 17's and S3's best networks read. D6's rule decides whether each joins,
+   recorded in this plan before stage 3.
+
+   **Stage 2's result (2026-10-18; each failing run's best step network, the worst answer's
+   peak):** neither joins. S3's five failures have no right code at D2's `d` 2 at all (2-10 codes,
+   exact accuracy 0.81 at length 2, 0.1-0.4 at 4): failure A, a state that never forms, not this
+   plan's mechanism. `p` 17's six (523-1,121 codes) break from right first codes 72-88% of the time
+   (`d` 1), exact to length 2, 0.85-0.99 at 3, 0.36-0.63 at 4: no exact core. **And random-4-0's
+   core depends on `d`:** at `d` 1 its first codes break 4-14% and its extra codes 34-38% (the
+   diagnosis above), but at D2's `d` 2 only 15-23 of its 24 first codes are right, and those break
+   17-31%, about as often as the extra codes: no exact core at the plan's own `d`, unlike S4 (1 of
+   120 at `d` 2). Random-4-0 stays a cell (D6 names it), read with this.
+2b. **B's origins, probes before the round (the owner, 2026-10-18: "probe more for B's origins
+   before we attempt to test a fix").** Probes claim nothing; each question's answer is written
+   before its data. Round 1's cell (D3 of the general-algebras plan, today's curriculum, 600 epochs),
+   seeds 0-2, on `jebel` (12 runs, 6 at once, about 1.5-2 h), from a worktree pinned at the
+   machines' merge; read with `breaks` and `by-length` at `d` 1 and 2. Baseline: random-4-0, 0 of 6
+   in round 1, B's signature (every state reached, breaks from depth 2-3, no exact core at `d` 2).
+   - **Merging or structure?** `random-perm-4-0`: random-4's machine with every token a bijection
+     (24 states, 5 tokens, 4 classes; stateless guess 0.333). A certified seed, or failures with an
+     exact core at `d` 2 (S4's kind), say B needs maps that merge states; B's signature in all
+     three says it doesn't.
+   - **Where in size?** `random-q8-1`, `random-q12-0`, `random-q16-0`: random-4's tokens and
+     classes at 8, 12 and 16 states, each the first draw whose stateless guess is at most halfway
+     from chance to 1 (0.399, 0.520, 0.544; at most 0.625). The smallest size failing 0 of 3 with
+     B's signature is where B appears; if all three work, B appears between 16 and 24.
+
+   | probe | states `q` | codes a factor | joint codes `m` | `m / q` | exclusion bound = cap |
+   | --- | --- | --- | --- | --- | --- |
+   | random-q8-1 | 8 | 9 | 81 | 10.1 | 88 |
+   | random-q12-0 | 12 | 11 | 121 | 10.1 | 132 |
+   | random-q16-0 | 16 | 12 | 144 | 9.0 | 159 |
+   | random-perm-4-0 | 24 | 15 | 225 | 9.4 | 248 |
+
+   Findings in the probe's docstring with the data's manifest; the next probe chosen from them.
 3. **The build.** The crate first (indrajala-math-rust): the commitment's target per window,
    defaulting to the nearest code, with parity tests against the Python reference. The golden run is
    bit-identical (an empty table is today's training); tier 1 A/B on the training path. Then the

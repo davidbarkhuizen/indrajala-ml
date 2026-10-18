@@ -106,3 +106,30 @@ def test_a_probe_run_trains_a_machine_and_certifies_each_step_against_it(tmp_pat
     assert all(isinstance(r["certified"], bool) and r["minimised"] >= 1 for r in ends)
     certificate = mf.certify_file(tmp_path / "network.json", mf.target_named("move-to-front-3"), "move-to-front-3")
     assert certificate["task"] == "move-to-front-3" and certificate["slot"] == 0
+
+
+# B's origins (the code-consolidation workplan's stage 2b): random-4's machine with bijections only,
+# and at other sizes; each probe's machine and its cell's feasibility (codes a factor, the cap)
+B_PROBES = {
+    "random-perm-4-0": (24, 15, 248),
+    "random-q8-1": (8, 9, 88),
+    "random-q12-0": (12, 11, 132),
+    "random-q16-0": (16, 12, 159),
+}
+
+
+@pytest.mark.parametrize("name", sorted(B_PROBES))
+def test_b_s_probe_machines_are_reachable_minimal_with_random_4_s_tokens_and_classes(name: str):
+    states, codes, cap = B_PROBES[name]
+    machine = wt.task_named(name).machine
+    assert machine.states == states and machine.tokens == 5 and machine.classes == 4
+    assert len(machine.reachable()) == states and machine.distinguishing_length() is not None
+    assert (machine.transition[:, 0] == np.arange(states)).all()  # token 0 the identity
+    factors = mf.scaled_factors(states, Fraction(32, 11), 2)
+    assert factors == [(16, codes), (16, codes)] and mf.exclusion_bound(states, factors) == cap
+
+
+def test_random_perm_s_tokens_are_bijections_and_random_4_s_merge_states():
+    perm, maps = wt.task_named("random-perm-4-0").machine, wt.task_named("random-4-0").machine
+    assert all(len(set(perm.transition[:, t])) == 24 for t in range(5))
+    assert any(len(set(maps.transition[:, t])) < 24 for t in range(1, 5))
