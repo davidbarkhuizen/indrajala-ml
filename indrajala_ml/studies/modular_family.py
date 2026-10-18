@@ -48,7 +48,8 @@ import numpy as np
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_data as md
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
-from indrajala_ml.model.persistence.load_network import load_network
+from indrajala_ml.model.persistence.format2 import network_to_json
+from indrajala_ml.model.persistence.load_network import load_network, network_from_state
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE, AttentionPooling, Codes, Factor, WindowRecurrence
 from indrajala_ml.studies import certificate_guard as cg
@@ -670,6 +671,77 @@ def exclusion_bound(q: int, factors: Sequence[tuple[int, int]]) -> int:
     return math.prod(m for _, m in factors) + q - 1
 
 
+CHECKPOINT = "checkpoint.json"
+
+
+@dataclass
+class Place:
+    """
+    Where a run is, as its checkpoint keeps it (run's resume): the step and the last epoch trained
+    in it (0: the step just begun), the epochs trained in all, the step's best screen and epochs
+    since, its rate, forks and the fork's peak, the last screen's answer kinds, the step's undone
+    updates and the guard's frozen epochs; the seconds trained, and the log's length in bytes.
+    """
+
+    step: int
+    epoch: int
+    spent: int
+    best: float
+    since: int
+    rate: float
+    forks: int
+    peak: float
+    last_kinds: dict[str, float]
+    step_rollbacks: int
+    frozen: int
+    seconds: float
+    log_bytes: int
+
+
+def _run_identity(
+    encoding: Target,
+    factors: Sequence[tuple[int, int]],
+    seed: int,
+    budget_seconds: float,
+    settings: Settings,
+    cap: int,
+    reads: str,
+    budget_epochs: int | None,
+    fork: Fork | None,
+    guard: bool,
+) -> dict[str, Any]:
+    # what a resumed run must share with the run it resumes
+    return {
+        "target_states": encoding.target_states,
+        "tokens": encoding.tokens,
+        "factors": [list(f) for f in factors],
+        "seed": seed,
+        "budget_seconds": budget_seconds,
+        "settings": repr(settings),
+        "cap": cap,
+        "reads": reads,
+        "budget_epochs": budget_epochs,
+        "fork": None if fork is None else repr(fork),
+        "guard": guard,
+    }
+
+
+BEGUN, ENDED = "begun", "ended"  # a checkpoint's place before the run's first row, and after its last
+
+
+def _write_checkpoint(out: Path, identity: dict[str, Any], place: Place | str, net: Any) -> None:
+    # the run's place (or BEGUN, ENDED) and its network in one file, replaced whole, so a stop at any
+    # moment leaves the last checkpoint or the new one
+    state = {
+        "run": identity,
+        "place": place if isinstance(place, str) else vars(place),
+        "network": network_to_json(net),
+    }
+    partial = out / (CHECKPOINT + ".partial")
+    partial.write_text(json.dumps(state))
+    partial.replace(out / CHECKPOINT)
+
+
 def run(
     encoding: Target,
     factors: Sequence[tuple[int, int]],
@@ -682,6 +754,7 @@ def run(
     budget_epochs: int | None = None,
     fork: Fork | None = None,
     guard: bool = False,
+    resume: bool = False,
 ) -> None:
     """
     One probe run: the curriculum until the budget (wall-clock seconds and, if given, epochs
@@ -695,12 +768,38 @@ def run(
     each epoch's row logs whether it was armed, its updates and those undone, each step's end the
     undone's sum. A run whose guard undoes STALL_SHARE of the updates of STALL_EPOCHS armed epochs in
     a row ends "stalled" (D9), its step's network certified as any step's.
+
+    Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
+    the run's place (Place) and its network, with its optimizer's and generator's state. With
+    `resume`, a run stopped part way goes on from its checkpoint (the code-consolidation workplan's
+    stage 3): its log cut back to the checkpoint's rows, an epoch begun after it trained again, so
+    every network and row but the seconds is the uninterrupted run's; the wall-clock budget counts
+    the seconds trained. A run that ended isn't trained again; one without a checkpoint starts.
     """
     if cap is None:
         cap = exclusion_bound(encoding.target_states, factors)
     out.mkdir(parents=True, exist_ok=True)
-    net = network(encoding, factors, seed, reads)
-    start = time.perf_counter()
+    identity = _run_identity(encoding, factors, seed, budget_seconds, settings, cap, reads, budget_epochs, fork, guard)
+    place: Place | None = None
+    saved = json.loads((out / CHECKPOINT).read_text()) if resume and (out / CHECKPOINT).exists() else None
+    if saved is not None:
+        assert saved["run"] == identity, f"{out} holds another run: {saved['run']} against {identity}"
+        if saved["place"] == ENDED:
+            return
+    if saved is not None and saved["place"] != BEGUN:
+        place = Place(**saved["place"])
+        net = network_from_state(saved["network"])
+        with (out / "log.jsonl").open("r+") as kept:
+            kept.truncate(place.log_bytes)
+    else:
+        assert saved is not None or not (resume and (out / "log.jsonl").exists()), (
+            f"{out} has a log but no checkpoint to resume from"
+        )
+        net = network(encoding, factors, seed, reads)
+        if saved is not None:
+            (out / "log.jsonl").write_text("")  # stopped before its first checkpoint: begun again from the seed
+        _write_checkpoint(out, identity, BEGUN, net)
+    start = time.perf_counter() - (place.seconds if place is not None else 0.0)
     log = (out / "log.jsonl").open("a")
 
     def record(row: dict[str, Any]) -> None:
@@ -708,24 +807,61 @@ def run(
         log.write(json.dumps(row) + "\n")
         log.flush()
 
-    record({"step": 0, "epoch": 0, **diagnose(net, encoding, settings)})
+    if place is None:
+        record({"step": 0, "epoch": 0, **diagnose(net, encoding, settings)})
     task = encoding.task
     guarding = cg.Guard(lambda n: QueryMachine(n, encoding, 0), task) if guard else None
-    frozen = 0  # consecutive armed epochs with STALL_SHARE of their updates undone
-    spent = 0  # epochs trained in all
-    for step in range(1, cap + 1):
+    frozen = (
+        place.frozen if place is not None else 0
+    )  # consecutive armed epochs with STALL_SHARE of their updates undone
+    spent = place.spent if place is not None else 0  # epochs trained in all
+    snapshot = out / "snapshot.network.json"
+
+    def checkpoint(step: int, epoch: int) -> None:
+        # the run's place after epoch of step (0: its start), every count read as it stands
+        log.flush()
+        place = Place(
+            step,
+            epoch,
+            spent,
+            best,
+            since,
+            rate,
+            forks,
+            peak,
+            dict(last_kinds),
+            step_rollbacks,
+            frozen,
+            time.perf_counter() - start,
+            log.tell(),
+        )
+        _write_checkpoint(out, identity, place, net)
+
+    for step in range(place.step if place is not None else 1, cap + 1):
         lengths = list(range(1, step + 1))
         screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{step}-{n}")[0] for n in lengths}
-        best, since, stop, epoch = -1.0, 0, "budget", 0
-        rate, forks, snapshot = settings.rate, 0, out / "snapshot.network.json"
-        start_score, start_kinds = screen(net, encoding, screens)  # the step before's network on this step's lengths
-        record({"step": step, "epoch": 0, "screen": round(start_score, 4), "kinds": _kinds(start_kinds)})
-        last_kinds, step_rollbacks = start_kinds, 0
-        peak = 0.0
-        if fork is not None:
-            peak = fork.trigger.value(start_score, start_kinds)
-            net.save(str(snapshot))
-        for epoch in range(1, settings.max_epochs + 1):
+        stop, epoch = "budget", 0
+        if place is not None and place.step == step:  # resumed within this step
+            best, since, epoch = place.best, place.since, place.epoch
+            rate, forks, peak = place.rate, place.forks, place.peak
+            last_kinds, step_rollbacks = place.last_kinds, place.step_rollbacks
+        else:
+            best, since = -1.0, 0
+            rate, forks = settings.rate, 0
+            start_score, start_kinds = screen(
+                net, encoding, screens
+            )  # the step before's network on this step's lengths
+            record({"step": step, "epoch": 0, "screen": round(start_score, 4), "kinds": _kinds(start_kinds)})
+            last_kinds, step_rollbacks = start_kinds, 0
+            peak = 0.0
+            if fork is not None:
+                peak = fork.trigger.value(start_score, start_kinds)
+                net.save(str(snapshot))
+
+        if epoch == 0:
+            checkpoint(step, 0)
+        resumed = epoch
+        for epoch in range(resumed + 1, settings.max_epochs + 1):
             if time.perf_counter() - start > budget_seconds:
                 stop = "deadline"
                 break
@@ -776,6 +912,7 @@ def run(
                             **guarded,
                         }
                     )
+                    checkpoint(step, epoch)
                     continue
             if epoch % settings.diagnose_every == 0:
                 record(
@@ -803,6 +940,7 @@ def run(
                 if since >= settings.patience:
                     stop = "plateau"
                     break
+            checkpoint(step, epoch)
         net.save(str(out / "network.json"))
         net.save(str(out / f"step-{step}.network.json"))  # every step's kept, to inspect what a run had
         # each step's certified answer (the quotient) certified (under a second at one column a window); the run stops at
@@ -828,6 +966,7 @@ def run(
         if stop in ("deadline", "spent", "stalled"):
             break
     log.close()
+    _write_checkpoint(out, identity, ENDED, net)
 
 
 def guard_epoch(
