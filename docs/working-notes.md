@@ -379,6 +379,11 @@ where you meet a new trap; delete one that no longer holds.
   two of `jebel`'s workers start the same network in the same second (2026-10-16), cause not found.
   Harmless for an idempotent test (one result overwrote the other); for anything that isn't, have
   each worker take a fixed share instead.
+  Worse, a queued study whose script waits on `pgrep -f <the previous script's name>` also waits
+  on a waiter watching that name. On 2026-10-18 that held `jebel` idle for hours after round 2
+  ended (the waiter's `while pgrep -f algebras-round2.sh` never ended, so neither did the
+  diagnostic's). Wait on a log line instead (`until grep -q "ended" .../launch.log`), and have each
+  launch script write one.
 - **A long test or study run from a worktree with `PYTHONPATH` still takes the main checkout's
   `.venv`, its compiled crate included:** check `git diff --stat <pinned> <main's> -- rust/` is empty
   before trusting the crate hash the results record.
