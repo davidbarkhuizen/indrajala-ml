@@ -192,12 +192,12 @@ def test_trace_marks_a_collapse_where_the_codes_in_use_halve():
 
     lines = mf.trace([row(1, [16, 15]), row(1, [14, 14]), row(2, [3, 4]), row(2, [4, 4], end="plateau", minimised=7)])
     assert ["collapse" in line for line in lines] == [False, False, True, False]
-    assert lines[0].startswith("step   1 epoch   5 codes [16, 15] share 0.00 sum 0.50")
+    assert lines[0].startswith("step   1 epoch   5 codes [16, 15] share 0.000 sum 0.500")
     assert lines[-1].endswith("END plateau min 7")
     fork = {"step": 2, "epoch": 3, "fork": 1, "screen": 0.3, "peak": 0.9, "restored": 0.9, "rate": 0.0015}
     assert (
         mf.trace([row(1, [16, 15]), fork])[1]
-        == "step   2 epoch   3 FORK 1: screen 0.30 peak 0.90 restored 0.90 rate 0.0015"
+        == "step   2 epoch   3 FORK 1: screen 0.300 peak 0.900 restored 0.900 rate 0.0015"
     )
 
 
@@ -217,12 +217,12 @@ def test_outcome_stops_at_the_first_certified_step_and_counts_its_epochs():
     rows = [
         row(0, 1, 0.1, epoch=0, seconds=0.2),
         row(1, 8, 0.6, end="passed", epochs=3, certified=False, seconds=30.0),
-        row(2, 16, 0.97, epoch=5, seconds=200.0),
+        row(2, 16, 0.997, epoch=5, seconds=200.0),  # kept to three decimals, not 1.0
         row(2, 7, 0.3, end="plateau", epochs=40, certified=False, seconds=300.0),  # a collapse
         row(3, 9, 1.0, end="passed", epochs=2, certified=True, seconds=330.0),
     ]
     assert mf.outcome(rows) == mf.Outcome(3, "certified", 45, 5.5, 1.0, 3, 1, 1, 0)
-    assert mf.outcome(rows[:4]) == mf.Outcome(2, "plateau", 43, 5.0, 0.97, 2, 1, 1, 1)
+    assert mf.outcome(rows[:4]) == mf.Outcome(2, "plateau", 43, 5.0, 0.997, 2, 1, 1, 1)
     assert mf.outcome(rows[:1]).end == "running"
     spent = row(3, 7, 0.4, end="spent", epochs=6, certified=False, seconds=330.0)  # 5 trained
     assert mf.outcome([*rows[:4], spent]).epochs == 48
@@ -262,7 +262,7 @@ def test_readout_counts_a_run_only_when_recertified_in_both_verdicts(tmp_path: P
     certificate("two", b"two", 1.0)
     lines = mf.readout(tmp_path, ["family", "quotient"], tmp_path / "certify")
     assert lines[1] == (
-        "seed1: certified at step 4, 7 epochs, 1.0 min; worst answer at best 1.00 (step 4), collapses 0, "
+        "seed1: certified at step 4, 7 epochs, 1.0 min; worst answer at best 1.000 (step 4), collapses 0, "
         "large drops 0 (0 unrecovered)"
     )
     assert "NOT RECERTIFIED" in lines[2] and lines[3].startswith("seed10: spent")  # seeds in numeric order

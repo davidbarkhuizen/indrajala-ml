@@ -452,19 +452,19 @@ def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
     for row in rows:
         if "fork" in row:
             lines.append(
-                f"step {row['step']:>3} epoch {row['epoch']:>3} FORK {row['fork']}: screen {row['screen']:.2f} "
-                f"peak {row['peak']:.2f} restored {row['restored']:.2f} rate {row['rate']:.2g}"
+                f"step {row['step']:>3} epoch {row['epoch']:>3} FORK {row['fork']}: screen {row['screen']:.3f} "
+                f"peak {row['peak']:.3f} restored {row['restored']:.3f} rate {row['rate']:.2g}"
             )
             continue
         if "factors" not in row:  # an epoch's screen score alone
             continue
         codes = _codes(row)
-        answers = " ".join(f"{name} {value:.2f}" for name, value in sorted(row["accuracy"].items()))
+        answers = " ".join(f"{name} {value:.3f}" for name, value in sorted(row["accuracy"].items()))
         end = f" END {row['end']} min {row.get('minimised')}" if "end" in row else ""
         mark = " << collapse" if _collapsed(before, codes, drop) else ""
         epoch = row.get("epoch", "-")
         share = row.get("state_share", 0.0)
-        lines.append(f"step {row['step']:>3} epoch {epoch:>3} codes {codes} share {share:.2f} {answers}{end}{mark}")
+        lines.append(f"step {row['step']:>3} epoch {epoch:>3} codes {codes} share {share:.3f} {answers}{end}{mark}")
         before = codes
     return lines
 
@@ -510,7 +510,7 @@ def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
         end,
         epochs,
         round(float(last["seconds"]) / 60, 1),
-        round(min(best.get("accuracy", {"-": 0.0}).values()), 2),
+        round(min(best.get("accuracy", {"-": 0.0}).values()), 3),  # the log keeps three decimals
         int(best["step"]),
         collapses,
         len(falls),
@@ -625,7 +625,7 @@ def readout(
             drops, unrecovered, dropped = drops + run.drops, unrecovered + run.unrecovered, dropped + (run.drops > 0)
             lines.append(
                 f"{log.parent.name}: {run.end} at step {run.step}, {run.epochs} epochs, {run.minutes} min; "
-                f"worst answer at best {run.peak:.2f} (step {run.peak_step}), collapses {run.collapses}, "
+                f"worst answer at best {run.peak:.3f} (step {run.peak_step}), collapses {run.collapses}, "
                 f"large drops {run.drops} ({run.unrecovered} unrecovered){note}"
             )
         low, high = inference.wilson(certified, len(seeds))
