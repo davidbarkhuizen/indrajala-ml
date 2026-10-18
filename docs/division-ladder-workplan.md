@@ -121,6 +121,5 @@ certified, which is exact at every length.
    the epoch time and memory.
 4. **Round 2** by D4's rule.
    **L2** (`p` 13 at 1,800 epochs) after it, on `stone`: `~/labour/l2.sh`, from a worktree at 440a680.
-   **L2** (`p` 13 at 1,800 epochs) after it, on `stone`: `~/labour/l2.sh`, from a worktree at 440a680.
 5. **Findings** in `modular_family_probe.py`'s docstring, P2's notes, the networks to
    indrajala-models; this plan retired.
