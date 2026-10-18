@@ -122,5 +122,11 @@
     "abort_c": 70,
     "start_below_c": 50,
     "set_by": "the owner, 2026-10-18, for the Raspberry Pi 5: at most 70 C inclusive, ideally at most 65 C; start_below_c from its idle 44-50 C (the aarch64 workplan, stage 5)"
+  },
+  "noise_rules": {
+    "shifted_pass": 0.02,
+    "high_load": 1.5,
+    "small_consistent": 0.01,
+    "measured_by": "the aarch64 workplan, stage 5 (2026-10-18): one A/A of focused_benchmark at e9ab957, ONNONO, each pass from below 50 C; pass shifts 0.0-0.1%, 2 of 270 rows consistent by chance (0.2% each); the per-pass spread median 2.5%, 90th percentile 27.4%, max 598%, noisier than jebel's rows (memory-bound rows, numpy's most)"
   }
 }
