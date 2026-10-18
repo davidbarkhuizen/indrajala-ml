@@ -58,7 +58,8 @@ can't hold its states.
 and with the guard armed, on the same data, and prints each one's seconds, whether its quotient's
 machine is right before and after, and the guard's rollbacks (the guard workplan's budget probe).
 `--first-seed F --seeds N` runs seeds F..F+N-1, a process each, `--workers` at once (default
-all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--budget-epochs` stops a
+all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--runs TASK:SEED ...` runs
+those alone, in one pool (chosen seeds replayed: DIR/<task>/seed<s> for several tasks); `--budget-epochs` stops a
 run when that many epochs are trained in all (or `--budget-minutes` pass, whichever first).
 `--trigger-signal`, `--trigger-rule`, `--trigger-threshold` and `--trigger-floor` set the fork's
 trigger (indrajala_ml/studies/collapse.py; the default is the fork's first: pooled, below 0.6 of
@@ -609,6 +610,13 @@ def main(argv: list[str]) -> int:
     seeds = run.add_mutually_exclusive_group(required=True)
     seeds.add_argument("--seed", type=int, help="one run, into --out")
     seeds.add_argument("--first-seed", type=int, help="--seeds runs from this seed, at once, into --out/seed<s>")
+    seeds.add_argument(
+        "--runs",
+        nargs="+",
+        metavar="TASK:SEED",
+        help="these runs alone (a machine's task and a seed each), at once, into --out/seed<s> or, for several "
+        "tasks, --out/<task>/seed<s>: chosen seeds replayed (not with --task)",
+    )
     run.add_argument("--seeds", type=int, default=1)
     run.add_argument(
         "--p", type=int, nargs="+", default=[5], help="the modulus; several run in one pool, into --out/p<p>"
@@ -808,6 +816,12 @@ def main(argv: list[str]) -> int:
     if args.codes_ratio is not None and args.factor:
         parser.error("--codes-ratio sets every factor's codes: not with --factor")
     # the targets by name: the machines', or division's at each p, and each one's directory when several
+    if args.runs is not None and args.task:
+        parser.error("--runs names its tasks: not with --task")
+    named: list[str] = args.runs or []
+    chosen = [(task, int(seed)) for task, _, seed in (run.rpartition(":") for run in named)]
+    if args.runs is not None:
+        args.task = list(dict.fromkeys(task for task, _ in chosen))
     names = args.task or [f"modular-division-{p}" for p in args.p]
     folders = dict(zip(names, args.task or [f"p{p}" for p in args.p], strict=True))
 
@@ -843,9 +857,10 @@ def main(argv: list[str]) -> int:
                 parser.error("--guard both and several --p or --task run --first-seed's seeds, not one --seed")
             probe(names[0])(seed=args.seed, out=args.out, guard=guards[0])
             return 0
-        seeds = range(args.first_seed, args.first_seed + args.seeds)
+        seeds = range(args.first_seed, args.first_seed + args.seeds) if args.runs is None else range(0)
         # each seed's targets and arms in turn, so a round's rungs and pairs end about together
         jobs = [(name, s, guard) for s in seeds for name in names for guard in guards]
+        jobs += [(name, s, guard) for name, s in chosen for guard in guards]
         context = multiprocessing.get_context("forkserver")
         with concurrent.futures.ProcessPoolExecutor(
             min(args.workers or len(jobs), len(jobs)), mp_context=context
