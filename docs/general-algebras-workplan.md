@@ -90,6 +90,16 @@ existence runs supply those tasks and their logs.
   (a working cell at `n` 3 and 4): its failures are read first (D9), and a fix is registered as a
   new experiment (round 1's settings stay as registered). Stages 5-7 replay round 2's `n` 5 cells,
   so they wait with it. The random class's failures and their fix: docs/code-consolidation-workplan.md.
+  **Owner, 2026-10-18, registered here before round 2's data: the random class is set aside, and
+  round 2 goes on without it.** Neither remedy rescued a random machine at 16 states (stage 2b of
+  the consolidation plan: the control, B and A each 0 of 6 on random-q16-0, every run's near
+  solution lost after its best step). The recorded limit: at round 1's cell the method certifies
+  random machines to about 12 states (random-q8-1 3 of 3, random-q12-0 2 of 3); near solutions
+  aren't kept above that, and it isn't capacity. So this condition lifts. Round 2 is the group
+  and aperiodic classes at `n` 5 (word-problem-s5, move-to-front-5; 12 runs), round 1's cell
+  unchanged (no remedy added), and E1 is read over those two classes (below). Random machines
+  return only by a later decision of the owner's, for instance if the consolidation plan's P2
+  (the step's best restored) certifies random-q16-0.
   - (a) *Chosen.* Pros: experiment-design.md section 2, a small case working before stepping up;
     the small rungs cost little. Cons: one round more than running all three sizes at once.
   - (b) Every size in one round. Pros: one launch. Cons: 120-state runs spent on a class that may not
@@ -132,6 +142,14 @@ The method **generalises past arithmetic at 120 states** if all three classes wo
 **refuted for a class** if that class fails at a size where the other two work. Then the class's
 Krohn-Rhodes type, group or aperiodic, is the finding, read with D9's diagnosis.
 
+**With the random class set aside (D5, the owner, 2026-10-18; registered before round 2's data):**
+round 1's reading stands (E1 refuted for the random class at `n` 3 and 4). At `n` 5 the method
+**generalises past arithmetic at 120 states for both Krohn-Rhodes extremes** if word-problem-s5 and
+move-to-front-5 both work. It's **refuted for a class** if that class fails where the other works,
+and the class's type is then the finding, read with D9. If both fail, the finding is a failure at
+120 states for both extremes, not for a class, read with D9 against division `p` 11's 4 of 6 at
+121.
+
 Reported per run, as the ladder reports it: certified or not, step, epochs, forks, minimised states,
 codes reached per factor, each factor's readout. Per cell: the count with its Wilson interval, and
 the slowest success's epochs against the 600-epoch budget.
@@ -171,9 +189,10 @@ Every success is certified, so it's exact at every length. No run reaches its ca
    time and memory for round 2's budget.
 3. **Round 1** (`n` 3 and 4, three classes, 36 runs) on `pyramidon`; certified in both verdicts;
    E1's readout per cell.
-4. **Round 2** (`n` 5, 18 runs) on `jebel`, if D5 allows (deferred until the random class passes
-   round 1, D5), from a worktree pinned at the build's merge. Budget from `p` 11's runs (35-120 minutes each at 6 at once) and stage 2's probe: 18 runs
-   at 8 workers is three waves, about 2-6 h. Long tests (uniform words at 128, 256 and 1,024) on one certified network a
+4. **Round 2** (`n` 5) on `jebel`, from a worktree pinned at `main`: 12 runs, word-problem-s5 and
+   move-to-front-5, seeds 0-5 (D5, the owner, 2026-10-18: the random class set aside). Budget from
+   `p` 11's runs (35-120 minutes each at 6 at once) and stage 2's probe: 12 runs at 6 workers is
+   two waves, about 1.5-4 h. Long tests (uniform words at 128, 256 and 1,024) on one certified network a
    cell (the ladder's D6). Findings in the probe's docstring; the networks to indrajala-models.
 5. **The fork's trigger, tuned across the classes (T1, registered in this stage's PR before its
    replays):** `drops` over every log from rounds 1-2 and division's (the fork probe, `p` 11, the

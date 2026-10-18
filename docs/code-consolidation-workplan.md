@@ -242,9 +242,14 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
 
    **B's result (2026-10-18; the runs in the probe's docstring):** 0 of 6, every run spent (130-174
    minutes against the control's 49-58). Worst answer at best 0.937-0.999 (the control's
-   0.895-0.995), each at steps 4-14, every run collapsing after its best and plateauing after; C2's
-   reading (the exact prefix, the failures' kinds) follows A's. So by the rule above, the one more
-   probe: A.
+   0.895-0.995), each at steps 4-14, every run collapsing after its best and plateauing after. So by
+   the rule above, the one more probe: A. **C2 (B's best networks against the control's, `breaks`
+   and `by-length` at `d` 1 and 2):** B lengthened the exact prefix in two seeds and shortened it in
+   two. Seeds 2 and 4 reached an exact core at `d` 2 (first codes breaking 1-3%), extra codes
+   breaking 2-3% (the control's best 6-7%), exact accuracy 0.98 at length 16 and 0.916 at 64 (the
+   control's best 0.89 and 0.43). Seeds 1 and 5 never formed a state (1 right code at `d` 2, failure
+   A), and seeds 0 and 3 had no exact core (B's signature). The control's seeds 0-2 repeat 2b's by
+   bits (every log row but the seconds).
 
    **A on random-q16-0, the one more probe (the owner, 2026-10-18: "test Remedy A - and probably
    abandon random machines for the moment").** Registered before its data: `--consolidate` (D1, D2's
@@ -260,6 +265,23 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
      The general algebras go on without the random class, its change registered in that plan before
      round 2's data. C2 is still read (A's extra codes and how often they break, against the
      control's), for the structured cells A is tested on next (S4, move-to-front 4).
+
+   **A's result (2026-10-18; the runs in the probe's docstring): 0 of 6, so random machines are set
+   aside** (registered in general-algebras-workplan.md, D5), a recorded limit: at round 1's cell,
+   with either remedy, our method certifies random machines to about 12 states. At random-q16-0 the
+   runs found near solutions and didn't keep them. That isn't a capacity limit: the cell holds 9
+   times the states. Every run spent its 600 epochs (48-60 minutes, as the control's). All six came
+   near, with the worst answer at best 0.976-0.999 (the control's 4 of 6, B's 4 of 6), and every
+   run collapsed after its best step (steps 7-14).
+   **C2 (A's best networks against the control's):** not moved as a whole. A's codes reached are
+   about the control's (21-64, median 52, against 25-63, median 50). Its extra codes break more often
+   from right codes at `d` 2 (0.30-0.56 in five seeds, against the control's median 0.17). The one
+   exception is seed 0, the nearest run of the three arms. At step 14 it had 21 codes on 16 states,
+   its first codes breaking 0-1%, with exact accuracy 0.996 at length 16 and 0.975 at 64, and it
+   collapsed after that step. **Why A pulled little:** at the best steps the network's own groups
+   number 22-63, against 16 states (duplicates pulled: a median 6-13% of the codes over a run). An
+   extra code's outputs are wrong, so within `d` tokens they differ from its state's first code,
+   and A (D1, the network's own `d`-equivalence) can't group them.
 2c. **Retention: keeping a near solution (the owner, 2026-10-18: "let's register both").** On
    random-q16-0 the control, B and A all found near solutions and lost them: B's seeds 2 and 4 had
    an exact core and exact accuracy 0.916 at length 64, A's six reached worst answers 0.976-0.999,
