@@ -194,6 +194,21 @@ Every success is certified, so it's exact at every length. No run reaches its ca
    `p` 11's runs (35-120 minutes each at 6 at once) and stage 2's probe: 12 runs at 6 workers is
    two waves, about 1.5-4 h. Long tests (uniform words at 128, 256 and 1,024) on one certified network a
    cell (the ladder's D6). Findings in the probe's docstring; the networks to indrajala-models.
+   **Round 2's result (2026-10-19; the runs in the probe's docstring): 0 of 12, so both extremes
+   fail at 120 states (E1's third answer), not one class.** word-problem-s5 0 of 6, move-to-front-5
+   0 of 6 (Wilson 95%: 0.00-0.39 each), against division `p` 11's 4 of 6 at 121 states, the same
+   cell. Every run spent its 600 epochs (43-92 minutes). There are no long tests, since no network
+   certified. **D9 found two mechanisms, both round 1's:**
+   - **Extra codes (S4's near miss, at scale):** all six S5 runs and move-to-front-5's seeds 0 and
+     2 formed a state (share 0.88-1.0) but minimise to 175-842 states against 120. S5 has an exact
+     core at `d` 2: the 120 states' first codes break 0-4%. Its extra codes break 1-17% from right
+     codes, and 83-100% from every code reached (385-748 reached). Seed 5's first codes break 0 of
+     720, with exact accuracy 1.0 at 24 and 0.999 at 48. Move-to-front-5 has no exact core at `d` 4:
+     only 40-69 of the reached codes are right, and the first codes break 39-49%.
+   - **Failure A:** move-to-front-5's seeds 1, 3, 4 and 5 never formed a state (2-3 codes a factor,
+     share 0.21-0.24, minimised to 3).
+   So the state count alone isn't the limit: division certifies at 121 in the same cell.
+
 5. **The fork's trigger, tuned across the classes (T1, registered in this stage's PR before its
    replays):** `drops` over every log from rounds 1-2 and division's (the fork probe, `p` 11, the
    ladder), with candidate triggers chosen by false alarms and drops caught across all of them

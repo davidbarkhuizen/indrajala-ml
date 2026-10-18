@@ -658,6 +658,32 @@ from consolidation/).
 - **Descriptively, A against round 1's control:** A certified S4's seeds 0 and 5 (the control's
   failures) and move-to-front 4's seed 5. It lost move-to-front 4's seeds 0 and 4 to failure A,
   where the control certified them.
+
+Findings (round 2 of the general algebras, stage 4 of docs/general-algebras-workplan.md, E1 as
+amended before its data in #850), 2026-10-18; `n` 5, word-problem-s5 and move-to-front-5, round 1's
+cell unchanged, 600 epochs, seeds 0-5. Code ff2b2f2 (~/code/wt-round2, crate 40a2761),
+OPENBLAS_NUM_THREADS=1, jebel, 6 at once, 18:47 to 21:35. Data in
+data/window-recurrent/general-algebras/round2/ (`readout.txt` added on pyramidon after it),
+manifest `round2.sha256` c2e1b2a5... (480 files, run from general-algebras/).
+
+| machine | states | certified (Wilson 95%) | came near (worst answer >= 0.95) | best minimised |
+| --- | --- | --- | --- | --- |
+| word-problem-s5 | 120 | 0 of 6 (0.00-0.39) | 5 | 175-842 |
+| move-to-front-5 | 120 | 0 of 6 (0.00-0.39) | 2 | 314, 346; 3 (four runs) |
+| division `p` 11 (the p11 ladder) | 121 | 4 of 6 (0.30-0.90) | - | - |
+
+- **Both extremes fail at 120 states (E1's third answer), not one class.** Every run spent its 600
+  epochs (43-92 minutes, steps 22-55). Division certifies at 121 in the same cell, so the state
+  count alone isn't the limit.
+- **Extra codes, as S4's near miss in round 1, at scale.** All six S5 runs formed a state (share
+  0.88-1.0). At `d` 2 their 120 states' first codes break 0-4%, an exact core. But they reach
+  385-748 codes, whose transitions break 83-100%, and the machines minimise to 175-842. Seed 5 came
+  nearest: its first codes break 0 of 720, with exact accuracy 1.0 at 24 and 0.999 at 48, minimised
+  to 175. Seeds 4 and 5 reached a worst answer of 1.000 at their best step and still didn't certify.
+- **Move-to-front-5 has no exact core:** seeds 0 and 2 formed a state (0.93, 0.97), but at `d` 4
+  only 69 and 40 of 337-339 codes are right, the first codes breaking 49% and 39%.
+- **Failure A in move-to-front-5's other four seeds** (1, 3, 4, 5): 2-3 codes a factor, share
+  0.21-0.24, minimised to 3; seeds 1 and 3 collapsed.
 """
 
 from __future__ import annotations
