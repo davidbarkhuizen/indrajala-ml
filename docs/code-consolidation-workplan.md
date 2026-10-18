@@ -334,6 +334,27 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
      was never a solution:** the best steps' networks minimise to 37-62 states against 16, so none
      certified. Seed 4's best step passed its screens perfectly and still minimised to 57. Within
      each later step the near solution broke again before its plateau.
+
+     **P1's result (2026-10-19; the runs in the probe's docstring): the guard certified fewer seeds,
+     not more, so it isn't kept with A.** S4: 6 of 6 in both arms. Move-to-front 4: 1 of 6 guarded,
+     against 3 of 6 unguarded. Every certified network was recertified in both verdicts. That
+     outcome wasn't one the answers named, and the guard did cost runs. Move-to-front 4's seeds 1
+     and 2 repeat the unguarded runs by bits until the guard arms (steps 11 and 13). Each step's
+     screen was perfect, but its network was right only at snap 1.0: at 1.05 it has 6-8 near ties,
+     and branched they give 1-4 wrong states (minimised to 32 and 28). Armed, the guard undid 96% and
+     100% of the updates, so the near ties never widened, and the stall rule ended the runs at steps
+     28 and 22. Unguarded, the same seeds certified 1-3 steps later. On S4 the guard undid 61-77% of
+     the updates in seeds 4 and 5, which still certified, 3 and 7 steps later than unguarded. **So
+     the guard arms on a perfect screen, which isn't a certificate,** and it freezes a near solution
+     as readily as a solution. It shouldn't arm before the step's network passes both verdicts. That
+     change is added to next-steps.md's guard entry, not built here.
+     **C2:** at `d` 2 (S4) and 3 (move-to-front 4), every certified network's reached codes (28-74)
+     are all right, breaking 0. The stalled networks' codes are also right within `d`: their fault
+     is the margins, not the codes. Move-to-front 4's three failures in both arms (seeds 0, 3, 4)
+     are failure A, 3-5 codes and no state (share 0.09-0.29). They never armed, so the arms are
+     identical. **Descriptively** (round 1's control, another commit): A unguarded certified S4's
+     seeds 0 and 5, the control's two failures, and move-to-front 4's seed 5. It lost move-to-front
+     4's seeds 0 and 4, both to failure A (the control certified them).
 3. **The build.** The crate first (indrajala-math-rust): the commitment's target per window,
    defaulting to the nearest code, with parity tests against the Python reference. The golden run is
    bit-identical (an empty table is today's training); tier 1 A/B on the training path. Then the
