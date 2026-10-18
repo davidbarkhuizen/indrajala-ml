@@ -62,9 +62,10 @@ frozen for 56 steps). The final identity token can't help when the one-token ans
   `Mealy.distinguishing_length`; 1 for S4 and random-4-0, so `d` 2; 2 for random-3-0, so `d` 3).
   Pros: just enough to split every pair of the target's states when the network's outputs are right,
   plus a margin against a one-token coincidence; a property of the task, like its window, not of
-  any state. Cons: uses one number from the target. *Confirmed by the owner (2026-10-18).* (b) A
-  fixed `d` (2) everywhere. Cons: too small for targets that need longer words to tell states apart
-  (division's), and silently merges their states.
+  any state. Cons: uses one number from the target. *(a), the per-task `d`, chosen; confirmed by the
+  owner (2026-10-18).*
+  - (b) *Rejected:* a fixed `d` (2) for every task. Cons: too small for targets that need longer
+    words to tell states apart (division's), so it silently merges their states.
 - **D3. Every arm starts the curriculum where a stateless network can't pass.** Step 1 trains
   lengths `1..s0`, where `s0` is the least length at which the answers aren't a function of the token
   alone (computed from the task's answers, exhaustively at these sizes). The other steps follow as
