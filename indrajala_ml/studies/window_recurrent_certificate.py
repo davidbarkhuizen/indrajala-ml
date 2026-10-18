@@ -416,11 +416,15 @@ def name_partition(partition: Sequence[Sequence[int]], coordinates: wt.Coordinat
     """
     The linear form over the target's coordinates (mod their modulus) whose values group the
     partition's states as it does, its first coefficient 1, the forms in order (A, then B, then
-    A + B, A + 2B, ...); None without coordinates or when no form fits.
+    A + B, A + 2B, ...); None without coordinates, when no form fits, and when a fit says nothing:
+    one block (some form is constant on every state: a permutation's positions sum to the same
+    value), or a partition of only some of the target's states.
     """
-    if coordinates is None:
+    if coordinates is None or len(partition) < 2:
         return None
     states = sorted(s for block in partition for s in block)
+    if len(states) < len(coordinates.values):
+        return None
     want = sorted(sorted(block) for block in partition)
     m = coordinates.modulus
     forms = itertools.product(range(m), repeat=len(coordinates.names))

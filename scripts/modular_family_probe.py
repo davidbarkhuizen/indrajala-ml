@@ -51,6 +51,12 @@ the peak, no floor). `drops LOG... [--trigger-...]` scores a trigger against run
 by more than 0.3), how many the trigger catches, of those never recovered how many, and its false
 alarms; at each epoch where the log has every answer kind's share (from the p11-trigger build on),
 else at each diagnosis (a proxy).
+`by-length NETWORK... --task T` and `breaks NETWORK... --task T` read saved networks' machines against
+the task's (indrajala_ml/studies/machine_reading.py; the code-consolidation workplan's stage 2):
+exact accuracy over every word of each length, and the share ending on a code right for its state;
+and the transitions that break, from each state's first code and from its extra codes, over every
+code and from right ones (a code right when `--d` tokens of outputs agree, default the task's
+distinguishing length plus one), by depth. A line a network, its JSON into `--out`.
 `trace` prints runs' logs a line per diagnosis (each factor's codes in use, the state's share, each
 answer's accuracy), marking a collapse: the codes in use below half the diagnosis before.
 `long-test` runs the long tests (docs/division-workplan.md, D4: U1 and S1 at 128, 256 and 1,024
@@ -450,11 +456,14 @@ import multiprocessing
 import sys
 from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
 from indrajala_ml.measurement import machine_lock
+from indrajala_ml.studies import machine_reading as mr
 from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
+from indrajala_ml.studies import window_tasks as wt
 from indrajala_ml.studies.collapse import RULES, SIGNALS, Trigger
 
 GUARD_ARMS = {False: "unguarded", True: "guarded"}  # --guard both's directories
@@ -562,6 +571,18 @@ def main(argv: list[str]) -> int:
     target.add_argument("--task", help="a general algebra's machine")
     epoch.add_argument("--step", type=int, required=True, help="the step whose lengths the epoch trains (1..step)")
     epoch.add_argument("--arm", choices=sorted(ARMS), default="family")
+    for name, summary in (
+        ("by-length", "saved networks' exact accuracy over every word of each length, against the task's machine"),
+        ("breaks", "saved networks' broken transitions, from each state's first code and its extra codes"),
+    ):
+        reading = commands.add_parser(name, help=summary)
+        reading.add_argument("networks", type=Path, nargs="+")
+        reading.add_argument("--task", required=True, help="modular-division-p (the quotient) or a machine's")
+        reading.add_argument("--arm", choices=sorted(ARMS), default="family")
+        reading.add_argument("--d", type=int, help="a right code's word length (default the task's distinguishing + 1)")
+        reading.add_argument("--out", type=Path, help="a directory for each network's <network>.<command>.json")
+        if name == "by-length":
+            reading.add_argument("--lengths", type=int, nargs="+", default=[1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64])
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
     readout.add_argument("root", type=Path, help="the study's directory, a <arm>/seed<s> per run")
     readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
@@ -601,6 +622,10 @@ def main(argv: list[str]) -> int:
         pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
         arms = list(dict.fromkeys(arm for pair in pairs for arm in pair)) if pairs else args.arms
         print("\n".join(mf.readout(args.root, arms, args.certify or args.root / "certify", pairs)))
+        return 0
+    if args.command in ("by-length", "breaks"):
+        for path in args.networks:
+            print(read_network(path, args), flush=True)
         return 0
     if args.command == "trace":
         for path in args.logs:
@@ -664,6 +689,35 @@ def main(argv: list[str]) -> int:
             for done in concurrent.futures.as_completed(runs):
                 print(f"{runs[done]}: {done.result()}", flush=True)
     return 0
+
+
+def read_network(path: Path, args: argparse.Namespace) -> str:
+    """One network's by-length or breaks (machine_reading), a line, and its JSON into --out."""
+    target = wt.task_named(args.task).machine
+    d = args.d or mr.word_length(target)
+    machine = mf.QueryMachine(mf.load_network(str(path)), _target(args.task, args), mf.slot(args.task))
+    walk = mr.product(machine, target)
+    if args.command == "by-length":
+        rows = mr.by_length(walk, sorted(args.lengths), d)
+        result: dict[str, Any] = {"network": str(path), "task": args.task, "d": d, "lengths": rows}
+        line = " ".join(f"{r['n']}:{r['exact']:.3f}/{r['named']:.3f}" for r in rows)
+        line = f"{path}: d {d}, exact/named by length {line}"
+    else:
+        result = {"network": str(path), "task": args.task, **mr.breaks(walk, d)}
+
+        def share(kind: str) -> str:
+            broken, transitions = result[kind]["broken"], result[kind]["transitions"]
+            return f"{broken}/{transitions} ({broken / transitions:.2f})" if transitions else "0/0"
+
+        line = (
+            f"{path}: d {d}, {result['codes']} codes, {result['pairs']} pairs on {result['states']} states, "
+            f"{result['right_pairs']} right; from right codes first {share('first_right')} extra "
+            f"{share('extra_right')}; from every code first {share('first')} extra {share('extra')}"
+        )
+    if args.out is not None:
+        args.out.mkdir(parents=True, exist_ok=True)
+        (args.out / f"{path.parent.name}.{path.stem}.{args.command}.json").write_text(json.dumps(result, indent=1))
+    return line
 
 
 def _target(task: str, args: argparse.Namespace) -> mf.Target:
