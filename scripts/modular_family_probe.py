@@ -625,6 +625,39 @@ consolidation/; the readout added on pyramidon after it).
   still minimised to 57. Within each later step the near solution broke again before its plateau.
   Keeping a near solution doesn't make it a machine. The extra codes are wrong, as A's reading
   found.
+
+Findings (P1, A with the certificate guard, stage 2c of docs/code-consolidation-workplan.md; a
+probe, its answers written before the data), 2026-10-19; round 1's cell with `--consolidate --guard
+both` (each seed unguarded and guarded), word-problem-s4 and move-to-front-4, seeds 0-5, 600
+epochs. Code bab7690 (crate 7df828d, its own venv), OPENBLAS_NUM_THREADS=1, stone (i7-1255U), 6
+at once, 2026-10-18 22:41 to 2026-10-19 01:06. Data in data/window-recurrent/consolidation/p1/
+(and `certify/`, added on pyramidon after it), manifest `p1.sha256` 2a753178... (662 files, run
+from consolidation/).
+
+| cell | unguarded | guarded | round 1's control (another commit) |
+| --- | --- | --- | --- |
+| word-problem-s4 | 6 of 6 | 6 of 6 | 4 of 6 |
+| move-to-front-4 | 3 of 6 (seeds 1, 2, 5) | 1 of 6 (seed 5) | 4 of 6 |
+
+- **The guard certified fewer seeds, not more,** and isn't kept with A. Every certified network
+  was recertified in both verdicts (28-75 codes reached, minimised to 24, snap ratio >= 1.00-1.25).
+- **It froze near solutions.** Move-to-front 4's seeds 1 and 2 repeat the unguarded runs by bits
+  until the guard arms (steps 11 and 13, a perfect screen). Their networks were right at snap 1.0
+  but not at 1.05: 6-8 near ties that, branched, give 1-4 wrong states (minimised to 32 and 28).
+  Armed for 18 and 10 epochs, the guard undid 96% and 100% of the updates, so the margins never
+  widened, and the stall rule ended the runs (steps 28 and 22). Unguarded, the same seeds
+  certified at steps 14 and 13. On S4 it undid 61-77% in seeds 4 and 5, which certified 3 and 7
+  steps later than unguarded; in the other four S4 seeds it undid 0-2 updates.
+- **So a perfect screen isn't a certificate,** and a guard armed by one keeps whatever it
+  finds. Arming it only on a step that passes both verdicts is the change it needs (added to
+  next-steps.md's guard entry; not built).
+- **C2:** every certified network's reached codes are all right within `d` (2 for S4, 3 for
+  move-to-front 4), breaking 0. The stalled networks' codes are too, so their fault is the
+  margins. Move-to-front 4's other failures, seeds 0, 3 and 4 in both arms (never armed, so
+  identical), are failure A: 3-5 codes, state share 0.09-0.29, spent at steps 41-46.
+- **Descriptively, A against round 1's control:** A certified S4's seeds 0 and 5 (the control's
+  failures) and move-to-front 4's seed 5. It lost move-to-front 4's seeds 0 and 4 to failure A,
+  where the control certified them.
 """
 
 from __future__ import annotations

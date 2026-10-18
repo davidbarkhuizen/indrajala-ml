@@ -205,7 +205,11 @@ worth running. In the order recommended, after one item that runs across them:
   guard only the states training visits; calm the optimizer once right (cap the update, reset
   Adam's moments); shrink the codebook to the minimised machine once right. First the cause
   probe: whether the undone flips land on rarely visited codes (`p` 11 reaches 210-456 codes for
-  121 states; stage 2d's network 8 for 3).
+  121 states; stage 2d's network 8 for 3). **Seen again in the consolidation plan's P1 (2026-10-19):** armed on a
+  perfect screen, the guard froze two move-to-front 4 networks that were right at snap 1.0 but had
+  6-8 near ties at 1.05, undoing 96-100% of the updates until the stall rule, where unguarded
+  they certified within 1-3 steps. The first softening to try is arming only on a step that passes
+  both verdicts.
 - **The fork's trigger, tuned across these machine classes**, not on division alone (the
   p11-trigger workplan's stage 4, deferred; the owner, 2026-10-17: the trigger "would need to be
   either target machine agnostic, or we need a way to tune it in general"). The tools exist:
