@@ -25,7 +25,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .venv
-          key: venv-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt') }}
+          key: venv-${{ runner.os }}-${{ runner.arch }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt') }}
 
       - name: Rust wheel key
         id: rust-commit
@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .rust-wheel
-          key: rust-wheel-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-maturin${{ steps.rust-commit.outputs.maturin }}-${{ steps.rust-commit.outputs.sha }}
+          key: rust-wheel-${{ runner.os }}-${{ runner.arch }}-py${{ steps.setup-python.outputs.python-version }}-maturin${{ steps.rust-commit.outputs.maturin }}-${{ steps.rust-commit.outputs.sha }}
 
       - name: Install pinned Rust toolchain
         if: steps.rust-wheel.outputs.cache-hit != 'true'
@@ -61,11 +61,13 @@ jobs:
     # Parallel jobs: rust/tests/ whole, and tests/ split into 8 shards (tests/conftest.py's
     # --shard I/N: every Nth test in collection order, so the slow parametrized tests spread across
     # them). Each job pays its own setup (about 20 s on a cache hit); the wall-clock is the slowest
-    # shard's, not the suite's.
+    # shard's, not the suite's. Every job on x86_64 and aarch64 (the aarch64 workplan, stage 4);
+    # the x86_64 jobs keep their names, the aarch64 ones add ", arm64".
     strategy:
       fail-fast: false
       matrix:
-        include:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+        part:
           - {suite: rust/tests/, shard: ""}
           - {suite: tests/, shard: 0/8}
           - {suite: tests/, shard: 1/8}
@@ -75,8 +77,8 @@ jobs:
           - {suite: tests/, shard: 5/8}
           - {suite: tests/, shard: 6/8}
           - {suite: tests/, shard: 7/8}
-    name: test (${{ matrix.suite }}${{ matrix.shard && format(' {0}', matrix.shard) || '' }})
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.part.suite }}${{ matrix.part.shard && format(' {0}', matrix.part.shard) || '' }}${{ matrix.runner == 'ubuntu-24.04-arm' && ', arm64' || '' }})
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v7
@@ -95,7 +97,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .venv
-          key: venv-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt') }}
+          key: venv-${{ runner.os }}-${{ runner.arch }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt') }}
 
       # Keyed on scripts/fetch_datasets.py's own content, which embeds every dataset's pinned
       # tag and each file's expected SHA-256 - so bumping either one changes the hash and
@@ -126,7 +128,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .rust-wheel
-          key: rust-wheel-${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-maturin${{ steps.rust-commit.outputs.maturin }}-${{ steps.rust-commit.outputs.sha }}
+          key: rust-wheel-${{ runner.os }}-${{ runner.arch }}-py${{ steps.setup-python.outputs.python-version }}-maturin${{ steps.rust-commit.outputs.maturin }}-${{ steps.rust-commit.outputs.sha }}
 
       # Only on a wheel-cache miss (a submodule bump): rust/target's dependency builds, keyed by
       # rust-cache on the toolchain, Cargo.lock and Cargo.toml; the crate itself always recompiles.
@@ -147,10 +149,11 @@ jobs:
         run: ./cli setup --rust-wheel-dir .rust-wheel
 
       - name: Test
-        run: ./cli test ${{ matrix.suite }} ${{ matrix.shard && format('--shard {0}', matrix.shard) || '' }}
+        run: ./cli test ${{ matrix.part.suite }} ${{ matrix.part.shard && format('--shard {0}', matrix.part.shard) || '' }}
 
       # The crate's bits are the same on every machine (the aarch64 workplan, D1), so its golden
-      # entries are a committed reference, checked here on the short job (about 1 s).
+      # entries are a committed reference, checked here on the short job (about 1 s), on both
+      # architectures (D7).
       - name: Golden run (Rust)
-        if: matrix.suite == 'rust/tests/'
+        if: matrix.part.suite == 'rust/tests/'
         run: .venv/bin/python scripts/golden_training_run.py check data/refactoring/golden_run_rust.json
