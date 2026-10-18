@@ -253,6 +253,24 @@ where you meet a new trap; delete one that no longer holds.
   naming it. The lock's record is cleared when the hold ends; a line left in `~/code/ab-runs/run.lock` by a killed job means nothing (it's an `flock`; `machine_lock.holder()` checks the pid).
 - **The permission classifier has blocked `pkill` and `kill` over ssh on `jebel`** at times; a kill
   of a named PID or process group the owner asked for went through. If blocked, ask the owner.
+- **`stone`, the third machine (since 2026-10-18): studies only, never timing.** `ssh stone`
+  (192.168.1.101, user david); i7-1255U laptop (2 performance and 8 efficiency cores, 12 threads,
+  15 W), 30 GB. **Available weekdays 18:00-07:00 and all weekend**: a study must fit the window or
+  split by whole runs. Lid and idle sleep are off (logind drop-in, GNOME), and it should be on AC.
+- **`stone`'s sandbox (the owner's rules):** work only in `~/labour` and below, and **no authed
+  service on or from it** (no `gh`, no GitHub remotes, no tokens). Code goes as git bundles by scp
+  from `pyramidon` (`git bundle create X.bundle main`; a bundle of one branch has no `HEAD`, so clone
+  with `-b main`; the submodule from its own bundle with `git -c protocol.file.allow=always
+  submodule update --init`), data and results by rsync from `pyramidon`, with manifests. Anonymous
+  downloads are allowed (rustup); pip installs offline from `~/labour/wheels` (fetched on
+  `pyramidon` with `pip download --only-binary=:all:`, leaving out `requirements.txt`'s `-e .`,
+  which zips the whole repo, data and all). `source ~/labour/env.sh` first: caches, config, pip and
+  `AB_RUNS_ROOT` (the machine lock) all under `~/labour`. Checkout `~/labour/code/indrajala-ml`.
+- **`stone`'s throughput:** at 8 workers it matches `jebel` at 6 (the ladder's `p` 13 cell, 30
+  epochs, seeds bit-identical with `jebel`'s round 2, screens equal at every matched epoch). A run
+  takes 0.89x `jebel`'s time at 4 workers, 1.34x at 8 and 1.93x at 12, so 12 adds about 4% over 8:
+  use 8. Measured only on early steps and 3.5-minute bursts; a long run's sustained clocks may be
+  lower on a 15 W laptop.
 - **Local `ab.py run` on `pyramidon`** needs `AB_CRATE_REPO=/home/david/code/indrajala-ml/rust` and
   `--skip-profile`; diagnostics only. `ab.py remote run` names the run after the laptop's branch:
   pass `--name`.
