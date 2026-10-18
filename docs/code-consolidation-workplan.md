@@ -216,6 +216,17 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
    "Bump rust/" PR and the probe's PR (tier 0): D3's `s0` (and a test that it's 1 for every round-1
    machine but random-3-0), D4's lengths (`--long-tail 4`), A's groups and pull (`--consolidate`),
    the per-diagnosis log of groups and pulls, the feasibility table against the config.
+
+   **`run --resume` (the owner, 2026-10-18), its own PR in this stage, tier 0:** a run that is
+   stopped goes on from its last epoch, so `stone`'s runs can pause at 07:00 and go on at 18:00.
+   Each epoch's end leaves a checkpoint beside the run: the network with its optimizer's state
+   (Adam's moments and step count) and its generator's, the loop's place and counters (step,
+   epoch, epochs spent, the step's best and patience, the fork's rate, count, peak and snapshot,
+   the guard's state, A's groups) and the minutes trained, so the wall-clock budget counts
+   training only. `run --resume DIR` reads it and trains on. The test: a run stopped at an epoch
+   and resumed against the same run uninterrupted, every network and log row but the seconds the
+   same by bits, on a small cell in the suite and once on round 1's cell (`random-4-0`, a few
+   steps) before the budget probe.
 4. **The budget probe:** one seed an arm a cell, 30 epochs, on `stone`, for each arm's epoch time
    and memory; the round's estimate as a range, and its split across `stone` and `jebel` (D8).
 5. **The round:** 54 runs (3 arms x 3 cells x 6 seeds), plus 36 for each cell D6 adds; recertified
