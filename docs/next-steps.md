@@ -15,7 +15,11 @@ in progress keeps its own list: [general-algebras-workplan.md](general-algebras-
 [grouped-query-attention-workplan.md](grouped-query-attention-workplan.md),
 [cross-attention-workplan.md](cross-attention-workplan.md),
 [arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md),
-[window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md). The order
+[code-consolidation-workplan.md](code-consolidation-workplan.md),
+[aarch64-workplan.md](aarch64-workplan.md),
+[factorisation-machine-workplan.md](factorisation-machine-workplan.md), and the deferred or paused
+[commitment-control-workplan.md](commitment-control-workplan.md) and
+[snap-wall-workplan.md](snap-wall-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -50,6 +54,10 @@ docs cite them by section:
 | The demos in their own repository (the demo split) | #720 | #722-#724, indrajala-demos #1-#2 | `git show 9c50fe6:docs/demos-split-workplan.md` |
 | The window loop in the crate (the window program) | #792 | #799-#802, crate #58-#59, archive #28-#30, #804 | `git show ad651d8:docs/window-program-workplan.md` |
 | Substantiating the window-recurrent adder's findings (the claims workplan, C0-C8, E1-E8) | #701 | #703-#808 (findings #712-#808), models #1; report [window-recurrent-report.md](window-recurrent-report.md) | `git show fea9de1:docs/window-recurrent-claims-workplan.md` |
+| The window-recurrent adder (milestone A; its claims in the row above) | #685 | #686-#702, #809 | `git show e45944e:docs/window-recurrent-adder-workplan.md` |
+| A factored state for the window-recurrent network (C9, C9', C9'') | #737 | #738-#764, crate #57 | `git show e45944e:docs/factored-state-workplan.md` |
+| A family of modular operations on one state (option 2) | #765 | #766 | `git show e45944e:docs/modular-family-workplan.md` |
+| Modular division with the family (`p` 5 and 7, the registered claim) | #766 | #767-#782 | `git show e45944e:docs/division-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -100,7 +108,7 @@ factored state and a cover). Left:
   every step certified (E2b snapped's cell with only the window changed): a candidate, not
   registered.
 
-## From the division work (2026-10-15; division-workplan.md is still open)
+## From the division work (2026-10-15; the division, modular-family and factored-state workplans retired 2026-10-18)
 
 Decided with the owner, each to become a workplan or a stage:
 
@@ -155,6 +163,21 @@ Decided with the owner, each to become a workplan or a stage:
   "family" (the code's arm name only), "basis", "ideal" (a semigroup term), "model". "Characteristic
   sample" (grammatical inference) is unverified: no open copy of Oncina & García 1992 or de la
   Higuera 1997 was found.
+- **Factored readouts** (the division workplan's stage 6, its D9; the modular family's stage 2):
+  every certified division network spreads its state over both codebooks, no factor a residue or
+  any `xA + yB`. To make factors carry residues again, the factored-state workplan's D10 reopens:
+  (a) the poolings over the output layer's tokens with independence stated only at the cell, or (c)
+  one window pass per factor, its `StateInput`s reading that factor alone. Its (b), reading before
+  the state, blocked learning even one counter (the D10 check, 0 of 2 against 2 of 2).
+- **Staggered factors, a next design** (the factored-state workplan's C9'', 0 certified: each later
+  factor's cell collapsed to one output in its turn): start a factor at its turn re-drawn and
+  re-seeded, its commitment off until it splits, a turn kept only if the answer improved; or train
+  jointly until each factor splits, then stagger.
+- **The factored state's untried variations** (that plan's "Not in this plan"): the cross-term on,
+  more factors; a state loss (its D3 (b)-(d)) only if the owner chooses it.
+- **The commitment controls** (option 1, the usage thermostat) stay deferred in
+  [commitment-control-workplan.md](commitment-control-workplan.md), for a probe that must train
+  past a solution or shows factors collapsing.
 
 ## Beyond arithmetic: other finite-state targets (the owner and Claude, 2026-10-17)
 
@@ -683,7 +706,7 @@ those three (#673); the rest waits here until a planned piece of work needs it.
 ## From length generalisation (terminated)
 
 The owner terminated the plan (2026-10-12) after its reading (stage 2), for the window-recurrent
-design ([window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md), Why this design):
+design (`git show e45944e:docs/window-recurrent-adder-workplan.md`, Why this design):
 a fixed-depth network that finds a carry's deciding column in one long hop needs position codes that
 stay distinguishable at any distance, which bounded codes can't give.
 
@@ -760,7 +783,7 @@ decisions' unchosen options and its Excluded for missing infrastructure (`git sh
 - **Candidates the framework couldn't build** (the workplan's Excluded for missing
   infrastructure), each a new candidate entry and a catalogue run once its piece exists:
   - a recurrent adder (one column a step, the carry as state): the window-recurrent adder,
-    [window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md);
+    `git show e45944e:docs/window-recurrent-adder-workplan.md`;
   - length generalisation (train at `n`, test at `n + k`): rotary positions exist (step 8), but
     loading trained weights into a network of another `T` doesn't (the parked `length-free-shapes`
     branch, From length generalisation); the window-recurrent adder sidesteps it with a fixed

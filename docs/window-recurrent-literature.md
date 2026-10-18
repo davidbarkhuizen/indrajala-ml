@@ -10,7 +10,7 @@ name given; arXiv ids are given for each.
 ## Scope and method
 
 The question: which of the window-recurrent adder's findings (stage 9 of
-[window-recurrent-adder-workplan.md](window-recurrent-adder-workplan.md); the findings in
+`git show e45944e:docs/window-recurrent-adder-workplan.md`; the findings in
 `scripts/window_recurrent_study.py`'s docstring) are already in the literature? The searches
 (2026-10-13) covered recurrent and Neural-GPU-style length generalisation on arithmetic,
 discretised or quantised recurrent states, segment- and block-recurrent transformers on

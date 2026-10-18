@@ -1,5 +1,5 @@
 """
-The modular family's probe (docs/modular-family-workplan.md, stage 2): one network answering the
+The modular family's probe (the modular-family workplan, stage 2): one network answering the
 running quotient, sum and difference of two numbers mod p at every window (query tokens), against
 the quotient alone; a factored state of C9''s cell, trained by the curriculum within a wall-clock
 budget, diagnosed as it trains (indrajala_ml/studies/modular_family.py).
@@ -71,7 +71,7 @@ code and from right ones (a code right when `--d` tokens of outputs agree, defau
 distinguishing length plus one), by depth. A line a network, its JSON into `--out`.
 `trace` prints runs' logs a line per diagnosis (each factor's codes in use, the state's share, each
 answer's accuracy), marking a collapse: the codes in use below half the diagnosis before.
-`long-test` runs the long tests (docs/division-workplan.md, D4: U1 and S1 at 128, 256 and 1,024
+`long-test` runs the long tests (the division workplan, D4: U1 and S1 at 128, 256 and 1,024
 columns, the harness's sizes) on saved family networks, one slot (the task's), into
 DIR/<network>.long-test.json (skipped when there), a line each of its cases and failures.
 
@@ -80,7 +80,7 @@ class, each factor's codes used and its share of A, B, the sum S, the difference
 tests; at each step's end, the quotient's accuracy at 24 and 48 columns) and `network.json` (the
 network at its last step's end).
 
-Findings (stage 2 of docs/modular-family-workplan.md), on jebel (i7-9700K), one process a run,
+Findings (stage 2 of the modular-family workplan), on jebel (i7-9700K), one process a run,
 OPENBLAS_NUM_THREADS=1, 2026-10-15; p 5, two factors of 16 codes, s 16 each, k 1 column (D3), the
 probe's settings (D4), a 60-minute budget a run. Data in data/window-recurrent/modular-family-probe/
 (a directory a run: log.jsonl, network.json; manifest `modular-family-probe.sha256`,
@@ -129,7 +129,7 @@ modular-family-probe/certify/ (in the first manifest); both machines.
   and the state never split in either arm (the step at one column passed on the column alone); found
   in local checks, fixed in 9b4be51 before any registered run.
 
-Findings (stages 2 and 3 of docs/division-workplan.md), 2026-10-15; p 5, reading the output, k 1
+Findings (stages 2 and 3 of the division workplan), 2026-10-15; p 5, reading the output, k 1
 column, the probe's settings, 60 minutes a run, stop at certified; the runs on jebel (i7-9700K), a
 process each, OPENBLAS_NUM_THREADS=1. Data in data/window-recurrent/division-probe-<probe>/ (a
 directory a seed: log.jsonl, network.json, certified-step-<s>.network.json; seed<s>.log,
@@ -187,7 +187,7 @@ and 1.0) on pyramidon.
   so the curriculum's default 280 applied; no run passed step 34. (Since 8364a83 the cap defaults
   to the cell's exclusion bound, `modular_family.exclusion_bound`.)
 
-Findings (stage 4 of docs/division-workplan.md, probe 4), 2026-10-15; p 7, the family, two factors
+Findings (stage 4 of the division workplan, probe 4), 2026-10-15; p 7, the family, two factors
 of 16 (256 joint states for 49; the exclusion bound 304, the cap), reading the output, k 1 column,
 the probe's settings, 60 minutes a run, stop at certified, seeds 0-3; jebel (i7-9700K), the main
 checkout at 8364a83, a process each, OPENBLAS_NUM_THREADS=1, 12:41-13:42. Data in
@@ -231,7 +231,7 @@ runs):
 - Not measured: the loss and the gradient's norm per batch around a collapse (the diagnosis is
   every 5 epochs); the next probe should log them.
 
-Findings (stage 5 of docs/division-workplan.md, the registered claim, D11-D14), 2026-10-15; p 5,
+Findings (stage 5 of the division workplan, the registered claim, D11-D14), 2026-10-15; p 5,
 two factors of 16, reading the output, the probe's settings, 400 epochs trained in all (180
 minutes only a guard; no run reached it), stop at certified, seeds 100-119 in each arm; ce4015d,
 OPENBLAS_NUM_THREADS=1; jebel seeds 100-113 (each arm 3 at once), pyramidon 114-119 (each arm 2 at

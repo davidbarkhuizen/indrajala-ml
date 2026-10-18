@@ -1,7 +1,7 @@
 # Workplan: controlling the codes' commitment (a factor that collapses)
 
 **Status: written 2026-10-15 at the owner's request; DEFERRED behind option 2
-([modular-family-workplan.md](modular-family-workplan.md)): it starts only if option 2's probe
+(`git show e45944e:docs/modular-family-workplan.md`): it starts only if option 2's probe
 fails, or if a later probe shows factors collapsing. Decisions D1-D5 settled (the owner delegates
 a workplan's decisions; each with its options' pros and cons). Probe-driven, as option 2.**
 
