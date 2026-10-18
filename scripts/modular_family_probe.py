@@ -499,6 +499,37 @@ round1-seed5-jebel/).
 - **Next:** round 2 (`n` 5) is deferred until the random class passes round 1 (D5, the owner); the
   consolidation workplan tests both remedies (A, consolidation; B, longer words) with D3 in every
   arm, after its B-origins probes (stage 2b).
+
+Findings (B's origins, stage 2b of docs/code-consolidation-workplan.md; probes, their answers
+written before the data), 2026-10-18; round 1's cell (as above), 600 epochs, seeds 0-2, on four
+random machines with random-4's tokens and classes. Code 1496113, OPENBLAS_NUM_THREADS=1, jebel, 6
+at once, 11:07 to 12:36 (a re-launch after a power cut; the first launch's three certified runs
+repeated by bits). Data in data/window-recurrent/consolidation/b-probes/ (`readout.txt`,
+`certify/`, `certify.log`, `reading/` with `breaks` at `d` 1 and 2 and `by-length` on each failure's
+best step network), manifest `b-probes.sha256` ca688177...c8bd2b74 (291 files, run from
+consolidation/; `certify/` and `reading/` added on pyramidon after it).
+
+| machine | states | certified (Wilson 95%) | slowest success's epochs | failures' worst answer at best |
+| --- | --- | --- | --- | --- |
+| random-q8-1 | 8 | 3 of 3 (0.44-1.00) | 61 | - |
+| random-q12-0 | 12 | 2 of 3 (0.21-0.94) | 169 | 0.984 |
+| random-q16-0 | 16 | 0 of 3 (0.00-0.56) | - | 0.968-0.995 |
+| random-perm-4-0 | 24 | 0 of 3 (0.00-0.56) | - | 0.788-0.908 |
+
+- **Every certified network passes both verdicts:** 0 wrong outputs, 0 wrong states, each
+  minimised to its machine's states; 17-19 joint codes reached at 8 states, 32-49 at 12; logit
+  lead >= 3.58, no near ties.
+- **Merging isn't failure B's cause:** random-perm-4-0 (every token a bijection) fails as random-4-0
+  does: every state reached, at `d` 1 first codes breaking 6-33% and extra codes 37-57%, breaks from
+  depth 2-3; at `d` 2 only 5-19 of 24 first codes right, breaking 27-60% (S4's near miss: 1 of 120);
+  exact accuracy at most 0.15 by length 16.
+- **No sharp edge in size:** failure B (no exact core at `d` 2) appears in one run at 12 (seed 1:
+  1 of 12 first codes right at `d` 2) and one at 16 (seed 0: 9 of 16, breaking 31%), and in every
+  run at 24. random-q16-0's seeds 1 and 2 instead fail as S4's near miss: an exact core at `d` 2
+  (first codes breaking 1-3%), extra codes breaking 6-7%, exact accuracy 0.99 and 0.98 at length 8,
+  0.89 and 0.85 at 16, 0.43 and 0.33 at 64; every random-q16-0 run collapsed after its best step.
+- **Next:** remedy B (`--long-tail 4`) against the control on random-q16-0, seeds 0-5, registered in
+  the plan's stage 2b before its data.
 """
 
 from __future__ import annotations

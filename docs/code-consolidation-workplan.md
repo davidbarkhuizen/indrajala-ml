@@ -210,6 +210,35 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
    | random-perm-4-0 | 24 | 15 | 225 | 9.4 | 248 |
 
    Findings in the probe's docstring with the data's manifest; the next probe chosen from them.
+
+   **The answers (2026-10-18; the runs in the probe's docstring, manifest `b-probes.sha256`):**
+   - **Merging isn't B's cause:** random-perm-4-0 failed 0 of 3, all with B's signature (every
+     state reached, breaks from depth 2-3; at `d` 2 only 5-19 of 24 first codes right, breaking
+     27-60%, against S4's near miss's 1 of 120).
+   - **In size, no sharp edge:** random-q8-1 certified 3 of 3, random-q12-0 2 of 3, random-q16-0 0
+     of 3. B's signature appears in one failure at 12 (seed 1) and one at 16 (seed 0); random-q16-0's
+     other two failures (seeds 1 and 2, worst answer 0.992 and 0.995) have S4's kind: an exact
+     core at `d` 2 (first codes breaking 1-3%), extra codes breaking 6-7%, exact accuracy 0.89 and
+     0.85 at length 16, 0.43 and 0.33 at 64, each collapsing after its best step. random-q16-0 is the
+     smallest size failing 0 of 3, with both mechanisms.
+
+   **B on the smallest failing random machine (the owner, 2026-10-18: "test B on the smallest
+   failing random machine next"; "it decides whether we can continue to use random machines in
+   our studies").** A probe, its answers written before its data: random-q16-0, seeds 0-5, two
+   arms on one commit (D5): the control (2b's cell) and B (`--long-tail 4`, D4, its long half
+   capped at the exclusion bound 159; 2b's runs ended at steps 25-29, so 4 `j` stays below it).
+   600 epochs, on `jebel`, 6 at once, the control then B (about 1 h and 2 h); read with `breaks` and
+   `by-length` at `d` 1 and 2. The control's seeds 0-2 repeat 2b's on the new commit, a check by bits.
+   - **B certifies at least one seed and the control none:** longer words cure random-q16-0's
+     failures (at least those with an exact core); random machines stay in the studies with B in
+     their cell, and the next probe is random-4-0 with B, for the new limit.
+   - **B 0 of 6:** at this schedule our method handles random machines to about 12 states; read
+     whether B lengthened the exact prefix (C2) and which mechanism each failure has. Random
+     machines then stay only at sizes that certify, a recorded limit rather than a test cell,
+     after one more probe the data points to (A for exact cores, a longer budget, or D4's factor
+     or share).
+   - **Both arms certify some seeds:** random-q16-0 is near the edge; read C2 (B's exact prefix
+     against the control's) before choosing.
 3. **The build.** The crate first (indrajala-math-rust): the commitment's target per window,
    defaulting to the nearest code, with parity tests against the Python reference. The golden run is
    bit-identical (an empty table is today's training); tier 1 A/B on the training path. Then the
