@@ -10,6 +10,11 @@ from it agree with the target's from the state on every word of up to `d` tokens
 distinguishing length plus one (the workplan's D2): with right outputs, enough to tell every pair
 of the target's states apart, with a token's margin. A state's **first code** is the one its
 breadth-first shortest word reaches; its other codes are **extra**.
+
+`groups` reads the network alone, with no target (the workplan's A, D1): its reachable codes grouped
+by `d`-equivalence (Moore's `k`-equivalence: no word of `d` tokens or fewer tells two apart by the
+network's outputs), each group's representative the code its shortest word reaches; `consolidation`
+is the table that pulls each duplicate to its representative.
 """
 
 from __future__ import annotations
@@ -25,6 +30,64 @@ from indrajala_ml.studies import window_tasks as wt
 
 IntArray = npt.NDArray[np.int64]
 BoolArray = npt.NDArray[np.bool_]
+
+
+@dataclass(frozen=True)
+class Walk:
+    """
+    The network's machine alone: its codes the start reaches, breadth first (code 0 the start's, so
+    each code's index orders it by its shortest word), each code's next code and outputs per token.
+    """
+
+    codes: list[wc.State]
+    next: IntArray  # (C, T) the code after each token
+    outputs: IntArray  # (C, T, S) the outputs after each token, a label per slot the machine reads
+
+
+def walk(machine: wc.WindowMachine, tokens: int) -> Walk:
+    """The network's machine walked from its start over every token (k 1, snapped states only)."""
+    assert machine.columns == 1, "one column a window"
+    windows = wc.all_windows(1, tokens)
+    start = tuple(int(x) for x in machine.start()[0])
+    index: dict[wc.State, int] = {start: 0}
+    codes = [start]
+    nexts: list[list[int]] = []
+    outputs: list[IntArray] = []
+    for code in codes:  # breadth first: codes grows as it's walked
+        st = machine.step(code, windows)
+        following: list[int] = []
+        for row in st.states:
+            reached = tuple(int(x) for x in row)
+            if reached not in index:
+                index[reached] = len(codes)
+                codes.append(reached)
+            following.append(index[reached])
+        nexts.append(following)
+        outputs.append(np.asarray(st.digits, dtype=np.int64))
+    return Walk(codes, np.array(nexts, dtype=np.int64), np.stack(outputs))
+
+
+def groups(walk: Walk, d: int) -> list[list[int]]:
+    """
+    The walk's codes grouped by d-equivalence (Moore refinement: two codes equivalent to depth k
+    when their outputs agree and their next codes are equivalent to depth k - 1), each group's codes
+    in order of reach, so its first the representative; groups ordered by their representatives.
+    """
+    count = len(walk.codes)
+    outputs = walk.outputs.reshape(count, -1)
+    block = np.zeros(count, dtype=np.int64)
+    for _ in range(d):
+        _, inverse = np.unique(np.concatenate([outputs, block[walk.next]], axis=1), axis=0, return_inverse=True)
+        block = inverse.reshape(-1)
+    members: dict[int, list[int]] = {}
+    for c in range(count):
+        members.setdefault(int(block[c]), []).append(c)
+    return sorted(members.values())
+
+
+def consolidation(walk: Walk, found: list[list[int]]) -> dict[wc.State, wc.State]:
+    """Each group's duplicates' codes to its representative's (the consolidation network.consolidate takes)."""
+    return {walk.codes[c]: walk.codes[group[0]] for group in found for c in group[1:]}
 
 
 @dataclass(frozen=True)
@@ -47,44 +110,29 @@ class Product:
 
 
 def product(machine: wc.WindowMachine, target: wt.Mealy) -> Product:
-    """The network's machine walked with the target's from both starts (k 1, snapped states only)."""
-    assert machine.columns == 1, "one column a window"
-    windows = wc.all_windows(1, target.tokens)
-    start = tuple(int(x) for x in machine.start()[0])
-    code_index: dict[wc.State, int] = {start: 0}
-    codes = [start]
-    steps: dict[int, tuple[list[int], list[int]]] = {}  # code -> (next codes, outputs) per token
+    """The network's machine walked with the target's from both starts (k 1, snapped states only; its first slot)."""
+    network = walk(machine, target.tokens)
     pair_index: dict[tuple[int, int], int] = {(0, target.start): 0}
     pairs: list[tuple[int, int]] = [(0, target.start)]
     depth: list[int] = [0]
     nexts: list[list[int]] = []
     right: list[list[bool]] = []
     for p, (c, s) in enumerate(pairs):  # breadth first: pairs grows as it's walked
-        if c not in steps:
-            st = machine.step(codes[c], windows)
-            following: list[int] = []
-            for row in st.states:
-                code = tuple(int(x) for x in row)
-                if code not in code_index:
-                    code_index[code] = len(codes)
-                    codes.append(code)
-                following.append(code_index[code])
-            steps[c] = (following, [int(x) for x in st.digits[:, 0]])
-        following, outputs = steps[c]
+        following, outputs = network.next[c], network.outputs[c, :, 0]
         row_next: list[int] = []
         row_right: list[bool] = []
         for t in range(target.tokens):
-            pair = (following[t], int(target.transition[s, t]))
+            pair = (int(following[t]), int(target.transition[s, t]))
             if pair not in pair_index:
                 pair_index[pair] = len(pairs)
                 pairs.append(pair)
                 depth.append(depth[p] + 1)
             row_next.append(pair_index[pair])
-            row_right.append(outputs[t] == int(target.output[s, t]))
+            row_right.append(int(outputs[t]) == int(target.output[s, t]))
         nexts.append(row_next)
         right.append(row_right)
     return Product(
-        codes,
+        network.codes,
         pairs,
         np.array(nexts, dtype=np.int64),
         np.array(right, dtype=np.bool_),

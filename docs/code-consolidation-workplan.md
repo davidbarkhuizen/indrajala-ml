@@ -217,6 +217,18 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
    machine but random-3-0), D4's lengths (`--long-tail 4`), A's groups and pull (`--consolidate`),
    the per-diagnosis log of groups and pulls, the feasibility table against the config.
 
+   **The probe's PR (2026-10-18, tier 0): built as above.** `s0` is computed exactly from the
+   target's states reached at each depth (`first_length`): 2 for random-3-0, 1 for every other
+   round-1 machine and division (tested), a step named by its longest length, so random-3-0's runs
+   begin at step 2. The long tail takes every other example in turn over `j+1..min(F j, cap)`, the
+   other half the curriculum's lengths in turn, as before. A's walk is the network's alone
+   (`machine_reading.walk`, on which `product` is now built), refined over every slot's outputs;
+   its table is read at each diagnosis, read again on a fork's restored network, and kept in the
+   checkpoint, each such row logging the codes reached, the groups and the duplicates pulled
+   (`consolidation`). Without the arms a run is as before (its identity too, so earlier checkpoints
+   resume). On round 1's cell (random-4-0, seed 0, 15 epochs, the fork) A pulled 2 of 33 codes at its
+   first diagnosis, training then differing from the control's; the epochs' time is unchanged.
+
    **`run --resume` (the owner, 2026-10-18), its own PR in this stage, tier 0:** a run that is
    stopped goes on from its last epoch, so `stone`'s runs can pause at 07:00 and go on at 18:00.
    Each epoch's end leaves a checkpoint beside the run: the network with its optimizer's state
