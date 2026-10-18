@@ -194,6 +194,21 @@ def test_a_consolidation_holds_each_duplicates_state_to_its_representatives_code
     assert all(np.array_equal(a, b) for a, b in zip(plain, _fresh_gradients(network, X, labels), strict=True))
 
 
+@pytest.mark.parametrize("recurrence", SNAPPED)
+def test_set_commitments_changes_training_and_the_specs_values_restore_it_by_bits(recurrence: str):
+    # the commitment-control workplan's diagnostic: commitment 0 drops the commitment's gradient
+    network = _network(recurrence=RECURRENCES[recurrence])
+    X, labels = _batch(3, examples=8)
+    plain = _fresh_gradients(network, X, labels)
+    specs = [0.0 if f.codes is None else f.codes.commitment for f in network.recurrence.factors]
+    network.set_commitments([0.0] * len(specs))
+    assert all(f.codes.commitment == 0.0 for f in network.recurrence_layer.factors)
+    off = _fresh_gradients(network, X, labels)
+    assert any(not np.array_equal(a, b) for a, b in zip(plain, off, strict=True))
+    network.set_commitments(specs)
+    assert all(np.array_equal(a, b) for a, b in zip(plain, _fresh_gradients(network, X, labels), strict=True))
+
+
 def test_a_consolidation_is_refused_unless_it_fits_the_recurrence():
     with pytest.raises(AssertionError, match="every factor snapped"):
         _network(recurrence=FACTORED_CROSS).consolidate({(1, 0, 0): (0, 0, 0)})

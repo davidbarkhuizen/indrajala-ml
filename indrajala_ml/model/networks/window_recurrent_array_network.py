@@ -167,6 +167,14 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         """The consolidation training holds the states to (empty: none; consolidate)."""
         return self.recurrence_layer.consolidation
 
+    def set_commitments(self, commitments: Sequence[float]) -> None:
+        """
+        Each factor's commitment from the next training step on, in factor order (the
+        commitment-control workplan): training state, not the network's, so not saved with it; a
+        loaded network has its specs' commitments.
+        """
+        self.recurrence_layer.set_commitments(commitments)
+
     def consolidate(self, consolidation: Consolidation) -> None:
         """
         From the next training step on, a state snapped to a duplicate joint code is held by the
