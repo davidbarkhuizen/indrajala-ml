@@ -90,6 +90,31 @@ their last machines minimising to 1-96 states (L1's ended at 74-663). So the edg
 11 (121 states, 4 of 6) and 13 (169), and it isn't the budget. **The width probe (L3, agreed with
 the owner 2026-10-18) is registered here before this plan retires.**
 
+**L3, the width (agreed with the owner 2026-10-18; registered 2026-10-19, before its data):** `p` 13
+with **one change: each factor 32 wide instead of 16**, the same 38 codes a factor (`--factor 32 38
+--factor 32 38` in place of `--codes-ratio 32/11`, which gives `--factor 16 38` at 13). Everything
+else is L1's round 2: the cell, seeds 0-5, 600 epochs, the commit 440a680. A check: the explicit
+`--factor 16 38` repeats L2's seed 0 by bits (every row but the seconds, 4 epochs on `stone`). It
+asks whether 38 codes in 16 dimensions are too crowded. `p` 11's 32 codes in 16 certified 4 of 6.
+The general algebras' round 2 failed at 120 states with those same 32 in 16 (0 of 12, an exact
+core under extra codes in S5), so crowding at 32 isn't what stops those machines. L3 tests it at
+38, for division only.
+- **At least one seed certifies (both verdicts):** the failure at 13 is the code space's. Division
+  is limited by its width at 16, not by its 169 states. 1-3 of 6 reads as a rate below `p` 11's,
+  undecided, as L2's rule.
+- **0 of 6:** the width isn't the cause either. The edge between 11 and 13 stands, unexplained by
+  budget or width, and with round 2 the limit is in the training at this cell, not in a state
+  count or a code space. This plan retires. Its finding and the open cause go to next-steps.md.
+- Reported as L1 and L2: each run's end, step, epochs, minimised states, codes reached a factor,
+  worst answer at best; and the first epochs against L1's round 2 (the width changes the network,
+  so not by bits).
+- **Feasibility:** as `p` 13's row (169 states, 38 codes a factor, `m` 1,444, cap 1,612): the codes
+  and cap are unchanged, only each code's dimension doubles.
+- **Where and how long:** `stone`, 6 at once, from `wt-ladder` (440a680), `--resume` not needed (the
+  commit predates it, so the run must fit one window). L2 reached 600 epochs in 83-121 minutes, and
+  width 32 costs about 5% more an epoch (4 epochs a width on `stone`): about 1.5-2.5 h, inside a
+  night's window.
+
 ## Feasibility (experiment-design.md, section 1)
 
 Two factors of width 16, each `ceil(32 p / 11)` codes (a counter needs `p`); the cap is the
