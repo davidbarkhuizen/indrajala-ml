@@ -69,6 +69,18 @@ worst answer at its best; per rung the count with its Wilson interval. Whether s
 600-epoch budget (the slowest success's epochs) is read beside each rung, since a failure under a
 crowded budget is the budget's as much as the architecture's.
 
+**L1's result (before L2, 2026-10-18):** round 1, `p` 17 and 23, 0 of 6 each; round 2, `p` 13, 0 of
+6. Every run spent its 600 epochs (`p` 13 at steps 15-29), so the failure point is between 11 and
+13, under a crowded budget: `p` 11's four successes took 293-543 of the 600 epochs.
+
+**L2, the budget (registered 2026-10-18, before its data):** `p` 13 again, with **one change: 1,800
+epochs a run** (three times L1's), everything else as round 2 (the cell, seeds 0-5, the commit
+440a680), on `stone` (6 workers, studies only; runs are bit-identical across machines, so each
+seed's first 600 epochs repeat round 2's). **The failure at 13 is the budget's** if at least one seed
+certifies (both verdicts); **it stands at three times the budget** at 0 of 6. Reported as L1, with
+the slowest success's epochs against 1,800 and each run's step at 600 and at its end. A 1-3 of 6
+result is read as a rate below `p` 11's, undecided.
+
 ## Feasibility (experiment-design.md, section 1)
 
 Two factors of width 16, each `ceil(32 p / 11)` codes (a counter needs `p`); the cap is the
@@ -108,5 +120,7 @@ certified, which is exact at every length.
    at once, the network the same size): 3-5 h; a few epochs at each rung on `jebel` first check
    the epoch time and memory.
 4. **Round 2** by D4's rule.
+   **L2** (`p` 13 at 1,800 epochs) after it, on `stone`: `~/labour/l2.sh`, from a worktree at 440a680.
+   **L2** (`p` 13 at 1,800 epochs) after it, on `stone`: `~/labour/l2.sh`, from a worktree at 440a680.
 5. **Findings** in `modular_family_probe.py`'s docstring, P2's notes, the networks to
    indrajala-models; this plan retired.
