@@ -282,9 +282,9 @@ half to the cap (4 x 62 = 248); round 1's runs stopped by step 30.
      - Beside it, descriptively only (another commit): A unguarded against round 1's control (S4 4
        of 6, move-to-front 4 4 of 6).
    - **P2, A with the step's best network restored, on random-q16-0.** Built first, its own PR
-     (tier 0): `run --restore-best`, at each step's end that isn't a pass, the step's best network
-     (the highest worst answer the diagnosis saw this step) restored, with its optimizer state,
-     before the next step; off by default, a run's identity unchanged without it, tested (a run
+     (tier 0): `run --restore-best`, at each step's end on a plateau, the step's best network
+     (at the best screen score the plateau rule tracks, saved at each new best) restored before the
+     next step, loaded as the fork loads its snapshot; off by default, a run's identity unchanged without it, tested (a run
      without it bit-identical to today's on a small cell, and a restored step's network equal to
      its snapshot). Then `--consolidate --restore-best`, random-q16-0, seeds 0-5, 600 epochs, on
      `jebel` (about 1 h), against this stage's A arm (2b), which is the control if a by-bits check
