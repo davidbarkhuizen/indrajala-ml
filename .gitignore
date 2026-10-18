@@ -198,3 +198,6 @@ data/window-recurrent/
 
 # the studies' result files, each with its provenance (indrajala_ml/studies/common.py, default_out)
 data/studies/
+
+# the session handover: the owner's untracked note, never committed
+docs/handover.md
