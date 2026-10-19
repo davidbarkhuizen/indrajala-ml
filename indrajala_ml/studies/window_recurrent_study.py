@@ -102,17 +102,22 @@ def window_specs(task: wt.Task) -> list[LayerSpec]:
     return transformer_window(task.machine.tokens, task.machine.classes)
 
 
-def transformer_window(tokens: int, classes: int) -> list[LayerSpec]:
-    """W11's window over tokens tokens, classes output classes (a task's, or the modular family's)."""
+def transformer_window(tokens: int, classes: int, width: int = D) -> list[LayerSpec]:
+    """
+    W11's window over tokens tokens, classes output classes (a task's, or the modular family's); width
+    its residual stream's, D by default, its FFN FFN / D times it (the window branches workplan's W1).
+    """
     blocks: list[LayerSpec] = []
     for _ in range(BLOCKS):
         blocks += [
             StateInput(),
             Residual((LayerNorm(), Attention(heads=HEADS, causal=True))),
-            Residual((LayerNorm(), Dense(FFN, activation="relu"), Dense(D, activation="linear", bias=True))),
+            Residual(
+                (LayerNorm(), Dense(FFN // D * width, activation="relu"), Dense(width, activation="linear", bias=True))
+            ),
         ]
     return [
-        Embedding(tokens, D),
+        Embedding(tokens, width),
         Position(),
         *blocks,
         LayerNorm(),

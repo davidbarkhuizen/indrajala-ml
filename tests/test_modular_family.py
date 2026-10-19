@@ -817,3 +817,34 @@ def test_tuning_the_readout_trains_the_output_layer_alone(tmp_path: Path):
     for index, (a, b) in enumerate(zip(old, new, strict=True)):
         if index != output:
             assert all(np.array_equal(x, y) for x, y in zip(a, b, strict=True)), f"index {index} changed"
+
+
+def test_the_window_width_widens_the_stream_and_its_default_is_w11s(tmp_path: Path):
+    from indrajala_ml.model.specs.layer_specs import Dense, Embedding, LayerNorm, Residual
+    from indrajala_ml.studies import window_recurrent_study as wr
+
+    assert wr.transformer_window(9, 14) == wr.transformer_window(9, 14, wr.D)
+    wide = wr.transformer_window(9, 14, 32)
+    assert wide[0] == Embedding(9, 32) and wide[4] == Residual(
+        (LayerNorm(), Dense(64, activation="relu"), Dense(32, activation="linear", bias=True))
+    )
+    encoding = mf.Encoding(5, mf.FAMILY)
+    settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
+    mf.run(encoding, [(4, 4), (4, 4)], 0, 60, tmp_path / "w16", settings, cap=2, reads="output", budget_epochs=1)
+    mf.run(
+        encoding, [(4, 4), (4, 4)], 0, 60, tmp_path / "w32", settings, cap=2, reads="output", budget_epochs=1, width=32
+    )
+    identity = {name: json.loads((tmp_path / name / "checkpoint.json").read_text())["run"] for name in ("w16", "w32")}
+    assert "width" not in identity["w16"] and identity["w32"]["width"] == 32
+
+
+def test_separability_reads_every_reachable_codes_features_and_fits_them(tmp_path: Path):
+    encoding = mf.Encoding(5, mf.FAMILY)
+    path = tmp_path / "network.json"
+    mf.network(encoding, [(4, 4), (4, 4)], 0, reads="output").save(str(path))
+    result = mf.separability(path, encoding, "modular-division-5", steps=5000, passes=3)
+    assert result["pairs"] == result["codes"] * len(
+        mf.wc.all_windows(1, mf.wt.task_named("modular-division-5").machine.tokens)
+    )
+    assert result["features"] == mf.wr.D and len(result["fit_wrong"]) == 1 and result["perceptron"]["passes"] <= 3
+    assert all(row["other"] >= 0 for row in result["wrong"])
