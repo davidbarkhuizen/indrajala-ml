@@ -4,6 +4,7 @@ import pytest
 
 from indrajala_ml.geometry import square_bounds
 from indrajala_ml.model.networks.python.linear_classifier_network import LinearClassifierNetwork
+from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.training.evaluate import (
     class_balanced_disagreement_rate,
     compare_on_random_point,
@@ -47,9 +48,12 @@ def test_sample_class_balanced_states_falls_back_to_input_bounds_when_unbounded(
 
 def test_class_balanced_disagreement_rate_is_zero_for_identical_classifier():
 
-    classifier, _ = reachable_reference_and_training_data(2, 2, square_bounds(5.0), 10)
+    # seeded: drawn from OS entropy, a reference's positive class was sometimes too small to sample
+    classifier, _ = reachable_reference_and_training_data(
+        2, 2, square_bounds(5.0), 10, rng=default_rng(0), data_rng=random.Random(0)
+    )
 
-    assert class_balanced_disagreement_rate(classifier, classifier) == 0.0
+    assert class_balanced_disagreement_rate(classifier, classifier, rng=random.Random(0)) == 0.0
 
 
 def test_class_balanced_disagreement_rate_detects_error_the_old_metric_missed():
