@@ -56,7 +56,11 @@ it (the window branches workplan's W1); `--branches` gives the window a shared t
 a factor and one for the answers, each factor's pooling reading its own (the plan's B1-B3; with
 `--reads output`), and `readout-tune` then trains the answers' whole branch; `--answer-branch`
 gives it a shared trunk, then the state branch (W11's last block, unchanged) that every factor reads
-and the answers' own single-head branch (the one-code-one-state workplan's R1). `run` prints each
+and the answers' own single-head branch (the one-code-one-state workplan's R1); `--thermostat` turns
+each factor's commitment off while it uses fewer than 3 effective codes (2 ** the entropy of its
+codes' use on the step's screen) and ramps it back over 20 epochs once it uses half its codebook
+(the commitment-control workplan's stage 2; levels set by `--thermostat-floor`, `-restore`,
+`-ramp`; each epoch's row logs its effective codes and commitments). `run` prints each
 target's feasibility line first (q, codes, m, the cap, s0, d) and refuses a cell whose joint codes
 can't hold its states.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
@@ -943,6 +947,16 @@ def main(argv: list[str]) -> int:
         help="the one-code-one-state workplan's R1: a shared trunk, then the state branch (W11's last block) every "
         "factor reads and the answers' own single-head branch (needs --reads output)",
     )
+    run.add_argument(
+        "--thermostat",
+        action="store_true",
+        help="the commitment-control workplan's usage thermostat (stage 2): each factor's commitment off below "
+        "--thermostat-floor effective codes, ramped back over --thermostat-ramp epochs once they reach "
+        "--thermostat-restore of its codebook",
+    )
+    run.add_argument("--thermostat-floor", type=float, default=mf.Thermostat.floor, metavar="CODES")
+    run.add_argument("--thermostat-restore", type=float, default=mf.Thermostat.restore, metavar="SHARE")
+    run.add_argument("--thermostat-ramp", type=int, default=mf.Thermostat.ramp, metavar="EPOCHS")
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
     certify.add_argument(
@@ -1093,6 +1107,11 @@ def main(argv: list[str]) -> int:
         parser.error("--branches and --answer-branch: each factor reads a branch's end, so --reads output")
     if args.branches and args.answer_branch:
         parser.error("--branches or --answer-branch, not both")
+    if args.thermostat and (args.commitment_from is not None or args.consolidate):
+        parser.error("--thermostat sets the commitment itself: not with --commitment-from or --consolidate")
+    thermostat = (
+        mf.Thermostat(args.thermostat_floor, args.thermostat_restore, args.thermostat_ramp) if args.thermostat else None
+    )
     # the targets by name: the machines', or division's at each p, and each one's directory when several
     if args.runs is not None and args.task:
         parser.error("--runs names its tasks: not with --task")
@@ -1127,6 +1146,7 @@ def main(argv: list[str]) -> int:
             width=args.window_width,
             branches=args.branches,
             answer_branch=args.answer_branch,
+            thermostat=thermostat,
         )
 
     for name in names:

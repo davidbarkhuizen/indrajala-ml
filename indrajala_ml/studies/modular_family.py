@@ -766,6 +766,60 @@ def machine_summary(net: Any, encoding: Target) -> dict[str, int]:
 CHECKPOINT = "checkpoint.json"
 
 
+@dataclass(frozen=True)
+class Thermostat:
+    """
+    The commitment-control workplan's usage thermostat (stage 2, D1 (a), D2'): each factor's
+    commitment off while its effective codes (effective_codes) are below `floor`; once they reach
+    `restore` of its codebook, ramped back to its specs' over `ramp` epochs; off again only below
+    `floor` (the gap between the two is the hysteresis). A factor's level is 0 (off) to `ramp` (its
+    specs' commitment).
+    """
+
+    floor: float = 3.0
+    restore: float = 0.5
+    ramp: int = 20
+
+    def levels(self, levels: Sequence[int], effective: Sequence[float], counts: Sequence[int]) -> list[int]:
+        """Each factor's next level from its level, its effective codes and its codebook's size."""
+        following: list[int] = []
+        for level, codes, count in zip(levels, effective, counts, strict=True):
+            if codes < self.floor:
+                following.append(0)
+            elif level > 0:
+                following.append(min(level + 1, self.ramp))
+            else:
+                following.append(1 if codes >= self.restore * count else 0)
+        return following
+
+    def commitments(self, levels: Sequence[int], full: Sequence[float]) -> list[float]:
+        """Each factor's commitment at its level, a share of its specs'."""
+        return [c * level / self.ramp for level, c in zip(levels, full, strict=True)]
+
+
+def effective_codes(net: Any, rows: Sequence[Sequence[tuple[Any, Any]]]) -> list[float]:
+    """
+    Each factor's effective codes, 2 ** H of its codes' use over every window's next state of the
+    rows given (lists of windows, one length each): the thermostat's signal (the network's own,
+    never the target's).
+    """
+    counts: list[dict[int, int]] = []
+    for batch in rows:
+        codes: list[list[tuple[int, ...]]] = net.state_codes(net.backend.matrix([tokens for tokens, _ in batch]))
+        for states in codes:
+            for state in states[1:]:
+                if not counts:
+                    counts = [{} for _ in state]
+                for g, code in enumerate(state):
+                    counts[g][code] = counts[g].get(code, 0) + 1
+    effective: list[float] = []
+    for used in counts:
+        total = sum(used.values())
+        entropy = -sum(n / total * math.log2(n / total) for n in used.values())
+        effective.append(2**entropy)
+    return effective
+
+
 @dataclass
 class Place:
     """
@@ -790,6 +844,7 @@ class Place:
     seconds: float
     log_bytes: int
     consolidation: list[tuple[list[int], list[int]]] = field(default_factory=list[tuple[list[int], list[int]]])
+    thermostat: list[int] = field(default_factory=list[int])  # each factor's level (Thermostat), with one
 
 
 def _run_identity(
@@ -811,6 +866,7 @@ def _run_identity(
     width: int = wr.D,
     branches: bool = False,
     answer_branch: bool = False,
+    thermostat: Thermostat | None = None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -834,6 +890,7 @@ def _run_identity(
         **({"width": width} if width != wr.D else {}),
         **({"branches": True} if branches else {}),
         **({"answer_branch": True} if answer_branch else {}),
+        **({"thermostat": repr(thermostat)} if thermostat is not None else {}),
     }
 
 
@@ -873,6 +930,7 @@ def run(
     width: int = wr.D,
     branches: bool = False,
     answer_branch: bool = False,
+    thermostat: Thermostat | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -931,6 +989,11 @@ def run(
         width,
         branches,
         answer_branch,
+        thermostat,
+    )
+    assert thermostat is None or (commitment_from is None and not consolidate), (
+        "the thermostat sets the commitment's weight itself: not with --commitment-from, nor with A, whose target "
+        "it moves (the commitment-control workplan)"
     )
     d = mr.word_length(encoding.task.machine) if consolidate else 0
     table: dict[tuple[int, ...], tuple[int, ...]] = {}  # A's, from the last diagnosis
@@ -974,6 +1037,8 @@ def run(
     snapshot = out / "snapshot.network.json"
     step_best = out / "best.network.json"  # restore_best's
     commitments = [0.0 if f.codes is None else f.codes.commitment for f in net.recurrence.factors]  # the specs'
+    counts = [0 if f.codes is None else f.codes.count for f in net.recurrence.factors]
+    levels = list(place.thermostat) if place is not None and place.thermostat else [0] * len(counts)  # off at the start
 
     def checkpoint(step: int, epoch: int) -> None:
         # the run's place after epoch of step (0: its start), every count read as it stands
@@ -993,6 +1058,7 @@ def run(
             time.perf_counter() - start,
             log.tell(),
             [(list(duplicate), list(representative)) for duplicate, representative in table.items()],
+            list(levels) if thermostat is not None else [],
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -1041,6 +1107,17 @@ def run(
             ]
             if commitment_from is not None:
                 net.set_commitments([0.0 if step < commitment_from else c for c in commitments])
+            thermo: dict[str, Any] = {}
+            if thermostat is not None:
+                # the network about to train (a fork's restored one included), read on the step's screen at its
+                # shortest, middle and longest lengths
+                effective = effective_codes(net, [screens[n] for n in sorted({1, (step + 1) // 2, step})])
+                levels = thermostat.levels(levels, effective, counts)
+                beta = thermostat.commitments(levels, commitments)
+                net.set_commitments(beta)
+                thermo = {
+                    "thermostat": {"effective": [round(e, 2) for e in effective], "beta": [round(b, 4) for b in beta]}
+                }
             guarded: dict[str, Any] = {}
             if guarding is not None:
                 if certified_right(encoding, last_kinds):
@@ -1080,6 +1157,7 @@ def run(
                             "restored": round(restored, 4),
                             "rate": rate,
                             **guarded,
+                            **thermo,
                             **grouped,
                         }
                     )
@@ -1093,12 +1171,22 @@ def run(
                         "screen": round(score, 4),
                         "kinds": _kinds(kinds),
                         **guarded,
+                        **thermo,
                         **diagnose(net, encoding, settings),
                         **({"consolidation": regroup()} if consolidate else {}),
                     }
                 )
             else:
-                record({"step": step, "epoch": epoch, "screen": round(score, 4), "kinds": _kinds(kinds), **guarded})
+                record(
+                    {
+                        "step": step,
+                        "epoch": epoch,
+                        "screen": round(score, 4),
+                        "kinds": _kinds(kinds),
+                        **guarded,
+                        **thermo,
+                    }
+                )
             if frozen >= STALL_EPOCHS:
                 stop = "stalled"
                 break
