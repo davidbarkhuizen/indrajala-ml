@@ -779,21 +779,27 @@ class Thermostat:
     commitment off while its effective codes (effective_codes) are below `floor`; once they reach
     `restore` of its codebook, ramped back to its specs' over `ramp` epochs; off again only below
     `floor` (the gap between the two is the hysteresis). A factor's level is 0 (off) to `ramp` (its
-    specs' commitment).
+    specs' commitment). With `restore_screen` (D2''), a factor off is restored once the step's best
+    screen reaches it, in place of half its codebook: the answers right, so a state has formed.
     """
 
     floor: float = 3.0
     restore: float = 0.5
     ramp: int = 20
+    restore_screen: float | None = None
 
-    def levels(self, levels: Sequence[int], effective: Sequence[float], counts: Sequence[int]) -> list[int]:
-        """Each factor's next level from its level, its effective codes and its codebook's size."""
+    def levels(
+        self, levels: Sequence[int], effective: Sequence[float], counts: Sequence[int], screen: float = 0.0
+    ) -> list[int]:
+        """Each factor's next level from its level, its effective codes, its codebook's size and the step's best screen."""
         following: list[int] = []
         for level, codes, count in zip(levels, effective, counts, strict=True):
             if codes < self.floor:
                 following.append(0)
             elif level > 0:
                 following.append(min(level + 1, self.ramp))
+            elif self.restore_screen is not None:
+                following.append(1 if screen >= self.restore_screen else 0)
             else:
                 following.append(1 if codes >= self.restore * count else 0)
         return following
@@ -1148,7 +1154,7 @@ def run(
                 # the network about to train (a fork's restored one included), read on the step's screen at its
                 # shortest, middle and longest lengths
                 effective = effective_codes(net, [screens[n] for n in sorted({1, (step + 1) // 2, step})])
-                levels = thermostat.levels(levels, effective, counts)
+                levels = thermostat.levels(levels, effective, counts, best)  # best: the step's best screen so far
                 beta = thermostat.commitments(levels, commitments)
                 net.set_commitments(beta)
                 thermo = {

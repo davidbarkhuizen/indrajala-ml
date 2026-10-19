@@ -972,6 +972,18 @@ def test_the_thermostat_holds_off_below_its_floor_ramps_back_from_half_the_codeb
     assert thermostat.commitments([0, 2, 4], [0.25, 0.25, 0.5]) == [0.0, 0.125, 0.5]
 
 
+def test_the_thermostat_with_a_screen_restores_only_once_the_answers_come_right():
+    # D2'': from off, back once the step's best screen reaches 0.95, whatever the codes in use
+    thermostat = mf.Thermostat(floor=3.0, restore=0.5, ramp=4, restore_screen=0.95)
+    levels = [0]
+    trace: list[int] = []
+    for codes, screen in [(6.0, 0.4), (8.0, 0.9), (8.0, 0.96), (8.0, 0.96), (2.0, 0.99), (5.0, 0.99)]:
+        levels = thermostat.levels(levels, [codes], [8], screen)
+        trace.append(levels[0])
+    # half the codebook (4 of 8) passed at once, but no restore until the screen; below the floor, off
+    assert trace == [0, 0, 1, 2, 0, 1]
+
+
 def test_effective_codes_are_two_to_the_entropy_of_each_factors_use():
     class Coded:
         # a network whose windows' next states are given (after the initial state): factor 0 on 4 codes

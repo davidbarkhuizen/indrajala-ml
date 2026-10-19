@@ -730,6 +730,38 @@ commitment-control/).
 - Two runs (S3 seeds 1 and 4) formed nothing either way: the commitment isn't failure A's only
   cause.
 
+Findings (the thermostat's probe, the commitment-control workplan's stage 2, D5'; a probe, its
+expectations written before its data), 2026-10-19; the commitment diagnostic's six failure-A runs
+(word-problem-s3 seeds 0, 1, 3, 4, 5; move-to-front-4 seed 3; round 1's cell) with `--thermostat`
+(D2': off below 3 effective codes, back at half the codebook over 20 epochs). Code 7617c52,
+OPENBLAS_NUM_THREADS=1, pyramidon, 6 at once, 12:56 to 16:07. Its controls: round 1 (all six
+failure A) and the diagnostic (the commitment off for steps 1-5: 3 of 6 formed a state, S3 seed 5
+certified). Data in data/window-recurrent/commitment-control/thermostat-probe/, manifest
+`thermostat-probe.sha256` a7b190e7... (246 files, run from commitment-control/).
+
+| run | the diagnostic (off for steps 1-5) | the thermostat: best state share |
+| --- | --- | --- |
+| S3 seed 0 | formed (0.97), eroded | 0.44 |
+| S3 seed 1 | none | 0.24 |
+| S3 seed 3 | formed (0.95), lost | 0.32 |
+| S3 seed 4 | none | **0.74**, then collapsed to one code |
+| S3 seed 5 | **certified at step 6** | 0.23, one code by step 9 |
+| move-to-front-4 seed 3 | formed (0.87) | 0.57, held |
+
+- **0 of 6 certified; 2 formed a state, one of them lost** (every run spent its 600 epochs). The
+  expectation met is "states form but the restore is wrong": not the thermostat's success, so C3
+  doesn't launch as registered.
+- **Code use is the wrong signal for a formed state.** In S3, a factor's effective codes reach
+  half its codebook (4 of 8) within steps 2-3, while the state's share is still about 0.2, so the
+  commitment comes back before any state has formed. S3 seed 5's was fully back by step 3; under
+  the diagnostic's schedule it stayed off through step 5, the state formed at step 5 (share 1.0),
+  and the run certified at step 6. A network uses many codes before its codes mean anything.
+- **Switching it off again doesn't undo a collapse:** S3 seeds 3, 4 and 5 fell to one or two codes
+  with the commitment returned, and stayed there once the thermostat had switched it back off.
+- **What the diagnostic's schedule got right:** off until the network's answers came right. Next
+  (the workplan's D2''): restore the commitment when the step's screen passes, an answers-only
+  signal (the fork's trigger is one too).
+
 Findings (round 2 of the general algebras, stage 4 of docs/general-algebras-workplan.md, E1 as
 amended before its data in #850), 2026-10-18; `n` 5, word-problem-s5 and move-to-front-5, round 1's
 cell unchanged, 600 epochs, seeds 0-5. Code ff2b2f2 (~/code/wt-round2, crate 40a2761),
@@ -963,6 +995,12 @@ def main(argv: list[str]) -> int:
     run.add_argument("--thermostat-restore", type=float, default=mf.Thermostat.restore, metavar="SHARE")
     run.add_argument("--thermostat-ramp", type=int, default=mf.Thermostat.ramp, metavar="EPOCHS")
     run.add_argument(
+        "--thermostat-screen",
+        type=float,
+        metavar="SCREEN",
+        help="D2'': restore a factor's commitment once the step's best screen reaches SCREEN, in place of half its codebook",
+    )
+    run.add_argument(
         "--keep-machine",
         action="store_true",
         help="the one-code-one-state workplan's R3: keep each step's network with the fewest pairs per code (read at "
@@ -1132,7 +1170,9 @@ def main(argv: list[str]) -> int:
     if args.thermostat and (args.commitment_from is not None or args.consolidate):
         parser.error("--thermostat sets the commitment itself: not with --commitment-from or --consolidate")
     thermostat = (
-        mf.Thermostat(args.thermostat_floor, args.thermostat_restore, args.thermostat_ramp) if args.thermostat else None
+        mf.Thermostat(args.thermostat_floor, args.thermostat_restore, args.thermostat_ramp, args.thermostat_screen)
+        if args.thermostat
+        else None
     )
     # the targets by name: the machines', or division's at each p, and each one's directory when several
     if args.runs is not None and args.task:
