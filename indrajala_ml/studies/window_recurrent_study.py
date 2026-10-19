@@ -71,6 +71,7 @@ from indrajala_ml.model.networks.window_recurrent_array_network import WindowRec
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
+    Branches,
     Dense,
     Embedding,
     LayerNorm,
@@ -123,6 +124,28 @@ def transformer_window(tokens: int, classes: int, width: int = D) -> list[LayerS
         LayerNorm(),
         Dense(classes, output=True, activation="softmax", loss="cross_entropy"),
     ]
+
+
+def branched_window(tokens: int, classes: int, factors: int, width: int = D) -> list[LayerSpec]:
+    """
+    The window branches workplan's window (D1, D2): W11's first two blocks as the shared trunk,
+    then Branches, a single-head block and a LayerNorm for each of factors factors and one for the
+    answers, which run on into the output layer; every path 3 blocks deep, width its stream's.
+    """
+    window = transformer_window(tokens, classes, width)
+    trunk = window[: 2 + 3 * (BLOCKS - 1)]  # the Embedding, the Position and the first BLOCKS - 1 blocks
+
+    def branch() -> tuple[LayerSpec, ...]:
+        return (
+            StateInput(),
+            Residual((LayerNorm(), Attention(heads=1, causal=True))),
+            Residual(
+                (LayerNorm(), Dense(FFN // D * width, activation="relu"), Dense(width, activation="linear", bias=True))
+            ),
+            LayerNorm(),
+        )
+
+    return [*trunk, Branches(tuple(branch() for _ in range(factors + 1))), window[-1]]
 
 
 def _output(task: wt.Task) -> list[LayerSpec]:

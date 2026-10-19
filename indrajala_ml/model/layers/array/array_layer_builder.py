@@ -10,6 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, SplitArrayLayer
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer
 from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import BatchNormArrayLayer
@@ -63,6 +64,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Add,
     Attention,
     BatchNorm,
+    Branch,
     Dense,
     Dropout,
     Embedding,
@@ -71,6 +73,7 @@ from indrajala_ml.model.specs.layer_specs import (
     LayerSpec,
     Patches,
     Position,
+    Split,
     StateInput,
     TokenMean,
     expand_specs,
@@ -105,6 +108,9 @@ class ArrayLayerClasses:
     affine: LayerClass
     fork: LayerClass
     add: LayerClass
+    # a window's branches (the window branches workplan): the split (size) and a branch's end (its split)
+    split: LayerClass = SplitArrayLayer
+    branch: LayerClass = BranchArrayLayer
 
 
 LAYER_CLASSES = {
@@ -253,8 +259,8 @@ def build_array_layers(
     """
     specs, validated (validate_layer_specs), as backend_name's layers over input_shape: one per
     expanded spec (expand_specs), each residual block's fork wired to its add and to its body's
-    first layer. With a state_size, specs are a window-recurrent network's window
-    (validate_window_specs), its StateInputs that wide.
+    first layer, and each window's split to its branches' first layers. With a state_size, specs are
+    a window-recurrent network's window (validate_window_specs), its StateInputs that wide.
     """
     token_classes = TOKEN_LAYER_CLASSES[backend_name]
     if state_size is None:
@@ -265,15 +271,30 @@ def build_array_layers(
     classes = LAYER_CLASSES[backend_name]
 
     layers: list[ArrayNetworkLayer[Any]] = []
-    # each open block's fork, and the fork whose body's first layer comes next
+    # each open block's fork, and the fork whose body's first layer comes next; each open split, and
+    # the split whose next branch's first layer comes next
     forks: list[Any] = []
     opened: Any = None
+    splits: list[Any] = []
+    branching: Any = None
     for spec, shape in zip(expand_specs(specs), shapes, strict=True):
         input_size = math.prod(shape.input_shape)
+        if isinstance(spec, Split):
+            branching = classes.split(input_size)
+            splits.append(branching)
+            layers.append(branching)
+            continue
+        if isinstance(spec, Branch):
+            layers.append(classes.branch(splits[-1]))
+            branching = splits[-1]
+            continue
         if isinstance(spec, Fork):
             opened = classes.fork(input_size)
             forks.append(opened)
             layers.append(opened)
+            if branching is not None:
+                branching.starts.append(opened)
+                branching = None
             continue
         if isinstance(spec, Add):
             fork = forks.pop()
@@ -302,4 +323,7 @@ def build_array_layers(
         if opened is not None:
             opened.body_first = layers[-1]
             opened = None
+        if branching is not None:
+            branching.starts.append(layers[-1])
+            branching = None
     return layers

@@ -325,11 +325,14 @@ class RecurrenceRustArrayLayer:
             initial = f.initial_state
             initial.grad_c = initial.grad_c + pa.sum_axis0(dH[:, start : start + size])
 
-    def forward_batch(self, X: pa.Array, C: pa.Array) -> pa.Array:
-        """The tokens the output layer reads, X (N, T * d), and the state C (N, S), to the next state (N, S)."""
+    def forward_batch(self, X: pa.Array | Sequence[pa.Array], C: pa.Array) -> pa.Array:
+        """
+        The tokens the output layer reads, X (N, T * d), or each factor's, one a factor (the window
+        branches workplan), and the state C (N, S), to the next state (N, S).
+        """
         factors = self.factors
         self._step = pa.recurrence_step_forward(
-            X,
+            X if isinstance(X, pa.Array) else list(X),
             C,
             [f.pooling.q for f in factors],
             [f.cell.W for f in factors],
@@ -342,8 +345,12 @@ class RecurrenceRustArrayLayer:
         self.H, self.indices = self._step.h, self._step.indices
         return self._step.state
 
-    def backward_batch(self, dQ: pa.Array, weight: float) -> tuple[pa.Array, pa.Array]:
-        """The next state's gradient (N, S) to the tokens' (N, T * d) and the state's (N, S); the parts' accumulated."""
+    def backward_batch(self, dQ: pa.Array, weight: float) -> tuple[pa.Array | list[pa.Array], pa.Array]:
+        """
+        The next state's gradient (N, S) to the tokens' (N, T * d), each factor's poolings' summed in
+        factor order, or each factor's apart if forward_batch read one a factor, and the state's (N,
+        S); the parts' accumulated.
+        """
         factors = self.factors
         dX, dC, grad_q, grad_W, grad_U, grad_b, grad_E = pa.recurrence_step_backward(
             self._step,

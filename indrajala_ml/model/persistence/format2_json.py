@@ -19,6 +19,8 @@ from indrajala_ml.model.specs.layer_specs import (
     Add,
     Attention,
     BatchNorm,
+    Branch,
+    Branches,
     Dense,
     Dropout,
     Embedding,
@@ -29,6 +31,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Patches,
     Position,
     Residual,
+    Split,
     StateInput,
     TokenMean,
     expand_specs,
@@ -70,6 +73,12 @@ def lists(value: Any) -> Any:
 def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
     if isinstance(spec, Residual):
         return {"kind": "residual", "body": [layer_to_json(layer) for layer in spec.body]}
+    if isinstance(spec, Branches):
+        # the window branches workplan, D6: each branch's layers, in order
+        return {
+            "kind": "branches",
+            "branches": [[layer_to_json(layer) for layer in branch] for branch in spec.branches],
+        }
     if isinstance(spec, ConvSpec):
         # a ReLU conv layer's entry as before ConvSpec had an activation, so those files don't change
         fields = asdict(spec)
@@ -116,6 +125,8 @@ def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
             return BatchNorm(**fields)
         case "residual":
             return Residual(tuple(layer_from_json(layer) for layer in spec["body"]))
+        case "branches":
+            return Branches(tuple(tuple(layer_from_json(layer) for layer in branch) for branch in spec["branches"]))
         case kind if kind in _TOKEN_SPECS:
             return _TOKEN_SPECS[kind](**fields)
         case kind:
@@ -215,7 +226,7 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("P",)
         case Attention():
             return ("Wq", "bq", "Wk", "bk", "Wv", "bv", "Wo", "bo")
-        case Fork() | Add() | PoolSpec() | Patches() | Dropout() | TokenMean():
+        case Fork() | Add() | Split() | Branch() | PoolSpec() | Patches() | Dropout() | TokenMean():
             return ()
         case Dense() if spec.bias:
             return ("W", "b")

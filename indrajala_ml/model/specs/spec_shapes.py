@@ -14,14 +14,17 @@ from indrajala_ml.model.specs.layer_specs import (
     Add,
     Attention,
     BatchNorm,
+    Branch,
     Dense,
     Dropout,
     Embedding,
+    ExpandedSpec,
     Fork,
     LayerNorm,
     LayerSpec,
     Patches,
     Position,
+    Split,
     StateInput,
     TokenMean,
     expand_specs,
@@ -64,7 +67,7 @@ class SpecShape:
     positions: int = 1
 
 
-def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape) -> list[SpecShape]:
+def spec_shapes(specs: Sequence[LayerSpec | ExpandedSpec], input_shape: InputShape) -> list[SpecShape]:
     """
     Each of expand_specs(specs)' shapes over input_shape, in forward order, each spec's input shape
     the previous one's output shape: what every builder needs besides the choice of class. A
@@ -77,13 +80,16 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
     layer-norm and attention workplan, D4), a token-wise output layer included (the sequence task
     workplan, D6), and a Position, a LayerNorm, an Attention and a Dropout keep their input's shape (a
     LayerNorm after a conv front end normalizes the flat image as one token), as does a StateInput,
-    which reads tokens (the window-recurrent adder workplan, W18). The specs' own
-    arguments are checked by the layers built from them, not here.
+    which reads tokens (the window-recurrent adder workplan, W18). A Split keeps its input's
+    shape, every branch keeps it (each Branch checks its branch's end), and each branch starts
+    from it (the window branches workplan). The specs' own arguments are checked by the layers built
+    from them, not here.
     """
     shapes: list[SpecShape] = []
     shape: Shape = input_shape
-    # each open block's input shape, its Fork's
+    # each open block's input shape, its Fork's; each open split's
     forks: list[Shape] = []
+    splits: list[Shape] = []
     for spec in expand_specs(specs):
         if isinstance(spec, Dense):
             shapes.append(SpecShape(shape, (shape[0], spec.size) if len(shape) == 2 else (spec.size,)))
@@ -95,6 +101,15 @@ def spec_shapes(specs: Sequence[LayerSpec | Fork | Add], input_shape: InputShape
                 f"a residual block is dense or over tokens (D2): its input is flat or tokens; got {shape}"
             )
             forks.append(shape)
+            shapes.append(SpecShape(shape, shape))
+        elif isinstance(spec, Split):
+            assert len(shape) == 2, f"branches are over tokens (the window branches workplan); got {shape}"
+            splits.append(shape)
+            shapes.append(SpecShape(shape, shape))
+        elif isinstance(spec, Branch):
+            assert shape == splits[-1], (
+                f"a branch keeps its tokens' width (the window branches workplan): it ends in {shape}, not {splits[-1]}"
+            )
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, Add):
             fork = forks.pop()
