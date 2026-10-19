@@ -29,7 +29,7 @@ right, the quotient's machine is read after every batch and an update that makes
 wrong is undone; each epoch's row logs `armed` and `rollbacks`, each step's end its `rollbacks`.
 Several `--p` run in one pool, each seed's moduli in turn, into DIR/p<p>/seed<s>; `--codes-ratio
 R` gives each of `--factors` factors `ceil(R p)` codes (the division ladder, R 32/11:
-docs/division-ladder-workplan.md).
+`git show f9101d8:docs/division-ladder-workplan.md`).
 `--task NAME ...` runs a general algebra's machines in place of division (the general-algebras
 workplan, D6: `word-problem-s<n>`, `move-to-front-<n>`, `random-<n>-<seed>`; window_tasks), each
 its own task, one token a window, several in one pool into DIR/<task>/seed<s>; `--codes-ratio R`
@@ -575,8 +575,8 @@ both run from consolidation/; the readouts and `reading/` added on pyramidon aft
   guard on S4 and move-to-front 4, on `stone`) and P2 (A with the step's best restored on
   random-q16-0, on `jebel`).
 
-Findings (the division ladder, docs/division-ladder-workplan.md: L1 registered before its data, and
-L2, the budget), 2026-10-17 and 18; `p` 11's cell (two factors of width 16, `ceil(32 p / 11)` codes
+Findings (the division ladder, retired 2026-10-19: `git show f9101d8:docs/division-ladder-workplan.md`; L1, L2 (the budget) and
+L3 (the width) each registered before its data), 2026-10-17 to 19; `p` 11's cell (two factors of width 16, `ceil(32 p / 11)` codes
 each, reading the output, the fork, 600 epochs) at higher primes, seeds 0-5 a rung. Code 440a680,
 OPENBLAS_NUM_THREADS=1. L1 round 1 (`p` 17 and 23) on jebel, 8 at once, 2026-10-17 19:53 to 22:29;
 round 2 (`p` 13) on jebel 2026-10-18 04:32 to 06:03; L2 (`p` 13 at 1,800 epochs) on stone, 6 at once,
@@ -590,6 +590,7 @@ pyramidon after it).
 | 11 (the p11 ladder, above) | 121 | 600 | 4 of 6 (0.30-0.90) | - |
 | 13 | 169 | 600 | 0 of 6 (0.00-0.39) | 0.394-0.916 |
 | 13 (L2) | 169 | 1,800 | 0 of 6 (0.00-0.39) | 0.394-0.936 |
+| 13 (L3, factors 32 wide) | 169 | 600 | 0 of 6 (0.00-0.39) | 0.382-0.994 |
 | 17 | 289 | 600 | 0 of 6 (0.00-0.39) | 0.609-0.774 |
 | 23 | 529 | 600 | 0 of 6 (0.00-0.39) | 0.360-0.386 |
 
@@ -602,8 +603,17 @@ pyramidon after it).
   their last machines minimising to 1-96 states.
 - **Noted, not explained:** `p` 17's runs came nearer (0.61-0.77) than most at 13 (0.39-0.42 in four
   seeds), so the worst answer at best isn't monotone in `p`.
-- **Next:** L3, the width probe: `p` 13 with factors 32 wide instead of 16, nothing else changed
-  (agreed with the owner 2026-10-18; registered in the plan before its data).
+- **L3: not the width either** (registered answer at 0 of 6). `p` 13 with each factor 32 wide
+  instead of 16, the same 38 codes, else L1's round 2 (440a680; stone, 6 at once, 2026-10-19 01:22
+  to 03:20; data in `l3/`, manifest `l3.sha256` 1e6545d6... (137 files, run from division-ladder/;
+  `readout.txt` added on pyramidon after it)). Every run spent its 600 epochs (83-118 minutes,
+  steps 14-25). So the edge between 11 and 13 stands, explained by neither the budget nor the width.
+  With the general algebras' round 2 (0 of 12 at 120 states in `p` 11's cell), the limit lies in
+  training at this cell, not in a state count or a code space.
+- **Descriptively, the width moved the runs** (not a claim, one change on six seeds): at their
+  best step four of six formed a state (share 0.996-1.0, against two of six at width 16), using
+  fewer codes on one factor (17-18 of 38 in three seeds). Seed 5 came nearest of any run at 13: worst
+  answer 0.994, sampled accuracy 0.99 at 48, its machine minimising to 172 against 169.
 
 Findings (P2, A with the step's best restored, stage 2c of docs/code-consolidation-workplan.md; a
 probe, its answers written before the data), 2026-10-18; random-q16-0, 2b's cell with `--consolidate

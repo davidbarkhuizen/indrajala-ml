@@ -418,7 +418,7 @@ def test_a_guard_that_undoes_nearly_every_update_for_its_stall_epochs_ends_the_r
     assert mf.outcome(rows).epochs == mf.STALL_EPOCHS
 
 
-# the division ladder's feasibility table (docs/division-ladder-workplan.md): p, codes a factor, the cap
+# the division ladder's feasibility table (git show f9101d8:docs/division-ladder-workplan.md): p, codes a factor, the cap
 LADDER = {
     13: (38, 1612),
     17: (50, 2788),
