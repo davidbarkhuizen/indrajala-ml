@@ -219,6 +219,63 @@ lost); effective codes reach half the codebook within 2-3 steps while the state'
 - **Its probe:** the same six runs with D2'', its expectation written before its data; then C3 as
   registered, with D2'' in place of D2'.
 
+## Stage 3, the quantiser's build (2026-10-19, before its build; the owner: the one build of this phase)
+
+The owner, 2026-10-19 evening: the thermostat is retired whatever its second probe shows, and
+annealing replaces it for bottleneck 1. D1 (d) and D3 stand; these settle what the build needs.
+With `d_k = ||h - e_k||^2` (a left fold over the features, as the snap's) and a factor's temperature
+`tau`, a soft factor's next state is `q = sum_k w_k e_k`, `w = softmax(-d / tau)` (the smallest
+`d_k` subtracted first). With `g` the gradient at `q`:
+
+```text
+h's gradient    (2 / tau) sum_k w_k (g.e_k - g.q) (e_k - q)  +  2 weight beta (h - sg[q])
+e_k's gradient  w_k g  +  (2 / tau) w_k (g.e_k - g.q) (h - e_k)  -  2 weight sg[w_k] (h - e_k)
+```
+
+the last terms the commitment, held to the soft `q`, and the codebook loss made soft:
+`weight sum_k sg[w_k] ||sg[h] - e_k||^2`, each code pulled to the windows that weight it.
+
+- **D6. Where it is soft: (a) training's forward and backward only; every evaluation hard.**
+  - (a) *Chosen.* The screens, diagnoses, `breaks` and the certificate read the snapped machine as
+    now. Pros: every reading means what it does today; D4' holds unchanged (certify any step: the
+    certificate judges the hard machine); stop at certified and the fork's trigger see the
+    machine. Cons: while `tau` is high the hard screen lags the soft network trained, so a step's
+    screen is the machine's, not the loss's (a fork may fire on the gap: read in the probe).
+  - (b) Soft everywhere until hard. Cons: no machine to read or certify until the anneal ends; the
+    curriculum's steps advance on a blend's screen.
+  - (c) Hard forward, soft backward (a straight-through estimator with the softmax's gradient).
+    Pros: train and evaluation agree. Cons: the state passed on is still one code, so the next
+    window sees no blend: not the soft-to-hard method of D1 (d), and failure A's constant is as
+    cheap as now.
+- **D7. The commitment while soft: 0, ramped back to the specs' over 20 epochs once a factor is
+  hard (D2''s ramp).** Pros: the diagnostic's finding (the commitment's pull is failure A's
+  cause) and its erosion at a full return; the codebook's soft term keeps every code moving. Cons:
+  the commitment's margins come only after hardening (the certificate's verdicts still judge them).
+- **D8. The schedule: per factor, `tau` from `tau_0` 1.0, halved every 10 epochs; hard for good
+  once 99% of the fixed sample's windows weight one code above 0.99 (D3's test), read at each
+  epoch's end.** (D3 said every 5 epochs.)
+  - (a) *Chosen,* 10. Pros: the diagnostic's states formed with the commitment off for steps 1-5,
+    47-86 epochs; halving every 10 reaches `tau` 1/64 by about 60. Cons: one more setting; slower
+    runs to their first hard step.
+  - (b) D3's 5. Pros: as written. Cons: about 30 epochs soft, shorter than the diagnostic's
+    window in every run that formed a state.
+  - (c) Reheated at each curriculum step. Cons: a new step's lengths would melt a formed state;
+    a variant for the probe to motivate, not the default.
+- **D9. `tau` absolute, not scaled per cell.** Pros: one number; the codes start at a dense
+  layer's fan-in scale on every cell, so squared distances start comparable. Cons: a cell whose
+  codes spread far would harden early; the hardness test, not the epoch, ends it.
+- **D10. Where it is built: the crate's codes ops and its recurrence step take a temperature per
+  factor (None: hard, today's bits); the numpy layer is the reference; the pure-Python network
+  refuses one.** Pros: one switch (`net.set_temperatures`), only `per_layer_gradients` sets the
+  layers soft, so nothing else can read a blend; the golden run and every run without the flag
+  unchanged. Cons: tier 1 (the crate's step gains an argument); the pure-Python network falls
+  behind (correctness and parity only, never trained at these sizes).
+- **D11. The initial state stays hard.** Pros: no change to `factored_codes_*`; it is one window's
+  input, learnt as now. Cons: its codes get no soft gradient (one state on every cell here).
+- **The sums' order (for the parity tests):** each row's weights and `q` left folds over the codes
+  in code order; `e`'s gradient accumulated row by row in row order, each row's three terms in
+  the order above; the hardness read in the harness by numpy from the sample's `h`.
+
 ## Stages (deferred)
 
 1. **This plan.**
@@ -231,6 +288,9 @@ lost); effective codes reach half the codebook within 2-3 steps while the state'
    state crystallising): it follows the thermostat's second probe (D2''), whatever that finds, if
    either it or the population plan ([population-workplan.md](population-workplan.md), level 2)
    shows the commitment's timing matters; its `tau` is then the population's natural temperature.
+   **(2026-10-19, evening) Built now, the thermostat retired:** its design above (D6-D11); the
+   crate first, then a "Bump rust/" PR with the harness's `--anneal`; its probe registered in its
+   script before the data.
 4. **Retire this plan;** leftovers to next-steps.md.
 
 Stage 2 is tier 0 (harness, pure Python). Stage 3 changes a timed path (the crate's recurrence):
