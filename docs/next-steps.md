@@ -5,7 +5,6 @@ decision is resolved and only future work is left. Whatever it left open (its "A
 list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
 "not planned yet" means only that no workplan has taken it up. A workplan still
 in progress keeps its own list: [general-algebras-workplan.md](general-algebras-workplan.md),
-[division-ladder-workplan.md](division-ladder-workplan.md),
 [pypi-release-workplan.md](pypi-release-workplan.md),
 [generation-workplan.md](generation-workplan.md),
 [training-recipe-workplan.md](training-recipe-workplan.md),
@@ -58,6 +57,7 @@ docs cite them by section:
 | A factored state for the window-recurrent network (C9, C9', C9'') | #737 | #738-#764, crate #57 | `git show e45944e:docs/factored-state-workplan.md` |
 | A family of modular operations on one state (option 2) | #765 | #766 | `git show e45944e:docs/modular-family-workplan.md` |
 | Modular division with the family (`p` 5 and 7, the registered claim) | #766 | #767-#782 | `git show e45944e:docs/division-workplan.md` |
+| Where division fails in `p` (the division ladder, L1-L3) | #817 | #824, #856, #859, this PR | `git show f9101d8:docs/division-ladder-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -178,6 +178,13 @@ Decided with the owner, each to become a workplan or a stage:
 - **The commitment controls** (option 1, the usage thermostat) stay deferred in
   [commitment-control-workplan.md](commitment-control-workplan.md), for a probe that must train
   past a solution or shows factors collapsing.
+- **Division's edge between `p` 11 and 13, unexplained** (the division ladder, retired
+  2026-10-19; the probe script's findings): 4 of 6 at 121 states, 0 of 6 at 169, neither the
+  budget (L2, 1,800 epochs) nor the width (L3, factors 32 wide) the cause. L3 moved the runs
+  (four of six formed a state against two; one minimised to 172 against 169), so a small follow-up
+  at width 32 (more seeds, or with a longer budget) is the cheapest next probe if division's
+  scaling is taken up again. The general algebras' round 2 fails at 120 states in the same cell, so
+  the cause is likely shared with them (extra codes and failure A).
 
 ## Beyond arithmetic: other finite-state targets (the owner and Claude, 2026-10-17)
 
