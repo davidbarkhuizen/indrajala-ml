@@ -23,7 +23,12 @@ from indrajala_ml.model.layers.rust.rust_array_layer import (
     fan_in_aware_random_rust_layer,
     fan_in_aware_random_rust_weights,
 )
-from indrajala_ml.model.specs.window_recurrence import Consolidation, commitment_targets, set_commitments
+from indrajala_ml.model.specs.window_recurrence import (
+    Consolidation,
+    check_temperatures,
+    commitment_targets,
+    set_commitments,
+)
 
 
 class StateInputRustArrayLayer:
@@ -261,6 +266,8 @@ class RecurrenceRustArrayLayer:
         ]
         self._commitments = [0.0 if f.codes is None else f.codes.commitment for f in self.factors]
         self.consolidation: Consolidation = {}
+        self.temperatures: list[float | None] = [None] * len(sizes)
+        self.soft = False  # whether forward_batch's codes are soft (the per-layer training step only)
 
     @property
     def commitments(self) -> list[float]:
@@ -271,6 +278,11 @@ class RecurrenceRustArrayLayer:
         """Each coded factor's commitment from the next training step on (a continuous factor's 0)."""
         set_commitments(self.factors, commitments)
         self._commitments = [0.0 if f.codes is None else f.codes.commitment for f in self.factors]
+
+    def set_temperatures(self, temperatures: Sequence[float | None]) -> None:
+        """Each factor's codes' temperature in training from the next step on (None: hard)."""
+        check_temperatures(self.factors, temperatures)
+        self.temperatures = list(temperatures)
 
     def parts(self) -> list[Any]:
         """The parts with parameters, factor by factor: pooling, cell, codes (if any), initial state."""
@@ -341,6 +353,7 @@ class RecurrenceRustArrayLayer:
             self._codes(),
             self.tokens,
             cross=self.cross,
+            temperatures=self.temperatures if self.soft else None,
         )
         self.H, self.indices = self._step.h, self._step.indices
         return self._step.state

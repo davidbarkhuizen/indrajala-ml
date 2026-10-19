@@ -60,7 +60,11 @@ and the answers' own single-head branch (the one-code-one-state workplan's R1); 
 each factor's commitment off while it uses fewer than 3 effective codes (2 ** the entropy of its
 codes' use on the step's screen) and ramps it back over 20 epochs once it uses half its codebook
 (the commitment-control workplan's stage 2; levels set by `--thermostat-floor`, `-restore`,
-`-ramp`; each epoch's row logs its effective codes and commitments); `--keep-machine` keeps each
+`-ramp`; each epoch's row logs its effective codes and commitments); `--anneal` trains each snapped
+factor's codes soft (the softmax mix at a temperature, from `--anneal-start` 1.0 halved every
+`--anneal-halving` 10 epochs), its commitment 0, until it hardens (99% of the step's screen's windows
+weighting one code above 0.99), then hard with its commitment ramped back over `--anneal-ramp` 20
+epochs (the commitment-control workplan's stage 3; each epoch's row logs them); `--keep-machine` keeps each
 step's network whose machine has the fewest pairs per code (read at each diagnosis, ties to more
 right pairs) and restores it at a plateau, and `--counterexamples [SHARE]` draws SHARE (0.25) of each
 epoch's examples from the shortest words to the codes wrong for their states (at most 256, read at
@@ -1060,6 +1064,16 @@ def main(argv: list[str]) -> int:
         help="D2'': restore a factor's commitment once the step's best screen reaches SCREEN, in place of half its codebook",
     )
     run.add_argument(
+        "--anneal",
+        action="store_true",
+        help="the commitment-control workplan's annealing (stage 3): each snapped factor's codes soft in training at "
+        "--anneal-start halved every --anneal-halving epochs, its commitment 0, until 99%% of the step's screen's "
+        "windows weight one code above 0.99; then hard, its commitment ramped back over --anneal-ramp epochs",
+    )
+    run.add_argument("--anneal-start", type=float, default=mf.Anneal.start, metavar="TEMPERATURE")
+    run.add_argument("--anneal-halving", type=int, default=mf.Anneal.halving, metavar="EPOCHS")
+    run.add_argument("--anneal-ramp", type=int, default=mf.Anneal.ramp, metavar="EPOCHS")
+    run.add_argument(
         "--keep-machine",
         action="store_true",
         help="the one-code-one-state workplan's R3: keep each step's network with the fewest pairs per code (read at "
@@ -1228,6 +1242,13 @@ def main(argv: list[str]) -> int:
         parser.error("--keep-machine or --restore-best, not both")
     if args.thermostat and (args.commitment_from is not None or args.consolidate):
         parser.error("--thermostat sets the commitment itself: not with --commitment-from or --consolidate")
+    if args.anneal and (args.thermostat or args.commitment_from is not None or args.consolidate):
+        parser.error("--anneal sets the commitment itself: not with --thermostat, --commitment-from or --consolidate")
+    anneal = (
+        mf.Anneal(args.anneal_start, args.anneal_halving, mf.Anneal.hard, mf.Anneal.share, args.anneal_ramp)
+        if args.anneal
+        else None
+    )
     thermostat = (
         mf.Thermostat(args.thermostat_floor, args.thermostat_restore, args.thermostat_ramp, args.thermostat_screen)
         if args.thermostat
@@ -1270,6 +1291,7 @@ def main(argv: list[str]) -> int:
             thermostat=thermostat,
             keep_machine=args.keep_machine,
             counterexamples=args.counterexamples,
+            anneal=anneal,
         )
 
     for name in names:
