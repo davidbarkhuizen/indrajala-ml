@@ -71,6 +71,11 @@ def test_a_probe_run_trains_diagnoses_and_saves(tmp_path: Path):
     assert len(rows[0]["factors"]) == 2 and set(rows[0]["factors"][0]["shares"]) == {"A", "B", "S", "D", "A=0", "B=0"}
     assert set(ends[-1]["long"]) == {"4"}
     assert all(isinstance(r["certified"], bool) and r["minimised"] >= 1 for r in ends)  # each step's certificate
+    # the walk's counts (R2): every pair has a code, and no more right pairs than pairs
+    assert all(
+        1 <= r["machine"]["codes"] <= r["machine"]["pairs"] and 0 <= r["machine"]["right"] <= r["machine"]["pairs"]
+        for r in ends
+    )
     assert (tmp_path / "network.json").exists()
     assert (tmp_path / "step-1.network.json").exists() and (tmp_path / "step-2.network.json").exists()
     starts = [r for r in rows if r.get("epoch") == 0 and r["step"] > 0]  # the step before's network, scored
@@ -195,6 +200,8 @@ def test_trace_marks_a_collapse_where_the_codes_in_use_halve():
     assert ["collapse" in line for line in lines] == [False, False, True, False]
     assert lines[0].startswith("step   1 epoch   5 codes [16, 15] share 0.000 sum 0.500")
     assert lines[-1].endswith("END plateau min 7")
+    walked = row(2, [4, 4], end="plateau", minimised=7, machine={"codes": 8, "pairs": 20, "right": 3})
+    assert mf.trace([walked])[0].endswith("END plateau min 7 pairs/code 2.50 right 3")
     fork = {"step": 2, "epoch": 3, "fork": 1, "screen": 0.3, "peak": 0.9, "restored": 0.9, "rate": 0.0015}
     assert (
         mf.trace([row(1, [16, 15]), fork])[1]

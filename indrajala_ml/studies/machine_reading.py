@@ -155,6 +155,15 @@ def right_codes(walk: Product, d: int) -> BoolArray:
     return right
 
 
+def summary(walk: Product, d: int) -> dict[str, int]:
+    """
+    The walk in three counts (the one-code-one-state workplan's R2): the codes reached, the pairs
+    (code, state) reached and the pairs whose code is right within d. Pairs over codes is how many
+    target states a code stands for on average: 1.0 in every certified network.
+    """
+    return {"codes": len(walk.codes), "pairs": len(walk.pairs), "right": int(right_codes(walk, d).sum())}
+
+
 def by_length(walk: Product, lengths: list[int], d: int) -> list[dict[str, Any]]:
     """
     Over all words of each length (uniform tokens, the start's pair): the share whose last answer is

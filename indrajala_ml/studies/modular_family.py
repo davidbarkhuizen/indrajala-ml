@@ -492,6 +492,9 @@ def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
         codes = _codes(row)
         answers = " ".join(f"{name} {value:.3f}" for name, value in sorted(row["accuracy"].items()))
         end = f" END {row['end']} min {row.get('minimised')}" if "end" in row else ""
+        if "machine" in row:  # pairs per code (the one-code-one-state workplan's R2)
+            walked = row["machine"]
+            end += f" pairs/code {walked['pairs'] / walked['codes']:.2f} right {walked['right']}"
         mark = " << collapse" if _collapsed(before, codes, drop) else ""
         epoch = row.get("epoch", "-")
         share = row.get("state_share", 0.0)
@@ -746,6 +749,12 @@ def consolidation(net: Any, encoding: Target, d: int) -> tuple[dict[tuple[int, .
     walk = mr.walk(QueryMachine(net, encoding, None), encoding.task.machine.tokens)
     found = mr.groups(walk, d)
     return mr.consolidation(walk, found), len(walk.codes), len(found)
+
+
+def machine_summary(net: Any, encoding: Target) -> dict[str, int]:
+    """The network's machine walked beside the target's, in three counts (machine_reading.summary), d the task's."""
+    machine = encoding.task.machine
+    return mr.summary(mr.product(QueryMachine(net, encoding, 0), machine), mr.word_length(machine))
 
 
 CHECKPOINT = "checkpoint.json"
@@ -1118,6 +1127,7 @@ def run(
                 "long": long_accuracy(net, encoding, settings),
                 "certified": certificate.certified,
                 "minimised": len(certificate.minimised),
+                "machine": machine_summary(net, encoding),
             }
         )
         if certificate.certified:
