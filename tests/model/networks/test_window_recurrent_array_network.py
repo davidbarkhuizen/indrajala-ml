@@ -90,6 +90,27 @@ BRANCHED_RECURRENCES = {
 BRANCHED = {name: _branched(len(r.factors)) for name, r in BRANCHED_RECURRENCES.items()}
 
 
+# the one-code-one-state workplan's R1: one state branch every factor reads, and the answers' own
+
+
+def _shared(factors: int) -> list[LayerSpec]:
+    state = (StateInput(), ATTENTION, LayerNorm())
+    answers = (StateInput(), FFN, LayerNorm())
+    return [
+        Embedding(27, 8),
+        Position(),
+        StateInput(),
+        ATTENTION,
+        Branches((state, answers), reads=(0,) * factors),
+        DIGITS,
+    ]
+
+
+SHARED_RECURRENCES = {f"{name}, one state branch": r for name, r in list(BRANCHED_RECURRENCES.items())}
+BRANCHED_RECURRENCES.update(SHARED_RECURRENCES)
+BRANCHED.update({name: _shared(len(r.factors)) for name, r in SHARED_RECURRENCES.items()})
+
+
 def covering_consolidation(recurrence: WindowRecurrence) -> dict[tuple[int, ...], tuple[int, ...]]:
     # a consolidation for the tests (the code-consolidation workplan, D1): every joint code onto the
     # next in its first factor, but those at the first factor's last code, which keep their own, so
@@ -528,8 +549,27 @@ def test_each_factor_reads_its_own_branch_and_the_answers_theirs():
     assert not np.array_equal(cells[1][:, first_size:], moved[1][:, first_size:])
 
 
-def test_a_branched_network_saves_and_loads_by_bits(tmp_path: Path):
-    network = _network(BRANCHED["two factors"], rule=Adam(), recurrence=BRANCHED_RECURRENCES["two factors"])
+def test_every_factor_reads_the_state_branch_and_the_answers_branch_moves_no_state():
+    # R1: both factors' poolings read the one state branch's end; the answers' branch, after it,
+    # shapes only the answers, so perturbing it leaves every factor's cells unchanged
+    name = "two factors, one state branch"
+    network = _network(BRANCHED[name], recurrence=BRANCHED_RECURRENCES[name])
+    reads = network._pooling_reads
+    assert len(set(reads)) == 1 and isinstance(network.layers[reads[0]], BranchArrayLayer)
+    X = _batch(2)[0]
+    outputs, _, cells = network.window_states(X)
+    answers = next(i for i in range(reads[0] + 1, len(network.layers) - 1) if hasattr(network.layers[i], "W"))
+    layer: Any = network.layers[answers]
+    layer.W = layer.W + 1.0
+    moved_outputs, _, moved = network.window_states(X)
+    for before, after in zip(cells, moved, strict=True):
+        np.testing.assert_array_equal(before, after)
+    assert not np.array_equal(outputs, moved_outputs)
+
+
+@pytest.mark.parametrize("name", ["two factors", "two factors, one state branch"])
+def test_a_branched_network_saves_and_loads_by_bits(tmp_path: Path, name: str):
+    network = _network(BRANCHED[name], rule=Adam(), recurrence=BRANCHED_RECURRENCES[name])
     X, labels = _batch(2)
     rows = [(tuple(x), label) for x, label in zip(X.tolist(), labels, strict=True)]
     network.learn_batch(0.01, rows)
@@ -552,11 +592,16 @@ def test_a_branched_network_saves_and_loads_by_bits(tmp_path: Path):
         (((StateInput(), FFN, LayerNorm()),) * 3, "before state", "reads its branch's end"),
         (((StateInput(), FFN),) * 3, "two factors", "ends in a LayerNorm"),
         (((Position(), StateInput(), FFN, LayerNorm()),) * 3, "two factors", "not Position"),
+        # R1's reads: one a factor, among the factors' branches, each of those read
+        (Branches(((StateInput(), FFN, LayerNorm()),) * 2, reads=(0,)), "two factors", "Branches' reads"),
+        (Branches(((StateInput(), FFN, LayerNorm()),) * 2, reads=(0, 1)), "two factors", "Branches' reads"),
+        (Branches(((StateInput(), FFN, LayerNorm()),) * 3, reads=(0, 0)), "two factors", "Branches' reads"),
     ],
 )
 def test_a_window_refuses_malformed_branches(branches: Any, recurrence: str, message: str):
     recurrences = {**BRANCHED_RECURRENCES, "before state": FACTORED}
-    window: list[LayerSpec] = [Embedding(27, 8), Position(), StateInput(), ATTENTION, Branches(branches), DIGITS]
+    spec = branches if isinstance(branches, Branches) else Branches(branches)
+    window: list[LayerSpec] = [Embedding(27, 8), Position(), StateInput(), ATTENTION, spec, DIGITS]
     with pytest.raises(AssertionError, match=message):
         _network(window, recurrence=recurrences[recurrence])
     # branches stand last, right after a residual block

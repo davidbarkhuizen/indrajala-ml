@@ -54,7 +54,9 @@ best, before the step's certificate and the next step, a row logging it; `--comm
 commitment 0; `--window-width D` widens the window's residual stream from W11's 16, its FFN twice
 it (the window branches workplan's W1); `--branches` gives the window a shared trunk, then a branch
 a factor and one for the answers, each factor's pooling reading its own (the plan's B1-B3; with
-`--reads output`), and `readout-tune` then trains the answers' whole branch. `run` prints each
+`--reads output`), and `readout-tune` then trains the answers' whole branch; `--answer-branch`
+gives it a shared trunk, then the state branch (W11's last block, unchanged) that every factor reads
+and the answers' own single-head branch (the one-code-one-state workplan's R1). `run` prints each
 target's feasibility line first (q, codes, m, the cap, s0, d) and refuses a cell whose joint codes
 can't hold its states.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
@@ -935,6 +937,12 @@ def main(argv: list[str]) -> int:
         help="the window branches workplan's window: a shared trunk, then a branch a factor and one for the answers "
         "(needs --reads output)",
     )
+    run.add_argument(
+        "--answer-branch",
+        action="store_true",
+        help="the one-code-one-state workplan's R1: a shared trunk, then the state branch (W11's last block) every "
+        "factor reads and the answers' own single-head branch (needs --reads output)",
+    )
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
     certify.add_argument(
@@ -1081,8 +1089,10 @@ def main(argv: list[str]) -> int:
         return 0
     if args.codes_ratio is not None and args.factor:
         parser.error("--codes-ratio sets every factor's codes: not with --factor")
-    if args.branches and args.reads != "output":
-        parser.error("--branches: each factor reads its branch's end, so --reads output")
+    if (args.branches or args.answer_branch) and args.reads != "output":
+        parser.error("--branches and --answer-branch: each factor reads a branch's end, so --reads output")
+    if args.branches and args.answer_branch:
+        parser.error("--branches or --answer-branch, not both")
     # the targets by name: the machines', or division's at each p, and each one's directory when several
     if args.runs is not None and args.task:
         parser.error("--runs names its tasks: not with --task")
@@ -1116,6 +1126,7 @@ def main(argv: list[str]) -> int:
             commitment_from=args.commitment_from,
             width=args.window_width,
             branches=args.branches,
+            answer_branch=args.answer_branch,
         )
 
     for name in names:

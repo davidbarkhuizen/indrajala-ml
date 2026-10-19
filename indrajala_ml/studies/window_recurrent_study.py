@@ -148,6 +148,27 @@ def branched_window(tokens: int, classes: int, factors: int, width: int = D) -> 
     return [*trunk, Branches(tuple(branch() for _ in range(factors + 1))), window[-1]]
 
 
+def answer_branch_window(tokens: int, classes: int, factors: int, width: int = D) -> list[LayerSpec]:
+    """
+    The one-code-one-state workplan's R1 (D2 (a)): W11's first two blocks as the shared trunk, then
+    two branches: the state branch, W11's third block unchanged (its heads, its FFN, its LayerNorm),
+    which every factor's pooling reads, and the answers' own single-head block and LayerNorm, which
+    runs on into the output layer; every path 3 blocks deep, width its stream's.
+    """
+    window = transformer_window(tokens, classes, width)
+    trunk = window[: 2 + 3 * (BLOCKS - 1)]  # the Embedding, the Position and the first BLOCKS - 1 blocks
+    state = tuple(window[len(trunk) : -1])  # the last block and its LayerNorm, as W11's
+    answers = (
+        StateInput(),
+        Residual((LayerNorm(), Attention(heads=1, causal=True))),
+        Residual(
+            (LayerNorm(), Dense(FFN // D * width, activation="relu"), Dense(width, activation="linear", bias=True))
+        ),
+        LayerNorm(),
+    )
+    return [*trunk, Branches((state, answers), reads=(0,) * factors), window[-1]]
+
+
 def _output(task: wt.Task) -> list[LayerSpec]:
     return [LayerNorm(), Dense(task.machine.classes, output=True, activation="softmax", loss="cross_entropy")]
 

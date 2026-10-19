@@ -218,14 +218,20 @@ class Branches:
     its last hidden layer, right before the output layer: each branch is token layers over the
     tokens before it (a StateInput, residual blocks, LayerNorms), keeping their width; factor g's
     pooling reads the end of branch g, and the last branch, the answers', runs on into the output
-    layer. A window of G factors has G + 1 branches (validate_window_recurrent).
+    layer. A window of G factors has G + 1 branches (validate_window_recurrent). With `reads`, factor g
+    reads the end of branch reads[g] instead, so several factors can share one branch (the
+    one-code-one-state workplan's R1: one state branch for every factor, and the answers' own);
+    every branch but the answers' is read.
     """
 
     branches: tuple[tuple[LayerSpec, ...], ...]
+    reads: tuple[int, ...] | None = None
 
     def __post_init__(self) -> None:
         # lists given are kept as tuples, so equal windows compare equal and the spec stays hashable
         object.__setattr__(self, "branches", tuple(tuple(branch) for branch in self.branches))
+        if self.reads is not None:
+            object.__setattr__(self, "reads", tuple(self.reads))
 
 
 LayerSpec = (
@@ -331,6 +337,19 @@ def branch_ends(specs: Sequence[LayerSpec | ExpandedSpec]) -> list[int]:
     input) in a window with branches (the window branches workplan); empty without them.
     """
     return [i for i, spec in enumerate(expand_specs(specs)) if isinstance(spec, Branch)]
+
+
+def factor_reads(specs: Sequence[LayerSpec]) -> list[int]:
+    """
+    Where each factor's pooling reads in a window with branches, an index into expand_specs(specs):
+    the end of its branch, branch g's for factor g or, with Branches' reads, branch reads[g]'s (the
+    one-code-one-state workplan's R1); empty without branches.
+    """
+    ends = branch_ends(specs)
+    branches = next((spec for spec in specs if isinstance(spec, Branches)), None)
+    if branches is None or branches.reads is None:
+        return ends
+    return [ends[r] for r in branches.reads]
 
 
 def token_wise_output(specs: Sequence[LayerSpec]) -> bool:
