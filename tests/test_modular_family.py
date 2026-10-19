@@ -5,6 +5,7 @@ import json
 import random
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -505,6 +506,15 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "fork": RESUMED_FORK,
         "commitment_from": 2,
     },
+    # the usage thermostat (the commitment-control workplan's stage 2), its levels low enough to move on 4 codes
+    "thermostat": {
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 2,
+        "budget_epochs": 6,
+        "fork": RESUMED_FORK,
+        "thermostat": mf.Thermostat(floor=1.5, restore=0.5, ramp=3),
+    },
 }
 
 
@@ -569,6 +579,8 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "consolidated":
         assert [step for step, _ in ends] == [2, 3]  # from s0
         assert any("fork" in r and "consolidation" in r for r in whole[0])
+    elif kind == "thermostat":
+        assert all("thermostat" in r for r in whole[0] if r.get("epoch", 0) > 0 and "end" not in r)
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":
@@ -932,3 +944,60 @@ def test_tuning_a_branched_readout_trains_the_answers_branch_alone(tmp_path: Pat
     ]
     assert changed and all(i >= answers and i < len(before.layers) for i in changed)
     assert len(before.layers) - 1 in changed
+
+
+def test_the_thermostat_holds_off_below_its_floor_ramps_back_from_half_the_codebook_and_drops_at_the_floor():
+    thermostat = mf.Thermostat(floor=3.0, restore=0.5, ramp=4)
+    counts = [8, 32]
+    levels = [0, 0]
+    trace: list[list[int]] = []
+    # factor 0: 2 codes (off), 5 codes (half of 8 reached: ramp), on up, then 2.5 (below the floor: off)
+    # factor 1: 10 codes stay off (between the floor and half of 32: the hysteresis), then 16 restores it
+    for effective in [(2.0, 10.0), (5.0, 10.0), (3.5, 10.0), (3.5, 16.0), (3.5, 10.0), (3.5, 10.0), (2.5, 3.0)]:
+        levels = thermostat.levels(levels, effective, counts)
+        trace.append(levels)
+    assert trace == [[0, 0], [1, 0], [2, 0], [3, 1], [4, 2], [4, 3], [0, 4]]
+    assert thermostat.commitments([0, 2, 4], [0.25, 0.25, 0.5]) == [0.0, 0.125, 0.5]
+
+
+def test_effective_codes_are_two_to_the_entropy_of_each_factors_use():
+    class Coded:
+        # a network whose windows' next states are given (after the initial state): factor 0 on 4 codes
+        # evenly, factor 1 on one; its backend's matrix the rows themselves
+        @staticmethod
+        def _rows(rows: list[Any]) -> list[Any]:
+            return rows
+
+        backend = SimpleNamespace(matrix=_rows)
+
+        def state_codes(self, X: Any) -> list[list[tuple[int, ...]]]:
+            return [[(0, 0), (0, 7), (1, 7), (2, 7), (3, 7)] for _ in X]
+
+    rows = [[((0,), None), ((1,), None)]]
+    assert mf.effective_codes(Coded(), rows) == pytest.approx([4.0, 1.0])
+
+
+def test_a_thermostat_run_logs_each_epochs_effective_codes_and_commitments(tmp_path: Path):
+    settings = mf.Settings(epoch_examples=32, max_epochs=3, screen=4, cases=4, lengths=(2,), long=(3,))
+    thermostat = mf.Thermostat(floor=1.5, restore=0.5, ramp=2)
+    mf.run(
+        mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path, settings, cap=2, budget_epochs=3, thermostat=thermostat
+    )
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    epochs = [r for r in rows if r.get("epoch", 0) > 0 and "end" not in r]
+    assert epochs and all(len(r["thermostat"]["effective"]) == len(r["thermostat"]["beta"]) == 1 for r in epochs)
+    assert all(r["thermostat"]["beta"][0] in (0.0, 0.125, 0.25) for r in epochs)  # off, half, or the specs' 0.25
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["thermostat"] == repr(thermostat)
+    with pytest.raises(AssertionError, match="the thermostat sets the commitment"):
+        mf.run(
+            mf.Encoding(5, mf.FAMILY),
+            [(4, 4)],
+            0,
+            60,
+            tmp_path / "x",
+            settings,
+            cap=2,
+            thermostat=thermostat,
+            commitment_from=2,
+        )

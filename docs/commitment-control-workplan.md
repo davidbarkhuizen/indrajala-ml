@@ -156,6 +156,46 @@ working and before it is certified.
   `jebel`; success registered with each probe (a factor that keeps at least 3 codes through 40
   epochs and gains share of a residue from its post-restart baseline).
 
+## Stage 2, re-aimed at failure A (2026-10-19, before its data)
+
+The owner, 2026-10-19: the thermostat is worth pursuing now, the diagnostic's evidence driving it
+(bottleneck 1 of [bottlenecks.md](bottlenecks.md); R5 of
+[one-code-one-state-workplan.md](one-code-one-state-workplan.md)). D2, D4 and D5 were set for
+C9''s collapsed factors, which no longer exist; failure A's evidence re-sets them. D1 (a) stands.
+
+- **The signal (D1 (a), made exact): each factor's effective codes,** `2^H` of its codes' use
+  over a fixed sample of the step's examples at each epoch's end (every window's snapped code;
+  the sample drawn from its own generator, so training's draws don't change). Round 1's failure-A
+  runs sat at 1-5 codes a factor, mostly 1-2; the certified S3 seed used 5-7; the diagnostic's
+  runs kept 5-8 with the commitment off.
+- **D2' (replacing D2). The levels: off below 3 effective codes; restored once a factor's effective
+  codes reach half its codebook, ramped from 0 to its specs' commitment over 20 epochs; off again
+  only below 3.**
+  - (a) D2 as written (off below 3, restore above 5, a 5-epoch ramp). Pros: settled. Cons: at
+    move-to-front-5 (32 codes) a formed state uses 14-32, so 5 restores long before a state forms;
+    and the diagnostic's full return eroded formed states within a step (S3 seed 0: 0.97 to 0.56).
+  - (b) *Chosen.* Half the codebook to restore, 20 epochs of ramp. Pros: scales with the cell (S3
+    4 of 8, move-to-front-5 16 of 32), every certified network here past it (S3 7-8 of 8, W1 22-32
+    of 38, move-to-front 4 12-14 of 15); the ramp four times D2's against the erosion seen; the
+    gap from 3 to half the codebook is the hysteresis. Cons: one more level; a state formed on
+    fewer than half its codes waits off (S3 seed 3 lost a state formed with it off: the restore
+    level exists for that case, and may need lowering).
+  - (c) Restore when the effective codes stop growing (a plateau). Cons: a run could plateau low
+    for long; another setting (its patience).
+- **D4' (replacing D4): a step is certified as now, whatever the commitment.** The certificate's
+  two verdicts (snap ratio 1.0 and 1.05) already test the margins D4 waited for. Pros: no special
+  case; stop at certified unchanged. Cons: a network certified with the commitment low may have
+  thinner margins: the verdicts say whether they suffice.
+- **D5' (replacing D5): the probe, then C3.** The probe: the diagnostic's six runs (S3 seeds 0, 1,
+  3, 4, 5; move-to-front 4 seed 3, round 1's cell) with `--thermostat`, its expectation written
+  in its script before the data; its control the diagnostic and round 1. **C3, registered here:**
+  round 2's move-to-front-5 cell (two factors, `--codes-ratio 32/11`, reading the output, the
+  fork, 600 epochs, seeds 0-5) with `--thermostat`, against round 2 (0 of 6, four of them failure
+  A) by the by-bits rule. **Helps:** 4 of 6 or more (Fisher one-sided p 0.030). **Works:** 1-3.
+  Read every failure: failure A (a state's share below 0.5 at its best) or another bottleneck. A
+  0 of 6 with fewer failure-A runs than round 2's four still shows the thermostat moving
+  bottleneck 1. Feasibility: round 2's (`q` 120, 32 codes a factor, `m` 1,024, cap 1,143).
+
 ## Stages (deferred)
 
 1. **This plan.**
