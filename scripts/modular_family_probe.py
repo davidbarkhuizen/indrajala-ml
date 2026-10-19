@@ -784,6 +784,8 @@ window-branches/; `readout.txt`, `certify/` and `long-tests/` added on pyramidon
   recertified on pyramidon (8941eb7) in both verdicts (`certify/`): 253-412 codes reached,
   minimised to 169, 0 wrong outputs and 0 wrong states; strict snap ratio >= 1.000-1.001, logit
   lead >= 0.64-1.63. The runs certified fast: 29-37 minutes, where L3's spent their 600 epochs.
+- **Its long test passes:** seed 2's certified network (step 9) passed every one of its 807,000
+  cases (U1 and S1 at 128, 256 and 1,024 columns; pyramidon, 8941eb7, 10,925 s; `long-tests/`).
 - **The certified machines are compact:** at the certified step each factor uses 22-32 of its 38
   codes, the state's share 1.0. Every certified run's worst answer reached 1.000 at step 6 or 7,
   one to five steps before its certificate.

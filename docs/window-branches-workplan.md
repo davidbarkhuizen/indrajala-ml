@@ -149,8 +149,8 @@ it certifies 4 or more (Fisher one-sided p 0.030); 1-3 of 6 against 0 is "works,
   limited division at 13. **0 of 6:** width alone isn't enough; the branches' claims read as
   planned.
   **Result (2026-10-19): works, 5 of 6** (seeds 0, 1, 2, 4, 5 at steps 8-11, each recertified in
-  both verdicts; Fisher one-sided p 0.008 against L3), on jebel at 85a9e44: findings in the probe
-  script's docstring (W1).
+  both verdicts; Fisher one-sided p 0.008 against L3; seed 2's long test, 807,000 cases, all
+  pass), on jebel at 85a9e44: findings in the probe script's docstring (W1).
 - **W2, the size control (D8; registered 2026-10-19, before its data):** L3's cell with the
   window 22 wide (`--window-width 22`: `FFN` 44, heads 2), no branches, seeds 0-5: 30,296
   parameters against B1's 28,702. Its control is L3, by W1's by-bits rule (the flag's default
