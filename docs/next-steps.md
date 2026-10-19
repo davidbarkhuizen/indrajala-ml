@@ -61,6 +61,7 @@ docs cite them by section:
 | A family of modular operations on one state (option 2) | #765 | #766 | `git show e45944e:docs/modular-family-workplan.md` |
 | Modular division with the family (`p` 5 and 7, the registered claim) | #766 | #767-#782 | `git show e45944e:docs/division-workplan.md` |
 | Where division fails in `p` (the division ladder, L1-L3) | #817 | #824, #856, #859, #861 | `git show f9101d8:docs/division-ladder-workplan.md` |
+| A path through the window for each factor and for the answers (window branches; W1, W2, B1-B3) | #863 | #864-#868, crate #66, #884 | `git show e7f1ff6:docs/window-branches-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -76,6 +77,21 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/multi_head_attention_study.py`'s, the sequence study's in `scripts/sequence_study.py`'s,
 the attention dropout study's in `scripts/attention_dropout_study.py`'s, the rotary study's in
 `scripts/rotary_study.py`'s, the addition study's in `scripts/addition_study.py`'s.
+
+## From the window branches (2026-10-19; the workplan retired the same day)
+
+The branches (`--branches`: a two-block trunk, a single-head block a factor and one for the answers)
+were built and not adopted: B1 and B2 worked in one seed a cell, W2 (width alone, at B1's size)
+did better on division, and B3 showed harm on S4 (the probe script's findings, stage 6). They stay
+an option. The answers' own branch with the factors on a shared state branch is R1, in
+[one-code-one-state-workplan.md](one-code-one-state-workplan.md). Left open, none planned:
+
+- **A stop-gradient between the answer branch and the trunk** (the plan's D4): the trunk is still
+  shaped by the answers' loss.
+- **Two heads a branch** (D2's alternative), and **a deeper trunk** before the branches: a single
+  head a factor at width 16 starved the transitions on S4.
+- **The branches at the base width (32) on the algebras' `n` 4 cells**, for no harm: the side
+  probe at 32 on S5 (0 of 2, pairs per code unchanged) gave no reason to run it.
 
 ## From the window program (2026-10-17)
 

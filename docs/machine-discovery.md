@@ -62,8 +62,8 @@ discovery problem supplies.
 - **The exclusion bound** needs the target's state count, unknown here. The known bound `m`
   stands in for it: train to `m_codes + m - 1`, which excludes memorising for any target within
   the bound. **A state bound is therefore a required known property**, not an optional one.
-- **The architecture** is the general one this work is converging on (the window that the
-  window branches and one-code-one-state plans adopt; bottlenecks.md). Nothing in it is chosen per
+- **The architecture** is the general one this work is converging on (the window the
+  one-code-one-state plan adopts, width 32 pending C0; bottlenecks.md). Nothing in it is chosen per
   task, which is what discovery needs: the target is unknown, so the architecture can't be fitted
   to it.
 
@@ -179,7 +179,6 @@ structure, each recovery proved.
 
 Related: [bottlenecks.md](bottlenecks.md) (where the work stands),
 [one-code-one-state-workplan.md](one-code-one-state-workplan.md),
-[window-branches-workplan.md](window-branches-workplan.md),
 [factorisation-machine-workplan.md](factorisation-machine-workplan.md) (a machine that discovers its
 own decomposition), [window-recurrent-literature.md](window-recurrent-literature.md) (the terms,
 Dan et al. 2022, the classical learners).
