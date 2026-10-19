@@ -93,8 +93,10 @@ DIR/<network>.long-test.json (skipped when there), a line each of its cases and 
 
 Each run writes `log.jsonl` (a line per diagnosis: each operation's accuracy, the quotient by
 class, each factor's codes used and its share of A, B, the sum S, the difference D and the zero
-tests; at each step's end, the quotient's accuracy at 24 and 48 columns) and `network.json` (the
-network at its last step's end).
+tests; at each step's end, the quotient's accuracy at 24 and 48 columns, its certificate, and
+`machine`: the codes, the pairs (code, state) and the right pairs its machine reaches beside the
+target's, so pairs per code, 1.0 in every certified network (the one-code-one-state workplan's R2;
+`trace` prints it)) and `network.json` (the network at its last step's end).
 
 Findings (stage 2 of the modular-family workplan), on jebel (i7-9700K), one process a run,
 OPENBLAS_NUM_THREADS=1, 2026-10-15; p 5, two factors of 16 codes, s 16 each, k 1 column (D3), the
