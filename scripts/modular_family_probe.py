@@ -57,6 +57,10 @@ can't hold its states.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
 and with the guard armed, on the same data, and prints each one's seconds, whether its quotient's
 machine is right before and after, and the guard's rollbacks (the guard workplan's budget probe).
+`readout-tune NETWORK --task T --step J --out DIR` trains a saved network's output layer alone
+(every other layer and the recurrence frozen, so its state machine is the saved one) on step J's
+lengths, an epoch at a time, until its certificate passes or `--epochs` are spent, a row an epoch
+(DIR/log.jsonl; DIR/certified.network.json if it certifies).
 `--first-seed F --seeds N` runs seeds F..F+N-1, a process each, `--workers` at once (default
 all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--runs TASK:SEED ...` runs
 those alone, in one pool (chosen seeds replayed: DIR/<task>/seed<s> for several tasks); `--budget-epochs` stops a
@@ -862,6 +866,15 @@ def main(argv: list[str]) -> int:
     target.add_argument("--task", help="a general algebra's machine")
     epoch.add_argument("--step", type=int, required=True, help="the step whose lengths the epoch trains (1..step)")
     epoch.add_argument("--arm", choices=sorted(ARMS), default="family")
+    tune = commands.add_parser("readout-tune", help="a saved network's output layer trained alone, to its certificate")
+    tune.add_argument("network", type=Path)
+    tune.add_argument(
+        "--task", required=True, help="modular-division-p (the quotient), modular-sum-p (the sum) or a machine's"
+    )
+    tune.add_argument("--arm", choices=sorted(ARMS), default="family")
+    tune.add_argument("--step", type=int, required=True, help="the step whose lengths it trains (1..step)")
+    tune.add_argument("--epochs", type=int, default=30, help="at most, stopping at the first certified")
+    tune.add_argument("--out", type=Path, required=True)
     for name, summary in (
         ("by-length", "saved networks' exact accuracy over every word of each length, against the task's machine"),
         ("breaks", "saved networks' broken transitions, from each state's first code and its extra codes"),
@@ -908,6 +921,11 @@ def main(argv: list[str]) -> int:
     if args.command == "guard-epoch":
         encoding = _target(args.task or f"modular-division-{args.p}", args)
         print(json.dumps(mf.guard_epoch(args.network, encoding, args.step)))
+        return 0
+    if args.command == "readout-tune":
+        target = _target(args.task, args)
+        for row in mf.tune_readout(args.network, target, args.task, args.step, args.out, args.epochs):
+            print(json.dumps(row), flush=True)
         return 0
     if args.command == "readout":
         pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
