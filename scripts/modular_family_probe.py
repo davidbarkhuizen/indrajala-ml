@@ -60,7 +60,12 @@ and the answers' own single-head branch (the one-code-one-state workplan's R1); 
 each factor's commitment off while it uses fewer than 3 effective codes (2 ** the entropy of its
 codes' use on the step's screen) and ramps it back over 20 epochs once it uses half its codebook
 (the commitment-control workplan's stage 2; levels set by `--thermostat-floor`, `-restore`,
-`-ramp`; each epoch's row logs its effective codes and commitments). `run` prints each
+`-ramp`; each epoch's row logs its effective codes and commitments); `--keep-machine` keeps each
+step's network whose machine has the fewest pairs per code (read at each diagnosis, ties to more
+right pairs) and restores it at a plateau, and `--counterexamples [SHARE]` draws SHARE (0.25) of each
+epoch's examples from the shortest words to the codes wrong for their states (at most 256, read at
+each diagnosis), each followed by `d` uniform tokens (the one-code-one-state workplan's R3 and R4;
+the diagnosis rows log `machine`, `kept` and `counterexamples`). `run` prints each
 target's feasibility line first (q, codes, m, the cap, s0, d) and refuses a cell whose joint codes
 can't hold its states.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
@@ -957,6 +962,21 @@ def main(argv: list[str]) -> int:
     run.add_argument("--thermostat-floor", type=float, default=mf.Thermostat.floor, metavar="CODES")
     run.add_argument("--thermostat-restore", type=float, default=mf.Thermostat.restore, metavar="SHARE")
     run.add_argument("--thermostat-ramp", type=int, default=mf.Thermostat.ramp, metavar="EPOCHS")
+    run.add_argument(
+        "--keep-machine",
+        action="store_true",
+        help="the one-code-one-state workplan's R3: keep each step's network with the fewest pairs per code (read at "
+        "each diagnosis) and restore it at a plateau (not with --restore-best)",
+    )
+    run.add_argument(
+        "--counterexamples",
+        type=float,
+        nargs="?",
+        const=0.25,
+        metavar="SHARE",
+        help="the one-code-one-state workplan's R4: SHARE of each epoch's examples (0.25 if no SHARE) from the words "
+        "reaching the codes that are wrong for their states, read at each diagnosis",
+    )
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
     certify.add_argument(
@@ -1107,6 +1127,8 @@ def main(argv: list[str]) -> int:
         parser.error("--branches and --answer-branch: each factor reads a branch's end, so --reads output")
     if args.branches and args.answer_branch:
         parser.error("--branches or --answer-branch, not both")
+    if args.keep_machine and args.restore_best:
+        parser.error("--keep-machine or --restore-best, not both")
     if args.thermostat and (args.commitment_from is not None or args.consolidate):
         parser.error("--thermostat sets the commitment itself: not with --commitment-from or --consolidate")
     thermostat = (
@@ -1147,6 +1169,8 @@ def main(argv: list[str]) -> int:
             branches=args.branches,
             answer_branch=args.answer_branch,
             thermostat=thermostat,
+            keep_machine=args.keep_machine,
+            counterexamples=args.counterexamples,
         )
 
     for name in names:

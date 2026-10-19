@@ -493,6 +493,12 @@ def trace(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> list[str]:
                 f"restored {row['restored']:.3f}"
             )
             continue
+        if "restore_machine" in row:  # R3's kept machine, restored at a plateau
+            lines.append(
+                f"step {row['step']:>3} epoch {row['epoch']:>3} RESTORE the kept machine: pairs/code "
+                f"{row['restore_machine']:.2f} screen {row['restored']:.3f}"
+            )
+            continue
         if "factors" not in row:  # an epoch's screen score alone
             continue
         codes = _codes(row)
@@ -845,6 +851,8 @@ class Place:
     log_bytes: int
     consolidation: list[tuple[list[int], list[int]]] = field(default_factory=list[tuple[list[int], list[int]]])
     thermostat: list[int] = field(default_factory=list[int])  # each factor's level (Thermostat), with one
+    machine_best: list[float] = field(default_factory=list[float])  # R3: the step's kept machine's key, with it
+    words: list[list[int]] = field(default_factory=list[list[int]])  # R4: the last diagnosis's counterexamples
 
 
 def _run_identity(
@@ -867,6 +875,8 @@ def _run_identity(
     branches: bool = False,
     answer_branch: bool = False,
     thermostat: Thermostat | None = None,
+    keep_machine: bool = False,
+    counterexamples: float | None = None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -891,9 +901,12 @@ def _run_identity(
         **({"branches": True} if branches else {}),
         **({"answer_branch": True} if answer_branch else {}),
         **({"thermostat": repr(thermostat)} if thermostat is not None else {}),
+        **({"keep_machine": True} if keep_machine else {}),
+        **({"counterexamples": counterexamples} if counterexamples is not None else {}),
     }
 
 
+COUNTEREXAMPLE_WORDS = 256  # R4's words at most (D6)
 BEGUN, ENDED = "begun", "ended"  # a checkpoint's place before the run's first row, and after its last
 
 
@@ -931,6 +944,8 @@ def run(
     branches: bool = False,
     answer_branch: bool = False,
     thermostat: Thermostat | None = None,
+    keep_machine: bool = False,
+    counterexamples: float | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -990,6 +1005,12 @@ def run(
         branches,
         answer_branch,
         thermostat,
+        keep_machine,
+        counterexamples,
+    )
+    assert not (keep_machine and restore_best), "the step's kept machine (R3) or its best screen, not both"
+    assert counterexamples is None or 0 < counterexamples < 1, (
+        f"a share of each epoch's examples; got {counterexamples}"
     )
     assert thermostat is None or (commitment_from is None and not consolidate), (
         "the thermostat sets the commitment's weight itself: not with --commitment-from, nor with A, whose target "
@@ -1039,6 +1060,10 @@ def run(
     commitments = [0.0 if f.codes is None else f.codes.commitment for f in net.recurrence.factors]  # the specs'
     counts = [0 if f.codes is None else f.codes.count for f in net.recurrence.factors]
     levels = list(place.thermostat) if place is not None and place.thermostat else [0] * len(counts)  # off at the start
+    walked_d = mr.word_length(encoding.task.machine)  # R3 and R4's walks' d, the task's
+    words: list[list[int]] = [list(w) for w in place.words] if place is not None else []
+    machine_kept = out / "machine-best.network.json"
+    machine_best: list[float] = []
 
     def checkpoint(step: int, epoch: int) -> None:
         # the run's place after epoch of step (0: its start), every count read as it stands
@@ -1059,6 +1084,8 @@ def run(
             log.tell(),
             [(list(duplicate), list(representative)) for duplicate, representative in table.items()],
             list(levels) if thermostat is not None else [],
+            list(machine_best),
+            [list(w) for w in words],
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -1077,8 +1104,10 @@ def run(
             best, since, epoch = place.best, place.since, place.epoch
             rate, forks, peak = place.rate, place.forks, place.peak
             last_kinds, step_rollbacks = place.last_kinds, place.step_rollbacks
+            machine_best = list(place.machine_best)
         else:
             best, since = -1.0, 0
+            machine_best = []
             rate, forks = settings.rate, 0
             start_score, start_kinds = screen(
                 net, encoding, screens
@@ -1105,6 +1134,13 @@ def run(
                 encoding.example(encoding.draw(n, rng))
                 for n in epoch_lengths(step, settings.epoch_examples, long_tail, cap)
             ]
+            if counterexamples is not None and words:
+                # R4 (D6): a share of the epoch from the last diagnosis's counterexamples, each word then d
+                # uniform tokens and the final zero column (encoding.draw), so its answers tell its states apart
+                taken = round(counterexamples * len(examples))
+                examples[:taken] = [
+                    encoding.example(words[i % len(words)] + encoding.draw(walked_d, rng)) for i in range(taken)
+                ]
             if commitment_from is not None:
                 net.set_commitments([0.0 if step < commitment_from else c for c in commitments])
             thermo: dict[str, Any] = {}
@@ -1164,6 +1200,20 @@ def run(
                     checkpoint(step, epoch)
                     continue
             if epoch % settings.diagnose_every == 0:
+                walked: dict[str, Any] = {}
+                if keep_machine or counterexamples is not None:
+                    walk = mr.product(QueryMachine(net, encoding, 0), encoding.task.machine)
+                    summary = mr.summary(walk, walked_d)
+                    walked["machine"] = summary
+                    if keep_machine:  # R3 (D5): the fewest pairs per code, ties to more right pairs
+                        key = [summary["pairs"] / summary["codes"], -float(summary["right"])]
+                        if not machine_best or key < machine_best:
+                            machine_best = key
+                            net.save(str(machine_kept))
+                            walked["kept"] = True
+                    if counterexamples is not None:
+                        words = mr.counterexamples(walk, walked_d, COUNTEREXAMPLE_WORDS)
+                        walked["counterexamples"] = len(words)
                 record(
                     {
                         "step": step,
@@ -1174,6 +1224,7 @@ def run(
                         **thermo,
                         **diagnose(net, encoding, settings),
                         **({"consolidation": regroup()} if consolidate else {}),
+                        **walked,
                     }
                 )
             else:
@@ -1203,6 +1254,17 @@ def run(
                     stop = "plateau"
                     break
             checkpoint(step, epoch)
+        if keep_machine and stop == "plateau" and machine_best:
+            net = load_network(str(machine_kept))
+            restored = screen(net, encoding, screens)[0]
+            record(
+                {
+                    "step": step,
+                    "epoch": epoch,
+                    "restore_machine": round(machine_best[0], 3),
+                    "restored": round(restored, 4),
+                }
+            )
         if restore_best and stop == "plateau":
             net = load_network(str(step_best))
             restored = screen(net, encoding, screens)[0]
