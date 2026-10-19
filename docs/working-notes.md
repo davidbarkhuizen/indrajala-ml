@@ -264,6 +264,10 @@ where you meet a new trap; delete one that no longer holds.
   down.
 - **`jebel`'s non-interactive shell lacks cargo:** `PATH=$HOME/.cargo/bin:$PATH ./cli build-rust`.
   **`gh` isn't authenticated on `jebel`:** open PRs for its branches from `pyramidon`.
+- **`ab.py remote run` refuses when `jebel`'s main checkout shows `M rust`** ("must be clean"):
+  its `rust/` was left at another crate commit (2026-10-19: 13ccf90 against main's 40a2761). With
+  nothing running from that checkout, `git submodule update rust`, then `./cli build-rust` (cargo
+  on the PATH, above) so its venv's crate matches the pin, then relaunch.
 - **Studies and `ab.py` share `jebel`'s machine lock:** an A/B is refused while a study runs,
   naming it. The lock's record is cleared when the hold ends; a line left in `~/code/ab-runs/run.lock` by a killed job means nothing (it's an `flock`; `machine_lock.holder()` checks the pid).
 - **The permission classifier has blocked `pkill` and `kill` over ssh on `jebel`** at times; a kill

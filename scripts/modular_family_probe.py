@@ -764,6 +764,35 @@ e3776728... (4 files, the final network's certificate among them, run from divis
   were 1% wrong.** Next candidates (not registered): the whole network trained with the certificate
   guard armed only on a right state machine (P1's lesson), or the answers given their own head
   apart from what the state reads.
+
+Findings (W1, the window branches workplan's width claim, registered in #863 before its data),
+2026-10-19; L3's cell (division `p` 13, two factors 32 wide with 38 codes each, reading the output,
+the fork, 600 epochs, stop at certified) with the window's residual stream 32 wide instead of 16
+(`--window-width 32`: `FFN` 64, 2 heads), seeds 0-5. Code 85a9e44 (crate 40a2761),
+OPENBLAS_NUM_THREADS=1, jebel, 6 at once, 05:28 to 07:20. Its control is L3: the flag's default
+repeated L3's first epochs by bits on 85a9e44 (4 epochs of seed 0). Data in
+data/window-recurrent/window-branches/w1/, manifest `w1.sha256` 35064b2a... (102 files, run from
+window-branches/; `readout.txt`, `certify/` and `long-tests/` added on pyramidon after it).
+
+| cell | window | certified (Wilson 95%) | certified at | worst answer at best (failures) |
+| --- | --- | --- | --- | --- |
+| L3 | 16 wide | 0 of 6 (0.00-0.39) | - | 0.382-0.994 |
+| W1 | 32 wide | 5 of 6 (0.44-0.97) | steps 8-11, 209-255 epochs | 0.808 (seed 3) |
+
+- **W1 works, and helps over L3** (5 of 6 against 0 of 6, Fisher one-sided p 0.008): by the
+  registered answer, a crowded 16-wide window limited division at 13. Every certified network was
+  recertified on pyramidon (8941eb7) in both verdicts (`certify/`): 253-412 codes reached,
+  minimised to 169, 0 wrong outputs and 0 wrong states; strict snap ratio >= 1.000-1.001, logit
+  lead >= 0.64-1.63. The runs certified fast: 29-37 minutes, where L3's spent their 600 epochs.
+- **The certified machines are compact:** at the certified step each factor uses 22-32 of its 38
+  codes, the state's share 1.0. Every certified run's worst answer reached 1.000 at step 6 or 7,
+  one to five steps before its certificate.
+- **Seed 3 never formed a state:** from step 5 it used every code (36-38 a factor) with the state's
+  share 0.72-0.84, its machine minimising to 360-733; 600 epochs spent at step 19, no collapse. Not
+  failure A (few codes): the opposite, codes saturated.
+- **What W1 leaves to the branches (D3, D8):** a wider stream suffices at 13, so the branches'
+  claim on division (B1, 16 wide) reads against W2, the window at 22 matched to B1 in parameters:
+  separation against size. A branches-at-32 cell could read only "no harm" against W1.
 """
 
 from __future__ import annotations

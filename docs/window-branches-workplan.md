@@ -148,6 +148,9 @@ it certifies 4 or more (Fisher one-sided p 0.030); 1-3 of 6 against 0 is "works,
   bits on the flag's commit; else L3's cell is rerun beside it. **Works:** a crowded 16-wide stream
   limited division at 13. **0 of 6:** width alone isn't enough; the branches' claims read as
   planned.
+  **Result (2026-10-19): works, 5 of 6** (seeds 0, 1, 2, 4, 5 at steps 8-11, each recertified in
+  both verdicts; Fisher one-sided p 0.008 against L3), on jebel at 85a9e44: findings in the probe
+  script's docstring (W1).
 - **W2, the size control (D8; registered 2026-10-19, before its data):** L3's cell with the
   window 22 wide (`--window-width 22`: `FFN` 44, heads 2), no branches, seeds 0-5: 30,296
   parameters against B1's 28,702. Its control is L3, by W1's by-bits rule (the flag's default
@@ -198,9 +201,8 @@ The branches change the window, not the codes or the cap: every cell keeps its c
    repo tool, with a test on a small cell); `transformer_window(tokens, classes, width=16)` and
    `run --window-width D` (`FFN` twice `D`), its default today's specs (tested; no golden run:
    the training path is unchanged); a few epochs of W1's cell on `stone` for its epoch time, and
-   the by-bits check of the default against L3. **W1 runs on `stone`**, from `main` at the merge
-   (`run --resume` lets it pause at 07:00 and go on at 18:00). Its findings in the probe script's
-   docstring, a PR of their own.
+   the by-bits check of the default against L3. W1 ran on `jebel` (05:28-07:20), from 85a9e44 (#864's
+   merge). Its findings in the probe script's docstring, a PR of their own. *Done.*
 3. **The crate (indrajala-math-rust):** the `branch` op (D5 (a)): forward, backward, `reads` one
    index a factor; tests against hand-built programs and the per-layer reference values; a program
    without `branch` bit-identical (the crate's tests and, after the bump, the golden run). Its own
