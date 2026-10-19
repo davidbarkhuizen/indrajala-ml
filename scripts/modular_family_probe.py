@@ -52,7 +52,9 @@ diagnosis row logging `consolidation` (codes reached, groups, duplicates pulled)
 best, before the step's certificate and the next step, a row logging it; `--commitment-from J`
 (the commitment-control workplan's diagnostic) trains the steps before J with every factor's
 commitment 0; `--window-width D` widens the window's residual stream from W11's 16, its FFN twice
-it (the window branches workplan's W1). `run` prints each
+it (the window branches workplan's W1); `--branches` gives the window a shared trunk, then a branch
+a factor and one for the answers, each factor's pooling reading its own (the plan's B1-B3; with
+`--reads output`), and `readout-tune` then trains the answers' whole branch. `run` prints each
 target's feasibility line first (q, codes, m, the cap, s0, d) and refuses a cell whose joint codes
 can't hold its states.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
@@ -857,6 +859,12 @@ def main(argv: list[str]) -> int:
         metavar="D",
         help="the window's residual stream (W11's 16), its FFN twice it (the window branches workplan's W1)",
     )
+    run.add_argument(
+        "--branches",
+        action="store_true",
+        help="the window branches workplan's window: a shared trunk, then a branch a factor and one for the answers "
+        "(needs --reads output)",
+    )
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
     certify.add_argument(
@@ -1003,6 +1011,8 @@ def main(argv: list[str]) -> int:
         return 0
     if args.codes_ratio is not None and args.factor:
         parser.error("--codes-ratio sets every factor's codes: not with --factor")
+    if args.branches and args.reads != "output":
+        parser.error("--branches: each factor reads its branch's end, so --reads output")
     # the targets by name: the machines', or division's at each p, and each one's directory when several
     if args.runs is not None and args.task:
         parser.error("--runs names its tasks: not with --task")
@@ -1035,6 +1045,7 @@ def main(argv: list[str]) -> int:
             restore_best=args.restore_best,
             commitment_from=args.commitment_from,
             width=args.window_width,
+            branches=args.branches,
         )
 
     for name in names:
