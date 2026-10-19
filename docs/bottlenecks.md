@@ -20,11 +20,11 @@ going wrong on codes beyond an exact core, and the answers not being separable o
 | | 1. State formation (failure A) | 2. Extra codes | 3. Answer separation |
 | --- | --- | --- | --- |
 | **what fails** | no state forms: 2-6 codes a factor, the state's share 0.06-0.35, the machine minimising to 3-6 | a state forms with an exact core (each state's first code breaks 0-4% of its transitions), but longer words reach many more codes, whose transitions break | the machine is exact, but some answers on it are wrong |
-| **where seen** | S3 (round 1, 5 of 6 failures); move-to-front 4 (round 1, P1: seeds 0, 3, 4); move-to-front 5 (round 2, 4 of 6; B2's first three seeds) | S4's near miss (round 1); random-4-0, random-q16-0 (2b, A, B, P2); S5 (round 2: 385-748 codes for 120 states, minimised to 175-842; B2's first three seeds: 425-737) | division `p` 13 (L3: seed 5's 169-state machine exact, 15-22 of 1,521 answers wrong) |
+| **where seen** | S3 (round 1, 5 of 6 failures); move-to-front 4 (round 1, P1: seeds 0, 3, 4); move-to-front 5 (round 2, 4 of 6; B2's first three seeds) | S4's near miss (round 1); random-4-0, random-q16-0 (2b, A, B, P2); S5 (round 2: 385-748 codes for 120 states, minimised to 175-842; B2's first three seeds: 425-737) | division `p` 13 (L3 seed 5 only: its 169-state machine exact, 15-22 of 1,521 answers wrong; L3's other five failures are in 2) |
 | **cause, as far as shown** | the commitment's pull: with nothing yet distinguishing the states, a constant meets it most cheaply. Diagnostic (2026-10-19, registered): with the commitment off for steps 1-5, 3 of 6 failure-A runs formed a state (0.87, 0.97, 1.0) and S3 seed 5 certified; the states eroded when it returned at step 6 | not duplicates: an extra code's outputs are wrong within `d` tokens, so the network's own equivalence can't merge them (A's reading). Not rarity (random-4-0). Where they first arise is unshown | a crowded window: the answers and every factor's transition read one 16-wide stream; its features don't linearly separate the answers (the separability check) |
 | **tried** | the commitment off early (the diagnostic: forms states, doesn't keep them) | A, consolidation (0 of 6, pulled little); B, the long tail (0 of 6, a longer exact prefix in 2 seeds); P2, restore the step's best (0 of 6: the best was never a machine); P1, the guard (fewer certified) | readout-tune (15 left: not an under-trained readout); W1, the window 32 wide: **5 of 6 against 0 of 6, cured** |
-| **plan** | [commitment-control-workplan.md](commitment-control-workplan.md) (deferred, re-aimed at failure A) | [code-consolidation-workplan.md](code-consolidation-workplan.md) (paused, its remedies spent) | [window-branches-workplan.md](window-branches-workplan.md) (stage 6 running) |
-| **next** | write the diagnostic's findings; build the usage thermostat (D1 (a): the commitment off while a factor's code use is low, back on once a state has formed), its probes on S3, move-to-front 4 and 5 | a diagnosis before another remedy: on B2's failures, where each extra code first appears (the step, the transition, the code it leaves), and whether the codes training visits are the ones that break | B1 (branches) against W2 (size) tonight; then division `p` 17 with the window that wins, registered before its data, for whether the cure holds as the machine grows |
+| **plan** | [commitment-control-workplan.md](commitment-control-workplan.md) (deferred, re-aimed at failure A) | [code-consolidation-workplan.md](code-consolidation-workplan.md) (paused, its remedies spent) | the window branches workplan (retired 2026-10-19, not adopted); R1 in [one-code-one-state-workplan.md](one-code-one-state-workplan.md) |
+| **next** | write the diagnostic's findings; build the usage thermostat (D1 (a): the commitment off while a factor's code use is low, back on once a state has formed), its probes on S3, move-to-front 4 and 5 | a diagnosis before another remedy: on B2's failures, where each extra code first appears (the step, the transition, the code it leaves), and whether the codes training visits are the ones that break | R1's probes (the answers' own branch, at 16 and 32); then division `p` 17 at width 32, registered before its data, for whether the cure holds as the machine grows |
 
 ## The common measure: one code, one state (2026-10-19)
 
@@ -37,14 +37,21 @@ logged and used to keep the best machine, counterexample training (2), the therm
 
 - **B2 (2026-10-19): the branches moved 1 and 2 in one seed each** (S5 1 of 6, move-to-front-5
   1 of 6, against 0 of 6 each in round 2): works, gain undecided.
-- **The branches at width 16 move division from 3 to 2** (B1 mid-run: codes standing for 11-81
-  states where L3's stood for one): splitting the factors' path starved their transitions.
+- **Division at width 16 was mostly 2, not 3 (stage 6's findings, 2026-10-19):** L3's five other
+  failures stood at 20-135 pairs per code; only seed 5 had an exact state. B1's failures (26-76) and
+  W2's at width 22 (34-120) are the same kind, so the branches didn't move division (as first read
+  from B1 mid-run); width relieved it (W2 3 of 6, W1 5 of 6).
+- **The branches, not adopted:** B1 1 of 6 and B2 1 of 6 a cell (works, gain undecided), W2 3 of 6
+  at B1's size, and harm on S4 (B3, 0 of 6 against round 1's 4 of 6, p 0.030); division `p` 11
+  fell to 1 of 6 from the ladder's 4 (no harm by the rule, p 0.12), its failures in 2 (9-88 pairs
+  per code). The side probe
+  (branches at 32, S5 seeds 0 and 1) left pairs per code unchanged (120, 77).
 
 ## How they combine
 
 - **One cell can hit more than one.** Move-to-front 5's seeds split between 1 and 2 (round 2: four
-  failure A, two with states but no exact core). Division `p` 13 at width 16 hit 3 with its state
-  exact. So a cell's count says little until each failure is read by D9's probes (`breaks`,
+  failure A, two with states but no exact core). Division `p` 13 at width 16 hit 2 in five
+  seeds and 3 in one (L3). So a cell's count says little until each failure is read by D9's probes (`breaks`,
   `by-length`) and assigned.
 - **A fix is read on its own bottleneck's cells.** The branches target 3; B2 (S5, move-to-front 5)
   hits 1 and 2, so a 0 of 6 there doesn't count against the branches on division, and isn't
@@ -62,3 +69,6 @@ logged and used to keep the best machine, counterexample training (2), the therm
   works and no shown cause.
 - 2026-10-19: the common measure (pairs per code) and its workplan; B2 read (1 of 6 on each
   cell).
+- 2026-10-19: the window branches' stage 6 read and the plan retired (not adopted: harm on S4).
+  Division at width 16 was mostly 2, not 3 (L3's other five failures read). R3 and R4's probe
+  certified S5 seed 1, a seed that failed in round 2 and B2: the first move on 2.

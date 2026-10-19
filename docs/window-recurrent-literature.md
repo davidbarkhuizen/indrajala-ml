@@ -242,7 +242,7 @@ literature repository; what they changed:
 
 Asked by the owner: how novel is the current architecture (W11's window, the factored snapped
 state with a pooling, a cell and codes a factor, and the window branches of
-[window-branches-workplan.md](window-branches-workplan.md))? Searched modular recurrent networks,
+the window branches workplan, retired 2026-10-19: `git show e7f1ff6:docs/window-branches-workplan.md`)? Searched modular recurrent networks,
 discretised states and communication, factored categorical latents, branched multi-task
 networks, Mealy machines learned by networks, and chunked recurrent transformers (2024-2026).
 Seven papers were read in the parts that bear on the design: method, experiments and related work

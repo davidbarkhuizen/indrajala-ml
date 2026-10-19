@@ -37,7 +37,8 @@ a2b39a33...):
 | B2 move-to-front-5 seed 3 | 34 | 22 | 0 | - | bottleneck 1, partly formed |
 | B2 move-to-front-5 seed 5, step 20 (3 steps before its certificate) | 265 | 2.2 | 144 | 21% | became 1.0 by step 23 |
 | round 2 move-to-front-5 seeds 0, 2 | 336-339 | 1.7-3.3 | 25-61 | 43-45% | states formed, transitions wrong |
-| B1 seeds 0-5 at steps 10-14 (division 13, window 16, branches; **mid-run**) | 141-415 | 11-81 | 1-4 | 89-100% | bottleneck 2, where L3 had an exact state |
+| B1 seeds 0-5 at steps 10-14 (division 13, window 16, branches; **mid-run**) | 141-415 | 11-81 | 1-4 | 89-100% | bottleneck 2 |
+| *added at stage 6's findings:* L3 seeds 0-4, best steps (window 16, no branches) | 251-414 | 20-135 | 1-7 | 99-100% | bottleneck 2, as B1's |
 
 What it shows:
 
@@ -45,10 +46,11 @@ What it shows:
    ways of missing it:** no state (1), codes that stand for several states (2), and an exact state
    with wrong answers (3). Extra codes as such aren't the fault: S5 seed 4 certified with 211 codes
    beyond its 120 states, every one right.
-2. **The branches at width 16 move division from bottleneck 3 to 2.** Without branches (L3) the
-   state was exact and the answers wrong; with a single-head branch a factor (B1, mid-run) every
-   seed's codes stand for 11-81 states. Separating the answers helped them; splitting the factors'
-   path starved their transitions. W1's width cured division without separating anything.
+2. **The branches at width 16 move division from bottleneck 3 to 2: wrong, corrected at the
+   window branches' stage 6 findings (2026-10-19).** L3's other five failures, read at their best steps,
+   stood at 20-135 pairs per code; only seed 5 had an exact state. So division at width 16 was
+   mostly bottleneck 2 with or without the branches (B1's failures 26-76, W2's at 22 34-120), and
+   width relieved it (W2 3 of 6, W1 5 of 6). The branches' own harm is on S4 (B3, 0 of 6 against 4).
 3. **Closeness at one step doesn't decide success; what training does next does.** Move-to-front-5
    seed 5 certified from 21% of its first codes broken; S5 seed 2 was at 0.6% and lost it
    (retention, across every bottleneck).
@@ -237,7 +239,8 @@ The remedies change the window or the training data, not the codes or the cap.
 7. **Findings** in the probe script's docstring and [bottlenecks.md](bottlenecks.md); the
    architecture and training adopted; this plan retired, its leftovers to next-steps.md.
 
-Related: [window-branches-workplan.md](window-branches-workplan.md) (stage 6 running: B1, W2, B3;
-its adoption decides D4), [commitment-control-workplan.md](commitment-control-workplan.md) (R5),
+Related: the window branches workplan (retired 2026-10-19, not adopted: `git show
+e7f1ff6:docs/window-branches-workplan.md`; its findings in the probe script's docstring),
+[commitment-control-workplan.md](commitment-control-workplan.md) (R5),
 [code-consolidation-workplan.md](code-consolidation-workplan.md) (its remedies for bottleneck 2
 spent; R3 replaces its P2's signal).

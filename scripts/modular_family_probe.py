@@ -840,6 +840,65 @@ window-branches/; `readout.txt`, `certify/` and `long-tests/` added on pyramidon
 - **What W1 leaves to the branches (D3, D8):** a wider stream suffices at 13, so the branches'
   claim on division (B1, 16 wide) reads against W2, the window at 22 matched to B1 in parameters:
   separation against size. A branches-at-32 cell could read only "no harm" against W1.
+Findings (the window branches workplan's stage 6: B1, W2, B2 and B3, registered in #863 and #866
+before their data; and a side probe), 2026-10-19; each cell its control's, with `--branches` (a
+two-block trunk, then one single-head block a factor and one for the answers, `D` 16) or
+`--window-width 22` (W2), seeds 0-5, 600 epochs, the fork, stop at certified. OPENBLAS_NUM_THREADS=1.
+B1 on stone from 6d808a5 (10:00 to 13:56) and B3's division `p` 11 on stone from 6d808a5 (13:56 to
+17:43); W2, B2 and B3's algebras on jebel from 393b3b1 (B2 08:04 to 11:24, W2 11:25 to 13:18, B3
+13:19 to 16:18), crate afa7204. Each control repeated by bits without the flag on its run's commit
+(`b2-bits-check/`, `b3-bits-check/`, `w2-bits-check/`; B1 by `controls/`; B3's `p` 11 only by B1's
+check of L3's cell on the same commit, the p11 ladder itself not replayed). Every certified network
+recertified on pyramidon in both verdicts (`certify/`). Data in
+data/window-recurrent/window-branches/{b1,w2,b2,b3,b3-p11}/, manifests `b1.sha256` 977fec17...
+(161 files), `w2.sha256` 4e433e2c... (135), `b2.sha256` a2b39a33... (472), `b3.sha256`
+556122c0... (457), `b3-p11.sha256` 66bcd433... (176: stone's b3/ copied whole; its `certify/`,
+`readout.txt` and `breaks/` added on pyramidon after, `b3-p11-readings.sha256` 36817b18..., 9);
+each failure's best step read by `breaks` afterwards (`breaks/` in each, and in
+division-ladder/l3/breaks/ for L3's five failures), manifest `stage6-breaks.sha256`
+7d35a970... (23 files, run from window-recurrent/).
+
+| claim | cell | control | result (Wilson 95%) | failures: pairs per code at best |
+| --- | --- | --- | --- | --- |
+| B1, branches at 16 | division `p` 13 | L3, 0 of 6 | 1 of 6 (0.03-0.56): seed 5, step 14 | 26-76, never near (worst answer 0.40-0.94) |
+| W2, width 22 (size) | division `p` 13 | L3, 0 of 6 | 3 of 6 (0.19-0.81): seeds 0-2, steps 10-14 | 34-120 |
+| B2, branches at 16 | word-problem-s5 | round 2, 0 of 6 | 1 of 6 (0.03-0.56): seed 4, step 17 | 36-120 (one at 1.65) |
+| B2, branches at 16 | move-to-front-5 | round 2, 0 of 6 | 1 of 6 (0.03-0.56): seed 5, step 23 | no state in 3 (4-34 codes) |
+| B3, branches at 16 | word-problem-s4 | round 1, 4 of 6 | **0 of 6 (0.00-0.39): harm**, p 0.030 | 2.0-23; 4 came near, 4 collapsed |
+| B3, branches at 16 | move-to-front-4 | round 1, 4 of 6 | 3 of 6 (0.19-0.81): no harm | no state (2-16 codes) |
+| B3, branches at 16 | division `p` 11 | the p11 ladder, 4 of 6 | 1 of 6 (0.03-0.56): seed 0, step 18; no harm | 9.3-88, never near (worst answer 0.39-0.67) |
+
+- **B1 works, gain undecided; W2 works too** (3 of 6 against L3's 0, p 0.091): by the registered
+  reading ("both work"), **size at B1's count suffices, and the separation's own part is
+  undecided**. B1 did worse than W2 (1 against 3 of 6) with 5% fewer parameters. B1's certificate:
+  408 and 397 codes reached, minimised to 169, 0 wrong outputs and states, snap ratio >= 1.000,
+  logit lead >= 0.552. W2's three: 286-338 codes, logit lead >= 0.256-1.69.
+- **Division at width 16 was mostly bottleneck 2, not 3.** L3's five other failures, read now at
+  their best steps, stood at 20-135 pairs per code (1-7 right pairs); only seed 5, the one the
+  readout probe read, had an exact state. B1's failures (26-76) and W2's (34-120) are the same kind.
+  So the branches didn't move division from 3 to 2 (the one-code-one-state workplan's reading of
+  B1 mid-run, corrected there): the narrow stream starved the transitions with or without them, and
+  width (W2 3 of 6, W1 5 of 6) is what relieved it.
+- **B2: works on both `n` 5 cells, gain undecided** (1 of 6 each against 0). Certificates: S5 seed
+  4, 331 codes minimised to 120, logit lead >= 3.91; move-to-front-5 seed 5, 219-220 codes, logit
+  lead >= 5.92. Its failures by bottleneck in the one-code-one-state workplan's "Why": S5's in 2,
+  move-to-front-5's mostly in 1.
+- **B3: harm on S4** (0 of 6 against round 1's 4 of 6, Fisher one-sided p 0.030). Four of its six
+  came near (worst answer >= 0.95) and four collapsed; seed 3 reached 1.000 at step 8 with an exact
+  core (2.0 pairs per code, its first codes breaking 0 of 120) and was lost. Move-to-front-4 3 of 6
+  against 4: no harm; its failures formed no state. Division `p` 11 1 of 6 against the ladder's 4 of 6:
+  no harm by the registered rule (p 0.12), but a fall; its five failures are bottleneck 2 (9.3-88
+  pairs per code, 1-3 right pairs), as B1's at 13: the narrow branch starving the transitions.
+  Seed 0's certificate: 169 codes reached, minimised to 121, 0 wrong outputs and states, snap
+  ratio >= 1.002, logit lead >= 1.39.
+- **The side probe (branches at 32 on S5 seeds 0 and 1; a probe, from 393b3b1 on jebel, 10:12 to
+  12:09; `probe-s5-b32/`, manifest `probe-s5-b32.sha256` 638c64ed..., 68 files):** 0 of 2, pairs
+  per code at the best steps 120 and 77 against B2's same seeds' 120 and 66: by its expectation,
+  **width adds nothing on S5's confusion** (bottleneck 2).
+- **Adoption (the workplan's rule): not adopted.** B1 and B2 work on cells whose controls failed,
+  but B3 shows harm on S4, so the branches stay an option (`--branches`). What they changed:
+  nothing width doesn't do on division; one seed each on the `n` 5 cells; harm on S4. The base
+  window is width 32 (the one-code-one-state workplan's D4', C0 running).
 """
 
 from __future__ import annotations
