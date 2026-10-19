@@ -106,9 +106,12 @@ What it shows:
     diagnosis's cost rises by a second; keeping isn't curing (P2): R3 is run with R4.
   - (b) Keep across steps (the run's best). Cons: a later step's longer words make it no longer
     comparable.
-- **D6. R4's sampling: at each diagnosis, the ambiguous pairs' shortest words (up to 256, the
-  walk's breadth-first order), each with its answers from the target; a quarter of each epoch's
-  examples drawn from them, lengths capped at the exclusion bound.**
+- **D6. R4's sampling: at each diagnosis, the shortest words to the pairs whose code is wrong for
+  their state within `d` (every code standing for several states is wrong for at least one, and a
+  code with wrong outputs is wrong; up to 256, the walk's breadth-first order), each followed by `d`
+  uniform tokens and the final zero column so its answers tell its states apart, with its answers
+  from the target; a quarter of each epoch's examples drawn from them.** (Worded so at the build,
+  before any data: the words go to the wrong pairs, which include the ambiguous ones.)
   - (a) *Chosen.* Pros: aims training at the codes that stand for several states; three quarters
     of the data unchanged, so the curriculum still covers every length. Cons: a build (words to
     examples); the share is a guess, probed first.

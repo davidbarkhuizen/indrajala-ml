@@ -67,6 +67,25 @@ def test_an_extra_code_that_breaks_is_counted_apart_from_the_first_codes():
     assert exact[:2] == [1.0, 1.0] and exact[-1] < exact[2] < 1.0
 
 
+def test_the_counterexamples_are_the_shortest_words_to_the_pairs_wrong_for_their_states():
+    # the extra code above: code 3 stands for count 0 after 1 1 1 and is wrong d tokens ahead; from it
+    # codes 3 and 2 alternate while the count runs on, so each later pair is wrong too (R4)
+    walk = mr.product(Table([[0, 1], [1, 2], [2, 3], [3, 2]], [[0, 1], [1, 2], [2, 0], [0, 1]]), COUNTER)
+    d = mr.word_length(COUNTER)
+    words = mr.counterexamples(walk, d, 10)
+    assert words == [[1] * n for n in range(3, 8)]  # the five pairs past the exact core 0 1 2
+    assert mr.counterexamples(walk, d, 1) == [[1, 1, 1]]  # at most limit, shortest first
+    for word in words:  # each word reaches a pair whose code is wrong for its state
+        pair = 0
+        for token in word:
+            pair = int(walk.next[pair][token])
+        assert not mr.right_codes(walk, d)[pair]
+    # a copy of the target has none
+    exact = mr.product(Table([[0, 1], [1, 2], [2, 0]], [[0, 1], [1, 2], [2, 0]]), COUNTER)
+    assert mr.counterexamples(exact, d, 10) == []
+    assert mr.summary(walk, d) == {"codes": 4, "pairs": len(walk.pairs), "right": int(mr.right_codes(walk, d).sum())}
+
+
 def test_a_factor_s_partition_is_named_only_over_half_the_states_or_more_and_in_two_blocks_or_more():
     coordinates = wt.Coordinates(("A",), np.array([[0], [1], [0], [1], [0], [1]]), 2)
     assert wc.name_partition([[0, 2, 4], [1, 3, 5]], coordinates) == "A"

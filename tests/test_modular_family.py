@@ -506,6 +506,15 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "fork": RESUMED_FORK,
         "commitment_from": 2,
     },
+    # R3 and R4 (the one-code-one-state workplan): random-3-0's step 3 ends on a plateau, restoring the kept machine
+    "kept": {
+        "encoding": mf.target_named("random-3-0"),
+        "settings": PLATEAUS,
+        "cap": 3,
+        "budget_epochs": 10,
+        "keep_machine": True,
+        "counterexamples": 0.25,
+    },
     # the usage thermostat (the commitment-control workplan's stage 2), its levels low enough to move on 4 codes
     "thermostat": {
         "encoding": mf.Encoding(5, mf.FAMILY),
@@ -579,6 +588,9 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "consolidated":
         assert [step for step, _ in ends] == [2, 3]  # from s0
         assert any("fork" in r and "consolidation" in r for r in whole[0])
+    elif kind == "kept":
+        assert any("machine" in r and "counterexamples" in r for r in whole[0])
+        assert any("restore_machine" in r for r in whole[0])
     elif kind == "thermostat":
         assert all("thermostat" in r for r in whole[0] if r.get("epoch", 0) > 0 and "end" not in r)
     elif kind == "uncommitted":
@@ -1001,3 +1013,23 @@ def test_a_thermostat_run_logs_each_epochs_effective_codes_and_commitments(tmp_p
             thermostat=thermostat,
             commitment_from=2,
         )
+
+
+def test_a_run_keeping_its_machine_and_training_on_counterexamples_logs_them(tmp_path: Path):
+    settings = mf.Settings(
+        epoch_examples=32, max_epochs=4, diagnose_every=2, screen=4, cases=4, lengths=(2,), long=(3,)
+    )
+    encoding = mf.target_named("random-3-0")
+    mf.run(
+        encoding, [(4, 4)], 0, 60, tmp_path, settings, cap=3, budget_epochs=4, keep_machine=True, counterexamples=0.5
+    )
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    diagnoses = [r for r in rows if "machine" in r and "end" not in r]
+    assert diagnoses and all(r["counterexamples"] >= 0 for r in diagnoses)
+    assert any(r.get("kept") for r in diagnoses) and (tmp_path / "machine-best.network.json").exists()
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["keep_machine"] is True and identity["counterexamples"] == 0.5
+    with pytest.raises(AssertionError, match="not both"):
+        mf.run(encoding, [(4, 4)], 0, 60, tmp_path / "x", settings, cap=3, keep_machine=True, restore_best=True)
+    with pytest.raises(AssertionError, match="a share"):
+        mf.run(encoding, [(4, 4)], 0, 60, tmp_path / "y", settings, cap=3, counterexamples=1.5)

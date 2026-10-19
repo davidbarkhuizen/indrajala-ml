@@ -164,6 +164,35 @@ def summary(walk: Product, d: int) -> dict[str, int]:
     return {"codes": len(walk.codes), "pairs": len(walk.pairs), "right": int(right_codes(walk, d).sum())}
 
 
+def counterexamples(walk: Product, d: int, limit: int) -> list[list[int]]:
+    """
+    The shortest word (tokens) to each pair whose code isn't right for its state within d (the
+    one-code-one-state workplan's R4: every code standing for several states is wrong for at least
+    one of them, and a code with wrong outputs is wrong), shortest first, at most limit of them. Each
+    pair's word is the one product found it by: its parent the first (pair, token) reaching it, in
+    the walk's breadth-first order.
+    """
+    parent: dict[int, tuple[int, int]] = {}
+    for p in range(len(walk.pairs)):
+        for t, q in enumerate(walk.next[p].tolist()):
+            if q != 0 and q not in parent:
+                parent[q] = (p, t)
+    right = right_codes(walk, d)
+    words: list[list[int]] = []
+    for q in range(len(walk.pairs)):  # breadth first, so the shortest words first
+        if right[q]:
+            continue
+        word: list[int] = []
+        at = q
+        while at != 0:
+            at, token = parent[at]
+            word.append(token)
+        words.append(word[::-1])
+        if len(words) == limit:
+            break
+    return words
+
+
 def by_length(walk: Product, lengths: list[int], d: int) -> list[dict[str, Any]]:
     """
     Over all words of each length (uniform tokens, the start's pair): the share whose last answer is
