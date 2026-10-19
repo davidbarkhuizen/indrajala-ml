@@ -171,6 +171,40 @@ seeds 0-5 certifies; **helps** if its control certified 0 of 6 and it certifies 
 - **C3, the thermostat** (bottleneck 1): registered in the commitment-control workplan's stage 2,
   its cells failure A's (S3, move-to-front 4 and 5).
 
+## Findings: R3 and R4's probe (2026-10-19; a probe, its expectations in its script before its data)
+
+Round 2's S5 cell (two factors, `--codes-ratio 32/11`, reading the output, the fork, 600 epochs,
+W11 16 wide: D4's base until one is adopted) with `--keep-machine --counterexamples 0.25`, seeds 0
+and 1. Code c452ed9 (`~/code/wt-r34`, crate afa7204), OPENBLAS_NUM_THREADS=1, `jebel`, 2 at once
+beside B3, 14:51 to 15:37. Its control is round 2's same seeds (0 of 2): without the flags, seed 0's
+first 14 log rows repeated round 2's by bits on c452ed9. Data in
+data/window-recurrent/one-code-one-state/r34-probe/ (`certify/` and `certify.log` added on
+`pyramidon` after it, at 5672dda), manifest `r34-probe.sha256` 9d558b22... (69 files, run from
+one-code-one-state/).
+
+| seed | round 2 | B2 (branches) | R3 and R4 | pairs per code at step ends |
+| --- | --- | --- | --- | --- |
+| 0 | spent, worst answer at best 0.966 | spent | spent at step 23 (46 min), share 0.96, 202 right pairs | 120 at every step's end but step 4's (59.8) |
+| 1 | spent, 0.851 | spent, 0.999 | **certified at step 21** (23 min) | 105-120 to step 20 (22.5 at step 11), **1.0 at step 21** |
+
+- **Seed 1 certified, recertified in both verdicts** (306 and 303 codes reached, minimised to 120,
+  0 wrong outputs and 0 wrong states; snap ratio >= 1.002, logit lead >= 2.57 and 3.67). It failed
+  in round 2 and in B2. By the expectation written first ("either certifies"), **R3 and R4 move
+  bottleneck 2: C2 goes ahead on the adopted window** (D4'). One seed of two: existence, not a
+  rate.
+- **Pairs per code isn't graded: it sits at its ceiling and then drops in one step.** It reads
+  about `q` (every code ambiguous on longer words) until the machine is one code, one state: seed
+  1 went from 117 at step 20 to 1.0 at step 21, its minimised machine from 372 to 120 states. B2's
+  S5 seed 4 did the same over five steps (24 to 1.0). Right pairs climb steadily meanwhile (seed 1:
+  0 to 377, seed 0: 0 to 202). So R3's keep, ruled by pairs per code, mostly chose among equals
+  (seed 1's 10 restores were at 105-120, ties broken by right pairs), and the probe can't say
+  whether R3 or R4 did the work.
+- **R4 drew its full 256 counterexamples at every diagnosis** in both runs: the walk always finds
+  wrong pairs before the end, as it should.
+- For the population plan (D2's energy, pairs per code): the ceiling means a population ranked by
+  it ties until one member is already done; right pairs, or pairs per code read at a shorter `d`,
+  may grade it. Not decided here.
+
 ## Feasibility (experiment-design.md, section 1)
 
 The remedies change the window or the training data, not the codes or the cap.
@@ -197,7 +231,8 @@ The remedies change the window or the training data, not the codes or the cap.
    unchanged. Then its probe: 2 seeds each on division 13, S5 and move-to-front-5, on the first free
    machine, its expectation written first.
 4. **C1** on `jebel` and `stone` once the current batch ends (B3's cells).
-5. **R3 and R4:** the build, tests, a probe (2 seeds on S5), then C2 on the base window.
+5. **R3 and R4:** the build, tests, a probe (2 seeds on S5), then C2 on the base window. *Built
+   (#878); the probe certified seed 1 (Findings above): C2 after C0.*
 6. **R5:** the commitment-control plan's stage 2 (its amendment, build, C3).
 7. **Findings** in the probe script's docstring and [bottlenecks.md](bottlenecks.md); the
    architecture and training adopted; this plan retired, its leftovers to next-steps.md.
