@@ -57,7 +57,7 @@ docs cite them by section:
 | A factored state for the window-recurrent network (C9, C9', C9'') | #737 | #738-#764, crate #57 | `git show e45944e:docs/factored-state-workplan.md` |
 | A family of modular operations on one state (option 2) | #765 | #766 | `git show e45944e:docs/modular-family-workplan.md` |
 | Modular division with the family (`p` 5 and 7, the registered claim) | #766 | #767-#782 | `git show e45944e:docs/division-workplan.md` |
-| Where division fails in `p` (the division ladder, L1-L3) | #817 | #824, #856, #859, this PR | `git show f9101d8:docs/division-ladder-workplan.md` |
+| Where division fails in `p` (the division ladder, L1-L3) | #817 | #824, #856, #859, #861 | `git show f9101d8:docs/division-ladder-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
