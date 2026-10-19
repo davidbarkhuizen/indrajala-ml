@@ -48,11 +48,19 @@ import numpy.typing as npt
 
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_data as md
+from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
 from indrajala_ml.model.persistence.format2 import network_to_json
 from indrajala_ml.model.persistence.load_network import load_network, network_from_state
 from indrajala_ml.model.specs.update_rules import Adam
-from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE, AttentionPooling, Codes, Factor, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import (
+    BEFORE_STATE,
+    OUTPUT,
+    AttentionPooling,
+    Codes,
+    Factor,
+    WindowRecurrence,
+)
 from indrajala_ml.studies import certificate_guard as cg
 from indrajala_ml.studies import inference
 from indrajala_ml.studies import machine_reading as mr
@@ -304,14 +312,26 @@ def columns(n: int, rng: random.Random) -> list[int]:
 
 
 def network(
-    encoding: Target, factors: Sequence[tuple[int, int]], seed: int, reads: str = BEFORE_STATE, width: int = wr.D
+    encoding: Target,
+    factors: Sequence[tuple[int, int]],
+    seed: int,
+    reads: str = BEFORE_STATE,
+    width: int = wr.D,
+    branches: bool = False,
 ) -> Any:
     """The transformer window (W11) over the encoding's tokens, a factored state (D3), Adam; the
-    poolings reading before the first StateInput (D10) or, with reads OUTPUT, the window's output."""
+    poolings reading before the first StateInput (D10) or, with reads OUTPUT, the window's output.
+    With branches, the window branches workplan's window (wr.branched_window), each factor's
+    pooling reading its own branch's end (reads OUTPUT)."""
+    assert not branches or reads == OUTPUT, "with branches each factor reads its branch's end: reads OUTPUT"
     recurrence = WindowRecurrence(
         tuple(Factor(s, Codes(m)) for s, m in factors), False, pooling=AttentionPooling(reads)
     )
-    specs = wr.transformer_window(encoding.tokens, encoding.classes, width)
+    specs = (
+        wr.branched_window(encoding.tokens, encoding.classes, len(factors), width)
+        if branches
+        else wr.transformer_window(encoding.tokens, encoding.classes, width)
+    )
     return WindowRecurrentRustArrayNetwork.randomized((encoding.width,), specs, recurrence, Adam(), seed=seed)
 
 
@@ -774,6 +794,7 @@ def _run_identity(
     restore_best: bool,
     commitment_from: int | None,
     width: int = wr.D,
+    branches: bool = False,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -795,6 +816,7 @@ def _run_identity(
         **({"restore_best": True} if restore_best else {}),
         **({"commitment_from": commitment_from} if commitment_from is not None else {}),
         **({"width": width} if width != wr.D else {}),
+        **({"branches": True} if branches else {}),
     }
 
 
@@ -832,6 +854,7 @@ def run(
     restore_best: bool = False,
     commitment_from: int | None = None,
     width: int = wr.D,
+    branches: bool = False,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -888,6 +911,7 @@ def run(
         restore_best,
         commitment_from,
         width,
+        branches,
     )
     d = mr.word_length(encoding.task.machine) if consolidate else 0
     table: dict[tuple[int, ...], tuple[int, ...]] = {}  # A's, from the last diagnosis
@@ -908,7 +932,7 @@ def run(
         assert saved is not None or not (resume and (out / "log.jsonl").exists()), (
             f"{out} has a log but no checkpoint to resume from"
         )
-        net = network(encoding, factors, seed, reads, width)
+        net = network(encoding, factors, seed, reads, width, branches)
         if saved is not None:
             (out / "log.jsonl").write_text("")  # stopped before its first checkpoint: begun again from the seed
         _write_checkpoint(out, identity, BEGUN, net)
@@ -1139,12 +1163,15 @@ def guard_epoch(
 
 def readout_only(net: Any) -> wr.FactorRates:
     """
-    The network's optimizer with every index but the output layer's at a rate of 0: the window's
-    other layers and the recurrence's parts keep their weights, so the state (the poolings read the
-    output layer's input) is the saved network's, and only the readout of its answers learns.
+    The network's optimizer with every index at a rate of 0 but the answers' path: the output layer,
+    and with branches the answers' whole branch (the window branches workplan), the layers after the
+    last factor's branch's end. The rest keep their weights, so the state (each pooling reads the
+    output layer's input, or its branch's end) is the saved network's, and only the readout of its
+    answers learns.
     """
-    output = len(net.layers) - 1
-    return wr.FactorRates(net.optimizer, {i: 0.0 for i in range(len(net.layers) + len(net.parts)) if i != output})
+    ends = [i for i, layer in enumerate(net.layers) if isinstance(layer, BranchArrayLayer)]
+    learning = range(ends[-1] + 1 if ends else len(net.layers) - 1, len(net.layers))
+    return wr.FactorRates(net.optimizer, {i: 0.0 for i in range(len(net.layers) + len(net.parts)) if i not in learning})
 
 
 def tune_readout(

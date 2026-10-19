@@ -848,3 +848,49 @@ def test_separability_reads_every_reachable_codes_features_and_fits_them(tmp_pat
     )
     assert result["features"] == mf.wr.D and len(result["fit_wrong"]) == 1 and result["perceptron"]["passes"] <= 3
     assert all(row["other"] >= 0 for row in result["wrong"])
+
+
+def test_a_branched_run_records_its_branches_and_its_window_has_a_branch_a_factor(tmp_path: Path):
+    encoding = mf.Encoding(5, mf.FAMILY)
+    net = mf.network(encoding, [(4, 4), (4, 4)], 0, "output", branches=True)
+    assert len(net._pooling_reads) == 2 and len(set(net._pooling_reads)) == 2
+    settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
+    mf.run(
+        encoding,
+        [(4, 4), (4, 4)],
+        0,
+        60,
+        tmp_path / "b",
+        settings,
+        cap=2,
+        reads="output",
+        budget_epochs=1,
+        branches=True,
+    )
+    identity = json.loads((tmp_path / "b" / "checkpoint.json").read_text())["run"]
+    assert identity["branches"] is True
+    with pytest.raises(AssertionError, match="reads OUTPUT"):
+        mf.network(encoding, [(4, 4)], 0, branches=True)
+
+
+def test_tuning_a_branched_readout_trains_the_answers_branch_alone(tmp_path: Path):
+    encoding = mf.Encoding(5, mf.FAMILY)
+    path = tmp_path / "network.json"
+    mf.network(encoding, [(4, 4), (4, 4)], 0, "output", branches=True).save(str(path))
+    mf.tune_readout(path, encoding, "modular-division-5", 2, tmp_path / "tuned", 1, mf.Settings(epoch_examples=64))
+    before, after = mf.load_network(str(path)), mf.load_network(str(tmp_path / "tuned" / "network.json"))
+
+    def arrays(net: Any) -> list[list[np.ndarray]]:
+        owners: list[Any] = [*net.layers, *net.parts]
+        parameters: list[list[Any]] = [list(getattr(owner, "parameters", list)()) for owner in owners]
+        return [[np.asarray(array.tolist()) for array in arrays] for arrays in parameters]
+
+    old, new = arrays(before), arrays(after)
+    answers = max(before._pooling_reads) + 1  # the answers' branch, then the output layer
+    changed = [
+        i
+        for i, (a, b) in enumerate(zip(old, new, strict=True))
+        if any(not np.array_equal(x, y) for x, y in zip(a, b, strict=True))
+    ]
+    assert changed and all(i >= answers and i < len(before.layers) for i in changed)
+    assert len(before.layers) - 1 in changed
