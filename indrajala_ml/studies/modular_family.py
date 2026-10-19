@@ -1130,6 +1130,69 @@ def guard_epoch(
     return result
 
 
+def readout_only(net: Any) -> wr.FactorRates:
+    """
+    The network's optimizer with every index but the output layer's at a rate of 0: the window's
+    other layers and the recurrence's parts keep their weights, so the state (the poolings read the
+    output layer's input) is the saved network's, and only the readout of its answers learns.
+    """
+    output = len(net.layers) - 1
+    return wr.FactorRates(net.optimizer, {i: 0.0 for i in range(len(net.layers) + len(net.parts)) if i != output})
+
+
+def tune_readout(
+    path: Path,
+    encoding: Target,
+    task_name: str,
+    step: int,
+    out: Path,
+    epochs: int,
+    settings: Settings = PROBE,
+    generator: str = "readout-tune",
+) -> list[dict[str, Any]]:
+    """
+    A saved network's output layer trained alone (readout_only) on step's lengths, an epoch at a time,
+    until its certificate (the task's slot, the default snap ratio) passes or epochs are spent: a row
+    an epoch (0: before), each with the certificate's counts, out/log.jsonl. The network is saved at
+    the end (out/network.json) and, if certified, out/certified.network.json.
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    net = load_network(str(path))
+    task, index = wt.task_named(task_name), slot(task_name)
+    rows: list[dict[str, Any]] = []
+    with (out / "log.jsonl").open("w") as log:
+        for epoch in range(epochs + 1):
+            if epoch:
+                rng = random.Random(f"{generator}-{step}-{epoch}")
+                examples = [
+                    encoding.example(encoding.draw(n, rng)) for n in epoch_lengths(step, settings.epoch_examples)
+                ]
+                inner, net.optimizer = net.optimizer, readout_only(net)
+                try:
+                    wr.train_epoch(net, examples, settings.batch_size, settings.rate, rng)
+                finally:
+                    net.optimizer = inner
+            certificate = wc.certify(QueryMachine(net, encoding, index), task)
+            rows.append(
+                {
+                    "epoch": epoch,
+                    "certified": certificate.certified,
+                    "wrong_outputs": certificate.wrong_outputs,
+                    "wrong_states": certificate.wrong_states,
+                    "minimised": len(certificate.minimised),
+                    "lead": round(certificate.lead.smallest, 4),
+                    "lead_short": certificate.lead.short,
+                }
+            )
+            log.write(json.dumps(rows[-1]) + "\n")
+            log.flush()
+            if certificate.certified:
+                net.save(str(out / "certified.network.json"))
+                break
+    net.save(str(out / "network.json"))
+    return rows
+
+
 class QueryMachine:
     """
     A family network as the certificate's WindowMachine over one column a window (stage 3): each

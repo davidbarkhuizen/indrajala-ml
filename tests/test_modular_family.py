@@ -793,3 +793,27 @@ def test_the_steps_before_commitment_from_train_without_the_commitment(tmp_path:
     assert [c for step, c in zip(trained, seen, strict=True) if step == 1] == [[0.0]] * trained.count(1)
     assert [c for step, c in zip(trained, seen, strict=True) if step == 2] == [[0.25]] * trained.count(2)
     assert json.loads((out / mf.CHECKPOINT).read_text())["run"]["commitment_from"] == 2
+
+
+def test_tuning_the_readout_trains_the_output_layer_alone(tmp_path: Path):
+    encoding = mf.Encoding(5, mf.FAMILY)
+    path = tmp_path / "network.json"
+    mf.network(encoding, [(4, 4), (4, 4)], 0, reads="output").save(str(path))
+    settings = mf.Settings(epoch_examples=64)
+    rows = mf.tune_readout(path, encoding, "modular-division-5", 2, tmp_path / "tuned", 2, settings)
+    assert [row["epoch"] for row in rows] == list(range(len(rows))) and 1 <= len(rows) <= 3
+    assert [json.loads(line) for line in (tmp_path / "tuned" / "log.jsonl").read_text().splitlines()] == rows
+    before, after = mf.load_network(str(path)), mf.load_network(str(tmp_path / "tuned" / "network.json"))
+
+    def arrays(net: Any) -> list[list[np.ndarray]]:
+        # each layer's, then each part's, parameters as the optimizer indexes them
+        owners: list[Any] = [*net.layers, *net.parts]
+        parameters: list[list[Any]] = [list(getattr(owner, "parameters", list)()) for owner in owners]
+        return [[np.asarray(array.tolist()) for array in arrays] for arrays in parameters]
+
+    old, new = arrays(before), arrays(after)
+    output = len(before.layers) - 1
+    assert old[output] and any(not np.array_equal(a, b) for a, b in zip(old[output], new[output], strict=True))
+    for index, (a, b) in enumerate(zip(old, new, strict=True)):
+        if index != output:
+            assert all(np.array_equal(x, y) for x, y in zip(a, b, strict=True)), f"index {index} changed"

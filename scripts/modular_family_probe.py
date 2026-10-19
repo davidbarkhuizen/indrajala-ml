@@ -57,6 +57,10 @@ can't hold its states.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
 and with the guard armed, on the same data, and prints each one's seconds, whether its quotient's
 machine is right before and after, and the guard's rollbacks (the guard workplan's budget probe).
+`readout-tune NETWORK --task T --step J --out DIR` trains a saved network's output layer alone
+(every other layer and the recurrence frozen, so its state machine is the saved one) on step J's
+lengths, an epoch at a time, until its certificate passes or `--epochs` are spent, a row an epoch
+(DIR/log.jsonl; DIR/certified.network.json if it certifies).
 `--first-seed F --seeds N` runs seeds F..F+N-1, a process each, `--workers` at once (default
 all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--runs TASK:SEED ...` runs
 those alone, in one pool (chosen seeds replayed: DIR/<task>/seed<s> for several tasks); `--budget-epochs` stops a
@@ -694,6 +698,28 @@ manifest `round2.sha256` c2e1b2a5... (480 files, run from general-algebras/).
   only 69 and 40 of 337-339 codes are right, the first codes breaking 49% and 39%.
 - **Failure A in move-to-front-5's other four seeds** (1, 3, 4, 5): 2-3 codes a factor, share
   0.21-0.24, minimised to 3; seeds 1 and 3 collapsed.
+
+Findings (the readout probe, after L3; the owner, 2026-10-19: "build and run it now"; a probe, its
+answers written before the data: certified, and width 32 then the readout is division's candidate
+cell at 13; else the errors aren't an under-trained readout), 2026-10-19; L3 seed 5's best
+network (step 15: 0 wrong states, 22 wrong outputs, minimised to 172 against 169), its output layer
+trained alone (`readout-tune`, every other layer and the recurrence frozen, tested) on step 15's
+lengths, 30 epochs. Code b7285fb, pyramidon. Data in
+data/window-recurrent/division-ladder/readout-tune/l3-seed5/, manifest `readout-tune.sha256`
+e3776728... (4 files, the final network's certificate among them, run from division-ladder/).
+
+- **Not certified: the errors aren't an under-trained readout.** After one epoch the machine
+  minimised to exactly 169: the 3 extra states were only the readout's errors. Wrong states stayed 0.
+  But wrong outputs stayed at 15-19 for 29 more epochs (15 at the end), with no trend.
+- **The 15 are confident and on the states' own codes:** 15 of 1,521 (state, query) pairs, over 12
+  of the 169 states. 14 are on a state's first code (one on an extra code), with logit leads of 0.15-4.3.
+  So the window's features for those pairs give the wrong answer, and a linear readout over them
+  can't separate it. The poolings read the output layer's input, so every earlier layer also feeds
+  the state: no further layer can be trained without risking the machine.
+- **So at width 32 and `p` 13 the state machine was learned exactly, and the answers it reads out
+  were 1% wrong.** Next candidates (not registered): the whole network trained with the certificate
+  guard armed only on a right state machine (P1's lesson), or the answers given their own head
+  apart from what the state reads.
 """
 
 from __future__ import annotations
@@ -862,6 +888,15 @@ def main(argv: list[str]) -> int:
     target.add_argument("--task", help="a general algebra's machine")
     epoch.add_argument("--step", type=int, required=True, help="the step whose lengths the epoch trains (1..step)")
     epoch.add_argument("--arm", choices=sorted(ARMS), default="family")
+    tune = commands.add_parser("readout-tune", help="a saved network's output layer trained alone, to its certificate")
+    tune.add_argument("network", type=Path)
+    tune.add_argument(
+        "--task", required=True, help="modular-division-p (the quotient), modular-sum-p (the sum) or a machine's"
+    )
+    tune.add_argument("--arm", choices=sorted(ARMS), default="family")
+    tune.add_argument("--step", type=int, required=True, help="the step whose lengths it trains (1..step)")
+    tune.add_argument("--epochs", type=int, default=30, help="at most, stopping at the first certified")
+    tune.add_argument("--out", type=Path, required=True)
     for name, summary in (
         ("by-length", "saved networks' exact accuracy over every word of each length, against the task's machine"),
         ("breaks", "saved networks' broken transitions, from each state's first code and its extra codes"),
@@ -908,6 +943,11 @@ def main(argv: list[str]) -> int:
     if args.command == "guard-epoch":
         encoding = _target(args.task or f"modular-division-{args.p}", args)
         print(json.dumps(mf.guard_epoch(args.network, encoding, args.step)))
+        return 0
+    if args.command == "readout-tune":
+        target = _target(args.task, args)
+        for row in mf.tune_readout(args.network, target, args.task, args.step, args.out, args.epochs):
+            print(json.dumps(row), flush=True)
         return 0
     if args.command == "readout":
         pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
