@@ -383,9 +383,18 @@ reference and the golden run hold their bits.
   `accumulate_gradient` +3-7% (it runs `matmul_long_k`, untouched); in the conv one, conv
   `forward` +9-13% and dense 10x30's ops +5-17%, all microsecond calls. Most likely the build's
   code placement moving small hot loops. Part may be real: the per-example downstream adds a little
-  per-example setup (conv 8x8 `downstream_batch` b32 +12%, single-example `downstream` +12%). **Open:**
-  a probe with functions aligned (`-C llvm-args=-align-all-functions=6`) to tell the two apart,
-  before the next kernel's A/B.
+  per-example setup (conv 8x8 `downstream_batch` b32 +12%, single-example `downstream` +12%).
+- **The alignment probe (2026-10-19, `2026-10-19-align-probe`): mostly code placement.** The same
+  A/B (b900778 against 504a1f6, ONNONO) with both crates built with every function aligned to 64
+  bytes (`-C llvm-args=-align-all-functions=6`; probe-only commits on the crate's
+  `probe-align-old`/`-new` branches, deleted after; `.so` 2d514ad229dc/b9c70f113d09 against the
+  unaligned run's efb050f9ebfe/dd53acd61b7c). Conv `forward` +9-13% became 0-2%; dense 10x30's
+  `downstream*`, `hidden_delta_batch` and bare ops +12-17% became within noise. **Real, smaller:**
+  conv 8x8 `downstream_batch` b32 +3.0% and single-example `downstream` +4.3% (from +12%), the
+  per-example setup's cost; dense 10x30 `accumulate_gradient_batch` b32 +7.7% (+8.3% unaligned).
+  **Not explained by placement:** conv `accumulate_gradient` +4-11% aligned (+1-8% unaligned), which
+  this change doesn't touch; a question for the next kernel's A/B, not this one. The conv
+  downstream's speedups (24-87%) are unchanged aligned.
 
 ## After this plan
 
