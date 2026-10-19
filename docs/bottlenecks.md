@@ -8,6 +8,11 @@ read against the bottleneck its cells hit. This file maps them to their evidence
 evidence lives in the probe script's findings (`scripts/modular_family_probe.py`) and the plans
 named below. Update a row when a result is read, and date it in the log at the end.
 
+**What it serves:** [machine-discovery.md](machine-discovery.md), the work's goal from its inception:
+discovering an unknown finite-state machine from its behaviour and known structure (its
+approximations, a state bound), the machine read off a network and proved. Discovery needs a network
+that learns a machine reliably: these bottlenecks are what stand in the way.
+
 A transducer is two functions of the state: the transition `delta`, the next state, and the output
 `lambda`, the answer. The three bottlenecks are the state never forming, the state's transitions
 going wrong on codes beyond an exact core, and the answers not being separable on a right state.

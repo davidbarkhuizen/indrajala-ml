@@ -1,5 +1,8 @@
 # Next steps: work left over from completed workplans
 
+**The goal all of it serves:** [machine-discovery.md](machine-discovery.md), discovering finite-state
+machines from behaviour and known structure, each discovery proved; its route in stages A-F.
+
 A workplan is deleted once its last stage merges, and never before: only when every stage and
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
