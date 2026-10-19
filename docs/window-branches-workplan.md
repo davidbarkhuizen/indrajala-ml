@@ -5,7 +5,10 @@ enhance our architecture regardless"), from the readout probe after the division
 owner's conjecture: "we need one attention head per codebook/factor, and ... one for the answer".
 D1-D7 settled under the owner's delegation, each with its options' pros and cons. W1 and B1-B3
 registered here, before their data. The build goes ahead whatever W1 and the separability check
-find (the owner); they decide what the branches' first claim is read against.**
+find (the owner); they decide what the branches' first claim is read against.** **Amended
+2026-10-19, after the architecture's novelty pass (the literature review's "Extension (2026-10-19)")
+and with W1 certifying in-run (5 of 6 by 06:49, its reading in progress): W2, a control matched to
+B1 in size, registered before its data (D8).**
 
 ## Why
 
@@ -88,6 +91,8 @@ attention, a residual FFN, a LayerNorm) over the trunk's tokens. Factor `g`'s po
   (W1).** Pros: one change between each claim and its control; W1 answers the "crowded stream"
   question with no build. Cons: if W1 alone works, the branches' first claim is read at a width
   already known to suffice; a branches-at-32 cell is then registered after B1 (stage 7), not here.
+  (2026-10-19: W1 works in-run at 5 of 6, so that cell, if run, can read only "no harm" against
+  it (D7). The question it was for, separation against size, is W2's (D8).)
 - **D4. Gradients: the answer branch's loss flows into the trunk as today; no stop-gradient.** Pros:
   the trunk must learn what the answers need from the columns; one change from today. Cons: the
   trunk is still shaped by the answers; a stop-gradient variant stays a follow-up.
@@ -114,6 +119,22 @@ attention, a residual FFN, a LayerNorm) over the trunk's tokens. Factor `g`'s po
   the controls already exist at these settings; 0 of 6 against 4 of 6 is Fisher one-sided p 0.030.
   Cons: a gain from a nonzero control (`p` 11's 4 of 6) can't be shown at 6 seeds: those cells
   read as "no harm" (B3).
+- **D8. Size against separation (2026-10-19): (b) a window without branches matched to B1 in
+  parameters, W2.** W1 works in-run, so a wider stream suffices at 13, and the branches add
+  parameters (Known limits). If B1 works, it can't tell separation from size alone. The counts
+  (`wr.parameter_count`, L3's cell, crate afa7204 on `branches-stage5`): L3 22,142; B1 28,702;
+  W1 47,726; branches at 32 69,038; without branches at width 20, 27,386; at 22, 30,296. Widths
+  must be even (2 heads divide the stream).
+  - (a) No control, the size limit stated. Pros: no runs. Cons: a B1 success reads "branches or
+    size", what the literature already predicts for hard parameter sharing (Vandenhende et al.).
+  - (b) *Chosen.* W2: width 22, no branches, 5.6% more parameters than B1. Pros: one flag
+    (`--window-width 22`, built), no build; it errs against the branches (more parameters, one path),
+    so B1 working where W2 fails is separation, not size. Cons: 6 more runs; width and size change
+    together (the size can't be matched at width 16 without another change: depth or heads).
+  - (c) The branches at 32 against W1 (D3's stage-7 cell, now). Cons: W1 at 5 of 6 leaves no room
+    for a gain at 6 seeds (D7): only "no harm" can be read.
+  - (d) A fourth block at width 16 (depth instead of width). Cons: changes depth, which D2 kept
+    fixed.
 
 ## The claims (registered before the data)
 
@@ -127,6 +148,13 @@ it certifies 4 or more (Fisher one-sided p 0.030); 1-3 of 6 against 0 is "works,
   bits on the flag's commit; else L3's cell is rerun beside it. **Works:** a crowded 16-wide stream
   limited division at 13. **0 of 6:** width alone isn't enough; the branches' claims read as
   planned.
+- **W2, the size control (D8; registered 2026-10-19, before its data):** L3's cell with the
+  window 22 wide (`--window-width 22`: `FFN` 44, heads 2), no branches, seeds 0-5: 30,296
+  parameters against B1's 28,702. Its control is L3, by W1's by-bits rule (the flag's default
+  repeats L3 on 85a9e44). Read with B1, by D7's counts: **B1 helps over size** if B1 certifies 4
+  or more and W2 0 of 6 (p 0.030): the separation, not the parameters, cures 13. **Both work:**
+  size at B1's count suffices; the separation's own part undecided. **B1 0 of 6:** W2 says
+  whether the parameters B1 adds would have sufficed without the branches. Otherwise descriptive.
 - **B1, the branches on division:** L3's cell with window branches (D1-D3, `D` 16), seeds 0-5,
   against L3 (0 of 6; the same by-bits rule). **Helps or works:** separate paths for `delta` and
   `lambda` cure division's failure at 13 where width (W1) did or didn't. **0 of 6:** the shared
@@ -151,7 +179,7 @@ The branches change the window, not the codes or the cap: every cell keeps its c
 
 | claim | cell | states `q` | codes a factor | `m` | `m / q` | cap |
 | --- | --- | --- | --- | --- | --- | --- |
-| W1, B1 | division `p` 13, factors 32 wide | 169 | 38 | 1,444 | 8.5 | 1,612 |
+| W1, W2, B1 | division `p` 13, factors 32 wide | 169 | 38 | 1,444 | 8.5 | 1,612 |
 | B2 | word-problem-s5, move-to-front-5 | 120 | 32 | 1,024 | 8.5 | 1,143 |
 | B3 | division `p` 11 | 121 | 32 | 1,024 | 8.5 | 1,144 |
 | B3 | word-problem-s4, move-to-front-4 | 24 | 15 | 225 | 9.4 | 248 |
@@ -159,8 +187,8 @@ The branches change the window, not the codes or the cap: every cell keeps its c
 ## Known limits
 
 - One branch design (D1 (b), D2): a failure is this design's, not every separation's.
-- The branches add parameters; a success isn't shown to be the separation rather than the size
-  (B1 against W1 is the one size comparison: W1 adds more parameters than the branches do).
+- The branches add parameters (28,702 against L3's 22,142 on L3's cell). W2 (D8) is B1's size
+  control. B2 and B3 have none: a B2 success reads "branches or size".
 - Six seeds a cell: existence and clear gains only (D7).
 
 ## Stages
@@ -185,11 +213,21 @@ The branches change the window, not the codes or the cap: every cell keeps its c
    `readout-tune` training the answer branch alone when the network has branches (tested: every
    factor branch, the trunk and the recurrence unchanged by bits); a few epochs a cell for the
    epoch time, the round's estimate.
-6. **B1, B2, B3** (42 runs: 6 for B1, 12 for B2, 18 for B3), on `jebel` and `stone`, whole runs a
-   machine, the claims in that order; manifests, recertified in both verdicts on `pyramidon`.
+6. **B1, B2, B3 and W2** (48 runs: 6 for B1, 12 for B2, 18 for B3, 6 for W2), on `jebel` and
+   `stone`, whole runs a machine, the B claims in that order and W2 beside B1 (from `main`, no
+   build: the flag is #864's); manifests, recertified in both verdicts on `pyramidon`.
 7. **Findings** in the probe script's docstring; adoption by the rule above; a branches-at-32 cell
    registered if W1 works and B1 doesn't (D3); this plan retired, its leftovers (D4's stop-gradient,
    D2's two heads a branch, the trunk's depth) to next-steps.md.
+
+**The design in the literature** (the review's "Extension (2026-10-19)"): the branches are hard
+parameter sharing (a shared trunk, a branch a task: Vandenhende et al. 2020; Guo et al. 2020), and
+the hypothesis is negative transfer between `delta`'s and `lambda`'s consumers. Separate paths for
+the two in a recurrent Mealy network are Tiňo & Šajda's (1995: one second-order path each, an
+extra layer on `lambda`), at 5 states, extracted by clustering. The factor's own pooling, cell and
+codes are RIMs-like (Goyal et al.). What these don't have is the diagnosis that motivates the
+branches here (an exact `delta`, a `lambda` its features can't separate, both proved) and a check
+of the result. The findings say so.
 
 Related: the general algebras' stages 5-7 (the fork's trigger, the guard's softenings) replay the
 `n` 5 cells: they wait for B2, so they replay the window that is adopted.

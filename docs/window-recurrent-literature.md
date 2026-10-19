@@ -4,7 +4,9 @@
 to judge which findings are new; extended the same day, after the certificate (E1), to the older
 literature on discretised recurrent states and automaton extraction, which the first searches
 missed. It backed the claims workplan, which planned the work to substantiate them
-(retired; its report, [window-recurrent-report.md](window-recurrent-report.md)).** Every paper read is kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`) as PDF and text, under the file
+(retired; its report, [window-recurrent-report.md](window-recurrent-report.md)). Extended
+2026-10-15 for the division paper and 2026-10-19 for the architecture's novelty (the sections at
+the end).** Every paper read is kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`) as PDF and text, under the file
 name given; arXiv ids are given for each.
 
 ## Scope and method
@@ -236,6 +238,56 @@ literature repository; what they changed:
   examples are misclassified, in cycles: the best-fitting published account of the abrupt collapse
   (the probe script's findings, "the collapse, traced").
 
+## Extension (2026-10-19): the architecture's novelty
+
+Asked by the owner: how novel is the current architecture (W11's window, the factored snapped
+state with a pooling, a cell and codes a factor, and the window branches of
+[window-branches-workplan.md](window-branches-workplan.md))? Searched modular recurrent networks,
+discretised states and communication, factored categorical latents, branched multi-task
+networks, Mealy machines learned by networks, and chunked recurrent transformers (2024-2026).
+Seven papers were read in the parts that bear on the design: method, experiments and related work
+in full. Each is in the literature repository.
+
+| paper | what it does | bearing |
+| --- | --- | --- |
+| Tiňo & Šajda 1995, Learning and Extracting Initial Mealy Automata with a Modular Neural Network Model (Neural Computation 7:822; `tino-1995-learning-extracting-initial-mealy-automata`) | a recurrent network for Mealy machines with **one second-order path for the transition (state units) and one for the output** (a hidden layer second-order in state and input, then an extra first-order layer); trained by gradient on input/output strings; the machine extracted afterwards by clustering (a star-topology SOM), then minimised | **separate `delta` and `lambda` paths are 1995's**, at 4 machines of up to 5 states; the extra output layer was "theoretically unnecessary" and converged 3 of 10 runs against 5 of 10 for the plain Neural Mealy Machine (Chen et al. 1992), one task: no evidence either way |
+| Goyal et al. 2021, Recurrent Independent Mechanisms (ICLR; 1909.10893; `goyal-2019-recurrent-independent-mechanisms`) | `k` recurrent modules (GRU or LSTM each, own parameters), each reading the input through its own attention, its query from its own state; top-`k` competition; attention between modules | **the per-factor pooling and cell are RIMs-like**; RIMs' states are continuous, their queries state-dependent (ours are learned constants), their modules compete; no machine is read off |
+| Liu et al. 2021, Discrete-Valued Neural Communication (2107.02367; `liu-2021-discrete-valued-neural-communication`) | VQ (straight-through) on messages between components, a vector split into `G` segments quantised against **one shared codebook**; in GNNs, transformers and RIMs | a factored discretisation, but of communication, shared across segments; their ablation finds discretising RIMs' state updates **worse** than discretising communication (the adding task), the opposite of our choice; no finite machine |
+| Hafner et al. 2021, Mastering Atari with Discrete World Models (DreamerV2; ICLR; 2010.02193; `hafner-2020-dreamerv2-discrete-world-models`) | a recurrent world model whose stochastic state is **32 categorical variables of 32 classes**, straight-through; categorical beat Gaussian latents on 42 of 55 games | a factored discrete recurrent state trained straight-through is established at scale; it sits beside a continuous GRU state, so the model isn't a finite machine |
+| Vandenhende et al. 2020, Branched Multi-Task Networks (BMVC; 1904.02920; `vandenhende-2019-branched-multi-task-networks`) | hard parameter sharing: shared shallow layers, task-specific deeper branches, where to branch chosen by task affinity | **the window branches are this design** (one trunk, a branch a consumer); its term for what the branches avoid is negative transfer |
+| Guo et al. 2020, Learning to Branch for Multi-Task Learning (ICML; 2006.01895; `guo-2020-learning-to-branch-multi-task`) | the branching learned (Gumbel-softmax over a tree of layers) | the same; our branch point is fixed (D1, D2) |
+| Zhang et al. 2026, Recurrent Looped Transformer (2610.07591; `zhang-2026-recurrent-looped-transformer`) | a parallel causal encoder and a recurrent transformer decoder whose final output feeds back, gated, into the next token's input; continuous state; one readout for the answer and the state; 8 layers, width 512, 3 seeds | **the nearest recent design**: its chunked variant (RLT-2, the state handed on once per chunk of 4 and gated into every token) is our window's shape with a continuous state. Chunking keeps 64-bit parity (99%) but drops swap-based S5 at 64 operations from 100% to 20%; standard S5 (all 120 permutations) stays near chance in every variant; addition fails beyond 8 digits |
+
+Surfaced, not read: Soulos et al. 2024, Recurrent Transformers Trade-Off Parallelism for Length
+Generalization on Regular Languages (NeurIPS 2024 workshop; OpenReview 6PjZA4Jvge; no arXiv
+version, and OpenReview refuses scripted downloads): from the abstract, chunked recurrent
+transformers' generalisation on regular languages falls quickly beyond chunks of 2. Chen et al.
+1992's Neural Mealy Machine (cited by Tiňo & Šajda).
+
+**What the architecture's parts are, as far as found.**
+
+- Each part has precedents: the snapped state (Zeng et al. 1993, above); factored discrete
+  latents trained straight-through (DreamerV2; product quantisation; DVNC's segments); a pooling,
+  cell and state a module (RIMs); the state added to a transformer over a chunk (Block-Recurrent
+  Transformers, RMT, RLT-2); a shared trunk with a branch a consumer (branched multi-task networks);
+  separate transition and output paths for a Mealy machine (Tiňo & Šajda 1995).
+- **Not found:** their combination, in which the factored codes make the trained network a finite
+  product machine, checked exactly. Of the modular and factored designs above, none is finite or
+  read off; of the Mealy networks, none is checked beyond its training and test strings or exceeds
+  a few states.
+- **So the network is not the contribution** (the contribution document's "Where it is weakest").
+  The branches' novelty is in the diagnosis that motivates them, not the design. The diagnosis is
+  the readout probe and the separability check: a transition proved exact, an output its features
+  don't linearly separate. If they help, the finding is that this negative transfer can be shown
+  and cured on a proved machine.
+- **A candidate finding, not a claim:** chunked recurrence with a continuous state loses
+  permutation tracking (RLT-2; Soulos et al.'s abstract). Our snapped state certifies with the
+  state handed on once per 4 input symbols (addition at `k` 4); division and the algebras hand it
+  on once a symbol (a column, a token), as RLT-1 does. A registered contrast
+  (the same window, continuous against snapped, on swap-based S5) would test whether the snap is
+  what lets a chunked step track state (P1's 2c, at a chunk). Standard S5 failing in RLT at 120
+  states, as ours does (round 2), says that cell is hard beyond our design.
+
 ## References (arXiv ids; local copies in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`))
 
 1511.08228, 1611.00736, 2003.08494, 2511.22751, 2602.07599, 2406.00075, 1811.12530, 1711.00937,
@@ -244,3 +296,5 @@ literature repository; what they changed:
 2005.13971, 2111.00600, 1902.10297, 2207.02098, 2210.10749, 2402.04875; Zeng, Goodman & Smyth,
 Neural Computation 5(6):976-990, 1993 (doi 10.1162/neco.1993.5.6.976); Das & Mozer, NeurIPS 6,
 19-26, 1993; Kolen, NeurIPS 6, 501-508, 1993; Omlin & Giles, Neural Networks 9(1):41-52, 1996.
+The architecture's extension: 1909.10893, 2107.02367, 2010.02193, 1904.02920, 2006.01895,
+2610.07591; Tiňo & Šajda, Neural Computation 7(4):822-844, 1995 (doi 10.1162/neco.1995.7.4.822).
