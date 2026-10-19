@@ -41,13 +41,14 @@ from __future__ import annotations
 
 from collections.abc import Generator, Iterator, Sequence
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Self
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Self, cast
 
 import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, SplitArrayLayer
 from indrajala_ml.model.layers.numpy import recurrent_array_layer as numpy_parts
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.rust import recurrent_rust_array_layer as rust_parts
@@ -60,7 +61,7 @@ from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNe
 from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT, NetworkFile
 from indrajala_ml.model.protocols.array_protocols import BackendArray, TrainedArrayLayer
 from indrajala_ml.model.specs.bounds import validate_class_count
-from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, branch_ends
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_window_recurrent
 from indrajala_ml.model.specs.update_rules import UpdateRule
@@ -112,6 +113,31 @@ class _WithPooling:
         return self._layer.downstream_batch() + self._pooled
 
 
+class _Pooled:
+    """
+    A branch's end (the window branches workplan) as the layer before it reads it: its poolings'
+    gradient alone, since nothing else reads the branch's result. A LayerNorm ends each branch.
+    """
+
+    def __init__(self, pooled: Any) -> None:
+        self._pooled = pooled
+
+    def downstream_batch(self) -> Any:
+        return self._pooled
+
+
+def _summed(pooled: Any, readers: Sequence[int]) -> Any:
+    # the readers' poolings' gradient: the step's one array if it read one, else each reader's
+    # summed in factor order (as the crate's window program sums them)
+    if not isinstance(pooled, list):
+        return pooled
+    parts = cast("list[Any]", pooled)
+    total = parts[readers[0]]
+    for g in readers[1:]:
+        total = total + parts[g]
+    return total
+
+
 class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
     """
     The module's network over ArrayNetworkBase, for either backend: its window's layers
@@ -138,9 +164,11 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         self.columns = input_shape[0]
         super().__init__(layers, input_shape)
 
-        # the layer whose input tokens the poolings read (D10), and their width
+        # the layer whose input tokens the poolings read (D10), and their width; with branches, each
+        # factor's branch's end (the window branches workplan)
         reads = pooling_reads(layers, recurrence)
-        _, features = token_shape(spec_shapes(layers, input_shape)[reads].input_shape)
+        ends = branch_ends(layers)
+        _, features = token_shape(spec_shapes(layers, input_shape)[ends[0] if ends else reads].input_shape)
         parts = _PARTS[self.backend.name]
         sizes = [
             (f.state_size, None, 0.0) if f.codes is None else (f.state_size, f.codes.count, f.codes.commitment)
@@ -151,10 +179,10 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         )
         self.parts: list[Any] = self.recurrence_layer.parts()
         self._state_inputs: list[Any] = [layer for layer in self.layers if isinstance(layer, parts.state_input)]
-        # that layer among the built layers: the output layer, or the first StateInput
-        self._pooling_reads = (
-            len(self.layers) - 1 if reads == len(layers) - 1 else self.layers.index(self._state_inputs[0])
-        )
+        # that layer among the built layers, each factor's: the output layer, the first StateInput,
+        # or its branch's end (a built layer a spec, expanded)
+        read = len(self.layers) - 1 if reads == len(layers) - 1 else self.layers.index(self._state_inputs[0])
+        self._pooling_reads: list[int] = ends or [read] * len(recurrence.factors)
 
     def _window_state_size(self) -> int | None:
         return self.recurrence.state_size
@@ -222,7 +250,13 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         self._activations: list[Any] = [X]
         for layer in self.layers:
             self._activations.append(layer.forward_batch(self._activations[-1]))
-        return self._activations[-1], self.recurrence_layer.forward_batch(self._activations[self._pooling_reads], C)
+        reads = self._pooling_reads
+        tokens = (
+            self._activations[reads[0]]
+            if len(set(reads)) == 1
+            else [self._activations[r] for r in reads]  # each factor's branch's (the window branches workplan)
+        )
+        return self._activations[-1], self.recurrence_layer.forward_batch(tokens, C)
 
     def _run_windows(self, X: Any, C: Any, states: bool, codes: bool) -> tuple[Any, list[Any], list[Any], list[Any]]:
         # the inference passes' windows: the per-layer path here, the window program on Rust
@@ -418,7 +452,13 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         reads = self._pooling_reads
         for i in reversed(range(len(self.layers) - 1)):
             following = self.layers[i + 1]
-            self.layers[i].compute_hidden_delta_batch(_WithPooling(following, pooled) if i + 1 == reads else following)
+            readers = [g for g, r in enumerate(reads) if r == i + 1]
+            if isinstance(following, BranchArrayLayer):
+                self.layers[i].compute_hidden_delta_batch(_Pooled(_summed(pooled, readers)))
+            elif readers:
+                self.layers[i].compute_hidden_delta_batch(_WithPooling(following, _summed(pooled, readers)))
+            else:
+                self.layers[i].compute_hidden_delta_batch(following)
         for layer, input_activation_batch in zip(self.layers, self._activations):
             layer.accumulate_gradient_batch(input_activation_batch)
 
@@ -493,6 +533,10 @@ def _program_op(layer: Any) -> tuple[Any, ...]:
         return ("fork",)
     if isinstance(layer, residual_layers.AddRustArrayLayer):
         return ("add",)
+    if isinstance(layer, SplitArrayLayer):
+        return ("split",)
+    if isinstance(layer, BranchArrayLayer):
+        return ("branch",)
     if isinstance(layer, LayerNormRustArrayLayer):
         return ("layer_norm", layer.epsilon)
     # the softmax output layer is a token-wise dense layer too: it goes first

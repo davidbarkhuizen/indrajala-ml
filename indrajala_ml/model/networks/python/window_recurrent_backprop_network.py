@@ -42,7 +42,7 @@ from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT, NetworkFile
 from indrajala_ml.model.protocols.classification import argmax_first_occurrence
 from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
 from indrajala_ml.model.specs.bounds import validate_batch, validate_class_count
-from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, branch_ends
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_window_recurrent
 from indrajala_ml.model.specs.update_rules import UpdateRule
@@ -77,6 +77,10 @@ class WindowRecurrentBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSo
         input_bounds: list[tuple[float, float]] | None = None,
     ) -> None:
         validate_window_recurrent(layers, recurrence, input_shape)
+        assert not branch_ends(layers), (
+            "a window's Branches are the array networks' (numpy and Rust; the window branches workplan, D6), not "
+            "the Python reference's"
+        )
         output = layers[-1]
         assert isinstance(output, Dense)
         validate_class_count(output.size)

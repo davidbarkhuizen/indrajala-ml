@@ -448,6 +448,7 @@ class RecurrenceArrayLayer:
         self.state_size = sum(self.sizes)
         self.starts = [sum(self.sizes[:g]) for g in range(len(self.sizes))]
         self.consolidation: Consolidation = {}
+        self._each = False  # whether the last forward_batch read one array of tokens a factor
         self.factors = [
             _FactorParts(
                 AttentionPoolingArrayLayer(tokens, features),
@@ -530,19 +531,29 @@ class RecurrenceArrayLayer:
         for f, dH in zip(self.factors, self._snap_backward(dC, weight), strict=True):
             f.initial_state.backward_batch(dH)
 
-    def forward_batch(self, X: FloatArray, C: FloatArray) -> FloatArray:
-        """The tokens the output layer reads, X (N, T * d), and the state C (N, S), to the next state (N, S)."""
+    def forward_batch(self, X: FloatArray | Sequence[FloatArray], C: FloatArray) -> FloatArray:
+        """
+        The tokens the output layer reads, X (N, T * d), or each factor's, one a factor (the window
+        branches workplan), and the state C (N, S), to the next state (N, S).
+        """
+        self._each = not isinstance(X, np.ndarray)
+        tokens = list(X) if not isinstance(X, np.ndarray) else [X] * len(self.factors)
         hs: list[FloatArray] = []
         for g, f in enumerate(self.factors):
-            u = f.pooling.forward_batch(X)
+            u = f.pooling.forward_batch(tokens[g])
             inputs = np.concatenate([u, self._others(C, g)], axis=1) if self.cross else u
             hs.append(f.cell.forward_batch(inputs, self._block(C, g)))
         return self._snapped(hs)
 
-    def backward_batch(self, dQ: FloatArray, weight: float) -> tuple[FloatArray, FloatArray]:
-        """The next state's gradient (N, S) to the tokens' (N, T * d) and the state's (N, S); the parts' accumulated."""
+    def backward_batch(self, dQ: FloatArray, weight: float) -> tuple[FloatArray | list[FloatArray], FloatArray]:
+        """
+        The next state's gradient (N, S) to the tokens' (N, T * d), each factor's poolings' summed in
+        factor order, or each factor's apart if forward_batch read one a factor, and the state's (N,
+        S); the parts' accumulated.
+        """
         d = self.features
         dX: FloatArray | None = None
+        dXs: list[FloatArray] = []
         dC_own: list[FloatArray] = []
         dC_cross: list[FloatArray] = []
         for f, dH in zip(self.factors, self._snap_backward(dQ, weight), strict=True):
@@ -551,6 +562,7 @@ class RecurrenceArrayLayer:
                 dC_cross.append(d_inputs[:, d:])
                 d_inputs = d_inputs[:, :d]
             dX_g = f.pooling.backward_batch(d_inputs)
+            dXs.append(dX_g)
             dX = dX_g if dX is None else dX + dX_g
             dC_own.append(dC)
         dC = np.concatenate(dC_own, axis=1)
@@ -559,4 +571,4 @@ class RecurrenceArrayLayer:
             dC[:, :start] += piece[:, :start]
             dC[:, start + size :] += piece[:, start:]
         assert dX is not None
-        return dX, dC
+        return (dXs if self._each else dX), dC

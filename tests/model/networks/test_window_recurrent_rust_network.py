@@ -31,6 +31,8 @@ from indrajala_ml.pcg64 import generator_state
 from tests.helpers import bits, exp_by_crate, patching, to_numpy
 from tests.model.networks.test_window_recurrent_array_network import (
     ATTENTION,
+    BRANCHED,
+    BRANCHED_RECURRENCES,
     DIGITS,
     RECURRENCE,
     RECURRENCES,
@@ -239,3 +241,17 @@ def test_a_continuous_state_trains_as_numpys(windows: int):
         numpy.learn_batch(0.1, rows)
     _assert_close(numpy.snapshot(), rust.snapshot(), 1e-10)
     assert rust.rng.state == numpy.rng.bit_generator.state
+
+
+@pytest.mark.usefixtures("crate_exp_attention", "crate_exp_parts")
+@pytest.mark.parametrize("windows", [1, 3])
+@pytest.mark.parametrize("recurrence", BRANCHED_RECURRENCES)
+def test_a_branched_window_trains_as_numpys(recurrence: str, windows: int):
+    # the window branches workplan's windows on both backends: numpy's per-layer path against the
+    # crate's window program, to within the products' rounding
+    rust, numpy = _pair(BRANCHED[recurrence], SGD(), recurrence=BRANCHED_RECURRENCES[recurrence])
+    rows = _rows(windows, 4, windows)
+    for _ in range(20):
+        rust.learn_batch(0.1, rows)
+        numpy.learn_batch(0.1, rows)
+    _assert_close(numpy.snapshot(), rust.snapshot(), 1e-10)

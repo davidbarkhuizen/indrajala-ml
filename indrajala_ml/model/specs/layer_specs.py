@@ -211,6 +211,23 @@ class TokenMean:
     """The mean over the tokens, (T, d) to (d,) (D8): the token part's end."""
 
 
+@dataclass(frozen=True)
+class Branches:
+    """
+    A window-recurrent network's window split into paths (the window branches workplan, D1, D6),
+    its last hidden layer, right before the output layer: each branch is token layers over the
+    tokens before it (a StateInput, residual blocks, LayerNorms), keeping their width; factor g's
+    pooling reads the end of branch g, and the last branch, the answers', runs on into the output
+    layer. A window of G factors has G + 1 branches (validate_window_recurrent).
+    """
+
+    branches: tuple[tuple[LayerSpec, ...], ...]
+
+    def __post_init__(self) -> None:
+        # lists given are kept as tuples, so equal windows compare equal and the spec stays hashable
+        object.__setattr__(self, "branches", tuple(tuple(branch) for branch in self.branches))
+
+
 LayerSpec = (
     Dense
     | ConvSpec
@@ -225,12 +242,11 @@ LayerSpec = (
     | Dropout
     | StateInput
     | TokenMean
+    | Branches
 )
 
 # the specs that start a token part, as a network's first layer
 TokenStart = Patches | Embedding
-# the specs that act on tokens only, from the token part's start to its TokenMean, both included
-TokenSpec = Patches | Embedding | Position | Attention | Dropout | StateInput | TokenMean
 
 
 @dataclass(frozen=True)
@@ -246,6 +262,26 @@ class Add:
     """A residual block's last layer once flattened: the body's output plus the block's input."""
 
 
+@dataclass(frozen=True)
+class Split:
+    """
+    Branches' first layer once flattened (expand_specs), which no user writes: it passes its input
+    on unchanged and keeps it, each branch starting from it.
+    """
+
+
+@dataclass(frozen=True)
+class Branch:
+    """
+    The end of a branch but the last once flattened: what a factor's pooling reads is its input,
+    and it gives the next branch the Split's input.
+    """
+
+
+# the specs that act on tokens only, from the token part's start to its TokenMean, both included
+TokenSpec = Patches | Embedding | Position | Attention | Dropout | StateInput | TokenMean | Split | Branch
+
+
 # a network's layers, one spec each: its specs with every Residual flattened
 ExpandedSpec = (
     Dense
@@ -254,6 +290,8 @@ ExpandedSpec = (
     | BatchNorm
     | Fork
     | Add
+    | Split
+    | Branch
     | Patches
     | Embedding
     | Position
@@ -265,19 +303,34 @@ ExpandedSpec = (
 )
 
 
-def expand_specs(specs: Sequence[LayerSpec | Fork | Add]) -> list[ExpandedSpec]:
+def expand_specs(specs: Sequence[LayerSpec | ExpandedSpec]) -> list[ExpandedSpec]:
     """
-    specs with each Residual(body) flattened into Fork, *body, Add, in order: the one place blocks
-    are flattened. Every layer index (snapshots, optimizer state, checkpoints, messages) is an
-    index into this list. An already-expanded list is returned as it is.
+    specs with each Residual(body) flattened into Fork, *body, Add, and Branches into Split, each
+    branch's layers with a Branch after each but the last, in order: the one place blocks and
+    branches are flattened. Every layer index (snapshots, optimizer state, checkpoints, messages)
+    is an index into this list. An already-expanded list is returned as it is.
     """
     expanded: list[ExpandedSpec] = []
     for spec in specs:
         if isinstance(spec, Residual):
             expanded += [Fork(), *expand_specs(spec.body), Add()]
+        elif isinstance(spec, Branches):
+            *firsts, last = spec.branches
+            expanded.append(Split())
+            for branch in firsts:
+                expanded += [*expand_specs(branch), Branch()]
+            expanded += expand_specs(last)
         else:
             expanded.append(spec)
     return expanded
+
+
+def branch_ends(specs: Sequence[LayerSpec | ExpandedSpec]) -> list[int]:
+    """
+    Each Branch's index in expand_specs(specs), in order: where each factor's pooling reads (its
+    input) in a window with branches (the window branches workplan); empty without them.
+    """
+    return [i for i, spec in enumerate(expand_specs(specs)) if isinstance(spec, Branch)]
 
 
 def token_wise_output(specs: Sequence[LayerSpec]) -> bool:
@@ -310,6 +363,12 @@ def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:
         if isinstance(spec, Residual):
             body = [path.replace("layer", "block body", 1) for path in spec_paths(spec.body)]
             paths += [f"layer {i}, block fork", *(f"layer {i}, {path}" for path in body), f"layer {i}, block add"]
+        elif isinstance(spec, Branches):
+            paths.append(f"layer {i}, split")
+            for b, branch in enumerate(spec.branches):
+                paths += [f"layer {i}, branch {b} {path}" for path in spec_paths(branch)]
+                if b + 1 < len(spec.branches):
+                    paths.append(f"layer {i}, branch {b} end")
         else:
             paths.append(f"layer {i}")
     return paths

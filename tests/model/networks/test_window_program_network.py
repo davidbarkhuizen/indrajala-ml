@@ -46,6 +46,8 @@ from indrajala_ml.studies import window_recurrent_study as wrs
 from indrajala_ml.studies import window_tasks as wt
 from tests.helpers import bits
 from tests.model.networks.test_window_recurrent_array_network import (
+    BRANCHED,
+    BRANCHED_RECURRENCES,
     DIGITS,
     RECURRENCES,
     SNAPPED,
@@ -278,3 +280,51 @@ def test_the_program_refuses_a_step_past_its_memory_budget():
             network.recurrence_layer.commitments,
             memory_budget=1000,
         )
+
+
+# the window branches workplan's windows: each factor reading its branch's end
+BRANCHED_CELLS = [(BRANCHED[name], BRANCHED_RECURRENCES[name]) for name in BRANCHED]
+
+
+@pytest.mark.parametrize("window, recurrence", BRANCHED_CELLS, ids=list(BRANCHED))
+def test_a_branched_windows_inference_passes_are_the_per_layer_paths(window: list[LayerSpec], recurrence: Any):
+    network = WindowRecurrentRustArrayNetwork.randomized((K,), window, recurrence, Adam(), seed=7)
+    X, labels = _batch(4, examples=5)
+    network.learn_batch(0.01, [(tuple(x), label) for x, label in zip(X, labels, strict=True)])
+    _assert_program_is_per_layer(network, RUST.matrix(X.tolist()))
+
+
+@pytest.mark.parametrize("window, recurrence", BRANCHED_CELLS, ids=list(BRANCHED))
+def test_a_branched_training_steps_gradients_are_the_per_layer_paths(window: list[LayerSpec], recurrence: Any):
+    program, per_layer = _twins(window, recurrence)
+    for windows in (1, 3):
+        X, labels = _batch(windows, examples=4, seed=windows)
+        for network in (program, per_layer):
+            _reset(network)
+        X_rust = RUST.matrix(X.tolist())
+        program._accumulate_gradients(X_rust, program._target_batch_array(labels))
+        with per_layer_path(per_layer):
+            per_layer._accumulate_gradients(X_rust, per_layer._target_batch_array(labels))
+        assert _gradients(program) == _gradients(per_layer)
+
+
+def test_a_consolidated_branched_training_step_is_the_per_layer_paths():
+    recurrence = BRANCHED_RECURRENCES["two factors"]
+    program, per_layer = _twins(BRANCHED["two factors"], recurrence)
+    for network in (program, per_layer):
+        network.consolidate(covering_consolidation(recurrence))
+    X, labels = _batch(3, examples=6, seed=31)
+    X_rust = RUST.matrix(X.tolist())
+    program._accumulate_gradients(X_rust, program._target_batch_array(labels))
+    with per_layer_path(per_layer):
+        per_layer._accumulate_gradients(X_rust, per_layer._target_batch_array(labels))
+    assert _gradients(program) == _gradients(per_layer)
+
+
+def test_a_branched_windows_split_and_branch_have_their_ops():
+    network = WindowRecurrentRustArrayNetwork.randomized(
+        (K,), BRANCHED["two factors"], BRANCHED_RECURRENCES["two factors"], Adam(), seed=7
+    )
+    ops = [_program_op(layer)[0] for layer in network.layers]
+    assert ops.count("split") == 1 and ops.count("branch") == 2
+    assert [ops[r] for r in network._pooling_reads] == ["branch", "branch"]

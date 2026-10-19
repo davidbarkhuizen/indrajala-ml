@@ -15,6 +15,7 @@ from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
+    Branches,
     Dense,
     Dropout,
     Embedding,
@@ -167,6 +168,27 @@ def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool, window: bool
         elif isinstance(spec, Residual):
             _check_token_residual(spec, in_body, window)
             blocks += 1
+        elif isinstance(spec, Branches):
+            assert window and not in_body and i + 1 == len(tokens), (
+                "Branches are a window-recurrent network's, its window's last token layer, right before the output "
+                f"layer (the window branches workplan, D1, D6); got {list(tokens)!r}"
+            )
+            assert len(spec.branches) >= 2, f"Branches are two or more branches; got {spec!r}"
+            assert i > 0 and isinstance(tokens[i - 1], Residual), (
+                "Branches follow a residual block, the shared trunk's last (the window branches workplan, D2; an add "
+                f"reads the split's downstream as it reads a fork's); got {list(tokens)!r}"
+            )
+            for branch in spec.branches:
+                assert branch and isinstance(branch[-1], LayerNorm), (
+                    "each branch ends in a LayerNorm, as a window before its output layer, which its pooling or the "
+                    f"output layer reads (the window branches workplan, D2); got {spec!r}"
+                )
+                inner = next((s for s in branch if isinstance(s, Position | Branches | Dropout)), None)
+                assert inner is None, (
+                    f"a branch holds a StateInput, residual blocks, LayerNorms and token-wise Dense layers, not "
+                    f"{inner!r} (the window branches workplan, D2); got {spec!r}"
+                )
+                _check_token_layers(branch, in_body=False, window=window)
         else:
             assert isinstance(spec, Dense), (
                 "among the tokens stand a token-wise Dense, a Position, a Dropout, a LayerNorm and residual blocks, "
@@ -314,6 +336,16 @@ def validate_window_recurrent(
     assert recurrence.pooling.reads in (OUTPUT, BEFORE_STATE), (
         f"a pooling reads the output layer's tokens or those before the first StateInput (D10); got {recurrence!r}"
     )
+    branches = next((spec for spec in specs if isinstance(spec, Branches)), None)
+    if branches is not None:
+        assert len(branches.branches) == len(factors) + 1, (
+            f"a window's Branches are one a factor and one for the answers (the window branches workplan, D1): "
+            f"{len(factors) + 1} for {len(factors)} factors; got {len(branches.branches)}"
+        )
+        assert recurrence.pooling.reads == OUTPUT, (
+            f"with Branches each factor's pooling reads its branch's end, AttentionPooling(OUTPUT) (the window branches "
+            f"workplan, D1); got {recurrence!r}"
+        )
 
 
 def validate_window_specs(specs: Sequence[LayerSpec], input_shape: InputShape) -> None:
