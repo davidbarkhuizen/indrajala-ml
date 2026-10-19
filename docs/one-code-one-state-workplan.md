@@ -122,6 +122,38 @@ What it shows:
   epochs, the fork, stop at certified; Fisher one-sided against the control, as the window branches
   plan's D7.**
 
+## Amendment (2026-10-19, afternoon, before C0's and the 32-wide probe's data): width 32 as the base
+
+**Why:** the window's width is a feasibility bound, not a setting to hold fixed for a clean
+comparison (experiment-design.md, section 1; the owner: "we have made the mistake of designing an
+experiment that can't succeed because it falls outside of the feasible region - again"). At width 16
+the window is too narrow for division at 13 (L3 0 of 6; W2 at 22, 3 of 6; W1 at 32, 5 of 6), and
+splitting it into a single-head branch per consumer starved the factors' transitions (B1 1 of 6; B3's
+S4 0 of 5 so far against round 1's 4 of 6, its failures at 2-23 pairs per code). So:
+
+- **D4' (replacing D4): the base window is W11 at width 32 (`--window-width 32`), on every
+  backdrop.** Pros: the width where division works; general (nothing per task); separation and the
+  training remedies are then tested where the base has capacity. Cons: about twice the epoch time;
+  the algebras at 32 are unmeasured, hence C0.
+- **D3' (R1's width): R1 is probed at 32 too** (seeds 0 and 1 on the three backdrops, after its
+  16-wide probe; exploratory, read against C0's same seeds), and C1 at 16 stays registered as
+  written: R1 adds a block for the answers without taking any capacity from the factors' path.
+- **C0, the base at width 32, registered:** round 1's cells (word-problem-s4, move-to-front-4) and
+  round 2's (word-problem-s5, move-to-front-5), two factors, `--codes-ratio 32/11`, reading the
+  output, the fork, 600 epochs, `--window-width 32`, seeds 0-5 (24 runs), against the same cells at
+  width 16 by the by-bits rule (the default width repeats them): round 1 S4 4 of 6, move-to-front-4
+  4 of 6; round 2 S5 0 of 6, move-to-front-5 0 of 6.
+  - **S5 and move-to-front-5:** works at 1 of 6 or more, helps at 4 or more (p 0.030).
+  - **S4 and move-to-front-4:** harm at 0 of 6 (p 0.030); otherwise descriptive.
+  - **Read every failure's bottleneck** by its pairs per code (R2's step-end rows) and state's
+    share: 1 (no state), 2 (codes standing for several states), or 3 (an exact state, wrong
+    answers).
+  - **No harm on S4 and move-to-front-4** confirms width 32 as the base (D4'). Harm on either
+    means width isn't free, and the base is chosen per its evidence in this plan's findings.
+- **Feasibility:** the cells' codes and caps are their rounds' (the table below); the window at 32
+  is W1's, sufficient at division 13.
+- **Where:** `jebel` once B3 ends (6 at once, beside R3/R4's probe), from main at this plan's merge.
+
 ## The claims (registered before the data)
 
 Certified means both verdicts, recertified on `pyramidon`. A cell **works** if at least one of

@@ -21,6 +21,15 @@ threshold probe), recorded with it. (The owner's rule, 2026-10-13; the claims pl
   Likewise the state width, window, vocabulary and lengths. *E7 ran modular division mod 7 with 32
   codes against a 49-state automaton: 20 runs that could never work, missed by the plan and its
   review.*
+- **The per-step channel has the capacity too** (2026-10-19): the window's residual stream carries
+  everything the next state and the answers need, so its width is a capacity bound like the codes'. A
+  cell's window is at least the width shown sufficient on a comparable cell, and an architectural
+  change is tested at a width where its base works. Splitting a too-narrow stream divides its
+  capacity. *The window branches plan tested a single-head branch per consumer at width 16, which
+  L3 had shown too narrow (division 13: 0 of 6 at 16, 3 at 22, 5 at 32); the factors' transitions
+  starved (B1 1 of 6; B3's S4 0 of 5 against round 1's 4 of 6), a second infeasible design.*
+  Every constraint on the step's information flow is in [information-flow.md](information-flow.md),
+  the checklist a study's cells are checked against.
 - **The check can see the target:** every target state reachable, and every pair of states told
   apart, within the check lengths.
 - **Training excludes wrong solutions: the exclusion bound.** Two finite machines of `n` and `n'`
