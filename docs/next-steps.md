@@ -178,13 +178,11 @@ Decided with the owner, each to become a workplan or a stage:
 - **The commitment controls** (option 1, the usage thermostat) stay deferred in
   [commitment-control-workplan.md](commitment-control-workplan.md), for a probe that must train
   past a solution or shows factors collapsing.
-- **Division's edge between `p` 11 and 13, unexplained** (the division ladder, retired
-  2026-10-19; the probe script's findings): 4 of 6 at 121 states, 0 of 6 at 169, neither the
-  budget (L2, 1,800 epochs) nor the width (L3, factors 32 wide) the cause. L3 moved the runs
-  (four of six formed a state against two; one minimised to 172 against 169), so a small follow-up
-  at width 32 (more seeds, or with a longer budget) is the cheapest next probe if division's
-  scaling is taken up again. The general algebras' round 2 fails at 120 states in the same cell, so
-  the cause is likely shared with them (extra codes and failure A).
+- **Division's edge between `p` 11 and 13: explained by W1** (the window branches workplan,
+  2026-10-19): neither the budget (L2) nor the factors' width (L3), but the window's: at 32 wide
+  instead of 16, 5 of 6 certified at 169 states against 0 of 6. The round-2 algebras' failures at
+  120 states are other bottlenecks (failure A, extra codes): the three are mapped in
+  [bottlenecks.md](bottlenecks.md), each with its plan and next step.
 
 ## Beyond arithmetic: other finite-state targets (the owner and Claude, 2026-10-17)
 
