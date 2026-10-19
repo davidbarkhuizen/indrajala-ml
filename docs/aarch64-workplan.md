@@ -401,6 +401,15 @@ reference and the golden run hold their bits.
   `add`, the pool ops, `accumulate_gradient_batch`): read as layout, as the probe above found on the
   Pi; not checked aligned on x86.
 
+**Study networks' certificates, on the Pi (2026-10-19, at the owner's request):** the 12 networks
+certified that day (W1's five and W2's three on division 13, B1's one, B2's S5 and move-to-front-5
+networks, the commitment diagnostic's S3 network) recertified on `litshe` (main at f39728e, crate
+afa7204) in both verdicts: **24 of 24 certificates identical to `pyramidon`'s, every field but the
+seconds and the file's path**, the floating-point margins (snap ratio, logit lead) included. So a
+learned machine's proof is the same on x86 and aarch64. Data and script in
+`data/window-recurrent/aarch64-recertify/recert-2026-10-19/` (`recertify.py`, `recertify.out`),
+manifest `recert-2026-10-19.sha256` 6c8fd925...
+
 ## After this plan
 
 - Other aarch64 machines (Graviton in CI or cloud, Apple silicon) are checked by D7's reference
