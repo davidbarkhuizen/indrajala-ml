@@ -154,7 +154,7 @@ def _factor(network: WindowRecurrentArrayNetwork) -> Any:
 
 def _identity_codes(network: WindowRecurrentArrayNetwork) -> None:
     # the codes as the identity, so every state is the cell's output and the loss differentiable
-    def forward(H: FloatArray) -> FloatArray:
+    def forward(H: FloatArray, temperature: float | None = None) -> FloatArray:
         return H.copy()
 
     def backward(dQ: FloatArray, weight: float) -> FloatArray:
