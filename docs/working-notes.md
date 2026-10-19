@@ -30,6 +30,10 @@ where you meet a new trap; delete one that no longer holds.
   was off by one).
 - **Bumping a submodule:** `git -C sub checkout X`, `git add sub`, then `git -C sub submodule
   update --recursive`. A top-level `git submodule update` first resets `sub` to the recorded commit.
+- **`git update-index --cacheinfo 160000,<sha>,rust` (a pin without a checkout) accepts any
+  SHA:** take it whole from `git -C <crate> rev-parse <ref>` and check `cat-file -t` first. A
+  mistyped pin pushes a commit no checkout can fetch (2026-10-18, `litshe`: "upload-pack: not our
+  ref").
 - **Stage files by name, never `git add -A` over a directory:** the untracked `docs/handover.md`
   was committed that way once (#582, untracked again in #583).
 
@@ -320,6 +324,9 @@ where you meet a new trap; delete one that no longer holds.
   submodule URL and its crate repo `~/code/indrajala-math-rust` (`ab.py`'s `CRATE_REPO`) both point
   at GitHub, so `ab.py remote --host litshe run --sync` and a crate A/B work unchanged. Cargo there
   runs one job (`~/.cargo/config.toml`), a single-core load under the owner's thermal limits.
+- **Over a non-interactive ssh, `cargo` isn't on the PATH:** `maturin develop` on `jebel` fails
+  with "rustc, the rust compiler, is not installed". `source ~/.cargo/env` first (`stone`'s
+  `env.sh` adds it).
 - **On `litshe` a worktree's `git submodule update --init rust` fails** with "transport 'file' not
   allowed" (its submodule URL is the local crate repo): `git -c protocol.file.allow=always
   submodule update --init rust`.
