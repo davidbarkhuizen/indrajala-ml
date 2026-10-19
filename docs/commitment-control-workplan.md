@@ -227,6 +227,10 @@ lost); effective codes reach half the codebook within 2-3 steps while the state'
    its probes.
 3. **The quantiser:** the crate's codes forward and backward with `tau` (`indrajala-math-rust`
    first), then the package's three implementations, parity tests; its probes.
+   **(2026-10-19) This is level 1's annealing** (the owner: a temperature that slowly cools, the
+   state crystallising): it follows the thermostat's second probe (D2''), whatever that finds, if
+   either it or the population plan ([population-workplan.md](population-workplan.md), level 2)
+   shows the commitment's timing matters; its `tau` is then the population's natural temperature.
 4. **Retire this plan;** leftovers to next-steps.md.
 
 Stage 2 is tier 0 (harness, pure Python). Stage 3 changes a timed path (the crate's recurrence):
