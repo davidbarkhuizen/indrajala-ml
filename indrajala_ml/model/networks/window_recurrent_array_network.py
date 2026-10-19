@@ -61,7 +61,7 @@ from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNe
 from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT, NetworkFile
 from indrajala_ml.model.protocols.array_protocols import BackendArray, TrainedArrayLayer
 from indrajala_ml.model.specs.bounds import validate_class_count
-from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, branch_ends
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, factor_reads
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_window_recurrent
 from indrajala_ml.model.specs.update_rules import UpdateRule
@@ -167,7 +167,7 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         # the layer whose input tokens the poolings read (D10), and their width; with branches, each
         # factor's branch's end (the window branches workplan)
         reads = pooling_reads(layers, recurrence)
-        ends = branch_ends(layers)
+        ends = factor_reads(layers)  # each factor's branch's end, or none
         _, features = token_shape(spec_shapes(layers, input_shape)[ends[0] if ends else reads].input_shape)
         parts = _PARTS[self.backend.name]
         sizes = [

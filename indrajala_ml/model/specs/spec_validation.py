@@ -338,10 +338,18 @@ def validate_window_recurrent(
     )
     branches = next((spec for spec in specs if isinstance(spec, Branches)), None)
     if branches is not None:
-        assert len(branches.branches) == len(factors) + 1, (
-            f"a window's Branches are one a factor and one for the answers (the window branches workplan, D1): "
-            f"{len(factors) + 1} for {len(factors)} factors; got {len(branches.branches)}"
-        )
+        if branches.reads is None:
+            assert len(branches.branches) == len(factors) + 1, (
+                f"a window's Branches are one a factor and one for the answers (the window branches workplan, D1): "
+                f"{len(factors) + 1} for {len(factors)} factors; got {len(branches.branches)}"
+            )
+        else:
+            read = len(branches.branches) - 1  # the factors' branches; the last is the answers'
+            assert len(branches.reads) == len(factors) and set(branches.reads) == set(range(read)), (
+                f"Branches' reads name each factor's branch, every branch but the answers' (the last) read by one "
+                f"or more (the one-code-one-state workplan, R1): {len(factors)} among branches 0-{read - 1}; got "
+                f"{branches.reads!r}"
+            )
         assert recurrence.pooling.reads == OUTPUT, (
             f"with Branches each factor's pooling reads its branch's end, AttentionPooling(OUTPUT) (the window branches "
             f"workplan, D1); got {recurrence!r}"

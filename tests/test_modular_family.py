@@ -880,10 +880,41 @@ def test_a_branched_run_records_its_branches_and_its_window_has_a_branch_a_facto
         mf.network(encoding, [(4, 4)], 0, branches=True)
 
 
-def test_tuning_a_branched_readout_trains_the_answers_branch_alone(tmp_path: Path):
+def test_an_answer_branch_run_records_it_and_every_factor_reads_the_state_branch(tmp_path: Path):
+    # the one-code-one-state workplan's R1: W11's third block unchanged as the state branch, which both
+    # factors read, and the answers' own single-head branch
+    encoding = mf.Encoding(5, mf.FAMILY)
+    net = mf.network(encoding, [(4, 4), (4, 4)], 0, "output", answer_branch=True)
+    assert len(net._pooling_reads) == 2 and len(set(net._pooling_reads)) == 1
+    specs = mf.wr.answer_branch_window(encoding.tokens, encoding.classes, 2)
+    plain = mf.wr.transformer_window(encoding.tokens, encoding.classes)
+    branches = specs[-2]
+    assert isinstance(branches, mf.wr.Branches) and branches.reads == (0, 0)
+    assert list(branches.branches[0]) == plain[-5:-1]  # the state branch: W11's last block and LayerNorm
+    settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
+    mf.run(
+        encoding,
+        [(4, 4), (4, 4)],
+        0,
+        60,
+        tmp_path / "r1",
+        settings,
+        cap=2,
+        reads="output",
+        budget_epochs=1,
+        answer_branch=True,
+    )
+    identity = json.loads((tmp_path / "r1" / "checkpoint.json").read_text())["run"]
+    assert identity["answer_branch"] is True and "branches" not in identity
+    with pytest.raises(AssertionError, match="not both"):
+        mf.network(encoding, [(4, 4)], 0, "output", branches=True, answer_branch=True)
+
+
+@pytest.mark.parametrize("window", ["branches", "answer_branch"])
+def test_tuning_a_branched_readout_trains_the_answers_branch_alone(tmp_path: Path, window: str):
     encoding = mf.Encoding(5, mf.FAMILY)
     path = tmp_path / "network.json"
-    mf.network(encoding, [(4, 4), (4, 4)], 0, "output", branches=True).save(str(path))
+    mf.network(encoding, [(4, 4), (4, 4)], 0, "output", **{window: True}).save(str(path))
     mf.tune_readout(path, encoding, "modular-division-5", 2, tmp_path / "tuned", 1, mf.Settings(epoch_examples=64))
     before, after = mf.load_network(str(path)), mf.load_network(str(tmp_path / "tuned" / "network.json"))
 

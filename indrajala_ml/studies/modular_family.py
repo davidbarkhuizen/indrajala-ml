@@ -318,20 +318,26 @@ def network(
     reads: str = BEFORE_STATE,
     width: int = wr.D,
     branches: bool = False,
+    answer_branch: bool = False,
 ) -> Any:
     """The transformer window (W11) over the encoding's tokens, a factored state (D3), Adam; the
     poolings reading before the first StateInput (D10) or, with reads OUTPUT, the window's output.
     With branches, the window branches workplan's window (wr.branched_window), each factor's
-    pooling reading its own branch's end (reads OUTPUT)."""
-    assert not branches or reads == OUTPUT, "with branches each factor reads its branch's end: reads OUTPUT"
+    pooling reading its own branch's end (reads OUTPUT); with answer_branch, the one-code-one-state
+    workplan's R1 (wr.answer_branch_window), every factor reading the shared state branch."""
+    assert not (branches or answer_branch) or reads == OUTPUT, (
+        "with branches each factor reads a branch's end: reads OUTPUT"
+    )
+    assert not (branches and answer_branch), "the window branches or the answers' branch, not both"
     recurrence = WindowRecurrence(
         tuple(Factor(s, Codes(m)) for s, m in factors), False, pooling=AttentionPooling(reads)
     )
-    specs = (
-        wr.branched_window(encoding.tokens, encoding.classes, len(factors), width)
-        if branches
-        else wr.transformer_window(encoding.tokens, encoding.classes, width)
-    )
+    if branches:
+        specs = wr.branched_window(encoding.tokens, encoding.classes, len(factors), width)
+    elif answer_branch:
+        specs = wr.answer_branch_window(encoding.tokens, encoding.classes, len(factors), width)
+    else:
+        specs = wr.transformer_window(encoding.tokens, encoding.classes, width)
     return WindowRecurrentRustArrayNetwork.randomized((encoding.width,), specs, recurrence, Adam(), seed=seed)
 
 
@@ -804,6 +810,7 @@ def _run_identity(
     commitment_from: int | None,
     width: int = wr.D,
     branches: bool = False,
+    answer_branch: bool = False,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -826,6 +833,7 @@ def _run_identity(
         **({"commitment_from": commitment_from} if commitment_from is not None else {}),
         **({"width": width} if width != wr.D else {}),
         **({"branches": True} if branches else {}),
+        **({"answer_branch": True} if answer_branch else {}),
     }
 
 
@@ -864,6 +872,7 @@ def run(
     commitment_from: int | None = None,
     width: int = wr.D,
     branches: bool = False,
+    answer_branch: bool = False,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -921,6 +930,7 @@ def run(
         commitment_from,
         width,
         branches,
+        answer_branch,
     )
     d = mr.word_length(encoding.task.machine) if consolidate else 0
     table: dict[tuple[int, ...], tuple[int, ...]] = {}  # A's, from the last diagnosis
@@ -941,7 +951,7 @@ def run(
         assert saved is not None or not (resume and (out / "log.jsonl").exists()), (
             f"{out} has a log but no checkpoint to resume from"
         )
-        net = network(encoding, factors, seed, reads, width, branches)
+        net = network(encoding, factors, seed, reads, width, branches, answer_branch)
         if saved is not None:
             (out / "log.jsonl").write_text("")  # stopped before its first checkpoint: begun again from the seed
         _write_checkpoint(out, identity, BEGUN, net)

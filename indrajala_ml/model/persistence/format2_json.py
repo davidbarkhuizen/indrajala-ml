@@ -74,10 +74,12 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
     if isinstance(spec, Residual):
         return {"kind": "residual", "body": [layer_to_json(layer) for layer in spec.body]}
     if isinstance(spec, Branches):
-        # the window branches workplan, D6: each branch's layers, in order
+        # the window branches workplan, D6: each branch's layers, in order; with reads (the
+        # one-code-one-state workplan, R1) each factor's branch, absent otherwise so earlier files don't change
         return {
             "kind": "branches",
             "branches": [[layer_to_json(layer) for layer in branch] for branch in spec.branches],
+            **({"reads": list(spec.reads)} if spec.reads is not None else {}),
         }
     if isinstance(spec, ConvSpec):
         # a ReLU conv layer's entry as before ConvSpec had an activation, so those files don't change
@@ -126,7 +128,11 @@ def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
         case "residual":
             return Residual(tuple(layer_from_json(layer) for layer in spec["body"]))
         case "branches":
-            return Branches(tuple(tuple(layer_from_json(layer) for layer in branch) for branch in spec["branches"]))
+            reads = spec.get("reads")
+            return Branches(
+                tuple(tuple(layer_from_json(layer) for layer in branch) for branch in spec["branches"]),
+                None if reads is None else tuple(reads),
+            )
         case kind if kind in _TOKEN_SPECS:
             return _TOKEN_SPECS[kind](**fields)
         case kind:
