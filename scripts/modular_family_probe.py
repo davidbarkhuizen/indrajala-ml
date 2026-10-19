@@ -51,12 +51,17 @@ diagnosis row logging `consolidation` (codes reached, groups, duplicates pulled)
 (stage 2c's P2) ends a step stopped by a plateau on its best screen's network, saved at each new
 best, before the step's certificate and the next step, a row logging it; `--commitment-from J`
 (the commitment-control workplan's diagnostic) trains the steps before J with every factor's
-commitment 0. `run` prints each
+commitment 0; `--window-width D` widens the window's residual stream from W11's 16, its FFN twice
+it (the window branches workplan's W1). `run` prints each
 target's feasibility line first (q, codes, m, the cap, s0, d) and refuses a cell whose joint codes
 can't hold its states.
 `guard-epoch NETWORK --p P --step J` trains one epoch of step J from a saved network, unguarded
 and with the guard armed, on the same data, and prints each one's seconds, whether its quotient's
 machine is right before and after, and the guard's rollbacks (the guard workplan's budget probe).
+`separability NETWORK --task T --out FILE` reads the features a saved network's output layer reads
+for every reachable code and window, and fits a linear readout to all of them (a softmax fit, then a
+perceptron): whether its answers are linearly separable, and for each pair left wrong how near the
+nearest feature with another answer is (the window branches workplan's check).
 `readout-tune NETWORK --task T --step J --out DIR` trains a saved network's output layer alone
 (every other layer and the recurrence frozen, so its state machine is the saved one) on step J's
 lengths, an epoch at a time, until its certificate passes or `--epochs` are spent, a row an epoch
@@ -845,6 +850,13 @@ def main(argv: list[str]) -> int:
         help="the commitment-control workplan's diagnostic: every factor's commitment 0 for the steps before J, "
         "its specs' from J",
     )
+    run.add_argument(
+        "--window-width",
+        type=int,
+        default=wr.D,
+        metavar="D",
+        help="the window's residual stream (W11's 16), its FFN twice it (the window branches workplan's W1)",
+    )
     certify = commands.add_parser("certify", help="a saved family network's certificate, one slot")
     certify.add_argument("network", type=Path)
     certify.add_argument(
@@ -888,6 +900,17 @@ def main(argv: list[str]) -> int:
     target.add_argument("--task", help="a general algebra's machine")
     epoch.add_argument("--step", type=int, required=True, help="the step whose lengths the epoch trains (1..step)")
     epoch.add_argument("--arm", choices=sorted(ARMS), default="family")
+    separable = commands.add_parser(
+        "separability", help="whether a saved network's answers are linearly separable over its output layer's input"
+    )
+    separable.add_argument("network", type=Path)
+    separable.add_argument(
+        "--task", required=True, help="modular-division-p (the quotient), modular-sum-p (the sum) or a machine's"
+    )
+    separable.add_argument("--arm", choices=sorted(ARMS), default="family")
+    separable.add_argument("--steps", type=int, default=60_000, help="the softmax fit's full-batch steps")
+    separable.add_argument("--passes", type=int, default=20_000, help="the perceptron's passes, at most")
+    separable.add_argument("--out", type=Path, required=True, help="the result's JSON")
     tune = commands.add_parser("readout-tune", help="a saved network's output layer trained alone, to its certificate")
     tune.add_argument("network", type=Path)
     tune.add_argument(
@@ -943,6 +966,11 @@ def main(argv: list[str]) -> int:
     if args.command == "guard-epoch":
         encoding = _target(args.task or f"modular-division-{args.p}", args)
         print(json.dumps(mf.guard_epoch(args.network, encoding, args.step)))
+        return 0
+    if args.command == "separability":
+        result = mf.separability(args.network, _target(args.task, args), args.task, args.steps, args.passes)
+        args.out.write_text(json.dumps(result, indent=1))
+        print(json.dumps({key: value for key, value in result.items() if key != "wrong"}))
         return 0
     if args.command == "readout-tune":
         target = _target(args.task, args)
@@ -1006,6 +1034,7 @@ def main(argv: list[str]) -> int:
             consolidate=args.consolidate,
             restore_best=args.restore_best,
             commitment_from=args.commitment_from,
+            width=args.window_width,
         )
 
     for name in names:

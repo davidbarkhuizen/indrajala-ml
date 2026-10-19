@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
+import numpy.typing as npt
 
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_data as md
@@ -302,13 +303,15 @@ def columns(n: int, rng: random.Random) -> list[int]:
     return [rng.randrange(COLUMNS) for _ in range(n)] + [0]
 
 
-def network(encoding: Target, factors: Sequence[tuple[int, int]], seed: int, reads: str = BEFORE_STATE) -> Any:
+def network(
+    encoding: Target, factors: Sequence[tuple[int, int]], seed: int, reads: str = BEFORE_STATE, width: int = wr.D
+) -> Any:
     """The transformer window (W11) over the encoding's tokens, a factored state (D3), Adam; the
     poolings reading before the first StateInput (D10) or, with reads OUTPUT, the window's output."""
     recurrence = WindowRecurrence(
         tuple(Factor(s, Codes(m)) for s, m in factors), False, pooling=AttentionPooling(reads)
     )
-    specs = wr.transformer_window(encoding.tokens, encoding.classes)
+    specs = wr.transformer_window(encoding.tokens, encoding.classes, width)
     return WindowRecurrentRustArrayNetwork.randomized((encoding.width,), specs, recurrence, Adam(), seed=seed)
 
 
@@ -770,6 +773,7 @@ def _run_identity(
     consolidate: bool,
     restore_best: bool,
     commitment_from: int | None,
+    width: int = wr.D,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -790,6 +794,7 @@ def _run_identity(
         **({"consolidate": True} if consolidate else {}),
         **({"restore_best": True} if restore_best else {}),
         **({"commitment_from": commitment_from} if commitment_from is not None else {}),
+        **({"width": width} if width != wr.D else {}),
     }
 
 
@@ -826,6 +831,7 @@ def run(
     consolidate: bool = False,
     restore_best: bool = False,
     commitment_from: int | None = None,
+    width: int = wr.D,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -881,6 +887,7 @@ def run(
         consolidate,
         restore_best,
         commitment_from,
+        width,
     )
     d = mr.word_length(encoding.task.machine) if consolidate else 0
     table: dict[tuple[int, ...], tuple[int, ...]] = {}  # A's, from the last diagnosis
@@ -901,7 +908,7 @@ def run(
         assert saved is not None or not (resume and (out / "log.jsonl").exists()), (
             f"{out} has a log but no checkpoint to resume from"
         )
-        net = network(encoding, factors, seed, reads)
+        net = network(encoding, factors, seed, reads, width)
         if saved is not None:
             (out / "log.jsonl").write_text("")  # stopped before its first checkpoint: begun again from the seed
         _write_checkpoint(out, identity, BEGUN, net)
@@ -1191,6 +1198,107 @@ def tune_readout(
                 break
     net.save(str(out / "network.json"))
     return rows
+
+
+def separability(
+    path: Path, encoding: Target, task_name: str, steps: int = 60_000, passes: int = 20_000, seed: int = 0
+) -> dict[str, Any]:
+    """
+    Whether a saved network's answers (its task's slot) are linearly separable over the features its
+    output layer reads (the window branches workplan's check): the features for every reachable code
+    and every window, an unregularised softmax readout fitted to them all (full batch, Adam, steps
+    steps, its fewest wrong at each 5,000), then a multiclass perceptron (0 errors in finitely many
+    passes iff separable) for at most passes passes; for each pair the fit leaves wrong, the distance
+    to the nearest feature with another answer and with its own.
+    """
+    net = load_network(str(path))
+    machine, task = QueryMachine(net, encoding, slot(task_name)), wt.task_named(task_name).machine
+    windows = wc.all_windows(1, task.tokens)
+    want_labels, want_state = task.windows(windows)
+    start, _ = machine.start()
+    phi = {start: task.start}
+    queue = [start]
+    for q in queue:  # every reachable code, breadth first, its target state
+        states = machine.step(q, windows).states
+        for window in range(len(windows)):
+            r = tuple(int(c) for c in states[window])
+            if r not in phi:
+                phi[r] = int(want_state[phi[q]][window])
+                queue.append(r)
+    codes = list(phi)
+    queries = np.array(encoding.query_tokens, dtype=np.int64)
+    full = np.concatenate([windows, np.repeat(queries[np.newaxis, :], len(windows), axis=0)], axis=1)
+    books = machine.inner.E
+    vectors = np.array([np.concatenate([books[g][i] for g, i in enumerate(q)]) for q in codes])
+    net._window_forward(
+        net.backend.matrix(np.tile(full, (len(codes), 1)).astype(np.float64).tolist()),
+        net.backend.matrix(np.repeat(vectors, len(windows), axis=0).tolist()),
+    )
+    features = np.array(net._activations[-2].tolist(), dtype=np.float64)
+    width = features.shape[1] // full.shape[1]
+    index = slot(task_name)
+    feats = features[:, index * width : (index + 1) * width]
+    y = np.array([int(want_labels[phi[q]][w][0]) for q in codes for w in range(len(windows))])
+    outputs = np.array(net._activations[-1].tolist())
+    k = net.class_count
+    network_wrong = int((outputs[:, index * k : (index + 1) * k].argmax(axis=1) != y).sum())
+    design: npt.NDArray[np.float64] = np.hstack([feats, np.ones((len(feats), 1))])
+    onehot = np.eye(k)[y]
+    weights: npt.NDArray[np.float64] = np.zeros((design.shape[1], k))
+    m, v = np.zeros_like(weights), np.zeros_like(weights)
+    fit: list[int] = []
+    for step in range(1, steps + 1):
+        z = design @ weights
+        p = np.exp(z - z.max(axis=1, keepdims=True))
+        p /= p.sum(axis=1, keepdims=True)
+        g = design.T @ (p - onehot) / len(y)
+        m, v = 0.9 * m + 0.1 * g, 0.999 * v + 0.001 * g * g
+        weights -= 0.01 * (m / (1 - 0.9**step)) / (np.sqrt(v / (1 - 0.999**step)) + 1e-12)
+        if step % 5000 == 0:
+            fit.append(int(((design @ weights).argmax(axis=1) != y).sum()))
+            if fit[-1] == 0:
+                break
+    rng = np.random.default_rng(seed)
+    u: npt.NDArray[np.float64] = np.zeros((design.shape[1], k))
+    fewest, used = len(y), 0
+    for used in range(1, passes + 1):
+        errors = 0
+        for i in rng.permutation(len(y)):
+            guess = int(np.argmax(design[i] @ u))
+            if guess != y[i]:
+                u[:, y[i]] += design[i]
+                u[:, guess] -= design[i]
+                errors += 1
+        fewest = min(fewest, errors)
+        if errors == 0:
+            break
+    wrong: list[dict[str, Any]] = []
+    for i in np.flatnonzero((design @ weights).argmax(axis=1) != y):
+        distances = np.sqrt(((feats - feats[i]) ** 2).sum(axis=1))
+        own = np.sort(distances[y == y[i]])
+        other = distances[y != y[i]]
+        q = codes[i // len(windows)]
+        wrong.append(
+            {
+                "code": list(q),
+                "state": phi[q],
+                "window": int(i % len(windows)),
+                "answer": int(y[i]),
+                "other": round(float(other.min()), 4),
+                "own": round(float(own[1]), 4) if len(own) > 1 else None,
+            }
+        )
+    return {
+        "network": str(path),
+        "codes": len(codes),
+        "states": len(set(phi.values())),
+        "pairs": len(y),
+        "features": width,
+        "network_wrong": network_wrong,
+        "fit_wrong": fit,
+        "perceptron": {"passes": used, "fewest": fewest, "separable": fewest == 0},
+        "wrong": wrong,
+    }
 
 
 class QueryMachine:
