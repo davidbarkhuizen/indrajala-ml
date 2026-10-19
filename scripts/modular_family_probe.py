@@ -680,6 +680,43 @@ from consolidation/).
   failures) and move-to-front 4's seed 5. It lost move-to-front 4's seeds 0 and 4 to failure A,
   where the control certified them.
 
+Findings (the commitment-control workplan's diagnostic, registered in #851 before its data; a
+probe, its answers written before the data), 2026-10-19; round 1's failure-A runs (word-problem-s3
+seeds 0, 1, 3, 4 and 5, move-to-front-4 seed 3), round 1's cell with one change, `--commitment-from
+6` (every factor's commitment 0 for steps 1-5). Code 6e5d746 (~/code/wt-cc), OPENBLAS_NUM_THREADS=1,
+jebel, 6 at once, 04:14 to 05:13, when the owner stopped it (S3 seeds 0, 1, 3 and 4 at steps 41-45,
+516-558 of 600 epochs, with checkpoints; the reading was complete). Its control is round 1's runs:
+without the flag, S3 seed 0's first 12 log rows repeat round 1's by bits (checked on 6389d26, crate
+afa7204, after the data: `commitment-control/control-bits-check/`; not on the build's commit). Data
+in data/window-recurrent/commitment-control/diagnostic/ (and `diagnostic-certify/`, added on
+pyramidon after it), manifest `diagnostic.sha256` d5262970... (237 files, run from
+commitment-control/).
+
+| run | round 1, state's share at steps 1-5 | the commitment off, steps 1-5 | from step 6, the commitment on |
+| --- | --- | --- | --- |
+| S3 seed 0 | 0.04-0.27 | 0.06, 0.28, 0.41, 0.95, **0.97** | 0.56 at step 6, 0.43 by step 10 |
+| S3 seed 1 | 0.06-0.21 | 0.06-0.31 | one code a factor from step 6 |
+| S3 seed 3 | 0.00-0.22 | 0.06, 0.21, 0.28, **0.95**, 0.15 | 0.13, one code a factor by step 10 |
+| S3 seed 4 | 0.06-0.32 | 0.06-0.30 | 0.24-0.27 |
+| S3 seed 5 | 0.06, then 0.00 | 0.06-0.32, **1.0** at step 5 | **certified at step 6** |
+| move-to-front 4 seed 3 | 0.18-0.38 | 0.04-0.76, **0.87** at step 5 | 0.69 at step 6; 0.94 at step 29, spent (minimised to 62 against 24) |
+
+- **3 of 6 formed a state by step 5's end** (share at least 0.5: S3 seeds 0 and 5, move-to-front 4
+  seed 3), against none of the same runs in round 1. By the registered answer, **the commitment's
+  pull is failure A's cause, and the thermostat (D1 (a)) is worth building.** S3 seed 5, at a share
+  of 0.00 by step 3 in round 1, certified at step 6: recertified in both verdicts (11 codes
+  reached, minimised to 6, snap ratio >= 1.412, logit lead >= 4.2).
+- **The commitment's return at full weight eroded the states it found:** S3 seed 0 fell from 0.97 to
+  0.56 in one step and never recovered; move-to-front 4 seed 3 fell from 0.87 to 0.69 and regained
+  0.94 only by step 29. So the thermostat's ramp back (D2) and its hysteresis are needed, not a
+  phase schedule.
+- **Without the commitment a state can form and still be lost:** S3 seed 3 reached 0.95 at step 4
+  and fell to 0.15 at step 5 with the commitment still off. Forming isn't keeping: the thermostat
+  should restore the commitment once a state has formed (its restore level), not leave it off for a
+  fixed number of steps.
+- Two runs (S3 seeds 1 and 4) formed nothing either way: the commitment isn't failure A's only
+  cause.
+
 Findings (round 2 of the general algebras, stage 4 of docs/general-algebras-workplan.md, E1 as
 amended before its data in #850), 2026-10-18; `n` 5, word-problem-s5 and move-to-front-5, round 1's
 cell unchanged, 600 epochs, seeds 0-5. Code ff2b2f2 (~/code/wt-round2, crate 40a2761),

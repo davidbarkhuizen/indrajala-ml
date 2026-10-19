@@ -18,6 +18,14 @@ pull, so this plan stays deferred: the fix for the division runs is planned apar
 the commitment, unless it is shown to be the cause), its candidates in
 [next-steps.md](next-steps.md), "From the division work".
 
+**The diagnostic's answer (2026-10-19; findings in `scripts/modular_family_probe.py`): 3 of 6
+formed a state with the commitment off for steps 1-5, so by its registered answer the commitment's
+pull is failure A's cause and stage 2, the thermostat, is next** (failure A is bottleneck 1 of
+[bottlenecks.md](bottlenecks.md)). Its readings shape the build: the commitment's return at full
+weight eroded the states found (D2's ramp and hysteresis are needed), and one state formed and was
+lost with the commitment off (it should come back once a state has formed: the restore level).
+Remedy A's interaction (below) is moot for now: A isn't kept (the consolidation plan's results).
+
 **Revisited (2026-10-18, at the owner's request: is it still relevant, would it still be
 useful?). As written, no; re-aimed at failure A, possibly; it stays deferred, re-aimed, its first
 step a diagnostic probe rather than a build.**
