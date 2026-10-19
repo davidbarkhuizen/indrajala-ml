@@ -256,6 +256,37 @@ def test_set_commitments_changes_training_and_the_specs_values_restore_it_by_bit
     assert all(np.array_equal(a, b) for a, b in zip(plain, _fresh_gradients(network, X, labels), strict=True))
 
 
+def _soft(network: WindowRecurrentArrayNetwork) -> list[float | None]:
+    # a temperature for each snapped factor (the commitment-control workplan, stage 3)
+    return [None if f.codes is None else 0.5 + 0.25 * g for g, f in enumerate(network.recurrence.factors)]
+
+
+@pytest.mark.parametrize("recurrence", SNAPPED)
+def test_temperatures_soften_training_only_and_none_restores_it_by_bits(recurrence: str):
+    network = _network(recurrence=RECURRENCES[recurrence])
+    X, labels = _batch(3, examples=8)
+    plain, codes, outputs = _fresh_gradients(network, X, labels), network.state_codes(X), network.forward_windows(X)
+    network.set_temperatures(_soft(network))
+    soft = _fresh_gradients(network, X, labels)
+    assert any(not np.array_equal(a, b) for a, b in zip(plain, soft, strict=True))
+    # inference reads the snapped machine whatever the temperatures (D6)
+    assert network.state_codes(X) == codes
+    assert np.array_equal(network.forward_windows(X), outputs)
+    assert not network.recurrence_layer.soft
+    network.set_temperatures([None] * len(network.recurrence.factors))
+    assert all(np.array_equal(a, b) for a, b in zip(plain, _fresh_gradients(network, X, labels), strict=True))
+
+
+def test_a_temperature_is_refused_for_a_continuous_factor_or_not_above_0():
+    network = _network(recurrence=FACTORED_CROSS)
+    with pytest.raises(AssertionError, match="no codes to soften"):
+        network.set_temperatures([1.0, 1.0, 1.0])
+    with pytest.raises(AssertionError, match="above 0"):
+        network.set_temperatures([0.0, None, 1.0])
+    with pytest.raises(AssertionError, match="a temperature per factor"):
+        network.set_temperatures([1.0])
+
+
 def test_a_consolidation_is_refused_unless_it_fits_the_recurrence():
     with pytest.raises(AssertionError, match="every factor snapped"):
         _network(recurrence=FACTORED_CROSS).consolidate({(1, 0, 0): (0, 0, 0)})

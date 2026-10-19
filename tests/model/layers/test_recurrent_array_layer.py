@@ -254,6 +254,43 @@ def test_the_codes_losses_match_central_differences(rng: np.random.Generator):
     assert layer.loss_batch(weight) == pytest.approx(codebook() + commitment(), rel=1e-14)
 
 
+def test_soft_codes_losses_and_mix_match_central_differences(rng: np.random.Generator):
+    # the soft-to-hard quantiser (the commitment-control workplan, stage 3): sum(G * q) through the
+    # weights, the commitment to sg[q] and the soft codebook loss with the weights and h held
+    layer = CodesArrayLayer(4, S, commitment=0.25)
+    layer.draw(rng)
+    H, G = rng.normal(size=(N, S)), rng.normal(size=(N, S))
+    weight, temperature = 0.5, 0.8
+    Q = layer.forward_batch(H, temperature).copy()
+    W = layer._W.copy()  # pyright: ignore[reportPrivateUsage, reportOptionalMemberAccess]
+    H0 = H.copy()  # sg[h] in the codebook loss: _numeric moves H in place
+    assert np.allclose(W.sum(axis=1), 1.0)
+    assert layer.indices.tolist() == layer.nearest(H).tolist()
+
+    def total() -> float:
+        probe = CodesArrayLayer(4, S)
+        probe.E = layer.E
+        mixed = float(np.sum(G * probe.forward_batch(H, temperature)))
+        committed = 0.25 * np.sum((H - Q) ** 2)
+        codebook = np.sum(W[:, :, np.newaxis] * (H0[:, np.newaxis, :] - layer.E[np.newaxis, :, :]) ** 2)
+        return mixed + float(weight * (committed + codebook))
+
+    expected_loss = float(weight * (0.25 * np.sum((H - Q) ** 2))) + float(
+        weight * np.sum(W[:, :, np.newaxis] * (H[:, np.newaxis, :] - layer.E[np.newaxis, :, :]) ** 2)
+    )
+    assert layer.loss_batch(weight) == pytest.approx(expected_loss, rel=1e-12)
+    dH = layer.backward_batch(G, weight)
+    _close(_numeric(total, layer.E), layer.grad_E)
+    _close(_numeric(total, H), dH)
+
+
+def test_soft_codes_cool_to_the_snap(rng: np.random.Generator):
+    layer = CodesArrayLayer(4, S)
+    layer.draw(rng)
+    H = rng.normal(size=(N, S))
+    assert np.allclose(layer.forward_batch(H, 1e-6), layer.forward_batch(H), atol=1e-12)
+
+
 def test_a_target_moves_the_commitments_pull_and_leaves_the_codebooks(rng: np.random.Generator):
     # the code-consolidation workplan, D1: commitment * ||h - sg[e_target]||^2 moves h; the
     # codebook loss still moves each chosen code toward its h

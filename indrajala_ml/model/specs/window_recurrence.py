@@ -27,6 +27,7 @@ validate_window_recurrent (spec_validation.py) checks a window and its recurrenc
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -98,6 +99,20 @@ def validate_consolidation(recurrence: WindowRecurrence, consolidation: Consolid
             assert len(code) == len(counts) and all(0 <= i < m for i, m in zip(code, counts, strict=True)), (
                 f"a consolidation's codes are a code index per factor, below the code counts {counts}; got {code}"
             )
+
+
+def check_temperatures(factors: Sequence[Any], temperatures: Sequence[float | None]) -> None:
+    """
+    Each factor's codes' temperature in training, on a recurrence layer's factor parts (either
+    backend's; the commitment-control workplan, stage 3): None (hard) or above 0 and finite; a
+    continuous factor's None.
+    """
+    assert len(temperatures) == len(factors), "a temperature per factor"
+    for factor, temperature in zip(factors, temperatures, strict=True):
+        if factor.codes is None:
+            assert temperature is None, "a continuous factor has no codes to soften"
+        elif temperature is not None:
+            assert math.isfinite(temperature) and temperature > 0.0, "a temperature above 0 and finite"
 
 
 def set_commitments(factors: Sequence[Any], commitments: Sequence[float]) -> None:

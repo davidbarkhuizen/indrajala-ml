@@ -832,6 +832,68 @@ def effective_codes(net: Any, rows: Sequence[Sequence[tuple[Any, Any]]]) -> list
     return effective
 
 
+@dataclass(frozen=True)
+class Anneal:
+    """
+    The commitment-control workplan's annealing (stage 3, the soft-to-hard quantiser; D6-D8): each
+    snapped factor's codes soft in training at `start` halved every `halving` epochs trained, its
+    commitment 0, until `share` of the sample's windows weight one code above `hard`; then hard for
+    good, its commitment ramped back to its specs' over `ramp` epochs. A factor's level is 0 (soft)
+    to `ramp` (hard, its specs' commitment).
+    """
+
+    start: float = 1.0
+    halving: int = 10
+    hard: float = 0.99
+    share: float = 0.99
+    ramp: int = 20
+
+    def temperature(self, spent: int) -> float:
+        """The soft factors' temperature after `spent` epochs trained in all."""
+        return self.start * 0.5 ** (spent // self.halving)
+
+    def levels(self, levels: Sequence[int], hardness: Sequence[float | None]) -> list[int]:
+        """Each factor's next level from its level and its hardness (None: continuous, or already hard)."""
+        following: list[int] = []
+        for level, hard in zip(levels, hardness, strict=True):
+            if level > 0:
+                following.append(min(level + 1, self.ramp))
+            else:
+                following.append(1 if hard is not None and hard >= self.share else 0)
+        return following
+
+    def commitments(self, levels: Sequence[int], full: Sequence[float]) -> list[float]:
+        """Each factor's commitment at its level, a share of its specs'."""
+        return [c * level / self.ramp for level, c in zip(levels, full, strict=True)]
+
+
+def hardness(
+    net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], temperatures: Sequence[float | None], hard: float
+) -> list[float | None]:
+    """
+    Each soft factor's share of every window's cell output, over the rows given (lists of windows, one
+    length each), whose largest weight at its temperature (the codes' softmax, as training's) is above
+    `hard`; None for a factor at None (annealing's test, D8: the network's own, never the target's).
+    """
+    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
+    above = [0] * len(temperatures)
+    total = 0
+    for batch in rows:
+        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
+        for cell in cells[1:]:
+            H = np.array(cell.tolist(), dtype=float)
+            total += len(H)
+            for g, (factor, t) in enumerate(zip(net.recurrence_layer.factors, temperatures, strict=True)):
+                if t is None:
+                    continue
+                E = np.array(factor.codes.E.tolist(), dtype=float)
+                h = H[:, starts[g] : starts[g] + E.shape[1]]
+                D = np.sum((h[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
+                A = np.exp(-(D - D.min(axis=1)[:, np.newaxis]) / t)
+                above[g] += int(np.sum(A.max(axis=1) / A.sum(axis=1) > hard))
+    return [None if t is None else above[g] / max(total, 1) for g, t in enumerate(temperatures)]
+
+
 @dataclass
 class Place:
     """
@@ -839,7 +901,8 @@ class Place:
     in it (0: the step just begun), the epochs trained in all, the step's best screen and epochs
     since, its rate, forks and the fork's peak, the last screen's answer kinds, the step's undone
     updates and the guard's frozen epochs; the seconds trained, and the log's length in bytes; and
-    A's table, (duplicate, representative) pairs (training state, not saved with the network).
+    A's table, (duplicate, representative) pairs (training state, not saved with the network); and
+    each factor's levels under the thermostat or annealing.
     """
 
     step: int
@@ -859,6 +922,7 @@ class Place:
     thermostat: list[int] = field(default_factory=list[int])  # each factor's level (Thermostat), with one
     machine_best: list[float] = field(default_factory=list[float])  # R3: the step's kept machine's key, with it
     words: list[list[int]] = field(default_factory=list[list[int]])  # R4: the last diagnosis's counterexamples
+    anneal: list[int] = field(default_factory=list[int])  # each factor's level (Anneal), with it
 
 
 def _run_identity(
@@ -883,6 +947,7 @@ def _run_identity(
     thermostat: Thermostat | None = None,
     keep_machine: bool = False,
     counterexamples: float | None = None,
+    anneal: Anneal | None = None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -909,6 +974,7 @@ def _run_identity(
         **({"thermostat": repr(thermostat)} if thermostat is not None else {}),
         **({"keep_machine": True} if keep_machine else {}),
         **({"counterexamples": counterexamples} if counterexamples is not None else {}),
+        **({"anneal": repr(anneal)} if anneal is not None else {}),
     }
 
 
@@ -952,6 +1018,7 @@ def run(
     thermostat: Thermostat | None = None,
     keep_machine: bool = False,
     counterexamples: float | None = None,
+    anneal: Anneal | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -978,7 +1045,9 @@ def run(
     a row logs the step's best screen (`restore`) and the restored network's (`restored`).
     `commitment_from` J (the commitment-control workplan's diagnostic, D1 (b)) trains every step
     before J with each factor's commitment 0 and from J with its specs' (set before each epoch, so a
-    fork's or a restore's loaded network has it too).
+    fork's or a restore's loaded network has it too). `anneal` (Anneal) sets each snapped factor's
+    temperature and commitment before each epoch from its level, read on the step's screen at its
+    shortest, middle and longest lengths, a row's `anneal` logging them.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -1013,6 +1082,7 @@ def run(
         thermostat,
         keep_machine,
         counterexamples,
+        anneal,
     )
     assert not (keep_machine and restore_best), "the step's kept machine (R3) or its best screen, not both"
     assert counterexamples is None or 0 < counterexamples < 1, (
@@ -1021,6 +1091,9 @@ def run(
     assert thermostat is None or (commitment_from is None and not consolidate), (
         "the thermostat sets the commitment's weight itself: not with --commitment-from, nor with A, whose target "
         "it moves (the commitment-control workplan)"
+    )
+    assert anneal is None or (thermostat is None and commitment_from is None and not consolidate), (
+        "annealing sets the commitment's weight itself, and its soft codes take no consolidation's target"
     )
     d = mr.word_length(encoding.task.machine) if consolidate else 0
     table: dict[tuple[int, ...], tuple[int, ...]] = {}  # A's, from the last diagnosis
@@ -1066,6 +1139,12 @@ def run(
     commitments = [0.0 if f.codes is None else f.codes.commitment for f in net.recurrence.factors]  # the specs'
     counts = [0 if f.codes is None else f.codes.count for f in net.recurrence.factors]
     levels = list(place.thermostat) if place is not None and place.thermostat else [0] * len(counts)  # off at the start
+    snapped = [f.codes is not None for f in net.recurrence.factors]
+    annealed = (  # Anneal's levels: soft at the start (a continuous factor's at the ramp's end, never soft)
+        list(place.anneal)
+        if place is not None and place.anneal
+        else [0 if s else (anneal.ramp if anneal is not None else 0) for s in snapped]
+    )
     walked_d = mr.word_length(encoding.task.machine)  # R3 and R4's walks' d, the task's
     words: list[list[int]] = [list(w) for w in place.words] if place is not None else []
     machine_kept = out / "machine-best.network.json"
@@ -1092,6 +1171,7 @@ def run(
             list(levels) if thermostat is not None else [],
             list(machine_best),
             [list(w) for w in words],
+            list(annealed) if anneal is not None else [],
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -1159,6 +1239,26 @@ def run(
                 net.set_commitments(beta)
                 thermo = {
                     "thermostat": {"effective": [round(e, 2) for e in effective], "beta": [round(b, 4) for b in beta]}
+                }
+            if anneal is not None:
+                # the network about to train (a fork's restored one included), its soft factors' hardness read
+                # at the temperature they trained at, on the step's screen at its shortest, middle and longest
+                temperature = anneal.temperature(spent)
+                soft = [temperature if s and level == 0 else None for s, level in zip(snapped, annealed, strict=True)]
+                hard = hardness(net, [screens[n] for n in sorted({1, (step + 1) // 2, step})], soft, anneal.hard)
+                annealed = anneal.levels(annealed, hard)
+                temperatures = [
+                    temperature if s and level == 0 else None for s, level in zip(snapped, annealed, strict=True)
+                ]
+                beta = anneal.commitments(annealed, commitments)
+                net.set_temperatures(temperatures)
+                net.set_commitments(beta)
+                thermo = {
+                    "anneal": {
+                        "temperature": temperatures,
+                        "hard": [None if h is None else round(h, 4) for h in hard],
+                        "beta": [round(b, 4) for b in beta],
+                    }
                 }
             guarded: dict[str, Any] = {}
             if guarding is not None:

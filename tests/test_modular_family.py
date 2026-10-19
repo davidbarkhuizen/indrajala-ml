@@ -524,6 +524,15 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "fork": RESUMED_FORK,
         "thermostat": mf.Thermostat(floor=1.5, restore=0.5, ramp=3),
     },
+    # annealing (the commitment-control workplan's stage 3), cooling fast enough to harden within the run
+    "annealed": {
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 2,
+        "budget_epochs": 6,
+        "fork": RESUMED_FORK,
+        "anneal": mf.Anneal(start=0.5, halving=1, ramp=2),
+    },
 }
 
 
@@ -593,6 +602,10 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
         assert any("restore_machine" in r for r in whole[0])
     elif kind == "thermostat":
         assert all("thermostat" in r for r in whole[0] if r.get("epoch", 0) > 0 and "end" not in r)
+    elif kind == "annealed":
+        annealed = [r["anneal"] for r in whole[0] if r.get("epoch", 0) > 0 and "end" not in r and "fork" not in r]
+        assert annealed and annealed[0]["temperature"] == [0.5]
+        assert annealed[-1]["temperature"] == [None] and annealed[-1]["beta"][0] > 0  # hardened, ramping back
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":
@@ -999,6 +1012,44 @@ def test_effective_codes_are_two_to_the_entropy_of_each_factors_use():
 
     rows = [[((0,), None), ((1,), None)]]
     assert mf.effective_codes(Coded(), rows) == pytest.approx([4.0, 1.0])
+
+
+def test_annealing_halves_its_temperature_hardens_for_good_and_ramps_the_commitment_back():
+    anneal = mf.Anneal(start=1.0, halving=10, ramp=4)
+    assert [anneal.temperature(n) for n in (0, 9, 10, 25)] == [1.0, 1.0, 0.5, 0.25]
+    levels = [0, 0, 4]
+    trace: list[list[int]] = []
+    for hard in ([0.5, 0.995, None], [0.995, 0.2, None], [0.1, 0.1, None], [0.1, 0.1, None], [0.1, 0.1, None]):
+        levels = anneal.levels(levels, hard)
+        trace.append(levels)
+    # factor 1 hard at once, factor 0 a step later; neither softens again; a level at the ramp stays there
+    assert trace == [[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 4, 4], [4, 4, 4]]
+    assert anneal.commitments([0, 2, 4], [0.25, 0.25, 0.5]) == [0.0, 0.125, 0.5]
+
+
+def test_hardness_is_the_share_of_windows_whose_largest_weight_passes_the_test():
+    net = mf.network(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, mf.BEFORE_STATE)
+    encoding = mf.Encoding(5, mf.FAMILY)
+    rows = [[encoding.example(encoding.draw(2, random.Random(i))) for i in range(6)]]
+    assert mf.hardness(net, rows, [None], 0.99) == [None]
+    cold, hot = mf.hardness(net, rows, [1e-9], 0.99)[0], mf.hardness(net, rows, [1e9], 0.99)[0]
+    assert cold == 1.0 and hot == 0.0
+
+
+def test_an_annealed_run_logs_each_epochs_temperatures_hardness_and_commitments(tmp_path: Path):
+    settings = mf.Settings(epoch_examples=32, max_epochs=3, screen=4, cases=4, lengths=(2,), long=(3,))
+    anneal = mf.Anneal(start=1.0, halving=1, ramp=2)
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path, settings, cap=2, budget_epochs=3, anneal=anneal)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    epochs = [r["anneal"] for r in rows if r.get("epoch", 0) > 0 and "end" not in r]
+    assert epochs and all(len(r["temperature"]) == len(r["hard"]) == len(r["beta"]) == 1 for r in epochs)
+    assert all((r["temperature"][0] is None) == (r["beta"][0] > 0) for r in epochs)  # soft, uncommitted
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["anneal"] == repr(anneal)
+    with pytest.raises(AssertionError, match="annealing sets the commitment"):
+        mf.run(
+            mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path / "x", settings, cap=2, anneal=anneal, consolidate=True
+        )
 
 
 def test_a_thermostat_run_logs_each_epochs_effective_codes_and_commitments(tmp_path: Path):
