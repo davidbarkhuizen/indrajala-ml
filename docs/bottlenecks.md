@@ -21,6 +21,20 @@ going wrong on codes beyond an exact core, and the answers not being separable o
 | **plan** | [commitment-control-workplan.md](commitment-control-workplan.md) (deferred, re-aimed at failure A) | [code-consolidation-workplan.md](code-consolidation-workplan.md) (paused, its remedies spent) | [window-branches-workplan.md](window-branches-workplan.md) (stage 6 running) |
 | **next** | write the diagnostic's findings; build the usage thermostat (D1 (a): the commitment off while a factor's code use is low, back on once a state has formed), its probes on S3, move-to-front 4 and 5 | a diagnosis before another remedy: on B2's failures, where each extra code first appears (the step, the transition, the code it leaves), and whether the codes training visits are the ones that break | B1 (branches) against W2 (size) tonight; then division `p` 17 with the window that wins, registered before its data, for whether the cure holds as the machine grows |
 
+## The common measure: one code, one state (2026-10-19)
+
+Every certified network has each of its codes standing for exactly one target state (pairs per
+code 1.0, `breaks`); each bottleneck is a way of missing that: no state (1), codes standing for
+several states (2), an exact state with wrong answers (3). Read across W1, L3, B1 (mid-run), B2 and
+round 2 in [one-code-one-state-workplan.md](one-code-one-state-workplan.md) ("Why"), which plans
+the remedies: the answers' own branch with the factors on the shared window (3), pairs per code
+logged and used to keep the best machine, counterexample training (2), the thermostat (1).
+
+- **B2 (2026-10-19): the branches moved 1 and 2 in one seed each** (S5 1 of 6, move-to-front-5
+  1 of 6, against 0 of 6 each in round 2): works, gain undecided.
+- **The branches at width 16 move division from 3 to 2** (B1 mid-run: codes standing for 11-81
+  states where L3's stood for one): splitting the factors' path starved their transitions.
+
 ## How they combine
 
 - **One cell can hit more than one.** Move-to-front 5's seeds split between 1 and 2 (round 2: four
@@ -41,3 +55,5 @@ going wrong on codes beyond an exact core, and the answers not being separable o
 - 2026-10-19: written. 3 is cured on division at 13 by width (W1); the branches' answer (B1,
   W2) tonight. 1 has a cause shown (the commitment) and a fix to build. 2 has no remedy that
   works and no shown cause.
+- 2026-10-19: the common measure (pairs per code) and its workplan; B2 read (1 of 6 on each
+  cell).
