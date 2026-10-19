@@ -196,6 +196,29 @@ C9''s collapsed factors, which no longer exist; failure A's evidence re-sets the
   0 of 6 with fewer failure-A runs than round 2's four still shows the thermostat moving
   bottleneck 1. Feasibility: round 2's (`q` 120, 32 codes a factor, `m` 1,024, cap 1,143).
 
+**The probe's answer (2026-10-19; findings in `scripts/modular_family_probe.py`): code use is the
+wrong restore signal, so C3 doesn't launch as registered.** 0 of 6 certified, 2 formed a state (one
+lost); effective codes reach half the codebook within 2-3 steps while the state's share is about
+0.2, so the commitment returns before a state forms. The diagnostic's fixed schedule (off for steps
+1-5) did better: 3 of 6 formed, one certified, all at the step where the answers came right.
+
+- **D2'' (2026-10-19, before its probe's data): off below 3 effective codes, as D2'; from off,
+  restored once the step's best screen reaches `restore_screen` (0.95), in place of half the
+  codebook; then ramped back over 20 epochs as D2' (`run --thermostat --thermostat-screen 0.95`).** The screen is the answers' accuracy on the
+  step's words (the network answering its training lengths), an inputs-and-answers signal like the
+  fork's trigger, never the target's states. With the final zero window, whose answer needs the
+  state, a screen near 1 needs a state.
+  - (a) *Chosen.* The step's screen at 0.95. Pros: it is when the diagnostic's states formed;
+    general (every task has a screen); still per step, so a later step's new lengths can switch it
+    off again (below the floor) and back. Cons: a step whose screen never reaches 0.95 trains
+    without the commitment throughout (near ties: the certificate's verdicts still judge them).
+  - (b) Restore at a fixed step (the diagnostic's schedule). Cons: blind to the run; 5 suited S3 by
+    chance.
+  - (c) The network's own machine (its `d`-equivalence groups) stabilising. Pros: no answers used.
+    Cons: groups stabilise on wrong machines too (consolidation's reading).
+- **Its probe:** the same six runs with D2'', its expectation written before its data; then C3 as
+  registered, with D2'' in place of D2'.
+
 ## Stages (deferred)
 
 1. **This plan.**
