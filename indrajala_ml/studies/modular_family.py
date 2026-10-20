@@ -572,7 +572,8 @@ def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
 def _anneal_at(rows: Sequence[Mapping[str, Any]], row: Mapping[str, Any]) -> Mapping[str, Any]:
     """The anneal at a diagnosis: its own, or the last epoch's before it (a step's end logs none)."""
     at = next(i for i, r in enumerate(rows) if r is row)
-    return next((r["anneal"] for r in reversed(rows[: at + 1]) if "anneal" in r), {})
+    none: Mapping[str, Any] = {}
+    return next((r["anneal"] for r in reversed(rows[: at + 1]) if "anneal" in r), none)
 
 
 def crucible_course(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> dict[str, Any]:
@@ -598,13 +599,15 @@ def crucible_course(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> dic
         lost = next((row for row in later if sum(_codes(row)) < drop * sum(_codes(best))), None)
 
     def anneal(row: Mapping[str, Any] | None) -> dict[str, Any]:
-        a = {} if row is None else _anneal_at(rows, row)
+        a: Mapping[str, Any] = {} if row is None else _anneal_at(rows, row)
         if not a:
             return {}
+        couplings: list[float] = a["coupling"]
+        temperatures: list[float] = a["temperature"]
         return {
             "phase": a["phase"],
-            "coupling": round(sum(a["coupling"]) / len(a["coupling"]), 3),
-            "temperature": float(np.mean(a["temperature"])),
+            "coupling": round(sum(couplings) / len(couplings), 3),
+            "temperature": float(np.mean(temperatures)),
         }
 
     end = outcome(rows, drop)
