@@ -165,6 +165,21 @@ state, leave it there long enough for the activation energy of the various state
 slowly cool to accumulate structure ... and allow the state to crystallize over time". D13-D20 replace
 D5, D7' and D9 for option 1; D4, D6, D8's hardness test, D10-D12 stand.
 
+**Vocabulary (agreed with the owner, 2026-10-20).** Rose's terms where his definitions hold exactly
+(deterministic annealing on fixed data): *temperature*, *critical temperature* (`2 lambda_max`),
+*phase transition* (a split of the codes); the melting point and the last transition are the first and
+last of the measured curve's transitions (D21). The rest is an explicit analogy with a crystallising
+material, not literature's terms:
+
+| Term | The profile | The codes and the state |
+|---|---|---|
+| crystallisation | the whole profile, the warm-up's end to hard codes | (the anneal) |
+| heating | the temperature doubling to `T_hot`, the coupling 0 | the codes soften |
+| melt | the hold above the melting point | the codes merge toward the mean (the lattice dissolves); the forward path carries the cells' outputs (coupling 0, D25) |
+| nucleation | the cool passing the melting point | the first phase transition: the first codes part |
+| growth | the cool down to the last transition | the later phase transitions; the coupling rises to 1, locking the state onto the codes |
+| solid | hard codes, coupling 1 | the crystal; its certificate says whether it is the target machine |
+
 - **D13. The first panel is void, not a verdict:** its anneal never ran (every factor hard within one
   epoch of the warm-up's end), so D12 isn't applied to it; option 1 is retried until its profile runs as
   designed, then decided by D12.
