@@ -22,16 +22,16 @@ going wrong on codes beyond an exact core, and the answers not being separable o
 | **what fails** | no state forms: 2-6 codes a factor, the state's share 0.06-0.35, the machine minimising to 3-6 | a state forms with an exact core (each state's first code breaks 0-4% of its transitions), but longer words reach many more codes, whose transitions break | the machine is exact, but some answers on it are wrong |
 | **where seen** | S3 (round 1, 5 of 6 failures); move-to-front 4 (round 1, P1: seeds 0, 3, 4); move-to-front 5 (round 2, 4 of 6; B2's first three seeds) | S4's near miss (round 1); random-4-0, random-q16-0 (2b, A, B, P2); S5 (round 2: 385-748 codes for 120 states, minimised to 175-842; B2's first three seeds: 425-737) | division `p` 13 (L3 seed 5 only: its 169-state machine exact, 15-22 of 1,521 answers wrong; L3's other five failures are in 2) |
 | **cause, as far as shown** | the commitment's pull: with nothing yet distinguishing the states, a constant meets it most cheaply. Diagnostic (2026-10-19, registered): with the commitment off for steps 1-5, 3 of 6 failure-A runs formed a state (0.87, 0.97, 1.0) and S3 seed 5 certified; the states eroded when it returned at step 6 | not duplicates: an extra code's outputs are wrong within `d` tokens, so the network's own equivalence can't merge them (A's reading). Not rarity (random-4-0). Where they first arise is unshown | a crowded window: the answers and every factor's transition read one 16-wide stream; its features don't linearly separate the answers (the separability check) |
-| **tried** | the commitment off early (the diagnostic: forms states, doesn't keep them) | A, consolidation (0 of 6, pulled little); B, the long tail (0 of 6, a longer exact prefix in 2 seeds); P2, restore the step's best (0 of 6: the best was never a machine); P1, the guard (fewer certified) | readout-tune (15 left: not an under-trained readout); W1, the window 32 wide: **5 of 6 against 0 of 6, cured** |
-| **plan** | [commitment-control-workplan.md](commitment-control-workplan.md) (deferred, re-aimed at failure A) | [code-consolidation-workplan.md](code-consolidation-workplan.md) (paused, its remedies spent) | the window branches workplan (retired 2026-10-19, not adopted); R1 in [one-code-one-state-workplan.md](one-code-one-state-workplan.md) |
-| **next** | write the diagnostic's findings; build the usage thermostat (D1 (a): the commitment off while a factor's code use is low, back on once a state has formed), its probes on S3, move-to-front 4 and 5 | a diagnosis before another remedy: on B2's failures, where each extra code first appears (the step, the transition, the code it leaves), and whether the codes training visits are the ones that break | R1's probes (the answers' own branch, at 16 and 32); then division `p` 17 at width 32, registered before its data, for whether the cure holds as the machine grows |
+| **tried** | the commitment off early (the diagnostic: forms states, doesn't keep them); the thermostat (0 of 6 twice; states formed and eroded at its return); annealing as built (0 of 8: codes merged above the critical temperature); **the commitment never on: 4 of 6 failure-A runs certified, but harm where it worked** (S4, division at 32) | A, consolidation (0 of 6, pulled little); B, the long tail (0 of 6, a longer exact prefix in 2 seeds); P2, restore the step's best (0 of 6: the best was never a machine); P1, the guard (fewer certified); **R3/R4 at 32 (C2): S5 2 of 6, move-to-front-5 3 of 6, against 0 of 6 each: works** | readout-tune (15 left: not an under-trained readout); W1, the window 32 wide: **5 of 6 against 0 of 6, cured** |; R1, the answers' own branch: 0 of 6 at 16 and at 32 (harm on division at 32)
+| **plan** | [state-formation-workplan.md](state-formation-workplan.md), option 1 (the annealed initial snap: a continuous warm-up, codes from the states seen, cooled from the critical temperature) and option 2 (cell noise) | the same plan, option 3 (the rotation trick); R3/R4 an option | width 32, the base |
+| **next** | the plan's stage 2: Rose's critical temperature on annealing's merged networks, Zhao et al.'s effective dimension on the failure-A runs | after option 1 | division `p` 17 at width 32 (not planned) |
 
 ## The common measure: one code, one state (2026-10-19)
 
 Every certified network has each of its codes standing for exactly one target state (pairs per
 code 1.0, `breaks`); each bottleneck is a way of missing that: no state (1), codes standing for
 several states (2), an exact state with wrong answers (3). Read across W1, L3, B1 (mid-run), B2 and
-round 2 in [one-code-one-state-workplan.md](one-code-one-state-workplan.md) ("Why"), which plans
+round 2 in `git show df1dcac:docs/one-code-one-state-workplan.md` ("Why"), which plans
 the remedies: the answers' own branch with the factors on the shared window (3), pairs per code
 logged and used to keep the best machine, counterexample training (2), the thermostat (1).
 
@@ -72,3 +72,9 @@ logged and used to keep the best machine, counterexample training (2), the therm
 - 2026-10-19: the window branches' stage 6 read and the plan retired (not adopted: harm on S4).
   Division at width 16 was mostly 2, not 3 (L3's other five failures read). R3 and R4's probe
   certified S5 seed 1, a seed that failed in round 2 and B2: the first move on 2.
+- 2026-10-20: the night's results (the probe script's findings): **1** forms with the commitment never
+  on (4 of 6) but that harms where it worked, so the commitment hurts before a state forms and helps
+  after (Zhao et al. 2026); annealing as built merged its codes (Rose 1998's critical temperature);
+  **2** moved with R3/R4 at 32 (5 of 12); R1 shelved. The owner abandoned the open plans and set
+  [state-formation-workplan.md](state-formation-workplan.md): the literature review's options, one at
+  a time.

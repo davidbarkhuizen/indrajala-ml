@@ -89,7 +89,7 @@ existence runs supply those tasks and their logs.
   **Owner, 2026-10-18: round 2 is deferred, not dropped, until the random class passes round 1**
   (a working cell at `n` 3 and 4): its failures are read first (D9), and a fix is registered as a
   new experiment (round 1's settings stay as registered). Stages 5-7 replay round 2's `n` 5 cells,
-  so they wait with it. The random class's failures and their fix: docs/code-consolidation-workplan.md.
+  so they wait with it. The random class's failures and their fix: `git show df1dcac:docs/code-consolidation-workplan.md`.
   **Owner, 2026-10-18, registered here before round 2's data: the random class is set aside, and
   round 2 goes on without it.** Neither remedy rescued a random machine at 16 states (stage 2b of
   the consolidation plan: the control, B and A each 0 of 6 on random-q16-0, every run's near

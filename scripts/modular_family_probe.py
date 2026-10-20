@@ -519,7 +519,7 @@ round1-seed5-jebel/).
   answers label 2, so step 1 passes on one code and all six runs stay there, spent at step 56 with
   the worst answer 0.633 from step 1. Recorded, not fixed here; the fix (D3, `s0`) is in the
   consolidation workplan's arms, a new registered experiment.
-- **Random-4-0's six failures are one mechanism** (D9, docs/code-consolidation-workplan.md, "Why"):
+- **Random-4-0's six failures are one mechanism** (D9, `git show df1dcac:docs/code-consolidation-workplan.md`, "Why"):
   an inexact core of first codes and extra codes reached by longer words, whose transitions break
   far more often; best steps 8-15, worst answer at best 0.86-0.96, four of six collapsing after it.
   S4's near miss (seed 0, 0.999 at step 13) has the same signature around an exact 24-code core;
@@ -533,7 +533,7 @@ round1-seed5-jebel/).
   consolidation workplan tests both remedies (A, consolidation; B, longer words) with D3 in every
   arm, after its B-origins probes (stage 2b).
 
-Findings (B's origins, stage 2b of docs/code-consolidation-workplan.md; probes, their answers
+Findings (B's origins, stage 2b of `git show df1dcac:docs/code-consolidation-workplan.md`; probes, their answers
 written before the data), 2026-10-18; round 1's cell (as above), 600 epochs, seeds 0-2, on four
 random machines with random-4's tokens and classes. Code 1496113, OPENBLAS_NUM_THREADS=1, jebel, 6
 at once, 11:07 to 12:36 (a re-launch after a power cut; the first launch's three certified runs
@@ -564,7 +564,7 @@ consolidation/; `certify/` and `reading/` added on pyramidon after it).
 - **Next:** remedy B (`--long-tail 4`) against the control on random-q16-0, seeds 0-5, registered in
   the plan's stage 2b before its data.
 
-Findings (B and then A on random-q16-0, stage 2b of docs/code-consolidation-workplan.md; probes,
+Findings (B and then A on random-q16-0, stage 2b of `git show df1dcac:docs/code-consolidation-workplan.md`; probes,
 their answers written before the data), 2026-10-18; round 1's cell, 600 epochs, seeds 0-5, three
 arms on one commit (D5): the control, B (`--long-tail 4`) and A (`--consolidate`, `d` 2). Code
 0b4a6b9 (~/code/wt-bq16, its own venv), OPENBLAS_NUM_THREADS=1, jebel, 6 at once: the control 12:39
@@ -643,7 +643,7 @@ pyramidon after it).
   fewer codes on one factor (17-18 of 38 in three seeds). Seed 5 came nearest of any run at 13: worst
   answer 0.994, sampled accuracy 0.99 at 48, its machine minimising to 172 against 169.
 
-Findings (P2, A with the step's best restored, stage 2c of docs/code-consolidation-workplan.md; a
+Findings (P2, A with the step's best restored, stage 2c of `git show df1dcac:docs/code-consolidation-workplan.md`; a
 probe, its answers written before the data), 2026-10-18; random-q16-0, 2b's cell with `--consolidate
 --restore-best`, seeds 0-5, 600 epochs. Code b5f9a05 (~/code/wt-p2, its own venv, crate 40a2761),
 OPENBLAS_NUM_THREADS=1, jebel, 6 at once, 17:44 to 18:46. Its control is 2b's A arm: A's first 15
@@ -664,7 +664,7 @@ consolidation/; the readout added on pyramidon after it).
   Keeping a near solution doesn't make it a machine. The extra codes are wrong, as A's reading
   found.
 
-Findings (P1, A with the certificate guard, stage 2c of docs/code-consolidation-workplan.md; a
+Findings (P1, A with the certificate guard, stage 2c of `git show df1dcac:docs/code-consolidation-workplan.md`; a
 probe, its answers written before the data), 2026-10-19; round 1's cell with `--consolidate --guard
 both` (each seed unguarded and guarded), word-problem-s4 and move-to-front-4, seeds 0-5, 600
 epochs. Code bab7690 (crate 7df828d, its own venv), OPENBLAS_NUM_THREADS=1, stone (i7-1255U), 6
@@ -903,6 +903,59 @@ division-ladder/l3/breaks/ for L3's five failures), manifest `stage6-breaks.sha2
   but B3 shows harm on S4, so the branches stay an option (`--branches`). What they changed:
   nothing width doesn't do on division; one seed each on the `n` 5 cells; harm on S4. The base
   window is width 32 (the one-code-one-state workplan's D4', C0 running).
+Findings (the night of 2026-10-19 to 20: the thermostat's second probe, annealing, the commitment never
+on, C0, C2 and R1; each registered or its expectation written in its script before its data; the
+owner then abandoned the plans these served, 2026-10-20, so the stopped runs are read as they stand).
+Data under data/window-recurrent/: commitment-control/thermostat-probe-2/ (manifest
+`thermostat-probe-2.sha256` 88a1382d..., 240 files), anneal-probe/ (`anneal-probe.sha256` d36128ae...,
+386; arm 2's in `stone/`), never-probe/ (`never-probe.sha256` ccb53e4c..., 244), never-r34/
+(6cf4aa9a..., 90), never-harm/ (81a518fc..., 74), never-scorecard/ (11253ceb..., 98);
+one-code-one-state/c0/ (`c0.sha256` f40f8b6a..., 973), c2/ (56cd3173..., 419), r1-probe/
+(8acdb953..., 239), r1-probe-32/ (67e83466..., 224); each manifest run from its parent directory.
+Every certificate below recertified on pyramidon in both verdicts (`certify/`, `certify.log`).
+
+- **The thermostat's second probe (D2'', `--thermostat --thermostat-screen 0.95`; round 1's six
+  failure-A runs; 1425fe9, pyramidon, 16:16 to 19:31): 0 of 6 certified; 4 of 6 formed a state**
+  (best shares 0.62-0.74: S3 seeds 3, 4, 5, move-to-front-4 seed 3) **and every one eroded within 1-2
+  steps of the commitment's return** (ends 0.01-0.10 on 3-5 codes). Not its registered success; the
+  thermostat retired (the owner's choice, made before).
+- **Annealing (`--anneal`, the commitment-control workplan's stage 3, D6-D11; #886):** arm 1 (the six
+  runs at width 16; cf036ab, crate a3e7604, pyramidon, 19:32 to 23:49; control: round 1 repeated by
+  bits, 12 rows) **0 of 6, 1 formed** (move-to-front-4 seed 3, 0.537): the factors hardened at steps
+  2-5 before any state, the commitment ramped back, the runs ended as round 1's. Arm 2 (move-to-front-5
+  seeds 0, 1 at width 32; 8e88c9d, stone, 18:26 to 22:51; control: C0 repeated by bits, 12 rows) **0 of
+  2, none formed** (0.466, 0.389; frozen from step 6 on 15 and 9 codes). **Arm 2's codes merged:**
+  23-27 of a factor's 32 codes identical (squared distance under 1e-6) by step 2-3, hardness stalled
+  near 0.30 until `tau` 1/64: deterministic annealing above its critical temperature (Rose 1998; the
+  literature review, 2026-10-20). Not a remedy as built. #886's tier-1 A/B (`epoch_op_profile`, ONNO
+  then NO): profiled totals 2.0-7.4% slower on conv paths its crate diff doesn't touch; merged at the
+  owner's word.
+- **The commitment never on (`--commitment-from 1000`):** arm 1 (S3 seeds 0, 3, round 1's cell;
+  8e88c9d, stone; control: the diagnostic repeated by bits, 14 rows) **both certified** (steps 6 and
+  8; seed 3 lost its state at steps 5-6 and re-formed it); arm 2 (S3 seeds 1, 4, 5, move-to-front-4
+  seed 3; 377e648, pyramidon; the diagnostic by bits, 12 rows) **S3 seed 5 and move-to-front-4 seed 3
+  certified, S3 seeds 1 and 4 formed nothing** (0.31, 0.48; 3-4 codes): **4 of the 6 failure-A runs**,
+  against at most 1 of 6 for the diagnostic and both thermostat probes. Their certificates are thin
+  (2-3 near ties each under the strict ratio). Arm 3 (move-to-front-5 seeds 0, 1 at 32; stone) 0 of 2:
+  states formed (0.86, 0.88, held 13-17 steps at 4.6-7 pairs per code) and lost. With R3/R4 (never-r34,
+  the same seeds) 0 of 2 (0.90, 0.92 at best, 3.4 pairs per code). **Where the commitment worked, harm**
+  (stopped at the redirection): S4 seeds 0, 1 at 32 uncertified at steps 22 and 30 (C0 certified them at
+  11 and 12); division 13 seeds 0, 1 at 32 at 73-108 pairs per code by steps 11-12 (W1 certified both;
+  control W1 repeated by bits, 8 rows); S5 seeds 0, 1 at 32 with R3/R4 at 18-20 (C2 certified seed 1).
+  **So the commitment hurts before a state forms and helps once one exists** (Zhao et al. 2026's
+  account); S3 seeds 1 and 4 collapse under the snap alone.
+- **C0 (the one-code-one-state workplan's width claim; c452ed9, jebel, 16:24 to 23:11; controls by
+  bits, 12-14 rows): S4 3 of 6, move-to-front-4 2 of 6, S5 0 of 6, move-to-front-5 0 of 6** (width 16:
+  4, 4, 0, 0). No harm by its rule (harm only at 0 of 6): width 32 the base. Failures: S5 all
+  bottleneck 2 (pairs per code about 120, share 0.88-0.98); move-to-front-5 five failure A, seed 2 a
+  state at 1.6; move-to-front-4 seeds 2, 3, 4 failure A; S4 seeds 2, 5 at 20-23 pairs per code.
+- **C2 (R3/R4 at width 32; c452ed9, jebel, 23:25 to 01:58; controls C0 by bits, 14 and 12 rows): S5 2
+  of 6 (seeds 1, 4), move-to-front-5 3 of 6 (seeds 1, 2, 5)** against C0's 0 of 6 each: works, not
+  helps (helps at 4). The failures came close (minimum pairs per code 1.0-1.9, S5 seed 0 5.4); move-to-
+  front-5 seed 1, failure A in C0, certified. Two certificates thin (9 and 11 near ties).
+- **R1 (the answers' own branch; 8824a70, stone): at 16, 0 of 6** (division at 23-44 pairs per code:
+  the branch disturbs the state too); **at 32, 0 of 6**, both division seeds failing where W1 certified
+  them. Shelved; C1 not run.
 """
 
 from __future__ import annotations

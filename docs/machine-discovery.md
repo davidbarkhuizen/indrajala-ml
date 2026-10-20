@@ -48,7 +48,7 @@ Every result below is in the papers or the probe script's findings. Each is a pi
 | **learning from approximations** | training on the outputs of the target's approximations beside its own made product machines learnable (division: 1/20 to 13-15/20); **one approximation suffices** (the sum alone, 10/20, where an equally informative non-approximation, the product, gives 0/20) | P2 (5, 5b) |
 | scale | certified transducers of 25, 49, 121 and 169 states (division `p` 5-13), 120 states (S5, move-to-front 5), from answers alone | P2; W1; B2 |
 | breadth | permutation groups (S3-S5), move-to-front and random machines beside arithmetic | the general algebras |
-| what stops it | three bottlenecks, one shared measure (one code, one state), remedies in progress | bottlenecks.md; one-code-one-state-workplan.md |
+| what stops it | three bottlenecks, one shared measure (one code, one state), remedies in progress | bottlenecks.md; `git show df1dcac:docs/one-code-one-state-workplan.md` |
 
 Result 5b is the seed of the goal. An approximation's outputs carry structure the network can use
 even though they don't determine the target's state. That is exactly the kind of known property a
@@ -133,8 +133,8 @@ compared against.
 ## What stands between here and there
 
 1. **Reliability** (now): the three bottlenecks. Discovery needs a network that finds the machine
-   in most seeds, not one in six (bottlenecks.md; one-code-one-state-workplan.md;
-   commitment-control-workplan.md).
+   in most seeds, not one in six (bottlenecks.md; `git show df1dcac:docs/one-code-one-state-workplan.md`;
+   `git show df1dcac:docs/commitment-control-workplan.md`).
 2. **Scale:** certified at 120-169 states today. Real systems may need more, through more factors
    and their coordinates (the factored state), not a flat codebook.
 3. **Verification tools without the target:** the four checks above as repo tools: the
@@ -178,7 +178,7 @@ discovery paper would follow stage C: recovering hidden machines from behaviour 
 structure, each recovery proved.
 
 Related: [bottlenecks.md](bottlenecks.md) (where the work stands),
-[one-code-one-state-workplan.md](one-code-one-state-workplan.md),
+`git show df1dcac:docs/one-code-one-state-workplan.md`,
 [factorisation-machine-workplan.md](factorisation-machine-workplan.md) (a machine that discovers its
 own decomposition), [window-recurrent-literature.md](window-recurrent-literature.md) (the terms,
 Dan et al. 2022, the classical learners).

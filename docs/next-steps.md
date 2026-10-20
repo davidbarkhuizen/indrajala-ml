@@ -17,10 +17,9 @@ in progress keeps its own list: [general-algebras-workplan.md](general-algebras-
 [grouped-query-attention-workplan.md](grouped-query-attention-workplan.md),
 [cross-attention-workplan.md](cross-attention-workplan.md),
 [arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md),
-[code-consolidation-workplan.md](code-consolidation-workplan.md),
+[state-formation-workplan.md](state-formation-workplan.md),
 [aarch64-workplan.md](aarch64-workplan.md),
-[factorisation-machine-workplan.md](factorisation-machine-workplan.md), and the deferred or paused
-[commitment-control-workplan.md](commitment-control-workplan.md) and
+[factorisation-machine-workplan.md](factorisation-machine-workplan.md), and the paused
 [snap-wall-workplan.md](snap-wall-workplan.md). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
@@ -62,6 +61,10 @@ docs cite them by section:
 | Modular division with the family (`p` 5 and 7, the registered claim) | #766 | #767-#782 | `git show e45944e:docs/division-workplan.md` |
 | Where division fails in `p` (the division ladder, L1-L3) | #817 | #824, #856, #859, #861 | `git show f9101d8:docs/division-ladder-workplan.md` |
 | A path through the window for each factor and for the answers (window branches; W1, W2, B1-B3) | #863 | #864-#868, crate #66, #884 | `git show e7f1ff6:docs/window-branches-workplan.md` |
+| Consolidating codes (A) and longer words (B) for bottleneck 2 (P1, P2) | #822 | #829, #832-#836, #845, #849, #854, #857 | `git show df1dcac:docs/code-consolidation-workplan.md` |
+| Controlling the codes' commitment (the diagnostic, the thermostat, annealing) | #765 | #851, #852, #871, #876, #881, #885, crate #67, #886 | `git show df1dcac:docs/commitment-control-workplan.md` |
+| One code, one state (R1-R4, C0, C2) | #873 | #874, #875, #878, #879, #883 | `git show df1dcac:docs/one-code-one-state-workplan.md` |
+| A population of runs selected by their machines (level 2, not built) | #882 | - | `git show df1dcac:docs/population-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -78,13 +81,27 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 the attention dropout study's in `scripts/attention_dropout_study.py`'s, the rotary study's in
 `scripts/rotary_study.py`'s, the addition study's in `scripts/addition_study.py`'s.
 
+## From the commitment, one-code-one-state, consolidation and population plans (retired 2026-10-20)
+
+The owner abandoned these plans' remaining claims on 2026-10-20 and set
+[state-formation-workplan.md](state-formation-workplan.md) in their place (the night's results are in
+the probe script's findings). Built and kept as options: `--commitment-from`, `--thermostat`
+(retired as a remedy), `--anneal` (as built it merges codes: the new plan's option 1 rebuilds its
+start), `--keep-machine` and `--counterexamples` (R3/R4: C2 worked, 5 of 12), `--answer-branch` (R1,
+shelved: harm on division at 32). Left open, none planned:
+
+- **C2 at 6 seeds with R3/R4 on every backdrop**, and R3/R4 against R4 alone (which did the work).
+- **The population plan's level 2** (selection among runs by their machines).
+- **Division `p` 17 at width 32**, for whether width's cure holds as the machine grows.
+- **The guard's softening** (arming only on a step that passes both verdicts).
+
 ## From the window branches (2026-10-19; the workplan retired the same day)
 
 The branches (`--branches`: a two-block trunk, a single-head block a factor and one for the answers)
 were built and not adopted: B1 and B2 worked in one seed a cell, W2 (width alone, at B1's size)
 did better on division, and B3 showed harm on S4 (the probe script's findings, stage 6). They stay
 an option. The answers' own branch with the factors on a shared state branch is R1, in
-[one-code-one-state-workplan.md](one-code-one-state-workplan.md). Left open, none planned:
+`git show df1dcac:docs/one-code-one-state-workplan.md`. Left open, none planned:
 
 - **A stop-gradient between the answer branch and the trunk** (the plan's D4): the trunk is still
   shaped by the answers' loss.
@@ -145,7 +162,7 @@ Decided with the owner, each to become a workplan or a stage:
   (restore the step's best network and halve the rate on a sharp fall of the training answers);
   an exponential moving average of the weights, certified in place of the raw weights; then the
   codebook's own remedies (code restarts, an EMA codebook) and, last, the commitment controls
-  ([commitment-control-workplan.md](commitment-control-workplan.md)). Each probed on replays of
+  (`git show df1dcac:docs/commitment-control-workplan.md`). Each probed on replays of
   `p` 7 seeds 0, 1 and 3. **Division stage 5's runs** (the probe script's findings) sharpen it:
   large drops are common (24 in 14 of 40 runs, in successes too) and 17 of 24 recovered, so a
   failure is a drop not recovered from; the curriculum moves on after a plateau whatever the
@@ -195,7 +212,7 @@ Decided with the owner, each to become a workplan or a stage:
 - **The factored state's untried variations** (that plan's "Not in this plan"): the cross-term on,
   more factors; a state loss (its D3 (b)-(d)) only if the owner chooses it.
 - **The commitment controls** (option 1, the usage thermostat) stay deferred in
-  [commitment-control-workplan.md](commitment-control-workplan.md), for a probe that must train
+  `git show df1dcac:docs/commitment-control-workplan.md`, for a probe that must train
   past a solution or shows factors collapsing.
 - **Division's edge between `p` 11 and 13: explained by W1** (the window branches workplan,
   2026-10-19): neither the budget (L2) nor the factors' width (L3), but the window's: at 32 wide

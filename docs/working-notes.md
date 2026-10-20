@@ -168,6 +168,13 @@ where you meet a new trap; delete one that no longer holds.
   `results/...` (run from `control/`); `e8c-q*.sha256` list `e8c-q4/...` (run from
   `data/window-recurrent`).
 
+- **Two runs at once on one machine each need their own lock:** `run` holds `$AB_RUNS_ROOT/run.lock`,
+  so a second run started with the same `AB_RUNS_ROOT` is refused ("not started: ... run.lock is held by
+  study ...") before it writes data. Give each concurrent script its own `AB_RUNS_ROOT`.
+- **`certify --out` is the certificate's file path, not a directory:** a second verdict written to the
+  same path overwrites the first. Name them `certify/<task>-seed<s>-certified-step-<n>[.strict].certificate.json`
+  (the strict verdict with `--snap-ratio 1.05`), with `certify.log` beside them.
+
 ## Studies: reading them
 
 - **Test window networks at full catalogue sizes:** reduced samples passed lengths the full sizes
