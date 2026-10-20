@@ -1143,6 +1143,13 @@ def test_a_whole_run_trains_and_screens_every_length_to_the_cap_from_its_first_s
     identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
     assert identity["whole"] is True
     assert mf.epoch_lengths(6, 12) == [1, 2, 3, 4, 5, 6] * 2  # the whole distribution, in turn
+    # blocks go on past the cap until the budget: a cap of 2, blocks of at most 1 epoch, 5 epochs
+    short = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path / "long", short, cap=2, budget_epochs=5, whole=True)
+    blocks = [
+        r["step"] for r in map(json.loads, (tmp_path / "long" / "log.jsonl").read_text().splitlines()) if "end" in r
+    ]
+    assert max(blocks) > 2
     with pytest.raises(AssertionError, match="no long tail"):
         mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path / "x", settings, cap=6, whole=True, long_tail=2)
 

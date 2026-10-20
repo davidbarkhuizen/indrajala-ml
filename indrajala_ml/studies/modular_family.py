@@ -1506,7 +1506,8 @@ def run(
     machine's readings, its certificate included, read the snapped network throughout.
     `whole` (the state formation workplan's D22) drops the curriculum: every epoch's examples drawn
     over every length 1..cap in turn, every step's screen over whole_lengths(cap); a step is then a
-    block of epochs ending, as any, in its certificate.
+    block of epochs ending, as any, in its certificate, and blocks go on past the cap until the budget
+    (wall-clock or epochs) or a certificate ends the run.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -1670,7 +1671,10 @@ def run(
         net.consolidate(table)
         return {"codes": codes, "groups": groups, "duplicates": len(table)}
 
-    for step in range(place.step if place is not None else first, cap + 1):
+    # the curriculum's steps end at the cap; the whole distribution's blocks go on until the budget (D22:
+    # a step is then a block of epochs, not a length)
+    begin = place.step if place is not None else first
+    for step in itertools.count(begin) if whole else range(begin, cap + 1):
         # the curriculum's lengths, or the whole distribution's every step (a step then a block of epochs)
         lengths = whole_lengths(cap) if whole else list(range(1, step + 1))
         named = "whole" if whole else step
