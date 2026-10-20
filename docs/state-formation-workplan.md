@@ -457,6 +457,34 @@ resumed from their checkpoints at 14:09-14:10: a resumed run is the uninterrupte
 stop (the consolidation workplan's stage 3), and the fix changes nothing before the cap, so no setting
 changed after the data; the registered expectations stand.
 
+## A note on random machines (2026-10-20; a note, not a plan)
+
+The owner: "this approach, if it works, is likely to also work for random machines"; and a conjecture,
+which this note shares: **the more structure a machine has, the quicker it can be cooled (crystallised);
+a random machine would just need a very slow cool.**
+
+- **Why the method should carry over:** nothing in it is the task's. It assumes only what any cell must
+  hold (codes enough for the states, training lengths to the exclusion bound); every temperature it
+  uses (the melting point, the transitions, the coupling's window) is measured from the run's own states;
+  Rose's theory is about clustering, not algebra. The handover (D25) addresses the joint encoding found
+  in the warm-up's states, which should be at its worst on a machine without product structure for the
+  factors to align with.
+- **Why random machines may be harder:** our random backdrops (random-4-0, random-q16-0) failed by
+  bottleneck 2 (extra codes whose outputs go wrong within `d` tokens; [bottlenecks.md](bottlenecks.md)),
+  not by failure A, so annealing helps there only if the splits stop where the target's states stop
+  (plausible: codes part only as far as the states' clusters do; untested, and the thermal noise could
+  split codes within a cluster).
+- **The conjecture's reasoning:** an algebra's structure (subgroups, quotients) gives a cascade of
+  transitions well apart in temperature (S4's from 2.5 to 0.0015, 4a), each passed on its own; a
+  random machine's clusters likely part closer together, in one crowded or sharp transition, where a
+  fast cool freezes a disordered assignment. The physical counterpart: strongly ordered materials
+  crystallise even when cooled fast, glass formers need a very slow cool or they freeze into a glass
+  (an amorphous solid, no long-range order); a frozen, wrongly split code assignment would be the
+  glass here.
+- **What would test it, with the measurements in hand:** the melting curve (D21) on a random machine's
+  warm-up: transitions crowded into a narrow band of temperature (against an algebra's cascade) would
+  support the reasoning; then the cooling rate needed to certify against the band's width.
+
 ## Stages
 
 1. **This plan** (docs). Before it, the night's findings PR (the existing data, at the owner's direction).
