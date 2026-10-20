@@ -14,6 +14,7 @@ import pytest
 
 from indrajala_ml.data import modular_data as md
 from indrajala_ml.studies import modular_family as mf
+from indrajala_ml.studies import window_tasks as wt
 
 
 def test_the_column_answers_division_and_the_queries_their_operations():
@@ -1139,6 +1140,32 @@ def test_the_melting_curve_splits_at_the_critical_temperature_into_the_clusters(
     groups = [g for _, g in melting["curve"]]
     assert groups == sorted(groups) and 3 in groups
     assert melting["transitions"][0][1] == 1
+
+
+def test_target_states_follow_the_machine_window_by_window():
+    machine = wt.task_named("word-problem-s3").machine
+    words = [[1, 2, 0], [2, 2, 0]]
+    rows = [[(tuple(float(t) for t in w), None) for w in words]]
+    states = mf.target_states(machine, rows)
+    expected: list[int] = []
+    for j in range(3):  # factor_states' order: each window, then each word
+        for w in words:
+            state = machine.start
+            for t in w[: j + 1]:
+                state = int(machine.transition[state, t])
+            expected.append(state)
+    assert states.tolist() == expected
+
+
+def test_state_separation_reads_the_target_from_the_cells_against_chance():
+    encoding = mf.target_named("word-problem-s3")
+    net = mf.network(encoding, [(4, 4), (4, 4)], 0, mf.OUTPUT)
+    rows = [mf.windows_drawn(encoding, n, 20, f"separation-test-{n}") for n in (2, 4)]
+    net.set_continuous([True, True])
+    separation = mf.state_separation(net, rows, encoding.task.machine, sample=100)
+    assert separation["windows"] == 100 and 0.0 < separation["chance"] <= 1.0
+    for name in ("joint", "factor-0", "factor-1"):
+        assert 0.0 <= separation[name]["neighbour"] <= 1.0 and 0.0 <= separation[name]["centroid"] <= 1.0
 
 
 def test_distinct_states_counts_each_snapped_factors_cell_outputs():

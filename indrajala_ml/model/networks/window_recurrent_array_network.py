@@ -317,17 +317,18 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         outputs, _, _, _ = self._run_windows(X, self._first_state(X.shape[0]), False, False, live=True)
         return outputs
 
-    def window_states(self, X: A) -> tuple[A, list[A], list[A]]:
+    def window_states(self, X: A, live: bool = False) -> tuple[A, list[A], list[A]]:
         """
         The inference forward pass with its states: each column's digit probabilities, as
         forward_windows's; the states (N, state_size), the initial state's then each window's
         next state's, W + 1 of them, a snapped state as its code's vector (the claims workplan's
         drift profile, E2b); and the cells' outputs before the snap, the same W + 1 (the snap
-        wall's margins, docs/snap-wall-workplan.md).
+        wall's margins, docs/snap-wall-workplan.md). `live`: the continuous factors (set_continuous)
+        read unsnapped, as forward_windows (the state formation workplan's warm-up readings).
         """
         C = self._first_state(X.shape[0])
         H = self.recurrence_layer.H
-        outputs, states, cells, _ = self._run_windows(X, C, True, False)
+        outputs, states, cells, _ = self._run_windows(X, C, True, False, live=live)
         return outputs, [C, *states], [H, *cells]
 
     def state_codes(self, X: A) -> list[list[tuple[int, ...]]]:

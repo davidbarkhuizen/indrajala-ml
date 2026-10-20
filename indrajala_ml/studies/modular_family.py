@@ -938,12 +938,15 @@ def _groups(close: np.ndarray) -> int:
     return len({root(i) for i in range(len(close))})
 
 
-def factor_states(net: Any, rows: Sequence[Sequence[tuple[Any, Any]]]) -> list[np.ndarray]:
-    """Each factor's cell outputs `h` (windows by its state size) over every window of the rows given."""
+def factor_states(net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], live: bool = False) -> list[np.ndarray]:
+    """
+    Each factor's cell outputs `h` (windows by its state size) over every window of the rows given
+    (`live`: continuous factors read unsnapped).
+    """
     starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
     blocks: list[list[np.ndarray]] = [[] for _ in starts]
     for batch in rows:
-        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
+        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]), live=live)
         for cell in cells[1:]:
             H = np.array(cell.tolist(), dtype=float)
             for g, f in enumerate(net.recurrence.factors):
@@ -1012,6 +1015,58 @@ def melting_curves(net: Any, rows: Sequence[Sequence[tuple[Any, Any]]]) -> list[
         None if f.codes is None else melting_curve(h, f.codes.count, np.random.default_rng([g]))
         for g, (f, h) in enumerate(zip(net.recurrence_layer.factors, factor_states(net, rows), strict=True))
     ]
+
+
+def target_states(machine: wt.Mealy, rows: Sequence[Sequence[tuple[Any, Any]]]) -> np.ndarray:
+    """Each window's target state, the machine's after the word's tokens to it, in factor_states' order."""
+    blocks: list[np.ndarray] = []
+    for batch in rows:
+        words = np.array([[int(t) for t in tokens] for tokens, _ in batch], dtype=np.int64)
+        state = np.full(len(words), machine.start, dtype=np.int64)
+        for j in range(words.shape[1]):
+            state = machine.transition[state, words[:, j]]
+            blocks.append(state.copy())
+    return np.concatenate(blocks)
+
+
+def state_separation(
+    net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], machine: wt.Mealy, sample: int = 3000, seed: int = 0
+) -> dict[str, Any]:
+    """
+    Whether the network's cell outputs `h` determine the target machine's state (the state formation
+    workplan's feasibility check: annealing clusters `h`, so it can find the target's states only where
+    `h` already separates them). Over every window of the rows given (at most `sample`, drawn), for
+    the joint `h` and each factor's: the leave-one-out nearest neighbour's and the nearest target
+    centroid's accuracy at naming the window's target state, against the most common state's share
+    (chance). Reads the network as set: continuous factors live (set_continuous first) for a warm-up's.
+    The target is read, never trained on: a diagnosis.
+    """
+    states = factor_states(net, rows, live=True)
+    targets = target_states(machine, rows)
+    rng = np.random.default_rng(seed)
+    chosen = rng.choice(len(targets), min(sample, len(targets)), replace=False)
+    targets = np.asarray(targets[chosen], dtype=np.int64)
+    blocks = {"joint": np.concatenate(states, axis=1)[chosen]} | {
+        f"factor-{g}": h[chosen] for g, h in enumerate(states)
+    }
+    found, counts = np.unique(targets, return_counts=True)
+    values = np.asarray(found, dtype=np.int64)
+    separation: dict[str, Any] = {
+        "windows": len(targets),
+        "states_seen": len(values),
+        "chance": float(counts.max() / len(targets)),
+    }
+    for name, h in blocks.items():
+        D = np.sum((h[:, np.newaxis, :] - h[np.newaxis, :, :]) ** 2, axis=2)
+        np.fill_diagonal(D, np.inf)
+        nearest: np.ndarray = np.argmin(D, axis=1)
+        neighbour = np.count_nonzero(targets[nearest] == targets) / len(targets)
+        centroids = np.array([h[targets == v].mean(axis=0) for v in values])
+        to_centroid = np.sum((h[:, np.newaxis, :] - centroids[np.newaxis, :, :]) ** 2, axis=2)
+        closest: np.ndarray = np.argmin(to_centroid, axis=1)
+        centroid = np.count_nonzero(values[closest] == targets) / len(targets)
+        separation[name] = {"neighbour": neighbour, "centroid": centroid}
+    return separation
 
 
 def state_spread(

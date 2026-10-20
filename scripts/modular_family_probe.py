@@ -1280,6 +1280,19 @@ def main(argv: list[str]) -> int:
     melting.add_argument("--arm", choices=sorted(ARMS), default="family")
     melting.add_argument("--step", type=int, required=True, help="the curriculum step whose screen lengths it samples")
     melting.add_argument("--cases", type=int, default=200, help="cases a length (the screen's)")
+    separation = commands.add_parser(
+        "state-separation",
+        help="whether saved networks' cell outputs determine the target machine's state (nearest neighbour and "
+        "centroid accuracy against chance; the state formation workplan's feasibility check)",
+    )
+    separation.add_argument("networks", type=Path, nargs="+")
+    separation.add_argument("--task", required=True, help="a machine's task")
+    separation.add_argument("--arm", choices=sorted(ARMS), default="family")
+    separation.add_argument("--lengths", type=int, nargs="+", default=[1, 2, 4, 8, 16, 32])
+    separation.add_argument("--cases", type=int, default=50, help="words a length")
+    separation.add_argument(
+        "--live", action="store_true", help="every snapped factor read continuous (a warm-up's network, as it trained)"
+    )
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
     readout.add_argument("root", type=Path, help="the study's directory, a <arm>/seed<s> per run")
     readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
@@ -1337,6 +1350,16 @@ def main(argv: list[str]) -> int:
         for path in args.networks:
             spread = mf.state_spread(mf.load_network(str(path)), rows)
             print(json.dumps({"network": str(path), "step": args.step, "factors": spread}), flush=True)
+        return 0
+    if args.command == "state-separation":
+        encoding = _target(args.task, args)
+        rows = [mf.windows_drawn(encoding, n, args.cases, f"separation-{n}") for n in args.lengths]
+        for path in args.networks:
+            net = mf.load_network(str(path))
+            if args.live:
+                net.set_continuous([f.codes is not None for f in net.recurrence.factors])
+            separation = mf.state_separation(net, rows, encoding.task.machine)
+            print(json.dumps({"network": str(path), "live": args.live, **separation}), flush=True)
         return 0
     if args.command == "melting-curve":
         encoding = _target(args.task, args)
