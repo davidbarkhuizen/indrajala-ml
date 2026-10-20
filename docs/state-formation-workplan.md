@@ -474,7 +474,7 @@ resumed from their checkpoints at 14:09-14:10: a resumed run is the uninterrupte
 stop (the consolidation workplan's stage 3), and the fix changes nothing before the cap, so no setting
 changed after the data; the registered expectations stand.
 
-## Readings: stage 4a'', the handover probe, in flight (2026-10-20, 15:00; not a verdict)
+## Readings: stage 4a'', the handover probe, in flight (2026-10-20, 15:00-17:00; not a verdict)
 
 `probe-4a3.sh` (resumed as `probe-4a3-resume.sh`, 3ac2ada; expectations in its header): S3 seed 0 on
 `pyramidon`, move-to-front-4 seed 3 on `stone`, each shape. The commitment never returns
@@ -496,10 +496,38 @@ runs end (the header's rule).
   measured at the warm-up's end (convex at `T` 1.43 and 1.70: 14 and 11 groups; the curve said 1.10 and
   1.30), so the material has moved since. Convex, the fastest early fall, leads: share 0.94, codes 15 and
   15, 4-6 of 77-80 pairs right (steps 44-48); s 0.92 from step 49; concave about 0.79, still near the melt.
-- **S3** is still in its warm-up (block 5 at 15:00; screen about 0.5, D14's cap at step 8).
-- **The question it raises** (for the decision, not a change to this probe): the anneal's melt erased a
-  near-certified snap that the warm-up had already reached on mtf-4. Whether the cool re-forms it, and
-  whether the separation holds as the coupling rises, is what the remaining run reads.
+- **Move-to-front-4 convex certified at step 104** (16:00; 168 min): minimised 24 states, the target's,
+  51 of 51 pairs right, `T` 0.11 and 0.13, coupling 0.63 and 0.55, still soft, the commitment never on;
+  the run stopped on it (D19). The first certificate of option 1. The cool re-formed the structure the
+  melt erased and bettered it (step 8's snap minimised to 32).
+- **Separation through it** (`state-separation`, each length alone; `option1/separation/separation.txt`):
+  the continuous state joint 1.00 at lengths 4, 16 and 64 at every step read (6-104), through the heat,
+  the hold and the coupling's rise; snapped, joint at length 16 1.00 at step 8, 0.74 at the hold's end
+  (31), 0.87 at 48, 0.93 at 63 (coupling 0.11), 0.98 at 80 (0.30), 1.00 at 95 (0.49) and 104. The
+  header's expectations: the screen held (met), joint >= 0.9 at length 16 as `l` rose (met), a state
+  share >= 0.5 and a certificate (met); each factor's alone toward 1.00 **not met** (snapped centroid
+  0.74-0.86 throughout): the certified machine holds the state jointly.
+- **What each factor holds** (`approximations`, built for this reading; exact over the pairs the start
+  reaches; `option1/approximations/`): neither factor's partition is a congruence, but the finest
+  approximation each determines has 10 and 7 blocks, and refines named congruences of move-to-front:
+  factor 0 the relative order of items {0, 1}, {0, 3} and {2, 3}, factor 1 of {0, 2} and {1, 2}. Each
+  relative order of two items is a flip-flop (access one, it leads; access the other, it trails; else
+  hold): an LRU's age matrix, five of its six bits held exactly, the sixth ({1, 3}) only jointly (the
+  approximations' meet 21 of 24 states, so not a cover). Each factor's code nearly a machine of its own
+  (autonomous 0.96, 0.88).
+- **The same reading on 13 earlier certified mtf-4 networks** (window branches b3, the never probe,
+  one-code-one-state C0, consolidation P1, general algebras round 1; the curriculum and, but for the never
+  probe, the commitment): every factor that determines a named congruence determines a relative order,
+  of two items or of three (an LRU of three items, 6 blocks, in 6 of the 13). Meets 2-24: one cover
+  (general algebras round 1 seed 1: an LRU of {0, 1, 3} in factor 0 and an 8-block congruence in factor 1,
+  both exact congruences, meet 24: the target a subdirect product of the two); then 4a'' (21), the never
+  probe (19), C0 seed 5 (18); the rest 2-12. So relative-order approximations are what this
+  architecture forms on move-to-front, whatever the method; the anneal's certificate is among the most
+  decomposed, not unique in kind.
+- **S3** (all three shapes one run until the cool): the warm-up reached its cap (step 8) at best share
+  0.22; the hold at `T` about 5.6, codes melted to 2 groups, screen 0.53-0.55 (as the warm-up's); the cool
+  begun at 16:30. Its epochs take about 52 s on `pyramidon` (three at once), so the budget runs to about
+  noon on 2026-10-21.
 
 ## A note on random machines (2026-10-20; a note, not a plan)
 
