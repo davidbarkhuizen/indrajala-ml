@@ -271,9 +271,11 @@ def orderings(n: int) -> list[tuple[int, ...]]:
 def order_labels(coordinates: Coordinates | None) -> dict[str, IntArray]:
     """
     An ordering machine's named partitions (its coordinates each position's item): "order {i, j, ...}"
-    the relative order of those items, "first k" the first k positions' items; none when the
-    coordinates aren't orderings. Which are congruences is the machine's (Mealy.is_congruence):
-    move-to-front's every one, each "order" of two items's quotient a flip-flop (an LRU's age matrix).
+    the relative order of those items, "first k" the first k positions' items, "places {i, ...}" the
+    positions those items hold, "parity" the ordering's sign; none when the coordinates aren't
+    orderings. Which are congruences is the machine's (Mealy.is_congruence): move-to-front's every
+    "order" and "first", each "order" of two items's quotient a flip-flop (an LRU's age matrix); a word
+    problem's every "places" (S_n acting on the placements of those items) and "parity" (A_n's cosets).
     """
     if coordinates is None:
         return {}
@@ -291,7 +293,14 @@ def order_labels(coordinates: Coordinates | None) -> dict[str, IntArray]:
         for r in range(2, n)
         for items in itertools.combinations(range(n), r)
     }
-    return named | {f"first {k}": labelled([row[:k] for row in values]) for k in range(1, n)}
+    named |= {f"first {k}": labelled([row[:k] for row in values]) for k in range(1, n)}
+    named |= {
+        f"places {{{', '.join(map(str, items))}}}": labelled([tuple(row.index(x) for x in items) for row in values])
+        for r in range(1, n - 1)
+        for items in itertools.combinations(range(n), r)
+    }
+    inversions = [sum(a > b for a, b in itertools.combinations(row, 2)) % 2 for row in values]
+    return named | {"parity": np.array(inversions, dtype=np.int64)}
 
 
 def _ordering_machine(

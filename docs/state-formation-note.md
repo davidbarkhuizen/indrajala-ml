@@ -65,8 +65,8 @@ annealing the snap, was being retried as a crystallisation (heat, a melt, a slow
      an LRU's age matrix; five of six held exactly, the sixth jointly); 13 earlier certified networks
      hold the same kind (relative orders of two or three items), one of them an exact cover (the target a
      subdirect product of its two factors' quotients).
-   - word-problem-s3 seed 0: one factor fixes a 3-block approximation (likely the group acting on three
-     points), the rest held jointly.
+   - word-problem-s3 seed 0: one factor fixes a 3-block approximation, exactly the place of item 2 (the
+     group acting on three points; `places {2}`, named since), the rest held jointly.
    This is discovery's decomposition side, read from the network rather than given to it.
 
 5. **A statistical, parallel method suits the problem.** Each run is an independent draw and the
