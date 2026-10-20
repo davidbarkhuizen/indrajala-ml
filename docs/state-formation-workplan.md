@@ -156,6 +156,109 @@ accepted option becomes part of the base the next one is tested on.
   follow-up probe chosen from its readings, then a decision. An accepted option joins the base. Adoption
   as the general method stays the owner's, on 6 seeds per backdrop.
 
+### Option 1 rebuilt: heat, hold, cool, crystallise (2026-10-20, after the void panel)
+
+The owner, after the first panel's flaw (findings below): "we definitely want retry annealing until we
+get it right and get a proper verdict either way"; and the profile, from crystallisation: "heat to hot
+quite quickly, hold it there, then let it cool long and slow ... smoothly ramp up to a high entropy
+state, leave it there long enough for the activation energy of the various states to be overcome, then
+slowly cool to accumulate structure ... and allow the state to crystallize over time". D13-D20 replace
+D5, D7' and D9 for option 1; D4, D6, D8's hardness test, D10-D12 stand.
+
+- **D13. The first panel is void, not a verdict:** its anneal never ran (every factor hard within one
+  epoch of the warm-up's end), so D12 isn't applied to it; option 1 is retried until its profile runs as
+  designed, then decided by D12.
+  - (a) *Chosen.* Pros: the panel tested an abrupt snap with the commitment's ramp, not option 1; the
+    owner's direction. Cons: a second panel's cost.
+  - (b) Apply D12 (a lost harm certificate: rejected). Cons: rejects an option that didn't run.
+- **D14 (replaces D5). The warm-up ends at the first step whose best screen reaches 0.95 and where
+  every snapped factor's states seen (distinct cell outputs on the step's screen, to 6 decimals) number
+  at least 4 times its codes; capped at 8 steps.**
+  - (a) *Chosen.* Pros: the void panel ended every warm-up at step 1, on 5-10 distinct states for 8-38
+    codes, so k-means left duplicates and `tau_0` fell to 1e-6; 4 a code gives k-means real clusters
+    (step 2 on every backdrop: S3's 43 words of length up to 2 against 32, S4's 601 against 60, division's
+    against 152). Cons: a count, not structure; the cap still ends a warm-up that never gets there.
+  - (b) Zhao et al.'s `d_eff` criterion. Cons: still unmeasured as a stopping rule here.
+  - (c) A fixed later step. Cons: blind to the backdrop.
+- **D15 (the owner's profile; replaces D7' and the halving's start). Each snapped factor, from the
+  warm-up's end: heated from `T_hot / 64`, doubling each epoch (6 epochs), held at `T_hot` (`hold` 10
+  epochs), then cooled exponentially (halved every `halving` 15 epochs) with no floor.** The hardness
+  test (D8's) is read only once cooling has begun.
+  - (a) *Chosen.* Pros: Rose's deterministic annealing as it is meant to run, from above the transitions
+    down through each; the heat is quick and smooth (doubling), the hold lets the codes reach the melt's
+    mean, the cool is slower than the built anneal's (15 against 10 epochs a halving) and exponential, so
+    its tail is long. `T_hot` is set from the whole's critical temperature (D16), measured reliably at the
+    warm-up's end (0.13-0.57 on the void panel), not from the codes' gaps. Cons: about 6 + 10 + 150
+    epochs to hard (a factor of about 1,000 cooled); the melt erases the codes' meaning while it holds.
+  - (b) Cool only, from the clusters' temperature (D7, D7'). Cons: what ran: no soft phase.
+  - (c) A linear cool. Cons: fast through the low temperatures where the fine splits happen.
+- **D16. `T_hot`: a multiple of the whole's critical temperature `2 lambda_max(h)`, settled by the
+  mechanics probe (stage 4a) between 2 (a full melt: every code at the mean, Rose's Theorem 1) and 0.5
+  (a partial melt: the codes merge into the top-level groups only).**
+  - (a) *Chosen.* Pros: the full melt is the owner's "high entropy state" and Rose's start; the partial
+    melt keeps the coarse structure the warm-up learned, if the full melt's erasure costs more than it
+    frees. One probe reads which splits back to the target's states. Cons: a probe's cost (6 short runs).
+  - (b) Full melt without a probe. Cons: annealing arm 2 merged and never split back (D17's reason).
+- **D17. Thermal noise (the owner: "the noise/perturbation to also be a function of the temperature -
+  so that the crystallization analogy is more complete"): each soft epoch, every code of a soft factor
+  moved by Gaussian noise of variance `kappa T` in all (per coordinate `kappa T / size`), from the run's
+  seed, step, epoch and forks; `kappa` settled by the mechanics probe between `10^-2` (agitation: a
+  displacement about a tenth of `sqrt(T)` an epoch, which can carry a code across a shallow barrier) and
+  `10^-4` (only Rose's symmetry breaking).**
+  - (a) *Chosen.* Pros: variance proportional to `T` is thermal noise's own scaling (Langevin dynamics,
+    equipartition), so it is strong in the melt, falls with the cool and vanishes as the codes freeze;
+    Rose 1998: identical codes split at a transition only under a perturbation, and annealing arm 2's
+    stayed identical (23-27 of 32) and never split back. Cons: noise in the codes changes training's
+    bits (the flag's runs only); too much keeps the codes from settling (the probe reads it).
+  - (b) Noise in the cell's pre-activation (option 2). Cons: option 2's own question; one option at a time.
+  - (c) Perturb only codes found merged. Cons: a merge threshold to choose; Rose's own variant, kept in
+    reserve if (a)'s noise is too much.
+  - Thermal noise on the states themselves (the cell's pre-activation, the particles rather than the
+    lattice) at the same `T` is option 2's build, the natural combination once option 1 is decided.
+- **D18. No fork with the warm-up (the owner: "drop the forking - it is not compatible with
+  crystallization"); during the heat and the hold the step's best follows the screen, so no plateau
+  ends a step on a melted network.**
+  - (a) *Chosen.* Pros: the fork restores an earlier network whenever the screen falls, undoing the melt
+    and every disorder a crystal passes through on its way; the harness refuses `--warm-up` with
+    `--fork`. Cons: no guard against a collapse; the panel's option runs differ from their controls (C0,
+    W1, the S3 controls, all with the fork) by the fork too, so D12 compares the method, not the anneal
+    alone.
+  - (b) The fork held off during the heat and the hold only. Cons: it still undoes the cool's disorder.
+- **D19 (the owner's "crystallise over time"; replaces D9). After a factor first passes the hardness
+  test it stays soft and keeps cooling for `tail` 40 epochs more; then hard, its commitment ramped back
+  over `ramp` 60 epochs.** The commitment is 0 from the warm-up's start to the tail's end.
+  - (a) *Chosen.* Pros: the hard machine is read and certified from the snapped network at every step's
+    end throughout (soft codes are training's only), so a crystal certified while soft stops the run as
+    any; the tail lets structure settle before the snap; both void panels' runs broke at a commitment of
+    about 0.225 of 0.25 on the 20-epoch ramp, so 60 is gentler. Cons: about 100 epochs more before the
+    commitment's benefit (the harm runs').
+  - (b) Hard at the test, the 20-epoch ramp (D9). Cons: what eroded the void panel's states.
+  - (c) Never hard, never committed. Cons: the harm data says the commitment is needed once a state exists.
+- **D21 (the owner: "grossly characterise the material (measure its melting point)"). The states'
+  melting curve, measured at the warm-up's end on the run's own states and logged:** Rose's
+  deterministic annealing of the factor's codes on its sampled outputs held fixed, from twice the
+  whole's critical temperature down 20 octaves (4 temperatures an octave, 30 updates each), the codes'
+  groups at each temperature and the transitions where they change; the first is the melting point.
+  Also a subcommand for saved networks (`melting-curve`).
+  - (a) *Chosen.* Pros: the material is the run's own, measured where the profile starts (a separate
+    earlier run's states would be another material: they move with training and with the step's
+    lengths); seconds a run (15 s for two factors of 15 codes); it shows where the profile must hold and
+    how far it must cool, and the mechanics probe reads training's splits (D20) against it. Cons: on
+    fixed states, while training moves them; a split is seen up to an octave late (critical slowing
+    down: the codes part slowly just below a transition).
+  - (b) A separate characterisation run per task first. Cons: another material; a run's cost.
+  - (c) The critical temperature alone (built). Cons: the melt's top only, not where the fine
+    structure forms.
+  - **First reading** (word-problem-s4 seed 1's step-4 network from the void panel, its best: codes
+    12,14, share 0.57): `T_c` 4.1 and 2.5, the codes leaving the melt at 2.9 and 1.8, 4-6 groups by 0.6,
+    and the last splits (to 12-14) at `10^-4` to `10^-5`: five decades, so the cool must run about 17
+    octaves (about 250 epochs at D15's halving). The built anneal's start (1.0) sat inside the coarse
+    transitions and D7''s `10^-6` below every one.
+- **D20. Each factor's profile logged each epoch** (its phase, temperature, hardness, commitment and its
+  codes' groups closer than `T / 100` squared), and the warm-up's end row with each factor's distinct
+  states, critical temperatures and `T_hot`. Pros: the melt, each split and the crystal are read from the
+  log. Cons: a little more per epoch (the codes only).
+
 ## Findings: stage 2, option 1's understanding (2026-10-20)
 
 `state-spread` (`scripts/modular_family_probe.py`, `mf.state_spread`): each factor's `h` sampled at a
@@ -185,6 +288,29 @@ data/window-recurrent/state-formation/spread/ (`anneal-arm2.jsonl`, `s3-never-ro
   panel expectation: failure-A runs at least as the never probe's (S3 0, mtf-4 3 certify), and **no harm**
   (S4 0, 1; division 0, 1; mtf-4 0 certify, as with the commitment on).
 
+## Findings: stage 4, option 1's first panel, void (2026-10-20)
+
+The panel (`--anneal --warm-up` at #891's c875b1a, D11) ran from 06:07 on `stone` and `pyramidon` and was
+stopped at 07:40 at the owner's word, once read: its anneal never ran (D13). Data in
+data/window-recurrent/state-formation/option1/ (`stone/`, `pyramidon/`).
+
+- **Every warm-up ended at step 1** (12 of 12 factors): the continuous network screened 1.0 on step 1's
+  words, D5's early-end risk. The states seen were 5-10 distinct points (the clusters' own temperature
+  about 1e-31), fewer than the codes (8-38), so k-means left duplicates, perturbed apart by 1e-3 of the
+  spread.
+- **So `tau_0` (D7': a quarter of the median nearest-code gap) was 1e-6 to 0.02,** 30 to 500,000 times
+  below the whole's critical temperature (0.13-0.57): D7''s option (c)'s failure, reached through the
+  duplicates. Every factor was hard by the next step's first or second epoch: an abrupt snap.
+- **The commitment's ramp then eroded what formed:** S3 seeds 0, 1 broke at a commitment of about 0.225
+  (codes 6,5 to 3,4; 6,7 to 2,3, a collapse); S4 seed 1 reached 12,14 codes and share 0.57 at step 4,
+  then eroded to 4,8.
+- **Readings, not a verdict:** S3 seeds 0, 1 uncertified at steps 21-26 (their controls collapsed to 1-2
+  codes by step 2: the warm-up's codes held 3-4 and share about 0.19 against 0.04 and 0); S4 seeds 0, 1
+  uncertified at 23-24 (C0 certified them at 11, 12); move-to-front-4 seed 0 at codes 3,2 from step 3;
+  division seeds 0, 1 uncertified at step 9 (seed 1 at share 0.965, every answer 0.94-0.96, rising);
+  word-problem-s5 seed 1 at share 0.81. S3 seed 4, move-to-front-4 seed 3 and move-to-front-5 seeds 0, 1
+  never started.
+
 ## Stages
 
 1. **This plan** (docs). Before it, the night's findings PR (the existing data, at the owner's direction).
@@ -195,7 +321,12 @@ data/window-recurrent/state-formation/spread/ (`anneal-arm2.jsonl`, `s3-never-ro
    built `--anneal`; parity tests, the golden run unchanged without the flags. Tier 1: the A/B once
    `jebel` is back (about 2026-10-22); the probes run from the branch meanwhile.
 4. **Option 1, test and decision:** the panel (D11), its expectation written in its script first;
-   accept or reject (D12).
+   accept or reject (D12). The first panel void (D13); rebuilt to D14-D20 on #891's branch, then:
+   - **4a. The mechanics probe:** word-problem-s3 seed 0 and word-problem-s4 seed 0 in three arms, a full
+     melt with `kappa` `10^-2`, a full melt with `10^-4`, a partial melt with `10^-2` (D16, D17); 6 runs,
+     about 2 h; read whether the codes melt at the hold, split back as they cool (D20's groups) and
+     harden, and the states formed; it settles D16 and D17. Every cell's bounds as D11's.
+   - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.
 6. **Option 3 (the rotation trick):** understanding (on bottleneck-2 failures, whether windows of

@@ -842,9 +842,11 @@ class Anneal:
     """
     The commitment-control workplan's annealing (stage 3, the soft-to-hard quantiser; D6-D8): each
     snapped factor's codes soft in training at `start` halved every `halving` epochs trained, its
-    commitment 0, until `share` of the sample's windows weight one code above `hard`; then hard for
-    good, its commitment ramped back to its specs' over `ramp` epochs. A factor's level is 0 (soft)
-    to `ramp` (hard, its specs' commitment).
+    commitment 0, until `share` of the sample's windows weight one code above `hard`; then soft for
+    `tail` epochs more, cooling on (the state formation workplan's D19: the crystal settles), then
+    hard for good, its commitment ramped back to its specs' over `ramp` epochs. A factor's level is 0
+    (soft, not yet hard), 1 to `tail` (soft, in its tail), to `tail + ramp` (hard, its specs'
+    commitment).
     """
 
     start: float = 1.0
@@ -852,24 +854,34 @@ class Anneal:
     hard: float = 0.99
     share: float = 0.99
     ramp: int = 20
+    tail: int = 0
+
+    @property
+    def top(self) -> int:
+        """The last level: hard, at its specs' commitment."""
+        return self.tail + self.ramp
+
+    def soft(self, level: int) -> bool:
+        """Whether a factor at this level trains soft."""
+        return level <= self.tail
 
     def temperature(self, spent: int) -> float:
         """The soft factors' temperature after `spent` epochs trained in all."""
         return self.start * 0.5 ** (spent // self.halving)
 
     def levels(self, levels: Sequence[int], hardness: Sequence[float | None]) -> list[int]:
-        """Each factor's next level from its level and its hardness (None: continuous, or already hard)."""
+        """Each factor's next level from its level and its hardness (None: continuous, or not read)."""
         following: list[int] = []
         for level, hard in zip(levels, hardness, strict=True):
             if level > 0:
-                following.append(min(level + 1, self.ramp))
+                following.append(min(level + 1, self.top))
             else:
                 following.append(1 if hard is not None and hard >= self.share else 0)
         return following
 
     def commitments(self, levels: Sequence[int], full: Sequence[float]) -> list[float]:
         """Each factor's commitment at its level, a share of its specs'."""
-        return [c * level / self.ramp for level, c in zip(levels, full, strict=True)]
+        return [c * max(level - self.tail, 0) / self.ramp for level, c in zip(levels, full, strict=True)]
 
 
 def hardness(
@@ -913,6 +925,82 @@ def _groups(close: np.ndarray) -> int:
     return len({root(i) for i in range(len(close))})
 
 
+def factor_states(net: Any, rows: Sequence[Sequence[tuple[Any, Any]]]) -> list[np.ndarray]:
+    """Each factor's cell outputs `h` (windows by its state size) over every window of the rows given."""
+    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
+    blocks: list[list[np.ndarray]] = [[] for _ in starts]
+    for batch in rows:
+        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
+        for cell in cells[1:]:
+            H = np.array(cell.tolist(), dtype=float)
+            for g, f in enumerate(net.recurrence.factors):
+                blocks[g].append(H[:, starts[g] : starts[g] + f.state_size])
+    return [np.concatenate(b) for b in blocks]
+
+
+def melting_curve(
+    h: np.ndarray,
+    k: int,
+    rng: np.random.Generator,
+    per_octave: int = 4,
+    octaves: int = 20,
+    iterations: int = 30,
+    sample: int = 2000,
+) -> dict[str, Any]:
+    """
+    The states' melting curve (the state formation workplan's D21): Rose's deterministic annealing of
+    `k` codes on the fixed outputs `h` (at most `sample` of them, drawn), from twice the whole's
+    critical temperature `T_c = 2 lambda_max` down `octaves` octaves, `per_octave` temperatures an
+    octave, `iterations` soft-assignment updates at each, the codes perturbed by `10^-6 sqrt(T_c)` so
+    identical ones can split; at each temperature the codes' groups closer than `T / 100` squared
+    (D20's). Returns `T_c`, the curve (temperature, groups) and its transitions (temperature, groups
+    before, after), the highest the melting point: where the codes leave the melt. A split is seen
+    late, up to about an octave below its temperature: just below a transition the codes part slowly
+    (critical slowing down), within the updates a temperature gets.
+    """
+    if len(h) > sample:
+        h = h[rng.choice(len(h), sample, replace=False)]
+    critical = 2.0 * float(np.linalg.eigvalsh(np.cov(h, rowvar=False))[-1])
+    scale = 1e-6 * math.sqrt(max(critical, 1e-300))
+    codes = np.repeat(h.mean(axis=0)[np.newaxis, :], k, axis=0)
+    curve: list[list[float]] = []
+    transitions: list[list[float]] = []
+    for i in range(per_octave * octaves + 1):
+        t = 2.0 * critical * 2.0 ** (-i / per_octave)
+        if t <= 0.0:
+            break
+        for _ in range(iterations):
+            codes = codes + rng.normal(0.0, scale, size=codes.shape)
+            D = np.sum((h[:, np.newaxis, :] - codes[np.newaxis, :, :]) ** 2, axis=2)
+            weights = np.exp(-(D - D.min(axis=1)[:, np.newaxis]) / t)
+            weights /= weights.sum(axis=1)[:, np.newaxis]
+            mass = weights.sum(axis=0)
+            codes = np.where(mass[:, np.newaxis] > 0, (weights.T @ h) / np.maximum(mass, 1e-300)[:, np.newaxis], codes)
+        groups = _groups(np.sum((codes[:, np.newaxis, :] - codes[np.newaxis, :, :]) ** 2, axis=2) < t / 100)
+        if curve and groups != curve[-1][1]:
+            transitions.append([t, curve[-1][1], groups])
+        curve.append([t, groups])
+        if groups == k:
+            break
+    return {
+        "critical_temperature": critical,
+        "melting_point": transitions[0][0] if transitions else None,
+        "curve": curve,
+        "transitions": transitions,
+    }
+
+
+def melting_curves(net: Any, rows: Sequence[Sequence[tuple[Any, Any]]]) -> list[dict[str, Any] | None]:
+    """
+    Each snapped factor's melting curve over every window's cell output of the rows given (D21; factor
+    `g`'s draws from seed `g`, as at the warm-up's end); None unsnapped.
+    """
+    return [
+        None if f.codes is None else melting_curve(h, f.codes.count, np.random.default_rng([g]))
+        for g, (f, h) in enumerate(zip(net.recurrence_layer.factors, factor_states(net, rows), strict=True))
+    ]
+
+
 def state_spread(
     net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], merged: float = 1e-6, share: float = 0.99
 ) -> list[dict[str, Any]]:
@@ -925,18 +1013,10 @@ def state_spread(
     over the windows' nearest codes, the codes in use and the pooled within-cluster covariance's top
     eigenvalue (D7's `tau_0` is twice it). A factor without codes has its codes' entries None.
     """
-    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
-    sizes = [f.state_size for f in net.recurrence.factors]
-    blocks: list[list[np.ndarray]] = [[] for _ in sizes]
-    for batch in rows:
-        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
-        for cell in cells[1:]:
-            H = np.array(cell.tolist(), dtype=float)
-            for g, (start, size) in enumerate(zip(starts, sizes, strict=True)):
-                blocks[g].append(H[:, start : start + size])
+    states = factor_states(net, rows)
     spread: list[dict[str, Any]] = []
     for g, factor in enumerate(net.recurrence_layer.factors):
-        h = np.concatenate(blocks[g])
+        h = states[g]
         eigen = np.sort(np.linalg.eigvalsh(np.cov(h, rowvar=False)))[::-1].clip(min=0.0)
         held = np.cumsum(eigen) / max(float(eigen.sum()), 1e-300)
         row: dict[str, Any] = {
@@ -976,23 +1056,74 @@ def state_spread(
 @dataclass(frozen=True)
 class WarmUp:
     """
-    The state formation workplan's option 1 (D4-D7, D10): every snapped factor run continuous (its
-    cell's output passed on, its codes unread, its commitment 0) from the run's start until the end of
-    the first step whose best screen reaches `screen`, or of its `cap`th step; then each factor's codes
-    set by k-means of its cells' outputs on the step's screen (`iterations` Lloyd iterations,
-    k-means++ seeding from the run's seed) and annealed from `tau_0`, a quarter of the median squared
-    distance from a code to its nearest (D7': below the temperature at which neighbouring codes merge,
-    Rose 1998, and soft between them), by the run's Anneal (halving, hardness test, the commitment's
-    ramp after hard).
+    The state formation workplan's option 1 (D4, D6, D10, D14-D18): every snapped factor run continuous
+    (its cell's output passed on, its codes unread, its commitment 0) from the run's start until the
+    end of the first step whose best screen reaches `screen` and where every snapped factor's distinct
+    states seen number `distinct` times its codes, or of its `cap`th step; then each factor's codes set
+    by k-means of its cells' outputs on the step's screen (`iterations` Lloyd iterations, k-means++
+    seeding from the run's seed), and its temperature profiled (the owner's, from crystallisation):
+    heated from `T_hot / 2 ** heat` doubling each epoch, held at `T_hot` for `hold` epochs, then
+    cooled exponentially, halved every `halving` epochs, with no floor; `T_hot` is `hot` times the
+    whole's critical temperature (Rose 1998: above it every code is at the mean, a melt). Each soft
+    epoch moves every soft code by thermal noise of variance `kappa T` (D17). The run's Anneal reads
+    hardness from the cool's start and holds the tail and the commitment's ramp.
     """
 
     screen: float = 0.95
     cap: int = 8
     iterations: int = 25
+    distinct: float = 4.0
+    hot: float = 2.0
+    heat: int = 6
+    hold: int = 10
+    halving: int = 15
+    kappa: float = 1e-2
 
-    def ends(self, step: int, first: int, best: float) -> bool:
-        """Whether the warm-up ends at this step's end."""
-        return best >= self.screen or step - first + 1 >= self.cap
+    def ends(self, step: int, first: int, best: float, distinct: Sequence[int], counts: Sequence[int]) -> bool:
+        """Whether the warm-up ends at this step's end (`distinct`, `counts`: each snapped factor's states and codes)."""
+        filled = all(n >= self.distinct * c for n, c in zip(distinct, counts, strict=True))
+        return (best >= self.screen and filled) or step - first + 1 >= self.cap
+
+    def phase(self, n: int) -> str:
+        """The profile's phase after `n` epochs trained from the warm-up's end."""
+        return "heat" if n < self.heat else "hold" if n < self.heat + self.hold else "cool"
+
+    def temperature(self, n: int, hot: float) -> float:
+        """A factor's temperature after `n` epochs trained from the warm-up's end, at its `T_hot` `hot`."""
+        if n < self.heat:
+            return hot * 2.0 ** (n - self.heat)
+        return hot * 0.5 ** (max(n - self.heat - self.hold, 0) / self.halving)
+
+
+def distinct_states(net: Any, rows: Sequence[Sequence[tuple[Any, Any]]]) -> list[int]:
+    """Each snapped factor's distinct cell outputs (to 6 decimals) over every window of the rows given (WarmUp, D14)."""
+    return [
+        len(np.unique(np.round(h, 6), axis=0))
+        for h, f in zip(factor_states(net, rows), net.recurrence.factors, strict=True)
+        if f.codes is not None
+    ]
+
+
+def jitter(net: Any, temperatures: Sequence[float | None], kappa: float, rng: np.random.Generator) -> None:
+    """Every soft factor's codes moved by Gaussian noise of variance `kappa T` in all (D17: thermal noise)."""
+    for factor, t in zip(net.recurrence_layer.factors, temperatures, strict=True):
+        if t is None:
+            continue
+        codes = np.array(factor.codes.E.tolist(), dtype=float)
+        moved = codes + rng.normal(0.0, math.sqrt(kappa * t / codes.shape[1]), size=codes.shape)
+        factor.codes.E = net.backend.matrix(moved.tolist())
+
+
+def code_groups(net: Any, temperatures: Sequence[float | None]) -> list[int | None]:
+    """Each soft factor's codes' groups closer than `T / 100` squared (D20: the melt and its splits); None if hard."""
+    groups: list[int | None] = []
+    for factor, t in zip(net.recurrence_layer.factors, temperatures, strict=True):
+        if t is None:
+            groups.append(None)
+            continue
+        E = np.array(factor.codes.E.tolist(), dtype=float)
+        groups.append(_groups(np.sum((E[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2) < t / 100))
+    return groups
 
 
 def kmeans(points: np.ndarray, k: int, rng: np.random.Generator, iterations: int) -> tuple[np.ndarray, np.ndarray]:
@@ -1023,45 +1154,39 @@ def kmeans(points: np.ndarray, k: int, rng: np.random.Generator, iterations: int
 
 
 def codes_from_states(
-    net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], rng: np.random.Generator, iterations: int
+    net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], rng: np.random.Generator, iterations: int, hot: float
 ) -> list[dict[str, Any]]:
     """
     Each snapped factor's codes set by k-means of its cells' outputs over the rows given (WarmUp, D6),
-    and its `tau_0`, a quarter of the median squared distance from a code to its nearest (D7': half
-    the temperature at which two such codes merge, Rose 1998); a row each, with the clusters' own
-    critical temperature (twice the pooled within-cluster top eigenvalue) and the whole's beside it.
+    and its `T_hot`, `hot` times the whole's critical temperature (D16); a row each, with the clusters'
+    own critical temperature (twice the pooled within-cluster top eigenvalue), the whole's, and the
+    states' melting curve's melting point and transitions (D21) beside it.
     """
     spread = state_spread(net, rows)
-    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
-    blocks: list[list[np.ndarray]] = [[] for _ in starts]
-    for batch in rows:
-        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
-        for cell in cells[1:]:
-            H = np.array(cell.tolist(), dtype=float)
-            for g, f in enumerate(net.recurrence.factors):
-                blocks[g].append(H[:, starts[g] : starts[g] + f.state_size])
+    states = factor_states(net, rows)
     made: list[dict[str, Any]] = []
     for g, factor in enumerate(net.recurrence_layer.factors):
         if factor.codes is None:
             made.append({})
             continue
-        h = np.concatenate(blocks[g])
+        h = states[g]
+        melting = melting_curve(h, factor.codes.count, np.random.default_rng([g]))  # k-means' draws untouched
         E, nearest = kmeans(h, factor.codes.count, rng, iterations)
         within = np.zeros((h.shape[1], h.shape[1]))
         for code in np.unique(nearest):
             centred = h[nearest == code] - h[nearest == code].mean(axis=0)
             within += centred.T @ centred
         lam = float(np.linalg.eigvalsh(within / max(len(h) - 1, 1))[-1])
-        gaps = np.sum((E[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
-        np.fill_diagonal(gaps, np.inf)
         factor.codes.E = net.backend.matrix(E.tolist())
         made.append(
             {
-                "tau_0": 0.25 * float(np.median(gaps.min(axis=1))),
+                "hot": hot * spread[g]["critical_temperature"],
                 "within_temperature": 2.0 * lam,
                 "critical_temperature": spread[g]["critical_temperature"],
                 "in_use": len(np.unique(nearest)),
                 "effective_dimension": spread[g]["effective_dimension"],
+                "melting_point": melting["melting_point"],
+                "transitions": melting["transitions"],
             }
         )
     return made
@@ -1097,7 +1222,7 @@ class Place:
     words: list[list[int]] = field(default_factory=list[list[int]])  # R4: the last diagnosis's counterexamples
     anneal: list[int] = field(default_factory=list[int])  # each factor's level (Anneal), with it
     warm: bool = False  # WarmUp: still continuous
-    tau_0: list[float] = field(default_factory=list[float])  # WarmUp: each factor's tau_0, once set
+    hot: list[float] = field(default_factory=list[float])  # WarmUp: each factor's T_hot, once set
     anneal_from: int = 0  # WarmUp: the epochs trained when the warm-up ended
 
 
@@ -1228,9 +1353,12 @@ def run(
     temperature and commitment before each epoch from its level, read on the step's screen at its
     shortest, middle and longest lengths, a row's `anneal` logging them. `warm_up` (WarmUp, with `anneal`; the
     state formation workplan's option 1) runs every snapped factor continuous from the start, each
-    row logging `warm`, until a step's end where it ends: its codes set from the states seen and
-    each factor annealed from its tau_0, a row logging `warm_up_end`; the machine's readings, its
-    certificate included, read the snapped network throughout.
+    row logging `warm`, each warm step's end its distinct states (`distinct`), until a step's end
+    where it ends: its codes set from the states seen, a row logging `warm_up_end`, then each factor's
+    temperature profiled from its T_hot (heat, hold, cool), its soft codes moved by thermal noise,
+    each row's `anneal` logging the phase and the codes' groups; no step's best is kept during the
+    heat and the hold, and nothing goes back (no fork, restore_best or keep_machine: D18). The
+    machine's readings, its certificate included, read the snapped network throughout.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -1269,6 +1397,9 @@ def run(
         warm_up,
     )
     assert warm_up is None or anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
+    assert warm_up is None or (fork is None and not restore_best and not keep_machine), (
+        "a crystallising run never goes back (D18): the warm-up not with the fork, restore_best or keep_machine"
+    )
     assert not (keep_machine and restore_best), "the step's kept machine (R3) or its best screen, not both"
     assert counterexamples is None or 0 < counterexamples < 1, (
         f"a share of each epoch's examples; got {counterexamples}"
@@ -1325,13 +1456,14 @@ def run(
     counts = [0 if f.codes is None else f.codes.count for f in net.recurrence.factors]
     levels = list(place.thermostat) if place is not None and place.thermostat else [0] * len(counts)  # off at the start
     snapped = [f.codes is not None for f in net.recurrence.factors]
+    counts_snapped = [c for c, s in zip(counts, snapped, strict=True) if s]
     annealed = (  # Anneal's levels: soft at the start (a continuous factor's at the ramp's end, never soft)
         list(place.anneal)
         if place is not None and place.anneal
-        else [0 if s else (anneal.ramp if anneal is not None else 0) for s in snapped]
+        else [0 if s else (anneal.top if anneal is not None else 0) for s in snapped]
     )
     warm = place.warm if place is not None else warm_up is not None  # WarmUp: still continuous
-    tau_0 = list(place.tau_0) if place is not None else []  # WarmUp: each factor's tau_0, once set
+    hot = list(place.hot) if place is not None else []  # WarmUp: each factor's T_hot, once set
     anneal_from = place.anneal_from if place is not None else 0  # WarmUp: the epochs trained at its end
 
     def warming() -> None:
@@ -1369,7 +1501,7 @@ def run(
             [list(w) for w in words],
             list(annealed) if anneal is not None else [],
             warm,
-            list(tau_0),
+            list(hot),
             anneal_from,
         )
         _write_checkpoint(out, identity, place, net)
@@ -1431,6 +1563,7 @@ def run(
             if commitment_from is not None:
                 net.set_commitments([0.0 if step < commitment_from else c for c in commitments])
             thermo: dict[str, Any] = {}
+            melting = False  # WarmUp: in the profile's heat or hold (D18)
             if thermostat is not None:
                 # the network about to train (a fork's restored one included), read on the step's screen at its
                 # shortest, middle and longest lengths
@@ -1449,20 +1582,30 @@ def run(
             elif anneal is not None:
                 # the network about to train (a fork's restored one included), its soft factors' hardness read
                 # at the temperature they trained at, on the step's screen at its shortest, middle and longest;
-                # after a warm-up, each factor's from its tau_0 (D7), halved from the warm-up's end
+                # after a warm-up, each factor's temperature its profile's from its T_hot (D15), hardness read
+                # from the cool's start, the soft codes moved by thermal noise (D17)
                 warming()
+                phase = warm_up.phase(spent - anneal_from) if warm_up is not None and hot else None
+                melting = phase in ("heat", "hold")
                 each = (
-                    [t * 0.5 ** ((spent - anneal_from) // anneal.halving) for t in tau_0]
-                    if tau_0
+                    [warm_up.temperature(spent - anneal_from, t) for t in hot]
+                    if warm_up is not None and hot
                     else [anneal.temperature(spent)] * len(snapped)
                 )
-                soft = [t if s and level == 0 else None for t, s, level in zip(each, snapped, annealed, strict=True)]
+                soft = [
+                    t if s and level == 0 and not melting else None
+                    for t, s, level in zip(each, snapped, annealed, strict=True)
+                ]
                 hard = hardness(net, [screens[n] for n in sorted({1, (step + 1) // 2, step})], soft, anneal.hard)
                 annealed = anneal.levels(annealed, hard)
                 temperatures = [
-                    t if s and level == 0 else None for t, s, level in zip(each, snapped, annealed, strict=True)
+                    t if s and anneal.soft(level) else None for t, s, level in zip(each, snapped, annealed, strict=True)
                 ]
                 beta = anneal.commitments(annealed, commitments)
+                profiled: dict[str, Any] = {}
+                if phase is not None and warm_up is not None:
+                    jitter(net, temperatures, warm_up.kappa, np.random.default_rng([seed, step, epoch, forks]))
+                    profiled = {"phase": phase, "groups": code_groups(net, temperatures)}
                 net.set_temperatures(temperatures)
                 net.set_commitments(beta)
                 thermo = {
@@ -1470,6 +1613,7 @@ def run(
                         "temperature": temperatures,
                         "hard": [None if h is None else round(h, 4) for h in hard],
                         "beta": [round(b, 4) for b in beta],
+                        **profiled,
                     }
                 }
             guarded: dict[str, Any] = {}
@@ -1562,7 +1706,7 @@ def run(
             if score == 1.0:
                 stop = "passed"
                 break
-            if score > best:
+            if score > best or melting:  # the melt's screen is its best (D18)
                 best, since = score, 0
                 if restore_best:
                     net.save(str(step_best))
@@ -1611,15 +1755,17 @@ def run(
         if certificate.certified:
             net.save(str(out / f"certified-step-{step}.network.json"))
             break
-        if warm and warm_up is not None and warm_up.ends(step, first, max(best, score)):
-            # WarmUp's end (D5-D7): the codes from the states seen, each factor's tau_0, the anneal from here
+        sample = [screens[n] for n in sorted({1, (step + 1) // 2, step})]
+        distinct = distinct_states(net, sample) if warm and warm_up is not None else []
+        if warm and warm_up is not None:
+            record({"step": step, "distinct": distinct})
+        if warm and warm_up is not None and warm_up.ends(step, first, max(best, score), distinct, counts_snapped):
+            # WarmUp's end (D14-D16): the codes from the states seen, each factor's T_hot, the profile from here
             warm = False
             warming()
             rng_codes = np.random.default_rng([seed, step])
-            made = codes_from_states(
-                net, [screens[n] for n in sorted({1, (step + 1) // 2, step})], rng_codes, warm_up.iterations
-            )
-            tau_0 = [m.get("tau_0", 1.0) or 1e-6 for m in made]
+            made = codes_from_states(net, sample, rng_codes, warm_up.iterations, warm_up.hot)
+            hot = [m.get("hot", 1.0) for m in made]
             anneal_from = spent
             record({"step": step, "warm_up_end": made})
             net.save(str(out / "network.json"))

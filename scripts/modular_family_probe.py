@@ -65,9 +65,13 @@ factor's codes soft (the softmax mix at a temperature, from `--anneal-start` 1.0
 `--anneal-halving` 10 epochs), its commitment 0, until it hardens (99% of the step's screen's windows
 weighting one code above 0.99), then hard with its commitment ramped back over `--anneal-ramp` 20
 epochs (the commitment-control workplan's stage 3; each epoch's row logs them); with `--warm-up`, every
-snapped factor runs continuous first (its commitment 0) until a step's best screen reaches 0.95 or the
-8th step, its codes then set by k-means of the states seen and annealed from tau_0, a quarter of the
-median squared distance from a code to its nearest (the state formation workplan's option 1, D7'); `--keep-machine` keeps each
+snapped factor runs continuous first (its commitment 0) until a step's best screen reaches 0.95 with its
+distinct states at least 4 times its codes, or the 8th step; its codes then set by k-means of the states
+seen, and its temperature profiled from T_hot (`--melt-hot` 2 times the whole's critical temperature):
+heated doubling over `--melt-heat` 6 epochs, held `--melt-hold` 10, cooled halving every `--melt-halving`
+15 with no floor, its soft codes moved by thermal noise of variance `--melt-kappa` 0.01 T, soft for
+`--anneal-tail` epochs past hard (the state formation workplan's option 1, D14-D19; never with the fork,
+`--restore-best` or `--keep-machine`); `--keep-machine` keeps each
 step's network whose machine has the fewest pairs per code (read at each diagnosis, ties to more
 right pairs) and restores it at a plateau, and `--counterexamples [SHARE]` draws SHARE (0.25) of each
 epoch's examples from the shortest words to the codes wrong for their states (at most 256, read at
@@ -1129,16 +1133,24 @@ def main(argv: list[str]) -> int:
     run.add_argument("--anneal-start", type=float, default=mf.Anneal.start, metavar="TEMPERATURE")
     run.add_argument("--anneal-halving", type=int, default=mf.Anneal.halving, metavar="EPOCHS")
     run.add_argument("--anneal-ramp", type=int, default=mf.Anneal.ramp, metavar="EPOCHS")
+    run.add_argument("--anneal-tail", type=int, default=mf.Anneal.tail, metavar="EPOCHS")
     run.add_argument(
         "--warm-up",
         action="store_true",
         help="the state formation workplan's option 1 (with --anneal): every snapped factor continuous, its "
         "commitment 0, until the end of the first step whose best screen reaches --warm-up-screen or of the "
-        "--warm-up-cap-th step; then its codes by k-means of the states seen, annealed from tau_0 (a quarter of "
-        "the median squared distance from a code to its nearest)",
+        "--warm-up-cap-th step, its distinct states at least --warm-up-distinct times its codes; then its codes by "
+        "k-means of the states seen, heated to --melt-hot times the whole's critical temperature over --melt-heat "
+        "epochs, held --melt-hold, cooled halving every --melt-halving, thermal noise of variance --melt-kappa T",
     )
     run.add_argument("--warm-up-screen", type=float, default=mf.WarmUp.screen, metavar="SHARE")
     run.add_argument("--warm-up-cap", type=int, default=mf.WarmUp.cap, metavar="STEPS")
+    run.add_argument("--warm-up-distinct", type=float, default=mf.WarmUp.distinct, metavar="RATIO")
+    run.add_argument("--melt-hot", type=float, default=mf.WarmUp.hot, metavar="MULTIPLE")
+    run.add_argument("--melt-heat", type=int, default=mf.WarmUp.heat, metavar="EPOCHS")
+    run.add_argument("--melt-hold", type=int, default=mf.WarmUp.hold, metavar="EPOCHS")
+    run.add_argument("--melt-halving", type=int, default=mf.WarmUp.halving, metavar="EPOCHS")
+    run.add_argument("--melt-kappa", type=float, default=mf.WarmUp.kappa, metavar="KAPPA")
     run.add_argument(
         "--keep-machine",
         action="store_true",
@@ -1238,6 +1250,16 @@ def main(argv: list[str]) -> int:
     spread.add_argument("--arm", choices=sorted(ARMS), default="family")
     spread.add_argument("--step", type=int, required=True, help="the curriculum step whose screen lengths it samples")
     spread.add_argument("--cases", type=int, default=200, help="cases a length (the screen's)")
+    melting = commands.add_parser(
+        "melting-curve",
+        help="saved networks' melting curves (D21): Rose's deterministic annealing of each factor's codes on its "
+        "outputs, cooled from twice the critical temperature, the codes' groups and transitions at each temperature",
+    )
+    melting.add_argument("networks", type=Path, nargs="+")
+    melting.add_argument("--task", required=True, help="modular-division-p (the quotient) or a machine's")
+    melting.add_argument("--arm", choices=sorted(ARMS), default="family")
+    melting.add_argument("--step", type=int, required=True, help="the curriculum step whose screen lengths it samples")
+    melting.add_argument("--cases", type=int, default=200, help="cases a length (the screen's)")
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
     readout.add_argument("root", type=Path, help="the study's directory, a <arm>/seed<s> per run")
     readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
@@ -1296,6 +1318,14 @@ def main(argv: list[str]) -> int:
             spread = mf.state_spread(mf.load_network(str(path)), rows)
             print(json.dumps({"network": str(path), "step": args.step, "factors": spread}), flush=True)
         return 0
+    if args.command == "melting-curve":
+        encoding = _target(args.task, args)
+        lengths = sorted({1, (args.step + 1) // 2, args.step})
+        rows = [mf.windows_drawn(encoding, n, args.cases, f"family-screen-{args.step}-{n}") for n in lengths]
+        for path in args.networks:
+            curves = mf.melting_curves(mf.load_network(str(path)), rows)
+            print(json.dumps({"network": str(path), "step": args.step, "factors": curves}), flush=True)
+        return 0
     if args.command in ("by-length", "breaks"):
         for path in args.networks:
             print(read_network(path, args), flush=True)
@@ -1328,13 +1358,31 @@ def main(argv: list[str]) -> int:
     if args.anneal and (args.thermostat or args.commitment_from is not None or args.consolidate):
         parser.error("--anneal sets the commitment itself: not with --thermostat, --commitment-from or --consolidate")
     anneal = (
-        mf.Anneal(args.anneal_start, args.anneal_halving, mf.Anneal.hard, mf.Anneal.share, args.anneal_ramp)
+        mf.Anneal(
+            args.anneal_start, args.anneal_halving, mf.Anneal.hard, mf.Anneal.share, args.anneal_ramp, args.anneal_tail
+        )
         if args.anneal
         else None
     )
     if args.warm_up and not args.anneal:
         parser.error("--warm-up ends in an annealed snap: with --anneal")
-    warm_up = mf.WarmUp(args.warm_up_screen, args.warm_up_cap) if args.warm_up else None
+    if args.warm_up and (args.fork or args.restore_best or args.keep_machine):
+        parser.error("--warm-up crystallises: never with --fork, --restore-best or --keep-machine (D18)")
+    warm_up = (
+        mf.WarmUp(
+            args.warm_up_screen,
+            args.warm_up_cap,
+            mf.WarmUp.iterations,
+            args.warm_up_distinct,
+            args.melt_hot,
+            args.melt_heat,
+            args.melt_hold,
+            args.melt_halving,
+            args.melt_kappa,
+        )
+        if args.warm_up
+        else None
+    )
     thermostat = (
         mf.Thermostat(args.thermostat_floor, args.thermostat_restore, args.thermostat_ramp, args.thermostat_screen)
         if args.thermostat
