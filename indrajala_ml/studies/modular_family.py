@@ -408,6 +408,11 @@ def _windows(encoding: Target, n: int, cases: int, seed: str) -> tuple[list[Exam
     return [encoding.example(c) for c in drawn], drawn
 
 
+def windows_drawn(encoding: Target, n: int, cases: int, seed: str) -> list[Example]:
+    """The examples of `cases` words of length `n` drawn as a run's screen draws them (its seed's name)."""
+    return _windows(encoding, n, cases, seed)[0]
+
+
 def accuracy(net: Any, encoding: Target, rows: Sequence[Example]) -> dict[str, list[int]]:
     """Each answer kind's [correct, all] (division's quotient by class, 0, undefined, nonzero)."""
     tally: dict[str, list[int]] = {}
@@ -892,6 +897,80 @@ def hardness(
                 A = np.exp(-(D - D.min(axis=1)[:, np.newaxis]) / t)
                 above[g] += int(np.sum(A.max(axis=1) / A.sum(axis=1) > hard))
     return [None if t is None else above[g] / max(total, 1) for g, t in enumerate(temperatures)]
+
+
+def _groups(close: np.ndarray) -> int:
+    """How many groups a symmetric closeness matrix joins its items into (transitively)."""
+    group = list(range(len(close)))
+
+    def root(i: int) -> int:
+        while group[i] != i:
+            i = group[i]
+        return i
+
+    for i, j in zip(*np.nonzero(np.triu(close, 1)), strict=True):
+        group[root(int(i))] = root(int(j))
+    return len({root(i) for i in range(len(close))})
+
+
+def state_spread(
+    net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], merged: float = 1e-6, share: float = 0.99
+) -> list[dict[str, Any]]:
+    """
+    Each factor's spread over every window's cell output `h` of the rows given (the state formation
+    workplan's D3: the network's own, never the target's): the top eigenvalue of `h`'s covariance and
+    deterministic annealing's critical temperature, twice it (Rose 1998, Theorem 1); `h`'s effective
+    dimension, the fewest principal components holding `share` of its variance (Zhao et al. 2026); the
+    codes' pairwise squared distances and their groups closer than `merged` (identical codes); and,
+    over the windows' nearest codes, the codes in use and the pooled within-cluster covariance's top
+    eigenvalue (D7's `tau_0` is twice it). A factor without codes has its codes' entries None.
+    """
+    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
+    sizes = [f.state_size for f in net.recurrence.factors]
+    blocks: list[list[np.ndarray]] = [[] for _ in sizes]
+    for batch in rows:
+        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
+        for cell in cells[1:]:
+            H = np.array(cell.tolist(), dtype=float)
+            for g, (start, size) in enumerate(zip(starts, sizes, strict=True)):
+                blocks[g].append(H[:, start : start + size])
+    spread: list[dict[str, Any]] = []
+    for g, factor in enumerate(net.recurrence_layer.factors):
+        h = np.concatenate(blocks[g])
+        eigen = np.sort(np.linalg.eigvalsh(np.cov(h, rowvar=False)))[::-1].clip(min=0.0)
+        held = np.cumsum(eigen) / max(float(eigen.sum()), 1e-300)
+        row: dict[str, Any] = {
+            "windows": len(h),
+            "lambda_max": float(eigen[0]),
+            "critical_temperature": 2.0 * float(eigen[0]),
+            "effective_dimension": int(np.searchsorted(held, share) + 1),
+            "codes": None,
+            "groups": None,
+            "nearest_squared": None,
+            "median_squared": None,
+            "in_use": None,
+            "within_lambda_max": None,
+        }
+        if factor.codes is not None:
+            E = np.array(factor.codes.E.tolist(), dtype=float)
+            pairs = np.sum((E[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
+            upper = pairs[np.triu_indices(len(E), 1)]
+            nearest = np.argmin(np.sum((h[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2), axis=1)
+            within = np.zeros((h.shape[1], h.shape[1]))
+            for code in np.unique(nearest):
+                members = h[nearest == code]
+                centred = members - members.mean(axis=0)
+                within += centred.T @ centred
+            row |= {
+                "codes": len(E),
+                "groups": _groups(pairs < merged),
+                "nearest_squared": float(upper.min()),
+                "median_squared": float(np.median(upper)),
+                "in_use": len(np.unique(nearest)),
+                "within_lambda_max": float(np.linalg.eigvalsh(within / max(len(h) - 1, 1))[-1]),
+            }
+        spread.append(row)
+    return spread
 
 
 @dataclass

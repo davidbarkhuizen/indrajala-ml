@@ -1036,6 +1036,28 @@ def test_hardness_is_the_share_of_windows_whose_largest_weight_passes_the_test()
     assert cold == 1.0 and hot == 0.0
 
 
+def test_state_spread_reads_the_outputs_critical_temperature_and_the_codes_groups():
+    encoding = mf.Encoding(5, mf.FAMILY)
+    net = mf.network(encoding, [(4, 4)], 0, mf.BEFORE_STATE)
+    rows = [[encoding.example(encoding.draw(3, random.Random(i))) for i in range(8)]]
+    (spread,) = mf.state_spread(net, rows)
+    h = np.concatenate(
+        [np.array(c.tolist())[:, :4] for c in net.window_states(net.backend.matrix([t for t, _ in rows[0]]))[2][1:]]
+    )
+    top = float(np.linalg.eigvalsh(np.cov(h, rowvar=False))[-1])
+    assert spread["windows"] == len(h) > 0
+    assert spread["critical_temperature"] == pytest.approx(2 * top)
+    assert 1 <= spread["effective_dimension"] <= 4
+    assert spread["codes"] == 4 and spread["groups"] == 4 and 1 <= spread["in_use"] <= 4
+    # three codes made identical: two groups, the nearest pair at distance 0
+    codes = net.recurrence_layer.factors[0].codes
+    E = np.array(codes.E.tolist())
+    E[1] = E[2] = E[0]
+    codes.E = net.backend.matrix(E.tolist()) if not isinstance(codes.E, np.ndarray) else E
+    (merged,) = mf.state_spread(net, rows)
+    assert merged["groups"] == 2 and merged["nearest_squared"] == 0.0
+
+
 def test_an_annealed_run_logs_each_epochs_temperatures_hardness_and_commitments(tmp_path: Path):
     settings = mf.Settings(epoch_examples=32, max_epochs=3, screen=4, cases=4, lengths=(2,), long=(3,))
     anneal = mf.Anneal(start=1.0, halving=1, ramp=2)
