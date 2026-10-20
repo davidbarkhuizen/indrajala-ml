@@ -544,6 +544,15 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1, handover=True),
         "crucible": True,
     },
+    "gated": {  # D29: a gate no screen meets, so the cool's clock holds from its second epoch
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1, handover=True, gate=2.0, window=3.0),
+        "crucible": True,
+    },
 }
 
 
@@ -620,6 +629,8 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "crucible":
         marks = [r["crucible"] for r in whole[0] if r.get("epoch") == 0 and "crucible" in r]
         assert marks and marks[0] != "grown" and marks[-1] == "grown"
+    elif kind == "gated":  # the clock held, the held count carried over every stop
+        assert max(r["anneal"].get("held", 0) for r in whole[0] if "anneal" in r) >= 2
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":
@@ -1096,6 +1107,25 @@ def test_the_handover_window_reads_each_factors_melting_curve():
     ]
     melting, final = mf.handover_window(made)
     assert melting == [2.5, 3.0, 1.0] and final == [0.3, pytest.approx(0.003), 1.0]
+    one = [{"melting_point": 2.0, "critical_temperature": 3.0, "transitions": [[2.0, 1, 8]]}]  # all at once
+    assert mf.handover_window(one) == ([2.0], [1.0])  # an octave
+    assert mf.handover_window(one, 3.0) == ([2.0], [0.25])  # D30: at least three
+    assert mf.handover_window(made, 3.0)[1] == [0.3, pytest.approx(0.003), 1.0]  # wider windows kept
+
+
+def test_the_gate_holds_the_cools_clock_while_the_screen_is_below_the_holds_level():
+    gated = mf.WarmUp(heat=2, hold=3, gate=0.99)
+    assert not gated.holds(5, 0.5, 1.0)  # the cool's first epoch: the clock runs from the hold
+    assert gated.holds(6, 0.98, 1.0) and not gated.holds(6, 0.99, 1.0)
+    assert not gated.holds(4, 0.0, 1.0)  # the hold's own epochs never wait
+    assert not mf.WarmUp(heat=2, hold=3).holds(6, 0.0, 1.0)  # without a gate
+
+
+def test_a_held_clock_holds_the_temperature_and_the_coupling(tmp_path: Path):
+    _resumable(tmp_path, kind="gated")
+    cool = [row["anneal"] for row in _outcome(tmp_path)[0] if row.get("anneal", {}).get("phase") == "cool"]
+    assert len(cool) >= 3 and [a["held"] for a in cool] == list(range(len(cool)))
+    assert all(a["temperature"] == cool[0]["temperature"] and a["coupling"] == cool[0]["coupling"] for a in cool)
 
 
 def test_the_hardness_test_waits_for_a_shaped_cool_to_run_its_curve():

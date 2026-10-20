@@ -392,6 +392,62 @@ crystallised, with the handover, on the material where it formed, before the lon
   separates (seeds don't form: the crucible's design is wrong); seeds form but none certifies (growth
   loses them: (b) next, where the logs say).
 
+### The quasi-static crucible (2026-10-20, evening, from the population of 4a''' in flight)
+
+By the owner's framing (path dependence expected; a failure that correlates with something observable
+early is a design flaw, to fix), the six failures of 4a''' (`population` on its logs at about 19:00, 55
+minutes in; findings below once it ends) fall in three systematic kinds, each seen from the answers or
+the run's own measurements, none from the target:
+
+- **The crucible too short:** D14 ended three warm-ups at step 3 (screen and distinct states passed at
+  once); in each the cool's best state share stayed 0.36-0.38. The five crucibles of length 5 and 8 all
+  formed a state in the cool (0.75-1.00).
+- **An open-loop cool:** the profile's clock is the epochs trained, so a step that dips trains more
+  epochs and the cool runs on through the dip. Each loss began with a dip at an unchanged schedule
+  (seed 2, step 85: screen 1.000 to 0.704; seed 6, step 69: 1.000 to 0.657; seed 1, step 101: 1.000 to
+  0.923), the coupling rising through it (seed 1 0.84 to 1.0 in 20 epochs, seed 2 0.80 to 1.0 in 11),
+  and no run recovered once at 1. The certified runs' screens never fell below 0.99 in the cool.
+- **A degenerate coupling window:** seed 6's factor 1 melted in one transition (1 to 8 groups at 2.14),
+  so D25's window fell back to an octave, and its coupling went 0 to 1 within 12 steps of the cool's
+  start, D25's abrupt handover in small; its loss came there.
+
+D28-D30 fix one each. Seeds 0 and 5 are untouched by all three (their warm-ups ended at the cap, their
+windows span 3.25-4.25 octaves, no screen in their cools fell below 0.99), so under them they are the
+same runs, and the follow-up reruns the six others.
+
+- **D28. The crucible at the warm-up's cap** (`--warm-up-screen 1.01`: only D14's cap of 8 steps ends
+  the warm-up).
+  - (a) *Chosen.* Pros: the three length-8 crucibles each formed the state (two certified); a setting,
+    no build; generic (the cap is D5's, every backdrop's). Cons: the cap a number, not read from the
+    run; a longer continuous warm-up may drift (D4), and on a backdrop whose warm-up passes early it
+    costs epochs.
+  - (b) A stricter D14 (more distinct states a code). Cons: S3's length-3 crucibles had 8 of 8 codes in
+    use; the count wasn't what was short.
+  - (c) The crucible grown from length 3 by a second anneal. Cons: a new mechanism, untested.
+- **D29. A quasi-static cool (`--melt-gate 0.99`): the profile's clock holds through an epoch whose
+  screen before it is below 0.99 of the hold's best**; temperature and coupling wait while the network
+  recovers at fixed values, the noise still on. As adaptive schedules in simulated annealing cool only
+  near equilibrium (Huang, Romeo and Sangiovanni-Vincentelli 1986), here the answers' screen is the
+  equilibrium's reading.
+  - (a) *Chosen.* Pros: answers only; compatible with D18 (nothing undone: the crystal waits rather than
+    being restored); time isn't the constraint (the owner); off while the screen holds, so a run that
+    never dips is unchanged. Cons: a run that never recovers stalls at its temperature until the budget
+    (logged: `held`); the threshold a number (the certified runs never fell below it; the losses fell
+    to 0.66-0.92).
+  - (b) Slow the whole cool. Cons: the dips came at every speed of the convex cool; the cost paid by
+    every run, and an open loop still.
+  - (c) The fork (restore and cool slower). Cons: D18, the owner's.
+- **D30. Each factor's coupling window at least 3 octaves below its melting point
+  (`--handover-octaves 3`).**
+  - (a) *Chosen.* Pros: the certified factors' windows were 3.25-4.25 octaves (unchanged); a curve with
+    one transition hands over gradually. Cons: below a single transition the window's end isn't the
+    material's; 3 a number.
+  - (b) Remeasure the curve until it shows a cascade. Cons: the material is what it is.
+- **4a''''. The quasi-static crucible probe:** word-problem-s3 seeds 1, 2, 3, 4, 6, 7, the cell and
+  profile of 4a''' with D28-D30, on `stone` from about 19:30 (13 workers on its 12 cores until 4a''' ends);
+  registered in `probe-d29.sh`'s header before its data. Seeds 0 and 5 carried over from 4a''' (the
+  same runs, above), so the population is 0-7.
+
 ## Findings: stage 2, option 1's understanding (2026-10-20)
 
 `state-spread` (`scripts/modular_family_probe.py`, `mf.state_spread`): each factor's `h` sampled at a

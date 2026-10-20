@@ -569,6 +569,86 @@ def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
     )
 
 
+def _anneal_at(rows: Sequence[Mapping[str, Any]], row: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The anneal at a diagnosis: its own, or the last epoch's before it (a step's end logs none)."""
+    at = next(i for i, r in enumerate(rows) if r is row)
+    return next((r["anneal"] for r in reversed(rows[: at + 1]) if "anneal" in r), {})
+
+
+def crucible_course(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> dict[str, Any]:
+    """
+    A seeded crystallisation's run (D26) from its log.jsonl, for a population's reading (D27): the
+    warm-up's end (its step, the crucible's length, each factor's codes in use, effective dimension,
+    melting point and transitions there; the warm-up's best screen); the crucible's best state share
+    in the cool (the heat's are the warm-up's codes, which the melt erases), its step and coupling; the first diagnosis after it whose codes in use fall below `drop` of the
+    best's (the loss: its step, phase, coupling, mean temperature); the first grown step; how it ended
+    (outcome's). Observables to set against a population's outcomes, early ones first.
+    """
+    start = next((row for row in rows if "warm_up_end" in row), None)
+    warm = [row for row in rows if row.get("warm") and "screen" in row]
+    diagnoses = [row for row in rows if "factors" in row and "accuracy" in row]
+    grown = next((int(row["step"]) for row in rows if row.get("crucible") == "grown"), None)
+    crucible = [row for row in diagnoses if start is not None and row["step"] > start["step"]]
+    crucible = [row for row in crucible if grown is None or row["step"] < grown]
+    cooled = [row for row in crucible if _anneal_at(rows, row).get("phase") == "cool"] or crucible
+    best = max(cooled, key=lambda row: float(row.get("state_share", 0.0)), default=None)
+    lost = None
+    if best is not None:
+        later = cooled[cooled.index(best) + 1 :]
+        lost = next((row for row in later if sum(_codes(row)) < drop * sum(_codes(best))), None)
+
+    def anneal(row: Mapping[str, Any] | None) -> dict[str, Any]:
+        a = {} if row is None else _anneal_at(rows, row)
+        if not a:
+            return {}
+        return {
+            "phase": a["phase"],
+            "coupling": round(sum(a["coupling"]) / len(a["coupling"]), 3),
+            "temperature": float(np.mean(a["temperature"])),
+        }
+
+    end = outcome(rows, drop)
+    return {
+        "warm_up_end": None if start is None else int(start["step"]),
+        "crucible": None if start is None else start["crucible"],
+        "warm_screen": max((float(row["screen"]) for row in warm), default=None),
+        "in_use": [] if start is None else [int(f["in_use"]) for f in start["warm_up_end"]],
+        "effective_dimension": [] if start is None else [int(f["effective_dimension"]) for f in start["warm_up_end"]],
+        "melting_point": [] if start is None else [float(f["melting_point"]) for f in start["warm_up_end"]],
+        "transitions": [] if start is None else [len(f["transitions"]) for f in start["warm_up_end"]],
+        "best_share": None if best is None else float(best.get("state_share", 0.0)),
+        "best_step": None if best is None else int(best["step"]),
+        "best": anneal(best),
+        "lost_step": None if lost is None else int(lost["step"]),
+        "lost": anneal(lost),
+        "grown": grown,
+        "end": end.end,
+        "step": end.step,
+        "minutes": end.minutes,
+    }
+
+
+def crucible_summary(course: Mapping[str, Any]) -> str:
+    """crucible_course's reading on one line."""
+
+    def at(a: Mapping[str, Any]) -> str:
+        return f" ({a['phase']}, coupling {a['coupling']:.2f}, T {a['temperature']:.2g})" if a else ""
+
+    best = (
+        "-"
+        if course["best_share"] is None
+        else f"{course['best_share']:.3f} at {course['best_step']}{at(course['best'])}"
+    )
+    lost = "-" if course["lost_step"] is None else f"{course['lost_step']}{at(course['lost'])}"
+    melting = ", ".join(f"{t:.2f}" for t in course["melting_point"])
+    return (
+        f"warm-up to {course['warm_up_end']} (crucible {course['crucible']}, screen {course['warm_screen']}, "
+        f"in use {course['in_use']}, d_eff {course['effective_dimension']}, melting {melting}, "
+        f"transitions {course['transitions']}); best share {best}; lost {lost}; grown {course['grown'] or '-'}; "
+        f"{course['end']} at {course['step']} ({course['minutes']} min)"
+    )
+
+
 DROP_FROM, DROP_BY = 0.9, 0.3
 RECOVERED = 0.05  # a drop recovered: a later point's worst answer back within this of its level before
 
@@ -1141,7 +1221,11 @@ class WarmUp:
     cooled exponentially, halved every `halving` epochs, with no floor; `T_hot` is `hot` times the
     whole's critical temperature (Rose 1998: above it every code is at the mean, a melt). Each soft
     epoch moves every soft code by thermal noise of variance `kappa T` (D17). The run's Anneal reads
-    hardness from the cool's start and holds the tail and the commitment's ramp.
+    hardness from the cool's start and holds the tail and the commitment's ramp. With `gate` (D29) the
+    cool is quasi-static: its clock (the profile's epochs) holds through an epoch whose screen before it
+    is below `gate` times the hold's best, so the temperature and the coupling wait for the network;
+    with `window` (D30) each factor's coupling window spans at least that many octaves below its melting
+    point.
     """
 
     screen: float = 0.95
@@ -1157,6 +1241,15 @@ class WarmUp:
     cool: int = 600
     octaves: float = 20.0
     handover: bool = False
+    gate: float = 0.0
+    window: float = 0.0
+
+    def holds(self, n: int, screen: float, level: float) -> bool:
+        """
+        Whether the clock holds at `n` (the profile's epochs so far) for the next epoch (D29): within the
+        cool, the screen before it (`screen`) below `gate` times the hold's best (`level`).
+        """
+        return self.gate > 0 and self.phase(n - 1) == "cool" and screen < self.gate * level
 
     def coupling(self, n: int, temperature: float, melting: float, final: float) -> float:
         """
@@ -1210,11 +1303,13 @@ class WarmUp:
         return hot * 2.0 ** (-self.octaves * COOLS[self.shape](u))
 
 
-def handover_window(made: Sequence[Mapping[str, Any]]) -> tuple[list[float], list[float]]:
+def handover_window(made: Sequence[Mapping[str, Any]], window: float = 0.0) -> tuple[list[float], list[float]]:
     """
     Each factor's coupling window from the warm-up end's rows (codes_from_states; D25): its melting
     point and its last transition's temperature, the whole's critical temperature and a thousandth of
-    the melting point where its curve has none; a factor without codes 1 and 1 (never coupled).
+    the melting point where its curve has none; at least `window` octaves wide (D30: a curve whose
+    codes part in one transition would otherwise hand over within an octave); a factor without codes 1
+    and 1 (never coupled).
     """
     melting: list[float] = []
     final: list[float] = []
@@ -1227,7 +1322,7 @@ def handover_window(made: Sequence[Mapping[str, Any]]) -> tuple[list[float], lis
         transitions: list[list[float]] = m.get("transitions") or []
         last = float(transitions[-1][0]) if transitions else top / 1000
         melting.append(top)
-        final.append(last if last < top else top / 2)
+        final.append(min(last if last < top else top / 2, top * 2.0**-window))
     return melting, final
 
 
@@ -1368,6 +1463,9 @@ class Place:
     final: list[float] = field(default_factory=list[float])  # WarmUp: each factor's last transition (D25)
     crucible: int = 0  # the crucible's longest length, once its warm-up ended (D26)
     grown: int = 0  # the crucible's first block of growth, once begun (D26)
+    held: int = 0  # WarmUp: the epochs its clock held (D29)
+    level: float = -1.0  # WarmUp: the hold's best screen (D29)
+    gate_screen: float = -1.0  # WarmUp: the last screen, which the gate reads (D29)
 
 
 def _run_identity(
@@ -1637,6 +1735,9 @@ def run(
     last_splits = list(place.final) if place is not None else []  # WarmUp: each factor's last transition (D25)
     fixed = place.crucible if place is not None else 0  # D26: the crucible's longest length, once set
     grown_from = place.grown if place is not None else 0  # D26: the first block of growth, once begun
+    held = place.held if place is not None else 0  # D29: the epochs the profile's clock held
+    level = place.level if place is not None else -1.0  # D29: the hold's best screen
+    gate_screen = place.gate_screen if place is not None else -1.0  # D29: the last screen
 
     def warming() -> None:
         # the network about to train or screen (a fork's or a restore's loaded one included) continuous
@@ -1679,6 +1780,9 @@ def run(
             list(last_splits),
             fixed,
             grown_from,
+            held,
+            level,
+            gate_screen,
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -1742,6 +1846,7 @@ def run(
                 }
             )
             last_kinds, step_rollbacks = start_kinds, 0
+            gate_screen = start_score  # D29: the gate reads the screen before the epoch
             peak = 0.0
             if fork is not None:
                 peak = fork.trigger.value(start_score, start_kinds)
@@ -1773,6 +1878,7 @@ def run(
                 net.set_commitments([0.0 if step < commitment_from else c for c in commitments])
             thermo: dict[str, Any] = {}
             melting = False  # WarmUp: in the profile's heat or hold (D18)
+            phase: str | None = None  # WarmUp: the profile's phase this epoch trains in
             if thermostat is not None:
                 # the network about to train (a fork's restored one included), read on the step's screen at its
                 # shortest, middle and longest lengths
@@ -1794,11 +1900,14 @@ def run(
                 # after a warm-up, each factor's temperature its profile's from its T_hot (D15), hardness read
                 # from the cool's start or a shaped cool's end (D24), the soft codes moved by thermal noise (D17)
                 warming()
-                phase = warm_up.phase(spent - anneal_from) if warm_up is not None and hot else None
+                if warm_up is not None and hot and warm_up.holds(spent - anneal_from - held, gate_screen, level):
+                    held += 1  # D29: this epoch trains at the last one's clock
+                clock = spent - anneal_from - held  # the profile's epochs (D29: less those held)
+                phase = warm_up.phase(clock) if warm_up is not None and hot else None
                 melting = phase in ("heat", "hold")
-                reading = phase is None or (warm_up is not None and warm_up.reads_hardness(spent - anneal_from))
+                reading = phase is None or (warm_up is not None and warm_up.reads_hardness(clock))
                 each = (
-                    [warm_up.temperature(spent - anneal_from, t) for t in hot]
+                    [warm_up.temperature(clock, t) for t in hot]
                     if warm_up is not None and hot
                     else [anneal.temperature(spent)] * len(snapped)
                 )
@@ -1819,10 +1928,12 @@ def run(
                     profiled = {"phase": phase, "groups": code_groups(net, temperatures, warm_up.kappa)}
                     if warm_up.handover:  # D25: each soft factor's coupling from its temperature
                         couplings = [
-                            1.0 if t is None else warm_up.coupling(spent - anneal_from, t, m, f)
+                            1.0 if t is None else warm_up.coupling(clock, t, m, f)
                             for t, m, f in zip(temperatures, melting_points, last_splits, strict=True)
                         ]
                         profiled["coupling"] = [round(c, 4) for c in couplings]
+                    if warm_up.gate:
+                        profiled["held"] = held
                 net.set_temperatures(temperatures)
                 net.set_couplings(couplings)
                 net.set_commitments(beta)
@@ -1850,6 +1961,9 @@ def run(
                 wr.train_epoch(net, examples, settings.batch_size, rate, rng)
             spent += 1
             score, kinds = screen(net, encoding, screens)
+            gate_screen = score
+            if phase == "hold":
+                level = max(level, score)  # D29: the liquid's level, the gate's reference
             last_kinds = kinds
             if fork is not None:
                 value = fork.trigger.value(score, kinds)
@@ -1984,7 +2098,7 @@ def run(
             rng_codes = np.random.default_rng([seed, step])
             made = codes_from_states(net, sample, rng_codes, warm_up.iterations, warm_up.hot)
             hot = [m.get("hot", 1.0) for m in made]
-            melting_points, last_splits = handover_window(made)
+            melting_points, last_splits = handover_window(made, warm_up.window)
             anneal_from = spent
             fixed = step if crucible else 0
             record({"step": step, "warm_up_end": made, **({"crucible": fixed} if crucible else {})})

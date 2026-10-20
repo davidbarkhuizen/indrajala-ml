@@ -1188,6 +1188,21 @@ def main(argv: list[str]) -> int:
         "l q, l 0 through the heat and the hold, then log-linear in T from its melting point to its last transition",
     )
     run.add_argument(
+        "--melt-gate",
+        type=float,
+        default=mf.WarmUp.gate,
+        metavar="SHARE",
+        help="a quasi-static cool (the state formation workplan's D29): the profile's clock holds through an epoch "
+        "whose screen before it is below SHARE times the hold's best (0: off)",
+    )
+    run.add_argument(
+        "--handover-octaves",
+        type=float,
+        default=mf.WarmUp.window,
+        metavar="OCTAVES",
+        help="each factor's coupling window at least OCTAVES below its melting point (D30; 0: the curve's alone)",
+    )
+    run.add_argument(
         "--keep-machine",
         action="store_true",
         help="the one-code-one-state workplan's R3: keep each step's network with the fewest pairs per code (read at "
@@ -1235,6 +1250,10 @@ def main(argv: list[str]) -> int:
     long.add_argument("--out", type=Path, required=True)
     trace = commands.add_parser("trace", help="runs' logs, a line per diagnosis, collapses marked")
     trace.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    population = commands.add_parser(
+        "population", help="seeded crystallisations' logs (D26, D27), a line per run: early observables, the outcome"
+    )
+    population.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
     drops = commands.add_parser("drops", help="a collapse trigger scored against runs' logs, offline")
     drops.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl (runs made without the fork)")
     _trigger_arguments(drops)
@@ -1398,6 +1417,11 @@ def main(argv: list[str]) -> int:
             print(f"== {path}")
             print("\n".join(mf.trace([json.loads(line) for line in path.read_text().splitlines()])))
         return 0
+    if args.command == "population":
+        for path in args.logs:
+            course = mf.crucible_course([json.loads(line) for line in path.read_text().splitlines()])
+            print(f"{path}: {mf.crucible_summary(course)}", flush=True)
+        return 0
     if args.command == "long-test":
         args.out.mkdir(parents=True, exist_ok=True)
         for path in args.networks:
@@ -1452,6 +1476,8 @@ def main(argv: list[str]) -> int:
             args.melt_cool,
             args.melt_octaves,
             args.handover,
+            args.melt_gate,
+            args.handover_octaves,
         )
         if args.warm_up
         else None
