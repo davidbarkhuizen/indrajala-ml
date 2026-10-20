@@ -363,6 +363,10 @@ where you meet a new trap; delete one that no longer holds.
   after launch. Over ssh to `jebel`, `$!` was the run.
 - **`cd X && ... && cmd &` backgrounds the whole chain in a subshell:** variables set in it don't
   reach the next command, and over ssh the session stays open until the chain ends.
+- **`pkill -f PATTERN` and `pgrep -f PATTERN` match their own shell** (its command line holds the
+  pattern): 2026-10-20, a `pkill -f "probe-4a2.sh word-problem"` killed the Bash tool's shell and a waiter
+  with it. Bracket one character (`pgrep -f "[p]robe-4a2.sh"`), which the pattern matches but its own
+  text doesn't; or kill by the PIDs a bracketed `pgrep` lists.
 - **Never chain a local launch after a remote one in one command:** when the launching ssh hangs
   (the line above), the Bash tool backgrounds the command and everything after the ssh runs when it
   finally returns (2026-10-20: a local probe launched again 1 h 48 min later, refused only by the run
