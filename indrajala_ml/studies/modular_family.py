@@ -1156,6 +1156,21 @@ class WarmUp:
     shape: str = "exponential"
     cool: int = 600
     octaves: float = 20.0
+    handover: bool = False
+
+    def coupling(self, n: int, temperature: float, melting: float, final: float) -> float:
+        """
+        A soft factor's coupling after `n` epochs from the warm-up's end at `temperature` (D25, with
+        `handover`; else 1): 0 through the heat and the hold (the state the cells' outputs, the codes
+        forming on them), then in the cool log-linear in T from 0 at its melting point `melting` to 1
+        at its last transition `final` (the melting curve's, D21), clipped to [0, 1].
+        """
+        if not self.handover:
+            return 1.0
+        if self.phase(n) != "cool":
+            return 0.0
+        share = math.log(melting / temperature) / math.log(melting / final)
+        return min(max(share, 0.0), 1.0)
 
     def ends(self, step: int, first: int, best: float, distinct: Sequence[int], counts: Sequence[int]) -> bool:
         """Whether the warm-up ends at this step's end (`distinct`, `counts`: each snapped factor's states and codes)."""
@@ -1193,6 +1208,27 @@ class WarmUp:
             return hot * 2.0**-self.octaves * 0.5 ** ((m - self.cool) / self.halving)
         u = m / self.cool
         return hot * 2.0 ** (-self.octaves * COOLS[self.shape](u))
+
+
+def handover_window(made: Sequence[Mapping[str, Any]]) -> tuple[list[float], list[float]]:
+    """
+    Each factor's coupling window from the warm-up end's rows (codes_from_states; D25): its melting
+    point and its last transition's temperature, the whole's critical temperature and a thousandth of
+    the melting point where its curve has none; a factor without codes 1 and 1 (never coupled).
+    """
+    melting: list[float] = []
+    final: list[float] = []
+    for m in made:
+        if not m:
+            melting.append(1.0)
+            final.append(1.0)
+            continue
+        top = float(m.get("melting_point") or m["critical_temperature"])
+        transitions: list[list[float]] = m.get("transitions") or []
+        last = float(transitions[-1][0]) if transitions else top / 1000
+        melting.append(top)
+        final.append(last if last < top else top / 2)
+    return melting, final
 
 
 def distinct_states(net: Any, rows: Sequence[Sequence[tuple[Any, Any]]]) -> list[int]:
@@ -1328,6 +1364,8 @@ class Place:
     warm: bool = False  # WarmUp: still continuous
     hot: list[float] = field(default_factory=list[float])  # WarmUp: each factor's T_hot, once set
     anneal_from: int = 0  # WarmUp: the epochs trained when the warm-up ended
+    melting: list[float] = field(default_factory=list[float])  # WarmUp: each factor's melting point (D25)
+    final: list[float] = field(default_factory=list[float])  # WarmUp: each factor's last transition (D25)
 
 
 def _run_identity(
@@ -1580,6 +1618,8 @@ def run(
     warm = place.warm if place is not None else warm_up is not None  # WarmUp: still continuous
     hot = list(place.hot) if place is not None else []  # WarmUp: each factor's T_hot, once set
     anneal_from = place.anneal_from if place is not None else 0  # WarmUp: the epochs trained at its end
+    melting_points = list(place.melting) if place is not None else []  # WarmUp: each factor's melting point (D25)
+    last_splits = list(place.final) if place is not None else []  # WarmUp: each factor's last transition (D25)
 
     def warming() -> None:
         # the network about to train or screen (a fork's or a restore's loaded one included) continuous
@@ -1618,6 +1658,8 @@ def run(
             warm,
             list(hot),
             anneal_from,
+            list(melting_points),
+            list(last_splits),
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -1726,10 +1768,18 @@ def run(
                 ]
                 beta = anneal.commitments(annealed, commitments)
                 profiled: dict[str, Any] = {}
+                couplings = [1.0] * len(snapped)
                 if phase is not None and warm_up is not None:
                     jitter(net, temperatures, warm_up.kappa, np.random.default_rng([seed, step, epoch, forks]))
                     profiled = {"phase": phase, "groups": code_groups(net, temperatures, warm_up.kappa)}
+                    if warm_up.handover:  # D25: each soft factor's coupling from its temperature
+                        couplings = [
+                            1.0 if t is None else warm_up.coupling(spent - anneal_from, t, m, f)
+                            for t, m, f in zip(temperatures, melting_points, last_splits, strict=True)
+                        ]
+                        profiled["coupling"] = [round(c, 4) for c in couplings]
                 net.set_temperatures(temperatures)
+                net.set_couplings(couplings)
                 net.set_commitments(beta)
                 thermo = {
                     "anneal": {
@@ -1889,6 +1939,7 @@ def run(
             rng_codes = np.random.default_rng([seed, step])
             made = codes_from_states(net, sample, rng_codes, warm_up.iterations, warm_up.hot)
             hot = [m.get("hot", 1.0) for m in made]
+            melting_points, last_splits = handover_window(made)
             anneal_from = spent
             record({"step": step, "warm_up_end": made})
             net.save(str(out / "network.json"))

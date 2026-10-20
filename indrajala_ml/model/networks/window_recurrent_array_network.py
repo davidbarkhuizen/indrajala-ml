@@ -222,6 +222,16 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         """
         self.recurrence_layer.set_continuous(continuous)
 
+    def set_couplings(self, couplings: Sequence[float]) -> None:
+        """
+        Each snapped factor's coupling, in factor order (the state formation workplan's gradual
+        handover, D25): its next state `(1 - l) h + l q` in the training step's windows and in
+        forward_windows (the screen), 1 its code (as without), 0 its cell's output with its codes still
+        learning from it; every machine reading and the initial state stay snapped. Training state, as
+        the temperatures: not saved with the network.
+        """
+        self.recurrence_layer.set_couplings(couplings)
+
     def consolidate(self, consolidation: Consolidation) -> None:
         """
         From the next training step on, a state snapped to a duplicate joint code is held by the
@@ -643,6 +653,7 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
             consolidation=self._consolidation,
             temperatures=recurrence.temperatures,
             continuous=recurrence.continuous if any(recurrence.continuous) else None,
+            couplings=recurrence.couplings if min(recurrence.couplings) < 1.0 else None,
         )
         recurrence.first_state_backward(dC, weight)
 
@@ -659,6 +670,7 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
         )
         self._windows(X)  # whole windows, refused as the per-layer path refuses them
         continuous = self.recurrence_layer.continuous
+        couplings = self.recurrence_layer.couplings
         return pa.window_program_forward(
             self._program,
             X,
@@ -667,4 +679,5 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
             states=states,
             codes=codes,
             continuous=continuous if live and any(continuous) else None,
+            couplings=couplings if live and min(couplings) < 1.0 else None,
         )

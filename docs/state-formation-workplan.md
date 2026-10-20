@@ -297,6 +297,22 @@ D5, D7' and D9 for option 1; D4, D6, D8's hardness test, D10-D12 stand.
     multi-day runs allowed where justified). Cons: three arms a task; a whole-distribution epoch costs
     18.6 s on S3, 61 s on S4 (on `stone`, two at once), so about 1,200 epochs is 6-9 h and 20-25 h.
   - (b) The exponential alone, slower. Cons: no reading of where the shape matters.
+- **D25 (the owner: "is it possible to have a gradual transition from continuous to snapped ?";
+  "would that be linked to temperature"). The gradual handover (`--handover`, the crate's
+  `couplings`): each soft factor's next state `(1 - l) h + l q`, its snapped path's gradient `l dq`
+  (its codebook and commitment terms whole), the cell's output `(1 - l) dq`; `l` 0 through the heat
+  and the hold, then in the cool log-linear in T from 0 at the factor's melting point to 1 at its last
+  transition (D21's curve, measured at the warm-up's end), 1 once hard.**
+  - (a) *Chosen.* Pros: the separation readings (findings below) put the loss at the snap itself, not
+    the melt: the warm-up's states carry the target's (joint nearest neighbour 0.98-1.00), its k-means
+    codes snapped with no training drop that to 0.82 and 0.25 (lengths 4, 16); a gradual coupling makes
+    the network shape each factor's states into clusters the codes can hold while it still has its
+    information; at 0 the codes form on the liquid (their codebook loss) without touching the forward
+    path, so the melt no longer erases the network's memory (4a's holds took the screen to 0.5); the
+    material sets the window (S4's transitions 2.5 to 0.0015, S3's 2.5 to 0.2). Cons: a crate change
+    (`couplings` per call, indrajala-math-rust #69); a second schedule, tied to the first.
+  - (b) `l` from fixed fractions of `T_hot`. Cons: blind to where the transitions are.
+  - (c) `l` from the codes' hardness. Cons: the forward path coupled to a noisy reading of itself.
 - **D20 amended: the groups' distance is `T max(1/100, 10 kappa)` squared,** above the thermal noise
   (4a's `full` arm unreadable at `T / 100`).
 - **D20. Each factor's profile logged each epoch** (its phase, temperature, hardness, commitment and its
@@ -394,6 +410,26 @@ from state-formation/, with the void panel's).
   (6,5, 0.23); no consistent winner, and the rule's tie goes to `full`. But the mechanics are right
   and the outcome isn't: the bottleneck is after the splits, not the melt's settings.
 
+## Findings: the state separation check (2026-10-20)
+
+`state-separation` (`scripts/modular_family_probe.py`, `mf.state_separation`): whether a network's cell
+outputs `h` determine the target machine's state, the target read only to measure: leave-one-out
+nearest neighbour's and nearest target centroid's accuracy on the joint `h` and each factor's, against
+chance (the commonest state's share); a warm-up's network read live (`--live`, its continuous factors
+unsnapped). Readings in data/window-recurrent/state-formation/option1/separation/separation.txt.
+
+- **The warm-up's continuous states carry the target's:** 4a's S4 seed 0 at its warm-up's end (step 7,
+  curriculum to length 7) joint 0.98-1.00 to length 16 (chance 0.06-0.24), 0.85 at 32, 0.61 at 64; S3
+  (step 8) 1.00 to 32, 0.94 at 64. Centroid accuracy nearly as high. A certified S3 network (snapped):
+  1.00 at every length, and 1.00 in each factor alone; the warm-up's factors alone weaker (S4 centroid
+  0.77 at length 16): the warm-up encodes the state jointly, not factor by factor.
+- **4a lost it at once and never recovered:** S4 `quiet` joint 0.74 and 0.25 (lengths 4, 16) at step 8
+  (`partial`, never melted, 0.78 and 0.34), 0.31-0.55 and 0.12-0.20 through steps 11-25.
+- **The snap itself loses it:** the step-7 network, its codes set by k-means as the warm-up's end sets
+  them, read snapped with no training: 0.82 and 0.25. So per-factor quantisation of the jointly
+  encoded state cuts distinctions that live in the combination, and in a recurrence each wrong snap
+  carries forward. Neither the melt nor the cool caused 4a's loss; the abrupt handover did (D25).
+
 ## Stages
 
 1. **This plan** (docs). Before it, the night's findings PR (the existing data, at the owner's direction).
@@ -414,6 +450,8 @@ from state-formation/, with the void panel's).
      the commitment), no curriculum, each shape; 6 runs, up to 1,600 epochs (S3 on `pyramidon`, mtf-4 on
      `stone`, up to about a day). Existence only: one seed a shape ranks nothing; every shape forming a
      state goes forward.
+   - **4a''. The handover probe** (D25): its mechanics first, separation read through the anneal
+     (`state-separation` at each step); registered before its data.
    - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.

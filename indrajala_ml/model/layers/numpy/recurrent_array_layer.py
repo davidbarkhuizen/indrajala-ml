@@ -36,6 +36,7 @@ from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
 from indrajala_ml.model.specs.window_recurrence import (
     Consolidation,
     check_continuous,
+    check_couplings,
     check_temperatures,
     commitment_targets,
     set_commitments,
@@ -446,6 +447,11 @@ class InitialStateArrayLayer:
         self.grad_c += sum_rows(dC)
 
 
+def _couple(h: FloatArray, q: FloatArray, coupling: float) -> FloatArray:
+    """A factor's coupled next state `(1 - coupling) h + coupling q` (D25); `q` itself at 1."""
+    return q if coupling == 1.0 else (1.0 - coupling) * h + coupling * q
+
+
 class _FactorParts:
     """One factor's parts: its pooling, cell, codes (None: continuous) and initial state."""
 
@@ -499,7 +505,9 @@ class RecurrenceArrayLayer:
         self.soft = False  # whether forward_batch's codes are soft (the network's training step only)
         self.continuous: list[bool] = [False] * len(sizes)  # each snapped factor run unsnapped (the warm-up)
         self.reading = False  # whether an inference pass reads the continuous factors unsnapped (the screen)
+        self.couplings: list[float] = [1.0] * len(sizes)  # each factor's next state's share of its code (D25)
         self._free: list[bool] = [False] * len(sizes)  # the last snap's unsnapped factors
+        self._coupled: list[float] = [1.0] * len(sizes)  # the last snap's couplings
         self.factors = [
             _FactorParts(
                 AttentionPoolingArrayLayer(tokens, features),
@@ -534,6 +542,15 @@ class RecurrenceArrayLayer:
         check_continuous(self.factors, continuous, self.temperatures)
         self.continuous = list(continuous)
 
+    def set_couplings(self, couplings: Sequence[float]) -> None:
+        """
+        Each factor's next state `(1 - l) h + l q` from the next training step on (the state formation
+        workplan's gradual handover, D25: 1, its code; 0, its cell's output, its codes still learning
+        from it); in inference too when `reading` (the screen). The initial state stays snapped.
+        """
+        check_couplings(self.factors, couplings, self.continuous)
+        self.couplings = list(couplings)
+
     def draw(self, rng: np.random.Generator) -> None:
         """Each factor's cell's gates, then its codes, factor by factor."""
         for f in self.factors:
@@ -554,10 +571,11 @@ class RecurrenceArrayLayer:
         self._hs = hs
         temperatures = self.temperatures if soft else [None] * len(self.factors)
         self._free = [c and (soft or live) for c in self.continuous]
+        self._coupled = list(self.couplings) if soft or live else [1.0] * len(self.factors)
         Q = np.concatenate(
             [
-                h if f.codes is None or free else f.codes.forward_batch(h, t)
-                for f, h, t, free in zip(self.factors, hs, temperatures, self._free, strict=True)
+                h if f.codes is None or free else _couple(h, f.codes.forward_batch(h, t), l)
+                for f, h, t, free, l in zip(self.factors, hs, temperatures, self._free, self._coupled, strict=True)
             ],
             axis=1,
         )
@@ -590,10 +608,17 @@ class RecurrenceArrayLayer:
         return [None if f.codes is None else f.codes.indices for f in self.factors]
 
     def _snap_backward(self, dQ: FloatArray, weight: float) -> list[FloatArray]:
-        return [
-            self._block(dQ, g) if f.codes is None or free else f.codes.backward_batch(self._block(dQ, g), weight)
-            for g, (f, free) in enumerate(zip(self.factors, self._free, strict=True))
-        ]
+        # coupled (D25): the snapped path takes l dQ (its codes' losses whole), the cell's output (1 - l) dQ
+        blocks: list[FloatArray] = []
+        for g, (f, free, coupling) in enumerate(zip(self.factors, self._free, self._coupled, strict=True)):
+            dQ_g = self._block(dQ, g)
+            if f.codes is None or free:
+                blocks.append(dQ_g)
+            elif coupling == 1.0:
+                blocks.append(f.codes.backward_batch(dQ_g, weight))
+            else:
+                blocks.append(f.codes.backward_batch(coupling * dQ_g, weight) + (1.0 - coupling) * dQ_g)
+        return blocks
 
     def first_state(self, examples: int) -> FloatArray:
         """The initial state, snapped, for each of examples examples, (examples, state_size)."""

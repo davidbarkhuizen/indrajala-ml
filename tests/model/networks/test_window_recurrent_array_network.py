@@ -308,6 +308,37 @@ def test_continuous_factors_pass_their_cells_output_on_in_training_and_the_scree
     assert np.array_equal(network.forward_windows(X), outputs)
 
 
+@pytest.mark.parametrize("recurrence", SNAPPED)
+def test_coupled_factors_blend_in_training_and_the_screen_only_and_1_is_the_snapped_network(recurrence: str):
+    network = _network(recurrence=RECURRENCES[recurrence])
+    X, labels = _batch(3, examples=8)
+    plain, codes, outputs = _fresh_gradients(network, X, labels), network.state_codes(X), network.forward_windows(X)
+    snapped = [f.codes is not None for f in network.recurrence.factors]
+    network.set_couplings([0.4 if s else 1.0 for s in snapped])
+    coupled = _fresh_gradients(network, X, labels)
+    assert any(not np.array_equal(a, b) for a, b in zip(plain, coupled, strict=True))
+    # the screen reads the blend; every machine reading stays snapped
+    assert not np.array_equal(network.forward_windows(X), outputs)
+    assert network.state_codes(X) == codes
+    # coupled at 0, the codes still learn from the cells' outputs (their codebook loss)
+    network.set_couplings([0.0 if s else 1.0 for s in snapped])
+    _fresh_gradients(network, X, labels)
+    assert all(np.any(f.codes.grad_E) for f in network.recurrence_layer.factors if f.codes is not None)
+    network.set_couplings([1.0] * len(snapped))
+    assert all(np.array_equal(a, b) for a, b in zip(plain, _fresh_gradients(network, X, labels), strict=True))
+    assert np.array_equal(network.forward_windows(X), outputs)
+
+
+def test_couplings_are_refused_out_of_range_for_a_continuous_factor_or_the_wrong_count():
+    network = _network(recurrence=FACTORED_CROSS)
+    with pytest.raises(AssertionError, match="a coupling in"):
+        network.set_couplings([1.5, 1.0, 1.0])
+    with pytest.raises(AssertionError, match="only a snapped factor not run continuous"):
+        network.set_couplings([1.0, 0.5, 1.0])
+    with pytest.raises(AssertionError, match="a coupling per factor"):
+        network.set_couplings([0.5])
+
+
 def test_continuous_is_refused_for_a_continuous_or_soft_factor_or_the_wrong_count():
     network = _network(recurrence=FACTORED_CROSS)
     with pytest.raises(AssertionError, match="only a snapped factor"):

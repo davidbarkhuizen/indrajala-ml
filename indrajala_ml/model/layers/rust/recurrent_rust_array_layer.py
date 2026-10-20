@@ -26,6 +26,7 @@ from indrajala_ml.model.layers.rust.rust_array_layer import (
 from indrajala_ml.model.specs.window_recurrence import (
     Consolidation,
     check_continuous,
+    check_couplings,
     check_temperatures,
     commitment_targets,
     set_commitments,
@@ -271,6 +272,7 @@ class RecurrenceRustArrayLayer:
         self.soft = False  # whether forward_batch's codes are soft (the per-layer training step only)
         self.continuous: list[bool] = [False] * len(sizes)  # each snapped factor run unsnapped (the warm-up)
         self.reading = False  # whether an inference pass reads the continuous factors unsnapped (the screen)
+        self.couplings: list[float] = [1.0] * len(sizes)  # each factor's next state's share of its code (D25)
         self._free: list[bool] = [False] * len(sizes)  # the last step's unsnapped factors
 
     @property
@@ -296,6 +298,15 @@ class RecurrenceRustArrayLayer:
         """
         check_continuous(self.factors, continuous, self.temperatures)
         self.continuous = list(continuous)
+
+    def set_couplings(self, couplings: Sequence[float]) -> None:
+        """
+        Each factor's next state `(1 - l) h + l q` from the next training step on (the state formation
+        workplan's gradual handover, D25: 1, its code; 0, its cell's output, its codes still learning
+        from it); in inference too when `reading` (the screen). The initial state stays snapped.
+        """
+        check_couplings(self.factors, couplings, self.continuous)
+        self.couplings = list(couplings)
 
     def parts(self) -> list[Any]:
         """The parts with parameters, factor by factor: pooling, cell, codes (if any), initial state."""
@@ -369,6 +380,7 @@ class RecurrenceRustArrayLayer:
             self.tokens,
             cross=self.cross,
             temperatures=self.temperatures if self.soft else None,
+            couplings=self.couplings if (self.soft or self.reading) and min(self.couplings) < 1.0 else None,
         )
         self.H, self.indices = self._step.h, self._step.indices
         return self._step.state

@@ -1066,6 +1066,26 @@ def test_the_shaped_cools_fall_their_octaves_in_their_epochs_between_the_limits(
     assert shaped["s"].temperature(10, 1.0) > shaped["convex"].temperature(10, 1.0)  # slow near the melt
 
 
+def test_the_handover_holds_the_state_liquid_through_the_melt_then_couples_it_as_the_codes_split():
+    warm_up = mf.WarmUp(heat=2, hold=3, handover=True)
+    assert warm_up.coupling(0, 0.01, 2.0, 0.02) == 0.0  # heating, though below the melting point
+    assert warm_up.coupling(4, 8.0, 2.0, 0.02) == 0.0  # holding
+    assert warm_up.coupling(5, 4.0, 2.0, 0.02) == 0.0  # cooling, above the melting point
+    assert warm_up.coupling(9, 0.2, 2.0, 0.02) == pytest.approx(0.5)  # halfway in log T
+    assert warm_up.coupling(9, 0.001, 2.0, 0.02) == 1.0
+    assert mf.WarmUp(heat=2, hold=3).coupling(0, 4.0, 2.0, 0.02) == 1.0  # without the handover
+
+
+def test_the_handover_window_reads_each_factors_melting_curve():
+    made: list[dict[str, Any]] = [
+        {"melting_point": 2.5, "critical_temperature": 3.5, "transitions": [[2.5, 1, 4], [0.3, 4, 6]]},
+        {"melting_point": None, "critical_temperature": 3.0, "transitions": []},
+        {},
+    ]
+    melting, final = mf.handover_window(made)
+    assert melting == [2.5, 3.0, 1.0] and final == [0.3, pytest.approx(0.003), 1.0]
+
+
 def test_the_hardness_test_waits_for_a_shaped_cool_to_run_its_curve():
     exponential = mf.WarmUp(heat=2, hold=3, shape="exponential")
     convex = mf.WarmUp(heat=2, hold=3, shape="convex", cool=100)
@@ -1269,6 +1289,23 @@ def test_a_warm_up_run_trains_continuous_then_heats_from_its_codes_t_hot(tmp_pat
     assert identity["warm_up"] == repr(warm_up)
     with pytest.raises(AssertionError, match="annealed snap"):
         mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path / "x", settings, cap=2, warm_up=warm_up)
+    # D25: with the handover, couplings 0 through the heat and the hold
+    handed = mf.WarmUp(screen=2.0, cap=1, heat=2, hold=1, handover=True)
+    mf.run(
+        mf.Encoding(5, mf.FAMILY),
+        [(4, 4)],
+        0,
+        60,
+        tmp_path / "handed",
+        settings,
+        cap=3,
+        budget_epochs=6,
+        anneal=anneal,
+        warm_up=handed,
+    )
+    handed_rows = [json.loads(line) for line in (tmp_path / "handed" / "log.jsonl").read_text().splitlines()]
+    profiled = [r["anneal"] for r in handed_rows if "anneal" in r and "phase" in r["anneal"]]
+    assert [a["coupling"] for a in profiled[:3]] == [[0.0], [0.0], [0.0]]
     with pytest.raises(AssertionError, match="never goes back"):
         mf.run(
             mf.Encoding(5, mf.FAMILY),

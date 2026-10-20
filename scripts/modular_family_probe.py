@@ -1172,6 +1172,12 @@ def main(argv: list[str]) -> int:
     run.add_argument("--melt-cool", type=int, default=mf.WarmUp.cool, metavar="EPOCHS")
     run.add_argument("--melt-octaves", type=float, default=mf.WarmUp.octaves, metavar="OCTAVES")
     run.add_argument(
+        "--handover",
+        action="store_true",
+        help="the gradual handover (the state formation workplan's D25): each soft factor's next state (1 - l) h + "
+        "l q, l 0 through the heat and the hold, then log-linear in T from its melting point to its last transition",
+    )
+    run.add_argument(
         "--keep-machine",
         action="store_true",
         help="the one-code-one-state workplan's R3: keep each step's network with the fewest pairs per code (read at "
@@ -1431,6 +1437,7 @@ def main(argv: list[str]) -> int:
             args.melt_shape,
             args.melt_cool,
             args.melt_octaves,
+            args.handover,
         )
         if args.warm_up
         else None
