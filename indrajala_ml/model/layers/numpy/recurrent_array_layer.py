@@ -35,6 +35,7 @@ from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
 from indrajala_ml.model.specs.window_recurrence import (
     Consolidation,
+    check_continuous,
     check_temperatures,
     commitment_targets,
     set_commitments,
@@ -496,6 +497,9 @@ class RecurrenceArrayLayer:
         self._each = False  # whether the last forward_batch read one array of tokens a factor
         self.temperatures: list[float | None] = [None] * len(sizes)
         self.soft = False  # whether forward_batch's codes are soft (the network's training step only)
+        self.continuous: list[bool] = [False] * len(sizes)  # each snapped factor run unsnapped (the warm-up)
+        self.reading = False  # whether an inference pass reads the continuous factors unsnapped (the screen)
+        self._free: list[bool] = [False] * len(sizes)  # the last snap's unsnapped factors
         self.factors = [
             _FactorParts(
                 AttentionPoolingArrayLayer(tokens, features),
@@ -521,6 +525,15 @@ class RecurrenceArrayLayer:
         check_temperatures(self.factors, temperatures)
         self.temperatures = list(temperatures)
 
+    def set_continuous(self, continuous: Sequence[bool]) -> None:
+        """
+        Each snapped factor run unsnapped from the next training step on, its cell's output passed on
+        and its codes unread (the state formation workplan's warm-up, D4); in inference too when
+        `reading` (the screen). The initial state stays snapped (D11).
+        """
+        check_continuous(self.factors, continuous, self.temperatures)
+        self.continuous = list(continuous)
+
     def draw(self, rng: np.random.Generator) -> None:
         """Each factor's cell's gates, then its codes, factor by factor."""
         for f in self.factors:
@@ -535,13 +548,16 @@ class RecurrenceArrayLayer:
         start, size = self.starts[g], self.sizes[g]
         return np.concatenate([C[:, :start], C[:, start + size :]], axis=1)
 
-    def _snapped(self, hs: list[FloatArray], soft: bool = False) -> FloatArray:
+    def _snapped(self, hs: list[FloatArray], soft: bool = False, live: bool = False) -> FloatArray:
+        # soft: the training step's windows (temperatures, the continuous factors); live: an inference
+        # pass reading the continuous factors unsnapped
         self._hs = hs
         temperatures = self.temperatures if soft else [None] * len(self.factors)
+        self._free = [c and (soft or live) for c in self.continuous]
         Q = np.concatenate(
             [
-                h if f.codes is None else f.codes.forward_batch(h, t)
-                for f, h, t in zip(self.factors, hs, temperatures, strict=True)
+                h if f.codes is None or free else f.codes.forward_batch(h, t)
+                for f, h, t, free in zip(self.factors, hs, temperatures, self._free, strict=True)
             ],
             axis=1,
         )
@@ -575,8 +591,8 @@ class RecurrenceArrayLayer:
 
     def _snap_backward(self, dQ: FloatArray, weight: float) -> list[FloatArray]:
         return [
-            self._block(dQ, g) if f.codes is None else f.codes.backward_batch(self._block(dQ, g), weight)
-            for g, f in enumerate(self.factors)
+            self._block(dQ, g) if f.codes is None or free else f.codes.backward_batch(self._block(dQ, g), weight)
+            for g, (f, free) in enumerate(zip(self.factors, self._free, strict=True))
         ]
 
     def first_state(self, examples: int) -> FloatArray:
@@ -600,7 +616,7 @@ class RecurrenceArrayLayer:
             u = f.pooling.forward_batch(tokens[g])
             inputs = np.concatenate([u, self._others(C, g)], axis=1) if self.cross else u
             hs.append(f.cell.forward_batch(inputs, self._block(C, g)))
-        return self._snapped(hs, self.soft)
+        return self._snapped(hs, self.soft, self.reading)
 
     def backward_batch(self, dQ: FloatArray, weight: float) -> tuple[FloatArray | list[FloatArray], FloatArray]:
         """

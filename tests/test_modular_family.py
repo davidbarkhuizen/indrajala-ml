@@ -1074,6 +1074,51 @@ def test_an_annealed_run_logs_each_epochs_temperatures_hardness_and_commitments(
         )
 
 
+def test_kmeans_finds_separated_clusters_and_perturbs_the_codes_it_cant_fill():
+    rng = np.random.default_rng(0)
+    centres = np.array([[0.0, 0.0], [5.0, 5.0], [-5.0, 5.0]])
+    points = np.concatenate([c + rng.normal(0.0, 0.1, size=(30, 2)) for c in centres])
+    found, nearest = mf.kmeans(points, 3, np.random.default_rng(1), 25)
+    rounded: list[list[float]] = np.round(found).tolist()
+    assert sorted(rounded) == sorted(centres.tolist())
+    assert len(set(nearest.tolist())) == 3
+    # two distinct points, four codes: no two codes equal
+    few, _ = mf.kmeans(np.array([[0.0, 0.0], [1.0, 1.0]] * 5), 4, np.random.default_rng(2), 5)
+    gaps = np.sum((few[:, np.newaxis, :] - few[np.newaxis, :, :]) ** 2, axis=2)[np.triu_indices(4, 1)]
+    assert gaps.min() > 0.0
+
+
+def test_a_warm_up_run_trains_continuous_then_anneals_from_its_codes_tau_0(tmp_path: Path):
+    settings = mf.Settings(epoch_examples=32, max_epochs=2, screen=40, cases=4, lengths=(2,), long=(3,))
+    anneal, warm_up = mf.Anneal(start=1.0, halving=1, ramp=2), mf.WarmUp(screen=2.0, cap=1)
+    mf.run(
+        mf.Encoding(5, mf.FAMILY),
+        [(4, 4)],
+        0,
+        60,
+        tmp_path,
+        settings,
+        cap=3,
+        budget_epochs=4,
+        anneal=anneal,
+        warm_up=warm_up,
+    )
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    (end,) = [r for r in rows if "warm_up_end" in r]
+    (made,) = end["warm_up_end"]
+    assert made["tau_0"] > 0.0 and made["within_temperature"] >= 0.0
+    at = rows.index(end)
+    assert all(r.get("warm") for r in rows[:at] if r.get("epoch", 0) > 0 and "end" not in r)
+    after = [r["anneal"] for r in rows[at:] if r.get("epoch", 0) > 0 and "end" not in r and "anneal" in r]
+    # D7': the anneal starts at tau_0, unless the factor is hard at its first reading
+    first = after[0]
+    assert first["temperature"][0] == pytest.approx(made["tau_0"]) or first["hard"][0] >= anneal.share
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["warm_up"] == repr(warm_up)
+    with pytest.raises(AssertionError, match="annealed snap"):
+        mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path / "x", settings, cap=2, warm_up=warm_up)
+
+
 def test_a_thermostat_run_logs_each_epochs_effective_codes_and_commitments(tmp_path: Path):
     settings = mf.Settings(epoch_examples=32, max_epochs=3, screen=4, cases=4, lengths=(2,), long=(3,))
     thermostat = mf.Thermostat(floor=1.5, restore=0.5, ramp=2)

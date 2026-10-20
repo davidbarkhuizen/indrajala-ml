@@ -25,6 +25,7 @@ from indrajala_ml.model.layers.rust.rust_array_layer import (
 )
 from indrajala_ml.model.specs.window_recurrence import (
     Consolidation,
+    check_continuous,
     check_temperatures,
     commitment_targets,
     set_commitments,
@@ -268,6 +269,9 @@ class RecurrenceRustArrayLayer:
         self.consolidation: Consolidation = {}
         self.temperatures: list[float | None] = [None] * len(sizes)
         self.soft = False  # whether forward_batch's codes are soft (the per-layer training step only)
+        self.continuous: list[bool] = [False] * len(sizes)  # each snapped factor run unsnapped (the warm-up)
+        self.reading = False  # whether an inference pass reads the continuous factors unsnapped (the screen)
+        self._free: list[bool] = [False] * len(sizes)  # the last step's unsnapped factors
 
     @property
     def commitments(self) -> list[float]:
@@ -283,6 +287,15 @@ class RecurrenceRustArrayLayer:
         """Each factor's codes' temperature in training from the next step on (None: hard)."""
         check_temperatures(self.factors, temperatures)
         self.temperatures = list(temperatures)
+
+    def set_continuous(self, continuous: Sequence[bool]) -> None:
+        """
+        Each snapped factor run unsnapped from the next training step on, its cell's output passed on
+        and its codes unread (the state formation workplan's warm-up, D4); in inference too when
+        `reading` (the screen). The initial state stays snapped (D11).
+        """
+        check_continuous(self.factors, continuous, self.temperatures)
+        self.continuous = list(continuous)
 
     def parts(self) -> list[Any]:
         """The parts with parameters, factor by factor: pooling, cell, codes (if any), initial state."""
@@ -314,9 +327,10 @@ class RecurrenceRustArrayLayer:
         assert targets is not None
         return [e.take_rows(t) for e, t in zip(codes, targets, strict=True) if e is not None]
 
-    def _set_grad_codes(self, grads: list[pa.Array | None]) -> None:
-        for f, grad in zip(self.factors, grads, strict=True):
-            if f.codes is not None:
+    def _set_grad_codes(self, grads: list[pa.Array | None], free: Sequence[bool] | None = None) -> None:
+        # a factor run continuous (free) leaves its codes' gradient as it was
+        for f, grad, unsnapped in zip(self.factors, grads, free or [False] * len(grads), strict=True):
+            if f.codes is not None and not unsnapped:
                 assert grad is not None
                 f.codes.grad_E = grad
 
@@ -343,6 +357,7 @@ class RecurrenceRustArrayLayer:
         branches workplan), and the state C (N, S), to the next state (N, S).
         """
         factors = self.factors
+        self._free = [c and (self.soft or self.reading) for c in self.continuous]
         self._step = pa.recurrence_step_forward(
             X if isinstance(X, pa.Array) else list(X),
             C,
@@ -350,7 +365,7 @@ class RecurrenceRustArrayLayer:
             [f.cell.W for f in factors],
             [f.cell.U for f in factors],
             [f.cell.b for f in factors],
-            self._codes(),
+            [None if free else e for e, free in zip(self._codes(), self._free, strict=True)],
             self.tokens,
             cross=self.cross,
             temperatures=self.temperatures if self.soft else None,
@@ -375,7 +390,7 @@ class RecurrenceRustArrayLayer:
             [f.cell.grad_W for f in factors],
             [f.cell.grad_U for f in factors],
             [f.cell.grad_b for f in factors],
-            self._grad_codes(),
+            [None if free else e for e, free in zip(self._grad_codes(), self._free, strict=True)],
             weight,
             self._commitments,
             self._targets(),
@@ -383,5 +398,5 @@ class RecurrenceRustArrayLayer:
         for f, gq, gW, gU, gb in zip(factors, grad_q, grad_W, grad_U, grad_b, strict=True):
             f.pooling.grad_q = gq
             f.cell.grad_W, f.cell.grad_U, f.cell.grad_b = gW, gU, gb
-        self._set_grad_codes(grad_E)
+        self._set_grad_codes(grad_E, self._free)
         return dX, dC

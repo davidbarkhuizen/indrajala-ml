@@ -64,7 +64,10 @@ codes' use on the step's screen) and ramps it back over 20 epochs once it uses h
 factor's codes soft (the softmax mix at a temperature, from `--anneal-start` 1.0 halved every
 `--anneal-halving` 10 epochs), its commitment 0, until it hardens (99% of the step's screen's windows
 weighting one code above 0.99), then hard with its commitment ramped back over `--anneal-ramp` 20
-epochs (the commitment-control workplan's stage 3; each epoch's row logs them); `--keep-machine` keeps each
+epochs (the commitment-control workplan's stage 3; each epoch's row logs them); with `--warm-up`, every
+snapped factor runs continuous first (its commitment 0) until a step's best screen reaches 0.95 or the
+8th step, its codes then set by k-means of the states seen and annealed from tau_0, a quarter of the
+median squared distance from a code to its nearest (the state formation workplan's option 1, D7'); `--keep-machine` keeps each
 step's network whose machine has the fewest pairs per code (read at each diagnosis, ties to more
 right pairs) and restores it at a plateau, and `--counterexamples [SHARE]` draws SHARE (0.25) of each
 epoch's examples from the shortest words to the codes wrong for their states (at most 256, read at
@@ -1127,6 +1130,16 @@ def main(argv: list[str]) -> int:
     run.add_argument("--anneal-halving", type=int, default=mf.Anneal.halving, metavar="EPOCHS")
     run.add_argument("--anneal-ramp", type=int, default=mf.Anneal.ramp, metavar="EPOCHS")
     run.add_argument(
+        "--warm-up",
+        action="store_true",
+        help="the state formation workplan's option 1 (with --anneal): every snapped factor continuous, its "
+        "commitment 0, until the end of the first step whose best screen reaches --warm-up-screen or of the "
+        "--warm-up-cap-th step; then its codes by k-means of the states seen, annealed from tau_0 (a quarter of "
+        "the median squared distance from a code to its nearest)",
+    )
+    run.add_argument("--warm-up-screen", type=float, default=mf.WarmUp.screen, metavar="SHARE")
+    run.add_argument("--warm-up-cap", type=int, default=mf.WarmUp.cap, metavar="STEPS")
+    run.add_argument(
         "--keep-machine",
         action="store_true",
         help="the one-code-one-state workplan's R3: keep each step's network with the fewest pairs per code (read at "
@@ -1319,6 +1332,9 @@ def main(argv: list[str]) -> int:
         if args.anneal
         else None
     )
+    if args.warm_up and not args.anneal:
+        parser.error("--warm-up ends in an annealed snap: with --anneal")
+    warm_up = mf.WarmUp(args.warm_up_screen, args.warm_up_cap) if args.warm_up else None
     thermostat = (
         mf.Thermostat(args.thermostat_floor, args.thermostat_restore, args.thermostat_ramp, args.thermostat_screen)
         if args.thermostat
@@ -1362,6 +1378,7 @@ def main(argv: list[str]) -> int:
             keep_machine=args.keep_machine,
             counterexamples=args.counterexamples,
             anneal=anneal,
+            warm_up=warm_up,
         )
 
     for name in names:

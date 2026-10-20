@@ -973,6 +973,100 @@ def state_spread(
     return spread
 
 
+@dataclass(frozen=True)
+class WarmUp:
+    """
+    The state formation workplan's option 1 (D4-D7, D10): every snapped factor run continuous (its
+    cell's output passed on, its codes unread, its commitment 0) from the run's start until the end of
+    the first step whose best screen reaches `screen`, or of its `cap`th step; then each factor's codes
+    set by k-means of its cells' outputs on the step's screen (`iterations` Lloyd iterations,
+    k-means++ seeding from the run's seed) and annealed from `tau_0`, a quarter of the median squared
+    distance from a code to its nearest (D7': below the temperature at which neighbouring codes merge,
+    Rose 1998, and soft between them), by the run's Anneal (halving, hardness test, the commitment's
+    ramp after hard).
+    """
+
+    screen: float = 0.95
+    cap: int = 8
+    iterations: int = 25
+
+    def ends(self, step: int, first: int, best: float) -> bool:
+        """Whether the warm-up ends at this step's end."""
+        return best >= self.screen or step - first + 1 >= self.cap
+
+
+def kmeans(points: np.ndarray, k: int, rng: np.random.Generator, iterations: int) -> tuple[np.ndarray, np.ndarray]:
+    """
+    k centres of the points (n, d), k-means++ seeding then Lloyd's iterations, and each point's nearest
+    centre. A centre with no points (fewer distinct points than k) is a drawn point moved by a small
+    random step, so no two codes start equal (deterministic annealing's perturbation).
+    """
+    n = len(points)
+    centres = [points[int(rng.integers(n))]]
+    for _ in range(1, k):
+        d = np.min(np.sum((points[:, np.newaxis, :] - np.array(centres)[np.newaxis, :, :]) ** 2, axis=2), axis=1)
+        total = float(d.sum())
+        centres.append(points[int(rng.choice(n, p=d / total))] if total > 0 else points[int(rng.integers(n))])
+    C = np.array(centres, dtype=float)
+    scale = max(float(np.sqrt(np.var(points, axis=0).sum())), 1e-6)
+    for _ in range(iterations + 1):
+        nearest = np.argmin(np.sum((points[:, np.newaxis, :] - C[np.newaxis, :, :]) ** 2, axis=2), axis=1)
+        for j in range(k):
+            members = points[nearest == j]
+            C[j] = (
+                members.mean(axis=0)
+                if len(members)
+                else points[int(rng.integers(n))] + rng.normal(0.0, 1e-3 * scale, size=points.shape[1])
+            )
+    nearest = np.argmin(np.sum((points[:, np.newaxis, :] - C[np.newaxis, :, :]) ** 2, axis=2), axis=1)
+    return C, nearest
+
+
+def codes_from_states(
+    net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], rng: np.random.Generator, iterations: int
+) -> list[dict[str, Any]]:
+    """
+    Each snapped factor's codes set by k-means of its cells' outputs over the rows given (WarmUp, D6),
+    and its `tau_0`, a quarter of the median squared distance from a code to its nearest (D7': half
+    the temperature at which two such codes merge, Rose 1998); a row each, with the clusters' own
+    critical temperature (twice the pooled within-cluster top eigenvalue) and the whole's beside it.
+    """
+    spread = state_spread(net, rows)
+    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
+    blocks: list[list[np.ndarray]] = [[] for _ in starts]
+    for batch in rows:
+        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
+        for cell in cells[1:]:
+            H = np.array(cell.tolist(), dtype=float)
+            for g, f in enumerate(net.recurrence.factors):
+                blocks[g].append(H[:, starts[g] : starts[g] + f.state_size])
+    made: list[dict[str, Any]] = []
+    for g, factor in enumerate(net.recurrence_layer.factors):
+        if factor.codes is None:
+            made.append({})
+            continue
+        h = np.concatenate(blocks[g])
+        E, nearest = kmeans(h, factor.codes.count, rng, iterations)
+        within = np.zeros((h.shape[1], h.shape[1]))
+        for code in np.unique(nearest):
+            centred = h[nearest == code] - h[nearest == code].mean(axis=0)
+            within += centred.T @ centred
+        lam = float(np.linalg.eigvalsh(within / max(len(h) - 1, 1))[-1])
+        gaps = np.sum((E[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
+        np.fill_diagonal(gaps, np.inf)
+        factor.codes.E = net.backend.matrix(E.tolist())
+        made.append(
+            {
+                "tau_0": 0.25 * float(np.median(gaps.min(axis=1))),
+                "within_temperature": 2.0 * lam,
+                "critical_temperature": spread[g]["critical_temperature"],
+                "in_use": len(np.unique(nearest)),
+                "effective_dimension": spread[g]["effective_dimension"],
+            }
+        )
+    return made
+
+
 @dataclass
 class Place:
     """
@@ -1002,6 +1096,9 @@ class Place:
     machine_best: list[float] = field(default_factory=list[float])  # R3: the step's kept machine's key, with it
     words: list[list[int]] = field(default_factory=list[list[int]])  # R4: the last diagnosis's counterexamples
     anneal: list[int] = field(default_factory=list[int])  # each factor's level (Anneal), with it
+    warm: bool = False  # WarmUp: still continuous
+    tau_0: list[float] = field(default_factory=list[float])  # WarmUp: each factor's tau_0, once set
+    anneal_from: int = 0  # WarmUp: the epochs trained when the warm-up ended
 
 
 def _run_identity(
@@ -1027,6 +1124,7 @@ def _run_identity(
     keep_machine: bool = False,
     counterexamples: float | None = None,
     anneal: Anneal | None = None,
+    warm_up: WarmUp | None = None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -1054,6 +1152,7 @@ def _run_identity(
         **({"keep_machine": True} if keep_machine else {}),
         **({"counterexamples": counterexamples} if counterexamples is not None else {}),
         **({"anneal": repr(anneal)} if anneal is not None else {}),
+        **({"warm_up": repr(warm_up)} if warm_up is not None else {}),
     }
 
 
@@ -1098,6 +1197,7 @@ def run(
     keep_machine: bool = False,
     counterexamples: float | None = None,
     anneal: Anneal | None = None,
+    warm_up: WarmUp | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -1126,7 +1226,11 @@ def run(
     before J with each factor's commitment 0 and from J with its specs' (set before each epoch, so a
     fork's or a restore's loaded network has it too). `anneal` (Anneal) sets each snapped factor's
     temperature and commitment before each epoch from its level, read on the step's screen at its
-    shortest, middle and longest lengths, a row's `anneal` logging them.
+    shortest, middle and longest lengths, a row's `anneal` logging them. `warm_up` (WarmUp, with `anneal`; the
+    state formation workplan's option 1) runs every snapped factor continuous from the start, each
+    row logging `warm`, until a step's end where it ends: its codes set from the states seen and
+    each factor annealed from its tau_0, a row logging `warm_up_end`; the machine's readings, its
+    certificate included, read the snapped network throughout.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -1162,7 +1266,9 @@ def run(
         keep_machine,
         counterexamples,
         anneal,
+        warm_up,
     )
+    assert warm_up is None or anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
     assert not (keep_machine and restore_best), "the step's kept machine (R3) or its best screen, not both"
     assert counterexamples is None or 0 < counterexamples < 1, (
         f"a share of each epoch's examples; got {counterexamples}"
@@ -1224,6 +1330,17 @@ def run(
         if place is not None and place.anneal
         else [0 if s else (anneal.ramp if anneal is not None else 0) for s in snapped]
     )
+    warm = place.warm if place is not None else warm_up is not None  # WarmUp: still continuous
+    tau_0 = list(place.tau_0) if place is not None else []  # WarmUp: each factor's tau_0, once set
+    anneal_from = place.anneal_from if place is not None else 0  # WarmUp: the epochs trained at its end
+
+    def warming() -> None:
+        # the network about to train or screen (a fork's or a restore's loaded one included) continuous
+        # while warming, snapped after (WarmUp)
+        if warm_up is not None:
+            net.set_temperatures([None] * len(snapped))
+            net.set_continuous(list(snapped) if warm else [False] * len(snapped))
+
     walked_d = mr.word_length(encoding.task.machine)  # R3 and R4's walks' d, the task's
     words: list[list[int]] = [list(w) for w in place.words] if place is not None else []
     machine_kept = out / "machine-best.network.json"
@@ -1251,6 +1368,9 @@ def run(
             list(machine_best),
             [list(w) for w in words],
             list(annealed) if anneal is not None else [],
+            warm,
+            list(tau_0),
+            anneal_from,
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -1265,6 +1385,7 @@ def run(
         lengths = list(range(1, step + 1))
         screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{step}-{n}")[0] for n in lengths}
         stop, epoch = "budget", 0
+        score = -1.0  # the last epoch's screen (WarmUp's end reads it with the step's best)
         if place is not None and place.step == step:  # resumed within this step
             best, since, epoch = place.best, place.since, place.epoch
             rate, forks, peak = place.rate, place.forks, place.peak
@@ -1274,6 +1395,7 @@ def run(
             best, since = -1.0, 0
             machine_best = []
             rate, forks = settings.rate, 0
+            warming()
             start_score, start_kinds = screen(
                 net, encoding, screens
             )  # the step before's network on this step's lengths
@@ -1319,15 +1441,26 @@ def run(
                 thermo = {
                     "thermostat": {"effective": [round(e, 2) for e in effective], "beta": [round(b, 4) for b in beta]}
                 }
-            if anneal is not None:
+            if warm:
+                # WarmUp: every snapped factor continuous, its commitment 0 (D4, D9)
+                warming()
+                net.set_commitments([0.0] * len(snapped))
+                thermo = {"warm": True}
+            elif anneal is not None:
                 # the network about to train (a fork's restored one included), its soft factors' hardness read
-                # at the temperature they trained at, on the step's screen at its shortest, middle and longest
-                temperature = anneal.temperature(spent)
-                soft = [temperature if s and level == 0 else None for s, level in zip(snapped, annealed, strict=True)]
+                # at the temperature they trained at, on the step's screen at its shortest, middle and longest;
+                # after a warm-up, each factor's from its tau_0 (D7), halved from the warm-up's end
+                warming()
+                each = (
+                    [t * 0.5 ** ((spent - anneal_from) // anneal.halving) for t in tau_0]
+                    if tau_0
+                    else [anneal.temperature(spent)] * len(snapped)
+                )
+                soft = [t if s and level == 0 else None for t, s, level in zip(each, snapped, annealed, strict=True)]
                 hard = hardness(net, [screens[n] for n in sorted({1, (step + 1) // 2, step})], soft, anneal.hard)
                 annealed = anneal.levels(annealed, hard)
                 temperatures = [
-                    temperature if s and level == 0 else None for s, level in zip(snapped, annealed, strict=True)
+                    t if s and level == 0 else None for t, s, level in zip(each, snapped, annealed, strict=True)
                 ]
                 beta = anneal.commitments(annealed, commitments)
                 net.set_temperatures(temperatures)
@@ -1478,6 +1611,18 @@ def run(
         if certificate.certified:
             net.save(str(out / f"certified-step-{step}.network.json"))
             break
+        if warm and warm_up is not None and warm_up.ends(step, first, max(best, score)):
+            # WarmUp's end (D5-D7): the codes from the states seen, each factor's tau_0, the anneal from here
+            warm = False
+            warming()
+            rng_codes = np.random.default_rng([seed, step])
+            made = codes_from_states(
+                net, [screens[n] for n in sorted({1, (step + 1) // 2, step})], rng_codes, warm_up.iterations
+            )
+            tau_0 = [m.get("tau_0", 1.0) or 1e-6 for m in made]
+            anneal_from = spent
+            record({"step": step, "warm_up_end": made})
+            net.save(str(out / "network.json"))
         if stop in ("deadline", "spent", "stalled"):
             break
     log.close()

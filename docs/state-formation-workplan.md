@@ -108,6 +108,22 @@ accepted option becomes part of the base the next one is tested on.
     global `T_c` so a merge can be read.
   - (b) A fraction of the global `T_c`. Cons: a fraction to choose; the clusters' scale is the relevant one.
   - (c) Absolute (D9 of the commitment-control plan). Cons: what failed.
+- **D7' (2026-10-20, replacing D7 at the build, before any run): `tau_0` a quarter of the median
+  squared distance from a code to its nearest (after k-means).** The build's test showed D7's `tau_0`
+  (the clusters' own critical temperature) leaves every window hard at once: with codes at the cluster
+  centres, the gap between neighbouring codes dwarfs it, so the "anneal" is an abrupt snap. Rose's
+  theory leaves a soft phase only between the clusters' critical temperature and the temperature at
+  which neighbouring codes merge (about `Delta^2 / 2` for codes `Delta` apart): D7' starts at half the
+  latter for a typical neighbour.
+  - (a) *Chosen.* Pros: genuinely soft (a typical neighbour weighted `e^-4` relative), no merge but of
+    codes much closer than typical (k-means' splits the anneal finds not real); checked on saved
+    networks before any run: S3 (the never probe, step 4) `tau_0` 1.4-2.4 against the clusters' 0.9-1.9
+    and the whole's 5-8, 6-33% of windows hard at `tau_0`, 92-98% at `tau_0 / 8`; move-to-front-5 (arm 3,
+    step 8) 1.2-1.7 against 0.45-0.61 and 9-14, 8-18% hard, 82-95% at `tau_0 / 8` (about 30 epochs).
+    Cons: a median over codes; logged with both critical temperatures.
+  - (b) D7 as written. Cons: an abrupt snap with good codes, not the owner's annealed snap.
+  - (c) The closest pair's merge temperature. Cons: k-means' near-duplicates (perturbed apart) would
+    make it tiny, hard at once.
 - **D8. The schedule and the hardness test as built** (`tau` halved every 10 epochs; hard for good once
   99% of the sample's windows weight one code above 0.99), from `tau_0`. Pros: built and tested;
   one change. Cons: halving every 10 may be slow from a lower `tau_0`; the logs show epochs to hard.
