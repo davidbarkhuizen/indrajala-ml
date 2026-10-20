@@ -1135,6 +1135,17 @@ def main(argv: list[str]) -> int:
     run.add_argument("--anneal-ramp", type=int, default=mf.Anneal.ramp, metavar="EPOCHS")
     run.add_argument("--anneal-tail", type=int, default=mf.Anneal.tail, metavar="EPOCHS")
     run.add_argument(
+        "--anneal-never-commit",
+        action="store_true",
+        help="the commitment stays 0 once hard (the state formation workplan's D23)",
+    )
+    run.add_argument(
+        "--whole",
+        action="store_true",
+        help="no curriculum (the state formation workplan's D22): every epoch over every length to the cap, every "
+        "step's screen over a fixed spread of them; a step a block of epochs ending in its certificate",
+    )
+    run.add_argument(
         "--warm-up",
         action="store_true",
         help="the state formation workplan's option 1 (with --anneal): every snapped factor continuous, its "
@@ -1359,7 +1370,13 @@ def main(argv: list[str]) -> int:
         parser.error("--anneal sets the commitment itself: not with --thermostat, --commitment-from or --consolidate")
     anneal = (
         mf.Anneal(
-            args.anneal_start, args.anneal_halving, mf.Anneal.hard, mf.Anneal.share, args.anneal_ramp, args.anneal_tail
+            args.anneal_start,
+            args.anneal_halving,
+            mf.Anneal.hard,
+            mf.Anneal.share,
+            args.anneal_ramp,
+            args.anneal_tail,
+            not args.anneal_never_commit,
         )
         if args.anneal
         else None
@@ -1427,6 +1444,7 @@ def main(argv: list[str]) -> int:
             counterexamples=args.counterexamples,
             anneal=anneal,
             warm_up=warm_up,
+            whole=args.whole,
         )
 
     for name in names:

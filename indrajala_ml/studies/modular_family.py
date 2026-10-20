@@ -757,6 +757,15 @@ def epoch_lengths(step: int, examples: int, long_tail: int | None = None, cap: i
     return [short[i // 2 % len(short)] if i % 2 == 0 else long[i // 2 % len(long)] for i in range(examples)]
 
 
+def whole_lengths(cap: int, points: int = 10) -> list[int]:
+    """
+    The screen's lengths when every epoch trains on the whole distribution (run's `whole`): 1 to 4 and
+    `points` more spaced geometrically to `cap`, its last.
+    """
+    spread = {1, 2, 3, 4, cap} | {round(cap ** (i / points)) for i in range(points + 1)}
+    return sorted(n for n in spread if n <= cap)
+
+
 def consolidation(net: Any, encoding: Target, d: int) -> tuple[dict[tuple[int, ...], tuple[int, ...]], int, int]:
     """
     A's table from the network alone (the workplan's D1): its reachable joint codes grouped by
@@ -844,7 +853,8 @@ class Anneal:
     snapped factor's codes soft in training at `start` halved every `halving` epochs trained, its
     commitment 0, until `share` of the sample's windows weight one code above `hard`; then soft for
     `tail` epochs more, cooling on (the state formation workplan's D19: the crystal settles), then
-    hard for good, its commitment ramped back to its specs' over `ramp` epochs. A factor's level is 0
+    hard for good, its commitment ramped back to its specs' over `ramp` epochs (never, without
+    `commit`). A factor's level is 0
     (soft, not yet hard), 1 to `tail` (soft, in its tail), to `tail + ramp` (hard, its specs'
     commitment).
     """
@@ -855,6 +865,7 @@ class Anneal:
     share: float = 0.99
     ramp: int = 20
     tail: int = 0
+    commit: bool = True
 
     @property
     def top(self) -> int:
@@ -880,7 +891,9 @@ class Anneal:
         return following
 
     def commitments(self, levels: Sequence[int], full: Sequence[float]) -> list[float]:
-        """Each factor's commitment at its level, a share of its specs'."""
+        """Each factor's commitment at its level, a share of its specs' (0 throughout without `commit`)."""
+        if not self.commit:
+            return [0.0] * len(levels)
         return [c * max(level - self.tail, 0) / self.ramp for level, c in zip(levels, full, strict=True)]
 
 
@@ -1114,15 +1127,19 @@ def jitter(net: Any, temperatures: Sequence[float | None], kappa: float, rng: np
         factor.codes.E = net.backend.matrix(moved.tolist())
 
 
-def code_groups(net: Any, temperatures: Sequence[float | None]) -> list[int | None]:
-    """Each soft factor's codes' groups closer than `T / 100` squared (D20: the melt and its splits); None if hard."""
+def code_groups(net: Any, temperatures: Sequence[float | None], kappa: float = 0.0) -> list[int | None]:
+    """
+    Each soft factor's codes' groups closer than `T max(1 / 100, 10 kappa)` squared (D20: the melt and
+    its splits, the distance above thermal noise's `kappa T`); None if hard.
+    """
     groups: list[int | None] = []
     for factor, t in zip(net.recurrence_layer.factors, temperatures, strict=True):
         if t is None:
             groups.append(None)
             continue
         E = np.array(factor.codes.E.tolist(), dtype=float)
-        groups.append(_groups(np.sum((E[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2) < t / 100))
+        close = t * max(1 / 100, 10 * kappa)
+        groups.append(_groups(np.sum((E[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2) < close))
     return groups
 
 
@@ -1250,6 +1267,7 @@ def _run_identity(
     counterexamples: float | None = None,
     anneal: Anneal | None = None,
     warm_up: WarmUp | None = None,
+    whole: bool = False,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -1278,6 +1296,7 @@ def _run_identity(
         **({"counterexamples": counterexamples} if counterexamples is not None else {}),
         **({"anneal": repr(anneal)} if anneal is not None else {}),
         **({"warm_up": repr(warm_up)} if warm_up is not None else {}),
+        **({"whole": True} if whole else {}),
     }
 
 
@@ -1323,6 +1342,7 @@ def run(
     counterexamples: float | None = None,
     anneal: Anneal | None = None,
     warm_up: WarmUp | None = None,
+    whole: bool = False,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -1359,6 +1379,9 @@ def run(
     each row's `anneal` logging the phase and the codes' groups; no step's best is kept during the
     heat and the hold, and nothing goes back (no fork, restore_best or keep_machine: D18). The
     machine's readings, its certificate included, read the snapped network throughout.
+    `whole` (the state formation workplan's D22) drops the curriculum: every epoch's examples drawn
+    over every length 1..cap in turn, every step's screen over whole_lengths(cap); a step is then a
+    block of epochs ending, as any, in its certificate.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -1395,8 +1418,10 @@ def run(
         counterexamples,
         anneal,
         warm_up,
+        whole,
     )
     assert warm_up is None or anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
+    assert not (whole and long_tail is not None), "the whole distribution has no long tail beyond it"
     assert warm_up is None or (fork is None and not restore_best and not keep_machine), (
         "a crystallising run never goes back (D18): the warm-up not with the fork, restore_best or keep_machine"
     )
@@ -1514,8 +1539,15 @@ def run(
         return {"codes": codes, "groups": groups, "duplicates": len(table)}
 
     for step in range(place.step if place is not None else first, cap + 1):
-        lengths = list(range(1, step + 1))
-        screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{step}-{n}")[0] for n in lengths}
+        # the curriculum's lengths, or the whole distribution's every step (a step then a block of epochs)
+        lengths = whole_lengths(cap) if whole else list(range(1, step + 1))
+        named = "whole" if whole else step
+        screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{named}-{n}")[0] for n in lengths}
+        read_at = (  # the step's screen at its shortest, middle and longest
+            sorted({lengths[0], lengths[len(lengths) // 2], lengths[-1]})
+            if whole
+            else sorted({1, (step + 1) // 2, step})
+        )
         stop, epoch = "budget", 0
         score = -1.0  # the last epoch's screen (WarmUp's end reads it with the step's best)
         if place is not None and place.step == step:  # resumed within this step
@@ -1551,7 +1583,7 @@ def run(
             rng = random.Random(f"family-train-{seed}-{step}-{epoch}" + (f"-fork{forks}" if forks else ""))
             examples = [
                 encoding.example(encoding.draw(n, rng))
-                for n in epoch_lengths(step, settings.epoch_examples, long_tail, cap)
+                for n in epoch_lengths(cap if whole else step, settings.epoch_examples, long_tail, cap)
             ]
             if counterexamples is not None and words:
                 # R4 (D6): a share of the epoch from the last diagnosis's counterexamples, each word then d
@@ -1567,7 +1599,7 @@ def run(
             if thermostat is not None:
                 # the network about to train (a fork's restored one included), read on the step's screen at its
                 # shortest, middle and longest lengths
-                effective = effective_codes(net, [screens[n] for n in sorted({1, (step + 1) // 2, step})])
+                effective = effective_codes(net, [screens[n] for n in read_at])
                 levels = thermostat.levels(levels, effective, counts, best)  # best: the step's best screen so far
                 beta = thermostat.commitments(levels, commitments)
                 net.set_commitments(beta)
@@ -1596,7 +1628,7 @@ def run(
                     t if s and level == 0 and not melting else None
                     for t, s, level in zip(each, snapped, annealed, strict=True)
                 ]
-                hard = hardness(net, [screens[n] for n in sorted({1, (step + 1) // 2, step})], soft, anneal.hard)
+                hard = hardness(net, [screens[n] for n in read_at], soft, anneal.hard)
                 annealed = anneal.levels(annealed, hard)
                 temperatures = [
                     t if s and anneal.soft(level) else None for t, s, level in zip(each, snapped, annealed, strict=True)
@@ -1605,7 +1637,7 @@ def run(
                 profiled: dict[str, Any] = {}
                 if phase is not None and warm_up is not None:
                     jitter(net, temperatures, warm_up.kappa, np.random.default_rng([seed, step, epoch, forks]))
-                    profiled = {"phase": phase, "groups": code_groups(net, temperatures)}
+                    profiled = {"phase": phase, "groups": code_groups(net, temperatures, warm_up.kappa)}
                 net.set_temperatures(temperatures)
                 net.set_commitments(beta)
                 thermo = {
@@ -1755,7 +1787,7 @@ def run(
         if certificate.certified:
             net.save(str(out / f"certified-step-{step}.network.json"))
             break
-        sample = [screens[n] for n in sorted({1, (step + 1) // 2, step})]
+        sample = [screens[n] for n in read_at]
         distinct = distinct_states(net, sample) if warm and warm_up is not None else []
         if warm and warm_up is not None:
             record({"step": step, "distinct": distinct})

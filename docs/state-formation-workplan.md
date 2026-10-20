@@ -254,6 +254,30 @@ D5, D7' and D9 for option 1; D4, D6, D8's hardness test, D10-D12 stand.
     and the last splits (to 12-14) at `10^-4` to `10^-5`: five decades, so the cool must run about 17
     octaves (about 250 epochs at D15's halving). The built anneal's start (1.0) sat inside the coarse
     transitions and D7''s `10^-6` below every one.
+- **D22 (after 4a; the owner: "the annealing is working correctly, but it is not compatible with our
+  current curriculum ... all features of the target machine have to be visible at all time ... The
+  entropy of the information the system sees needs to be a maximum at the maximum temperature ... i
+  don't think we could build an ideal curriculum without already knowing too much about the target
+  machine"; "i don't [know] if we should have a curriculum at all"). No curriculum with option 1
+  (`--whole`): every epoch's examples drawn over every length 1 to the cap (the exclusion bound) in
+  turn, from the first epoch, warm-up included; every step's screen over a fixed spread of lengths
+  (1-4 and 10 geometric to the cap, `whole_lengths`); a step is a block of epochs ending in its
+  certificate, the material unchanged.**
+  - (a) *Chosen.* Pros: annealing assumes one material; the curriculum changed it through the cool
+    (4a: the steps ran 8 to 14 while the codes were soft, the screen falling), so every transition
+    measured at the warm-up's end was stale within steps; the whole distribution is the maximum
+    entropy view of the task and assumes nothing of the machine beyond the bound the cell must hold
+    anyway. Cons: credit assignment through long words from the start (the curriculum's reason; the
+    old all-at-once arm nearly worked at `m` 64, failed elsewhere); a continuous warm-up may drift on
+    long words; epochs cost the mean length, half the cap (S3 35, S4 124, against about 20 late in 4a).
+  - (b) The curriculum held during the anneal (the proposal before the owner's). Cons: still a
+    material that changes, between anneals; a length order is generic, but not the anneal's material.
+  - (c) If (a)'s risks hit: uniform over a shorter range, never an ordered curriculum.
+- **D23. The commitment's return as an arm (`--anneal-never-commit`):** 4a's losses came in the late
+  cool and the ramp alike, so the follow-up probe runs the commitment's return (D19) against its never
+  returning, both with D22. Pros: separates the two suspects left. Cons: two arms a task.
+- **D20 amended: the groups' distance is `T max(1/100, 10 kappa)` squared,** above the thermal noise
+  (4a's `full` arm unreadable at `T / 100`).
 - **D20. Each factor's profile logged each epoch** (its phase, temperature, hardness, commitment and its
   codes' groups closer than `T / 100` squared), and the warm-up's end row with each factor's distinct
   states, critical temperatures and `T_hot`. Pros: the melt, each split and the crystal are read from the

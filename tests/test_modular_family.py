@@ -1071,6 +1071,39 @@ def test_thermal_noise_scales_with_the_temperature_and_spares_hard_factors():
     assert mf.code_groups(net, [1e9, None])[0] == 1  # every code within T / 100: one group, the melt
 
 
+def test_whole_lengths_spread_from_one_to_the_cap():
+    assert mf.whole_lengths(69) == [1, 2, 3, 4, 5, 8, 13, 19, 30, 45, 69]
+    assert mf.whole_lengths(3) == [1, 2, 3]
+
+
+def test_annealing_without_commit_keeps_the_commitment_at_zero():
+    anneal = mf.Anneal(ramp=2, tail=1, commit=False)
+    assert anneal.commitments([0, 2, 3], [0.25] * 3) == [0.0, 0.0, 0.0]
+
+
+def test_code_groups_join_codes_within_the_thermal_noise():
+    encoding = mf.Encoding(5, mf.FAMILY)
+    net = mf.network(encoding, [(4, 4)], 0, mf.BEFORE_STATE)
+    codes = net.recurrence_layer.factors[0].codes
+    codes.E = net.backend.matrix([[0.0] * 4, [0.1] + [0.0] * 3, [5.0] + [0.0] * 3, [-5.0] + [0.0] * 3])
+    # squared gaps 0.01, 25, 25...: at T 0.5 apart under T / 100, together under 10 kappa T at kappa 0.01
+    assert mf.code_groups(net, [0.5]) == [4]
+    assert mf.code_groups(net, [0.5], 0.01) == [3]
+
+
+def test_a_whole_run_trains_and_screens_every_length_to_the_cap_from_its_first_step(tmp_path: Path):
+    settings = mf.Settings(epoch_examples=32, max_epochs=2, screen=4, cases=4, lengths=(2,), long=(3,))
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path, settings, cap=6, budget_epochs=3, whole=True)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    starts = [r for r in rows if r.get("epoch") == 0 and "screen" in r]
+    assert starts and all(r["kinds"] for r in starts)
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["whole"] is True
+    assert mf.epoch_lengths(6, 12) == [1, 2, 3, 4, 5, 6] * 2  # the whole distribution, in turn
+    with pytest.raises(AssertionError, match="no long tail"):
+        mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path / "x", settings, cap=6, whole=True, long_tail=2)
+
+
 def test_the_melting_curve_splits_at_the_critical_temperature_into_the_clusters():
     rng = np.random.default_rng(0)
     centres = np.array([[0.0, 0.0], [6.0, 0.0], [0.0, 3.0]])
