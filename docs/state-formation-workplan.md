@@ -140,6 +140,35 @@ accepted option becomes part of the base the next one is tested on.
   follow-up probe chosen from its readings, then a decision. An accepted option joins the base. Adoption
   as the general method stays the owner's, on 6 seeds per backdrop.
 
+## Findings: stage 2, option 1's understanding (2026-10-20)
+
+`state-spread` (`scripts/modular_family_probe.py`, `mf.state_spread`): each factor's `h` sampled at a
+step's screen lengths (100 cases a length), on saved step networks. Data in
+data/window-recurrent/state-formation/spread/ (`anneal-arm2.jsonl`, `s3-never-round1.jsonl`), manifest
+`spread.sha256` (run from state-formation/).
+
+- **Rose, refined: the codes merge within each cluster, not globally.** On annealing arm 2 (move-to-front-5
+  at 32), the global critical temperature `2 lambda_max(h)` was 2.3-6.5, **above** `tau` 1.0, so D3's
+  expectation as written (merging only where `tau > T_c`) is refuted for the global `T_c`. But `h` sat in
+  only 4-9 clusters (`effective_dimension` 1-5 of 16), and each cluster's critical temperature (twice the
+  within-cluster top eigenvalue, 0.0004-0.36) was far **below** `tau`: the surviving groups (6-9 at steps
+  2-3) match the clusters in use (5-9), as Rose's theorem gives below the global `T_c`. So the merge is
+  deterministic annealing between the clusters' and the whole's critical temperatures, and **D7's `tau_0`
+  (twice the pooled within-cluster eigenvalue) is the right scale.**
+- **Zhao et al. confirmed for the commitment: it collapses `h`'s dimension.** On round 1's S3 failures
+  (the commitment on), `h`'s effective dimension stayed 1-5 of 16 through steps 1-6, on 1-5 codes in use;
+  with the commitment never on, it rose to 10-14 from step 2 on 6-8 codes, in the runs that certified
+  (seeds 0, 3, 5).
+- **But S3 seeds 1 and 4 aren't dimensional collapse:** with the commitment never on, their `h` reached
+  11-15 dimensions and 5-8 codes in use (seed 1 dipped to 3 at step 4) and still formed no state. Their
+  failure is the codes not aligning with the states, a different mechanism; **the warm-up isn't
+  expected to rescue them** (still on the panel, to read).
+- **So option 1's case rests on keeping the commitment's benefit after formation** (the harm data)
+  without its collapse before it: the warm-up (continuous, no commitment) gives the dimensions, the
+  anneal from D7's `tau_0` turns them into codes without merging, the commitment returns once hard. Its
+  panel expectation: failure-A runs at least as the never probe's (S3 0, mtf-4 3 certify), and **no harm**
+  (S4 0, 1; division 0, 1; mtf-4 0 certify, as with the commitment on).
+
 ## Stages
 
 1. **This plan** (docs). Before it, the night's findings PR (the existing data, at the owner's direction).

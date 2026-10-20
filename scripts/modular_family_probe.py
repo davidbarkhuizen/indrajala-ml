@@ -1216,6 +1216,15 @@ def main(argv: list[str]) -> int:
         reading.add_argument("--out", type=Path, help="a directory for each network's <network>.<command>.json")
         if name == "by-length":
             reading.add_argument("--lengths", type=int, nargs="+", default=[1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64])
+    spread = commands.add_parser(
+        "state-spread",
+        help="saved networks' state spread: the outputs' critical temperature and effective dimension, the codes' groups",
+    )
+    spread.add_argument("networks", type=Path, nargs="+")
+    spread.add_argument("--task", required=True, help="modular-division-p (the quotient) or a machine's")
+    spread.add_argument("--arm", choices=sorted(ARMS), default="family")
+    spread.add_argument("--step", type=int, required=True, help="the curriculum step whose screen lengths it samples")
+    spread.add_argument("--cases", type=int, default=200, help="cases a length (the screen's)")
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
     readout.add_argument("root", type=Path, help="the study's directory, a <arm>/seed<s> per run")
     readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
@@ -1265,6 +1274,14 @@ def main(argv: list[str]) -> int:
         pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
         arms = list(dict.fromkeys(arm for pair in pairs for arm in pair)) if pairs else args.arms
         print("\n".join(mf.readout(args.root, arms, args.certify or args.root / "certify", pairs)))
+        return 0
+    if args.command == "state-spread":
+        encoding = _target(args.task, args)
+        lengths = sorted({1, (args.step + 1) // 2, args.step})
+        rows = [mf.windows_drawn(encoding, n, args.cases, f"family-screen-{args.step}-{n}") for n in lengths]
+        for path in args.networks:
+            spread = mf.state_spread(mf.load_network(str(path)), rows)
+            print(json.dumps({"network": str(path), "step": args.step, "factors": spread}), flush=True)
         return 0
     if args.command in ("by-length", "breaks"):
         for path in args.networks:
