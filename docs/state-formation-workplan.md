@@ -643,6 +643,39 @@ runs end (the header's rule).
   begun at 16:30. Its epochs take about 52 s on `pyramidon` (three at once), so the budget runs to about
   noon on 2026-10-21.
 
+## Findings: stage 4a'''', the quasi-static crucible (2026-10-20, read 20:30)
+
+`probe-d29.sh` at 3fb967a on `stone` (expectations in its header): word-problem-s3 seeds 1, 2, 3, 4, 6, 7,
+19:04-19:33; seeds 0 and 5 carried over from 4a''' (the same runs under D28-D30). Read by the header's
+rule: `population` on each log; `state-separation` snapped on the crucible's last block's network (every
+run certified in its crucible, none reached growth, so the certified network); `approximations` on each
+certified network. Data in data/window-recurrent/state-formation/option1/probe-d29/s3/; separation in
+`option1/separation/separation.txt`, approximations in `option1/approximations/`.
+
+- **Every run certified: 6 of 6, so `p` 8 of 8 (Wilson 95% 0.68-1.00), against 2 of 8 (0.07-0.59) in
+  4a'''.** Steps 13-123, 4.1-28.4 min. The six seeds were 4a''''s three systematic failures.
+- **D28 met:** every crucible length 8 (screen 1.0, 8 of 8 codes a factor in use, `d_eff` 3-9); each
+  run's best state share 1.000; snapped joint nearest-neighbour separation 1.00 at lengths 16 and 64 in
+  all six (chance 0.20, 0.17; centroid 0.84-1.00), each factor alone 1.00 by nearest neighbour. Seed
+  formation in 6 of 6 (4 needed).
+- **D29 met:** two runs dipped in the cool, and the clock held through each: seed 1 at steps 49 and 87
+  (screen 0.94, 0.99; `held` 2 by its end), seed 4 at 48, 53 and 83 (0.63, 0.94, 0.80; `held` 6), each
+  recovering to the gate in 1-3 epochs at fixed `T` and coupling. No run lost a formed state (`lost -`
+  in all six), none stalled at a held clock (refutations not met). The hold's own dips (seed 1 step 17,
+  0.88) are outside the gate by design and recovered within the step.
+- **D30:** seed 6's factor 1 again melted in one transition (at 2.14); its window held at 3 octaves, and
+  it certified at step 92 (coupling 0.67, `T` 0.42).
+- **Seed 2 certified in the heat** (step 13, coupling 0, `T` 0.33): the length-8 crucible alone formed
+  its machine; 4a''''s length-3 crucible had not (best share 0.36-0.38).
+- **What the factors hold** (`approximations`; S3 on three points): seed 7 is a cover (meet 6): factor
+  0 is exactly the congruence `places {1}`, factor 1 `places {2}`, the places of two items, which
+  together fix the permutation; the target a subdirect product of the two factors. Seeds 2 and 6:
+  factor 0 `places {1}` (meet 3); 4a''''s seed 0: factor 1 `places {2}`. Seeds 1, 3, 4 and 4a''''s seed
+  5: no named congruence (meet 1), the state held jointly.
+- **Verdict:** the header's claims met, no refutation; `p` lifted above the bar (4 of 8). By the
+  handover's rule, the panel (4b) next, with the quasi-static crucible (4a''' and D28-D30) as option 1's
+  candidate, once 4a''' and 4a'' end and are read.
+
 ## A note on random machines (2026-10-20; a note, not a plan)
 
 The owner: "this approach, if it works, is likely to also work for random machines"; and a conjecture,
@@ -695,6 +728,8 @@ a random machine would just need a very slow cool.**
      (`state-separation` at each step); registered before its data.
    - **4a'''. The seeded crystallisation probe** (D26, D27): word-problem-s3 seeds 0-7 on `stone`,
      `--crucible`; existence; registered before its data.
+   - **4a''''. The quasi-static crucible probe** (D28-D30): 4a''''s six failed seeds on `stone`;
+     registered in `probe-d29.sh`; read 2026-10-20: 8 of 8 certified (findings above).
    - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.
