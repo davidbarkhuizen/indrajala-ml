@@ -1050,6 +1050,28 @@ def test_the_melt_profile_heats_doubling_holds_then_cools_exponentially():
     assert all(a > b for a, b in itertools.pairwise(temperatures[5:]))  # smooth, no floor
 
 
+def test_the_shaped_cools_fall_their_octaves_in_their_epochs_between_the_limits():
+    shaped = {
+        shape: mf.WarmUp(heat=0, hold=0, halving=10, shape=shape, cool=100, octaves=10)
+        for shape in ("concave", "convex", "s")
+    }
+    for warm_up in shaped.values():
+        assert warm_up.temperature(0, 1.0) == 1.0
+        assert warm_up.temperature(100, 1.0) == pytest.approx(2.0**-10)
+        assert warm_up.temperature(110, 1.0) == pytest.approx(2.0**-11)  # then halved as the exponential
+    straight = 2.0**-5  # the exponential's at the halfway point, the same end points
+    assert shaped["concave"].temperature(50, 1.0) > straight > shaped["convex"].temperature(50, 1.0)
+    assert shaped["s"].temperature(50, 1.0) == pytest.approx(straight)
+    assert shaped["s"].temperature(10, 1.0) > shaped["convex"].temperature(10, 1.0)  # slow near the melt
+
+
+def test_the_hardness_test_waits_for_a_shaped_cool_to_run_its_curve():
+    exponential = mf.WarmUp(heat=2, hold=3, shape="exponential")
+    convex = mf.WarmUp(heat=2, hold=3, shape="convex", cool=100)
+    assert [exponential.reads_hardness(n) for n in (4, 5, 6)] == [False, True, True]
+    assert [convex.reads_hardness(n) for n in (5, 104, 105)] == [False, False, True]
+
+
 def test_the_warm_up_ends_only_with_its_screen_and_enough_distinct_states_or_at_its_cap():
     warm_up = mf.WarmUp(screen=0.95, cap=8, distinct=4.0)
     assert not warm_up.ends(1, 1, 1.0, [7, 40], [8, 8])  # screened, too few states in one factor

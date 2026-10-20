@@ -276,6 +276,27 @@ D5, D7' and D9 for option 1; D4, D6, D8's hardness test, D10-D12 stand.
 - **D23. The commitment's return as an arm (`--anneal-never-commit`):** 4a's losses came in the late
   cool and the ramp alike, so the follow-up probe runs the commitment's return (D19) against its never
   returning, both with D22. Pros: separates the two suspects left. Cons: two arms a task.
+- **D24 (the owner: "we may need more time, and a very slow cool - and to possibly experiment with
+  different shapes of cooling curve ... i don't think we should see time as the issue, only whether
+  our network can actually learn generically"; "test a concave curve and a convex curve ... those
+  represent the two limiting cases"; "and also maybe a s-curve"). The cool's shape on a
+  log-temperature scale (`--melt-shape`), each falling `octaves` 20 in `cool` 600 epochs from
+  `T_hot` (about 17 octaves span the melting curves, 4a), then halved every `halving` 30 epochs:**
+  concave (octaves fallen as `u^2`, `u` the share of the cool passed: it stays near the melt, then falls
+  fast), convex (as `1 - (1 - u)^2`: it falls fast, then a long slow tail where the fine splits are), and
+  s (as `3u^2 - 2u^3`: slow at the melt and in the tail, fast between). The exponential (a straight
+  line) lies between the two limits. The hardness test is read only once a shaped cool has run, so each
+  shape's whole curve trains soft (read from the cool's start, the convex limit would reach 4a's hard
+  temperature, about 0.05, by epoch 115 of 600, the concave by 355: the probe would compare times to the
+  snap, not shapes). The hold 20 epochs (4a's 10 melted to 4-5 groups, not 1); `kappa` 1e-2 (agitation,
+  the owner's thermal picture, readable now D20's distance sits above the noise); the commitment never
+  back (D23 (b): it certified the failure-A seeds before, and its return is the next question once a
+  crystal forms, not this one).
+  - (a) *Chosen.* Pros: the limits bracket the shapes, the s-curve lingers at both ends where the
+    transitions sit; a result says which side to explore; time isn't the constraint (the owner;
+    multi-day runs allowed where justified). Cons: three arms a task; a whole-distribution epoch costs
+    18.6 s on S3, 61 s on S4 (on `stone`, two at once), so about 1,200 epochs is 6-9 h and 20-25 h.
+  - (b) The exponential alone, slower. Cons: no reading of where the shape matters.
 - **D20 amended: the groups' distance is `T max(1/100, 10 kappa)` squared,** above the thermal noise
   (4a's `full` arm unreadable at `T / 100`).
 - **D20. Each factor's profile logged each epoch** (its phase, temperature, hardness, commitment and its
@@ -388,6 +409,11 @@ from state-formation/, with the void panel's).
      melt with `kappa` `10^-2`, a full melt with `10^-4`, a partial melt with `10^-2` (D16, D17); 6 runs,
      about 2 h; read whether the codes melt at the hold, split back as they cool (D20's groups) and
      harden, and the states formed; it settles D16 and D17. Every cell's bounds as D11's.
+   - **4a'. The shapes probe** (D22-D24): word-problem-s3 seed 0 and move-to-front-4 seed 3 (the
+     failure-A seeds that certified with the commitment never on; not S4 seed 0, a harm seed that needs
+     the commitment), no curriculum, each shape; 6 runs, up to 1,600 epochs (S3 on `pyramidon`, mtf-4 on
+     `stone`, up to about a day). Existence only: one seed a shape ranks nothing; every shape forming a
+     state goes forward.
    - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.

@@ -1163,6 +1163,15 @@ def main(argv: list[str]) -> int:
     run.add_argument("--melt-halving", type=int, default=mf.WarmUp.halving, metavar="EPOCHS")
     run.add_argument("--melt-kappa", type=float, default=mf.WarmUp.kappa, metavar="KAPPA")
     run.add_argument(
+        "--melt-shape",
+        choices=["exponential", *sorted(mf.COOLS)],
+        default=mf.WarmUp.shape,
+        help="the cool's shape on a log-temperature scale (D24): exponential halves every --melt-halving epochs; the "
+        "others fall --melt-octaves in --melt-cool epochs, then halve as it",
+    )
+    run.add_argument("--melt-cool", type=int, default=mf.WarmUp.cool, metavar="EPOCHS")
+    run.add_argument("--melt-octaves", type=float, default=mf.WarmUp.octaves, metavar="OCTAVES")
+    run.add_argument(
         "--keep-machine",
         action="store_true",
         help="the one-code-one-state workplan's R3: keep each step's network with the fewest pairs per code (read at "
@@ -1396,6 +1405,9 @@ def main(argv: list[str]) -> int:
             args.melt_hold,
             args.melt_halving,
             args.melt_kappa,
+            args.melt_shape,
+            args.melt_cool,
+            args.melt_octaves,
         )
         if args.warm_up
         else None

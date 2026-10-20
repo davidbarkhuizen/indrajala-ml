@@ -1066,6 +1066,13 @@ def state_spread(
     return spread
 
 
+COOLS: dict[str, Callable[[float], float]] = {  # the shaped cools' octaves fallen, a share of all, by share of time
+    "concave": lambda u: u**2,
+    "convex": lambda u: 1.0 - (1.0 - u) ** 2,
+    "s": lambda u: 3 * u**2 - 2 * u**3,
+}
+
+
 @dataclass(frozen=True)
 class WarmUp:
     """
@@ -1091,21 +1098,46 @@ class WarmUp:
     hold: int = 10
     halving: int = 15
     kappa: float = 1e-2
+    shape: str = "exponential"
+    cool: int = 600
+    octaves: float = 20.0
 
     def ends(self, step: int, first: int, best: float, distinct: Sequence[int], counts: Sequence[int]) -> bool:
         """Whether the warm-up ends at this step's end (`distinct`, `counts`: each snapped factor's states and codes)."""
         filled = all(n >= self.distinct * c for n, c in zip(distinct, counts, strict=True))
         return (best >= self.screen and filled) or step - first + 1 >= self.cap
 
+    def reads_hardness(self, n: int) -> bool:
+        """
+        Whether the hardness test is read after `n` epochs from the warm-up's end: from the cool's start
+        (exponential), or once a shaped cool has run its `cool` epochs, so its whole curve trains soft.
+        """
+        cooled = n - self.heat - self.hold
+        return cooled >= 0 and (self.shape == "exponential" or cooled >= self.cool)
+
     def phase(self, n: int) -> str:
         """The profile's phase after `n` epochs trained from the warm-up's end."""
         return "heat" if n < self.heat else "hold" if n < self.heat + self.hold else "cool"
 
     def temperature(self, n: int, hot: float) -> float:
-        """A factor's temperature after `n` epochs trained from the warm-up's end, at its `T_hot` `hot`."""
+        """
+        A factor's temperature after `n` epochs trained from the warm-up's end, at its `T_hot` `hot`. The
+        cool's shape on a log-temperature scale (D24): `exponential` a straight line, halved every
+        `halving` epochs; `concave` (the octaves fallen go as `u ** 2`, `u` the share of `cool` epochs
+        passed: it stays near the melt, then falls fast), `convex` (as `1 - (1 - u) ** 2`: it falls
+        fast, then a long slow tail) and `s` (as `3 u ** 2 - 2 u ** 3`: slow near the melt and in the
+        tail, fast between), each falling `octaves` in `cool` epochs, then halved every `halving` as
+        the exponential.
+        """
         if n < self.heat:
             return hot * 2.0 ** (n - self.heat)
-        return hot * 0.5 ** (max(n - self.heat - self.hold, 0) / self.halving)
+        m = max(n - self.heat - self.hold, 0)
+        if self.shape == "exponential":
+            return hot * 0.5 ** (m / self.halving)
+        if m >= self.cool:
+            return hot * 2.0**-self.octaves * 0.5 ** ((m - self.cool) / self.halving)
+        u = m / self.cool
+        return hot * 2.0 ** (-self.octaves * COOLS[self.shape](u))
 
 
 def distinct_states(net: Any, rows: Sequence[Sequence[tuple[Any, Any]]]) -> list[int]:
@@ -1422,6 +1454,9 @@ def run(
     )
     assert warm_up is None or anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
     assert not (whole and long_tail is not None), "the whole distribution has no long tail beyond it"
+    assert warm_up is None or warm_up.shape == "exponential" or warm_up.shape in COOLS, (
+        f"a cool's shape: exponential or one of {sorted(COOLS)}"
+    )
     assert warm_up is None or (fork is None and not restore_best and not keep_machine), (
         "a crystallising run never goes back (D18): the warm-up not with the fork, restore_best or keep_machine"
     )
@@ -1615,17 +1650,18 @@ def run(
                 # the network about to train (a fork's restored one included), its soft factors' hardness read
                 # at the temperature they trained at, on the step's screen at its shortest, middle and longest;
                 # after a warm-up, each factor's temperature its profile's from its T_hot (D15), hardness read
-                # from the cool's start, the soft codes moved by thermal noise (D17)
+                # from the cool's start or a shaped cool's end (D24), the soft codes moved by thermal noise (D17)
                 warming()
                 phase = warm_up.phase(spent - anneal_from) if warm_up is not None and hot else None
                 melting = phase in ("heat", "hold")
+                reading = phase is None or (warm_up is not None and warm_up.reads_hardness(spent - anneal_from))
                 each = (
                     [warm_up.temperature(spent - anneal_from, t) for t in hot]
                     if warm_up is not None and hot
                     else [anneal.temperature(spent)] * len(snapped)
                 )
                 soft = [
-                    t if s and level == 0 and not melting else None
+                    t if s and level == 0 and reading else None
                     for t, s, level in zip(each, snapped, annealed, strict=True)
                 ]
                 hard = hardness(net, [screens[n] for n in read_at], soft, anneal.hard)
