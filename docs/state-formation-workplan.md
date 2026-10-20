@@ -249,6 +249,12 @@ material, not literature's terms:
     commitment's benefit (the harm runs').
   - (b) Hard at the test, the 20-epoch ramp (D9). Cons: what eroded the void panel's states.
   - (c) Never hard, never committed. Cons: the harm data says the commitment is needed once a state exists.
+- **D20. Each factor's profile logged each epoch** (its phase, temperature, hardness, commitment and its
+  codes' groups closer than `T / 100` squared), and the warm-up's end row with each factor's distinct
+  states, critical temperatures and `T_hot`. Pros: the melt, each split and the crystal are read from the
+  log. Cons: a little more per epoch (the codes only).
+- **D20 amended: the groups' distance is `T max(1/100, 10 kappa)` squared,** above the thermal noise
+  (4a's `full` arm unreadable at `T / 100`).
 - **D21 (the owner: "grossly characterise the material (measure its melting point)"). The states'
   melting curve, measured at the warm-up's end on the run's own states and logged:** Rose's
   deterministic annealing of the factor's codes on its sampled outputs held fixed, from twice the
@@ -328,13 +334,6 @@ material, not literature's terms:
     (`couplings` per call, indrajala-math-rust #69); a second schedule, tied to the first.
   - (b) `l` from fixed fractions of `T_hot`. Cons: blind to where the transitions are.
   - (c) `l` from the codes' hardness. Cons: the forward path coupled to a noisy reading of itself.
-- **D20 amended: the groups' distance is `T max(1/100, 10 kappa)` squared,** above the thermal noise
-  (4a's `full` arm unreadable at `T / 100`).
-- **D20. Each factor's profile logged each epoch** (its phase, temperature, hardness, commitment and its
-  codes' groups closer than `T / 100` squared), and the warm-up's end row with each factor's distinct
-  states, critical temperatures and `T_hot`. Pros: the melt, each split and the crystal are read from the
-  log. Cons: a little more per epoch (the codes only).
-
 ## Findings: stage 2, option 1's understanding (2026-10-20)
 
 `state-spread` (`scripts/modular_family_probe.py`, `mf.state_spread`): each factor's `h` sampled at a
@@ -445,6 +444,24 @@ unsnapped). Readings in data/window-recurrent/state-formation/option1/separation
   encoded state cuts distinctions that live in the combination, and in a recurrence each wrong snap
   carries forward. Neither the melt nor the cool caused 4a's loss; the abrupt handover did (D25).
 
+## Findings: stage 4a', the shapes probe's warm-ups (2026-10-20)
+
+`probe-4a2.sh` at 45f7c51 (D22-D24, the abrupt snap still at the warm-up's end): started 12:15, stopped
+at 12:53 at the owner's direction once its warm-ups were read; D25 superseded its anneal. Data in
+data/window-recurrent/state-formation/option1/probe-4a2/ (`s3/`, `mtf4/`).
+
+- **The no-curriculum warm-up on move-to-front-4 seed 3:** screen 1.0 from its first block (a block an
+  epoch from step 2), its continuous states 50-55 a factor through step 5 and 75 at step 6, so D14 ended
+  the warm-up at step 6 (60 needed); 15 of 15 codes a factor in use, `d_eff` 8. Its states carry the
+  target's at every length (`--live`, joint nearest neighbour 1.00 at lengths 4-128, chance 0.05-0.19;
+  each factor alone 0.91-0.99): the long words the curriculum held back cost the warm-up nothing here.
+- **Its material:** whole critical temperatures 1.48 and 1.76 (`T_hot` 3.0, 3.5), melting points 1.10
+  and 1.30, last transitions (14 to 15 groups) 0.029 and 0.020: about 5.5 octaves, against S4's 11 (4a).
+- **Word-problem-s3 seed 0 was still in its warm-up at the stop:** step 1 ended on its plateau (20
+  epochs, screen about 0.7, 28 distinct states a factor against 32 needed).
+- The three shapes are one run until their cool starts (the shape only sets the cool), so a probe's
+  three arms read alike through the heat and the hold.
+
 ## A flaw in 4a'', fixed by resumption (2026-10-20, 14:05)
 
 D22's blocks still ran from step 1 to the cap (the curriculum's last length): with no curriculum a block
@@ -456,6 +473,33 @@ stopped at 14:05-14:08 (mtf-4 at blocks 31-36, at the cool's start; S3 in its wa
 resumed from their checkpoints at 14:09-14:10: a resumed run is the uninterrupted one by bits up to the
 stop (the consolidation workplan's stage 3), and the fix changes nothing before the cap, so no setting
 changed after the data; the registered expectations stand.
+
+## Readings: stage 4a'', the handover probe, in flight (2026-10-20, 15:00; not a verdict)
+
+`probe-4a3.sh` (resumed as `probe-4a3-resume.sh`, 3ac2ada; expectations in its header): S3 seed 0 on
+`pyramidon`, move-to-front-4 seed 3 on `stone`, each shape. The commitment never returns
+(`--anneal-never-commit`, D24); the coupling runs log-linear in `T` from each factor's melting point to
+its last transition (D25). Readings from the logs only; the separation through the cool is read when the
+runs end (the header's rule).
+
+- **Move-to-front-4's warm-up as 4a''s** (step 6, the same material), the phases by block: heat steps
+  7-11 (`T` 0.05 to 3.0), hold 12-31 (`T_hot`), cool from 32.
+- **The k-means snap at the warm-up's end nearly certified:** the snapped network (the codes read, the
+  forward path still continuous at coupling 0) at step 7 share 0.94, 39 of 67 pairs right; at step 8
+  (`T` 0.09-0.11, early in the heat, codes 15 and 15) share 1.00, 43 of 43 pairs right, uncertified
+  (minimised 32 states against the target's 24). Unlike 4a's S4 (snap 0.82 and 0.25 joint separation),
+  here the no-curriculum warm-up's states snap almost into the target machine.
+- **The melt took it away, on the codes alone:** the screen held at 1.0 through the heat and the hold
+  (the header's first expectation met: the forward path didn't melt), while the codes merged (groups 15
+  to 12, 9 at the hold's start, 4-8 through it) and the snapped share fell to 0.64-0.87, pairs right 0.
+- **The cool, so far (steps 32-52, coupling still 0):** the codes split back above the melting points
+  measured at the warm-up's end (convex at `T` 1.43 and 1.70: 14 and 11 groups; the curve said 1.10 and
+  1.30), so the material has moved since. Convex, the fastest early fall, leads: share 0.94, codes 15 and
+  15, 4-6 of 77-80 pairs right (steps 44-48); s 0.92 from step 49; concave about 0.79, still near the melt.
+- **S3** is still in its warm-up (block 5 at 15:00; screen about 0.5, D14's cap at step 8).
+- **The question it raises** (for the decision, not a change to this probe): the anneal's melt erased a
+  near-certified snap that the warm-up had already reached on mtf-4. Whether the cool re-forms it, and
+  whether the separation holds as the coupling rises, is what the remaining run reads.
 
 ## A note on random machines (2026-10-20; a note, not a plan)
 
