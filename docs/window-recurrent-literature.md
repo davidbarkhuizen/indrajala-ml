@@ -288,6 +288,89 @@ transformers' generalisation on regular languages falls quickly beyond chunks of
   what lets a chunked step track state (P1's 2c, at a chunk). Standard S5 failing in RLT at 120
   states, as ours does (round 2), says that cell is hard beyond our design.
 
+## Extension (2026-10-20): state formation, the commitment, and lost states
+
+Asked by the owner: look further for known understanding of our problem, and known fixes. The
+problem, as the night of 2026-10-19 left it ([bottlenecks.md](bottlenecks.md); findings to be
+written into the probe script's docstring):
+
+- **Bottleneck 1 (no state forms) is mostly the commitment's.** With the commitment never on
+  (`--commitment-from 1000`), 4 of round 1's 6 failure-A runs certified (S3 seeds 0, 3, 5;
+  move-to-front-4 seed 3), against at most 1 of 6 for the diagnostic and both thermostat probes.
+  Two seeds (S3 1, 4) collapsed to 1-4 codes **with the commitment off and the snap on**.
+- **States formed are lost when the commitment returns** (the diagnostic, both thermostat probes:
+  every formed state eroded within 1-2 steps of the return); with it off, S3 seed 3 lost a state
+  and re-formed it.
+- **Annealing (`--anneal`, D6-D11) merged the codes:** at width 32, 23-27 of a factor's 32 codes
+  became identical (squared distance under 1e-6) by step 2-3 at `tau` 1.0, the codes starting
+  about 0.03 apart; hardness stalled near 0.30 until `tau` was 1/64. Neither arm formed a state.
+- **Bottleneck 2 (codes standing for several states)** moved with R3/R4 (keep the best machine,
+  counterexample training): C2 at width 32 certified S5 2 of 6 and move-to-front-5 3 of 6, against
+  0 of 6 each; with the commitment off, R3/R4 certified neither of move-to-front-5's seeds 0, 1.
+- **Certified networks have thin margins** (near ties under the strict snap ratio of 1.05 in each
+  commitment-off certificate, and in two each of C0's and C2's).
+
+Searched vector-quantisation collapse and its fixes (2017-2026), soft-to-hard and annealed
+quantisation, deterministic annealing, and finite automata learned by gradient with discrete or
+noisy states. Eleven papers added to the literature repository, read in the parts that bear on
+the above (method, mechanism and the experiments behind each claim); two already there re-read.
+
+| paper | what it shows | bearing |
+| --- | --- | --- |
+| Rose 1998, Deterministic Annealing for Clustering, Compression, Classification, Regression, and Related Optimization Problems (Proc. IEEE 86:2210; `rose-1998-deterministic-annealing-clustering`) | with squared-error distortion and soft assignments `p ~ exp(-d/T)`, every codevector sits at the data's mean above a **critical temperature `T_c = 2 lambda_max`** (twice the largest eigenvalue of the data's covariance; Theorem 1); below it a cluster splits along its principal axis; coincident codevectors split only under a perturbation | **the exact mechanism of the annealing probe's merge:** our soft codes are DA with `T = tau`, started far above `T_c` for codes 0.03 apart; and identical codes stay identical under a deterministic gradient, so they never split. Annealing has to start below `T_c` (measured from the outputs `h`), or perturb coincident codes at each transition, as DA does |
+| Mavridis & Baras 2021, Online Deterministic Annealing for Classification and Clustering (2102.05836; `mavridis-2021-online-deterministic-annealing`) | DA as an online (stochastic-approximation) algorithm; codevectors duplicated with a small perturbation and merged back when they coincide; the number in use grows by bifurcation as `T` falls | an online recipe for the same: duplicate-and-perturb instead of a fixed codebook all at one point |
+| Agustsson et al. 2017, Soft-to-Hard Vector Quantization (NeurIPS; 1704.00648; `agustsson-2017-soft-to-hard-vector-quantization`) | soft assignments annealed to hard (D1 (d)'s source); **the codes initialised by clustering the network's own pre-quantisation outputs, and `sigma_0` from them**; the schedule tied to the gap between the soft and hard losses, or the iteration; "too slow" lets the network invert the soft assignments (growing weights), "too fast" vanishes the gradients | D8 and D9 set `tau` by epoch and in absolute units; the source sets both from the network's outputs. A cheap fix within the built annealing: codes from the sample's `h` (k-means), `tau_0` below `2 lambda_max` |
+| Takida et al. 2022, SQ-VAE (ICML; 2205.07547; `takida-2022-sq-vae-self-annealed-stochastic-quantization`) | stochastic quantisation whose variance is **learned**; it falls during training ("self-annealing"), so the quantiser becomes deterministic without a schedule; codebook use without restarts or the commitment's heuristics | the temperature as a parameter, not a schedule: no `tau_0` or halving to set |
+| Zhao et al. 2026, Continuous First, Discrete Later: VQ-VAEs Without Dimensional Collapse (2605.06870; `zhao-2026-continuous-first-discrete-later-vq-vae`) | **quantising before the encoder has learned a direction deactivates it for good:** directions below a "water level" stop evolving through the commitment term's interaction with the straight-through gradient; the latent's effective dimension collapses (to 2-5 of 512 at scale) and a loss floor follows that no codebook fix passes. Fix: **an unquantised warm-up**, its length predicted by their theory (an adaptive switch) | the closest account of failure A found: the state's directions are frozen before they mean anything, the commitment the agent, never recovered. It predicts what we saw (the commitment off cures most; the snap alone still collapses two seeds: our snap is on from step 1) and names the next remedy: the state continuous for the first steps, then snapped (Lancucki et al. 2020 also delay quantisation) |
+| Tang et al. 2026, StableVQ (2609.26774; `tang-2026-stablevq-stable-vq-tokenizer-training`) | collapse and instability from the **coupling** of encoder and codebook; standard training relies on encoder oscillations to bring codes into use; fixes: a corrected straight-through gradient, a codebook loss over regions, separate learning-rate schedules | the same coupling as the commitment's pull, in tokenizers; separate schedules for codes and network is an idea we haven't tried |
+| Mentzer et al. 2024, Finite Scalar Quantization (ICLR; 2309.15505; `mentzer-2023-finite-scalar-quantization`) | each of a few bounded dimensions rounded to a fixed grid; the codebook their product; **no codebook to learn, no commitment loss, no collapse** by construction, competitive with VQ | a factored quantiser with no commitment at all (one axis a dimension); a new kind of component, so the owner's; its grid would fix the codes' spread, which annealing showed matters |
+| Zhu et al. 2025, SimVQ (ICCV; 2411.02038; `zhu-2024-simvq-representation-collapse-one-linear-layer`) | collapse from **disjoint optimisation**: only the nearest code gets a gradient; codes as a frozen random basis times one trained linear map, so every code moves | why unused codes never join (our dead codes); a reparameterisation of the codes, a build |
+| Fifty et al. 2025, the rotation trick (ICLR; 2410.06424; `fifty-2024-rotation-trick-vector-quantization`) | replaces the straight-through gradient with a rotation and rescaling from the output to its code; unlike straight-through, it **can push points within one code's region apart** | bottleneck 2's form: windows of different target states on one code get one straight-through update, so nothing separates them; this gradient can. A crate change |
+| Oliva & Lago-Fernández 2020, Stability of Internal States in RNNs Trained on Regular Languages (2006.10828; `oliva-2020-stability-internal-states-rnn-regular-languages`) | **noise in the recurrent pre-activation** drives units to saturation, into clusters that act as a DFA's states; transitions deterministic, stable on arbitrarily long strings, and **perturbed states return to their clusters**; noise ramped up from 0 works too | a margin-maker other than the commitment (the near ties) and a cure for drift; their companion paper (2005.13971, read 2026-10-15) learned the carry automaton this way |
+| Umili & Capobianco 2024, DeepDFA (ECAI; 2408.08622; `umili-2024-deepdfa-automata-learning-probabilistic-relaxations`) | a DFA's probabilistic relaxation as a recurrent network over a bounded set of states, transitions sharpened to one-hot by temperature annealing; robust to label noise | another parameterisation, the state bound built in; its annealing is of the transitions, not of codes in a learned space |
+| *re-read:* Wang & Niepert 2019, State-Regularized RNNs (`wang-2019-state-regularized-rnns`) | the soft centroid state at a **fixed `tau` 1**, its centroids **initialised uniformly in [-0.5, 0.5]** | spread wide against `tau`, so below Rose's `T_c`: why their soft centroids don't coincide and ours did |
+| *re-read:* Huh et al. 2023, Straightening Out the Straight-Through Estimator (`huh-2023-straightening-straight-through-estimator`) | index collapse traced to the divergence between the commitment's target and the codes; an affine reparameterisation and an alternating ("synchronised") commitment update | already in the 2026-10-15 extension; it names the commitment as a collapse source, as Zhao et al. do |
+
+**What is known, mapped to our findings.**
+
+- **The commitment freezing what isn't learned yet is known** (Zhao et al. 2026's mechanism; Huh et
+  al. 2023 and StableVQ's coupling), as is the fix family: quantise later (an unquantised warm-up),
+  or drop the commitment (FSQ). Our result, that the commitment off for good certifies 4 of 6, is
+  that family's half-step: the snap stays on from the start. Zhao et al. predict the two seeds that
+  collapse anyway; their warm-up is the remedy to probe for them.
+- **The annealing merge is deterministic annealing above its critical temperature** (Rose 1998,
+  Theorem 1), exact and old. The fix is equally known: `tau` below `2 lambda_max` of the outputs'
+  covariance at the start, the codes initialised from the outputs (Agustsson et al.; Wang and
+  Niepert's wide spread), duplicates perturbed (DA), or `tau` learned (SQ-VAE). D9's choice of an
+  absolute `tau` is what failed, as its own con half-said.
+- **States lost and thin margins:** noise in the recurrence (Oliva and Lago-Fernández) makes
+  states attracting and margins wide without the commitment; the drift it cures is Zeng et al.'s
+  (1993). Not found: a study of a state lost **while training continues** on longer words, our
+  retention problem; the closest is grokking's "lost solutions" (the 2026-10-15 extension).
+- **Codes standing for several states:** the straight-through gradient can't separate windows on
+  one code (the rotation trick's motivation); disjoint optimisation keeps unused codes away
+  (SimVQ). **Counterexample training (R4) has no gradient-training precedent found:** L*-style
+  counterexamples are used to extract automata from trained networks (Weiss et al. 2018; Moore
+  machines from transformers, 2410.06045, surfaced, not read), not as training data.
+
+**Candidate remedies, in the order this review would probe them** (each a probe first, its
+expectation written before its data; builds are the owner's in the frozen phase):
+
+1. **Annealing with `tau_0` from the outputs' scale** (`tau_0` below `2 lambda_max` of the sample's
+   `h`, or the codes initialised from it, and the commitment kept off after hardening, as the never
+   probe found). A change to the built annealing (D9 revisited), not a new component.
+2. **A continuous warm-up:** the state unsnapped (identity codes, as the continuous network's test
+   uses) for the first steps, then snapped with the codes initialised from the states seen. For S3
+   seeds 1 and 4. A small harness build.
+3. **Noise in the cell's pre-activation** (Oliva and Lago-Fernández) as the margin-maker in the
+   commitment's place. A layer change.
+4. **The rotation trick** for bottleneck 2, beside R3/R4. A crate change.
+5. **FSQ-style fixed-grid factors.** A new kind of component: the owner's call.
+
+Not found: any study of a factored discrete recurrent state learning a finite machine to proof that
+reports the commitment's effect; the VQ results are on autoencoders and tokenizers, where the
+quantiser's input is a single forward pass, not a state fed back.
+
 ## References (arXiv ids; local copies in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`))
 
 1511.08228, 1611.00736, 2003.08494, 2511.22751, 2602.07599, 2406.00075, 1811.12530, 1711.00937,
@@ -298,3 +381,6 @@ Neural Computation 5(6):976-990, 1993 (doi 10.1162/neco.1993.5.6.976); Das & Moz
 19-26, 1993; Kolen, NeurIPS 6, 501-508, 1993; Omlin & Giles, Neural Networks 9(1):41-52, 1996.
 The architecture's extension: 1909.10893, 2107.02367, 2010.02193, 1904.02920, 2006.01895,
 2610.07591; Tiňo & Šajda, Neural Computation 7(4):822-844, 1995 (doi 10.1162/neco.1995.7.4.822).
+The state formation extension: 2309.15505, 1704.00648, 2205.07547, 2410.06424, 2411.02038,
+2605.06870, 2609.26774, 2006.10828, 2408.08622, 2102.05836; Rose, Proceedings of the IEEE
+86(11):2210-2239, 1998 (doi 10.1109/5.726788).
