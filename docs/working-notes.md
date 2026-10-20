@@ -363,6 +363,11 @@ where you meet a new trap; delete one that no longer holds.
   after launch. Over ssh to `jebel`, `$!` was the run.
 - **`cd X && ... && cmd &` backgrounds the whole chain in a subshell:** variables set in it don't
   reach the next command, and over ssh the session stays open until the chain ends.
+- **Never chain a local launch after a remote one in one command:** when the launching ssh hangs
+  (the line above), the Bash tool backgrounds the command and everything after the ssh runs when it
+  finally returns (2026-10-20: a local probe launched again 1 h 48 min later, refused only by the run
+  locks, its "ended" line fooling a waiter). Launch each machine in its own call; wait on a run's
+  process (`kill -0 PID`), not on a line a second launch could write.
 - **To run a study from a worktree's code into the main checkout's data** (so `main` can be pulled
   while it runs): `cd` to the main checkout, `PYTHONPATH=<worktree>`, and the script and config by
   the worktree's path. `indrajala_ml` is a namespace package, so check which copy loads (a

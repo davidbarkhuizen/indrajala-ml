@@ -311,6 +311,44 @@ data/window-recurrent/state-formation/option1/ (`stone/`, `pyramidon/`).
   word-problem-s5 seed 1 at share 0.81. S3 seed 4, move-to-front-4 seed 3 and move-to-front-5 seeds 0, 1
   never started.
 
+## Findings: stage 4a, the mechanics probe (2026-10-20)
+
+`probe-4a.sh` (its expectations in its header, before the data) at b8c3799: word-problem-s3 seed 0 on
+`pyramidon`, word-problem-s4 seed 0 on `stone`, arms `full` (`T_hot` 2 `T_c`, `kappa` 1e-2), `quiet`
+(2 `T_c`, 1e-4), `partial` (0.5 `T_c`, 1e-2); 600 epochs each, all spent. Data in
+data/window-recurrent/state-formation/option1/probe-4a/ (`s3/`, `s4/`), manifest `option1.sha256` (run
+from state-formation/, with the void panel's).
+
+- **The warm-up's end (D14):** S4 at step 7 (70 distinct states a factor against 60 needed, 15 of 15
+  codes in use, `d_eff` 9-11); S3 at its cap, step 8 (the continuous states never passed 24 distinct
+  against 32: the continuous network passed steps 1-8 on 16-24 states, saturated). Expectation met on
+  S4, not on S3.
+- **The melting curves (D21):** melting points 2.5-2.6 on S4 (`T_c` 3.5-3.7), the full 15 groups by
+  0.07-0.0015; on S3 2.5 and 2.05 (`T_c` 3.5, 2.9), 7 groups by 0.2-0.26.
+- **The melt and the splits, as Rose's theory says (the `quiet` arm, readable):** at the hold the codes
+  merged (S4 15 to 5 and 4 groups in 10 epochs; S3 8 to 2-3); in the cool they split back from about
+  the curve's melting point (S4 from 3.2 to 14-15 groups by 1.6; S3 factor 0 from about 3.5, factor 1
+  held at 2 groups until 2.3, its melting point 2.05). So the curve measured on fixed states predicts
+  training's transitions within about a fifth of an octave, early side.
+- **`full`'s groups are unreadable (a measurement flaw):** at `kappa` 1e-2 the noise moves each code
+  by about `T / 100` squared an epoch, D20's grouping distance, so the count stayed near all codes
+  whatever the melt; its screen did fall in the hold (S4 0.80 to 0.45). The threshold must sit above
+  the noise.
+- **`partial` never melted:** 0.5 `T_c` is below the melting point (about 0.7 `T_c` on both tasks),
+  so D16's "partial melt" was a hold in the solid; its codes stayed apart.
+- **No state formed, in any arm; nothing certified.** Best state shares 0.44-0.46 on S4 (steps 9-13,
+  soft), 0.23-0.32 on S3 (steps 9-11); then every arm lost its codes: S4 `full` and `partial` to 1-2
+  a factor, `quiet` to 5,3; S3 to 1-3. The losses came in the late cool and in the commitment's ramp
+  (S3 `full` lost its codes at step 12, soft, the commitment 0; S3 `quiet` at steps 14-15, early in
+  the ramp; S4 within 1-2 steps of the commitment's full weight). S3 seed 0 certified with the
+  commitment never on (round 1, width 16); here it didn't in any arm.
+- **The curriculum ran ahead of the crystal:** the plateau rule advanced the steps through the cool
+  (S4 8 to 14, S3 9 to 14, in about 130 epochs), the screen falling (S4 0.80 to 0.40-0.50) while the
+  codes were soft: new lengths arrived faster than structure settled.
+- **D16, D17 by the header's rule:** at hard, S4 favours `full` (codes 11,10, share 0.45), S3 `partial`
+  (6,5, 0.23); no consistent winner, and the rule's tie goes to `full`. But the mechanics are right
+  and the outcome isn't: the bottleneck is after the splits, not the melt's settings.
+
 ## Stages
 
 1. **This plan** (docs). Before it, the night's findings PR (the existing data, at the owner's direction).
