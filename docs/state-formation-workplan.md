@@ -445,6 +445,18 @@ unsnapped). Readings in data/window-recurrent/state-formation/option1/separation
   encoded state cuts distinctions that live in the combination, and in a recurrence each wrong snap
   carries forward. Neither the melt nor the cool caused 4a's loss; the abrupt handover did (D25).
 
+## A flaw in 4a'', fixed by resumption (2026-10-20, 14:05)
+
+D22's blocks still ran from step 1 to the cap (the curriculum's last length): with no curriculum a block
+isn't a length, and a run whose screen reached 1.0 passed a block an epoch, so move-to-front-4 seed 3
+(screen 1.0 from its warm-up's block 5) would have ended at block 248, about 240 epochs after the
+warm-up, before its cool (626 epochs) and, for the s and concave shapes, before the coupling reached 1;
+S3 at block 69. Fixed (3ac2ada: blocks go on until the budget or a certificate). The six runs were
+stopped at 14:05-14:08 (mtf-4 at blocks 31-36, at the cool's start; S3 in its warm-up, block 4) and
+resumed from their checkpoints at 14:09-14:10: a resumed run is the uninterrupted one by bits up to the
+stop (the consolidation workplan's stage 3), and the fix changes nothing before the cap, so no setting
+changed after the data; the registered expectations stand.
+
 ## Stages
 
 1. **This plan** (docs). Before it, the night's findings PR (the existing data, at the owner's direction).
