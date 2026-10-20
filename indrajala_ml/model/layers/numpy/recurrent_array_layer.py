@@ -33,7 +33,12 @@ from indrajala_ml.model.layers.numpy.array_layer import (
 )
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
-from indrajala_ml.model.specs.window_recurrence import Consolidation, commitment_targets, set_commitments
+from indrajala_ml.model.specs.window_recurrence import (
+    Consolidation,
+    check_temperatures,
+    commitment_targets,
+    set_commitments,
+)
 
 exp = np.exp
 
@@ -264,6 +269,12 @@ class CodesArrayLayer:
     wall * weight * gate * max(0, log(wall_ratio^2) - s)^2, gate the state's example's (1 when its
     every digit is right, set by the network before backward; None, every example's 1), its
     gradient to h, e1 and e2. Off (wall 0), nothing of it is computed.
+
+    forward_batch with a temperature is the soft-to-hard quantiser (the commitment-control
+    workplan, stage 3, D6): q = sum_k w_k e_k, w = softmax(-d / temperature) of the squared
+    distances d (the smallest subtracted; the sums left folds in code order); its loss weight *
+    (commitment * ||h - sg[q]||^2 + sum_k sg[w_k] ||sg[h] - e_k||^2), and q's gradient to h through
+    the weights alone. Neither the wall nor a target with it. indices are the nearest codes either way.
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
@@ -302,15 +313,30 @@ class CodesArrayLayer:
         distances = _fold(differences * differences, axis=2)
         return np.argmin(distances, axis=1)
 
-    def forward_batch(self, H: FloatArray) -> FloatArray:
-        """h (N, size) to its nearest code (N, size), a new array."""
+    def forward_batch(self, H: FloatArray, temperature: float | None = None) -> FloatArray:
+        """h (N, size) to its nearest code (N, size), a new array; with a temperature, to its soft state."""
         self._H = H
         self.indices = self.nearest(H)
-        self._Q = self.E[self.indices]
+        self._temperature = temperature
+        if temperature is None:
+            self._W = None
+            self._Q = self.E[self.indices]
+            return self._Q
+        assert self.wall == 0.0, "the soft codes take no wall"
+        differences = H[:, np.newaxis, :] - self.E[np.newaxis, :, :]
+        D = _fold(differences * differences, axis=2)
+        A = exp(-(D - D.min(axis=1)[:, np.newaxis]) / temperature)
+        self._W = A / _fold(A, axis=1)[:, np.newaxis]
+        self._Q = _fold(self._W[:, :, np.newaxis] * self.E[np.newaxis, :, :], axis=1)
         return self._Q
 
     def loss_batch(self, weight: float) -> float:
         """The batch's code losses, weighted, summed over the examples: what backward_batch differentiates."""
+        if self._W is not None:
+            committed = _fold(_fold((self._H - self._Q) ** 2, axis=1), axis=0)
+            pulled = self._H[:, np.newaxis, :] - self.E[np.newaxis, :, :]
+            codebook = np.sum(self._W * _fold(pulled * pulled, axis=2))
+            return float(weight * self.commitment * committed + weight * codebook)
         differences = self._H - self._Q
         squared = _fold(_fold(differences * differences, axis=1), axis=0)
         if self.targets is None:
@@ -347,8 +373,11 @@ class CodesArrayLayer:
     def backward_batch(self, dQ: FloatArray, weight: float) -> FloatArray:
         """
         The code's gradient (N, size) to h's: straight through, plus the commitment loss's and the
-        wall's; E's accumulated.
+        wall's; E's accumulated. Soft (forward_batch's temperature): the softmax's, the commitment's to
+        the soft q, and E's three terms row by row (src/recurrent.rs's soft_codes_backward).
         """
+        if self._W is not None:
+            return self._soft_backward(dQ, weight)
         differences = self._H - self._Q
         np.add.at(self.grad_E, self.indices, -2.0 * weight * differences)
         pulled = differences if self.targets is None else self._H - self.E[self.targets]
@@ -364,6 +393,22 @@ class CodesArrayLayer:
         np.add.at(self.grad_E, self.indices, ds * to_first)
         np.add.at(self.grad_E, second, -ds * to_second)
         return dH + ds * (to_second - to_first)
+
+    def _soft_backward(self, dQ: FloatArray, weight: float) -> FloatArray:
+        H, Q, W, E = self._H, self._Q, self._W, self.E
+        assert W is not None and self._temperature is not None
+        assert self.targets is None, "a soft factor takes no commitment target: a consolidation needs hard codes"
+        scale, code_scale = 2.0 / self._temperature, -2.0 * weight
+        C = W * (_fold(dQ[:, np.newaxis, :] * E[np.newaxis, :, :], axis=2) - _fold(dQ * Q, axis=1)[:, np.newaxis])
+        S = _fold(C[:, :, np.newaxis] * (E[np.newaxis, :, :] - Q[:, np.newaxis, :]), axis=1)
+        grad_E = self.grad_E
+        for n in range(len(H)):  # row by row, each row's three terms in turn
+            pulled = H[n][np.newaxis, :] - E
+            grad_E = grad_E + W[n][:, np.newaxis] * dQ[n][np.newaxis, :]
+            grad_E = grad_E + (scale * C[n])[:, np.newaxis] * pulled
+            grad_E = grad_E + (code_scale * W[n])[:, np.newaxis] * pulled
+        self.grad_E = grad_E
+        return scale * S + (2.0 * weight * self.commitment) * (H - Q)
 
 
 class InitialStateArrayLayer:
@@ -449,6 +494,8 @@ class RecurrenceArrayLayer:
         self.starts = [sum(self.sizes[:g]) for g in range(len(self.sizes))]
         self.consolidation: Consolidation = {}
         self._each = False  # whether the last forward_batch read one array of tokens a factor
+        self.temperatures: list[float | None] = [None] * len(sizes)
+        self.soft = False  # whether forward_batch's codes are soft (the network's training step only)
         self.factors = [
             _FactorParts(
                 AttentionPoolingArrayLayer(tokens, features),
@@ -469,6 +516,11 @@ class RecurrenceArrayLayer:
         """Each coded factor's commitment from the next training step on (a continuous factor's 0)."""
         set_commitments(self.factors, commitments)
 
+    def set_temperatures(self, temperatures: Sequence[float | None]) -> None:
+        """Each factor's codes' temperature in training from the next step on (None: hard)."""
+        check_temperatures(self.factors, temperatures)
+        self.temperatures = list(temperatures)
+
     def draw(self, rng: np.random.Generator) -> None:
         """Each factor's cell's gates, then its codes, factor by factor."""
         for f in self.factors:
@@ -483,10 +535,15 @@ class RecurrenceArrayLayer:
         start, size = self.starts[g], self.sizes[g]
         return np.concatenate([C[:, :start], C[:, start + size :]], axis=1)
 
-    def _snapped(self, hs: list[FloatArray]) -> FloatArray:
+    def _snapped(self, hs: list[FloatArray], soft: bool = False) -> FloatArray:
         self._hs = hs
+        temperatures = self.temperatures if soft else [None] * len(self.factors)
         Q = np.concatenate(
-            [h if f.codes is None else f.codes.forward_batch(h) for f, h in zip(self.factors, hs, strict=True)], axis=1
+            [
+                h if f.codes is None else f.codes.forward_batch(h, t)
+                for f, h, t in zip(self.factors, hs, temperatures, strict=True)
+            ],
+            axis=1,
         )
         self._set_targets()
         return Q
@@ -543,7 +600,7 @@ class RecurrenceArrayLayer:
             u = f.pooling.forward_batch(tokens[g])
             inputs = np.concatenate([u, self._others(C, g)], axis=1) if self.cross else u
             hs.append(f.cell.forward_batch(inputs, self._block(C, g)))
-        return self._snapped(hs)
+        return self._snapped(hs, self.soft)
 
     def backward_batch(self, dQ: FloatArray, weight: float) -> tuple[FloatArray | list[FloatArray], FloatArray]:
         """

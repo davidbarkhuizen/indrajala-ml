@@ -203,6 +203,15 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         """
         self.recurrence_layer.set_commitments(commitments)
 
+    def set_temperatures(self, temperatures: Sequence[float | None]) -> None:
+        """
+        Each factor's codes' temperature from the next training step on, in factor order (None:
+        hard; the commitment-control workplan, stage 3): soft in the training step's windows only,
+        every other pass, the initial state's included, snapped (D6, D11). Training state, as the
+        commitments: not saved with the network.
+        """
+        self.recurrence_layer.set_temperatures(temperatures)
+
     def consolidate(self, consolidation: Consolidation) -> None:
         """
         From the next training step on, a state snapped to a duplicate joint code is held by the
@@ -402,6 +411,8 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         walled = self._walled_codes()
         right: list[bool] = []
         self._set_training_mode(True)
+        recurrence = self.recurrence_layer
+        recurrence.soft = True
         try:
             C = self._first_state(X.shape[0])
             for w in range(windows):
@@ -421,6 +432,7 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
                 dC = self._window_backward(self.backend.columns(Y, w * width, (w + 1) * width), dC, weight)
             set_generator_state(self.rng, after)
         finally:
+            recurrence.soft = False
             self._set_training_mode(False)
 
         self._first_state(X.shape[0])
@@ -611,6 +623,7 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
             weight,
             recurrence.commitments,
             consolidation=self._consolidation,
+            temperatures=recurrence.temperatures,
         )
         recurrence.first_state_backward(dC, weight)
 
