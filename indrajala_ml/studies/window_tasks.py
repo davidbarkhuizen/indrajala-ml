@@ -181,6 +181,32 @@ class Mealy:
                     return False
         return True
 
+    def congruence_closure(self, labels: IntArray | Sequence[int]) -> IntArray:
+        """
+        The finest congruence coarser than the partition by `labels`: states with one label joined,
+        then the states two joined states go to on any token, until every transition respects it. Its
+        labels number the blocks in order of their first state. What `labels` determines of the
+        machine exactly: an approximation (is_congruence) is its own closure.
+        """
+        parent = list(range(self.states))
+
+        def find(s: int) -> int:
+            while parent[s] != s:
+                parent[s] = parent[parent[s]]
+                s = parent[s]
+            return s
+
+        first: dict[int, int] = {}
+        pending = [(s, first.setdefault(int(labels[s]), s)) for s in range(self.states)]
+        while pending:
+            s, r = pending.pop()
+            s, r = find(s), find(r)
+            if s != r:
+                parent[s] = r
+                pending.extend((int(self.transition[s, t]), int(self.transition[r, t])) for t in range(self.tokens))
+        blocks: dict[int, int] = {}
+        return np.array([blocks.setdefault(find(s), len(blocks)) for s in range(self.states)], dtype=np.int64)
+
     def distinguishing(self, s: int, r: int) -> list[int]:
         """The shortest word (first in token order) whose last label differs from s and from r."""
         assert s != r
@@ -240,6 +266,32 @@ CARRY = carry_machine()
 def orderings(n: int) -> list[tuple[int, ...]]:
     """The n! orderings of items 0..n-1, the identity first."""
     return list(itertools.permutations(range(n)))
+
+
+def order_labels(coordinates: Coordinates | None) -> dict[str, IntArray]:
+    """
+    An ordering machine's named partitions (its coordinates each position's item): "order {i, j, ...}"
+    the relative order of those items, "first k" the first k positions' items; none when the
+    coordinates aren't orderings. Which are congruences is the machine's (Mealy.is_congruence):
+    move-to-front's every one, each "order" of two items's quotient a flip-flop (an LRU's age matrix).
+    """
+    if coordinates is None:
+        return {}
+    values = [tuple(int(x) for x in row) for row in coordinates.values]
+    n = len(coordinates.names)
+    if any(sorted(row) != list(range(n)) for row in values):
+        return {}
+
+    def labelled(keys: list[tuple[int, ...]]) -> IntArray:
+        index: dict[tuple[int, ...], int] = {}
+        return np.array([index.setdefault(key, len(index)) for key in keys], dtype=np.int64)
+
+    named = {
+        f"order {{{', '.join(map(str, items))}}}": labelled([tuple(x for x in row if x in items) for row in values])
+        for r in range(2, n)
+        for items in itertools.combinations(range(n), r)
+    }
+    return named | {f"first {k}": labelled([row[:k] for row in values]) for k in range(1, n)}
 
 
 def _ordering_machine(

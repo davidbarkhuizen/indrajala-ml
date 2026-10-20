@@ -107,6 +107,10 @@ exact accuracy over every word of each length, and the share ending on a code ri
 and the transitions that break, from each state's first code and from its extra codes, over every
 code and from right ones (a code right when `--d` tokens of outputs agree, default the task's
 distinguishing length plus one), by depth. A line a network, its JSON into `--out`.
+`approximations NETWORK... --task T` reads what each factor's code determines of the task's machine
+exactly (machine_reading.approximations): the finest approximation (a congruence's quotient) it
+determines, the named congruences that refines (an ordering machine's, window_tasks.order_labels),
+whether the factor's code is a machine of its own, and whether the factors together cover the target.
 `trace` prints runs' logs a line per diagnosis (each factor's codes in use, the state's share, each
 answer's accuracy), marking a collapse: the codes in use below half the diagnosis before.
 `long-test` runs the long tests (the division workplan, D4: U1 and S1 at 128, 256 and 1,024
@@ -1258,6 +1262,10 @@ def main(argv: list[str]) -> int:
     for name, summary in (
         ("by-length", "saved networks' exact accuracy over every word of each length, against the task's machine"),
         ("breaks", "saved networks' broken transitions, from each state's first code and its extra codes"),
+        (
+            "approximations",
+            "what each factor's code determines of the task's machine exactly, and whether they cover it",
+        ),
     ):
         reading = commands.add_parser(name, help=summary)
         reading.add_argument("networks", type=Path, nargs="+")
@@ -1375,7 +1383,7 @@ def main(argv: list[str]) -> int:
             curves = mf.melting_curves(mf.load_network(str(path)), rows)
             print(json.dumps({"network": str(path), "step": args.step, "factors": curves}), flush=True)
         return 0
-    if args.command in ("by-length", "breaks"):
+    if args.command in ("by-length", "breaks", "approximations"):
         for path in args.networks:
             print(read_network(path, args), flush=True)
         return 0
@@ -1551,6 +1559,13 @@ def read_network(path: Path, args: argparse.Namespace) -> str:
         result: dict[str, Any] = {"network": str(path), "task": args.task, "d": d, "lengths": rows}
         line = " ".join(f"{r['n']}:{r['exact']:.3f}/{r['named']:.3f}" for r in rows)
         line = f"{path}: d {d}, exact/named by length {line}"
+    elif args.command == "approximations":
+        result = {"network": str(path), "task": args.task, **mr.approximations(walk, target)}
+        line = f"{path}: {result['states']} states, meet {result['meet']}, cover {result['cover']}; " + "; ".join(
+            f"factor {g}: {f['codes']} codes, approximation {len(f['approximation'])} blocks "
+            f"(congruence {f['congruence']}, autonomous {f['autonomous']:.3f}), determines {', '.join(f['determines']) or '-'}"
+            for g, f in enumerate(result["factors"])
+        )
     else:
         result = {"network": str(path), "task": args.task, **mr.breaks(walk, d)}
 

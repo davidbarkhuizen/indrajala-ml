@@ -121,3 +121,65 @@ def test_codes_are_grouped_only_as_far_as_d_tokens_tell_them_apart():
 def test_the_product_s_codes_are_the_walk_s():
     table = Table([[0, 1], [1, 2], [2, 3], [3, 2]], [[0, 1], [1, 2], [2, 0], [0, 1]])
     assert mr.product(table, COUNTER).codes == mr.walk(table, 2).codes
+
+
+class Pairs:
+    """A snapped machine of two factors given by a table over (code 0, code 1): next[(a, b)][t], out[(a, b)][t]."""
+
+    def __init__(self, next: dict[wc.State, list[wc.State]], out: dict[wc.State, list[int]]) -> None:
+        self.next, self.out = next, out
+
+    @property
+    def columns(self) -> int:
+        return 1
+
+    @property
+    def codes(self) -> list[int]:
+        return [2, 2]
+
+    def start(self) -> tuple[wc.State, list[wc.FloatArray]]:
+        return (0, 0), [np.zeros(2), np.zeros(2)]
+
+    def step(self, state: wc.State, windows: wc.IntArray) -> wc.Steps:
+        tokens = [int(w[0]) for w in windows]
+        return wc.Steps(
+            np.array([[self.out[state][t]] for t in tokens], dtype=np.int64),
+            np.ones((len(tokens), 1)),
+            np.array([self.next[state][t] for t in tokens], dtype=np.int64),
+            [np.zeros((len(tokens), 2)), np.zeros((len(tokens), 2))],
+        )
+
+
+def test_a_copy_of_the_target_determines_its_finest_named_congruence_and_covers_it():
+    target = wt.task_named("move-to-front-3").machine
+    copy = Table(target.transition.tolist(), target.output.tolist())
+    result = mr.approximations(mr.product(copy, target), target)
+    (factor,) = result["factors"]
+    assert result["states"] == result["meet"] == 6 and result["cover"]
+    assert factor["function"] and factor["congruence"] and factor["autonomous"] == 1.0
+    assert factor["approximation"] == [1] * 6
+    assert factor["determines"] == ["first 2"]  # the whole order: every coarser named congruence implied
+
+
+def _toggle(t: int, s: wc.State) -> wc.State:
+    """Token 0 the identity, token 1 toggles the first bit, token 2 the second."""
+    a, b = s
+    return (a, b) if t == 0 else (1 - a, b) if t == 1 else (a, 1 - b)
+
+
+def test_two_counters_mod_2_each_an_approximation_together_a_cover():
+    # the target: two bits each a counter mod 2 (_toggle), the output the first bit; a network holding
+    # each bit in its own factor
+    states: list[wc.State] = [(a, b) for a in range(2) for b in range(2)]
+    transition = np.array([[states.index(_toggle(t, s)) for t in range(3)] for s in states])
+    target = wt.Mealy(transition, np.array([[states[int(r)][0] for r in row] for row in transition]))
+    network = Pairs(
+        {s: [_toggle(t, s) for t in range(3)] for s in states},
+        {s: [_toggle(t, s)[0] for t in range(3)] for s in states},
+    )
+    result = mr.approximations(mr.product(network, target), target)
+    assert result["cover"] and result["meet"] == 4
+    for factor in result["factors"]:
+        assert factor["codes"] == 2 and factor["function"] and factor["congruence"]
+        assert factor["approximation"] == [2, 2] and factor["autonomous"] == 1.0
+        assert factor["determines"] == []  # no coordinates, no names

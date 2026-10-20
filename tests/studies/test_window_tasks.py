@@ -149,3 +149,29 @@ def test_division_readouts_approximations_and_the_cover(p: int):
         assert readout(machine, *labels).distinguishing_length() == 1
     assert readout(machine, total).distinguishing_length() is None
     assert all(len(set(machine.transition[:, t])) == machine.states for t in range(machine.tokens))
+
+
+def test_the_congruence_closure_is_the_finest_congruence_coarser_than_the_labels():
+    counter = wt.Mealy(np.array([[0, 1], [1, 2], [2, 0]]), np.array([[0, 1], [1, 2], [2, 0]]))
+    assert counter.congruence_closure([0, 1, 2]).tolist() == [0, 1, 2]
+    # joining counts 0 and 1 joins their successors 1 and 2: one block
+    assert counter.congruence_closure([0, 0, 1]).tolist() == [0, 0, 0]
+    machine = wt.modular_machine(5)
+    assert machine.coordinates is not None
+    A, B = machine.coordinates.values.T
+    total, quotient = (A + B) % 5, np.array([md.quotient(int(a), int(b), 5) for a, b in zip(A, B, strict=True)])
+    closed = machine.congruence_closure(total)  # an approximation is its own closure
+    assert len(set(zip(closed.tolist(), total.tolist(), strict=True))) == len(set(total.tolist()))
+    coarser = machine.congruence_closure(quotient)
+    assert machine.is_congruence(coarser)
+    assert all(coarser[s] == coarser[r] for s in range(25) for r in range(25) if quotient[s] == quotient[r])
+
+
+def test_order_labels_name_move_to_fronts_congruences_and_not_the_word_problems():
+    mtf = wt.task_named("move-to-front-4").machine
+    named = wt.order_labels(mtf.coordinates)
+    assert len(named) == 13 and all(mtf.is_congruence(v) for v in named.values())
+    assert sorted(np.bincount(named["order {1, 3}"]).tolist()) == [12, 12]  # a flip-flop: an age matrix's bit
+    s3 = wt.task_named("word-problem-s3").machine
+    assert [k for k, v in wt.order_labels(s3.coordinates).items() if s3.is_congruence(v)] == ["first 2"]
+    assert wt.order_labels(wt.modular_machine(5).coordinates) == {}
