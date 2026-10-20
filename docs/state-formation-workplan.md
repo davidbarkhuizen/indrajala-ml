@@ -334,6 +334,64 @@ material, not literature's terms:
     (`couplings` per call, indrajala-math-rust #69); a second schedule, tied to the first.
   - (b) `l` from fixed fractions of `T_hot`. Cons: blind to where the transitions are.
   - (c) `l` from the codes' hardness. Cons: the forward path coupled to a noisy reading of itself.
+### Seeded crystallisation (2026-10-20, after 4a''s readings)
+
+The owner: "continuing with the crystallization analogy - how can we form seed nuclei and then use them
+to seed the melt when we start cooling?"; on a seed freezing wrong (a polycrystal): "isn't this why we
+need a statistical/parallel approach?"; and "I would hold off on the Hukushima variation until we have
+done the initial baseline and interrogated the results".
+
+**Understanding first (the readings, `option1/separation/separation.txt`):** on word-problem-s3 the
+no-curriculum warm-up never formed the state (4a'', step 8: continuous centroid accuracy at chance from
+length 16, nearest neighbour 0.51 at 64 against chance 0.17: a drifting liquid, nothing to crystallise).
+The curriculum's warm-up did form it (4a: 1.00 to length 32, 0.94 at 64), but **snapped onto its own
+k-means codes with no training it fell to chance** (joint 0.90, 0.41, 0.20 at lengths 4, 16, 64 against
+0.26, 0.20, 0.17; 7 of 145 pairs right), where move-to-front-4's snap kept 1.00. A permutation machine has
+no synchronising word: one wrong snap stays wrong to the word's end, where a reset machine forgets it
+within a few tokens. So a group's seed can't be a snapshot of the continuous state: it must be
+crystallised, with the handover, on the material where it formed, before the long words arrive.
+
+- **D26. The seed grown in its own crucible, then grown on the whole distribution (`--crucible`).** The
+  curriculum's warm-up (D14, without `--whole`), then the material held at the warm-up's last step's
+  lengths through the whole profile (D15-D25: the full melt, the handover, convex, the commitment never
+  back) until every factor is hard; then growth: every block the whole distribution's (D22), the codes
+  hard, the forward path coupled to them (1).
+  - (a) *Chosen.* Pros: each part worked before (the curriculum formed S3's state, 4a; the handover
+    crystallised mtf-4's, 4a''); the material is fixed through the anneal (D22's reason holds: one
+    material a profile); growth trains to the cap, so the run's training meets the exclusion bound.
+    Cons: the crucible trains below the bound, so a seed may be a memorised machine (growth on the whole
+    distribution is its correction; a certificate is a proof whatever the lengths); growth at a frozen
+    temperature can't dissolve a wrong seed ((b) would).
+  - (b) Seed the melt: after the crucible, reheat on the whole distribution to just below the seed's
+    melting point and cool again (the owner's picture, and their earlier "heat to just below the melt").
+    Pros: a wrong seed can dissolve. Cons: here a temperature in the forward path blurs the state, which
+    costs a group's (the understanding above), and D25's coupling is 0 at the melting point, unplugging
+    the seed while the long words arrive: it needs a coupling rule of its own. The next variant, chosen
+    from the baseline's readings.
+  - (c) The curriculum warm-up's state snapped, no crucible anneal. Cons: the snap leaves S3 at chance.
+- **D27. A population of independent crucibles, the certificate the selector:** word-problem-s3 seeds
+  0-7, one cell, each run its own warm-up, codes and noise; existence (a certificate in any run), the
+  rate a screen (Wilson 95%).
+  - (a) *Chosen.* Pros: the owner's statistical approach; independent by construction (no shared seed,
+    so a polycrystal in one run says nothing of another); with the rate at 0.2, 8 runs give a
+    certificate with probability 0.83; 8 fills `stone` with the handover probe's two runs (8-10 workers its
+    best throughput). Cons: one task; 8 seeds a screen, not a rate.
+  - (b) Population annealing (Hukushima and Iba 2003; Machta 2010: replicas resampled by fitness at each
+    temperature). Deferred at the owner's word until this baseline is read; its resampling signal must
+    be the answers' screen, never the certificate (discovery: the target unknown).
+  - (c) Fewer seeds. Cons: the rate unmeasured.
+- **The cell (feasibility, docs/information-flow.md):** two factors, `--codes-ratio 32/11` (8 codes a
+  factor, `m` 64 against `q` 6, row 1), reading the output, width 32 (S3 certified at 32, row 3), cap 69
+  (`m + q - 1`, row 2, reached by growth), 1,600 epochs or 690 minutes; `T_hot` 2 `T_c`, hold 20,
+  `kappa` 1e-2, convex, tail 40, the handover, the commitment never back. Budget: the crucible's 666
+  epochs at about 10 s (4a's S3 at lengths 1-9), growth's 930 at about 28 s (D24's 18.6 s, slower with 10
+  runs on `stone`): about 10 h a run, in `stone`'s window (18:00-07:00).
+- **Expectations (registered in `probe-d26.sh`'s header before its data):** seed formation: at the
+  crucible's last block (before growth), the snapped joint nearest-neighbour separation at length 16
+  >= 0.9 in at least half the runs; growth: at least one certifies. Refuted: no crucible crystal
+  separates (seeds don't form: the crucible's design is wrong); seeds form but none certifies (growth
+  loses them: (b) next, where the logs say).
+
 ## Findings: stage 2, option 1's understanding (2026-10-20)
 
 `state-spread` (`scripts/modular_family_probe.py`, `mf.state_spread`): each factor's `h` sampled at a
@@ -579,6 +637,8 @@ a random machine would just need a very slow cool.**
      state goes forward.
    - **4a''. The handover probe** (D25): its mechanics first, separation read through the anneal
      (`state-separation` at each step); registered before its data.
+   - **4a'''. The seeded crystallisation probe** (D26, D27): word-problem-s3 seeds 0-7 on `stone`,
+     `--crucible`; existence; registered before its data.
    - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.

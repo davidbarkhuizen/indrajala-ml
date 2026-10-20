@@ -1150,6 +1150,12 @@ def main(argv: list[str]) -> int:
         "step's screen over a fixed spread of them; a step a block of epochs ending in its certificate",
     )
     run.add_argument(
+        "--crucible",
+        action="store_true",
+        help="the state formation workplan's D26 (with --warm-up): the material held at the warm-up's last step's "
+        "lengths through the whole profile, then, every factor hard, the whole distribution's (a seed, then growth)",
+    )
+    run.add_argument(
         "--warm-up",
         action="store_true",
         help="the state formation workplan's option 1 (with --anneal): every snapped factor continuous, its "
@@ -1495,6 +1501,7 @@ def main(argv: list[str]) -> int:
             anneal=anneal,
             warm_up=warm_up,
             whole=args.whole,
+            crucible=args.crucible,
         )
 
     for name in names:

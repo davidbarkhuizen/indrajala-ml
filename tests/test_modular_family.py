@@ -535,6 +535,15 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "fork": RESUMED_FORK,
         "anneal": mf.Anneal(start=0.5, halving=1, ramp=2),
     },
+    "crucible": {  # D26: the warm-up's end, the crucible's blocks, then growth, within the budget
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,  # the warm-up's 2 steps of up to 4 epochs, the crucible's block, growth's
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1, handover=True),
+        "crucible": True,
+    },
 }
 
 
@@ -608,6 +617,9 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
         annealed = [r["anneal"] for r in whole[0] if r.get("epoch", 0) > 0 and "end" not in r and "fork" not in r]
         assert annealed and annealed[0]["temperature"] == [0.5]
         assert annealed[-1]["temperature"] == [None] and annealed[-1]["beta"][0] > 0  # hardened, ramping back
+    elif kind == "crucible":
+        marks = [r["crucible"] for r in whole[0] if r.get("epoch") == 0 and "crucible" in r]
+        assert marks and marks[0] != "grown" and marks[-1] == "grown"
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":
@@ -1325,6 +1337,53 @@ def test_a_warm_up_run_trains_continuous_then_heats_from_its_codes_t_hot(tmp_pat
             anneal=anneal,
             warm_up=warm_up,
             restore_best=True,
+        )
+
+
+def test_a_crucible_holds_the_warm_ups_material_then_grows_on_the_whole_distribution(tmp_path: Path):
+    settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=40, cases=4, lengths=(2,), long=(3,))
+    # hard at the first reading (every window's weight above 0), read from the cool's start: after 2 epochs
+    anneal = mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False)
+    warm_up = mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1, handover=True)
+    encoding = mf.Encoding(5, mf.FAMILY)
+    mf.run(
+        encoding,
+        [(4, 4)],
+        0,
+        60,
+        tmp_path,
+        settings,
+        cap=6,
+        budget_epochs=8,
+        anneal=anneal,
+        warm_up=warm_up,
+        crucible=True,
+    )
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    (end,) = [r for r in rows if "warm_up_end" in r]
+    first = mf.first_length(encoding.task.machine)
+    assert end["crucible"] == end["step"] == first + 1  # the warm-up's cap: its second step
+    starts = [r for r in rows if r.get("epoch") == 0 and "screen" in r and r["step"] > end["step"]]
+    marks = [r["crucible"] for r in starts]
+    assert marks[0] == end["step"] and "grown" in marks  # the crucible's blocks, then growth
+    grown = marks.index("grown")
+    assert all(m == end["step"] for m in marks[:grown]) and all(m == "grown" for m in marks[grown:])
+    assert set(starts[grown]["kinds"]) >= set(starts[0]["kinds"])
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["crucible"] is True
+    with pytest.raises(AssertionError, match="crucible"):
+        mf.run(
+            encoding,
+            [(4, 4)],
+            0,
+            60,
+            tmp_path / "x",
+            settings,
+            cap=6,
+            anneal=anneal,
+            warm_up=warm_up,
+            crucible=True,
+            whole=True,
         )
 
 

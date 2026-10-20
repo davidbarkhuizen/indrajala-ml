@@ -1366,6 +1366,8 @@ class Place:
     anneal_from: int = 0  # WarmUp: the epochs trained when the warm-up ended
     melting: list[float] = field(default_factory=list[float])  # WarmUp: each factor's melting point (D25)
     final: list[float] = field(default_factory=list[float])  # WarmUp: each factor's last transition (D25)
+    crucible: int = 0  # the crucible's longest length, once its warm-up ended (D26)
+    grown: int = 0  # the crucible's first block of growth, once begun (D26)
 
 
 def _run_identity(
@@ -1393,6 +1395,7 @@ def _run_identity(
     anneal: Anneal | None = None,
     warm_up: WarmUp | None = None,
     whole: bool = False,
+    crucible: bool = False,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -1422,6 +1425,7 @@ def _run_identity(
         **({"anneal": repr(anneal)} if anneal is not None else {}),
         **({"warm_up": repr(warm_up)} if warm_up is not None else {}),
         **({"whole": True} if whole else {}),
+        **({"crucible": True} if crucible else {}),
     }
 
 
@@ -1468,6 +1472,7 @@ def run(
     anneal: Anneal | None = None,
     warm_up: WarmUp | None = None,
     whole: bool = False,
+    crucible: bool = False,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -1508,6 +1513,11 @@ def run(
     over every length 1..cap in turn, every step's screen over whole_lengths(cap); a step is then a
     block of epochs ending, as any, in its certificate, and blocks go on past the cap until the budget
     (wall-clock or epochs) or a certificate ends the run.
+    `crucible` (with `warm_up`; the state formation workplan's D26, a seed grown in its own crucible)
+    holds the material at the warm-up's end: every block after it trains and screens the warm-up's
+    last step's lengths, so the whole profile crystallises the state the curriculum formed on one
+    material; once every snapped factor is hard, the seed grows: every block from the next on is the
+    whole distribution's (as `whole`), its codes hard, the forward path coupled to them.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -1545,9 +1555,13 @@ def run(
         anneal,
         warm_up,
         whole,
+        crucible,
     )
     assert warm_up is None or anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
     assert not (whole and long_tail is not None), "the whole distribution has no long tail beyond it"
+    assert not crucible or (warm_up is not None and not whole and long_tail is None), (
+        "a crucible holds a warm-up's material, then grows on the whole distribution: with a warm-up, not --whole"
+    )
     assert warm_up is None or warm_up.shape == "exponential" or warm_up.shape in COOLS, (
         f"a cool's shape: exponential or one of {sorted(COOLS)}"
     )
@@ -1621,6 +1635,8 @@ def run(
     anneal_from = place.anneal_from if place is not None else 0  # WarmUp: the epochs trained at its end
     melting_points = list(place.melting) if place is not None else []  # WarmUp: each factor's melting point (D25)
     last_splits = list(place.final) if place is not None else []  # WarmUp: each factor's last transition (D25)
+    fixed = place.crucible if place is not None else 0  # D26: the crucible's longest length, once set
+    grown_from = place.grown if place is not None else 0  # D26: the first block of growth, once begun
 
     def warming() -> None:
         # the network about to train or screen (a fork's or a restore's loaded one included) continuous
@@ -1661,6 +1677,8 @@ def run(
             anneal_from,
             list(melting_points),
             list(last_splits),
+            fixed,
+            grown_from,
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -1674,19 +1692,34 @@ def run(
     # the curriculum's steps end at the cap; the whole distribution's blocks go on until the budget (D22:
     # a step is then a block of epochs, not a length)
     begin = place.step if place is not None else first
-    for step in itertools.count(begin) if whole else range(begin, cap + 1):
-        # the curriculum's lengths, or the whole distribution's every step (a step then a block of epochs)
-        lengths = whole_lengths(cap) if whole else list(range(1, step + 1))
-        named = "whole" if whole else step
+    for step in itertools.count(begin) if whole or crucible else range(begin, cap + 1):
+        # the curriculum's lengths, or the whole distribution's every step (a step then a block of epochs);
+        # a crucible's (D26) its warm-up's last step's every block, then, every factor hard, the whole's
+        # growth begins at the first block to start with every factor hard, and is kept (a resumed block
+        # within it reads it from its checkpoint, not from the levels the block's epochs moved)
+        if (
+            not grown_from
+            and not (place is not None and place.step == step)
+            and fixed > 0
+            and anneal is not None
+            and all(not anneal.soft(level) for level, s in zip(annealed, snapped, strict=True) if s)
+        ):
+            grown_from = step
+        grown = grown_from > 0
+        flat = whole or grown
+        longest = fixed or step
+        lengths = whole_lengths(cap) if flat else list(range(1, longest + 1))
+        named = "whole" if flat else longest
         screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{named}-{n}")[0] for n in lengths}
         read_at = (  # the step's screen at its shortest, middle and longest
             sorted({lengths[0], lengths[len(lengths) // 2], lengths[-1]})
-            if whole
-            else sorted({1, (step + 1) // 2, step})
+            if flat
+            else sorted({1, (longest + 1) // 2, longest})
         )
         stop, epoch = "budget", 0
         score = -1.0  # the last epoch's screen (WarmUp's end reads it with the step's best)
         if place is not None and place.step == step:  # resumed within this step
+            warming()  # the loaded network continuous while warming, as the stopped run's was
             best, since, epoch = place.best, place.since, place.epoch
             rate, forks, peak = place.rate, place.forks, place.peak
             last_kinds, step_rollbacks = place.last_kinds, place.step_rollbacks
@@ -1699,7 +1732,15 @@ def run(
             start_score, start_kinds = screen(
                 net, encoding, screens
             )  # the step before's network on this step's lengths
-            record({"step": step, "epoch": 0, "screen": round(start_score, 4), "kinds": _kinds(start_kinds)})
+            record(
+                {
+                    "step": step,
+                    "epoch": 0,
+                    "screen": round(start_score, 4),
+                    "kinds": _kinds(start_kinds),
+                    **({"crucible": "grown" if grown else fixed} if crucible and fixed else {}),
+                }
+            )
             last_kinds, step_rollbacks = start_kinds, 0
             peak = 0.0
             if fork is not None:
@@ -1719,7 +1760,7 @@ def run(
             rng = random.Random(f"family-train-{seed}-{step}-{epoch}" + (f"-fork{forks}" if forks else ""))
             examples = [
                 encoding.example(encoding.draw(n, rng))
-                for n in epoch_lengths(cap if whole else step, settings.epoch_examples, long_tail, cap)
+                for n in epoch_lengths(cap if flat else longest, settings.epoch_examples, long_tail, cap)
             ]
             if counterexamples is not None and words:
                 # R4 (D6): a share of the epoch from the last diagnosis's counterexamples, each word then d
@@ -1945,7 +1986,8 @@ def run(
             hot = [m.get("hot", 1.0) for m in made]
             melting_points, last_splits = handover_window(made)
             anneal_from = spent
-            record({"step": step, "warm_up_end": made})
+            fixed = step if crucible else 0
+            record({"step": step, "warm_up_end": made, **({"crucible": fixed} if crucible else {})})
             net.save(str(out / "network.json"))
         if stop in ("deadline", "spent", "stalled"):
             break
