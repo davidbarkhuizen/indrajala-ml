@@ -89,9 +89,15 @@ learned machines whose factors read out as the target's approximations.
   4a''' are applied only when they end.
 - **Generality and harm:** the panel (S4, move-to-front-5, division, S5) hasn't run with the crucible
   and the handover; the harm runs certified before only with the commitment on.
-- **Failures in the population:** S3 seed 2 collapsed late in the cool at full coupling; the crucibles
-  whose warm-up ended at step 3 (lengths 1-3) were stalled at shares 0.34-0.38; the no-curriculum S3 runs
-  are expected to fail.
+- **Failures in the population, and what they mean:** path dependence is expected (the owner: a
+  generalising method shouldn't work from every start; random machines will need the phase space sampled
+  over many seeds). With a verifier free of false positives the measure is the per-run success rate `p`
+  and the cost of a proved machine (about `1 / p` runs), and the question for random machines is how `p`
+  scales. Still, a failure that correlates with something observable early is a design flaw lowering `p`,
+  to fix; one that correlates with nothing is the phase space, to sample. Tonight's candidates for the
+  first kind: the crucibles whose warm-up ended at step 3 (lengths 1-3, stalled at shares 0.34-0.38) and
+  S3 seed 2's collapse late in the cool at full coupling (as 4a's late-cool losses); the no-curriculum S3
+  runs are expected to fail.
 - **Bottleneck 2** (extra codes wrong within a few tokens, the random machines' failure) is untouched.
 - **The other options** (noise in the cell, the rotation trick, FSQ factors) are next once option 1 is
   decided.
