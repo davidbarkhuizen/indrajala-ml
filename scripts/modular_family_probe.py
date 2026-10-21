@@ -1265,6 +1265,17 @@ def main(argv: list[str]) -> int:
         "population", help="seeded crystallisations' logs (D26, D27), a line per run: early observables, the outcome"
     )
     population.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    stop = commands.add_parser(
+        "answers-stop",
+        help="runs' logs, a line per run: an answers-only stop under a state bound, judged by the certificate",
+    )
+    stop.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    stop.add_argument("--task", help="a machine's name: the bound its states, and the encoding for --snapped")
+    stop.add_argument("--bound", type=int, help="the state bound (division's: its p squared); else --task's states")
+    stop.add_argument("--slack", type=float, default=1.0, help="the bound times this (a loose bound)")
+    stop.add_argument(
+        "--snapped", action="store_true", help="re-read answers on each step's saved network (a coupled run's log)"
+    )
     capacity = commands.add_parser(
         "heat-capacity", help="profiled runs' logs (D32), a line per run: each factor's splits and capacity peak"
     )
@@ -1436,6 +1447,31 @@ def main(argv: list[str]) -> int:
         for path in args.logs:
             course = mf.crucible_course([json.loads(line) for line in path.read_text().splitlines()])
             print(f"{path}: {mf.crucible_summary(course)}", flush=True)
+        return 0
+    if args.command == "answers-stop":
+        encoding = None if args.task is None else mf.target_named(args.task)
+        if args.bound is not None:
+            bound = args.bound * args.slack
+        elif encoding is not None:
+            bound = encoding.task.machine.states * args.slack
+        else:
+            raise SystemExit("answers-stop: --bound or a machine's --task")
+        if args.snapped and encoding is None:
+            raise SystemExit("answers-stop: --snapped needs --task")
+        tally: dict[str, int] = {}
+        for path in args.logs:
+
+            def snapped(step: int, path: Path = path) -> dict[str, float] | None:
+                saved = path.parent / f"step-{step}.network.json"
+                if encoding is None or not saved.exists():
+                    return None
+                return mf.snapped_answers(mf.load_network(str(saved)), encoding)
+
+            rows = [json.loads(line) for line in path.read_text().splitlines()]
+            verdict = mf.answers_stop(rows, bound, snapped if args.snapped else None)
+            tally[verdict["verdict"]] = tally.get(verdict["verdict"], 0) + 1
+            print(f"{path}: {verdict['verdict']}, stop {verdict['stop']}, certified {verdict['certified']}", flush=True)
+        print(f"bound {bound:g}: {tally}")
         return 0
     if args.command == "heat-capacity":
         for path in args.logs:

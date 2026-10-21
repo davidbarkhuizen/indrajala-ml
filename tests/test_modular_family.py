@@ -1331,6 +1331,41 @@ def test_thermals_are_the_soft_assignments_energy_and_its_derivative_in_temperat
     assert here[1] == pytest.approx((up[0] - down[0]) / (2 * dt), rel=1e-3)
 
 
+def _step_end(step: int, right: bool, minimised: int, certified: bool) -> dict[str, Any]:
+    v = 1.0 if right else 0.9
+    return {
+        "step": step,
+        "end": "passed",
+        "accuracy": {"token-0": 1.0},
+        "long": {"24": v, "48": 1.0},
+        "minimised": minimised,
+        "certified": certified,
+    }
+
+
+def test_answers_stop_judges_the_first_step_right_within_the_bound_by_the_certificate():
+    def run(*ends: dict[str, Any]) -> list[dict[str, Any]]:
+        return [{"step": 0, "epoch": 0, "screen": 0.5}, *ends]  # a row with no end is skipped
+
+    # all right but above the bound (a larger machine agreeing on the samples), then the certified step
+    kept = run(_step_end(1, True, 9, False), _step_end(2, True, 6, True))
+    assert mf.answers_stop(kept, 6) == {"verdict": "kept", "stop": 2, "certified": 2}
+    assert mf.answers_stop(kept, 6 * 1.5)["verdict"] == "false-stop"  # a loose bound stops on the larger one
+    assert mf.answers_stop(run(_step_end(1, True, 6, False), _step_end(2, True, 6, True)), 6)["stop"] == 1
+    assert mf.answers_stop(run(_step_end(1, True, 5, False)), 6)["verdict"] == "false-discovery"
+    assert mf.answers_stop(run(_step_end(1, False, 6, True)), 6)["verdict"] == "missed"
+    assert mf.answers_stop(run(_step_end(1, False, 6, False)), 6) == {
+        "verdict": "silent",
+        "stop": None,
+        "certified": None,
+    }
+    # a coupled run's answers re-read from the saved networks: the logged (soft) ones are ignored
+    soft = run(_step_end(1, True, 6, False), _step_end(2, True, 6, True))
+    reread = {1: {"24": 0.5}, 2: {"24": 1.0}}
+    assert mf.answers_stop(soft, 6, lambda step: reread[step])["verdict"] == "kept"
+    assert mf.answers_stop(soft, 6, lambda step: None)["verdict"] == "missed"  # no saved network: no stop
+
+
 def test_heat_course_reads_each_factors_splits_and_capacity_peak_in_the_cool():
     def row(phase: str, groups: list[int], capacity: list[float], t: list[float | None]) -> dict[str, Any]:
         return {

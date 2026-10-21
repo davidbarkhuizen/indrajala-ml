@@ -928,6 +928,50 @@ each log. Data in data/window-recurrent/state-formation/option1/probe-d32/.
   their overlay rescaled; and each factor's phase diagram, its codes on their principal axis against T
   from the saved step networks, beside the melting curve).
 
+## Findings: the reasoning review's re-reading of existing data (2026-10-21)
+
+Re-read offline while the adaptive cool's existence probe (D33's probe) and the handover probe's S3
+arm (4a'') ran, for the review's items 1, 3 and 8 ([reasoning-review-2026-10-21.md](reasoning-review-2026-10-21.md)).
+The tool: `answers-stop` (the probe script; `mf.answers_stop`), a line per run.
+
+- **An answers-only stop finds the target's machine when the state bound is tight (item 1).** The
+  rule: the first step whose answers are all right (the step's own screen and the long lengths 24 and
+  48) and whose machine, read off and minimised, has at most the bound's states; the certificate read
+  only to judge it. Over every run log with step ends (the studies under `data/window-recurrent/`,
+  option 1's apart), with the bound at the target's size: 121 runs stop on their certified network,
+  8 stop earlier on an uncertified one, none stops in a run that never certified (no false
+  discovery), none trains past its certificate. Each of the 8 has exactly the target's states; the
+  four whose stop networks were saved (move-to-front-4 three times, word-problem-s4) **certify at
+  snap ratio 1.0** (the network as it computes) and fail at 1.05 only on near ties, so the rule found
+  the target's machine there too; the other four (division `p` 5) saved only their certified network.
+  - **The bound must be tight:** at 1.1 times the target's size, 25 stop on an uncertified network
+    and 1 is a false discovery; at 1.5, 44 and 4; with no bound, 55 and 10. Those networks answer every
+    sampled word to length 48 and are larger machines (e.g. 26-165 states for division's 25, 533-613
+    for S5's 120): the samples don't tell them from the target, their size does. Discovery's state
+    bound ([machine-discovery.md](machine-discovery.md)) is therefore the stop's, not only the
+    exclusion bound's, and its slack costs.
+  - **Option 1's logged answers are the coupled network's**, not its snapped machine's (a run at
+    coupling 0.06 logs right answers while its snapped machine has 2-3 states), so the rule re-reads
+    them on each step's saved network (`--snapped`; a loaded network carries no coupling). On option
+    1's S3 runs (4a''' and 4a''''), 7 of 8 certified runs stop on their certified network and one
+    (4a''' seed 5) at step 108 against 117, whose network certifies at 1.0 (logit lead 13.1); no false
+    discovery in the 21 runs (S3 and move-to-front-4) that never certified.
+  - **Limits:** every run stopped at its first certificate, so a rule that waits (e.g. for a machine
+    stable over steps) can't be read: the certified step's machine usually differs from the step
+    before's, and nothing after it was trained. The near ties are the certificate's margin, not the
+    machine.
+- **The certificates come long before the coupling is complete (item 3).** In the quasi-static
+  crucible's S3 runs (4a'''' and 4a'''s seeds 0 and 5), every factor's codes reach their final number
+  of groups at a coupling of 0.00-0.50, and the run certifies at couplings of 0.06-0.90 (seed 7:
+  0.06 and 0.17; seed 3: 0.27 and 0.23). The certificate reads the snapped network; the network
+  trained is the coupled one. So the codes come to quantise the continuous dynamics exactly while
+  the forward path is still mostly continuous: the handover's completion isn't what conversion needs.
+- **The crucible's lengths reach and tell apart every state on every machine backdrop (item 8).**
+  The deepest state from the start and the length that tells every pair apart (Chow's `k`), against
+  the crucible's 8: word-problem-s3 2 and 1; S4 4 and 1; S5 5 and 1; move-to-front-4 3 and 2;
+  move-to-front-5 4 and 3; random-q8-1 2 and 1; random-q12-0 3 and 1; random-q16-0 4 and 1. Every
+  sum is at most 7. Division (arithmetic, no machine table) isn't read. The register's new row 15.
+
 ## A note on random machines (2026-10-20; a note, not a plan)
 
 The owner: "this approach, if it works, is likely to also work for random machines"; and a conjecture,
