@@ -1169,6 +1169,14 @@ def main(argv: list[str]) -> int:
         "forward path)",
     )
     run.add_argument(
+        "--continuous",
+        action="store_true",
+        help="the state formation workplan's D48 (with --crucible and --melt-shape exponential, no --handover or "
+        "--melt-gate): every switch after the warm-up continuous: the cool's rate from the screen (D49), the "
+        "coupling from the codes' sharpness (D50), soft to the end with a straight-through gradient (D51), growth "
+        "from the crucible (D52), a step an epoch with its readings (D53)",
+    )
+    run.add_argument(
         "--warm-up",
         action="store_true",
         help="the state formation workplan's option 1 (with --anneal): every snapped factor continuous, its "
@@ -1528,6 +1536,10 @@ def main(argv: list[str]) -> int:
         if args.anneal
         else None
     )
+    if args.continuous and not (
+        args.warm_up and args.crucible and args.melt_shape == "exponential" and not args.handover and not args.melt_gate
+    ):
+        parser.error("--continuous (D48) is a crucible's exponential cool: no --handover or --melt-gate of its own")
     if args.warm_up and not args.anneal:
         parser.error("--warm-up ends in an annealed snap: with --anneal")
     if args.warm_up and (args.fork or args.restore_best or args.keep_machine):
@@ -1605,6 +1617,7 @@ def main(argv: list[str]) -> int:
             crucible=args.crucible,
             state_bound=args.state_bound,
             coupling_cap=args.coupling_cap,
+            continuous=mf.Continuous() if args.continuous else None,
         )
 
     for name in names:
