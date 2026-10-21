@@ -61,7 +61,8 @@ Output is bounded: raw data goes to files only, `run` and `extend` print a line 
 and one when they finish (or the failing step's last 20 lines of stderr, exiting 1), and
 `report --brief` prints at most 15 lines. `report --md FILE` writes the full table and a protocol
 paragraph for a PR body. `report --pooled FILE`, for an A/A only (one commit and one crate on both
-sides), writes the baseline's form instead: each row pooled over every pass, with its spread of
+sides), writes the baseline's form instead (with, where a case ran on both backends, the crate's
+time over numpy's, worst first): each row pooled over every pass, with its spread of
 per-pass medians and each pass's shift (docs/machine_profiles/). `report --passes 1-4` pools only
 the passes named, to see what a shorter run would have concluded.
 
@@ -101,7 +102,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -1727,6 +1728,22 @@ def pass_spread(row: RowStats, data: ReportData) -> float | None:
     return (max(medians) - min(medians)) / pooled if medians and pooled else None
 
 
+def backend_ratios(rows: Sequence[RowStats]) -> list[tuple[str, str, float, float]]:
+    """
+    Each case timed on both backends (`<case> / rust` beside `<case> / numpy`): the case, its metric,
+    the crate's and numpy's pooled medians, worst ratio of the crate's over numpy's first (the aarch64
+    workplan's stage 6 baseline: the order of the crate's kernels to write).
+    """
+    medians = {(row.metric, row.case): statistics.median(row.old_runs + row.new_runs) for row in rows}
+    pairs: list[tuple[str, str, float, float]] = []
+    for (metric, case), rust in medians.items():
+        stem, _, backend = case.rpartition(" / ")
+        numpy = medians.get((metric, f"{stem} / numpy"))
+        if backend == "rust" and numpy:
+            pairs.append((stem, metric, rust, numpy))
+    return sorted(pairs, key=lambda pair: pair[2] / pair[3], reverse=True)
+
+
 def pooled_report(data: ReportData) -> str:
     """An A/A as a baseline: per row, the median (min-max) over every pass, the per-pass medians in
     pass order and their spread; before the tables, the spread over rows and each pass's shift."""
@@ -1769,6 +1786,20 @@ def pooled_report(data: ReportData) -> str:
                 f"| {_value(statistics.median(runs), unit)} ({_value(min(runs), unit)}-{_value(max(runs), unit)}) "
                 f"| {per_pass} | {'-' if spread is None else f'{spread * 100:.1f}%'} |"
             )
+    pairs = backend_ratios(data.rows)
+    if pairs:
+        unit = data.rows[0].unit
+        lines += [
+            "",
+            "### the crate over numpy",
+            "",
+            f"| case | crate {unit} | numpy {unit} | crate / numpy |",
+            "|---|---|---|---|",
+        ]
+        lines += [
+            f"| {stem} ({metric}) | {_value(rust, unit)} | {_value(numpy, unit)} | {rust / numpy:.2f} |"
+            for stem, metric, rust, numpy in pairs
+        ]
     return "\n".join(lines) + "\n"
 
 
