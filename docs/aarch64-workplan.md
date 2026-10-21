@@ -6,7 +6,7 @@ speed and production; D10 settled by the owner (2026-10-13, revised 2026-10-17):
 active cooler. Stages 0 and 1 done (2026-10-17): the Pi's Rust and pure-Python golden entries
 already equal jebel's bit for bit (stage 1's findings). Stage 2 done (2026-10-17): the crate's
 own `exp` and D6's rules. Stage 3 done (2026-10-17): the committed Rust reference, checked in
-CI. Stage 4 done (2026-10-18): CI on aarch64 and musl. Stage 5 done (2026-10-18): the Pi's timing setup, its thermal limits and its A/A. Stage 7's first two kernels done (2026-10-18): the matrix products and the dot products, with the conv downstream per example (bumped in #865 with the window branches' crate, afa7204); stage 6 (the baseline) next. The demo split
+CI. Stage 4 done (2026-10-18): CI on aarch64 and musl. Stage 5 done (2026-10-18): the Pi's timing setup, its thermal limits and its A/A. Stage 7's first two kernels done (2026-10-18): the matrix products and the dot products, with the conv downstream per example (bumped in #865 with the window branches' crate, afa7204); Stage 6 done (2026-10-21): the baseline, its order for stage 7 (threading first, then a NEON transpose, then the narrow-`k` tile). The demo split
 (`git show 9c50fe6:docs/demos-split-workplan.md`) is done, so the Pi needs no matplotlib.**
 
 indrajala-ml and the crate run on aarch64, tested and timed on a Raspberry Pi 5 (8 GB). The crate
@@ -352,6 +352,29 @@ end, on the Pi and (for the same table) on jebel. The result is a table of crate
 ratios per op on each machine, ordering stage 7's work. Expected from the code: matmul furthest
 behind (scalar against OpenBLAS's NEON kernels); small ops, where the Python call dominates,
 possibly ahead already.
+
+**Done (2026-10-21): the baseline.** Two A/As of `focused_benchmark` at main 69bf104 (crate
+5689b2a), ONNONO, both backends at their defaults: `2026-10-21-stage6-baseline-jebel-focused_benchmark`
+(267 of 270 rows within noise) and `2026-10-21-stage6-baseline-litshe-focused_benchmark` (268 of 270;
+passes peaked at 45.8-56.8 C), each read with `report --pooled`, whose crate-over-numpy table
+(`backend_ratios`, #900) pairs 134 cases.
+- **jebel: the crate faster on 101, slower on 33**, the large products worst (conv tail 32 x 5408
+  bare downstream b32 3.66, forward_batch b32 2.62; dense 30 x 784 downstream_batch b512 1.85;
+  attention forward_batch b32 1.39): OpenBLAS's tuned AVX2 kernels against the crate's fixed order.
+- **litshe: the crate faster on 115, slower on 19.** Worst: dense 30 x 784 transpose b512 2.74,
+  10 x 30 transpose b512 2.52, dense 30 x 784 downstream_batch b32 2.19, conv tail forward_batch
+  b32 2.08, dense 30 x 784 bare accumulate b32 1.89.
+- **On the Pi most of the gap is threading, not the kernels** (single-pass probes on litshe, both
+  backends held to one thread, `--rust-threads 1 --openblas-threads 1`): conv tail forward_batch b32
+  numpy 536 µs at its default, 1,128 at one thread, the crate 1,090 (0.97); dense 30 x 784
+  downstream_batch b32 numpy 108 at one thread, the crate 128 (1.18); accumulate_gradient_batch b32
+  numpy 144 against the crate's 140 (0.98; numpy's default 88-437, its threads waking for a small
+  product). OpenBLAS uses all 4 cores where the crate's threading threshold, set on x86, keeps it on
+  one. **The transpose is a real single-thread gap:** (512, 30) 25.0 µs against 8.9.
+- **So stage 7's order on the Pi:** (1) the crate's threading threshold for aarch64 (a sweep of
+  `--rust-threads 4:T` on the products the table names; threading never changes bits); (2) a NEON
+  transpose (2 x 2 blocks through `vzip1q`/`vzip2q`: a copy, exact; x86's 1.87 suggests an AVX2 one
+  beside it); (3) the narrow-`k` tile (`NEON_TILE_ROWS`, marked untuned; 18% at `k` 30).
 
 ### Stage 7 onward: NEON kernels, one per PR, in the baseline's order
 
