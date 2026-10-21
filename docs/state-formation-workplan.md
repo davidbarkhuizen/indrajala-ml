@@ -82,6 +82,8 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D43 | 2026-10-21, afternoon | the exact state bound | the panel at `N = q`, claimed so; slack read offline on its step networks |
 | D44 | 2026-10-21, afternoon | the crucible's cap from the bound | after the panel (D39's (iv)): the cap from the state bound, not the target |
 | D45 | 2026-10-21, 13:00 | D38's reading and D34's order | the gate's holds and the snapped answers read; D34's probe only if D38 is refuted |
+| D46 | 2026-10-21, 16:30 | the core matrix | 4b-core: D36's arms on S3 and mtf-4, fresh seeds 8-23, 600 epochs on every machine; the large tier set aside |
+| 4b-core | 2026-10-21, registered 16:30 | the core matrix | 48 runs (`probe-4b-core.sh`) on stone, jebel and pyramidon, from about 20:00 |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -691,6 +693,36 @@ it. D36 is the owner's; D35 and D37-D39 settled under the owner's delegation.
   algebra's cascade (the random-machine conjecture). (iii) Runs past their first certificate under
   D35 (D35's (c)): does a rule that waits for a stable machine stop on the target? Each registered in
   its own script before its data.
+
+### The core matrix (2026-10-21, 16:30; before the coupling probe's data)
+
+The panel's timing (2026-10-21, one cell at a time on `pyramidon`, scaled to `stone`): under
+`--whole`, S5 and move-to-front-5 epochs take about 300-440 s and 2.6 GB, division 13's over 1,000 s
+and over 3.1 GB, so a run of 1,600 epochs is 5.5-8 days (S5, mtf-5) and 18-27 days (division). The
+owner: "we don't have the infrastructure for the large tier ... is there an affordable matrix we can
+run to rather just provide a better statistical basis to what we already know?"; and "let's include
+jebel at night, but running at 50% capacity".
+
+- **D46. The core matrix (4b-core) before the panel:** D36's arms (the quasi-static crucible, and the
+  same cool with `--whole`) on word-problem-s3 and move-to-front-4, fresh seeds (S3 crucible and mtf-4
+  whole 8-23, S3 whole and mtf-4 crucible 8-15: 48 runs), 600 epochs on every machine, D35's stop at
+  the exact bound, D41's success, D45's coupling rule; expectations, refutations and analysis in
+  `~/code/probe-4b-core.sh`'s header (registered before its data). The large tier (S5, mtf-5, division)
+  waits for a machine that can run it or a cheaper length distribution (a design question, not
+  settled); the harm and random-machine cells (D37) are add-ons, not in this matrix.
+  - (a) *Chosen* (the owner's question; settled under the delegation). Pros: every claim option 1
+    rests on (the crucible's rate on S3, groups against resets, the crucible's harm on a reset
+    machine, the stop's safety) gets a rate on fresh seeds and two Fisher contrasts; about 1.5 days on
+    three machines, under 0.6 GB a run. Cons: two backdrops only; the harm cells and the random
+    machines wait.
+  - (b) The full panel (D37's cells). Cons: weeks for the large tier on this hardware.
+  - (c) The small tier (S3, mtf-4, S4, random; D37's cells without the large ones). Pros: the harm
+    question too. Cons: about 3 days, and fewer seeds a cell for the same cost.
+  - **The budget, 600 epochs on every machine (minutes 2,400, a safety):** the machines run at
+    different speeds (`pyramidon` about twice `stone`'s seconds an epoch), so a minutes budget would
+    give a run's outcome its machine; every certified run of option 1 so far took at most 294 epochs.
+    Pros: machine-neutral; about twice the slowest success. Cons: a run that would certify later than
+    600 epochs is a failure here (logged: its course to the budget).
 
 ### The consistency review settled (2026-10-21, afternoon)
 
