@@ -485,6 +485,42 @@ same runs, and the follow-up reruns the six others.
     existence probe on S3 seeds 0-7 and move-to-front-4 seed 3; then the panel, both arms, registered
     before its data. Open in the build: the weights learn while the codes anneal, so the landscape moves
     and stationarity at fixed `T` may not hold; the cap and re-estimation are the guard.
+- **D33. The adaptive cool as built (`--melt-shape adaptive`; D32's build, settled 2026-10-21 under the
+  owner's delegation).** The cost is the soft assignment's distortion, Rose's energy (`thermals`), each
+  factor its own; the understanding step's S3 reading (below) shows its capacity low in the melt, rising
+  at nucleation and peaking within the cascade of splits. One measurement an epoch (the energy and
+  capacity over the step's screen at its three lengths), so Huang et al.'s statistics over many moves
+  at a temperature become statistics over epochs:
+  - **The equilibrium test:** a temperature's first epoch passes if its energy is within `within` 0.75
+    sigma (`sigma = T sqrt(C)`, the assignment's spread) of the energy predicted from the last
+    temperature (`E - C dT`, Huang et al.'s prediction); a later epoch, if within 0.75 sigma of the
+    epoch's before (stationary at `T`). (a) *Chosen.* Pros: their test's form and constant; the
+    prediction lets a material that tracks equilibrium step every epoch; stationarity is what the
+    weights' moving landscape breaks, so the test holds `T` exactly then. Cons: an epoch's energy moves
+    with training as well as heat, so in the cold tail (sigma small) it holds often, until the cap. (b)
+    A Kolmogorov-Smirnov test of the epochs' energies. Cons: needs many epochs a temperature; their
+    second stage, for many moves. (c) No test, the step alone. Cons: open loop again (D29's lesson).
+  - **The step:** `T exp(-pace / sqrt(C))`, `C` the capacity's mean over the epochs at `T` (their
+    `T exp(-lambda T / sigma)` exactly), at most an octave. (a) *Chosen.* Pros: slow where the capacity
+    peaks (the splits), fast through the melt's flat top and below the last split; the octave bounds a
+    step where `C` is near 0. Cons: a factor 0.5 a choice; the mean smooths the epoch's noise (19-22 local
+    maxima a factor in S3 seed 4's cool) only over the epochs at `T`.
+  - **`pace` 0.03:** the convex cool's own speed through the cascades it certified with (implied
+    `-d ln T sqrt(C)` an epoch, the splits' medians 0.027-0.034 on S3 seeds 4 and 7), so the adaptive arm
+    is no faster than convex where the transitions are and faster elsewhere. Pros: one known-good
+    anchor. Cons: mtf-4's reading may move it (read when its run ends, before the existence probe).
+  - **`settle` 10 epochs:** the cap on epochs at a temperature, then a step regardless, sized by the
+    epochs measured there (their re-estimation). Pros: bounds a stall (the cold tail) at about the
+    exponential's 15 epochs a halving. Cons: a number.
+  - **Kept:** D29's gate (it holds the adaptive cool too: no step on a held epoch), D25's coupling
+    (log-linear in `T`, whatever schedule sets `T`), the hold and heat; hardness read from the cool's
+    start (as the exponential: no curve to wait for).
+  - **Resumption:** the cool's state (each factor's temperature, its epochs' measurements, its
+    prediction) is in the checkpoint; building its resumption test found that the couplings, training
+    state not saved with the network, weren't restored on resume, so a soft, coupled run resumed at a
+    step's end or start screened at coupling 1 (logged screens only, and D29's first gate reading);
+    fixed (the checkpoint keeps them). No earlier probe's certificate is touched (certificates read the
+    snapped network).
 - **4a''''. The quasi-static crucible probe:** word-problem-s3 seeds 1, 2, 3, 4, 6, 7, the cell and
   profile of 4a''' with D28-D30, on `stone` from about 19:30 (13 workers on its 12 cores until 4a''' ends);
   registered in `probe-d29.sh`'s header before its data. Seeds 0 and 5 carried over from 4a''' (the
@@ -796,6 +832,10 @@ a random machine would just need a very slow cool.**
      `--crucible`; existence; registered before its data; read 2026-10-21: 2 of 8 (findings above).
    - **4a''''. The quasi-static crucible probe** (D28-D30): 4a''''s six failed seeds on `stone`;
      registered in `probe-d29.sh`; read 2026-10-20: 8 of 8 certified (findings above).
+   - **D32's understanding step:** `thermals` logged on S3 seeds 4, 7 and mtf-4 seed 3 convex
+     (`probe-d32.sh`), read with `heat-capacity`; then D33's build.
+   - **D33's existence probe:** the adaptive crucible on S3 seeds 0-7 and mtf-4 seed 3 (with a convex
+     crucible control on mtf-4), registered in `probe-d33.sh`.
   - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.

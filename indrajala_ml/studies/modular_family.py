@@ -38,7 +38,7 @@ import random
 import re
 import time
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Protocol
@@ -652,6 +652,70 @@ def crucible_summary(course: Mapping[str, Any]) -> str:
     )
 
 
+def heat_course(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any] | None]:
+    """
+    Each factor's cool from a profiled run's log.jsonl (D32's understanding step), its epochs counted
+    from the cool's start: its splits (an epoch whose codes' groups rise, D20), the first (nucleation)
+    and the largest (the first of the largest rise); its heat capacity's peak (`thermals`, the
+    epoch's logged `capacity`), the peak's distance in epochs from each and whether it lies within the
+    cascade (from the first split to the last); the capacity's local maxima and its jump across the
+    nucleation epoch. None for a factor never soft in the cool, or a log without `capacity`.
+    """
+    cool = [r["anneal"] for r in rows if r.get("anneal", {}).get("phase") == "cool" and "capacity" in r["anneal"]]
+    courses: list[dict[str, Any] | None] = []
+    for g in range(len(cool[0]["temperature"]) if cool else 0):
+        soft = [a for a in cool if a["temperature"][g] is not None]
+        if not soft:
+            courses.append(None)
+            continue
+        T = [float(a["temperature"][g]) for a in soft]
+        groups = [int(a["groups"][g]) for a in soft]
+        C = [float(a["capacity"][g]) for a in soft]
+        splits = [(i, groups[i] - groups[i - 1]) for i in range(1, len(soft)) if groups[i] > groups[i - 1]]
+        peak = max(range(len(C)), key=C.__getitem__)
+        first = splits[0][0] if splits else None
+        largest = max(splits, key=lambda s: s[1])[0] if splits else None
+        courses.append(
+            {
+                "epochs": len(soft),
+                "groups": [groups[0], groups[-1]],
+                "splits": [[i, rise, round(T[i], 4)] for i, rise in splits],
+                "nucleation": first,
+                "largest": largest,
+                "peak": peak,
+                "peak_capacity": C[peak],
+                "peak_temperature": round(T[peak], 4),
+                "from_nucleation": None if first is None else peak - first,
+                "from_largest": None if largest is None else peak - largest,
+                "in_cascade": bool(splits) and splits[0][0] <= peak <= splits[-1][0],
+                "maxima": sum(1 for i in range(1, len(C) - 1) if C[i - 1] < C[i] > C[i + 1]),
+                "jump": None if not first or C[first - 1] <= 0 else round(C[first] / C[first - 1], 2),
+            }
+        )
+    return courses
+
+
+def heat_summary(courses: Sequence[Mapping[str, Any] | None]) -> str:
+    """heat_course's reading on one line."""
+
+    def factor(g: int, c: Mapping[str, Any] | None) -> str:
+        if c is None:
+            return f"factor {g} -"
+        splits = c["splits"]
+        span = (
+            f"T {splits[0][2]:.3g} to {splits[-1][2]:.3g}, epochs {splits[0][0]}-{splits[-1][0]}" if splits else "none"
+        )
+        return (
+            f"factor {g}: groups {c['groups'][0]} to {c['groups'][1]} in {c['epochs']} epochs, {len(splits)} splits "
+            f"({span}; nucleation {c['nucleation']}, largest {c['largest']}, jump x{c['jump']}); capacity peak "
+            f"{c['peak_capacity']:.3g} at {c['peak']} (T {c['peak_temperature']:.3g}), {c['from_nucleation']} from "
+            f"nucleation, {c['from_largest']} from the largest, {'in' if c['in_cascade'] else 'outside'} the "
+            f"cascade; {c['maxima']} local maxima"
+        )
+
+    return "; ".join(factor(g, c) for g, c in enumerate(courses))
+
+
 DROP_FROM, DROP_BY = 0.9, 0.3
 RECOVERED = 0.05  # a drop recovered: a later point's worst answer back within this of its level before
 
@@ -1261,7 +1325,9 @@ class WarmUp:
     cool is quasi-static: its clock (the profile's epochs) holds through an epoch whose screen before it
     is below `gate` times the hold's best, so the temperature and the coupling wait for the network;
     with `window` (D30) each factor's coupling window spans at least that many octaves below its melting
-    point.
+    point. With `shape` `adaptive` (D32, D33) the cool isn't precomputed: each factor's temperature
+    steps once an equilibrium test passes (`within`) or after `settle` epochs at it, by a step sized
+    from its heat capacity (`pace`), as Cooling sets it.
     """
 
     screen: float = 0.95
@@ -1279,6 +1345,9 @@ class WarmUp:
     handover: bool = False
     gate: float = 0.0
     window: float = 0.0
+    pace: float = 0.03
+    settle: int = 10
+    within: float = 0.75
 
     def holds(self, n: int, screen: float, level: float) -> bool:
         """
@@ -1312,7 +1381,7 @@ class WarmUp:
         (exponential), or once a shaped cool has run its `cool` epochs, so its whole curve trains soft.
         """
         cooled = n - self.heat - self.hold
-        return cooled >= 0 and (self.shape == "exponential" or cooled >= self.cool)
+        return cooled >= 0 and (self.shape in ("exponential", "adaptive") or cooled >= self.cool)
 
     def phase(self, n: int) -> str:
         """The profile's phase after `n` epochs trained from the warm-up's end."""
@@ -1326,17 +1395,72 @@ class WarmUp:
         passed: it stays near the melt, then falls fast), `convex` (as `1 - (1 - u) ** 2`: it falls
         fast, then a long slow tail) and `s` (as `3 u ** 2 - 2 u ** 3`: slow near the melt and in the
         tail, fast between), each falling `octaves` in `cool` epochs, then halved every `halving` as
-        the exponential.
+        the exponential; `adaptive` (D33) `hot` here, its cool Cooling's.
         """
         if n < self.heat:
             return hot * 2.0 ** (n - self.heat)
         m = max(n - self.heat - self.hold, 0)
+        if self.shape == "adaptive":
+            return hot  # the cool's start; Cooling's from there (D33)
         if self.shape == "exponential":
             return hot * 0.5 ** (m / self.halving)
         if m >= self.cool:
             return hot * 2.0**-self.octaves * 0.5 ** ((m - self.cool) / self.halving)
         u = m / self.cool
         return hot * 2.0 ** (-self.octaves * COOLS[self.shape](u))
+
+
+@dataclass
+class Cooling:
+    """
+    The adaptive cool's state (D32, D33: Huang, Romeo and Sangiovanni-Vincentelli 1986), each soft
+    factor's: its temperature, the energies and heat capacities measured at it (`thermals`, an epoch
+    each), and the energy predicted for it from the last (None: none, the cool's first). WarmUp's
+    `pace` is lambda, `within` the equilibrium test's share of the spread, `settle` the cap.
+    """
+
+    temperature: list[float]
+    energies: list[list[float]]
+    capacities: list[list[float]]
+    predicted: list[float | None]
+
+    @staticmethod
+    def start(hot: Sequence[float]) -> Cooling:
+        """The cool at its start, each factor at its T_hot."""
+        return Cooling(list(hot), [[] for _ in hot], [[] for _ in hot], [None] * len(hot))
+
+    def advance(self, warm_up: WarmUp) -> None:
+        """
+        Each factor's temperature for the next epoch (D33): it steps once the epochs at it pass the
+        equilibrium test or number `settle`, to `T exp(-pace / sqrt(C))` (Huang et al.'s `T exp(-lambda
+        T / sigma)`, sigma `T sqrt(C)`, C the capacity's mean at T), at most an octave; the energy
+        predicted there `E - C dT`. The test: the first epoch's energy within `within` sigma of its
+        prediction, or a later epoch's within `within` sigma of the epoch's before (stationary at T).
+        """
+        for g, (t, energies, capacities) in enumerate(
+            zip(self.temperature, self.energies, self.capacities, strict=True)
+        ):
+            if not energies:
+                continue
+            capacity = sum(capacities) / len(capacities)
+            sigma = t * math.sqrt(max(capacity, 0.0))
+            last = energies[-1]
+            before = self.predicted[g] if len(energies) == 1 else energies[-2]
+            settled = before is not None and abs(last - before) <= warm_up.within * sigma
+            if not (settled or len(energies) >= warm_up.settle):
+                continue
+            ratio = math.exp(-warm_up.pace / math.sqrt(capacity)) if capacity > 0 else 0.0
+            cooler = t * max(ratio, 0.5)
+            self.temperature[g] = cooler
+            self.predicted[g] = last - capacity * (t - cooler)
+            self.energies[g], self.capacities[g] = [], []
+
+    def record(self, heat: Sequence[tuple[float, float] | None]) -> None:
+        """Each soft factor's energy and capacity this epoch, at its temperature (thermals'; None: hard)."""
+        for g, e in enumerate(heat):
+            if e is not None:
+                self.energies[g].append(e[0])
+                self.capacities[g].append(e[1])
 
 
 def handover_window(made: Sequence[Mapping[str, Any]], window: float = 0.0) -> tuple[list[float], list[float]]:
@@ -1502,6 +1626,8 @@ class Place:
     held: int = 0  # WarmUp: the epochs its clock held (D29)
     level: float = -1.0  # WarmUp: the hold's best screen (D29)
     gate_screen: float = -1.0  # WarmUp: the last screen, which the gate reads (D29)
+    cooling: dict[str, Any] = field(default_factory=dict[str, Any])  # WarmUp: the adaptive cool's state (D33)
+    couplings: list[float] = field(default_factory=list[float])  # WarmUp: the network's last set (D25)
 
 
 def _run_identity(
@@ -1696,8 +1822,8 @@ def run(
     assert not crucible or (warm_up is not None and not whole and long_tail is None), (
         "a crucible holds a warm-up's material, then grows on the whole distribution: with a warm-up, not --whole"
     )
-    assert warm_up is None or warm_up.shape == "exponential" or warm_up.shape in COOLS, (
-        f"a cool's shape: exponential or one of {sorted(COOLS)}"
+    assert warm_up is None or warm_up.shape in ("exponential", "adaptive") or warm_up.shape in COOLS, (
+        f"a cool's shape: exponential, adaptive or one of {sorted(COOLS)}"
     )
     assert warm_up is None or (fork is None and not restore_best and not keep_machine), (
         "a crystallising run never goes back (D18): the warm-up not with the fork, restore_best or keep_machine"
@@ -1774,6 +1900,10 @@ def run(
     held = place.held if place is not None else 0  # D29: the epochs the profile's clock held
     level = place.level if place is not None else -1.0  # D29: the hold's best screen
     gate_screen = place.gate_screen if place is not None else -1.0  # D29: the last screen
+    cooling = Cooling(**place.cooling) if place is not None and place.cooling else None  # D33: the adaptive cool
+    coupled = list(place.couplings) if place is not None else []  # D25: the couplings last set, training state
+    if coupled:
+        net.set_couplings(coupled)  # the loaded network's, as the stopped run's was (its screens read them)
 
     def warming() -> None:
         # the network about to train or screen (a fork's or a restore's loaded one included) continuous
@@ -1819,6 +1949,8 @@ def run(
             held,
             level,
             gate_screen,
+            asdict(cooling) if cooling is not None else {},
+            list(coupled),
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -1936,7 +2068,10 @@ def run(
                 # after a warm-up, each factor's temperature its profile's from its T_hot (D15), hardness read
                 # from the cool's start or a shaped cool's end (D24), the soft codes moved by thermal noise (D17)
                 warming()
-                if warm_up is not None and hot and warm_up.holds(spent - anneal_from - held, gate_screen, level):
+                holding = (
+                    warm_up is not None and bool(hot) and warm_up.holds(spent - anneal_from - held, gate_screen, level)
+                )
+                if holding:
                     held += 1  # D29: this epoch trains at the last one's clock
                 clock = spent - anneal_from - held  # the profile's epochs (D29: less those held)
                 phase = warm_up.phase(clock) if warm_up is not None and hot else None
@@ -1947,6 +2082,10 @@ def run(
                     if warm_up is not None and hot
                     else [anneal.temperature(spent)] * len(snapped)
                 )
+                if cooling is not None and warm_up is not None and phase == "cool":
+                    if not holding:  # D33: the adaptive cool steps from its measurements; D29's gate holds it too
+                        cooling.advance(warm_up)
+                    each = list(cooling.temperature)
                 soft = [
                     t if s and level == 0 and reading else None
                     for t, s, level in zip(each, snapped, annealed, strict=True)
@@ -1962,9 +2101,13 @@ def run(
                 if phase is not None and warm_up is not None:
                     jitter(net, temperatures, warm_up.kappa, np.random.default_rng([seed, step, epoch, forks]))
                     profiled = {"phase": phase, "groups": code_groups(net, temperatures, warm_up.kappa)}
-                    heat = thermals(net, [screens[n] for n in read_at], temperatures)  # D32: logged only
+                    # D32's logging, and the adaptive cool's reading (D33)
+                    heat = thermals(net, [screens[n] for n in read_at], temperatures)
                     profiled["energy"] = [None if e is None else round(e[0], 6) for e in heat]
                     profiled["capacity"] = [None if e is None else round(e[1], 6) for e in heat]
+                    if cooling is not None and phase == "cool":  # D33: the measurements the next step reads
+                        cooling.record(heat)
+                        profiled["at"] = [len(e) for e in cooling.energies]
                     if warm_up.handover:  # D25: each soft factor's coupling from its temperature
                         couplings = [
                             1.0 if t is None else warm_up.coupling(clock, t, m, f)
@@ -1975,6 +2118,7 @@ def run(
                         profiled["held"] = held
                 net.set_temperatures(temperatures)
                 net.set_couplings(couplings)
+                coupled = couplings
                 net.set_commitments(beta)
                 thermo = {
                     "anneal": {
@@ -2139,6 +2283,7 @@ def run(
             hot = [m.get("hot", 1.0) for m in made]
             melting_points, last_splits = handover_window(made, warm_up.window)
             anneal_from = spent
+            cooling = Cooling.start(hot) if warm_up.shape == "adaptive" else None
             fixed = step if crucible else 0
             record({"step": step, "warm_up_end": made, **({"crucible": fixed} if crucible else {})})
             net.save(str(out / "network.json"))

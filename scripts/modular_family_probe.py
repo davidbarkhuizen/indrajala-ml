@@ -1174,11 +1174,15 @@ def main(argv: list[str]) -> int:
     run.add_argument("--melt-kappa", type=float, default=mf.WarmUp.kappa, metavar="KAPPA")
     run.add_argument(
         "--melt-shape",
-        choices=["exponential", *sorted(mf.COOLS)],
+        choices=["exponential", "adaptive", *sorted(mf.COOLS)],
         default=mf.WarmUp.shape,
         help="the cool's shape on a log-temperature scale (D24): exponential halves every --melt-halving epochs; the "
-        "others fall --melt-octaves in --melt-cool epochs, then halve as it",
+        "others fall --melt-octaves in --melt-cool epochs, then halve as it; adaptive (D33) steps each factor's "
+        "temperature once at equilibrium (--cool-within) or after --cool-settle epochs, by T exp(-pace / sqrt(C))",
     )
+    run.add_argument("--cool-pace", type=float, default=mf.WarmUp.pace, metavar="LAMBDA")
+    run.add_argument("--cool-settle", type=int, default=mf.WarmUp.settle, metavar="EPOCHS")
+    run.add_argument("--cool-within", type=float, default=mf.WarmUp.within, metavar="SIGMAS")
     run.add_argument("--melt-cool", type=int, default=mf.WarmUp.cool, metavar="EPOCHS")
     run.add_argument("--melt-octaves", type=float, default=mf.WarmUp.octaves, metavar="OCTAVES")
     run.add_argument(
@@ -1254,6 +1258,10 @@ def main(argv: list[str]) -> int:
         "population", help="seeded crystallisations' logs (D26, D27), a line per run: early observables, the outcome"
     )
     population.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    capacity = commands.add_parser(
+        "heat-capacity", help="profiled runs' logs (D32), a line per run: each factor's splits and capacity peak"
+    )
+    capacity.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
     drops = commands.add_parser("drops", help="a collapse trigger scored against runs' logs, offline")
     drops.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl (runs made without the fork)")
     _trigger_arguments(drops)
@@ -1422,6 +1430,11 @@ def main(argv: list[str]) -> int:
             course = mf.crucible_course([json.loads(line) for line in path.read_text().splitlines()])
             print(f"{path}: {mf.crucible_summary(course)}", flush=True)
         return 0
+    if args.command == "heat-capacity":
+        for path in args.logs:
+            courses = mf.heat_course([json.loads(line) for line in path.read_text().splitlines()])
+            print(f"{path}: {mf.heat_summary(courses)}", flush=True)
+        return 0
     if args.command == "long-test":
         args.out.mkdir(parents=True, exist_ok=True)
         for path in args.networks:
@@ -1478,6 +1491,9 @@ def main(argv: list[str]) -> int:
             args.handover,
             args.melt_gate,
             args.handover_octaves,
+            args.cool_pace,
+            args.cool_settle,
+            args.cool_within,
         )
         if args.warm_up
         else None

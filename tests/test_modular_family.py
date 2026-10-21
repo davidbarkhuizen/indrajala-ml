@@ -3,6 +3,7 @@
 import hashlib
 import itertools
 import json
+import math
 import random
 import shutil
 from pathlib import Path
@@ -553,6 +554,15 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1, handover=True, gate=2.0, window=3.0),
         "crucible": True,
     },
+    "adaptive": {  # D33: the cool's temperatures and measurements carried over every stop
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, handover=True, shape="adaptive", settle=2),
+        "crucible": True,
+    },
 }
 
 
@@ -631,6 +641,9 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
         assert marks and marks[0] != "grown" and marks[-1] == "grown"
     elif kind == "gated":  # the clock held, the held count carried over every stop
         assert max(r["anneal"].get("held", 0) for r in whole[0] if "anneal" in r) >= 2
+    elif kind == "adaptive":  # the cool stepped more than once, part way through a temperature at some stop
+        cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
+        assert len({a["temperature"][0] for a in cool}) >= 3 and any(a["at"] == [2] for a in cool)
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":
@@ -1128,6 +1141,38 @@ def test_a_held_clock_holds_the_temperature_and_the_coupling(tmp_path: Path):
     assert all(a["temperature"] == cool[0]["temperature"] and a["coupling"] == cool[0]["coupling"] for a in cool)
 
 
+def test_the_adaptive_cool_steps_at_equilibrium_or_its_cap_by_its_heat_capacity():
+    warm_up = mf.WarmUp(shape="adaptive", pace=0.1, settle=3, within=0.75)
+    cooling = mf.Cooling.start([2.0, 1.0])
+    cooling.advance(warm_up)  # nothing measured yet: the cool's start
+    assert cooling.temperature == [2.0, 1.0]
+    cooling.record([(5.0, 0.25), None])  # factor 1 hard: never measured, never stepped
+    cooling.advance(warm_up)  # one epoch, no prediction to test it against
+    assert cooling.temperature == [2.0, 1.0]
+    cooling.record([(5.5, 0.25), None])  # sigma 2 sqrt(0.25) = 1: within 0.75 of the epoch before
+    cooling.advance(warm_up)
+    step = math.exp(-0.1 / 0.5)
+    assert cooling.temperature == pytest.approx([2.0 * step, 1.0])
+    assert cooling.predicted[0] == pytest.approx(5.5 - 0.25 * (2.0 - 2.0 * step))
+    assert cooling.energies == [[], []] and cooling.capacities == [[], []]
+    t = cooling.temperature[0]
+    cooling.record([(9.0, 0.25), None])  # far from its prediction: holds
+    cooling.advance(warm_up)
+    cooling.record([(7.0, 0.25), None])  # moved more than 0.75 sigma since: holds
+    cooling.advance(warm_up)
+    assert cooling.temperature[0] == t
+    cooling.record([(1.0, 1.0), None])  # the cap: steps whatever the test, by the capacity's mean at t
+    cooling.advance(warm_up)
+    assert cooling.temperature[0] == pytest.approx(t * math.exp(-0.1 / math.sqrt(0.5)))
+    flat = mf.Cooling.start([1.0])  # a capacity near 0 (no transition): at most an octave
+    flat.record([(1.0, 1e-8)])
+    flat.record([(1.0, 1e-8)])
+    flat.advance(warm_up)
+    assert flat.temperature == [0.5]
+    assert mf.WarmUp(shape="adaptive", heat=2, hold=3).temperature(9, 4.0) == 4.0  # Cooling's from the cool on
+    assert mf.WarmUp(shape="adaptive", heat=2, hold=3).reads_hardness(5)
+
+
 def test_the_hardness_test_waits_for_a_shaped_cool_to_run_its_curve():
     exponential = mf.WarmUp(heat=2, hold=3, shape="exponential")
     convex = mf.WarmUp(heat=2, hold=3, shape="convex", cool=100)
@@ -1273,6 +1318,35 @@ def test_thermals_are_the_soft_assignments_energy_and_its_derivative_in_temperat
     (here,), (up,), (down,) = (mf.thermals(net, rows, [x]) for x in (t, t + dt, t - dt))
     assert here is not None and up is not None and down is not None
     assert here[1] == pytest.approx((up[0] - down[0]) / (2 * dt), rel=1e-3)
+
+
+def test_heat_course_reads_each_factors_splits_and_capacity_peak_in_the_cool():
+    def row(phase: str, groups: list[int], capacity: list[float], t: list[float | None]) -> dict[str, Any]:
+        return {
+            "step": 1,
+            "epoch": 1,
+            "anneal": {"phase": phase, "temperature": t, "groups": groups, "capacity": capacity},
+        }
+
+    rows: list[dict[str, Any]] = [
+        row("hold", [2, 8], [9.0, 0.1], [4.0, None]),  # the hold's peak isn't the cool's
+        row("cool", [2, 8], [0.1, 0.1], [3.0, None]),
+        row("cool", [3, 8], [0.3, 0.1], [2.0, None]),  # nucleation at epoch 1, jump x3
+        row("cool", [3, 8], [0.5, 0.1], [1.5, None]),
+        row("cool", [6, 8], [0.4, 0.1], [1.0, None]),  # the largest split, epoch 3
+        row("cool", [5, 8], [0.6, 0.1], [0.8, None]),  # a merge is no split
+        row("cool", [8, 8], [0.2, 0.1], [0.5, None]),
+        {"step": 1, "factors": []},
+    ]
+    course, frozen = mf.heat_course(rows)
+    assert frozen is None and course is not None
+    assert course["splits"] == [[1, 1, 2.0], [3, 3, 1.0], [5, 3, 0.5]]
+    assert course["nucleation"] == 1 and course["largest"] == 3 and course["jump"] == 3.0
+    assert course["peak"] == 4 and course["peak_capacity"] == 0.6 and course["peak_temperature"] == 0.8
+    assert course["from_nucleation"] == 3 and course["from_largest"] == 1 and course["in_cascade"]
+    assert course["maxima"] == 2 and course["groups"] == [2, 8] and course["epochs"] == 6
+    assert "factor 1 -" in mf.heat_summary([course, frozen])
+    assert mf.heat_course([{"step": 1, "anneal": {"phase": "cool", "temperature": [1.0]}}]) == []
 
 
 def test_state_spread_reads_the_outputs_critical_temperature_and_the_codes_groups():

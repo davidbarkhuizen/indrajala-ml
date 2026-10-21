@@ -115,6 +115,11 @@ where you meet a new trap; delete one that no longer holds.
 - **`/tmp` on `pyramidon` is RAM-backed (tmpfs) with a per-user quota:** scratch copies of study
   data cost memory, and a test writing many run directories filled the quota (2026-10-18). Remove
   each one's files as it goes (the resume test does).
+- **Training state set on the network isn't saved with it** (temperatures, couplings, continuous
+  factors, commitments): a resumed run loads the network bare, so whatever its first screen reads
+  before the next epoch sets them must be kept in the checkpoint's `Place` and re-applied (the
+  couplings were not until 2026-10-21, found by the adaptive cool's resume test). A resume test whose
+  factors harden at once (coupling 1) can't see such a gap: give a new profile's test soft factors.
 - **Background Python writing to a log is block-buffered:** a killed job leaves nothing. Use
   `python -u` or `PYTHONUNBUFFERED=1` for any log you may need mid-run.
 - **The harness log prints nothing within a step;** progress shows as `models/<key>/step-<j>.json`
