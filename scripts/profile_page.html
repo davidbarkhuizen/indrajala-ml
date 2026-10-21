@@ -60,7 +60,7 @@ details { font-size: 0.85rem; color: var(--ink-2); }
   <p class="sub">Each run's epochs from its log, over the epochs trained: the warm-up, then the profile's heat, hold and cool until the codes are hard. Hover any panel to read every quantity at that epoch.</p>
   <div class="controls">
     <label for="run">Run <select id="run"></select></label>
-    <label>View <span class="seg"><button id="v-stacked" aria-pressed="true">Stacked</button><button id="v-overlay" aria-pressed="false">Overlay</button><button id="v-phase" aria-pressed="false">Phase diagram</button></span></label>
+    <label>View <span class="seg"><button id="v-stacked" aria-pressed="true">Stacked</button><button id="v-overlay" aria-pressed="false">Overlay</button><button id="v-phase" aria-pressed="false">Phase diagram</button><button id="v-heat" aria-pressed="false">Heat curves</button><button id="v-splits" aria-pressed="false">Splits</button><button id="v-order" aria-pressed="false">Order</button><button id="v-steps" aria-pressed="false">Step rule</button><button id="v-machine" aria-pressed="false">Machine size</button></span></label>
     <label for="factor" id="factor-wrap" hidden>Factor <select id="factor"></select></label>
   </div>
   <p class="reading" id="reading"></p>
@@ -347,6 +347,157 @@ function renderPhase(box, run) {
   $('legend').innerHTML = legend.join('');
 }
 
+// A general plot: one x scale and one y scale (linear or log, x optionally reversed), lines, steps and
+// points, reference lines; a point's `tip` shows on hover.
+function plot(box, o) {
+  const W = box.clientWidth, H = o.H || 220, m = { l: 58, r: 84, t: 26, b: 36 };
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': o.title }, box);
+  const t = el('text', { x: m.l, y: m.t - 10, class: 'title' }, svg); t.textContent = o.title;
+  const xs = [], ys = [];
+  for (const s of o.series) for (const p of s.pts) { if (p[0] !== null && p[1] !== null) { xs.push(p[0]); ys.push(p[1]); } }
+  for (const r of o.refs || []) { if (r.axis === 'x') xs.push(r.value); if (r.axis === 'y') ys.push(r.value); }
+  const ex = o.x.domain || extent(xs, o.x.log), ey = o.y.domain || extent(ys, o.y.log);
+  if (!ex || !ey) { const n = el('text', { x: m.l + 8, y: m.t + 24 }, svg); n.textContent = o.empty || 'nothing logged for this in this run'; return; }
+  const padded = (e, d) => (d ? e : [e[0] - (e[1] - e[0]) * 0.05, e[1] + (e[1] - e[0]) * 0.05]);
+  const [x0, x1] = padded(ex, o.x.domain), [y0, y1] = padded(ey, o.y.domain);
+  const tx = (v) => (o.x.log ? Math.log10(v) : v), ty = (v) => (o.y.log ? Math.log10(v) : v);
+  const sx = (v) => { const u = (tx(v) - x0) / (x1 - x0); return m.l + (o.x.reverse ? 1 - u : u) * (W - m.l - m.r); };
+  const sy = (v) => H - m.b - ((ty(v) - y0) / (y1 - y0)) * (H - m.t - m.b);
+  const ticks = (lo, hi, log, n) => (log ? niceTicks(Math.ceil(lo * 2) / 2, hi, n).filter((v) => Number.isInteger(v * 2)).map((v) => Math.pow(10, v)) : niceTicks(lo, hi, n));
+  for (const v of ticks(y0, y1, o.y.log, 4)) {
+    el('line', { x1: m.l, x2: W - m.r, y1: sy(v), y2: sy(v), stroke: css('--grid') }, svg);
+    const l = el('text', { x: m.l - 6, y: sy(v) + 3.5, 'text-anchor': 'end' }, svg); l.textContent = fmt(v);
+  }
+  for (const v of ticks(x0, x1, o.x.log, 7)) {
+    el('line', { x1: sx(v), x2: sx(v), y1: H - m.b, y2: H - m.b + 4, stroke: css('--axis') }, svg);
+    const l = el('text', { x: sx(v), y: H - m.b + 15, 'text-anchor': 'middle' }, svg); l.textContent = fmt(v);
+  }
+  const xl = el('text', { x: W - m.r, y: H - m.b + 29, 'text-anchor': 'end' }, svg); xl.textContent = o.x.label;
+  const yl = el('text', { x: W - m.r, y: m.t - 10, 'text-anchor': 'end' }, svg); yl.textContent = o.y.label ? `y: ${o.y.label}` : '';
+  for (const r of o.refs || []) {
+    if (r.axis === 'diag') {
+      const lo = Math.max(o.x.log ? Math.pow(10, x0) : x0, o.y.log ? Math.pow(10, y0) : y0), hi = Math.min(o.x.log ? Math.pow(10, x1) : x1, o.y.log ? Math.pow(10, y1) : y1);
+      el('line', { x1: sx(lo), y1: sy(lo), x2: sx(hi), y2: sy(hi), stroke: css('--axis'), 'stroke-dasharray': '4 4' }, svg);
+      if (r.label) { const l = el('text', { x: sx(hi) + 4, y: sy(hi) + 4 }, svg); l.textContent = r.label; }
+    } else if (r.axis === 'line') {  // y = slope x through the origin
+      const a = o.x.log ? Math.pow(10, x0) : x0, b = o.x.log ? Math.pow(10, x1) : x1;
+      el('line', { x1: sx(a), y1: sy(r.slope * a), x2: sx(b), y2: sy(r.slope * b), stroke: css('--axis'), 'stroke-dasharray': '4 4' }, svg);
+      if (r.label) { const l = el('text', { x: sx(b) + 4, y: sy(r.slope * b) + 4 }, svg); l.textContent = r.label; }
+    } else {
+      const X = r.axis === 'x', P = X ? sx(r.value) : sy(r.value);
+      el('line', X ? { x1: P, x2: P, y1: m.t, y2: H - m.b } : { x1: m.l, x2: W - m.r, y1: P, y2: P }, svg).setAttribute('stroke', css('--axis'));
+      svg.lastChild.setAttribute('stroke-dasharray', '3 3');
+      if (r.label) { const l = el('text', X ? { x: P + 4, y: m.t + 10 } : { x: W - m.r + 6, y: P + 4 }, svg); l.textContent = r.label; }
+    }
+  }
+  const labels = [];
+  for (const s of o.series) {
+    const pts = s.pts.filter((p) => p[0] !== null && p[1] !== null && (!o.x.log || p[0] > 0) && (!o.y.log || p[1] > 0));
+    if (s.mode !== 'points' && pts.length) {
+      let d = '';
+      pts.forEach((p, i) => { const X = sx(p[0]).toFixed(1), Y = sy(p[1]).toFixed(1); d += i === 0 ? `M${X},${Y}` : s.mode === 'step' ? `H${X}V${Y}` : `L${X},${Y}`; });
+      el('path', { d, fill: 'none', stroke: s.color, 'stroke-width': s.width || 2, 'stroke-dasharray': s.dash || 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'stroke-opacity': s.opacity || 1 }, svg);
+    }
+    if (s.mode === 'points' || s.dots) {
+      for (const p of pts) {
+        const c = el('circle', { cx: sx(p[0]), cy: sy(p[1]), r: (p[3] && p[3].r) || s.r || 3.5, fill: (p[3] && p[3].fill) || s.color, 'fill-opacity': s.opacity || 0.85, stroke: css('--surface'), 'stroke-width': 1.5 }, svg);
+        if (p[2]) { const ti = el('title', {}, c); ti.textContent = p[2]; }
+      }
+    }
+    if (s.label && pts.length) { const p = pts[pts.length - 1]; labels.push({ x: sx(p[0]), y: sy(p[1]), text: s.label }); }
+  }
+  directLabels(svg, labels, H, m);
+}
+const factorColor = (g) => css(COLORS[g]);
+const legendFactors = (run, extra) => { $('legend').innerHTML = Array.from({ length: run.factors }, (_, g) => `<span><i style="background:var(${COLORS[g]})"></i>factor ${g}</span>`).join('') + (extra || ''); };
+const melting = (run, g) => (run.diagram && run.diagram[g] ? run.diagram[g].melting : null);
+
+function renderHeat(box, run) {
+  // 1. the heat curves: energy and capacity against temperature, the heating and cooling branches apart
+  const c = run.columns;
+  for (let g = 0; g < run.factors; g++) {
+    for (const [key, name, log] of [['E', 'energy ⟨D⟩', false], ['C', 'heat capacity C', true]]) {
+      const branch = (phases) => c.x.map((_, i) => (phases.includes(c.phase[i]) ? [c.T[g][i], c[key][g][i], `epoch ${c.x[i]} · ${c.phase[i]} · T ${fmt(c.T[g][i])} · ${name} ${fmt(c[key][g][i])}`] : [null, null])).filter((p) => p[0] !== null && p[1] !== null);
+      const m = melting(run, g);
+      plot(box, {
+        title: `Factor ${g}: ${name} against temperature (log), heating and cooling`, H: 210,
+        x: { log: true, reverse: true, label: 'temperature T (cooling to the right)' }, y: { log, label: log ? 'log' : '' },
+        series: [
+          { pts: branch(['heat']), color: css('--s2'), dots: true, r: 3, label: 'heating' },
+          { pts: branch(['hold']), color: css('--s3'), mode: 'points', r: 2.5, label: 'hold' },
+          { pts: branch(['cool']), color: css('--s1'), dots: true, r: 2.5, label: 'cooling' },
+        ],
+        refs: m ? [{ axis: 'x', value: m, label: 'melting point' }] : [],
+      });
+    }
+  }
+  $('legend').innerHTML = `<span><i style="background:var(--s2)"></i>heating</span><span><i style="background:var(--s3)"></i>hold</span><span><i style="background:var(--s1)"></i>cooling</span>`;
+}
+
+function renderSplits(box) {
+  // 2. every page run's splits: the temperature each was seen at against the melting curve's prediction
+  const series = [];
+  DATA.runs.forEach((run, k) => (run.splits || []).forEach((found, g) => {
+    const pts = found.filter((p) => p[2] !== null).map(([t, n, pred, first]) => [pred, t, `${run.name} · factor ${g} · to ${n} groups · seen at T ${fmt(t)}, predicted ${fmt(pred)}${first ? ' · nucleation' : ''}`, { r: first ? 6 : 3.5 }]);
+    series.push({ pts, color: css(COLORS[k % COLORS.length]), mode: 'points' });
+  }));
+  plot(box, {
+    title: 'Splits: the temperature training reached each group count, against the melting curve\'s', H: 380,
+    x: { log: true, label: 'predicted T (the melting curve, on the warm-up\'s states)' }, y: { log: true, label: 'seen in training (log)' },
+    series, refs: [{ axis: 'diag', label: 'as predicted' }], empty: 'No run here has both a melting curve and splits.',
+  });
+  $('legend').innerHTML = DATA.runs.slice(0, COLORS.length).map((run, k) => `<span><i style="background:var(${COLORS[k]})"></i>${run.name}</span>`).join('');
+}
+
+function renderOrder(box, run) {
+  // 3. the order parameter (the snapped state share at each step's end) against temperature and coupling
+  const c = run.columns;
+  const at = (d) => { let i = c.x.indexOf(d.x); return i; };
+  const pick = (key, g) => run.diagnoses.map((d) => { const i = at(d); return i < 0 ? [null, null] : [c[key][g][i], d.share, `step ${d.step} · ${key === 'T' ? 'T' : 'coupling'} ${fmt(c[key][g][i])} · share ${fmt(d.share)}${d.certified ? ' · certified' : ''}`, d.certified ? { r: 6, fill: css('--good') } : null]; });
+  const series = (key) => Array.from({ length: run.factors }, (_, g) => ({ pts: pick(key, g), color: factorColor(g), dots: true, r: 3.5, opacity: 0.85, label: `factor ${g}` }));
+  plot(box, { title: 'State share at each step\'s end against each factor\'s temperature', H: 260, x: { log: true, reverse: true, label: 'temperature T (cooling to the right)' }, y: { domain: [0, 1], label: 'state share' }, series: series('T') });
+  plot(box, { title: 'State share at each step\'s end against each factor\'s coupling', H: 260, x: { domain: [0, 1], label: 'coupling l (0 the cell\'s output, 1 the code)' }, y: { domain: [0, 1], label: 'state share' }, series: series('L') });
+  legendFactors(run, `<span><i style="background:var(--good);height:8px;width:8px;border-radius:50%"></i>certified</span>`);
+}
+
+function renderSteps(box, run) {
+  // 5. the step rule: each temperature step's d ln T against 1 / sqrt(mean capacity); the rule is the line pace x
+  const series = (run.steps || []).map((levels, g) => ({
+    pts: levels.filter((l) => l[2] > 0).map(([t, n, cbar, d, cap]) => [1 / Math.sqrt(cbar), d, `T ${fmt(t)} · ${n} epochs at it · C̄ ${fmt(cbar)} · d ln T ${fmt(d)}${cap ? ' · left at the cap' : ''}`, cap ? { r: 6, fill: css('--s4') } : null]),
+    color: factorColor(g), mode: 'points', r: 3.5,
+  }));
+  const pace = run.pace || 0.03;  // a run from before the adaptive cool: the rule at its default, for comparison
+  const refs = [{ axis: 'line', slope: pace, label: `pace ${pace}` }, { axis: 'y', value: Math.log(2), label: 'an octave' }];
+  plot(box, { title: `Each temperature step against the capacity there (${run.shape || 'unknown'} cool)`, H: 340, x: { log: true, label: '1 / sqrt(mean capacity at the temperature)' }, y: { log: true, label: 'd ln T (log)' }, series, refs });
+  legendFactors(run, run.settle ? `<span><i style="background:var(--s4);height:8px;width:8px;border-radius:50%"></i>left at the cap (${run.settle} epochs)</span>` : '');
+  $('note').textContent = run.shape === 'adaptive'
+    ? 'The adaptive cool steps by T exp(-pace / sqrt(C̄)), at most an octave: its points should lie on the dashed line or the octave. Points off it show the rule mis-read.'
+    : 'A precomputed cool: its steps are set by the epoch, not the capacity. The dashed line is the adaptive rule at its pace, for comparison: points above it stepped faster than the rule would have.';
+}
+
+function renderMachine(box, run) {
+  // 7. the machine's size over the run: its minimised states and joint codes against the target's, pairs per code
+  const D = run.diagnoses.filter((d) => d.minimised !== null && d.minimised !== undefined);
+  const tip = (d) => `step ${d.step} · minimised ${d.minimised} · codes ${d.codes} · pairs ${d.pairs} · right ${d.right}${d.certified ? ' · certified' : ''}`;
+  const refs = run.q ? [{ axis: 'y', value: run.q, label: `target ${run.q}` }] : [];
+  plot(box, {
+    title: 'Minimised states and joint codes in use at each step\'s end', H: 240, x: { label: 'epochs trained' }, y: { log: true, label: 'states (log)' }, refs,
+    series: [
+      { pts: D.map((d) => [d.x, d.minimised, tip(d)]), color: css('--s1'), mode: 'step', dots: true, r: 2.5, label: 'minimised' },
+      { pts: D.map((d) => [d.x, d.codes, tip(d)]), color: css('--s2'), mode: 'step', dots: true, r: 2.5, label: 'joint codes' },
+    ],
+  });
+  plot(box, {
+    title: 'Pairs per code (1: each code one target state)', H: 200, x: { label: 'epochs trained' }, y: { log: true, label: 'log' }, refs: [{ axis: 'y', value: 1, label: 'one' }],
+    series: [{ pts: D.filter((d) => d.codes).map((d) => [d.x, d.pairs / d.codes, tip(d)]), color: css('--s3'), mode: 'step', dots: true, r: 2.5, label: 'pairs per code' }],
+  });
+  plot(box, {
+    title: 'Each factor\'s codes in use', H: 200, x: { label: 'epochs trained' }, y: { label: 'codes' },
+    series: Array.from({ length: run.factors }, (_, g) => ({ pts: D.map((d) => [d.x, d.in_use[g] ?? null, tip(d)]), color: factorColor(g), mode: 'step', label: `factor ${g}` })),
+  });
+  $('legend').innerHTML = `<span><i style="background:var(--s1)"></i>minimised states</span><span><i style="background:var(--s2)"></i>joint codes</span><span><i style="background:var(--s3)"></i>pairs per code</span>`;
+}
+
 function renderTable(run) {
   const c = run.columns, F = run.factors;
   const head = ['epoch', 'step', 'phase', 'screen'].concat(...['T', 'C', 'E', 'G', 'L'].map((k) => Array.from({ length: F }, (_, g) => `${k}${g}`)));
@@ -366,12 +517,26 @@ function render() {
   $('factor-wrap').hidden = state.view !== 'overlay';
   $('v-stacked').setAttribute('aria-pressed', state.view === 'stacked');
   $('v-overlay').setAttribute('aria-pressed', state.view === 'overlay');
-  $('v-phase').setAttribute('aria-pressed', state.view === 'phase');
+  for (const v of ['stacked', 'overlay', 'phase', 'heat', 'splits', 'order', 'steps', 'machine']) $('v-' + v).setAttribute('aria-pressed', state.view === v);
   if (state.view === 'stacked') {
     $('legend').innerHTML = Array.from({ length: run.factors }, (_, g) => `<span><i style="background:var(${COLORS[g]})"></i>factor ${g}</span>`).join('') +
       `<span><i style="background:var(--ink-2)"></i>screen</span><span><i style="background:var(--good);height:8px;width:8px;border-radius:50%"></i>certified</span>`;
     $('note').textContent = 'Shaded bands are the phases; dashed lines mark the warm-up\'s end and growth. Gaps: a factor hard (no temperature) or not yet profiled.';
     renderStacked(box, run);
+  } else if (state.view === 'heat') {
+    $('note').textContent = 'The textbook curves: capacity peaks mark the transitions; where heating and cooling branches part, the profile ran out of equilibrium.';
+    renderHeat(box, run);
+  } else if (state.view === 'splits') {
+    $('note').textContent = 'Every run on this page. Large points: nucleation. Training counts groups closer than T max(1/100, 10 kappa) squared, the curve closer than T/100, so by construction training would see a split later (lower T, below the diagonal). Points above it split earlier than the warm-up\'s states predict: the material moved after the warm-up, or the thermal noise parted the codes.';
+    renderSplits(box);
+  } else if (state.view === 'order') {
+    $('note').textContent = 'The state share as an order parameter: where it rises against T is the crystal forming; against the coupling, whether the state forms before the codes carry the forward path or because they do.';
+    renderOrder(box, run);
+  } else if (state.view === 'steps') {
+    renderSteps(box, run);
+  } else if (state.view === 'machine') {
+    $('note').textContent = 'The snapped machine walked beside the target at each step\'s end. A certificate needs minimised states at the target\'s count and one pair per code.';
+    renderMachine(box, run);
   } else if (state.view === 'phase') {
     $('note').textContent = 'Rose\'s bifurcation diagram: in the melt the codes sit together; each split as the run cools is a phase transition. Points: each step\'s saved network, at the temperature its last epoch trained at; hover a point for its step.';
     renderPhase(box, run);
@@ -390,7 +555,7 @@ function init() {
   $('factor').addEventListener('change', (e) => { state.factor = +e.target.value; render(); });
   $('v-stacked').addEventListener('click', () => { state.view = 'stacked'; render(); });
   $('v-overlay').addEventListener('click', () => { state.view = 'overlay'; render(); });
-  $('v-phase').addEventListener('click', () => { state.view = 'phase'; render(); });
+  for (const v of ['phase', 'heat', 'splits', 'order', 'steps', 'machine']) $('v-' + v).addEventListener('click', () => { state.view = v; render(); });
   $('table-details').addEventListener('toggle', () => { if ($('table-details').open) renderTable(DATA.runs[state.run]); });
   let t; new ResizeObserver(() => { clearTimeout(t); t = setTimeout(render, 80); }).observe($('chart'));
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);

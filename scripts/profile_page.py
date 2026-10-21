@@ -11,7 +11,10 @@ against temperature, from the run's saved step networks, beside the melting curv
 """
 
 import argparse
+import itertools
 import json
+import math
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -55,6 +58,7 @@ def course(rows: list[dict[str, Any]]) -> dict[str, Any]:
             for g in range(factors):
                 columns["L"][g].append(None if couplings is None else couplings[g])
         elif "certified" in r:
+            machine: dict[str, Any] = r.get("machine") or {}
             diagnoses.append(
                 {
                     "x": x,
@@ -62,6 +66,11 @@ def course(rows: list[dict[str, Any]]) -> dict[str, Any]:
                     "share": r.get("state_share"),
                     "certified": r["certified"],
                     "end": r.get("end"),
+                    "minimised": r.get("minimised"),
+                    "codes": machine.get("codes"),
+                    "pairs": machine.get("pairs"),
+                    "right": machine.get("right"),
+                    "in_use": [f.get("codes") for f in r.get("factors", [])],
                 }
             )
         elif "warm_up_end" in r:
@@ -122,6 +131,75 @@ def diagram(rows: list[dict[str, Any]], directory: Path) -> list[dict[str, Any]]
     return out
 
 
+def splits(rows: list[dict[str, Any]]) -> list[list[list[Any]]]:
+    """
+    Each factor's splits in training's cool (its groups rising, D20) beside the melting curve's
+    prediction (D21, at the warm-up's end): [observed T, groups reached, predicted T, nucleation], the
+    prediction the curve's temperature where it first holds as many groups (None if it never does).
+    """
+    start = next((r for r in rows if "warm_up_end" in r), None)
+    if start is None:
+        return []
+    cool = [r["anneal"] for r in rows if r.get("anneal", {}).get("phase") == "cool" and "groups" in r["anneal"]]
+    out: list[list[list[Any]]] = []
+    for g, made in enumerate(start["warm_up_end"]):
+        curve: list[list[float]] = made.get("transitions") or []
+        found: list[list[Any]] = []
+        before = None
+        for a in cool:
+            t, n = a["temperature"][g], a["groups"][g]
+            if t is None or n is None:
+                continue
+            if before is not None and n > before:
+                predicted = next((c[0] for c in curve if c[2] >= n), None)
+                found.append([t, n, predicted, not found])
+            before = n
+        out.append(found)
+    return out
+
+
+def steps(rows: list[dict[str, Any]], settle: int | None) -> list[list[list[Any]]]:
+    """
+    Each factor's temperature steps in the cool: [T, epochs at it, the capacity's mean there, d ln T to
+    the next, left at the cap] (the cap read only for an adaptive cool, `settle` its epochs).
+    """
+    cool = [r["anneal"] for r in rows if r.get("anneal", {}).get("phase") == "cool" and "capacity" in r["anneal"]]
+    factors = len(cool[0]["temperature"]) if cool else 0
+    out: list[list[list[Any]]] = []
+    for g in range(factors):
+        levels: list[tuple[float, list[float]]] = []
+        for a in cool:
+            t, c = a["temperature"][g], a["capacity"][g]
+            if t is None or c is None:
+                break
+            if levels and levels[-1][0] == t:
+                levels[-1][1].append(c)
+            else:
+                levels.append((t, [c]))
+        out.append(
+            [
+                [t, len(cs), sum(cs) / len(cs), math.log(t / after), settle is not None and len(cs) >= settle]
+                for (t, cs), (after, _) in itertools.pairwise(levels)
+            ]
+        )
+    return out
+
+
+def identity(directory: Path) -> dict[str, Any]:
+    """The run's identity from its checkpoint: the target's states, the cool's shape and its pace and settle."""
+    path = directory / "checkpoint.json"
+    run: dict[str, Any] = json.loads(path.read_text())["run"] if path.exists() else {}
+    warm = str(run.get("warm_up", ""))
+    found = {k: re.search(rf"\b{k}=([^,)]+)", warm) for k in ("shape", "pace", "settle")}
+    shape = found["shape"].group(1).strip("'") if found["shape"] else None
+    return {
+        "q": run.get("target_states"),
+        "shape": shape,
+        "pace": float(found["pace"].group(1)) if found["pace"] else None,
+        "settle": int(found["settle"].group(1)) if found["settle"] and shape == "adaptive" else None,
+    }
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("runs", nargs="+", metavar="NAME=LOG", help="a name for the run and its log.jsonl")
@@ -133,7 +211,19 @@ def main(argv: list[str]) -> int:
         name, _, path = spec.partition("=")
         rows = [json.loads(line) for line in Path(path).read_text().splitlines()]
         reading = mf.heat_summary(mf.heat_course(rows))
-        runs.append({"name": name, "reading": reading, **course(rows), "diagram": diagram(rows, Path(path).parent)})
+        directory = Path(path).parent
+        known = identity(directory)
+        runs.append(
+            {
+                "name": name,
+                "reading": reading,
+                **known,
+                **course(rows),
+                "diagram": diagram(rows, directory),
+                "splits": splits(rows),
+                "steps": steps(rows, known["settle"]),
+            }
+        )
     template = (Path(__file__).parent / "profile_page.html").read_text()
     page = template.replace("__TITLE__", args.title).replace(
         "__DATA__", json.dumps({"runs": runs}, separators=(",", ":"))
