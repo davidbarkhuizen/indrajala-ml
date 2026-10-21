@@ -167,6 +167,28 @@ def _toggle(t: int, s: wc.State) -> wc.State:
     return (a, b) if t == 0 else (1 - a, b) if t == 1 else (a, 1 - b)
 
 
+def test_a_counter_mod_4_in_two_bits_is_a_cascade_not_a_parallel_cover():
+    # the target: a counter mod 4 (token 0 holds, 1 and 2 add one), states (low, high); the low bit
+    # alone a counter mod 2, the high bit flipping on the low bit's carry: the series form
+    def count(t: int, s: wc.State) -> wc.State:
+        value = (s[0] + 2 * s[1] + (t > 0)) % 4
+        return (value % 2, value // 2)
+
+    states: list[wc.State] = [(a, b) for b in range(2) for a in range(2)]
+    transition = np.array([[states.index(count(t, s)) for t in range(3)] for s in states])
+    target = wt.Mealy(transition, np.array([[states[int(r)][1] for r in row] for row in transition]))
+    network = Pairs(
+        {s: [count(t, s) for t in range(3)] for s in states},
+        {s: [count(t, s)[1] for t in range(3)] for s in states},
+    )
+    result = mr.approximations(mr.product(network, target), target)
+    low, high = result["factors"]
+    assert low["congruence"] and low["approximation"] == [2, 2] and low["autonomous"] == 1.0
+    assert not high["congruence"] and high["approximation"] == [4] and high["autonomous"] < 1.0
+    assert not result["cover"] and result["meet"] == 2  # the parallel reading misses it
+    assert result["cascade"] == [0]  # the low bit on top, the high bit reading it
+
+
 def test_two_counters_mod_2_each_an_approximation_together_a_cover():
     # the target: two bits each a counter mod 2 (_toggle), the output the first bit; a network holding
     # each bit in its own factor
@@ -183,3 +205,4 @@ def test_two_counters_mod_2_each_an_approximation_together_a_cover():
         assert factor["codes"] == 2 and factor["function"] and factor["congruence"]
         assert factor["approximation"] == [2, 2] and factor["autonomous"] == 1.0
         assert factor["determines"] == []  # no coordinates, no names
+    assert result["cascade"] == [0, 1]  # a parallel product: a cascade of either over the other

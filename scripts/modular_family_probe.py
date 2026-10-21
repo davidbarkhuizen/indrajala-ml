@@ -1594,10 +1594,14 @@ def read_network(path: Path, args: argparse.Namespace) -> str:
         line = f"{path}: d {d}, exact/named by length {line}"
     elif args.command == "approximations":
         result = {"network": str(path), "task": args.task, **mr.approximations(walk, target)}
-        line = f"{path}: {result['states']} states, meet {result['meet']}, cover {result['cover']}; " + "; ".join(
-            f"factor {g}: {f['codes']} codes, approximation {len(f['approximation'])} blocks "
-            f"(congruence {f['congruence']}, autonomous {f['autonomous']:.3f}), determines {', '.join(f['determines']) or '-'}"
-            for g, f in enumerate(result["factors"])
+        top = ", ".join(str(g) for g in result["cascade"]) or "-"
+        line = (
+            f"{path}: {result['states']} states, meet {result['meet']}, cover {result['cover']}, cascade top {top}; "
+            + "; ".join(
+                f"factor {g}: {f['codes']} codes, approximation {len(f['approximation'])} blocks "
+                f"(congruence {f['congruence']}, autonomous {f['autonomous']:.3f}), determines {', '.join(f['determines']) or '-'}"
+                for g, f in enumerate(result["factors"])
+            )
         )
     else:
         result = {"network": str(path), "task": args.task, **mr.breaks(walk, d)}

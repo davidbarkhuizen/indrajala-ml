@@ -296,6 +296,17 @@ alphabet, codes, the exclusion bound against the curriculum's cap).
 and random machines over the same states at 6, 24 and 120, then the trigger and the guard tuned
 across them (the two items above).
 
+**A measurement gap: the components' kind (2026-10-21).** `approximations` reads a learned machine's
+decomposition two ways: a parallel cover (the factors' approximations' meet separates every state) and
+a cascade (a factor's approximation nontrivial, the joint codes determining the state: that quotient
+on top, the rest below reading it). It doesn't read whether the components are irreducible (Krohn and
+Rhodes: primes, the simple groups, and units, the flip-flop's divisors): each component's own
+transformation monoid, and for the lower one its action within each block above (its holonomy, in
+Egri-Nagy and Nehaniv's terms). So it tells S3's network cascade (a point's place on top, the other
+two items' order below) from Krohn and Rhodes's (the sign on top, a counter mod 3 below) only by the
+named congruence on top, not by the parts' algebra. Wanted before a discovery study reports a
+decomposition: a reading of each component's monoid, its groups and its prime loops.
+
 ## From composable layers
 
 - **New combinations.** The Sequential networks build every spec list `validate_layer_specs`

@@ -685,6 +685,23 @@ runs end (the header's rule).
   begun at 16:30. Its epochs take about 52 s on `pyramidon` (three at once), so the budget runs to about
   noon on 2026-10-21.
 
+## Findings: stage 4a''', seeded crystallisation (2026-10-21, read 05:20)
+
+`probe-d26.sh` at f0064cb on `stone`, word-problem-s3 seeds 0-7, 18:05-05:01. Read by its header's rule
+(`state-separation` snapped at length 16 on the crucible's last block, the step before the first
+"grown" block; a run certified in its crucible read on its certified network). Data in
+data/window-recurrent/state-formation/option1/probe-d26/s3/.
+
+- **Seed formation 2 of 8 (4 needed): not met.** Seeds 0 and 5 joint nearest-neighbour 1.00 (centroid
+  0.99-1.00); the other six 0.24-0.30 against chance 0.20 on their crucible's last block (steps 101-191).
+- **Growth: met only formally.** Seeds 0 and 5 certified in the crucible (steps 85, 117); growth (from
+  steps 102-192) recovered none of the six, each to the epoch budget (577-656 minutes).
+- **The six failures as read in flight** (`population`): crucibles of length 3 never formed the state
+  (seeds 3, 4, 7, best share 0.36-0.38); length 5 and 8 formed it and lost it as the open-loop cool ran
+  to coupling 1 (seeds 1, 2, 6: best 0.75-0.93, lost at steps 81-106, `T` 0.002-0.02); seed 6's factor 1
+  a single transition. Neither refutation applies (two crystals separated, both certified). These are
+  the three kinds D28-D30 fixed, and 4a'''' (below) reran the six under them: 8 of 8.
+
 ## Findings: stage 4a'''', the quasi-static crucible (2026-10-20, read 20:30)
 
 `probe-d29.sh` at 3fb967a on `stone` (expectations in its header): word-problem-s3 seeds 1, 2, 3, 4, 6, 7,
@@ -714,6 +731,13 @@ certified network. Data in data/window-recurrent/state-formation/option1/probe-d
   together fix the permutation; the target a subdirect product of the two factors. Seeds 2 and 6:
   factor 0 `places {1}` (meet 3); 4a''''s seed 0: factor 1 `places {2}`. Seeds 1, 3, 4 and 4a''''s seed
   5: no named congruence (meet 1), the state held jointly.
+- **Cascades** (`approximations`' cascade reading, added 2026-10-21: a factor's approximation
+  nontrivial while the joint codes determine the state): seeds 0, 2 and 6 are cascades, the place of
+  an item on top and the other factor below reading it (two states a block: the other two items'
+  order), S3's chain through a point's stabiliser, not Krohn and Rhodes's through the sign (no network
+  holds `parity`); seed 7 parallel (either on top); seeds 1, 3, 4, 5 none. Move-to-front-4's three
+  certificates: either factor on top. Whether the parts are irreducible isn't read yet (next-steps.md,
+  "the components' kind").
 - **Verdict:** the header's claims met, no refutation; `p` lifted above the bar (4 of 8). By the
   handover's rule, the panel (4b) next, with the quasi-static crucible (4a''' and D28-D30) as option 1's
   candidate, once 4a''' and 4a'' end and are read.
@@ -769,10 +793,10 @@ a random machine would just need a very slow cool.**
    - **4a''. The handover probe** (D25): its mechanics first, separation read through the anneal
      (`state-separation` at each step); registered before its data.
    - **4a'''. The seeded crystallisation probe** (D26, D27): word-problem-s3 seeds 0-7 on `stone`,
-     `--crucible`; existence; registered before its data.
+     `--crucible`; existence; registered before its data; read 2026-10-21: 2 of 8 (findings above).
    - **4a''''. The quasi-static crucible probe** (D28-D30): 4a''''s six failed seeds on `stone`;
      registered in `probe-d29.sh`; read 2026-10-20: 8 of 8 certified (findings above).
-   - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
+  - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.
 6. **Option 3 (the rotation trick):** understanding (on extra-codes failures, whether windows of

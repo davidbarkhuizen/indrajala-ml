@@ -275,7 +275,12 @@ def approximations(walk: Product, target: wt.Mealy) -> dict[str, Any]:
     target's named congruences that closure refines, the finest only (window_tasks.order_labels); and
     the share of the factor's (code, token) pairs whose next code is one, 1.0 when the factor's code
     is a machine of its own. Jointly, whether the factors' approximations cover the target: their
-    meet separates every reached state (then the target is a subdirect product of them).
+    meet separates every reached state (then the target is a subdirect product of them, a parallel
+    cover). And the factors on top of a cascade: each factor whose approximation is nontrivial, while
+    the joint codes determine the state, so the target is that approximation with the rest's codes
+    below it, reading it (the series form, Krohn and Rhodes; a
+    nontrivial congruence is what a serial decomposition needs, Hartmanis and Stearns). A cascade's
+    lower factor alone is no congruence, so its closure, and the parallel meet, miss it.
     """
     states = sorted({s for _, s in walk.pairs})
     named = {k: v for k, v in wt.order_labels(target.coordinates).items() if target.is_congruence(v)}
@@ -316,4 +321,15 @@ def approximations(walk: Product, target: wt.Mealy) -> dict[str, Any]:
             }
         )
     meet = {tuple(int(c[s]) for c in closures) for s in states}
-    return {"states": len(states), "factors": factors, "meet": len(meet), "cover": len(meet) == len(states)}
+    held: dict[int, set[int]] = {}  # each joint code -> the states it holds
+    for c, s in walk.pairs:
+        held.setdefault(c, set()).add(s)
+    determined = all(len(h) == 1 for h in held.values())
+    top = [g for g, f in enumerate(factors) if determined and 1 < len(f["approximation"]) < len(states)]
+    return {
+        "states": len(states),
+        "factors": factors,
+        "meet": len(meet),
+        "cover": len(meet) == len(states),
+        "cascade": top,
+    }
