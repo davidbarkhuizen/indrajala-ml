@@ -343,6 +343,11 @@ where you meet a new trap; delete one that no longer holds.
 - **Over a non-interactive ssh, `cargo` isn't on the PATH:** `maturin develop` on `jebel` fails
   with "rustc, the rust compiler, is not installed". `source ~/.cargo/env` first (`stone`'s
   `env.sh` adds it).
+- **Archiving a `litshe` run:** `ab.py remote --host litshe archive` fails (no archive clone there,
+  and no GitHub credentials). Copy it here and archive it from `pyramidon`: `rsync -a
+  litshe:code/ab-runs/<run> ~/code/ab-runs/`, then `ab.py archive <run>` (the run's profile is read
+  from this checkout, its identity checked). On `jebel` the archive pushes its branch and fails at
+  `gh pr create`: open the PR here with `-R davidbarkhuizen/indrajala-benchmarks --head <branch>`.
 - **On `litshe` a worktree's `git submodule update --init rust` fails** with "transport 'file' not
   allowed" (its submodule URL is the local crate repo): `git -c protocol.file.allow=always
   submodule update --init rust`.
