@@ -41,7 +41,7 @@ from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -819,6 +819,43 @@ def answers_stopping(
     return passed, {"answers_stop": row}
 
 
+def continuous_readings(
+    net: Any,
+    encoding: Target,
+    task: wt.Task,
+    certificate: wc.Certificate,
+    coupled: Sequence[float],
+    answers: bool,
+) -> dict[str, Any]:
+    """
+    D53's readings at a step's end (the continuous crystallisation's every epoch): the step's
+    certificate and the strict one (snap ratio 1.0) each as its verdict, wrong states, wrong outputs,
+    those wrong only on a near tie, near ties and states minimised (`certificates`); with `answers`,
+    the snapped machine's answers (as answers_stopping reads them: every coupling at 1, then restored).
+    """
+    strict = wc.certify(QueryMachine(net, encoding, 0), task, snap_ratio=1.0)
+    row: dict[str, Any] = {
+        "certificates": {
+            name: {
+                "certified": c.certified,
+                "wrong_states": c.wrong_states,
+                "wrong_outputs": c.wrong_outputs,
+                "wrong_ties": c.wrong_ties,
+                "near_ties": c.snap.short,
+                "minimised": len(c.minimised),
+            }
+            for name, c in (("default", certificate), ("strict", strict))
+        }
+    }
+    if answers:
+        if coupled:
+            net.set_couplings([1.0] * len(coupled))
+        row["snapped_answers"] = snapped_answers(net, encoding)
+        if coupled:
+            net.set_couplings(list(coupled))
+    return row
+
+
 DROP_FROM, DROP_BY = 0.9, 0.3
 RECOVERED = 0.05  # a drop recovered: a later point's worst answer back within this of its level before
 
@@ -1174,6 +1211,38 @@ def hardness(
     return [None if t is None else above[g] / max(total, 1) for g, t in enumerate(temperatures)]
 
 
+def sharpness(
+    net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], temperatures: Sequence[float | None], hard: float
+) -> list[tuple[float, float] | None]:
+    """
+    Each soft factor's codes' sharpness over the rows given (the continuous crystallisation's D50): the
+    mean over every window's cell output of its largest weight at its temperature (the codes' softmax,
+    as training's), and D8's share of them above `hard` (hardness's, read every epoch, D53); None for
+    a factor at None.
+    """
+    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
+    largest = [0.0] * len(temperatures)
+    above = [0] * len(temperatures)
+    total = 0
+    for batch in rows:
+        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
+        for cell in cells[1:]:
+            H = np.array(cell.tolist(), dtype=float)
+            total += len(H)
+            for g, (factor, t) in enumerate(zip(net.recurrence_layer.factors, temperatures, strict=True)):
+                if t is None:
+                    continue
+                E = np.array(factor.codes.E.tolist(), dtype=float)
+                h = H[:, starts[g] : starts[g] + E.shape[1]]
+                D = np.sum((h[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
+                A = np.exp(-(D - D.min(axis=1)[:, np.newaxis]) / t)
+                weights = A.max(axis=1) / A.sum(axis=1)
+                largest[g] += float(np.sum(weights))
+                above[g] += int(np.sum(weights > hard))
+    n = max(total, 1)
+    return [None if t is None else (largest[g] / n, above[g] / n) for g, t in enumerate(temperatures)]
+
+
 def thermals(
     net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], temperatures: Sequence[float | None]
 ) -> list[tuple[float, float] | None]:
@@ -1453,14 +1522,14 @@ class WarmUp:
     within: float = 0.75
     rise: float = 0.0
 
-    def holds(self, n: int, screen: float, level: float) -> bool:
+    def holds(self, n: float, screen: float, level: float) -> bool:
         """
         Whether the clock holds at `n` (the profile's epochs so far) for the next epoch (D29): within the
         cool, the screen before it (`screen`) below `gate` times the hold's best (`level`).
         """
         return self.gate > 0 and self.phase(n - 1) == "cool" and screen < self.gate * level
 
-    def coupling(self, n: int, temperature: float, melting: float, final: float) -> float:
+    def coupling(self, n: float, temperature: float, melting: float, final: float) -> float:
         """
         A soft factor's coupling after `n` epochs from the warm-up's end at `temperature` (D25, with
         `handover`; else 1): 0 through the heat and the hold (the state the cells' outputs, the codes
@@ -1491,7 +1560,7 @@ class WarmUp:
         filled = all(n >= self.distinct * c for n, c in zip(distinct, counts, strict=True))
         return (best >= self.screen and filled) or step - first + 1 >= self.cap
 
-    def reads_hardness(self, n: int) -> bool:
+    def reads_hardness(self, n: float) -> bool:
         """
         Whether the hardness test is read after `n` epochs from the warm-up's end: from the cool's start
         (exponential), or once a shaped cool has run its `cool` epochs, so its whole curve trains soft.
@@ -1499,11 +1568,11 @@ class WarmUp:
         cooled = n - self.heat - self.hold
         return cooled >= 0 and (self.shape in ("exponential", "adaptive") or cooled >= self.cool)
 
-    def phase(self, n: int) -> str:
+    def phase(self, n: float) -> str:
         """The profile's phase after `n` epochs trained from the warm-up's end."""
         return "heat" if n < self.heat else "hold" if n < self.heat + self.hold else "cool"
 
-    def temperature(self, n: int, hot: float) -> float:
+    def temperature(self, n: float, hot: float) -> float:
         """
         A factor's temperature after `n` epochs trained from the warm-up's end, at its `T_hot` `hot`. The
         cool's shape on a log-temperature scale (D24): `exponential` a straight line, halved every
@@ -1580,6 +1649,198 @@ class Cooling:
             if e is not None:
                 self.energies[g].append(e[0])
                 self.capacities[g].append(e[1])
+
+
+@dataclass(frozen=True)
+class Continuous:
+    """
+    The continuous crystallisation (the state formation workplan's D48-D53, with WarmUp's exponential
+    cool, from the crucible): every switch of the profile continuous. The cool's clock advances an
+    epoch by `rate` (D49: 1 at `high` times the hold's level, 0 at `low`, linear between); each
+    snapped factor's coupling from its codes' sharpness (D50, `coupling`), 0 through the heat and the
+    hold; soft to the end, its gradient straight through, its temperature held from where its
+    sharpness first reaches `sharp` (D51); the crucible's longest length grown in `ln L` by `growth`
+    times the rate and the smallest coupling an epoch, to the cap (D52, `grow`). After the warm-up a
+    step is one epoch, its readings every epoch; the melting curve every `curve_every`, the step's
+    network saved every `save_every` (D53).
+    """
+
+    low: float = 0.95
+    high: float = 0.99
+    sharp: float = 0.999
+    growth: float = 0.02
+    curve_every: int = 25
+    save_every: int = 10
+
+    def rate(self, screen: float, level: float) -> float:
+        """The share of an epoch the cool's clock advances (D49), from the screen before it against the hold's level."""
+        return min(max((screen / level - self.low) / (self.high - self.low), 0.0), 1.0) if level > 0 else 1.0
+
+    @staticmethod
+    def coupling(sharp: float, start: float) -> float:
+        """A snapped factor's coupling in the cool (D50): its sharpness's rise from the cool's start, as a share of what's left."""
+        return min(max((sharp - start) / max(1.0 - start, 1e-12), 0.0), 1.0)
+
+    def grow(self, length: float, rate: float, coupling: float, cap: int) -> float:
+        """The crucible's longest length after an epoch (D52), from its rate and the smallest coupling."""
+        return min(float(cap), length * math.exp(self.growth * rate * coupling))
+
+
+def growth_lengths(length: float, examples: int) -> list[int]:
+    """
+    An epoch's examples' lengths at the longest `length` (D52; real): the mixture `(1 - f) U(1..n) + f
+    U(1..n+1)`, `n` its floor and `f` the rest, each part's lengths in turn (as epoch_lengths), the
+    `f` share first.
+    """
+    n = int(length)
+    longer = round((length - n) * examples)
+    return [i % (n + 1) + 1 if i < longer else (i - longer) % n + 1 for i in range(examples)]
+
+
+def growth_screen(crucible: int, length: float) -> list[int]:
+    """The screen's lengths at the longest `length` (D52): the crucible's every length and whole_lengths's to its floor."""
+    return sorted(set(range(1, crucible + 1)) | set(whole_lengths(int(length))))
+
+
+@dataclass(frozen=True)
+class ContinuousState:
+    """
+    What the continuous crystallisation carries from epoch to epoch (D49-D52): the clock's held share,
+    each factor's T_hot, held temperature (0: none) and the cool's first sharpness, and the crucible's
+    longest length.
+    """
+
+    held: float
+    hot: list[float]
+    floors: list[float]
+    sharp_from: list[float]
+    length: float
+
+
+@dataclass(frozen=True)
+class ContinuousEpoch:
+    """continuous_epoch's result: the state carried on (its length the next epoch's, D52), the epoch's phase, rate and couplings, and its row's `anneal`."""
+
+    state: ContinuousState
+    phase: str
+    rate: float
+    couplings: list[float]
+    thermo: dict[str, Any]
+
+
+def continuous_epoch(
+    net: Any,
+    continuous: Continuous,
+    warm_up: WarmUp,
+    rows: Sequence[Sequence[tuple[Any, Any]]],
+    snapped: Sequence[bool],
+    state: ContinuousState,
+    trained: int,
+    screen: float,
+    level: float,
+    hard: float,
+    beta: list[float],
+    coupling_cap: float,
+    rng: np.random.Generator,
+    cap: int,
+) -> ContinuousEpoch:
+    """
+    One epoch's setting under the continuous crystallisation (D48-D51), before it trains, `trained`
+    epochs after the warm-up's end: the clock advanced by the rate from `screen` against the hold's
+    `level` (D49), each snapped factor soft at its profile's temperature or its held one (D51), its
+    sharpness read on `rows` (D50, D53), its coupling from it (0 through the heat and the hold), its
+    temperature held once its sharpness reaches `sharp`; the soft codes jittered (D17), the thermals
+    read, and the network set (temperatures, couplings, its gradient straight through, `beta`); in
+    the cool, the longest length grown by the rate and the smallest coupling for the next epoch (D52:
+    this epoch's examples and screen were drawn at the state's).
+    """
+    length = state.length
+    held, rate = state.held, 1.0
+    if warm_up.phase(trained - held - 1) == "cool":
+        rate = continuous.rate(screen, level)
+        held += 1.0 - rate
+    clock = trained - held
+    phase = warm_up.phase(clock)
+    temperatures: list[float | None] = [
+        max(warm_up.temperature(clock, t), f) if s else None
+        for t, f, s in zip(state.hot, state.floors, snapped, strict=True)
+    ]
+    sharp = sharpness(net, rows, temperatures, hard)
+    levels = [0.0 if v is None else v[0] for v in sharp]
+    sharp_from = list(levels) if phase == "cool" and not state.sharp_from else list(state.sharp_from)
+    couplings = [
+        1.0 if not s else continuous.coupling(v, v0) if phase == "cool" else 0.0
+        for s, v, v0 in zip(snapped, levels, sharp_from or levels, strict=True)
+    ]
+    if coupling_cap < 1.0:  # D38's cap, as without
+        couplings = [min(c, coupling_cap) for c in couplings]
+    floors = [
+        f if f > 0 or t is None or phase != "cool" or v < continuous.sharp else t
+        for f, t, v in zip(state.floors, temperatures, levels, strict=True)
+    ]
+    jitter(net, temperatures, warm_up.kappa, rng)
+    heat = thermals(net, rows, temperatures)
+    net.set_temperatures(temperatures)
+    net.set_couplings(couplings)
+    net.set_straight(True)
+    net.set_commitments(beta)
+    thermo = {
+        "anneal": {
+            "temperature": temperatures,
+            "sharpness": [None if v is None else round(v[0], 6) for v in sharp],
+            "hard": [None if v is None else round(v[1], 4) for v in sharp],
+            "beta": [round(b, 4) for b in beta],
+            "phase": phase,
+            "groups": code_groups(net, temperatures, warm_up.kappa),
+            "energy": [None if e is None else round(e[0], 6) for e in heat],
+            "capacity": [None if e is None else round(e[1], 6) for e in heat],
+            "coupling": [round(c, 4) for c in couplings],
+            "rate": round(rate, 4),
+            "clock": round(clock, 3),
+            "length": round(length, 3),
+            "floors": floors,
+        }
+    }
+    grown = (
+        continuous.grow(length, rate, min(c for c, s in zip(couplings, snapped, strict=True) if s), cap)
+        if phase == "cool"
+        else length
+    )
+    return ContinuousEpoch(
+        ContinuousState(held, list(state.hot), floors, sharp_from, grown), phase, rate, couplings, thermo
+    )
+
+
+def step_screens(
+    encoding: Target,
+    settings: Settings,
+    cap: int,
+    longest: int,
+    flat: bool,
+    crucible: int,
+    length: float,
+    cached: dict[int, list[Example]],
+) -> tuple[dict[int, list[Example]], list[int]]:
+    """
+    A step's screen (its windows by length) and the lengths its readings take: the whole
+    distribution's (`flat`), the curriculum's to `longest`, or, growing from a `crucible` (D52; 0:
+    not), the crucible's and the growth's to `length`, their windows kept in `cached` between epochs.
+    """
+    if crucible:
+        lengths = growth_screen(crucible, length)
+        for n in lengths:
+            if n not in cached:
+                cached[n] = _windows(encoding, n, settings.screen, f"family-screen-continuous-{n}")[0]
+        return {n: cached[n] for n in lengths}, sorted({1, (crucible + 1) // 2, crucible, int(length)})
+    lengths = whole_lengths(cap) if flat else list(range(1, longest + 1))
+    named = "whole" if flat else longest
+    screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{named}-{n}")[0] for n in lengths}
+    read_at = (  # the step's screen at its shortest, middle and longest
+        sorted({lengths[0], lengths[len(lengths) // 2], lengths[-1]})
+        if flat
+        else sorted({1, (longest + 1) // 2, longest})
+    )
+    return screens, read_at
 
 
 def handover_window(made: Sequence[Mapping[str, Any]], window: float = 0.0) -> tuple[list[float], list[float]]:
@@ -1742,11 +2003,14 @@ class Place:
     final: list[float] = field(default_factory=list[float])  # WarmUp: each factor's last transition (D25)
     crucible: int = 0  # the crucible's longest length, once its warm-up ended (D26)
     grown: int = 0  # the crucible's first block of growth, once begun (D26)
-    held: int = 0  # WarmUp: the epochs its clock held (D29)
+    held: float = 0  # WarmUp: the epochs its clock held (D29; with Continuous, the shares of epochs, D49)
     level: float = -1.0  # WarmUp: the hold's best screen (D29)
     gate_screen: float = -1.0  # WarmUp: the last screen, which the gate reads (D29)
     cooling: dict[str, Any] = field(default_factory=dict[str, Any])  # WarmUp: the adaptive cool's state (D33)
     couplings: list[float] = field(default_factory=list[float])  # WarmUp: the network's last set (D25)
+    length: float = 0.0  # Continuous: the crucible's longest length, once its warm-up ended (D52)
+    sharp_from: list[float] = field(default_factory=list[float])  # Continuous: the cool's first sharpness (D50)
+    floors: list[float] = field(default_factory=list[float])  # Continuous: each factor's held temperature (D51)
 
 
 def _run_identity(
@@ -1777,6 +2041,7 @@ def _run_identity(
     crucible: bool = False,
     state_bound: int | None = None,
     coupling_cap: float = 1.0,
+    continuous: Continuous | None = None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -1809,6 +2074,7 @@ def _run_identity(
         **({"crucible": True} if crucible else {}),
         **({"state_bound": state_bound} if state_bound is not None else {}),
         **({"coupling_cap": coupling_cap} if coupling_cap < 1.0 else {}),
+        **({"continuous": repr(continuous)} if continuous is not None else {}),
     }
 
 
@@ -1858,6 +2124,7 @@ def run(
     crucible: bool = False,
     state_bound: int | None = None,
     coupling_cap: float = 1.0,
+    continuous: Continuous | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -1910,6 +2177,14 @@ def run(
     judge the stop (a run certified before it trains on). `coupling_cap` (D38) caps every factor's
     coupling, every phase, so at 0 the codes anneal on the cells' outputs and never enter the
     forward path; the certificate reads the snapped network as ever.
+    `continuous` (Continuous, with a crucible's exponential cool, no handover and no gate; the state
+    formation workplan's D48) makes every switch after the warm-up continuous: the clock's rate (D49),
+    the coupling from the codes' sharpness (D50), soft to the end with a straight-through gradient
+    (D51; the levels never move), growth from the crucible (D52); each step then one epoch, its
+    readings each one's (D53): each row's `anneal` logging the sharpness, D8's share above `hard`, the
+    rate, the clock and the longest length; each step's end the strict certificate (snap ratio 1.0),
+    both certificates' wrong states, outputs and near ties, the snapped answers (without a state bound,
+    whose stop reads them) and, every `curve_every`, the melting curve.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -1950,6 +2225,7 @@ def run(
         crucible,
         state_bound,
         coupling_cap,
+        continuous,
     )
     assert warm_up is None or anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
     assert not (whole and long_tail is not None), "the whole distribution has no long tail beyond it"
@@ -1963,6 +2239,13 @@ def run(
         "a crystallising run never goes back (D18): the warm-up not with the fork, restore_best or keep_machine"
     )
     assert not (keep_machine and restore_best), "the step's kept machine (R3) or its best screen, not both"
+    assert continuous is None or (
+        warm_up is not None
+        and crucible
+        and warm_up.shape == "exponential"
+        and not warm_up.handover
+        and warm_up.gate == 0.0
+    ), "the continuous crystallisation (D48) is a crucible's, its exponential cool with its own coupling and rate"
     assert counterexamples is None or 0 < counterexamples < 1, (
         f"a share of each epoch's examples; got {counterexamples}"
     )
@@ -2011,7 +2294,7 @@ def run(
     frozen = (
         place.frozen if place is not None else 0
     )  # consecutive armed epochs with STALL_SHARE of their updates undone
-    spent = place.spent if place is not None else 0  # epochs trained in all
+    spent: int = place.spent if place is not None else 0  # epochs trained in all
     snapshot = out / "snapshot.network.json"
     step_best = out / "best.network.json"  # restore_best's
     commitments = [0.0 if f.codes is None else f.codes.commitment for f in net.recurrence.factors]  # the specs'
@@ -2019,23 +2302,44 @@ def run(
     levels = list(place.thermostat) if place is not None and place.thermostat else [0] * len(counts)  # off at the start
     snapped = [f.codes is not None for f in net.recurrence.factors]
     counts_snapped = [c for c, s in zip(counts, snapped, strict=True) if s]
-    annealed = (  # Anneal's levels: soft at the start (a continuous factor's at the ramp's end, never soft)
+    annealed: list[int] = (  # Anneal's levels: soft at the start (a continuous factor's at the ramp's end, never soft)
         list(place.anneal)
         if place is not None and place.anneal
         else [0 if s else (anneal.top if anneal is not None else 0) for s in snapped]
     )
-    warm = place.warm if place is not None else warm_up is not None  # WarmUp: still continuous
-    hot = list(place.hot) if place is not None else []  # WarmUp: each factor's T_hot, once set
-    anneal_from = place.anneal_from if place is not None else 0  # WarmUp: the epochs trained at its end
-    melting_points = list(place.melting) if place is not None else []  # WarmUp: each factor's melting point (D25)
-    last_splits = list(place.final) if place is not None else []  # WarmUp: each factor's last transition (D25)
-    fixed = place.crucible if place is not None else 0  # D26: the crucible's longest length, once set
-    grown_from = place.grown if place is not None else 0  # D26: the first block of growth, once begun
-    held = place.held if place is not None else 0  # D29: the epochs the profile's clock held
-    level = place.level if place is not None else -1.0  # D29: the hold's best screen
-    gate_screen = place.gate_screen if place is not None else -1.0  # D29: the last screen
-    cooling = Cooling(**place.cooling) if place is not None and place.cooling else None  # D33: the adaptive cool
-    coupled = list(place.couplings) if place is not None else []  # D25: the couplings last set, training state
+    warm: bool = place.warm if place is not None else warm_up is not None  # WarmUp: still continuous
+    hot: list[float] = list(place.hot) if place is not None else []  # WarmUp: each factor's T_hot, once set
+    anneal_from: int = place.anneal_from if place is not None else 0  # WarmUp: the epochs trained at its end
+    melting_points: list[float] = (
+        list(place.melting) if place is not None else []
+    )  # WarmUp: each factor's melting point (D25)
+    last_splits: list[float] = (
+        list(place.final) if place is not None else []
+    )  # WarmUp: each factor's last transition (D25)
+    fixed: int = place.crucible if place is not None else 0  # D26: the crucible's longest length, once set
+    grown_from: int = place.grown if place is not None else 0  # D26: the first block of growth, once begun
+    held = (
+        int(place.held) if place is not None else 0
+    )  # D29: the epochs the profile's clock held (the continuous clock's, D49, in cstate)
+    level: float = place.level if place is not None else -1.0  # D29: the hold's best screen
+    gate_screen: float = place.gate_screen if place is not None else -1.0  # D29: the last screen
+    cooling: Cooling | None = (
+        Cooling(**place.cooling) if place is not None and place.cooling else None
+    )  # D33: the adaptive cool
+    coupled: list[float] = (
+        list(place.couplings) if place is not None else []
+    )  # D25: the couplings last set, training state
+    cstate: ContinuousState = (
+        ContinuousState(  # D49-D52: the clock's held share, T_hot, the held temperatures, the first sharpness
+            place.held if place is not None else 0.0,
+            list(place.hot) if place is not None else [],
+            list(place.floors) if place is not None else [],
+            list(place.sharp_from) if place is not None else [],
+            place.length if place is not None else 0.0,
+        )
+    )
+    growing = continuous is not None and fixed > 0  # D52: after the warm-up, a step an epoch
+    cached: dict[int, list[Example]] = {}  # D52: the growing screen's windows, by length
     if coupled:
         net.set_couplings(coupled)  # the loaded network's, as the stopped run's was (its screens read them)
 
@@ -2080,11 +2384,14 @@ def run(
             list(last_splits),
             fixed,
             grown_from,
-            held,
+            cstate.held if continuous is not None else held,
             level,
             gate_screen,
             asdict(cooling) if cooling is not None else {},
             list(coupled),
+            cstate.length,
+            list(cstate.sharp_from),
+            list(cstate.floors),
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -2098,6 +2405,16 @@ def run(
     # the curriculum's steps end at the cap; the whole distribution's blocks go on until the budget (D22:
     # a step is then a block of epochs, not a length)
     begin = place.step if place is not None else first
+    continuing = continuous is not None  # D48: after the warm-up, each epoch continuous_epoch's
+    # every step sets these before it reads them (declared here: run's loop is past the type checker's inference)
+    best: float = -1.0
+    since: int = 0
+    rate: float = settings.rate
+    forks: int = 0
+    peak: float = 0.0
+    last_kinds: dict[str, float] = {}
+    step_rollbacks: int = 0
+    score: float = -1.0
     for step in itertools.count(begin) if whole or crucible else range(begin, cap + 1):
         # the curriculum's lengths, or the whole distribution's every step (a step then a block of epochs);
         # a crucible's (D26) its warm-up's last step's every block, then, every factor hard, the whole's
@@ -2114,13 +2431,11 @@ def run(
         grown = grown_from > 0
         flat = whole or grown
         longest = fixed or step
-        lengths = whole_lengths(cap) if flat else list(range(1, longest + 1))
-        named = "whole" if flat else longest
-        screens = {n: _windows(encoding, n, settings.screen, f"family-screen-{named}-{n}")[0] for n in lengths}
-        read_at = (  # the step's screen at its shortest, middle and longest
-            sorted({lengths[0], lengths[len(lengths) // 2], lengths[-1]})
-            if flat
-            else sorted({1, (longest + 1) // 2, longest})
+        growing = continuous is not None and fixed > 0
+        # its declared type, which pyright loses later in the step without it (run's loop is past its inference)
+        cstate = cast(ContinuousState, cstate)  # pyright: ignore[reportUnnecessaryCast]
+        screens, read_at = step_screens(
+            encoding, settings, cap, longest, flat, fixed if growing else 0, cstate.length, cached
         )
         stop, epoch = "budget", 0
         score = -1.0  # the last epoch's screen (WarmUp's end reads it with the step's best)
@@ -2165,10 +2480,12 @@ def run(
                 stop = "spent"
                 break
             rng = random.Random(f"family-train-{seed}-{step}-{epoch}" + (f"-fork{forks}" if forks else ""))
-            examples = [
-                encoding.example(encoding.draw(n, rng))
-                for n in epoch_lengths(cap if flat else longest, settings.epoch_examples, long_tail, cap)
-            ]
+            drawn = (
+                growth_lengths(cstate.length, settings.epoch_examples)
+                if growing
+                else epoch_lengths(cap if flat else longest, settings.epoch_examples, long_tail, cap)
+            )
+            examples = [encoding.example(encoding.draw(n, rng)) for n in drawn]
             if counterexamples is not None and words:
                 # R4 (D6): a share of the epoch from the last diagnosis's counterexamples, each word then d
                 # uniform tokens and the final zero column (encoding.draw), so its answers tell its states apart
@@ -2196,6 +2513,29 @@ def run(
                 warming()
                 net.set_commitments([0.0] * len(snapped))
                 thermo = {"warm": True}
+            elif continuing:
+                # D48-D51: the epoch's clock, temperatures, couplings and readings (continuous_epoch)
+                assert anneal is not None and continuous is not None and warm_up is not None
+                warming()
+                moved: ContinuousEpoch = continuous_epoch(
+                    net,
+                    continuous,
+                    warm_up,
+                    [screens[n] for n in read_at],
+                    snapped,
+                    cstate,
+                    spent - anneal_from,
+                    gate_screen,
+                    level,
+                    anneal.hard,
+                    anneal.commitments(annealed, commitments),
+                    coupling_cap,
+                    np.random.default_rng([seed, step, epoch, forks]),
+                    cap,
+                )
+                cstate = moved.state
+                phase, coupled, thermo = moved.phase, moved.couplings, moved.thermo
+                melting = phase in ("heat", "hold")
             elif anneal is not None:
                 # the network about to train (a fork's restored one included), its soft factors' hardness read
                 # at the temperature they trained at, on the step's screen at its shortest, middle and longest;
@@ -2358,6 +2698,9 @@ def run(
             if score == 1.0:
                 stop = "passed"
                 break
+            if growing:  # D53: after the warm-up a step is one epoch, its readings each one's
+                stop = "epoch"
+                break
             if score > best or melting:  # the melt's screen is its best (D18)
                 best, since = score, 0
                 if restore_best:
@@ -2385,7 +2728,8 @@ def run(
             grouped = {"consolidation": regroup()} if consolidate else {}
             record({"step": step, "epoch": epoch, "restore": round(best, 4), "restored": round(restored, 4), **grouped})
         net.save(str(out / "network.json"))
-        net.save(str(out / f"step-{step}.network.json"))  # every step's kept, to inspect what a run had
+        if not growing or step % continuous.save_every == 0:  # type: ignore[union-attr]  # D53: every 10th
+            net.save(str(out / f"step-{step}.network.json"))  # every step's kept, to inspect what a run had
         # each step's certified answer (the quotient) certified (under a second at one column a window); the run stops at
         # its first certified step: training past it can destroy the network (E8b; this probe's
         # first runs, both certified networks lost within 3 steps)
@@ -2394,6 +2738,10 @@ def run(
         judged: dict[str, Any] = {}
         if state_bound is not None:  # D35: the answers-only stop; the certificate only judges it
             stopping, judged = answers_stopping(net, encoding, task, certificate, state_bound, coupled, warm)
+        if growing:  # D53: both certificates' breakdowns, the snapped answers, the melting curve
+            judged.update(continuous_readings(net, encoding, task, certificate, coupled, state_bound is None))
+            if step % continuous.curve_every == 0:  # type: ignore[union-attr]
+                judged["melting"] = melting_curves(net, [screens[n] for n in read_at])
         record(
             {
                 "step": step,
@@ -2430,6 +2778,8 @@ def run(
             anneal_from = spent
             cooling = Cooling.start(hot) if warm_up.shape == "adaptive" else None
             fixed = step if crucible else 0
+            if continuous is not None:  # D51, D52: no temperature held yet; growth from the crucible's length
+                cstate = ContinuousState(0.0, list(hot), [0.0] * len(snapped), [], float(fixed))
             record({"step": step, "warm_up_end": made, **({"crucible": fixed} if crucible else {})})
             net.save(str(out / "network.json"))
         if stop in ("deadline", "spent", "stalled"):
