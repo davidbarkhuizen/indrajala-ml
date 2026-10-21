@@ -75,6 +75,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D37 | 2026-10-21 | the panel's cells | D11's, fresh S3 seeds 8-15, random-q16-0 seeds 0 and 1 and a random-q12-0 control; the harm cells' expectation registered |
 | D38 | 2026-10-21 | the coupling probe | `--coupling-cap 0`: the codes anneal on the liquid, never coupled; S3 seeds 0-7, move-to-front-4 seed 3 |
 | D39 | 2026-10-21 | the design probes | after the panel: an approximation beside S3, a random machine's melting curve, runs past the first certificate |
+| the consistency review | 2026-10-21, afternoon | rules against practice | ten items (`consistency-review-2026-10-21.md`), for the panel's registration |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -1107,6 +1108,8 @@ a random machine would just need a very slow cool.**
      probe (`~/code/probe-d38.sh`, registered before its data; on `stone` from 18:00); then:
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
+5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
+   diagnosis, by fit to the mechanism found; their stages as first planned:
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.
 6. **Option 3 (the rotation trick):** understanding (on extra-codes failures, whether windows of
@@ -1120,4 +1123,4 @@ a random machine would just need a very slow cool.**
 ## Machines
 
 `stone`: about half its 12 cores by day, all at night (the panel's 12 runs at night). `pyramidon`:
-development, up to about 4 small workers. `jebel`: down until about 2026-10-22, then timing.
+development, up to about 4 small workers. `jebel`: up, 06:00-18:00 only (its power load overnight), timing.

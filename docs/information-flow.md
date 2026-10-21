@@ -34,7 +34,7 @@ the codes'.
 | 5 | the output layer | the answers linearly separable on the stream's features | the layer is linear; no linear readout of L3's 16 features fixed its last 1% (the separability check) | measured |
 | 6 | the poolings | each reads the window's output, not the tokens before the state | before the state a cell must compute the whole transition (the D10 check: 0 of 2 against 2 of 2) | imposed rule |
 | 7 | the codes | one code, one state (pairs per code 1.0) | every certified network has it; extra codes are its failure; the branches don't fix it (at 16 or 32 on S5); R3 and R4's probe certified one S5 seed of two | required, open |
-| 8 | the commitment | a state can form before the commitment pulls outputs to their codes | off early, 3 of 6 failure-A runs formed a state; the thermostat's code-use signal returns it too soon (its probe so far) | required, open |
+| 8 | the commitment | a state can form before the commitment pulls outputs to their codes | off early, 3 of 6 failure-A runs formed a state; the thermostat's code-use signal returns it too soon (its probe so far); option 1 (the state formation workplan) runs with the commitment never on, so the row holds trivially there, and the harm cells test what that costs (D37) | required, open |
 | 9 | the cell | each factor's state `s_g` enough for its transition | 32 in use; 16 to 32 (L3) didn't cure division 13 | design choice |
 | 10 | the window | `k` 1: the state handed on every symbol | keeps the step one symbol and the certificate fast; a chunked step is another capacity question | design choice |
 | 11 | the data | every example ends in a final zero window, whose answer needs the state | without it a one-column step passes on the column alone | imposed rule |
