@@ -84,6 +84,14 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D45 | 2026-10-21, 13:00 | D38's reading and D34's order | the gate's holds and the snapped answers read; D34's probe only if D38 is refuted |
 | D46 | 2026-10-21, 16:30 | the core matrix | 4b-core: D36's arms on S3 and mtf-4, fresh seeds 8-23, 600 epochs on every machine; the large tier set aside |
 | 4b-core | 2026-10-21, registered 16:30 | the core matrix | 48 runs (`probe-4b-core.sh`) on stone, jebel and pyramidon, from about 20:00 |
+| D47 | 2026-10-21, evening | the matrix set aside | the owner: 4b-core not launched; the continuous method replaces it |
+| D48 | 2026-10-21, evening | the continuous crystallisation | the owner: every switch of the profile made continuous, all at once (`--continuous`) |
+| D49 | 2026-10-21, evening | the continuous rate | the clock advances by `g`, from the screen against the hold's level (0.95-0.99); one exponential cool |
+| D50 | 2026-10-21, evening | the coupling from sharpness | the coupling read live from the codes' mean largest soft weight, from the cool's start |
+| D51 | 2026-10-21, evening | no hard switch | soft to the end with a straight-through gradient (the crate's `straight`); `T` held where the codes are hard to 0.1% |
+| D52 | 2026-10-21, evening | continuous growth | the longest length rising in `ln L` at `0.02 g c` from the crucible's to the cap |
+| D53 | 2026-10-21, evening | the readings every epoch | the certificate's breakdown, snapped answers, sharpness, `g`, `L` each epoch; the melting curve every 25 |
+| D54 | 2026-10-21, evening | the continuous probe | S3 seeds 0-7 and move-to-front-4 seeds 0-3 under D48 (`probe-d54.sh`) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -724,6 +732,99 @@ jebel at night, but running at 50% capacity".
     Pros: machine-neutral; about twice the slowest success. Cons: a run that would certify later than
     600 epochs is a failure here (logged: its course to the budget).
 
+### The continuous crystallisation (2026-10-21, evening; the owner)
+
+A detailed reading of the coupling probe's (D38) seed 3, in flight (not a verdict; the probe runs to
+its registered end): at coupling 0 the continuous network separated S3's six states perfectly from
+step 9 through the melt and the cool, while its codes, annealed on its outputs, re-formed to a
+snapped separation of 1.0 only at step 108, where the certificate at ratio 1.0 found no wrong state
+and 2 wrong outputs (the readout, trained on continuous states alone, misreads some codes), then
+froze from step 120 (22 codes, 12 states minimised) for want of any signal; its hardness unread for
+600 epochs by the convex shape (D24), growth waited on it. The readings that showed this were all
+rebuilt offline. The owner: "stop the matrix. make everything we can, that still makes sense to do
+so, continuous. all at once - the whole point of the crystallization is to be quasi-static so that
+we can smoothly transition down the energy profile. then let's just test that." D47 and D48 are the
+owner's; D49-D54 settled under the delegation.
+
+- **D47. The core matrix (D46) set aside, unlaunched.** Its registration stands in
+  `~/code/probe-4b-core.sh`; the continuous method replaces the method it would have measured. The
+  coupling probe (D38) and the adaptive cool's probe (D33's) run to their registered ends.
+- **D48. The continuous crystallisation (`--continuous`): every switch of option 1's profile that can
+  be continuous made so, all at once, and tested as one method.** One event stays: the warm-up's end,
+  where the codes are made (k-means, D6) and the profile starts, continuous in the forward path
+  because the coupling is 0 there. Its parts are D49-D53; its test D54.
+- **D49. The cool's rate, continuous (replaces D29's binary gate and D24's shapes).** The profile's
+  clock advances each cool epoch by `g = clip((s / level - 0.95) / (0.99 - 0.95), 0, 1)`, `s` the
+  screen before the epoch, `level` the hold's best (D29's): full speed at D29's 0.99, slowing linearly
+  to a stop at 0.95. The cool is exponential in that clock, halved every 30 epochs (D8's halving), with
+  no shape; heat and hold as D15.
+  - (a) *Chosen.* Pros: the rate falls as the network leaves equilibrium, not on or off, so the path
+    down the profile is quasi-static by construction; one shape, no shape constants (D24's octaves and
+    cool length). Cons: two thresholds (0.95, 0.99) for D29's one.
+  - (b) D29's binary gate. Cons: a switch; the clock runs at full speed the epoch after any recovery,
+    which is where the D33 probe's losses came (a run of jumps).
+  - (c) The adaptive cool's step (D33) scaled by `g`. Pros: the heat capacity's information too.
+    Cons: the D33 probe lost 4 of 7 by its steps' size; two mechanisms at once.
+- **D50. The coupling read live from the codes' sharpness (replaces D25's window, D21's once-measured
+  melting curve and D30's 3 octaves).** Each epoch, each factor's sharpness `S` is the mean over the
+  screen's windows (D8's sample) of the largest soft weight at its temperature; its coupling
+  `l = clip((S - S_0) / (1 - S_0), 0, 1)`, `S_0` its sharpness at the cool's first epoch; 0 through the
+  heat and the hold (D25's), so it starts at 0 at the cool's start.
+  - (a) *Chosen.* Pros: the codes take the state as fast as their assignments become definite, read
+    on the material as it is (the 15:15 readings: the melting curve moves by up to 5 octaves as
+    training sharpens the clusters); no melting points, windows or octaves; continuous wherever the
+    sharpness is. Cons: steep where a split happens (D49's rate slows it there); new, untested.
+  - (b) D25 with the melting curve re-measured every k epochs. Pros: D25's tested form. Cons: a curve a
+    measurement (2-8 s), stepwise between them, and D30's window constant.
+  - (c) No coupling (D38 at cap 0). Cons: D38's seed 3: the readout and the cell never train on the
+    codes, so the snapped machine never answers right.
+- **D51. No hard switch; a straight-through gradient at every temperature (replaces D8's hardness
+  test, D19's tail and the levels).** The snapped factors stay soft for the rest of the run, at their
+  profile's temperature, until each factor's sharpness first reaches 0.999 (its codes hard to 0.1% of
+  windows), where its temperature stays. The soft codes' gradient to the cell is straight through
+  (the crate's `straight`: `dh = dq` plus the commitment's, the softmax's term dropped), so with D25's
+  split the cell gets `dq` whole at every coupling, and as `T` falls the soft path becomes the hard
+  path's exactly. The codes keep their soft gradients.
+  - (a) *Chosen.* Pros: no switch anywhere from the melt to the crystal; the cell is never starved
+    (with the soft gradient its share of `dq` falls to `1 - l` while the softmax's term vanishes away
+    from boundaries, near 0 at full coupling, then jumps to the whole at the hard switch); the
+    straight-through estimator is the literature's (van den Oord et al. 2017). Cons: a crate build;
+    the softmax's term (where moving `h` changes its code) no longer reaches the cell.
+  - (b) The soft gradient, `T` to no floor, no hard switch. Cons: the cell starved at full coupling;
+    `2/T` gradients near boundaries, unclipped (Adam, no clipping).
+  - (c) Keep the hardness switch, read every epoch. Cons: a switch, and the gradient's jump.
+- **D52. Growth continuous (replaces D26's switch from the crucible to the whole distribution).** The
+  longest length `L` (real) starts at the crucible's and rises each epoch by `0.02 g c` in `ln L`, `c`
+  the smallest factor's coupling, to the cap; an epoch's examples are the mixture
+  `(1 - f) U(1..n) + f U(1..n+1)`, `n = floor(L)`, `f = L - n`, and its screen is
+  `whole_lengths(n)`. At full rate S3 grows from 8 to 69 in about 108 epochs, move-to-front-4 to 248
+  in about 172.
+  - (a) *Chosen.* Pros: growth only as the crystal holds the state (coupled) and the screen stays at
+    equilibrium (`g`); the material changes as slowly as the temperature does. Cons: a rate constant
+    (0.02); growth can stall where `c` stays low.
+  - (b) Growth once every coupling reaches 1. Cons: a switch again.
+  - (c) The whole distribution from the cool's start (D36's arm 2). Cons: not the crucible; tested
+    separately by the panel's arms.
+- **D53. The readings every epoch (the owner: "shouldn't these readings be continuous?").** After
+  the warm-up a step is one epoch, so every epoch ends with the step's readings: the certificate at
+  both verdicts (D41) with its wrong states, wrong outputs and near ties apart, the snapped answers
+  (`snapped_answers`), and the machine read off; each epoch's row logs every factor's sharpness, its
+  hardness (D8's share, ungated), the coupling, `g`, the clock and `L`. The melting curve (D21) is read
+  on the current network every 25 epochs (2-8 s a curve); the network is saved every 10 epochs and at
+  every certificate and stop (each 2 MB). D35's stop at the exact bound reads every epoch.
+  - (a) *Chosen.* Pros: a failure's mechanism read from the log; the time series `population` reads.
+    Cons: each epoch's certificate and answers cost seconds (measured at the build).
+  - (b) Readings offline on saved networks, as now. Cons: what the owner named: most of the path unseen.
+- **D54. The continuous crystallisation's existence probe (`~/code/probe-d54.sh`, registered before
+  its data).** word-problem-s3 seeds 0-7 (the crucible's design seeds: 4a'''' 8 of 8, D38 in flight)
+  and move-to-front-4 seeds 0-3 (the crucible's control on seed 3 never certified; its whole runs
+  certified seed 3), each D48's method from the crucible's cell, the commitment never back, D35's stop
+  at the exact bound, D41's success; 1,600 epochs or 690 minutes a run.
+  - (a) *Chosen.* Pros: the method on the seeds where the quasi-static crucible's rate is known, plus
+    the reset machine the crucible failed. Cons: design seeds; a rate on fresh seeds waits for a
+    matrix of the method that survives.
+  - (b) Fresh seeds at once. Cons: existence first (the memory's rule): one working cell before a rate.
+
 ### The consistency review settled (2026-10-21, afternoon)
 
 The consistency review ([consistency-review-2026-10-21.md](consistency-review-2026-10-21.md)), its
@@ -1276,6 +1377,9 @@ a random machine would just need a very slow cool.**
    - **The restructured order (D35-D39):** the builds (`--state-bound`, the snapped
      answers at each step's end, `--coupling-cap`; pure Python, tested; built 2026-10-21); D38's coupling
      probe (`~/code/probe-d38.sh`, registered before its data; on `stone` from 18:00); then:
+  - **The continuous crystallisation (D47-D54):** the core matrix set aside; the crate's `straight`
+    (`indrajala-math-rust` first, then a "Bump rust/" PR), then `--continuous` (D49-D53, pure Python,
+    tested, the golden run unchanged without it), then D54's probe, registered in its script.
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
