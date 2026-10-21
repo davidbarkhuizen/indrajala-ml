@@ -47,7 +47,7 @@ Every result below is in the papers or the probe script's findings. Each is a pi
 | keeping a solution | stop at the first certified step; training past it destroys it | P1 (3a, 3b) |
 | **learning from approximations** | training on the outputs of the target's approximations beside its own made product machines learnable (division: 1/20 to 13-15/20); **one approximation suffices** (the sum alone, 10/20, where an equally informative non-approximation, the product, gives 0/20) | P2 (5, 5b) |
 | scale | certified transducers of 25, 49, 121 and 169 states (division `p` 5-13), 120 states (S5, move-to-front 5), from answers alone | P2; W1; B2 |
-| breadth | permutation groups (S3-S5), move-to-front and random machines beside arithmetic | the general algebras |
+| breadth | permutation groups (S3-S5) and move-to-front beside arithmetic; random machines only to about 12 states (random-q8-1 3 of 3, random-q12-0 2 of 3; 0 of 6 at 16, by extra codes and lost near solutions), set aside since 2026-10-18 | the general algebras |
 | what stops it | four failure kinds (formation, conversion, extra codes, answer separation), one shared measure (one code, one state), remedies in progress | failure-kinds.md; `git show df1dcac:docs/one-code-one-state-workplan.md` |
 
 Result 5b is the seed of the goal. An approximation's outputs carry structure the network can use
