@@ -94,6 +94,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D54 | 2026-10-21, evening | the continuous probe | S3 seeds 0-7 and move-to-front-4 seeds 0-3 under D48 (`probe-d54.sh`) |
 | D55 | 2026-10-21, 20:50 | the fresh-seed matrix | D54's cell on S3 seeds 24-39 and move-to-front-4 seeds 24-31 (`probe-d55.sh`) |
 | D56 | 2026-10-22, 00:40 | the unstructured probe | D54's cell on random-q16-0 seeds 0-3 (`probe-d56.sh`) |
+| D57 | 2026-10-22, 00:50 | the S4 probe | D54's cell on word-problem-s4 seeds 0-2, the harm cells without the commitment (`probe-d57.sh`) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -855,6 +856,18 @@ owner's; D49-D54 settled under the delegation.
     D55's rate; a backdrop whose failures so far were extra codes, which a schedule may not reach.
   - (b) More fresh seeds for D55. Cons: grows a registered matrix (the memory's rule: no growing
     matrices); D55's 24 runs already size its rate.
+- **D57. The continuous crystallisation on S4 (`~/code/probe-d57.sh`, registered before its data,
+  2026-10-22, 00:50).** `pyramidon`'s three slots freed by D55's slice: D54's cell unchanged on
+  word-problem-s4 seeds 0-2 (seeds 0 and 1 D37's harm cells, certified before only with the
+  commitment, which D48 never turns on). Feasibility: q 24, 15 codes a factor, m 225 (9.4 q), cap 248,
+  width 32; row 15: depth 4 + k 1. Expectations: at least 1 of 3 succeed (D41), the harm cells' first
+  certificate without the commitment; 0 of 3 read, not a refutation, each failure classified by kind
+  (near ties against extra codes, D37's harm question), strict-only certifications apart; any false
+  discovery refutes D35's stop on this backdrop.
+  - (a) *Chosen.* Pros: the harm question asked of the method that dropped the commitment; a second
+    backdrop beside D56's, on cores otherwise idle. Cons: three seeds, existence only.
+  - (b) Division `p` 13 (the other harm cell). Cons: its 169 states make a run memory-heavy, past
+    `pyramidon`'s three slots.
 
 ### The consistency review settled (2026-10-21, afternoon)
 
@@ -1413,6 +1426,7 @@ a random machine would just need a very slow cool.**
     tested, the golden run unchanged without it), then D54's probe, registered in its script.
     Then D55's fresh-seed matrix, the same cell, registered in its script.
     Then D56's random-q16-0 probe, the same cell, registered in its script.
+    Then D57's S4 probe, the same cell, registered in its script.
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
