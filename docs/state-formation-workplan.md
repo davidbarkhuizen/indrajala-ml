@@ -76,6 +76,12 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D38 | 2026-10-21 | the coupling probe | `--coupling-cap 0`: the codes anneal on the liquid, never coupled; S3 seeds 0-7, move-to-front-4 seed 3 |
 | D39 | 2026-10-21 | the design probes | after the panel: an approximation beside S3, a random machine's melting curve, runs past the first certificate |
 | the consistency review | 2026-10-21, afternoon | rules against practice | ten items (`consistency-review-2026-10-21.md`), for the panel's registration |
+| D40 | 2026-10-21, afternoon | the panel's verdict | D12 replaced for 4b: a harm loss goes to the diagnosis; rejected only if no failure-A run moves |
+| D41 | 2026-10-21, afternoon | one success | certified at both verdicts on the stop's network; exact at 1.0 alone reported, not counted |
+| D42 | 2026-10-21, afternoon | the bound as trained | each certified run's training length reported; the exclusion bound the config's; Chow's check for stage B |
+| D43 | 2026-10-21, afternoon | the exact state bound | the panel at `N = q`, claimed so; slack read offline on its step networks |
+| D44 | 2026-10-21, afternoon | the crucible's cap from the bound | after the panel (D39's (iv)): the cap from the state bound, not the target |
+| D45 | 2026-10-21, 13:00 | D38's reading and D34's order | the gate's holds and the snapped answers read; D34's probe only if D38 is refuted |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -685,6 +691,80 @@ it. D36 is the owner's; D35 and D37-D39 settled under the owner's delegation.
   algebra's cascade (the random-machine conjecture). (iii) Runs past their first certificate under
   D35 (D35's (c)): does a rule that waits for a stable machine stop on the target? Each registered in
   its own script before its data.
+
+### The consistency review settled (2026-10-21, afternoon)
+
+The consistency review ([consistency-review-2026-10-21.md](consistency-review-2026-10-21.md)), its
+items 1-8, settled under the owner's delegation ("go ahead and settle them under your delegation"),
+before the panel's (4b) registration and before the coupling probe's (D38) data.
+
+- **D40. The panel's verdict (item 1): D12 replaced for 4b.** Each arm is accepted as the base
+  candidate when it certifies more failure-A runs (D11's S3 seeds 0, 1, 4, move-to-front-4 seed 3,
+  move-to-front-5 seeds 0, 1) than their controls; a lost harm certificate doesn't reject it, but
+  sends that cell to D31's diagnosis (near ties against pairs per code, D37's expectation), whose
+  remedy is tested before adoption; rejected when it moves no failure-A run. Fresh S3 seeds 8-15
+  measure `p` against a bar (at least 4 of 8, as D33's), not a control. The random cells get a
+  control: round 1's cell at width 32, the option off (`--fork`, the commitment on, as C0), once
+  each, beside the panel (3 short runs). Adoption as the general method stays the owner's (6 seeds a
+  backdrop).
+  - (a) *Chosen.* Pros: consistent with D31 (the panel diagnoses) and with D37's registered harm
+    expectation, which under D12 would reject option 1 on a loss the programme already predicts;
+    a failure-A gain is still required, so an option that moves nothing is still rejected. Cons:
+    an option can be accepted while it harms, pending the remedy (a base candidate, not adopted).
+  - (b) D12 as written. Pros: the rule set before option 1's first panel. Cons: rejects on the
+    expected loss, before the diagnosis D31 asks for.
+  - (c) The commitment back on the harm cells only. Cons: a method chosen per backdrop, against one
+    general architecture.
+- **D41. One success definition (item 5): a run succeeds when the network it stops on certifies at
+  both verdicts** (the default snap ratio, near ties branched, and 1.0), as D12 and `population`
+  (`VERDICTS`) count; a stop exact only at 1.0 is reported ("exact as it computes"), not counted.
+  - (a) *Chosen.* Pros: every earlier rate's definition, so the panel compares with them; the
+    default ratio's branching is the robust proof. Cons: under D35 a run stopped on a network exact
+    at 1.0 counts as a failure (4 of the re-reading's 8 earlier stops were of that kind; reported).
+  - (b) 1.0 counts. Pros: the machine is right as the network computes. Cons: breaks comparability;
+    near ties are the margin option 2 is shelved for, so they should show.
+  - (c) The stop's later certificate counts. Cons: under D35 the run stops; nothing later exists.
+- **D42. The exclusion bound as trained (item 2).** The register's row 2 is a property of the cell's
+  config (growth trains to `m + q - 1`), not of a run that certifies before growth; each certified
+  run's longest trained length is reported beside it (from its log), and a claim says "certified,
+  trained to length L". Under D35, a stop below the bound rests on the state bound and sampled
+  answers (a screen), with the certificate the judge. The exact answers-only form is Chow's test set
+  from the read machine under the bound (machine-discovery.md's check 4: with `N = n` it is the
+  transition cover times a characterization set, small): built as stage B's first tool, run offline
+  on the panel's stops when it is read.
+  - (a) *Chosen.* Pros: no claim says more than the run did; the panel isn't delayed; the exact
+    check arrives as a durable tool with the panel's reading. Cons: the panel's stop stays a screen
+    until then.
+  - (b) The crucible's lengths to the bound (69 on S3). Cons: undoes the crucible (D26, D28).
+  - (c) Chow's test set as the stop, built before the panel. Pros: an exact answers-only stop at
+    once. Cons: a new tool, untested, delaying the panel; D35's re-reading found no false discovery
+    at the exact bound, so it can follow.
+- **D43. The exact state bound (item 4): the panel stops at `N = q`, the target's size, and its
+  claims say "under an exact state bound".** The slack's cost is read offline on the panel's saved
+  step networks (`answers-stop` at 1.1 and 1.5 times the size, as the re-reading did); the
+  population's selector under a slack bound (runs stopping on different machines) goes to stage C.
+  - (a) *Chosen.* Pros: the bound the re-reading validated; slack read for free from the same runs.
+    Cons: the best case for discovery; a slack bound's false stops would have ended runs the panel
+    reads past.
+  - (b) The panel at a slack bound. Cons: its false stops end runs early, confounding option 1's
+    failures with the stop's.
+- **D44. The crucible's cap (item 3): after the panel, as D39's (iv).** The cap set from the state
+  bound (row 15's depth and `k`, each at most `N - 1`) or the dependence stated as a known-structure
+  assumption, decided by the panel's crucible arm. For the panel, row 15's check stands as a
+  feasibility check (the target known).
+  - (a) *Chosen.* Pros: the panel's crucible-against-whole arms (D36) say first whether the crucible
+    is kept at all. Cons: the panel's crucible is the S3-tuned 8.
+  - (b) The cap from the bound now. Cons: at division's 169 the worst case is the curriculum's whole
+    range, not a crucible.
+- **D45. D38's reading and D34's order (items 6-8; registered here before D38's data, 13:00).**
+  D38's reading adds, per run: whether D29's gate held and how often (at cap 0 it reads the
+  continuous network), and the snapped answers on each step's network (`answers-stop --snapped`)
+  against the logged screen; whichever way it comes out, both accounts (D25's, the re-reading's)
+  written up. The bounded handover's probe (D34's probe) runs only if D38 is refuted on S3 (read by
+  about 20:00); if D38 holds, it is set aside unrun, recorded.
+  - (a) *Chosen.* Pros: a failure can be told apart from the blind gate; no `pyramidon` night on a
+    refinement of a part D38 may shelve. Cons: D34's probe waits an evening.
+  - (b) D34's probe now, as the handover had it. Cons: may answer a question the shelf has closed.
 
 - **4a''''. The quasi-static crucible probe:** word-problem-s3 seeds 1, 2, 3, 4, 6, 7, the cell and
   profile of 4a''' with D28-D30, on `stone` from about 19:30 (13 workers on its 12 cores until 4a''' ends);
