@@ -1558,6 +1558,18 @@ def test_a_crucibles_reading_marks_a_loss_after_every_factor_is_hard():
     assert course["best"] == {"phase": "cool", "coupling": 0.5, "temperature": 0.4}
     assert (course["lost_step"], course["lost"]["temperature"]) == (10, None)
     assert "lost 10 (cool, coupling 1.00, hard)" in mf.crucible_summary(course)
+    assert (course["held"], course["rise"], course["trained"]) == (0, 0.5, None)
+    assert mf.crucible_course(rows, run={"cap": 69})["trained"] == 8
+
+
+def test_the_trained_length_is_the_cap_once_whole_or_grown_and_the_crucibles_before():
+    rows: list[dict[str, Any]] = [
+        {"step": 5, "epoch": 1, "screen": 1.0, "warm": True},
+        {"step": 8, "warm_up_end": [], "crucible": 8},
+        {"step": 30, "epoch": 1, "screen": 1.0, "crucible": "grown"},
+    ]
+    assert [mf.trained_length(rows, {"cap": 69}, s) for s in (5, 8, 9, 29, 30)] == [5, 8, 8, 8, 69]
+    assert mf.trained_length(rows[:1], {"cap": 69, "whole": True}, 5) == 69
 
 
 def test_a_crucible_holds_the_warm_ups_material_then_grows_on_the_whole_distribution(tmp_path: Path):
