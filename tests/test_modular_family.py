@@ -574,6 +574,16 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "coupling_cap": 0.0,
         "state_bound": 25,
     },
+    "continuous": {  # D48-D53: the clock's shares, the sharpness's start, the floors and the length resumed
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1),
+        "crucible": True,
+        "continuous": mf.Continuous(low=0.0, high=2.0, growth=0.5, curve_every=3, save_every=2),
+    },
 }
 
 
@@ -592,6 +602,84 @@ def test_the_coupling_cap_holds_every_coupling_and_the_answers_stop_judges_every
     assert all(isinstance(r["answers_stop"]["strict"], bool) for r in passed)
     assert len(list(tmp_path.glob("answers-stop-step-*.network.json"))) == len(passed) <= 1  # the stop ends it
     assert not passed or passed[0] is ends[-1]
+
+
+CONTINUOUS = mf.Continuous(low=0.0, high=2.0, growth=0.5, curve_every=3, save_every=2)
+
+
+def test_the_continuous_rate_coupling_and_growth_are_continuous_and_bounded():
+    c = mf.Continuous()
+    assert c.rate(0.99, 1.0) == pytest.approx(1.0) and c.rate(1.0, 1.0) == 1.0
+    assert c.rate(0.95, 1.0) == pytest.approx(0.0) and c.rate(0.5, 1.0) == 0.0
+    assert c.rate(0.97, 1.0) == pytest.approx(0.5)  # linear between (D49)
+    assert mf.Continuous.coupling(0.4, 0.4) == 0.0 and mf.Continuous.coupling(1.0, 0.4) == 1.0
+    assert mf.Continuous.coupling(0.7, 0.4) == pytest.approx(0.5)  # half of what was left (D50)
+    assert mf.Continuous.coupling(0.3, 0.4) == 0.0  # less sharp than the cool's start: uncoupled
+    assert c.grow(8.0, 0.0, 1.0, 69) == 8.0 and c.grow(8.0, 1.0, 0.0, 69) == 8.0  # no rate or no coupling
+    assert c.grow(8.0, 1.0, 1.0, 69) == pytest.approx(8.0 * math.exp(0.02))
+    assert c.grow(68.9, 1.0, 1.0, 69) == 69.0  # to the cap, no further (D52)
+
+
+def test_growth_lengths_mix_the_floors_and_the_next_lengths_by_the_rest():
+    assert mf.growth_lengths(4.0, 8) == [1, 2, 3, 4, 1, 2, 3, 4]  # whole: epoch_lengths's
+    assert mf.growth_lengths(4.0, 8) == mf.epoch_lengths(4, 8)
+    mixed = mf.growth_lengths(4.5, 10)  # half the examples over 1..5, half over 1..4
+    assert mixed == [1, 2, 3, 4, 5, 1, 2, 3, 4, 1]
+    assert max(mf.growth_lengths(4.05, 100)) == 5 and max(mf.growth_lengths(4.04, 100)) == 4  # 5 from 1..5 first
+    assert mf.growth_screen(8, 8.0) == list(range(1, 9))
+    assert mf.growth_screen(8, 20.7) == sorted(set(range(1, 9)) | set(mf.whole_lengths(20)))
+
+
+def test_sharpness_reads_hardnesss_share_beside_the_mean_largest_weight():
+    net = mf.network(mf.Encoding(5, mf.FAMILY), [(4, 4), (4, 4)], 0)
+    rows = [mf._windows(mf.Encoding(5, mf.FAMILY), n, 6, f"sharp-{n}")[0] for n in (1, 3)]
+    for temperatures in ([0.5, None], [1e-3, 2.0]):
+        sharp = mf.sharpness(net, rows, temperatures, 0.9)
+        assert [None if v is None else v[1] for v in sharp] == mf.hardness(net, rows, temperatures, 0.9)
+        assert all(v is None or 1 / 4 <= v[0] <= 1.0 for v in sharp)
+    cold, hot = mf.sharpness(net, rows, [1e-6, 1e6], 0.9)
+    assert cold is not None and hot is not None and cold[0] > 0.999 and hot[0] < 0.26
+
+
+def test_a_continuous_run_moves_every_switch_smoothly_and_reads_every_epoch(tmp_path: Path):
+    config = dict(RESUMABLE["continuous"])
+    encoding, settings = config.pop("encoding"), config.pop("settings")
+    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path, settings, **config)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    (end,) = [r for r in rows if "warm_up_end" in r]
+    after = [r for r in rows if r["step"] > end["step"]]
+    epochs = [r for r in after if "anneal" in r]
+    assert epochs and all(r["anneal"]["temperature"][0] is not None for r in epochs)  # never hard (D51)
+    assert all(0.0 <= r["anneal"]["rate"] <= 1.0 for r in epochs)
+    assert all(c == 0.0 for r in epochs if r["anneal"]["phase"] != "cool" for c in r["anneal"]["coupling"])
+    cools = [r for r in epochs if r["anneal"]["phase"] == "cool"]
+    assert cools and cools[0]["anneal"]["coupling"] == [0.0]  # the cool starts uncoupled (D50)
+    lengths = [r["anneal"]["length"] for r in epochs]
+    assert lengths[0] == end["crucible"] and lengths == sorted(lengths) and lengths[-1] > lengths[0]  # D52
+    assert all(len(r["anneal"]["sharpness"]) == len(r["anneal"]["hard"]) == 1 for r in epochs)
+    ends = [r for r in after if "end" in r]
+    assert ends and all(r["epochs"] == 1 for r in ends)  # a step an epoch (D53)
+    assert all(set(r["certificates"]) == {"default", "strict"} for r in ends)
+    assert all(set(r["snapped_answers"]) == {"8", "16", "24", "48"} for r in ends)
+    assert [r["step"] for r in ends if "melting" in r] == [r["step"] for r in ends if r["step"] % 3 == 0]
+    saved = {int(p.name.split("-")[1].split(".")[0]) for p in tmp_path.glob("step-*.network.json")}
+    assert {r["step"] for r in ends} & saved == {r["step"] for r in ends if r["step"] % 2 == 0}
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["continuous"] == repr(CONTINUOUS)
+    with pytest.raises(AssertionError, match="continuous crystallisation"):
+        mf.run(
+            encoding,
+            [(4, 4)],
+            0,
+            1e9,
+            tmp_path / "x",
+            settings,
+            cap=6,
+            anneal=config["anneal"],
+            warm_up=mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1, handover=True),
+            crucible=True,
+            continuous=CONTINUOUS,
+        )
 
 
 class Stop(Exception):
@@ -675,6 +763,9 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "capped":  # every coupling capped, every step's end judged by the answers-only stop
         couplings = [c for r in whole[0] if "coupling" in r.get("anneal", {}) for c in r["anneal"]["coupling"]]
         assert couplings and set(couplings) == {0.0} and all("answers_stop" in r for r in whole[0] if "end" in r)
+    elif kind == "continuous":  # the length grown and the clock's shares carried over every stop
+        cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
+        assert cool and cool[-1]["length"] > cool[0]["length"] and any(0 < a["rate"] < 1 for a in cool[1:])
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":
