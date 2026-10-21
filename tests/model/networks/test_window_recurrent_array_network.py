@@ -329,6 +329,25 @@ def test_coupled_factors_blend_in_training_and_the_screen_only_and_1_is_the_snap
     assert np.array_equal(network.forward_windows(X), outputs)
 
 
+@pytest.mark.parametrize("recurrence", SNAPPED)
+def test_straight_changes_only_a_soft_trainings_gradients_and_off_restores_it_by_bits(recurrence: str):
+    # the state formation workplan's D51: a soft factor's gradient to its cell straight through
+    network = _network(recurrence=RECURRENCES[recurrence])
+    X, labels = _batch(3, examples=8)
+    plain, outputs = _fresh_gradients(network, X, labels), network.forward_windows(X)
+    network.set_straight(True)  # hard codes: nothing changes
+    assert all(np.array_equal(a, b) for a, b in zip(plain, _fresh_gradients(network, X, labels), strict=True))
+    network.set_straight(False)
+    network.set_temperatures(_soft(network))
+    soft = _fresh_gradients(network, X, labels)
+    network.set_straight(True)
+    straight = _fresh_gradients(network, X, labels)
+    assert any(not np.array_equal(a, b) for a, b in zip(soft, straight, strict=True))
+    assert np.array_equal(network.forward_windows(X), outputs)
+    network.set_straight(False)
+    assert all(np.array_equal(a, b) for a, b in zip(soft, _fresh_gradients(network, X, labels), strict=True))
+
+
 def test_couplings_are_refused_out_of_range_for_a_continuous_factor_or_the_wrong_count():
     network = _network(recurrence=FACTORED_CROSS)
     with pytest.raises(AssertionError, match="a coupling in"):

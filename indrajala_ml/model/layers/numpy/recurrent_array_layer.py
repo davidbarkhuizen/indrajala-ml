@@ -276,7 +276,9 @@ class CodesArrayLayer:
     workplan, stage 3, D6): q = sum_k w_k e_k, w = softmax(-d / temperature) of the squared
     distances d (the smallest subtracted; the sums left folds in code order); its loss weight *
     (commitment * ||h - sg[q]||^2 + sum_k sg[w_k] ||sg[h] - e_k||^2), and q's gradient to h through
-    the weights alone. Neither the wall nor a target with it. indices are the nearest codes either way.
+    the weights alone; with `straight` (the state formation workplan's D51), straight through instead
+    (dq, the softmax's term dropped), E's as without it. Neither the wall nor a target with it.
+    indices are the nearest codes either way.
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
@@ -291,6 +293,7 @@ class CodesArrayLayer:
         self.wall_ratio = wall_ratio
         self.gate: FloatArray | None = None
         self.targets: npt.NDArray[np.intp] | None = None
+        self.straight = False  # a soft step's gradient to h straight through (D51)
         self.E: FloatArray = np.zeros((count, size))
         self.grad_E: FloatArray = np.zeros((count, size))
 
@@ -410,7 +413,7 @@ class CodesArrayLayer:
             grad_E = grad_E + (scale * C[n])[:, np.newaxis] * pulled
             grad_E = grad_E + (code_scale * W[n])[:, np.newaxis] * pulled
         self.grad_E = grad_E
-        return scale * S + (2.0 * weight * self.commitment) * (H - Q)
+        return (dQ if self.straight else scale * S) + (2.0 * weight * self.commitment) * (H - Q)
 
 
 class InitialStateArrayLayer:
@@ -506,6 +509,7 @@ class RecurrenceArrayLayer:
         self.continuous: list[bool] = [False] * len(sizes)  # each snapped factor run unsnapped (the warm-up)
         self.reading = False  # whether an inference pass reads the continuous factors unsnapped (the screen)
         self.couplings: list[float] = [1.0] * len(sizes)  # each factor's next state's share of its code (D25)
+        self.straight = False  # a soft factor's gradient to its cell straight through (D51)
         self._free: list[bool] = [False] * len(sizes)  # the last snap's unsnapped factors
         self._coupled: list[float] = [1.0] * len(sizes)  # the last snap's couplings
         self.factors = [
@@ -550,6 +554,13 @@ class RecurrenceArrayLayer:
         """
         check_couplings(self.factors, couplings, self.continuous)
         self.couplings = list(couplings)
+
+    def set_straight(self, straight: bool) -> None:
+        """Every soft factor's gradient to its cell straight through from the next training step on (D51)."""
+        self.straight = straight
+        for f in self.factors:
+            if f.codes is not None:
+                f.codes.straight = straight
 
     def draw(self, rng: np.random.Generator) -> None:
         """Each factor's cell's gates, then its codes, factor by factor."""

@@ -273,6 +273,7 @@ class RecurrenceRustArrayLayer:
         self.continuous: list[bool] = [False] * len(sizes)  # each snapped factor run unsnapped (the warm-up)
         self.reading = False  # whether an inference pass reads the continuous factors unsnapped (the screen)
         self.couplings: list[float] = [1.0] * len(sizes)  # each factor's next state's share of its code (D25)
+        self.straight = False  # a soft factor's gradient to its cell straight through (D51)
         self._free: list[bool] = [False] * len(sizes)  # the last step's unsnapped factors
 
     @property
@@ -307,6 +308,10 @@ class RecurrenceRustArrayLayer:
         """
         check_couplings(self.factors, couplings, self.continuous)
         self.couplings = list(couplings)
+
+    def set_straight(self, straight: bool) -> None:
+        """Every soft factor's gradient to its cell straight through from the next training step on (D51)."""
+        self.straight = straight
 
     def parts(self) -> list[Any]:
         """The parts with parameters, factor by factor: pooling, cell, codes (if any), initial state."""
@@ -406,6 +411,7 @@ class RecurrenceRustArrayLayer:
             weight,
             self._commitments,
             self._targets(),
+            straight=self.straight,
         )
         for f, gq, gW, gU, gb in zip(factors, grad_q, grad_W, grad_U, grad_b, strict=True):
             f.pooling.grad_q = gq
