@@ -291,6 +291,19 @@ def test_backend_ratios_pair_each_cases_crate_and_numpy_rows_worst_first() -> No
     assert ab.backend_ratios(rows) == [("a", "per call", 10.0, 5.0), ("b", "per call", 1.0, 4.0)]
 
 
+def test_backends_report_tables_the_crate_over_numpy() -> None:
+    lines = ab.backends_report(ab.report_data(FIXTURES / "pr480")).splitlines()
+    assert lines[2] == "| case | crate s | numpy s | crate / numpy |"
+    assert lines[4] == "| dense B=32 (epoch, loader) | 0.878 | 1.072 | 0.82 |"
+
+
+def test_backends_report_refuses_a_run_without_both_backends(toy_repo: Path, tmp_path: Path) -> None:
+    args = ["run", "--bench", "cmd", "--old", "HEAD", "--order", "ON", "--skip-profile", "--", "scripts/probe.py"]
+    assert _run(toy_repo, *args) == 0
+    with pytest.raises(ab.AbError, match="both backends"):
+        ab.backends_report(ab.report_data(ab.find_run(None)))
+
+
 def test_a_copied_runs_profile_is_read_from_this_checkout(tmp_path: Path) -> None:
     relative = "docs/machine_profiles/raspberry-pi-5.json"
     assert ab.recorded_profile({"repo": str(tmp_path / "gone")}, relative) == ab.REPO / relative

@@ -10,7 +10,7 @@ docs/measurement.md (the A/B harness workplan in docs/next-steps.md has the desi
                              --new-crate 750d83a --control-backend numpy
     python scripts/ab.py status [RUN]
     python scripts/ab.py extend [RUN] --order NO
-    python scripts/ab.py report [RUN] [--brief] [--md FILE] [--pooled FILE]
+    python scripts/ab.py report [RUN] [--brief] [--md FILE] [--pooled FILE] [--backends FILE]
     python scripts/ab.py clean [--worktrees] [--wheels]
     python scripts/ab.py archive [RUN ...] [--reason TEXT] [--profile FILE] [--replaces PATH] [--no-pr]
     python scripts/ab.py check [--apply-setup]
@@ -61,8 +61,7 @@ Output is bounded: raw data goes to files only, `run` and `extend` print a line 
 and one when they finish (or the failing step's last 20 lines of stderr, exiting 1), and
 `report --brief` prints at most 15 lines. `report --md FILE` writes the full table and a protocol
 paragraph for a PR body. `report --pooled FILE`, for an A/A only (one commit and one crate on both
-sides), writes the baseline's form instead (with, where a case ran on both backends, the crate's
-time over numpy's, worst first): each row pooled over every pass, with its spread of
+sides), writes the baseline's form instead: each row pooled over every pass, with its spread of
 per-pass medians and each pass's shift (docs/machine_profiles/). `report --passes 1-4` pools only
 the passes named, to see what a shorter run would have concluded.
 
@@ -1155,7 +1154,7 @@ def cmd_status(args: argparse.Namespace) -> None:
 def cmd_report(args: argparse.Namespace) -> None:
     run_dir = find_run(args.run)
     data = report_data(run_dir, args.passes)
-    for target, render in ((args.md, markdown_report), (args.pooled, pooled_report)):
+    for target, render in ((args.md, markdown_report), (args.pooled, pooled_report), (args.backends, backends_report)):
         if target == "-":  # for ab.py remote report: the file alone on stdout
             print(render(data), end="")
             return
@@ -1163,7 +1162,7 @@ def cmd_report(args: argparse.Namespace) -> None:
             Path(target).write_text(render(data))
             if not args.brief:
                 print(f"wrote {target}")
-    if args.brief or not (args.md or args.pooled):
+    if args.brief or not (args.md or args.pooled or args.backends):
         print("\n".join(brief_report(data)))
 
 
@@ -1796,20 +1795,29 @@ def pooled_report(data: ReportData) -> str:
                 f"| {_value(statistics.median(runs), unit)} ({_value(min(runs), unit)}-{_value(max(runs), unit)}) "
                 f"| {per_pass} | {'-' if spread is None else f'{spread * 100:.1f}%'} |"
             )
+    return "\n".join(lines) + "\n"
+
+
+def backends_report(data: ReportData) -> str:
+    """
+    `report --backends`: the crate's time over numpy's for every case run on both, worst first
+    (backend_ratios), each pooled over every pass. Its own file, so the archived reports (brief,
+    report.md, pooled.md) still reproduce with this ab.py.
+    """
     pairs = backend_ratios(data.rows)
-    if pairs:
-        unit = data.rows[0].unit
-        lines += [
-            "",
-            "### the crate over numpy",
-            "",
-            f"| case | crate {unit} | numpy {unit} | crate / numpy |",
-            "|---|---|---|---|",
-        ]
-        lines += [
-            f"| {stem} ({metric}) | {_value(rust, unit)} | {_value(numpy, unit)} | {rust / numpy:.2f} |"
-            for stem, metric, rust, numpy in pairs
-        ]
+    if not pairs:
+        raise AbError("report --backends needs cases run on both backends (`<case> / rust` and `<case> / numpy`)")
+    unit = data.rows[0].unit
+    lines = [
+        protocol_paragraph(data),
+        "",
+        f"| case | crate {unit} | numpy {unit} | crate / numpy |",
+        "|---|---|---|---|",
+    ]
+    lines += [
+        f"| {stem} ({metric}) | {_value(rust, unit)} | {_value(numpy, unit)} | {rust / numpy:.2f} |"
+        for stem, metric, rust, numpy in pairs
+    ]
     return "\n".join(lines) + "\n"
 
 
@@ -1850,6 +1858,9 @@ def _report_parser(report: argparse.ArgumentParser) -> argparse.ArgumentParser:
     report.add_argument("--brief", action="store_true", help=f"at most {BRIEF_LINES} lines (the default output)")
     report.add_argument("--md", help="write the full tables and the protocol paragraph here (- for stdout)")
     report.add_argument("--pooled", help="an A/A only: each row pooled over every pass, with its spread, here")
+    report.add_argument(
+        "--backends", help="each case run on both backends: the crate's time over numpy's, worst first, here"
+    )
     report.add_argument("--passes", help="report only these passes, e.g. 1-4 or 1,2,5 (the tier 1 check)")
     return report
 
@@ -2017,10 +2028,10 @@ def cmd_remote(args: argparse.Namespace, extra: list[str]) -> None:
 
 
 def cmd_remote_report(args: argparse.Namespace, rest: list[str]) -> None:
-    """report on the host; --md and --pooled files are written here."""
+    """report on the host; --md, --pooled and --backends files are written here."""
     options = _report_parser(argparse.ArgumentParser(prog="ab.py remote report")).parse_args(rest)
     common = [*([options.run] if options.run else []), *(["--passes", options.passes] if options.passes else [])]
-    for flag, target in (("--md", options.md), ("--pooled", options.pooled)):
+    for flag, target in (("--md", options.md), ("--pooled", options.pooled), ("--backends", options.backends)):
         if target:
             result = _ssh(args.host, args.remote_repo, ["report", *common, flag, "-"], capture=True)
             if result.returncode:
@@ -2028,7 +2039,7 @@ def cmd_remote_report(args: argparse.Namespace, rest: list[str]) -> None:
             Path(target).write_text(result.stdout)
             if not options.brief:
                 print(f"wrote {target}")
-    if options.brief or not (options.md or options.pooled):
+    if options.brief or not (options.md or options.pooled or options.backends):
         _remote(args.host, args.remote_repo, ["report", *common, "--brief"], "report again")
 
 
