@@ -39,7 +39,7 @@ the codes'.
 | 10 | the window | `k` 1: the state handed on every symbol | keeps the step one symbol and the certificate fast; a chunked step is another capacity question | design choice |
 | 11 | the data | every example ends in a final zero window, whose answer needs the state | without it a one-column step passes on the column alone | imposed rule |
 | 12 | the state input | the state reaches every block (`P c` before each) | W11's window | design choice |
-| 13 | training control | stop at the first certified step | training past a proof destroys it (E8b) | imposed rule |
+| 13 | training control | stop at the first step whose snapped machine answers right within the state bound (D35, from the panel on; before it, the first certified step) | training past a proof destroys it (E8b); the answers-only stop kept every certificate when the bound is tight, and fails fast when it isn't (the state-formation workplan's re-reading) | imposed rule |
 | 14 | the proof | every state reachable and every pair told apart within the check; near ties branched | sampled tests overstate (networks passing 328,000 cases provably wrong) | imposed rule |
 | 15 | the crucible (option 1, D26) | its lengths (to the warm-up's cap, 8) reach every state and tell every pair apart: the deepest state's depth plus Chow's `k` at most the cap | on every machine backdrop at most 7 (move-to-front-5: 4 + 3); division unread (state-formation-workplan.md, the review's re-reading) | imposed rule (2026-10-21) |
 
