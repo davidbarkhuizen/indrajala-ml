@@ -966,6 +966,41 @@ runs end (the header's rule).
   begun at 16:30. Its epochs take about 52 s on `pyramidon` (three at once), so the budget runs to about
   noon on 2026-10-21.
 
+## Readings: the coupling probe's preview and the moving material (2026-10-21, 15:15; before D38's data)
+
+Two readings of existing data, the quasi-static crucible's saved step networks (4a'''', seeds 1, 3,
+4, 6, 7; seed 2 certified in the heat), while the panel's timing ran; written before the coupling
+probe's (D38) data (its runs launch at 19:00). Data and script in
+data/window-recurrent/state-formation/option1/readings-2026-10-21/.
+
+- **The coupling probe's preview: existing data can't separate the coupling from the cooling.** At
+  each run's last step at coupling 0 its codes hadn't reached their final groups (seed 4 [2, 7]
+  against [8, 8], seed 1 [7, 2], seed 3 [2, 3] against [4, 6], seed 6 [5, 6]); D25 starts the
+  coupling at the melting point, where the splits begin, so the two move together by design. Through
+  the hold and the cool at coupling 0 the snapped machine is at chance (snapped answers 0.43-0.49 at
+  length 8, joint separation at 16 0.23-0.31 against 0.20: the codes melted); it improves only as
+  coupling and splits advance together, and certifies at couplings 0.12-0.84. **One weak clue:** seed 7
+  reached its final groups ([3, 4]) at step 59, coupling 0.02, and its snapped machine stayed near
+  chance through step 64 (coupling 0.08, answers 0.54 at length 8), exact by 67 (0.12): the right
+  groups alone weren't the machine; the coupling's shaping, or more training, completed it. The
+  completion is abrupt in seeds 3 and 7 (about 0.6 to exact in 3 steps), gradual in 1, 4, 6 (20-50
+  steps). So D38 is the only test; this reading leans, weakly, against its registered expectation
+  (at least 6 of 8 at cap 0). `coupling_preview.py` (snapped answers read uncoupled, `mf.snapped_answers`,
+  and `state-separation` at length 16, at about a dozen steps a run).
+- **The splits come early because the material moves (D32's open item, answered for S3).** The
+  melting curve (D21) re-measured with `melting-curve --step 8` on later step networks tracks
+  training's splits; the warm-up's curve doesn't. Seed 4: the warm-up's curve puts factor 0's full
+  split (8 groups) at T 0.015 and factor 1's never; on step 50's network 0.79 and 0.77, on step 69's
+  0.50 and 1.74, where training reached 8 groups (step 69) at 1.05 and 0.63. Seed 7: training's final
+  3 groups in factor 0 at T 3.58 (step 56), the curve on step 59's network 3.58 (the warm-up's 1.22);
+  factor 1's 4 groups at 1.72 in training, 1.1 on step 59's network. So the curve on the current
+  network is within 0-1 octave of training (about 5 of the 6 octaves removed); the remaining octave
+  or less is the thermal noise or the curve's own lag (critical slowing, D21). As training sharpens
+  the states into clusters, their splits move hotter. **Bearing:** the coupling window (D25, D30) and
+  the adaptive cool's step are tied to a curve measured once, on a material that moves; if the
+  coupling survives D38, its window would be read from a curve re-measured as the cool runs (seconds
+  a curve: 2-8 s here). Not a remedy chosen: a design note for after D38 and the panel.
+
 ## Findings: stage 4a'''s S3 arm, the handover with no curriculum (2026-10-21, read 13:40)
 
 `probe-4a3.sh` (resumed at 3ac2ada) on `pyramidon`, word-problem-s3 seed 0 under each shape, 2026-10-20
