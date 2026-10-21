@@ -28,7 +28,7 @@ the codes'.
 | # | Where it acts | Requirement | Why, and the evidence | Status |
 | --- | --- | --- | --- | --- |
 | 1 | the snap | joint codes `m = prod m_g` at least the target's minimal states `q`; a surplus of 3-5x | fewer can't represent it (E7: 32 codes for 49 states, 20 runs that couldn't work) | imposed rule |
-| 2 | the training data | longest length `L >= m + q - 1` (the exclusion bound) | below it a wrong machine fits every case (E8: 37 of 40 memorised); with an unknown target a state bound stands in for `q` | imposed rule |
+| 2 | the training data | longest length `L >= m + q - 1` (the exclusion bound) | below it a wrong machine fits every case (E8: 37 of 40 memorised); with an unknown target a state bound stands in for `q`; a property of the config: a run certified before reaching it reports its trained length (D42) | imposed rule |
 | 3 | the residual stream | width `D` enough for every consumer at once | division 13: 0 of 6 at 16, 3 of 6 at 22, 5 of 6 at 32; at 16 five of L3's six failures had ambiguous codes (20-135 pairs per code) and one an exact state whose answers its features couldn't separate; the base is now 32 | measured (2026-10-19) |
 | 4 | attention, per consumer | splitting the stream adds no capacity; each consumer keeps enough heads and width | a single-head branch per consumer at 16: B1 1 of 6 (W2, width alone at its size, 3 of 6); harm on S4 (B3, 0 of 6 against 4 of 6, p 0.030); not adopted | measured (2026-10-19) |
 | 5 | the output layer | the answers linearly separable on the stream's features | the layer is linear; no linear readout of L3's 16 features fixed its last 1% (the separability check) | measured |

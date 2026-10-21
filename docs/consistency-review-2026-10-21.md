@@ -11,7 +11,8 @@ probes' headers (`~/code/probe-d33.sh`, `probe-d34.sh`, `probe-d38.sh`), the har
 (`~/code/indrajala-papers/state-formation-status.tex`). The adaptive cool's existence probe (D33's
 probe) and the handover probe's S3 arm (4a'') were still running, and the coupling probe (D38)
 waiting for 19:00. Nothing here is planned work: items 1-6 go to the panel's registration or to a
-decision; the stale statements (item 9) are corrected in the same PRs.
+decision; the stale statements (item 9) are corrected in the same PRs. **Items 1-8 settled the same afternoon
+as D40-D45 (the workplan's "The consistency review settled").**
 
 ## Rules the programme states, against what it does
 
