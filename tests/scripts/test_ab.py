@@ -277,6 +277,20 @@ def test_pooled_report_of_an_aa_pools_every_pass(toy_repo: Path, tmp_path: Path)
     assert "| steady (control) | 1.001 (1.000-1.002) | 1.001, 1.001, 1.001, 1.001 | 0.0% |" in lines
 
 
+def test_backend_ratios_pair_each_cases_crate_and_numpy_rows_worst_first() -> None:
+    def row(case: str, value: float) -> ab.RowStats:
+        return ab.RowStats("per call", case, "µs", False, [[value, value]], [[value]])
+
+    rows = [
+        row("a / rust", 10.0),
+        row("a / numpy", 5.0),
+        row("b / rust", 1.0),
+        row("b / numpy", 4.0),
+        row("c / rust", 3.0),
+    ]
+    assert ab.backend_ratios(rows) == [("a", "per call", 10.0, 5.0), ("b", "per call", 1.0, 4.0)]
+
+
 def test_pooled_report_refuses_an_ab() -> None:
     with pytest.raises(ab.AbError, match="is for an A/A"):
         ab.pooled_report(ab.report_data(FIXTURES / "pr480"))
