@@ -232,6 +232,14 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         """
         self.recurrence_layer.set_couplings(couplings)
 
+    def set_straight(self, straight: bool) -> None:
+        """
+        Every soft factor's gradient to its cell straight through, `dq` and the commitment's (the state
+        formation workplan's D51: as the temperature falls, the soft path's gradient becomes the hard
+        snap's); its codes' gradients as without it. Training state, as the temperatures: not saved.
+        """
+        self.recurrence_layer.set_straight(straight)
+
     def consolidate(self, consolidation: Consolidation) -> None:
         """
         From the next training step on, a state snapped to a duplicate joint code is held by the
@@ -654,6 +662,7 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
             temperatures=recurrence.temperatures,
             continuous=recurrence.continuous if any(recurrence.continuous) else None,
             couplings=recurrence.couplings if min(recurrence.couplings) < 1.0 else None,
+            straight=recurrence.straight,
         )
         recurrence.first_state_backward(dC, weight)
 

@@ -287,6 +287,48 @@ def test_soft_trainings_program_is_the_rust_per_layer_path_by_bits(recurrence: s
             assert bits(x) == bits(y)
 
 
+def _straight_soft(network: Any) -> None:
+    # every snapped factor soft, coupled below 1, its gradient straight through (the workplan's D51)
+    network.set_temperatures([None if f.codes is None else 0.75 for f in network.recurrence.factors])
+    network.set_couplings(_couplings(network))
+    network.set_straight(True)
+
+
+@pytest.mark.usefixtures("crate_exp_attention", "crate_exp_parts")
+@pytest.mark.parametrize("recurrence", RECURRENCES)
+def test_straight_soft_coupled_training_has_numpys(recurrence: str):
+    rust, numpy = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
+    for network in (rust, numpy):
+        _straight_soft(network)
+    X, labels = _batch(3, examples=4)
+    rust.rng, numpy.rng = RUST.default_rng(5), NUMPY.default_rng(5)
+    numpy._accumulate_gradients(X, numpy._target_batch_array(labels))
+    rust._accumulate_gradients(RUST.matrix(X.tolist()), rust._target_batch_array(labels))
+    expected = [tuple(layer.gradients()) for layer in [*numpy.layers, *numpy.parts] if hasattr(layer, "gradients")]
+    actual = [tuple(layer.gradients()) for layer in [*rust.layers, *rust.parts] if hasattr(layer, "gradients")]
+    _assert_close(expected, actual, 1e-10)
+
+
+@pytest.mark.parametrize("recurrence", RECURRENCES)
+def test_straight_soft_coupled_trainings_program_is_the_rust_per_layer_path_by_bits(recurrence: str):
+    rust, _ = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
+    per_layer, _ = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
+    for network in (rust, per_layer):
+        _straight_soft(network)
+    X, labels = _batch(3, examples=4)
+    rust.rng, per_layer.rng = RUST.default_rng(5), RUST.default_rng(5)
+    X_rust = RUST.matrix(X.tolist())
+    rust._accumulate_gradients(X_rust, rust._target_batch_array(labels))
+    per_layer.per_layer_gradients(X_rust, per_layer._target_batch_array(labels))
+    for a, b in zip(
+        [layer for layer in [*rust.layers, *rust.parts] if hasattr(layer, "gradients")],
+        [layer for layer in [*per_layer.layers, *per_layer.parts] if hasattr(layer, "gradients")],
+        strict=True,
+    ):
+        for x, y in zip(a.gradients(), b.gradients(), strict=True):
+            assert bits(x) == bits(y)
+
+
 def test_a_recomputed_window_draws_its_dropout_masks_again():
     window: list[LayerSpec] = [Embedding(27, 8), Position(), Dropout(0.3), StateInput(), ATTENTION, DIGITS]
     trained = WindowRecurrentRustArrayNetwork.randomized((K,), window, RECURRENCE, SGD(), seed=7)
