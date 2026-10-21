@@ -1560,6 +1560,9 @@ def test_a_crucibles_reading_marks_a_loss_after_every_factor_is_hard():
     assert "lost 10 (cool, coupling 1.00, hard)" in mf.crucible_summary(course)
     assert (course["held"], course["rise"], course["trained"]) == (0, 0.5, None)
     assert mf.crucible_course(rows, run={"cap": 69})["trained"] == 8
+    whole = [{**rows[0], "crucible": None}, *rows[1:]]
+    del whole[0]["crucible"]  # a --whole run's warm-up end logs no crucible (D22)
+    assert mf.crucible_course(whole, run={"cap": 69, "whole": True})["trained"] == 69
 
 
 def test_the_trained_length_is_the_cap_once_whole_or_grown_and_the_crucibles_before():
