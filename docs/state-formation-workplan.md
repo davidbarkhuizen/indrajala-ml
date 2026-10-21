@@ -966,6 +966,29 @@ runs end (the header's rule).
   begun at 16:30. Its epochs take about 52 s on `pyramidon` (three at once), so the budget runs to about
   noon on 2026-10-21.
 
+## Findings: stage 4a'''s S3 arm, the handover with no curriculum (2026-10-21, read 13:40)
+
+`probe-4a3.sh` (resumed at 3ac2ada) on `pyramidon`, word-problem-s3 seed 0 under each shape, 2026-10-20
+13:04 to 2026-10-21 13:26; each run to its 1,440-minute budget (steps 88-97). Read by its header's rule
+(`population` on each log, `state-separation` snapped on convex's step networks around its best).
+Data in data/window-recurrent/state-formation/option1/probe-4a3/s3/; separation in
+`option1/separation/separation.txt`.
+
+- **No certificate in any shape.** The warm-up reached its cap (step 8) at screen 0.75, 8 of 8 codes
+  a factor in use, `d_eff` 6; trained to the cap (69) throughout (`--whole`), the gate absent (D29
+  came later; `held` 0); the coupling's largest rise an epoch 0.006-0.010.
+- **States: met only formally.** Best state shares concave 0.356 (step 17), convex **0.566** (step 12,
+  coupling 0.35), s 0.251 (step 13), each lost within 1-5 steps. Convex's share passes the header's
+  0.5, but its snapped joint nearest-neighbour separation at length 16 is 0.35 at step 12 (chance 0.20;
+  0.23-0.30 at steps 8, 13, 20 and 91) and at chance at 64 throughout (0.17-0.21); the continuous
+  network itself (`--live`, pooled over lengths 4, 16, 64) 0.48-0.52 at steps 8-12, 0.35 at 13. The
+  share comes from short words; no state formed.
+- **So formation, as registered and expected** (the reasoning review: "no curriculum on a group"):
+  the handover never had a state to convert. By the header's rule, convex is the only shape to go
+  forward, and it is already the panel's: D36's `--whole` arm is this cell with D29's gate. Concave
+  and s don't go forward. The arm's reading is the panel's expectation for S3 under `--whole`: the
+  formation failure, unless the gate changes it.
+
 ## Findings: stage 4a''', seeded crystallisation (2026-10-21, read 05:20)
 
 `probe-d26.sh` at f0064cb on `stone`, word-problem-s3 seeds 0-7, 18:05-05:01. Read by its header's rule

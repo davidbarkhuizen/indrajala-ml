@@ -633,7 +633,7 @@ def crucible_course(
     rises = [b - a for before, after in itertools.pairwise(couplings) for a, b in zip(before, after, strict=True)]
     return {
         "warm_up_end": None if start is None else int(start["step"]),
-        "crucible": None if start is None else start["crucible"],
+        "crucible": None if start is None else start.get("crucible"),  # None with --whole (D22)
         "warm_screen": max((float(row["screen"]) for row in warm), default=None),
         "in_use": [] if start is None else [int(f["in_use"]) for f in start["warm_up_end"]],
         "effective_dimension": [] if start is None else [int(f["effective_dimension"]) for f in start["warm_up_end"]],
