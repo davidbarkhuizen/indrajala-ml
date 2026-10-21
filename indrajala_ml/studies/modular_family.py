@@ -719,6 +719,52 @@ def heat_summary(courses: Sequence[Mapping[str, Any] | None]) -> str:
     return "; ".join(factor(g, c) for g, c in enumerate(courses))
 
 
+ANSWERS_LENGTHS = (8, 16, 24, 48)  # a snapped network's answers re-read at these lengths (answers_stop)
+
+
+def snapped_answers(net: Any, encoding: Target, lengths: Sequence[int] = ANSWERS_LENGTHS) -> dict[str, float]:
+    """
+    A saved network's certified answer's accuracy at each length (as long_accuracy), read uncoupled: a
+    loaded network carries no coupling, so these are its snapped machine's answers, not a soft run's.
+    """
+    result: dict[str, float] = {}
+    for n in lengths:
+        tally = accuracy(net, encoding, windows_drawn(encoding, n, Settings().cases, f"answers-stop-{n}"))
+        q = [tally[k] for k in tally if encoding.certified(k)]
+        result[str(n)] = round(sum(c for c, _ in q) / sum(a for _, a in q), 4)
+    return result
+
+
+def answers_stop(
+    rows: Sequence[Mapping[str, Any]],
+    bound: float,
+    snapped: Callable[[int], Mapping[str, float] | None] | None = None,
+) -> dict[str, Any]:
+    """
+    An answers-only stop, read offline from a run's log.jsonl (the reasoning review's item 1): the first
+    step whose answers are all right (the step's own and the long lengths') and whose machine, read off
+    and minimised, has at most `bound` states (a state bound, as discovery supplies). The certificate is
+    read only to judge the stop: "kept" (the stop's network certified), "false-stop" (an uncertified
+    network, in a run that certified later), "false-discovery" (in a run that never certified),
+    "missed" (the run certified before the rule passed) or "silent" (neither). `snapped(step)` replaces
+    the logged answers with a saved network's (snapped_answers) for runs whose logged answers are a
+    soft network's (option 1's coupling); None where the step's network wasn't saved.
+    """
+    ends = [row for row in rows if "end" in row and "certified" in row]
+    certified = next((int(row["step"]) for row in ends if row["certified"]), None)
+    for row in ends:
+        if row["minimised"] <= bound:
+            answers = (
+                {**row.get("accuracy", {}), **row.get("long", {})} if snapped is None else snapped(int(row["step"]))
+            )
+            if answers and all(v == 1.0 for v in answers.values()):
+                verdict = "kept" if row["certified"] else "false-stop" if certified is not None else "false-discovery"
+                return {"verdict": verdict, "stop": int(row["step"]), "certified": certified}
+        if row["certified"]:
+            return {"verdict": "missed", "stop": None, "certified": certified}
+    return {"verdict": "silent", "stop": None, "certified": certified}
+
+
 DROP_FROM, DROP_BY = 0.9, 0.3
 RECOVERED = 0.05  # a drop recovered: a later point's worst answer back within this of its level before
 
