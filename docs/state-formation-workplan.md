@@ -443,6 +443,25 @@ same runs, and the follow-up reruns the six others.
     one transition hands over gradually. Cons: below a single transition the window's end isn't the
     material's; 3 a number.
   - (b) Remeasure the curve until it shows a cascade. Cons: the material is what it is.
+- **D31. After option 1, the panel diagnoses before any next option (the owner, 2026-10-21).** Once
+  option 1 (the quasi-static crucible) is decided, options 2-4 go on the shelf, not in turn as D1 had
+  them. The panel (4b) runs the method against the full backdrop to find the failing cases; those are
+  analysed in detail for a common failure mechanism; only then is a remedy chosen, by its fit to that
+  mechanism, from the shelf or elsewhere.
+  - (a) *Chosen.* Pros: a remedy picked for a measured mechanism, not by the review's order (the lesson
+    of formation against conversion: remedies judged on runs failing at the other problem); the
+    instruments exist (`population`, `state-separation`, `approximations`, `breaks`); no option built
+    for a wall not yet met. Cons: options 2-4 untested for now; a mechanism the diagnosis can't name
+    leaves no ranking.
+  - (b) Options 2-4 in turn (D1). Cons: each tested on whatever fails, fitting or not; three builds
+    before the panel's failures are read.
+  - Refinements: the diagnosis presumes no mechanism (bottleneck 2 likely, not given): each failing run
+    is classified by formation (`state-separation`, continuous), conversion (snapped against
+    continuous), and extra codes (`breaks`, codes standing for several states); the shelf records each
+    option's wall (option 2, noise: thin margins and near ties; option 3, the rotation trick: windows of
+    different states sharing a code, bottleneck 2's own; option 4, FSQ factors: a codebook that
+    collapses), so the diagnosis can call one down; the panel adds fresh word-problem-s3 seeds (8-15),
+    since D28-D30 were designed from seeds 1-7's failures.
 - **4a''''. The quasi-static crucible probe:** word-problem-s3 seeds 1, 2, 3, 4, 6, 7, the cell and
   profile of 4a''' with D28-D30, on `stone` from about 19:30 (13 workers on its 12 cores until 4a''' ends);
   registered in `probe-d29.sh`'s header before its data. Seeds 0 and 5 carried over from 4a''' (the
