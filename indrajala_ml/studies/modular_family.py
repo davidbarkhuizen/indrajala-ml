@@ -576,14 +576,31 @@ def _anneal_at(rows: Sequence[Mapping[str, Any]], row: Mapping[str, Any]) -> Map
     return next((r["anneal"] for r in reversed(rows[: at + 1]) if "anneal" in r), none)
 
 
-def crucible_course(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> dict[str, Any]:
+def trained_length(rows: Sequence[Mapping[str, Any]], run: Mapping[str, Any], step: int) -> int:
+    """
+    The longest length a run had trained on by `step` (the state formation workplan's D42), from its
+    log and its checkpoint's `run` record: the cap with `--whole` or once a crucible grew (D26); a
+    crucible's length after its warm-up; else the curriculum's step.
+    """
+    grown = next((int(row["step"]) for row in rows if row.get("crucible") == "grown"), None)
+    if run.get("whole") or (grown is not None and grown <= step):
+        return int(run["cap"])
+    fixed = next((row for row in rows if "warm_up_end" in row and "crucible" in row), None)
+    return int(fixed["crucible"]) if fixed is not None and step > fixed["step"] else step
+
+
+def crucible_course(
+    rows: Sequence[Mapping[str, Any]], drop: float = 0.5, run: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
     """
     A seeded crystallisation's run (D26) from its log.jsonl, for a population's reading (D27): the
     warm-up's end (its step, the crucible's length, each factor's codes in use, effective dimension,
     melting point and transitions there; the warm-up's best screen); the crucible's best state share
     in the cool (the heat's are the warm-up's codes, which the melt erases), its step and coupling; the first diagnosis after it whose codes in use fall below `drop` of the
     best's (the loss: its step, phase, coupling, mean temperature); the first grown step; how it ended
-    (outcome's). Observables to set against a population's outcomes, early ones first.
+    (outcome's). Observables to set against a population's outcomes, early ones first. Up to the
+    end: the epochs D29's gate held, the largest rise of a factor's coupling in an epoch (D34, D45),
+    and with the checkpoint's `run` record the longest length trained (D42).
     """
     start = next((row for row in rows if "warm_up_end" in row), None)
     warm = [row for row in rows if row.get("warm") and "screen" in row]
@@ -611,6 +628,9 @@ def crucible_course(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> dic
         }
 
     end = outcome(rows, drop)
+    profile = [row["anneal"] for row in rows if "anneal" in row and row["step"] <= end.step]
+    couplings = [a["coupling"] for a in profile if "coupling" in a]
+    rises = [b - a for before, after in itertools.pairwise(couplings) for a, b in zip(before, after, strict=True)]
     return {
         "warm_up_end": None if start is None else int(start["step"]),
         "crucible": None if start is None else start["crucible"],
@@ -628,6 +648,9 @@ def crucible_course(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> dic
         "end": end.end,
         "step": end.step,
         "minutes": end.minutes,
+        "held": max((int(a.get("held", 0)) for a in profile), default=0),
+        "rise": round(max(rises, default=0.0), 4),
+        "trained": None if run is None else trained_length(rows, run, end.step),
     }
 
 
@@ -651,7 +674,8 @@ def crucible_summary(course: Mapping[str, Any]) -> str:
         f"warm-up to {course['warm_up_end']} (crucible {course['crucible']}, screen {course['warm_screen']}, "
         f"in use {course['in_use']}, d_eff {course['effective_dimension']}, melting {melting}, "
         f"transitions {course['transitions']}); best share {best}; lost {lost}; grown {course['grown'] or '-'}; "
-        f"{course['end']} at {course['step']} ({course['minutes']} min)"
+        f"{course['end']} at {course['step']} ({course['minutes']} min); held {course['held']}, "
+        f"coupling's largest rise {course['rise']}, trained to {course['trained'] or '?'}"
     )
 
 

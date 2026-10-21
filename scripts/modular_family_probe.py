@@ -1458,7 +1458,9 @@ def main(argv: list[str]) -> int:
         return 0
     if args.command == "population":
         for path in args.logs:
-            course = mf.crucible_course([json.loads(line) for line in path.read_text().splitlines()])
+            checkpoint = path.parent / "checkpoint.json"  # its run record, for the trained length (D42)
+            run = json.loads(checkpoint.read_text())["run"] if checkpoint.exists() else None
+            course = mf.crucible_course([json.loads(line) for line in path.read_text().splitlines()], run=run)
             print(f"{path}: {mf.crucible_summary(course)}", flush=True)
         return 0
     if args.command == "answers-stop":
