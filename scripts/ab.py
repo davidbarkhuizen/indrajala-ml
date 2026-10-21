@@ -1244,6 +1244,16 @@ def run_files(run_dir: Path, manifest: dict[str, Any]) -> list[str]:
     return names
 
 
+def recorded_profile(manifest: dict[str, Any], relative: str) -> Path:
+    """
+    The profile a run's machine check read: in the run's own checkout, or, when the run was copied
+    here from a machine with no archive clone (litshe), the same file in this checkout, every
+    checkout carrying docs/machine_profiles/; the caller still checks its identity against the run's.
+    """
+    path = Path(manifest["repo"]) / relative
+    return path if path.exists() else REPO / relative
+
+
 def check_for_archive(run_dir: Path, profile: str | None, reason: str | None) -> ArchivedRun:
     """A run ready to archive: finished (a failed run needs a reason), only its own files, its
     reports rendered, and its profile either checked by the run or named with --profile."""
@@ -1265,7 +1275,7 @@ def check_for_archive(run_dir: Path, profile: str | None, reason: str | None) ->
         identities = {c["profile_identity"] for c in checks}
         if len(paths) != 1 or len(identities) != 1:
             raise AbError(f"{run_dir.name}: its machine checks name more than one profile")
-        path = Path(manifest["repo"]) / paths.pop()
+        path = recorded_profile(manifest, paths.pop())
         if benchmark_archive.identity_sha256(json.loads(path.read_text())) != identities.pop():
             raise AbError(
                 f"{run_dir.name}: {path.name} was re-recorded with another identity since the run; "
