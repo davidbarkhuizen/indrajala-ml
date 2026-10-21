@@ -508,7 +508,8 @@ same runs, and the follow-up reruns the six others.
   - **`pace` 0.03:** the convex cool's own speed through the cascades it certified with (implied
     `-d ln T sqrt(C)` an epoch, the splits' medians 0.027-0.034 on S3 seeds 4 and 7), so the adaptive arm
     is no faster than convex where the transitions are and faster elsewhere. Pros: one known-good
-    anchor. Cons: mtf-4's reading may move it (read when its run ends, before the existence probe).
+    anchor; mtf-4's cascades agree (0.029-0.037, findings below). Cons: one schedule's speed, not
+    an optimum.
   - **`settle` 10 epochs:** the cap on epochs at a temperature, then a step regardless, sized by the
     epochs measured there (their re-estimation). Pros: bounds a stall (the cold tail) at about the
     exponential's 15 epochs a halving. Cons: a number.
@@ -777,6 +778,30 @@ certified network. Data in data/window-recurrent/state-formation/option1/probe-d
 - **Verdict:** the header's claims met, no refutation; `p` lifted above the bar (4 of 8). By the
   handover's rule, the panel (4b) next, with the quasi-static crucible (4a''' and D28-D30) as option 1's
   candidate, once 4a''' and 4a'' end and are read.
+
+## Findings: D32's understanding step (2026-10-21, read 07:30)
+
+`probe-d32.sh` at 364a09e on `stone`, 05:06-07:12: S3 seeds 4 and 7 (as 4a'''') and mtf-4 seed 3 convex
+(as 4a''), the `thermals` logging only. Read by its header's rule with `heat-capacity` (built for it) on
+each log. Data in data/window-recurrent/state-formation/option1/probe-d32/.
+
+- **Passive: met.** Each run certified at its original step: S3 seed 4 at 123, seed 7 at 67, mtf-4 at
+  104 (126 min); the golden run bit-identical at 364a09e.
+- **The capacity peaks at the splits: met by runs (2 of 3), narrowly; by factors 2 of 6.** The largest
+  capacity within 2 epochs of the largest split: S3 seed 4 factor 0 (1 epoch after), mtf-4 factor 1 (at
+  it); not S3 seed 4 factor 1 (3), seed 7 (9 and 12: it certified mid-cascade, at 3 and 4 groups), mtf-4
+  factor 0 (its peak at the cool's first epoch: its hold left 7 groups, not a full melt).
+- **The shape the step needs holds where the cool passes a cascade:** the capacity sits at 0.01-0.06
+  through the melt (S3), jumps 1.2-2.6 times at nucleation, stays high across the cascade (peaks 0.6-1.0
+  at T 1.4-2.7) and falls to about 0.001 below the last split. Not a spike at one split: a hump over the
+  cascade, so `pace / sqrt(C)` slows the whole cascade. The refutation (flat or monotone) not met.
+- **Noisy epoch to epoch** (11-22 local maxima a factor), hence D33's mean over a temperature's epochs.
+- **`pace` (D33):** the convex cool's implied `-d ln T sqrt(C)` through each cascade, S3 0.027-0.034, mtf-4
+  0.029-0.037: 0.03 stands.
+- **Tools:** `heat-capacity` (each factor's splits and capacity peak); `scripts/profile_page.py`, a
+  run's course as one page (stacked time series of T, capacity, energy, groups, coupling and screen;
+  their overlay rescaled; and each factor's phase diagram, its codes on their principal axis against T
+  from the saved step networks, beside the melting curve).
 
 ## A note on random machines (2026-10-20; a note, not a plan)
 
