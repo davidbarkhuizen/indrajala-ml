@@ -67,6 +67,8 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D32's understanding step | 2026-10-21, 05:06-07:12 | the heat-capacity logging run | `thermals` on three certified runs (`probe-d32.sh`) |
 | D33 | 2026-10-21 | the adaptive cool as built | `--melt-shape adaptive`: the equilibrium test, `T exp(-pace / sqrt(C))`, `pace` 0.03, `settle` 10 |
 | D33's probe | 2026-10-21, from 07:24 | the adaptive cool's existence probe | S3 seeds 0-7, mtf-4 seed 3, a convex control (`probe-d33.sh`) |
+| D34 | 2026-10-21, 08:30 | the bounded handover | `--cool-rise 0.02`: the adaptive step no colder than raises the coupling by 0.02 |
+| D34's probe | 2026-10-21, from noon | the bounded handover's probe | S3 seeds 0, 1, 3-7 under D34 (`probe-d34.sh`) |
 | 4b | registered later | the panel | both arms (D29's crucible, D33's cool) on D11's backdrop and S3 seeds 8-15 |
 
 From earlier plans:
@@ -594,6 +596,25 @@ same runs, and the follow-up reruns the six others.
     step's end or start screened at coupling 1 (logged screens only, and D29's first gate reading);
     fixed (the checkpoint keeps them). No earlier probe's certificate is touched (certificates read the
     snapped network).
+- **D34. The adaptive cool's handover bounded (`--cool-rise 0.02`; from the D33 probe's in-flight
+  reading below, settled 2026-10-21 under the owner's delegation): a step no colder than raises a
+  factor's coupling by 0.02.** D33's step reads the codes' capacity, which falls to about 0.01 below the
+  cascade while the coupling (D25, log-linear in `T`) is still about half way, so the steps there reach
+  the octave cap and the coupling rises up to 0.65 in an epoch; each jump drops the screen, the gate
+  (D29) holds, the network recovers, the next jump drops it again, until the state erodes. The
+  quasi-static crucible's coupling never rose more than 0.02 an epoch (0.009-0.020 on seeds 0, 1, 3, 4,
+  5).
+  - (a) *Chosen.* The bound on the coupling's rise a step, 0.02. Pros: bounds the forward path's change,
+    which is what broke, where it changes (inside the window only: above it and below it the step is
+    D33's); 0.02 the most the 8-of-8 cools used; the cascade's pacing kept; `rise` 0 is D33 exactly
+    (bits unchanged). Cons: slower than D33 below the cascade (about 50 epochs across a full window);
+    a number, from one schedule.
+  - (b) A smaller octave cap (a step at most e.g. 0.1 in ln `T`). Cons: blind to the window's width (a
+    3-octave window and a 10-octave one need different caps); slows the melt's flat top too.
+  - (c) The coupling on its own clock, a fixed rate from the cool's start. Cons: unlinks it from the
+    temperature (the owner's D25: "would that be linked to temperature").
+  - (d) The forward path's response in the capacity (the screen's variance with the energy's). Cons:
+    a new measurement, untested; (a) bounds the same thing directly.
 - **4a''''. The quasi-static crucible probe:** word-problem-s3 seeds 1, 2, 3, 4, 6, 7, the cell and
   profile of 4a''' with D28-D30, on `stone` from about 19:30 (13 workers on its 12 cores until 4a''' ends);
   registered in `probe-d29.sh`'s header before its data. Seeds 0 and 5 carried over from 4a''' (the
@@ -851,6 +872,29 @@ certified network. Data in data/window-recurrent/state-formation/option1/probe-d
   handover's rule, the panel (4b) next, with the quasi-static crucible (4a''' and D28-D30) as option 1's
   candidate, once 4a''' and 4a'' end and are read.
 
+## Readings: the D33 probe, in flight (2026-10-21, 08:15; not a verdict)
+
+`probe-d33.sh` at 9acc6be on `stone` from 07:24 (`population` on the logs, fixed at 17acb63 for a loss
+after every factor is hard). Its launcher was stopped at 08:18 with seeds 6 and 7 unstarted (5 at once,
+the running five at their 690-minute budgets till about 19:00); `probe-d33-rest.sh` (the same flags)
+started seed 6 then and seed 7 at 18:00, a schedule change only.
+
+- **Certified: S3 seeds 0, 2, 4** (steps 71, 13, 104; 11.5, 2.4, 21.5 min; quasi-static 4a'''/4a''''
+  85, 13, 123). Seed 2 in the heat (as 4a''''), so it reads neither cool.
+- **Lost in the cool: S3 seeds 1, 3, 5,** each after forming the state (best share 0.73, 0.90, 0.99 at
+  steps 69, 60, 80; codes in use halved at 73, 65, 89), then grown; the same seeds certified
+  quasi-static. **mtf-4 seed 3:** adaptive best 0.925 at 90, grown at 99; convex control best 0.929
+  at 114, still cooling.
+- **The mechanism (seed 3, epoch by epoch):** below the cascade (groups 8, 8 by step 61) the capacity
+  fell to 0.01-0.02, the step `pace / sqrt(C)` rose to 0.14-0.27 in ln `T` (0.04 through the cascade)
+  and the coupling, at 0.5-0.6, rose in jumps (0.59, 0.64, 0.68, 0.75); after each the screen fell to
+  0.54-0.85, the gate held 1-18 epochs, recovered to 0.99, and the next step dropped it again; share
+  0.90 to 0.30 in five steps.
+- **Across seeds:** the largest coupling rise in an epoch, quasi-static against adaptive: seed 1 0.013
+  and 0.28, seed 3 0.014 and 0.25, seed 5 0.015 and 0.65; certified seed 0 0.020 and 0.055 (it
+  certified as its steps grew), seed 4 0.009 and 0.56 (it survived them). Rises of 0.03 or more: none
+  quasi-static, 7-15 adaptive. An early observable before every loss: D34.
+
 ## Findings: D32's understanding step (2026-10-21, read 07:30)
 
 `probe-d32.sh` at 364a09e on `stone`, 05:06-07:12: S3 seeds 4 and 7 (as 4a'''') and mtf-4 seed 3 convex
@@ -933,6 +977,8 @@ a random machine would just need a very slow cool.**
      (`probe-d32.sh`), read with `heat-capacity`; then D33's build.
    - **D33's existence probe:** the adaptive crucible on S3 seeds 0-7 and mtf-4 seed 3 (with a convex
      crucible control on mtf-4), registered in `probe-d33.sh`.
+   - **D34's probe:** the bounded handover on S3 seeds 0, 1, 3-7 (seed 2 carried over), registered in
+     `probe-d34.sh`, on `pyramidon` once 4a'''s S3 arm ends.
   - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.

@@ -1169,6 +1169,17 @@ def test_the_adaptive_cool_steps_at_equilibrium_or_its_cap_by_its_heat_capacity(
     flat.record([(1.0, 1e-8)])
     flat.advance(warm_up)
     assert flat.temperature == [0.5]
+    bounded = mf.WarmUp(shape="adaptive", pace=0.1, settle=1, handover=True, rise=0.02)
+    melting, final = 2.0, 2.0 * 2.0**-4  # a 4-octave window: 0.02 of it is 0.08 of an octave
+    for t, share in ((4.0, 0.0), (1.0, 0.25)):  # above the window: from its top; within it: from the coupling's
+        edge = bounded.floor(t, melting, final)
+        assert bounded.coupling(100, edge, melting, final) == pytest.approx(share + 0.02)  # in the cool
+        steep = mf.Cooling.start([t])
+        steep.record([(1.0, 1e-8)])  # a flat capacity: an octave unbounded, the coupling's bound here
+        steep.advance(bounded, [melting], [final])
+        assert steep.temperature == pytest.approx([max(edge, t / 2)])
+    assert bounded.floor(final * 1.01, melting, final) == 0.0  # the window's end within the bound
+    assert mf.WarmUp(handover=True).floor(1.0, melting, final) == 0.0  # unbounded without rise
     assert mf.WarmUp(shape="adaptive", heat=2, hold=3).temperature(9, 4.0) == 4.0  # Cooling's from the cool on
     assert mf.WarmUp(shape="adaptive", heat=2, hold=3).reads_hardness(5)
 

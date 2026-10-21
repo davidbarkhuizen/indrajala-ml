@@ -1351,6 +1351,7 @@ class WarmUp:
     pace: float = 0.03
     settle: int = 10
     within: float = 0.75
+    rise: float = 0.0
 
     def holds(self, n: int, screen: float, level: float) -> bool:
         """
@@ -1372,6 +1373,18 @@ class WarmUp:
             return 0.0
         share = math.log(melting / temperature) / math.log(melting / final)
         return min(max(share, 0.0), 1.0)
+
+    def floor(self, temperature: float, melting: float, final: float) -> float:
+        """
+        The coldest temperature the adaptive cool may step to from `temperature` (D34): the one where the
+        coupling (log-linear in T, D25) has risen by `rise` at most; 0 (no bound) without `rise` or the
+        handover, or where that rise would reach the window's end.
+        """
+        if not (self.rise > 0 and self.handover):
+            return 0.0
+        width = math.log(melting / final)
+        share = min(max(math.log(melting / temperature) / width, 0.0), 1.0) + self.rise
+        return melting * math.exp(-share * width) if share < 1.0 else 0.0
 
     def ends(self, step: int, first: int, best: float, distinct: Sequence[int], counts: Sequence[int]) -> bool:
         """Whether the warm-up ends at this step's end (`distinct`, `counts`: each snapped factor's states and codes)."""
@@ -1432,12 +1445,13 @@ class Cooling:
         """The cool at its start, each factor at its T_hot."""
         return Cooling(list(hot), [[] for _ in hot], [[] for _ in hot], [None] * len(hot))
 
-    def advance(self, warm_up: WarmUp) -> None:
+    def advance(self, warm_up: WarmUp, melting: Sequence[float] = (), final: Sequence[float] = ()) -> None:
         """
         Each factor's temperature for the next epoch (D33): it steps once the epochs at it pass the
         equilibrium test or number `settle`, to `T exp(-pace / sqrt(C))` (Huang et al.'s `T exp(-lambda
-        T / sigma)`, sigma `T sqrt(C)`, C the capacity's mean at T), at most an octave; the energy
-        predicted there `E - C dT`. The test: the first epoch's energy within `within` sigma of its
+        T / sigma)`, sigma `T sqrt(C)`, C the capacity's mean at T), at most an octave, and no colder
+        than WarmUp.floor in its coupling window (`melting`, `final`: D34); the energy predicted there
+        `E - C dT`. The test: the first epoch's energy within `within` sigma of its
         prediction, or a later epoch's within `within` sigma of the epoch's before (stationary at T).
         """
         for g, (t, energies, capacities) in enumerate(
@@ -1454,6 +1468,8 @@ class Cooling:
                 continue
             ratio = math.exp(-warm_up.pace / math.sqrt(capacity)) if capacity > 0 else 0.0
             cooler = t * max(ratio, 0.5)
+            if g < len(melting):
+                cooler = max(cooler, warm_up.floor(t, melting[g], final[g]))
             self.temperature[g] = cooler
             self.predicted[g] = last - capacity * (t - cooler)
             self.energies[g], self.capacities[g] = [], []
@@ -2087,7 +2103,7 @@ def run(
                 )
                 if cooling is not None and warm_up is not None and phase == "cool":
                     if not holding:  # D33: the adaptive cool steps from its measurements; D29's gate holds it too
-                        cooling.advance(warm_up)
+                        cooling.advance(warm_up, melting_points, last_splits)
                     each = list(cooling.temperature)
                 soft = [
                     t if s and level == 0 and reading else None

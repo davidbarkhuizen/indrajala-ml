@@ -1183,6 +1183,13 @@ def main(argv: list[str]) -> int:
     run.add_argument("--cool-pace", type=float, default=mf.WarmUp.pace, metavar="LAMBDA")
     run.add_argument("--cool-settle", type=int, default=mf.WarmUp.settle, metavar="EPOCHS")
     run.add_argument("--cool-within", type=float, default=mf.WarmUp.within, metavar="SIGMAS")
+    run.add_argument(
+        "--cool-rise",
+        type=float,
+        default=mf.WarmUp.rise,
+        metavar="SHARE",
+        help="the adaptive cool's step no larger than raises a factor's coupling by SHARE (D34; 0: unbounded)",
+    )
     run.add_argument("--melt-cool", type=int, default=mf.WarmUp.cool, metavar="EPOCHS")
     run.add_argument("--melt-octaves", type=float, default=mf.WarmUp.octaves, metavar="OCTAVES")
     run.add_argument(
@@ -1494,6 +1501,7 @@ def main(argv: list[str]) -> int:
             args.cool_pace,
             args.cool_settle,
             args.cool_within,
+            args.cool_rise,
         )
         if args.warm_up
         else None
