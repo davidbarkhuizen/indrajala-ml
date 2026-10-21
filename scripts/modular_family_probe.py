@@ -1156,6 +1156,19 @@ def main(argv: list[str]) -> int:
         "lengths through the whole profile, then, every factor hard, the whole distribution's (a seed, then growth)",
     )
     run.add_argument(
+        "--state-bound",
+        type=int,
+        help="the state formation workplan's D35: stop at the first step whose snapped machine answers right "
+        "with at most this many states, minimised (the certificate only judging); else at the first certificate",
+    )
+    run.add_argument(
+        "--coupling-cap",
+        type=float,
+        default=1.0,
+        help="the state formation workplan's D38: every factor's coupling capped (0: the codes never in the "
+        "forward path)",
+    )
+    run.add_argument(
         "--warm-up",
         action="store_true",
         help="the state formation workplan's option 1 (with --anneal): every snapped factor continuous, its "
@@ -1588,6 +1601,8 @@ def main(argv: list[str]) -> int:
             warm_up=warm_up,
             whole=args.whole,
             crucible=args.crucible,
+            state_bound=args.state_bound,
+            coupling_cap=args.coupling_cap,
         )
 
     for name in names:

@@ -563,7 +563,35 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, handover=True, shape="adaptive", settle=2),
         "crucible": True,
     },
+    "capped": {  # D38's coupling cap and D35's answers-only stop: the cap and the stop's readings resumed
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1, handover=True),
+        "crucible": True,
+        "coupling_cap": 0.0,
+        "state_bound": 25,
+    },
 }
+
+
+def test_the_coupling_cap_holds_every_coupling_and_the_answers_stop_judges_every_steps_end(tmp_path: Path):
+    config = dict(RESUMABLE["capped"])
+    encoding, settings = config.pop("encoding"), config.pop("settings")
+    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path, settings, **config)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    couplings = [c for r in rows if "coupling" in r.get("anneal", {}) for c in r["anneal"]["coupling"]]
+    assert couplings and all(c == 0.0 for c in couplings)  # every phase, hard factors' too
+    ends = [r for r in rows if "end" in r]
+    assert ends and all("answers_stop" in r for r in ends)
+    judged = [r["answers_stop"] for r in ends if not r["answers_stop"].get("warm")]
+    assert judged and all(set(j["answers"]) == {"8", "16", "24", "48"} for j in judged)
+    passed = [r for r in ends if r["answers_stop"]["passed"]]
+    assert all(isinstance(r["answers_stop"]["strict"], bool) for r in passed)
+    assert len(list(tmp_path.glob("answers-stop-step-*.network.json"))) == len(passed) <= 1  # the stop ends it
+    assert not passed or passed[0] is ends[-1]
 
 
 class Stop(Exception):
@@ -644,6 +672,9 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "adaptive":  # the cool stepped more than once, part way through a temperature at some stop
         cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
         assert len({a["temperature"][0] for a in cool}) >= 3 and any(a["at"] == [2] for a in cool)
+    elif kind == "capped":  # every coupling capped, every step's end judged by the answers-only stop
+        couplings = [c for r in whole[0] if "coupling" in r.get("anneal", {}) for c in r["anneal"]["coupling"]]
+        assert couplings and set(couplings) == {0.0} and all("answers_stop" in r for r in whole[0] if "end" in r)
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":

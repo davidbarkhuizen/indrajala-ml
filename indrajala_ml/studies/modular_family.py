@@ -765,6 +765,36 @@ def answers_stop(
     return {"verdict": "silent", "stop": None, "certified": certified}
 
 
+def answers_stopping(
+    net: Any,
+    encoding: Target,
+    task: wt.Task,
+    certificate: wc.Certificate,
+    bound: int,
+    coupled: Sequence[float],
+    warm: bool,
+) -> tuple[bool, dict[str, Any]]:
+    """
+    D35's stop at a step's end: whether the run stops (the snapped machine's answers all right at
+    ANSWERS_LENGTHS and its minimised machine within `bound` states, never during the warm-up, whose
+    factors run continuous), and the row's `answers_stop` (the answers, the verdict and, on a stop,
+    the strict certificate at snap ratio 1.0 beside the step's own). A coupled network's answers are
+    read with every coupling at 1 (its snapped machine's), then its couplings restored.
+    """
+    if warm:
+        return False, {"answers_stop": {"passed": False, "warm": True}}
+    if coupled:
+        net.set_couplings([1.0] * len(coupled))
+    answers = snapped_answers(net, encoding)
+    if coupled:
+        net.set_couplings(list(coupled))
+    passed = len(certificate.minimised) <= bound and all(v == 1.0 for v in answers.values())
+    row: dict[str, Any] = {"answers": answers, "passed": passed}
+    if passed:
+        row["strict"] = wc.certify(QueryMachine(net, encoding, 0), task, snap_ratio=1.0).certified
+    return passed, {"answers_stop": row}
+
+
 DROP_FROM, DROP_BY = 0.9, 0.3
 RECOVERED = 0.05  # a drop recovered: a later point's worst answer back within this of its level before
 
@@ -1721,6 +1751,8 @@ def _run_identity(
     warm_up: WarmUp | None = None,
     whole: bool = False,
     crucible: bool = False,
+    state_bound: int | None = None,
+    coupling_cap: float = 1.0,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -1751,6 +1783,8 @@ def _run_identity(
         **({"warm_up": repr(warm_up)} if warm_up is not None else {}),
         **({"whole": True} if whole else {}),
         **({"crucible": True} if crucible else {}),
+        **({"state_bound": state_bound} if state_bound is not None else {}),
+        **({"coupling_cap": coupling_cap} if coupling_cap < 1.0 else {}),
     }
 
 
@@ -1798,6 +1832,8 @@ def run(
     warm_up: WarmUp | None = None,
     whole: bool = False,
     crucible: bool = False,
+    state_bound: int | None = None,
+    coupling_cap: float = 1.0,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -1843,6 +1879,13 @@ def run(
     last step's lengths, so the whole profile crystallises the state the curriculum formed on one
     material; once every snapped factor is hard, the seed grows: every block from the next on is the
     whole distribution's (as `whole`), its codes hard, the forward path coupled to them.
+    `state_bound` N (the state formation workplan's D35) stops the run by its answers, not its
+    certificate: at the first step's end (after the warm-up) whose snapped machine answers every
+    word of ANSWERS_LENGTHS right and has, minimised, at most N states (answers_stopping), saving
+    out/answers-stop-step-S.network.json; the certificate is still read at every step's end, only to
+    judge the stop (a run certified before it trains on). `coupling_cap` (D38) caps every factor's
+    coupling, every phase, so at 0 the codes anneal on the cells' outputs and never enter the
+    forward path; the certificate reads the snapped network as ever.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -1881,6 +1924,8 @@ def run(
         warm_up,
         whole,
         crucible,
+        state_bound,
+        coupling_cap,
     )
     assert warm_up is None or anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
     assert not (whole and long_tail is not None), "the whole distribution has no long tail beyond it"
@@ -2181,6 +2226,9 @@ def run(
                         profiled["coupling"] = [round(c, 4) for c in couplings]
                     if warm_up.gate:
                         profiled["held"] = held
+                if coupling_cap < 1.0:  # D38: the coupling probe's cap, every factor, every phase
+                    couplings = [min(c, coupling_cap) for c in couplings]
+                    profiled["coupling"] = [round(c, 4) for c in couplings]
                 net.set_temperatures(temperatures)
                 net.set_couplings(couplings)
                 coupled = couplings
@@ -2318,6 +2366,10 @@ def run(
         # its first certified step: training past it can destroy the network (E8b; this probe's
         # first runs, both certified networks lost within 3 steps)
         certificate = wc.certify(QueryMachine(net, encoding, 0), task)
+        stopping = certificate.certified
+        judged: dict[str, Any] = {}
+        if state_bound is not None:  # D35: the answers-only stop; the certificate only judges it
+            stopping, judged = answers_stopping(net, encoding, task, certificate, state_bound, coupled, warm)
         record(
             {
                 "step": step,
@@ -2330,10 +2382,14 @@ def run(
                 "certified": certificate.certified,
                 "minimised": len(certificate.minimised),
                 "machine": machine_summary(net, encoding),
+                **judged,
             }
         )
         if certificate.certified:
             net.save(str(out / f"certified-step-{step}.network.json"))
+        if stopping:
+            if state_bound is not None:
+                net.save(str(out / f"answers-stop-step-{step}.network.json"))
             break
         sample = [screens[n] for n in read_at]
         distinct = distinct_states(net, sample) if warm and warm_up is not None else []
