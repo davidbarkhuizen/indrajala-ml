@@ -462,6 +462,29 @@ same runs, and the follow-up reruns the six others.
     different states sharing a code, extra codes' own; option 4, FSQ factors: a codebook that
     collapses), so the diagnosis can call one down; the panel adds fresh word-problem-s3 seeds (8-15),
     since D28-D30 were designed from seeds 1-7's failures.
+- **D32. Adaptive cooling, beside the quasi-static crucible in the panel (the owner, 2026-10-21).** In
+  the adaptive schedule of Huang, Romeo and Sangiovanni-Vincentelli (developed in Romeo 1989, Ch. 7)
+  the cooling curve isn't precomputed: the temperature steps only once an equilibrium test passes (the
+  cost's moving average within 0.75 of its predicted standard deviation, then Kolmogorov-Smirnov), and
+  each step is sized by the cost's measured spread, `T_{k+1} = T_k exp(-lambda T_k / sigma_T)`, so it
+  slows by itself where the variance (the specific heat) peaks, at the phase transitions; a cap on moves
+  a temperature, with the predictions re-estimated when it is hit. D29 is a one-sided form of the test
+  on a precomputed curve. The panel (4b) runs two arms: the quasi-static crucible (D26-D30) and the
+  crucible with adaptive cooling (the shape, octaves and cool length replaced by the rule and `lambda`).
+  - (a) Adaptive cooling as option 1's form before the panel, one arm. Pros: the panel tests one
+    finished form; one panel. Cons: the panel waits on the build and its existence probe.
+  - (b) The panel with D29 alone, adaptive cooling shelved. Pros: fastest to the failures. Cons: a
+    panel rerun if the failures are the cool's.
+  - (c) *Chosen.* Both arms in the panel. Pros: the two schedules compared on every backdrop at once;
+    a failure read against both (a cooling failure in one arm and not the other names itself); the
+    shape question answered by the data. Cons: twice the panel's runs; the panel waits on the build.
+  - The order: the understanding step first (the cost's spread per epoch logged: the batch loss and the
+    soft assignment's distortion, Rose's energy, whose variance is the specific heat; read on a
+    certified S3 seed and move-to-front-4 seed 3 for peaks at the codes' splits, which picks the cost);
+    then the build (`--cool adaptive`, the equilibrium test, the step rule, the cap); then a short
+    existence probe on S3 seeds 0-7 and move-to-front-4 seed 3; then the panel, both arms, registered
+    before its data. Open in the build: the weights learn while the codes anneal, so the landscape moves
+    and stationarity at fixed `T` may not hold; the cap and re-estimation are the guard.
 - **4a''''. The quasi-static crucible probe:** word-problem-s3 seeds 1, 2, 3, 4, 6, 7, the cell and
   profile of 4a''' with D28-D30, on `stone` from about 19:30 (13 workers on its 12 cores until 4a''' ends);
   registered in `probe-d29.sh`'s header before its data. Seeds 0 and 5 carried over from 4a''' (the
