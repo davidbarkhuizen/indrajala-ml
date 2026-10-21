@@ -914,6 +914,11 @@ each log. Data in data/window-recurrent/state-formation/option1/probe-d32/.
 - **Noisy epoch to epoch** (11-22 local maxima a factor), hence D33's mean over a temperature's epochs.
 - **`pace` (D33):** the convex cool's implied `-d ln T sqrt(C)` through each cascade, S3 0.027-0.034, mtf-4
   0.029-0.037: 0.03 stands.
+- **The splits come early:** training reaches its fine group counts 2-6 octaves hotter than the
+  melting curve measured at the warm-up's end predicts (mtf-4 factor 0: 15 groups at `T` 1.19,
+  predicted 0.029). Not the grouping threshold (it biases the other way); 4a's `quiet` arm (`kappa`
+  1e-4) split within a fifth of an octave of the curve, so the material moving after the warm-up or
+  the thermal noise (`kappa` 1e-2) parting codes; unread, a look in the panel.
 - **Tools:** `heat-capacity` (each factor's splits and capacity peak); `scripts/profile_page.py`, a
   run's course as one page (stacked time series of T, capacity, energy, groups, coupling and screen;
   their overlay rescaled; and each factor's phase diagram, its codes on their principal axis against T
