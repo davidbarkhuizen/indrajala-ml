@@ -13,6 +13,78 @@ training method that forms a state, keeps it and certifies on every backdrop
 ([failure-kinds.md](failure-kinds.md)). The options are the literature review's
 ([window-recurrent-literature.md](window-recurrent-literature.md), extension 2026-10-20).
 
+## The IDs, in time order
+
+Every ID this plan uses, with the short label to write before it (memory `label-decision-ids`: "the
+quasi-static cool (D29)", never a bare ID). A primed ID replaces the one it names. IDs from earlier
+plans follow, each with its plan (`next-steps.md`'s table gives the `git show` that reads it).
+
+| ID | When | Short label | What it is |
+|---|---|---|---|
+| options 1-4 | 2026-10-20 | the literature's options | the annealed initial snap, cell noise, the rotation trick, FSQ factors (D1's order) |
+| D1 | 2026-10-20 | one option at a time | the options in turn, each understood, built, tested, decided |
+| D2 | 2026-10-20 | the annealed initial snap | option 1 joins a continuous warm-up and an anneal of the snap |
+| D3 | 2026-10-20 | understanding first | Rose's critical temperature and Zhao et al.'s effective dimension, on saved networks |
+| D4 | 2026-10-20 | the continuous warm-up | the codes bypassed, the cell's output the next state |
+| D5 | 2026-10-20 | the warm-up's end (first) | the first step screening 0.95, capped at 8 steps; replaced by D14 |
+| D6 | 2026-10-20 | k-means codes | each factor's codes from k-means of its outputs at the warm-up's end |
+| D7 | 2026-10-20 | `tau_0` from the clusters | twice the pooled within-cluster eigenvalue; replaced by D7' |
+| D8 | 2026-10-20 | the halving and hardness test | `tau` halved every 10 epochs; hard at 99% of windows above 0.99 |
+| D9 | 2026-10-20 | the commitment's ramp (first) | 0 while soft, ramped back over 20 epochs; replaced by D19 |
+| D10 | 2026-10-20 | readings in the warm-up | screens and the fork only; no certificate until the first hard step |
+| D11 | 2026-10-20 | the panel | 12 runs at width 32 over every failure kind and both harms |
+| D12 | 2026-10-20 | accept or reject | the panel's rule for an option |
+| stages 1-8 | 2026-10-20 | the plan's stages | the plan, option 1's understanding, build, test; options 2-4; findings |
+| stage 2 | 2026-10-20 | option 1's understanding | `state-spread`: the merge within clusters, the commitment's collapse |
+| D7' | 2026-10-20, at the build | `tau_0` from the codes' gaps | a quarter of the median nearest-code squared distance |
+| stage 4 | 2026-10-20, 06:07-07:40 | the void panel | the first panel; its anneal never ran |
+| D13 | 2026-10-20, after the void panel | the void panel | not a verdict; option 1 retried until its profile runs |
+| D14 | 2026-10-20 | the warm-up's end | screen 0.95 and 4 distinct states a code, capped at 8 steps |
+| D15 | 2026-10-20 | heat, hold, cool | the owner's profile: doubling to `T_hot`, a hold, an exponential cool |
+| D16 | 2026-10-20 | the melt's height | `T_hot` a multiple of the critical temperature (2, the full melt) |
+| D17 | 2026-10-20 | thermal noise | each soft code moved by noise of variance `kappa T` (`kappa` 1e-2) |
+| D18 | 2026-10-20 | no fork | the fork dropped with the warm-up |
+| D19 | 2026-10-20 | the tail and the slow ramp | soft 40 epochs past hard, then the commitment over 60 |
+| D20 | 2026-10-20 | the profile's log | each factor's phase, temperature, hardness, commitment and groups an epoch |
+| 4a | 2026-10-20 | the mechanics probe | full, quiet and partial melts on S3 and S4 seed 0 (`probe-4a.sh`) |
+| D20 amended | 2026-10-20, after 4a | the groups above the noise | the grouping distance `T max(1/100, 10 kappa)` squared |
+| D21 | 2026-10-20 | the melting curve | the run's own states annealed at the warm-up's end; the melting point and last transition |
+| D22 | 2026-10-20, after 4a | no curriculum | `--whole`: every length to the cap from the first epoch |
+| D23 | 2026-10-20 | the commitment's return as an arm | `--anneal-never-commit` against D19's return |
+| D24 | 2026-10-20 | the cool's shapes | concave, convex and s on log temperature, 20 octaves in 600 epochs |
+| 4a' | 2026-10-20, 12:15-12:53 | the shapes probe | D22-D24 with the abrupt snap; stopped once its warm-ups were read |
+| D25 | 2026-10-20 | the gradual handover | the coupling `l`, log-linear in `T` from the melting point to the last transition |
+| 4a'' | 2026-10-20, from 13:00 | the handover probe | D25 on S3 seed 0 and mtf-4 seed 3, each shape; mtf-4 convex certified (16:00) |
+| D26 | 2026-10-20, evening | seeded crystallisation | the crucible: the curriculum's warm-up held through the profile, then growth |
+| D27 | 2026-10-20, evening | a population of crucibles | S3 seeds 0-7, the certificate the selector |
+| 4a''' | 2026-10-20 18:05 to 10-21 05:01 | the seeded crystallisation probe | D26, D27 (`probe-d26.sh`): 2 of 8 |
+| D28 | 2026-10-20, about 19:00 | the crucible at the cap | `--warm-up-screen 1.01`: the warm-up runs its 8 steps |
+| D29 | 2026-10-20, about 19:00 | the quasi-static cool | `--melt-gate 0.99`: the clock holds while the screen is below the hold's best |
+| D30 | 2026-10-20, about 19:00 | the 3-octave window | the coupling's window at least 3 octaves |
+| 4a'''' | 2026-10-20, 19:04-20:30 | the quasi-static crucible probe | D28-D30 on 4a''''s six failures (`probe-d29.sh`): 8 of 8 |
+| D31 | 2026-10-21 | diagnose before a remedy | options 2-4 shelved; the panel's failures classified by kind first |
+| D32 | 2026-10-21 | adaptive cooling | Huang et al.'s schedule beside the quasi-static crucible in the panel |
+| D32's understanding step | 2026-10-21, 05:06-07:12 | the heat-capacity logging run | `thermals` on three certified runs (`probe-d32.sh`) |
+| D33 | 2026-10-21 | the adaptive cool as built | `--melt-shape adaptive`: the equilibrium test, `T exp(-pace / sqrt(C))`, `pace` 0.03, `settle` 10 |
+| D33's probe | 2026-10-21, from 07:24 | the adaptive cool's existence probe | S3 seeds 0-7, mtf-4 seed 3, a convex control (`probe-d33.sh`) |
+| 4b | registered later | the panel | both arms (D29's crucible, D33's cool) on D11's backdrop and S3 seeds 8-15 |
+
+From earlier plans:
+
+| ID | Plan (when) | Short label | What it is |
+|---|---|---|---|
+| L3 | division ladder | the division rung | division `p` 13, factors 32 wide, window 16 |
+| W11 | window branches (2026-10-19) | the base window | three blocks, `D` 16, 2 heads, FFN 32 |
+| W1 | window branches | the 32-wide window | L3's cell at window width 32: 5 of 6 |
+| W2 | window branches | the size control | L3's cell matched to B1's size: 3 of 6 |
+| B1-B3 | window branches | the window branches | B1 on division, B2 on S5 and mtf-5, B3 no harm (written b3 in 4a'''s readings) |
+| D2'' | commitment control (2026-10-19) | the thermostat's screen | restored once the step's screen reaches 0.95 |
+| P1 | code consolidation (2026-10-18) | the guard | A with the certificate guard |
+| P2 | code consolidation | restore the step's best | A with the step's best network restored: 0 of 6 |
+| R1-R4 | one code, one state (2026-10-19) | the extra-codes remedies | R1 the answers' own branch, R2 pairs per code logged, R3 keep the best machine, R4 counterexample training |
+| C0 | one code, one state | the base at width 32 | rounds 1 and 2's cells at width 32, seeds 0-5 (not the claims report's C0) |
+| C2 | one code, one state | R3 and R4 on the base | S5 2 of 6, mtf-5 3 of 6 at width 32 |
+
 ## Why: what the night of 2026-10-19 showed, and what the literature says it is
 
 - **The commitment hurts before a state forms and helps after.** With it never on, 4 of round 1's 6
@@ -87,7 +159,7 @@ accepted option becomes part of the base the next one is tested on.
     state carries nothing.
   - (c) Noise as the warm-up. Cons: option 2's question; one change at a time.
 - **D5. The warm-up's end: the first step whose screen reaches 0.95, capped at 8 steps.**
-  - (a) *Chosen.* Pros: answers-only (the fork's and D2'''s signal); the diagnostic's states formed
+  - (a) *Chosen.* Pros: answers-only (the fork's and the thermostat's screen's, the commitment-control plan's D2''); the diagnostic's states formed
     where the answers came right (steps 4-5); general across tasks. Cons: a continuous state may reach
     0.95 on short words without discrete structure, ending the warm-up early; the cap bounds the drift.
   - (b) Zhao et al.'s adaptive criterion (`d_eff` stops growing). Pros: their theory's. Cons: unmeasured
