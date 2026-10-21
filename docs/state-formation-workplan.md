@@ -69,7 +69,13 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D33's probe | 2026-10-21, from 07:24 | the adaptive cool's existence probe | S3 seeds 0-7, mtf-4 seed 3, a convex control (`probe-d33.sh`) |
 | D34 | 2026-10-21, 08:30 | the bounded handover | `--cool-rise 0.02`: the adaptive step no colder than raises the coupling by 0.02 |
 | D34's probe | 2026-10-21, from noon | the bounded handover's probe | S3 seeds 0, 1, 3-7 under D34 (`probe-d34.sh`) |
-| 4b | registered later | the panel | both arms (D29's crucible, D33's cool) on D11's backdrop and S3 seeds 8-15 |
+| the reasoning review | 2026-10-21 | gaps and inconsistencies | ten items (`reasoning-review-2026-10-21.md`); its re-reading of existing data in the findings |
+| D35 | 2026-10-21 | the answers-only stop | `--stop answers --state-bound N`: the snapped machine's answers all right within the bound; the certificate only judges |
+| D36 | 2026-10-21 | crucible against whole | the panel's arms: the quasi-static crucible and the same cool with `--whole` (the owner; replaces D32's second arm) |
+| D37 | 2026-10-21 | the panel's cells | D11's, fresh S3 seeds 8-15, random-q16-0 seeds 0 and 1 and a random-q12-0 control; the harm cells' expectation registered |
+| D38 | 2026-10-21 | the coupling probe | `--coupling-cap 0`: the codes anneal on the liquid, never coupled; S3 seeds 0-7, move-to-front-4 seed 3 |
+| D39 | 2026-10-21 | the design probes | after the panel: an approximation beside S3, a random machine's melting curve, runs past the first certificate |
+| 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
 
@@ -615,6 +621,70 @@ same runs, and the follow-up reruns the six others.
     temperature (the owner's D25: "would that be linked to temperature").
   - (d) The forward path's response in the capacity (the screen's variance with the energy's). Cons:
     a new measurement, untested; (a) bounds the same thing directly.
+### The program restructured (2026-10-21, after the reasoning review)
+
+The reasoning review ([reasoning-review-2026-10-21.md](reasoning-review-2026-10-21.md)) and its
+re-reading of existing data (findings below) change what the panel (4b) tests and what comes before
+it. D36 is the owner's; D35 and D37-D39 settled under the owner's delegation.
+
+- **D35. The stop: answers-only under the state bound, the certificate only judging it**
+  (`--stop answers --state-bound N`; the review's item 1). A run stops at the first step whose
+  snapped machine's answers are all right (the step's screen and lengths 8, 16, 24, 48, read on the
+  snapped network, `mf.snapped_answers`) and whose machine, read off and minimised, has at most `N`
+  states (the target's size where the target is known). The stopped network is certified at the
+  default snap ratio and at 1.0, both recorded; a run that certifies before the rule passes trains
+  on (recorded: `missed`).
+  - (a) *Chosen.* Pros: the target leaves the training loop, as discovery needs (machine-discovery.md);
+    the re-reading lost no certificate under it (121 kept, 8 earlier on networks exact at 1.0, no false
+    discovery, none missed), so it costs the panel nothing; the panel tests it prospectively. Cons: a
+    network exact only at 1.0 now ends a run (both verdicts reported); the bound must be tight (1.1
+    times the size: 25 false stops), so a loose-bound study is its own question.
+  - (b) Keep the stop at the first certificate, the rule logged beside it. Pros: no change. Cons: the
+    target stays in the loop; every rate stays a known-target rate.
+  - (c) Train a fixed number of steps past the first certificate. Pros: measures rules that wait for
+    a stable machine (the re-reading's limit). Cons: training past a proof destroys it (P1, 3b); its
+    own probe, after the panel (D39).
+- **D36. The panel's arms: the crucible against the whole distribution, both quasi-static (the
+  owner, 2026-10-21; replaces D32's second arm).** Arm 1 the quasi-static crucible (D26-D30); arm 2
+  the same cool on the whole length distribution from the first epoch (`--whole`, no crucible). The
+  review's items 4 and 5: the bounded handover (D34) ties the adaptive cool to the quasi-static
+  cool's coupling rate where the failures came, so D32's arms barely differ there, while the crucible
+  hasn't certified move-to-front-4, which certified only with `--whole` (4a''). A failure in the
+  crucible arm alone names the crucible's harm on a backdrop. The adaptive cool waits as a generality
+  refinement (no shape, octave or cool-length constants); D34's probe still runs as registered (it
+  reads whether that refinement holds) but no longer gates the panel.
+- **D37. The panel's cells: D11's, fresh S3 seeds 8-15 (D31), and random machines** (the review's
+  items 7 and 10). Added: random-q16-0 seeds 0 and 1 (0 of 6 at round 1's cell, by extra codes and lost
+  near solutions) and a random-q12-0 seed that certified at round 1's cell (the control). Every cell's
+  bounds (codes, the exclusion bound, row 15's crucible check) written beside it at registration.
+  Registered with it, before its data: **the harm cells' expectation** (S4 seeds 0 and 1,
+  move-to-front-4 seed 0, division `p` 13 seeds 0 and 1, which certified only with the commitment):
+  at least one loses its certificate in each arm, the commitment never back; each loss read for thin
+  margins (near ties, option 2's wall) against extra codes (pairs per code, option 3's), which
+  decides the follow-up.
+  - (a) *Chosen.* Pros: discovery's likely targets (unstructured) in the panel; the harm question
+    registered, not read after. Cons: more runs (sized at registration; about two nights on `stone`).
+  - (b) D11's cells only. Cons: option 1 judged on structured machines alone.
+- **D38. The coupling probe, before the panel (`--coupling-cap 0`; the review's item 3).** The
+  re-reading: every certificate in the quasi-static crucible came at a coupling of 0.06-0.90, its codes
+  at their final groups at 0.00-0.50. The probe holds each factor's coupling at 0 (the codes anneal on
+  the liquid and never enter the forward path) and certifies the snapped network, everything else as
+  the quasi-static crucible (D26-D30), on S3 seeds 0-7, with move-to-front-4 seed 3 under `--whole`.
+  Expectations registered in its script before its data: at least 6 of 8 S3 certified; refuted at 4
+  or fewer (the coupling matters, and where the snapped and coupled screens part says why).
+  - (a) *Chosen.* Pros: if it holds, conversion needs no handover (one schedule fewer, a simpler
+    method for every backdrop) and the panel tests that; short (S3's crucible runs are 4-28 minutes).
+    Cons: a build (`--coupling-cap`, pure Python); the panel waits about a night.
+  - (b) After the panel. Cons: the panel then tests a method that may carry a part it doesn't need.
+  - (c) Not at all (D25 as built). Cons: the review's item 3 stays open.
+- **D39. After the panel's diagnosis (D31): three short design probes, in order.** (i) An
+  approximation's output beside S3's answers (the sign, an item's place) under `--whole`: does an
+  approximation form the state without a seed (items 2 and 9; joins P2's finding to formation)?
+  (ii) The melting curve (D21) on random-q16-0's warm-up: a crowded band of transitions against an
+  algebra's cascade (the random-machine conjecture). (iii) Runs past their first certificate under
+  D35 (D35's (c)): does a rule that waits for a stable machine stop on the target? Each registered in
+  its own script before its data.
+
 - **4a''''. The quasi-static crucible probe:** word-problem-s3 seeds 1, 2, 3, 4, 6, 7, the cell and
   profile of 4a''' with D28-D30, on `stone` from about 19:30 (13 workers on its 12 cores until 4a''' ends);
   registered in `probe-d29.sh`'s header before its data. Seeds 0 and 5 carried over from 4a''' (the
@@ -1031,8 +1101,11 @@ a random machine would just need a very slow cool.**
    - **D33's existence probe:** the adaptive crucible on S3 seeds 0-7 and mtf-4 seed 3 (with a convex
      crucible control on mtf-4), registered in `probe-d33.sh`.
    - **D34's probe:** the bounded handover on S3 seeds 0, 1, 3-7 (seed 2 carried over), registered in
-     `probe-d34.sh`, on `pyramidon` once 4a'''s S3 arm ends.
-  - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
+     `probe-d34.sh`, on `pyramidon` once 4a'''s S3 arm ends; it no longer gates the panel (D36).
+   - **The restructured order (D35-D39):** the builds (`--stop answers --state-bound`, the snapped
+     answers at each step's end, `--coupling-cap`; pure Python, tested); D38's coupling probe; then:
+  - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
+    before its data; D12; then D31's diagnosis and D39's probes.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.
 6. **Option 3 (the rotation trick):** understanding (on extra-codes failures, whether windows of
