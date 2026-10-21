@@ -92,6 +92,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D52 | 2026-10-21, evening | continuous growth | the longest length rising in `ln L` at `0.02 g c` from the crucible's to the cap |
 | D53 | 2026-10-21, evening | the readings every epoch | the certificate's breakdown, snapped answers, sharpness, `g`, `L` each epoch; the melting curve every 25 |
 | D54 | 2026-10-21, evening | the continuous probe | S3 seeds 0-7 and move-to-front-4 seeds 0-3 under D48 (`probe-d54.sh`) |
+| D55 | 2026-10-21, 20:50 | the fresh-seed matrix | D54's cell on S3 seeds 24-39 and move-to-front-4 seeds 24-31 (`probe-d55.sh`) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -824,6 +825,22 @@ owner's; D49-D54 settled under the delegation.
     the reset machine the crucible failed. Cons: design seeds; a rate on fresh seeds waits for a
     matrix of the method that survives.
   - (b) Fresh seeds at once. Cons: existence first (the memory's rule): one working cell before a rate.
+- **D55. The continuous crystallisation's fresh-seed matrix (`~/code/probe-d55.sh`, registered before
+  its data, 2026-10-21, 20:50).** D54's existence bar met on its design seeds (S3 6 of 8 by then,
+  move-to-front-4 seed 0 certified; its last two S3 runs still running, its reading to come), the
+  owner asking for the night's spare capacity: D54's cell unchanged on seeds no run has touched,
+  word-problem-s3 24-39 and move-to-front-4 24-31 (D54 used 0-7 and 0-3; the stopped core matrix
+  (D46) 8-23, under other arms). Expectations: S3 at least 12 of 16 succeed (D41), refuted at 8 or
+  fewer; move-to-front-4 at least 2 of 8, its strict-only certifications counted apart, 0 read, not a
+  refutation; any false discovery refutes; each rate with its Wilson 95% interval, the mechanics and
+  failures read as D54's. On `stone` (8 at once, stopped at 06:55 and resumed the next evening),
+  `pyramidon` (3) and `klip` (as its heat test allows).
+  - (a) *Chosen.* Pros: the rate D54 can't give (its seeds were the design's); runs of minutes make
+    it a night's work; the same cell, so nothing in it is tuned on what it reads. Cons: run before
+    D54's last two S3 runs end (they can't move its bar: 6 of 8 already) and before the margin
+    question (near ties) is settled, which it measures rather than fixes.
+  - (b) Wait for D54's reading and the margin decision. Cons: a night's machines idle for a reading
+    that can't change the cell.
 
 ### The consistency review settled (2026-10-21, afternoon)
 
@@ -1380,6 +1397,7 @@ a random machine would just need a very slow cool.**
   - **The continuous crystallisation (D47-D54):** the core matrix set aside; the crate's `straight`
     (`indrajala-math-rust` first, then a "Bump rust/" PR), then `--continuous` (D49-D53, pure Python,
     tested, the golden run unchanged without it), then D54's probe, registered in its script.
+    Then D55's fresh-seed matrix, the same cell, registered in its script.
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
