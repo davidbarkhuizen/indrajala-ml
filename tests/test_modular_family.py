@@ -1254,6 +1254,27 @@ def test_hardness_is_the_share_of_windows_whose_largest_weight_passes_the_test()
     assert cold == 1.0 and hot == 0.0
 
 
+def test_thermals_are_the_soft_assignments_energy_and_its_derivative_in_temperature():
+    encoding = mf.Encoding(5, mf.FAMILY)
+    net = mf.network(encoding, [(4, 4)], 0, mf.BEFORE_STATE)
+    rows = [[encoding.example(encoding.draw(2, random.Random(i))) for i in range(6)]]
+    assert mf.thermals(net, rows, [None]) == [None]
+    h = np.concatenate(
+        [np.array(c.tolist())[:, :4] for c in net.window_states(net.backend.matrix([t for t, _ in rows[0]]))[2][1:]]
+    )
+    E = np.array(net.recurrence_layer.factors[0].codes.E.tolist())
+    D = np.sum((h[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
+    (cold,) = mf.thermals(net, rows, [1e-9])
+    assert cold is not None and cold[0] == pytest.approx(D.min(axis=1).mean()) and cold[1] == pytest.approx(0.0)
+    (hot,) = mf.thermals(net, rows, [1e9])
+    assert hot is not None and hot[0] == pytest.approx(D.mean(), rel=1e-6)
+    # the capacity is d<D>/dT: a central difference of the energy
+    t, dt = 0.1, 1e-5
+    (here,), (up,), (down,) = (mf.thermals(net, rows, [x]) for x in (t, t + dt, t - dt))
+    assert here is not None and up is not None and down is not None
+    assert here[1] == pytest.approx((up[0] - down[0]) / (2 * dt), rel=1e-3)
+
+
 def test_state_spread_reads_the_outputs_critical_temperature_and_the_codes_groups():
     encoding = mf.Encoding(5, mf.FAMILY)
     net = mf.network(encoding, [(4, 4)], 0, mf.BEFORE_STATE)

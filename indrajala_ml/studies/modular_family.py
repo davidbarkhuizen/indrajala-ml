@@ -1007,6 +1007,39 @@ def hardness(
     return [None if t is None else above[g] / max(total, 1) for g, t in enumerate(temperatures)]
 
 
+def thermals(
+    net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], temperatures: Sequence[float | None]
+) -> list[tuple[float, float] | None]:
+    """
+    Each soft factor's energy and heat capacity at its temperature over the rows given (D32's
+    understanding step): the mean over windows of the soft assignment's distortion, `<D>` (Rose 1998's
+    energy), and the mean of its variance under the assignment over `T^2`, `d<D>/dT` (its specific heat,
+    peaking at a phase transition); None for a factor at None. Exact, no sampling; the target unread.
+    """
+    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
+    energy = [0.0] * len(temperatures)
+    spread = [0.0] * len(temperatures)
+    total = 0
+    for batch in rows:
+        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
+        for cell in cells[1:]:
+            H = np.array(cell.tolist(), dtype=float)
+            total += len(H)
+            for g, (factor, t) in enumerate(zip(net.recurrence_layer.factors, temperatures, strict=True)):
+                if t is None:
+                    continue
+                E = np.array(factor.codes.E.tolist(), dtype=float)
+                h = H[:, starts[g] : starts[g] + E.shape[1]]
+                D = np.sum((h[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
+                A = np.exp(-(D - D.min(axis=1)[:, np.newaxis]) / t)
+                P = A / A.sum(axis=1)[:, np.newaxis]
+                mean = np.sum(P * D, axis=1)
+                energy[g] += float(mean.sum())
+                spread[g] += float(np.sum(np.sum(P * D**2, axis=1) - mean**2))
+    n = max(total, 1)
+    return [None if t is None else (energy[g] / n, spread[g] / n / (t * t)) for g, t in enumerate(temperatures)]
+
+
 def _groups(close: np.ndarray) -> int:
     """How many groups a symmetric closeness matrix joins its items into (transitively)."""
     group = list(range(len(close)))
@@ -1929,6 +1962,9 @@ def run(
                 if phase is not None and warm_up is not None:
                     jitter(net, temperatures, warm_up.kappa, np.random.default_rng([seed, step, epoch, forks]))
                     profiled = {"phase": phase, "groups": code_groups(net, temperatures, warm_up.kappa)}
+                    heat = thermals(net, [screens[n] for n in read_at], temperatures)  # D32: logged only
+                    profiled["energy"] = [None if e is None else round(e[0], 6) for e in heat]
+                    profiled["capacity"] = [None if e is None else round(e[1], 6) for e in heat]
                     if warm_up.handover:  # D25: each soft factor's coupling from its temperature
                         couplings = [
                             1.0 if t is None else warm_up.coupling(clock, t, m, f)
