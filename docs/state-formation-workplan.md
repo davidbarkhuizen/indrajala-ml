@@ -93,6 +93,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D53 | 2026-10-21, evening | the readings every epoch | the certificate's breakdown, snapped answers, sharpness, `g`, `L` each epoch; the melting curve every 25 |
 | D54 | 2026-10-21, evening | the continuous probe | S3 seeds 0-7 and move-to-front-4 seeds 0-3 under D48 (`probe-d54.sh`) |
 | D55 | 2026-10-21, 20:50 | the fresh-seed matrix | D54's cell on S3 seeds 24-39 and move-to-front-4 seeds 24-31 (`probe-d55.sh`) |
+| D56 | 2026-10-22, 00:40 | the unstructured probe | D54's cell on random-q16-0 seeds 0-3 (`probe-d56.sh`) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -841,6 +842,19 @@ owner's; D49-D54 settled under the delegation.
     question (near ties) is settled, which it measures rather than fixes.
   - (b) Wait for D54's reading and the margin decision. Cons: a night's machines idle for a reading
     that can't change the cell.
+- **D56. The continuous crystallisation on an unstructured machine (`~/code/probe-d56.sh`, registered
+  before its data, 2026-10-22, 00:40).** `jebel`'s four night cores freed by D38's S3 arm: D54's cell
+  unchanged on random-q16-0 seeds 0-3 (D37's random cells, seeds 0 and 1: 0 of 6 at round 1's cell
+  by extra codes and lost near solutions; the consolidation plan's control, B and A each 0 of 6).
+  Feasibility: q 16, 12 codes a factor, m 144 (9.0 q), cap 159, width 32; row 15: depth 4 + k 1.
+  Expectations: at least 1 of 4 succeed (D41), random-q16-0's first certificate in any arm; 0 of 4
+  read, not a refutation, each failure classified by kind (extra codes against near ties); any false
+  discovery refutes D35's stop on this backdrop; the mechanics read as D54's.
+  - (a) *Chosen.* Pros: the method on discovery's likely target (the memory's rule: a working cell is
+    checked on every backdrop), on cores otherwise idle; existence first, four seeds. Cons: before
+    D55's rate; a backdrop whose failures so far were extra codes, which a schedule may not reach.
+  - (b) More fresh seeds for D55. Cons: grows a registered matrix (the memory's rule: no growing
+    matrices); D55's 24 runs already size its rate.
 
 ### The consistency review settled (2026-10-21, afternoon)
 
@@ -1398,6 +1412,7 @@ a random machine would just need a very slow cool.**
     (`indrajala-math-rust` first, then a "Bump rust/" PR), then `--continuous` (D49-D53, pure Python,
     tested, the golden run unchanged without it), then D54's probe, registered in its script.
     Then D55's fresh-seed matrix, the same cell, registered in its script.
+    Then D56's random-q16-0 probe, the same cell, registered in its script.
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
