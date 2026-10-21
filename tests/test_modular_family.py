@@ -1465,6 +1465,24 @@ def test_a_warm_up_run_trains_continuous_then_heats_from_its_codes_t_hot(tmp_pat
         )
 
 
+def test_a_crucibles_reading_marks_a_loss_after_every_factor_is_hard():
+    start = {"in_use": 8, "effective_dimension": 6, "melting_point": 2.5, "transitions": [1.0, 0.5]}
+    soft = {"phase": "cool", "coupling": [0.5, 0.5], "temperature": [0.5, 0.3]}
+    hard = {"phase": "cool", "coupling": [1.0, 1.0], "temperature": [None, None]}
+    rows: list[dict[str, Any]] = [
+        {"step": 8, "warm_up_end": [start, start], "crucible": 8},
+        {"step": 9, "epoch": 1, "screen": 1.0, "anneal": soft},
+        {"step": 9, "factors": [{"codes": 8}, {"codes": 8}], "accuracy": {"a": 0.9}, "state_share": 0.9},
+        {"step": 10, "epoch": 1, "screen": 0.4, "anneal": hard},
+        {"step": 10, "factors": [{"codes": 2}, {"codes": 2}], "accuracy": {"a": 0.3}, "state_share": 0.2},
+        {"step": 10, "end": "spent", "epochs": 2, "seconds": 180.0},
+    ]
+    course = mf.crucible_course(rows)
+    assert course["best"] == {"phase": "cool", "coupling": 0.5, "temperature": 0.4}
+    assert (course["lost_step"], course["lost"]["temperature"]) == (10, None)
+    assert "lost 10 (cool, coupling 1.00, hard)" in mf.crucible_summary(course)
+
+
 def test_a_crucible_holds_the_warm_ups_material_then_grows_on_the_whole_distribution(tmp_path: Path):
     settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=40, cases=4, lengths=(2,), long=(3,))
     # hard at the first reading (every window's weight above 0), read from the cool's start: after 2 epochs

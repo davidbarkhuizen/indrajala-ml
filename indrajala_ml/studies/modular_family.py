@@ -603,11 +603,11 @@ def crucible_course(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> dic
         if not a:
             return {}
         couplings: list[float] = a["coupling"]
-        temperatures: list[float] = a["temperature"]
+        soft = [t for t in a["temperature"] if t is not None]  # a hard factor has no temperature
         return {
             "phase": a["phase"],
             "coupling": round(sum(couplings) / len(couplings), 3),
-            "temperature": float(np.mean(temperatures)),
+            "temperature": float(np.mean(soft)) if soft else None,
         }
 
     end = outcome(rows, drop)
@@ -635,7 +635,10 @@ def crucible_summary(course: Mapping[str, Any]) -> str:
     """crucible_course's reading on one line."""
 
     def at(a: Mapping[str, Any]) -> str:
-        return f" ({a['phase']}, coupling {a['coupling']:.2f}, T {a['temperature']:.2g})" if a else ""
+        if not a:
+            return ""
+        heat = "hard" if a["temperature"] is None else f"T {a['temperature']:.2g}"
+        return f" ({a['phase']}, coupling {a['coupling']:.2f}, {heat})"
 
     best = (
         "-"
