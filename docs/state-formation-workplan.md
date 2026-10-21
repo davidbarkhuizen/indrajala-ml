@@ -10,7 +10,7 @@ commitment-control and one-code-one-state plans' remaining claims (closed at the
 
 The goal is [machine-discovery.md](machine-discovery.md)'s stage A: one general architecture and
 training method that forms a state, keeps it and certifies on every backdrop
-([bottlenecks.md](bottlenecks.md)). The options are the literature review's
+([failure-kinds.md](failure-kinds.md)). The options are the literature review's
 ([window-recurrent-literature.md](window-recurrent-literature.md), extension 2026-10-20).
 
 ## Why: what the night of 2026-10-19 showed, and what the literature says it is
@@ -30,7 +30,7 @@ training method that forms a state, keeps it and certifies on every backdrop
   codes split only under a perturbation. The codes start uniform in `±1/sqrt(size)` (squared distances
   about 0.67 at size 16) and had merged by step 1's end, so `tau` 1.0 was above `T_c` from the start.
 - **Certified networks have thin margins** (near ties in every commitment-off certificate and in some
-  of C0's and C2's); **codes standing for several states** (bottleneck 2) moved only with R3/R4.
+  of C0's and C2's); **codes standing for several states** (extra codes) moved only with R3/R4.
 
 ## The options, in order (D1)
 
@@ -40,7 +40,7 @@ training method that forms a state, keeps it and certifies on every backdrop
 2. **Noise in the cell's pre-activation** (Oliva & Lago-Fernández 2020): saturated, attracting states
    and wider margins.
 3. **The rotation trick** (Fifty et al. 2025): a gradient that can separate windows on one code
-   (bottleneck 2).
+   (extra codes).
 4. **FSQ-style fixed-grid factors** (Mentzer et al. 2024): no codebook to learn, no commitment.
 
 Each option in turn: **understand** (a measurement on existing networks that tests the literature's
@@ -52,7 +52,7 @@ accepted option becomes part of the base the next one is tested on.
 
 - **D1. One option at a time, in the order above.**
   - (a) *Chosen.* Pros: the owner's direction; each result read against one change; the order is the
-    review's, by fit to the bottleneck seen most (formation) and by cost (harness, then a layer, then
+    review's, by fit to the failure kind seen most (formation) and by cost (harness, then a layer, then
     the crate's gradient, then a new component). Cons: slower than running several at once; an
     interaction (e.g. noise helping only with the warm-up) is seen only if the earlier option is
     accepted.
@@ -139,16 +139,16 @@ accepted option becomes part of the base the next one is tested on.
   pass on a continuous network's screen (the hard machine is read from the first hard step on).
 - **D11. The panel: 12 runs at width 32** (the base), round 1's and 2's cell (two factors,
   `--codes-ratio 32/11`, reading the output, the fork, 600 epochs; R3/R4 off unless accepted):
-  - failure A: word-problem-s3 seeds 0, 1, 4 (0 certified with the commitment off; 1 and 4 never
+  - formation or conversion (failure A): word-problem-s3 seeds 0, 1, 4 (0 certified with the commitment off; 1 and 4 never
     formed); move-to-front-4 seed 3; move-to-front-5 seeds 0, 1;
   - harm: word-problem-s4 seeds 0, 1 (C0 certified both), move-to-front-4 seed 0 (C0), division `p` 13
     seeds 0, 1 (W1, `--factor 32 38` twice);
-  - bottleneck 2: word-problem-s5 seed 1.
+  - extra codes: word-problem-s5 seed 1.
   Controls by the by-bits rule where they exist (C0, W1); S3 at 32 has none, so S3 seeds 0, 1, 4 run
   without the option beside the panel once (the base control). Feasibility: the cells' registered
   bounds (S3 q 6, 8 codes, m 64, cap 69; mtf-4 24, 15, 225, 248; S4 the same; S5 and mtf-5 120, 32,
   1,024, 1,143; division 169, 38, 1,444, 1,612), each width 32 certified before.
-  - Pros: every bottleneck and both kinds of harm in one batch, about 3 h on `stone` at night. Cons:
+  - Pros: every failure kind and both kinds of harm in one batch, about 3 h on `stone` at night. Cons:
     one or two seeds a cell: existence, not rates.
 - **D12. Accept or reject.** An option is **accepted** when, on the panel, it certifies more failure-A
   runs than their controls, loses none of the harm runs' certificates, and its certificates pass both
@@ -455,11 +455,11 @@ same runs, and the follow-up reruns the six others.
     leaves no ranking.
   - (b) Options 2-4 in turn (D1). Cons: each tested on whatever fails, fitting or not; three builds
     before the panel's failures are read.
-  - Refinements: the diagnosis presumes no mechanism (bottleneck 2 likely, not given): each failing run
+  - Refinements: the diagnosis presumes no mechanism (extra codes likely, not given): each failing run
     is classified by formation (`state-separation`, continuous), conversion (snapped against
     continuous), and extra codes (`breaks`, codes standing for several states); the shelf records each
     option's wall (option 2, noise: thin margins and near ties; option 3, the rotation trick: windows of
-    different states sharing a code, bottleneck 2's own; option 4, FSQ factors: a codebook that
+    different states sharing a code, extra codes' own; option 4, FSQ factors: a codebook that
     collapses), so the diagnosis can call one down; the panel adds fresh word-problem-s3 seeds (8-15),
     since D28-D30 were designed from seeds 1-7's failures.
 - **4a''''. The quasi-static crucible probe:** word-problem-s3 seeds 1, 2, 3, 4, 6, 7, the cell and
@@ -708,8 +708,8 @@ a random machine would just need a very slow cool.**
   in the warm-up's states, which should be at its worst on a machine without product structure for the
   factors to align with.
 - **Why random machines may be harder:** our random backdrops (random-4-0, random-q16-0) failed by
-  bottleneck 2 (extra codes whose outputs go wrong within `d` tokens; [bottlenecks.md](bottlenecks.md)),
-  not by failure A, so annealing helps there only if the splits stop where the target's states stop
+  extra codes (codes whose outputs go wrong within `d` tokens; [failure-kinds.md](failure-kinds.md)),
+  not by formation or conversion, so annealing helps there only if the splits stop where the target's states stop
   (plausible: codes part only as far as the states' clusters do; untested, and the thermal noise could
   split codes within a cluster).
 - **The conjecture's reasoning:** an algebra's structure (subgroups, quotients) gives a cascade of
@@ -752,12 +752,12 @@ a random machine would just need a very slow cool.**
    - **4b. The panel** (D11) at 4a's `T_hot`, registered before its data; D12.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
    build (`--cell-noise`, numpy and crate), the panel, decision.
-6. **Option 3 (the rotation trick):** understanding (on bottleneck-2 failures, whether windows of
+6. **Option 3 (the rotation trick):** understanding (on extra-codes failures, whether windows of
    different target states share codes, from `breaks`), build (the crate's straight-through gradient),
    the panel, decision.
 7. **Option 4 (FSQ factors):** understanding, design (a fixed grid a factor, its levels from the
    codes ratio), build, the panel, decision.
-8. **Findings** in [bottlenecks.md](bottlenecks.md) and the probe script; this plan retired, leftovers
+8. **Findings** in [failure-kinds.md](failure-kinds.md) and the probe script; this plan retired, leftovers
    to [next-steps.md](next-steps.md).
 
 ## Machines

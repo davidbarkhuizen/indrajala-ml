@@ -48,7 +48,7 @@ Every result below is in the papers or the probe script's findings. Each is a pi
 | **learning from approximations** | training on the outputs of the target's approximations beside its own made product machines learnable (division: 1/20 to 13-15/20); **one approximation suffices** (the sum alone, 10/20, where an equally informative non-approximation, the product, gives 0/20) | P2 (5, 5b) |
 | scale | certified transducers of 25, 49, 121 and 169 states (division `p` 5-13), 120 states (S5, move-to-front 5), from answers alone | P2; W1; B2 |
 | breadth | permutation groups (S3-S5), move-to-front and random machines beside arithmetic | the general algebras |
-| what stops it | three bottlenecks, one shared measure (one code, one state), remedies in progress | bottlenecks.md; `git show df1dcac:docs/one-code-one-state-workplan.md` |
+| what stops it | four failure kinds (formation, conversion, extra codes, answer separation), one shared measure (one code, one state), remedies in progress | failure-kinds.md; `git show df1dcac:docs/one-code-one-state-workplan.md` |
 
 Result 5b is the seed of the goal. An approximation's outputs carry structure the network can use
 even though they don't determine the target's state. That is exactly the kind of known property a
@@ -63,7 +63,7 @@ discovery problem supplies.
   stands in for it: train to `m_codes + m - 1`, which excludes memorising for any target within
   the bound. **A state bound is therefore a required known property**, not an optional one.
 - **The architecture** is the general one this work is converging on (the window the
-  one-code-one-state plan adopts, width 32 pending C0; bottlenecks.md). Nothing in it is chosen per
+  one-code-one-state plan adopts, width 32 pending C0; failure-kinds.md). Nothing in it is chosen per
   task, which is what discovery needs: the target is unknown, so the architecture can't be fitted
   to it.
 
@@ -79,7 +79,7 @@ unknown, but four exact checks remain, each built from what the certificate alre
    states onto `A_i`'s that commutes with every transition and output `A_i` has. This is decidable
    by walking `M` beside `A_i` from both starts, as `machine_reading.product` walks a network
    beside its target. The map exists iff no state of `M` is paired with two states of `A_i`
-   (`A_i` minimal). That is the same "one code, one state" property the bottleneck work measures,
+   (`A_i` minimal). That is the same "one code, one state" property the failure kinds measure,
    here between `M` and an approximation.
 3. **Minimality.** `M` minimised is exact; its state count is a fact, not an estimate.
 4. **Equivalence to `T`, given queries and the bound (Chow 1978).** A minimal `M` with `n` states
@@ -132,8 +132,8 @@ compared against.
 
 ## What stands between here and there
 
-1. **Reliability** (now): the three bottlenecks. Discovery needs a network that finds the machine
-   in most seeds, not one in six (bottlenecks.md; `git show df1dcac:docs/one-code-one-state-workplan.md`;
+1. **Reliability** (now): the four failure kinds. Discovery needs a network that finds the machine
+   in most seeds, not one in six (failure-kinds.md; `git show df1dcac:docs/one-code-one-state-workplan.md`;
    `git show df1dcac:docs/commitment-control-workplan.md`).
 2. **Scale:** certified at 120-169 states today. Real systems may need more, through more factors
    and their coordinates (the factored state), not a flat codebook.
@@ -150,7 +150,7 @@ compared against.
 
 Each stage is registered as its own workplan when the work reaches it, with claims before data.
 
-- **A. Reliability** (in progress): the bottleneck remedies, until a general architecture
+- **A. Reliability** (in progress): remedies for the failure kinds, until a general architecture
   certifies most seeds on every backdrop (division, the permutation groups, move-to-front, random
   machines).
 - **B. The verification tools:** the four checks above, each tested on known targets (where the
@@ -177,7 +177,7 @@ reading a machine off a network exactly, and learning one from its target's appr
 discovery paper would follow stage C: recovering hidden machines from behaviour and known
 structure, each recovery proved.
 
-Related: [bottlenecks.md](bottlenecks.md) (where the work stands),
+Related: [failure-kinds.md](failure-kinds.md) (where the work stands),
 `git show df1dcac:docs/one-code-one-state-workplan.md`,
 [factorisation-machine-workplan.md](factorisation-machine-workplan.md) (a machine that discovers its
 own decomposition), [window-recurrent-literature.md](window-recurrent-literature.md) (the terms,

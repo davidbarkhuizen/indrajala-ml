@@ -11,7 +11,7 @@ it was written, so no verdict is applied here.**
 The project's aim is machine discovery ([machine-discovery.md](machine-discovery.md)): unknown
 finite-state machines found from behaviour and known structure, and proved. Its stage A is one
 general architecture and training method that forms a state, keeps it and certifies on every
-backdrop ([bottlenecks.md](bottlenecks.md)). The network is the window-recurrent transformer: each
+backdrop ([failure-kinds.md](failure-kinds.md)). The network is the window-recurrent transformer: each
 window's tokens and a snapped state (one code a factor) give the next state and the answers, so a
 trained network is a finite-state transducer whose certificate (every window from every reachable
 state, against the target machine) is a proof.

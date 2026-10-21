@@ -61,7 +61,7 @@ docs cite them by section:
 | Modular division with the family (`p` 5 and 7, the registered claim) | #766 | #767-#782 | `git show e45944e:docs/division-workplan.md` |
 | Where division fails in `p` (the division ladder, L1-L3) | #817 | #824, #856, #859, #861 | `git show f9101d8:docs/division-ladder-workplan.md` |
 | A path through the window for each factor and for the answers (window branches; W1, W2, B1-B3) | #863 | #864-#868, crate #66, #884 | `git show e7f1ff6:docs/window-branches-workplan.md` |
-| Consolidating codes (A) and longer words (B) for bottleneck 2 (P1, P2) | #822 | #829, #832-#836, #845, #849, #854, #857 | `git show df1dcac:docs/code-consolidation-workplan.md` |
+| Consolidating codes (A) and longer words (B) for extra codes (P1, P2) | #822 | #829, #832-#836, #845, #849, #854, #857 | `git show df1dcac:docs/code-consolidation-workplan.md` |
 | Controlling the codes' commitment (the diagnostic, the thermostat, annealing) | #765 | #851, #852, #871, #876, #881, #885, crate #67, #886 | `git show df1dcac:docs/commitment-control-workplan.md` |
 | One code, one state (R1-R4, C0, C2) | #873 | #874, #875, #878, #879, #883 | `git show df1dcac:docs/one-code-one-state-workplan.md` |
 | A population of runs selected by their machines (level 2, not built) | #882 | - | `git show df1dcac:docs/population-workplan.md` |
@@ -217,8 +217,8 @@ Decided with the owner, each to become a workplan or a stage:
 - **Division's edge between `p` 11 and 13: explained by W1** (the window branches workplan,
   2026-10-19): neither the budget (L2) nor the factors' width (L3), but the window's: at 32 wide
   instead of 16, 5 of 6 certified at 169 states against 0 of 6. The round-2 algebras' failures at
-  120 states are other bottlenecks (failure A, extra codes): the three are mapped in
-  [bottlenecks.md](bottlenecks.md), each with its plan and next step.
+  120 states are other failure kinds (formation or conversion, extra codes): the kinds are mapped in
+  [failure-kinds.md](failure-kinds.md), each with its plan and next step.
 
 ## Beyond arithmetic: other finite-state targets (the owner and Claude, 2026-10-17)
 
