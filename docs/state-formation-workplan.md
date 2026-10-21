@@ -70,7 +70,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D34 | 2026-10-21, 08:30 | the bounded handover | `--cool-rise 0.02`: the adaptive step no colder than raises the coupling by 0.02 |
 | D34's probe | 2026-10-21, from noon | the bounded handover's probe | S3 seeds 0, 1, 3-7 under D34 (`probe-d34.sh`) |
 | the reasoning review | 2026-10-21 | gaps and inconsistencies | ten items (`reasoning-review-2026-10-21.md`); its re-reading of existing data in the findings |
-| D35 | 2026-10-21 | the answers-only stop | `--stop answers --state-bound N`: the snapped machine's answers all right within the bound; the certificate only judges |
+| D35 | 2026-10-21 | the answers-only stop | `--state-bound N`: the snapped machine's answers all right within the bound; the certificate only judges |
 | D36 | 2026-10-21 | crucible against whole | the panel's arms: the quasi-static crucible and the same cool with `--whole` (the owner; replaces D32's second arm) |
 | D37 | 2026-10-21 | the panel's cells | D11's, fresh S3 seeds 8-15, random-q16-0 seeds 0 and 1 and a random-q12-0 control; the harm cells' expectation registered |
 | D38 | 2026-10-21 | the coupling probe | `--coupling-cap 0`: the codes anneal on the liquid, never coupled; S3 seeds 0-7, move-to-front-4 seed 3 |
@@ -628,7 +628,7 @@ re-reading of existing data (findings below) change what the panel (4b) tests an
 it. D36 is the owner's; D35 and D37-D39 settled under the owner's delegation.
 
 - **D35. The stop: answers-only under the state bound, the certificate only judging it**
-  (`--stop answers --state-bound N`; the review's item 1). A run stops at the first step whose
+  (`--state-bound N`; the review's item 1). A run stops at the first step whose
   snapped machine's answers are all right (the step's screen and lengths 8, 16, 24, 48, read on the
   snapped network, `mf.snapped_answers`) and whose machine, read off and minimised, has at most `N`
   states (the target's size where the target is known). The stopped network is certified at the
@@ -1102,8 +1102,9 @@ a random machine would just need a very slow cool.**
      crucible control on mtf-4), registered in `probe-d33.sh`.
    - **D34's probe:** the bounded handover on S3 seeds 0, 1, 3-7 (seed 2 carried over), registered in
      `probe-d34.sh`, on `pyramidon` once 4a'''s S3 arm ends; it no longer gates the panel (D36).
-   - **The restructured order (D35-D39):** the builds (`--stop answers --state-bound`, the snapped
-     answers at each step's end, `--coupling-cap`; pure Python, tested); D38's coupling probe; then:
+   - **The restructured order (D35-D39):** the builds (`--state-bound`, the snapped
+     answers at each step's end, `--coupling-cap`; pure Python, tested; built 2026-10-21); D38's coupling
+     probe (`~/code/probe-d38.sh`, registered before its data; on `stone` from 18:00); then:
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5. **Option 2 (noise):** understanding (the certified networks' snap margins against the failures'),
