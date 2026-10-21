@@ -894,6 +894,10 @@ started seed 6 then and seed 7 at 18:00, a schedule change only.
   and 0.28, seed 3 0.014 and 0.25, seed 5 0.015 and 0.65; certified seed 0 0.020 and 0.055 (it
   certified as its steps grew), seed 4 0.009 and 0.56 (it survived them). Rises of 0.03 or more: none
   quasi-static, 7-15 adaptive. An early observable before every loss: D34.
+- **Seed 6 (read 10:00) lost the same way, more gently:** best share 0.78 at step 68, the coupling's
+  rises growing steadily from 0.030 to 0.059 an epoch over steps 71-77 (quasi-static: at most 0.021),
+  the screen falling to 0.87 at 77, the codes in use halved there. So 3 certified and 4 lost of 7;
+  the registered bar (4 of 8) now needs seed 7 (from 18:00).
 
 ## Findings: D32's understanding step (2026-10-21, read 07:30)
 
