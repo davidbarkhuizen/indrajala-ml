@@ -33,7 +33,7 @@ the codes'.
 | 4 | attention, per consumer | splitting the stream adds no capacity; each consumer keeps enough heads and width | a single-head branch per consumer at 16: B1 1 of 6 (W2, width alone at its size, 3 of 6); harm on S4 (B3, 0 of 6 against 4 of 6, p 0.030); not adopted | measured (2026-10-19) |
 | 5 | the output layer | the answers linearly separable on the stream's features | the layer is linear; no linear readout of L3's 16 features fixed its last 1% (the separability check) | measured |
 | 6 | the poolings | each reads the window's output, not the tokens before the state | before the state a cell must compute the whole transition (the D10 check: 0 of 2 against 2 of 2) | imposed rule |
-| 7 | the codes | one code, one state (pairs per code 1.0) | every certified network has it; bottleneck 2 is its failure; the branches don't fix it (at 16 or 32 on S5); R3 and R4's probe certified one S5 seed of two | required, open |
+| 7 | the codes | one code, one state (pairs per code 1.0) | every certified network has it; extra codes are its failure; the branches don't fix it (at 16 or 32 on S5); R3 and R4's probe certified one S5 seed of two | required, open |
 | 8 | the commitment | a state can form before the commitment pulls outputs to their codes | off early, 3 of 6 failure-A runs formed a state; the thermostat's code-use signal returns it too soon (its probe so far) | required, open |
 | 9 | the cell | each factor's state `s_g` enough for its transition | 32 in use; 16 to 32 (L3) didn't cure division 13 | design choice |
 | 10 | the window | `k` 1: the state handed on every symbol | keeps the step one symbol and the certificate fast; a chunked step is another capacity question | design choice |

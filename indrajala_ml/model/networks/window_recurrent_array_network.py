@@ -212,6 +212,26 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         """
         self.recurrence_layer.set_temperatures(temperatures)
 
+    def set_continuous(self, continuous: Sequence[bool]) -> None:
+        """
+        Each snapped factor run unsnapped, in factor order (the state formation workplan's warm-up, D4):
+        its cell's output passed on and its codes unread, in the training step's windows and in
+        forward_windows (the screen); every machine reading (window_states, state_codes, the
+        certificate) and the initial state stay snapped. Training state, as the temperatures: not
+        saved with the network.
+        """
+        self.recurrence_layer.set_continuous(continuous)
+
+    def set_couplings(self, couplings: Sequence[float]) -> None:
+        """
+        Each snapped factor's coupling, in factor order (the state formation workplan's gradual
+        handover, D25): its next state `(1 - l) h + l q` in the training step's windows and in
+        forward_windows (the screen), 1 its code (as without), 0 its cell's output with its codes still
+        learning from it; every machine reading and the initial state stay snapped. Training state, as
+        the temperatures: not saved with the network.
+        """
+        self.recurrence_layer.set_couplings(couplings)
+
     def consolidate(self, consolidation: Consolidation) -> None:
         """
         From the next training step on, a state snapped to a duplicate joint code is held by the
@@ -267,12 +287,15 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         )
         return self._activations[-1], self.recurrence_layer.forward_batch(tokens, C)
 
-    def _run_windows(self, X: Any, C: Any, states: bool, codes: bool) -> tuple[Any, list[Any], list[Any], list[Any]]:
-        # the inference passes' windows: the per-layer path here, the window program on Rust
-        return self.per_layer_windows(X, C, states, codes)
+    def _run_windows(
+        self, X: Any, C: Any, states: bool, codes: bool, live: bool = False
+    ) -> tuple[Any, list[Any], list[Any], list[Any]]:
+        # the inference passes' windows: the per-layer path here, the window program on Rust; live, the
+        # continuous factors read unsnapped (forward_windows)
+        return self.per_layer_windows(X, C, states, codes, live)
 
     def per_layer_windows(
-        self, X: Any, C: Any, states: bool, codes: bool
+        self, X: Any, C: Any, states: bool, codes: bool, live: bool = False
     ) -> tuple[Any, list[Any], list[Any], list[Any]]:
         """
         The inference forward pass over every window of X from the snapped state C: the outputs
@@ -285,32 +308,37 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         kept_states: list[Any] = []
         kept_cells: list[Any] = []
         kept_indices: list[Any] = []
-        for w in range(self._windows(X)):
-            output, C = self._window_forward(self._window(X, w), C)
-            outputs.append(output)
-            if states:
-                kept_states.append(C)
-                kept_cells.append(self.recurrence_layer.H)
-            if codes:
-                kept_indices.append(list(self.recurrence_layer.indices))
+        self.recurrence_layer.reading = live  # live: the continuous factors read unsnapped (the screen)
+        try:
+            for w in range(self._windows(X)):
+                output, C = self._window_forward(self._window(X, w), C)
+                outputs.append(output)
+                if states:
+                    kept_states.append(C)
+                    kept_cells.append(self.recurrence_layer.H)
+                if codes:
+                    kept_indices.append(list(self.recurrence_layer.indices))
+        finally:
+            self.recurrence_layer.reading = False
         return self.backend.concatenate_columns(outputs), kept_states, kept_cells, kept_indices
 
     def forward_windows(self, X: A) -> A:
         """The inference forward pass: each column's digit probabilities, (N, W * k * classes)."""
-        outputs, _, _, _ = self._run_windows(X, self._first_state(X.shape[0]), False, False)
+        outputs, _, _, _ = self._run_windows(X, self._first_state(X.shape[0]), False, False, live=True)
         return outputs
 
-    def window_states(self, X: A) -> tuple[A, list[A], list[A]]:
+    def window_states(self, X: A, live: bool = False) -> tuple[A, list[A], list[A]]:
         """
         The inference forward pass with its states: each column's digit probabilities, as
         forward_windows's; the states (N, state_size), the initial state's then each window's
         next state's, W + 1 of them, a snapped state as its code's vector (the claims workplan's
         drift profile, E2b); and the cells' outputs before the snap, the same W + 1 (the snap
-        wall's margins, docs/snap-wall-workplan.md).
+        wall's margins, docs/snap-wall-workplan.md). `live`: the continuous factors (set_continuous)
+        read unsnapped, as forward_windows (the state formation workplan's warm-up readings).
         """
         C = self._first_state(X.shape[0])
         H = self.recurrence_layer.H
-        outputs, states, cells, _ = self._run_windows(X, C, True, False)
+        outputs, states, cells, _ = self._run_windows(X, C, True, False, live=live)
         return outputs, [C, *states], [H, *cells]
 
     def state_codes(self, X: A) -> list[list[tuple[int, ...]]]:
@@ -624,6 +652,8 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
             recurrence.commitments,
             consolidation=self._consolidation,
             temperatures=recurrence.temperatures,
+            continuous=recurrence.continuous if any(recurrence.continuous) else None,
+            couplings=recurrence.couplings if min(recurrence.couplings) < 1.0 else None,
         )
         recurrence.first_state_backward(dC, weight)
 
@@ -631,10 +661,23 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
         super().consolidate(consolidation)
         self._consolidation = [(list(d), list(r)) for d, r in consolidation.items()]
 
-    def _run_windows(self, X: Any, C: Any, states: bool, codes: bool) -> tuple[Any, list[Any], list[Any], list[Any]]:
+    def _run_windows(
+        self, X: Any, C: Any, states: bool, codes: bool, live: bool = False
+    ) -> tuple[Any, list[Any], list[Any], list[Any]]:
         dropping = (AttentionRustArrayLayer, token_layers.TokenDropoutRustArrayLayer)
         assert not any(layer.training for layer in self.layers if isinstance(layer, dropping)), (
             "the window program runs inference only: training's forward pass is the per-layer path"
         )
         self._windows(X)  # whole windows, refused as the per-layer path refuses them
-        return pa.window_program_forward(self._program, X, self._program_parameters(), C, states=states, codes=codes)
+        continuous = self.recurrence_layer.continuous
+        couplings = self.recurrence_layer.couplings
+        return pa.window_program_forward(
+            self._program,
+            X,
+            self._program_parameters(),
+            C,
+            states=states,
+            codes=codes,
+            continuous=continuous if live and any(continuous) else None,
+            couplings=couplings if live and min(couplings) < 1.0 else None,
+        )

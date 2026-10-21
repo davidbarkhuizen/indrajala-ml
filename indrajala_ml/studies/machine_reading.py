@@ -258,3 +258,78 @@ def breaks(walk: Product, d: int) -> dict[str, Any]:
         **{k: {"broken": v[0], "transitions": v[1]} for k, v in tallies.items()},
         "depth_right": {str(k): {"broken": v[0], "transitions": v[1]} for k, v in sorted(depths.items())},
     }
+
+
+def _refines(fine: IntArray, coarse: IntArray, states: list[int]) -> bool:
+    """Whether every block of `fine` over the states sits inside one block of `coarse`."""
+    image: dict[int, int] = {}
+    return all(image.setdefault(int(fine[s]), int(coarse[s])) == int(coarse[s]) for s in states)
+
+
+def approximations(walk: Product, target: wt.Mealy) -> dict[str, Any]:
+    """
+    What each factor's code determines of the target exactly, over the pairs the start reaches: the
+    reached states joined when one code of the factor holds both (the certificate's readout), whether
+    that partition is itself a congruence, and its closure (Mealy.congruence_closure), the finest
+    approximation (a homomorphic image, Egri-Nagy and Nehaniv) the factor's code determines; the
+    target's named congruences that closure refines, the finest only (window_tasks.order_labels); and
+    the share of the factor's (code, token) pairs whose next code is one, 1.0 when the factor's code
+    is a machine of its own. Jointly, whether the factors' approximations cover the target: their
+    meet separates every reached state (then the target is a subdirect product of them, a parallel
+    cover). And the factors on top of a cascade: each factor whose approximation is nontrivial, while
+    the joint codes determine the state, so the target is that approximation with the rest's codes
+    below it, reading it (the series form, Krohn and Rhodes; a
+    nontrivial congruence is what a serial decomposition needs, Hartmanis and Stearns). A cascade's
+    lower factor alone is no congruence, so its closure, and the parallel meet, miss it.
+    """
+    states = sorted({s for _, s in walk.pairs})
+    named = {k: v for k, v in wt.order_labels(target.coordinates).items() if target.is_congruence(v)}
+    closures: list[IntArray] = []
+    factors: list[dict[str, Any]] = []
+    for g in range(len(walk.codes[0])):
+        holders: dict[int, int] = {}  # the factor's code -> a state it holds, joined below
+        labels = np.arange(target.states, dtype=np.int64)
+        for c, s in walk.pairs:
+            labels[labels == labels[s]] = labels[holders.setdefault(walk.codes[c][g], s)]
+        codes_of: dict[int, set[int]] = {}
+        following: dict[tuple[int, int], set[int]] = {}
+        for p, (c, s) in enumerate(walk.pairs):
+            codes_of.setdefault(s, set()).add(walk.codes[c][g])
+            for t in range(target.tokens):
+                after = walk.codes[walk.pairs[int(walk.next[p, t])][0]][g]
+                following.setdefault((walk.codes[c][g], t), set()).add(after)
+        closure = target.congruence_closure(labels)
+        closures.append(closure)
+        determined = [k for k, v in named.items() if _refines(closure, v, states)]
+        finest = [
+            k
+            for k in determined
+            if not any(
+                j != k and _refines(named[j], named[k], states) and not _refines(named[k], named[j], states)
+                for j in determined
+            )
+        ]
+        factors.append(
+            {
+                "codes": len(holders),
+                "function": all(len(c) == 1 for c in codes_of.values()),
+                "blocks": len({int(labels[s]) for s in states}),
+                "congruence": target.is_congruence(labels),
+                "approximation": sorted(np.unique(closure[states], return_counts=True)[1].tolist(), reverse=True),
+                "determines": finest,
+                "autonomous": sum(len(n) == 1 for n in following.values()) / len(following),
+            }
+        )
+    meet = {tuple(int(c[s]) for c in closures) for s in states}
+    held: dict[int, set[int]] = {}  # each joint code -> the states it holds
+    for c, s in walk.pairs:
+        held.setdefault(c, set()).add(s)
+    determined = all(len(h) == 1 for h in held.values())
+    top = [g for g, f in enumerate(factors) if determined and 1 < len(f["approximation"]) < len(states)]
+    return {
+        "states": len(states),
+        "factors": factors,
+        "meet": len(meet),
+        "cover": len(meet) == len(states),
+        "cascade": top,
+    }

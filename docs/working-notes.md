@@ -115,6 +115,11 @@ where you meet a new trap; delete one that no longer holds.
 - **`/tmp` on `pyramidon` is RAM-backed (tmpfs) with a per-user quota:** scratch copies of study
   data cost memory, and a test writing many run directories filled the quota (2026-10-18). Remove
   each one's files as it goes (the resume test does).
+- **Training state set on the network isn't saved with it** (temperatures, couplings, continuous
+  factors, commitments): a resumed run loads the network bare, so whatever its first screen reads
+  before the next epoch sets them must be kept in the checkpoint's `Place` and re-applied (the
+  couplings were not until 2026-10-21, found by the adaptive cool's resume test). A resume test whose
+  factors harden at once (coupling 1) can't see such a gap: give a new profile's test soft factors.
 - **Background Python writing to a log is block-buffered:** a killed job leaves nothing. Use
   `python -u` or `PYTHONUNBUFFERED=1` for any log you may need mid-run.
 - **The harness log prints nothing within a step;** progress shows as `models/<key>/step-<j>.json`
@@ -363,6 +368,15 @@ where you meet a new trap; delete one that no longer holds.
   after launch. Over ssh to `jebel`, `$!` was the run.
 - **`cd X && ... && cmd &` backgrounds the whole chain in a subshell:** variables set in it don't
   reach the next command, and over ssh the session stays open until the chain ends.
+- **`pkill -f PATTERN` and `pgrep -f PATTERN` match their own shell** (its command line holds the
+  pattern): 2026-10-20, a `pkill -f "probe-4a2.sh word-problem"` killed the Bash tool's shell and a waiter
+  with it. Bracket one character (`pgrep -f "[p]robe-4a2.sh"`), which the pattern matches but its own
+  text doesn't; or kill by the PIDs a bracketed `pgrep` lists.
+- **Never chain a local launch after a remote one in one command:** when the launching ssh hangs
+  (the line above), the Bash tool backgrounds the command and everything after the ssh runs when it
+  finally returns (2026-10-20: a local probe launched again 1 h 48 min later, refused only by the run
+  locks, its "ended" line fooling a waiter). Launch each machine in its own call; wait on a run's
+  process (`kill -0 PID`), not on a line a second launch could write.
 - **To run a study from a worktree's code into the main checkout's data** (so `main` can be pulled
   while it runs): `cd` to the main checkout, `PYTHONPATH=<worktree>`, and the script and config by
   the worktree's path. `indrajala_ml` is a namespace package, so check which copy loads (a

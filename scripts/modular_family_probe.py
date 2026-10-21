@@ -64,7 +64,14 @@ codes' use on the step's screen) and ramps it back over 20 epochs once it uses h
 factor's codes soft (the softmax mix at a temperature, from `--anneal-start` 1.0 halved every
 `--anneal-halving` 10 epochs), its commitment 0, until it hardens (99% of the step's screen's windows
 weighting one code above 0.99), then hard with its commitment ramped back over `--anneal-ramp` 20
-epochs (the commitment-control workplan's stage 3; each epoch's row logs them); `--keep-machine` keeps each
+epochs (the commitment-control workplan's stage 3; each epoch's row logs them); with `--warm-up`, every
+snapped factor runs continuous first (its commitment 0) until a step's best screen reaches 0.95 with its
+distinct states at least 4 times its codes, or the 8th step; its codes then set by k-means of the states
+seen, and its temperature profiled from T_hot (`--melt-hot` 2 times the whole's critical temperature):
+heated doubling over `--melt-heat` 6 epochs, held `--melt-hold` 10, cooled halving every `--melt-halving`
+15 with no floor, its soft codes moved by thermal noise of variance `--melt-kappa` 0.01 T, soft for
+`--anneal-tail` epochs past hard (the state formation workplan's option 1, D14-D19; never with the fork,
+`--restore-best` or `--keep-machine`); `--keep-machine` keeps each
 step's network whose machine has the fewest pairs per code (read at each diagnosis, ties to more
 right pairs) and restores it at a plateau, and `--counterexamples [SHARE]` draws SHARE (0.25) of each
 epoch's examples from the shortest words to the codes wrong for their states (at most 256, read at
@@ -100,6 +107,10 @@ exact accuracy over every word of each length, and the share ending on a code ri
 and the transitions that break, from each state's first code and from its extra codes, over every
 code and from right ones (a code right when `--d` tokens of outputs agree, default the task's
 distinguishing length plus one), by depth. A line a network, its JSON into `--out`.
+`approximations NETWORK... --task T` reads what each factor's code determines of the task's machine
+exactly (machine_reading.approximations): the finest approximation (a congruence's quotient) it
+determines, the named congruences that refines (an ordering machine's, window_tasks.order_labels),
+whether the factor's code is a machine of its own, and whether the factors together cover the target.
 `trace` prints runs' logs a line per diagnosis (each factor's codes in use, the state's share, each
 answer's accuracy), marking a collapse: the codes in use below half the diagnosis before.
 `long-test` runs the long tests (the division workplan, D4: U1 and S1 at 128, 256 and 1,024
@@ -1126,6 +1137,82 @@ def main(argv: list[str]) -> int:
     run.add_argument("--anneal-start", type=float, default=mf.Anneal.start, metavar="TEMPERATURE")
     run.add_argument("--anneal-halving", type=int, default=mf.Anneal.halving, metavar="EPOCHS")
     run.add_argument("--anneal-ramp", type=int, default=mf.Anneal.ramp, metavar="EPOCHS")
+    run.add_argument("--anneal-tail", type=int, default=mf.Anneal.tail, metavar="EPOCHS")
+    run.add_argument(
+        "--anneal-never-commit",
+        action="store_true",
+        help="the commitment stays 0 once hard (the state formation workplan's D23)",
+    )
+    run.add_argument(
+        "--whole",
+        action="store_true",
+        help="no curriculum (the state formation workplan's D22): every epoch over every length to the cap, every "
+        "step's screen over a fixed spread of them; a step a block of epochs ending in its certificate",
+    )
+    run.add_argument(
+        "--crucible",
+        action="store_true",
+        help="the state formation workplan's D26 (with --warm-up): the material held at the warm-up's last step's "
+        "lengths through the whole profile, then, every factor hard, the whole distribution's (a seed, then growth)",
+    )
+    run.add_argument(
+        "--warm-up",
+        action="store_true",
+        help="the state formation workplan's option 1 (with --anneal): every snapped factor continuous, its "
+        "commitment 0, until the end of the first step whose best screen reaches --warm-up-screen or of the "
+        "--warm-up-cap-th step, its distinct states at least --warm-up-distinct times its codes; then its codes by "
+        "k-means of the states seen, heated to --melt-hot times the whole's critical temperature over --melt-heat "
+        "epochs, held --melt-hold, cooled halving every --melt-halving, thermal noise of variance --melt-kappa T",
+    )
+    run.add_argument("--warm-up-screen", type=float, default=mf.WarmUp.screen, metavar="SHARE")
+    run.add_argument("--warm-up-cap", type=int, default=mf.WarmUp.cap, metavar="STEPS")
+    run.add_argument("--warm-up-distinct", type=float, default=mf.WarmUp.distinct, metavar="RATIO")
+    run.add_argument("--melt-hot", type=float, default=mf.WarmUp.hot, metavar="MULTIPLE")
+    run.add_argument("--melt-heat", type=int, default=mf.WarmUp.heat, metavar="EPOCHS")
+    run.add_argument("--melt-hold", type=int, default=mf.WarmUp.hold, metavar="EPOCHS")
+    run.add_argument("--melt-halving", type=int, default=mf.WarmUp.halving, metavar="EPOCHS")
+    run.add_argument("--melt-kappa", type=float, default=mf.WarmUp.kappa, metavar="KAPPA")
+    run.add_argument(
+        "--melt-shape",
+        choices=["exponential", "adaptive", *sorted(mf.COOLS)],
+        default=mf.WarmUp.shape,
+        help="the cool's shape on a log-temperature scale (D24): exponential halves every --melt-halving epochs; the "
+        "others fall --melt-octaves in --melt-cool epochs, then halve as it; adaptive (D33) steps each factor's "
+        "temperature once at equilibrium (--cool-within) or after --cool-settle epochs, by T exp(-pace / sqrt(C))",
+    )
+    run.add_argument("--cool-pace", type=float, default=mf.WarmUp.pace, metavar="LAMBDA")
+    run.add_argument("--cool-settle", type=int, default=mf.WarmUp.settle, metavar="EPOCHS")
+    run.add_argument("--cool-within", type=float, default=mf.WarmUp.within, metavar="SIGMAS")
+    run.add_argument(
+        "--cool-rise",
+        type=float,
+        default=mf.WarmUp.rise,
+        metavar="SHARE",
+        help="the adaptive cool's step no larger than raises a factor's coupling by SHARE (D34; 0: unbounded)",
+    )
+    run.add_argument("--melt-cool", type=int, default=mf.WarmUp.cool, metavar="EPOCHS")
+    run.add_argument("--melt-octaves", type=float, default=mf.WarmUp.octaves, metavar="OCTAVES")
+    run.add_argument(
+        "--handover",
+        action="store_true",
+        help="the gradual handover (the state formation workplan's D25): each soft factor's next state (1 - l) h + "
+        "l q, l 0 through the heat and the hold, then log-linear in T from its melting point to its last transition",
+    )
+    run.add_argument(
+        "--melt-gate",
+        type=float,
+        default=mf.WarmUp.gate,
+        metavar="SHARE",
+        help="a quasi-static cool (the state formation workplan's D29): the profile's clock holds through an epoch "
+        "whose screen before it is below SHARE times the hold's best (0: off)",
+    )
+    run.add_argument(
+        "--handover-octaves",
+        type=float,
+        default=mf.WarmUp.window,
+        metavar="OCTAVES",
+        help="each factor's coupling window at least OCTAVES below its melting point (D30; 0: the curve's alone)",
+    )
     run.add_argument(
         "--keep-machine",
         action="store_true",
@@ -1174,6 +1261,14 @@ def main(argv: list[str]) -> int:
     long.add_argument("--out", type=Path, required=True)
     trace = commands.add_parser("trace", help="runs' logs, a line per diagnosis, collapses marked")
     trace.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    population = commands.add_parser(
+        "population", help="seeded crystallisations' logs (D26, D27), a line per run: early observables, the outcome"
+    )
+    population.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    capacity = commands.add_parser(
+        "heat-capacity", help="profiled runs' logs (D32), a line per run: each factor's splits and capacity peak"
+    )
+    capacity.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
     drops = commands.add_parser("drops", help="a collapse trigger scored against runs' logs, offline")
     drops.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl (runs made without the fork)")
     _trigger_arguments(drops)
@@ -1207,6 +1302,10 @@ def main(argv: list[str]) -> int:
     for name, summary in (
         ("by-length", "saved networks' exact accuracy over every word of each length, against the task's machine"),
         ("breaks", "saved networks' broken transitions, from each state's first code and its extra codes"),
+        (
+            "approximations",
+            "what each factor's code determines of the task's machine exactly, and whether they cover it",
+        ),
     ):
         reading = commands.add_parser(name, help=summary)
         reading.add_argument("networks", type=Path, nargs="+")
@@ -1225,6 +1324,29 @@ def main(argv: list[str]) -> int:
     spread.add_argument("--arm", choices=sorted(ARMS), default="family")
     spread.add_argument("--step", type=int, required=True, help="the curriculum step whose screen lengths it samples")
     spread.add_argument("--cases", type=int, default=200, help="cases a length (the screen's)")
+    melting = commands.add_parser(
+        "melting-curve",
+        help="saved networks' melting curves (D21): Rose's deterministic annealing of each factor's codes on its "
+        "outputs, cooled from twice the critical temperature, the codes' groups and transitions at each temperature",
+    )
+    melting.add_argument("networks", type=Path, nargs="+")
+    melting.add_argument("--task", required=True, help="modular-division-p (the quotient) or a machine's")
+    melting.add_argument("--arm", choices=sorted(ARMS), default="family")
+    melting.add_argument("--step", type=int, required=True, help="the curriculum step whose screen lengths it samples")
+    melting.add_argument("--cases", type=int, default=200, help="cases a length (the screen's)")
+    separation = commands.add_parser(
+        "state-separation",
+        help="whether saved networks' cell outputs determine the target machine's state (nearest neighbour and "
+        "centroid accuracy against chance; the state formation workplan's feasibility check)",
+    )
+    separation.add_argument("networks", type=Path, nargs="+")
+    separation.add_argument("--task", required=True, help="a machine's task")
+    separation.add_argument("--arm", choices=sorted(ARMS), default="family")
+    separation.add_argument("--lengths", type=int, nargs="+", default=[1, 2, 4, 8, 16, 32])
+    separation.add_argument("--cases", type=int, default=50, help="words a length")
+    separation.add_argument(
+        "--live", action="store_true", help="every snapped factor read continuous (a warm-up's network, as it trained)"
+    )
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
     readout.add_argument("root", type=Path, help="the study's directory, a <arm>/seed<s> per run")
     readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
@@ -1283,7 +1405,25 @@ def main(argv: list[str]) -> int:
             spread = mf.state_spread(mf.load_network(str(path)), rows)
             print(json.dumps({"network": str(path), "step": args.step, "factors": spread}), flush=True)
         return 0
-    if args.command in ("by-length", "breaks"):
+    if args.command == "state-separation":
+        encoding = _target(args.task, args)
+        rows = [mf.windows_drawn(encoding, n, args.cases, f"separation-{n}") for n in args.lengths]
+        for path in args.networks:
+            net = mf.load_network(str(path))
+            if args.live:
+                net.set_continuous([f.codes is not None for f in net.recurrence.factors])
+            separation = mf.state_separation(net, rows, encoding.task.machine)
+            print(json.dumps({"network": str(path), "live": args.live, **separation}), flush=True)
+        return 0
+    if args.command == "melting-curve":
+        encoding = _target(args.task, args)
+        lengths = sorted({1, (args.step + 1) // 2, args.step})
+        rows = [mf.windows_drawn(encoding, n, args.cases, f"family-screen-{args.step}-{n}") for n in lengths]
+        for path in args.networks:
+            curves = mf.melting_curves(mf.load_network(str(path)), rows)
+            print(json.dumps({"network": str(path), "step": args.step, "factors": curves}), flush=True)
+        return 0
+    if args.command in ("by-length", "breaks", "approximations"):
         for path in args.networks:
             print(read_network(path, args), flush=True)
         return 0
@@ -1291,6 +1431,16 @@ def main(argv: list[str]) -> int:
         for path in args.logs:
             print(f"== {path}")
             print("\n".join(mf.trace([json.loads(line) for line in path.read_text().splitlines()])))
+        return 0
+    if args.command == "population":
+        for path in args.logs:
+            course = mf.crucible_course([json.loads(line) for line in path.read_text().splitlines()])
+            print(f"{path}: {mf.crucible_summary(course)}", flush=True)
+        return 0
+    if args.command == "heat-capacity":
+        for path in args.logs:
+            courses = mf.heat_course([json.loads(line) for line in path.read_text().splitlines()])
+            print(f"{path}: {mf.heat_summary(courses)}", flush=True)
         return 0
     if args.command == "long-test":
         args.out.mkdir(parents=True, exist_ok=True)
@@ -1315,8 +1465,45 @@ def main(argv: list[str]) -> int:
     if args.anneal and (args.thermostat or args.commitment_from is not None or args.consolidate):
         parser.error("--anneal sets the commitment itself: not with --thermostat, --commitment-from or --consolidate")
     anneal = (
-        mf.Anneal(args.anneal_start, args.anneal_halving, mf.Anneal.hard, mf.Anneal.share, args.anneal_ramp)
+        mf.Anneal(
+            args.anneal_start,
+            args.anneal_halving,
+            mf.Anneal.hard,
+            mf.Anneal.share,
+            args.anneal_ramp,
+            args.anneal_tail,
+            not args.anneal_never_commit,
+        )
         if args.anneal
+        else None
+    )
+    if args.warm_up and not args.anneal:
+        parser.error("--warm-up ends in an annealed snap: with --anneal")
+    if args.warm_up and (args.fork or args.restore_best or args.keep_machine):
+        parser.error("--warm-up crystallises: never with --fork, --restore-best or --keep-machine (D18)")
+    warm_up = (
+        mf.WarmUp(
+            args.warm_up_screen,
+            args.warm_up_cap,
+            mf.WarmUp.iterations,
+            args.warm_up_distinct,
+            args.melt_hot,
+            args.melt_heat,
+            args.melt_hold,
+            args.melt_halving,
+            args.melt_kappa,
+            args.melt_shape,
+            args.melt_cool,
+            args.melt_octaves,
+            args.handover,
+            args.melt_gate,
+            args.handover_octaves,
+            args.cool_pace,
+            args.cool_settle,
+            args.cool_within,
+            args.cool_rise,
+        )
+        if args.warm_up
         else None
     )
     thermostat = (
@@ -1362,6 +1549,9 @@ def main(argv: list[str]) -> int:
             keep_machine=args.keep_machine,
             counterexamples=args.counterexamples,
             anneal=anneal,
+            warm_up=warm_up,
+            whole=args.whole,
+            crucible=args.crucible,
         )
 
     for name in names:
@@ -1426,6 +1616,17 @@ def read_network(path: Path, args: argparse.Namespace) -> str:
         result: dict[str, Any] = {"network": str(path), "task": args.task, "d": d, "lengths": rows}
         line = " ".join(f"{r['n']}:{r['exact']:.3f}/{r['named']:.3f}" for r in rows)
         line = f"{path}: d {d}, exact/named by length {line}"
+    elif args.command == "approximations":
+        result = {"network": str(path), "task": args.task, **mr.approximations(walk, target)}
+        top = ", ".join(str(g) for g in result["cascade"]) or "-"
+        line = (
+            f"{path}: {result['states']} states, meet {result['meet']}, cover {result['cover']}, cascade top {top}; "
+            + "; ".join(
+                f"factor {g}: {f['codes']} codes, approximation {len(f['approximation'])} blocks "
+                f"(congruence {f['congruence']}, autonomous {f['autonomous']:.3f}), determines {', '.join(f['determines']) or '-'}"
+                for g, f in enumerate(result["factors"])
+            )
+        )
     else:
         result = {"network": str(path), "task": args.task, **mr.breaks(walk, d)}
 

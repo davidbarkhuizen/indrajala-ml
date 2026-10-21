@@ -115,6 +115,32 @@ def check_temperatures(factors: Sequence[Any], temperatures: Sequence[float | No
             assert math.isfinite(temperature) and temperature > 0.0, "a temperature above 0 and finite"
 
 
+def check_continuous(factors: Sequence[Any], continuous: Sequence[bool], temperatures: Sequence[float | None]) -> None:
+    """
+    A continuous flag per factor, on a recurrence layer's factor parts (either backend's; the state
+    formation workplan's warm-up, D4): each flagged factor snapped and at no temperature.
+    """
+    assert len(continuous) == len(factors), "a continuous flag per factor"
+    for g, (factor, free, temperature) in enumerate(zip(factors, continuous, temperatures, strict=True)):
+        assert not free or (factor.codes is not None and temperature is None), (
+            f"only a snapped factor at no temperature runs continuous; factor {g} doesn't"
+        )
+
+
+def check_couplings(factors: Sequence[Any], couplings: Sequence[float], continuous: Sequence[bool]) -> None:
+    """
+    A coupling per factor, on a recurrence layer's factor parts (either backend's; the state formation
+    workplan's gradual handover, D25): each in [0, 1], below 1 only for a snapped factor not run
+    continuous.
+    """
+    assert len(couplings) == len(factors), "a coupling per factor"
+    for g, (factor, coupling, free) in enumerate(zip(factors, couplings, continuous, strict=True)):
+        assert 0.0 <= coupling <= 1.0, f"a coupling in [0, 1]; factor {g}'s is {coupling}"
+        assert coupling == 1.0 or (factor.codes is not None and not free), (
+            f"only a snapped factor not run continuous is coupled below 1; factor {g} isn't"
+        )
+
+
 def set_commitments(factors: Sequence[Any], commitments: Sequence[float]) -> None:
     """
     Each factor's codes' commitment, on a recurrence layer's factor parts (either backend's): the

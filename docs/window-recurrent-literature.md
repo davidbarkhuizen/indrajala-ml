@@ -291,7 +291,7 @@ transformers' generalisation on regular languages falls quickly beyond chunks of
 ## Extension (2026-10-20): state formation, the commitment, and lost states
 
 Asked by the owner: look further for known understanding of our problem, and known fixes. The
-problem, as the night of 2026-10-19 left it ([bottlenecks.md](bottlenecks.md); findings to be
+problem, as the night of 2026-10-19 left it ([failure-kinds.md](failure-kinds.md); findings to be
 written into the probe script's docstring):
 
 - **Bottleneck 1 (no state forms) is mostly the commitment's.** With the commitment never on

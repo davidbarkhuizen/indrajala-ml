@@ -1,7 +1,9 @@
 """The modular family's encoding and probe (the modular-family workplan, stage 2)."""
 
 import hashlib
+import itertools
 import json
+import math
 import random
 import shutil
 from pathlib import Path
@@ -13,6 +15,7 @@ import pytest
 
 from indrajala_ml.data import modular_data as md
 from indrajala_ml.studies import modular_family as mf
+from indrajala_ml.studies import window_tasks as wt
 
 
 def test_the_column_answers_division_and_the_queries_their_operations():
@@ -533,6 +536,33 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "fork": RESUMED_FORK,
         "anneal": mf.Anneal(start=0.5, halving=1, ramp=2),
     },
+    "crucible": {  # D26: the warm-up's end, the crucible's blocks, then growth, within the budget
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,  # the warm-up's 2 steps of up to 4 epochs, the crucible's block, growth's
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1, handover=True),
+        "crucible": True,
+    },
+    "gated": {  # D29: a gate no screen meets, so the cool's clock holds from its second epoch
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1, handover=True, gate=2.0, window=3.0),
+        "crucible": True,
+    },
+    "adaptive": {  # D33: the cool's temperatures and measurements carried over every stop
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, handover=True, shape="adaptive", settle=2),
+        "crucible": True,
+    },
 }
 
 
@@ -606,6 +636,14 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
         annealed = [r["anneal"] for r in whole[0] if r.get("epoch", 0) > 0 and "end" not in r and "fork" not in r]
         assert annealed and annealed[0]["temperature"] == [0.5]
         assert annealed[-1]["temperature"] == [None] and annealed[-1]["beta"][0] > 0  # hardened, ramping back
+    elif kind == "crucible":
+        marks = [r["crucible"] for r in whole[0] if r.get("epoch") == 0 and "crucible" in r]
+        assert marks and marks[0] != "grown" and marks[-1] == "grown"
+    elif kind == "gated":  # the clock held, the held count carried over every stop
+        assert max(r["anneal"].get("held", 0) for r in whole[0] if "anneal" in r) >= 2
+    elif kind == "adaptive":  # the cool stepped more than once, part way through a temperature at some stop
+        cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
+        assert len({a["temperature"][0] for a in cool}) >= 3 and any(a["at"] == [2] for a in cool)
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":
@@ -1027,6 +1065,242 @@ def test_annealing_halves_its_temperature_hardens_for_good_and_ramps_the_commitm
     assert anneal.commitments([0, 2, 4], [0.25, 0.25, 0.5]) == [0.0, 0.125, 0.5]
 
 
+def test_annealing_with_a_tail_stays_soft_past_hard_then_ramps_the_commitment():
+    anneal = mf.Anneal(ramp=2, tail=3)
+    assert anneal.top == 5
+    levels = [0]
+    trace: list[int] = []
+    for hard in (0.5, 0.995, None, None, None, None, None):
+        levels = anneal.levels(levels, [hard])
+        trace.append(levels[0])
+    assert trace == [0, 1, 2, 3, 4, 5, 5]
+    assert [anneal.soft(level) for level in (0, 3, 4)] == [True, True, False]
+    assert anneal.commitments([0, 3, 4, 5], [0.5] * 4) == [0.0, 0.0, 0.25, 0.5]
+
+
+def test_the_melt_profile_heats_doubling_holds_then_cools_exponentially():
+    warm_up = mf.WarmUp(heat=3, hold=2, halving=4)
+    assert [warm_up.phase(n) for n in (0, 2, 3, 4, 5, 99)] == ["heat", "heat", "hold", "hold", "cool", "cool"]
+    temperatures = [warm_up.temperature(n, 8.0) for n in range(10)]
+    assert temperatures[:5] == [1.0, 2.0, 4.0, 8.0, 8.0]
+    assert temperatures[5] == 8.0 and temperatures[9] == pytest.approx(4.0)
+    assert all(a > b for a, b in itertools.pairwise(temperatures[5:]))  # smooth, no floor
+
+
+def test_the_shaped_cools_fall_their_octaves_in_their_epochs_between_the_limits():
+    shaped = {
+        shape: mf.WarmUp(heat=0, hold=0, halving=10, shape=shape, cool=100, octaves=10)
+        for shape in ("concave", "convex", "s")
+    }
+    for warm_up in shaped.values():
+        assert warm_up.temperature(0, 1.0) == 1.0
+        assert warm_up.temperature(100, 1.0) == pytest.approx(2.0**-10)
+        assert warm_up.temperature(110, 1.0) == pytest.approx(2.0**-11)  # then halved as the exponential
+    straight = 2.0**-5  # the exponential's at the halfway point, the same end points
+    assert shaped["concave"].temperature(50, 1.0) > straight > shaped["convex"].temperature(50, 1.0)
+    assert shaped["s"].temperature(50, 1.0) == pytest.approx(straight)
+    assert shaped["s"].temperature(10, 1.0) > shaped["convex"].temperature(10, 1.0)  # slow near the melt
+
+
+def test_the_handover_holds_the_state_liquid_through_the_melt_then_couples_it_as_the_codes_split():
+    warm_up = mf.WarmUp(heat=2, hold=3, handover=True)
+    assert warm_up.coupling(0, 0.01, 2.0, 0.02) == 0.0  # heating, though below the melting point
+    assert warm_up.coupling(4, 8.0, 2.0, 0.02) == 0.0  # holding
+    assert warm_up.coupling(5, 4.0, 2.0, 0.02) == 0.0  # cooling, above the melting point
+    assert warm_up.coupling(9, 0.2, 2.0, 0.02) == pytest.approx(0.5)  # halfway in log T
+    assert warm_up.coupling(9, 0.001, 2.0, 0.02) == 1.0
+    assert mf.WarmUp(heat=2, hold=3).coupling(0, 4.0, 2.0, 0.02) == 1.0  # without the handover
+
+
+def test_the_handover_window_reads_each_factors_melting_curve():
+    made: list[dict[str, Any]] = [
+        {"melting_point": 2.5, "critical_temperature": 3.5, "transitions": [[2.5, 1, 4], [0.3, 4, 6]]},
+        {"melting_point": None, "critical_temperature": 3.0, "transitions": []},
+        {},
+    ]
+    melting, final = mf.handover_window(made)
+    assert melting == [2.5, 3.0, 1.0] and final == [0.3, pytest.approx(0.003), 1.0]
+    one = [{"melting_point": 2.0, "critical_temperature": 3.0, "transitions": [[2.0, 1, 8]]}]  # all at once
+    assert mf.handover_window(one) == ([2.0], [1.0])  # an octave
+    assert mf.handover_window(one, 3.0) == ([2.0], [0.25])  # D30: at least three
+    assert mf.handover_window(made, 3.0)[1] == [0.3, pytest.approx(0.003), 1.0]  # wider windows kept
+
+
+def test_the_gate_holds_the_cools_clock_while_the_screen_is_below_the_holds_level():
+    gated = mf.WarmUp(heat=2, hold=3, gate=0.99)
+    assert not gated.holds(5, 0.5, 1.0)  # the cool's first epoch: the clock runs from the hold
+    assert gated.holds(6, 0.98, 1.0) and not gated.holds(6, 0.99, 1.0)
+    assert not gated.holds(4, 0.0, 1.0)  # the hold's own epochs never wait
+    assert not mf.WarmUp(heat=2, hold=3).holds(6, 0.0, 1.0)  # without a gate
+
+
+def test_a_held_clock_holds_the_temperature_and_the_coupling(tmp_path: Path):
+    _resumable(tmp_path, kind="gated")
+    cool = [row["anneal"] for row in _outcome(tmp_path)[0] if row.get("anneal", {}).get("phase") == "cool"]
+    assert len(cool) >= 3 and [a["held"] for a in cool] == list(range(len(cool)))
+    assert all(a["temperature"] == cool[0]["temperature"] and a["coupling"] == cool[0]["coupling"] for a in cool)
+
+
+def test_the_adaptive_cool_steps_at_equilibrium_or_its_cap_by_its_heat_capacity():
+    warm_up = mf.WarmUp(shape="adaptive", pace=0.1, settle=3, within=0.75)
+    cooling = mf.Cooling.start([2.0, 1.0])
+    cooling.advance(warm_up)  # nothing measured yet: the cool's start
+    assert cooling.temperature == [2.0, 1.0]
+    cooling.record([(5.0, 0.25), None])  # factor 1 hard: never measured, never stepped
+    cooling.advance(warm_up)  # one epoch, no prediction to test it against
+    assert cooling.temperature == [2.0, 1.0]
+    cooling.record([(5.5, 0.25), None])  # sigma 2 sqrt(0.25) = 1: within 0.75 of the epoch before
+    cooling.advance(warm_up)
+    step = math.exp(-0.1 / 0.5)
+    assert cooling.temperature == pytest.approx([2.0 * step, 1.0])
+    assert cooling.predicted[0] == pytest.approx(5.5 - 0.25 * (2.0 - 2.0 * step))
+    assert cooling.energies == [[], []] and cooling.capacities == [[], []]
+    t = cooling.temperature[0]
+    cooling.record([(9.0, 0.25), None])  # far from its prediction: holds
+    cooling.advance(warm_up)
+    cooling.record([(7.0, 0.25), None])  # moved more than 0.75 sigma since: holds
+    cooling.advance(warm_up)
+    assert cooling.temperature[0] == t
+    cooling.record([(1.0, 1.0), None])  # the cap: steps whatever the test, by the capacity's mean at t
+    cooling.advance(warm_up)
+    assert cooling.temperature[0] == pytest.approx(t * math.exp(-0.1 / math.sqrt(0.5)))
+    flat = mf.Cooling.start([1.0])  # a capacity near 0 (no transition): at most an octave
+    flat.record([(1.0, 1e-8)])
+    flat.record([(1.0, 1e-8)])
+    flat.advance(warm_up)
+    assert flat.temperature == [0.5]
+    bounded = mf.WarmUp(shape="adaptive", pace=0.1, settle=1, handover=True, rise=0.02)
+    melting, final = 2.0, 2.0 * 2.0**-4  # a 4-octave window: 0.02 of it is 0.08 of an octave
+    for t, share in ((4.0, 0.0), (1.0, 0.25)):  # above the window: from its top; within it: from the coupling's
+        edge = bounded.floor(t, melting, final)
+        assert bounded.coupling(100, edge, melting, final) == pytest.approx(share + 0.02)  # in the cool
+        steep = mf.Cooling.start([t])
+        steep.record([(1.0, 1e-8)])  # a flat capacity: an octave unbounded, the coupling's bound here
+        steep.advance(bounded, [melting], [final])
+        assert steep.temperature == pytest.approx([max(edge, t / 2)])
+    assert bounded.floor(final * 1.01, melting, final) == 0.0  # the window's end within the bound
+    assert mf.WarmUp(handover=True).floor(1.0, melting, final) == 0.0  # unbounded without rise
+    assert mf.WarmUp(shape="adaptive", heat=2, hold=3).temperature(9, 4.0) == 4.0  # Cooling's from the cool on
+    assert mf.WarmUp(shape="adaptive", heat=2, hold=3).reads_hardness(5)
+
+
+def test_the_hardness_test_waits_for_a_shaped_cool_to_run_its_curve():
+    exponential = mf.WarmUp(heat=2, hold=3, shape="exponential")
+    convex = mf.WarmUp(heat=2, hold=3, shape="convex", cool=100)
+    assert [exponential.reads_hardness(n) for n in (4, 5, 6)] == [False, True, True]
+    assert [convex.reads_hardness(n) for n in (5, 104, 105)] == [False, False, True]
+
+
+def test_the_warm_up_ends_only_with_its_screen_and_enough_distinct_states_or_at_its_cap():
+    warm_up = mf.WarmUp(screen=0.95, cap=8, distinct=4.0)
+    assert not warm_up.ends(1, 1, 1.0, [7, 40], [8, 8])  # screened, too few states in one factor
+    assert warm_up.ends(2, 1, 0.96, [32, 40], [8, 8])
+    assert not warm_up.ends(2, 1, 0.9, [32, 40], [8, 8])
+    assert warm_up.ends(8, 1, 0.5, [1, 1], [8, 8])  # the cap
+
+
+def test_thermal_noise_scales_with_the_temperature_and_spares_hard_factors():
+    encoding = mf.Encoding(5, mf.FAMILY)
+    net = mf.network(encoding, [(4, 4), (4, 4)], 0, mf.BEFORE_STATE)
+    before = [np.array(f.codes.E.tolist()) for f in net.recurrence_layer.factors]
+    mf.jitter(net, [4.0, None], 1e-2, np.random.default_rng(0))
+    after = [np.array(f.codes.E.tolist()) for f in net.recurrence_layer.factors]
+    assert np.array_equal(before[1], after[1])
+    moved = np.sum((after[0] - before[0]) ** 2, axis=1)  # each code's squared move, about kappa T = 0.04
+    assert 0.0 < float(moved.mean()) < 0.2
+    assert mf.code_groups(net, [4.0, None])[1] is None
+    assert mf.code_groups(net, [1e9, None])[0] == 1  # every code within T / 100: one group, the melt
+
+
+def test_whole_lengths_spread_from_one_to_the_cap():
+    assert mf.whole_lengths(69) == [1, 2, 3, 4, 5, 8, 13, 19, 30, 45, 69]
+    assert mf.whole_lengths(3) == [1, 2, 3]
+
+
+def test_annealing_without_commit_keeps_the_commitment_at_zero():
+    anneal = mf.Anneal(ramp=2, tail=1, commit=False)
+    assert anneal.commitments([0, 2, 3], [0.25] * 3) == [0.0, 0.0, 0.0]
+
+
+def test_code_groups_join_codes_within_the_thermal_noise():
+    encoding = mf.Encoding(5, mf.FAMILY)
+    net = mf.network(encoding, [(4, 4)], 0, mf.BEFORE_STATE)
+    codes = net.recurrence_layer.factors[0].codes
+    codes.E = net.backend.matrix([[0.0] * 4, [0.1] + [0.0] * 3, [5.0] + [0.0] * 3, [-5.0] + [0.0] * 3])
+    # squared gaps 0.01, 25, 25...: at T 0.5 apart under T / 100, together under 10 kappa T at kappa 0.01
+    assert mf.code_groups(net, [0.5]) == [4]
+    assert mf.code_groups(net, [0.5], 0.01) == [3]
+
+
+def test_a_whole_run_trains_and_screens_every_length_to_the_cap_from_its_first_step(tmp_path: Path):
+    settings = mf.Settings(epoch_examples=32, max_epochs=2, screen=4, cases=4, lengths=(2,), long=(3,))
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path, settings, cap=6, budget_epochs=3, whole=True)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    starts = [r for r in rows if r.get("epoch") == 0 and "screen" in r]
+    assert starts and all(r["kinds"] for r in starts)
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["whole"] is True
+    assert mf.epoch_lengths(6, 12) == [1, 2, 3, 4, 5, 6] * 2  # the whole distribution, in turn
+    # blocks go on past the cap until the budget: a cap of 2, blocks of at most 1 epoch, 5 epochs
+    short = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
+    mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path / "long", short, cap=2, budget_epochs=5, whole=True)
+    blocks = [
+        r["step"] for r in map(json.loads, (tmp_path / "long" / "log.jsonl").read_text().splitlines()) if "end" in r
+    ]
+    assert max(blocks) > 2
+    with pytest.raises(AssertionError, match="no long tail"):
+        mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path / "x", settings, cap=6, whole=True, long_tail=2)
+
+
+def test_the_melting_curve_splits_at_the_critical_temperature_into_the_clusters():
+    rng = np.random.default_rng(0)
+    centres = np.array([[0.0, 0.0], [6.0, 0.0], [0.0, 3.0]])
+    h = np.concatenate([c + rng.normal(0.0, 0.05, size=(40, 2)) for c in centres])
+    melting = mf.melting_curve(h, 6, np.random.default_rng(1))
+    critical = 2.0 * float(np.linalg.eigvalsh(np.cov(h, rowvar=False))[-1])
+    assert melting["critical_temperature"] == pytest.approx(critical)
+    assert melting["curve"][0] == [2.0 * critical, 1]  # the melt: every code at the mean
+    # Rose: the first split at T_c, seen within an octave below it (critical slowing down); 3 groups by the end
+    assert critical / 2 <= melting["melting_point"] <= critical
+    groups = [g for _, g in melting["curve"]]
+    assert groups == sorted(groups) and 3 in groups
+    assert melting["transitions"][0][1] == 1
+
+
+def test_target_states_follow_the_machine_window_by_window():
+    machine = wt.task_named("word-problem-s3").machine
+    words = [[1, 2, 0], [2, 2, 0]]
+    rows = [[(tuple(float(t) for t in w), None) for w in words]]
+    states = mf.target_states(machine, rows)
+    expected: list[int] = []
+    for j in range(3):  # factor_states' order: each window, then each word
+        for w in words:
+            state = machine.start
+            for t in w[: j + 1]:
+                state = int(machine.transition[state, t])
+            expected.append(state)
+    assert states.tolist() == expected
+
+
+def test_state_separation_reads_the_target_from_the_cells_against_chance():
+    encoding = mf.target_named("word-problem-s3")
+    net = mf.network(encoding, [(4, 4), (4, 4)], 0, mf.OUTPUT)
+    rows = [mf.windows_drawn(encoding, n, 20, f"separation-test-{n}") for n in (2, 4)]
+    net.set_continuous([True, True])
+    separation = mf.state_separation(net, rows, encoding.task.machine, sample=100)
+    assert separation["windows"] == 100 and 0.0 < separation["chance"] <= 1.0
+    for name in ("joint", "factor-0", "factor-1"):
+        assert 0.0 <= separation[name]["neighbour"] <= 1.0 and 0.0 <= separation[name]["centroid"] <= 1.0
+
+
+def test_distinct_states_counts_each_snapped_factors_cell_outputs():
+    encoding = mf.Encoding(5, mf.FAMILY)
+    net = mf.network(encoding, [(4, 4)], 0, mf.BEFORE_STATE)
+    rows = [[encoding.example(encoding.draw(2, random.Random(i))) for i in range(6)]]
+    (n,) = mf.distinct_states(net, rows)
+    assert 1 <= n <= 6 * 2
+
+
 def test_hardness_is_the_share_of_windows_whose_largest_weight_passes_the_test():
     net = mf.network(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, mf.BEFORE_STATE)
     encoding = mf.Encoding(5, mf.FAMILY)
@@ -1034,6 +1308,56 @@ def test_hardness_is_the_share_of_windows_whose_largest_weight_passes_the_test()
     assert mf.hardness(net, rows, [None], 0.99) == [None]
     cold, hot = mf.hardness(net, rows, [1e-9], 0.99)[0], mf.hardness(net, rows, [1e9], 0.99)[0]
     assert cold == 1.0 and hot == 0.0
+
+
+def test_thermals_are_the_soft_assignments_energy_and_its_derivative_in_temperature():
+    encoding = mf.Encoding(5, mf.FAMILY)
+    net = mf.network(encoding, [(4, 4)], 0, mf.BEFORE_STATE)
+    rows = [[encoding.example(encoding.draw(2, random.Random(i))) for i in range(6)]]
+    assert mf.thermals(net, rows, [None]) == [None]
+    h = np.concatenate(
+        [np.array(c.tolist())[:, :4] for c in net.window_states(net.backend.matrix([t for t, _ in rows[0]]))[2][1:]]
+    )
+    E = np.array(net.recurrence_layer.factors[0].codes.E.tolist())
+    D = np.sum((h[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
+    (cold,) = mf.thermals(net, rows, [1e-9])
+    assert cold is not None and cold[0] == pytest.approx(D.min(axis=1).mean()) and cold[1] == pytest.approx(0.0)
+    (hot,) = mf.thermals(net, rows, [1e9])
+    assert hot is not None and hot[0] == pytest.approx(D.mean(), rel=1e-6)
+    # the capacity is d<D>/dT: a central difference of the energy
+    t, dt = 0.1, 1e-5
+    (here,), (up,), (down,) = (mf.thermals(net, rows, [x]) for x in (t, t + dt, t - dt))
+    assert here is not None and up is not None and down is not None
+    assert here[1] == pytest.approx((up[0] - down[0]) / (2 * dt), rel=1e-3)
+
+
+def test_heat_course_reads_each_factors_splits_and_capacity_peak_in_the_cool():
+    def row(phase: str, groups: list[int], capacity: list[float], t: list[float | None]) -> dict[str, Any]:
+        return {
+            "step": 1,
+            "epoch": 1,
+            "anneal": {"phase": phase, "temperature": t, "groups": groups, "capacity": capacity},
+        }
+
+    rows: list[dict[str, Any]] = [
+        row("hold", [2, 8], [9.0, 0.1], [4.0, None]),  # the hold's peak isn't the cool's
+        row("cool", [2, 8], [0.1, 0.1], [3.0, None]),
+        row("cool", [3, 8], [0.3, 0.1], [2.0, None]),  # nucleation at epoch 1, jump x3
+        row("cool", [3, 8], [0.5, 0.1], [1.5, None]),
+        row("cool", [6, 8], [0.4, 0.1], [1.0, None]),  # the largest split, epoch 3
+        row("cool", [5, 8], [0.6, 0.1], [0.8, None]),  # a merge is no split
+        row("cool", [8, 8], [0.2, 0.1], [0.5, None]),
+        {"step": 1, "factors": []},
+    ]
+    course, frozen = mf.heat_course(rows)
+    assert frozen is None and course is not None
+    assert course["splits"] == [[1, 1, 2.0], [3, 3, 1.0], [5, 3, 0.5]]
+    assert course["nucleation"] == 1 and course["largest"] == 3 and course["jump"] == 3.0
+    assert course["peak"] == 4 and course["peak_capacity"] == 0.6 and course["peak_temperature"] == 0.8
+    assert course["from_nucleation"] == 3 and course["from_largest"] == 1 and course["in_cascade"]
+    assert course["maxima"] == 2 and course["groups"] == [2, 8] and course["epochs"] == 6
+    assert "factor 1 -" in mf.heat_summary([course, frozen])
+    assert mf.heat_course([{"step": 1, "anneal": {"phase": "cool", "temperature": [1.0]}}]) == []
 
 
 def test_state_spread_reads_the_outputs_critical_temperature_and_the_codes_groups():
@@ -1071,6 +1395,149 @@ def test_an_annealed_run_logs_each_epochs_temperatures_hardness_and_commitments(
     with pytest.raises(AssertionError, match="annealing sets the commitment"):
         mf.run(
             mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path / "x", settings, cap=2, anneal=anneal, consolidate=True
+        )
+
+
+def test_kmeans_finds_separated_clusters_and_perturbs_the_codes_it_cant_fill():
+    rng = np.random.default_rng(0)
+    centres = np.array([[0.0, 0.0], [5.0, 5.0], [-5.0, 5.0]])
+    points = np.concatenate([c + rng.normal(0.0, 0.1, size=(30, 2)) for c in centres])
+    found, nearest = mf.kmeans(points, 3, np.random.default_rng(1), 25)
+    rounded: list[list[float]] = np.round(found).tolist()
+    assert sorted(rounded) == sorted(centres.tolist())
+    assert len(set(nearest.tolist())) == 3
+    # two distinct points, four codes: no two codes equal
+    few, _ = mf.kmeans(np.array([[0.0, 0.0], [1.0, 1.0]] * 5), 4, np.random.default_rng(2), 5)
+    gaps = np.sum((few[:, np.newaxis, :] - few[np.newaxis, :, :]) ** 2, axis=2)[np.triu_indices(4, 1)]
+    assert gaps.min() > 0.0
+
+
+def test_a_warm_up_run_trains_continuous_then_heats_from_its_codes_t_hot(tmp_path: Path):
+    settings = mf.Settings(epoch_examples=32, max_epochs=2, screen=40, cases=4, lengths=(2,), long=(3,))
+    anneal, warm_up = mf.Anneal(start=1.0, halving=1, ramp=2), mf.WarmUp(screen=2.0, cap=1, heat=2, hold=1)
+    mf.run(
+        mf.Encoding(5, mf.FAMILY),
+        [(4, 4)],
+        0,
+        60,
+        tmp_path,
+        settings,
+        cap=3,
+        budget_epochs=6,
+        anneal=anneal,
+        warm_up=warm_up,
+    )
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    (end,) = [r for r in rows if "warm_up_end" in r]
+    (made,) = end["warm_up_end"]
+    assert made["hot"] == pytest.approx(2.0 * made["critical_temperature"]) and made["within_temperature"] >= 0.0
+    assert "melting_point" in made and isinstance(made["transitions"], list)
+    assert any("distinct" in r for r in rows)
+    at = rows.index(end)
+    assert all(r.get("warm") for r in rows[:at] if r.get("epoch", 0) > 0 and "end" not in r)
+    after = [r["anneal"] for r in rows[at:] if r.get("epoch", 0) > 0 and "end" not in r and "anneal" in r]
+    # D15: heated from T_hot / 4, doubling, hardness unread until the cool
+    assert [a["phase"] for a in after[:3]] == ["heat", "heat", "hold"]
+    assert [a["temperature"][0] for a in after[:3]] == pytest.approx([made["hot"] / 4, made["hot"] / 2, made["hot"]])
+    assert all(a["hard"][0] is None for a in after[:3]) and all(a["beta"][0] == 0.0 for a in after[:3])
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["warm_up"] == repr(warm_up)
+    with pytest.raises(AssertionError, match="annealed snap"):
+        mf.run(mf.Encoding(5, mf.FAMILY), [(4, 4)], 0, 60, tmp_path / "x", settings, cap=2, warm_up=warm_up)
+    # D25: with the handover, couplings 0 through the heat and the hold
+    handed = mf.WarmUp(screen=2.0, cap=1, heat=2, hold=1, handover=True)
+    mf.run(
+        mf.Encoding(5, mf.FAMILY),
+        [(4, 4)],
+        0,
+        60,
+        tmp_path / "handed",
+        settings,
+        cap=3,
+        budget_epochs=6,
+        anneal=anneal,
+        warm_up=handed,
+    )
+    handed_rows = [json.loads(line) for line in (tmp_path / "handed" / "log.jsonl").read_text().splitlines()]
+    profiled = [r["anneal"] for r in handed_rows if "anneal" in r and "phase" in r["anneal"]]
+    assert [a["coupling"] for a in profiled[:3]] == [[0.0], [0.0], [0.0]]
+    with pytest.raises(AssertionError, match="never goes back"):
+        mf.run(
+            mf.Encoding(5, mf.FAMILY),
+            [(4, 4)],
+            0,
+            60,
+            tmp_path / "y",
+            settings,
+            cap=2,
+            anneal=anneal,
+            warm_up=warm_up,
+            restore_best=True,
+        )
+
+
+def test_a_crucibles_reading_marks_a_loss_after_every_factor_is_hard():
+    start = {"in_use": 8, "effective_dimension": 6, "melting_point": 2.5, "transitions": [1.0, 0.5]}
+    soft = {"phase": "cool", "coupling": [0.5, 0.5], "temperature": [0.5, 0.3]}
+    hard = {"phase": "cool", "coupling": [1.0, 1.0], "temperature": [None, None]}
+    rows: list[dict[str, Any]] = [
+        {"step": 8, "warm_up_end": [start, start], "crucible": 8},
+        {"step": 9, "epoch": 1, "screen": 1.0, "anneal": soft},
+        {"step": 9, "factors": [{"codes": 8}, {"codes": 8}], "accuracy": {"a": 0.9}, "state_share": 0.9},
+        {"step": 10, "epoch": 1, "screen": 0.4, "anneal": hard},
+        {"step": 10, "factors": [{"codes": 2}, {"codes": 2}], "accuracy": {"a": 0.3}, "state_share": 0.2},
+        {"step": 10, "end": "spent", "epochs": 2, "seconds": 180.0},
+    ]
+    course = mf.crucible_course(rows)
+    assert course["best"] == {"phase": "cool", "coupling": 0.5, "temperature": 0.4}
+    assert (course["lost_step"], course["lost"]["temperature"]) == (10, None)
+    assert "lost 10 (cool, coupling 1.00, hard)" in mf.crucible_summary(course)
+
+
+def test_a_crucible_holds_the_warm_ups_material_then_grows_on_the_whole_distribution(tmp_path: Path):
+    settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=40, cases=4, lengths=(2,), long=(3,))
+    # hard at the first reading (every window's weight above 0), read from the cool's start: after 2 epochs
+    anneal = mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False)
+    warm_up = mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1, handover=True)
+    encoding = mf.Encoding(5, mf.FAMILY)
+    mf.run(
+        encoding,
+        [(4, 4)],
+        0,
+        60,
+        tmp_path,
+        settings,
+        cap=6,
+        budget_epochs=8,
+        anneal=anneal,
+        warm_up=warm_up,
+        crucible=True,
+    )
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    (end,) = [r for r in rows if "warm_up_end" in r]
+    first = mf.first_length(encoding.task.machine)
+    assert end["crucible"] == end["step"] == first + 1  # the warm-up's cap: its second step
+    starts = [r for r in rows if r.get("epoch") == 0 and "screen" in r and r["step"] > end["step"]]
+    marks = [r["crucible"] for r in starts]
+    assert marks[0] == end["step"] and "grown" in marks  # the crucible's blocks, then growth
+    grown = marks.index("grown")
+    assert all(m == end["step"] for m in marks[:grown]) and all(m == "grown" for m in marks[grown:])
+    assert set(starts[grown]["kinds"]) >= set(starts[0]["kinds"])
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["crucible"] is True
+    with pytest.raises(AssertionError, match="crucible"):
+        mf.run(
+            encoding,
+            [(4, 4)],
+            0,
+            60,
+            tmp_path / "x",
+            settings,
+            cap=6,
+            anneal=anneal,
+            warm_up=warm_up,
+            crucible=True,
+            whole=True,
         )
 
 

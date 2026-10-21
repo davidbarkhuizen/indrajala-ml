@@ -277,6 +277,79 @@ def test_temperatures_soften_training_only_and_none_restores_it_by_bits(recurren
     assert all(np.array_equal(a, b) for a, b in zip(plain, _fresh_gradients(network, X, labels), strict=True))
 
 
+def _free(network: WindowRecurrentArrayNetwork) -> list[bool]:
+    # every snapped factor run continuous (the state formation workplan's warm-up)
+    return [f.codes is not None for f in network.recurrence.factors]
+
+
+@pytest.mark.parametrize("recurrence", SNAPPED)
+def test_continuous_factors_pass_their_cells_output_on_in_training_and_the_screen_only(recurrence: str):
+    network = _network(recurrence=RECURRENCES[recurrence])
+    X, labels = _batch(3, examples=8)
+    plain, codes, outputs = _fresh_gradients(network, X, labels), network.state_codes(X), network.forward_windows(X)
+    _, states, _ = network.window_states(X)
+    network.set_continuous(_free(network))
+    free = _fresh_gradients(network, X, labels)
+    assert any(not np.array_equal(a, b) for a, b in zip(plain, free, strict=True))
+    # a continuous factor's codes take no gradient from the windows: only the initial state's code,
+    # which stays snapped (D11), has one
+    _, first = network.first_step()
+    for f, code in zip(network.recurrence_layer.factors, first[0], strict=True):
+        others = np.delete(f.codes.grad_E, code, axis=0)
+        assert not np.any(others)
+    # the screen (forward_windows) reads the continuous state; every machine reading stays snapped
+    assert not np.array_equal(network.forward_windows(X), outputs)
+    assert network.state_codes(X) == codes
+    _, states_now, _ = network.window_states(X)
+    assert all(np.array_equal(a, b) for a, b in zip(states, states_now, strict=True))
+    assert not network.recurrence_layer.reading
+    network.set_continuous([False] * len(network.recurrence.factors))
+    assert all(np.array_equal(a, b) for a, b in zip(plain, _fresh_gradients(network, X, labels), strict=True))
+    assert np.array_equal(network.forward_windows(X), outputs)
+
+
+@pytest.mark.parametrize("recurrence", SNAPPED)
+def test_coupled_factors_blend_in_training_and_the_screen_only_and_1_is_the_snapped_network(recurrence: str):
+    network = _network(recurrence=RECURRENCES[recurrence])
+    X, labels = _batch(3, examples=8)
+    plain, codes, outputs = _fresh_gradients(network, X, labels), network.state_codes(X), network.forward_windows(X)
+    snapped = [f.codes is not None for f in network.recurrence.factors]
+    network.set_couplings([0.4 if s else 1.0 for s in snapped])
+    coupled = _fresh_gradients(network, X, labels)
+    assert any(not np.array_equal(a, b) for a, b in zip(plain, coupled, strict=True))
+    # the screen reads the blend; every machine reading stays snapped
+    assert not np.array_equal(network.forward_windows(X), outputs)
+    assert network.state_codes(X) == codes
+    # coupled at 0, the codes still learn from the cells' outputs (their codebook loss)
+    network.set_couplings([0.0 if s else 1.0 for s in snapped])
+    _fresh_gradients(network, X, labels)
+    assert all(np.any(f.codes.grad_E) for f in network.recurrence_layer.factors if f.codes is not None)
+    network.set_couplings([1.0] * len(snapped))
+    assert all(np.array_equal(a, b) for a, b in zip(plain, _fresh_gradients(network, X, labels), strict=True))
+    assert np.array_equal(network.forward_windows(X), outputs)
+
+
+def test_couplings_are_refused_out_of_range_for_a_continuous_factor_or_the_wrong_count():
+    network = _network(recurrence=FACTORED_CROSS)
+    with pytest.raises(AssertionError, match="a coupling in"):
+        network.set_couplings([1.5, 1.0, 1.0])
+    with pytest.raises(AssertionError, match="only a snapped factor not run continuous"):
+        network.set_couplings([1.0, 0.5, 1.0])
+    with pytest.raises(AssertionError, match="a coupling per factor"):
+        network.set_couplings([0.5])
+
+
+def test_continuous_is_refused_for_a_continuous_or_soft_factor_or_the_wrong_count():
+    network = _network(recurrence=FACTORED_CROSS)
+    with pytest.raises(AssertionError, match="only a snapped factor"):
+        network.set_continuous([True, True, False])
+    with pytest.raises(AssertionError, match="a continuous flag per factor"):
+        network.set_continuous([True])
+    network.set_temperatures([1.0, None, None])
+    with pytest.raises(AssertionError, match="only a snapped factor"):
+        network.set_continuous([True, False, False])
+
+
 def test_a_temperature_is_refused_for_a_continuous_factor_or_not_above_0():
     network = _network(recurrence=FACTORED_CROSS)
     with pytest.raises(AssertionError, match="no codes to soften"):
