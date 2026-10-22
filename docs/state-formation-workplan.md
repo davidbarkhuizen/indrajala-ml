@@ -101,6 +101,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D61 | 2026-10-22, 08:00 | the paced coupling | the coupling paced by a trust region (`--coupling-pace`) or read from a Savitzky-Golay line (`--sharpness-smoothing`); its probe (`probe-d61.sh`) |
 | D62 | 2026-10-22, 08:00 | the run's state object | `run`'s loop-carried state one dataclass, the loop's body split into functions of it (planned) |
 | D63 | 2026-10-22, 08:40 | the collapse | reheat (the rate below the hold's level negative, the clock run back) or kill-and-resample, on cost per certified machine (planned, after D62) |
+| D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -1017,6 +1018,25 @@ owner's; D49-D54 settled under the delegation.
   registered after D61's reading, on the drop-first failures (S3 24, D54's S3 4, D57's S4 0, 2) and
   the jump-first ones, with D61's arm if one is adopted: a diagnosis; adopted only on a fresh-seed
   rate against the method's current one (a clear majority certifying is the aim, not every seed).
+- **D64. The method's fresh-seed rate (`~/code/probe-d64.sh`, registered before its data, 2026-10-22,
+  09:00; the owner: "you can run stone at a half-load today").** The method is statistical, so a
+  remedy (D61's arms, D63) is adopted only on a fresh-seed rate against the current method's, which is
+  known only from D59's re-runs of D55's seeds (S3 11 of 16, move-to-front-4 7 of 8); and "in general"
+  covers every backdrop class, where the larger and unstructured machines are the gap (random-q16-0 0
+  of 4, D56; random-q12-0 1 of 4, D58, read 08:58; S4 1 of 3, D57). The current method unchanged
+  (D54's cell, `--margin-wait 200` under D60, no D61 arm) on untouched seeds: word-problem-s3 40-47,
+  move-to-front-4 32-35, word-problem-s4 3-5, random-q16-0 4-6 on `stone` (6 at once by day, 10 at
+  night; stopped at 06:55 Friday, resumed that evening), random-q12-0 4-7 on `klip` (3 at once); 22
+  runs. Feasibility as D54's and D56-D58's. Expectations: each backdrop's rate (D41) with its Wilson
+  interval; S3 and move-to-front-4 together at least 8 of 12 (the working rate), refuted as working
+  in general on them at 6 or fewer; the larger and unstructured backdrops read, not barred (their
+  rates against S3's: the scaling question); any false discovery refutes the stop; read: each
+  failure's kind and order (jump or drop first, the frozen clock's epochs), the margin's waits, the
+  deadline's stops, the seconds to each certificate. Its seeds pair any later arm's batch.
+  - (a) *Chosen.* Pros: the comparison every adoption needs, on fresh seeds; weights the gap; the
+    half-load `stone` and the free `klip` today. Cons: a coarse rate per backdrop (3-8 seeds).
+  - (b) S3 and move-to-front-4 only, 24 seeds (a sharper working rate). Cons: silent on the gap.
+  - (c) Wait for D61's reading, then one batch with its arm. Cons: no current rate to compare it to.
 
 ### The consistency review settled (2026-10-21, afternoon)
 
@@ -1580,6 +1600,7 @@ a random machine would just need a very slow cool.**
     Then the margin stop (D59, `--margin-wait`, tested, the golden run unchanged) and its probe.
     Then the margin deadline (D60) and the paced coupling (D61, both arms; tested, the golden run
     unchanged), D61's probe registered in its script; then the run's state object (D62).
+    Then D64's fresh-seed rate, registered in its script; then the collapse (D63).
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
