@@ -1749,6 +1749,10 @@ class Continuous:
     smoothed by a one-sided Savitzky-Golay filter (`smoothed`: its least-squares line over the
     readings of the last e-folding time of the cool's clock, `halving / ln 2`, read at the clock's
     end): no lag on a steady rise, a jump spread over the time the temperature takes to move.
+    `reheat` (the state formation workplan's D63 (a)) extends the rate's line below `low` to -1 (at
+    `2 low - high` of the level): a screen fallen that far runs the clock back, never past the cool's
+    start, so the temperature rises, the codes soften and the coupling read from their sharpness falls;
+    a held temperature the clock passes back over is released; growth only forward.
     """
 
     low: float = 0.95
@@ -1759,10 +1763,12 @@ class Continuous:
     save_every: int = 10
     pace: bool = field(default=False, repr=False)  # D61 (b); in the run's identity apart
     smooth: bool = field(default=False, repr=False)  # D61 (c); in the run's identity apart
+    reheat: bool = field(default=False, repr=False)  # D63 (a); in the run's identity apart
 
     def rate(self, screen: float, level: float) -> float:
         """The share of an epoch the cool's clock advances (D49), from the screen before it against the hold's level."""
-        return min(max((screen / level - self.low) / (self.high - self.low), 0.0), 1.0) if level > 0 else 1.0
+        least = -1.0 if self.reheat else 0.0  # D63 (a): below `low`, the clock runs back
+        return min(max((screen / level - self.low) / (self.high - self.low), least), 1.0) if level > 0 else 1.0
 
     @staticmethod
     def coupling(sharp: float, start: float) -> float:
@@ -1870,12 +1876,16 @@ def continuous_epoch(
     held, rate = state.held, 1.0
     if warm_up.phase(trained - held - 1) == "cool":
         rate = continuous.rate(screen, level)
-        held += 1.0 - rate
+        held = min(held + 1.0 - rate, trained - warm_up.heat - warm_up.hold)  # D63 (a): never back past the cool
     clock = trained - held
     phase = warm_up.phase(clock)
+    floors = list(state.floors)
+    if rate < 0:  # D63 (a): a held temperature the clock passes back over released
+        floors = [
+            0.0 if f > 0 and warm_up.temperature(clock, h) > f else f for f, h in zip(floors, state.hot, strict=True)
+        ]
     temperatures: list[float | None] = [
-        max(warm_up.temperature(clock, t), f) if s else None
-        for t, f, s in zip(state.hot, state.floors, snapped, strict=True)
+        max(warm_up.temperature(clock, t), f) if s else None for t, f, s in zip(state.hot, floors, snapped, strict=True)
     ]
     sharp = sharpness(net, rows, temperatures, hard)
     levels = [0.0 if v is None else v[0] for v in sharp]
@@ -1905,8 +1915,10 @@ def continuous_epoch(
     if coupling_cap < 1.0:  # D38's cap, as without
         couplings = [min(c, coupling_cap) for c in couplings]
     floors = [
-        f if f > 0 or t is None or phase != "cool" or v < continuous.sharp else t
-        for f, t, v in zip(state.floors, temperatures, levels, strict=True)
+        f
+        if f > 0 or t is None or phase != "cool" or v < continuous.sharp or rate < 0
+        else t  # D63: none held running back
+        for f, t, v in zip(floors, temperatures, levels, strict=True)
     ]
     jitter(net, temperatures, warm_up.kappa, rng)
     heat = thermals(net, rows, temperatures)
@@ -1935,7 +1947,7 @@ def continuous_epoch(
         }
     }
     grown = (
-        continuous.grow(length, rate, min(c for c, s in zip(couplings, snapped, strict=True) if s), cap)
+        continuous.grow(length, max(rate, 0.0), min(c for c, s in zip(couplings, snapped, strict=True) if s), cap)
         if phase == "cool"
         else length
     )
@@ -2220,6 +2232,7 @@ def _run_identity(
         **({"continuous": repr(continuous)} if continuous is not None else {}),
         **({"coupling_pace": True} if continuous is not None and continuous.pace else {}),
         **({"sharpness_smoothing": True} if continuous is not None and continuous.smooth else {}),
+        **({"reheat": True} if continuous is not None and continuous.reheat else {}),
         **({"margin_wait": margin_wait} if margin_wait is not None else {}),
     }
 
