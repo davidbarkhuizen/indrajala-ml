@@ -103,6 +103,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D63 | 2026-10-22, 08:15 | the collapse | reheat (the rate below the hold's level negative, the clock run back) or kill-and-resample, on cost per certified machine (planned, after D62) |
 | D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`) |
 | D65 | 2026-10-22, 10:45 | the order-biased cool | the cool's halving time times `1 + w (s - 1)`: w the machine's order from answers (0 when ordered), s the slowdown from the melting curve and relaxation; set aside at 11:05 on its stage 0 (the failures freeze, the cool does not outrun them) |
+| D66 | 2026-10-22, 11:20 | the two-phase cool | a second gate on the clock, quasi-static in the state's order (the snapped machine's long answers): slowed while the order rises, today's cool where it is settled (planned, after D63's reading) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -1115,6 +1116,62 @@ owner's; D49-D54 settled under the delegation.
     machines does not follow from it, and a loose bound blurs it. Kept as tools (`order`,
     `formation`); nothing built on them. Revisit only if the reheat (D63 (a)) fails on the random
     machines.
+- **D66. The two-phase cool: quasi-static in the order too (planned 2026-10-22, 11:20; the owner:
+  "we need to split the cool into two portions - an initial slow cool ... and a second quasi-static
+  cool like we already have ... the ordered machines only need the second phase"; "yes" to its
+  plan).** Replaces D65's mechanism. The onset reading (findings, the freeze, below): the state begins
+  to form (state share first >= 0.6) at 2.2-3.1 times the factors' melting point on move-to-front-4
+  and mostly 1.7-2.3 on S3, but only at 1.0-1.4 on the random machines, which then freeze at about 1
+  before forming: they start ordering late and run out of room. Today's gate (D49) is quasi-static in
+  the screen, which a network answers right on short words while its state is still disordered; the
+  cool is not quasi-static in the state's order. The owner's aside (raise the melt for random
+  machines) answered: the melting point is measured, not set, the start is already 2-5 times it, and
+  in an exponential cool a hotter start adds epochs only at the top, not around the melt.
+  - **The mechanism:** a second gate on the clock, `rate = min(g_screen, g_order)`, the order read
+    from answers alone: `A`, the snapped machine's accuracy at the longest answers length (48; already
+    read at every step's end for the answers-only stop, D35, on the same fixed words each step, so a
+    change is the network's, not the sample's). `g_order = clip(1 - rise / se)`, `rise` the epoch's
+    increase of `A` (falls ignored: a fall is the screen gate's), `se = sqrt(A (1 - A) / n)` the
+    standard error of `A` over its `n` answers: the clock runs at full speed while the order is
+    settled (flat: not yet begun, or formed) and slows while it is still rising faster than it can be
+    told from its own sampling. No new constant: the scale is the reading's own error. Phase 1 is
+    then not a schedule but whatever stretch of the cool the order rises in: an ordered machine that
+    has formed above the zone meets it only briefly (its rise passes early, at 2-3 times the melt), a
+    random machine's begins at the melt, where it is slowed.
+  - **Stage 0, offline (now: existing data):** (0a) `g_order` replayed on the 47 completed runs'
+    logged `A` (step ends): where it would slow each (temperature over the melting point), for how
+    many epochs, how much of an ordered run's cool it would stretch; (0b) `n` (the answers behind
+    `A`) and whether the step-end `A` is per epoch in the cool (the cool's steps are one epoch); the
+    cost of reading `A` every epoch (seconds); (0c) the budget under the replayed slowing; (0d)
+    feasibility of random-q16-1 and -2 (docs/information-flow.md's register). Criteria registered now:
+    the replay slows every random run between its onset and its freeze; on ordered runs it adds at
+    most a quarter to the cool's epochs before formation; else the owner sees it before stage 1.
+  - **Stage 1, the build (code only, while the current work runs):** `--order-gate` (with
+    `--continuous`): `A` each cool epoch, `g_order` and `rate` in the anneal row; `Place` fields, an
+    identity key, a resumable kind; tests: the gate's formula, and off leaves a run bit-identical;
+    strict pyright, the full suite, the golden run; PR, CI, merge.
+  - **Stage 2, the probe (registered before its data, after D63's reading; expected Saturday
+    2026-10-24 once D64 and D63's probe end):** D63's reading sets its arms: if the reheat re-freezes
+    the random runs at the same point on its re-cool, the pace through the zone is implicated (for
+    D66); if the reheat certifies them, D66's probe is a diagnosis of a second route. Cells: the gate
+    on random-q12-0 seeds 4-7 and random-q16-0 seeds 4-6 (paired with D64's controls and D63's
+    reheat), random-q16-1 and -2 seeds 0-2 with and without (12 runs: not one machine's tuning), and a
+    harm check on S3 seeds 40-43 and move-to-front-4 32-33 (paired with D64's): 25 runs. Expectations
+    (fixed at registration): promising at the gate forming on at least half its random runs with
+    their controls at a quarter or fewer; refuted at a random rate no better than the controls';
+    harm: the ordered arm losing more than one of six against its pairs; any false discovery refutes
+    the stop; read: where `g_order` slowed each run (temperature over the melting point), the epochs
+    added, the onsets and freezes, cost per certified machine. A diagnosis; adoption only on a
+    fresh-seed rate, the gate with the reheat as the candidate method.
+  - (a) *Chosen:* the order gate. Pros: answers-only; one reading already taken at every step; no
+    order weight (D65's stage 0 found none reliable); slows only while the order rises, so random
+    machines are slowed where they start; derived scale. Cons: slows ordered machines during their own
+    formation too (harmless in principle; the harm check reads it), not exactly zero for them; reads
+    `A` every epoch (cost: stage 0b).
+  - (b) A fixed slow band around the melting point (from the warm-up's melting curve). Cons: a band's
+    width is a constant; slows ordered machines that have long formed.
+  - (c) The order weight (D65) on the pace. Cons: no weight met its criteria.
+  - (d) A hotter start (the owner's aside). Cons: adds time only at the top of an exponential cool.
 
 ### The consistency review settled (2026-10-21, afternoon)
 
@@ -1725,6 +1782,12 @@ Read for D65's stage 0 on the same 47 runs' per-epoch rows (`anneal`: `rate`, `c
   the window between the melt and the freeze, in effect, and did not form either.
 - **Not the curriculum:** the never-formed runs froze at lengths 8.0-9.4 and ended at 9.2-11.6; the
   formed runs formed at 8.2-15.6 (S3 8.2-11.2), so the frozen runs sat at lengths where others form.
+- **Onset (the owner's two-phase question):** the state begins to form (share first >= 0.6) at
+  2.2-3.1 times the factors' melting point on move-to-front-4, 0.8-2.5 (mostly 1.7-2.3) on S3,
+  1.2-1.4 on S4, and 1.0-1.4 on random-q12-0 and random-q16-0, whose failures then freeze at about 1
+  before forming (random-q12-0 seed 0 formed at 0.59). Ordered machines order above the zone; random
+  ones only begin there. The frozen holds above were of a glass already formed: they say nothing
+  about a slower approach before it (D66).
 - **The snapped machine's long answers read formation from answers alone:** its accuracy at length 48
   tracks the state share (random failures flat at 0.51-0.60 for 1,400 steps; S3 seed 34 0.35 to 1.00
   as it formed), an answers-only observable for a freeze.
