@@ -5,8 +5,9 @@ to judge which findings are new; extended the same day, after the certificate (E
 literature on discretised recurrent states and automaton extraction, which the first searches
 missed. It backed the claims workplan, which planned the work to substantiate them
 (retired; its report, [window-recurrent-report.md](window-recurrent-report.md)). Extended
-2026-10-15 for the division paper and 2026-10-19 for the architecture's novelty (the sections at
-the end).** Every paper read is kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`) as PDF and text, under the file
+2026-10-15 for the division paper, 2026-10-19 for the architecture's novelty, 2026-10-20 for
+state formation and 2026-10-22 for the freeze, restarts and random machines (the sections at the
+end).** Every paper read is kept in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`) as PDF and text, under the file
 name given; arXiv ids are given for each.
 
 ## Scope and method
@@ -371,6 +372,115 @@ Not found: any study of a factored discrete recurrent state learning a finite ma
 reports the commitment's effect; the VQ results are on autoencoders and tokenizers, where the
 quantiser's input is a single forward pass, not a state fed back.
 
+## Extension (2026-10-22): the freeze, restarts, collapses and random machines
+
+Asked by the owner: review the concepts and findings that arose since the 2026-10-20 extension. The
+problem, as the continuous crystallisation (D48-D66, [state-formation-workplan.md](state-formation-workplan.md))
+left it:
+
+- **The method works on ordered machines, as a batch:** with the margin stop, S3 11 of 16 and
+  move-to-front-4 7 of 8 on D55's fresh seeds (D59); the method is statistical (a clear majority
+  certifying, not every seed).
+- **Every failure ends frozen:** the quasi-static clock (D49) holds at 0 for 738-1,472 epochs; the
+  random machines freeze before the state forms, near the factors' melting point (0.54-1.16 of it);
+  the coupling, read from the codes' sharpness (D50), keeps quenching while the clock is held; a hold
+  in the window between melt and freeze (two runs) did not form. One run thawed after 445 epochs and
+  certified (S3 seed 30).
+- **The larger machine fails at keeping:** S4 formed, then collapsed at a steady coupling (the screen
+  0.99 to 0.42 in one or two epochs), then froze. **Coupling jumps** (moves >= 0.1 an epoch): 58-201
+  in every spent failure, at most 11 in certified runs.
+- **Success is forming times keeping; size is not the variable** (the scaling conjecture): the random
+  machines fail at forming, S4 at keeping; `order` reads a target's order against random machines.
+- **The remedies planned:** the reheat (D63 (a), the clock run back) against kill-and-resample (D63
+  (e)) on cost per certified machine; the slowed re-cool after each reheat (D66, the forward rate
+  times `2^-k`); the paced coupling (D61, a trust region or a Savitzky-Golay line); the order-biased
+  cool (D65) set aside; constants derived, never fixed.
+
+Searched: freezing and re-annealing in simulated annealing, constant-thermodynamic-speed schedules,
+restart strategies and heavy-tailed run times, warm restarts in SGD, loss of plasticity and
+re-initialisation, glassy training dynamics, loss spikes, replica exchange, seed variance in
+benchmarks, and the learnability of random automata by statistical queries and gradient descent.
+Eighteen papers added to the literature repository (its PR #8), read in the parts that bear on the
+above; one re-read.
+
+| paper | what it shows | bearing |
+| --- | --- | --- |
+| Kirkpatrick, Gelatt & Vecchi 1983, Optimization by Simulated Annealing (Science 220:671; `kirkpatrick-1983-optimization-by-simulated-annealing`) | melt, then cool in slow stages until the system **"freezes" and no further changes occur**; a rapid cool leaves it **frozen into a metastable state**, and the best of several rapid quenches is reported beside the anneal; **specific heat maxima mark the onset of freezing**, two peaks for two kinds of ordering | the vocabulary's source. SA's freeze is the configuration's; ours is the schedule's (the clock held by the gate while the coupling quenches): see "the freeze" below. Peaks per kind of ordering are our cascades (D21) |
+| Andresen & Gordon 1993, Analytic Constant Thermodynamic Speed-Cooling Strategies (Open Syst. Inf. Dyn. 2:1; `andresen-1993-constant-thermodynamic-speed-cooling`) | the schedule of constant thermodynamic speed, **`dT/dt = -v T / (eps sqrt(C))`**, with the heat capacity `C` and the **relaxation time `eps`** both estimated from the run's past; the most efficient general schedule (minimal entropy production) | the derived bias of the note on random machines (the halving time from splits per octave times the relaxation time `tau`) is this schedule; D33's adaptive cool (`T exp(-pace / sqrt(C))`) had `C` without `eps`. As `eps` diverges at a kinetic arrest, the schedule stops: such a schedule cannot pass a glass on its own |
+| Ingber 1989, Very Fast Simulated Re-Annealing (Math. Comput. Modelling 12:967; `ingber-1989-very-fast-simulated-reannealing`, the author's draft) | an exponential schedule per parameter, **each with its own annealing time**; **re-annealing**: every hundred or so acceptances, each parameter's annealing time is rescaled from its current sensitivity (`s_i`, the cost's derivative at the best point), so the insensitive parameters are made hotter again | the reheat's precedent, with the run-back derived from the run (no constant) and **per axis**: D63 (a) runs one clock back for all factors; Ingber's form would run each factor's back by its own reading (its sharpness or its share) |
+| Luby, Sinclair & Zuckerman 1993, Optimal Speedup of Las Vegas Algorithms (IPL 47:173; `luby-1993-optimal-speedup-las-vegas-algorithms`) | for an algorithm whose answer is always correct when it stops, with known run-time distribution `q`, the optimal strategy is a **fixed cutoff `t*` repeated**, minimising **`l(t) = (t - sum_{t'<t} q(t')) / q(t)`**, the expected cost per success; it stays optimal when runs may be suspended and resumed (Theorem 4); unknown `q`: the universal sequence (1, 1, 2, 1, 1, 2, 4, ...) within `O(log)` of optimal | **a certified run is a Las Vegas run** (when it stops, the machine is proved). D63 (e)'s window is `t*`, derivable from the runs' own `q` per backdrop (D64's and D54-D59's logs): no constant. And D63's comparison is exactly `l` of two algorithms: the reheat is a different algorithm with its own `q` |
+| Gomes, Selman, Crato & Kautz 2000, Heavy-Tailed Phenomena in SAT and CSP (J. Autom. Reasoning 24:67; `gomes-2000-heavy-tailed-phenomena-satisfiability-csp`) | randomised search's run times are **heavy-tailed** (Pareto-Levy, possibly no finite mean), with a **left tail** of short successful runs; **rapid restarts remove the heavy tail** and exploit the short runs (up to 100x); censored runs (stopped at a cutoff) handled by tail estimators | our spent runs are censored at the budget; S3 seed 30's thaw is the tail's other side. Read `q`'s tail before choosing `t*` |
+| Loshchilov & Hutter 2017, SGDR (ICLR; 1608.03983; `loshchilov-2017-sgdr-warm-restarts`) | **warm restarts**: the learning rate reset high, the weights kept, then annealed again; **periods doubled after each restart (`T_mult` 2)** | D66's `2^-k` is this schedule, triggered by the freeze instead of a fixed period; both keep the weights (a warm, not a cold, restart) |
+| Earl & Deem 2005, Parallel Tempering (PCCP 7:3910; physics/0508111; `earl-2005-parallel-tempering-theory-applications`) | replicas at a ladder of temperatures, adjacent ones **swapping configurations** by a Metropolis test; the hottest never trapped; the ladder set so swaps are accepted at a steady rate | for a parallel batch, the alternative to independent seeds: a frozen run's configuration exchanged with a hotter one's. Its exactness (detailed balance) does not carry to SGD, which is no Metropolis chain: a heuristic here, and a batch-level component (the owner's call) |
+| Dohare et al. 2023, Maintaining Plasticity in Deep Continual Learning (2306.13812; Nature 2024; `dohare-2023-maintaining-plasticity-deep-continual-learning`) | over a long sequence of tasks, gradient descent **loses plasticity** until it learns no better than a shallow net; correlates: **dead units, growing weights, falling effective rank**; remedy: **continual backpropagation** (low-utility units re-initialised), or L2 with shrink-and-perturb; gradient descent alone is not enough, "a random, non-gradient component" is needed | the frozen run as lost plasticity: the curriculum's growth (D52) is a non-stationary task. Its correlates are measurable offline on our frozen runs (codes in use, `d_eff`, weight norms); the reheat's thermal noise (D17) and a fresh seed are the non-gradient component |
+| Ash & Adams 2020, On Warm-Starting Neural Network Training (NeurIPS; 1910.08475; `ash-2020-warm-starting-neural-network-training`) | data arriving in stages: warm-started networks generalise worse than fresh ones; **shrink and perturb** (`theta <- lambda theta + noise`) closes the gap; shrinking **keeps the hypothesis (the argmax) while raising the output's entropy**; shrinking the last layer alone does not suffice | a reheat in weight space: it softens without discarding the machine, as D63 (a) intends with the clock. Our curriculum is their staged data |
+| Baity-Jesi et al. 2018, Comparing Dynamics: DNNs versus Glassy Systems (ICML; 1803.06969; `baity-jesi-2018-dynamics-dnn-versus-glassy-systems`) | over-parametrised networks slow down through flat directions, without barrier crossing, unlike glasses; **under-parametrised networks show typical glassy dynamics** (ageing, stuck after a quench) | their variable is parameters against training examples; our words are generated afresh, effectively unbounded against a small network, which is the under-parametrised side: a hypothesis for why runs freeze, untested here |
+| Cohen et al. 2021, Gradient Descent ... at the Edge of Stability (ICLR; 2103.00065; `cohen-2021-edge-of-stability-gradient-descent`) | the Hessian's top eigenvalue (their **"sharpness"**) rises to `2/eta`, then hovers there while the loss falls **non-monotonically**, with spikes | a candidate mechanism for coupling jumps and collapses; **their sharpness is not our `sharpness`** (the codes' mean largest soft weight, D50): a name clash to keep apart in writing. We train with Adam, where the slingshot (below) is the closer account |
+| *re-read:* Thilak et al. 2022, the Slingshot Mechanism (2206.04817; `thilak-2022-slingshot-mechanism-adaptive-optimizers`) | with adaptive optimisers, after the data is fitted, the **last layer's norm grows, then a loss spike**, in cycles | S4's collapse fits its timing (formed and strict-exact at steps 130-134, then the fall at a steady coupling): untested, because the readout's weight norm is not logged |
+| Li et al. 2018, Hyperband (JMLR 18; 1603.06560; `li-2018-hyperband-bandit-hyperparameter-optimization`) | **successive halving**: run many configurations on a small budget, keep the best half, double the budget, repeat; Hyperband hedges over the starting count | an early-stopping rule needs an early signal that predicts success; ours would be `formation` (the state share) or the snapped machine's long answers (answers-only); the freeze-based kill is the other kind (a stall, not a rank) |
+| Bouthillier et al. 2021, Accounting for Variance in ML Benchmarks (MLSys; 2103.03098; `bouthillier-2021-accounting-variance-ml-benchmarks`) | the seed, the data's order and the hyperparameters' search each move results markedly; **randomise every source**, compare by `P(A > B)` with percentile-bootstrap intervals, not by means | the statistical method's practice: paired fresh seeds (D64's pair the arms), rates with intervals (Wilson's), never chosen seeds; a further source to randomise would be the data's order |
+| Rubin, Seroussi & Ringel 2024, Grokking as a First Order Phase Transition (ICLR; 2310.03789; `rubin-2024-grokking-first-order-phase-transition`) | grokking maps to a **first-order** transition (an equilibrium theory): past it, a **mixed phase** of "droplets" (some units specialised to the teacher, the rest not) | a first-order transition is what can be **supercooled**: cooled past the melting point without nucleating. Our random runs near their melting point without forming are that picture, loosely (no free energy is defined for our training) |
+| Angluin, Eisenstat, Kontorovich & Reyzin 2010, Lower Bounds on Learning Random Structures with Statistical Queries (ALT; `angluin-2010-lower-bounds-random-structures-sq`, the Yale report) | random DFAs cannot be weakly learned with polynomially many statistical queries **under an arbitrary (adversarial) input distribution** | does not apply as such: our words are uniform, our answers per step |
+| Angluin & Chen 2015, Learning a Random DFA from Uniform Strings and State Information (ALT; `angluin-2015-learning-random-dfa-uniform-strings-state`) | a random DFA **is** learnable in the SQ model from uniform strings labelled with the state reached; a random DFA's diameter is `O(log n)` (Trakhtenbrot and Barzdin) and its random walk mixes fast | richer labels make random machines easy for SQ: our per-step answers sit between accept/reject and the state |
+| Giapitzakis, Fountoulakis, Nichani & Lee 2025, SQ Complexity of Learning Semiautomata (2510.04115; `giapitzakis-2025-sq-complexity-learning-semiautomata`) | the first **SQ hardness for semiautomata under the uniform distribution**, from the transition structure alone: distinct random permutation semiautomata's final states decorrelate as the random walk on `S_N x S_N` mixes, needing words of length **`Omega(N^2 ln N)`** | for N = 16 that is about 700 symbols, with final-state labels only; our lengths are under 20 with an answer at every step, so the theorem does not explain random-q16-0's failures; it says what a long-word curriculum would meet |
+| Abbe et al. 2021, On the Power of Differentiable Learning versus PAC and SQ Learning (NeurIPS; 2108.04190; `abbe-2021-power-differentiable-learning-pac-sq`) | SGD can always simulate SQ learning; beyond SQ only with fine enough gradient precision against the batch size; coarse precision or large batches make it **no stronger than SQ** | the bridge that makes SQ lower bounds bear on gradient training at all; with the precision caveat, they bound, not predict |
+
+**What is known, mapped to our findings.**
+
+- **The freeze is the known failure of an equilibrium-gated schedule at a kinetic arrest.** Adaptive
+  and constant-speed schedules (Huang et al. 1986, Romeo 1989, Andresen and Gordon 1993) advance only
+  as fast as the system relaxes; where the relaxation time diverges (a glass) they stop, and our gate
+  (D29, D49) holds the clock exactly so. Kirkpatrick et al.'s remedy for a quench frozen into a
+  metastable state is a new quench (the best of several), and the field's later answers are three:
+  re-anneal (Ingber), restart (Luby, Gomes), or exchange with a hotter copy (parallel tempering). All
+  three are D63's options or near them; nothing found suggests a slower cool passes the arrest, which
+  matches D65's stage 0. The coupling quenching at a held clock (a glass forming at fixed `T`) has no
+  counterpart found: it is a property of our coupling's reading (D50), not of annealing.
+- **Restart theory gives D63 (e) its constant from the data.** A certified run is a Las Vegas run, so
+  Luby et al.'s `l(t)` on each backdrop's run-time distribution gives the cutoff `t*` (and, for a
+  heavy tail, the gain); the reheat changes the distribution itself, and the comparison is `l` against
+  `l`. The owner's caution (the reheat may reach solutions that resampling discards) is outside
+  Luby's model, which only counts time to the first success: read the reheat's certificates apart,
+  as D63 already plans.
+- **Warm restarts with doubling periods are standard** (SGDR), the slowed re-cool's (D66) schedule;
+  **per-axis re-annealing from current sensitivities** (Ingber) is a form the reheat doesn't yet take.
+- **Lost plasticity is a known end of long gradient training on changing data**, with measurable
+  correlates and a non-gradient remedy (re-initialisation, shrink and perturb); whether our frozen
+  runs show its correlates is an offline reading on existing networks.
+- **Collapses after a fit, under Adam, are the slingshot's signature** (re-read), the edge of
+  stability its full-batch cousin; neither is tested here, for want of the readout norm in the logs.
+  D61 smooths the coupling's reading; if a collapse is an optimiser instability, D61 cannot cure it.
+- **Random machines:** theory proves random automata hard for SQ (and so for coarse gradient
+  methods) only with adversarial distributions or very long words and final-state labels; with state
+  labels they are easy. Our failures are at short lengths with dense answers, where no result found
+  applies: the difficulty of random-q16-0 is not explained by the theory found, and the scaling
+  conjecture's reading (forming fails, the cascade crowded) stands as our own.
+
+**Measurements and options this review points to** (no new experiment before the planned ones end;
+the offline items may run any time):
+
+1. **Luby's `l(t)` per backdrop, offline**, on the completed runs' step ends (D54-D59, D64 once
+   read), the spent runs as censored: `t*` for D63 (e) and the curve D63 compares against. A durable
+   `population` subcommand.
+2. **The readout's weight norm, logged each epoch** (with Adam's state if cheap), so a collapse can be
+   tested for the slingshot; built into the next change that touches the per-epoch row.
+3. **Plasticity's correlates on the frozen runs, offline:** codes in use, `d_eff` (stage 2's
+   `state-spread`), weight norms, on the saved networks where they exist.
+4. **For D63's reading:** whether one factor freezes while another doesn't (the case for Ingber's
+   per-factor run-back).
+5. **Parallel tempering for a batch:** a new component, the owner's call.
+
+Surfaced, not read: Schafer 2011, What Is a Savitzky-Golay Filter? (IEEE SPM 28(4):111, the tutorial
+for D61's smoothing; no open copy found) and Savitzky & Golay 1964 (Anal. Chem. 36:1627); Nikishin et
+al. 2022, the primacy bias and resets (2205.07802); Salamon et al. 1988 and Nourani & Andresen 1998
+(constant speed, the latter comparing schedules); Mitarchuk et al. 2024 (gradient descent's limits for
+finite-precision recurrent networks, TMLR). Kontorovich 2009 (random DFAs PAC-learnable, 0907.0453)
+was withdrawn for an error.
+
+Not found: a study of a cooling schedule gated on equilibrium stalling at a kinetic arrest in neural
+training; restart theory applied to training runs that end in a proof; any SQ or gradient result for
+transducers with an answer at every step at short lengths.
+
 ## References (arXiv ids; local copies in the literature repository (`davidbarkhuizen/indrajala-literature`, cloned as `~/code/indrajala-literature/`))
 
 1511.08228, 1611.00736, 2003.08494, 2511.22751, 2602.07599, 2406.00075, 1811.12530, 1711.00937,
@@ -384,3 +494,10 @@ The architecture's extension: 1909.10893, 2107.02367, 2010.02193, 1904.02920, 20
 The state formation extension: 2309.15505, 1704.00648, 2205.07547, 2410.06424, 2411.02038,
 2605.06870, 2609.26774, 2006.10828, 2408.08622, 2102.05836; Rose, Proceedings of the IEEE
 86(11):2210-2239, 1998 (doi 10.1109/5.726788).
+The freeze and restarts extension: 1608.03983, 1603.06560, 1803.06969, 1910.08475, 2103.00065,
+2103.03098, 2108.04190, 2306.13812, 2310.03789, 2510.04115, physics/0508111; Kirkpatrick, Gelatt &
+Vecchi, Science 220(4598):671-680, 1983; Ingber, Mathematical and Computer Modelling 12(8):967-973,
+1989; Andresen & Gordon, Open Systems & Information Dynamics 2(1):1-12, 1993; Luby, Sinclair &
+Zuckerman, Information Processing Letters 47(4):173-180, 1993; Gomes, Selman, Crato & Kautz, Journal
+of Automated Reasoning 24:67-100, 2000; Angluin, Eisenstat, Kontorovich & Reyzin, ALT 2010 (LNCS
+6331:194-208); Angluin & Chen, ALT 2015:119-133.
