@@ -97,6 +97,10 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D57 | 2026-10-22, 00:50 | the S4 probe | D54's cell on word-problem-s4 seeds 0-2, the harm cells without the commitment (`probe-d57.sh`) |
 | D58 | 2026-10-22, 02:50 | the random control probe | D54's cell on random-q12-0 seeds 0-3 (`probe-d58.sh`) |
 | D59 | 2026-10-22, 04:20 | the margin stop | D35's stop waits until no near tie splits the machine (`--margin-wait 200`); its probe on the 12 strict-only stops (`probe-d59.sh`) |
+| D60 | 2026-10-22, 08:00 | the margin deadline | the margin stop's wait counts every step past the first pass, ending on the best pass's network |
+| D61 | 2026-10-22, 08:00 | the paced coupling | the coupling paced by a trust region (`--coupling-pace`) or read from a Savitzky-Golay line (`--sharpness-smoothing`); its probe (`probe-d61.sh`) |
+| D62 | 2026-10-22, 08:00 | the run's state object | `run`'s loop-carried state one dataclass, the loop's body split into functions of it (planned) |
+| D63 | 2026-10-22, 08:40 | the collapse | reheat (the rate below the hold's level negative, the clock run back) or kill-and-resample, on cost per certified machine (planned, after D62) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -903,6 +907,116 @@ owner's; D49-D54 settled under the delegation.
     separation shown on 19 networks of two machines only.
   - (b) Zero near ties. Cons: every certified stop had some (2-125): it would wait past certificates.
   - (c) A fixed number of steps past the first pass (D35's (c)). Cons: blind to the margin it waits for.
+- **D60. The margin deadline (`--margin-wait`'s wait, revised; the owner, 2026-10-22: "make the wait
+  also count steps outside the pass").** D59's wait counted only the steps D35's stop passed: S3 35 and
+  D54's move-to-front-4 3 passed twice with split ties, then never again, so neither run's wait ended
+  (each past step 250, toward the 1,600-epoch budget). Now every step past the first pass counts; a run
+  no pass cleared stops 200 steps after it ("waited") on the pass with the fewest split and label ties
+  (each such pass's network kept, `best-pass-step-S.network.json`), restored and judged as the stop's
+  in the run's last row (`end` "waited", `restored` its step); the margin stop's state is now `Margin`.
+  A run whose pass clears inside the wait is D59's, bit for bit. No probe of its own: on D59's data it
+  changes only the two runs, read from their logs and kept networks, and D61's runs use it.
+  - (a) *Chosen.* Pros: every run's stop bounded (200 steps past its first pass); the stop's network
+    is one D35's stop passed, the fewest ties being the nearest to a clean pass. Cons: a run that
+    would clear later is stopped (none of D59's ten cleared past step 72 of the wait).
+  - (b) The wait ending on the network as it stands. Cons: it may pass nothing (S3 35's didn't).
+  - (c) The first pass's network (D59's kept one). Cons: ignores a pass with fewer ties since.
+- **D61. The paced coupling (the owner, 2026-10-22: "i would like to test both b and c", each
+  "dynamically calculated", no fixed constant).** The coupling, read straight from the sharpness
+  (D50), jumps when a split moves it: every run that spent its budget (D54's S3 1, 4; D55's S3 24, 25;
+  D56's random-q16-0 0-3) moved it by 0.1 or more in an epoch 58-201 times (largest 0.34-0.77), the
+  certified ones at most 11 (largest 0.20); S3 35 lost D35's pass two steps after a rise of 0.23. D49's
+  rate slows the clock when the screen drops, but not the coupling. Two arms, each with no scale of
+  its own, in `Continuous` (off by default, the golden run unchanged):
+  - (b) *Tested,* `--coupling-pace`: each coupling moves toward its sharpness's at most its allowance
+    an epoch, the allowance its first rise, then times `2 ** (2 rate - 1)` (doubled while the screen
+    holds, halved when the clock stops). Pros: the network's response sets the pace (a trust region);
+    every control on D49's one signal. Cons: a long-stopped clock freezes the coupling, its retreat too.
+  - (c) *Tested* (the owner: "swap c to savitzky-golay"), `--sharpness-smoothing`: the coupling read
+    from the sharpness smoothed by a one-sided Savitzky-Golay filter of degree 1: its least-squares
+    line over the readings of the cool's last e-folding time of clock (`halving / ln 2`, about 43 at
+    halving 30), read at the clock's end. Pros: no lag on a steady rise, a jump spread over the time
+    the temperature takes to move; offline on four runs' logged sharpness it removed every move of
+    0.1 or more (largest 0.02-0.04) with a mean lag of -0.02 to 0.05. Cons: the one-sided line is
+    noisier than a centred one, and damps a jump less than an average would.
+  - (c') The moving average first proposed (gain `rate ln 2 / halving`). Cons: offline, it held the
+    coupling 0.16-0.53 below the sharpness's, and froze it with the clock (random-q16-0's).
+  - (a) A fixed cap on the move (0.05, the pre-continuous bound). Cons: a constant (the owner: "we
+    can't [use] a fixed constant").
+  Its probe (`~/code/probe-d61.sh`, registered before its data): both arms, D54's cell with D59's
+  margin stop under D60, on the failures word-problem-s3 24, 25, 35, random-q16-0 0, 1 and
+  move-to-front-4 3 (lost its pass with only 6 such moves: the jumps' counter-case) and the clean
+  word-problem-s3 26 and move-to-front-4 24, 16 runs on `jebel` (8 at once by day, a queued run
+  launched after 18:00 only below 4), each control its seed's earlier run.
+  Expectations: each arm's coupling moves below 0.1 an epoch in every cool, fewer such moves than its
+  control in each failure; an arm's mechanism reads as promising if it rescues (D41) at least 2 of the
+  6 failures and loses neither clean seed, refuted if it rescues none or loses both; any false
+  discovery refutes the stop; D60: every run ends at a clean pass or 200 steps past its first; read:
+  rows up to the cool's start against the control's (bit-identical but for the arm's fields).
+  Prediction from the failures' order (written before the data: the first coupling move of 0.1 or
+  more against the screen's first fall below 0.9): jump first in S3 35 (outside the probe, also in
+  random-q16-0 2, 3 and D54's S3 1), the same epoch in S3 25 and random-q16-0 0, 1, drop first in S3 24 (the
+  screen at 0.74 with the coupling 0, the cool's start) and D57's S4 0 and 2 (a collapse at a steady
+  0.97, the trained length 16.6-18.8, after which the rate held the clock at 0 for 1,400 epochs). An
+  arm should rescue jump-first and same-epoch failures, not S3 24 (the counter-case); every failure
+  shares the frozen clock after its drop, which neither arm changes.
+  Diagnosis, not adoption (the owner, 2026-10-22: "only a clear majority of them. if we tinker to
+  every seed we will over-tune the method ... the final method [is] statistical"): this probe reads
+  whether an arm removes the jumps and what that does on chosen failures. An arm is adopted only on a
+  rate over fresh seeds against the method's current rate (D54's cell with the margin stop on D55's
+  seeds: S3 11 of 16, move-to-front-4 7 of 8 at D59's reading), in a batch registered after this
+  reading, if its mechanism reads as promising.
+- **D62. The run's state, one object (the owner, 2026-10-22: "do we not need a restructure (maybe DTOs
+  or request objects) to simplify typing ? this is now becoming a recurring problem").** `run` is one
+  function of about 700 lines carrying some 40 locals from step to step; past pyright's code-flow
+  limit its inferred types silently become partly Unknown (twice now: D59's first build, D60's, each
+  fixed by moving logic out). `Place` already mirrors those locals for the checkpoint, by hand, so
+  every new switch touches three places (the local, `Place`, the checkpoint's call).
+  - (a) *Chosen,* after D61's launch, its own PR: the loop-carried state one dataclass (the run's
+    state, `Place`'s fields as one object that is checkpointed as it stands), the loop's body split
+    into functions of it (the epoch's setting and training, the step's end and stop, the warm-up's
+    end), each a request in and a result out. Pros: types stay inferred as the method grows; a new
+    switch is one field; the checkpoint can't drift from the state. Cons: a large mechanical change
+    to the most-run code: checked as a pure refactor (the golden run and every resume test
+    bit-identical, a D54 cell's run row for row).
+  - (b) Raise pyright's limits or silence its reports there. Cons: hides the unknowns rather than
+    removing them; the three-place mirror stays.
+  - (c) Split `modular_family.py` into modules first. Cons: moves the problem; `run`'s flow is the cause.
+- **D63. The collapse: reheat or resample (planned; the owner, 2026-10-22: "yes, plan d63").** Every failure of D54-D59 shares
+  one end: once the screen falls, D49's rate holds the clock at 0, the temperature stays where it was
+  and the coupling, read from a sharpness that stays high, holds a wrong, nearly hard machine for the
+  rest of the budget (D57's S4 0 and 2: a collapse to 3-17 states at a steady coupling 0.97, then
+  1,400 epochs frozen; S3 24: the screen at 0.74 at the cool's start). Nothing in the method can undo a
+  collapse. The rate extended below the hold's level would run the clock back: the temperature rises,
+  the codes soften, the sharpness and so the coupling fall, and the cool resumes once the screen
+  recovers.
+  - (a) *Planned.* The rate's line extended below `low` to -1 (at `2 low - high` times the level, 0.91
+    at the defaults), the clock moving back by it, never past the cool's start; the held temperatures
+    (D51) released where the clock passes back over them; growth only forward. Pros: continuous, on
+    D49's one signal, no constant of its own; a collapse becomes a local re-melt rather than the run's
+    end. Cons: a run can cycle (reheat, cool, collapse); the epochs it spends; S3 24's drop at the
+    cool's start leaves no room to run back (the hold's).
+  - (b) A re-melt to T_hot on collapse. Cons: a switch (D48 removed them); it discards what formed.
+  - (e) *Planned beside (a)* (the owner, 2026-10-22: "add the kill-and-resample option"): end a run
+    whose clock has held at 0 past a window (its collapse read from the rate, D49's signal, over the
+    cool's e-folding time) and start a fresh seed in its slot. Pros: the method is a batch (path
+    dependence, D41's rate): a doomed run's budget goes to a new sample (D57's S4 0 spent about 1,400
+    epochs frozen); no change to training, so nothing tuned to a seed. Cons: discards a run that might
+    have recovered; needs the batch runner, not the run; selects for paths that never collapse, so
+    it may discard a category of solutions only a collapse and recovery reach (the owner, 2026-10-22:
+    "the reheat may be worth it, otherwise we may be discarding a category of solutions that we may
+    need"), likeliest on the larger machines, where collapses are commonest. (a) and (e) compared on
+    cost per certified machine (epochs, or minutes, over certificates) on the same fresh seeds, and on
+    which runs each certifies: a certificate reached only after a reheat (a collapse, then recovery)
+    is the category (e) loses, read apart, by backdrop (random-q16-0 and S4 first).
+  - (c) Restore the best step's network (`--restore-best`, the guard). Cons: a discontinuity, and the
+    same training from there can collapse again.
+  - (d) Lower only the coupling when the screen falls (D61 (b) with its rate signed). Cons: the codes
+    stay hard at the frozen temperature; half the move.
+  Build after D62 (on the run's state object), tested, the golden run unchanged without it; its probe
+  registered after D61's reading, on the drop-first failures (S3 24, D54's S3 4, D57's S4 0, 2) and
+  the jump-first ones, with D61's arm if one is adopted: a diagnosis; adopted only on a fresh-seed
+  rate against the method's current one (a clear majority certifying is the aim, not every seed).
 
 ### The consistency review settled (2026-10-21, afternoon)
 
@@ -1464,6 +1578,8 @@ a random machine would just need a very slow cool.**
     Then D57's S4 probe, the same cell, registered in its script.
     Then D58's random-q12-0 probe, the same cell, registered in its script.
     Then the margin stop (D59, `--margin-wait`, tested, the golden run unchanged) and its probe.
+    Then the margin deadline (D60) and the paced coupling (D61, both arms; tested, the golden run
+    unchanged), D61's probe registered in its script; then the run's state object (D62).
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
