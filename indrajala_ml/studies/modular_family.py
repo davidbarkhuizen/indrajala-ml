@@ -2012,6 +2012,8 @@ class Place:
     sharp_from: list[float] = field(default_factory=list[float])  # Continuous: the cool's first sharpness (D50)
     floors: list[float] = field(default_factory=list[float])  # Continuous: each factor's held temperature (D51)
     first_pass: int = -1  # the margin stop: the step D35's stop first passed with a split tie (D59)
+    best_pass: int = -1  # the margin stop: the pass with the fewest ties since (D60)
+    best_ties: int = -1  # its split and label ties (D60)
 
 
 def _run_identity(
@@ -2192,8 +2194,10 @@ def run(
     `margin_wait` W (with `state_bound`; the state formation workplan's D59) makes D35's stop wait for its
     margins: a step D35's stop passes stops the run only when no near tie splits the snapped machine
     (the certificate's split_ties: a tie's branch into another of its minimised states) and no label is
-    a near tie; the first such pass's network kept (out/first-pass-step-S.network.json), the run stopped
-    W steps after it if none clears ("waited").
+    a near tie; the first such pass's network kept (out/first-pass-step-S.network.json), and each pass
+    with fewer ties than any before it (out/best-pass-step-S.network.json). W steps after the first
+    pass, each step counted whether it passes or not (D60), a run none cleared stops ("waited") on the
+    best pass's network, restored and judged as its stop's.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -2307,6 +2311,8 @@ def run(
     )  # consecutive armed epochs with STALL_SHARE of their updates undone
     spent: int = place.spent if place is not None else 0  # epochs trained in all
     first_pass: int = place.first_pass if place is not None else -1  # D59: D35's first pass with a split tie
+    best_pass: int = place.best_pass if place is not None else -1  # D60: the pass with the fewest ties
+    best_ties: int = place.best_ties if place is not None else -1
     snapshot = out / "snapshot.network.json"
     step_best = out / "best.network.json"  # restore_best's
     commitments = [0.0 if f.codes is None else f.codes.commitment for f in net.recurrence.factors]  # the specs'
@@ -2405,6 +2411,8 @@ def run(
             list(cstate.sharp_from),
             list(cstate.floors),
             first_pass,
+            best_pass,
+            best_ties,
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -2753,13 +2761,29 @@ def run(
             stopping, judged = answers_stopping(net, encoding, task, certificate, state_bound, coupled, warm)
             if margin_wait is not None and stopping:  # D59: the stop waits until no near tie splits the machine
                 margins: dict[str, Any] = {"split_ties": certificate.split_ties, "lead_ties": certificate.lead.short}
-                if certificate.split_ties or certificate.lead.short:
+                ties = certificate.split_ties + certificate.lead.short
+                if ties:
                     if first_pass < 0:
                         first_pass = step
                         net.save(str(out / f"first-pass-step-{step}.network.json"))
-                    stopping = step - first_pass >= margin_wait
-                    margins["waited"] = stopping
+                    if best_pass < 0 or ties < best_ties:  # D60: the pass the wait would end on
+                        best_pass, best_ties = step, ties
+                        net.save(str(out / f"best-pass-step-{step}.network.json"))
+                    stopping = False
+                    margins["waited"] = False
                 judged["answers_stop"].update(margins, first_pass=first_pass)
+            if margin_wait is not None and first_pass >= 0 and not stopping and step - first_pass >= margin_wait:
+                # D60: the wait counts every step; it ends on the best pass's network, judged as the stop's
+                if best_pass != step:
+                    net = load_network(str(out / f"best-pass-step-{best_pass}.network.json"))
+                    certificate = wc.certify(QueryMachine(net, encoding, 0), task)
+                    _, judged = answers_stopping(net, encoding, task, certificate, state_bound, coupled, warm)
+                    judged["answers_stop"].update(
+                        {"split_ties": certificate.split_ties, "lead_ties": certificate.lead.short},
+                        first_pass=first_pass,
+                    )
+                judged["answers_stop"].update(waited=True, best_pass=best_pass)
+                stopping = True
         if growing:  # D53: both certificates' breakdowns, the snapped answers, the melting curve
             judged.update(continuous_readings(net, encoding, task, certificate, coupled, state_bound is None))
             if step % continuous.curve_every == 0:  # type: ignore[union-attr]

@@ -683,15 +683,21 @@ def test_a_continuous_run_moves_every_switch_smoothly_and_reads_every_epoch(tmp_
         )
 
 
-def _margin_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, split_until: int) -> list[dict[str, Any]]:
-    # D35's stop passes at every step after the warm-up; the certificate's ties split until a step
+def _margin_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, split_until: int, passes: int = 10**6
+) -> list[dict[str, Any]]:
+    # D35's stop passes at the first `passes` steps after the warm-up (and on a restored network); the
+    # certificate's ties split until a step
     config = dict(RESUMABLE["continuous"], budget_epochs=40, state_bound=25, margin_wait=3)
     encoding, settings = config.pop("encoding"), config.pop("settings")
-    stopping = mf.answers_stopping
+    stopping, passed = mf.answers_stopping, [0]
 
     def passing(*args: Any) -> tuple[bool, dict[str, Any]]:
-        warm = args[-1]
-        return (False, stopping(*args)[1]) if warm else (True, {"answers_stop": {"passed": True}})
+        if args[-1]:  # warm
+            return False, stopping(*args)[1]
+        passed[0] += 1
+        verdict = passed[0] <= passes or passed[0] > passes + 3  # the restore's call past the wait
+        return verdict, {"answers_stop": {"passed": verdict}}
 
     certify, steps = mf.wc.certify, [0]
 
@@ -719,8 +725,25 @@ def test_the_margin_stop_waits_past_a_split_tie_and_stops_once_none_splits(
     assert judged[0]["answers_stop"]["first_pass"] == first and judged[0]["answers_stop"]["split_ties"] == 1
     assert [r["step"] for r in judged] == list(range(first, first + 4))  # D59: W steps past the first pass
     assert [r["answers_stop"]["waited"] for r in judged] == [False, False, False, True]
+    assert judged[-1]["answers_stop"]["best_pass"] == first  # D60: no pass had fewer ties
     assert (tmp_path / f"first-pass-step-{first}.network.json").exists()
-    assert (tmp_path / f"answers-stop-step-{first + 3}.network.json").exists()
+    assert (tmp_path / f"answers-stop-step-{first + 3}.network.json").read_text() == (
+        tmp_path / f"best-pass-step-{first}.network.json"
+    ).read_text()  # D60: the stop's network the best pass's, restored
+
+
+def test_the_margin_stop_counts_the_steps_past_its_pass_and_ends_on_the_best_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    rows = _margin_run(tmp_path, monkeypatch, split_until=10**6, passes=2)  # passes twice, then never
+    ends = [r for r in rows if "end" in r and not r["answers_stop"].get("warm")]
+    first = ends[0]["step"]
+    assert [r["answers_stop"]["passed"] for r in ends[:3]] == [True, True, False]
+    assert ends[-1]["step"] == first + 3  # D60: the wait counts the steps that don't pass
+    assert ends[-1]["answers_stop"]["waited"] and ends[-1]["answers_stop"]["best_pass"] == first
+    assert (tmp_path / f"answers-stop-step-{first + 3}.network.json").read_text() == (
+        tmp_path / f"best-pass-step-{first}.network.json"
+    ).read_text()
 
 
 def test_the_margin_stop_stops_at_the_first_pass_whose_ties_split_nothing(
