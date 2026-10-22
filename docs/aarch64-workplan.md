@@ -6,7 +6,7 @@ speed and production; D10 settled by the owner (2026-10-13, revised 2026-10-17):
 active cooler. Stages 0 and 1 done (2026-10-17): the Pi's Rust and pure-Python golden entries
 already equal jebel's bit for bit (stage 1's findings). Stage 2 done (2026-10-17): the crate's
 own `exp` and D6's rules. Stage 3 done (2026-10-17): the committed Rust reference, checked in
-CI. Stage 4 done (2026-10-18): CI on aarch64 and musl. Stage 5 done (2026-10-18): the Pi's timing setup, its thermal limits and its A/A. Stage 7's first two kernels done (2026-10-18): the matrix products and the dot products, with the conv downstream per example (bumped in #865 with the window branches' crate, afa7204); Stage 6 done (2026-10-21): the baseline, its order for stage 7 (threading first, then a NEON transpose, then the narrow-`k` tile). The demo split
+CI. Stage 4 done (2026-10-18): CI on aarch64 and musl. Stage 5 done (2026-10-18): the Pi's timing setup, its thermal limits and its A/A. Stage 7's first two kernels done (2026-10-18): the matrix products and the dot products, with the conv downstream per example (bumped in #865 with the window branches' crate, afa7204); Stage 6 done (2026-10-21): the baseline, its order for stage 7 (threading first, then a NEON transpose, then the narrow-`k` tile). Stage 7's baseline order done (2026-10-22): the threshold and the tile unchanged on their measurements, the NEON transpose in (crate #71). The demo split
 (`git show 9c50fe6:docs/demos-split-workplan.md`) is done, so the Pi needs no matplotlib.**
 
 indrajala-ml and the crate run on aarch64, tested and timed on a Raspberry Pi 5 (8 GB). The crate
@@ -423,6 +423,32 @@ reference and the golden run hold their bits.
   all in code the bump doesn't change on x86 (5 of them numpy rows; `transpose` +26-49%, `sum_axis0`,
   `add`, the pool ops, `accumulate_gradient_batch`): read as layout, as the probe above found on the
   Pi; not checked aligned on x86.
+
+**The baseline's order, done (2026-10-22; crate 647f23c, #71):**
+
+- **(1) The threading threshold for aarch64: unchanged (8M flops).** A sweep on `litshe`
+  (`focused_benchmark`, rust, `--rust-threads 4:T`, T 8M to 250k, 2 passes, the 30 cases of the
+  products stage 6 named; peak 39.5 C) found no threshold that gains without losing elsewhere: at 1M
+  the conv tail's `forward_batch` b32 1,118 to 947 µs (numpy 525) but its `downstream_batch` b32
+  1,238 to 1,591; the dense 30 x 784 products at b32 (under 1M flops) gain nothing from threads;
+  the large batches are threaded at 8M already. Stage 6's reading that most of the Pi's gap is
+  threading holds for numpy's single-thread comparison, not for the crate's kernels: a call's thread
+  start costs more than it saves at these sizes.
+- **(2) A NEON transpose (crate #71):** `transpose`'s 8 x 8 blocks move 2 x 2 sub-blocks through
+  `vzip1q_f64`/`vzip2q_f64`; a copy, bit-identical (2,991 crate tests, D7's reference, both on the
+  Pi). Tier 2 A/B `2026-10-22-neon-transpose` (ONNONO, passes peaked 48.0-57.3 C): every
+  transpose 37-58% faster (dense 30 x 784 b512 24.8 to 10.7 µs, numpy about 9); the products that
+  use it (`accumulate_gradient_batch`) 7-10% faster. Dense 10 x 30's `downstream`/`hidden_delta`
+  rows +19-42%, in code this change doesn't touch: **code placement**, as the alignment probe found
+  before: built with every function aligned (`-align-all-functions=6`), both crates time those rows
+  identically (b512 46.3 µs each) while the transpose still drops 8.6 to 3.7 µs.
+- **(3) The narrow-`k` tile: unchanged (2 rows x 16 columns).** The tile made a pair of constants
+  (rows, 2-lane registers) and seven shapes timed on aligned builds (2 x 8, 3 x 6, 4 x 6, 4 x 4,
+  6 x 4, 5 x 5, 8 x 2; the crate's linalg tests passing for each): none wins across the products.
+  On the target, dense 30 x 784 `downstream_batch` b32 (k = 30), the best (4 x 6) is 7% faster;
+  taller tiles slow the conv tail's and attention's products by 10-65%; dense 10 x 30 gains up to
+  38% (6 x 4) on 3 µs calls. The narrow-`k` gap to numpy (127 against 58 µs) is not the tile's
+  shape; left as found, not built.
 
 **Study networks' certificates, on the Pi (2026-10-19, at the owner's request):** the 12 networks
 certified that day (W1's five and W2's three on division 13, B1's one, B2's S5 and move-to-front-5
