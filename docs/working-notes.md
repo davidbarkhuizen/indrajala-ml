@@ -302,6 +302,14 @@ where you meet a new trap; delete one that no longer holds.
   takes 0.89x `jebel`'s time at 4 workers, 1.34x at 8 and 1.93x at 12, so 12 adds about 4% over 8:
   use 8. Measured only on early steps and 3.5-minute bursts; a long run's sustained clocks may be
   lower on a 15 W laptop.
+- **`klip`, the fourth machine: studies only.** `ssh klip` (192.168.1.104); Ryzen 7 3700U laptop
+  (4 cores, 8 threads), 5 GB, so about 3 small runs at once. Always on, all cores; the owner's
+  limit (2026-10-21): <= 85 C, ideally <= 80 C. **CPU boost is off** (`cpu-boost-off.service`;
+  `/sys/devices/system/cpu/cpufreq/boost` reads 0): boost overheats it. **Run every job under the
+  thermal guard** `~/code/thermal-guard.sh LOG [STOP] -- COMMAND...`: it starts the command in its own
+  process group, logs the k10temp sensor every 5 s to LOG and stops the group at STOP C (85) or
+  above, with an "ended, status N, peak T C" line. A waiter there watches the probe's "probe ended" line
+  or the guard's process gone (`pgrep -f "[t]hermal-guard.sh <its LOG's directory>"`).
 - **Local `ab.py run` on `pyramidon`** needs `AB_CRATE_REPO=/home/david/code/indrajala-ml/rust` and
   `--skip-profile`; diagnostics only. `ab.py remote run` names the run after the laptop's branch:
   pass `--name`.
@@ -377,6 +385,11 @@ where you meet a new trap; delete one that no longer holds.
   pattern): 2026-10-20, a `pkill -f "probe-4a2.sh word-problem"` killed the Bash tool's shell and a waiter
   with it. Bracket one character (`pgrep -f "[p]robe-4a2.sh"`), which the pattern matches but its own
   text doesn't; or kill by the PIDs a bracketed `pgrep` lists.
+- **A scheduled stop kills itself the same way:** `stone`'s stop for D55 ran `pkill -f
+  "option1/probe-[d]55"` inside a `bash -c` whose own command line named `.../probe-d55/launch.log`
+  (to write the "stopped" line), so the pattern matched its own shell: the runs stopped, but no
+  "stopped" line was written. Put a scheduled stop in a script file (`~/labour/stop-d64.sh`), so the
+  command line that runs it holds no pattern.
 - **Never chain a local launch after a remote one in one command:** when the launching ssh hangs
   (the line above), the Bash tool backgrounds the command and everything after the ssh runs when it
   finally returns (2026-10-20: a local probe launched again 1 h 48 min later, refused only by the run
