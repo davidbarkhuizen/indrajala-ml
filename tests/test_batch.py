@@ -1,6 +1,8 @@
 import asyncio
+import datetime
 import json
 import os
+import shutil
 import signal
 import socket
 import sys
@@ -34,6 +36,9 @@ with (out / "log.jsonl").open("w") as log:
             break
 print(f"seed {seed}: step {step}, {end}")
 """
+
+
+SAST = datetime.timezone(datetime.timedelta(hours=2))  # the hosts' local hours
 
 
 def free_port() -> int:
@@ -153,3 +158,109 @@ def test_a_restarted_worker_re_adopts_its_running_attempts_from_their_pid_files(
     while b.alive(running.pid) and time.monotonic() < deadline:
         time.sleep(0.05)
     assert not b.alive(running.pid) and not worker(tmp_path, "w", 1).running  # ended: nothing to adopt
+
+
+def test_a_hosts_window_reads_its_hours_left_and_is_none_outside_them():
+    thursday_night = datetime.datetime(2026, 10, 22, 20, 0, tzinfo=SAST)  # a Thursday
+    assert b.window_left(b.HOSTS["stone"], thursday_night) == 11 * 3600  # weekday nights to 07:00
+    assert (
+        b.window_left(b.HOSTS["stone"], datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)) is None
+    )  # the owner's day
+    assert b.window_left(b.HOSTS["stone"], datetime.datetime(2026, 10, 24, 10, 0, tzinfo=SAST)) == 14 * 3600  # Saturday
+    assert (
+        b.window_left(b.HOSTS["jebel"], datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)) == 6 * 3600
+    )  # by day (solar)
+    assert b.window_left(b.HOSTS["jebel"], thursday_night) is None
+    assert b.window_left(b.HOSTS["klip"], thursday_night) == float("inf")
+
+
+def test_a_worker_on_another_commit_is_refused_and_given_nothing(tmp_path: Path):
+    directory = tmp_path / "batch"
+    b.register(directory, b.Batch("p", "measure", "continuous", b.attempts("s3:1-2"), commit="abc123"))
+    port = free_port()
+
+    async def go() -> None:
+        controller = b.Controller(directory)
+        serving = asyncio.create_task(controller.serve(port))
+        await asyncio.sleep(0.1)
+        await asyncio.wait_for(worker(tmp_path, "w", 1).serve(port, retry=0.1), timeout=10)  # returns: refused
+        serving.cancel()
+
+    asyncio.run(go())
+    state = b.State.read(directory)
+    assert not state.assigned and not state.ended
+    assert '"type": "refused"' in (directory / b.LEDGER).read_text()
+
+
+def test_a_windows_end_stops_a_hosts_attempts_and_queues_them_again(tmp_path: Path):
+    directory = tmp_path / "batch"
+    b.register(directory, b.Batch("w", "measure", "continuous", b.attempts("s3:1-2")))
+    clock = [datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)]
+    host = b.Host("w", 2, str(tmp_path), sys.executable, str(tmp_path / "w"), windows=(b.Window(b.ALL_DAYS, 12, 1),))
+    port = free_port()
+
+    async def go() -> b.Controller:
+        controller = b.Controller(directory, {"w": host}, now=lambda: clock[0], check=0.1)
+        serving = asyncio.create_task(controller.serve(port))
+        await asyncio.sleep(0.1)
+        running = asyncio.create_task(worker(tmp_path, "w", 2, env={"STUB_SLEEP": "5"}).serve(port, retry=0.1))
+        await asyncio.sleep(1.0)  # both attempts assigned and running
+        clock[0] = datetime.datetime(2026, 10, 22, 13, 30, tzinfo=SAST)  # the window has closed
+        await asyncio.sleep(1.5)
+        running.cancel()
+        serving.cancel()
+        return controller
+
+    controller = asyncio.run(go())
+    ledger = (directory / b.LEDGER).read_text()
+    assert ledger.count('"type": "assigned"') == 2 and ledger.count('"why": "window"') == 2
+    assert not controller.state.assigned and controller.state.next_attempt() == b.Attempt("s3-1", "s3", 1)
+    assert not controller.fits("w", b.Attempt("s3-1", "s3", 1))  # nothing given outside its hours
+
+
+def test_a_remote_attempt_is_pulled_and_checked_against_its_manifest(tmp_path: Path):
+    source = tmp_path / "source"
+    (source / "seed1").mkdir(parents=True)
+    (source / "seed1" / "log.jsonl").write_text('{"step": 1}\n')
+    (source / "pid").write_text("{}")
+    files = b.manifest(source)
+    assert list(files) == ["seed1/log.jsonl"]  # the pid file left out
+    copy = tmp_path / "copy"
+    shutil.copytree(source, copy)
+    assert b.verify(copy, files)
+    (copy / "seed1" / "log.jsonl").write_text("changed\n")
+    assert not b.verify(copy, files)
+
+
+def test_the_fleets_commands_follow_each_hosts_rules():
+    stone = b.worker_line(b.HOSTS["stone"], 47111)
+    assert stone.startswith("source ~/labour/env.sh; ") and "PYTHONPATH=/home/david/labour/site-straight:" in stone
+    assert "--slots 11" in stone and "setsid nohup" in stone and stone.endswith("< /dev/null &")
+    klip = b.worker_line(b.HOSTS["klip"], 47111)
+    assert "--wrapper=/home/david/code/thermal-guard.sh" in klip and "--wrapper=--" in klip
+    steps = b.prepare(b.HOSTS["stone"], "abc123", Path("/repo"), Path("/tmp"))
+    assert steps[1][3:5] == ["bundle", "create"] and "--no-recurse-submodules" in steps[3][2]
+    assert b.prepare(b.HOSTS["klip"], "abc123", Path("/repo"), Path("/tmp"))[0][2].startswith("cd ~/code/indrajala-ml")
+
+
+def test_a_batch_with_a_remote_host_ends_once_its_attempts_are_pulled(tmp_path: Path):
+    directory = tmp_path / "batch"
+    b.register(directory, b.Batch("r", "measure", "continuous", b.attempts("s3:1-2")))
+    host = b.Host("w", 2, str(tmp_path), sys.executable, str(tmp_path / "w"))  # remote: its attempts pulled
+    port = free_port()
+
+    def pull(h: b.Host, attempt: str, destination: Path) -> bool:  # a local copy stands in for rsync over ssh
+        shutil.copytree(Path(h.root) / attempt, destination, dirs_exist_ok=True)
+        return True
+
+    async def go() -> None:
+        controller = b.Controller(directory, {"w": host}, pull=pull, check=0.1)
+        serving = asyncio.create_task(controller.serve(port))
+        await asyncio.sleep(0.1)
+        await asyncio.wait_for(worker(tmp_path, "w", 2).serve(port, retry=0.1), timeout=30)
+        await asyncio.wait_for(serving, timeout=10)  # done: every attempt ended and pulled
+
+    asyncio.run(go())
+    ledger = (directory / b.LEDGER).read_text()
+    assert ledger.count('"ok": true') == 2 and ledger.rstrip().endswith("}") and '"type": "done"' in ledger
+    assert (directory / "attempts" / "s3-2" / "seed2" / "log.jsonl").exists()
