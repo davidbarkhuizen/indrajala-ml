@@ -100,7 +100,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D60 | 2026-10-22, 08:00 | the margin deadline | the margin stop's wait counts every step past the first pass, ending on the best pass's network |
 | D61 | 2026-10-22, 08:00 | the paced coupling | the coupling paced by a trust region (`--coupling-pace`) or read from a Savitzky-Golay line (`--sharpness-smoothing`); its probe (`probe-d61.sh`) |
 | D62 | 2026-10-22, 08:00 | the run's state object | `run`'s loop-carried state one dataclass, the loop's body split into functions of it (planned) |
-| D63 | 2026-10-22, 08:40 | the collapse | reheat (the rate below the hold's level negative, the clock run back) or kill-and-resample, on cost per certified machine (planned, after D62) |
+| D63 | 2026-10-22, 08:15 | the collapse | reheat (the rate below the hold's level negative, the clock run back) or kill-and-resample, on cost per certified machine (planned, after D62) |
 | D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
@@ -1526,6 +1526,65 @@ The tool: `answers-stop` (the probe script; `mf.answers_stop`), a line per run.
   the crucible's 8: word-problem-s3 2 and 1; S4 4 and 1; S5 5 and 1; move-to-front-4 3 and 2;
   move-to-front-5 4 and 3; random-q8-1 2 and 1; random-q12-0 3 and 1; random-q16-0 4 and 1. Every
   sum is at most 7. Division (arithmetic, no machine table) isn't read. The register's new row 15.
+
+## Findings: the probes D33-D59, final (read 2026-10-21 evening to 2026-10-22, 09:45)
+
+Each probe read by its registered header; a success is a certificate at both verdicts (D41). Counts
+from each run's last line (`seed N: step S, END, M min`); Wilson 95% intervals.
+
+- **The adaptive cool's probe (D33's probe): S3 4 of 8, its bar met exactly** (seeds 0, 2, 4, 7 at
+  steps 71, 13, 104, 60; 2-22 minutes). Seeds 1, 3, 5, 6 lost in the cool as read in flight (the
+  coupling's rises of 0.25-0.65 an epoch below the cascade) and ran to the 690-minute deadline;
+  move-to-front-4 seed 3 likewise (deadline at step 105), its convex control spent at step 173.
+- **The coupling probe (D38): refuted.** With the coupling held at 0, S3 4 of 8 (seeds 0, 2, 5, 7;
+  0.22-0.78); seeds 1, 3, 4, 6 spent at steps 698-709, never once answering right on their snapped
+  machine; move-to-front-4 seed 3 to its deadline. The handover is needed; the panel's handover
+  question was then superseded by the coupling read from sharpness (D50).
+- **The continuous probe (D54):** S3 6 of 8 (seeds 0, 2, 3, 5, 6, 7; 0.41-0.93; 11-57 minutes),
+  seeds 1 and 4 spent; move-to-front-4 1 of 4 (seed 0, the crucible's first move-to-front
+  certificate), seeds 1-3 stopped by the answers-only stop (D35) on machines exact only at the strict
+  verdict (seeds 1, 2 certified under the margin stop, D59).
+- **The fresh-seed matrix (D55): S3 7 of 16 (0.44, 0.23-0.67), refuted as registered (8 or fewer);
+  move-to-front-4 3 of 8 (0.38, 0.14-0.69), its bar (2) met.** Most losses were strict-only stops,
+  not failures to form the state: with the margin stop the same seeds read S3 11 of 16 (0.69,
+  0.44-0.86) and move-to-front-4 7 of 8 (0.88, 0.53-0.98).
+- **The unstructured probe (D56): random-q16-0 0 of 4,** every seed spent (steps 1523-1561).
+  Conversion failures: the state formed in the warm-up and was lost to coupling jumps of 0.20-0.48,
+  then the clock held at 0 to the budget.
+- **The S4 probe (D57): 1 of 3, its bar (1) met** (seed 1 at step 106, now without the commitment
+  term). Seeds 0 and 2 formed the state (seed 0 strict-exact with 24 states at steps 130-134), D35
+  never passed (the default verdict's minimised machine about 116 states: 100-130 near ties), then
+  **collapsed at a steady coupling of 0.97 and length 16.6-18.8** (screen 0.99 to 0.42 in one or two
+  epochs, to 3-17 states), and the clock held at 0 for about 1,400 epochs.
+- **The random control probe (D58): random-q12-0 1 of 4** (seed 0 at step 127), below its bar of 2,
+  not refuted (0); seeds 1-3 spent.
+- **The margin stop (D59): success by its rules, 10 of the 11 read** (S3 27, 29, 33, 36; mtf-4 24,
+  26, 29, 30; D54's mtf-4 1, 2), every replay identical to its first run up to the first pass; S3 35
+  spent (its first pass, exact at the strict verdict, lost); no false discovery. The split ties
+  (`Certificate.split_ties`, target-free) separate D55's 19 stopped networks exactly; waits 1-72
+  steps. The twelfth run (D54's mtf-4 seed 3) passed at steps 143-144 with split ties and runs to
+  its deadline; under D60 it would end 200 steps past its first pass on the best pass.
+
+### The coupling's jumps and the order of failure (offline, the spent runs of D54-D59)
+
+A jump is a coupling move of 0.1 or more in an epoch. Every spent run had 58-201 of them (largest
+0.34-0.77); certified runs at most 11 (largest 0.20). Against the screen's first fall below 0.9:
+
+| order | runs |
+|---|---|
+| jump first | S3 35 (D59's replay), S3 1 (D54), random-q16-0 2, 3 (D56) |
+| the same epoch | S3 25 (D55), random-q16-0 0, 1 (D56) |
+| drop first | S3 24 (D55), S3 4 (D54; coupling about 0), S4 0, 2 (D57; the late collapse) |
+
+Shared by all: after the drop the clock's rate (D49) holds at 0 and the run sits frozen to its
+budget, the motive of the collapse (D63). The jump-first and same-epoch failures are the paced
+coupling's (D61) target; the drop-first ones are not.
+
+### Savitzky-Golay against a moving average (offline, for D61 (c))
+
+On four runs' logged sharpness, a one-sided degree-1 Savitzky-Golay line over the cool's e-folding
+time removed every jump with a mean lag of -0.02 to 0.05; a moving average over the same window
+lagged 0.16-0.53 and, its window counted in clock, froze with the clock.
 
 ## A note on random machines (2026-10-20; a note, not a plan)
 
