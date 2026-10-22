@@ -96,6 +96,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D56 | 2026-10-22, 00:40 | the unstructured probe | D54's cell on random-q16-0 seeds 0-3 (`probe-d56.sh`) |
 | D57 | 2026-10-22, 00:50 | the S4 probe | D54's cell on word-problem-s4 seeds 0-2, the harm cells without the commitment (`probe-d57.sh`) |
 | D58 | 2026-10-22, 02:50 | the random control probe | D54's cell on random-q12-0 seeds 0-3 (`probe-d58.sh`) |
+| D59 | 2026-10-22, 04:20 | the margin stop | D35's stop waits until no near tie splits the machine (`--margin-wait 200`); its probe on the 12 strict-only stops (`probe-d59.sh`) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -880,6 +881,28 @@ owner's; D49-D54 settled under the delegation.
     fails where the earlier arms didn't); cores otherwise idle. Cons: four seeds, a coarse rate.
   - (b) move-to-front-5 or S5. Cons: 120 states, memory-heavy on `klip`; existence on the smaller
     unstructured machine first.
+- **D59. The margin stop (`--margin-wait`; D35's (c) and D39's (iii); the owner, 2026-10-22: "yes,
+  register the waiting stop probe").** By 04:00, 12 runs of D54 and D55 had stopped at D35's first pass
+  on networks exact at the strict verdict (0 wrong states and outputs, the target's size minimised) but
+  not the default: each a near tie's branch into another state (1-13 wrong states, 2-188 near ties),
+  so D41 counted none. Near ties alone don't decide it: the 10 certified stops had 2-125. What does is
+  whether a tie splits the machine: the certificate now counts `split_ties`, the (state, window) pairs
+  whose near ties branch into another state of its own minimised machine than the snap's, read
+  without the target; on D55's 19 stopped networks it is above 0 on each of the 9 early stops and 0 on
+  each of the 10 certified. The stop: a step D35's stop passes ends the run only when no tie splits
+  and no label is a near tie, at most 200 steps after the first such pass ("waited"), that pass's
+  network kept. Its probe (`~/code/probe-d59.sh`, registered before its data): the 12 re-run from
+  their seeds (word-problem-s3 27, 29, 33, 35, 36 and move-to-front-4 24, 26, 29, 30 from D55;
+  move-to-front-4 1, 2, 3 from D54), each bit-identical to its first run up to its first pass.
+  Expectations: at least 8 of 12 succeed (D41), refuted at 4 or fewer; a run exact at 1.0 at its first
+  pass whose stop's network isn't is a lost machine, refuted if the lost outnumber the gained; any false
+  discovery refutes; read: the steps waited, the ties over the wait, the trained length.
+  - (a) *Chosen.* Pros: target-free, as D35 is (discovery); it reads, on this data, exactly the
+    default verdict's failures; a wait that ends (200 steps) so a run that never clears still stops.
+    Cons: training past an exact machine can lose it (P1, 3b), which the probe counts; the rule's
+    separation shown on 19 networks of two machines only.
+  - (b) Zero near ties. Cons: every certified stop had some (2-125): it would wait past certificates.
+  - (c) A fixed number of steps past the first pass (D35's (c)). Cons: blind to the margin it waits for.
 
 ### The consistency review settled (2026-10-21, afternoon)
 
@@ -1440,6 +1463,7 @@ a random machine would just need a very slow cool.**
     Then D56's random-q16-0 probe, the same cell, registered in its script.
     Then D57's S4 probe, the same cell, registered in its script.
     Then D58's random-q12-0 probe, the same cell, registered in its script.
+    Then the margin stop (D59, `--margin-wait`, tested, the golden run unchanged) and its probe.
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
