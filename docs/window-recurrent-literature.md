@@ -400,8 +400,8 @@ Searched: freezing and re-annealing in simulated annealing, constant-thermodynam
 restart strategies and heavy-tailed run times, warm restarts in SGD, loss of plasticity and
 re-initialisation, glassy training dynamics, loss spikes, replica exchange, seed variance in
 benchmarks, and the learnability of random automata by statistical queries and gradient descent.
-Eighteen papers added to the literature repository (its PR #8; Salamon & Berry 1983, Nulton & Salamon 1988
-and Salamon et al. 1988 later, #10-#12, supplied by the owner), read in the parts that bear on the
+Eighteen papers added to the literature repository (its PR #8; Salamon & Berry 1983, Nulton & Salamon 1988,
+Salamon et al. 1988, Schafer 2011 and Savitzky & Golay 1964 later, #10-#14, supplied by the owner), read in the parts that bear on the
 above; one re-read.
 
 | paper | what it shows | bearing |
@@ -421,6 +421,7 @@ above; one re-read.
 | Baity-Jesi et al. 2018, Comparing Dynamics: DNNs versus Glassy Systems (ICML; 1803.06969; `baity-jesi-2018-dynamics-dnn-versus-glassy-systems`) | over-parametrised networks slow down through flat directions, without barrier crossing, unlike glasses; **under-parametrised networks show typical glassy dynamics** (ageing, stuck after a quench) | their variable is parameters against training examples; our words are generated afresh, effectively unbounded against a small network, which is the under-parametrised side: a hypothesis for why runs freeze, untested here |
 | Cohen et al. 2021, Gradient Descent ... at the Edge of Stability (ICLR; 2103.00065; `cohen-2021-edge-of-stability-gradient-descent`) | the Hessian's top eigenvalue (their **"sharpness"**) rises to `2/eta`, then hovers there while the loss falls **non-monotonically**, with spikes | a candidate mechanism for coupling jumps and collapses; **their sharpness is not our `sharpness`** (the codes' mean largest soft weight, D50): a name clash to keep apart in writing. We train with Adam, where the slingshot (below) is the closer account |
 | *re-read:* Thilak et al. 2022, the Slingshot Mechanism (2206.04817; `thilak-2022-slingshot-mechanism-adaptive-optimizers`) | with adaptive optimisers, after the data is fitted, the **last layer's norm grows, then a loss spike**, in cycles | S4's collapse fits its timing (formed and strict-exact at steps 130-134, then the fall at a steady coupling): untested, because the readout's weight norm is not logged |
+| Savitzky & Golay 1964, Smoothing and Differentiation of Data by Simplified Least Squares Procedures (Anal. Chem. 36:1627; `savitzky-1964-smoothing-differentiation-least-squares`) and Schafer 2011, What Is a Savitzky-Golay Filter? (IEEE SPM 28(4):111; `schafer-2011-what-is-savitzky-golay-filter`), both supplied by the owner | a degree-`N` local least-squares fit over `2M + 1` samples, **read at the window's central point**, is a fixed convolution (tabulated integers), and so are its derivatives there; Schafer: the filters for `N` and `N + 1` coincide for even `N`, so **degree 1 centred is a moving average** (P2); the 3 dB cutoff `f_c ~ (N + 1) / (3.2 M - 4.6)` (M >= 25) | D61 (c) reads the degree-1 line **at the newest epoch** (one-sided), which neither paper treats: its offline lag advantage over the moving average (-0.02 to 0.05 against 0.16-0.53) comes from the one-sided reading alone, since centred the two are one filter. The cutoff formula gives a derived window for a chosen smoothness |
 | Li et al. 2018, Hyperband (JMLR 18; 1603.06560; `li-2018-hyperband-bandit-hyperparameter-optimization`) | **successive halving**: run many configurations on a small budget, keep the best half, double the budget, repeat; Hyperband hedges over the starting count | an early-stopping rule needs an early signal that predicts success; ours would be `formation` (the state share) or the snapped machine's long answers (answers-only); the freeze-based kill is the other kind (a stall, not a rank) |
 | Bouthillier et al. 2021, Accounting for Variance in ML Benchmarks (MLSys; 2103.03098; `bouthillier-2021-accounting-variance-ml-benchmarks`) | the seed, the data's order and the hyperparameters' search each move results markedly; **randomise every source**, compare by `P(A > B)` with percentile-bootstrap intervals, not by means | the statistical method's practice: paired fresh seeds (D64's pair the arms), rates with intervals (Wilson's), never chosen seeds; a further source to randomise would be the data's order |
 | Rubin, Seroussi & Ringel 2024, Grokking as a First Order Phase Transition (ICLR; 2310.03789; `rubin-2024-grokking-first-order-phase-transition`) | grokking maps to a **first-order** transition (an equilibrium theory): past it, a **mixed phase** of "droplets" (some units specialised to the teacher, the rest not) | a first-order transition is what can be **supercooled**: cooled past the melting point without nucleating. Our random runs near their melting point without forming are that picture, loosely (no free energy is defined for our training) |
@@ -478,10 +479,9 @@ the offline items may run any time):
    evidence does not support a per-factor reheat.
 5. **Parallel tempering for a batch:** a new component, the owner's call.
 
-Surfaced, not read: Schafer 2011, What Is a Savitzky-Golay Filter? (IEEE SPM 28(4):111, the tutorial
-for D61's smoothing; no open copy found) and Savitzky & Golay 1964 (Anal. Chem. 36:1627); Nikishin et
+Surfaced, not read: Nikishin et
 al. 2022, the primacy bias and resets (2205.07802); Nourani & Andresen 1998
-(constant speed; Nourani & Andresen 1998 has since been added to the literature repository, its #9, unread); Mitarchuk et al. 2024 (gradient descent's limits for
+(constant speed against other schedules; since added to the literature repository, its #9, unread); Mitarchuk et al. 2024 (gradient descent's limits for
 finite-precision recurrent networks, TMLR). Kontorovich 2009 (random DFAs PAC-learnable, 0907.0453)
 was withdrawn for an error.
 
@@ -506,7 +506,8 @@ The freeze and restarts extension: 1608.03983, 1603.06560, 1803.06969, 1910.0847
 2103.03098, 2108.04190, 2306.13812, 2310.03789, 2510.04115, physics/0508111; Kirkpatrick, Gelatt &
 Vecchi, Science 220(4598):671-680, 1983; Ingber, Mathematical and Computer Modelling 12(8):967-973,
 1989; Salamon & Berry, Physical Review Letters 51(13):1127-1130, 1983;
-Nulton & Salamon, Physical Review A 37(4):1351-1356, 1988; Salamon, Nulton, Harland, Pedersen, Ruppeiner &
+Nulton & Salamon, Physical Review A 37(4):1351-1356, 1988; Schafer, IEEE Signal Processing Magazine
+28(4):111-117, 2011; Savitzky & Golay, Analytical Chemistry 36(8):1627-1639, 1964; Salamon, Nulton, Harland, Pedersen, Ruppeiner &
 Liao, Computer Physics Communications 49:423-428, 1988;
 Andresen & Gordon, Open Systems & Information Dynamics 2(1):1-12, 1993; Luby, Sinclair &
 Zuckerman, Information Processing Letters 47(4):173-180, 1993; Gomes, Selman, Crato & Kautz, Journal
