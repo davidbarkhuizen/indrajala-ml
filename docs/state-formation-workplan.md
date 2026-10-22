@@ -102,7 +102,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D62 | 2026-10-22, 08:00 | the run's state object | `run`'s loop-carried state one dataclass, the loop's body split into functions of it (planned) |
 | D63 | 2026-10-22, 08:15 | the collapse | reheat (the rate below the hold's level negative, the clock run back) or kill-and-resample, on cost per certified machine (planned, after D62) |
 | D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`) |
-| D65 | 2026-10-22, 11:15 | the order-biased cool | the cool's halving time times `1 + w (s - 1)`: w the machine's order from answers (0 when ordered), s the slowdown from the melting curve and relaxation (planned, after the current work) |
+| D65 | 2026-10-22, 10:45 | the order-biased cool | the cool's halving time times `1 + w (s - 1)`: w the machine's order from answers (0 when ordered), s the slowdown from the melting curve and relaxation; set aside at 11:05 on its stage 0 (the failures freeze, the cool does not outrun them) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -1038,7 +1038,7 @@ owner's; D49-D54 settled under the delegation.
     half-load `stone` and the free `klip` today. Cons: a coarse rate per backdrop (3-8 seeds).
   - (b) S3 and move-to-front-4 only, 24 seeds (a sharper working rate). Cons: silent on the gap.
   - (c) Wait for D61's reading, then one batch with its arm. Cons: no current rate to compare it to.
-- **D65. The order-biased cool (planned 2026-10-22, 11:15; the owner: "plan this work in detail, and
+- **D65. The order-biased cool (planned 2026-10-22, 10:45, set aside at 11:05 on its stage 0, below; the owner: "plan this work in detail, and
   schedule it immediately after the completion of our current planned work").** The scaling
   conjecture's reading (below) puts the random machines' failures at forming the state, their melting
   curves the most crowded, while every ordered machine forms at today's pace (S3 19 of 24,
@@ -1102,6 +1102,19 @@ owner's; D49-D54 settled under the delegation.
     shows s collapses on ordered runs by itself.
   - (d) More seeds instead (the owner's conjecture). Cons: random-q16-0's four plateaus point at the
     pace, not the sample; the owner: the sampling unchanged for now.
+  - **Stage 0 read (11:05): the slowdown set aside** (the owner: "write it up that way"); the freeze
+    (findings, below) is the common failure, D63's target. (0b) s is about 1 on every run, random or
+    ordered (at most 1.6, an S3 run; random-q16-0 1.0-1.17): before the freeze the gate's holds last
+    1-5 epochs against a halving of 30, so the cool does not outrun the network; and the frozen runs
+    sat at one temperature for about 1,400 epochs, an infinitely slow cool there, without forming.
+    (0a) No statistic meets the criteria: |drop z| puts every algebra (S3-S5, move-to-front-3 to 5) at
+    w = 0 at every bound, but 16 of 22 random machines at most reach w >= 0.8 (73%, at 1.1 times the
+    bound; 15 of 22 at the bound), and at 1.5 times the bound 5 of 22; rms z and the whitened distance
+    do worse; random-perm-4-0 (every token a permutation, a group's action) reads ordered under all
+    three, rightly. The order reading separates the algebras reliably; a weight that is 1 on random
+    machines does not follow from it, and a loose bound blurs it. Kept as tools (`order`,
+    `formation`); nothing built on them. Revisit only if the reheat (D63 (a)) fails on the random
+    machines.
 
 ### The consistency review settled (2026-10-21, afternoon)
 
@@ -1692,6 +1705,35 @@ owner: the sampling is not changed yet.
   S4's collapse); for random-q16-0 the evidence (four plateaus far from forming, the most crowded
   cascade) points at the cool's pace, not the sample, though 0 of 4 (Wilson 0-0.49) cannot exclude a
   usable p. Small samples throughout (3-4 runs on the new backdrops); D64 adds 3-4 a backdrop.
+
+## Findings: the freeze, every failure's end (offline, 2026-10-22, 11:00)
+
+Read for D65's stage 0 on the same 47 runs' per-epoch rows (`anneal`: `rate`, `clock`,
+`temperature`, `coupling`, `sharpness`, `length`) and step ends.
+
+- **Every spent run ends frozen:** all 16 (S3 1, 4, 24, 25, 31, 39; move-to-front-4 25; S4 0, 2;
+  random-q12-0 1-3; random-q16-0 0-3) hold the rate at 0 for 738-1,472 epochs. The random machines
+  freeze early, before the state forms (clock 71-91, temperature 1.4-1.9, at 0.54-1.16 of the factor's
+  melting point, mostly 0.7-0.95); S4's freeze deep after its collapse (0.33-0.42 of the melting
+  point). S3 seed 30 froze for 445 epochs, thawed and certified (formed at step 853).
+- **Not a cool outrunning the network:** before the freeze the gate holds 1-5 epochs at a time
+  (halving 30); the frozen runs then spent about 1,400 epochs at one temperature without forming.
+- **Frozen is not still:** the clock stops but the coupling, read from the sharpness, mostly rises to
+  1 while frozen (random-q16-0 seeds 0, 3, random-q12-0 seed 2: 0.12-0.81 to 0.99-1.00): a quench by
+  the coupling at fixed temperature, a glass. Two runs stayed soft: random-q16-0 seeds 1 and 2 sat at
+  0.87-1.16 of the melting point with coupling 0.30-0.68 unchanged for 1,405-1,472 epochs, a hold in
+  the window between the melt and the freeze, in effect, and did not form either.
+- **Not the curriculum:** the never-formed runs froze at lengths 8.0-9.4 and ended at 9.2-11.6; the
+  formed runs formed at 8.2-15.6 (S3 8.2-11.2), so the frozen runs sat at lengths where others form.
+- **The snapped machine's long answers read formation from answers alone:** its accuracy at length 48
+  tracks the state share (random failures flat at 0.51-0.60 for 1,400 steps; S3 seed 34 0.35 to 1.00
+  as it formed), an answers-only observable for a freeze.
+- **So:** the remedy is escaping the freeze, not slowing the cool: a reheat (D63 (a): the clock run
+  back, the held temperatures released, a partial re-melt, a fresh attempt at nucleation) or a fresh
+  seed (D63 (e)). A plain hold in the window (the owner's question, from glass-ceramics, where
+  crystallisation is fastest between the glass transition and the melt) has in effect been tried by
+  two runs and did not form; glass-ceramics also need nucleating agents, which points at nucleation,
+  not time, as the barrier: a reheat or a new seed is a new nucleation attempt.
 
 ## A note on random machines (2026-10-20; a note, not a plan)
 
