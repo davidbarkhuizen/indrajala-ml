@@ -41,7 +41,7 @@ from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Protocol
 
 import numpy as np
 import numpy.typing as npt
@@ -2241,6 +2241,824 @@ def _write_checkpoint(out: Path, identity: dict[str, Any], place: Place | str, n
     partial.replace(out / CHECKPOINT)
 
 
+@dataclass(frozen=True)
+class RunConfig:
+    """run's settings, the cap resolved (its default the cell's exclusion bound): see run."""
+
+    encoding: Target
+    factors: Sequence[tuple[int, int]]
+    seed: int
+    budget_seconds: float
+    out: Path
+    settings: Settings
+    cap: int
+    reads: str
+    budget_epochs: int | None
+    fork: Fork | None
+    guard: bool
+    long_tail: int | None
+    consolidate: bool
+    restore_best: bool
+    commitment_from: int | None
+    width: int
+    branches: bool
+    answer_branch: bool
+    thermostat: Thermostat | None
+    keep_machine: bool
+    counterexamples: float | None
+    anneal: Anneal | None
+    warm_up: WarmUp | None
+    whole: bool
+    crucible: bool
+    state_bound: int | None
+    coupling_cap: float
+    continuous: Continuous | None
+    margin_wait: int | None
+
+    def identity(self, first: int) -> dict[str, Any]:
+        """What a resumed run must share with the run it resumes (_run_identity's)."""
+        return _run_identity(
+            self.encoding,
+            self.factors,
+            self.seed,
+            self.budget_seconds,
+            self.settings,
+            self.cap,
+            self.reads,
+            self.budget_epochs,
+            self.fork,
+            self.guard,
+            first,
+            self.long_tail,
+            self.consolidate,
+            self.restore_best,
+            self.commitment_from,
+            self.width,
+            self.branches,
+            self.answer_branch,
+            self.thermostat,
+            self.keep_machine,
+            self.counterexamples,
+            self.anneal,
+            self.warm_up,
+            self.whole,
+            self.crucible,
+            self.state_bound,
+            self.coupling_cap,
+            self.continuous,
+            self.margin_wait,
+        )
+
+    def check(self) -> None:
+        """The settings' combinations a run allows (an AssertionError naming the first it doesn't)."""
+        assert self.margin_wait is None or self.state_bound is not None, (
+            "the margin stop waits on D35's: with a state bound"
+        )
+        assert self.continuous is None or not self.continuous.pace or self.coupling_cap == 1.0, (
+            "D61's pace or D38's cap, not both"
+        )
+        assert self.warm_up is None or self.anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
+        assert not (self.whole and self.long_tail is not None), "the whole distribution has no long tail beyond it"
+        assert not self.crucible or (self.warm_up is not None and not self.whole and self.long_tail is None), (
+            "a crucible holds a warm-up's material, then grows on the whole distribution: with a warm-up, not --whole"
+        )
+        assert (
+            self.warm_up is None or self.warm_up.shape in ("exponential", "adaptive") or self.warm_up.shape in COOLS
+        ), f"a cool's shape: exponential, adaptive or one of {sorted(COOLS)}"
+        assert self.warm_up is None or (self.fork is None and not self.restore_best and not self.keep_machine), (
+            "a crystallising run never goes back (D18): the warm-up not with the fork, restore_best or keep_machine"
+        )
+        assert not (self.keep_machine and self.restore_best), (
+            "the step's kept machine (R3) or its best screen, not both"
+        )
+        assert self.continuous is None or (
+            self.warm_up is not None
+            and self.crucible
+            and self.warm_up.shape == "exponential"
+            and not self.warm_up.handover
+            and self.warm_up.gate == 0.0
+        ), "the continuous crystallisation (D48) is a crucible's, its exponential cool with its own coupling and rate"
+        assert self.counterexamples is None or 0 < self.counterexamples < 1, (
+            f"a share of each epoch's examples; got {self.counterexamples}"
+        )
+        assert self.thermostat is None or (self.commitment_from is None and not self.consolidate), (
+            "the thermostat sets the commitment's weight itself: not with --commitment-from, nor with A, whose target "
+            "it moves (the commitment-control workplan)"
+        )
+        assert self.anneal is None or (
+            self.thermostat is None and self.commitment_from is None and not self.consolidate
+        ), "annealing sets the commitment's weight itself, and its soft codes take no consolidation's target"
+
+
+@dataclass
+class RunState:
+    """
+    What a run carries from epoch to epoch and step to step (the state formation workplan's D62), as
+    its objects; Place is its checkpoint's form (`place`, `resumed`). The step's own (the best screen
+    and the epochs since, the rate, forks and the fork's peak, the last screen's answer kinds, the
+    undone updates, R3's kept machine) set at each step's start; the rest carried over.
+    """
+
+    spent: int  # epochs trained in all
+    frozen: int  # consecutive armed epochs with STALL_SHARE of their updates undone
+    table: dict[tuple[int, ...], tuple[int, ...]]  # A's, from the last diagnosis
+    levels: list[int]  # each factor's level (Thermostat)
+    words: list[list[int]]  # R4: the last diagnosis's counterexamples
+    annealed: list[int]  # Anneal's levels: soft at the start (a continuous factor's at the ramp's end, never soft)
+    warm: bool  # WarmUp: still continuous
+    hot: list[float]  # WarmUp: each factor's T_hot, once set
+    anneal_from: int  # WarmUp: the epochs trained at its end
+    melting_points: list[float]  # WarmUp: each factor's melting point (D25)
+    last_splits: list[float]  # WarmUp: each factor's last transition (D25)
+    fixed: int  # D26: the crucible's longest length, once set
+    grown_from: int  # D26: the first block of growth, once begun
+    held: int  # D29: the epochs the profile's clock held (the continuous clock's, D49, in cstate)
+    level: float  # D29: the hold's best screen
+    gate_screen: float  # D29: the last screen
+    cooling: Cooling | None  # D33: the adaptive cool
+    coupled: list[float]  # D25: the couplings last set, training state
+    cstate: ContinuousState  # D49-D52, D61
+    margin: Margin  # D59-D60
+    best: float = -1.0
+    since: int = 0
+    rate: float = 0.0
+    forks: int = 0
+    peak: float = 0.0
+    last_kinds: dict[str, float] = field(default_factory=dict[str, float])
+    step_rollbacks: int = 0
+    machine_best: list[float] = field(default_factory=list[float])
+    score: float = -1.0  # the last epoch's screen (WarmUp's end reads it with the step's best)
+
+    @staticmethod
+    def begun(config: RunConfig, snapped: Sequence[bool]) -> RunState:
+        """A new run's state."""
+        anneal = config.anneal
+        return RunState(
+            spent=0,
+            frozen=0,
+            table={},
+            levels=[0] * len(snapped),
+            words=[],
+            annealed=[0 if s else (anneal.top if anneal is not None else 0) for s in snapped],
+            warm=config.warm_up is not None,
+            hot=[],
+            anneal_from=0,
+            melting_points=[],
+            last_splits=[],
+            fixed=0,
+            grown_from=0,
+            held=0,
+            level=-1.0,
+            gate_screen=-1.0,
+            cooling=None,
+            coupled=[],
+            cstate=ContinuousState(0.0, [], [], [], 0.0),
+            margin=Margin(config.margin_wait),
+            rate=config.settings.rate,
+        )
+
+    @staticmethod
+    def resumed(place: Place, config: RunConfig, snapped: Sequence[bool]) -> RunState:
+        """A stopped run's state, from its checkpoint's place."""
+        state = RunState.begun(config, snapped)
+        state.spent, state.frozen = place.spent, place.frozen
+        state.table = {tuple(duplicate): tuple(representative) for duplicate, representative in place.consolidation}
+        state.levels = list(place.thermostat) if place.thermostat else state.levels
+        state.words = [list(w) for w in place.words]
+        state.annealed = list(place.anneal) if place.anneal else state.annealed
+        state.warm, state.hot, state.anneal_from = place.warm, list(place.hot), place.anneal_from
+        state.melting_points, state.last_splits = list(place.melting), list(place.final)
+        state.fixed, state.grown_from, state.held = place.crucible, place.grown, int(place.held)
+        state.level, state.gate_screen = place.level, place.gate_screen
+        state.cooling = Cooling(**place.cooling) if place.cooling else None
+        state.coupled = list(place.couplings)
+        state.cstate = ContinuousState(
+            place.held,
+            list(place.hot),
+            list(place.floors),
+            list(place.sharp_from),
+            place.length,
+            list(place.allowance),
+            list(place.couplings) if place.allowance else [],
+            [list(h) for h in place.history],
+        )
+        state.margin = Margin(config.margin_wait, place.first_pass, place.best_pass, place.best_ties)
+        return state
+
+    def place(self, step: int, epoch: int, seconds: float, log_bytes: int, config: RunConfig) -> Place:
+        """The checkpoint's place after `epoch` of `step` (0: its start), every count as it stands."""
+        return Place(
+            step,
+            epoch,
+            self.spent,
+            self.best,
+            self.since,
+            self.rate,
+            self.forks,
+            self.peak,
+            dict(self.last_kinds),
+            self.step_rollbacks,
+            self.frozen,
+            seconds,
+            log_bytes,
+            [(list(duplicate), list(representative)) for duplicate, representative in self.table.items()],
+            list(self.levels) if config.thermostat is not None else [],
+            list(self.machine_best),
+            [list(w) for w in self.words],
+            list(self.annealed) if config.anneal is not None else [],
+            self.warm,
+            list(self.hot),
+            self.anneal_from,
+            list(self.melting_points),
+            list(self.last_splits),
+            self.fixed,
+            self.grown_from,
+            self.cstate.held if config.continuous is not None else self.held,
+            self.level,
+            self.gate_screen,
+            asdict(self.cooling) if self.cooling is not None else {},
+            list(self.coupled),
+            self.cstate.length,
+            list(self.cstate.sharp_from),
+            list(self.cstate.floors),
+            self.margin.first_pass,
+            self.margin.best_pass,
+            self.margin.best_ties,
+            list(self.cstate.allowance),
+            [list(h) for h in self.cstate.history],
+        )
+
+
+@dataclass(frozen=True)
+class StepPlan:
+    """A step's setting (run's): its screen's windows and the lengths read, and the curriculum's place in it."""
+
+    step: int
+    screens: dict[int, list[Example]]
+    read_at: list[int]
+    flat: bool  # every epoch over every length to the cap (the whole distribution, or a crucible grown)
+    longest: int  # the curriculum's longest length (the crucible's, held)
+    grown: bool  # a crucible's growth begun (D26)
+    growing: bool  # D52: after the warm-up of a continuous run, a step an epoch
+
+    @property
+    def sample(self) -> list[list[Example]]:
+        """The screen's windows at the lengths read (hardness's, sharpness's, the melting curve's)."""
+        return [self.screens[n] for n in self.read_at]
+
+
+@dataclass(frozen=True)
+class EpochSetting:
+    """An epoch's setting before it trains (_Run.set_epoch): its row's thermodynamics, its phase, whether it melts."""
+
+    thermo: dict[str, Any]
+    phase: str | None
+    melting: bool
+
+
+class _Run:
+    """
+    One run (run's), its settings (RunConfig), its state (RunState), its network and its log apart
+    (the state formation workplan's D62): each phase of a step a method of them.
+    """
+
+    def __init__(self, config: RunConfig, resume: bool) -> None:
+        c = config
+        c.out.mkdir(parents=True, exist_ok=True)
+        self.c = c
+        self.first = first_length(c.encoding.task.machine)
+        self.identity = c.identity(self.first)
+        c.check()
+        self.d = mr.word_length(c.encoding.task.machine) if c.consolidate else 0
+        self.place: Place | None = None  # the checkpoint resumed from
+        self.ended = False
+        saved = json.loads((c.out / CHECKPOINT).read_text()) if resume and (c.out / CHECKPOINT).exists() else None
+        if saved is not None:
+            assert saved["run"] == self.identity, f"{c.out} holds another run: {saved['run']} against {self.identity}"
+            if saved["place"] == ENDED:
+                self.ended = True
+                return
+        table: dict[tuple[int, ...], tuple[int, ...]] = {}
+        if saved is not None and saved["place"] != BEGUN:
+            self.place = Place(**saved["place"])
+            self.net: Any = network_from_state(saved["network"])
+            table = {tuple(duplicate): tuple(representative) for duplicate, representative in self.place.consolidation}
+            self.net.consolidate(table)
+            with (c.out / "log.jsonl").open("r+") as kept:
+                kept.truncate(self.place.log_bytes)
+        else:
+            assert saved is not None or not (resume and (c.out / "log.jsonl").exists()), (
+                f"{c.out} has a log but no checkpoint to resume from"
+            )
+            self.net = network(c.encoding, c.factors, c.seed, c.reads, c.width, c.branches, c.answer_branch)
+            if saved is not None:
+                (c.out / "log.jsonl").write_text("")  # stopped before its first checkpoint: begun again from the seed
+            _write_checkpoint(c.out, self.identity, BEGUN, self.net)
+        self.start = time.perf_counter() - (self.place.seconds if self.place is not None else 0.0)
+        self.log = (c.out / "log.jsonl").open("a")
+        if self.place is None:
+            self.record({"step": 0, "epoch": 0, **diagnose(self.net, c.encoding, c.settings)})
+        self.task = c.encoding.task
+        self.guarding = cg.Guard(lambda n: QueryMachine(n, c.encoding, 0), self.task) if c.guard else None
+        self.snapshot = c.out / "snapshot.network.json"
+        self.step_best = c.out / "best.network.json"  # restore_best's
+        factors = self.net.recurrence.factors
+        self.commitments = [0.0 if f.codes is None else f.codes.commitment for f in factors]  # the specs'
+        self.counts = [0 if f.codes is None else f.codes.count for f in factors]
+        self.snapped = [f.codes is not None for f in factors]
+        self.counts_snapped = [n for n, s in zip(self.counts, self.snapped, strict=True) if s]
+        self.s = (
+            RunState.resumed(self.place, c, self.snapped) if self.place is not None else RunState.begun(c, self.snapped)
+        )
+        self.cached: dict[int, list[Example]] = {}  # D52: the growing screen's windows, by length
+        if self.s.coupled:
+            self.net.set_couplings(
+                self.s.coupled
+            )  # the loaded network's, as the stopped run's was (its screens read them)
+        self.walked_d = mr.word_length(c.encoding.task.machine)  # R3 and R4's walks' d, the task's
+        self.machine_kept = c.out / "machine-best.network.json"
+        self.continuing = c.continuous is not None  # D48: after the warm-up, each epoch continuous_epoch's
+
+    def record(self, row: dict[str, Any]) -> None:
+        row["seconds"] = round(time.perf_counter() - self.start, 1)
+        self.log.write(json.dumps(row) + "\n")
+        self.log.flush()
+
+    def warming(self) -> None:
+        # the network about to train or screen (a fork's or a restore's loaded one included) continuous
+        # while warming, snapped after (WarmUp)
+        if self.c.warm_up is not None:
+            self.net.set_temperatures([None] * len(self.snapped))
+            self.net.set_continuous(list(self.snapped) if self.s.warm else [False] * len(self.snapped))
+
+    def checkpoint(self, step: int, epoch: int) -> None:
+        # the run's place after epoch of step (0: its start), every count read as it stands
+        self.log.flush()
+        place = self.s.place(step, epoch, time.perf_counter() - self.start, self.log.tell(), self.c)
+        _write_checkpoint(self.c.out, self.identity, place, self.net)
+
+    def regroup(self) -> dict[str, int]:
+        # A's table read from the network as it stands and held until the next; the row's record of it
+        self.s.table, codes, groups = consolidation(self.net, self.c.encoding, self.d)
+        self.net.consolidate(self.s.table)
+        return {"codes": codes, "groups": groups, "duplicates": len(self.s.table)}
+
+    def go(self) -> None:
+        """The run, from its first step (or its checkpoint's) to its stop."""
+        c, s = self.c, self.s
+        # the curriculum's steps end at the cap; the whole distribution's blocks go on until the budget (D22:
+        # a step is then a block of epochs, not a length)
+        begin = self.place.step if self.place is not None else self.first
+        for step in itertools.count(begin) if c.whole or c.crucible else range(begin, c.cap + 1):
+            if self.run_step(self.plan(step)):
+                break
+        if c.state_bound is not None and s.margin.waited >= 0:  # D60: the wait's stop, on the best pass's network
+            growing = c.continuous is not None and s.fixed > 0
+            self.record(s.margin.stop_row(c.out, c.encoding, c.settings, c.state_bound, s.coupled, growing))
+        self.log.close()
+        _write_checkpoint(c.out, self.identity, ENDED, self.net)
+
+    def plan(self, step: int) -> StepPlan:
+        # the curriculum's lengths, or the whole distribution's every step (a step then a block of epochs);
+        # a crucible's (D26) its warm-up's last step's every block, then, every factor hard, the whole's
+        # growth begins at the first block to start with every factor hard, and is kept (a resumed block
+        # within it reads it from its checkpoint, not from the levels the block's epochs moved)
+        c, s = self.c, self.s
+        if (
+            not s.grown_from
+            and not (self.place is not None and self.place.step == step)
+            and s.fixed > 0
+            and c.anneal is not None
+            and all(not c.anneal.soft(level) for level, sn in zip(s.annealed, self.snapped, strict=True) if sn)
+        ):
+            s.grown_from = step
+        grown = s.grown_from > 0
+        flat = c.whole or grown
+        longest = s.fixed or step
+        growing = c.continuous is not None and s.fixed > 0
+        screens, read_at = step_screens(
+            c.encoding, c.settings, c.cap, longest, flat, s.fixed if growing else 0, s.cstate.length, self.cached
+        )
+        return StepPlan(step, screens, read_at, flat, longest, grown, growing)
+
+    def begin_step(self, p: StepPlan) -> int:
+        """The step's start: its own state set (or resumed), its first row; the epoch it goes on from."""
+        c, s = self.c, self.s
+        epoch = 0
+        if self.place is not None and self.place.step == p.step:  # resumed within this step
+            self.warming()  # the loaded network continuous while warming, as the stopped run's was
+            s.best, s.since, epoch = self.place.best, self.place.since, self.place.epoch
+            s.rate, s.forks, s.peak = self.place.rate, self.place.forks, self.place.peak
+            s.last_kinds, s.step_rollbacks = self.place.last_kinds, self.place.step_rollbacks
+            s.machine_best = list(self.place.machine_best)
+        else:
+            s.best, s.since = -1.0, 0
+            s.machine_best = []
+            s.rate, s.forks = c.settings.rate, 0
+            self.warming()
+            start_score, start_kinds = screen(
+                self.net, c.encoding, p.screens
+            )  # the step before's network on this step's lengths
+            self.record(
+                {
+                    "step": p.step,
+                    "epoch": 0,
+                    "screen": round(start_score, 4),
+                    "kinds": _kinds(start_kinds),
+                    **({"crucible": "grown" if p.grown else s.fixed} if c.crucible and s.fixed else {}),
+                }
+            )
+            s.last_kinds, s.step_rollbacks = start_kinds, 0
+            s.gate_screen = start_score  # D29: the gate reads the screen before the epoch
+            s.peak = 0.0
+            if c.fork is not None:
+                s.peak = c.fork.trigger.value(start_score, start_kinds)
+                self.net.save(str(self.snapshot))
+        if epoch == 0:
+            self.checkpoint(p.step, 0)
+        return epoch
+
+    def run_step(self, p: StepPlan) -> bool:
+        """One step, its epochs and its end; whether the run stops after it."""
+        c, s = self.c, self.s
+        stop = "budget"
+        s.score = -1.0  # the last epoch's screen (WarmUp's end reads it with the step's best)
+        epoch = resumed = self.begin_step(p)
+        for epoch in range(resumed + 1, c.settings.max_epochs + 1):
+            if time.perf_counter() - self.start > c.budget_seconds:
+                stop = "deadline"
+                break
+            if c.budget_epochs is not None and s.spent >= c.budget_epochs:
+                stop = "spent"
+                break
+            ended = self.run_epoch(p, epoch)
+            if ended == "fork":
+                continue
+            if ended is not None:
+                stop = ended
+                break
+            self.checkpoint(p.step, epoch)
+        if self.end_step(p, stop, epoch):
+            return True
+        self.warm_up_end(p)
+        return stop in ("deadline", "spent", "stalled")
+
+    def set_epoch(self, p: StepPlan, epoch: int) -> EpochSetting:
+        """The epoch's setting before it trains: the thermostat's, the warm-up's, the continuous or annealed profile's."""
+        c, s, net = self.c, self.s, self.net
+        thermo: dict[str, Any] = {}
+        melting = False  # WarmUp: in the profile's heat or hold (D18)
+        phase: str | None = None  # WarmUp: the profile's phase this epoch trains in
+        if c.thermostat is not None:
+            # the network about to train (a fork's restored one included), read on the step's screen at its
+            # shortest, middle and longest lengths
+            effective = effective_codes(net, p.sample)
+            s.levels = c.thermostat.levels(s.levels, effective, self.counts, s.best)  # best: the step's best so far
+            beta = c.thermostat.commitments(s.levels, self.commitments)
+            net.set_commitments(beta)
+            thermo = {
+                "thermostat": {"effective": [round(e, 2) for e in effective], "beta": [round(b, 4) for b in beta]}
+            }
+        if s.warm:
+            # WarmUp: every snapped factor continuous, its commitment 0 (D4, D9)
+            self.warming()
+            net.set_commitments([0.0] * len(self.snapped))
+            thermo = {"warm": True}
+        elif self.continuing:
+            # D48-D51: the epoch's clock, temperatures, couplings and readings (continuous_epoch)
+            assert c.anneal is not None and c.continuous is not None and c.warm_up is not None
+            self.warming()
+            moved = continuous_epoch(
+                net,
+                c.continuous,
+                c.warm_up,
+                p.sample,
+                self.snapped,
+                s.cstate,
+                s.spent - s.anneal_from,
+                s.gate_screen,
+                s.level,
+                c.anneal.hard,
+                c.anneal.commitments(s.annealed, self.commitments),
+                c.coupling_cap,
+                np.random.default_rng([c.seed, p.step, epoch, s.forks]),
+                c.cap,
+            )
+            s.cstate = moved.state
+            phase, s.coupled, thermo = moved.phase, moved.couplings, moved.thermo
+            melting = phase in ("heat", "hold")
+        elif c.anneal is not None:
+            phase, thermo = self.anneal_epoch(p, epoch, c.anneal)
+            melting = phase in ("heat", "hold")
+        return EpochSetting(thermo, phase, melting)
+
+    def anneal_epoch(self, p: StepPlan, epoch: int, anneal: Anneal) -> tuple[str | None, dict[str, Any]]:
+        # the network about to train (a fork's restored one included), its soft factors' hardness read
+        # at the temperature they trained at, on the step's screen at its shortest, middle and longest;
+        # after a warm-up, each factor's temperature its profile's from its T_hot (D15), hardness read
+        # from the cool's start or a shaped cool's end (D24), the soft codes moved by thermal noise (D17)
+        c, s, net, warm_up = self.c, self.s, self.net, self.c.warm_up
+        self.warming()
+        holding = (
+            warm_up is not None
+            and bool(s.hot)
+            and warm_up.holds(s.spent - s.anneal_from - s.held, s.gate_screen, s.level)
+        )
+        if holding:
+            s.held += 1  # D29: this epoch trains at the last one's clock
+        clock = s.spent - s.anneal_from - s.held  # the profile's epochs (D29: less those held)
+        phase = warm_up.phase(clock) if warm_up is not None and s.hot else None
+        reading = phase is None or (warm_up is not None and warm_up.reads_hardness(clock))
+        each = (
+            [warm_up.temperature(clock, t) for t in s.hot]
+            if warm_up is not None and s.hot
+            else [anneal.temperature(s.spent)] * len(self.snapped)
+        )
+        if s.cooling is not None and warm_up is not None and phase == "cool":
+            if not holding:  # D33: the adaptive cool steps from its measurements; D29's gate holds it too
+                s.cooling.advance(warm_up, s.melting_points, s.last_splits)
+            each = list(s.cooling.temperature)
+        soft = [
+            t if sn and level == 0 and reading else None
+            for t, sn, level in zip(each, self.snapped, s.annealed, strict=True)
+        ]
+        hard = hardness(net, p.sample, soft, anneal.hard)
+        s.annealed = anneal.levels(s.annealed, hard)
+        temperatures = [
+            t if sn and anneal.soft(level) else None
+            for t, sn, level in zip(each, self.snapped, s.annealed, strict=True)
+        ]
+        beta = anneal.commitments(s.annealed, self.commitments)
+        profiled: dict[str, Any] = {}
+        couplings = [1.0] * len(self.snapped)
+        if phase is not None and warm_up is not None:
+            jitter(net, temperatures, warm_up.kappa, np.random.default_rng([c.seed, p.step, epoch, s.forks]))
+            profiled = {"phase": phase, "groups": code_groups(net, temperatures, warm_up.kappa)}
+            # D32's logging, and the adaptive cool's reading (D33)
+            heat = thermals(net, p.sample, temperatures)
+            profiled["energy"] = [None if e is None else round(e[0], 6) for e in heat]
+            profiled["capacity"] = [None if e is None else round(e[1], 6) for e in heat]
+            if s.cooling is not None and phase == "cool":  # D33: the measurements the next step reads
+                s.cooling.record(heat)
+                profiled["at"] = [len(e) for e in s.cooling.energies]
+            if warm_up.handover:  # D25: each soft factor's coupling from its temperature
+                couplings = [
+                    1.0 if t is None else warm_up.coupling(clock, t, m, f)
+                    for t, m, f in zip(temperatures, s.melting_points, s.last_splits, strict=True)
+                ]
+                profiled["coupling"] = [round(x, 4) for x in couplings]
+            if warm_up.gate:
+                profiled["held"] = s.held
+        if c.coupling_cap < 1.0:  # D38: the coupling probe's cap, every factor, every phase
+            couplings = [min(x, c.coupling_cap) for x in couplings]
+            profiled["coupling"] = [round(x, 4) for x in couplings]
+        net.set_temperatures(temperatures)
+        net.set_couplings(couplings)
+        s.coupled = couplings
+        net.set_commitments(beta)
+        thermo = {
+            "anneal": {
+                "temperature": temperatures,
+                "hard": [None if h is None else round(h, 4) for h in hard],
+                "beta": [round(b, 4) for b in beta],
+                **profiled,
+            }
+        }
+        return phase, thermo
+
+    def run_epoch(self, p: StepPlan, epoch: int) -> str | None:
+        """One epoch, trained, screened and logged; how the step ends after it ("fork": goes on from its snapshot), or None."""
+        c, s = self.c, self.s
+        rng = random.Random(f"family-train-{c.seed}-{p.step}-{epoch}" + (f"-fork{s.forks}" if s.forks else ""))
+        drawn = (
+            growth_lengths(s.cstate.length, c.settings.epoch_examples)
+            if p.growing
+            else epoch_lengths(c.cap if p.flat else p.longest, c.settings.epoch_examples, c.long_tail, c.cap)
+        )
+        examples = [c.encoding.example(c.encoding.draw(n, rng)) for n in drawn]
+        if c.counterexamples is not None and s.words:
+            # R4 (D6): a share of the epoch from the last diagnosis's counterexamples, each word then d
+            # uniform tokens and the final zero column (encoding.draw), so its answers tell its states apart
+            taken = round(c.counterexamples * len(examples))
+            examples[:taken] = [
+                c.encoding.example(s.words[i % len(s.words)] + c.encoding.draw(self.walked_d, rng))
+                for i in range(taken)
+            ]
+        if c.commitment_from is not None:
+            self.net.set_commitments([0.0 if p.step < c.commitment_from else x for x in self.commitments])
+        setting = self.set_epoch(p, epoch)
+        guarded: dict[str, Any] = {}
+        if self.guarding is not None:
+            if certified_right(c.encoding, s.last_kinds):
+                self.guarding.arm(self.net)
+            else:
+                self.guarding.disarm()
+            updates, rollbacks = self.guarding.updates, self.guarding.rollbacks
+            wr.train_epoch(self.net, examples, c.settings.batch_size, s.rate, rng, self.guarding)
+            updates, rollbacks = self.guarding.updates - updates, self.guarding.rollbacks - rollbacks
+            guarded = {"armed": self.guarding.armed, "updates": updates, "rollbacks": rollbacks}
+            s.step_rollbacks += rollbacks
+            s.frozen = s.frozen + 1 if updates and rollbacks >= STALL_SHARE * updates else 0
+        else:
+            wr.train_epoch(self.net, examples, c.settings.batch_size, s.rate, rng)
+        s.spent += 1
+        s.score, kinds = screen(self.net, c.encoding, p.screens)
+        s.gate_screen = s.score
+        if setting.phase == "hold":
+            s.level = max(s.level, s.score)  # D29: the liquid's level, the gate's reference
+        s.last_kinds = kinds
+        if c.fork is not None and self.forked(p, epoch, kinds, guarded, setting.thermo):
+            return "fork"
+        self.record_epoch(p, epoch, kinds, guarded, setting.thermo)
+        if s.frozen >= STALL_EPOCHS:
+            return "stalled"
+        if s.score == 1.0:
+            return "passed"
+        if p.growing:  # D53: after the warm-up a step is one epoch, its readings each one's
+            return "epoch"
+        if s.score > s.best or setting.melting:  # the melt's screen is its best (D18)
+            s.best, s.since = s.score, 0
+            if c.restore_best:
+                self.net.save(str(self.step_best))
+        else:
+            s.since += 1
+            if s.since >= c.settings.patience:
+                return "plateau"
+        return None
+
+    def forked(
+        self, p: StepPlan, epoch: int, kinds: dict[str, float], guarded: dict[str, Any], thermo: dict[str, Any]
+    ) -> bool:
+        """The fork (Fork) after an epoch: the peak kept, or, on a collapse, the snapshot restored and the rate cooled; whether it forked."""
+        c, s = self.c, self.s
+        assert c.fork is not None
+        value = c.fork.trigger.value(s.score, kinds)
+        if value > s.peak:
+            s.peak = value
+            self.net.save(str(self.snapshot))
+            return False
+        if not (c.fork.trigger.fires(value, s.peak) and s.forks < c.fork.limit):
+            return False
+        s.forks += 1
+        s.rate *= c.fork.cool
+        self.net = load_network(str(self.snapshot))
+        restored, s.last_kinds = screen(self.net, c.encoding, p.screens)
+        grouped = {"consolidation": self.regroup()} if c.consolidate else {}
+        self.record(
+            {
+                "step": p.step,
+                "epoch": epoch,
+                "fork": s.forks,
+                "screen": round(s.score, 4),
+                "kinds": _kinds(kinds),
+                "peak": round(s.peak, 4),
+                "restored": round(restored, 4),
+                "rate": s.rate,
+                **guarded,
+                **thermo,
+                **grouped,
+            }
+        )
+        self.checkpoint(p.step, epoch)
+        return True
+
+    def record_epoch(
+        self, p: StepPlan, epoch: int, kinds: dict[str, float], guarded: dict[str, Any], thermo: dict[str, Any]
+    ) -> None:
+        """The epoch's row; every `diagnose_every`, with the diagnosis and R3's and R4's walks."""
+        c, s, net = self.c, self.s, self.net
+        if epoch % c.settings.diagnose_every != 0:
+            self.record(
+                {
+                    "step": p.step,
+                    "epoch": epoch,
+                    "screen": round(s.score, 4),
+                    "kinds": _kinds(kinds),
+                    **guarded,
+                    **thermo,
+                }
+            )
+            return
+        walked: dict[str, Any] = {}
+        if c.keep_machine or c.counterexamples is not None:
+            walk = mr.product(QueryMachine(net, c.encoding, 0), c.encoding.task.machine)
+            summary = mr.summary(walk, self.walked_d)
+            walked["machine"] = summary
+            if c.keep_machine:  # R3 (D5): the fewest pairs per code, ties to more right pairs
+                key = [summary["pairs"] / summary["codes"], -float(summary["right"])]
+                if not s.machine_best or key < s.machine_best:
+                    s.machine_best = key
+                    net.save(str(self.machine_kept))
+                    walked["kept"] = True
+            if c.counterexamples is not None:
+                s.words = mr.counterexamples(walk, self.walked_d, COUNTEREXAMPLE_WORDS)
+                walked["counterexamples"] = len(s.words)
+        self.record(
+            {
+                "step": p.step,
+                "epoch": epoch,
+                "screen": round(s.score, 4),
+                "kinds": _kinds(kinds),
+                **guarded,
+                **thermo,
+                **diagnose(net, c.encoding, c.settings),
+                **({"consolidation": self.regroup()} if c.consolidate else {}),
+                **walked,
+            }
+        )
+
+    def end_step(self, p: StepPlan, stop: str, epoch: int) -> bool:
+        """The step's end: a plateau's restores, the network saved and certified, its row; whether the run stops."""
+        c, s = self.c, self.s
+        if c.keep_machine and stop == "plateau" and s.machine_best:
+            self.net = load_network(str(self.machine_kept))
+            restored = screen(self.net, c.encoding, p.screens)[0]
+            self.record(
+                {
+                    "step": p.step,
+                    "epoch": epoch,
+                    "restore_machine": round(s.machine_best[0], 3),
+                    "restored": round(restored, 4),
+                }
+            )
+        if c.restore_best and stop == "plateau":
+            self.net = load_network(str(self.step_best))
+            restored = screen(self.net, c.encoding, p.screens)[0]
+            grouped = {"consolidation": self.regroup()} if c.consolidate else {}
+            self.record(
+                {"step": p.step, "epoch": epoch, "restore": round(s.best, 4), "restored": round(restored, 4), **grouped}
+            )
+        net = self.net
+        net.save(str(c.out / "network.json"))
+        if not p.growing or (c.continuous is not None and p.step % c.continuous.save_every == 0):  # D53: every 10th
+            net.save(str(c.out / f"step-{p.step}.network.json"))  # every step's kept, to inspect what a run had
+        # each step's certified answer (the quotient) certified (under a second at one column a window); the run stops at
+        # its first certified step: training past it can destroy the network (E8b; this probe's
+        # first runs, both certified networks lost within 3 steps)
+        certificate = wc.certify(QueryMachine(net, c.encoding, 0), self.task)
+        stopping = certificate.certified
+        judged: dict[str, Any] = {}
+        if c.state_bound is not None:  # D35: the answers-only stop; the certificate only judges it
+            stopping, judged = answers_stopping(
+                net, c.encoding, self.task, certificate, c.state_bound, s.coupled, s.warm
+            )
+            if s.margin.wait is not None:  # D59-D60: the stop waits until no near tie splits the machine
+                stopping = s.margin.judge(p.step, stopping, certificate, judged, net, c.out)
+        if (
+            p.growing and c.continuous is not None
+        ):  # D53: both certificates' breakdowns, the snapped answers, the melting curve
+            judged.update(
+                continuous_readings(net, c.encoding, self.task, certificate, s.coupled, c.state_bound is None)
+            )
+            if p.step % c.continuous.curve_every == 0:
+                judged["melting"] = melting_curves(net, p.sample)
+        self.record(
+            {
+                "step": p.step,
+                "end": stop,
+                "epochs": epoch,
+                **({"forks": s.forks} if c.fork is not None else {}),
+                **({"rollbacks": s.step_rollbacks} if self.guarding is not None else {}),
+                **diagnose(net, c.encoding, c.settings),
+                "long": long_accuracy(net, c.encoding, c.settings),
+                "certified": certificate.certified,
+                "minimised": len(certificate.minimised),
+                "machine": machine_summary(net, c.encoding),
+                **judged,
+            }
+        )
+        if certificate.certified:
+            net.save(str(c.out / f"certified-step-{p.step}.network.json"))
+        if stopping and c.state_bound is not None:
+            net.save(str(c.out / f"answers-stop-step-{p.step}.network.json"))
+        return stopping
+
+    def warm_up_end(self, p: StepPlan) -> None:
+        """A warm step's distinct states and, at the warm-up's end (D14-D16), the codes from the states seen and the profile's start."""
+        c, s, warm_up = self.c, self.s, self.c.warm_up
+        if not (s.warm and warm_up is not None):
+            return
+        sample = p.sample
+        distinct = distinct_states(self.net, sample)
+        self.record({"step": p.step, "distinct": distinct})
+        if not warm_up.ends(p.step, self.first, max(s.best, s.score), distinct, self.counts_snapped):
+            return
+        # WarmUp's end (D14-D16): the codes from the states seen, each factor's T_hot, the profile from here
+        s.warm = False
+        self.warming()
+        rng_codes = np.random.default_rng([c.seed, p.step])
+        made = codes_from_states(self.net, sample, rng_codes, warm_up.iterations, warm_up.hot)
+        s.hot = [m.get("hot", 1.0) for m in made]
+        s.melting_points, s.last_splits = handover_window(made, warm_up.window)
+        s.anneal_from = s.spent
+        s.cooling = Cooling.start(s.hot) if warm_up.shape == "adaptive" else None
+        s.fixed = p.step if c.crucible else 0
+        if c.continuous is not None:  # D51, D52: no temperature held yet; growth from the crucible's length
+            s.cstate = ContinuousState(0.0, list(s.hot), [0.0] * len(self.snapped), [], float(s.fixed))
+        self.record({"step": p.step, "warm_up_end": made, **({"crucible": s.fixed} if c.crucible else {})})
+        self.net.save(str(c.out / "network.json"))
+
+
 def run(
     encoding: Target,
     factors: Sequence[tuple[int, int]],
@@ -2347,22 +3165,18 @@ def run(
     every network and row but the seconds is the uninterrupted run's; the wall-clock budget counts
     the seconds trained. A run that ended isn't trained again; one without a checkpoint starts.
     """
-    if cap is None:
-        cap = exclusion_bound(encoding.target_states, factors)
-    out.mkdir(parents=True, exist_ok=True)
-    first = first_length(encoding.task.machine)
-    identity = _run_identity(
+    config = RunConfig(
         encoding,
         factors,
         seed,
         budget_seconds,
+        out,
         settings,
-        cap,
+        exclusion_bound(encoding.target_states, factors) if cap is None else cap,
         reads,
         budget_epochs,
         fork,
         guard,
-        first,
         long_tail,
         consolidate,
         restore_best,
@@ -2382,580 +3196,9 @@ def run(
         continuous,
         margin_wait,
     )
-    assert margin_wait is None or state_bound is not None, "the margin stop waits on D35's: with a state bound"
-    assert continuous is None or not continuous.pace or coupling_cap == 1.0, "D61's pace or D38's cap, not both"
-    assert warm_up is None or anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
-    assert not (whole and long_tail is not None), "the whole distribution has no long tail beyond it"
-    assert not crucible or (warm_up is not None and not whole and long_tail is None), (
-        "a crucible holds a warm-up's material, then grows on the whole distribution: with a warm-up, not --whole"
-    )
-    assert warm_up is None or warm_up.shape in ("exponential", "adaptive") or warm_up.shape in COOLS, (
-        f"a cool's shape: exponential, adaptive or one of {sorted(COOLS)}"
-    )
-    assert warm_up is None or (fork is None and not restore_best and not keep_machine), (
-        "a crystallising run never goes back (D18): the warm-up not with the fork, restore_best or keep_machine"
-    )
-    assert not (keep_machine and restore_best), "the step's kept machine (R3) or its best screen, not both"
-    assert continuous is None or (
-        warm_up is not None
-        and crucible
-        and warm_up.shape == "exponential"
-        and not warm_up.handover
-        and warm_up.gate == 0.0
-    ), "the continuous crystallisation (D48) is a crucible's, its exponential cool with its own coupling and rate"
-    assert counterexamples is None or 0 < counterexamples < 1, (
-        f"a share of each epoch's examples; got {counterexamples}"
-    )
-    assert thermostat is None or (commitment_from is None and not consolidate), (
-        "the thermostat sets the commitment's weight itself: not with --commitment-from, nor with A, whose target "
-        "it moves (the commitment-control workplan)"
-    )
-    assert anneal is None or (thermostat is None and commitment_from is None and not consolidate), (
-        "annealing sets the commitment's weight itself, and its soft codes take no consolidation's target"
-    )
-    d = mr.word_length(encoding.task.machine) if consolidate else 0
-    table: dict[tuple[int, ...], tuple[int, ...]] = {}  # A's, from the last diagnosis
-    place: Place | None = None
-    saved = json.loads((out / CHECKPOINT).read_text()) if resume and (out / CHECKPOINT).exists() else None
-    if saved is not None:
-        assert saved["run"] == identity, f"{out} holds another run: {saved['run']} against {identity}"
-        if saved["place"] == ENDED:
-            return
-    if saved is not None and saved["place"] != BEGUN:
-        place = Place(**saved["place"])
-        net = network_from_state(saved["network"])
-        table = {tuple(duplicate): tuple(representative) for duplicate, representative in place.consolidation}
-        net.consolidate(table)
-        with (out / "log.jsonl").open("r+") as kept:
-            kept.truncate(place.log_bytes)
-    else:
-        assert saved is not None or not (resume and (out / "log.jsonl").exists()), (
-            f"{out} has a log but no checkpoint to resume from"
-        )
-        net = network(encoding, factors, seed, reads, width, branches, answer_branch)
-        if saved is not None:
-            (out / "log.jsonl").write_text("")  # stopped before its first checkpoint: begun again from the seed
-        _write_checkpoint(out, identity, BEGUN, net)
-    start = time.perf_counter() - (place.seconds if place is not None else 0.0)
-    log = (out / "log.jsonl").open("a")
-
-    def record(row: dict[str, Any]) -> None:
-        row["seconds"] = round(time.perf_counter() - start, 1)
-        log.write(json.dumps(row) + "\n")
-        log.flush()
-
-    if place is None:
-        record({"step": 0, "epoch": 0, **diagnose(net, encoding, settings)})
-    task = encoding.task
-    guarding = cg.Guard(lambda n: QueryMachine(n, encoding, 0), task) if guard else None
-    frozen = (
-        place.frozen if place is not None else 0
-    )  # consecutive armed epochs with STALL_SHARE of their updates undone
-    spent: int = place.spent if place is not None else 0  # epochs trained in all
-    margin = Margin(margin_wait, *((place.first_pass, place.best_pass, place.best_ties) if place else ()))  # D59-D60
-    snapshot = out / "snapshot.network.json"
-    step_best = out / "best.network.json"  # restore_best's
-    commitments = [0.0 if f.codes is None else f.codes.commitment for f in net.recurrence.factors]  # the specs'
-    counts = [0 if f.codes is None else f.codes.count for f in net.recurrence.factors]
-    levels = list(place.thermostat) if place is not None and place.thermostat else [0] * len(counts)  # off at the start
-    snapped = [f.codes is not None for f in net.recurrence.factors]
-    counts_snapped = [c for c, s in zip(counts, snapped, strict=True) if s]
-    annealed: list[int] = (  # Anneal's levels: soft at the start (a continuous factor's at the ramp's end, never soft)
-        list(place.anneal)
-        if place is not None and place.anneal
-        else [0 if s else (anneal.top if anneal is not None else 0) for s in snapped]
-    )
-    warm: bool = place.warm if place is not None else warm_up is not None  # WarmUp: still continuous
-    hot: list[float] = list(place.hot) if place is not None else []  # WarmUp: each factor's T_hot, once set
-    anneal_from: int = place.anneal_from if place is not None else 0  # WarmUp: the epochs trained at its end
-    melting_points: list[float] = (
-        list(place.melting) if place is not None else []
-    )  # WarmUp: each factor's melting point (D25)
-    last_splits: list[float] = (
-        list(place.final) if place is not None else []
-    )  # WarmUp: each factor's last transition (D25)
-    fixed: int = place.crucible if place is not None else 0  # D26: the crucible's longest length, once set
-    grown_from: int = place.grown if place is not None else 0  # D26: the first block of growth, once begun
-    held = (
-        int(place.held) if place is not None else 0
-    )  # D29: the epochs the profile's clock held (the continuous clock's, D49, in cstate)
-    level: float = place.level if place is not None else -1.0  # D29: the hold's best screen
-    gate_screen: float = place.gate_screen if place is not None else -1.0  # D29: the last screen
-    cooling: Cooling | None = (
-        Cooling(**place.cooling) if place is not None and place.cooling else None
-    )  # D33: the adaptive cool
-    coupled: list[float] = (
-        list(place.couplings) if place is not None else []
-    )  # D25: the couplings last set, training state
-    cstate: ContinuousState = (
-        ContinuousState(  # D49-D52: the clock's held share, T_hot, the held temperatures, the first sharpness
-            place.held if place is not None else 0.0,
-            list(place.hot) if place is not None else [],
-            list(place.floors) if place is not None else [],
-            list(place.sharp_from) if place is not None else [],
-            place.length if place is not None else 0.0,
-            list(place.allowance) if place is not None else [],
-            list(place.couplings) if place is not None and place.allowance else [],
-            [list(h) for h in place.history] if place is not None else [],
-        )
-    )
-    growing = continuous is not None and fixed > 0  # D52: after the warm-up, a step an epoch
-    cached: dict[int, list[Example]] = {}  # D52: the growing screen's windows, by length
-    if coupled:
-        net.set_couplings(coupled)  # the loaded network's, as the stopped run's was (its screens read them)
-
-    def warming() -> None:
-        # the network about to train or screen (a fork's or a restore's loaded one included) continuous
-        # while warming, snapped after (WarmUp)
-        if warm_up is not None:
-            net.set_temperatures([None] * len(snapped))
-            net.set_continuous(list(snapped) if warm else [False] * len(snapped))
-
-    walked_d = mr.word_length(encoding.task.machine)  # R3 and R4's walks' d, the task's
-    words: list[list[int]] = [list(w) for w in place.words] if place is not None else []
-    machine_kept = out / "machine-best.network.json"
-    machine_best: list[float] = []
-
-    def checkpoint(step: int, epoch: int) -> None:
-        # the run's place after epoch of step (0: its start), every count read as it stands
-        log.flush()
-        place = Place(
-            step,
-            epoch,
-            spent,
-            best,
-            since,
-            rate,
-            forks,
-            peak,
-            dict(last_kinds),
-            step_rollbacks,
-            frozen,
-            time.perf_counter() - start,
-            log.tell(),
-            [(list(duplicate), list(representative)) for duplicate, representative in table.items()],
-            list(levels) if thermostat is not None else [],
-            list(machine_best),
-            [list(w) for w in words],
-            list(annealed) if anneal is not None else [],
-            warm,
-            list(hot),
-            anneal_from,
-            list(melting_points),
-            list(last_splits),
-            fixed,
-            grown_from,
-            cstate.held if continuous is not None else held,
-            level,
-            gate_screen,
-            asdict(cooling) if cooling is not None else {},
-            list(coupled),
-            cstate.length,
-            list(cstate.sharp_from),
-            list(cstate.floors),
-            margin.first_pass,
-            margin.best_pass,
-            margin.best_ties,
-            list(cstate.allowance),
-            [list(h) for h in cstate.history],
-        )
-        _write_checkpoint(out, identity, place, net)
-
-    def regroup() -> dict[str, int]:
-        # A's table read from the network as it stands and held until the next; the row's record of it
-        nonlocal table
-        table, codes, groups = consolidation(net, encoding, d)
-        net.consolidate(table)
-        return {"codes": codes, "groups": groups, "duplicates": len(table)}
-
-    # the curriculum's steps end at the cap; the whole distribution's blocks go on until the budget (D22:
-    # a step is then a block of epochs, not a length)
-    begin = place.step if place is not None else first
-    continuing = continuous is not None  # D48: after the warm-up, each epoch continuous_epoch's
-    # every step sets these before it reads them (declared here: run's loop is past the type checker's inference)
-    best: float = -1.0
-    since: int = 0
-    rate: float = settings.rate
-    forks: int = 0
-    peak: float = 0.0
-    last_kinds: dict[str, float] = {}
-    step_rollbacks: int = 0
-    score: float = -1.0
-    for step in itertools.count(begin) if whole or crucible else range(begin, cap + 1):
-        # the curriculum's lengths, or the whole distribution's every step (a step then a block of epochs);
-        # a crucible's (D26) its warm-up's last step's every block, then, every factor hard, the whole's
-        # growth begins at the first block to start with every factor hard, and is kept (a resumed block
-        # within it reads it from its checkpoint, not from the levels the block's epochs moved)
-        if (
-            not grown_from
-            and not (place is not None and place.step == step)
-            and fixed > 0
-            and anneal is not None
-            and all(not anneal.soft(level) for level, s in zip(annealed, snapped, strict=True) if s)
-        ):
-            grown_from = step
-        grown = grown_from > 0
-        flat = whole or grown
-        longest = fixed or step
-        growing = continuous is not None and fixed > 0
-        # its declared type, which pyright loses later in the step without it (run's loop is past its inference)
-        cstate = cast(ContinuousState, cstate)  # pyright: ignore[reportUnnecessaryCast]
-        screens, read_at = step_screens(
-            encoding, settings, cap, longest, flat, fixed if growing else 0, cstate.length, cached
-        )
-        stop, epoch = "budget", 0
-        score = -1.0  # the last epoch's screen (WarmUp's end reads it with the step's best)
-        if place is not None and place.step == step:  # resumed within this step
-            warming()  # the loaded network continuous while warming, as the stopped run's was
-            best, since, epoch = place.best, place.since, place.epoch
-            rate, forks, peak = place.rate, place.forks, place.peak
-            last_kinds, step_rollbacks = place.last_kinds, place.step_rollbacks
-            machine_best = list(place.machine_best)
-        else:
-            best, since = -1.0, 0
-            machine_best = []
-            rate, forks = settings.rate, 0
-            warming()
-            start_score, start_kinds = screen(
-                net, encoding, screens
-            )  # the step before's network on this step's lengths
-            record(
-                {
-                    "step": step,
-                    "epoch": 0,
-                    "screen": round(start_score, 4),
-                    "kinds": _kinds(start_kinds),
-                    **({"crucible": "grown" if grown else fixed} if crucible and fixed else {}),
-                }
-            )
-            last_kinds, step_rollbacks = start_kinds, 0
-            gate_screen = start_score  # D29: the gate reads the screen before the epoch
-            peak = 0.0
-            if fork is not None:
-                peak = fork.trigger.value(start_score, start_kinds)
-                net.save(str(snapshot))
-
-        if epoch == 0:
-            checkpoint(step, 0)
-        resumed = epoch
-        for epoch in range(resumed + 1, settings.max_epochs + 1):
-            if time.perf_counter() - start > budget_seconds:
-                stop = "deadline"
-                break
-            if budget_epochs is not None and spent >= budget_epochs:
-                stop = "spent"
-                break
-            rng = random.Random(f"family-train-{seed}-{step}-{epoch}" + (f"-fork{forks}" if forks else ""))
-            drawn = (
-                growth_lengths(cstate.length, settings.epoch_examples)
-                if growing
-                else epoch_lengths(cap if flat else longest, settings.epoch_examples, long_tail, cap)
-            )
-            examples = [encoding.example(encoding.draw(n, rng)) for n in drawn]
-            if counterexamples is not None and words:
-                # R4 (D6): a share of the epoch from the last diagnosis's counterexamples, each word then d
-                # uniform tokens and the final zero column (encoding.draw), so its answers tell its states apart
-                taken = round(counterexamples * len(examples))
-                examples[:taken] = [
-                    encoding.example(words[i % len(words)] + encoding.draw(walked_d, rng)) for i in range(taken)
-                ]
-            if commitment_from is not None:
-                net.set_commitments([0.0 if step < commitment_from else c for c in commitments])
-            thermo: dict[str, Any] = {}
-            melting = False  # WarmUp: in the profile's heat or hold (D18)
-            phase: str | None = None  # WarmUp: the profile's phase this epoch trains in
-            if thermostat is not None:
-                # the network about to train (a fork's restored one included), read on the step's screen at its
-                # shortest, middle and longest lengths
-                effective = effective_codes(net, [screens[n] for n in read_at])
-                levels = thermostat.levels(levels, effective, counts, best)  # best: the step's best screen so far
-                beta = thermostat.commitments(levels, commitments)
-                net.set_commitments(beta)
-                thermo = {
-                    "thermostat": {"effective": [round(e, 2) for e in effective], "beta": [round(b, 4) for b in beta]}
-                }
-            if warm:
-                # WarmUp: every snapped factor continuous, its commitment 0 (D4, D9)
-                warming()
-                net.set_commitments([0.0] * len(snapped))
-                thermo = {"warm": True}
-            elif continuing:
-                # D48-D51: the epoch's clock, temperatures, couplings and readings (continuous_epoch)
-                assert anneal is not None and continuous is not None and warm_up is not None
-                warming()
-                moved: ContinuousEpoch = continuous_epoch(
-                    net,
-                    continuous,
-                    warm_up,
-                    [screens[n] for n in read_at],
-                    snapped,
-                    cstate,
-                    spent - anneal_from,
-                    gate_screen,
-                    level,
-                    anneal.hard,
-                    anneal.commitments(annealed, commitments),
-                    coupling_cap,
-                    np.random.default_rng([seed, step, epoch, forks]),
-                    cap,
-                )
-                cstate = moved.state
-                phase, coupled, thermo = moved.phase, moved.couplings, moved.thermo
-                melting = phase in ("heat", "hold")
-            elif anneal is not None:
-                # the network about to train (a fork's restored one included), its soft factors' hardness read
-                # at the temperature they trained at, on the step's screen at its shortest, middle and longest;
-                # after a warm-up, each factor's temperature its profile's from its T_hot (D15), hardness read
-                # from the cool's start or a shaped cool's end (D24), the soft codes moved by thermal noise (D17)
-                warming()
-                holding = (
-                    warm_up is not None and bool(hot) and warm_up.holds(spent - anneal_from - held, gate_screen, level)
-                )
-                if holding:
-                    held += 1  # D29: this epoch trains at the last one's clock
-                clock = spent - anneal_from - held  # the profile's epochs (D29: less those held)
-                phase = warm_up.phase(clock) if warm_up is not None and hot else None
-                melting = phase in ("heat", "hold")
-                reading = phase is None or (warm_up is not None and warm_up.reads_hardness(clock))
-                each = (
-                    [warm_up.temperature(clock, t) for t in hot]
-                    if warm_up is not None and hot
-                    else [anneal.temperature(spent)] * len(snapped)
-                )
-                if cooling is not None and warm_up is not None and phase == "cool":
-                    if not holding:  # D33: the adaptive cool steps from its measurements; D29's gate holds it too
-                        cooling.advance(warm_up, melting_points, last_splits)
-                    each = list(cooling.temperature)
-                soft = [
-                    t if s and level == 0 and reading else None
-                    for t, s, level in zip(each, snapped, annealed, strict=True)
-                ]
-                hard = hardness(net, [screens[n] for n in read_at], soft, anneal.hard)
-                annealed = anneal.levels(annealed, hard)
-                temperatures = [
-                    t if s and anneal.soft(level) else None for t, s, level in zip(each, snapped, annealed, strict=True)
-                ]
-                beta = anneal.commitments(annealed, commitments)
-                profiled: dict[str, Any] = {}
-                couplings = [1.0] * len(snapped)
-                if phase is not None and warm_up is not None:
-                    jitter(net, temperatures, warm_up.kappa, np.random.default_rng([seed, step, epoch, forks]))
-                    profiled = {"phase": phase, "groups": code_groups(net, temperatures, warm_up.kappa)}
-                    # D32's logging, and the adaptive cool's reading (D33)
-                    heat = thermals(net, [screens[n] for n in read_at], temperatures)
-                    profiled["energy"] = [None if e is None else round(e[0], 6) for e in heat]
-                    profiled["capacity"] = [None if e is None else round(e[1], 6) for e in heat]
-                    if cooling is not None and phase == "cool":  # D33: the measurements the next step reads
-                        cooling.record(heat)
-                        profiled["at"] = [len(e) for e in cooling.energies]
-                    if warm_up.handover:  # D25: each soft factor's coupling from its temperature
-                        couplings = [
-                            1.0 if t is None else warm_up.coupling(clock, t, m, f)
-                            for t, m, f in zip(temperatures, melting_points, last_splits, strict=True)
-                        ]
-                        profiled["coupling"] = [round(c, 4) for c in couplings]
-                    if warm_up.gate:
-                        profiled["held"] = held
-                if coupling_cap < 1.0:  # D38: the coupling probe's cap, every factor, every phase
-                    couplings = [min(c, coupling_cap) for c in couplings]
-                    profiled["coupling"] = [round(c, 4) for c in couplings]
-                net.set_temperatures(temperatures)
-                net.set_couplings(couplings)
-                coupled = couplings
-                net.set_commitments(beta)
-                thermo = {
-                    "anneal": {
-                        "temperature": temperatures,
-                        "hard": [None if h is None else round(h, 4) for h in hard],
-                        "beta": [round(b, 4) for b in beta],
-                        **profiled,
-                    }
-                }
-            guarded: dict[str, Any] = {}
-            if guarding is not None:
-                if certified_right(encoding, last_kinds):
-                    guarding.arm(net)
-                else:
-                    guarding.disarm()
-                updates, rollbacks = guarding.updates, guarding.rollbacks
-                wr.train_epoch(net, examples, settings.batch_size, rate, rng, guarding)
-                updates, rollbacks = guarding.updates - updates, guarding.rollbacks - rollbacks
-                guarded = {"armed": guarding.armed, "updates": updates, "rollbacks": rollbacks}
-                step_rollbacks += rollbacks
-                frozen = frozen + 1 if updates and rollbacks >= STALL_SHARE * updates else 0
-            else:
-                wr.train_epoch(net, examples, settings.batch_size, rate, rng)
-            spent += 1
-            score, kinds = screen(net, encoding, screens)
-            gate_screen = score
-            if phase == "hold":
-                level = max(level, score)  # D29: the liquid's level, the gate's reference
-            last_kinds = kinds
-            if fork is not None:
-                value = fork.trigger.value(score, kinds)
-                if value > peak:
-                    peak = value
-                    net.save(str(snapshot))
-                elif fork.trigger.fires(value, peak) and forks < fork.limit:
-                    forks += 1
-                    rate *= fork.cool
-                    net = load_network(str(snapshot))
-                    restored, last_kinds = screen(net, encoding, screens)
-                    grouped = {"consolidation": regroup()} if consolidate else {}
-                    record(
-                        {
-                            "step": step,
-                            "epoch": epoch,
-                            "fork": forks,
-                            "screen": round(score, 4),
-                            "kinds": _kinds(kinds),
-                            "peak": round(peak, 4),
-                            "restored": round(restored, 4),
-                            "rate": rate,
-                            **guarded,
-                            **thermo,
-                            **grouped,
-                        }
-                    )
-                    checkpoint(step, epoch)
-                    continue
-            if epoch % settings.diagnose_every == 0:
-                walked: dict[str, Any] = {}
-                if keep_machine or counterexamples is not None:
-                    walk = mr.product(QueryMachine(net, encoding, 0), encoding.task.machine)
-                    summary = mr.summary(walk, walked_d)
-                    walked["machine"] = summary
-                    if keep_machine:  # R3 (D5): the fewest pairs per code, ties to more right pairs
-                        key = [summary["pairs"] / summary["codes"], -float(summary["right"])]
-                        if not machine_best or key < machine_best:
-                            machine_best = key
-                            net.save(str(machine_kept))
-                            walked["kept"] = True
-                    if counterexamples is not None:
-                        words = mr.counterexamples(walk, walked_d, COUNTEREXAMPLE_WORDS)
-                        walked["counterexamples"] = len(words)
-                record(
-                    {
-                        "step": step,
-                        "epoch": epoch,
-                        "screen": round(score, 4),
-                        "kinds": _kinds(kinds),
-                        **guarded,
-                        **thermo,
-                        **diagnose(net, encoding, settings),
-                        **({"consolidation": regroup()} if consolidate else {}),
-                        **walked,
-                    }
-                )
-            else:
-                record(
-                    {
-                        "step": step,
-                        "epoch": epoch,
-                        "screen": round(score, 4),
-                        "kinds": _kinds(kinds),
-                        **guarded,
-                        **thermo,
-                    }
-                )
-            if frozen >= STALL_EPOCHS:
-                stop = "stalled"
-                break
-            if score == 1.0:
-                stop = "passed"
-                break
-            if growing:  # D53: after the warm-up a step is one epoch, its readings each one's
-                stop = "epoch"
-                break
-            if score > best or melting:  # the melt's screen is its best (D18)
-                best, since = score, 0
-                if restore_best:
-                    net.save(str(step_best))
-            else:
-                since += 1
-                if since >= settings.patience:
-                    stop = "plateau"
-                    break
-            checkpoint(step, epoch)
-        if keep_machine and stop == "plateau" and machine_best:
-            net = load_network(str(machine_kept))
-            restored = screen(net, encoding, screens)[0]
-            record(
-                {
-                    "step": step,
-                    "epoch": epoch,
-                    "restore_machine": round(machine_best[0], 3),
-                    "restored": round(restored, 4),
-                }
-            )
-        if restore_best and stop == "plateau":
-            net = load_network(str(step_best))
-            restored = screen(net, encoding, screens)[0]
-            grouped = {"consolidation": regroup()} if consolidate else {}
-            record({"step": step, "epoch": epoch, "restore": round(best, 4), "restored": round(restored, 4), **grouped})
-        net.save(str(out / "network.json"))
-        if not growing or step % continuous.save_every == 0:  # type: ignore[union-attr]  # D53: every 10th
-            net.save(str(out / f"step-{step}.network.json"))  # every step's kept, to inspect what a run had
-        # each step's certified answer (the quotient) certified (under a second at one column a window); the run stops at
-        # its first certified step: training past it can destroy the network (E8b; this probe's
-        # first runs, both certified networks lost within 3 steps)
-        certificate = wc.certify(QueryMachine(net, encoding, 0), task)
-        stopping = certificate.certified
-        judged: dict[str, Any] = {}
-        if state_bound is not None:  # D35: the answers-only stop; the certificate only judges it
-            stopping, judged = answers_stopping(net, encoding, task, certificate, state_bound, coupled, warm)
-            if margin.wait is not None:  # D59-D60: the stop waits until no near tie splits the machine
-                stopping = margin.judge(step, stopping, certificate, judged, net, out)
-        if growing:  # D53: both certificates' breakdowns, the snapped answers, the melting curve
-            judged.update(continuous_readings(net, encoding, task, certificate, coupled, state_bound is None))
-            if step % continuous.curve_every == 0:  # type: ignore[union-attr]
-                judged["melting"] = melting_curves(net, [screens[n] for n in read_at])
-        record(
-            {
-                "step": step,
-                "end": stop,
-                "epochs": epoch,
-                **({"forks": forks} if fork is not None else {}),
-                **({"rollbacks": step_rollbacks} if guarding is not None else {}),
-                **diagnose(net, encoding, settings),
-                "long": long_accuracy(net, encoding, settings),
-                "certified": certificate.certified,
-                "minimised": len(certificate.minimised),
-                "machine": machine_summary(net, encoding),
-                **judged,
-            }
-        )
-        if certificate.certified:
-            net.save(str(out / f"certified-step-{step}.network.json"))
-        if stopping:
-            if state_bound is not None:
-                net.save(str(out / f"answers-stop-step-{step}.network.json"))
-            break
-        sample = [screens[n] for n in read_at]
-        distinct = distinct_states(net, sample) if warm and warm_up is not None else []
-        if warm and warm_up is not None:
-            record({"step": step, "distinct": distinct})
-        if warm and warm_up is not None and warm_up.ends(step, first, max(best, score), distinct, counts_snapped):
-            # WarmUp's end (D14-D16): the codes from the states seen, each factor's T_hot, the profile from here
-            warm = False
-            warming()
-            rng_codes = np.random.default_rng([seed, step])
-            made = codes_from_states(net, sample, rng_codes, warm_up.iterations, warm_up.hot)
-            hot = [m.get("hot", 1.0) for m in made]
-            melting_points, last_splits = handover_window(made, warm_up.window)
-            anneal_from = spent
-            cooling = Cooling.start(hot) if warm_up.shape == "adaptive" else None
-            fixed = step if crucible else 0
-            if continuous is not None:  # D51, D52: no temperature held yet; growth from the crucible's length
-                cstate = ContinuousState(0.0, list(hot), [0.0] * len(snapped), [], float(fixed))
-            record({"step": step, "warm_up_end": made, **({"crucible": fixed} if crucible else {})})
-            net.save(str(out / "network.json"))
-        if stop in ("deadline", "spent", "stalled"):
-            break
-    if state_bound is not None and margin.waited >= 0:  # D60: the wait's stop, on the best pass's network
-        record(margin.stop_row(out, encoding, settings, state_bound, coupled, growing))
-    log.close()
-    _write_checkpoint(out, identity, ENDED, net)
+    running = _Run(config, resume)
+    if not running.ended:
+        running.go()
 
 
 def guard_epoch(
