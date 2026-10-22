@@ -605,6 +605,16 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "crucible": True,
         "continuous": mf.Continuous(low=0.0, high=2.0, growth=0.5, curve_every=3, save_every=2, smooth=True),
     },
+    "reheated": {  # D63 (a): a clock run back (the screen below the level), its held share carried over every stop
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1),
+        "crucible": True,
+        "continuous": mf.Continuous(low=1.2, high=2.0, growth=0.5, curve_every=3, save_every=2, reheat=True),
+    },
 }
 
 
@@ -778,6 +788,27 @@ def test_the_smoothed_coupling_reads_the_sharpness_line_over_the_cools_e_folding
     assert identity["sharpness_smoothing"] is True and identity["continuous"] == repr(CONTINUOUS)
 
 
+def test_the_reheats_rate_runs_below_zero_to_minus_one_and_only_with_it():
+    continuous, reheated = mf.Continuous(), mf.Continuous(reheat=True)
+    assert continuous.rate(0.5, 1.0) == 0.0 and reheated.rate(0.5, 1.0) == -1.0  # D63 (a): 2 low - high and below
+    assert reheated.rate(2 * 0.95 - 0.99 + 0.02, 1.0) == pytest.approx(-0.5)
+    assert reheated.rate(0.97, 1.0) == continuous.rate(0.97, 1.0) == pytest.approx(0.5)
+
+
+def test_a_reheated_run_runs_its_clock_back_to_the_cools_start_and_grows_only_forward(tmp_path: Path):
+    config = dict(RESUMABLE["reheated"], continuous=mf.Continuous(low=1.5, high=2.0, growth=0.5, reheat=True))
+    encoding, settings = config.pop("encoding"), config.pop("settings")
+    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path, settings, **config)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    cool = [r["anneal"] for r in rows if r.get("anneal", {}).get("phase") == "cool"]
+    warm_up = config["warm_up"]
+    assert cool and all(a["rate"] < 0 for a in cool[1:])  # the screen about its level, far below `low`
+    assert all(a["clock"] == warm_up.heat + warm_up.hold for a in cool)  # held at the cool's start, never before it
+    assert len({a["length"] for a in cool}) == 1  # no growth running back
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["reheat"] is True and "reheat" not in identity["continuous"]  # in the identity apart
+
+
 def test_the_margin_stop_waits_past_a_split_tie_and_stops_once_none_splits(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -912,6 +943,9 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "smoothed":
         cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
         assert cool and any(a["smoothed"] != a["sharpness"] for a in cool)
+    elif kind == "reheated":  # the rate below 0 at some stop, the clock never back past the cool's start
+        cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
+        assert cool and any(a["rate"] < 0 for a in cool) and all(a["clock"] >= 2 for a in cool)
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":

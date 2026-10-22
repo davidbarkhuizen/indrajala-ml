@@ -1190,6 +1190,13 @@ def main(argv: list[str]) -> int:
         "holds and halved when the clock stops (times 2 ** (2 rate - 1))",
     )
     run.add_argument(
+        "--reheat",
+        action="store_true",
+        help="the state formation workplan's D63 (a) (with --continuous): the cool's rate extended below its low "
+        "mark to -1, a fallen screen running the clock back (never past the cool's start), the temperatures it "
+        "passes back over released; growth only forward",
+    )
+    run.add_argument(
         "--sharpness-smoothing",
         action="store_true",
         help="the state formation workplan's D61 (c) (with --continuous): the coupling read from the sharpness "
@@ -1560,8 +1567,10 @@ def main(argv: list[str]) -> int:
         args.warm_up and args.crucible and args.melt_shape == "exponential" and not args.handover and not args.melt_gate
     ):
         parser.error("--continuous (D48) is a crucible's exponential cool: no --handover or --melt-gate of its own")
-    if (args.coupling_pace or args.sharpness_smoothing) and not args.continuous:
-        parser.error("--coupling-pace and --sharpness-smoothing (D61) set the continuous coupling: with --continuous")
+    if (args.coupling_pace or args.sharpness_smoothing or args.reheat) and not args.continuous:
+        parser.error(
+            "--coupling-pace, --sharpness-smoothing (D61) and --reheat (D63) set the continuous profile: with --continuous"
+        )
     if args.coupling_pace and args.coupling_cap < 1.0:
         parser.error("--coupling-pace (D61) paces the coupling D38's cap would bound: not both")
     if args.margin_wait is not None and args.state_bound is None:
@@ -1644,7 +1653,9 @@ def main(argv: list[str]) -> int:
             state_bound=args.state_bound,
             coupling_cap=args.coupling_cap,
             continuous=(
-                mf.Continuous(pace=args.coupling_pace, smooth=args.sharpness_smoothing) if args.continuous else None
+                mf.Continuous(pace=args.coupling_pace, smooth=args.sharpness_smoothing, reheat=args.reheat)
+                if args.continuous
+                else None
             ),
             margin_wait=args.margin_wait,
         )
