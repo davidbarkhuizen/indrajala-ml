@@ -725,6 +725,63 @@ def test_a_continuous_run_moves_every_switch_smoothly_and_reads_every_epoch(tmp_
         )
 
 
+def test_a_cutoff_ends_an_uncertified_attempt_at_its_step_as_the_uncut_run_was_there(tmp_path: Path):
+    # the batch runner workplan's D1: rows identical to the uncut run's up to the cutoff, then "cut"
+    config = dict(RESUMABLE["continuous"])
+    encoding, settings = config.pop("encoding"), config.pop("settings")
+
+    def rows(out: Path, **more: Any) -> list[dict[str, Any]]:
+        mf.run(encoding, [(4, 4)], 0, 1e9, out, settings, **config, **more)
+        return [json.loads(line) for line in (out / "log.jsonl").read_text().splitlines()]
+
+    def timeless(row: dict[str, Any]) -> dict[str, Any]:
+        return {k: v for k, v in row.items() if k != "seconds"}
+
+    whole, cut = rows(tmp_path / "whole"), rows(tmp_path / "cut", cutoff_steps=5)
+    assert [timeless(r) for r in cut[:-1]] == [timeless(r) for r in whole[: len(cut) - 1]]
+    ends = [r for r in cut if "end" in r and "state_share" in r]
+    assert ends[-1]["step"] == 5 and ends[-1]["end"] == "cut" and cut[-1]["step"] == 5
+    assert max(r["step"] for r in whole if "end" in r) > 5
+    assert {k: v for k, v in ends[-1].items() if k not in ("seconds", "end")} == {
+        k: v
+        for k, v in next(r for r in whole if r.get("step") == 5 and "end" in r).items()
+        if k not in ("seconds", "end")
+    }
+    identity = json.loads((tmp_path / "cut" / "checkpoint.json").read_text())["run"]
+    assert (
+        identity["cutoff_steps"] == 5
+        and "cutoff_steps" not in json.loads((tmp_path / "whole" / "checkpoint.json").read_text())["run"]
+    )
+    assert mf.restart_course(cut) == (None, 5.0, False)  # a finished failure, not censored
+    with pytest.raises(AssertionError, match="cutoff"):
+        mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path / "x", settings, cap=2, cutoff_steps=3)
+
+
+def test_a_cutoff_leaves_a_run_certified_at_both_verdicts_to_its_own_stop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # certified at both verdicts from the start, but D35's stop never passes: the run goes past the cutoff
+    config = dict(RESUMABLE["continuous"], state_bound=25)
+    encoding, settings = config.pop("encoding"), config.pop("settings")
+    stopping, certify = mf.answers_stopping, mf.wc.certify
+
+    def never(*args: Any) -> tuple[bool, dict[str, Any]]:  # D35's stop never passes
+        return False, stopping(*args)[1]
+
+    monkeypatch.setattr(mf, "answers_stopping", never)
+
+    def clean(*args: Any, **kwargs: Any) -> Any:  # every verdict certified: no wrong outputs or states, no label tie
+        c = certify(*args, **kwargs)
+        lead = dataclasses.replace(c.lead, short=0)
+        return dataclasses.replace(c, wrong_outputs=0, wrong_states=0, wrong_ties=0, counterexample=None, lead=lead)
+
+    monkeypatch.setattr(mf.wc, "certify", clean)
+    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path, settings, **config, cutoff_steps=3)
+    ends = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    ends = [r for r in ends if "end" in r and "state_share" in r]
+    assert "cut" not in {r["end"] for r in ends} and ends[-1]["step"] > 3
+
+
 def _margin_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, split_until: int, passes: int = 10**6
 ) -> list[dict[str, Any]]:
