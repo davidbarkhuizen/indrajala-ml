@@ -1032,6 +1032,11 @@ owner's; D49-D54 settled under the delegation.
     success only). A per-factor form of the reheat (Ingber 1989's re-annealing per parameter) was
     considered and dropped (the owner, 2026-10-22): in nine frozen runs and S4's two collapses the
     factors formed and fell together.
+    **Using restarts needs a batch runner** (an attempt cut at its cutoff, a fresh seed started in its
+    slot, the batch stopped by its rule): planned in [batch-runner-workplan.md](batch-runner-workplan.md)
+    (2026-10-22; the cutoff in the run, `--cutoff-steps`; a controller on `pyramidon`, a socket-connected worker on each of the
+    machines), built from 2026-10-23 while D63 runs; its first use is the method's next fresh-seed batch,
+    with D63's verdict choosing the arm.
   - (c) Restore the best step's network (`--restore-best`, the guard). Cons: a discontinuity, and the
     same training from there can collapse again.
   - (d) Lower only the coupling when the screen falls (D61 (b) with its rate signed). Cons: the codes
@@ -1978,6 +1983,7 @@ a random machine would just need a very slow cool.**
     Then D64's fresh-seed rate, registered in its script; then the collapse (D63).
     Beside them, offline (the 2026-10-22 literature review): the restart cost (`restart-cost`, Luby's
     `l(t)` and `t*` per backdrop), read on every completed run as the runs come in; D63 compared on it.
+    Then the batch runner ([batch-runner-workplan.md](batch-runner-workplan.md)), built while D63 runs.
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
