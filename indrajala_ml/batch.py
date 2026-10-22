@@ -412,6 +412,7 @@ class Controller:
                 ok = await asyncio.to_thread(self.pull, self.hosts[host], attempt, destination)
                 verified = ok and verify(destination, files)
                 self.log({"type": "pulled", "id": attempt, "host": host, "ok": verified})
+                self.pulling.discard(task)  # this pull done before the batch's end is judged
                 self.settle()
 
             task = asyncio.create_task(pulling())

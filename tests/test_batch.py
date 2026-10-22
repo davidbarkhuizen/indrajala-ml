@@ -241,3 +241,26 @@ def test_the_fleets_commands_follow_each_hosts_rules():
     steps = b.prepare(b.HOSTS["stone"], "abc123", Path("/repo"), Path("/tmp"))
     assert steps[1][3:5] == ["bundle", "create"] and "--no-recurse-submodules" in steps[3][2]
     assert b.prepare(b.HOSTS["klip"], "abc123", Path("/repo"), Path("/tmp"))[0][2].startswith("cd ~/code/indrajala-ml")
+
+
+def test_a_batch_with_a_remote_host_ends_once_its_attempts_are_pulled(tmp_path: Path):
+    directory = tmp_path / "batch"
+    b.register(directory, b.Batch("r", "measure", "continuous", b.attempts("s3:1-2")))
+    host = b.Host("w", 2, str(tmp_path), sys.executable, str(tmp_path / "w"))  # remote: its attempts pulled
+    port = free_port()
+
+    def pull(h: b.Host, attempt: str, destination: Path) -> bool:  # a local copy stands in for rsync over ssh
+        shutil.copytree(Path(h.root) / attempt, destination, dirs_exist_ok=True)
+        return True
+
+    async def go() -> None:
+        controller = b.Controller(directory, {"w": host}, pull=pull, check=0.1)
+        serving = asyncio.create_task(controller.serve(port))
+        await asyncio.sleep(0.1)
+        await asyncio.wait_for(worker(tmp_path, "w", 2).serve(port, retry=0.1), timeout=30)
+        await asyncio.wait_for(serving, timeout=10)  # done: every attempt ended and pulled
+
+    asyncio.run(go())
+    ledger = (directory / b.LEDGER).read_text()
+    assert ledger.count('"ok": true') == 2 and ledger.rstrip().endswith("}") and '"type": "done"' in ledger
+    assert (directory / "attempts" / "s3-2" / "seed2" / "log.jsonl").exists()
