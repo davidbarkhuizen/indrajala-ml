@@ -1834,6 +1834,24 @@ def test_state_spread_reads_the_outputs_critical_temperature_and_the_codes_group
     assert merged["groups"] == 2 and merged["nearest_squared"] == 0.0
 
 
+def test_weight_norms_read_every_trained_parameter_the_readout_and_each_factors_cell_and_codes():
+    encoding = mf.Encoding(5, mf.FAMILY)
+    net = mf.network(encoding, [(4, 4)], 0, mf.BEFORE_STATE)
+    norms = mf.weight_norms(net)
+    out = net.output_layer
+    readout = math.sqrt(sum(float(np.sum(np.square(np.array(a.tolist())))) for a in (out.W, out.b)))
+    assert norms["readout"] == pytest.approx(readout)
+    assert len(norms["cells"]) == len(norms["codes"]) == 1 and norms["codes"][0] is not None
+    assert norms["total"] > max(norms["readout"], norms["cells"][0], norms["codes"][0]) > 0
+    # the codes doubled: their norm doubles, the total grows, the readout doesn't move
+    codes = net.recurrence_layer.factors[0].codes
+    E = np.array(codes.E.tolist()) * 2
+    codes.E = net.backend.matrix(E.tolist()) if not isinstance(codes.E, np.ndarray) else E
+    doubled = mf.weight_norms(net)
+    assert doubled["codes"][0] == pytest.approx(2 * norms["codes"][0])
+    assert doubled["readout"] == pytest.approx(norms["readout"]) and doubled["total"] > norms["total"]
+
+
 def test_an_annealed_run_logs_each_epochs_temperatures_hardness_and_commitments(tmp_path: Path):
     settings = mf.Settings(epoch_examples=32, max_epochs=3, screen=4, cases=4, lengths=(2,), long=(3,))
     anneal = mf.Anneal(start=1.0, halving=1, ramp=2)

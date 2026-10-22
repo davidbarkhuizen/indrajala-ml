@@ -1762,6 +1762,30 @@ def state_spread(
     return spread
 
 
+def weight_norms(net: Any) -> dict[str, Any]:
+    """
+    A saved network's weight norms (Frobenius), for plasticity's correlates and the slingshot (the
+    2026-10-22 literature review: Dohare et al.'s growing weights; Thilak et al.'s last-layer norm
+    growth before a loss spike): every trained parameter (an attribute with a `grad_` twin) of every
+    layer and part (`total`), the readout's weights and bias (`readout`, the output layer), and per
+    factor its cell's (`cells`) and its codes' (`codes`, None without codes).
+    """
+
+    def norm2(layer: Any) -> float:
+        own: dict[str, Any] = layer.__dict__
+        trained = [k for k in own if not k.startswith("grad_") and f"grad_{k}" in own]
+        return sum(float(np.sum(np.square(np.array(own[k].tolist(), dtype=float)))) for k in trained)
+
+    layers = list(net.layers) + list(net.parts)
+    factors = net.recurrence_layer.factors
+    return {
+        "total": math.sqrt(sum(norm2(layer) for layer in layers)),
+        "readout": math.sqrt(norm2(net.output_layer)),
+        "cells": [math.sqrt(norm2(f.cell)) for f in factors],
+        "codes": [None if f.codes is None else math.sqrt(norm2(f.codes)) for f in factors],
+    }
+
+
 COOLS: dict[str, Callable[[float], float]] = {  # the shaped cools' octaves fallen, a share of all, by share of time
     "concave": lambda u: u**2,
     "convex": lambda u: 1.0 - (1.0 - u) ** 2,
