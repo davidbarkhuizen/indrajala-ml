@@ -400,13 +400,15 @@ Searched: freezing and re-annealing in simulated annealing, constant-thermodynam
 restart strategies and heavy-tailed run times, warm restarts in SGD, loss of plasticity and
 re-initialisation, glassy training dynamics, loss spikes, replica exchange, seed variance in
 benchmarks, and the learnability of random automata by statistical queries and gradient descent.
-Eighteen papers added to the literature repository (its PR #8), read in the parts that bear on the
+Eighteen papers added to the literature repository (its PR #8; Salamon & Berry 1983 later, #10,
+supplied by the owner), read in the parts that bear on the
 above; one re-read.
 
 | paper | what it shows | bearing |
 | --- | --- | --- |
 | Kirkpatrick, Gelatt & Vecchi 1983, Optimization by Simulated Annealing (Science 220:671; `kirkpatrick-1983-optimization-by-simulated-annealing`) | melt, then cool in slow stages until the system **"freezes" and no further changes occur**; a rapid cool leaves it **frozen into a metastable state**, and the best of several rapid quenches is reported beside the anneal; **specific heat maxima mark the onset of freezing**, two peaks for two kinds of ordering | the vocabulary's source. SA's freeze is the configuration's; ours is the schedule's (the clock held by the gate while the coupling quenches): see "the freeze" below. Peaks per kind of ordering are our cascades (D21) |
 | Andresen & Gordon 1993, Analytic Constant Thermodynamic Speed-Cooling Strategies (Open Syst. Inf. Dyn. 2:1; `andresen-1993-constant-thermodynamic-speed-cooling`) | the schedule of constant thermodynamic speed, **`dT/dt = -v T / (eps sqrt(C))`**, with the heat capacity `C` and the **relaxation time `eps`** both estimated from the run's past; the most efficient general schedule (minimal entropy production) | the derived bias of the note on random machines (the halving time from splits per octave times the relaxation time `tau`) is this schedule; D33's adaptive cool (`T exp(-pace / sqrt(C))`) had `C` without `eps`. As `eps` diverges at a kinetic arrest, the schedule stops: such a schedule cannot pass a glass on its own |
+| Salamon & Berry 1983, Thermodynamic Length and Dissipated Availability (PRL 51:1127; `salamon-1983-thermodynamic-length-dissipated-availability`, supplied by the owner) | for a process near equilibrium, the availability dissipated is at least **`L^2 eps / tau`**: the path's thermodynamic length squared (Weinhold's metric), times a **mean relaxation time**, over the total time; equality at **constant thermodynamic speed** | the derivation behind Andresen and Gordon's schedule and the random-machine note's bias: for a fixed budget, time is spent where the path is long (the octaves where codes split) in proportion to the relaxation time there. As `eps` grows without bound (a glass) the bound does too: no budget passes the arrest by schedule alone |
 | Ingber 1989, Very Fast Simulated Re-Annealing (Math. Comput. Modelling 12:967; `ingber-1989-very-fast-simulated-reannealing`, the author's draft) | an exponential schedule per parameter, **each with its own annealing time**; **re-annealing**: every hundred or so acceptances, each parameter's annealing time is rescaled from its current sensitivity (`s_i`, the cost's derivative at the best point), so the insensitive parameters are made hotter again | the reheat's precedent, with the run-back derived from the run (no constant) and **per axis**: D63 (a) runs one clock back for all factors; Ingber's form would run each factor's back by its own reading (its sharpness or its share) |
 | Luby, Sinclair & Zuckerman 1993, Optimal Speedup of Las Vegas Algorithms (IPL 47:173; `luby-1993-optimal-speedup-las-vegas-algorithms`) | for an algorithm whose answer is always correct when it stops, with known run-time distribution `q`, the optimal strategy is a **fixed cutoff `t*` repeated**, minimising **`l(t) = (t - sum_{t'<t} q(t')) / q(t)`**, the expected cost per success; it stays optimal when runs may be suspended and resumed (Theorem 4); unknown `q`: the universal sequence (1, 1, 2, 1, 1, 2, 4, ...) within `O(log)` of optimal | **a certified run is a Las Vegas run** (when it stops, the machine is proved). D63 (e)'s window is `t*`, derivable from the runs' own `q` per backdrop (D64's and D54-D59's logs): no constant. And D63's comparison is exactly `l` of two algorithms: the reheat is a different algorithm with its own `q` |
 | Gomes, Selman, Crato & Kautz 2000, Heavy-Tailed Phenomena in SAT and CSP (J. Autom. Reasoning 24:67; `gomes-2000-heavy-tailed-phenomena-satisfiability-csp`) | randomised search's run times are **heavy-tailed** (Pareto-Levy, possibly no finite mean), with a **left tail** of short successful runs; **rapid restarts remove the heavy tail** and exploit the short runs (up to 100x); censored runs (stopped at a cutoff) handled by tail estimators | our spent runs are censored at the budget; S3 seed 30's thaw is the tail's other side. Read `q`'s tail before choosing `t*` |
@@ -477,7 +479,7 @@ the offline items may run any time):
 Surfaced, not read: Schafer 2011, What Is a Savitzky-Golay Filter? (IEEE SPM 28(4):111, the tutorial
 for D61's smoothing; no open copy found) and Savitzky & Golay 1964 (Anal. Chem. 36:1627); Nikishin et
 al. 2022, the primacy bias and resets (2205.07802); Salamon et al. 1988 and Nourani & Andresen 1998
-(constant speed, the latter comparing schedules); Mitarchuk et al. 2024 (gradient descent's limits for
+(constant speed; Nourani & Andresen 1998 has since been added to the literature repository, its #9, unread); Mitarchuk et al. 2024 (gradient descent's limits for
 finite-precision recurrent networks, TMLR). Kontorovich 2009 (random DFAs PAC-learnable, 0907.0453)
 was withdrawn for an error.
 
@@ -501,7 +503,8 @@ The state formation extension: 2309.15505, 1704.00648, 2205.07547, 2410.06424, 2
 The freeze and restarts extension: 1608.03983, 1603.06560, 1803.06969, 1910.08475, 2103.00065,
 2103.03098, 2108.04190, 2306.13812, 2310.03789, 2510.04115, physics/0508111; Kirkpatrick, Gelatt &
 Vecchi, Science 220(4598):671-680, 1983; Ingber, Mathematical and Computer Modelling 12(8):967-973,
-1989; Andresen & Gordon, Open Systems & Information Dynamics 2(1):1-12, 1993; Luby, Sinclair &
+1989; Salamon & Berry, Physical Review Letters 51(13):1127-1130, 1983;
+Andresen & Gordon, Open Systems & Information Dynamics 2(1):1-12, 1993; Luby, Sinclair &
 Zuckerman, Information Processing Letters 47(4):173-180, 1993; Gomes, Selman, Crato & Kautz, Journal
 of Automated Reasoning 24:67-100, 2000; Angluin, Eisenstat, Kontorovich & Reyzin, ALT 2010 (LNCS
 6331:194-208); Angluin & Chen, ALT 2015:119-133.
