@@ -743,6 +743,85 @@ def heat_summary(courses: Sequence[Mapping[str, Any] | None]) -> str:
     return "; ".join(factor(g, c) for g, c in enumerate(courses))
 
 
+FORMED_SHARE = 0.95  # a step's end whose state share reaches this formed the state (formation_course)
+
+
+def formation_course(rows: Sequence[Mapping[str, Any]], by: int = 200) -> dict[str, Any] | None:
+    """
+    A run's formation and its keeping from its log.jsonl (the scaling conjecture's reading, 2026-10-22):
+    the first step's end whose state share reaches FORMED_SHARE (`formed`), the largest share, the first
+    step certified at the strict verdict and at the default (`strict`, `certified`), the first whose
+    answers-only stop passed (`passed`), `lost` (after `formed`, the first share below 0.6), the seconds
+    at step `by` and at the last row (the cost a kill at `by` would save); and the first melting curve
+    (D21) per factor: the share of its clusters made at the first transition (`first_jump`) and the
+    octaves below the melting point to half and three quarters of them (`octaves_half`,
+    `octaves_three_quarters`: how crowded its cascade is). None for a log without step ends.
+    """
+    steps = [r for r in rows if "end" in r and "state_share" in r]
+    if not steps:
+        return None
+
+    def first(test: Callable[[Mapping[str, Any]], bool]) -> int | None:
+        return next((int(r["step"]) for r in steps if test(r)), None)
+
+    formed = first(lambda r: r["state_share"] >= FORMED_SHARE)
+    melting: Sequence[Mapping[str, Any]] | None = next((r["melting"] for r in rows if "melting" in r), None)
+    cascades: list[dict[str, Any] | None] = []
+    for factor in melting or ():
+        # each transition [temperature, groups before, groups after]
+        transitions = [(float(t[0]), int(t[2])) for t in factor["transitions"]]
+        if not transitions:
+            cascades.append(None)
+            continue
+        foot = max(after for _, after in transitions)
+
+        def reach(share: float, transitions: list[tuple[float, int]] = transitions, foot: int = foot) -> float:
+            T = next(T for T, after in transitions if after >= share * foot)
+            return round(math.log2(transitions[0][0] / T), 2)
+
+        cascades.append(
+            {
+                "foot": foot,
+                "transitions": len(transitions),
+                "first_jump": round(transitions[0][1] / foot, 2),
+                "octaves_half": reach(0.5),
+                "octaves_three_quarters": reach(0.75),
+            }
+        )
+    return {
+        "steps": len(steps),
+        "max_share": max(float(r["state_share"]) for r in steps),
+        "formed": formed,
+        "strict": first(lambda r: bool(r.get("certificates", {}).get("strict", {}).get("certified"))),
+        "certified": first(lambda r: bool(r.get("certified"))),
+        "passed": first(lambda r: bool(r.get("answers_stop", {}).get("passed"))),
+        "lost": None if formed is None else first(lambda r: r["step"] > formed and r["state_share"] < 0.6),
+        "seconds_by": next((float(r["seconds"]) for r in steps if r["step"] >= by), None),
+        "seconds": float(steps[-1]["seconds"]),
+        "cascades": cascades,
+    }
+
+
+def formation_summary(course: Mapping[str, Any] | None) -> str:
+    """formation_course's reading on one line."""
+    if course is None:
+        return "no step ends"
+    cascades = "; ".join(
+        "-"
+        if c is None
+        else f"{c['transitions']} transitions to {c['foot']}, first {c['first_jump']}, "
+        f"half in {c['octaves_half']} oct, 3/4 in {c['octaves_three_quarters']} oct"
+        for c in course["cascades"]
+    )
+    by = course["seconds_by"]
+    return (
+        f"max share {course['max_share']:.3f}, formed {course['formed']}, strict {course['strict']}, "
+        f"certified {course['certified']}, passed {course['passed']}, lost {course['lost']}; "
+        f"{'-' if by is None else round(by / 60, 1)} of {round(course['seconds'] / 60, 1)} min by the kill's step; "
+        f"melting: {cascades or '-'}"
+    )
+
+
 ANSWERS_LENGTHS = (8, 16, 24, 48)  # a snapped network's answers re-read at these lengths (answers_stop)
 
 

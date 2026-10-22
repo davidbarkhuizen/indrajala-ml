@@ -1668,6 +1668,47 @@ def test_answers_stop_judges_the_first_step_right_within_the_bound_by_the_certif
     assert mf.answers_stop(soft, 6, lambda step: None)["verdict"] == "missed"  # no saved network: no stop
 
 
+def test_formation_course_reads_when_the_state_formed_was_kept_and_the_melting_curves_crowding():
+    def step(n: int, share: float, seconds: float, **more: Any) -> dict[str, Any]:
+        return {"step": n, "end": "epoch", "state_share": share, "seconds": seconds, **more}
+
+    melting: list[dict[str, Any]] = [
+        {"transitions": [[4.0, 1, 4], [2.0, 4, 6], [1.0, 6, 8]]},  # half at the first, 3/4 two octaves down
+        {"transitions": []},
+    ]
+    rows: list[dict[str, Any]] = [
+        {"step": 1, "melting": melting},
+        step(1, 0.5, 10.0),
+        step(2, 0.97, 20.0, certificates={"strict": {"certified": True}}),
+        step(3, 0.4, 30.0, answers_stop={"passed": True}),
+        step(4, 0.99, 40.0, certified=True),
+    ]
+    course = mf.formation_course(rows, by=3)
+    assert course is not None
+    assert (course["formed"], course["strict"], course["passed"], course["certified"], course["lost"]) == (
+        2,
+        2,
+        3,
+        4,
+        3,
+    )
+    assert (course["max_share"], course["seconds_by"], course["seconds"]) == (0.99, 30.0, 40.0)
+    assert course["cascades"] == [
+        {"foot": 8, "transitions": 3, "first_jump": 0.5, "octaves_half": 0.0, "octaves_three_quarters": 1.0},
+        None,
+    ]
+    assert "formed 2" in mf.formation_summary(course) and "3/4 in 1.0 oct; -" in mf.formation_summary(course)
+    never = mf.formation_course([step(1, 0.5, 10.0)], by=200)
+    assert never is not None and (never["formed"], never["lost"], never["seconds_by"], never["cascades"]) == (
+        None,
+        None,
+        None,
+        [],
+    )
+    assert mf.formation_course([{"step": 1, "melting": melting}]) is None
+    assert mf.formation_summary(None) == "no step ends"
+
+
 def test_heat_course_reads_each_factors_splits_and_capacity_peak_in_the_cool():
     def row(phase: str, groups: list[int], capacity: list[float], t: list[float | None]) -> dict[str, Any]:
         return {

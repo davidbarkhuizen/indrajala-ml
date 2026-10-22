@@ -1586,6 +1586,48 @@ On four runs' logged sharpness, a one-sided degree-1 Savitzky-Golay line over th
 time removed every jump with a mean lag of -0.02 to 0.05; a moving average over the same window
 lagged 0.16-0.53 and, its window counted in clock, froze with the clock.
 
+## Findings: the scaling conjecture (offline, 2026-10-22, 10:30)
+
+The owner's conjecture: larger machines, and more random ones, need the phase space sampled more (a
+larger batch, more seeds). Read offline on every completed run of the current method (D54-D58, with
+D59's margin stop), 47 runs; the tool: `formation` (`mf.formation_course`), a line per run. The
+owner: the sampling is not changed yet.
+
+- **A run's success is two probabilities: forming the state** (a step's end with state share >= 0.95)
+  **and keeping it** to a certificate:
+
+  | backdrop | states | formed | kept, of those formed | certified |
+  |---|---|---|---|---|
+  | S3 | 6 | 19 of 24 | 17 of 18 (S3 35 open) | 17 of 24 |
+  | move-to-front-4 | 24 | 11 of 12 | 10 of 10 (D54's seed 3 running) | 10 of 12 |
+  | S4 | 24 | 3 of 3 | 1 of 3 | 1 of 3 |
+  | random-q12-0 | 12 | 1 of 4 | 1 of 1 | 1 of 4 |
+  | random-q16-0 | 16 | 0 of 4 | - | 0 of 4 |
+
+- **Size is not the variable:** move-to-front-4 (24 states) is the best backdrop, S4 (24) and
+  random-q12-0 (12) poor. **The larger machine fails at keeping:** S4 formed 3 of 3 and lost 2 to the
+  late collapse (D57), one mechanism, a design signal (D63); more seeds would also do at p about 1/3
+  (12 runs for 99%). **The random machines fail at forming:** their failures plateaued at a state
+  share of 0.82-0.86 (random-q12-0) and 0.68-0.76 (random-q16-0) over the whole budget (about 1,550
+  steps), further from forming than any S3 failure (0.80-0.95); not a time limit.
+- **The first melting curve (D21, at step 25) reads the backdrops' cascades:** the octaves below the
+  melting point in which a factor makes three quarters of its clusters, mean (range): move-to-front-4
+  4.3 (1.3-9.3), random-q12-0 3.3 (0.8-11.3), S4 1.3 (0-2.0), S3 1.0 (0-4.3), random-q16-0 0.8
+  (0-1.8); the share made at the first transition 0.31, 0.40, 0.51, 0.53, 0.54. The most crowded
+  (random-q16-0) is the worst backdrop and the most spread (move-to-front-4) the best, as the note on
+  random machines (below) conjectured; within each backdrop the certified and failed runs' cascades
+  are alike, so it is the machine's, not the seed's: more seeds do not change it, a slower cool might.
+  Against it: S3 is as crowded and certifies (few states to sort, untested), and random-q12-0 is
+  spread yet poor.
+- **The cost:** the 12 runs that never formed spent about 65 hours, 86% of it after step 200; of the
+  runs not formed by step 200 one formed later (S3 seed 30, at step 853, certified). A kill at step
+  200 with a fresh seed in its slot (D63 (e)) would lose about 1 in 13 of them and most of their cost:
+  a larger batch is affordable with it.
+- **So:** for S4 and random-q12-0 a larger batch suffices at today's rates (with the kill, and D63 for
+  S4's collapse); for random-q16-0 the evidence (four plateaus far from forming, the most crowded
+  cascade) points at the cool's pace, not the sample, though 0 of 4 (Wilson 0-0.49) cannot exclude a
+  usable p. Small samples throughout (3-4 runs on the new backdrops); D64 adds 3-4 a backdrop.
+
 ## A note on random machines (2026-10-20; a note, not a plan)
 
 The owner: "this approach, if it works, is likely to also work for random machines"; and a conjecture,
@@ -1613,6 +1655,33 @@ a random machine would just need a very slow cool.**
 - **What would test it, with the measurements in hand:** the melting curve (D21) on a random machine's
   warm-up: transitions crowded into a narrow band of temperature (against an algebra's cascade) would
   support the reasoning; then the cooling rate needed to certify against the band's width.
+- **The owner's bias (2026-10-22; a note, not a plan, after the planned work):** keep the
+  quasi-static curve (D49's clock, its gate, its shape) and bias only its pace (the halving time) by
+  the target's order, read from answers alone, so one mechanism covers both limits: a strongly ordered
+  machine cooled faster, a glass former slower. Two answers-only readings, measured offline on the
+  five targets and runs:
+  - *From the data, before training:* the answer's conditional entropy given the last k tokens,
+    k = 0-6, on uniform words (bits): S3 1.58 flat, S4 2.0 to 1.95 (a group: no finite memory),
+    move-to-front-4 2.0 to 0.25 (a reset machine: its last few distinct tokens fix the state),
+    random-q12-0 1.77 to 1.08 and random-q16-0 1.61 to 1.02 (a slow, steady decay). It tells the three
+    kinds apart (flat, fast, slow) but does not rank their difficulty (S3, flat, is the easiest; the
+    random machines, between, the hardest). Moore's refinement (states told apart by suffixes of length
+    k, which needs chosen words) is no use here: every target but move-to-front-4 separates at k = 1.
+  - *From the network, in the warm-up:* the melting curve (D21) is answers-only too (the network saw
+    only answers), and reads the property the cool meets: `log2 groups(T)` is the code assignment's
+    configurational entropy, its rise per octave the entropy the cool must release there (a heat
+    capacity, C = dS/d ln T). Crowded (random-q16-0) releases it in under an octave, a cascade
+    (move-to-front-4) over four.
+  - *A derived bias, no new constant:* constant thermodynamic speed (Salamon and Berry; Nulton and
+    Salamon) gives each interval of the cool time in proportion to what it must release; with the
+    network's relaxation time tau (the epochs its screen takes to recover after the clock moves, read
+    live as the gate already does) the halving time becomes `max(halving, splits per octave x tau)`, the
+    splits per octave from the warm-up's melting curve at its densest octave; the curve's shape is
+    unchanged, its pace slowed where the machine is crowded. Cautions: the adaptive cool (D33) failed by
+    reading the capacity live (its steps outran the handover below the cascade): a bias fixed from the
+    warm-up's curve avoids that; a network that has not separated the states may show a crowded curve
+    as a symptom, not a cause (random-q16-0's never formed); and the speed-up side (shortening for
+    ordered machines) changes what works today, so it would be tested apart.
 
 ## Stages
 

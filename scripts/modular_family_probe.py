@@ -1328,6 +1328,13 @@ def main(argv: list[str]) -> int:
         "heat-capacity", help="profiled runs' logs (D32), a line per run: each factor's splits and capacity peak"
     )
     capacity.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    formation = commands.add_parser(
+        "formation",
+        help="runs' logs, a line per run: when the state formed and was kept, the cost by a kill's step, the "
+        "first melting curve's crowding (the scaling conjecture's reading)",
+    )
+    formation.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    formation.add_argument("--by", type=int, default=200, help="the kill's step: seconds spent by it")
     drops = commands.add_parser("drops", help="a collapse trigger scored against runs' logs, offline")
     drops.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl (runs made without the fork)")
     _trigger_arguments(drops)
@@ -1522,6 +1529,11 @@ def main(argv: list[str]) -> int:
             tally[verdict["verdict"]] = tally.get(verdict["verdict"], 0) + 1
             print(f"{path}: {verdict['verdict']}, stop {verdict['stop']}, certified {verdict['certified']}", flush=True)
         print(f"bound {bound:g}: {tally}")
+        return 0
+    if args.command == "formation":
+        for path in args.logs:
+            course = mf.formation_course([json.loads(line) for line in path.read_text().splitlines()], args.by)
+            print(f"{path}: {mf.formation_summary(course)}", flush=True)
         return 0
     if args.command == "heat-capacity":
         for path in args.logs:
