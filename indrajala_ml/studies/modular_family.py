@@ -819,6 +819,85 @@ def answers_stopping(
     return passed, {"answers_stop": row}
 
 
+@dataclass
+class Margin:
+    """
+    The margin stop's state (D59, D60): its wait W, D35's first pass with a split or label tie, and
+    the pass with the fewest since (its ties).
+    """
+
+    wait: int | None
+    first_pass: int = -1
+    best_pass: int = -1
+    best_ties: int = -1
+    waited: int = -1  # the step the wait ended at
+
+    def judge(
+        self, step: int, stopping: bool, certificate: wc.Certificate, judged: dict[str, Any], net: Any, out: Path
+    ) -> bool:
+        """
+        Whether D35's stop, `stopping`, stops the run at `step` (D59): only with no split or label tie,
+        the first such pass's network and each with fewer ties than any before kept (D60); or at the
+        wait's end, every step past the first pass counted (the run's last row then the best pass's: `stop_row`).
+        """
+        if stopping:
+            ties = certificate.split_ties + certificate.lead.short
+            if ties and self.first_pass < 0:
+                self.first_pass = step
+                net.save(str(out / f"first-pass-step-{step}.network.json"))
+            if ties and (self.best_pass < 0 or ties < self.best_ties) and not self.due(step):
+                self.best_pass, self.best_ties = step, ties  # D60: the pass the wait would end on
+                net.save(str(out / f"best-pass-step-{step}.network.json"))
+            margins = {"split_ties": certificate.split_ties, "lead_ties": certificate.lead.short}
+            judged["answers_stop"].update(margins, first_pass=self.first_pass, **({"waited": False} if ties else {}))
+            stopping = not ties
+        if self.due(step):
+            judged["answers_stop"].update(waited=True, best_pass=self.best_pass)
+            self.waited = step
+            return True
+        return stopping
+
+    def due(self, step: int) -> bool:
+        """
+        Whether the wait ends at `step` (D60): W steps past the first pass, every step counted (no pass
+        cleared before it: a clean pass stops the run).
+        """
+        return self.wait is not None and self.first_pass >= 0 and step - self.first_pass >= self.wait
+
+    def stop_row(
+        self,
+        out: Path,
+        encoding: Target,
+        settings: Settings,
+        bound: int,
+        coupled: Sequence[float],
+        readings: bool,
+    ) -> dict[str, Any]:
+        """
+        The wait's stop (D60): the best pass's network restored, kept as the stop's
+        (answers-stop-step-S), and its row, judged as a step's end (with D53's `readings`).
+        """
+        net = load_network(str(out / f"best-pass-step-{self.best_pass}.network.json"))
+        net.save(str(out / f"answers-stop-step-{self.waited}.network.json"))
+        certificate = wc.certify(QueryMachine(net, encoding, 0), encoding.task)
+        judged = answers_stopping(net, encoding, encoding.task, certificate, bound, coupled, False)[1]
+        margins = {"split_ties": certificate.split_ties, "lead_ties": certificate.lead.short}
+        judged["answers_stop"].update(margins, first_pass=self.first_pass, waited=True, best_pass=self.best_pass)
+        if readings:
+            judged.update(continuous_readings(net, encoding, encoding.task, certificate, coupled, False))
+        return {
+            "step": self.waited,
+            "end": "waited",
+            "restored": self.best_pass,
+            **diagnose(net, encoding, settings),
+            "long": long_accuracy(net, encoding, settings),
+            "certified": certificate.certified,
+            "minimised": len(certificate.minimised),
+            "machine": machine_summary(net, encoding),
+            **judged,
+        }
+
+
 def continuous_readings(
     net: Any,
     encoding: Target,
@@ -2196,8 +2275,8 @@ def run(
     (the certificate's split_ties: a tie's branch into another of its minimised states) and no label is
     a near tie; the first such pass's network kept (out/first-pass-step-S.network.json), and each pass
     with fewer ties than any before it (out/best-pass-step-S.network.json). W steps after the first
-    pass, each step counted whether it passes or not (D60), a run none cleared stops ("waited") on the
-    best pass's network, restored and judged as its stop's.
+    pass, each step counted whether it passes or not (D60), a run none cleared stops ("waited"), its
+    last row the best pass's network restored and judged as its stop's (Margin).
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -2310,9 +2389,7 @@ def run(
         place.frozen if place is not None else 0
     )  # consecutive armed epochs with STALL_SHARE of their updates undone
     spent: int = place.spent if place is not None else 0  # epochs trained in all
-    first_pass: int = place.first_pass if place is not None else -1  # D59: D35's first pass with a split tie
-    best_pass: int = place.best_pass if place is not None else -1  # D60: the pass with the fewest ties
-    best_ties: int = place.best_ties if place is not None else -1
+    margin = Margin(margin_wait, *((place.first_pass, place.best_pass, place.best_ties) if place else ()))  # D59-D60
     snapshot = out / "snapshot.network.json"
     step_best = out / "best.network.json"  # restore_best's
     commitments = [0.0 if f.codes is None else f.codes.commitment for f in net.recurrence.factors]  # the specs'
@@ -2410,9 +2487,9 @@ def run(
             cstate.length,
             list(cstate.sharp_from),
             list(cstate.floors),
-            first_pass,
-            best_pass,
-            best_ties,
+            margin.first_pass,
+            margin.best_pass,
+            margin.best_ties,
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -2759,31 +2836,8 @@ def run(
         judged: dict[str, Any] = {}
         if state_bound is not None:  # D35: the answers-only stop; the certificate only judges it
             stopping, judged = answers_stopping(net, encoding, task, certificate, state_bound, coupled, warm)
-            if margin_wait is not None and stopping:  # D59: the stop waits until no near tie splits the machine
-                margins: dict[str, Any] = {"split_ties": certificate.split_ties, "lead_ties": certificate.lead.short}
-                ties = certificate.split_ties + certificate.lead.short
-                if ties:
-                    if first_pass < 0:
-                        first_pass = step
-                        net.save(str(out / f"first-pass-step-{step}.network.json"))
-                    if best_pass < 0 or ties < best_ties:  # D60: the pass the wait would end on
-                        best_pass, best_ties = step, ties
-                        net.save(str(out / f"best-pass-step-{step}.network.json"))
-                    stopping = False
-                    margins["waited"] = False
-                judged["answers_stop"].update(margins, first_pass=first_pass)
-            if margin_wait is not None and first_pass >= 0 and not stopping and step - first_pass >= margin_wait:
-                # D60: the wait counts every step; it ends on the best pass's network, judged as the stop's
-                if best_pass != step:
-                    net = load_network(str(out / f"best-pass-step-{best_pass}.network.json"))
-                    certificate = wc.certify(QueryMachine(net, encoding, 0), task)
-                    _, judged = answers_stopping(net, encoding, task, certificate, state_bound, coupled, warm)
-                    judged["answers_stop"].update(
-                        {"split_ties": certificate.split_ties, "lead_ties": certificate.lead.short},
-                        first_pass=first_pass,
-                    )
-                judged["answers_stop"].update(waited=True, best_pass=best_pass)
-                stopping = True
+            if margin.wait is not None:  # D59-D60: the stop waits until no near tie splits the machine
+                stopping = margin.judge(step, stopping, certificate, judged, net, out)
         if growing:  # D53: both certificates' breakdowns, the snapped answers, the melting curve
             judged.update(continuous_readings(net, encoding, task, certificate, coupled, state_bound is None))
             if step % continuous.curve_every == 0:  # type: ignore[union-attr]
@@ -2830,6 +2884,8 @@ def run(
             net.save(str(out / "network.json"))
         if stop in ("deadline", "spent", "stalled"):
             break
+    if state_bound is not None and margin.waited >= 0:  # D60: the wait's stop, on the best pass's network
+        record(margin.stop_row(out, encoding, settings, state_bound, coupled, growing))
     log.close()
     _write_checkpoint(out, identity, ENDED, net)
 
