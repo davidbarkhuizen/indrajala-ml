@@ -1841,8 +1841,36 @@ Read for D65's stage 0 on the same 47 runs' per-epoch rows (`anneal`: `rate`, `c
   constant-lag form of D49's clock (Nulton and Salamon's criterion); faster cools for ordered machines
   (a direct quench beats an equilibrium schedule where there are no local minima, Salamon et al.
   1988, the speed-up side D65 set aside); parallel tempering across a batch (the owner's call, a new
-  component); the readout's weight norm logged per epoch (the slingshot test for S4's collapse) in the
-  next change to the per-epoch row.
+  component); the readout's weight norm logged per epoch in the next change to the per-epoch row (read
+  offline on saved networks already: the slingshot not supported, below).
+
+## Findings: plasticity and the slingshot (offline, 2026-10-22, 16:30)
+
+Read on saved step networks (every 10 steps) with `weight-norms` and `state-spread` (`--step 100`),
+for two of the literature review's readings: S4's two collapses (D57's seeds 0, 2) against its
+certified seed 1, and random-q16-0's freezes (D56's seeds 0, 2).
+
+- **The slingshot is not supported for S4's collapse:** it predicts the readout's norm growing before
+  the loss spikes (Thilak et al. 2022); here it falls before both collapses (seed 0: 10.1 at step 80,
+  6.1 at 120, 7.2 at 130, 4.6 at 140 after the fall at 137; seed 2: 10.0, 7.0, then 4.6 at 130) and
+  falls alike in the certified seed 1 (7.6 to 5.9 by step 100); the cells' norms rise steadily, with no
+  jump at the collapse. At 10-step resolution: evidence against, not a refutation.
+- **After S4's collapse, all three of plasticity's correlates** (Dohare et al. 2023): codes in use
+  fall from 15 of 15 to 2-3 by step 300 and stay there, the outputs' effective dimension from 15 to
+  3-5, and the total weight norm grows about fourfold over the freeze (seed 0: 121 at step 130, 528 at
+  1,500; seed 2 partly recovers its codes at step 600, 13 and 7 of 15, then loses them). Before the
+  collapse both look like the certified seed (15 of 15 codes, dimension 15, the same norms at step
+  100): correlates of the frozen state, not predictors of the collapse.
+- **random-q16-0's freezes are not dead codes:** the weights grow alike (about fourfold, 101 to 492 and
+  94 to 466), but 10-12 of 12 codes stay in use and the dimension near its maximum (12-15) for most of
+  the freeze, thinning only late (seed 0: 4 and 7 of 12 at step 1,500). Every code in use on a wrong
+  assignment: the glass that the coupling's quench at a held clock describes.
+- **So:** the weight growth is common to every frozen run, and without a long unfrozen run it is not
+  separable from Adam's drift with no weight decay; the dead codes and lost dimension are S4's, after
+  its collapse. For D63: a reheat that softens the codes may revive S4's dead ones (as seed 2's partial
+  recovery did once); on the random machines nothing is dead to revive, so a reheat would re-sort a
+  full assignment. Shrink and perturb (Ash and Adams 2020), a non-gradient kick that keeps the learned
+  hypothesis, stays a later candidate, not planned.
 
 ## A note on random machines (2026-10-20; a note, not a plan)
 
