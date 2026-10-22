@@ -585,6 +585,26 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "crucible": True,
         "continuous": mf.Continuous(low=0.0, high=2.0, growth=0.5, curve_every=3, save_every=2),
     },
+    "paced": {  # D61 (b): each coupling's allowance and last move carried over every stop
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1),
+        "crucible": True,
+        "continuous": mf.Continuous(low=0.0, high=2.0, growth=0.5, curve_every=3, save_every=2, pace=True),
+    },
+    "smoothed": {  # D61 (c): the window's readings carried over every stop
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1),
+        "crucible": True,
+        "continuous": mf.Continuous(low=0.0, high=2.0, growth=0.5, curve_every=3, save_every=2, smooth=True),
+    },
 }
 
 
@@ -716,6 +736,48 @@ def _margin_run(
     return [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
 
 
+def _cool(tmp_path: Path, kind: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    config = dict(RESUMABLE[kind])
+    encoding, settings = config.pop("encoding"), config.pop("settings")
+    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path, settings, **config)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    return [r["anneal"] for r in rows if r.get("anneal", {}).get("phase") == "cool"], config
+
+
+def test_the_paced_coupling_moves_at_most_its_allowance_which_the_rate_doubles_or_halves(tmp_path: Path):
+    cool, _ = _cool(tmp_path, "paced")
+    assert cool[0]["coupling"] == [0.0] and cool[0]["allowance"] == [cool[0]["target"][0]]  # D61 (b)
+    for before, after in itertools.pairwise(cool):
+        (a,), (b,), (rate,) = before["allowance"], after["allowance"], [after["rate"]]
+        first = max(after["target"][0] - before["coupling"][0], 0.0)  # its first rise, taken whole
+        assert b == pytest.approx(a * 2 ** (2 * rate - 1) if a > 0 else first, abs=2e-4)
+        assert abs(after["coupling"][0] - before["coupling"][0]) <= b + 1e-4
+        assert (
+            after["coupling"][0] == after["target"][0] or abs(after["coupling"][0] - before["coupling"][0]) > b - 1e-4
+        )
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["coupling_pace"] is True and "sharpness_smoothing" not in identity
+
+
+def test_the_savitzky_golay_line_is_exact_on_a_line_and_the_mean_at_one_time():
+    assert mf.savitzky_golay([[0.0, 0.1, 1.0], [1.0, 0.3, 1.0], [3.0, 0.7, 1.0]], 3.0) == pytest.approx([0.7, 1.0])
+    assert mf.savitzky_golay([[2.0, 0.2], [2.0, 0.6]], 2.0) == pytest.approx([0.4])
+    assert mf.savitzky_golay([[0.0, 0.0], [1.0, 0.0], [2.0, 1.0]], 2.0) == pytest.approx([5 / 6])  # a jump, spread
+
+
+def test_the_smoothed_coupling_reads_the_sharpness_line_over_the_cools_e_folding_time(tmp_path: Path):
+    cool, config = _cool(tmp_path, "smoothed")
+    span = config["warm_up"].halving / math.log(2)
+    assert cool[0]["smoothed"] == pytest.approx(cool[0]["sharpness"], abs=1e-6)  # the cool's first (D61 (c))
+    for i, now in enumerate(cool):
+        window = [[a["clock"], a["sharpness"][0]] for a in cool[: i + 1] if a["clock"] > now["clock"] - span]
+        assert now["smoothed"][0] == pytest.approx(mf.savitzky_golay(window, now["clock"])[0], abs=1e-3)
+    start = cool[0]["sharpness"][0]
+    assert all(a["target"][0] == pytest.approx(mf.Continuous.coupling(a["smoothed"][0], start), abs=1e-3) for a in cool)
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["sharpness_smoothing"] is True and identity["continuous"] == repr(CONTINUOUS)
+
+
 def test_the_margin_stop_waits_past_a_split_tie_and_stops_once_none_splits(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -844,6 +906,12 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "continuous":  # the length grown and the clock's shares carried over every stop
         cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
         assert cool and cool[-1]["length"] > cool[0]["length"] and any(0 < a["rate"] < 1 for a in cool[1:])
+    elif kind == "paced":  # an allowance set and moved by the rate at some stop
+        cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
+        assert cool and any(a["allowance"][0] > 0 for a in cool) and any(0 < a["rate"] < 1 for a in cool[1:])
+    elif kind == "smoothed":
+        cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
+        assert cool and any(a["smoothed"] != a["sharpness"] for a in cool)
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":

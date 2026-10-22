@@ -1741,7 +1741,14 @@ class Continuous:
     sharpness first reaches `sharp` (D51); the crucible's longest length grown in `ln L` by `growth`
     times the rate and the smallest coupling an epoch, to the cap (D52, `grow`). After the warm-up a
     step is one epoch, its readings every epoch; the melting curve every `curve_every`, the step's
-    network saved every `save_every` (D53).
+    network saved every `save_every` (D53). Two ways to keep the coupling from jumping when the
+    sharpness does (D61), neither with a scale of its own: `pace`, each factor's coupling moving
+    toward its sharpness's at most its allowance an epoch, the allowance its first rise and then
+    times `2 ** (2 rate - 1)` an epoch (doubled while the screen holds, halved when the clock stops:
+    a trust region the network's response sets); `smooth`, the coupling read from the sharpness
+    smoothed by a one-sided Savitzky-Golay filter (`smoothed`: its least-squares line over the
+    readings of the last e-folding time of the cool's clock, `halving / ln 2`, read at the clock's
+    end): no lag on a steady rise, a jump spread over the time the temperature takes to move.
     """
 
     low: float = 0.95
@@ -1750,6 +1757,8 @@ class Continuous:
     growth: float = 0.02
     curve_every: int = 25
     save_every: int = 10
+    pace: bool = field(default=False, repr=False)  # D61 (b); in the run's identity apart
+    smooth: bool = field(default=False, repr=False)  # D61 (c); in the run's identity apart
 
     def rate(self, screen: float, level: float) -> float:
         """The share of an epoch the cool's clock advances (D49), from the screen before it against the hold's level."""
@@ -1763,6 +1772,25 @@ class Continuous:
     def grow(self, length: float, rate: float, coupling: float, cap: int) -> float:
         """The crucible's longest length after an epoch (D52), from its rate and the smallest coupling."""
         return min(float(cap), length * math.exp(self.growth * rate * coupling))
+
+
+def savitzky_golay(history: Sequence[Sequence[float]], clock: float) -> list[float]:
+    """
+    Each factor's sharpness smoothed (D61 (c)): the least-squares line through its readings in
+    `history` (each the clock and every factor's sharpness), read at `clock`, a one-sided
+    Savitzky-Golay filter of degree 1 on the clock's (uneven) times; their mean where the readings
+    share one time.
+    """
+    xs = [h[0] for h in history]
+    x0 = sum(xs) / len(xs)
+    spread = sum((x - x0) ** 2 for x in xs)
+    smoothed: list[float] = []
+    for g in range(len(history[0]) - 1):
+        ys = [h[1 + g] for h in history]
+        y0 = sum(ys) / len(ys)
+        slope = sum((x - x0) * (y - y0) for x, y in zip(xs, ys, strict=True)) / spread if spread > 1e-12 else 0.0
+        smoothed.append(y0 + slope * (clock - x0))
+    return smoothed
 
 
 def growth_lengths(length: float, examples: int) -> list[int]:
@@ -1786,7 +1814,9 @@ class ContinuousState:
     """
     What the continuous crystallisation carries from epoch to epoch (D49-D52): the clock's held share,
     each factor's T_hot, held temperature (0: none) and the cool's first sharpness, and the crucible's
-    longest length.
+    longest length; with D61's `pace` each factor's allowance and its coupling last set, with
+    `smooth` the cool's readings within its window, each the clock and every factor's sharpness
+    (empty before the cool).
     """
 
     held: float
@@ -1794,6 +1824,9 @@ class ContinuousState:
     floors: list[float]
     sharp_from: list[float]
     length: float
+    allowance: list[float] = field(default_factory=list[float])
+    last: list[float] = field(default_factory=list[float])
+    history: list[list[float]] = field(default_factory=list[list[float]])
 
 
 @dataclass(frozen=True)
@@ -1847,10 +1880,28 @@ def continuous_epoch(
     sharp = sharpness(net, rows, temperatures, hard)
     levels = [0.0 if v is None else v[0] for v in sharp]
     sharp_from = list(levels) if phase == "cool" and not state.sharp_from else list(state.sharp_from)
+    history, smoothed = [list(h) for h in state.history], []
+    if continuous.smooth and phase == "cool":  # D61 (c): the sharpness's line over the cool's e-folding time
+        span = warm_up.halving / math.log(2)
+        history = [h for h in history if h[0] > clock - span] + [[clock, *levels]]
+        smoothed = savitzky_golay(history, clock)
     couplings = [
         1.0 if not s else continuous.coupling(v, v0) if phase == "cool" else 0.0
-        for s, v, v0 in zip(snapped, levels, sharp_from or levels, strict=True)
+        for s, v, v0 in zip(snapped, smoothed or levels, sharp_from or levels, strict=True)
     ]
+    targets = list(couplings)
+    allowance, last = list(state.allowance), list(state.last)
+    if continuous.pace and phase == "cool":  # D61 (b): each coupling's move at most its allowance
+        before = last if allowance else [0.0] * len(couplings)
+        allowance = [
+            a * 2.0 ** (2 * rate - 1) if a > 0 else max(c - b, 0.0)
+            for c, b, a in zip(couplings, before, allowance or [0.0] * len(couplings), strict=True)
+        ]
+        couplings = [
+            c if not s else b + min(max(c - b, -a), a)
+            for s, c, b, a in zip(snapped, couplings, before, allowance, strict=True)
+        ]
+        last = list(couplings)
     if coupling_cap < 1.0:  # D38's cap, as without
         couplings = [min(c, coupling_cap) for c in couplings]
     floors = [
@@ -1878,6 +1929,9 @@ def continuous_epoch(
             "clock": round(clock, 3),
             "length": round(length, 3),
             "floors": floors,
+            **({"target": [round(c, 4) for c in targets]} if continuous.pace or continuous.smooth else {}),
+            **({"allowance": [round(a, 6) for a in allowance]} if continuous.pace else {}),
+            **({"smoothed": [round(m, 6) for m in smoothed]} if continuous.smooth else {}),
         }
     }
     grown = (
@@ -1886,7 +1940,11 @@ def continuous_epoch(
         else length
     )
     return ContinuousEpoch(
-        ContinuousState(held, list(state.hot), floors, sharp_from, grown), phase, rate, couplings, thermo
+        ContinuousState(held, list(state.hot), floors, sharp_from, grown, allowance, last, history),
+        phase,
+        rate,
+        couplings,
+        thermo,
     )
 
 
@@ -2093,6 +2151,8 @@ class Place:
     first_pass: int = -1  # the margin stop: the step D35's stop first passed with a split tie (D59)
     best_pass: int = -1  # the margin stop: the pass with the fewest ties since (D60)
     best_ties: int = -1  # its split and label ties (D60)
+    allowance: list[float] = field(default_factory=list[float])  # Continuous: each coupling's allowance (D61)
+    history: list[list[float]] = field(default_factory=list[list[float]])  # Continuous: the window's readings (D61)
 
 
 def _run_identity(
@@ -2158,6 +2218,8 @@ def _run_identity(
         **({"state_bound": state_bound} if state_bound is not None else {}),
         **({"coupling_cap": coupling_cap} if coupling_cap < 1.0 else {}),
         **({"continuous": repr(continuous)} if continuous is not None else {}),
+        **({"coupling_pace": True} if continuous is not None and continuous.pace else {}),
+        **({"sharpness_smoothing": True} if continuous is not None and continuous.smooth else {}),
         **({"margin_wait": margin_wait} if margin_wait is not None else {}),
     }
 
@@ -2321,6 +2383,7 @@ def run(
         margin_wait,
     )
     assert margin_wait is None or state_bound is not None, "the margin stop waits on D35's: with a state bound"
+    assert continuous is None or not continuous.pace or coupling_cap == 1.0, "D61's pace or D38's cap, not both"
     assert warm_up is None or anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
     assert not (whole and long_tail is not None), "the whole distribution has no long tail beyond it"
     assert not crucible or (warm_up is not None and not whole and long_tail is None), (
@@ -2431,6 +2494,9 @@ def run(
             list(place.floors) if place is not None else [],
             list(place.sharp_from) if place is not None else [],
             place.length if place is not None else 0.0,
+            list(place.allowance) if place is not None else [],
+            list(place.couplings) if place is not None and place.allowance else [],
+            [list(h) for h in place.history] if place is not None else [],
         )
     )
     growing = continuous is not None and fixed > 0  # D52: after the warm-up, a step an epoch
@@ -2490,6 +2556,8 @@ def run(
             margin.first_pass,
             margin.best_pass,
             margin.best_ties,
+            list(cstate.allowance),
+            [list(h) for h in cstate.history],
         )
         _write_checkpoint(out, identity, place, net)
 
