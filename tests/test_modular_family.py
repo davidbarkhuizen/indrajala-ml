@@ -615,6 +615,18 @@ RESUMABLE: dict[str, dict[str, Any]] = {
         "crucible": True,
         "continuous": mf.Continuous(low=1.2, high=2.0, growth=0.5, curve_every=3, save_every=2, reheat=True),
     },
+    "slowed": {  # D66: the reheats counted and the clock's back carried over every stop
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=1),
+        "crucible": True,
+        "continuous": mf.Continuous(
+            low=1.2, high=2.0, growth=0.5, curve_every=3, save_every=2, reheat=True, slowing=True
+        ),
+    },
 }
 
 
@@ -795,6 +807,16 @@ def test_the_reheats_rate_runs_below_zero_to_minus_one_and_only_with_it():
     assert reheated.rate(0.97, 1.0) == continuous.rate(0.97, 1.0) == pytest.approx(0.5)
 
 
+def test_the_reheat_slowing_halves_the_forward_rate_after_each_reheat_and_leaves_the_run_back():
+    slowed = mf.Continuous.slowed
+    assert slowed(0.8, 0, False) == (0.8, 0, False)  # never reheated: unchanged
+    assert slowed(-0.5, 0, False) == (-0.5, 0, True)  # running back: unchanged, marked
+    assert slowed(0.0, 0, True) == (0.0, 0, True)  # held: not yet forward
+    assert slowed(0.8, 0, True) == (0.4, 1, False)  # forward again: one reheat, half the pace
+    assert slowed(1.0, 1, False) == (0.5, 1, False)
+    assert slowed(-1.0, 1, False) == (-1.0, 1, True) and slowed(1.0, 1, True) == (0.25, 2, False)
+
+
 def test_a_reheated_run_runs_its_clock_back_to_the_cools_start_and_grows_only_forward(tmp_path: Path):
     config = dict(RESUMABLE["reheated"], continuous=mf.Continuous(low=1.5, high=2.0, growth=0.5, reheat=True))
     encoding, settings = config.pop("encoding"), config.pop("settings")
@@ -946,6 +968,9 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "reheated":  # the rate below 0 at some stop, the clock never back past the cool's start
         cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
         assert cool and any(a["rate"] < 0 for a in cool) and all(a["clock"] >= 2 for a in cool)
+    elif kind == "slowed":  # the reheats logged every cool epoch, the rate below 0 at some stop
+        cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
+        assert cool and all("reheats" in a for a in cool) and any(a["rate"] < 0 for a in cool)
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":

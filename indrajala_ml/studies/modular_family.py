@@ -1895,7 +1895,10 @@ class Continuous:
     `reheat` (the state formation workplan's D63 (a)) extends the rate's line below `low` to -1 (at
     `2 low - high` of the level): a screen fallen that far runs the clock back, never past the cool's
     start, so the temperature rises, the codes soften and the coupling read from their sharpness falls;
-    a held temperature the clock passes back over is released; growth only forward.
+    a held temperature the clock passes back over is released; growth only forward. `slowing` (D66,
+    with `reheat`) halves the forward rate after each reheat (a stretch of the rate below 0, counted
+    when it next rises above 0): the re-cool through the zone at half the pace of the pass before, the
+    run back unchanged; a run that never reheats is unchanged.
     """
 
     low: float = 0.95
@@ -1907,11 +1910,22 @@ class Continuous:
     pace: bool = field(default=False, repr=False)  # D61 (b); in the run's identity apart
     smooth: bool = field(default=False, repr=False)  # D61 (c); in the run's identity apart
     reheat: bool = field(default=False, repr=False)  # D63 (a); in the run's identity apart
+    slowing: bool = field(default=False, repr=False)  # D66; in the run's identity apart
 
     def rate(self, screen: float, level: float) -> float:
         """The share of an epoch the cool's clock advances (D49), from the screen before it against the hold's level."""
         least = -1.0 if self.reheat else 0.0  # D63 (a): below `low`, the clock runs back
         return min(max((screen / level - self.low) / (self.high - self.low), least), 1.0) if level > 0 else 1.0
+
+    @staticmethod
+    def slowed(rate: float, reheats: int, back: bool) -> tuple[float, int, bool]:
+        """
+        D66: the rate after `reheats` reheats, with whether the clock was running back: a reheat counted
+        as the clock turns forward again, the forward rate halved for each, the run back unchanged.
+        """
+        if back and rate > 0:
+            reheats, back = reheats + 1, False
+        return (rate * 2.0**-reheats if rate > 0 else rate), reheats, back or rate < 0
 
     @staticmethod
     def coupling(sharp: float, start: float) -> float:
@@ -1965,7 +1979,8 @@ class ContinuousState:
     each factor's T_hot, held temperature (0: none) and the cool's first sharpness, and the crucible's
     longest length; with D61's `pace` each factor's allowance and its coupling last set, with
     `smooth` the cool's readings within its window, each the clock and every factor's sharpness
-    (empty before the cool).
+    (empty before the cool); with D66's `slowing` the reheats so far and whether the clock is running
+    back.
     """
 
     held: float
@@ -1976,6 +1991,8 @@ class ContinuousState:
     allowance: list[float] = field(default_factory=list[float])
     last: list[float] = field(default_factory=list[float])
     history: list[list[float]] = field(default_factory=list[list[float]])
+    reheats: int = 0
+    back: bool = False
 
 
 @dataclass(frozen=True)
@@ -2017,8 +2034,11 @@ def continuous_epoch(
     """
     length = state.length
     held, rate = state.held, 1.0
+    reheats, back = state.reheats, state.back
     if warm_up.phase(trained - held - 1) == "cool":
         rate = continuous.rate(screen, level)
+        if continuous.slowing:
+            rate, reheats, back = continuous.slowed(rate, reheats, back)
         held = min(held + 1.0 - rate, trained - warm_up.heat - warm_up.hold)  # D63 (a): never back past the cool
     clock = trained - held
     phase = warm_up.phase(clock)
@@ -2087,6 +2107,7 @@ def continuous_epoch(
             **({"target": [round(c, 4) for c in targets]} if continuous.pace or continuous.smooth else {}),
             **({"allowance": [round(a, 6) for a in allowance]} if continuous.pace else {}),
             **({"smoothed": [round(m, 6) for m in smoothed]} if continuous.smooth else {}),
+            **({"reheats": reheats} if continuous.slowing else {}),
         }
     }
     grown = (
@@ -2095,7 +2116,7 @@ def continuous_epoch(
         else length
     )
     return ContinuousEpoch(
-        ContinuousState(held, list(state.hot), floors, sharp_from, grown, allowance, last, history),
+        ContinuousState(held, list(state.hot), floors, sharp_from, grown, allowance, last, history, reheats, back),
         phase,
         rate,
         couplings,
@@ -2308,6 +2329,8 @@ class Place:
     best_ties: int = -1  # its split and label ties (D60)
     allowance: list[float] = field(default_factory=list[float])  # Continuous: each coupling's allowance (D61)
     history: list[list[float]] = field(default_factory=list[list[float]])  # Continuous: the window's readings (D61)
+    reheats: int = 0  # Continuous: the reheats so far (D66)
+    back: bool = False  # Continuous: the clock running back (D66)
 
 
 def _run_identity(
@@ -2376,6 +2399,7 @@ def _run_identity(
         **({"coupling_pace": True} if continuous is not None and continuous.pace else {}),
         **({"sharpness_smoothing": True} if continuous is not None and continuous.smooth else {}),
         **({"reheat": True} if continuous is not None and continuous.reheat else {}),
+        **({"reheat_slowing": True} if continuous is not None and continuous.slowing else {}),
         **({"margin_wait": margin_wait} if margin_wait is not None else {}),
     }
 
@@ -2597,6 +2621,8 @@ class RunState:
             list(place.allowance),
             list(place.couplings) if place.allowance else [],
             [list(h) for h in place.history],
+            place.reheats,
+            place.back,
         )
         state.margin = Margin(config.margin_wait, place.first_pass, place.best_pass, place.best_ties)
         return state
@@ -2642,6 +2668,8 @@ class RunState:
             self.margin.best_ties,
             list(self.cstate.allowance),
             [list(h) for h in self.cstate.history],
+            self.cstate.reheats,
+            self.cstate.back,
         )
 
 
