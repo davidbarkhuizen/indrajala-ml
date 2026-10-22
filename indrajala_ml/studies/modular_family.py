@@ -823,6 +823,73 @@ def formation_summary(course: Mapping[str, Any] | None) -> str:
     )
 
 
+def restart_course(rows: Sequence[Mapping[str, Any]], clock: str = "steps") -> tuple[float | None, float, bool] | None:
+    """
+    A run as a restart attempt, on `clock` ("steps" or "seconds"), from its log.jsonl: its time to
+    success (D41's: the first step's end certified at both verdicts, the default and the strict; None if
+    never), its last step's end, and whether it was censored there (ended "spent", its budget: what it
+    would have done next is unknown) rather than finished (a stop that fired on a machine not certified
+    is a failed attempt of known cost). None for a log without step ends.
+    """
+    steps = [r for r in rows if "end" in r and "state_share" in r]
+    if not steps:
+        return None
+
+    def at(r: Mapping[str, Any]) -> float:
+        return float(r["step"] if clock == "steps" else r["seconds"])
+
+    hit = next(
+        (r for r in steps if r.get("certified") and r.get("certificates", {}).get("strict", {}).get("certified")),
+        None,
+    )
+    return (None if hit is None else at(hit)), at(steps[-1]), hit is None and steps[-1]["end"] == "spent"
+
+
+def restart_cost(runs: Sequence[tuple[float | None, float, bool]]) -> dict[str, Any]:
+    """
+    Luby, Sinclair and Zuckerman's expected cost per success of fresh-seed restarts at a fixed cutoff
+    `t` (a certified run is a Las Vegas run: right whenever it stops): `l(t) = E[min(T, t)] / q(t)`,
+    with `q` the share of runs certified by `t` and `T` a run's time to success, or to its end when it
+    fails. `runs` are restart_course's; a run censored at its budget is read only to the shortest
+    censored run's time (`horizon`); a finished failure costs its known time at any cutoff. The optimal
+    fixed cutoff `t*` lies at a success time (between them `q` is flat and the cost rises). `run_out`:
+    each run to its own end, today's cost per certificate.
+    """
+    censored = [end for _, end, c in runs if c]
+    successes = sorted(s for s, _, _ in runs if s is not None)
+    horizon = min(censored) if censored else max((end for _, end, _ in runs), default=0.0)
+    curve: list[tuple[float, float, float]] = []  # (t, q(t), l(t))
+    for t in sorted({s for s in successes if s <= horizon} | ({horizon} if successes else set())):
+        q = sum(1 for s in successes if s <= t) / len(runs)
+        cost = sum(min(end if s is None else s, t) for s, end, _ in runs) / len(runs)
+        if q > 0:
+            curve.append((t, q, cost / q))
+    best = min(curve, key=lambda c: c[2]) if curve else None
+    return {
+        "runs": len(runs),
+        "certified": len(successes),
+        "censored": len(censored),
+        "horizon": horizon,
+        "curve": curve,
+        "best": best,
+        "run_out": sum(end if s is None else s for s, end, _ in runs) / len(successes) if successes else None,
+    }
+
+
+def restart_summary(cost: Mapping[str, Any], unit: str = "steps") -> str:
+    """restart_cost's reading on one line."""
+    best = cost["best"]
+    head = f"{cost['runs']} runs, {cost['certified']} certified, {cost['censored']} censored"
+    if best is None:
+        return f"{head}; none certified by the horizon {cost['horizon']:g} {unit}: no cutoff pays"
+    t, q, l = best
+    out = cost["run_out"]
+    return (
+        f"{head}; read to {cost['horizon']:g} {unit}: t* {t:g} (q {q:.2f}), l(t*) {l:.0f} {unit} per "
+        f"certificate against {out:.0f} running each out ({out / l:.1f}x)"
+    )
+
+
 def answer_profile(
     machine: wt.Mealy, rng: random.Random, depth: int = 6, words: int = 6000, length: int = 40
 ) -> list[float]:

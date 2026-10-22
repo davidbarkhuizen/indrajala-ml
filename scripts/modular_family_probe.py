@@ -1342,6 +1342,14 @@ def main(argv: list[str]) -> int:
     )
     formation.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
     formation.add_argument("--by", type=int, default=200, help="the kill's step: seconds spent by it")
+    restarts = commands.add_parser(
+        "restart-cost",
+        help="runs' logs of one backdrop: Luby's expected cost per certificate of fresh-seed restarts at a "
+        "fixed cutoff, the optimal cutoff t* (D63 (e)'s window, the 2026-10-22 literature review)",
+    )
+    restarts.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    restarts.add_argument("--clock", choices=("steps", "seconds"), default="steps", help="the cost's unit")
+    restarts.add_argument("--curve", action="store_true", help="every cutoff's q(t) and l(t), a line each")
     order = commands.add_parser(
         "order",
         help="machines' order from answers alone: the answer's entropy given the last k tokens against random "
@@ -1544,6 +1552,20 @@ def main(argv: list[str]) -> int:
             tally[verdict["verdict"]] = tally.get(verdict["verdict"], 0) + 1
             print(f"{path}: {verdict['verdict']}, stop {verdict['stop']}, certified {verdict['certified']}", flush=True)
         print(f"bound {bound:g}: {tally}")
+        return 0
+    if args.command == "restart-cost":
+        courses = [
+            mf.restart_course([json.loads(line) for line in path.read_text().splitlines()], args.clock)
+            for path in args.logs
+        ]
+        for path, course in zip(args.logs, courses, strict=True):
+            if course is None:
+                print(f"{path}: no step ends, left out", flush=True)
+        cost = mf.restart_cost([c for c in courses if c is not None])
+        if args.curve:
+            for t, q, cost_t in cost["curve"]:
+                print(f"t {t:g}: q {q:.3f}, l {cost_t:.1f}", flush=True)
+        print(mf.restart_summary(cost, args.clock), flush=True)
         return 0
     if args.command == "formation":
         for path in args.logs:

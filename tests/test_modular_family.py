@@ -1734,6 +1734,41 @@ def test_formation_course_reads_when_the_state_formed_was_kept_and_the_melting_c
     assert mf.formation_summary(None) == "no step ends"
 
 
+def test_restart_cost_finds_lubys_cutoff_and_reads_censored_runs_only_to_the_shortest():
+    def step(
+        n: int, seconds: float, end: str = "epoch", certified: bool = False, strict: bool = False
+    ) -> dict[str, Any]:
+        return {
+            "step": n,
+            "end": end,
+            "state_share": 1.0,
+            "seconds": seconds,
+            "certified": certified,
+            "certificates": {"strict": {"certified": strict}},
+        }
+
+    # D41: both verdicts; the default alone is not a success; "spent" censors, a stop that fired doesn't
+    fast = [step(1, 5.0), step(2, 10.0, "passed", certified=True, strict=True)]
+    spent = [step(1, 5.0, certified=True), step(100, 500.0, "spent")]
+    false_stop = [step(1, 5.0), step(30, 150.0, "passed", certified=True)]
+    assert mf.restart_course(fast) == (2.0, 2.0, False)
+    assert mf.restart_course(fast, clock="seconds") == (10.0, 10.0, False)
+    assert mf.restart_course(spent) == (None, 100.0, True)
+    assert mf.restart_course(false_stop) == (None, 30.0, False)
+    assert mf.restart_course([{"step": 1, "melting": []}]) is None
+    # half the runs certify at 2, the rest are spent at 100: l(2) = (0.5*2 + 0.5*2) / 0.5 = 4, against
+    # (2 + 100) / 1 = 102 per certificate running each out
+    cost = mf.restart_cost([(2.0, 2.0, False), (None, 100.0, True)])
+    assert cost["horizon"] == 100.0 and cost["best"] == (2.0, 0.5, 4.0) and cost["run_out"] == 102.0
+    assert "t* 2" in mf.restart_summary(cost) and "(25.5x)" in mf.restart_summary(cost)
+    # a success later than the shortest censored run is unread beyond it; a finished failure isn't censored
+    late = mf.restart_cost([(2.0, 2.0, False), (None, 50.0, True), (80.0, 80.0, False), (None, 30.0, False)])
+    assert late["horizon"] == 50.0 and [t for t, _, _ in late["curve"]] == [2.0, 50.0]
+    assert late["curve"][0] == (2.0, 0.25, 8.0)  # every run costs min(T, 2) = 2; one of four certified
+    none = mf.restart_cost([(None, 10.0, True)])
+    assert none["best"] is None and "no cutoff pays" in mf.restart_summary(none)
+
+
 def test_the_answer_profile_reads_how_fast_recent_tokens_remove_the_answers_uncertainty():
     # the answer is the last token: uncertain alone (2 bits over 4 tokens), certain given one token
     last = wt.Mealy(np.array([[t for t in range(4)] for _ in range(4)]), np.array([[t for t in range(4)]] * 4))
