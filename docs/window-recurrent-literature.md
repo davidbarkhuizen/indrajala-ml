@@ -443,7 +443,8 @@ above; one re-read.
   Luby's model, which only counts time to the first success: read the reheat's certificates apart,
   as D63 already plans.
 - **Warm restarts with doubling periods are standard** (SGDR), the slowed re-cool's (D66) schedule;
-  **per-axis re-annealing from current sensitivities** (Ingber) is a form the reheat doesn't yet take.
+  **per-axis re-annealing from current sensitivities** (Ingber) was considered and dropped (item 4
+  below: our factors fail together).
 - **Lost plasticity is a known end of long gradient training on changing data**, with measurable
   correlates and a non-gradient remedy (re-initialisation, shrink and perturb); whether our frozen
   runs show its correlates is an offline reading on existing networks.
@@ -466,8 +467,11 @@ the offline items may run any time):
    tested for the slingshot; built into the next change that touches the per-epoch row.
 3. **Plasticity's correlates on the frozen runs, offline:** codes in use, `d_eff` (stage 2's
    `state-spread`), weight norms, on the saved networks where they exist.
-4. **For D63's reading:** whether one factor freezes while another doesn't (the case for Ingber's
-   per-factor run-back).
+4. ~~Ingber's per-factor run-back~~ **dropped (the owner, 2026-10-22):** read offline the same day
+   on nine frozen runs (random-q16-0 0-3, random-q12-0 1-3, S3 31) and S4's two collapses, no run
+   formed one factor while another stayed stuck: the factors' shares fall together and stay equally
+   low; only their live readings diverge (one factor quenched hard while another is liquid). The
+   evidence does not support a per-factor reheat.
 5. **Parallel tempering for a batch:** a new component, the owner's call.
 
 Surfaced, not read: Schafer 2011, What Is a Savitzky-Golay Filter? (IEEE SPM 28(4):111, the tutorial
