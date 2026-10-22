@@ -197,8 +197,10 @@ Decided with the owner, each to become a workplan or a stage:
 - **Terms** (settled with the owner, the division paper): target machine and its output function;
   approximation (homomorphic image); cover (emulation); coordinates; k-distinguishable (Chow). Not
   "family" (the code's arm name only), "basis", "ideal" (a semigroup term), "model". "Characteristic
-  sample" (grammatical inference) is unverified: no open copy of Oncina & García 1992 or de la
-  Higuera 1997 was found.
+  sample" (grammatical inference) is verified (de la Higuera 1997, Definition 1, after Gold; in the
+  literature repository): a sample, polynomial in the target's size, such that **a given algorithm**
+  returns the target whenever its data contains the sample. The term is relative to the algorithm
+  (RPNI's, OSTIA's), so it is used only with one named; Oncina & García 1992 (RPNI) is still unread.
 - **Factored readouts** (the division workplan's stage 6, its D9; the modular family's stage 2):
   every certified division network spreads its state over both codebooks, no factor a residue or
   any `xA + yB`. To make factors carry residues again, the factored-state workplan's D10 reopens:
