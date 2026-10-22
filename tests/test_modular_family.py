@@ -1,5 +1,6 @@
 """The modular family's encoding and probe (the modular-family workplan, stage 2)."""
 
+import dataclasses
 import hashlib
 import itertools
 import json
@@ -680,6 +681,57 @@ def test_a_continuous_run_moves_every_switch_smoothly_and_reads_every_epoch(tmp_
             crucible=True,
             continuous=CONTINUOUS,
         )
+
+
+def _margin_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, split_until: int) -> list[dict[str, Any]]:
+    # D35's stop passes at every step after the warm-up; the certificate's ties split until a step
+    config = dict(RESUMABLE["continuous"], budget_epochs=40, state_bound=25, margin_wait=3)
+    encoding, settings = config.pop("encoding"), config.pop("settings")
+    stopping = mf.answers_stopping
+
+    def passing(*args: Any) -> tuple[bool, dict[str, Any]]:
+        warm = args[-1]
+        return (False, stopping(*args)[1]) if warm else (True, {"answers_stop": {"passed": True}})
+
+    certify, steps = mf.wc.certify, [0]
+
+    def splitting(*args: Any, **kwargs: Any) -> Any:
+        c = certify(*args, **kwargs)
+        if "snap_ratio" in kwargs:  # the strict certificate (continuous_readings)
+            return c
+        steps[0] += 1
+        return dataclasses.replace(c, split_ties=1 if steps[0] <= split_until else 0)
+
+    monkeypatch.setattr(mf, "answers_stopping", passing)
+    monkeypatch.setattr(mf.wc, "certify", splitting)
+    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path, settings, **config)
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["margin_wait"] == 3
+    return [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+
+
+def test_the_margin_stop_waits_past_a_split_tie_and_stops_once_none_splits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    rows = _margin_run(tmp_path, monkeypatch, split_until=10**6)  # never clears: waits W steps, then stops
+    judged = [r for r in rows if "end" in r and r["answers_stop"].get("passed")]
+    first = judged[0]["step"]
+    assert judged[0]["answers_stop"]["first_pass"] == first and judged[0]["answers_stop"]["split_ties"] == 1
+    assert [r["step"] for r in judged] == list(range(first, first + 4))  # D59: W steps past the first pass
+    assert [r["answers_stop"]["waited"] for r in judged] == [False, False, False, True]
+    assert (tmp_path / f"first-pass-step-{first}.network.json").exists()
+    assert (tmp_path / f"answers-stop-step-{first + 3}.network.json").exists()
+
+
+def test_the_margin_stop_stops_at_the_first_pass_whose_ties_split_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    rows = _margin_run(tmp_path, monkeypatch, split_until=0)
+    ends = [r for r in rows if "end" in r]
+    judged = [r for r in ends if r["answers_stop"].get("passed")]
+    assert len(judged) == 1 and judged[0] is ends[-1]  # no split tie: D35's stop as it was
+    assert judged[0]["answers_stop"]["split_ties"] == 0 and "waited" not in judged[0]["answers_stop"]
+    assert judged[0]["answers_stop"]["first_pass"] == -1
 
 
 class Stop(Exception):

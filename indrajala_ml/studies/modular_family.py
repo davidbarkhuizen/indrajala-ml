@@ -2011,6 +2011,7 @@ class Place:
     length: float = 0.0  # Continuous: the crucible's longest length, once its warm-up ended (D52)
     sharp_from: list[float] = field(default_factory=list[float])  # Continuous: the cool's first sharpness (D50)
     floors: list[float] = field(default_factory=list[float])  # Continuous: each factor's held temperature (D51)
+    first_pass: int = -1  # the margin stop: the step D35's stop first passed with a split tie (D59)
 
 
 def _run_identity(
@@ -2042,6 +2043,7 @@ def _run_identity(
     state_bound: int | None = None,
     coupling_cap: float = 1.0,
     continuous: Continuous | None = None,
+    margin_wait: int | None = None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -2075,6 +2077,7 @@ def _run_identity(
         **({"state_bound": state_bound} if state_bound is not None else {}),
         **({"coupling_cap": coupling_cap} if coupling_cap < 1.0 else {}),
         **({"continuous": repr(continuous)} if continuous is not None else {}),
+        **({"margin_wait": margin_wait} if margin_wait is not None else {}),
     }
 
 
@@ -2125,6 +2128,7 @@ def run(
     state_bound: int | None = None,
     coupling_cap: float = 1.0,
     continuous: Continuous | None = None,
+    margin_wait: int | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -2185,6 +2189,11 @@ def run(
     rate, the clock and the longest length; each step's end the strict certificate (snap ratio 1.0),
     both certificates' wrong states, outputs and near ties, the snapped answers (without a state bound,
     whose stop reads them) and, every `curve_every`, the melting curve.
+    `margin_wait` W (with `state_bound`; the state formation workplan's D59) makes D35's stop wait for its
+    margins: a step D35's stop passes stops the run only when no near tie splits the snapped machine
+    (the certificate's split_ties: a tie's branch into another of its minimised states) and no label is
+    a near tie; the first such pass's network kept (out/first-pass-step-S.network.json), the run stopped
+    W steps after it if none clears ("waited").
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -2226,7 +2235,9 @@ def run(
         state_bound,
         coupling_cap,
         continuous,
+        margin_wait,
     )
+    assert margin_wait is None or state_bound is not None, "the margin stop waits on D35's: with a state bound"
     assert warm_up is None or anneal is not None, "the warm-up's end is an annealed snap: with an Anneal"
     assert not (whole and long_tail is not None), "the whole distribution has no long tail beyond it"
     assert not crucible or (warm_up is not None and not whole and long_tail is None), (
@@ -2295,6 +2306,7 @@ def run(
         place.frozen if place is not None else 0
     )  # consecutive armed epochs with STALL_SHARE of their updates undone
     spent: int = place.spent if place is not None else 0  # epochs trained in all
+    first_pass: int = place.first_pass if place is not None else -1  # D59: D35's first pass with a split tie
     snapshot = out / "snapshot.network.json"
     step_best = out / "best.network.json"  # restore_best's
     commitments = [0.0 if f.codes is None else f.codes.commitment for f in net.recurrence.factors]  # the specs'
@@ -2392,6 +2404,7 @@ def run(
             cstate.length,
             list(cstate.sharp_from),
             list(cstate.floors),
+            first_pass,
         )
         _write_checkpoint(out, identity, place, net)
 
@@ -2738,6 +2751,15 @@ def run(
         judged: dict[str, Any] = {}
         if state_bound is not None:  # D35: the answers-only stop; the certificate only judges it
             stopping, judged = answers_stopping(net, encoding, task, certificate, state_bound, coupled, warm)
+            if margin_wait is not None and stopping:  # D59: the stop waits until no near tie splits the machine
+                margins: dict[str, Any] = {"split_ties": certificate.split_ties, "lead_ties": certificate.lead.short}
+                if certificate.split_ties or certificate.lead.short:
+                    if first_pass < 0:
+                        first_pass = step
+                        net.save(str(out / f"first-pass-step-{step}.network.json"))
+                    stopping = step - first_pass >= margin_wait
+                    margins["waited"] = stopping
+                judged["answers_stop"].update(margins, first_pass=first_pass)
         if growing:  # D53: both certificates' breakdowns, the snapped answers, the melting curve
             judged.update(continuous_readings(net, encoding, task, certificate, coupled, state_bound is None))
             if step % continuous.curve_every == 0:  # type: ignore[union-attr]

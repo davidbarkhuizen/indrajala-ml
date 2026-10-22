@@ -30,7 +30,9 @@ The snap's margin (D3): a snap holds when every other code is at least SNAP_RATI
 the code it snaps to. Rounding elsewhere (another batch, another BLAS order) could snap a near tie
 to another code, so a near tie branches: every code within the ratio is a next code too, explored
 and checked as G's is. A certificate with near ties is still a proof, for either snap; they are
-counted (ties) apart from wrong outputs. A label's near tie can't branch (one of its labels is
+counted (ties) apart from wrong outputs, and those that split (split_ties: a branch into another
+state of the minimised machine than the snap's, the machine's own nondeterminism, read without the
+target). A label's near tie can't branch (one of its labels is
 wrong): it fails the certificate. (D3 as written failed every near tie; branching proves the same
 for both snaps instead, settled in stage 2.)
 
@@ -284,6 +286,7 @@ class Certificate:
     seconds: float
     task: str
     case: dict[str, Any] | None  # the counterexample as the task's case (window_tasks' case_json)
+    split_ties: int = 0  # (state, window) pairs a near tie branches into another minimised state than the snap's
 
     @property
     def correct(self) -> bool:
@@ -473,6 +476,7 @@ def certify(
     D: dict[State, npt.NDArray[np.int8]] = {}
     G: dict[State, npt.NDArray[np.int16]] = {}
     wrong_outputs = wrong_states = wrong_ties = 0
+    branches: list[tuple[State, IntArray, IntArray]] = []  # each state's near ties' windows and next states
     first: tuple[str, State, int, State | None] | None = None  # kind, state, window, the next state that failed
     for q in queue:  # breadth first: the queue grows as states are reached
         parts = [machine.step(q, windows[i : i + BATCH]) for i in range(0, len(windows), BATCH)]
@@ -506,6 +510,8 @@ def certify(
         wrong_outputs += len(bad_outputs)
         wrong_states += len(bad_states)
         wrong_ties += len(bad_states) - int(wrong_next[: len(windows)].sum())
+        if len(next_windows) > len(windows):
+            branches.append((q, next_windows[len(windows) :], next_rows[len(windows) :]))
         if first is None and (len(bad_outputs) or len(bad_states)):
             d = int(bad_outputs[0]) if len(bad_outputs) else len(windows)
             c = int(bad_states[0]) if len(bad_states) else len(windows)
@@ -535,6 +541,7 @@ def certify(
             [int(x) for x in D[q][w]] if r is None else [phi[r]],
             after,
         )
+    minimised = minimise(queue, D, G)
     return Certificate(
         k,
         list(machine.codes),
@@ -547,13 +554,34 @@ def certify(
         counterexample,
         snap.margin(),
         lead.margin(),
-        minimise(queue, D, G),
+        minimised,
         readout(queue, phi, target),
         len(queue) * len(windows),
         time.perf_counter() - begun,
         task.name,
         None if counterexample is None else task.case_json(counterexample.columns()),
+        split_ties(minimised, G, branches),
     )
+
+
+def split_ties(
+    minimised: Sequence[Sequence[State]],
+    G: Mapping[State, npt.NDArray[np.int16]],
+    branches: Sequence[tuple[State, IntArray, IntArray]],
+) -> int:
+    """
+    The (state, window) pairs whose near ties branch into another minimised state than the snapped next
+    state's: the machine's own nondeterminism, read without the target (the state formation workplan's
+    D59). A tie between equivalent codes splits nothing; one that splits is a wrong state for some
+    snap, whatever the target.
+    """
+    block = {q: i for i, states in enumerate(minimised) for q in states}
+    split: set[tuple[State, int]] = set()
+    for q, windows, rows in branches:
+        for w, row in zip(windows, rows, strict=True):
+            if block[_state(row)] != block[_state(G[q][w])]:
+                split.add((q, int(w)))
+    return len(split)
 
 
 def certify_file(path: Path, task_name: str = wt.ADDITION.name, snap_ratio: float = SNAP_RATIO) -> dict[str, Any]:
