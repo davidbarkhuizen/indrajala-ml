@@ -98,9 +98,9 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D58 | 2026-10-22, 02:50 | the random control probe | D54's cell on random-q12-0 seeds 0-3 (`probe-d58.sh`) |
 | D59 | 2026-10-22, 04:20 | the margin stop | D35's stop waits until no near tie splits the machine (`--margin-wait 200`); its probe on the 12 strict-only stops (`probe-d59.sh`) |
 | D60 | 2026-10-22, 08:00 | the margin deadline | the margin stop's wait counts every step past the first pass, ending on the best pass's network |
-| D61 | 2026-10-22, 08:00 | the paced coupling | the coupling paced by a trust region (`--coupling-pace`) or read from a Savitzky-Golay line (`--sharpness-smoothing`); its probe (`probe-d61.sh`) |
+| D61 | 2026-10-22, 08:00 | the paced coupling | the coupling paced by a trust region (`--coupling-pace`) or read from a Savitzky-Golay line (`--sharpness-smoothing`); its probe (`probe-d61.sh`), read 18:00: neither arm promising (1 of 6 rescued each) |
 | D62 | 2026-10-22, 08:00 | the run's state object | `run`'s loop-carried state one dataclass, the loop's body split into functions of it (planned) |
-| D63 | 2026-10-22, 08:15 | the collapse | reheat (the rate below the hold's level negative, the clock run back) or kill-and-resample, on cost per certified machine (planned, after D62) |
+| D63 | 2026-10-22, 08:15 | the collapse | reheat (the rate below the hold's level negative, the clock run back) and restarts, each arm at its own cutoff, on cost per certified machine; its probe registered 18:15 (`probe-d63.sh`) on D64's 22 seeds |
 | D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`) |
 | D65 | 2026-10-22, 10:45 | the order-biased cool | the cool's halving time times `1 + w (s - 1)`: w the machine's order from answers (0 when ordered), s the slowdown from the melting curve and relaxation; set aside at 11:05 on its stage 0 (the failures freeze, the cool does not outrun them) |
 | D66 | 2026-10-22, 11:20 | the two-phase cool | a slower re-cool after each reheat (the forward rate times `2^-k`, k reheats so far): zero for runs that never freeze; reshaped at 11:50 from an order gate that failed its stage 0 (planned, after D63's reading) |
@@ -1041,10 +1041,34 @@ owner's; D49-D54 settled under the delegation.
     same training from there can collapse again.
   - (d) Lower only the coupling when the screen falls (D61 (b) with its rate signed). Cons: the codes
     stay hard at the frozen temperature; half the move.
-  Build after D62 (on the run's state object), tested, the golden run unchanged without it; its probe
-  registered after D61's reading, on the drop-first failures (S3 24, D54's S3 4, D57's S4 0, 2) and
-  the jump-first ones, with D61's arm if one is adopted: a diagnosis; adopted only on a fresh-seed
-  rate against the method's current one (a clear majority certifying is the aim, not every seed).
+  Build after D62 (on the run's state object), tested, the golden run unchanged without it.
+  **Both together** (the owner, 2026-10-22: "i would imagine that we need both, if they both work"):
+  the reheat acts within a run (it changes `q(t)`), restarts act across runs at a fixed cutoff; they
+  combine. So the comparison is the plain method with restarts at its own `t*` against the reheat
+  with restarts at its own `t*'` (a reheat's recovery takes epochs, so `t*'` is likely later), each
+  read from its arm's runs; if the reheat's is cheaper per certificate, both are adopted together.
+  Restarts only multiply a rate above zero: where `q` is 0 (random-q16-0, 0 of 11 runs on 7 seeds),
+  the reheat must first make forming possible.
+  **Its probe** (`~/code/probe-d63.sh`, sha256 b32f5c2995709114..., registered 2026-10-22, 18:15,
+  after D61's reading and before its data): D64's cell plus `--reheat`, no D61 arm (neither was
+  promising), on D64's 22 seeds (word-problem-s3 40-47, move-to-front-4 32-35, word-problem-s4 3-5,
+  random-q16-0 4-6, random-q12-0 4-7), each paired with its D64 twin; word-problem-s4 0 and 2 (D57's
+  collapses) as a diagnosis, in no rate. The earlier cell list is settled under the rule on planned
+  work (the owner, 2026-10-22): chosen failures give way to fresh seeds (the statistical method; the
+  paired verdict needs them), and S3 24 is dropped outright (its drop at the cool's start leaves the
+  reheat no room to run back: it cannot succeed by the mechanism). Code at 0fdf237 (after the reheat
+  and the run's state object; D64's 41f92e7 predates them). Placement: `stone` (its whole machine
+  until 07:00 tonight, the owner: the five S4, random-q16-0, random-q12-0 6-7, move-to-front-4;
+  stopped 06:55, resumed that evening), `pyramidon` (S3), `klip` (random-q12-0 4-5).
+  Expectations (read with D64's twins once both have ended): integrity (each run's rows identical to
+  its D64 twin's up to its first reheat, but for the reheat's own fields); any false discovery refutes
+  the stop; the paired verdict (McNemar: b, seeds only the reheat certifies; c, only the plain): the
+  reheat helps if b >= c + 2, refuted if c >= b; the cost: Luby's `l` per arm at its own cutoff, pooled
+  over S3 and move-to-front-4 and per gap backdrop; the reheat with restarts adopted with restarts if
+  it helps on the paired verdict and `l(t*') <= l(t*)` on the pooled ordered backdrops; restarts at
+  `t*` adopted for the plain method in any case (D63 (e), offline); random-q16-0's existence (any
+  certificate) reported; read apart: certificates only after a reheat, each reheat's depth, whether
+  the re-cool froze again and where (D66's trigger), S4's codes in use and dimension around reheats.
 - **D64. The method's fresh-seed rate (`~/code/probe-d64.sh`, registered before its data, 2026-10-22,
   09:00; the owner: "you can run stone at a half-load today").** The method is statistical, so a
   remedy (D61's arms, D63) is adopted only on a fresh-seed rate against the current method's, which is
@@ -1848,6 +1872,28 @@ Read for D65's stage 0 on the same 47 runs' per-epoch rows (`anneal`: `rate`, `c
   1988, the speed-up side D65 set aside); parallel tempering across a batch (the owner's call, a new
   component); the readout's weight norm logged per epoch in the next change to the per-epoch row (read
   offline on saved networks already: the slingshot not supported, below).
+
+## Findings: the paced coupling's probe (D61), read 2026-10-22, 18:00
+
+Read by its registered header on the copied logs (`probe-d61/`, 1,882 files verified against
+`jebel-option1-d61.sha256`, sha256 72021f16...), each run against its seed's earlier run.
+
+| arm | integrity (rows to the cool's start) | moves of 0.1 or more | failures rescued | clean seeds lost |
+|---|---|---|---|---|
+| pace (`--coupling-pace`) | identical, all 8 (122-191 rows) | fewer than the control in 5 of 6 failures, not removed (4-35 a run, largest up to 0.78) | 1 of 6 (S3 35, step 108) | none |
+| smooth (`--sharpness-smoothing`) | identical, all 8 | none in any run (largest 0.03-0.06) | 1 of 6 (S3 25, step 101) | move-to-front-4 24 (spent) |
+
+- **Neither arm promising** (at least 2 of 6 rescued, neither clean seed lost), **neither refuted**
+  (none rescued, or both clean seeds lost). No false discovery. The fresh-seed batch planned for a
+  promising arm is not run (dropped under the rule on planned work: its condition failed).
+- **The prediction held:** the rescues came from a jump-first failure (S3 35, pace) and a same-epoch
+  one (S3 25, smooth); neither arm rescued S3 24 (the drop-first counter-case) or the random machines.
+- **The jumps are a symptom, not the cause:** the smoothed coupling never moved 0.1 in an epoch, yet
+  5 of its 6 failures failed as before and it lost a clean seed; every failure still ended frozen.
+  This is the literature review's reading (the freeze is escaped, not paced) confirmed by experiment.
+- **The added reading** (one-sided extrapolation's noise): no move of the smoothed arm was made by
+  noise; it made no move of 0.1 at all.
+- D63 runs the current method with no D61 arm.
 
 ## Findings: plasticity and the slingshot (offline, 2026-10-22, 16:30)
 
