@@ -1709,6 +1709,20 @@ def test_formation_course_reads_when_the_state_formed_was_kept_and_the_melting_c
     assert mf.formation_summary(None) == "no step ends"
 
 
+def test_the_answer_profile_reads_how_fast_recent_tokens_remove_the_answers_uncertainty():
+    # the answer is the last token: uncertain alone (2 bits over 4 tokens), certain given one token
+    last = wt.Mealy(np.array([[t for t in range(4)] for _ in range(4)]), np.array([[t for t in range(4)]] * 4))
+    profile = mf.answer_profile(last, random.Random(0), depth=2, words=200, length=10)
+    assert abs(profile[0] - 2.0) < 0.05 and profile[1] == profile[2] == 0.0
+
+
+def test_order_against_random_puts_a_random_machine_near_its_ensemble_and_a_group_far_from_it():
+    random_q12 = mf.order_against_random(mf.target_named("random-q12-0").task.machine, 12, ensemble=8)
+    group = mf.order_against_random(mf.target_named("word-problem-s4").task.machine, 24, ensemble=8)
+    assert random_q12["rms_z"] < 1.5 < group["rms_z"]
+    assert group["drop_z"] < 0  # a group conserves its past: recent tokens leave the answer uncertain
+
+
 def test_heat_course_reads_each_factors_splits_and_capacity_peak_in_the_cool():
     def row(phase: str, groups: list[int], capacity: list[float], t: list[float | None]) -> dict[str, Any]:
         return {

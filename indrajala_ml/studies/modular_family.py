@@ -37,6 +37,7 @@ import math
 import random
 import re
 import time
+from collections import Counter, defaultdict
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from fractions import Fraction
@@ -820,6 +821,69 @@ def formation_summary(course: Mapping[str, Any] | None) -> str:
         f"{'-' if by is None else round(by / 60, 1)} of {round(course['seconds'] / 60, 1)} min by the kill's step; "
         f"melting: {cascades or '-'}"
     )
+
+
+def answer_profile(
+    machine: wt.Mealy, rng: random.Random, depth: int = 6, words: int = 6000, length: int = 40
+) -> list[float]:
+    """
+    The answer's entropy in bits given the last k tokens, k = 0..depth, over uniform words (answers
+    only: the words and their answers, nothing of the machine's structure): how fast recent input
+    removes the answer's uncertainty (the order note in the state formation workplan).
+    """
+    counts: list[dict[tuple[int, ...], Counter[int]]] = [defaultdict(Counter) for _ in range(depth + 1)]
+    for _ in range(words):
+        word = [rng.randrange(machine.tokens) for _ in range(length)]
+        answers = machine.run(word)
+        for t in range(depth, length):
+            for k in range(depth + 1):
+                counts[k][tuple(word[t - k + 1 : t + 1]) if k else ()][answers[t]] += 1
+    profile: list[float] = []
+    for by_context in counts:
+        total = sum(sum(c.values()) for c in by_context.values())
+        profile.append(
+            sum(-sum(n / total * math.log2(n / sum(c.values())) for n in c.values()) for c in by_context.values())
+        )
+    return profile
+
+
+def order_against_random(
+    machine: wt.Mealy, states: int, ensemble: int = 30, seed: int = 0, depth: int = 6
+) -> dict[str, Any]:
+    """
+    A machine's order as its answer profile's distance from random machines' (a relative entropy
+    against randomness): `ensemble` random machines with `states` states (the state bound) and the
+    machine's tokens (token 0 the identity) and classes, drawn as random-q's; `z` per k, its root mean
+    square (`rms_z`: about 0 for a machine that looks random), and the uncertainty the last `depth`
+    tokens remove as a share (`drop`) against the ensemble's (`drop_z`: negative where the past is
+    conserved, a group; positive where it is forgotten, a reset machine).
+    """
+    rng = random.Random(f"order-{seed}")
+
+    def drawn(i: int) -> wt.Mealy:
+        draw = random.Random(f"order-{states}-{machine.tokens}-{machine.classes}-{seed}-{i}")
+        while True:
+            transition = np.array(
+                [[s, *(draw.randrange(states) for _ in range(machine.tokens - 1))] for s in range(states)],
+                dtype=np.int64,
+            )
+            if len(wt.Mealy(transition, transition).reachable()) == states:
+                return wt.random_labels(transition, machine.classes, draw)
+
+    profile = np.array(answer_profile(machine, rng, depth))
+    profiles = np.array([answer_profile(drawn(i), rng, depth) for i in range(ensemble)])
+    mean, spread = profiles.mean(0), profiles.std(0) + 1e-9
+    z = (profile - mean) / spread
+    drop = (profile[0] - profile[-1]) / profile[0] if profile[0] > 0 else 0.0
+    drops = (profiles[:, 0] - profiles[:, -1]) / profiles[:, 0]
+    return {
+        "profile": [round(float(h), 3) for h in profile],
+        "ensemble": [round(float(h), 3) for h in mean],
+        "z": [round(float(v), 2) for v in z],
+        "rms_z": round(float(np.sqrt((z**2).mean())), 2),
+        "drop": round(float(drop), 3),
+        "drop_z": round(float((drop - drops.mean()) / (drops.std() + 1e-9)), 2),
+    }
 
 
 ANSWERS_LENGTHS = (8, 16, 24, 48)  # a snapped network's answers re-read at these lengths (answers_stop)
