@@ -363,7 +363,7 @@ def random_machine(n: int, seed: int) -> Mealy:
             return machine
 
 
-def _random_labels(transition: IntArray, classes: int, rng: Random) -> Mealy:
+def random_labels(transition: IntArray, classes: int, rng: Random) -> Mealy:
     """A random label in `classes` per state (the label of the state after a token), redrawn until minimal."""
     while True:
         labels = np.array([rng.randrange(classes) for _ in range(len(transition))], dtype=np.int64)
@@ -384,7 +384,7 @@ def random_permutation_machine(n: int, seed: int) -> Mealy:
         maps = [rng.sample(range(q), q) for _ in range(n)]
         transition = np.array([[s, *(m[s] for m in maps)] for s in range(q)], dtype=np.int64)
         if len(Mealy(transition, transition).reachable()) == q:
-            return _random_labels(transition, n, rng)
+            return random_labels(transition, n, rng)
 
 
 @functools.cache
@@ -398,7 +398,7 @@ def random_sized_machine(q: int, seed: int) -> Mealy:
     while True:
         transition = np.array([[s, *(rng.randrange(q) for _ in range(4))] for s in range(q)], dtype=np.int64)
         if len(Mealy(transition, transition).reachable()) == q:
-            return _random_labels(transition, 4, rng)
+            return random_labels(transition, 4, rng)
 
 
 Word = tuple[int, ...]

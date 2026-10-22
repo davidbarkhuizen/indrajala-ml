@@ -102,6 +102,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D62 | 2026-10-22, 08:00 | the run's state object | `run`'s loop-carried state one dataclass, the loop's body split into functions of it (planned) |
 | D63 | 2026-10-22, 08:15 | the collapse | reheat (the rate below the hold's level negative, the clock run back) or kill-and-resample, on cost per certified machine (planned, after D62) |
 | D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`) |
+| D65 | 2026-10-22, 11:15 | the order-biased cool | the cool's halving time times `1 + w (s - 1)`: w the machine's order from answers (0 when ordered), s the slowdown from the melting curve and relaxation (planned, after the current work) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -1037,6 +1038,70 @@ owner's; D49-D54 settled under the delegation.
     half-load `stone` and the free `klip` today. Cons: a coarse rate per backdrop (3-8 seeds).
   - (b) S3 and move-to-front-4 only, 24 seeds (a sharper working rate). Cons: silent on the gap.
   - (c) Wait for D61's reading, then one batch with its arm. Cons: no current rate to compare it to.
+- **D65. The order-biased cool (planned 2026-10-22, 11:15; the owner: "plan this work in detail, and
+  schedule it immediately after the completion of our current planned work").** The scaling
+  conjecture's reading (below) puts the random machines' failures at forming the state, their melting
+  curves the most crowded, while every ordered machine forms at today's pace (S3 19 of 24,
+  move-to-front-4 11 of 12, S4 3 of 3; S4's losses are the collapse, D63's). The owner: keep the
+  quasi-static curve and bias only its pace by the machine's order, read from answers alone; a
+  correction that slows random machines and vanishes for ordered ones ("where we seem to be spot on
+  already"); a constant only if derived from theory, ideally read dynamically. The mechanism: the
+  cool's halving time (D49) becomes `halving x (1 + w (s - 1))`, its shape and gate unchanged:
+  - **w, the order weight (once, at the run's start, answers only):** the answer's entropy given the
+    last k tokens (k = 0-6) on the run's own uniform words and answers (`mf.answer_profile`), against
+    an ensemble of random machines of the state bound's size and the machine's tokens and classes
+    (`mf.order_against_random`). Read offline on the five targets (60 random machines each): rms z
+    S3 3.34, move-to-front-4 6.69, S4 3.31, random-q12-0 0.31, random-q16-0 1.10; the ensembles'
+    own medians 0.68-0.93 and maxima 2.46-4.39. A tail probability is no weight (uniform for random
+    machines: random-q16-0 0.28); the candidate is a ramp read from the ensemble alone, 1 up to its
+    median and 0 at its maximum (S3 0, move-to-front-4 0, random-q12-0 1, random-q16-0 0.85), but S4
+    reads 0.29 (one 24-state random machine at 4.39 stretches the envelope): the statistic is stage
+    0's to settle. w exactly 0 leaves a run bit-identical to today's.
+  - **s, the slowdown's size (dynamic, from the run):** constant thermodynamic speed (Salamon and
+    Berry; Nulton and Salamon): an interval of the cool gets time in proportion to what it must
+    release. `s = max(1, splits x tau / halving)`, the splits those of the warm-up's last melting curve
+    (D21, D53) in its densest octave (the factors' largest), tau the network's relaxation time in
+    epochs (stage 0 picks its reading: the hold's epochs to its best screen, or live in the cool as the
+    epochs from a clock move to the gate's return to 1, only ever raising s: the adaptive cool, D33,
+    failed by speeding up on a live reading).
+  - **Stage 0, offline (allowed now: existing data; the owner's rule):** (0a) the order statistic on
+    the catalogue's machines to 169 states (S3-S5, move-to-front-4 and 5, division p 5-13,
+    random-q12 and random-q16 seeds 0-9, random-4) with ensembles of 60, at the bound and 1.1 and 1.5
+    times it; criteria registered now: every algebra w = 0, at least 90% of the random machines (not
+    the ensemble's) w >= 0.8; the candidates rms z, |drop z| and the whitened (Mahalanobis) distance,
+    the first to meet both chosen; none meeting them goes to the owner. (0b) s and tau on the 47
+    completed runs' logs: if s alone is 1 on every ordered run and above 1 on the random ones, w is
+    dropped (option (c)). (0c) the cool's length under s on random-q12-0 and random-q16-0 against
+    the budget (1,600 epochs, 690 minutes), the budget derived from it if short. (0d) feasibility of
+    the new random machines (docs/information-flow.md's register: codes, exclusion bound, width).
+  - **Stage 1, the build (code only, while the current work runs):** `--order-bias` (with
+    `--continuous`): an `order` row at the run's start (profile, statistic, w), s fixed at the cool's
+    start, each anneal row's `halving`, `w`, `s`, `tau`; `Place` fields, an identity key, a resumable
+    kind; a test that w = 0 leaves a run row-identical to the control; strict pyright, the full suite,
+    the golden run; its PR, CI, merge.
+  - **Stage 2, the probe (registered before its data; launched when the current planned work has
+    ended: D61 read, D63's probe and D64 ended, D59's last run):** random machines only (an ordered
+    machine's w = 0 is checked in stage 1, no run): random-q12-0 seeds 4-7 and random-q16-0 seeds 4-6
+    under the bias, paired with D64's controls on the same seeds; random-q16-1 and random-q16-2 (not
+    yet run: not one machine's tuning) seeds 0-2, arm and control; 19 runs, S4 seeds 3-5 added (paired
+    with D64's) only if stage 0 leaves S4 a w above 0, as a harm check. Expectations (to fix at
+    registration): formation and certificate rates, arm against control; promising at the arm forming
+    on at least half its runs with the controls at a quarter or fewer, refuted at an arm rate no
+    better than its controls'; any false discovery refutes the stop; read: w, s, tau, the cool's
+    length, cost per certified machine (with D63 (e)'s kill offline). A diagnosis; adoption only on a
+    fresh-seed rate. Machines: `jebel` (at most 4 at night), `klip`, `stone` on weekday nights,
+    `pyramidon`. Expected start Saturday 2026-10-24 (after D64's Friday night on `stone` and D63's
+    probe), read Saturday evening to Sunday.
+  - (a) *Chosen:* w and s together. Pros: what the owner asked: one consistent mechanism for both
+    limits, answers-only, the curve kept; ordered runs unchanged exactly; s derived and dynamic, w
+    read from an ensemble, no fitted constant. Cons: two readings to validate; w needs the state bound
+    (a loose bound shifts the ensemble: stage 0a reads it); an ensemble of 60 costs seconds a run.
+  - (b) w with a slowdown fixed from theory. Cons: a constant, and nothing in hand derives its size.
+  - (c) s alone. Pros: one reading, fully dynamic. Cons: S3's cascade is as crowded as random-q16-0's,
+    so it may slow ordered machines that need no slowing; chosen instead of (a) only if stage 0b
+    shows s collapses on ordered runs by itself.
+  - (d) More seeds instead (the owner's conjecture). Cons: random-q16-0's four plateaus point at the
+    pace, not the sample; the owner: the sampling unchanged for now.
 
 ### The consistency review settled (2026-10-21, afternoon)
 
@@ -1586,6 +1651,48 @@ On four runs' logged sharpness, a one-sided degree-1 Savitzky-Golay line over th
 time removed every jump with a mean lag of -0.02 to 0.05; a moving average over the same window
 lagged 0.16-0.53 and, its window counted in clock, froze with the clock.
 
+## Findings: the scaling conjecture (offline, 2026-10-22, 10:30)
+
+The owner's conjecture: larger machines, and more random ones, need the phase space sampled more (a
+larger batch, more seeds). Read offline on every completed run of the current method (D54-D58, with
+D59's margin stop), 47 runs; the tool: `formation` (`mf.formation_course`), a line per run. The
+owner: the sampling is not changed yet.
+
+- **A run's success is two probabilities: forming the state** (a step's end with state share >= 0.95)
+  **and keeping it** to a certificate:
+
+  | backdrop | states | formed | kept, of those formed | certified |
+  |---|---|---|---|---|
+  | S3 | 6 | 19 of 24 | 17 of 18 (S3 35 open) | 17 of 24 |
+  | move-to-front-4 | 24 | 11 of 12 | 10 of 10 (D54's seed 3 running) | 10 of 12 |
+  | S4 | 24 | 3 of 3 | 1 of 3 | 1 of 3 |
+  | random-q12-0 | 12 | 1 of 4 | 1 of 1 | 1 of 4 |
+  | random-q16-0 | 16 | 0 of 4 | - | 0 of 4 |
+
+- **Size is not the variable:** move-to-front-4 (24 states) is the best backdrop, S4 (24) and
+  random-q12-0 (12) poor. **The larger machine fails at keeping:** S4 formed 3 of 3 and lost 2 to the
+  late collapse (D57), one mechanism, a design signal (D63); more seeds would also do at p about 1/3
+  (12 runs for 99%). **The random machines fail at forming:** their failures plateaued at a state
+  share of 0.82-0.86 (random-q12-0) and 0.68-0.76 (random-q16-0) over the whole budget (about 1,550
+  steps), further from forming than any S3 failure (0.80-0.95); not a time limit.
+- **The first melting curve (D21, at step 25) reads the backdrops' cascades:** the octaves below the
+  melting point in which a factor makes three quarters of its clusters, mean (range): move-to-front-4
+  4.3 (1.3-9.3), random-q12-0 3.3 (0.8-11.3), S4 1.3 (0-2.0), S3 1.0 (0-4.3), random-q16-0 0.8
+  (0-1.8); the share made at the first transition 0.31, 0.40, 0.51, 0.53, 0.54. The most crowded
+  (random-q16-0) is the worst backdrop and the most spread (move-to-front-4) the best, as the note on
+  random machines (below) conjectured; within each backdrop the certified and failed runs' cascades
+  are alike, so it is the machine's, not the seed's: more seeds do not change it, a slower cool might.
+  Against it: S3 is as crowded and certifies (few states to sort, untested), and random-q12-0 is
+  spread yet poor.
+- **The cost:** the 12 runs that never formed spent about 65 hours, 86% of it after step 200; of the
+  runs not formed by step 200 one formed later (S3 seed 30, at step 853, certified). A kill at step
+  200 with a fresh seed in its slot (D63 (e)) would lose about 1 in 13 of them and most of their cost:
+  a larger batch is affordable with it.
+- **So:** for S4 and random-q12-0 a larger batch suffices at today's rates (with the kill, and D63 for
+  S4's collapse); for random-q16-0 the evidence (four plateaus far from forming, the most crowded
+  cascade) points at the cool's pace, not the sample, though 0 of 4 (Wilson 0-0.49) cannot exclude a
+  usable p. Small samples throughout (3-4 runs on the new backdrops); D64 adds 3-4 a backdrop.
+
 ## A note on random machines (2026-10-20; a note, not a plan)
 
 The owner: "this approach, if it works, is likely to also work for random machines"; and a conjecture,
@@ -1613,6 +1720,36 @@ a random machine would just need a very slow cool.**
 - **What would test it, with the measurements in hand:** the melting curve (D21) on a random machine's
   warm-up: transitions crowded into a narrow band of temperature (against an algebra's cascade) would
   support the reasoning; then the cooling rate needed to certify against the band's width.
+- **The owner's bias (2026-10-22; a note, not a plan, after the planned work):** keep the
+  quasi-static curve (D49's clock, its gate, its shape) and bias only its pace (the halving time) by
+  the target's order, read from answers alone, so one mechanism covers both limits: a strongly ordered
+  machine cooled faster, a glass former slower. Two answers-only readings, measured offline on the
+  five targets and runs:
+  - *From the data, before training:* the answer's conditional entropy given the last k tokens,
+    k = 0-6, on uniform words (bits): S3 1.58 flat, S4 2.0 to 1.95 (a group: no finite memory),
+    move-to-front-4 2.0 to 0.25 (a reset machine: its last few distinct tokens fix the state),
+    random-q12-0 1.77 to 1.08 and random-q16-0 1.61 to 1.02 (a slow, steady decay). Not a difficulty
+    (the owner: order is what is measured, not our experience of difficulty): against random machines
+    of the same size (the state bound) it reads order itself, a relative entropy against randomness:
+    the random targets sit inside their ensembles (rms z 0.31, 1.10), the algebras outside (S3 3.3,
+    S4 3.3, move-to-front-4 6.7), in two directions, a group conserving its past (the profile flat)
+    and a reset machine forgetting it (the profile falling fast); `order` (the probe's subcommand). Moore's refinement (states told apart by suffixes of length
+    k, which needs chosen words) is no use here: every target but move-to-front-4 separates at k = 1.
+  - *From the network, in the warm-up:* the melting curve (D21) is answers-only too (the network saw
+    only answers), and reads the property the cool meets: `log2 groups(T)` is the code assignment's
+    configurational entropy, its rise per octave the entropy the cool must release there (a heat
+    capacity, C = dS/d ln T). Crowded (random-q16-0) releases it in under an octave, a cascade
+    (move-to-front-4) over four.
+  - *A derived bias, no new constant:* constant thermodynamic speed (Salamon and Berry; Nulton and
+    Salamon) gives each interval of the cool time in proportion to what it must release; with the
+    network's relaxation time tau (the epochs its screen takes to recover after the clock moves, read
+    live as the gate already does) the halving time becomes `max(halving, splits per octave x tau)`, the
+    splits per octave from the warm-up's melting curve at its densest octave; the curve's shape is
+    unchanged, its pace slowed where the machine is crowded. Cautions: the adaptive cool (D33) failed by
+    reading the capacity live (its steps outran the handover below the cascade): a bias fixed from the
+    warm-up's curve avoids that; a network that has not separated the states may show a crowded curve
+    as a symptom, not a cause (random-q16-0's never formed); and the speed-up side (shortening for
+    ordered machines) changes what works today, so it would be tested apart.
 
 ## Stages
 
