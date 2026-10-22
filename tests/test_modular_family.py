@@ -1791,6 +1791,67 @@ def test_formation_course_reads_when_the_state_formed_was_kept_and_the_melting_c
     assert mf.formation_summary(None) == "no step ends"
 
 
+def _cool_row(step: int, coupling: float, screen: float, rate: float = 1.0, **anneal: Any) -> dict[str, Any]:
+    return {
+        "step": step,
+        "epoch": 1,
+        "screen": screen,
+        "anneal": {
+            "phase": "cool",
+            "coupling": [coupling, 0.0],
+            "rate": rate,
+            "clock": float(step),
+            "temperature": [1.0, 0.5],
+            **anneal,
+        },
+        "seconds": float(step),
+    }
+
+
+def test_cool_course_orders_the_first_jump_against_the_screens_fall_and_finds_the_freeze_and_reheats():
+    rows: list[dict[str, Any]] = [
+        {"step": 1, "epoch": 1, "screen": 1.0, "anneal": {"phase": "heat", "coupling": [0.0, 0.0], "rate": 1.0}},
+        _cool_row(2, 0.0, 0.85),  # below the fall's line before ever reaching it: not a fall
+        _cool_row(3, 0.05, 0.95),
+        _cool_row(4, 0.2, 0.97),  # the first jump (0.15)
+        _cool_row(5, 0.25, 0.6, rate=0.0),  # the fall, an epoch after the jump
+        _cool_row(6, 0.3, 0.6, rate=0.0),
+        _cool_row(7, 0.3, 0.7, rate=-0.5),  # a reheat
+        _cool_row(8, 0.3, 0.7, rate=0.0),
+        _cool_row(9, 0.6, 0.9, rate=-1.0),  # a second reheat, and a jump
+    ]
+    course = mf.cool_course(rows)
+    assert course is not None
+    assert (course["epochs"], course["start"], course["jumps"], course["largest"], course["jump"]) == (8, 2, 2, 0.3, 4)
+    assert (course["fall"], course["order"], course["gap"]) == (5, "jump first", 1)
+    assert course["frozen"] == {"epochs": 2, "step": 5, "clock": 5.0, "temperature": 1.0, "coupling": 0.25}
+    assert (course["reheats"], course["reheat"]) == (2, 7)
+    assert "jump first (+1 epochs)" in mf.cool_summary(course)
+    same = mf.cool_course([_cool_row(1, 0.0, 0.95), _cool_row(2, 0.2, 0.5)])
+    assert same is not None and (same["order"], same["gap"]) == ("the same epoch", 0)
+    drop = mf.cool_course([_cool_row(1, 0.0, 0.95), _cool_row(2, 0.0, 0.5), _cool_row(3, 0.5, 0.5)])
+    assert drop is not None and (drop["order"], drop["gap"], drop["frozen"]) == ("drop first", -1, None)
+    calm = mf.cool_course([_cool_row(1, 0.0, 0.95), _cool_row(2, 0.05, 0.99)])
+    assert calm is not None and (calm["jumps"], calm["fall"], calm["order"]) == (0, None, None)
+    assert "never frozen" in mf.cool_summary(calm) and ": -;" in mf.cool_summary(calm)
+    assert mf.cool_course(rows[:1]) is None and mf.cool_summary(None) == "no cool"
+
+
+def test_same_prefix_reads_a_paired_arms_rows_against_its_control_but_for_seconds_and_its_own_fields():
+    control = [{"step": 1, "screen": 1.0, "seconds": 1.0}, _cool_row(2, 0.1, 0.99), _cool_row(3, 0.2, 0.99)]
+    arm = [
+        {"step": 1, "screen": 1.0, "seconds": 9.0},  # seconds ignored
+        _cool_row(2, 0.1, 0.99, target=0.5),
+        _cool_row(3, 0.3, 0.99, target=0.5),  # the arm acts in the cool
+    ]
+    assert mf.same_prefix(arm, control) == {"same": 1, "before_cool": 1, "differs": 2, "intact": True}
+    assert mf.same_prefix(arm, control, ["target"]) == {"same": 2, "before_cool": 1, "differs": 3, "intact": True}
+    early = [{"step": 1, "screen": 0.5, "seconds": 1.0}, *control[1:]]
+    assert mf.same_prefix(early, control)["intact"] is False
+    assert mf.same_prefix(control, control) == {"same": 3, "before_cool": 1, "differs": None, "intact": True}
+    assert mf.same_prefix(control[:2], control)["differs"] == 3  # the longer log's next row
+
+
 def test_restart_cost_finds_lubys_cutoff_and_reads_censored_runs_only_to_the_shortest():
     def step(
         n: int, seconds: float, end: str = "epoch", certified: bool = False, strict: bool = False
