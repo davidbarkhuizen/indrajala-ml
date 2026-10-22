@@ -2422,6 +2422,7 @@ class Place:
     history: list[list[float]] = field(default_factory=list[list[float]])  # Continuous: the window's readings (D61)
     reheats: int = 0  # Continuous: the reheats so far (D66)
     back: bool = False  # Continuous: the clock running back (D66)
+    succeeded: int = -1  # the cutoff: the first step certified at both verdicts (D41), -1 before one
 
 
 def _run_identity(
@@ -2454,6 +2455,7 @@ def _run_identity(
     coupling_cap: float = 1.0,
     continuous: Continuous | None = None,
     margin_wait: int | None = None,
+    cutoff_steps: int | None = None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -2492,6 +2494,7 @@ def _run_identity(
         **({"reheat": True} if continuous is not None and continuous.reheat else {}),
         **({"reheat_slowing": True} if continuous is not None and continuous.slowing else {}),
         **({"margin_wait": margin_wait} if margin_wait is not None else {}),
+        **({"cutoff_steps": cutoff_steps} if cutoff_steps is not None else {}),
     }
 
 
@@ -2545,6 +2548,7 @@ class RunConfig:
     coupling_cap: float
     continuous: Continuous | None
     margin_wait: int | None
+    cutoff_steps: int | None = None
 
     def identity(self, first: int) -> dict[str, Any]:
         """What a resumed run must share with the run it resumes (_run_identity's)."""
@@ -2578,12 +2582,16 @@ class RunConfig:
             self.coupling_cap,
             self.continuous,
             self.margin_wait,
+            self.cutoff_steps,
         )
 
     def check(self) -> None:
         """The settings' combinations a run allows (an AssertionError naming the first it doesn't)."""
         assert self.margin_wait is None or self.state_bound is not None, (
             "the margin stop waits on D35's: with a state bound"
+        )
+        assert self.cutoff_steps is None or (self.continuous is not None and self.cutoff_steps >= 1), (
+            "the cutoff reads D41's success at both verdicts, a continuous run's step ends: with --continuous, at least 1"
         )
         assert self.continuous is None or not self.continuous.pace or self.coupling_cap == 1.0, (
             "D61's pace or D38's cap, not both"
@@ -2659,6 +2667,7 @@ class RunState:
     step_rollbacks: int = 0
     machine_best: list[float] = field(default_factory=list[float])
     score: float = -1.0  # the last epoch's screen (WarmUp's end reads it with the step's best)
+    succeeded: int = -1  # the first step certified at both verdicts (D41), for the cutoff
 
     @staticmethod
     def begun(config: RunConfig, snapped: Sequence[bool]) -> RunState:
@@ -2716,6 +2725,7 @@ class RunState:
             place.back,
         )
         state.margin = Margin(config.margin_wait, place.first_pass, place.best_pass, place.best_ties)
+        state.succeeded = place.succeeded
         return state
 
     def place(self, step: int, epoch: int, seconds: float, log_bytes: int, config: RunConfig) -> Place:
@@ -2761,6 +2771,7 @@ class RunState:
             [list(h) for h in self.cstate.history],
             self.cstate.reheats,
             self.cstate.back,
+            self.succeeded,
         )
 
 
@@ -3287,10 +3298,19 @@ class _Run:
             )
             if p.step % c.continuous.curve_every == 0:
                 judged["melting"] = melting_curves(net, p.sample)
+        if (
+            s.succeeded < 0
+            and certificate.certified
+            and judged.get("certificates", {}).get("strict", {}).get("certified")
+        ):
+            s.succeeded = p.step  # D41's success: both verdicts
+        # the batch runner's cutoff (its D1): an attempt not certified at both verdicts by step `cutoff_steps`'s
+        # end stops there, "cut" (a run already certified goes on to its own stop)
+        cut = c.cutoff_steps is not None and p.step >= c.cutoff_steps and s.succeeded < 0 and not stopping
         self.record(
             {
                 "step": p.step,
-                "end": stop,
+                "end": "cut" if cut else stop,
                 "epochs": epoch,
                 **({"forks": s.forks} if c.fork is not None else {}),
                 **({"rollbacks": s.step_rollbacks} if self.guarding is not None else {}),
@@ -3306,7 +3326,7 @@ class _Run:
             net.save(str(c.out / f"certified-step-{p.step}.network.json"))
         if stopping and c.state_bound is not None:
             net.save(str(c.out / f"answers-stop-step-{p.step}.network.json"))
-        return stopping
+        return stopping or cut
 
     def warm_up_end(self, p: StepPlan) -> None:
         """A warm step's distinct states and, at the warm-up's end (D14-D16), the codes from the states seen and the profile's start."""
@@ -3365,6 +3385,7 @@ def run(
     coupling_cap: float = 1.0,
     continuous: Continuous | None = None,
     margin_wait: int | None = None,
+    cutoff_steps: int | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -3432,6 +3453,9 @@ def run(
     with fewer ties than any before it (out/best-pass-step-S.network.json). W steps after the first
     pass, each step counted whether it passes or not (D60), a run none cleared stops ("waited"), its
     last row the best pass's network restored and judged as its stop's (Margin).
+    `cutoff_steps` T (with `continuous`; the batch runner workplan's D1) ends an attempt at step T's end
+    ("cut") unless some step by then was certified at both verdicts (D41), so restarts at a fixed
+    cutoff (Luby et al. 1993) need no runner to stop a run; a run already certified goes on to its stop.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
     the run's place (Place) and its network, with its optimizer's and generator's state. With
@@ -3470,6 +3494,7 @@ def run(
         coupling_cap,
         continuous,
         margin_wait,
+        cutoff_steps,
     )
     running = _Run(config, resume)
     if not running.ended:
