@@ -38,7 +38,7 @@ import random
 import re
 import time
 from collections import Counter, defaultdict
-from collections.abc import Callable, Hashable, Mapping, Sequence
+from collections.abc import Callable, Collection, Hashable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from fractions import Fraction
 from pathlib import Path
@@ -888,6 +888,116 @@ def restart_summary(cost: Mapping[str, Any], unit: str = "steps") -> str:
         f"{head}; read to {cost['horizon']:g} {unit}: t* {t:g} (q {q:.2f}), l(t*) {l:.0f} {unit} per "
         f"certificate against {out:.0f} running each out ({out / l:.1f}x)"
     )
+
+
+JUMP = 0.1  # a coupling move of this or more in an epoch, any factor, is a jump (cool_course)
+SCREEN_FALL = 0.9  # the screen's fall: its first epoch below this after one at or above it (cool_course)
+
+
+def cool_course(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
+    """
+    A run's cool from its log.jsonl, its epochs in the phase "cool" (the workplan's readings of the
+    coupling's jumps and the freeze, D61, D63): the coupling's jumps (`jumps`, `largest` move, the first
+    jump's step `jump`), the screen's fall (`fall`, the step of its first epoch below SCREEN_FALL after
+    one at or above it) and their `order` ("jump first", "the same epoch", "drop first", or None without
+    either) with the fall's epochs after the first jump (`gap`; a row's coupling is set before its epoch
+    trains, its screen read after); the longest freeze (`frozen`: the clock's rate held at 0, its epochs, its first step, the
+    clock, the hottest factor's temperature and the largest coupling there); the reheats (D63 (a):
+    stretches of a rate below 0, their count and the first's step). None for a log without a cool.
+    """
+    cool = [r for r in rows if r.get("anneal", {}).get("phase") == "cool"]
+    if not cool:
+        return None
+    moves = [
+        (int(b["step"]), max(abs(y - x) for x, y in zip(a["anneal"]["coupling"], b["anneal"]["coupling"], strict=True)))
+        for a, b in itertools.pairwise(cool)
+    ]
+    jumps = [(i + 1, step) for i, (step, move) in enumerate(moves) if move >= JUMP]
+    high = next((i for i, r in enumerate(cool) if r["screen"] >= SCREEN_FALL), None)
+    fall = None if high is None else next((i for i in range(high, len(cool)) if cool[i]["screen"] < SCREEN_FALL), None)
+    order, gap = None, None
+    if jumps and fall is not None:
+        gap = fall - jumps[0][0]
+        order = "jump first" if gap > 0 else "the same epoch" if gap == 0 else "drop first"
+    frozen: dict[str, Any] | None = None
+    held, reheats, reheat = 0, 0, None
+    for i, r in enumerate(cool):
+        rate = float(r["anneal"]["rate"])
+        held = held + 1 if rate == 0 else 0
+        if held and (frozen is None or held > frozen["epochs"]):
+            at = cool[i - held + 1]["anneal"]
+            frozen = {
+                "epochs": held,
+                "step": int(cool[i - held + 1]["step"]),
+                "clock": round(float(at["clock"]), 1),
+                "temperature": round(max(at["temperature"]), 3),
+                "coupling": round(max(at["coupling"]), 2),
+            }
+        if rate < 0 and (i == 0 or float(cool[i - 1]["anneal"]["rate"]) >= 0):
+            reheats += 1
+            reheat = int(r["step"]) if reheat is None else reheat
+    return {
+        "epochs": len(cool),
+        "start": int(cool[0]["step"]),
+        "jumps": len(jumps),
+        "largest": round(max((move for _, move in moves), default=0.0), 2),
+        "jump": jumps[0][1] if jumps else None,
+        "fall": None if fall is None else int(cool[fall]["step"]),
+        "order": order,
+        "gap": gap,
+        "frozen": frozen,
+        "reheats": reheats,
+        "reheat": reheat,
+    }
+
+
+def cool_summary(course: Mapping[str, Any] | None) -> str:
+    """cool_course's reading on one line."""
+    if course is None:
+        return "no cool"
+    frozen = course["frozen"]
+    held = (
+        "never frozen"
+        if frozen is None
+        else f"frozen {frozen['epochs']} epochs from step {frozen['step']} (clock {frozen['clock']:g}, "
+        f"T {frozen['temperature']:g}, coupling {frozen['coupling']:g})"
+    )
+    order = "-" if course["order"] is None else f"{course['order']} ({course['gap']:+d} epochs)"
+    return (
+        f"cool {course['epochs']} epochs from step {course['start']}; {course['jumps']} jumps (largest "
+        f"{course['largest']:g}, first at step {course['jump']}), screen fall at step {course['fall']}: "
+        f"{order}; {held}; {course['reheats']} reheats (first at step {course['reheat']})"
+    )
+
+
+def same_prefix(
+    rows: Sequence[Mapping[str, Any]], control: Sequence[Mapping[str, Any]], ignore: Collection[str] = ()
+) -> dict[str, Any]:
+    """
+    A paired arm's integrity against its control (D61, D63): how many leading rows are the control's
+    (`same`), but for `seconds` and the `anneal` fields named in `ignore` (an arm's own), the rows before
+    the run's cool (`before_cool`, its first row in the phase "cool"), the first differing row's step
+    (`differs`, None if neither log has one past the other) and whether every row before the cool is
+    the control's (`intact`): an arm acting only in the cool keeps it; D63's reheat differs at its first
+    reheat at the earliest.
+    """
+
+    def kept(r: Mapping[str, Any]) -> dict[str, Any]:
+        out = {k: v for k, v in r.items() if k != "seconds"}
+        if "anneal" in out:
+            out["anneal"] = {k: v for k, v in out["anneal"].items() if k not in ignore}
+        return out
+
+    same = 0
+    for mine, theirs in zip(rows, control):
+        if kept(mine) != kept(theirs):
+            break
+        same += 1
+    before_cool = next((i for i, r in enumerate(rows) if r.get("anneal", {}).get("phase") == "cool"), len(rows))
+    differs = None if same >= min(len(rows), len(control)) else rows[same].get("step")
+    if differs is None and len(rows) != len(control):
+        differs = (rows if len(rows) > len(control) else control)[same].get("step")
+    return {"same": same, "before_cool": before_cool, "differs": differs, "intact": same >= before_cool}
 
 
 def answer_profile(

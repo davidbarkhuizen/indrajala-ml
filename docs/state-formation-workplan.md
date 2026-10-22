@@ -1770,6 +1770,20 @@ Shared by all: after the drop the clock's rate (D49) holds at 0 and the run sits
 budget, the motive of the collapse (D63). The jump-first and same-epoch failures are the paced
 coupling's (D61) target; the drop-first ones are not.
 
+**Read durably** with `modular_family_probe.py cool` (2026-10-22): the cool's epochs only, a move of
+0.1 or more exactly, the fall the screen's first epoch below 0.9 after one at or above it, with the
+gap in epochs (a row's coupling is set before its epoch trains, its screen read after). The table
+above came from a scratch script that rounded each move to 0.01 first (counting moves from 0.095:
+S3 24 58 against the tool's 52). **Exact counts correct the counts above:** of the 15 spent runs
+with logs here (random-q16-0 2, 3 not copied), 14 had 52-371 jumps in the cool (largest 0.37-0.77)
+but move-to-front-4 25 had one (0.13); and two certified runs had many, S3 30 (134, largest 0.46; it
+froze and thawed) and S3 37 (51, 0.49), the rest at most 9 (largest 0.28). Many jumps go with failure, not
+only with it. The tool reproduces every row's order but S3 25's, whose first jump
+(step 64) is logged one epoch before its fall (step 65): jump first by one epoch. D61's prediction
+read the jump-first and same-epoch failures as one target, so its verdict stands. `same-prefix` is the
+paired arm's integrity check (D61's; D63's reheat run departs from its control at its first reheat at
+the earliest).
+
 ### Savitzky-Golay against a moving average (offline, for D61 (c))
 
 On four runs' logged sharpness, a one-sided degree-1 Savitzky-Golay line over the cool's e-folding

@@ -1348,6 +1348,19 @@ def main(argv: list[str]) -> int:
     )
     formation.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
     formation.add_argument("--by", type=int, default=200, help="the kill's step: seconds spent by it")
+    cool = commands.add_parser(
+        "cool",
+        help="runs' logs, a line per run: the coupling's jumps against the screen's fall (their order), the "
+        "longest freeze, the reheats",
+    )
+    cool.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    prefix = commands.add_parser(
+        "same-prefix",
+        help="a paired arm's logs against their controls', a line per pair: the rows identical, the cool's start, "
+        "the first difference",
+    )
+    prefix.add_argument("pairs", type=Path, nargs="+", help="LOG CONTROL, LOG CONTROL, ...: each run's log.jsonl")
+    prefix.add_argument("--ignore", nargs="*", default=[], help="the arm's own anneal fields (D61's target ...)")
     restarts = commands.add_parser(
         "restart-cost",
         help="runs' logs of one backdrop: Luby's expected cost per certificate of fresh-seed restarts at a "
@@ -1587,6 +1600,27 @@ def main(argv: list[str]) -> int:
             for t, q, cost_t in cost["curve"]:
                 print(f"t {t:g}: q {q:.3f}, l {cost_t:.1f}", flush=True)
         print(mf.restart_summary(cost, args.clock), flush=True)
+        return 0
+    if args.command == "cool":
+        for path in args.logs:
+            course = mf.cool_course([json.loads(line) for line in path.read_text().splitlines()])
+            print(f"{path}: {mf.cool_summary(course)}", flush=True)
+        return 0
+    if args.command == "same-prefix":
+        if len(args.pairs) % 2:
+            raise SystemExit("same-prefix: give logs in pairs, LOG CONTROL")
+        for path, control in zip(args.pairs[::2], args.pairs[1::2], strict=True):
+            reading = mf.same_prefix(
+                [json.loads(line) for line in path.read_text().splitlines()],
+                [json.loads(line) for line in control.read_text().splitlines()],
+                args.ignore,
+            )
+            verdict = "intact" if reading["intact"] else "BROKEN"
+            print(
+                f"{path} against {control}: {verdict}, {reading['same']} rows identical, the cool from row "
+                f"{reading['before_cool']}, first difference at step {reading['differs']}",
+                flush=True,
+            )
         return 0
     if args.command == "formation":
         for path in args.logs:
