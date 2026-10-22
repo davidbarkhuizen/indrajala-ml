@@ -95,6 +95,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D55 | 2026-10-21, 20:50 | the fresh-seed matrix | D54's cell on S3 seeds 24-39 and move-to-front-4 seeds 24-31 (`probe-d55.sh`) |
 | D56 | 2026-10-22, 00:40 | the unstructured probe | D54's cell on random-q16-0 seeds 0-3 (`probe-d56.sh`) |
 | D57 | 2026-10-22, 00:50 | the S4 probe | D54's cell on word-problem-s4 seeds 0-2, the harm cells without the commitment (`probe-d57.sh`) |
+| D58 | 2026-10-22, 02:50 | the random control probe | D54's cell on random-q12-0 seeds 0-3 (`probe-d58.sh`) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -868,6 +869,17 @@ owner's; D49-D54 settled under the delegation.
     backdrop beside D56's, on cores otherwise idle. Cons: three seeds, existence only.
   - (b) Division `p` 13 (the other harm cell). Cons: its 169 states make a run memory-heavy, past
     `pyramidon`'s three slots.
+- **D58. The continuous crystallisation on the random control (`~/code/probe-d58.sh`, registered
+  before its data, 2026-10-22, 02:50).** `klip`'s slots freed by D55's slice: D54's cell unchanged on
+  random-q12-0 seeds 0-3 (D37's control backdrop; the general algebras' consolidation certified 2 of 3
+  at about 12 states). Feasibility: q 12, 11 codes a factor, m 121 (10.1 q), cap 132, width 32; row 15:
+  depth 3 + k 1. Expectations: at least 2 of 4 succeed (D41); refuted at 0 of 4 (the method loses
+  what the earlier arms had on an unstructured machine); strict-only certifications apart; any false
+  discovery refutes D35's stop on this backdrop.
+  - (a) *Chosen.* Pros: D56's reading needs it (a failure on random-q16-0 means little if the method
+    fails where the earlier arms didn't); cores otherwise idle. Cons: four seeds, a coarse rate.
+  - (b) move-to-front-5 or S5. Cons: 120 states, memory-heavy on `klip`; existence on the smaller
+    unstructured machine first.
 
 ### The consistency review settled (2026-10-21, afternoon)
 
@@ -1427,6 +1439,7 @@ a random machine would just need a very slow cool.**
     Then D55's fresh-seed matrix, the same cell, registered in its script.
     Then D56's random-q16-0 probe, the same cell, registered in its script.
     Then D57's S4 probe, the same cell, registered in its script.
+    Then D58's random-q12-0 probe, the same cell, registered in its script.
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
