@@ -175,6 +175,13 @@ def test_a_snap_near_tie_branches_and_fails_when_the_other_code_carries_otherwis
     assert counterexample.got == [0]
 
 
+def test_a_near_tie_to_another_carry_splits_the_minimised_machine():
+    # the tie's other code is another carry: a state the machine itself tells apart from the snap's
+    certificate = wc.certify(CarryMachine(2, fault="snap-tie"))
+    assert certificate.split_ties > 0
+    assert wc.certify(CarryMachine(2, fault="snap-tie"), snap_ratio=1.0).split_ties == 0
+
+
 def test_strict_certifies_a_machine_wrong_only_on_a_near_tie():
     certificate = wc.certify(CarryMachine(2, fault="snap-tie"), snap_ratio=1.0)
     assert certificate.certified and certificate.snap.short == 0 and certificate.wrong_ties == 0
@@ -183,6 +190,7 @@ def test_strict_certifies_a_machine_wrong_only_on_a_near_tie():
 def test_a_snap_near_tie_between_copies_of_a_carry_is_certified_and_counted():
     certificate = wc.certify(CarryMachine(2, copies=2, fault="copy-tie"))
     assert certificate.certified and certificate.snap.short > 0
+    assert certificate.split_ties == 0  # the copies minimise to one state: the tie splits nothing
     assert certificate.snap.smallest == pytest.approx(NEAR) and certificate.snap.window is not None
 
 

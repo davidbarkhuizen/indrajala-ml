@@ -1162,6 +1162,12 @@ def main(argv: list[str]) -> int:
         "with at most this many states, minimised (the certificate only judging); else at the first certificate",
     )
     run.add_argument(
+        "--margin-wait",
+        type=int,
+        help="the state formation workplan's D59 (with --state-bound): D35's stop waits until no near tie splits "
+        "the snapped machine, at most this many steps after its first pass",
+    )
+    run.add_argument(
         "--coupling-cap",
         type=float,
         default=1.0,
@@ -1540,6 +1546,8 @@ def main(argv: list[str]) -> int:
         args.warm_up and args.crucible and args.melt_shape == "exponential" and not args.handover and not args.melt_gate
     ):
         parser.error("--continuous (D48) is a crucible's exponential cool: no --handover or --melt-gate of its own")
+    if args.margin_wait is not None and args.state_bound is None:
+        parser.error("--margin-wait (D59) waits on D35's stop: with --state-bound")
     if args.warm_up and not args.anneal:
         parser.error("--warm-up ends in an annealed snap: with --anneal")
     if args.warm_up and (args.fork or args.restore_best or args.keep_machine):
@@ -1618,6 +1626,7 @@ def main(argv: list[str]) -> int:
             state_bound=args.state_bound,
             coupling_cap=args.coupling_cap,
             continuous=mf.Continuous() if args.continuous else None,
+            margin_wait=args.margin_wait,
         )
 
     for name in names:
