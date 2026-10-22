@@ -969,6 +969,11 @@ owner's; D49-D54 settled under the delegation.
   rate over fresh seeds against the method's current rate (D54's cell with the margin stop on D55's
   seeds: S3 11 of 16, move-to-front-4 7 of 8 at D59's reading), in a batch registered after this
   reading, if its mechanism reads as promising.
+  A reading added before its data was read (the 2026-10-22 literature review; not a registered claim):
+  centred, a degree-1 Savitzky-Golay line is a moving average (Schafer 2011), so arm (c)'s lag gain
+  over (c') is its one-sided reading alone, a linear extrapolation whose variance at the window's end
+  is about four times its centre's; count, per run, the arm's coupling moves of 0.1 or more not matched
+  by a move of the sharpness itself (moves made by noise).
 - **D62. The run's state, one object (the owner, 2026-10-22: "do we not need a restructure (maybe DTOs
   or request objects) to simplify typing ? this is now becoming a recurring problem").** `run` is one
   function of about 700 lines carrying some 40 locals from step to step; past pyright's code-flow
@@ -1012,6 +1017,21 @@ owner's; D49-D54 settled under the delegation.
     cost per certified machine (epochs, or minutes, over certificates) on the same fresh seeds, and on
     which runs each certifies: a certificate reached only after a reheat (a collapse, then recovery)
     is the category (e) loses, read apart, by backdrop (random-q16-0 and S4 first).
+    **The window from the runs** (the 2026-10-22 literature review: Luby, Sinclair and Zuckerman
+    1993): a certified run is a Las Vegas run, so fresh-seed restarts are best at the fixed cutoff `t*`
+    minimising the expected cost per certificate `l(t) = E[min(T, t)] / q(t)`, read per backdrop from
+    the runs' own times (`modular_family_probe.py restart-cost`; a run spent at its budget censored).
+    On the completed runs of the current method (D54's and D55's seeds, D59's re-runs): S3 `t*` 137
+    steps, 182 steps per certificate against 798 running each out (24 runs); move-to-front-4 169, 157
+    against 298 (11); S4 106, 318 against 3,213 (3); the successes cluster at 85-170 steps, `l` rising
+    slowly past `t*` (S3: 216 at 219), so the first sizing's kill at 200 costs about 15-20% over S3's
+    estimate. (e)'s window is `t*`, no constant; the clock-held kill above is a second rule, compared on
+    the same runs. The comparison with (a) is `l` against `l` (the reheat changes `q` itself), on paired
+    seeds: McNemar's test for the paired verdict (its paper not yet in the literature repository), the
+    reheat-only certificates read apart, as above (outside Luby's model, which counts time to the first
+    success only). A per-factor form of the reheat (Ingber 1989's re-annealing per parameter) was
+    considered and dropped (the owner, 2026-10-22): in nine frozen runs and S4's two collapses the
+    factors formed and fell together.
   - (c) Restore the best step's network (`--restore-best`, the guard). Cons: a discontinuity, and the
     same training from there can collapse again.
   - (d) Lower only the coupling when the screen falls (D61 (b) with its rate signed). Cons: the codes
@@ -1035,6 +1055,10 @@ owner's; D49-D54 settled under the delegation.
   rates against S3's: the scaling question); any false discovery refutes the stop; read: each
   failure's kind and order (jump or drop first, the frozen clock's epochs), the margin's waits, the
   deadline's stops, the seconds to each certificate. Its seeds pair any later arm's batch.
+  Readings added after registration, before its data (the 2026-10-22 literature review; exploratory,
+  no verdict): `l(t)` and `t*` per backdrop with D54-D59's runs (`restart-cost`), and the scaling
+  question as a trend in proportions (Cochran 1954, Armitage 1955) across the backdrops ordered by
+  `order`'s distance from random machines.
   - (a) *Chosen.* Pros: the comparison every adoption needs, on fresh seeds; weights the gap; the
     half-load `stone` and the free `klip` today. Cons: a coarse rate per backdrop (3-8 seeds).
   - (b) S3 and move-to-front-4 only, 24 seeds (a sharper working rate). Cons: silent on the gap.
@@ -1694,12 +1718,13 @@ from each run's last line (`seed N: step S, END, M min`); Wilson 95% intervals.
   epochs, to 3-17 states), and the clock held at 0 for about 1,400 epochs.
 - **The random control probe (D58): random-q12-0 1 of 4** (seed 0 at step 127), below its bar of 2,
   not refuted (0); seeds 1-3 spent.
-- **The margin stop (D59): success by its rules, 10 of the 11 read** (S3 27, 29, 33, 36; mtf-4 24,
-  26, 29, 30; D54's mtf-4 1, 2), every replay identical to its first run up to the first pass; S3 35
-  spent (its first pass, exact at the strict verdict, lost); no false discovery. The split ties
+- **The margin stop (D59): success by its rules, 10 of 12, final (read 2026-10-22, 15:47)** (S3 27,
+  29, 33, 36; mtf-4 24, 26, 29, 30; D54's mtf-4 1, 2), every replay identical to its first run up to
+  the first pass; no false discovery. Lost 2 against 10 gained: S3 35 spent (its first pass, exact at
+  the strict verdict, lost) and D54's mtf-4 seed 3 (passed at steps 143-144 with split ties, never
+  again; its 690-minute deadline at step 1,193; `klip` peaked at 66 C). The split ties
   (`Certificate.split_ties`, target-free) separate D55's 19 stopped networks exactly; waits 1-72
-  steps. The twelfth run (D54's mtf-4 seed 3) passed at steps 143-144 with split ties and runs to
-  its deadline; under D60 it would end 200 steps past its first pass on the best pass.
+  steps. Under D60 the two lost runs would have ended 200 steps past their first pass on the best pass.
 
 ### The coupling's jumps and the order of failure (offline, the spent runs of D54-D59)
 
@@ -1735,7 +1760,7 @@ owner: the sampling is not changed yet.
   | backdrop | states | formed | kept, of those formed | certified |
   |---|---|---|---|---|
   | S3 | 6 | 19 of 24 | 17 of 18 (S3 35 open) | 17 of 24 |
-  | move-to-front-4 | 24 | 11 of 12 | 10 of 10 (D54's seed 3 running) | 10 of 12 |
+  | move-to-front-4 | 24 | 11 of 12 | 10 of 11 (D54's seed 3 lost its pass, D59) | 10 of 12 |
   | S4 | 24 | 3 of 3 | 1 of 3 | 1 of 3 |
   | random-q12-0 | 12 | 1 of 4 | 1 of 1 | 1 of 4 |
   | random-q16-0 | 16 | 0 of 4 | - | 0 of 4 |
@@ -1763,6 +1788,10 @@ owner: the sampling is not changed yet.
   S4's collapse); for random-q16-0 the evidence (four plateaus far from forming, the most crowded
   cascade) points at the cool's pace, not the sample, though 0 of 4 (Wilson 0-0.49) cannot exclude a
   usable p. Small samples throughout (3-4 runs on the new backdrops); D64 adds 3-4 a backdrop.
+- **A mechanism for the larger batch (the 2026-10-22 review):** constant-speed annealing was run on an
+  ensemble of copies sharing one temperature, which stops representing equilibrium once phase space
+  breaks into more basins than copies (Salamon et al. 1988): a machine with many basins (the random
+  ones) needs more copies, the conjecture's remedy.
 
 ## Findings: the freeze, every failure's end (offline, 2026-10-22, 11:00)
 
@@ -1798,6 +1827,50 @@ Read for D65's stage 0 on the same 47 runs' per-epoch rows (`anneal`: `rate`, `c
   crystallisation is fastest between the glass transition and the melt) has in effect been tried by
   two runs and did not form; glass-ceramics also need nucleating agents, which points at nucleation,
   not time, as the barrier: a reheat or a new seed is a new nucleation attempt.
+- **The literature agrees (the 2026-10-22 review, `window-recurrent-literature.md`; the research note
+  `indrajala-papers/freeze-and-restarts.tex`):** an equilibrium-gated schedule halts at a kinetic
+  arrest. The dissipation of a finite-time process is at least `L^2 eps / tau` (Salamon and Berry
+  1983); the optimal schedule, constant thermodynamic speed `dT/dt = -v T / (eps sqrt(C))` (Nulton and
+  Salamon 1988; Salamon et al. 1988; Andresen and Gordon 1993, 1994), stops as the relaxation time
+  `eps` diverges, and its derivation assumes a uniform system, which a glass is not. D49's clock is a
+  bang-bang form of it: it reads the same lag (the screen against the hold's level) but stops at a set
+  lag where the optimum moves at one. The field's remedies are escape: re-anneal (Ingber 1989), restart
+  (Luby et al. 1993, D63 (e)'s window), exchange with a hotter copy (parallel tempering). Not in the
+  literature: the coupling quenching at a held clock, a property of D50's reading.
+- **Later candidates from the review (not planned; after the planned work, each on its own case):** a
+  constant-lag form of D49's clock (Nulton and Salamon's criterion); faster cools for ordered machines
+  (a direct quench beats an equilibrium schedule where there are no local minima, Salamon et al.
+  1988, the speed-up side D65 set aside); parallel tempering across a batch (the owner's call, a new
+  component); the readout's weight norm logged per epoch in the next change to the per-epoch row (read
+  offline on saved networks already: the slingshot not supported, below).
+
+## Findings: plasticity and the slingshot (offline, 2026-10-22, 16:30)
+
+Read on saved step networks (every 10 steps) with `weight-norms` and `state-spread` (`--step 100`),
+for two of the literature review's readings: S4's two collapses (D57's seeds 0, 2) against its
+certified seed 1, and random-q16-0's freezes (D56's seeds 0, 2).
+
+- **The slingshot is not supported for S4's collapse:** it predicts the readout's norm growing before
+  the loss spikes (Thilak et al. 2022); here it falls before both collapses (seed 0: 10.1 at step 80,
+  6.1 at 120, 7.2 at 130, 4.6 at 140 after the fall at 137; seed 2: 10.0, 7.0, then 4.6 at 130) and
+  falls alike in the certified seed 1 (7.6 to 5.9 by step 100); the cells' norms rise steadily, with no
+  jump at the collapse. At 10-step resolution: evidence against, not a refutation.
+- **After S4's collapse, all three of plasticity's correlates** (Dohare et al. 2023): codes in use
+  fall from 15 of 15 to 2-3 by step 300 and stay there, the outputs' effective dimension from 15 to
+  3-5, and the total weight norm grows about fourfold over the freeze (seed 0: 121 at step 130, 528 at
+  1,500; seed 2 partly recovers its codes at step 600, 13 and 7 of 15, then loses them). Before the
+  collapse both look like the certified seed (15 of 15 codes, dimension 15, the same norms at step
+  100): correlates of the frozen state, not predictors of the collapse.
+- **random-q16-0's freezes are not dead codes:** the weights grow alike (about fourfold, 101 to 492 and
+  94 to 466), but 10-12 of 12 codes stay in use and the dimension near its maximum (12-15) for most of
+  the freeze, thinning only late (seed 0: 4 and 7 of 12 at step 1,500). Every code in use on a wrong
+  assignment: the glass that the coupling's quench at a held clock describes.
+- **So:** the weight growth is common to every frozen run, and without a long unfrozen run it is not
+  separable from Adam's drift with no weight decay; the dead codes and lost dimension are S4's, after
+  its collapse. For D63: a reheat that softens the codes may revive S4's dead ones (as seed 2's partial
+  recovery did once); on the random machines nothing is dead to revive, so a reheat would re-sort a
+  full assignment. Shrink and perturb (Ash and Adams 2020), a non-gradient kick that keeps the learned
+  hypothesis, stays a later candidate, not planned.
 
 ## A note on random machines (2026-10-20; a note, not a plan)
 
@@ -1903,6 +1976,8 @@ a random machine would just need a very slow cool.**
     Then the margin deadline (D60) and the paced coupling (D61, both arms; tested, the golden run
     unchanged), D61's probe registered in its script; then the run's state object (D62).
     Then D64's fresh-seed rate, registered in its script; then the collapse (D63).
+    Beside them, offline (the 2026-10-22 literature review): the restart cost (`restart-cost`, Luby's
+    `l(t)` and `t*` per backdrop), read on every completed run as the runs come in; D63 compared on it.
   - **4b. The panel** (D11) at 4a's `T_hot`, its arms D36's, its cells D37's, its stop D35's, registered
     before its data; D12; then D31's diagnosis and D39's probes.
 5-7. **Shelved by D31** (diagnose before a remedy): options 2-4 are called down only by the panel's
