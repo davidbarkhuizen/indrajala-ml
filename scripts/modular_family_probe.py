@@ -1190,6 +1190,13 @@ def main(argv: list[str]) -> int:
         "holds and halved when the clock stops (times 2 ** (2 rate - 1))",
     )
     run.add_argument(
+        "--reheat-slowing",
+        action="store_true",
+        help="the state formation workplan's D66 (with --reheat): the cool's forward rate halved after each "
+        "reheat, the re-cool through the zone at half the pace of the pass before; a run that never reheats is "
+        "unchanged",
+    )
+    run.add_argument(
         "--reheat",
         action="store_true",
         help="the state formation workplan's D63 (a) (with --continuous): the cool's rate extended below its low "
@@ -1597,6 +1604,8 @@ def main(argv: list[str]) -> int:
         parser.error(
             "--coupling-pace, --sharpness-smoothing (D61) and --reheat (D63) set the continuous profile: with --continuous"
         )
+    if args.reheat_slowing and not args.reheat:
+        parser.error("--reheat-slowing (D66) slows the re-cool after a reheat: with --reheat")
     if args.coupling_pace and args.coupling_cap < 1.0:
         parser.error("--coupling-pace (D61) paces the coupling D38's cap would bound: not both")
     if args.margin_wait is not None and args.state_bound is None:
@@ -1679,7 +1688,12 @@ def main(argv: list[str]) -> int:
             state_bound=args.state_bound,
             coupling_cap=args.coupling_cap,
             continuous=(
-                mf.Continuous(pace=args.coupling_pace, smooth=args.sharpness_smoothing, reheat=args.reheat)
+                mf.Continuous(
+                    pace=args.coupling_pace,
+                    smooth=args.sharpness_smoothing,
+                    reheat=args.reheat,
+                    slowing=args.reheat_slowing,
+                )
                 if args.continuous
                 else None
             ),
