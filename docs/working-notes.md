@@ -220,6 +220,11 @@ where you meet a new trap; delete one that no longer holds.
   forkserver's children, outside the attempt's rusage (`time -v` saw 51 MB of a division run). The
   worker sums PSS over the attempt's session at each look (every 2 s) and puts the peak in its summary
   (`peak_pss_mb`); a spike shorter than a look can be missed.
+- **Several cells in one batch:** `register --cell A --cell B ...` runs the spec under each cell in
+  turn (list the longest first: the fleet takes attempts in order), the ids `<cell>.<backdrop>-<seed>`
+  so the cells' runs never share a directory; `find` counts `k` per cell and backdrop. A ledger from
+  before (one `cell` for the batch) is read as each attempt's, and the attempt message is unchanged,
+  so a controller at a newer commit serves workers pinned at an older one.
 - **A host given outside its hours:** `controller --open HOST` (the owner's grant, logged in the
   ledger as `opened`); the host table is unchanged.
 

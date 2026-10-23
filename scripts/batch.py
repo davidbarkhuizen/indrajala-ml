@@ -2,7 +2,7 @@
 The batch runner (docs/workplans/batch-runner-workplan.md): a controller on one machine and a worker daemon on
 each, over newline-delimited JSON on a TCP socket on 127.0.0.1 (indrajala_ml.batch).
 
-    python scripts/batch.py register DIR --name NAME --mode measure|find --cell CELL --attempts SPEC
+    python scripts/batch.py register DIR --name NAME --mode measure|find --cell CELL [--cell CELL ...] --attempts SPEC
                                      [--cutoff BACKDROP=EPOCHS ...] [--k K] [--commit COMMIT]
     python scripts/batch.py prepare --hosts pyramidon,klip,stone --commit COMMIT
     python scripts/batch.py controller DIR [--port PORT] [--hosts pyramidon,klip,stone]
@@ -12,7 +12,8 @@ each, over newline-delimited JSON on a TCP socket on 127.0.0.1 (indrajala_ml.bat
     python scripts/batch.py status DIR
     python scripts/batch.py report DIR
 
-SPEC is `s3:40-47,mtf4:32-35` (BACKDROPS' short names); a cutoff is a backdrop's Luby t* in epochs trained
+SPEC is `s3:40-47,mtf4:32-35` (BACKDROPS' short names), run under each cell in turn (the longest
+first); a cutoff is a backdrop's Luby t* in epochs trained
 (the run's --cutoff-epochs; epochs are the time axis). The controller serves until the batch is done; a worker runs its attempts in
 ROOT/<attempt>/ from WORKTREE's scripts and reconnects after a dropped connection. Across machines
 (stage 4): `prepare` puts each host's worktree at the batch's commit, `fleet` keeps a reverse ssh tunnel
@@ -40,7 +41,9 @@ def main(argv: list[str]) -> int:
     register.add_argument("dir", type=Path)
     register.add_argument("--name", required=True)
     register.add_argument("--mode", choices=("measure", "find"), required=True)
-    register.add_argument("--cell", choices=sorted(b.CELLS), required=True)
+    register.add_argument(
+        "--cell", choices=sorted(b.CELLS), action="append", required=True, help="each cell, the longest first"
+    )
     register.add_argument("--attempts", required=True, help="s3:40-47,mtf4:32-35")
     register.add_argument(
         "--cutoff", action="append", default=[], help="BACKDROP=EPOCHS, each backdrop's t* in epochs trained"
@@ -80,7 +83,7 @@ def main(argv: list[str]) -> int:
 
     if args.command == "register":
         cutoffs = {k: int(v) for k, v in (c.split("=") for c in args.cutoff)}
-        made = b.attempts(args.attempts, cutoffs)
+        made = b.attempts(args.attempts, args.cell, cutoffs)
         commit = args.commit
         if commit is not None:  # the workers report a full sha and the controller compares exactly
             repo = Path(__file__).resolve().parent.parent
@@ -93,7 +96,7 @@ def main(argv: list[str]) -> int:
         here = next(h for h in b.HOSTS.values() if not h.remote)  # the controller's machine: its batch crate
         repo = Path(__file__).resolve().parent.parent
         crate = args.crate or b.identity(repo, here.python, {"PYTHONPATH": here.pythonpath})[1]
-        b.register(args.dir, b.Batch(args.name, args.mode, args.cell, made, args.k, commit, crate))
+        b.register(args.dir, b.Batch(args.name, args.mode, made, args.k, commit, crate))
         print(f"registered {args.dir}: {len(b.State.read(args.dir).batch.attempts)} attempts")
     elif args.command == "prepare":
         repo = Path(__file__).resolve().parent.parent
@@ -132,10 +135,12 @@ def main(argv: list[str]) -> int:
 
         state = b.State.read(args.dir)
         print("\n".join(b.report(args.dir)))
-        for backdrop in sorted({a.backdrop for a in state.batch.attempts}):
-            ended = [state.ended[a.id] for a in state.batch.attempts if a.backdrop == backdrop and a.id in state.ended]
+        several = len(state.batch.cells) > 1
+        for (cell, backdrop), mine in b.groups(state.batch).items():
+            ended = [state.ended[a.id] for a in mine if a.id in state.ended]
             if ended:
-                print(f"  {backdrop}: {mf.restart_summary(mf.restart_cost(b.runs_of(ended)), 'epochs')}")
+                name = f"{cell} {backdrop}" if several else backdrop
+                print(f"  {name}: {mf.restart_summary(mf.restart_cost(b.runs_of(ended)), 'epochs')}")
     return 0
 
 
