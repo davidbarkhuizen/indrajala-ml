@@ -1097,7 +1097,9 @@ def answers_stop(
     An answers-only stop, read offline from a run's log.jsonl (the reasoning review's item 1): the first
     step whose answers are all right (the step's own and the long lengths') and whose machine, read off
     and minimised, has at most `bound` states (a state bound, as discovery supplies). The certificate is
-    read only to judge the stop: "kept" (the stop's network certified), "false-stop" (an uncertified
+    read only to judge the stop: "kept" (the stop's network certified), "strict-only" (not certified
+    with near ties branched, but exact at snap ratio 1.0, the network as it computes: the margin's
+    case, D59; read from the row's `certificates` where logged), "false-stop" (an uncertified
     network, in a run that certified later), "false-discovery" (in a run that never certified),
     "missed" (the run certified before the rule passed) or "silent" (neither). `snapped(step)` replaces
     the logged answers with a saved network's (snapped_answers) for runs whose logged answers are a
@@ -1111,7 +1113,16 @@ def answers_stop(
                 {**row.get("accuracy", {}), **row.get("long", {})} if snapped is None else snapped(int(row["step"]))
             )
             if answers and all(v == 1.0 for v in answers.values()):
-                verdict = "kept" if row["certified"] else "false-stop" if certified is not None else "false-discovery"
+                strict = row.get("certificates", {}).get("strict", {}).get("certified", False)
+                verdict = (
+                    "kept"
+                    if row["certified"]
+                    else "strict-only"
+                    if strict
+                    else "false-stop"
+                    if certified is not None
+                    else "false-discovery"
+                )
                 return {"verdict": verdict, "stop": int(row["step"]), "certified": certified}
         if row["certified"]:
             return {"verdict": "missed", "stop": None, "certified": certified}

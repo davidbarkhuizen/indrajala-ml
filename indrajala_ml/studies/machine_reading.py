@@ -67,6 +67,11 @@ def walk(machine: wc.WindowMachine, tokens: int) -> Walk:
     return Walk(codes, np.array(nexts, dtype=np.int64), np.stack(outputs))
 
 
+def mealy(walk: Walk, slot: int = 0) -> wt.Mealy:
+    """The walk as a Mealy machine (its codes the states, code 0 the start), its labels one slot's (the first, as product reads)."""
+    return wt.Mealy(walk.next, walk.outputs[:, :, slot])
+
+
 def groups(walk: Walk, d: int) -> list[list[int]]:
     """
     The walk's codes grouped by d-equivalence (Moore refinement: two codes equivalent to depth k
