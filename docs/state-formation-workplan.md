@@ -104,7 +104,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`); read 2026-10-23, 05:30: S3 and move-to-front-4 7 of 12, between its bars; 0 of 10 on the others; every failure frozen |
 | D65 | 2026-10-22, 10:45 | the order-biased cool | the cool's halving time times `1 + w (s - 1)`: w the machine's order from answers (0 when ordered), s the slowdown from the melting curve and relaxation; set aside at 11:05 on its stage 0 (the failures freeze, the cool does not outrun them) |
 | D66 | 2026-10-22, 11:20 | the two-phase cool | a slower re-cool after each reheat (the forward rate times `2^-k`, k reheats so far): zero for runs that never freeze; reshaped at 11:50 from an order gate that failed its stage 0 (planned, after D63's reading) |
-| D67 | 2026-10-23, 06:05 | the deadline's completion | the ten runs of D63 and D64 that the 690-minute wall-clock budget cut short of their 1,600 epochs, run again from their seeds to their epoch budget (`probe-d67.sh`); epochs the binding budget from now on |
+| D67 | 2026-10-23, 06:05 | the deadline's completion | the nine runs of D63 and D64 that the 690-minute wall-clock budget cut short of their 1,600 epochs, run again from their seeds to their epoch budget (`probe-d67.sh`); epochs the binding budget from now on |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -1233,7 +1233,9 @@ owner's; D49-D54 settled under the delegation.
   that might be affected").** A run's budget is its epochs (1,600); the 690-minute wall-clock budget,
   meant as a guard, bound ten runs of the two probes still being read, cutting them short on a loaded
   `stone`: D64's S3 45 (1,584 epochs), move-to-front-4 34 (918) and 35 (1,135); D63's S4 2-5
-  (892-1,091) and random-q16-0 4 (1,336), 5 (1,330) and 6 (at its deadline about 06:20). A deadline's
+  (892-1,091) and random-q16-0 4 (1,336), 5 (1,330) and 6 (at its deadline about 06:20). **Random-q16-0
+  6 spent its 1,600 epochs at 685.5 minutes (06:15), before its deadline: complete, so not re-run (nine
+  runs).** A deadline's
   stop writes its checkpoint "ended", so none can be resumed; the seed run again from the start (the
   same cell at its probe's commit, the wall clock lifted: `--budget-minutes 100000`, since the old
   code's default is 60) is the same run up to the deadline (every row but the seconds; bit parity
