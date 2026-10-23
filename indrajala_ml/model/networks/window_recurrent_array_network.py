@@ -341,7 +341,7 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         forward_windows's; the states (N, state_size), the initial state's then each window's
         next state's, W + 1 of them, a snapped state as its code's vector (the claims workplan's
         drift profile, E2b); and the cells' outputs before the snap, the same W + 1 (the snap
-        wall's margins, docs/snap-wall-workplan.md). `live`: the continuous factors (set_continuous)
+        wall's margins, docs/workplans/snap-wall-workplan.md). `live`: the continuous factors (set_continuous)
         read unsnapped, as forward_windows (the state formation workplan's warm-up readings).
         """
         C = self._first_state(X.shape[0])
@@ -477,7 +477,7 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
             codes.gate = None  # this batch's only
 
     def _walled_codes(self) -> list[Any]:
-        # the factors' codes with the snap wall on (docs/snap-wall-workplan.md; numpy's only, D8)
+        # the factors' codes with the snap wall on (docs/workplans/snap-wall-workplan.md; numpy's only, D8)
         factors = getattr(self.recurrence_layer, "factors", ())
         return [f.codes for f in factors if f.codes is not None and getattr(f.codes, "wall", 0.0) > 0.0]
 
@@ -644,7 +644,7 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
     def _accumulate_gradients(self, X: Any, Y: Any) -> None:
         # the windows forward in training and back in one call, each gradient accumulated in place;
         # then the initial state's, through its codes (W14, W20; D5, D6)
-        assert not self._walled_codes(), "the snap wall is numpy's (docs/snap-wall-workplan.md, D8)"
+        assert not self._walled_codes(), "the snap wall is numpy's (docs/workplans/snap-wall-workplan.md, D8)"
         windows = self._windows(X)
         weight = 1.0 / windows
         recurrence = self.recurrence_layer

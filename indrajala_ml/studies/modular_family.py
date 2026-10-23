@@ -19,7 +19,7 @@ wall-clock budget, diagnosing it as it goes: each operation's accuracy, the quot
 and each factor's share of `A`, `B`, the sum, the difference and the zero tests
 (window_diagnostics.share).
 
-The probe runs any target the same way (the general algebras, docs/general-algebras-workplan.md,
+The probe runs any target the same way (the general algebras, docs/workplans/general-algebras-workplan.md,
 D6): a target is an encoding (`Target`), division's `Encoding` one, `MachineEncoding` (any
 window_tasks machine, its own task, one token a window) another. The fork, the trigger, the guard
 and the readouts read only what a Target gives: its windows and answers, each answer's kind (D7:

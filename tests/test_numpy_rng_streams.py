@@ -1,8 +1,8 @@
 """
-numpy's random streams are reproducible from outside numpy, bit for bit (docs/rng-audit.md). A
+numpy's random streams are reproducible from outside numpy, bit for bit (docs/audits/rng-audit.md). A
 pure-Python MT19937, seeded as np.random.seed(int) seeds it, reproduces the legacy stream that
 randomize() (np.random.uniform) and DropoutArrayLayer (np.random.random >= p) draw from, and the
-PCG64 Generator's floats are (raw >> 11) * 2^-53. np.random.seed's three paths (docs/rng-audit.md,
+PCG64 Generator's floats are (raw >> 11) * 2^-53. np.random.seed's three paths (docs/audits/rng-audit.md,
 "Seeding") are pinned too: init_genrand for anything operator.index takes (after squeeze),
 init_by_array for other sequences, and the rejections. This is the algorithm the crate's MT19937
 ports; rust/tests/test_random_numpy_parity.py checks the crate against np.random directly.

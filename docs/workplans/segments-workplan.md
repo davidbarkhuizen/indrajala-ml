@@ -4,7 +4,7 @@
 production (the owner's direction, 2026-10-10: the long-form corpora are the targets, a toy corpus
 never decides the design). Stage 1 (this plan) done.**
 
-Roadmap step 11 ([primitives-roadmap.md](primitives-roadmap.md)): one segment id per token, from
+Roadmap step 11 ([primitives-roadmap.md](../primitives-roadmap.md)): one segment id per token, from
 which attention, the loss and the evaluation know which tokens belong together and which are
 padding; text packed into full windows with explicit boundaries for training; padded batches of
 variable-length inputs for inference. All three implementations and the crate.

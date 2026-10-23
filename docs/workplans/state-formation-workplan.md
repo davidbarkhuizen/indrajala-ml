@@ -8,10 +8,10 @@ understanding, testing then either accepting or rejecting each in turn", builds 
 the owner's delegation, each with its options' pros and cons. Probe-driven. Supersedes the
 commitment-control and one-code-one-state plans' remaining claims (closed at the same direction).**
 
-The goal is [machine-discovery.md](machine-discovery.md)'s stage A: one general architecture and
+The goal is [machine-discovery.md](../machine-discovery.md)'s stage A: one general architecture and
 training method that forms a state, keeps it and certifies on every backdrop
-([failure-kinds.md](failure-kinds.md)). The options are the literature review's
-([window-recurrent-literature.md](window-recurrent-literature.md), extension 2026-10-20).
+([failure-kinds.md](../failure-kinds.md)). The options are the literature review's
+([window-recurrent-literature.md](../window-recurrent-literature.md), extension 2026-10-20).
 
 ## The IDs, in time order
 
@@ -653,7 +653,7 @@ same runs, and the follow-up reruns the six others.
     a new measurement, untested; (a) bounds the same thing directly.
 ### The program restructured (2026-10-21, after the reasoning review)
 
-The reasoning review ([reasoning-review-2026-10-21.md](reasoning-review-2026-10-21.md)) and its
+The reasoning review ([reasoning-review-2026-10-21.md](../audits/reasoning-review-2026-10-21.md)) and its
 re-reading of existing data (findings below) change what the panel (4b) tests and what comes before
 it. D36 is the owner's; D35 and D37-D39 settled under the owner's delegation.
 
@@ -1268,7 +1268,7 @@ owner's; D49-D54 settled under the delegation.
 
 ### The consistency review settled (2026-10-21, afternoon)
 
-The consistency review ([consistency-review-2026-10-21.md](consistency-review-2026-10-21.md)), its
+The consistency review ([consistency-review-2026-10-21.md](../audits/consistency-review-2026-10-21.md)), its
 items 1-8, settled under the owner's delegation ("go ahead and settle them under your delegation"),
 before the panel's (4b) registration and before the coupling probe's (D38) data.
 
@@ -1714,7 +1714,7 @@ each log. Data in data/window-recurrent/state-formation/option1/probe-d32/.
 ## Findings: the reasoning review's re-reading of existing data (2026-10-21)
 
 Re-read offline while the adaptive cool's existence probe (D33's probe) and the handover probe's S3
-arm (4a'') ran, for the review's items 1, 3 and 8 ([reasoning-review-2026-10-21.md](reasoning-review-2026-10-21.md)).
+arm (4a'') ran, for the review's items 1, 3 and 8 ([reasoning-review-2026-10-21.md](../audits/reasoning-review-2026-10-21.md)).
 The tool: `answers-stop` (the probe script; `mf.answers_stop`), a line per run.
 
 - **An answers-only stop finds the target's machine when the state bound is tight (item 1).** The
@@ -1731,7 +1731,7 @@ The tool: `answers-stop` (the probe script; `mf.answers_stop`), a line per run.
     and 1 is a false discovery; at 1.5, 44 and 4; with no bound, 55 and 10. Those networks answer every
     sampled word to length 48 and are larger machines (e.g. 26-165 states for division's 25, 533-613
     for S5's 120): the samples don't tell them from the target, their size does. Discovery's state
-    bound ([machine-discovery.md](machine-discovery.md)) is therefore the stop's, not only the
+    bound ([machine-discovery.md](../machine-discovery.md)) is therefore the stop's, not only the
     exclusion bound's, and its slack costs.
   - **Option 1's logged answers are the coupled network's**, not its snapped machine's (a run at
     coupling 0.06 logs right answers while its snapped machine has 2-3 states), so the rule re-reads
@@ -2073,7 +2073,7 @@ a random machine would just need a very slow cool.**
   in the warm-up's states, which should be at its worst on a machine without product structure for the
   factors to align with.
 - **Why random machines may be harder:** our random backdrops (random-4-0, random-q16-0) failed by
-  extra codes (codes whose outputs go wrong within `d` tokens; [failure-kinds.md](failure-kinds.md)),
+  extra codes (codes whose outputs go wrong within `d` tokens; [failure-kinds.md](../failure-kinds.md)),
   not by formation or conversion, so annealing helps there only if the splits stop where the target's states stop
   (plausible: codes part only as far as the states' clusters do; untested, and the thermal noise could
   split codes within a cluster).
@@ -2178,8 +2178,8 @@ a random machine would just need a very slow cool.**
    the panel, decision.
 7. **Option 4 (FSQ factors):** understanding, design (a fixed grid a factor, its levels from the
    codes ratio), build, the panel, decision.
-8. **Findings** in [failure-kinds.md](failure-kinds.md) and the probe script; this plan retired, leftovers
-   to [next-steps.md](next-steps.md).
+8. **Findings** in [failure-kinds.md](../failure-kinds.md) and the probe script; this plan retired, leftovers
+   to [next-steps.md](../next-steps.md).
 
 ## Machines
 

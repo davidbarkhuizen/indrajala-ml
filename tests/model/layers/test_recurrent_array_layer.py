@@ -338,7 +338,7 @@ def test_codes_scatter_their_gradient_to_the_codes_chosen_only():
     assert layer.grad_E.tolist() == [[-6.0], [2.0], [0.0]]
 
 
-# the snap wall (docs/snap-wall-workplan.md)
+# the snap wall (docs/workplans/snap-wall-workplan.md)
 
 WALLED = 6  # states, one at each pair of 4 codes' midpoint
 
