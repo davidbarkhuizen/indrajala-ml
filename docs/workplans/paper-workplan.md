@@ -197,6 +197,55 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     discoverer who knows the size only roughly. (c) 1.5 as well. Cons: out of reach for every target
     but S3 (the slack reading's table).
 
+## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
+
+`data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
+names, each with its run's arm and vocabulary; a JSON a network, `tally.py` → `tally.txt`, the
+manifest `paper/t4.sha256` (85 files). A factor's approximation nontrivial: 1 < blocks < states.
+
+| set | networks | factors nontrivial | networks holding a line (both factors) | covers | determines |
+| --- | --- | --- | --- | --- | --- |
+| `p` 5 division claim, family | 13 | 8/26 | 5 (3) | 3 | `A + B` 4, `A - B` 4 |
+| `p` 5 division claim, quotient | 1 | 0/2 | 0 | 0 | - |
+| `p` 5 approximation claim, family | 15 | 13/30 | 8 (5) | 5 | `A + B` 7, `A - B` 6 |
+| `p` 5 approximation claim, sum | 10 | 7/20 | 7 (0) | 0 | `A + B` 7 |
+| `p` 5 approximation claim, quotient | 1 | 1/2 | 1 (0) | 0 | `B` 1 |
+| `p` 5 probe 2a (apart) | 3 | 3/6 | 2 (1) | 1 | `A + B` 2, `A - B` 1 |
+| `p` 7 probe 4 and fork probe | 6 | 3/12 | 2 (1) | 1 | `A + B` 1, `A - B` 2 |
+| `p` 11 ladder | 4 | 6/8 | 4 (2) | 2 | `A + B` 3, `A - B` 3 |
+| `p` 13 W1 | 5 | 2/10 | 2 (0) | 0 | `A + B` 1, `A - B` 1 |
+| word-problem-s3 | 1 | 2/2 | - | 1 | `places {1}`, `places {2}` |
+| word-problem-s4 | 4 | 3/8 | - | 0 | `places {1}` 2, `places {2}` 1 |
+| move-to-front-3 | 6 | 9/12 | - | 1 | `order {0, 1}` 4, `{0, 2}` 5, `{1, 2}` 1 |
+
+- **T4a met:** the algebras' factors 14 of 22 nontrivial (0.64; the bar a half, the refutation a
+  quarter). S4 alone 3 of 8.
+- **T4b met:** no factor holds `parity`; every congruence named on S3 and S4 is a `places` one (a
+  point's or a pair's stabiliser): S3 seed 2 a cover by the places of items 1 and 2, as 4a''''s seed
+  7 was.
+- **T4c mixed, by its registered rule:** division's factors 43 of 116 nontrivial (0.37; 40 of 110,
+  0.36, without probe 2a), between the expectation (below a quarter) and K8's extension (at least a
+  half). By set it ranges from 0.20 (W1) to 0.75 (`p` 11).
+- **What the mixed count hides, read beside it (not registered):** every one of the 43 nontrivial
+  division factors holds *exactly one line* (its approximation `p` blocks of `p`, naming one of
+  the p + 1 lines), and the line is almost always an output the arm trained on: the sum arm's 7
+  are all `A + B`, never `A - B` (7 of its 10 networks hold the sum in a factor of its own); the
+  cover's arms hold `A + B` 18 times and `A - B` 17; of the 116 factors none holds another line
+  but the quotient-alone network's one `B`. 12 of the 58 division networks are covers, their two
+  factors the sum and the difference apart. So where a division factor decomposes, it holds the
+  approximation it was given; about a third do, the rest hold the state jointly.
+- **A check for P2 before the manuscript:** P2's "the learned state is not factored by residue"
+  says each factor of "the cover's first networks" at a solved step holds 0.37-0.71 of every
+  direction `xA + yB`. If those are probe 2a's networks (reported apart here), two of the three hold
+  `A + B` or `A - B` exactly in a factor at their certified step; the section's networks and step
+  need confirming, and its wording correcting if they are these.
+- **For the paper (D10's use):** K8 stands for the algebras on networks that didn't shape it (T4a,
+  T4b). On division it holds in a narrower form than K8 states: a third of the factors, each
+  holding exactly a trained approximation; stated so, with the count as registered (mixed). The
+  sum arm's factors (only ever the sum) are the sharpest observation, exploratory (not registered),
+  and T1's arms (the suffix and token outputs) can test it: a factor holding a non-approximation
+  output exactly would say the factor holds what it is asked, not what is an approximation.
+
 ## Stages
 
 1. **This plan;** the audit's standing decisions applied (F1 recorded in the state-formation
