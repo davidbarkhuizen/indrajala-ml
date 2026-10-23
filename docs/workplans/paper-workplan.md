@@ -125,13 +125,91 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
   amendments (F9, F24) and the fresh-seed rate's verdict (F1: D64 stays 7 of 12, D67 reported on its
   own), done in stage 1.
 
+- **D10. T4 registered: the decomposition reading** (2026-10-23, before any of its networks is read
+  by `approximations`). The tool: `approximations NETWORK... --task T --arm A --vocabulary ...` (the
+  run's own arm and vocabulary), which names division's congruences too since stage 2: its p + 1 lines
+  `A + kB` (the sum `A + B`, the difference `A - B`, `A`, `B`), all of its nontrivial congruences
+  (window_tasks.linear_labels, proved and tested). Read on the snapped certified network of each run.
+  - **The networks** (fixed now; two factors each; one-factor networks left out, as a lone factor
+    holds the whole state once certified):
+    - *division, P2's and W1's* (58): `p` 5: `division-claim/` family 13, quotient 1;
+      `approximation-claim/` family 15, sum 10, quotient 1 (`--vocabulary sum difference product`);
+      `division-probe-2a/` seeds 4, 5, 7 (the cover; the networks of P2's "not factored by residue"
+      reading, so reported apart); `p` 7: `division-probe-4/` seed 2, `fork-probe/` fork 0, 2, 3 and
+      nofork 0, 2; `p` 11: `p11-ladder/` 1, 2, 4, 5; `p` 13: `window-branches/w1/` 0, 1, 2, 4, 5 (W1,
+      K6's registered 5 of 6). None read by `approximations`; their logs' factor shares (`A`, `B`,
+      `S`, `D`, a continuous proxy) were seen during training.
+    - *the algebras, round 1's unread* (11): word-problem-s3 seed 2, word-problem-s4 seeds 1-4,
+      move-to-front-3 seeds 0-5 (`general-algebras/round1/`). Round 1's four move-to-front-4
+      networks were read in shaping K8 and are left out.
+    - *T2's and T5's certified networks*, when they exist, by the same rules, reported as fresh.
+  - **Expectations** (a factor's approximation nontrivial: 1 < blocks < the target's states):
+    - **T4a, the algebras:** at least half the factors hold a nontrivial approximation (the 14
+      move-to-front-4 networks read before: 25 of 28 factors). *Refuted* below a quarter.
+    - **T4b, the word problems:** no factor's approximation is the sign (`parity`, A_n's cosets)
+      alone, and every named congruence a factor determines on S3 and S4 short of the whole state is a
+      stabiliser's (`places`): the chain through a stabiliser, not Krohn and Rhodes's through the sign. *Refuted*
+      by any factor holding `parity` without a finer `places`.
+    - **T4c, division (expected against K8):** P2's reading (each factor holding 0.37-0.71 of every
+      direction, no factor a function of one residue) predicts that fewer than a quarter of division's
+      factors determine a line, so the state is held jointly, with the cover's arm (trained on the sum
+      and difference) no different. *K8 extends to division* if at least half determine a line (in
+      the family and sum arms, the trained `A + B` or `A - B` most of all); in between, reported as
+      mixed. Reported by arm and `p`, `division-probe-2a` apart.
+    - **Reported, no expectation:** covers (the meet separating every state), cascades, each factor's
+      autonomy.
+  - **The paper's use:** T4a and T4b standing, K8 is stated for the algebras on networks that didn't
+    shape it; T4c decides whether K8 claims division (if refuted, the paper says division's learned
+    state is held jointly, P2's section confirmed exactly).
+  - Options: (a) *chosen*, every unread two-factor network with expectations from the readings so
+    far. Pros: networks not read before; the counter-prior (P2's) stated rather than ignored;
+    division's reading exact now. Cons: the algebras' unread set is small (11) until T5. (b) Only
+    T2's and T5's fresh networks. Pros: wholly fresh. Cons: waits on the long batches; leaves 58
+    division networks unread. (c) Re-read every network, the 21 that shaped K8 included. Cons: the
+    hypothesis's own data can't test it.
+- **D11. T6 registered: the target-free proof** (2026-10-23, before any of its runs exist). The tool:
+  `answers-proof LOG... --task T --arm A --slack 1 1.1 --limit 20000000 --out DIR`, on every run of
+  T1, T2, T3's coded arms (a continuous state has no machine to read) and T5: at each bound (the
+  target's states times 1.0 and 1.1, rounded down), the answers-only stop from the log (the logged
+  answers all right at the step's lengths and 24 and 48, the minimised machine within the bound),
+  then Chow's test set on that step's saved network, the target a black box. The paper's cell saves
+  every step's network, so every stop has one.
+  - **Reach** (the test set's words, the target's own machine): division `p` 5 904 at the bound,
+    82,300 at 1.1; `p` 7 1,770 and 1.3e7; `p` 11 4,360 and 1.4e15; `p` 13 6,090 and 1.3e19; S3 50
+    and 50; S4 363 and 11,253; move-to-front-4 1,331 and 41,261; random-q12-0 305 and 1,830;
+    random-q16-0 405 and 2,430. So at 1.1 `p` 11 and 13 are out of reach: their stops are judged by
+    the certificate alone, reported as such.
+  - **An integrity check, not an expectation:** at the exact bound Chow's theorem makes its verdict
+    the machine's equality with the target, so on every stop it agrees with the strict verdict
+    (snap ratio 1.0); any disagreement is a bug, diagnosed before the reading goes on.
+  - **Expectations:**
+    - **T6a:** no false discovery and no false stop at the exact bound (the slack reading: none in
+      90 runs). *Refuted* by any one.
+    - **T6b:** at 1.1, no wrong machine where Chow reaches (the slack reading: none). *Refuted* by any
+      stop Chow refutes; reported with the bound and the counterexample's length.
+    - **T6c:** every certified run's answers-only stop lands at or before its certified step (kept or
+      strict-only), so the proof needs no certificate in the loop; "missed" runs (certified before the
+      logged answers all passed) reported, expected under a tenth.
+    - **Reported:** the words each proof queried, per target.
+  - Options: (a) *chosen*, the exact bound and 1.1, Chow where it reaches. Pros: K9 measured on
+    every paper run, its cost stated; the slack bound shows a discoverer's margin. Cons: no proof at
+    1.1 for `p` 11 and 13. (b) The exact bound only. Pros: proof everywhere. Cons: says nothing of a
+    discoverer who knows the size only roughly. (c) 1.5 as well. Cons: out of reach for every target
+    but S3 (the slack reading's table).
+
 ## Stages
 
 1. **This plan;** the audit's standing decisions applied (F1 recorded in the state-formation
    workplan, the protocol amended for F9 and F24, F3's reword in contribution.md); the Chow tool
    merged (K9's instrument).
 2. **Offline first:** T4 and T6's tools and expectations registered; T8's sweep; T7's regeneration
-   script begun.
+   script begun. **Done 2026-10-23:** T4 and T6 registered (D10, D11), their tools here (division's
+   lines named in `approximations`, the readings' `--vocabulary`, `answers-proof`); T8's sweep in
+   indrajala-research's window-recurrent-literature.md (its 2026-10-23 extension: no 2025-2026
+   work learns an automaton by gradient descent and proves it at every length), the papers in
+   indrajala-literature; T7's `scripts/paper_tables.py` (P2's approximation table regenerated
+   identically), its further tables added with the manuscript (stage 6). T4's reading of the 69
+   networks named in D10 is offline and may run now; T6 waits on its runs.
 3. **Builds:** T1's two control outputs (suffix and token) as answer kinds of the division encoding;
    T3's continuous and linear windows in the division probe if not already there; each tested, the
    golden run unchanged.

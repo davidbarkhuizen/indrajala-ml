@@ -206,3 +206,26 @@ def test_two_counters_mod_2_each_an_approximation_together_a_cover():
         assert factor["approximation"] == [2, 2] and factor["autonomous"] == 1.0
         assert factor["determines"] == []  # no coordinates, no names
     assert result["cascade"] == [0, 1]  # a parallel product: a cascade of either over the other
+
+
+def test_divisions_sum_and_difference_held_apart_read_as_its_lines_and_cover_it():
+    # a network holding division's state as (A + B, A - B) mod 5, a factor each: the two named lines
+    p = 5
+    target = wt.modular_machine(p)
+    assert target.coordinates is not None
+    values = target.coordinates.values
+
+    def held(s: int) -> wc.State:
+        A, B = (int(x) for x in values[s])
+        return ((A + B) % p, (A - B) % p)
+
+    state_of = {held(s): s for s in range(target.states)}
+    network = Pairs(
+        {code: [held(int(r)) for r in target.transition[s]] for code, s in state_of.items()},
+        {code: target.output[s].tolist() for code, s in state_of.items()},
+    )
+    result = mr.approximations(mr.product(network, target), target)
+    total, difference = result["factors"]
+    assert result["cover"] and result["meet"] == p * p
+    assert total["congruence"] and total["approximation"] == [p] * p and total["determines"] == ["A + B"]
+    assert difference["congruence"] and difference["determines"] == ["A - B"]
