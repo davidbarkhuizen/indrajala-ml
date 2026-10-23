@@ -212,8 +212,11 @@ Decided with the owner, each to become a workplan or a stage:
   `a = 0` adds resets.
 - **The approximation claim: done, A1-A3 hold** (2026-10-17; the workplan retired:
   `git show c201622:docs/approximation-claim-workplan.md`; findings in `scripts/modular_family_probe.py`'s docstring).
-  The sum alone certifies 10 of 20 against the quotient alone's 1 and the product's 0, so one
-  approximation helps because it is one. Open: whether any approximation helps (one control,
+  The sum alone certifies 10 of 20 against the quotient alone's 1 and the product's 0: the sum, an
+  approximation, helps where an equally distinguishing non-approximation, which the network doesn't
+  learn, doesn't. Whether it helps *because* it is an approximation needs a learnable
+  non-approximation control (the programme audit's F3): the paper's T1
+  ([paper-workplan.md](workplans/paper-workplan.md)). Open: whether any approximation helps (one control,
   the product, at one machine), and at larger `p`; the affine map above tests one
   approximation where no cover exists.
 - **Terms** (settled with the owner, the division paper): target machine and its output function;
