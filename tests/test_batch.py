@@ -351,6 +351,40 @@ def test_t1_and_t3s_cells_meet_their_registered_bounds():
     assert all(b.BACKDROPS[n].vocabulary == b.T1_VOCABULARY for n in ("d5-sum", "d5-suffix", "d5-token"))
 
 
+# paper-workplan.md D15, D16: each backdrop's states q, codes a factor and cap (the exclusion bound) under the paper cell
+T2_T5 = {
+    "d7-family": (49, 21, 489),
+    "d11-family": (121, 32, 1144),
+    "d11-quotient": (121, 32, 1144),
+    "d13-family": (169, 38, 1612),
+    "s3": (6, 8, 69),
+    "s4": (24, 15, 248),
+    "mtf4": (24, 15, 248),
+    "rq12": (12, 11, 132),
+    "rq16": (16, 12, 159),
+}
+
+
+@pytest.mark.parametrize("name", sorted(T2_T5))
+def test_t2_and_t5s_cells_meet_their_registered_bounds(name: str):
+    from fractions import Fraction
+
+    from indrajala_ml.studies import modular_family as mf
+
+    q, codes, cap = T2_T5[name]
+    cell = b.CELLS["paper"].args
+    assert [cell[cell.index(f) + 1] for f in ("--factors", "--codes-ratio", "--factor-width", "--window-width")] == [
+        "2",
+        "32/11",
+        "32",
+        "32",
+    ]
+    factors = mf.scaled_factors(q, Fraction(32, 11), 2, 32)
+    assert b.BACKDROPS[name].bound == q and factors == [(32, codes), (32, codes)]
+    assert codes * codes >= 8 * q  # joint codes at least 8 times the states
+    assert mf.exclusion_bound(q, factors) == cap
+
+
 def test_an_opened_host_takes_work_outside_its_hours():
     thursday_noon = datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)  # stone's owner's day
     assert b.window_left(b.HOSTS["stone"], thursday_noon) is None
