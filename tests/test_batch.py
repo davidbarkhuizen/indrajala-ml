@@ -8,6 +8,7 @@ import socket
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -291,3 +292,44 @@ def test_t1s_cell_is_the_approximation_claims():
     command = worker(Path("/tmp"), "w", 1).command(b.Attempt("d5-sum-0", "d5-sum", 0), "approximation")
     assert command[command.index("--budget-epochs") + 1] == "400"
     assert not {"--fork", "--codes-ratio", "--window-width", "--state-bound"} & set(command)
+
+
+def test_a_paper_cells_run_succeeds_at_its_first_certificate_and_a_continuous_one_never(tmp_path: Path):
+    paper = tmp_path / "paper.jsonl"
+    rows: list[dict[str, Any]] = [
+        {"step": 1, "epoch": 0, "accuracy": {}},  # an epoch's screen: no end
+        {"step": 1, "end": "passed", "epochs": 30, "certified": False, "minimised": 40, "seconds": 9.0},
+        {"step": 2, "end": "passed", "epochs": 25, "certified": True, "minimised": 25, "seconds": 20.0},
+    ]
+    paper.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    read = b.summary(paper)
+    assert read["success"] == 55 and read["end"] == "passed" and read["step"] == 2
+    continuous = tmp_path / "continuous.jsonl"
+    rows = [{"step": 1, "end": "spent", "epochs": 400, "certified": False, "long": {"24": 0.2}, "seconds": 5.0}]
+    continuous.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    read = b.summary(continuous)
+    assert read["success"] is None and read["end"] == "spent" and read["epochs"] == 399
+
+
+def test_t3s_cells_change_only_the_window_or_the_state():
+    w = worker(Path("/tmp"), "w", 1)
+    base = w.command(b.Attempt("d5-family-wide-0", "d5-family-wide", 0), "approximation")
+    for cell, baseline in (("approximation-linear", "linear"), ("approximation-continuous", "continuous")):
+        command = w.command(b.Attempt("d5-family-wide-0", "d5-family-wide", 0), cell)
+        assert [a for a in command if a not in ("--baseline", baseline)] == base
+    assert base[base.index("--vocabulary") + 1 : base.index("--vocabulary") + 4] == ["sum", "difference", "product"]
+
+
+def test_t1_and_t3s_cells_meet_their_registered_bounds():
+    # paper-workplan.md D13, D14: two factors of 16 codes (256 joint), the cap the quotient's exclusion bound,
+    # the suffix arm's machine (division's state and the last column's digit sum) within the codes
+    from indrajala_ml.studies import modular_family as mf
+
+    cell = b.CELLS["approximation"].args
+    assert cell[cell.index("--factors") + 1] == "2" and "--codes-ratio" not in cell  # the default 16 x 16
+    factors = [(16, 16), (16, 16)]
+    joint = 16 * 16
+    assert mf.exclusion_bound(25, factors) == joint + 25 - 1 == 280
+    assert joint >= 25 * 5  # the suffix arm's 125 states
+    assert {b.BACKDROPS[name].arm for name in ("d5-sum", "d5-suffix", "d5-token")} == {"sum", "suffix", "token"}
+    assert all(b.BACKDROPS[n].vocabulary == b.T1_VOCABULARY for n in ("d5-sum", "d5-suffix", "d5-token"))
