@@ -17,8 +17,12 @@ docs/protocols/measurement.md (the A/B harness workplan in docs/next-steps.md ha
     python scripts/ab.py wait [RUN]
     python scripts/ab.py remote --host jebel run|extend|wait|status|report|archive [its arguments]
 
-Each side is a commit, checked out once as a detached worktree under ~/code/ab-worktrees/<sha7>.
-A run lives in ~/code/ab-runs/<YYYY-MM-DD>-<name>/ (manifest.json, progress.jsonl, and each pass's
+Everything lives under one root, `--runs-root DIR` (before the command; else AB_RUNS_ROOT, else
+~/data/indrajala-ml/runs/ab): runs/ (the runs), launches/ (detached runs' logs), wheels/ (the crate
+builds), worktrees/ (the sides' checkouts; AB_WORKTREES_ROOT overrides), notes/, and run.lock (the
+machine lock, which a study on the machine takes from the same root through AB_RUNS_ROOT).
+Each side is a commit, checked out once as a detached worktree under ROOT/worktrees/<sha7>.
+A run lives in ROOT/runs/<YYYY-MM-DD>-<name>/ (manifest.json, progress.jsonl, and each pass's
 raw output and logs), which is also the neutral working directory every pass runs from, with a
 `data` symlink to this checkout's data/. A pass runs the benchmark once, in its own process tree,
 with only its side's tree on PYTHONPATH; a probe first checks that the trainer
@@ -46,7 +50,7 @@ matches; a run from before identity hashes, or without a machine check, names it
 `run --detach` and `extend --detach` start the command in its own session, so it outlives the
 shell or ssh session that started it, and return once its run directory exists; `wait` blocks
 until it ends and prints the brief report. A machine runs one run or extend at a time (an flock on
-RUNS_ROOT/run.lock). `check` is the machine check alone; with --apply-setup a failed check re-runs
+ROOT/run.lock). `check` is the machine check alone; with --apply-setup a failed check re-runs
 the setup through its installed root-owned copy (scripts/install_benchmark_setup.sh), once. With the machine
 check on, run and extend wait up to 5 minutes for the 1-minute load to fall to the profile's
 high_load, then refuse (--allow-load runs anyway, recorded).
@@ -79,7 +83,7 @@ Benchmarks: prepared_dataset_timing (control: `prepare`, plus the other backend'
 {"case": ..., "metric": ..., "value": ..., "unit": ...} (optionally "control": true).
 Crate A/Bs: when the sides' crate commits differ (each tree's rust/ submodule, or --old-crate /
 --new-crate, which alone make a crate-only A/B), each crate commit is built once into a release
-wheel under ~/code/ab-runs/wheels/<sha>/ (from a `git archive` of ~/code/indrajala-math-rust, with
+wheel under ROOT/wheels/<sha>/ (from a `git archive` of ~/code/indrajala-math-rust, with
 the toolchain it pins) and installed with `pip install --target` into a site directory there,
 which goes on PYTHONPATH after the tree; each pass checks the extension's hash. The venv is never
 touched. When they are equal, both sides use the venv's extension.
@@ -112,8 +116,8 @@ from indrajala_ml.measurement.machine_profile import compare
 from indrajala_ml.measurement.machine_profile_capture import power_policy
 
 REPO = Path(__file__).resolve().parent.parent
-RUNS_ROOT = Path(os.environ.get("AB_RUNS_ROOT", Path.home() / "code/ab-runs"))
-WORKTREES_ROOT = Path(os.environ.get("AB_WORKTREES_ROOT", Path.home() / "code/ab-worktrees"))
+runs_root = machine_lock.runs_root()  # the root (main sets it from --runs-root), and its worktrees
+worktrees_root = Path(os.environ.get("AB_WORKTREES_ROOT") or runs_root / "worktrees")
 CRATE_REPO = Path(os.environ.get("AB_CRATE_REPO", Path.home() / "code/indrajala-math-rust"))
 CARGO_BIN = Path.home() / ".cargo/bin"
 # the benchmark machine's setup, as installed by scripts/install_benchmark_setup.sh (root-owned, and
@@ -500,29 +504,33 @@ def _manifest(run_dir: Path) -> dict[str, Any]:
     return json.loads((run_dir / "manifest.json").read_text())
 
 
+def _runs() -> Path:
+    return runs_root / "runs"
+
+
 def _run_dirs() -> list[Path]:
-    if not RUNS_ROOT.is_dir():
+    if not _runs().is_dir():
         return []
     return sorted(
-        (d for d in RUNS_ROOT.iterdir() if (d / "manifest.json").is_file()),
+        (d for d in _runs().iterdir() if (d / "manifest.json").is_file()),
         key=lambda d: _manifest(d)["created"],
     )
 
 
 def find_run(run: str | None) -> Path:
-    """A run by path, by directory name under RUNS_ROOT, by name suffix, or the most recent."""
+    """A run by path, by directory name under ROOT/runs, by name suffix, or the most recent."""
     if run is None:
         runs = _run_dirs()
         if not runs:
-            raise AbError(f"no runs under {RUNS_ROOT}")
+            raise AbError(f"no runs under {_runs()}")
         return runs[-1]
-    for candidate in (Path(run), RUNS_ROOT / run):
+    for candidate in (Path(run), _runs() / run):
         if (candidate / "manifest.json").is_file():
             # absolute: each pass runs its benchmark inside the run directory
             return candidate.resolve()
     matches = [d for d in _run_dirs() if d.name.endswith(run)]
     if len(matches) != 1:
-        raise AbError(f"no single run matches {run!r} under {RUNS_ROOT}")
+        raise AbError(f"no single run matches {run!r} under {_runs()}")
     return matches[0]
 
 
@@ -537,7 +545,7 @@ def _dated(name: str) -> bool:
 def _new_run_dir(name: str) -> Path:
     """Today's date before the name, unless --name already starts with a date."""
     name = name.replace("/", "-")
-    base = RUNS_ROOT / (name if _dated(name) else f"{_local_now().date().isoformat()}-{name}")
+    base = _runs() / (name if _dated(name) else f"{_local_now().date().isoformat()}-{name}")
     run_dir, n = base, 1
     while run_dir.exists():
         n += 1
@@ -547,13 +555,13 @@ def _new_run_dir(name: str) -> Path:
 
 
 def ensure_worktree(repo: Path, commit: str) -> Path:
-    """A detached worktree of commit under WORKTREES_ROOT, created once and reused."""
-    tree = WORKTREES_ROOT / commit[:7]
+    """A detached worktree of commit under worktrees_root, created once and reused."""
+    tree = worktrees_root / commit[:7]
     if tree.exists():
         if _git(tree, "rev-parse", "HEAD") != commit:
             raise AbError(f"{tree} exists but isn't at {commit[:7]}; remove it or run ab.py clean --worktrees")
         return tree
-    WORKTREES_ROOT.mkdir(parents=True, exist_ok=True)
+    worktrees_root.mkdir(parents=True, exist_ok=True)
     _git(repo, "worktree", "add", "--detach", str(tree), commit)
     return tree
 
@@ -567,7 +575,7 @@ def _crate_commit(repo: Path, commit: str) -> str | None:
 
 
 def _wheels_root() -> Path:
-    return RUNS_ROOT / "wheels"
+    return runs_root / "wheels"
 
 
 def _wheel_dir(crate: str) -> Path:
@@ -1120,11 +1128,11 @@ def cmd_extend(args: argparse.Namespace) -> None:
 @contextlib.contextmanager
 def run_lock(what: str) -> Generator[None]:
     """One run or extend at a time on this machine, and none during a study's training: the machine
-    lock (indrajala_ml/measurement/machine_lock.py) on RUNS_ROOT/run.lock for as long as the process
+    lock (indrajala_ml/measurement/machine_lock.py) on ROOT/run.lock for as long as the process
     lives, so a killed run never leaves it held. The second is refused, naming the first."""
     with contextlib.ExitStack() as stack:
         try:
-            stack.enter_context(machine_lock.hold(what, "run", RUNS_ROOT))
+            stack.enter_context(machine_lock.hold(what, "run", runs_root))
         except machine_lock.MachineBusy as busy:
             raise AbError(str(busy)) from None
         yield
@@ -1205,7 +1213,7 @@ def _clean_wheels(crates: set[str]) -> None:
 def _clean_worktrees(repo: Path, referenced: set[Path]) -> None:
     removed: list[str] = []
     kept = 0
-    for tree in sorted(WORKTREES_ROOT.iterdir()) if WORKTREES_ROOT.is_dir() else []:
+    for tree in sorted(worktrees_root.iterdir()) if worktrees_root.is_dir() else []:
         if tree in referenced:
             kept += 1
             continue
@@ -1871,11 +1879,11 @@ def machine_check(repo: Path) -> tuple[Path, list[str] | None]:
     profile = host_profile(repo, hostname)
     if profile is None:
         raise AbError(f"machine profile: none in {PROFILES_DIR} for host {hostname}")
-    RUNS_ROOT.mkdir(parents=True, exist_ok=True)  # the comparison's cwd, absent on a new machine
+    runs_root.mkdir(parents=True, exist_ok=True)  # the comparison's cwd, absent on a new machine
     result = subprocess.run(
         [sys.executable, str(repo / "scripts/machine_profile.py"), "compare", str(profile)],
         check=False,
-        cwd=RUNS_ROOT,
+        cwd=runs_root,
         env=_pass_env(repo),
         capture_output=True,
         text=True,
@@ -1938,7 +1946,7 @@ def sync_checkout(repo: Path, commits: list[str]) -> list[str]:
 def detach(argv: list[str], what: str) -> None:
     """Start this command (argv, without --detach) as its own session, so it outlives the shell or
     ssh session that started it, and return once its run directory names it."""
-    launches = RUNS_ROOT / "launches"
+    launches = runs_root / "launches"
     launches.mkdir(parents=True, exist_ok=True)
     log = launches / f"{_local_now():%Y%m%d-%H%M%S}-{os.getpid()}.log"
     with open(log, "w") as out:
@@ -1947,7 +1955,7 @@ def detach(argv: list[str], what: str) -> None:
             stdin=subprocess.DEVNULL,
             stdout=out,
             stderr=subprocess.STDOUT,
-            cwd=RUNS_ROOT,
+            cwd=runs_root,
             start_new_session=True,
         )
     deadline = time.monotonic() + DETACH_SECONDS
@@ -1970,7 +1978,7 @@ def cmd_wait(args: argparse.Namespace) -> None:
     while (manifest := _manifest(run_dir))["state"] == "running" and _pid_alive(manifest["pid"]):
         time.sleep(WAIT_SECONDS)
     if manifest["state"] != "done":
-        logs = sorted((RUNS_ROOT / "launches").glob(f"{run_dir.name}-*.log"))
+        logs = sorted((runs_root / "launches").glob(f"{run_dir.name}-*.log"))
         state = manifest["state"] if manifest["state"] != "running" else "stopped (its process is gone)"
         raise AbError(f"{run_dir.name}: {state}", _tail(logs[-1]) if logs else [])
     print("\n".join(brief_report(report_data(run_dir))))
@@ -2077,6 +2085,12 @@ def main(argv: list[str] | None = None) -> int:
         argv, extra = argv[:split], argv[split + 1 :]
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--repo", default=str(REPO), help="the repository whose commits are compared")
+    parser.add_argument(
+        "--runs-root",
+        type=Path,
+        help="the root of runs, launches, wheels, worktrees and the machine lock (default: AB_RUNS_ROOT, "
+        "else ~/data/indrajala-ml/runs/ab)",
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     run = _run_parser(commands.add_parser("run", help="run an A/B"))
@@ -2120,6 +2134,10 @@ def main(argv: list[str] | None = None) -> int:
     remote.add_argument("rest", nargs=argparse.REMAINDER, help="the command's own arguments")
 
     args = parser.parse_args(argv)
+    if args.runs_root is not None:
+        global runs_root, worktrees_root
+        runs_root = Path(args.runs_root).expanduser().resolve()
+        worktrees_root = Path(os.environ.get("AB_WORKTREES_ROOT") or runs_root / "worktrees")
     if extra and args.command not in ("run", "remote"):
         parser.error("arguments after -- are for run only")
     if args.command in ("run", "extend") and not args.detach and (args.apply_setup or getattr(args, "sync", False)):

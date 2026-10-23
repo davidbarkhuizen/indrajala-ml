@@ -3,8 +3,9 @@ One heavy job at a time on a machine (the study-runs workplan's D1 and D2, retir
 868838e:docs/study-runs-workplan.md): an A/B's run or extend (scripts/ab.py) or a study's training
 stage. Each holds an flock on RUNS_ROOT/run.lock for as long as its process lives, so a killed job
 never leaves it held, and writes one JSON line naming itself (what, kind, pid, since); a second is
-refused with that line. RUNS_ROOT is ab.py's runs directory, AB_RUNS_ROOT or ~/code/ab-runs, read
-when the lock is taken.
+refused with that line. RUNS_ROOT is ab.py's runs root (its --runs-root, else AB_RUNS_ROOT, else
+DEFAULT_ROOT, ~/data/indrajala-ml/runs/ab); a study's is AB_RUNS_ROOT or DEFAULT_ROOT, read when the
+lock is taken.
 
 The lock's file is opened non-inheritable (PEP 446), so a spawned or forkserver worker doesn't hold
 it: the job's own process does, and the lock ends with it. A study's workers don't: killed alone,
@@ -29,8 +30,11 @@ class MachineBusy(Exception):
     pass
 
 
+DEFAULT_ROOT = Path.home() / "data/indrajala-ml/runs/ab"  # the A/B data's home, outside the checkouts
+
+
 def runs_root() -> Path:
-    return Path(os.environ.get("AB_RUNS_ROOT", Path.home() / "code/ab-runs"))
+    return Path(os.environ.get("AB_RUNS_ROOT", DEFAULT_ROOT))
 
 
 def describe(record: str) -> str:
