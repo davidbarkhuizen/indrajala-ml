@@ -2043,6 +2043,23 @@ time was re-read.
 | D64, the fresh-seed rate | S3 45 (1,584), move-to-front-4 34 (918), 35 (1,135) | S3 and move-to-front-4 7 of 9 that ran their budget, 3 censored: **undetermined** (not "between its bars"): met at 8 of 12 if any of the three certifies, never refuted (7 already); D67 completes them |
 | D63, the collapse | S4 2-5 (892-1,091), random-q16-0 4 (1,336), 5 (1,330), 6 | its paired verdict waits on D67's completions |
 
+**D67's completions and D63's last runs, recorded (2026-10-23, 16:30; outcome and integrity only, the
+pause's rule, the paper workplan's D9).** Every completion ran to its 1,600 epochs (`spent`) on
+`jebel`, and none certified at either verdict at any step: D63's S4 2-5, random-q16-0 4, 5; D64's S3
+45 (recorded earlier) and move-to-front-4 34, 35 (moved from `pyramidon` at their checkpoints with
+`--resume`, F24). **Integrity:** each completion's rows are identical to its cut run's (`stone`'s
+copy) through the cut run's last row before its deadline (`same-prefix`: 2,605-3,895 rows; the first
+difference at the cut's deadline step, 852-1,278): every completion intact. **D63's move-to-front-4
+34, 35 on `klip`** (the old code, its 690-minute deadline binding): stopped by the deadline at steps
+600 and 937, **censored**; each identical to its first start on `stone` (stopped at step 99 and 97 to
+move it) through that start's last row. Seed 34 was exact at the strict verdict only (1.0, near ties
+unbranched) at steps 381-387 and 455, never at the default verdict (wrong states from near ties): not
+a success (D41), and the margin stop rightly ran on. So D64 stays 7 of 12 (F1) and **D67, on its own:
+0 of 3 D64 completions certified, 0 of 6 D63 completions**; D63's paired verdict and the freezes'
+permanence are read when the programme resumes. Archived in `option1/probe-d67/`,
+`option1/probe-d67-d64/` (`jebel-option1-d67.sha256`, 1,514 files) and `option1/probe-d63/`
+(`klip-option1-d63.sha256` regenerated, 518 files, host paths); every manifest verified on the copy.
+
 - **Costs in epochs** (`restart-cost`'s default since): D63 (e)'s window (above, in its entry) S3
   3.5x, move-to-front-4 2.2x, S4 8.9x cheaper per certificate with restarts (first read in steps as
   4.4x, 1.9x, 10x); D64's S3 3.5x, move-to-front-4 3.7x (in steps 3.9x, 4.1x). Steps understate epochs
