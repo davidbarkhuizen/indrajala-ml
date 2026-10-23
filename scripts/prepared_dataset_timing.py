@@ -7,7 +7,7 @@ trainers the demos use, before and after the dataset became one backend array (#
 Every (config, backend, repeat) runs in its own process, never two backends in one, rotating the
 order each repeat, and the medians are reported. The script only uses interfaces that exist on
 both sides of the change, so old against new runs this same file on each side: scripts/ab.py
-(`--bench prepared_dataset_timing`, docs/protocols/measurement.md) runs it with each side's worktree on
+(`--bench prepared_dataset_timing`, docs/measurement.md) runs it with each side's worktree on
 PYTHONPATH (the output starts with the trainers module it imported):
 
     python scripts/ab.py run --bench prepared_dataset_timing [--old main] [--new HEAD]
@@ -26,7 +26,7 @@ from numpy-drawn seed-0 weights, the shuffle seeded 0 (seeded_weights.seeded_shu
   on a tree from before the network owned one, from the seeded globals. Added for the RNG
   generators workplan's stage 3, which moved the masks onto the network's generator;
 - conv B=512 (not run by default; --configs): conv B=32's network and weights at mini-batch 512,
-  the kernel protocol's large-batch conv epoch (docs/protocols/measurement.md, §6). Added for the benchmark
+  the kernel protocol's large-batch conv epoch (docs/measurement.md, §6). Added for the benchmark
   machine workplan's stage 5;
 - dense B=512 (not run by default; --configs): dense B=32's network and weights at batch 512, the
   kernel protocol's large-batch dense epoch. Added for the benchmark machine workplan's stage 6.

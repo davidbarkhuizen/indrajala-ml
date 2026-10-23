@@ -12,7 +12,7 @@ within a tolerance.
         --note TEXT [--commit REF] [--date YYYY-MM-DD] [--profile FILE] [--replaces PATH] [--no-pr]
 
 archive adds the file to the benchmark archive as a new version for this host
-(indrajala_ml/measurement/benchmark_archive.py; docs/protocols/measurement.md, §8): its commit pair, why, and
+(indrajala_ml/measurement/benchmark_archive.py; docs/measurement.md, §8): its commit pair, why, and
 which entries were added, moved or removed against the previous version. A new-functionality
 version in which an earlier entry moved is refused.
 
