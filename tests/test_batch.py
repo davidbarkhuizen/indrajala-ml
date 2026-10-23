@@ -192,6 +192,25 @@ def test_a_worker_on_another_commit_is_refused_and_given_nothing(tmp_path: Path)
     assert '"type": "refused"' in (directory / b.LEDGER).read_text()
 
 
+def test_a_worker_on_another_crate_is_refused_and_given_nothing(tmp_path: Path):
+    directory = tmp_path / "batch"
+    b.register(directory, b.Batch("p", "measure", "continuous", b.attempts("s3:1-2"), crate="0" * 64))
+    port = free_port()
+
+    async def go() -> None:
+        controller = b.Controller(directory)
+        serving = asyncio.create_task(controller.serve(port))
+        await asyncio.sleep(0.1)
+        await asyncio.wait_for(worker(tmp_path, "w", 1).serve(port, retry=0.1), timeout=10)  # returns: refused
+        serving.cancel()
+
+    asyncio.run(go())
+    state = b.State.read(directory)
+    assert not state.assigned and not state.ended
+    refused = [json.loads(r) for r in (directory / b.LEDGER).read_text().splitlines() if '"refused"' in r]
+    assert refused and refused[0]["crate"] != "0" * 64
+
+
 def test_a_windows_end_stops_a_hosts_attempts_and_queues_them_again(tmp_path: Path):
     directory = tmp_path / "batch"
     b.register(directory, b.Batch("w", "measure", "continuous", b.attempts("s3:1-2")))
