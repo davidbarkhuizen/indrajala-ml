@@ -295,6 +295,7 @@ class Batch:
     attempts: tuple[Attempt, ...]
     k: int | None = None
     commit: str | None = None  # the code every worker must run (D6)
+    crate: str | None = None  # the crate extension's SHA-256 every worker must import (D6)
 
     def __post_init__(self) -> None:
         assert self.mode in ("measure", "find"), f"a mode: measure or find; got {self.mode}"
@@ -309,7 +310,7 @@ class Batch:
     @staticmethod
     def from_json(row: dict[str, Any]) -> Batch:
         attempts = tuple(Attempt(**a) for a in row["attempts"])
-        return Batch(row["name"], row["mode"], row["cell"], attempts, row.get("k"), row.get("commit"))
+        return Batch(row["name"], row["mode"], row["cell"], attempts, row.get("k"), row.get("commit"), row.get("crate"))
 
 
 def attempts(spec: str, cutoffs: dict[str, int] | None = None) -> tuple[Attempt, ...]:
@@ -444,8 +445,8 @@ class Controller:
     """
     A batch's controller (D4): the protocol's server on 127.0.0.1, its queue and its ledger. Each
     attempt is assigned once, on a worker's `ready`, never more than its free slots less the attempts
-    already sent it and not yet started. A worker on another commit than the batch's is refused (D6);
-    each host's crate is recorded. With `hosts` (D7), a host is given work only inside its hours and only
+    already sent it and not yet started. A worker on another commit or crate than the batch's is refused
+    (D6); each host's crate is recorded. With `hosts` (D7), a host is given work only inside its hours and only
     an attempt whose expected time (its cutoff times the host's seconds an epoch so far) ends inside them;
     at a window's end its attempts are stopped and queued again. A remote host's ended attempt is pulled
     into `attempts/` and checked against its manifest.
@@ -541,10 +542,19 @@ class Controller:
                 kind = message["type"]
                 if kind == "hello":
                     host = message["host"]
-                    commit = self.state.batch.commit
-                    if commit is not None and message.get("commit") != commit:
-                        self.log({"type": "refused", "host": host, "commit": message.get("commit")})
-                        await send(writer, {"type": "refused", "commit": commit})
+                    batch = self.state.batch
+                    if (batch.commit is not None and message.get("commit") != batch.commit) or (
+                        batch.crate is not None and message.get("crate") != batch.crate
+                    ):
+                        self.log(
+                            {
+                                "type": "refused",
+                                "host": host,
+                                "commit": message.get("commit"),
+                                "crate": message.get("crate"),
+                            }
+                        )
+                        await send(writer, {"type": "refused", "commit": batch.commit, "crate": batch.crate})
                         break
                     self.log(
                         {"type": "hello", "host": host, "commit": message.get("commit"), "crate": message.get("crate")}
@@ -747,7 +757,7 @@ class Worker:
                     elif message["type"] == "stop":
                         await self.stop(writer)
                     elif message["type"] == "refused":
-                        return True  # on another commit than the batch's: nothing to run here
+                        return True  # on another commit or crate than the batch's: nothing to run here
                 await self.look(writer)
                 if self.draining and not self.running:
                     return True

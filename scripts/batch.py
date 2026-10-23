@@ -47,6 +47,9 @@ def main(argv: list[str]) -> int:
     )
     register.add_argument("--k", type=int, help="find mode: certificates a backdrop needs")
     register.add_argument("--commit", help="the commit every worker must run (D6); a short sha is expanded")
+    register.add_argument(
+        "--crate", help="the crate extension's SHA-256 every worker must import (D6); default this machine's"
+    )
     prepare = commands.add_parser("prepare", help="each host's worktree at a commit")
     prepare.add_argument("--hosts", required=True)
     prepare.add_argument("--commit", required=True)
@@ -87,7 +90,8 @@ def main(argv: list[str]) -> int:
                 capture_output=True,
                 text=True,
             ).stdout.strip()
-        b.register(args.dir, b.Batch(args.name, args.mode, args.cell, made, args.k, commit))
+        crate = args.crate or b.identity(Path(__file__).resolve().parent.parent, sys.executable, {})[1]
+        b.register(args.dir, b.Batch(args.name, args.mode, args.cell, made, args.k, commit, crate))
         print(f"registered {args.dir}: {len(b.State.read(args.dir).batch.attempts)} attempts")
     elif args.command == "prepare":
         repo = Path(__file__).resolve().parent.parent
