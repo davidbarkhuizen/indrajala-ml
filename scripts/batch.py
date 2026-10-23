@@ -46,7 +46,7 @@ def main(argv: list[str]) -> int:
         "--cutoff", action="append", default=[], help="BACKDROP=EPOCHS, each backdrop's t* in epochs trained"
     )
     register.add_argument("--k", type=int, help="find mode: certificates a backdrop needs")
-    register.add_argument("--commit", help="the commit every worker must run (D6)")
+    register.add_argument("--commit", help="the commit every worker must run (D6); a short sha is expanded")
     prepare = commands.add_parser("prepare", help="each host's worktree at a commit")
     prepare.add_argument("--hosts", required=True)
     prepare.add_argument("--commit", required=True)
@@ -78,7 +78,16 @@ def main(argv: list[str]) -> int:
     if args.command == "register":
         cutoffs = {k: int(v) for k, v in (c.split("=") for c in args.cutoff)}
         made = b.attempts(args.attempts, cutoffs)
-        b.register(args.dir, b.Batch(args.name, args.mode, args.cell, made, args.k, args.commit))
+        commit = args.commit
+        if commit is not None:  # the workers report a full sha and the controller compares exactly
+            repo = Path(__file__).resolve().parent.parent
+            commit = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "--verify", f"{commit}^{{commit}}"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        b.register(args.dir, b.Batch(args.name, args.mode, args.cell, made, args.k, commit))
         print(f"registered {args.dir}: {len(b.State.read(args.dir).batch.attempts)} attempts")
     elif args.command == "prepare":
         repo = Path(__file__).resolve().parent.parent

@@ -230,7 +230,7 @@ HOSTS: dict[str, Host] = {
         "/home/david/code/wt-batch",
         "/home/david/code/indrajala-ml/.venv/bin/python",
         "/home/david/code/batch-attempts",
-        windows=(Window(ALL_DAYS, 7, 11),),
+        # on grid power, around the clock, from 2026-10-23's evening (the owner); before, 07:00-18:00 on solar
     ),
     "stone": Host(
         "stone",
