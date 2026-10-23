@@ -50,7 +50,7 @@ SMT), 32 KB L1d and 256 KB L2 per core, 12 MB L3, AVX2 and FMA without AVX-512, 
 turbo on, and the package power limit PL1 lowered to 65 W (at the stock 95 W a long all-core load
 reaches 100 C and throttles). Its full record is `docs/machine_profiles/i7-9700k.json`, and its
 noise and baseline, from six A/As of every benchmark, are in
-[`docs/machine_profiles/i7-9700k.md`](../machine_profiles/i7-9700k.md). The noise figures below are
+[`docs/machine_profiles/i7-9700k.md`](machine_profiles/i7-9700k.md). The noise figures below are
 this machine's. The gotchas in §7 were first measured on the Ryzen 7 3700U laptop before it
 (`docs/machine_profiles/ryzen7-3700u.json`) and re-checked here (the benchmark machine
 workplan's stage 6, `git show 480164d:docs/benchmark-machine-workplan.md`): §7 has the i7's numbers, and the
@@ -460,7 +460,7 @@ What to do next:
 
 **Measured on the Ryzen laptop** (Zen 2, 4 cores; the benchmark machine workplan's D9). These
 didn't hold on the i7, or held with other numbers; the i7's are above, and
-[machine_profiles/i7-9700k.md](../machine_profiles/i7-9700k.md) has each side by side.
+[machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md) has each side by side.
 
 - A Rust batch op right after a threaded numpy call ran 2-5x slow, whatever Rust's thread count
   (the i7: 1.56x threaded, 1.09x on one thread).

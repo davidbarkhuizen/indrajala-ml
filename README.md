@@ -94,8 +94,8 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
 | `scripts/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
-| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention, multi-head attention and sequence studies and the refactoring golden run; see `docs/protocols/measurement.md` |
-| `docs/` | working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open workplans, `docs/research-notes/` the studies' findings, notes, reports and literature review, `docs/protocols/` the experiment design, the feasibility checklist and the measurement guide, `docs/audits/` the RNG audit and the dated reviews |
+| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention, multi-head attention and sequence studies and the refactoring golden run; see `docs/measurement.md` |
+| `docs/` | the measurement guide, working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open workplans, `docs/research-notes/` the studies' findings, notes, reports and literature review, `docs/protocols/` the experiment design, and the feasibility checklist, `docs/audits/` the RNG audit and the dated reviews |
 
 ## Models
 
@@ -938,7 +938,7 @@ test passing, and:
   they are also committed as `data/refactoring/golden_run_rust.json`, which CI checks on every
   PR (`... check data/refactoring/golden_run_rust.json` checks it on any machine).
 - **No hot-path slowdown.** A stage that touches `learn*` or `classify_rows` is timed old against
-  new with `scripts/ab.py` ([docs/protocols/measurement.md](docs/protocols/measurement.md)). It must be within noise.
+  new with `scripts/ab.py` ([docs/measurement.md](docs/measurement.md)). It must be within noise.
 - **Public names stay.** The demos (indrajala-demos), `ensemble_train.py` and the tests construct
   the concrete classes by name, and saved model files must still load:
   `tests/model/persistence/test_legacy_saved_models.py` loads a committed file for every class that has `save`
@@ -946,7 +946,7 @@ test passing, and:
 
 ## Docs
 
-- [docs/protocols/measurement.md](docs/protocols/measurement.md): how to time a change: the machines, the tools, A/Bs
+- [docs/measurement.md](docs/measurement.md): how to time a change: the machines, the tools, A/Bs
   with `scripts/ab.py`, the benchmarking tiers, and the rules for a timing claim in a PR.
 - [`indrajala-benchmarks`](https://github.com/davidbarkhuizen/indrajala-benchmarks): the archive
   of golden runs, A/B runs with their reports, and the machine profiles they ran on; CI there
