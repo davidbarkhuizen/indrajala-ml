@@ -31,7 +31,7 @@ import shlex
 import socket
 import subprocess
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -405,6 +405,16 @@ class State:
         return not self.assigned and self.next_attempt() is None
 
 
+def last_run[R: Mapping[str, Any]](rows: Sequence[R]) -> list[R]:
+    """
+    A log's last run: a step end that doesn't follow its predecessor's step starts a run again (a lost
+    attempt re-run in its old directory, before the worker set one aside, appended to its log).
+    """
+    ends = [i for i, r in enumerate(rows) if "end" in r and "certified" in r]
+    restarts = [i for i, j in itertools.pairwise(ends) if int(rows[j]["step"]) <= int(rows[i]["step"])]
+    return list(rows[restarts[-1] + 1 :] if restarts else rows)
+
+
 def summary(log: Path) -> dict[str, Any]:
     """
     An attempt's outcome from its run's log.jsonl: its last step, its end, epochs trained and seconds,
@@ -412,15 +422,10 @@ def summary(log: Path) -> dict[str, Any]:
     never). A run whose rows don't log the strict verdict (the paper's cells: it is checked after, by
     recertifying the saved network) succeeds at its first certified step; a continuous state (T3) never
     does here (long tests judge it). Epochs as modular_family.restart_course counts them (the time
-    axis): each step end's, less the one a budget's stop logs untrained. Only the log's last run counts: a
-    step end that doesn't follow its predecessor's step starts a run again (a lost attempt re-run in its
-    old directory, before the worker set one aside, appended to its log). The worker adds `peak_pss_mb`.
+    axis): each step end's, less the one a budget's stop logs untrained. Only the log's last run counts
+    (last_run). The worker adds `peak_pss_mb`.
     """
-    rows = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
-    ends = [i for i, r in enumerate(rows) if "end" in r and "certified" in r]
-    restarts = [i for i, j in itertools.pairwise(ends) if int(rows[j]["step"]) <= int(rows[i]["step"])]
-    if restarts:
-        rows = rows[restarts[-1] + 1 :]  # the last run's rows
+    rows = last_run([json.loads(line) for line in log.read_text().splitlines()] if log.exists() else [])
     trained: dict[int, int] = {}
     total = 0
     for i, r in enumerate(rows):
