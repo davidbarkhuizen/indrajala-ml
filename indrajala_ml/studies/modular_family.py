@@ -334,6 +334,10 @@ def columns(n: int, rng: random.Random) -> list[int]:
     return [rng.randrange(COLUMNS) for _ in range(n)] + [0]
 
 
+LINEAR, CONTINUOUS_STATE = "linear", "continuous"
+BASELINES = (LINEAR, CONTINUOUS_STATE)  # the paper's T3: the transformer's and the snap's controls
+
+
 def network(
     encoding: Target,
     factors: Sequence[tuple[int, int]],
@@ -342,20 +346,29 @@ def network(
     width: int = wr.D,
     branches: bool = False,
     answer_branch: bool = False,
+    baseline: str | None = None,
 ) -> Any:
     """The transformer window (W11) over the encoding's tokens, a factored state (D3), Adam; the
     poolings reading before the first StateInput (D10) or, with reads OUTPUT, the window's output.
     With branches, the window branches workplan's window (wr.branched_window), each factor's
     pooling reading its own branch's end (reads OUTPUT); with answer_branch, the one-code-one-state
-    workplan's R1 (wr.answer_branch_window), every factor reading the shared state branch."""
+    workplan's R1 (wr.answer_branch_window), every factor reading the shared state branch. A
+    baseline (BASELINES, the paper's T3): "linear", E6's window without its blocks (wr.linear_window);
+    "continuous", every factor's state continuous, no codes (E2's)."""
     assert not (branches or answer_branch) or reads == OUTPUT, (
         "with branches each factor reads a branch's end: reads OUTPUT"
     )
     assert not (branches and answer_branch), "the window branches or the answers' branch, not both"
+    assert baseline is None or baseline in BASELINES, f"a baseline: one of {BASELINES}"
+    assert baseline is None or not (branches or answer_branch), "a baseline is W11's window or E6's, unbranched"
     recurrence = WindowRecurrence(
-        tuple(Factor(s, Codes(m)) for s, m in factors), False, pooling=AttentionPooling(reads)
+        tuple(Factor(s, None if baseline == CONTINUOUS_STATE else Codes(m)) for s, m in factors),
+        False,
+        pooling=AttentionPooling(reads),
     )
-    if branches:
+    if baseline == LINEAR:
+        specs = wr.linear_window(encoding.tokens, encoding.classes, width)
+    elif branches:
         specs = wr.branched_window(encoding.tokens, encoding.classes, len(factors), width)
     elif answer_branch:
         specs = wr.answer_branch_window(encoding.tokens, encoding.classes, len(factors), width)
@@ -449,19 +462,27 @@ def accuracy(net: Any, encoding: Target, rows: Sequence[Example]) -> dict[str, l
 
 
 def diagnose(net: Any, encoding: Target, settings: Settings) -> dict[str, Any]:
-    """Each answer's accuracy and each factor's codes used and shares, at the diagnosis's lengths."""
+    """
+    Each answer's accuracy and each factor's codes used and shares, at the diagnosis's lengths; a
+    continuous state (the T3 baseline) has no codes, so its answers' accuracy alone.
+    """
     tally: dict[str, list[int]] = {}
     samples: list[tuple[tuple[int, ...], Hashable]] = []  # codes, the target's state per window
+    snapped = net.recurrence.snapped
     for n in settings.lengths:
         rows, drawn = _windows(encoding, n, settings.cases, f"family-diagnose-{n}")
         for name, (c, a) in accuracy(net, encoding, rows).items():
             t = tally.setdefault(name, [0, 0])
             t[0] += c
             t[1] += a
+        if not snapped:
+            continue
         codes: list[list[tuple[int, ...]]] = net.state_codes(net.backend.matrix([tokens for tokens, _ in rows]))
         for states, cols in zip(codes, drawn, strict=True):
             for w, state in enumerate(encoding.states(cols)):
                 samples.append((states[w + 1], state))
+    if not snapped:
+        return {"accuracy": {name: round(c / a, 3) for name, (c, a) in sorted(tally.items())}}
     factors = [
         {
             "codes": len({c[g] for c, _ in samples}),
@@ -2637,6 +2658,7 @@ def _run_identity(
     continuous: Continuous | None = None,
     margin_wait: int | None = None,
     cutoff_epochs: int | None = None,
+    baseline: str | None = None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes; not the wall-clock
@@ -2676,6 +2698,7 @@ def _run_identity(
         **({"reheat_slowing": True} if continuous is not None and continuous.slowing else {}),
         **({"margin_wait": margin_wait} if margin_wait is not None else {}),
         **({"cutoff_epochs": cutoff_epochs} if cutoff_epochs is not None else {}),
+        **({"baseline": baseline} if baseline is not None else {}),
     }
 
 
@@ -2732,6 +2755,7 @@ class RunConfig:
     continuous: Continuous | None
     margin_wait: int | None
     cutoff_epochs: int | None = None
+    baseline: str | None = None
 
     def identity(self, first: int) -> dict[str, Any]:
         """What a resumed run must share with the run it resumes (_run_identity's)."""
@@ -2765,10 +2789,14 @@ class RunConfig:
             self.continuous,
             self.margin_wait,
             self.cutoff_epochs,
+            self.baseline,
         )
 
     def check(self) -> None:
         """The settings' combinations a run allows (an AssertionError naming the first it doesn't)."""
+        assert self.baseline != CONTINUOUS_STATE or not (
+            self.state_bound is not None or self.anneal or self.warm_up or self.continuous or self.guard
+        ), "a continuous state has no codes: no state bound, anneal, warm-up, continuous profile or guard"
         assert self.margin_wait is None or self.state_bound is not None, (
             "the margin stop waits on D35's: with a state bound"
         )
@@ -3024,7 +3052,7 @@ class _Run:
             assert saved is not None or not (resume and (c.out / "log.jsonl").exists()), (
                 f"{c.out} has a log but no checkpoint to resume from"
             )
-            self.net = network(c.encoding, c.factors, c.seed, c.reads, c.width, c.branches, c.answer_branch)
+            self.net = network(c.encoding, c.factors, c.seed, c.reads, c.width, c.branches, c.answer_branch, c.baseline)
             if saved is not None:
                 (c.out / "log.jsonl").write_text("")  # stopped before its first checkpoint: begun again from the seed
             _write_checkpoint(c.out, self.identity, BEGUN, self.net)
@@ -3471,6 +3499,8 @@ class _Run:
         # each step's certified answer (the quotient) certified (under a second at one column a window); the run stops at
         # its first certified step: training past it can destroy the network (E8b; this probe's
         # first runs, both certified networks lost within 3 steps)
+        if not net.recurrence.snapped:  # T3's continuous state: no machine to certify; judged by long tests
+            return self.end_continuous_step(p, epoch, stop)
         certificate = wc.certify(QueryMachine(net, c.encoding, 0), self.task)
         stopping = certificate.certified
         judged: dict[str, Any] = {}
@@ -3518,6 +3548,23 @@ class _Run:
         if stopping and c.state_bound is not None:
             net.save(str(c.out / f"answers-stop-step-{p.step}.network.json"))
         return stopping or cut
+
+    def end_continuous_step(self, p: StepPlan, epoch: int, stop: str) -> bool:
+        """A continuous state's step end (the T3 baseline): its answers and long accuracy, never certified."""
+        c, s = self.c, self.s
+        cut = c.cutoff_epochs is not None and s.spent >= c.cutoff_epochs
+        self.record(
+            {
+                "step": p.step,
+                "end": "cut" if cut else stop,
+                "epochs": epoch,
+                **({"forks": s.forks} if c.fork is not None else {}),
+                **diagnose(self.net, c.encoding, c.settings),
+                "long": long_accuracy(self.net, c.encoding, c.settings),
+                "certified": False,
+            }
+        )
+        return cut
 
     def warm_up_end(self, p: StepPlan) -> None:
         """A warm step's distinct states and, at the warm-up's end (D14-D16), the codes from the states seen and the profile's start."""
@@ -3577,6 +3624,7 @@ def run(
     continuous: Continuous | None = None,
     margin_wait: int | None = None,
     cutoff_epochs: int | None = None,
+    baseline: str | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -3691,6 +3739,7 @@ def run(
         continuous,
         margin_wait,
         cutoff_epochs,
+        baseline,
     )
     running = _Run(config, resume)
     if not running.ended:
