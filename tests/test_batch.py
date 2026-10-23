@@ -113,12 +113,13 @@ def test_a_find_batch_stops_starting_attempts_once_k_have_succeeded(tmp_path: Pa
 def test_a_cut_attempt_ends_cut_and_unsuccessful(tmp_path: Path):
     batch = b.Batch("c", "measure", "continuous", b.attempts("s3:2,s3:4", {"s3": 3}))
     state = run_batch(tmp_path, batch, worker(tmp_path, "w", 2))
-    assert state.ended["s3-2"]["success"] == 2 and state.ended["s3-4"] == {
+    assert state.ended["s3-2"]["success"] == 2 and state.ended["s3-4"] | {"peak_pss_mb": None} == {
         "success": None,
         "step": 3,
         "epochs": 3,
         "end": "cut",
         "seconds": 3.0,
+        "peak_pss_mb": None,
     }
 
 
@@ -391,3 +392,39 @@ def test_an_opened_host_takes_work_outside_its_hours():
     opened = b.opened({"stone": b.HOSTS["stone"], "klip": b.HOSTS["klip"]}, ["stone"])
     assert b.window_left(opened["stone"], thursday_noon) is not None and opened["klip"] == b.HOSTS["klip"]
     assert b.HOSTS["stone"].windows  # the table itself unchanged
+
+
+def test_a_log_with_a_re_run_appended_is_summarised_from_its_last_run_only(tmp_path: Path):
+    log = tmp_path / "log.jsonl"
+    run = [{"step": s, "end": "epoch", "epochs": 10, "certified": False, "seconds": float(s)} for s in (1, 2, 3)]
+    again = [*run, {"step": 4, "end": "spent", "epochs": 11, "certified": False, "seconds": 4.0}]
+    log.write_text("".join(json.dumps(r) + "\n" for r in [{"step": 1, "epoch": 0}, *run, {"step": 1}, *again]))
+    read = b.summary(log)
+    assert read["epochs"] == 40 and read["step"] == 4 and read["end"] == "spent" and read["seconds"] == 4.0
+
+
+def test_an_attempt_run_again_gets_a_fresh_directory_its_old_one_set_aside(tmp_path: Path):
+    first = worker(tmp_path, "w", 1)
+    attempt = b.Attempt("s3-1", "s3", 1)
+    root = tmp_path / "w"
+    for run in range(3):  # each run lost and the attempt sent to this host again
+        if run:
+            (root / "s3-1" / "mark").write_text(str(run))
+        running = first.launch(attempt, "continuous")
+        while b.alive(running.pid):
+            time.sleep(0.05)
+    assert sorted(p.name for p in (root / "lost").iterdir()) == ["s3-1-1", "s3-1-2"]
+    assert (root / "lost" / "s3-1-2" / "mark").read_text() == "2" and not (root / "s3-1" / "mark").exists()
+    assert (root / "s3-1" / "seed1" / "log.jsonl").exists()
+    assert not worker(tmp_path, "w", 1).running  # the set-aside directories are never adopted
+
+
+def test_a_sessions_pss_sums_its_processes_and_an_attempts_peak_reaches_its_summary(tmp_path: Path):
+    mine = b.session_pss(os.getsid(0))
+    assert mine is not None and mine > 0 and b.session_pss(1, tmp_path / "none") is None
+    state = run_batch(
+        tmp_path,
+        b.Batch("m", "measure", "continuous", b.attempts("s3:1")),
+        worker(tmp_path, "w", 1, {"STUB_SLEEP": "0.3"}),
+    )
+    assert state.ended["s3-1"]["peak_pss_mb"] > 1
