@@ -12,7 +12,7 @@ each, over newline-delimited JSON on a TCP socket on 127.0.0.1 (indrajala_ml.bat
     python scripts/batch.py status DIR
     python scripts/batch.py report DIR
 
-SPEC is `s3:40-47,mtf4:32-35` (TASKS' short names); a cutoff is a backdrop's Luby t* in epochs trained
+SPEC is `s3:40-47,mtf4:32-35` (BACKDROPS' short names); a cutoff is a backdrop's Luby t* in epochs trained
 (the run's --cutoff-epochs; epochs are the time axis). The controller serves until the batch is done; a worker runs its attempts in
 ROOT/<attempt>/ from WORKTREE's scripts and reconnects after a dropped connection. Across machines
 (stage 4): `prepare` puts each host's worktree at the batch's commit, `fleet` keeps a reverse ssh tunnel

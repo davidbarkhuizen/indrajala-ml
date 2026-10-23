@@ -75,16 +75,94 @@ CONTINUOUS_CELL = [
     "--margin-wait",
     "200",
 ]
-CELLS: dict[str, tuple[str, ...]] = {
-    "continuous": tuple(CONTINUOUS_CELL),
-    "continuous-reheat": (*CONTINUOUS_CELL, "--reheat"),
+# The paper's cell (paper-workplan.md, D3 and D12): the division and round-1 cell as W1 ran it at 169
+# states (two factors 32 wide, ceil(32/11 sqrt(q)) codes, reading the output, the fork, the window
+# 32 wide), stopped at its first certified step, 600 epochs (W1's and round 1's); no state bound.
+PAPER_CELL = [
+    "--factors",
+    "2",
+    "--codes-ratio",
+    "32/11",
+    "--factor-width",
+    "32",
+    "--reads",
+    "output",
+    "--fork",
+    "--window-width",
+    "32",
+    "--budget-epochs",
+    "600",
+    "--workers",
+    "1",
+]
+
+# The approximation claim's cell (`git show c201622:docs/approximation-claim-workplan.md`: two factors
+# of 16, reading the output, the default window, 400 epochs, stop at certified, no fork): T1 repeats its
+# sum arm beside the two controls, and T3's baselines compare with T1 and A1 (paper-workplan.md, D12).
+APPROXIMATION_CELL = ["--factors", "2", "--reads", "output", "--budget-epochs", "400", "--workers", "1"]
+
+
+@dataclass(frozen=True)
+class Cell:
+    """A registered method: its run arguments, and whether it stops on the answers under the backdrop's state bound."""
+
+    args: tuple[str, ...]
+    bounded: bool = False
+
+
+CELLS: dict[str, Cell] = {
+    "continuous": Cell(tuple(CONTINUOUS_CELL), bounded=True),
+    "continuous-reheat": Cell((*CONTINUOUS_CELL, "--reheat"), bounded=True),
+    "paper": Cell(tuple(PAPER_CELL)),
+    "approximation": Cell(tuple(APPROXIMATION_CELL)),
 }
-TASKS: dict[str, tuple[str, int]] = {  # a backdrop's short name: the task's and its state bound
-    "s3": ("word-problem-s3", 6),
-    "s4": ("word-problem-s4", 24),
-    "mtf4": ("move-to-front-4", 24),
-    "rq12": ("random-q12-0", 12),
-    "rq16": ("random-q16-0", 16),
+
+DIVISION = "modular-division-"
+T1_VOCABULARY = ("sum", "suffix", "token")  # T1's arms ask the same tokens (paper-workplan.md, T1)
+
+
+@dataclass(frozen=True)
+class Backdrop:
+    """
+    A task to run a cell on: a machine's (`run --runs TASK:SEED`, its log out/seed<s>/log.jsonl), or
+    division at its p with an arm's queries and a vocabulary (`run --p P --seed S --arm A`, its log
+    out/log.jsonl); `bound` the target's states, a bounded cell's state bound.
+    """
+
+    task: str
+    bound: int
+    arm: str = "family"
+    vocabulary: tuple[str, ...] = ()
+
+    @property
+    def division(self) -> bool:
+        return self.task.startswith(DIVISION)
+
+    def args(self, seed: int) -> list[str]:
+        if not self.division:
+            return ["--runs", f"{self.task}:{seed}"]
+        vocabulary = ["--vocabulary", *self.vocabulary] if self.vocabulary else []
+        return ["--p", self.task.removeprefix(DIVISION), "--seed", str(seed), "--arm", self.arm, *vocabulary]
+
+    def log(self, directory: Path, seed: int) -> Path:
+        return directory / "log.jsonl" if self.division else directory / f"seed{seed}" / "log.jsonl"
+
+
+def division(p: int, arm: str = "family", vocabulary: tuple[str, ...] = ()) -> Backdrop:
+    return Backdrop(f"{DIVISION}{p}", p * p, arm, vocabulary)
+
+
+BACKDROPS: dict[str, Backdrop] = {  # a backdrop's short name, as attempts name it
+    "s3": Backdrop("word-problem-s3", 6),
+    "s4": Backdrop("word-problem-s4", 24),
+    "mtf4": Backdrop("move-to-front-4", 24),
+    "rq12": Backdrop("random-q12-0", 12),
+    "rq16": Backdrop("random-q16-0", 16),
+    # T1: division at p 5, the quotient and one more output, the three arms on one vocabulary
+    **{f"d5-{arm}": division(5, arm, T1_VOCABULARY) for arm in ("sum", "suffix", "token")},
+    # T2: the cover at p 7, 11 and 13, the quotient alone at 11
+    **{f"d{p}-family": division(p) for p in (7, 11, 13)},
+    "d11-quotient": division(11, "quotient"),
 }
 
 
@@ -210,7 +288,7 @@ class Batch:
         assert self.mode in ("measure", "find"), f"a mode: measure or find; got {self.mode}"
         assert self.mode != "find" or (self.k is not None and self.k >= 1), "find needs k >= 1"
         assert self.cell in CELLS, f"a registered cell: one of {sorted(CELLS)}"
-        assert all(a.backdrop in TASKS for a in self.attempts), f"backdrops: {sorted(TASKS)}"
+        assert all(a.backdrop in BACKDROPS for a in self.attempts), f"backdrops: {sorted(BACKDROPS)}"
         assert len({a.id for a in self.attempts}) == len(self.attempts), "attempts' ids unique"
 
     def to_json(self) -> dict[str, Any]:
@@ -577,18 +655,17 @@ class Worker:
                 self.running[attempt.id] = Running(attempt, pid_file.parent, record["pid"])
 
     def command(self, attempt: Attempt, cell: str) -> list[str]:
-        task, bound = TASKS[attempt.backdrop]
+        backdrop, chosen = BACKDROPS[attempt.backdrop], CELLS[cell]
         cutoff = ["--cutoff-epochs", str(attempt.cutoff)] if attempt.cutoff is not None else []
+        bound = ["--state-bound", str(backdrop.bound)] if chosen.bounded else []
         return [
             *self.wrapper,
             self.python,
             self.script,
             "run",
-            "--runs",
-            f"{task}:{attempt.seed}",
-            *CELLS[cell],
-            "--state-bound",
-            str(bound),
+            *backdrop.args(attempt.seed),
+            *chosen.args,
+            *bound,
             *cutoff,
             "--out",
             str(self.root / attempt.id),
@@ -620,8 +697,7 @@ class Worker:
         return running
 
     def log_of(self, running: Running) -> Path:
-        # one run's log: --runs NAME:SEED writes out/seed<s>/log.jsonl
-        return running.directory / f"seed{running.attempt.seed}" / "log.jsonl"
+        return BACKDROPS[running.attempt.backdrop].log(running.directory, running.attempt.seed)
 
     async def stop(self, writer: asyncio.StreamWriter) -> None:
         """Every running attempt stopped (its process group), reported, its directory marked."""

@@ -266,3 +266,28 @@ def test_a_batch_with_a_remote_host_ends_once_its_attempts_are_pulled(tmp_path: 
     ledger = (directory / b.LEDGER).read_text()
     assert ledger.count('"ok": true') == 2 and ledger.rstrip().endswith("}") and '"type": "done"' in ledger
     assert (directory / "attempts" / "s3-2" / "seed2" / "log.jsonl").exists()
+
+
+def test_a_division_backdrop_runs_by_p_seed_and_arm_its_log_at_the_runs_own_path(tmp_path: Path):
+    w = worker(tmp_path, "w", 1)
+    attempt = b.Attempt("d5-suffix-3", "d5-suffix", 3)
+    command = w.command(attempt, "paper")
+    run = command[command.index("run") + 1 :]
+    assert run[:6] == ["--p", "5", "--seed", "3", "--arm", "suffix"]
+    assert run[6:10] == ["--vocabulary", "sum", "suffix", "token"]
+    assert "--state-bound" not in command and "--runs" not in command  # the paper's cell stops on its certificate
+    assert run[run.index("--factor-width") + 1] == "32" and run[run.index("--budget-epochs") + 1] == "600"
+    running = b.Running(attempt, tmp_path / "w" / attempt.id, 0)
+    assert w.log_of(running) == running.directory / "log.jsonl"
+    machine = b.Running(b.Attempt("s3-1", "s3", 1), tmp_path / "w" / "s3-1", 0)
+    assert w.log_of(machine) == machine.directory / "seed1" / "log.jsonl"
+    bounded = w.command(machine.attempt, "continuous")
+    assert bounded[bounded.index("--state-bound") + 1] == "6"
+    assert b.BACKDROPS["d13-family"].args(0)[:2] == ["--p", "13"] and b.BACKDROPS["d13-family"].bound == 169
+    assert "--vocabulary" not in b.BACKDROPS["d11-quotient"].args(0)  # T2's: the default vocabulary
+
+
+def test_t1s_cell_is_the_approximation_claims():
+    command = worker(Path("/tmp"), "w", 1).command(b.Attempt("d5-sum-0", "d5-sum", 0), "approximation")
+    assert command[command.index("--budget-epochs") + 1] == "400"
+    assert not {"--fork", "--codes-ratio", "--window-width", "--state-bound"} & set(command)
