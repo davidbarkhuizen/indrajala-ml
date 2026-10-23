@@ -20,7 +20,10 @@ in progress keeps its own list: [general-algebras-workplan.md](workplans/general
 [state-formation-workplan.md](workplans/state-formation-workplan.md),
 [aarch64-workplan.md](workplans/aarch64-workplan.md),
 [factorisation-machine-workplan.md](workplans/factorisation-machine-workplan.md), and the paused
-[snap-wall-workplan.md](workplans/snap-wall-workplan.md). The order
+[snap-wall-workplan.md](workplans/snap-wall-workplan.md). Of the research plans, the general
+algebras, the factorisation machine and the adders of any length have been paused since 2026-10-20,
+when the owner set planned work aside for the state-formation plan, and the snap wall since
+2026-10-16; each waits for a decision to resume or retire (the programme audit's F29). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
