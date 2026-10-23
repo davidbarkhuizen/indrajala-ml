@@ -190,9 +190,13 @@ From the quick survey to the decisive number:
 scripts, pooling scripts and tables retyped into PR bodies are not used. A measurement `ab.py`
 can't express gets a probe or an adapter, in the same PR (below).
 
-`ab.py` resolves both sides to commits and checks each out once as a detached worktree under
-`~/code/ab-worktrees/<sha7>`, so both builds are committed and the working checkout stays free. A
-run lives in `~/code/ab-runs/<date>-<name>/`: its manifest (commits, crate hashes, commands,
+Everything `ab.py` keeps lives under one root, outside the checkouts: `--runs-root DIR` (before the
+command), else `AB_RUNS_ROOT`, else `~/data/indrajala-ml/runs/ab` (ROOT below). It holds `runs/`,
+`launches/`, `wheels/`, `worktrees/`, `notes/` and the machine lock `run.lock`, which a study on the
+machine takes from the same root (`AB_RUNS_ROOT`, or the default). `ab.py` resolves both sides to
+commits and checks each out once as a detached worktree under `ROOT/worktrees/<sha7>`, so both
+builds are committed and the working checkout stays free. A run lives in
+`ROOT/runs/<date>-<name>/`: its manifest (commits, crate hashes, commands,
 machine check, environment), `progress.jsonl`, and each pass's raw output and logs. That
 directory is also the neutral working directory every pass runs from.
 
@@ -222,7 +226,7 @@ python scripts/ab.py run --bench prepared_dataset_timing --old main --new main \
 
 The sides' crate commits default to each tree's `rust/` submodule, so a "Bump rust/" branch
 against `main` is a crate A/B with no flags. Each crate commit is built once into a release wheel
-under `~/code/ab-runs/wheels/<sha>/` and installed with `pip install --target` into a site
+under `ROOT/wheels/<sha>/` and installed with `pip install --target` into a site
 directory on `PYTHONPATH` after the tree. The venv is never touched, and every pass checks the
 extension's hash. The numpy rows are the control: a crate change can't move them.
 
@@ -270,14 +274,14 @@ python scripts/ab.py remote --host jebel archive RUN --reason "#NNN: what it cla
 The run never depends on the ssh session. If the connection drops, or the laptop sleeps, only the
 wait ends, and its message names the command that resumes it: `remote --host jebel wait RUN`.
 `remote extend`, `status` and `archive` work the same way. On `jebel` itself the pieces are `run
---detach` (start in its own session; the log is in `~/code/ab-runs/launches/`), `wait` and
+--detach` (start in its own session; the log is in `ROOT/launches/`), `wait` and
 `check`.
 
 **Other commands.** `status` prints one line (the pass running, how many are done, an ETA).
 `clean --worktrees` and `clean --wheels` remove the worktrees and crate builds no run of the last
 14 days refers to. `RUN` defaults to the most recent run everywhere. A machine runs one `run` or
 `extend` at a time, and none while a study trains: a second is refused while the first holds
-`~/code/ab-runs/run.lock`, which frees itself when its process ends, however it ends. The refusal
+`ROOT/run.lock`, which frees itself when its process ends, however it ends. The refusal
 names the holder (`run` or `study`, its command, pid and start; §2).
 
 ## 5. Reading the report
@@ -448,7 +452,7 @@ What to do next:
   stage 3's A/B compiled because its new commit was newer than that build. `ab.py` now
   extracts with fresh modification times and refuses same-extension runs
   ([§4](#4-running-an-ab-with-abpy)).
-  After a bad build, remove its `~/code/ab-runs/wheels/<sha>/` directory before running again.
+  After a bad build, remove its `ROOT/wheels/<sha>/` directory before running again.
 - **`pkill -f <pattern>` also matches the invoking shell's own command line.** Stop a stray
   benchmark by PID. Waiting is the same: `while pgrep -f "<pattern>"` matches its own loop's
   command line and never exits, and a `pgrep` right after `(nohup cmd &)` can catch the wrapper

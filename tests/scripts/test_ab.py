@@ -205,8 +205,8 @@ def toy_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         (repo / "indrajala_ml/toy.py").write_text(f"VALUE = {value}\n")
         _git(repo, "add", ".")
         _git(repo, "commit", "-q", "-m", f"toy {value}")
-    monkeypatch.setattr(ab, "RUNS_ROOT", tmp_path / "runs")
-    monkeypatch.setattr(ab, "WORKTREES_ROOT", tmp_path / "worktrees")
+    monkeypatch.setattr(ab, "runs_root", tmp_path / "runs")
+    monkeypatch.setattr(ab, "worktrees_root", tmp_path / "worktrees")
     return repo
 
 
@@ -242,7 +242,7 @@ def test_run_and_extend_end_to_end(toy_repo: Path, capsys: pytest.CaptureFixture
     ]
     for side in ("old", "new"):
         tree = Path(manifest[side]["tree"])
-        assert tree.parent == ab.WORKTREES_ROOT
+        assert tree.parent == ab.worktrees_root
         assert all(
             Path(p["provenance"]["train"]).parent.parent == tree for p in manifest["passes"] if p["side"] == side
         )
@@ -445,7 +445,7 @@ def test_clean_removes_unreferenced_worktrees(toy_repo: Path, capsys: pytest.Cap
         )
         == 0
     )
-    stray = ab.WORKTREES_ROOT / "stray"
+    stray = ab.worktrees_root / "stray"
     _git(toy_repo, "worktree", "add", "-q", "--detach", str(stray), "HEAD")
     capsys.readouterr()
     assert _run(toy_repo, "clean", "--worktrees") == 0
@@ -631,7 +631,7 @@ def test_ensure_site_installs_the_wheel_outside_the_venv(toy_crates: list[str]) 
     extension = site / "indrajala_math_rust/indrajala_math_rust.cpython-314-x86_64-linux-gnu.so"
     assert extension.read_bytes() == f"extension {toy_crates[0]}".encode()
     assert sha == hashlib.sha256(extension.read_bytes()).hexdigest()
-    assert site.is_relative_to(ab.RUNS_ROOT / "wheels")
+    assert site.is_relative_to(ab.runs_root / "wheels")
     assert ab.ensure_site(toy_crates[0]) == (site, sha)  # cached: installed once
 
 
@@ -719,11 +719,11 @@ def test_clean_removes_unreferenced_wheels(
     args = ["run", "--bench", "cmd", "--old", "HEAD", "--order", "ON", "--skip-profile"]
     assert _run(toy_repo, *args, "--old-crate", old, "--new-crate", new, "--", "scripts/probe.py") == 0
     _fake_wheel(ab._wheel_dir("f" * 40), b"stray")
-    (ab.RUNS_ROOT / "wheels/target").mkdir()
+    (ab.runs_root / "wheels/target").mkdir()
     capsys.readouterr()
     assert _run(toy_repo, "clean", "--wheels") == 0
     assert capsys.readouterr().out == "removed 1 wheels (fffffff), kept 2\n"
-    assert (ab.RUNS_ROOT / "wheels/target").is_dir() and ab._wheel_dir(old).is_dir()
+    assert (ab.runs_root / "wheels/target").is_dir() and ab._wheel_dir(old).is_dir()
 
 
 def test_the_machine_line_says_when_load_follows_crate_builds() -> None:
@@ -795,7 +795,7 @@ def archive_clone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     _git(clone, "init", "-q", "-b", "main")
     _git(clone, "add", ".")
     _git(clone, "commit", "-q", "-m", "empty")
-    monkeypatch.setattr(ab, "RUNS_ROOT", tmp_path / "runs")
+    monkeypatch.setattr(ab, "runs_root", tmp_path / "runs")
     return clone
 
 
@@ -1034,7 +1034,7 @@ def test_report_passes_refuses_what_the_run_lacks(passes: str, message: str) -> 
     ],
 )
 def test_a_run_is_dated_once(name: str, expected: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ab, "RUNS_ROOT", tmp_path)
+    monkeypatch.setattr(ab, "runs_root", tmp_path)
     monkeypatch.setattr(ab, "_local_now", lambda: datetime.datetime(2026, 10, 9, 8, 0, tzinfo=datetime.UTC))
     assert ab._new_run_dir(name).name == expected
     assert ab._new_run_dir(name).name == f"{expected}-2"
@@ -1044,7 +1044,7 @@ def test_a_run_named_by_a_relative_path_is_found_as_an_absolute_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # each pass runs inside the run directory, so a relative one would name it twice (extend's case)
-    monkeypatch.setattr(ab, "RUNS_ROOT", tmp_path)
+    monkeypatch.setattr(ab, "runs_root", tmp_path)
     run_dir = tmp_path / "2026-10-09-a-run"
     run_dir.mkdir()
     (run_dir / "manifest.json").write_text("{}")
@@ -1054,7 +1054,7 @@ def test_a_run_named_by_a_relative_path_is_found_as_an_absolute_one(
 
 
 def test_a_second_run_is_refused_while_one_holds_the_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ab, "RUNS_ROOT", tmp_path)
+    monkeypatch.setattr(ab, "runs_root", tmp_path)
     hold = (
         "import fcntl, sys, time; f = open(sys.argv[1], 'a+'); f.write('pid 1, run x'); f.flush(); "
         "fcntl.flock(f, fcntl.LOCK_EX); print('held', flush=True); time.sleep(60)"
@@ -1096,8 +1096,23 @@ def test_a_detached_run_outlives_its_starter_and_wait_reports_it(
     assert _run(detachable, "wait", name) == 0
     brief = capsys.readouterr().out.splitlines()
     assert brief[0].startswith(f"{name}: old ") and len(brief) <= ab.BRIEF_LINES
-    assert json.loads((ab.RUNS_ROOT / name / "manifest.json").read_text())["state"] == "done"
-    assert len(list((ab.RUNS_ROOT / "launches").glob(f"{name}-*.log"))) == 1
+    assert json.loads((ab.runs_root / "runs" / name / "manifest.json").read_text())["state"] == "done"
+    assert len(list((ab.runs_root / "launches").glob(f"{name}-*.log"))) == 1
+
+
+def test_the_runs_root_is_an_argument_and_a_detached_run_keeps_it(
+    detachable: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # --runs-root before the command: the runs, the launches and the sides' worktrees under it, the
+    # environment's roots (the fixture's) not touched
+    monkeypatch.delenv("AB_WORKTREES_ROOT")
+    root = tmp_path / "given"
+    assert _run(detachable, "--runs-root", str(root), *DETACHED_RUN, "--", "scripts/probe.py") == 0
+    name = capsys.readouterr().out.split()[1]
+    assert _run(detachable, "--runs-root", str(root), "wait", name) == 0
+    assert json.loads((root / "runs" / name / "manifest.json").read_text())["state"] == "done"
+    assert len(list((root / "launches").glob(f"{name}-*.log"))) == 1
+    assert any((root / "worktrees").iterdir()) and not (tmp_path / "runs" / "runs").exists()
 
 
 def test_a_detached_run_that_fails_is_reported_by_wait_with_its_log(
