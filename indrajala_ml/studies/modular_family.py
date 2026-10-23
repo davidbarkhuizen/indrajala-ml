@@ -2548,7 +2548,6 @@ def _run_identity(
     encoding: Target,
     factors: Sequence[tuple[int, int]],
     seed: int,
-    budget_seconds: float | None,
     settings: Settings,
     cap: int,
     reads: str,
@@ -2577,13 +2576,13 @@ def _run_identity(
     cutoff_epochs: int | None = None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
-    # only when not their defaults, so a checkpoint from before them still resumes
+    # only when not their defaults, so a checkpoint from before them still resumes; not the wall-clock
+    # guard (a runaway guard alone since epochs bind), so a run its deadline stopped resumes with a larger one
     return {
         "target_states": encoding.target_states,
         "tokens": encoding.tokens,
         "factors": [list(f) for f in factors],
         "seed": seed,
-        "budget_seconds": budget_seconds,
         "settings": repr(settings),
         "cap": cap,
         "reads": reads,
@@ -2619,6 +2618,8 @@ def _run_identity(
 
 COUNTEREXAMPLE_WORDS = 256  # R4's words at most (D6)
 BEGUN, ENDED = "begun", "ended"  # a checkpoint's place before the run's first row, and after its last
+GUARD = "budget_seconds"  # the wall-clock guard, in identities from before it left them (ignored on resume)
+STEP_FILE = re.compile(r"-step-(\d+)\.network\.json$")  # a step end's networks (step-S, certified-step-S, ...)
 
 
 def _write_checkpoint(out: Path, identity: dict[str, Any], place: Place | str, net: Any) -> None:
@@ -2675,7 +2676,6 @@ class RunConfig:
             self.encoding,
             self.factors,
             self.seed,
-            self.budget_seconds,
             self.settings,
             self.cap,
             self.reads,
@@ -2937,9 +2937,11 @@ class _Run:
         self.d = mr.word_length(c.encoding.task.machine) if c.consolidate else 0
         self.place: Place | None = None  # the checkpoint resumed from
         self.ended = False
+        self.deadline = False  # the wall-clock guard stopped it: its last checkpoint kept, so it resumes
         saved = json.loads((c.out / CHECKPOINT).read_text()) if resume and (c.out / CHECKPOINT).exists() else None
         if saved is not None:
-            assert saved["run"] == self.identity, f"{c.out} holds another run: {saved['run']} against {self.identity}"
+            kept = {k: v for k, v in saved["run"].items() if k != GUARD}
+            assert kept == self.identity, f"{c.out} holds another run: {saved['run']} against {self.identity}"
             if saved["place"] == ENDED:
                 self.ended = True
                 return
@@ -2949,8 +2951,12 @@ class _Run:
             self.net: Any = network_from_state(saved["network"])
             table = {tuple(duplicate): tuple(representative) for duplicate, representative in self.place.consolidation}
             self.net.consolidate(table)
-            with (c.out / "log.jsonl").open("r+") as kept:
-                kept.truncate(self.place.log_bytes)
+            with (c.out / "log.jsonl").open("r+") as log:
+                log.truncate(self.place.log_bytes)
+            for path in c.out.glob("*-step-*.network.json"):  # a step's end from this step on came after the
+                found = STEP_FILE.search(path.name)  # checkpoint (a deadline's cut step's): the run writes its own
+                if found and int(found.group(1)) >= self.place.step:
+                    path.unlink()
         else:
             assert saved is not None or not (resume and (c.out / "log.jsonl").exists()), (
                 f"{c.out} has a log but no checkpoint to resume from"
@@ -3021,7 +3027,8 @@ class _Run:
             growing = c.continuous is not None and s.fixed > 0
             self.record(s.margin.stop_row(c.out, c.encoding, c.settings, c.state_bound, s.coupled, growing))
         self.log.close()
-        _write_checkpoint(c.out, self.identity, ENDED, self.net)
+        if not self.deadline:  # a deadline's stop keeps the last epoch's checkpoint: the run is censored, not ended
+            _write_checkpoint(c.out, self.identity, ENDED, self.net)
 
     def plan(self, step: int) -> StepPlan:
         # the curriculum's lengths, or the whole distribution's every step (a step then a block of epochs);
@@ -3092,6 +3099,7 @@ class _Run:
         for epoch in range(resumed + 1, c.settings.max_epochs + 1):
             if c.budget_seconds is not None and time.perf_counter() - self.start > c.budget_seconds:
                 stop = "deadline"
+                self.deadline = True
                 break
             if c.budget_epochs is not None and s.spent >= c.budget_epochs:
                 stop = "spent"
@@ -3584,7 +3592,10 @@ def run(
     `resume`, a run stopped part way goes on from its checkpoint (the code-consolidation workplan's
     stage 3): its log cut back to the checkpoint's rows, an epoch begun after it trained again, so
     every network and row but the seconds is the uninterrupted run's; the wall-clock guard counts
-    the seconds trained. A run that ended isn't trained again; one without a checkpoint starts.
+    the seconds trained. A run that ended isn't trained again; one without a checkpoint starts. A
+    deadline's stop (the guard) logs its step's end but keeps the last epoch's checkpoint, so the
+    same run resumed with a larger guard goes on to its epoch budget as if never stopped (its rows
+    and step files after that checkpoint dropped); the guard isn't part of the run's identity.
     """
     config = RunConfig(
         encoding,

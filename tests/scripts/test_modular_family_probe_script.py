@@ -35,4 +35,4 @@ def test_run_needs_an_epoch_budget_and_has_no_wall_clock_one_by_default(
     out = tmp_path / "out"
     assert script.main(["run", "--runs", "word-problem-s3:1", *TINY, "--out", str(out)]) == 0
     saved = json.loads((out / "seed1" / "checkpoint.json").read_text())
-    assert saved["run"]["budget_seconds"] is None and saved["run"]["budget_epochs"] == 1
+    assert "budget_seconds" not in saved["run"] and saved["run"]["budget_epochs"] == 1  # a guard, not identity
