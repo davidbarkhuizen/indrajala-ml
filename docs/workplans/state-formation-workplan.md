@@ -2093,6 +2093,7 @@ has had a sensitivity reading; the owner's rule is no constants without a deriva
 
 Not yet planned: a sensitivity reading, one constant at a time on fresh seeds on the batch runner
 (the audit's F10; the owner's call).
+
 ## Findings: the slack bound and Chow's test set (offline, 2026-10-23; the programme audit's F6, F32)
 
 Read offline on every copied log of the continuous method (D54, D55, D57, D58, D59, D61 and D64: 90
