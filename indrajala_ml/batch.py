@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import datetime
 import hashlib
 import json
@@ -242,6 +243,11 @@ HOSTS: dict[str, Host] = {
         windows=(Window(WEEKDAYS, 18, 13), Window((5,), 0, 24), Window((6,), 0, 31)),
     ),
 }
+
+
+def opened(hosts: dict[str, Host], names: Sequence[str]) -> dict[str, Host]:
+    """The hosts with `names` open at any hour (no windows): the owner's grant outside their hours."""
+    return {n: dataclasses.replace(h, windows=()) if n in names else h for n, h in hosts.items()}
 
 
 def local_now() -> datetime.datetime:

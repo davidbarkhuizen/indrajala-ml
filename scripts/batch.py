@@ -57,6 +57,11 @@ def main(argv: list[str]) -> int:
     controller.add_argument("dir", type=Path)
     controller.add_argument("--port", type=int, default=PORT)
     controller.add_argument("--hosts", help="the fleet's hosts: their hours and pulls (D7)")
+    controller.add_argument(
+        "--open",
+        default="",
+        help="hosts the owner has given outside their hours, open for this controller's life (logged in the ledger)",
+    )
     worker = commands.add_parser("worker", help="run attempts on this machine")
     worker.add_argument("root", type=Path)
     worker.add_argument("--slots", type=int, required=True)
@@ -85,7 +90,13 @@ def main(argv: list[str]) -> int:
         asyncio.run(b.fleet([b.HOSTS[n] for n in args.hosts.split(",")], args.port))
     elif args.command == "controller":
         hosts = {n: b.HOSTS[n] for n in args.hosts.split(",")} if args.hosts else None
-        asyncio.run(b.Controller(args.dir, hosts).serve(args.port))
+        opened = [n for n in args.open.split(",") if n]
+        if opened and (hosts is None or not set(opened) <= set(hosts)):
+            parser.error("--open names hosts among --hosts")
+        controller = b.Controller(args.dir, b.opened(hosts, opened) if hosts else None)
+        if opened:
+            controller.log({"type": "opened", "hosts": opened})
+        asyncio.run(controller.serve(args.port))
         print("\n".join(b.report(args.dir)))
     elif args.command == "worker":
         worker = b.Worker(

@@ -333,3 +333,11 @@ def test_t1_and_t3s_cells_meet_their_registered_bounds():
     assert joint >= 25 * 5  # the suffix arm's 125 states
     assert {b.BACKDROPS[name].arm for name in ("d5-sum", "d5-suffix", "d5-token")} == {"sum", "suffix", "token"}
     assert all(b.BACKDROPS[n].vocabulary == b.T1_VOCABULARY for n in ("d5-sum", "d5-suffix", "d5-token"))
+
+
+def test_an_opened_host_takes_work_outside_its_hours():
+    thursday_noon = datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)  # stone's owner's day
+    assert b.window_left(b.HOSTS["stone"], thursday_noon) is None
+    opened = b.opened({"stone": b.HOSTS["stone"], "klip": b.HOSTS["klip"]}, ["stone"])
+    assert b.window_left(opened["stone"], thursday_noon) is not None and opened["klip"] == b.HOSTS["klip"]
+    assert b.HOSTS["stone"].windows  # the table itself unchanged
