@@ -196,6 +196,25 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     1.1 for `p` 11 and 13. (b) The exact bound only. Pros: proof everywhere. Cons: says nothing of a
     discoverer who knows the size only roughly. (c) 1.5 as well. Cons: out of reach for every target
     but S3 (the slack reading's table).
+- **D12. The paper's cell, exactly: W1's** (2026-10-23, stage 3, before any run of it). D3's
+  "division and round-1 cell" left the factors' width open: round 1 ran `--codes-ratio 32/11` at
+  width 16, W1 (the only registered result at 169 states) two factors 32 wide of 38 codes, which is
+  `--codes-ratio 32/11` at width 32 (38 = ceil(32/11 * 13); the `p` 11 ladder's 32 codes too). The
+  runner's `paper` cell: `--factors 2 --codes-ratio 32/11 --factor-width 32 --reads output --fork
+  --window-width 32 --budget-epochs 600`, stopping at the first certified step, no `--state-bound`
+  (its run record W1's but the budget, checked); 600 epochs as W1 and round 1; T2's and T5's cell.
+  T1 and T3 keep their own design's cell, the approximation claim's (`approximation`: two factors of
+  16, reading the output, the default window, 400 epochs, no fork), since T1 repeats A2's arm and T3
+  compares with T1 and A1. Backdrops (the runner's `BACKDROPS`): T1's `d5-sum`, `d5-suffix`, `d5-token`
+  on one vocabulary (`sum suffix token`); T2's `d7-family`, `d11-family`, `d13-family`,
+  `d11-quotient`; T5's `s3`, `s4`, `mtf4`, `rq12`, `rq16`.
+  - (a) *Chosen:* width 32 for every backdrop of T2 and T5. Pros: one method throughout (D3), and it is the cell
+    behind the scale result (K6), so T2 measures W1's own cell at 20 seeds. Cons: T5's algebras run
+    at a width round 1 didn't (its six seeds a screen of another cell); more parameters per run.
+  - (b) Width 16 throughout (round 1's). Pros: round 1's cell exactly. Cons: at 169 states it is not
+    the cell that certified (W1's L3 baseline at width 32, the window's width the change); T2 would
+    test a cell with no evidence at scale.
+  - (c) Width by backdrop (16 for the algebras, 32 for division). Cons: two methods, against D3.
 
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 

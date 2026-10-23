@@ -1030,8 +1030,13 @@ def main(argv: list[str]) -> int:
     run.add_argument(
         "--codes-ratio",
         type=Fraction,
-        help="each of --factors factors ceil(R sqrt(q)) codes for q target states, width 16: ceil(R p) for "
-        "division (the division ladder's D2, the general algebras' D3: 32/11)",
+        help="each of --factors factors ceil(R sqrt(q)) codes for q target states, width --factor-width: "
+        "ceil(R p) for division (the division ladder's D2, the general algebras' D3: 32/11)",
+    )
+    run.add_argument(
+        "--factor-width",
+        type=int,
+        help="each --codes-ratio factor's width s (default 16; W1's and the paper's cell: 32)",
     )
     run.add_argument("--factors", type=int, default=2, help="factors of 16 codes, s 16 each")
     run.add_argument(
@@ -1742,6 +1747,8 @@ def main(argv: list[str]) -> int:
         return 0
     if args.codes_ratio is not None and args.factor:
         parser.error("--codes-ratio sets every factor's codes: not with --factor")
+    if args.factor_width is not None and args.codes_ratio is None:
+        parser.error("--factor-width sets --codes-ratio's factors' width: only with --codes-ratio")
     if (args.branches or args.answer_branch) and args.reads != "output":
         parser.error("--branches and --answer-branch: each factor reads a branch's end, so --reads output")
     if args.branches and args.answer_branch:
@@ -1828,7 +1835,9 @@ def main(argv: list[str]) -> int:
     def cell(name: str) -> tuple[mf.Target, list[tuple[int, int]]]:
         encoding = _target(name, args)
         if args.codes_ratio is not None:
-            return encoding, mf.scaled_factors(encoding.target_states, args.codes_ratio, args.factors)
+            return encoding, mf.scaled_factors(
+                encoding.target_states, args.codes_ratio, args.factors, args.factor_width or 16
+            )
         return encoding, [tuple(f) for f in args.factor] if args.factor else [(16, 16)] * args.factors
 
     def probe(name: str) -> functools.partial[None]:
