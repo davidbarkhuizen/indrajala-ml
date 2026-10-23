@@ -23,9 +23,13 @@
 
 ## Studies
 
-A study that trains networks and makes claims from them follows
-[docs/protocols/experiment-design.md](docs/protocols/experiment-design.md); read it before designing one or writing its
-workplan.
+A study that trains networks and makes claims from them follows the experiment design, in the
+research repository: `../indrajala-research/docs/protocols/experiment-design.md` in the sibling
+clone ([on GitHub](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/protocols/experiment-design.md));
+read it, and the feasibility checklist beside it (`information-flow.md`), before designing one or
+writing its workplan. The research notes (findings, reports, the literature review, the failure
+kinds, the goal) are there too, in `docs/research-notes/`; the workplans, where findings are
+registered and recorded, stay here.
 
 - **Every cell must be able to succeed, and its training must exclude memorising:** the model can
   represent the target (codes at least its minimal states), and the longest training length is at

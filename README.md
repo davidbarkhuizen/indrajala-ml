@@ -95,7 +95,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
 | `scripts/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
 | `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention, multi-head attention and sequence studies and the refactoring golden run; see `docs/measurement.md` |
-| `docs/` | the measurement guide, working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open workplans, `docs/research-notes/` the studies' findings, notes, reports and literature review, `docs/protocols/` the experiment design, and the feasibility checklist, `docs/audits/` the RNG audit and the dated reviews |
+| `docs/` | the measurement guide, working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open workplans, `docs/audits/` the RNG audit and the dated reviews. The research notes and the research protocols (experiment design, feasibility checklist) are in [indrajala-research](https://github.com/davidbarkhuizen/indrajala-research)'s `docs/` |
 
 ## Models
 
@@ -918,11 +918,11 @@ docstring; the results and threshold models are archived in `indrajala-models`).
 window-recurrent adder (`git show e45944e:docs/window-recurrent-adder-workplan.md`)
 checks the same catalogue at lengths up to 64. What the adder studies have found so far, from
 this study to the window-recurrent claims, is summarised in
-[docs/research-notes/adder-findings.md](docs/research-notes/adder-findings.md); the window-recurrent claims themselves, each
+[indrajala-research/docs/research-notes/adder-findings.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/adder-findings.md); the window-recurrent claims themselves, each
 registered before its data and decided (the snap is what extrapolates; a certified network adds
 at every length; more codes buy test-passing networks, not correct ones; all at once works at
 least as often as the curriculum; failures aren't unexplored states), are reported in
-[docs/research-notes/window-recurrent-report.md](docs/research-notes/window-recurrent-report.md).
+[indrajala-research/docs/research-notes/window-recurrent-report.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/window-recurrent-report.md).
 
 ## Refactoring
 
