@@ -68,6 +68,7 @@ docs cite them by section:
 | Controlling the codes' commitment (the diagnostic, the thermostat, annealing) | #765 | #851, #852, #871, #876, #881, #885, crate #67, #886 | `git show df1dcac:docs/commitment-control-workplan.md` |
 | One code, one state (R1-R4, C0, C2) | #873 | #874, #875, #878, #879, #883 | `git show df1dcac:docs/one-code-one-state-workplan.md` |
 | A population of runs selected by their machines (level 2, not built) | #882 | - | `git show df1dcac:docs/population-workplan.md` |
+| An audit of the research programme (2026-10-23) | #953 | indrajala-research #48-#50, #954 | `git show 4ea65cc:docs/workplans/programme-audit-workplan.md`; the four reviews at indrajala-research's top level (`review-2026-10-23-*.md`) |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -83,6 +84,24 @@ and [rng-audit.md](audits/rng-audit.md). The batch-size studies' findings are in
 `scripts/multi_head_attention_study.py`'s, the sequence study's in `scripts/sequence_study.py`'s,
 the attention dropout study's in `scripts/attention_dropout_study.py`'s, the rotary study's in
 `scripts/rotary_study.py`'s, the addition study's in `scripts/addition_study.py`'s.
+
+## From the programme audit (2026-10-23; the workplan retired the same day)
+
+Four dated reviews in indrajala-research: the programme's evolution, its reasoning
+(inconsistencies, gaps, assumptions), 33 findings (F1-F33) and the earlier reviews re-assessed.
+Its S3/S4 corrections are merged (indrajala-research #50, #954). Left, the owner's calls (S1/S2):
+
+- **F1:** the fresh-seed rate's (D64) registered verdict (7 of 12) against the deadline's
+  completion (D67) standing in for its cut runs.
+- **F2, F3, F20, F22, F23, F27:** the papers' wording (the guard in training; "because it is one";
+  E2b''s reused arm; stopping at the proof; the 0 of 160 baseline) and whether they wait for stage A.
+- **F5:** retire the panel's gate (D1, D12, D40) or run its affordable form as the runner's first batch.
+- **F6, F32:** the slack bound read offline on the D54-D64 step networks; Chow's test set built.
+- **F7:** the batch runner's find mode needs a stated verifier.
+- **F9, F10, F24:** the protocol's sidedness and mid-run moves; a table of the method's constants.
+- **F13-F18:** contribution.md brought up to the fresh-seed evidence; the class line narrowed; the
+  120-against-121 confound; the method's scope; an approximation beside S3 (D39 (i)).
+- **The reviews' lesson:** when a gate is dropped, re-home every recommendation that waited on it.
 
 ## From the commitment, one-code-one-state, consolidation and population plans (retired 2026-10-20)
 
