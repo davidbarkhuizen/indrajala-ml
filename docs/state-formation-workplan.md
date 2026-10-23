@@ -104,7 +104,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`); read 2026-10-23, 05:30: S3 and move-to-front-4 7 of 12, between its bars; 0 of 10 on the others; every failure frozen |
 | D65 | 2026-10-22, 10:45 | the order-biased cool | the cool's halving time times `1 + w (s - 1)`: w the machine's order from answers (0 when ordered), s the slowdown from the melting curve and relaxation; set aside at 11:05 on its stage 0 (the failures freeze, the cool does not outrun them) |
 | D66 | 2026-10-22, 11:20 | the two-phase cool | a slower re-cool after each reheat (the forward rate times `2^-k`, k reheats so far): zero for runs that never freeze; reshaped at 11:50 from an order gate that failed its stage 0 (planned, after D63's reading) |
-| D67 | 2026-10-23, 06:45 | the deadline's completion | the ten runs of D63 and D64 that the 690-minute wall-clock budget cut short of their 1,600 epochs, run again from their seeds to their epoch budget (`probe-d67.sh`); epochs the binding budget from now on |
+| D67 | 2026-10-23, 06:05 | the deadline's completion | the ten runs of D63 and D64 that the 690-minute wall-clock budget cut short of their 1,600 epochs, run again from their seeds to their epoch budget (`probe-d67.sh`); epochs the binding budget from now on |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -1228,7 +1228,7 @@ owner's; D49-D54 settled under the delegation.
   - (d) The order weight (D65) on the pace. Cons: no weight met its criteria.
   - (e) A hotter start (the owner's aside). Cons: adds time only at the top of an exponential cool.
 - **D67. The deadline's completion (`~/code/probe-d67.sh`, sha256 411f31578d966b10, registered
-  2026-10-23, 06:45, before its data; the owner: "make epochs the binding budget from now on - that
+  2026-10-23, 06:05, before its data, its header's "06:45" a slip; the owner: "make epochs the binding budget from now on - that
   approach is thermodynamically consistent"; "systematically work through and re-process any data
   that might be affected").** A run's budget is its epochs (1,600); the 690-minute wall-clock budget,
   meant as a guard, bound ten runs of the two probes still being read, cutting them short on a loaded
