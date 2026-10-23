@@ -3,7 +3,7 @@
 **Status: decisions D1-D8 settled (2026-10-10) by building for extensibility, speed and real-world
 production (the owner's direction, 2026-10-10). Stage 1 (this plan) done.**
 
-Roadmap step 14 ([primitives-roadmap.md](primitives-roadmap.md)): attention whose `h` query heads
+Roadmap step 14 ([primitives-roadmap.md](../primitives-roadmap.md)): attention whose `h` query heads
 share `g` key/value heads (Ainslie et al. 2023, "GQA"; `g = 1` is multi-query attention, Shazeer
 2019), in all three implementations and the crate, measured where it pays: the key/value cache of
 step 9's decoder at step 12's context lengths.

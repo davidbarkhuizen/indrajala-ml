@@ -3,7 +3,7 @@
 **Status: decisions D1-D8 settled (2026-10-10) by building for extensibility, speed and real-world
 production (the owner's direction, 2026-10-10). Stage 1 (this plan) done.**
 
-Roadmap step 13 ([primitives-roadmap.md](primitives-roadmap.md)): the activations production
+Roadmap step 13 ([primitives-roadmap.md](../primitives-roadmap.md)): the activations production
 transformers use in their feed-forward blocks: GELU (BERT, GPT-2, ViT) and the gated SwiGLU
 (PaLM, LLaMA and most decoders since 2022), in all three implementations and the crate.
 

@@ -376,7 +376,7 @@ quantiser's input is a single forward pass, not a state fed back.
 ## Extension (2026-10-22): the freeze, restarts, collapses and random machines
 
 Asked by the owner: review the concepts and findings that arose since the 2026-10-20 extension. The
-problem, as the continuous crystallisation (D48-D66, [state-formation-workplan.md](state-formation-workplan.md))
+problem, as the continuous crystallisation (D48-D66, [state-formation-workplan.md](workplans/state-formation-workplan.md))
 left it:
 
 - **The method works on ordered machines, as a batch:** with the margin stop, S3 11 of 16 and

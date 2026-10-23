@@ -1,5 +1,5 @@
 """
-The RNG audit's measurements (docs/rng-audit.md): the crate's uniform/bernoulli_mask (its legacy
+The RNG audit's measurements (docs/audits/rng-audit.md): the crate's uniform/bernoulli_mask (its legacy
 MT19937 module functions, and its PCG64 Generator) against numpy's legacy np.random (MT19937) and
 its PCG64 Generator, for statistical quality and speed.
 

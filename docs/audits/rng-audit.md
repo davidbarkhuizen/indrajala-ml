@@ -4,7 +4,7 @@ The random number generators this project uses: how the Rust crate's generator
 (`rust/src/random.rs`) reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and
 what is still open. The crate also has a PCG64 `Generator` (`rust/src/generator.rs`) that
 reproduces numpy's `default_rng` bit for bit, which the Rust networks draw from (the RNG generators
-workplan, retired: [next-steps.md](next-steps.md)). The measurements and checks come from these
+workplan, retired: [next-steps.md](../next-steps.md)). The measurements and checks come from these
 harnesses:
 
 - `rust/tests/test_random_numpy_parity.py`: the crate against `np.random`, bit for bit. It covers
@@ -56,7 +56,7 @@ so a stopped run resumes by bits. Stage 7 also deleted `seed_everything` and `ba
 crate keeps its MT19937 module functions (`pa.seed`, `pa.random`, `pa.uniform`), mirroring
 `np.random` (D7), and nothing in `indrajala_ml` calls them.
 
-Since the RNG draw-order workplan (retired: [next-steps.md](next-steps.md)), pure Python draws
+Since the RNG draw-order workplan (retired: [next-steps.md](../next-steps.md)), pure Python draws
 in numpy's order too. A layer draws its whole weight matrix row by row, then its biases
 (`fan_in_aware_weights_and_biases`), and an attention layer draws each projection that way, `q, k,
 v, o` in turn. A network with dropout trains layer-major, so each dropout layer draws its batch's
@@ -201,7 +201,7 @@ Rust never fuses `low + range * u` into an FMA. numpy's C might, depending on th
 flags. GCC in ISO C mode doesn't contract, but clang contracts within an expression by default,
 and arm64 has FMA in its baseline. Linux x86_64 wheels target a baseline without FMA, so today's
 CI can't show a difference. The PyPI plan's multi-platform CI
-([pypi-release-workplan.md](pypi-release-workplan.md), stage 2) runs the parity tests on arm64
+([pypi-release-workplan.md](../workplans/pypi-release-workplan.md), stage 2) runs the parity tests on arm64
 and macOS and will catch it. If a numpy build contracts, record it and decide then. Don't
 pre-emptively add `mul_add`.
 

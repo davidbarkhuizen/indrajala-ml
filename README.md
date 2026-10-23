@@ -95,7 +95,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
 | `scripts/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
 | `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention, multi-head attention and sequence studies and the refactoring golden run; see `docs/measurement.md` |
-| `docs/` | the measurement guide, next steps, the PyPI release workplan, the primitives roadmap, the RNG audit, machine profiles |
+| `docs/` | the measurement guide, next steps, the primitives roadmap, the studies' notes and reports, machine profiles; `docs/workplans/` the open workplans, `docs/audits/` the RNG audit and the dated reviews |
 
 ## Models
 
@@ -201,7 +201,7 @@ hand-computed examples, and the reference the array implementations are checked 
 never used for performance (speed/timing) measurement; only the numpy and Rust implementations
 are timed. Accuracy comparisons of pure-Python models are fine. From one seed, every pure-Python
 network with an array twin starts with numpy's and Rust's weights and draws their dropout masks,
-by bits (`tests/model/networks/test_seeded_init_parity.py`; [docs/rng-audit.md](docs/rng-audit.md)),
+by bits (`tests/model/networks/test_seeded_init_parity.py`; [docs/audits/rng-audit.md](docs/audits/rng-audit.md)),
 so a parity test seeds all sides alike.
 
 ## Saving and loading
@@ -956,7 +956,7 @@ test passing, and:
   Ryzen laptop's numbers beside them.
 - [docs/i7-9700k-rust-optimization.md](docs/i7-9700k-rust-optimization.md): where the Rust crate
   lags numpy on the benchmark machine, and what to investigate for each gap.
-- [docs/pypi-release-workplan.md](docs/pypi-release-workplan.md): publishing the Rust crate to
+- [docs/workplans/pypi-release-workplan.md](docs/workplans/pypi-release-workplan.md): publishing the Rust crate to
   PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
@@ -964,7 +964,7 @@ test passing, and:
   masking, all done.
 - [docs/next-steps.md](docs/next-steps.md): the work left over from completed workplans, and how
   to read those workplans in git history.
-- [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's
+- [docs/audits/rng-audit.md](docs/audits/rng-audit.md): the random number generators in use, how the crate's
   reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and the open RNG work.
 
 ## License

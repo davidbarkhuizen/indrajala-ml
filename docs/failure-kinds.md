@@ -3,7 +3,7 @@
 **Written 2026-10-19 at the owner's request as a three-bottleneck view; renamed 2026-10-21, at the
 owner's direction, to failure kinds named by what fails and how it is measured** (the first
 bottleneck split in two once `state-separation` told formation from conversion,
-[state-formation-workplan.md](state-formation-workplan.md)). Every failure seen since the general
+[state-formation-workplan.md](workplans/state-formation-workplan.md)). Every failure seen since the general
 algebras' round 1 is one of four kinds, each with its own cause and its own fix. A fix for one isn't
 expected to move another, so a study's failures are each classified first, and a remedy is chosen by
 its fit to the kind (the workplan's D31). This file maps them to their evidence and plans; the
@@ -36,7 +36,7 @@ separation. The table below is as of 2026-10-19, its first column the two then u
 | **where seen** | S3 (round 1, 5 of 6 failures); move-to-front 4 (round 1, P1: seeds 0, 3, 4); move-to-front 5 (round 2, 4 of 6; B2's first three seeds) | S4's near miss (round 1); random-4-0, random-q16-0 (2b, A, B, P2); S5 (round 2: 385-748 codes for 120 states, minimised to 175-842; B2's first three seeds: 425-737) | division `p` 13 (L3 seed 5 only: its 169-state machine exact, 15-22 of 1,521 answers wrong; L3's other five failures are in 2) |
 | **cause, as far as shown** | the commitment's pull: with nothing yet distinguishing the states, a constant meets it most cheaply. Diagnostic (2026-10-19, registered): with the commitment off for steps 1-5, 3 of 6 failure-A runs formed a state (0.87, 0.97, 1.0) and S3 seed 5 certified; the states eroded when it returned at step 6 | not duplicates: an extra code's outputs are wrong within `d` tokens, so the network's own equivalence can't merge them (A's reading). Not rarity (random-4-0). Where they first arise is unshown | a crowded window: the answers and every factor's transition read one 16-wide stream; its features don't linearly separate the answers (the separability check) |
 | **tried** | the commitment off early (the diagnostic: forms states, doesn't keep them); the thermostat (0 of 6 twice; states formed and eroded at its return); annealing as built (0 of 8: codes merged above the critical temperature); **the commitment never on: 4 of 6 failure-A runs certified, but harm where it worked** (S4, division at 32) | A, consolidation (0 of 6, pulled little); B, the long tail (0 of 6, a longer exact prefix in 2 seeds); P2, restore the step's best (0 of 6: the best was never a machine); P1, the guard (fewer certified); **R3/R4 at 32 (C2): S5 2 of 6, move-to-front-5 3 of 6, against 0 of 6 each: works** | readout-tune (15 left: not an under-trained readout); W1, the window 32 wide: **5 of 6 against 0 of 6, cured** |; R1, the answers' own branch: 0 of 6 at 16 and at 32 (harm on division at 32)
-| **plan** | [state-formation-workplan.md](state-formation-workplan.md), option 1 (the annealed initial snap: a continuous warm-up, codes from the states seen, cooled from the critical temperature) and option 2 (cell noise) | the same plan, option 3 (the rotation trick); R3/R4 an option | width 32, the base |
+| **plan** | [state-formation-workplan.md](workplans/state-formation-workplan.md), option 1 (the annealed initial snap: a continuous warm-up, codes from the states seen, cooled from the critical temperature) and option 2 (cell noise) | the same plan, option 3 (the rotation trick); R3/R4 an option | width 32, the base |
 | **next** | the plan's stage 2: Rose's critical temperature on annealing's merged networks, Zhao et al.'s effective dimension on the failure-A runs | after option 1 | division `p` 17 at width 32 (not planned) |
 
 ## The common measure: one code, one state (2026-10-19)
@@ -85,10 +85,10 @@ logged and used to keep the best machine, counterexample training (2), the therm
   the owner's direction; formation and conversion told apart by `state-separation` (2026-10-20).
   The quasi-static crucible cured both on word-problem-s3 (8 of 8 certified; findings 4a''''); the
   handover probe (4a''), with no crucible, certified move-to-front-4 seed 3 under every shape, which
-  hasn't yet certified in the crucible (corrected 2026-10-21, [reasoning-review-2026-10-21.md](reasoning-review-2026-10-21.md));
+  hasn't yet certified in the crucible (corrected 2026-10-21, [reasoning-review-2026-10-21.md](audits/reasoning-review-2026-10-21.md));
   the panel (4b) classifies what is left. The 2026-10-19 table's "plan" and "next" rows are
   superseded: D31 shelved options 2-4, called down only by the panel's diagnosis
-  ([consistency-review-2026-10-21.md](consistency-review-2026-10-21.md)).
+  ([consistency-review-2026-10-21.md](audits/consistency-review-2026-10-21.md)).
 - 2026-10-19: the common measure (pairs per code) and its workplan; B2 read (1 of 6 on each
   cell).
 - 2026-10-19: the window branches' stage 6 read and the plan retired (not adopted: harm on S4).
@@ -98,5 +98,5 @@ logged and used to keep the best machine, counterexample training (2), the therm
   on (4 of 6) but that harms where it worked, so the commitment hurts before a state forms and helps
   after (Zhao et al. 2026); annealing as built merged its codes (Rose 1998's critical temperature);
   **2** moved with R3/R4 at 32 (5 of 12); R1 shelved. The owner abandoned the open plans and set
-  [state-formation-workplan.md](state-formation-workplan.md): the literature review's options, one at
+  [state-formation-workplan.md](workplans/state-formation-workplan.md): the literature review's options, one at
   a time.

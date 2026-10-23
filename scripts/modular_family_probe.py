@@ -488,7 +488,7 @@ readout is `readout data/window-recurrent/p11-ladder --arms family`.
   guard (`replay --guard`, the snap-wall workplan's stage 2d) joins the fork rather than
   superseding it.
 
-Findings (the general algebras' build probes, stage 2 of docs/general-algebras-workplan.md; probes,
+Findings (the general algebras' build probes, stage 2 of docs/workplans/general-algebras-workplan.md; probes,
 no claim), 2026-10-17, pyramidon, the workplan's cell (two factors, `--codes-ratio 32/11`, reading
 the output, the fork), OPENBLAS_NUM_THREADS=1, in a scratch directory (not kept):
 
@@ -502,7 +502,7 @@ the output, the fork), OPENBLAS_NUM_THREADS=1, in a scratch directory (not kept)
   minutes); S3 0 of 2, 2-4 codes in use, its answers about half right at 150 epochs; random-3-0 0
   of 2, still one code. Round 1 (E1, 600 epochs, 6 seeds) runs as registered.
 
-Findings (round 1 of the general algebras, stage 3 of docs/general-algebras-workplan.md, E1
+Findings (round 1 of the general algebras, stage 3 of docs/workplans/general-algebras-workplan.md, E1
 registered before its data), 2026-10-17/18; `n` 3 and 4, three classes, the workplan's cell (two
 factors, `--codes-ratio 32/11`, reading the output, the fork with today's trigger, the guard off),
 600 epochs, stop at certified, seeds 0-5. Code 5a89bfe, OPENBLAS_NUM_THREADS=1; seeds 0-4 on
@@ -779,7 +779,7 @@ certified). Data in data/window-recurrent/commitment-control/thermostat-probe/, 
   (the workplan's D2''): restore the commitment when the step's screen passes, an answers-only
   signal (the fork's trigger is one too).
 
-Findings (round 2 of the general algebras, stage 4 of docs/general-algebras-workplan.md, E1 as
+Findings (round 2 of the general algebras, stage 4 of docs/workplans/general-algebras-workplan.md, E1 as
 amended before its data in #850), 2026-10-18; `n` 5, word-problem-s5 and move-to-front-5, round 1's
 cell unchanged, 600 epochs, seeds 0-5. Code ff2b2f2 (~/code/wt-round2, crate 40a2761),
 OPENBLAS_NUM_THREADS=1, jebel, 6 at once, 18:47 to 21:35. Data in

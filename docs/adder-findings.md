@@ -28,7 +28,7 @@ retired workplan is `git show 8990f74:docs/addition-study-workplan.md`.*
 
 ## 2. Why a fixed-depth network can't add at any length
 
-*Recorded in [arbitrary-length-addition-workplan.md](arbitrary-length-addition-workplan.md) and
+*Recorded in [arbitrary-length-addition-workplan.md](workplans/arbitrary-length-addition-workplan.md) and
 [next-steps.md](next-steps.md) (From length generalisation); the terminated plan's literature
 section is `git show c3d619b:docs/length-generalisation-workplan.md`.*
 

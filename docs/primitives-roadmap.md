@@ -33,7 +33,7 @@ recurrence.
 
 Before step 7, a fix, not a primitive: pure Python's random draws in numpy's order, so that all
 three implementations start, and drop out, alike from one seed; done (2026-10-10, #649-#652;
-[rng-audit.md](rng-audit.md)). Step 7's attention dropout then tests its masks in all three by
+[rng-audit.md](audits/rng-audit.md)). Step 7's attention dropout then tests its masks in all three by
 bits.
 
 7. **Dropout in attention**: done (2026-10-11), on the attention weights and token-wise, for the
@@ -42,20 +42,20 @@ bits.
    as a window slides; done (2026-10-12), and the default for new sequence models: lower held out
    than learned positions on every corpus (next-steps, From rotary positions).
 9. **Generation**: sampling text from a trained sequence model, with a key/value cache; planned
-   (2026-10-10, [generation-workplan.md](generation-workplan.md)).
+   (2026-10-10, [generation-workplan.md](workplans/generation-workplan.md)).
 10. **The training recipe**: learning-rate schedules as data, AdamW and gradient clipping, with
-    longer training; planned (2026-10-10, [training-recipe-workplan.md](training-recipe-workplan.md)).
+    longer training; planned (2026-10-10, [training-recipe-workplan.md](workplans/training-recipe-workplan.md)).
 11. **Segments: packing, document masks and padding**: one segment id per token, for packed
     training windows and padded inference batches; planned (2026-10-10,
-    [segments-workplan.md](segments-workplan.md)).
+    [segments-workplan.md](workplans/segments-workplan.md)).
 12. **Context length**: windows of 256 and 1,024 characters, with tiled attention; planned
-    (2026-10-10, [context-length-workplan.md](context-length-workplan.md)).
+    (2026-10-10, [context-length-workplan.md](workplans/context-length-workplan.md)).
 13. **FFN activations: GELU and SwiGLU**; planned (2026-10-10,
-    [ffn-activations-workplan.md](ffn-activations-workplan.md)).
+    [ffn-activations-workplan.md](workplans/ffn-activations-workplan.md)).
 14. **Grouped- and multi-query attention**; planned (2026-10-10,
-    [grouped-query-attention-workplan.md](grouped-query-attention-workplan.md)).
+    [grouped-query-attention-workplan.md](workplans/grouped-query-attention-workplan.md)).
 15. **Cross-attention**, with an encoder-decoder model on Greek-English translation; planned
-    (2026-10-10, [cross-attention-workplan.md](cross-attention-workplan.md)).
+    (2026-10-10, [cross-attention-workplan.md](workplans/cross-attention-workplan.md)).
 
 Steps 7 to 13 were ordered by the owner on 2026-10-10 from the candidates the multi-head attention
 and sequence task workplans left (next-steps.md). The same day the owner chose a key/value cache
