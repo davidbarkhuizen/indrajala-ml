@@ -104,6 +104,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`); read 2026-10-23, 05:30: S3 and move-to-front-4 7 of 12, between its bars; 0 of 10 on the others; every failure frozen |
 | D65 | 2026-10-22, 10:45 | the order-biased cool | the cool's halving time times `1 + w (s - 1)`: w the machine's order from answers (0 when ordered), s the slowdown from the melting curve and relaxation; set aside at 11:05 on its stage 0 (the failures freeze, the cool does not outrun them) |
 | D66 | 2026-10-22, 11:20 | the two-phase cool | a slower re-cool after each reheat (the forward rate times `2^-k`, k reheats so far): zero for runs that never freeze; reshaped at 11:50 from an order gate that failed its stage 0 (planned, after D63's reading) |
+| D67 | 2026-10-23, 06:45 | the deadline's completion | the ten runs of D63 and D64 that the 690-minute wall-clock budget cut short of their 1,600 epochs, run again from their seeds to their epoch budget (`probe-d67.sh`); epochs the binding budget from now on |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
 
 From earlier plans:
@@ -1226,6 +1227,30 @@ owner's; D49-D54 settled under the delegation.
   - (c) A fixed slow band around the melting point. Cons: a constant width; slows every run.
   - (d) The order weight (D65) on the pace. Cons: no weight met its criteria.
   - (e) A hotter start (the owner's aside). Cons: adds time only at the top of an exponential cool.
+- **D67. The deadline's completion (`~/code/probe-d67.sh`, sha256 411f31578d966b10, registered
+  2026-10-23, 06:45, before its data; the owner: "make epochs the binding budget from now on - that
+  approach is thermodynamically consistent"; "systematically work through and re-process any data
+  that might be affected").** A run's budget is its epochs (1,600); the 690-minute wall-clock budget,
+  meant as a guard, bound ten runs of the two probes still being read, cutting them short on a loaded
+  `stone`: D64's S3 45 (1,584 epochs), move-to-front-4 34 (918) and 35 (1,135); D63's S4 2-5
+  (892-1,091) and random-q16-0 4 (1,336), 5 (1,330) and 6 (at its deadline about 06:20). A deadline's
+  stop writes its checkpoint "ended", so none can be resumed; the seed run again from the start (the
+  same cell at its probe's commit, the wall clock lifted: `--budget-minutes 100000`, since the old
+  code's default is 60) is the same run up to the deadline (every row but the seconds; bit parity
+  across machines), then runs on to its epoch budget. D64's at 41f92e7, D63's at 0fdf237 (`--reheat`).
+  Not re-run, re-read as censored: D33's and D38's cut runs (verdicts standing on their ended runs,
+  designs superseded) and D59's move-to-front-4 3 (its success by its rules holds with it censored).
+  Placement (where, not what: bit parity): `jebel` (8 at once by day, once the owner powers it on;
+  ends by evening; else the laptops' free slots) the seven D63
+  runs and S3 45; `pyramidon` move-to-front-4 34, 35 (always on; the longest). Expectations:
+  - integrity: each completion's rows identical to its cut run's (`same-prefix`, seconds aside) through
+    the cut run's last row before its deadline; a difference before it voids that completion;
+  - each completion's outcome at its epoch budget (D41) stands in for its cut run: D64's S3 and
+    move-to-front-4 rate at least 8 of 12, its bar met, if any of its three certifies, else 7 of 12
+    (between its bars); D63's paired verdict at equal epochs;
+  - any false discovery refutes the stop (D35 with D59-D60), as in both probes;
+  - read apart: whether a run frozen at its deadline thaws after it, and when (the freeze's
+    permanence: restarts' and the reheat's case).
 
 ### The consistency review settled (2026-10-21, afternoon)
 
