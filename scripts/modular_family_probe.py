@@ -999,7 +999,14 @@ from indrajala_ml.studies import window_tasks as wt
 from indrajala_ml.studies.collapse import RULES, SIGNALS, Trigger
 
 GUARD_ARMS = {False: "unguarded", True: "guarded"}  # --guard both's directories
-ARMS = {"family": mf.FAMILY, "quotient": mf.QUOTIENT, "sum": mf.SUM, "product": mf.PRODUCT}
+ARMS = {
+    "family": mf.FAMILY,
+    "quotient": mf.QUOTIENT,
+    "sum": mf.SUM,
+    "product": mf.PRODUCT,
+    "suffix": mf.SUFFIX,
+    "token": mf.TOKEN,
+}
 
 
 def main(argv: list[str]) -> int:
@@ -1069,7 +1076,7 @@ def main(argv: list[str]) -> int:
     run.add_argument(
         "--vocabulary",
         nargs="+",
-        choices=list(mf.OPERATIONS),
+        choices=list(mf.QUERIES),
         default=list(mf.VOCABULARY),
         help="the operations with a token (the approximation claim's: sum difference product)",
     )
@@ -1314,7 +1321,7 @@ def main(argv: list[str]) -> int:
     certify.add_argument(
         "--vocabulary",
         nargs="+",
-        choices=list(mf.OPERATIONS),
+        choices=list(mf.QUERIES),
         default=list(mf.VOCABULARY),
         help="the operations with a token (the approximation claim's: sum difference product)",
     )
@@ -1330,7 +1337,7 @@ def main(argv: list[str]) -> int:
     long.add_argument(
         "--vocabulary",
         nargs="+",
-        choices=list(mf.OPERATIONS),
+        choices=list(mf.QUERIES),
         default=list(mf.VOCABULARY),
         help="the operations with a token (the approximation claim's: sum difference product)",
     )
@@ -1367,7 +1374,7 @@ def main(argv: list[str]) -> int:
     proof.add_argument(
         "--vocabulary",
         nargs="+",
-        choices=list(mf.OPERATIONS),
+        choices=list(mf.QUERIES),
         default=list(mf.VOCABULARY),
         help="the operations with a token (the approximation claim's: sum difference product)",
     )
@@ -1470,7 +1477,7 @@ def main(argv: list[str]) -> int:
         reading.add_argument(
             "--vocabulary",
             nargs="+",
-            choices=list(mf.OPERATIONS),
+            choices=list(mf.QUERIES),
             default=list(mf.VOCABULARY),
             help="the operations with a token (the approximation claim's: sum difference product)",
         )

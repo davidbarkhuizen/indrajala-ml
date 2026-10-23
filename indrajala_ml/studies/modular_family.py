@@ -80,9 +80,19 @@ OPERATIONS: dict[str, Callable[[int, int, int], int]] = {
     "difference": lambda A, B, p: (A - B) % p,
     "product": lambda A, B, p: (A * B) % p,  # not an approximation (the approximation claim)
 }
+# the paper's T1 controls (paper-workplan.md): outputs of the columns read, not of the state (A, B), so
+# no approximation of division's machine: a column's digit sum (its token a + b) and, with the column
+# before (none before the first: 0), the last two columns' (a state the network must carry, one column)
+COLUMN_OPERATIONS: dict[str, Callable[[int, int, int], int]] = {
+    "token": lambda digits, before, p: digits % p,
+    "suffix": lambda digits, before, p: (digits + before) % p,
+}
+QUERIES = (*OPERATIONS, *COLUMN_OPERATIONS)  # every operation a query token can ask for
 FAMILY = ("sum", "difference")
 SUM = ("sum",)  # the family without the difference (the division workplan's stage 3 option)
 PRODUCT = ("product",)
+TOKEN = ("token",)  # T1's controls: an extra output that is no approximation, state-free
+SUFFIX = ("suffix",)  # and state-carrying
 QUOTIENT: tuple[str, ...] = ()
 VOCABULARY = ("sum", "difference")  # the operations with a token: every study's before the approximation claim
 WIDE = ("sum", "difference", "product")  # the approximation claim's, the same for its every arm
@@ -105,8 +115,8 @@ class Encoding:
     vocabulary: tuple[str, ...] = VOCABULARY
 
     def __post_init__(self) -> None:
-        assert set(self.queries) <= set(self.vocabulary) <= set(OPERATIONS), (
-            f"queries {self.queries} need tokens in the vocabulary {self.vocabulary}, of {tuple(OPERATIONS)}"
+        assert set(self.queries) <= set(self.vocabulary) <= set(QUERIES), (
+            f"queries {self.queries} need tokens in the vocabulary {self.vocabulary}, of {QUERIES}"
         )
 
     @property
@@ -184,10 +194,22 @@ class Encoding:
         labels: list[int] = []
         windows, answers, successors = self._windows, self._answers, self._successors
         state = 0  # (A, B) mod p as A p + B
+        if not any(q in COLUMN_OPERATIONS for q in self.queries):  # every answer a function of the state
+            for token in columns:
+                state = successors[state][token]
+                tokens += windows[token]
+                labels += answers[state]
+            return tuple(tokens), tuple(labels)
+        before = 0  # the column before's digit sum
         for token in columns:
             state = successors[state][token]
             tokens += windows[token]
-            labels += answers[state]
+            digits = token // BASE + token % BASE
+            labels += (
+                answer if q is None else COLUMN_OPERATIONS[q](digits, before, self.p)
+                for q, answer in zip((None, *self.queries), answers[state], strict=True)
+            )
+            before = digits
         return tuple(tokens), tuple(labels)
 
     @functools.cached_property
@@ -198,10 +220,10 @@ class Encoding:
 
     @functools.cached_property
     def _answers(self) -> tuple[tuple[int, ...], ...]:
-        """Each state's answers, A p + B: the quotient's, then each query's."""
+        """Each state's answers, A p + B: the quotient's, then each query's (-1 for a column operation's, set per column)."""
         p = self.p
         return tuple(
-            (md.quotient(A, B, p), *(OPERATIONS[operation](A, B, p) for operation in self.queries))
+            (md.quotient(A, B, p), *(OPERATIONS[q](A, B, p) if q in OPERATIONS else -1 for q in self.queries))
             for A in range(p)
             for B in range(p)
         )
