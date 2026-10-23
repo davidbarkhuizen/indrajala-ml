@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import datetime
 import hashlib
 import json
@@ -115,10 +116,14 @@ CELLS: dict[str, Cell] = {
     "continuous-reheat": Cell((*CONTINUOUS_CELL, "--reheat"), bounded=True),
     "paper": Cell(tuple(PAPER_CELL)),
     "approximation": Cell(tuple(APPROXIMATION_CELL)),
+    # T3's baselines: the approximation claim's cell with only the window (E6's) or the state (E2's) changed
+    "approximation-linear": Cell((*APPROXIMATION_CELL, "--baseline", "linear")),
+    "approximation-continuous": Cell((*APPROXIMATION_CELL, "--baseline", "continuous")),
 }
 
 DIVISION = "modular-division-"
 T1_VOCABULARY = ("sum", "suffix", "token")  # T1's arms ask the same tokens (paper-workplan.md, T1)
+WIDE = ("sum", "difference", "product")  # the approximation claim's vocabulary: T3's cover, as A1's
 
 
 @dataclass(frozen=True)
@@ -163,6 +168,8 @@ BACKDROPS: dict[str, Backdrop] = {  # a backdrop's short name, as attempts name 
     # T2: the cover at p 7, 11 and 13, the quotient alone at 11
     **{f"d{p}-family": division(p) for p in (7, 11, 13)},
     "d11-quotient": division(11, "quotient"),
+    # T3: the cover at p 5 on the approximation claim's vocabulary (A1's arm), under each window and state
+    "d5-family-wide": division(5, "family", WIDE),
 }
 
 
@@ -236,6 +243,11 @@ HOSTS: dict[str, Host] = {
         windows=(Window(WEEKDAYS, 18, 13), Window((5,), 0, 24), Window((6,), 0, 31)),
     ),
 }
+
+
+def opened(hosts: dict[str, Host], names: Sequence[str]) -> dict[str, Host]:
+    """The hosts with `names` open at any hour (no windows): the owner's grant outside their hours."""
+    return {n: dataclasses.replace(h, windows=()) if n in names else h for n, h in hosts.items()}
 
 
 def local_now() -> datetime.datetime:
@@ -375,8 +387,10 @@ def summary(log: Path) -> dict[str, Any]:
     """
     An attempt's outcome from its run's log.jsonl: its last step, its end, epochs trained and seconds,
     and its success in epochs trained (D41's: the first step's end certified at both verdicts; None if
-    never). Epochs as modular_family.restart_course counts them (the time axis): each step end's, less
-    the one a budget's stop logs untrained.
+    never). A run whose rows don't log the strict verdict (the paper's cells: it is checked after, by
+    recertifying the saved network) succeeds at its first certified step; a continuous state (T3) never
+    does here (long tests judge it). Epochs as modular_family.restart_course counts them (the time
+    axis): each step end's, less the one a budget's stop logs untrained.
     """
     rows = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
     trained: dict[int, int] = {}
@@ -385,14 +399,15 @@ def summary(log: Path) -> dict[str, Any]:
         if "end" in r:
             total += int(r.get("epochs", 0)) - (r["end"] in CENSORED)
             trained[i] = total
-    steps = [i for i, r in enumerate(rows) if "end" in r and "state_share" in r]
+    steps = [i for i, r in enumerate(rows) if "end" in r and "certified" in r]  # a step's end, not a screen's
     if not steps:
         return {"success": None, "step": None, "epochs": None, "end": "error", "seconds": None}
     success = next(
         (
             trained[i]
             for i in steps
-            if rows[i].get("certified") and rows[i].get("certificates", {}).get("strict", {}).get("certified")
+            if rows[i].get("certified")
+            and ("certificates" not in rows[i] or rows[i]["certificates"].get("strict", {}).get("certified"))
         ),
         None,
     )

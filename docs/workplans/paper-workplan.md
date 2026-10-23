@@ -232,6 +232,73 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     the cell that certified (W1's L3 baseline at width 32, the window's width the change); T2 would
     test a cell with no evidence at scale.
   - (c) Width by backdrop (16 for the algebras, 32 for division). Cons: two methods, against D3.
+- **D13. T1 registered: is it the approximation, or any extra output?** (2026-10-23, before any of
+  its runs.) Division at `p` 5, the quotient plus one extra output, three arms on one vocabulary
+  (`sum suffix token`) and the same 20 fresh seeds, **300-319**: `d5-sum` (an approximation; A2's
+  arm on T1's vocabulary), `d5-suffix` (the last two columns' digit sum mod `p`: learnable,
+  state-carrying, no function of division's state), `d5-token` (the column's own digit sum mod `p`:
+  learnable, no state). The runner's `approximation` cell (D12: the approximation claim's settings,
+  two factors of 16, reading the output, the default window, 400 epochs, stop at certified, no
+  fork), measure mode, no cutoff.
+  - **Feasibility** (experiment-design.md section 1, information-flow.md): the certified answer's
+    target `q` 25 in every arm, and the machine all the outputs need: 25 states (sum, a function of
+    the state; token, of the column alone) or 125 (suffix: the state and the last column's digit
+    sum, 5 values). Joint codes 16 x 16 = 256: 10.2, 10.2 and 2.0 times those (suffix below the
+    3-5 times surplus; stated, kept: it is the control's own cost). The cap 280 = m + 25 - 1, the
+    exclusion bound for the quotient (the network's machine projected on it has at most m states).
+    The window 16 wide: this cell certified at `p` 5 (A1, A2: rows 3, 5). Every state reachable and
+    told apart at one column (row 14). Probe (2026-10-23, `pyramidon`, seed 300, 6 epochs): 68-72 MB a
+    run; the approximation claim's history for the budget: a success 10-30 min, a failure (400 epochs)
+    1-2 h on `pyramidon`; about 100 run-hours in all if the controls mostly fail.
+  - **Success:** certified at the stop and recertified in both verdicts (`readout`'s rule), every
+    certified network long-tested (U1, S1 at 128, 256, 1,024 columns).
+  - **Tests (one-sided, registered with their direction: K5 claims the approximation helps beyond
+    any learnable extra output, so the sum is expected to certify more often):** T1a `d5-sum` against
+    `d5-suffix`, T1b `d5-sum` against `d5-token`, Fisher's exact, Holm over the two at its reading
+    (and over the paper's family at the end, D5), both sides reported where they differ.
+  - **Expectations and refutations:** the sum about 10 of 20 (A2). **K5's "because" stands** if both
+    T1a and T1b hold (Holm 0.05). **It is refuted** if either control certifies at least as often as
+    the sum (then an extra learnable output helps as much: the sum's advantage over the product was
+    not its being an approximation). Otherwise (lower but not significant) undecided, reported so.
+  - **Exploratory, not registered:** `approximations` on every certified network (do the controls'
+    outputs sit in a factor of their own, as the sum did in T4?); the T1 networks' epochs to certify.
+  - **Then D8:** T10 is decided on T1's reading.
+  - **Where:** the runner, its stage-4 live check: the controller on `pyramidon`, workers on `stone`
+    (12 slots, its windows) and `klip` (8 cores, 5 GB: 6 slots at 70 MB, at <= 85 C), `jebel` by day
+    when free; findings into this workplan, data `data/window-recurrent/paper/t1/` with a manifest.
+  - Options: (a) *chosen*, three arms on one new vocabulary and fresh seeds. Pros: one change between
+    arms (the output asked); the sum rerun beside the controls, not taken from A2 (another
+    vocabulary). Cons: the sum's rate measured again (20 runs). (b) The controls against A2's sum.
+    Cons: a different vocabulary, and data already read. (c) Only the suffix control. Cons: the token
+    asks whether a stateless output helps, a separate question at 20 more runs.
+- **D14. T3 registered: does the snap matter, and the transformer, on division?** (2026-10-23, before
+  any of its runs.) The cover at `p` 5 on the approximation claim's vocabulary (`sum difference
+  product`, A1's arm: `d5-family-wide`), the same 20 fresh seeds 300-319, three arms that differ in
+  one thing each from the first: `approximation` (the transformer window and the snapped state: the
+  control, run fresh), `approximation-linear` (E6's window, no blocks), `approximation-continuous`
+  (E2's continuous state, no codes). 400 epochs, measure mode.
+  - **Feasibility:** the control and linear arms as D13's (25 states, 256 codes, cap 280); the linear
+    window keeps the GRU cell's nonlinearity and none in the window (E6 certified the carry automaton
+    so, 2 of 6); the continuous state has no codes, so rows 1, 2 and 14 don't apply: it can't be
+    certified, only long-tested. Probe: 63-70 MB a run; the linear window's epochs about 5 times
+    faster; the continuous arm trains all 400 epochs (no certificate stops it), about 2 h a run.
+  - **Success:** the control and linear arms as D13 (certified, both verdicts, long-tested); the
+    continuous arm's network at its budget's end passing every long-test case (U1, S1 at 128, 256,
+    1,024 columns). The asymmetry favours the continuous arm (a long test passes networks a
+    certificate refutes: K2), so its refutation of K3 would be conservative.
+  - **Tests (one-sided, direction registered: K3 claims each of the snap and the transformer is
+    needed, so the control is expected to succeed more often):** T3a control against continuous, T3b
+    control against linear, Fisher's exact, Holm over the two (and the paper's family, D5).
+  - **Expectations and refutations:** the control about 15 of 20 (A1); continuous about 0 (E2: 0 of
+    20 at 1,024 columns; C2, C2b). **K3 (the snap) stands** if T3a holds; refuted if the continuous
+    arm succeeds as often. **The transformer's role** stands if T3b holds; if the linear arm certifies
+    as often, the paper says the window needs no blocks at `p` 5 (stated as found). Undecided
+    otherwise.
+  - **Where:** as D13, after T1 in the runner's queue; data `data/window-recurrent/paper/t3/`.
+  - Options: (a) *chosen*, the control run fresh beside the two baselines. Pros: same code, seeds and
+    machines, one change an arm. Cons: 20 runs more than (b). (b) Against A1's existing runs. Cons:
+    data already read, other seeds, another commit. (c) Against T1's sum arm (the plan's first
+    wording). Cons: another vocabulary and outputs, two changes at once.
 
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
