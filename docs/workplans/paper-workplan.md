@@ -337,11 +337,17 @@ manifest `paper/t4.sha256` (85 files). A factor's approximation nontrivial: 1 < 
   but the quotient-alone network's one `B`. 12 of the 58 division networks are covers, their two
   factors the sum and the difference apart. So where a division factor decomposes, it holds the
   approximation it was given; about a third do, the rest hold the state jointly.
-- **A check for P2 before the manuscript:** P2's "the learned state is not factored by residue"
-  says each factor of "the cover's first networks" at a solved step holds 0.37-0.71 of every
-  direction `xA + yB`. If those are probe 2a's networks (reported apart here), two of the three hold
-  `A + B` or `A - B` exactly in a factor at their certified step; the section's networks and step
-  need confirming, and its wording correcting if they are these.
+- **A check for P2 before the manuscript (done 2026-10-23, exploratory, not T4):** P2's "the learned
+  state is not factored by residue" reads the modular-family probe's first division networks
+  (`modular-family-probe/family-output-seed0`, `seed1`; `scripts/modular_family_probe.py`'s
+  docstring), not probe 2a's. Its numbers are seed 1's **step 6**, which is not a solved step: 98.7%
+  right on samples, it fails the certificate (1,025 wrong outputs). The two networks that certified
+  (seed 1 step 11, seed 0 step 12), read by `approximations` now: **no factor of either determines
+  any nontrivial approximation** (each factor's finest one block; 14 and 10 codes, 14 and 12), nor
+  does step 6's. So the section's claim holds for its networks, its "solved step" is corrected in P2
+  (read at an uncertified step; the certified ones agree), and it is not a general claim: in T4 a
+  third of later division factors hold a line. Outputs and manifest:
+  `data/window-recurrent/paper/p2-check/`, `paper/p2-check.sha256` (4 files).
 - **For the paper (D10's use):** K8 stands for the algebras on networks that didn't shape it (T4a,
   T4b). On division it holds in a narrower form than K8 states: a third of the factors, each
   holding exactly a trained approximation; stated so, with the count as registered (mixed). The
