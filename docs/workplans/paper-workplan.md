@@ -119,7 +119,7 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
   new work. **Running registered probes run to their registered ends** (the rule: the deadline's
   completion (D67) and the reheat against restarts' (D63) moved runs, all ending today); their
   outcomes and integrity (`same-prefix`) are recorded, their full readings deferred. **Paused:** the
-  two-phase cool (D66), the batch runner's stage 4-6, the audit's set-2 follow-ups that serve the
+  two-phase cool (D66), the batch runner's state-formation batch (stage 5; the runner itself serves the paper, D4), the audit's set-2 follow-ups that serve the
   state-formation strand (F5's gate, F10's sensitivity, F11's relaxation times, F17's large-tier
   profile, F18's approximation beside S3, which T10 partly takes up). **Kept:** the audit's protocol
   amendments (F9, F24) and the fresh-seed rate's verdict (F1: D64 stays 7 of 12, D67 reported on its
