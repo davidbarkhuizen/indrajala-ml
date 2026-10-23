@@ -249,7 +249,8 @@ where you meet a new trap; delete one that no longer holds.
 - **The certificate is fast at `k` 1** (about 2 s a 40-network pass) and slow at `k` 4 (minutes a
   network).
 - **The long-test JSON:** `lengths -> n -> properties -> id -> {cases, passed, failures}`;
-  `classify_long.py` reads it with the certificates.
+  `modular_family_probe.py long-summary DIR` reads a study's (`long-test --out DIR/<run>`): a line
+  per run, its failures and the network's sha256, and one for all.
 - **`WindowRecurrence.codes` is None for a continuous network:** `state_codes`, `first_step` and
   `window_step` assert "no codes" on one.
 - **Results carry `window`** (#717) and may carry `m: null`: use `comparable`'s defaults (no

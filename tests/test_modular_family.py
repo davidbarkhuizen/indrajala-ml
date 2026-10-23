@@ -2340,3 +2340,26 @@ def test_a_runs_outcome_counts_a_logs_last_run_only():
     spent = {"step": 3, "end": "spent", "epochs": 401, "certified": False, "seconds": 9.0}
     once = mf.outcome([*run, spent])
     assert mf.outcome([*run, *run, spent]) == once and once.epochs == 420  # a re-run appended to the log
+
+
+def test_long_summary_counts_every_run_and_names_a_failing_one(tmp_path: Path):
+    def run(name: str, wrong: int) -> None:
+        lengths = {
+            str(n): {
+                "properties": {
+                    "U1": {"cases": 10, "passed": 10 - wrong, "failures": [{"case": i} for i in range(wrong)]}
+                }
+            }
+            for n in (128, 256)
+        }
+        (tmp_path / name).mkdir()
+        long = {"sha256": f"{name:0<64}", "lengths": lengths}
+        (tmp_path / name / "certified-step-4.network.long-test.json").write_text(json.dumps(long))
+
+    run("sum-1", 0)
+    run("token-2", 1)
+    assert mf.long_summary(tmp_path) == [
+        "sum-1: 20 of 20 passed, 0 failures listed, sha256 sum-10000000",
+        "token-2: 18 of 20 passed (U1@128 1, U1@256 1), 2 failures listed, sha256 token-200000",
+        "all: 38 of 40 passed; networks with a failure: token-2",
+    ]
