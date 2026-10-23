@@ -48,7 +48,7 @@ def main(argv: list[str]) -> int:
     register.add_argument("--k", type=int, help="find mode: certificates a backdrop needs")
     register.add_argument("--commit", help="the commit every worker must run (D6); a short sha is expanded")
     register.add_argument(
-        "--crate", help="the crate extension's SHA-256 every worker must import (D6); default this machine's"
+        "--crate", help="the crate extension's SHA-256 every worker must import (D6); default the hosts' (b.CRATE)"
     )
     prepare = commands.add_parser("prepare", help="each host's worktree at a commit")
     prepare.add_argument("--hosts", required=True)
@@ -90,7 +90,9 @@ def main(argv: list[str]) -> int:
                 capture_output=True,
                 text=True,
             ).stdout.strip()
-        crate = args.crate or b.identity(Path(__file__).resolve().parent.parent, sys.executable, {})[1]
+        here = next(h for h in b.HOSTS.values() if not h.remote)  # the controller's machine: its batch crate
+        repo = Path(__file__).resolve().parent.parent
+        crate = args.crate or b.identity(repo, here.python, {"PYTHONPATH": here.pythonpath})[1]
         b.register(args.dir, b.Batch(args.name, args.mode, args.cell, made, args.k, commit, crate))
         print(f"registered {args.dir}: {len(b.State.read(args.dir).batch.attempts)} attempts")
     elif args.command == "prepare":
