@@ -1039,7 +1039,7 @@ owner's; D49-D54 settled under the delegation.
     factors formed and fell together.
     **Using restarts needs a batch runner** (an attempt cut at its cutoff, a fresh seed started in its
     slot, the batch stopped by its rule): planned in [batch-runner-workplan.md](batch-runner-workplan.md)
-    (2026-10-22; the cutoff in the run, `--cutoff-steps`; a controller on `pyramidon`, a socket-connected worker on each of the
+    (2026-10-22; the cutoff in the run, `--cutoff-steps`, in epochs since 2026-10-23 as `--cutoff-epochs`; a controller on `pyramidon`, a socket-connected worker on each of the
     machines), built from 2026-10-23 while D63 runs; its first use is the method's next fresh-seed batch,
     with D63's verdict choosing the arm.
   - (c) Restore the best step's network (`--restore-best`, the guard). Cons: a discontinuity, and the

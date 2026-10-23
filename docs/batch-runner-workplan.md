@@ -25,8 +25,8 @@ the machines we have, each in its own hours.
 ## Decisions
 
 - **D1. Where the cutoff lives.**
-  - (a) *Chosen:* in the run: `--cutoff-steps T`, the run ending "cut" at the end of step `T` if not
-    certified (D41) by then; off by default, so the golden run is unchanged. Pros: the stop is
+  - (a) *Chosen:* in the run: `--cutoff-epochs T` (first `--cutoff-steps`; epochs since stage 5),
+    the run ending "cut" at the first step's end with `T` epochs trained if not certified (D41) by then; off by default, so the golden run is unchanged. Pros: the stop is
     deterministic (a step's end, the same on every machine, so an attempt's outcome doesn't depend on
     its host or the runner's timing); the end label tells a cut attempt from a spent one; a single run
     can be cut without the runner. Cons: a package change to the most-run code (the run's state
@@ -117,7 +117,7 @@ the machines we have, each in its own hours.
 ## Stages
 
 1. **This plan.**
-2. **The cutoff in the run** (D1): `--cutoff-steps`, its end label "cut", a field of the run's state;
+2. **The cutoff in the run** (D1): `--cutoff-steps` (in epochs since stage 5), its end label "cut", a field of the run's state;
    tests (a cut run's rows identical to the uncut run's up to the cutoff); the golden run unchanged;
    `restart-cost` reading "cut" as a finished failure. Tier 0 by its timing (no timed path), the
    golden run because it touches the run's loop.
@@ -138,7 +138,9 @@ the machines we have, each in its own hours.
    [experiment-design.md](experiment-design.md), section 1): the run's cutoff becomes `--cutoff-epochs`
    (epochs trained in all at a step's end), the attempts' costs and the report's `l` in epochs. Steps
    understate epochs early in a run (the warm-up and hold train several a step; D64's S3 43 certified at
-   step 11, epoch 23), exactly where cutoffs sit. Then the first use: the method's next fresh-seed batch in measure mode, with D63's verdict deciding the
+   step 11, epoch 23), exactly where cutoffs sit. **Built** (2026-10-23): `--cutoff-epochs`; the
+   attempts' summaries carry `epochs` (success and last step's end in epochs trained), `runs_of` and the
+   report in epochs, a host's time estimate from its seconds an epoch. Then the first use: the method's next fresh-seed batch in measure mode, with D63's verdict deciding the
    arm (the plain method with restarts, or the reheat with restarts), registered as its own decision
    in the state-formation workplan.
 6. **Docs and retire:** the runner in [working-notes.md](working-notes.md) (its hosts, its ledger, its
@@ -146,7 +148,8 @@ the machines we have, each in its own hours.
 
 ## Known limits
 
-- Cutoffs and costs in steps (stages 2-4) are not the time axis: epochs are (stage 5 moves them).
+- Cutoffs and costs were in steps in stages 2-4; stage 5 moved them to epochs, the time axis. A ledger
+  from before it (the stage-4 checks) holds summaries without `epochs`: `runs_of` leaves them out.
 
 - Restarts assume attempts independent and identically distributed: true of fresh seeds by
   construction, not of attempts on different backdrops (each backdrop has its own `t*`).

@@ -3,7 +3,7 @@ The batch runner (docs/batch-runner-workplan.md): a controller on one machine an
 each, over newline-delimited JSON on a TCP socket on 127.0.0.1 (indrajala_ml.batch).
 
     python scripts/batch.py register DIR --name NAME --mode measure|find --cell CELL --attempts SPEC
-                                     [--cutoff BACKDROP=STEPS ...] [--k K] [--commit COMMIT]
+                                     [--cutoff BACKDROP=EPOCHS ...] [--k K] [--commit COMMIT]
     python scripts/batch.py prepare --hosts pyramidon,klip,stone --commit COMMIT
     python scripts/batch.py controller DIR [--port PORT] [--hosts pyramidon,klip,stone]
     python scripts/batch.py fleet --hosts pyramidon,klip,stone [--port PORT]
@@ -12,8 +12,8 @@ each, over newline-delimited JSON on a TCP socket on 127.0.0.1 (indrajala_ml.bat
     python scripts/batch.py status DIR
     python scripts/batch.py report DIR
 
-SPEC is `s3:40-47,mtf4:32-35` (TASKS' short names); a cutoff is a backdrop's Luby t* in steps (the
-run's --cutoff-steps). The controller serves until the batch is done; a worker runs its attempts in
+SPEC is `s3:40-47,mtf4:32-35` (TASKS' short names); a cutoff is a backdrop's Luby t* in epochs trained
+(the run's --cutoff-epochs; epochs are the time axis). The controller serves until the batch is done; a worker runs its attempts in
 ROOT/<attempt>/ from WORKTREE's scripts and reconnects after a dropped connection. Across machines
 (stage 4): `prepare` puts each host's worktree at the batch's commit, `fleet` keeps a reverse ssh tunnel
 to each remote host and starts its worker (HOSTS: slots, worktree, python, hours), and the controller
@@ -42,7 +42,9 @@ def main(argv: list[str]) -> int:
     register.add_argument("--mode", choices=("measure", "find"), required=True)
     register.add_argument("--cell", choices=sorted(b.CELLS), required=True)
     register.add_argument("--attempts", required=True, help="s3:40-47,mtf4:32-35")
-    register.add_argument("--cutoff", action="append", default=[], help="BACKDROP=STEPS, each backdrop's t*")
+    register.add_argument(
+        "--cutoff", action="append", default=[], help="BACKDROP=EPOCHS, each backdrop's t* in epochs trained"
+    )
     register.add_argument("--k", type=int, help="find mode: certificates a backdrop needs")
     register.add_argument("--commit", help="the commit every worker must run (D6)")
     prepare = commands.add_parser("prepare", help="each host's worktree at a commit")
@@ -107,7 +109,7 @@ def main(argv: list[str]) -> int:
         for backdrop in sorted({a.backdrop for a in state.batch.attempts}):
             ended = [state.ended[a.id] for a in state.batch.attempts if a.backdrop == backdrop and a.id in state.ended]
             if ended:
-                print(f"  {backdrop}: {mf.restart_summary(mf.restart_cost(b.runs_of(ended)))}")
+                print(f"  {backdrop}: {mf.restart_summary(mf.restart_cost(b.runs_of(ended)), 'epochs')}")
     return 0
 
 

@@ -725,8 +725,9 @@ def test_a_continuous_run_moves_every_switch_smoothly_and_reads_every_epoch(tmp_
         )
 
 
-def test_a_cutoff_ends_an_uncertified_attempt_at_its_step_as_the_uncut_run_was_there(tmp_path: Path):
-    # the batch runner workplan's D1: rows identical to the uncut run's up to the cutoff, then "cut"
+def test_a_cutoff_ends_an_uncertified_attempt_at_its_epochs_as_the_uncut_run_was_there(tmp_path: Path):
+    # the batch runner workplan's D1, in epochs (its stage 5): rows identical to the uncut run's up to the
+    # first step end with the cutoff's epochs trained, then "cut"
     config = dict(RESUMABLE["continuous"])
     encoding, settings = config.pop("encoding"), config.pop("settings")
 
@@ -737,7 +738,15 @@ def test_a_cutoff_ends_an_uncertified_attempt_at_its_step_as_the_uncut_run_was_t
     def timeless(row: dict[str, Any]) -> dict[str, Any]:
         return {k: v for k, v in row.items() if k != "seconds"}
 
-    whole, cut = rows(tmp_path / "whole"), rows(tmp_path / "cut", cutoff_steps=5)
+    whole = rows(tmp_path / "whole")
+    trained: dict[int, int] = {}  # each step end's epochs trained in all
+    total = 0
+    for r in whole:
+        if "end" in r:
+            total += r["epochs"] - (r["end"] in mf.CENSORED)
+            trained[r["step"]] = total
+    cutoff = trained[4] + 1  # past step 4's epochs: step 5's end is the first at it
+    cut = rows(tmp_path / "cut", cutoff_epochs=cutoff)
     assert [timeless(r) for r in cut[:-1]] == [timeless(r) for r in whole[: len(cut) - 1]]
     ends = [r for r in cut if "end" in r and "state_share" in r]
     assert ends[-1]["step"] == 5 and ends[-1]["end"] == "cut" and cut[-1]["step"] == 5
@@ -749,12 +758,12 @@ def test_a_cutoff_ends_an_uncertified_attempt_at_its_step_as_the_uncut_run_was_t
     }
     identity = json.loads((tmp_path / "cut" / "checkpoint.json").read_text())["run"]
     assert (
-        identity["cutoff_steps"] == 5
-        and "cutoff_steps" not in json.loads((tmp_path / "whole" / "checkpoint.json").read_text())["run"]
+        identity["cutoff_epochs"] == cutoff
+        and "cutoff_epochs" not in json.loads((tmp_path / "whole" / "checkpoint.json").read_text())["run"]
     )
-    assert mf.restart_course(cut, clock="steps") == (None, 5.0, False)  # a finished failure, not censored
+    assert mf.restart_course(cut) == (None, float(trained[5]), False)  # a finished failure, not censored
     with pytest.raises(AssertionError, match="cutoff"):
-        mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path / "x", settings, cap=2, cutoff_steps=3)
+        mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path / "x", settings, cap=2, cutoff_epochs=3)
 
 
 def test_a_cutoff_leaves_a_run_certified_at_both_verdicts_to_its_own_stop(
@@ -776,10 +785,12 @@ def test_a_cutoff_leaves_a_run_certified_at_both_verdicts_to_its_own_stop(
         return dataclasses.replace(c, wrong_outputs=0, wrong_states=0, wrong_ties=0, counterexample=None, lead=lead)
 
     monkeypatch.setattr(mf.wc, "certify", clean)
-    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path, settings, **config, cutoff_steps=3)
+    # certified at both verdicts at step 3's end, epoch 9 (the warm-up's steps train 4 epochs each, the
+    # strict verdict judged from step 3), so a cutoff at 10 epochs (step 4's end) leaves it running
+    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path, settings, **config, cutoff_epochs=10)
     ends = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
     ends = [r for r in ends if "end" in r and "state_share" in r]
-    assert "cut" not in {r["end"] for r in ends} and ends[-1]["step"] > 3
+    assert "cut" not in {r["end"] for r in ends} and ends[-1]["step"] > 4
 
 
 def _margin_run(

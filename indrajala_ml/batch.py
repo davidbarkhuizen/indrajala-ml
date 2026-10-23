@@ -184,7 +184,7 @@ def window_left(host: Host, now: datetime.datetime) -> float | None:
 
 @dataclass(frozen=True)
 class Attempt:
-    """One attempt: a backdrop's seed, cut at `cutoff` steps (None: run to its budget)."""
+    """One attempt: a backdrop's seed, cut at `cutoff` epochs trained (None: run to its budget)."""
 
     id: str
     backdrop: str
@@ -295,23 +295,37 @@ class State:
 
 def summary(log: Path) -> dict[str, Any]:
     """
-    An attempt's outcome from its run's log.jsonl: its last step's end and seconds, and its success
-    (D41's: the first step's end certified at both verdicts; None if never).
+    An attempt's outcome from its run's log.jsonl: its last step, its end, epochs trained and seconds,
+    and its success in epochs trained (D41's: the first step's end certified at both verdicts; None if
+    never). Epochs as modular_family.restart_course counts them (the time axis): each step end's, less
+    the one a budget's stop logs untrained.
     """
     rows = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
-    steps = [r for r in rows if "end" in r and "state_share" in r]
+    trained: dict[int, int] = {}
+    total = 0
+    for i, r in enumerate(rows):
+        if "end" in r:
+            total += int(r.get("epochs", 0)) - (r["end"] in CENSORED)
+            trained[i] = total
+    steps = [i for i, r in enumerate(rows) if "end" in r and "state_share" in r]
     if not steps:
-        return {"success": None, "step": None, "end": "error", "seconds": None}
+        return {"success": None, "step": None, "epochs": None, "end": "error", "seconds": None}
     success = next(
         (
-            int(r["step"])
-            for r in steps
-            if r.get("certified") and r.get("certificates", {}).get("strict", {}).get("certified")
+            trained[i]
+            for i in steps
+            if rows[i].get("certified") and rows[i].get("certificates", {}).get("strict", {}).get("certified")
         ),
         None,
     )
-    last = steps[-1]
-    return {"success": success, "step": int(last["step"]), "end": last["end"], "seconds": float(last["seconds"])}
+    last = rows[steps[-1]]
+    return {
+        "success": success,
+        "step": int(last["step"]),
+        "epochs": trained[steps[-1]],
+        "end": last["end"],
+        "seconds": float(last["seconds"]),
+    }
 
 
 def last_step(log: Path) -> int | None:
@@ -339,7 +353,7 @@ class Controller:
     attempt is assigned once, on a worker's `ready`, never more than its free slots less the attempts
     already sent it and not yet started. A worker on another commit than the batch's is refused (D6);
     each host's crate is recorded. With `hosts` (D7), a host is given work only inside its hours and only
-    an attempt whose expected time (its cutoff times the host's seconds a step so far) ends inside them;
+    an attempt whose expected time (its cutoff times the host's seconds an epoch so far) ends inside them;
     at a window's end its attempts are stopped and queued again. A remote host's ended attempt is pulled
     into `attempts/` and checked against its manifest.
     """
@@ -369,12 +383,12 @@ class Controller:
             f.write(json.dumps({**event, "t": round(time.time(), 3)}) + "\n")
         self.state.apply(event)
 
-    def seconds_a_step(self, host: str) -> float | None:
-        """The host's mean seconds a step over its ended attempts (None before any)."""
+    def seconds_an_epoch(self, host: str) -> float | None:
+        """The host's mean seconds an epoch over its ended attempts (None before any)."""
         rates = [
-            s["seconds"] / s["step"]
+            s["seconds"] / s["epochs"]
             for i, s in self.state.ended.items()
-            if s.get("step") and s.get("seconds") and self.state.hosts_of.get(i) == host
+            if s.get("epochs") and s.get("seconds") and self.state.hosts_of.get(i) == host
         ]
         return sum(rates) / len(rates) if rates else None
 
@@ -385,7 +399,7 @@ class Controller:
         left = window_left(self.hosts[host], self.now())
         if left is None:
             return False
-        rate = self.seconds_a_step(host)
+        rate = self.seconds_an_epoch(host)
         return attempt.cutoff is None or rate is None or attempt.cutoff * rate < left
 
     async def assign(self, host: str, writer: asyncio.StreamWriter, free: int) -> None:
@@ -564,7 +578,7 @@ class Worker:
 
     def command(self, attempt: Attempt, cell: str) -> list[str]:
         task, bound = TASKS[attempt.backdrop]
-        cutoff = ["--cutoff-steps", str(attempt.cutoff)] if attempt.cutoff is not None else []
+        cutoff = ["--cutoff-epochs", str(attempt.cutoff)] if attempt.cutoff is not None else []
         return [
             *self.wrapper,
             self.python,
@@ -819,9 +833,9 @@ def wilson(successes: int, n: int, z: float = 1.959964) -> tuple[float, float]:
 
 
 def runs_of(summaries: Sequence[dict[str, Any]]) -> list[tuple[float | None, float, bool]]:
-    """Ended attempts as restart_cost's runs (success step, last step, censored at its budget)."""
+    """Ended attempts as restart_cost's runs (success and last step's end in epochs, censored at its budget)."""
     return [
-        (None if s["success"] is None else float(s["success"]), float(s["step"]), s["end"] in CENSORED)
+        (None if s["success"] is None else float(s["success"]), float(s["epochs"]), s["end"] in CENSORED)
         for s in summaries
-        if s["step"] is not None
+        if s.get("epochs") is not None
     ]
