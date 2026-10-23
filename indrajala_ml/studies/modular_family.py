@@ -1482,6 +1482,32 @@ def readout(
     return lines
 
 
+def long_summary(root: Path) -> list[str]:
+    """
+    A study's long tests (long-test --out root/<run>, a <network>.long-test.json each): a line per
+    run (its cases passed, the failures listed, the network's sha256 prefix) and one for all.
+    """
+    lines: list[str] = []
+    passed = cases = 0
+    failing: list[str] = []
+    for path in sorted(root.glob("*/*.long-test.json")):
+        long = json.loads(path.read_text())
+        results = [r for length in long["lengths"].values() for r in length["properties"].values()]
+        run_cases, run_passed = sum(r["cases"] for r in results), sum(r["passed"] for r in results)
+        _, failures = wr.long_test_failures(long)
+        listed = sum(len(r.get("failures", [])) for r in results)
+        lines.append(
+            f"{path.parent.name}: {run_passed:,} of {run_cases:,} passed"
+            + (f" ({', '.join(failures)})" if failures else "")
+            + f", {listed} failures listed, sha256 {long['sha256'][:12]}"
+        )
+        cases, passed = cases + run_cases, passed + run_passed
+        if failures:
+            failing.append(path.parent.name)
+    lines.append(f"all: {passed:,} of {cases:,} passed; networks with a failure: {', '.join(failing) or 'none'}")
+    return lines
+
+
 STALL_SHARE, STALL_EPOCHS = 0.95, 10  # a guarded run frozen (the guard workplan's D9)
 
 

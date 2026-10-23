@@ -1533,6 +1533,8 @@ def main(argv: list[str]) -> int:
     separation.add_argument(
         "--live", action="store_true", help="every snapped factor read continuous (a warm-up's network, as it trained)"
     )
+    summary = commands.add_parser("long-summary", help="a study's long tests: a line per run, failures, all")
+    summary.add_argument("root", type=Path, help="long-test's outputs, a <run>/<network>.long-test.json each")
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
     readout.add_argument("root", type=Path, help="the study's directory, a <arm>/seed<s> per run")
     readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
@@ -1582,6 +1584,9 @@ def main(argv: list[str]) -> int:
         pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
         arms = list(dict.fromkeys(arm for pair in pairs for arm in pair)) if pairs else args.arms
         print("\n".join(mf.readout(args.root, arms, args.certify or args.root / "certify", pairs)))
+        return 0
+    if args.command == "long-summary":
+        print("\n".join(mf.long_summary(args.root)))
         return 0
     if args.command == "state-spread":
         encoding = _target(args.task, args)
