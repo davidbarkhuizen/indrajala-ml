@@ -101,7 +101,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D61 | 2026-10-22, 08:00 | the paced coupling | the coupling paced by a trust region (`--coupling-pace`) or read from a Savitzky-Golay line (`--sharpness-smoothing`); its probe (`probe-d61.sh`), read 18:00: neither arm promising (1 of 6 rescued each) |
 | D62 | 2026-10-22, 08:00 | the run's state object | `run`'s loop-carried state one dataclass, the loop's body split into functions of it (planned) |
 | D63 | 2026-10-22, 08:15 | the collapse | reheat (the rate below the hold's level negative, the clock run back) and restarts, each arm at its own cutoff, on cost per certified machine; its probe registered 18:15 (`probe-d63.sh`) on D64's 22 seeds |
-| D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`) |
+| D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`); read 2026-10-23, 05:30: S3 and move-to-front-4 7 of 12, between its bars; 0 of 10 on the others; every failure frozen |
 | D65 | 2026-10-22, 10:45 | the order-biased cool | the cool's halving time times `1 + w (s - 1)`: w the machine's order from answers (0 when ordered), s the slowdown from the melting curve and relaxation; set aside at 11:05 on its stage 0 (the failures freeze, the cool does not outrun them) |
 | D66 | 2026-10-22, 11:20 | the two-phase cool | a slower re-cool after each reheat (the forward rate times `2^-k`, k reheats so far): zero for runs that never freeze; reshaped at 11:50 from an order gate that failed its stage 0 (planned, after D63's reading) |
 | 4b | registered later | the panel | D36's arms (the crucible against `--whole`, both quasi-static) on D37's cells, D35's stop |
@@ -1936,6 +1936,47 @@ certified seed 1, and random-q16-0's freezes (D56's seeds 0, 2).
   recovery did once); on the random machines nothing is dead to revive, so a reheat would re-sort a
   full assignment. Shrink and perturb (Ash and Adams 2020), a non-gradient kick that keeps the learned
   hypothesis, stays a later candidate, not planned.
+
+## Findings: the method's fresh-seed rate (D64), read 2026-10-23, 05:30
+
+Read by its registered header on all 22 runs (`stone` 18, ended 04:15; `klip` random-q12-0 4-7,
+ended 20:59); a success is a certificate at both verdicts on the stop's network (D41). Logs copied and
+checked against `stone`'s manifest (`stone-option1-d64.sha256`) and `klip`'s (`klip-option1-d64.sha256`).
+
+| backdrop | certified | rate (Wilson 95%) | failures' ends |
+|---|---|---|---|
+| S3 40-47 | 40, 41, 42, 43, 47 | 5 of 8 (0.62, 0.31-0.86) | 44, 46 spent; 45 the 690-minute deadline |
+| move-to-front-4 32-35 | 32, 33 | 2 of 4 (0.50, 0.15-0.85) | 34, 35 the deadline (steps 884, 1,096) |
+| S4 3-5 | none | 0 of 3 (0.00-0.56) | all spent |
+| random-q12-0 4-7 | none | 0 of 4 (0.00-0.49) | all spent |
+| random-q16-0 4-6 | none | 0 of 3 (0.00-0.56) | all spent |
+
+- **S3 and move-to-front-4 together: 7 of 12 (0.58, 0.32-0.81), between the bars:** the working
+  rate's bar (at least 8) not met, "working in general" not refuted (6 or fewer). Consistent with the
+  margin stop's re-runs of D55's seeds (S3 11 of 16, 0.69; move-to-front-4 7 of 8) at these sizes.
+- **The larger and unstructured backdrops: 0 of 10.** Refutes nothing (as registered) but names the
+  gap: with D56-D58, S4 1 of 6, random-q12-0 1 of 8, random-q16-0 0 of 7 under the continuous cell.
+- **No false discovery;** the stop fired only on certified networks. The margin's waits: 1 step
+  (move-to-front-4 32), 0 on the rest; no stop by D60's deadline.
+- **Every failure is frozen** (`cool`): all 15 hold the clock at 0 for 543-1,462 epochs. Formed then
+  lost: S3 46 (formed at step 13), S4 3, random-q12-0 5, and move-to-front-4 34, 35 (share 0.99 at
+  steps 84, 94, then frozen 543-592 epochs to the deadline: slow runs, 0.6-0.8 minutes a step);
+  never formed: S3 44, 45, S4 4, 5, random-q12-0 4, 6, 7, random-q16-0 4-6. Certified runs froze too
+  and thawed: S3 41 (94 epochs), S3 40 (32).
+- **Order** (the first jump against the screen's fall): jump first in 10 (move-to-front-4 34, 35,
+  S4 4, 5, random-q12-0 4, 5, 7, random-q16-0 4-6), drop first in 5 (all three S3 failures, S4 3,
+  random-q12-0 6), the same epoch in none. Jumps in the cool: failures 85-188 but move-to-front-4 34,
+  35 (1, 5); certified 2-37.
+- **Cost per certificate** (`restart-cost`, spent runs censored): S3's `t*` is 11 steps (q 0.12),
+  set by one run (seed 43, certified at step 11) and not to be trusted on 8 runs; at the cutoff all its
+  certificates need (229 steps) `l` is 276 steps against 1,086 running each out (3.9x).
+  Move-to-front-4: `t*` 140 steps (q 0.50), `l` 278 steps against 1,128 (4.1x); 5,144 seconds against
+  43,984. Minutes to each certificate: S3 1.6-47.1, move-to-front-4 40.9 and 43.5 (`stone` at half
+  load by day).
+- **So:** the method certifies about 3 in 5 runs on the ordered backdrops and none of ten on the larger
+  and unstructured ones, and every failure ends in the freeze; D63's motive stands, and its paired
+  reading has its twins. Restarts at a cutoff of about 230 steps would cut the ordered backdrops' cost
+  per certificate about fourfold on these runs (D63 (e) reads it with D63's).
 
 ## A note on random machines (2026-10-20; a note, not a plan)
 
