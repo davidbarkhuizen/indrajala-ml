@@ -1,7 +1,7 @@
 """
 Does numpy's OpenBLAS slow a Rust call made right after it? After a threaded BLAS call,
 OpenBLAS's worker threads spin for a while (`OPENBLAS_THREAD_TIMEOUT`) before they sleep, and on
-the Ryzen laptop a Rust batch op in that window measured 2-5x slow (docs/measurement.md, §7).
+the Ryzen laptop a Rust batch op in that window measured 2-5x slow (docs/protocols/measurement.md, §7).
 This times single Rust calls in one process under three conditions, alternated trial by trial:
 
 - after numpy: a threaded numpy product (512 x 5408 @ 5408 x 32), then the Rust call at once;

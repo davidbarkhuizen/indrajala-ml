@@ -5,7 +5,7 @@ and specifically our line of reasoning, in the light of what we now know ... are
 things we have missed, or obvious inconsistencies in our reasoning"), with no further literature
 review.** Read against [state-formation-workplan.md](../workplans/state-formation-workplan.md) (D13-D34),
 [failure-kinds.md](../research-notes/failure-kinds.md), [machine-discovery.md](../research-notes/machine-discovery.md),
-[information-flow.md](../research-protocol/information-flow.md), the status note
+[information-flow.md](../protocols/information-flow.md), the status note
 (`~/code/indrajala-papers/state-formation-status.tex`) and `contribution.md`, with the adaptive
 cool's existence probe (D33's probe) and the handover probe's S3 arm (4a'') still running. Nothing
 here is planned work: what it recommends goes to the panel's (4b) registration or to a decision.

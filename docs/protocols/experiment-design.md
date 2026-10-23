@@ -2,7 +2,7 @@
 
 How a learning study in this project is designed, run and judged: a study that trains networks
 and makes claims from them (the addition and sequence studies, the window-recurrent matrix, its
-claims plan's experiments). [measurement.md](../measurement.md) is the other half: how a change is
+claims plan's experiments). [measurement.md](measurement.md) is the other half: how a change is
 *timed*. Read this before designing a study or writing a study workplan.
 
 Each rule names where it was decided and what taught it, so it can be argued with from the

@@ -5,7 +5,7 @@ programme for internal consistency"), after the program's restructuring (D35-D39
 panel's (4b) registration.** Read against [state-formation-workplan.md](../workplans/state-formation-workplan.md)
 (D1-D39), [reasoning-review-2026-10-21.md](reasoning-review-2026-10-21.md) (the morning's review),
 [failure-kinds.md](../research-notes/failure-kinds.md), [machine-discovery.md](../research-notes/machine-discovery.md),
-[information-flow.md](../research-protocol/information-flow.md), [experiment-design.md](../research-protocol/experiment-design.md), the
+[information-flow.md](../protocols/information-flow.md), [experiment-design.md](../protocols/experiment-design.md), the
 probes' headers (`~/code/probe-d33.sh`, `probe-d34.sh`, `probe-d38.sh`), the harness
 (`indrajala_ml/studies/modular_family.py`) and the status note
 (`~/code/indrajala-papers/state-formation-status.tex`). The adaptive cool's existence probe (D33's

@@ -72,7 +72,7 @@ candidate optimizations) were retired the same way: `git show 0a04977:docs/optim
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention, The sequence task, Dropout among the
-tokens, Rotary positions, The addition study), [measurement.md](measurement.md)
+tokens, Rotary positions, The addition study), [measurement.md](protocols/measurement.md)
 and [rng-audit.md](audits/rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/residual_depth_study.py`'s, the patch-attention study's in

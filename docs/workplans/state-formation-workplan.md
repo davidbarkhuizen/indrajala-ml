@@ -490,7 +490,7 @@ crystallised, with the handover, on the material where it formed, before the lon
     temperature). Deferred at the owner's word until this baseline is read; its resampling signal must
     be the answers' screen, never the certificate (discovery: the target unknown).
   - (c) Fewer seeds. Cons: the rate unmeasured.
-- **The cell (feasibility, docs/research-protocol/information-flow.md):** two factors, `--codes-ratio 32/11` (8 codes a
+- **The cell (feasibility, docs/protocols/information-flow.md):** two factors, `--codes-ratio 32/11` (8 codes a
   factor, `m` 64 against `q` 6, row 1), reading the output, width 32 (S3 certified at 32, row 3), cap 69
   (`m + q - 1`, row 2, reached by growth), 1,600 epochs or 690 minutes; `T_hot` 2 `T_c`, hold 20,
   `kappa` 1e-2, convex, tail 40, the handover, the commitment never back. Budget: the crucible's 666
@@ -1140,7 +1140,7 @@ owner's; D49-D54 settled under the delegation.
     completed runs' logs: if s alone is 1 on every ordered run and above 1 on the random ones, w is
     dropped (option (c)). (0c) the cool's length under s on random-q12-0 and random-q16-0 against
     the budget (1,600 epochs, 690 minutes), the budget derived from it if short. (0d) feasibility of
-    the new random machines (docs/research-protocol/information-flow.md's register: codes, exclusion bound, width).
+    the new random machines (docs/protocols/information-flow.md's register: codes, exclusion bound, width).
   - **Stage 1, the build (code only, while the current work runs):** `--order-bias` (with
     `--continuous`): an `order` row at the run's start (profile, statistic, w), s fixed at the cool's
     start, each anneal row's `halving`, `w`, `s`, `tau`; `Place` fields, an identity key, a resumable

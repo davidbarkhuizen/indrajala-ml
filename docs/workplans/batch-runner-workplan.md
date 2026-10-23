@@ -135,7 +135,7 @@ the machines we have, each in its own hours.
    four, each attempt's log identical to a local run of its seed, and the daemon's own CPU and memory
    measured at rest and under load.
 5. **The cutoff in epochs, then first use.** Epochs trained are the time axis (the owner, 2026-10-23;
-   [experiment-design.md](../research-protocol/experiment-design.md), section 1): the run's cutoff becomes `--cutoff-epochs`
+   [experiment-design.md](../protocols/experiment-design.md), section 1): the run's cutoff becomes `--cutoff-epochs`
    (epochs trained in all at a step's end), the attempts' costs and the report's `l` in epochs. Steps
    understate epochs early in a run (the warm-up and hold train several a step; D64's S3 43 certified at
    step 11, epoch 23), exactly where cutoffs sit. **Built** (2026-10-23): `--cutoff-epochs`; the

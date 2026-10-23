@@ -113,7 +113,7 @@ section is `git show c3d619b:docs/length-generalisation-workplan.md`.*
 
 ## The rules these findings set
 
-*Recorded in [experiment-design.md](../research-protocol/experiment-design.md) and CLAUDE.md (Studies).*
+*Recorded in [experiment-design.md](../protocols/experiment-design.md) and CLAUDE.md (Studies).*
 
 1. **Every cell must be able to succeed:** at least as many codes as the target's minimal states.
 2. **Training must exclude memorising:** the longest training length at least `m + q - 1`.

@@ -4,7 +4,7 @@
 missing infrastructure that would be required to allow the network-machine to truly perform a
 prime-factor decomposition"). Decisions D1-D12 settled under the owner's standing delegation, each
 with its options' pros and cons. Revised 2026-10-14 against
-[experiment-design.md](../research-protocol/experiment-design.md) and the work since (the claims workplan's E7-E8b and
+[experiment-design.md](../protocols/experiment-design.md) and the work since (the claims workplan's E7-E8b and
 D30-D34, the factored-state workplan): D1, D3, D4, D6, D9, D10, D11 and D12 revised, D13-D14
 added, F1 restated as an existence claim, the stages and the cost redone. D13 then set by the
 owner: **the controllers' state is factored, one factor per register**, R1 the cross-term's
