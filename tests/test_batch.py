@@ -431,12 +431,12 @@ def test_a_log_with_a_re_run_appended_is_summarised_from_its_last_run_only(tmp_p
 
 def test_an_attempt_run_again_gets_a_fresh_directory_its_old_one_set_aside(tmp_path: Path):
     first = worker(tmp_path, "w", 1)
-    attempt = b.Attempt("s3-1", "s3", 1)
+    attempt = b.Attempt("s3-1", "continuous", "s3", 1)
     root = tmp_path / "w"
     for run in range(3):  # each run lost and the attempt sent to this host again
         if run:
             (root / "s3-1" / "mark").write_text(str(run))
-        running = first.launch(attempt, "continuous")
+        running = first.launch(attempt)
         while b.alive(running.pid):
             time.sleep(0.05)
     assert sorted(p.name for p in (root / "lost").iterdir()) == ["s3-1-1", "s3-1-2"]
@@ -450,7 +450,7 @@ def test_a_sessions_pss_sums_its_processes_and_an_attempts_peak_reaches_its_summ
     assert mine is not None and mine > 0 and b.session_pss(1, tmp_path / "none") is None
     state = run_batch(
         tmp_path,
-        b.Batch("m", "measure", "continuous", b.attempts("s3:1")),
+        b.Batch("m", "measure", b.attempts("s3:1", ["continuous"])),
         worker(tmp_path, "w", 1, {"STUB_SLEEP": "0.3"}),
     )
     assert state.ended["s3-1"]["peak_pss_mb"] > 1
