@@ -1066,6 +1066,45 @@ def test_resuming_skips_an_ended_run_and_starts_one_not_begun(tmp_path: Path):
     assert json.loads((tmp_path / "new" / mf.CHECKPOINT).read_text())["place"] == mf.ENDED
 
 
+@pytest.mark.parametrize("kind", ["forked", "continuous", "margin"])
+def test_a_deadlines_stop_resumes_with_a_larger_guard_as_the_uninterrupted_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
+):
+    # the wall clock a counter (a second a reading), so each guard stops at the same place every time
+    config = (
+        dict(RESUMABLE["continuous"], budget_epochs=40, state_bound=25, margin_wait=3)
+        if kind == "margin"
+        else dict(RESUMABLE[kind])
+    )
+    encoding, settings = config.pop("encoding"), config.pop("settings")
+    whole_out = tmp_path / "whole"
+    mf.run(encoding, [(4, 4)], 0, 1e9, whole_out, settings, **config)
+    whole = _outcome(whole_out)
+    clock = [0.0]
+
+    def ticking() -> float:
+        clock[0] += 1.0
+        return clock[0]
+
+    with monkeypatch.context() as patched:
+        patched.setattr(mf, "time", SimpleNamespace(perf_counter=ticking))
+        mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path / "counted", settings, **config)
+    readings = clock[0]
+    for guard in (readings / 4, readings / 2, 3 * readings / 4):
+        out = tmp_path / f"guard-{guard:g}"
+        clock[0] = 0.0
+        with monkeypatch.context() as patched:
+            patched.setattr(mf, "time", SimpleNamespace(perf_counter=ticking))
+            mf.run(encoding, [(4, 4)], 0, guard, out, settings, **config)
+        rows = [json.loads(line) for line in (out / "log.jsonl").read_text().splitlines()]
+        assert any(r.get("end") == "deadline" for r in rows), guard  # the guard stopped it
+        assert json.loads((out / mf.CHECKPOINT).read_text())["place"] != mf.ENDED
+        mf.run(encoding, [(4, 4)], 0, 1e9, out, settings, resume=True, **config)
+        assert _outcome(out) == whole, guard
+        mf.run(encoding, [(4, 4)], 0, 1e9, out, settings, resume=True, **config)  # ended now: nothing trains
+        assert _outcome(out) == whole, guard
+
+
 def test_resuming_refuses_another_runs_checkpoint_and_a_log_without_one(tmp_path: Path):
     _resumable(tmp_path / "run")
     with pytest.raises(AssertionError, match="another run"):

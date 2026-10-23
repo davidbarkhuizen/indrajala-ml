@@ -120,6 +120,11 @@ where you meet a new trap; delete one that no longer holds.
   before the next epoch sets them must be kept in the checkpoint's `Place` and re-applied (the
   couplings were not until 2026-10-21, found by the adaptive cool's resume test). A resume test whose
   factors harden at once (coupling 1) can't see such a gap: give a new profile's test soft factors.
+- **A run its wall-clock guard stopped resumes:** `modular_family_probe.py run` with a "deadline"
+  stop keeps the last epoch's checkpoint (not "ended"), so the same command with `--resume` and a
+  larger `--budget-minutes` goes on to its epoch budget as the uninterrupted run (the deadline's
+  rows and the cut step's files dropped); the guard isn't part of the run's identity. Runs cut
+  before this change (D67's nine) ended their checkpoints and can't: re-run them from their seeds.
 - **Background Python writing to a log is block-buffered:** a killed job leaves nothing. Use
   `python -u` or `PYTHONUNBUFFERED=1` for any log you may need mid-run.
 - **The harness log prints nothing within a step;** progress shows as `models/<key>/step-<j>.json`
