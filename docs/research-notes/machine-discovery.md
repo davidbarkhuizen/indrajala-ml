@@ -4,7 +4,7 @@
 inception".** This is the destination, not a workplan. Every study and workplan here serves it,
 and each should be able to say how. Its stages (below) become workplans when the work reaches
 them. The terms follow the papers' (the literature review's "Terms";
-`~/code/indrajala-papers/contribution.md`):
+`~/code/indrajala-research/contribution.md`):
 - the **target machine** is the machine to be found;
 - an **approximation** of it is a homomorphic image (a surjective morphism onto a smaller machine);
 - a **cover** is a machine that emulates it (an injective morphism into, for example, a product of

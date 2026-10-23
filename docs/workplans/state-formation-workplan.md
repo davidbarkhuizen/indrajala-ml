@@ -1910,7 +1910,7 @@ Read for D65's stage 0 on the same 47 runs' per-epoch rows (`anneal`: `rate`, `c
   two runs and did not form; glass-ceramics also need nucleating agents, which points at nucleation,
   not time, as the barrier: a reheat or a new seed is a new nucleation attempt.
 - **The literature agrees (the 2026-10-22 review, `window-recurrent-literature.md`; the research note
-  `indrajala-papers/freeze-and-restarts.tex`):** an equilibrium-gated schedule halts at a kinetic
+  `indrajala-research/research-notes/freeze-and-restarts.tex`):** an equilibrium-gated schedule halts at a kinetic
   arrest. The dissipation of a finite-time process is at least `L^2 eps / tau` (Salamon and Berry
   1983); the optimal schedule, constant thermodynamic speed `dT/dt = -v T / (eps sqrt(C))` (Nulton and
   Salamon 1988; Salamon et al. 1988; Andresen and Gordon 1993, 1994), stops as the relaxation time

@@ -7,7 +7,7 @@ options' pros and cons, and every stage's record. Each experiment's findings, wi
 manifests and commits, are in [scripts/window_recurrent_study.py](../scripts/window_recurrent_study.py)'s
 docstring (E1's certificate also in
 [window_recurrent_certificate.py](../indrajala_ml/studies/window_recurrent_certificate.py)). The
-paper is P1, `snapped-window-recurrence.tex` in indrajala-papers; the literature is in
+paper is P1, `papers/snapped-window-recurrence.tex` in indrajala-research; the literature is in
 [window-recurrent-literature.md](window-recurrent-literature.md).
 
 The question: the window-recurrent adder (`git show e45944e:docs/window-recurrent-adder-workplan.md`)

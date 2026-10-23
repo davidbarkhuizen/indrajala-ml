@@ -8,7 +8,7 @@ panel's (4b) registration.** Read against [state-formation-workplan.md](../workp
 [information-flow.md](../protocols/information-flow.md), [experiment-design.md](../protocols/experiment-design.md), the
 probes' headers (`~/code/probe-d33.sh`, `probe-d34.sh`, `probe-d38.sh`), the harness
 (`indrajala_ml/studies/modular_family.py`) and the status note
-(`~/code/indrajala-papers/state-formation-status.tex`). The adaptive cool's existence probe (D33's
+(`~/code/indrajala-research/research-notes/state-formation-status.tex`). The adaptive cool's existence probe (D33's
 probe) and the handover probe's S3 arm (4a'') were still running, and the coupling probe (D38)
 waiting for 19:00. Nothing here is planned work: items 1-6 go to the panel's registration or to a
 decision; the stale statements (item 9) are corrected in the same PRs. **Items 1-8 settled the same afternoon
