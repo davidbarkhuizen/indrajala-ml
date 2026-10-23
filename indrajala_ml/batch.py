@@ -205,6 +205,10 @@ class Host:
 
 
 WEEKDAYS, ALL_DAYS = (0, 1, 2, 3, 4), (0, 1, 2, 3, 4, 5, 6)
+# One crate build on every host (D6): the same .so, unpacked into a site directory named by its crate
+# commit and put before the worktree on PYTHONPATH, so every host's crate hash is the same and a venv's
+# own build (rebuilt in development) never reaches a batch. rust/ at 647f23c, built on pyramidon.
+CRATE = "crate-647f23c"
 # The owner's rules as data (2026-10-22): jebel by day only (solar), stone weekday nights and all weekend,
 # the laptops always; slots are cores less the worker's, bounded by memory (pyramidon and klip 5 GB).
 HOSTS: dict[str, Host] = {
@@ -214,6 +218,7 @@ HOSTS: dict[str, Host] = {
         "/home/david/code/wt-batch",
         "/home/david/code/indrajala-ml/.venv/bin/python",
         "/home/david/code/batch-attempts",
+        pythonpath=f"/home/david/code/{CRATE}",
         remote=False,
     ),
     "klip": Host(
@@ -222,6 +227,7 @@ HOSTS: dict[str, Host] = {
         "/home/david/code/wt-batch",
         "/home/david/code/indrajala-ml/.venv/bin/python",
         "/home/david/code/batch-attempts",
+        pythonpath=f"/home/david/code/{CRATE}",
         wrapper=("/home/david/code/thermal-guard.sh", "/home/david/code/batch-attempts/temp", "85", "--"),
     ),
     "jebel": Host(
@@ -230,6 +236,7 @@ HOSTS: dict[str, Host] = {
         "/home/david/code/wt-batch",
         "/home/david/code/indrajala-ml/.venv/bin/python",
         "/home/david/code/batch-attempts",
+        pythonpath=f"/home/david/code/{CRATE}",
         # on grid power, around the clock, from 2026-10-23's evening (the owner); before, 07:00-18:00 on solar
     ),
     "stone": Host(
@@ -238,7 +245,7 @@ HOSTS: dict[str, Host] = {
         "/home/david/labour/code/wt-batch",
         "/home/david/labour/code/wt-branches/.venv/bin/python",
         "/home/david/labour/batch-attempts",
-        pythonpath="/home/david/labour/site-straight",
+        pythonpath=f"/home/david/labour/{CRATE}",
         setup="source ~/labour/env.sh",
         windows=(Window(WEEKDAYS, 18, 13), Window((5,), 0, 24), Window((6,), 0, 31)),
     ),

@@ -206,8 +206,9 @@ where you meet a new trap; delete one that no longer holds.
   outlive it).
 - **The crate is pinned too** (D6): `register` records the crate extension's SHA-256 (`--crate`, default
   the registering machine's) and the controller refuses a worker that imports another. Builds of one
-  source differ by machine, so put the same built `.so` on every host (one wheel, `pip install
-  --no-deps`). T1 ran before the check: `pyramidon`'s crate (rust 647f23c, whose one change is
+  source differ by machine, so every host imports one build: `b.CRATE` (`crate-647f23c`), the package
+  directories copied from `pyramidon`'s venv into `~/code/crate-647f23c` (`~/labour/` on `stone`) and put
+  first on PYTHONPATH by the host table. A new crate: a new directory on every host, `CRATE` changed. T1 ran before the check: `pyramidon`'s crate (rust 647f23c, whose one change is
   aarch64-only NEON) differed from `klip`'s and `stone`'s (45d6a37); `same-prefix` on `d5-sum-304` gave
   31 identical rows across them (2026-10-23).
 - **A host given outside its hours:** `controller --open HOST` (the owner's grant, logged in the
