@@ -1798,6 +1798,9 @@ def test_answers_stop_judges_the_first_step_right_within_the_bound_by_the_certif
     reread = {1: {"24": 0.5}, 2: {"24": 1.0}}
     assert mf.answers_stop(soft, 6, lambda step: reread[step])["verdict"] == "kept"
     assert mf.answers_stop(soft, 6, lambda step: None)["verdict"] == "missed"  # no saved network: no stop
+    # a stop exact at snap ratio 1.0 but not with near ties branched (the margin's case, D59)
+    strict = {**_step_end(1, True, 6, False), "certificates": {"strict": {"certified": True}}}
+    assert mf.answers_stop(run(strict), 6)["verdict"] == "strict-only"
 
 
 def test_formation_course_reads_when_the_state_formed_was_kept_and_the_melting_curves_crowding():

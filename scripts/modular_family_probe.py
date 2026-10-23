@@ -986,6 +986,7 @@ from pathlib import Path
 from typing import Any
 
 from indrajala_ml.measurement import machine_lock
+from indrajala_ml.studies import chow
 from indrajala_ml.studies import machine_reading as mr
 from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_recurrent_certificate as wc
@@ -1342,6 +1343,11 @@ def main(argv: list[str]) -> int:
     stop.add_argument(
         "--snapped", action="store_true", help="re-read answers on each step's saved network (a coupled run's log)"
     )
+    stop.add_argument(
+        "--logged",
+        action="store_true",
+        help="each step's snapped answers as its row logged them (answers_stop, D53: every epoch of a continuous run)",
+    )
     capacity = commands.add_parser(
         "heat-capacity", help="profiled runs' logs (D32), a line per run: each factor's splits and capacity peak"
     )
@@ -1424,6 +1430,10 @@ def main(argv: list[str]) -> int:
             "approximations",
             "what each factor's code determines of the task's machine exactly, and whether they cover it",
         ),
+        (
+            "chow",
+            "saved networks' machines against the task's by Chow's test set under a state bound (answers-only, exact)",
+        ),
     ):
         reading = commands.add_parser(name, help=summary)
         reading.add_argument("networks", type=Path, nargs="+")
@@ -1433,6 +1443,10 @@ def main(argv: list[str]) -> int:
         reading.add_argument("--out", type=Path, help="a directory for each network's <network>.<command>.json")
         if name == "by-length":
             reading.add_argument("--lengths", type=int, nargs="+", default=[1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64])
+        if name == "chow":
+            reading.add_argument("--bound", type=int, help="the state bound (default the task's states)")
+            reading.add_argument("--slack", type=float, default=1.0, help="the bound times this, rounded down")
+            reading.add_argument("--limit", type=int, default=10_000_000, help="the most test words to query")
     spread = commands.add_parser(
         "state-spread",
         help="saved networks' state spread: the outputs' critical temperature and effective dimension, the codes' groups",
@@ -1547,7 +1561,7 @@ def main(argv: list[str]) -> int:
             curves = mf.melting_curves(mf.load_network(str(path)), rows)
             print(json.dumps({"network": str(path), "step": args.step, "factors": curves}), flush=True)
         return 0
-    if args.command in ("by-length", "breaks", "approximations"):
+    if args.command in ("by-length", "breaks", "approximations", "chow"):
         for path in args.networks:
             print(read_network(path, args), flush=True)
         return 0
@@ -1583,7 +1597,13 @@ def main(argv: list[str]) -> int:
                 return mf.snapped_answers(mf.load_network(str(saved)), encoding)
 
             rows = [json.loads(line) for line in path.read_text().splitlines()]
-            verdict = mf.answers_stop(rows, bound, snapped if args.snapped else None)
+            logged = {
+                int(row["step"]): row["answers_stop"].get("answers")
+                for row in rows
+                if "end" in row and isinstance(row.get("answers_stop"), dict)
+            }
+            reader = logged.get if args.logged else snapped if args.snapped else None
+            verdict = mf.answers_stop(rows, bound, reader)
             tally[verdict["verdict"]] = tally.get(verdict["verdict"], 0) + 1
             print(f"{path}: {verdict['verdict']}, stop {verdict['stop']}, certified {verdict['certified']}", flush=True)
         print(f"bound {bound:g}: {tally}")
@@ -1847,7 +1867,37 @@ def read_network(path: Path, args: argparse.Namespace) -> str:
     d = args.d or mr.word_length(target)
     machine = mf.QueryMachine(mf.load_network(str(path)), _target(args.task, args), mf.slot(args.task))
     walk = mr.product(machine, target)
-    if args.command == "by-length":
+    if args.command == "chow":
+        bound = int((args.bound or target.states) * args.slack)
+        machine_states = len(walk.codes)
+        try:
+            checked = chow.check(
+                mr.mealy(mr.walk(machine, target.tokens)), chow.machine_query(target), bound, limit=args.limit
+            )
+        except ValueError as refused:
+            result = {"network": str(path), "task": args.task, "bound": bound, "refused": str(refused)}
+            line = f"{path}: bound {bound}, {refused}"
+        else:
+            result = {
+                "network": str(path),
+                "task": args.task,
+                "codes": machine_states,
+                "states": checked.states,
+                "bound": bound,
+                "equivalent": checked.equivalent,
+                "words": checked.words,
+                "counterexample": None if checked.counterexample is None else list(checked.counterexample),
+            }
+            line = (
+                f"{path}: {machine_states} codes, minimised {checked.states}, bound {bound}: "
+                f"{'equivalent' if checked.equivalent else 'not equivalent'} after {checked.words:,} words"
+                + (
+                    ""
+                    if checked.counterexample is None
+                    else f", counterexample of {len(checked.counterexample)} tokens"
+                )
+            )
+    elif args.command == "by-length":
         rows = mr.by_length(walk, sorted(args.lengths), d)
         result: dict[str, Any] = {"network": str(path), "task": args.task, "d": d, "lengths": rows}
         line = " ".join(f"{r['n']}:{r['exact']:.3f}/{r['named']:.3f}" for r in rows)

@@ -2094,6 +2094,53 @@ has had a sensitivity reading; the owner's rule is no constants without a deriva
 Not yet planned: a sensitivity reading, one constant at a time on fresh seeds on the batch runner
 (the audit's F10; the owner's call).
 
+## Findings: the slack bound and Chow's test set (offline, 2026-10-23; the programme audit's F6, F32)
+
+Read offline on every copied log of the continuous method (D54, D55, D57, D58, D59, D61 and D64: 90
+runs, the replays of D59 and D61 included, so fewer distinct seeds; D56's random-q16-0 logs not
+copied), with `answers-stop --logged`: D35's first pass, each step's snapped answers as its row logged
+them (D53), the stop judged by the row's certificates. New verdict: **strict-only**, a stop not
+certified with near ties branched but exact at snap ratio 1.0, the network as it computes (the
+margin stop's case, D59), told apart from a wrong machine. The margin stop itself can't be replayed at
+a slack bound from the logs: its split ties are logged only on passes at the exact bound.
+
+| backdrop (runs) | x1.0 | x1.1 | x1.5 |
+|---|---|---|---|
+| S3 (45) | kept 21, strict-only 11, silent 13 | the same (bound 6.6) | kept 12, strict-only 21, silent 12 |
+| move-to-front-4 (24) | kept 5, strict-only 14, silent 5 | kept 2, strict-only 17, silent 5 | kept 1, strict-only 16, **false discovery 1, false stop 1**, silent 5 |
+| S4 (6) | kept 1, silent 5 | the same | strict-only 1, silent 5 |
+| random-q12-0 (8) | kept 1, silent 7 | the same | strict-only 1, silent 7 |
+| random-q16-0 (7) | silent 7 | silent 7 | silent 7 |
+
+- **No wrong machine at 1.1 times the bound:** a slack of 10% only moves stops onto networks exact as
+  they compute, with more near ties (strict-only). The 2026-10-21 re-reading's 25 false stops and a
+  false discovery at 1.1 were on the earlier studies' runs (the commitment on, no option 1), judged
+  by the default verdict alone.
+- **At 1.5 times, one wrong machine:** move-to-front-4 seed 30 at step 114 (36 states allowed against
+  24), in D55's run and in its D59 replay (the same run to that step); the replay certified at 123.
+- **Chow's test set** (`indrajala_ml/studies/chow.py`, the probe's `chow`: the network's machine as it
+  computes, minimised, against the target as a black box, exact for any target within the bound)
+  catches every such stop by construction, and its size says what that costs in queries:
+
+  | target (states, tokens) | x1.0 | x1.1 | x1.5 |
+  |---|---|---|---|
+  | S3 (6, 4) | 50 | 50 | 4,250 |
+  | random-q12-0 (12, 5) | 305 | 1,830 | 5,956,955 |
+  | random-q16-0 (16, 5) | 405 | 2,430 | 197,753,805 |
+  | S4 (24, 5) | 363 | 11,253 | 1.1e11 |
+  | move-to-front-4 (24, 5) | 1,331 | 41,261 | 4.1e11 |
+
+  On a certified S3 network (D64 seed 40, step 215) it passes after 50 words at the bound, 3,242 at
+  1.5 times and 207,530 at twice; on S3 seed 44's step 1,000 (2 states) it finds a counterexample of 2
+  tokens.
+- **So:** under a bound within about 10% the answers-only stop picks right machines on these runs,
+  and Chow's test set proves them with a few thousand to tens of thousands of queries; at 1.5 times
+  the stop can pick a wrong machine and the exact check is out of reach (`|X|^(N - n)`). Discovery
+  needs a tight bound, as machine-discovery.md says; the stop at a slack bound needs the check, and
+  the check needs the bound tight.
+- **Records:** the D64 copy's archive-side manifest `option1/archive-option1-d64.sha256` (2,608 files,
+  sha256 c2e688ce...), written after the per-host manifests were found not to verify as copied (F31).
+
 ## A note on random machines (2026-10-20; a note, not a plan)
 
 The owner: "this approach, if it works, is likely to also work for random machines"; and a conjecture,
