@@ -1126,6 +1126,12 @@ def main(argv: list[str]) -> int:
         "factor reads and the answers' own single-head branch (needs --reads output)",
     )
     run.add_argument(
+        "--baseline",
+        choices=mf.BASELINES,
+        help="the paper's T3: 'linear', E6's window without its blocks; 'continuous', every factor's state "
+        "continuous, no codes (no certificate: judged by long tests)",
+    )
+    run.add_argument(
         "--thermostat",
         action="store_true",
         help="the commitment-control workplan's usage thermostat (stage 2): each factor's commitment off below "
@@ -1858,6 +1864,7 @@ def main(argv: list[str]) -> int:
             width=args.window_width,
             branches=args.branches,
             answer_branch=args.answer_branch,
+            baseline=args.baseline,
             thermostat=thermostat,
             keep_machine=args.keep_machine,
             counterexamples=args.counterexamples,

@@ -174,17 +174,23 @@ def _output(task: wt.Task) -> list[LayerSpec]:
 
 
 def linear_window_specs(task: wt.Task) -> list[LayerSpec]:
+    """E6's baseline for a task (linear_window)."""
+    return linear_window(task.machine.tokens, task.machine.classes)
+
+
+def linear_window(tokens: int, classes: int, width: int = D) -> list[LayerSpec]:
     """
     E6's baseline (the claims workplan, D21): no blocks, the state added to the embedded tokens and
     one linear residual (a StateInput stands before a residual block), then the output layer; no
     nonlinearity but the LayerNorms, so the recurrence does the step's work.
     """
     return [
-        Embedding(task.machine.tokens, D),
+        Embedding(tokens, width),
         Position(),
         StateInput(),
-        Residual((LayerNorm(), Dense(D, activation="linear", bias=True))),
-        *_output(task),
+        Residual((LayerNorm(), Dense(width, activation="linear", bias=True))),
+        LayerNorm(),
+        Dense(classes, output=True, activation="softmax", loss="cross_entropy"),
     ]
 
 

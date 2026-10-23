@@ -1423,7 +1423,10 @@ def test_an_answer_branch_run_records_it_and_every_factor_reads_the_state_branch
 def test_tuning_a_branched_readout_trains_the_answers_branch_alone(tmp_path: Path, window: str):
     encoding = mf.Encoding(5, mf.FAMILY)
     path = tmp_path / "network.json"
-    mf.network(encoding, [(4, 4), (4, 4)], 0, "output", **{window: True}).save(str(path))
+    branched = mf.network(
+        encoding, [(4, 4), (4, 4)], 0, "output", branches=window == "branches", answer_branch=window == "answer_branch"
+    )
+    branched.save(str(path))
     mf.tune_readout(path, encoding, "modular-division-5", 2, tmp_path / "tuned", 1, mf.Settings(epoch_examples=64))
     before, after = mf.load_network(str(path)), mf.load_network(str(tmp_path / "tuned" / "network.json"))
 
@@ -2257,3 +2260,48 @@ def test_a_run_keeping_its_machine_and_training_on_counterexamples_logs_them(tmp
         mf.run(encoding, [(4, 4)], 0, 60, tmp_path / "x", settings, cap=3, keep_machine=True, restore_best=True)
     with pytest.raises(AssertionError, match="a share"):
         mf.run(encoding, [(4, 4)], 0, 60, tmp_path / "y", settings, cap=3, counterexamples=1.5)
+
+
+def test_t3s_baselines_build_e6s_window_and_e2s_continuous_state():
+    encoding = mf.Encoding(5, mf.FAMILY)
+    linear = mf.network(encoding, [(4, 4), (4, 4)], 0, mf.OUTPUT, baseline=mf.LINEAR)
+    names = [type(layer).__name__ for layer in linear.layers]
+    assert "AttentionArrayLayer" not in " ".join(names) and linear.recurrence.snapped
+    continuous = mf.network(encoding, [(4, 4), (4, 4)], 0, mf.OUTPUT, baseline=mf.CONTINUOUS_STATE)
+    assert not continuous.recurrence.snapped
+    assert all(f.codes is None for f in continuous.recurrence.factors)
+    with pytest.raises(AssertionError):
+        mf.network(encoding, [(4, 4)], 0, mf.OUTPUT, branches=True, baseline=mf.LINEAR)
+
+
+def test_a_continuous_state_trains_unjudged_by_a_certificate_and_refuses_a_state_bound(tmp_path: Path):
+    settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
+    encoding = mf.Encoding(5, mf.FAMILY)
+    mf.run(
+        encoding,
+        [(4, 4), (4, 4)],
+        0,
+        1e9,
+        tmp_path / "run",
+        settings,
+        cap=3,
+        reads=mf.OUTPUT,
+        budget_epochs=2,
+        baseline=mf.CONTINUOUS_STATE,
+    )
+    rows = [json.loads(line) for line in (tmp_path / "run" / "log.jsonl").read_text().splitlines()]
+    ends = [r for r in rows if "end" in r]
+    assert ends and all(r["certified"] is False and "minimised" not in r and "long" in r for r in ends)
+    assert not list((tmp_path / "run").glob("certified-step-*"))
+    with pytest.raises(AssertionError):
+        mf.run(
+            encoding,
+            [(4, 4)],
+            0,
+            1e9,
+            tmp_path / "bounded",
+            settings,
+            budget_epochs=2,
+            state_bound=25,
+            baseline=mf.CONTINUOUS_STATE,
+        )
