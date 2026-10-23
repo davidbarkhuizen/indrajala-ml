@@ -541,6 +541,9 @@ class Outcome:
     unrecovered: int  # of them, never back to DROP_FROM
 
 
+CENSORED = ("spent", "deadline")  # a run's ends at a budget: what it would have done next is unknown
+
+
 def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
     """
     A run's Outcome: certified at the first step's end that certified (the run stops there). A step
@@ -549,9 +552,7 @@ def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
     """
     ends = [row for row in rows if "end" in row]
     last = next((row for row in ends if row.get("certified")), ends[-1] if ends else rows[-1])
-    epochs = sum(
-        int(row["epochs"]) - (row["end"] in ("spent", "deadline")) for row in ends if row["step"] <= last["step"]
-    )
+    epochs = sum(int(row["epochs"]) - (row["end"] in CENSORED) for row in ends if row["step"] <= last["step"])
     end = "certified" if last.get("certified") else str(last.get("end", "running"))
     diagnoses = [row for row in rows if "accuracy" in row and row["step"] <= last["step"]]
     best = max(diagnoses, key=_worst, default=last)
@@ -823,26 +824,34 @@ def formation_summary(course: Mapping[str, Any] | None) -> str:
     )
 
 
-def restart_course(rows: Sequence[Mapping[str, Any]], clock: str = "steps") -> tuple[float | None, float, bool] | None:
+def restart_course(rows: Sequence[Mapping[str, Any]], clock: str = "epochs") -> tuple[float | None, float, bool] | None:
     """
-    A run as a restart attempt, on `clock` ("steps" or "seconds"), from its log.jsonl: its time to
-    success (D41's: the first step's end certified at both verdicts, the default and the strict; None if
-    never), its last step's end, and whether it was censored there (ended "spent", its budget: what it
-    would have done next is unknown) rather than finished (a stop that fired on a machine not certified
-    is a failed attempt of known cost). None for a log without step ends.
+    A run as a restart attempt, on `clock` ("epochs" trained in all, the budget's unit and the time
+    axis, the owner 2026-10-23; "steps"; or "seconds", money not time), from its log.jsonl: its time
+    to success (D41's: the first step's end certified at both verdicts, the default and the strict;
+    None if never), its last step's end, and whether it was censored there (ended at a budget,
+    "spent", or the wall-clock guard's "deadline": what it would have done next is unknown) rather
+    than finished (a stop that fired on a machine not certified is a failed attempt of known cost).
+    None for a log without step ends.
     """
     steps = [r for r in rows if "end" in r and "state_share" in r]
     if not steps:
         return None
+    trained: dict[int, int] = {}  # each step end's epochs trained in all, counted as outcome counts them
+    total = 0
+    for r in rows:
+        if "end" in r:
+            total += int(r.get("epochs", 0)) - (r["end"] in CENSORED)
+            trained[id(r)] = total
 
     def at(r: Mapping[str, Any]) -> float:
-        return float(r["step"] if clock == "steps" else r["seconds"])
+        return float(trained[id(r)] if clock == "epochs" else r["step"] if clock == "steps" else r["seconds"])
 
     hit = next(
         (r for r in steps if r.get("certified") and r.get("certificates", {}).get("strict", {}).get("certified")),
         None,
     )
-    return (None if hit is None else at(hit)), at(steps[-1]), hit is None and steps[-1]["end"] == "spent"
+    return (None if hit is None else at(hit)), at(steps[-1]), hit is None and steps[-1]["end"] in CENSORED
 
 
 def restart_cost(runs: Sequence[tuple[float | None, float, bool]]) -> dict[str, Any]:
@@ -2539,7 +2548,7 @@ def _run_identity(
     encoding: Target,
     factors: Sequence[tuple[int, int]],
     seed: int,
-    budget_seconds: float,
+    budget_seconds: float | None,
     settings: Settings,
     cap: int,
     reads: str,
@@ -2632,7 +2641,7 @@ class RunConfig:
     encoding: Target
     factors: Sequence[tuple[int, int]]
     seed: int
-    budget_seconds: float
+    budget_seconds: float | None
     out: Path
     settings: Settings
     cap: int
@@ -3081,7 +3090,7 @@ class _Run:
         s.score = -1.0  # the last epoch's screen (WarmUp's end reads it with the step's best)
         epoch = resumed = self.begin_step(p)
         for epoch in range(resumed + 1, c.settings.max_epochs + 1):
-            if time.perf_counter() - self.start > c.budget_seconds:
+            if c.budget_seconds is not None and time.perf_counter() - self.start > c.budget_seconds:
                 stop = "deadline"
                 break
             if c.budget_epochs is not None and s.spent >= c.budget_epochs:
@@ -3468,7 +3477,7 @@ def run(
     encoding: Target,
     factors: Sequence[tuple[int, int]],
     seed: int,
-    budget_seconds: float,
+    budget_seconds: float | None,
     out: Path,
     settings: Settings = PROBE,
     cap: int | None = None,
@@ -3499,9 +3508,10 @@ def run(
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
-    network could pass it; a step named by its longest length) until the budget (wall-clock seconds
-    and, if given, epochs trained in all, whichever is spent first: the epochs don't depend on the
-    machine or its load) or the cap (by default the cell's exclusion bound), a line of JSON per diagnosis to
+    network could pass it; a step named by its longest length) until the budget (epochs trained in
+    all, `budget_epochs`, the binding budget and the run's time axis: they don't depend on the machine
+    or its load; `budget_seconds`, wall-clock, only a runaway guard, None for none; whichever is spent
+    first, a "deadline" stop censored like a "spent" one) or the cap (by default the cell's exclusion bound), a line of JSON per diagnosis to
     out/log.jsonl, the network saved at each step's end to out/network.json. With `fork`, a collapse
     within a step goes back to the step's best network and forks (Fork; a log line each). With
     `guard`, the certificate guard on the certified answer against its task's machine
@@ -3571,7 +3581,7 @@ def run(
     the run's place (Place) and its network, with its optimizer's and generator's state. With
     `resume`, a run stopped part way goes on from its checkpoint (the code-consolidation workplan's
     stage 3): its log cut back to the checkpoint's rows, an epoch begun after it trained again, so
-    every network and row but the seconds is the uninterrupted run's; the wall-clock budget counts
+    every network and row but the seconds is the uninterrupted run's; the wall-clock guard counts
     the seconds trained. A run that ended isn't trained again; one without a checkpoint starts.
     """
     config = RunConfig(

@@ -752,7 +752,7 @@ def test_a_cutoff_ends_an_uncertified_attempt_at_its_step_as_the_uncut_run_was_t
         identity["cutoff_steps"] == 5
         and "cutoff_steps" not in json.loads((tmp_path / "whole" / "checkpoint.json").read_text())["run"]
     )
-    assert mf.restart_course(cut) == (None, 5.0, False)  # a finished failure, not censored
+    assert mf.restart_course(cut, clock="steps") == (None, 5.0, False)  # a finished failure, not censored
     with pytest.raises(AssertionError, match="cutoff"):
         mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path / "x", settings, cap=2, cutoff_steps=3)
 
@@ -1869,10 +1869,26 @@ def test_restart_cost_finds_lubys_cutoff_and_reads_censored_runs_only_to_the_sho
     fast = [step(1, 5.0), step(2, 10.0, "passed", certified=True, strict=True)]
     spent = [step(1, 5.0, certified=True), step(100, 500.0, "spent")]
     false_stop = [step(1, 5.0), step(30, 150.0, "passed", certified=True)]
-    assert mf.restart_course(fast) == (2.0, 2.0, False)
+    assert mf.restart_course(fast, clock="steps") == (2.0, 2.0, False)
     assert mf.restart_course(fast, clock="seconds") == (10.0, 10.0, False)
-    assert mf.restart_course(spent) == (None, 100.0, True)
-    assert mf.restart_course(false_stop) == (None, 30.0, False)
+    assert mf.restart_course(spent, clock="steps") == (None, 100.0, True)
+    # the wall-clock guard's stop censors too (epochs are the binding budget, the owner 2026-10-23)
+    assert mf.restart_course([step(1, 5.0), step(80, 690.0, "deadline")], clock="steps") == (None, 80.0, True)
+    assert mf.restart_course(false_stop, clock="steps") == (None, 30.0, False)
+    # the default clock, epochs trained in all (the time axis): each step end's epochs summed, a
+    # budget's stop logging one epoch not trained (outcome's count); a step end without a reading
+    # (no state share) still counts its epochs
+    trained = [
+        {**step(1, 5.0), "epochs": 3},
+        {"step": 2, "end": "epoch", "epochs": 2},
+        {**step(3, 15.0, "passed", certified=True, strict=True), "epochs": 4},
+    ]
+    assert mf.restart_course(trained) == (9.0, 9.0, False)
+    assert mf.restart_course([{**step(1, 5.0), "epochs": 3}, {**step(2, 9.0, "spent"), "epochs": 5}]) == (
+        None,
+        7.0,
+        True,
+    )
     assert mf.restart_course([{"step": 1, "melting": []}]) is None
     # half the runs certify at 2, the rest are spent at 100: l(2) = (0.5*2 + 0.5*2) / 0.5 = 4, against
     # (2 + 100) / 1 = 102 per certificate running each out
