@@ -1343,6 +1343,41 @@ NEAR = 0.95  # a run's worst answer at least this at some diagnosis: it came nea
 VERDICTS = (wc.SNAP_RATIO, 1.0)  # a certified network's two recertifications: the default snap ratio and strict
 
 
+@dataclass(frozen=True)
+class ArmRun:
+    """One run of a registered comparison's arm: its seed, its course (Outcome), and whether it counts
+    as certified (its saved network recertified in both verdicts), with the verdicts found."""
+
+    seed: int
+    outcome: Outcome
+    certified: bool
+    verdicts: dict[float, bool]
+
+
+def recertifications(certify: Path) -> dict[str, dict[float, bool]]:
+    """The recertifications in `certify` (*.certificate.json): each network's sha256 -> {snap ratio: certified}."""
+    verdicts: dict[str, dict[float, bool]] = {}
+    for path in sorted(certify.glob("*.certificate.json")):
+        result = json.loads(path.read_text())
+        verdicts.setdefault(result["sha256"], {})[result["snap_ratio"]] = bool(result["certified"])
+    return verdicts
+
+
+def arm_runs(root: Path, arm: str, verdicts: Mapping[str, Mapping[float, bool]]) -> list[ArmRun]:
+    """An arm's runs, root/<arm>/seed<s>/log.jsonl in seed order, each certified only when its saved network
+    (matched by sha256) is recertified in both verdicts (VERDICTS)."""
+    runs: list[ArmRun] = []
+    for log in sorted((root / arm).glob("seed*/log.jsonl"), key=lambda p: int(p.parent.name.removeprefix("seed"))):
+        run = outcome([json.loads(line) for line in log.read_text().splitlines()])
+        found: dict[float, bool] = {}
+        if run.end == "certified":
+            network = log.parent / f"certified-step-{run.step}.network.json"
+            found = dict(verdicts.get(hashlib.sha256(network.read_bytes()).hexdigest(), {}))
+        certified = run.end == "certified" and all(found.get(ratio) for ratio in VERDICTS)
+        runs.append(ArmRun(int(log.parent.name.removeprefix("seed")), run, certified, found))
+    return runs
+
+
 def readout(
     root: Path, arms: Sequence[str], certify: Path, pairs: Sequence[tuple[str, str]] | None = None
 ) -> list[str]:
@@ -1356,32 +1391,27 @@ def readout(
     Each run's course too (Outcome), and how many of an arm's failures came near a solution (NEAR):
     a failure near one lost it, one never near never found it.
     """
-    verdicts: dict[str, dict[float, bool]] = {}
-    for path in sorted(certify.glob("*.certificate.json")):
-        result = json.loads(path.read_text())
-        verdicts.setdefault(result["sha256"], {})[result["snap_ratio"]] = bool(result["certified"])
+    verdicts = recertifications(certify)
     lines: list[str] = []
     counts: dict[str, tuple[int, int]] = {}
     for arm in arms:
-        seeds = sorted((root / arm).glob("seed*/log.jsonl"), key=lambda p: int(p.parent.name.removeprefix("seed")))
+        seeds = arm_runs(root, arm, verdicts)
         certified, near, collapsed, drops, unrecovered, dropped = 0, 0, 0, 0, 0, 0
         lines.append(f"== {arm}")
-        for log in seeds:
-            run = outcome([json.loads(line) for line in log.read_text().splitlines()])
+        for entry in seeds:
+            run = entry.outcome
             note = ""
             if run.end == "certified":
-                network = log.parent / f"certified-step-{run.step}.network.json"
-                found = verdicts.get(hashlib.sha256(network.read_bytes()).hexdigest(), {})
-                if all(found.get(ratio) for ratio in VERDICTS):
+                if entry.certified:
                     certified += 1
                 else:
-                    note = f"  NOT RECERTIFIED (verdicts found: {found})"
+                    note = f"  NOT RECERTIFIED (verdicts found: {entry.verdicts})"
             if run.end != "certified":
                 near += run.peak >= NEAR
                 collapsed += run.collapses > 0
             drops, unrecovered, dropped = drops + run.drops, unrecovered + run.unrecovered, dropped + (run.drops > 0)
             lines.append(
-                f"{log.parent.name}: {run.end} at step {run.step}, {run.epochs} epochs, {run.minutes} min; "
+                f"seed{entry.seed}: {run.end} at step {run.step}, {run.epochs} epochs, {run.minutes} min; "
                 f"worst answer at best {run.peak:.3f} (step {run.peak_step}), collapses {run.collapses}, "
                 f"large drops {run.drops} ({run.unrecovered} unrecovered){note}"
             )
