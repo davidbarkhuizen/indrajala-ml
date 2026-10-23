@@ -170,10 +170,7 @@ def test_a_hosts_window_reads_its_hours_left_and_is_none_outside_them():
         b.window_left(b.HOSTS["stone"], datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)) is None
     )  # the owner's day
     assert b.window_left(b.HOSTS["stone"], datetime.datetime(2026, 10, 24, 10, 0, tzinfo=SAST)) == 14 * 3600  # Saturday
-    assert (
-        b.window_left(b.HOSTS["jebel"], datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)) == 6 * 3600
-    )  # by day (solar)
-    assert b.window_left(b.HOSTS["jebel"], thursday_night) is None
+    assert b.window_left(b.HOSTS["jebel"], thursday_night) is not None  # on grid power: around the clock
     assert b.window_left(b.HOSTS["klip"], thursday_night) == float("inf")
 
 

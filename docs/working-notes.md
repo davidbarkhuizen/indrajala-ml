@@ -195,6 +195,18 @@ where you meet a new trap; delete one that no longer holds.
   same path overwrites the first. Name them `certify/<task>-seed<s>-certified-step-<n>[.strict].certificate.json`
   (the strict verdict with `--snap-ratio 1.05`), with `certify.log` beside them.
 
+### The batch runner (`scripts/batch.py`, `indrajala_ml/batch.py`)
+
+- **The ledger's commit must be the full sha:** workers report theirs in full and the controller
+  compares exactly, so a short `--commit` refused every worker (2026-10-23, T1's first start; nothing
+  ran). `register` now expands it.
+- **Stop a fleet by its process group** (`kill -- -PGID`; it runs under `setsid`): killing the fleet's
+  pid alone leaves its `ssh -R` tunnels holding the remote port, and the next fleet's tunnels fail with
+  "remote port forwarding failed" (harmless while the old ones forward to the same port, but they
+  outlive it).
+- **A host given outside its hours:** `controller --open HOST` (the owner's grant, logged in the
+  ledger as `opened`); the host table is unchanged.
+
 ## Studies: reading them
 
 - **Test window networks at full catalogue sizes:** reduced samples passed lengths the full sizes
