@@ -1540,6 +1540,12 @@ def main(argv: list[str]) -> int:
     readout.add_argument("--arms", nargs="+", default=["family", "quotient"], help="the first is tested as better")
     readout.add_argument("--certify", type=Path, help="the recertifications (default: root/certify)")
     readout.add_argument(
+        "--long-tests",
+        type=Path,
+        help="long-test's outputs (<run>/<network>.long-test.json): count a run only certified and long-tested "
+        "(a run without codes: its last network long-tested)",
+    )
+    readout.add_argument(
         "--pairs",
         nargs="+",
         metavar="BETTER:OTHER",
@@ -1583,7 +1589,7 @@ def main(argv: list[str]) -> int:
     if args.command == "readout":
         pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
         arms = list(dict.fromkeys(arm for pair in pairs for arm in pair)) if pairs else args.arms
-        print("\n".join(mf.readout(args.root, arms, args.certify or args.root / "certify", pairs)))
+        print("\n".join(mf.readout(args.root, arms, args.certify or args.root / "certify", pairs, args.long_tests)))
         return 0
     if args.command == "long-summary":
         print("\n".join(mf.long_summary(args.root)))

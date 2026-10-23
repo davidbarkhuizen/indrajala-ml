@@ -294,6 +294,48 @@ def test_readout_counts_a_run_only_when_recertified_in_both_verdicts(tmp_path: P
     ]
 
 
+def test_readout_with_long_tests_counts_a_certified_run_only_long_tested_and_a_codeless_run_by_its_last_network(
+    tmp_path: Path,
+):
+    def run(arm: str, seed: int, network: bytes, certified: bool) -> None:
+        out = tmp_path / arm / f"seed{seed}"
+        out.mkdir(parents=True)
+        end: dict[str, Any] = {"step": 4, "end": "passed" if certified else "spent", "epochs": 7, "seconds": 60.0}
+        end |= {"certified": certified, "accuracy": {"sum": 1.0 if certified else 0.3}}
+        if arm == "family":
+            end["factors"] = [{"codes": 9}]
+        rows = [{**end, "end": "passed", "step": 3, "certified": False}, end]  # a codeless log: no collapse read
+        (out / "log.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
+        (out / ("certified-step-4.network.json" if certified else "network.json")).write_bytes(network)
+        sha = hashlib.sha256(network).hexdigest()
+        for ratio in mf.VERDICTS if certified else ():
+            result = {"sha256": sha, "snap_ratio": ratio, "certified": True}
+            (tmp_path / "certify" / f"{arm}-{seed}-{ratio}.certificate.json").write_text(json.dumps(result))
+
+    def long_test(name: str, network: bytes, wrong: int) -> None:
+        result = {"cases": 10, "passed": 10 - wrong}
+        long = {"sha256": hashlib.sha256(network).hexdigest(), "lengths": {"128": {"properties": {"U1": result}}}}
+        (tmp_path / "long" / name).mkdir(parents=True)
+        (tmp_path / "long" / name / "net.long-test.json").write_text(json.dumps(long))
+
+    (tmp_path / "certify").mkdir()
+    for seed, network in enumerate([b"pass", b"fail", b"untested"]):
+        run("family", seed, network, certified=True)
+    run("continuous", 0, b"last-pass", certified=False)
+    run("continuous", 1, b"last-fail", certified=False)
+    for name, network, wrong in [("a", b"pass", 0), ("b", b"fail", 2), ("c", b"last-pass", 0), ("d", b"last-fail", 1)]:
+        long_test(name, network, wrong)
+    lines = mf.readout(tmp_path, ["family", "continuous"], tmp_path / "certify", long_tests=tmp_path / "long")
+    assert lines[1].endswith("; long tests passed") and lines[2].endswith("; LONG TEST FAILED")
+    assert lines[3].endswith("; NOT LONG-TESTED")
+    assert lines[4].startswith("family: 1 of 3 succeeded")
+    assert lines[8].startswith("seed0: spent") and lines[8].endswith("; long tests passed")
+    assert lines[10].startswith("continuous: 1 of 2 succeeded")
+    assert mf.readout(tmp_path, ["family", "continuous"], tmp_path / "certify")[10].startswith(
+        "continuous: 0 of 2 certified"
+    )
+
+
 def test_each_screen_row_logs_every_answer_kinds_share_beside_the_pooled_one(tmp_path: Path):
     settings = mf.Settings(
         epoch_examples=64, max_epochs=2, diagnose_every=10, screen=4, cases=8, lengths=(2,), long=(4,)

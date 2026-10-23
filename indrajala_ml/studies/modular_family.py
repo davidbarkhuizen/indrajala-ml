@@ -602,7 +602,8 @@ def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
     end = "certified" if last.get("certified") else str(last.get("end", "running"))
     diagnoses = [row for row in rows if "accuracy" in row and row["step"] <= last["step"]]
     best = max(diagnoses, key=_worst, default=last)
-    collapses = sum(_collapsed(_codes(before), _codes(row), drop) for before, row in itertools.pairwise(diagnoses))
+    coded = [row for row in diagnoses if "factors" in row]  # a continuous state logs no codes
+    collapses = sum(_collapsed(_codes(before), _codes(row), drop) for before, row in itertools.pairwise(coded))
     falls = large_drops(diagnoses)
     return Outcome(
         int(last["step"]),
@@ -1392,12 +1393,21 @@ VERDICTS = (wc.SNAP_RATIO, 1.0)  # a certified network's two recertifications: t
 @dataclass(frozen=True)
 class ArmRun:
     """One run of a registered comparison's arm: its seed, its course (Outcome), and whether it counts
-    as certified (its saved network recertified in both verdicts), with the verdicts found."""
+    as certified (its saved network recertified in both verdicts), with the verdicts found; and, when
+    long tests are read, whether its network passed every case (None: no long test found). A run
+    with no codes (a continuous state) has no certificate: its network at its budget's end is long-tested."""
 
     seed: int
     outcome: Outcome
     certified: bool
     verdicts: dict[float, bool]
+    coded: bool = True
+    long: bool | None = None
+
+    @property
+    def succeeded(self) -> bool:
+        """With long tests read: certified (coded) and long-tested, or long-tested alone (no codes)."""
+        return (self.certified or not self.coded) and self.long is True
 
 
 def recertifications(certify: Path) -> dict[str, dict[float, bool]]:
@@ -1409,23 +1419,48 @@ def recertifications(certify: Path) -> dict[str, dict[float, bool]]:
     return verdicts
 
 
-def arm_runs(root: Path, arm: str, verdicts: Mapping[str, Mapping[float, bool]]) -> list[ArmRun]:
+def long_tested(long_tests: Path) -> dict[str, bool]:
+    """The long tests under `long_tests` (*/*.long-test.json): each network's sha256 -> every case passed."""
+    passed: dict[str, bool] = {}
+    for path in sorted(long_tests.glob("*/*.long-test.json")):
+        long = json.loads(path.read_text())
+        passed[long["sha256"]] = not wr.long_test_failures(long)[1]
+    return passed
+
+
+def arm_runs(
+    root: Path,
+    arm: str,
+    verdicts: Mapping[str, Mapping[float, bool]],
+    long: Mapping[str, bool] | None = None,
+) -> list[ArmRun]:
     """An arm's runs, root/<arm>/seed<s>/log.jsonl in seed order, each certified only when its saved network
-    (matched by sha256) is recertified in both verdicts (VERDICTS)."""
+    (matched by sha256) is recertified in both verdicts (VERDICTS); with `long` (long_tested), each
+    certified network's long test, or a run without codes its network.json's (its budget's end)."""
     runs: list[ArmRun] = []
     for log in sorted((root / arm).glob("seed*/log.jsonl"), key=lambda p: int(p.parent.name.removeprefix("seed"))):
-        run = outcome([json.loads(line) for line in log.read_text().splitlines()])
+        rows = [json.loads(line) for line in log.read_text().splitlines()]
+        run = outcome(rows)
+        coded = any("factors" in row for row in rows)
         found: dict[float, bool] = {}
+        tested: Path | None = None if coded else log.parent / "network.json"
         if run.end == "certified":
-            network = log.parent / f"certified-step-{run.step}.network.json"
-            found = dict(verdicts.get(hashlib.sha256(network.read_bytes()).hexdigest(), {}))
+            tested = log.parent / f"certified-step-{run.step}.network.json"
+            found = dict(verdicts.get(hashlib.sha256(tested.read_bytes()).hexdigest(), {}))
         certified = run.end == "certified" and all(found.get(ratio) for ratio in VERDICTS)
-        runs.append(ArmRun(int(log.parent.name.removeprefix("seed")), run, certified, found))
+        passed = None
+        if long is not None and tested is not None and tested.exists():
+            passed = long.get(hashlib.sha256(tested.read_bytes()).hexdigest())
+        runs.append(ArmRun(int(log.parent.name.removeprefix("seed")), run, certified, found, coded, passed))
     return runs
 
 
 def readout(
-    root: Path, arms: Sequence[str], certify: Path, pairs: Sequence[tuple[str, str]] | None = None
+    root: Path,
+    arms: Sequence[str],
+    certify: Path,
+    pairs: Sequence[tuple[str, str]] | None = None,
+    long_tests: Path | None = None,
 ) -> list[str]:
     """
     A registered comparison's readout (the division workplan's stage 5): each run in root/<arm>/seed<s>
@@ -1435,23 +1470,30 @@ def readout(
     certifies more often than the second (by default the first two arms of two), and with more than
     one pair each p Holm-adjusted over the pairs (the approximation claim's D5).
     Each run's course too (Outcome), and how many of an arm's failures came near a solution (NEAR):
-    a failure near one lost it, one never near never found it.
+    a failure near one lost it, one never near never found it. With `long_tests` (long-test's outputs,
+    <run>/<network>.long-test.json), a run counts only when it succeeded (ArmRun.succeeded: certified
+    and every long-test case passed; a run with no codes, its last network passing every case), and
+    a certified network not yet long-tested is marked.
     """
     verdicts = recertifications(certify)
+    long = long_tested(long_tests) if long_tests is not None else None
+    counted = "certified" if long is None else "succeeded"
     lines: list[str] = []
     counts: dict[str, tuple[int, int]] = {}
     for arm in arms:
-        seeds = arm_runs(root, arm, verdicts)
+        seeds = arm_runs(root, arm, verdicts, long)
         certified, near, collapsed, drops, unrecovered, dropped = 0, 0, 0, 0, 0, 0
         lines.append(f"== {arm}")
         for entry in seeds:
             run = entry.outcome
             note = ""
-            if run.end == "certified":
-                if entry.certified:
-                    certified += 1
-                else:
-                    note = f"  NOT RECERTIFIED (verdicts found: {entry.verdicts})"
+            if run.end == "certified" and not entry.certified:
+                note = f"  NOT RECERTIFIED (verdicts found: {entry.verdicts})"
+            if long is not None and (entry.certified or not entry.coded):
+                note += {True: "; long tests passed", False: "; LONG TEST FAILED", None: "; NOT LONG-TESTED"}[
+                    entry.long
+                ]
+            certified += entry.certified if long is None else entry.succeeded
             if run.end != "certified":
                 near += run.peak >= NEAR
                 collapsed += run.collapses > 0
@@ -1462,7 +1504,7 @@ def readout(
                 f"large drops {run.drops} ({run.unrecovered} unrecovered){note}"
             )
         low, high = inference.wilson(certified, len(seeds))
-        lines.append(f"{arm}: {certified} of {len(seeds)} certified (Wilson 95%: {low:.2f}-{high:.2f})")
+        lines.append(f"{arm}: {certified} of {len(seeds)} {counted} (Wilson 95%: {low:.2f}-{high:.2f})")
         failures = len(seeds) - certified
         lines.append(
             f"{arm}'s {failures} failures: {near} came near a solution (worst answer >= {NEAR}), {collapsed} collapsed"
