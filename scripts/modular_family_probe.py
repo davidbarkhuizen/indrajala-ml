@@ -92,8 +92,10 @@ lengths, an epoch at a time, until its certificate passes or `--epochs` are spen
 (DIR/log.jsonl; DIR/certified.network.json if it certifies).
 `--first-seed F --seeds N` runs seeds F..F+N-1, a process each, `--workers` at once (default
 all), into DIR/seed<s>/ (and its output and errors in DIR/seed<s>.log); `--runs TASK:SEED ...` runs
-those alone, in one pool (chosen seeds replayed: DIR/<task>/seed<s> for several tasks); `--budget-epochs` stops a
-run when that many epochs are trained in all (or `--budget-minutes` pass, whichever first).
+those alone, in one pool (chosen seeds replayed: DIR/<task>/seed<s> for several tasks); `--budget-epochs` (required)
+stops a run when that many epochs are trained in all, the binding budget (epochs, not wall-clock, are
+the run's time axis: the owner, 2026-10-23); `--budget-minutes` is only a runaway guard (none by
+default), its stop "deadline" read as censored.
 `--trigger-signal`, `--trigger-rule`, `--trigger-threshold` and `--trigger-floor` set the fork's
 trigger (indrajala_ml/studies/collapse.py; the default is the fork's first: pooled, below 0.6 of
 the peak, no floor). `drops LOG... [--trigger-...]` scores a trigger against runs' logs, offline
@@ -1038,8 +1040,10 @@ def main(argv: list[str]) -> int:
     run.add_argument(
         "--reads", choices=["before_state", "output"], default="before_state", help="the poolings' tokens (D10)"
     )
-    run.add_argument("--budget-minutes", type=float, default=60.0)
-    run.add_argument("--budget-epochs", type=int, help="epochs trained in all, whichever budget is spent first")
+    run.add_argument(
+        "--budget-minutes", type=float, help="a wall-clock runaway guard only (default none; its stop is censored)"
+    )
+    run.add_argument("--budget-epochs", type=int, required=True, help="epochs trained in all: the binding budget")
     run.add_argument("--workers", type=int, help="runs at once (default: every seed at once)")
     run.add_argument(
         "--fork", action="store_true", help="snapshot and fork on collapse (the collapse-fork workplan, retired)"
@@ -1367,7 +1371,12 @@ def main(argv: list[str]) -> int:
         "fixed cutoff, the optimal cutoff t* (D63 (e)'s window, the 2026-10-22 literature review)",
     )
     restarts.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
-    restarts.add_argument("--clock", choices=("steps", "seconds"), default="steps", help="the cost's unit")
+    restarts.add_argument(
+        "--clock",
+        choices=("epochs", "steps", "seconds"),
+        default="epochs",
+        help="the cost's unit: epochs trained (the time axis), steps, or seconds (money, not time)",
+    )
     restarts.add_argument("--curve", action="store_true", help="every cutoff's q(t) and l(t), a line each")
     order = commands.add_parser(
         "order",
@@ -1745,7 +1754,7 @@ def main(argv: list[str]) -> int:
             mf.run,
             encoding,
             factors,
-            budget_seconds=args.budget_minutes * 60,
+            budget_seconds=None if args.budget_minutes is None else args.budget_minutes * 60,
             reads=args.reads,
             budget_epochs=args.budget_epochs,
             fork=mf.Fork(trigger=_trigger(args)) if args.fork else None,

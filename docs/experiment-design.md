@@ -48,12 +48,22 @@ threshold probe), recorded with it. (The owner's rule, 2026-10-13; the claims pl
   didn't fit its training lengths; E8c's certified counters at `m` 16 reached 7-13 codes for 5
   states before minimising: learning used about twice the states), so `m` stays at about 3-5 times
   the states and `L` grows to meet the bound, rather than `m` shrinking to it.
-- **An existence test takes its cell from what worked, and a wall-clock budget** (the owner,
+- **An existence test takes its cell from what worked, and a short budget** (the owner,
   2026-10-14: "existence first, then refine"; "when this architecture works, it tends to be
   clear-cut and early"). Reuse the settings of the nearest certified networks (their codes used,
   not only their `m`); shrinking toward the minimum is the refinement after a network exists. The
-  cap stays at the bound (feasibility), and `budget_hours` stops the study at a deadline a few
-  times past the step where the evidence says it certifies (the factored-state workplan's D13).
+  cap stays at the bound (feasibility), and the budget stops the study a few times past the step
+  where the evidence says it certifies (the factored-state workplan's D13), in epochs (below).
+- **Epochs trained are the binding budget and the time axis** (the owner, 2026-10-23: "make epochs
+  the binding budget from now on - that approach is thermodynamically consistent"). An epoch is one
+  sweep over the data, the anneal's own clock, and the same computation on every machine; a wall
+  clock makes a run's outcome depend on where it ran and beside what (D63's runs on a loaded `stone`
+  reached its 690-minute deadline at steps 833-1,252, their D64 twins about 1,550). So a run's budget
+  is `--budget-epochs` (required), and a cutoff and a cost per certificate are in epochs trained
+  (`restart-cost`'s default clock; not steps: the warm-up and hold train several epochs a step, so
+  steps understate epochs early in a run by up to half, where cutoffs sit); a wall-clock limit is only a runaway guard set far above any normal run
+  (`--budget-minutes`, none by default), its stop (`deadline`) censored, never a failure. Wall-clock
+  time schedules machines (hours, windows) and prices compute, nothing more.
 - **The budget is measured before launch:** epoch time and memory from a probe run (one seed, one
   cell), then the study's estimate as a range. No study long enough to matter starts on a guess.
 

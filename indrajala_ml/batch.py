@@ -33,11 +33,13 @@ from pathlib import Path
 from typing import Any
 
 VERSION = 1
+CENSORED = ("spent", "deadline")  # modular_family.CENSORED: ends at a budget (the standard library only)
 LEDGER = "ledger.jsonl"
 POLL = 2.0  # seconds between a worker's looks at its attempts
 
 # The continuous crystallisation's cell (D54's, with the margin stop under its deadline: D59, D60),
-# as probe-d64.sh runs it; "-reheat" adds D63 (a).
+# as probe-d64.sh runs it but for its wall-clock budget (epochs bind: the owner, 2026-10-23); "-reheat"
+# adds D63 (a).
 CONTINUOUS_CELL = [
     "--factors",
     "2",
@@ -49,8 +51,6 @@ CONTINUOUS_CELL = [
     "32",
     "--budget-epochs",
     "1600",
-    "--budget-minutes",
-    "690",
     "--anneal",
     "--anneal-tail",
     "40",
@@ -821,7 +821,7 @@ def wilson(successes: int, n: int, z: float = 1.959964) -> tuple[float, float]:
 def runs_of(summaries: Sequence[dict[str, Any]]) -> list[tuple[float | None, float, bool]]:
     """Ended attempts as restart_cost's runs (success step, last step, censored at its budget)."""
     return [
-        (None if s["success"] is None else float(s["success"]), float(s["step"]), s["end"] == "spent")
+        (None if s["success"] is None else float(s["success"]), float(s["step"]), s["end"] in CENSORED)
         for s in summaries
         if s["step"] is not None
     ]

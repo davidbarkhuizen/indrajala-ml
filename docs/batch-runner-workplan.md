@@ -11,8 +11,9 @@ The method is statistical (the owner, 2026-10-22: a parallel batch, a clear majo
 the literature review of 2026-10-22 showed that its runs are Las Vegas runs: a certified run is right
 whenever it stops. So the cheapest way to a certificate is fresh-seed restarts at a fixed cutoff
 `t*` (Luby, Sinclair and Zuckerman 1993), read per backdrop from the runs themselves
-(`modular_family_probe.py restart-cost`): on the completed runs, 4.4 times cheaper per certificate
-than running each seed out on S3, 1.9 times on move-to-front-4, about 10 times on S4. The collapse's
+(`modular_family_probe.py restart-cost`): on the completed runs, 3.5 times cheaper per certificate
+than running each seed out on S3, 2.2 times on move-to-front-4, about 9 times on S4 (in epochs, the
+time axis, re-read 2026-10-23; first read in steps as 4.4, 1.9 and 10). The collapse's
 probe (D63 in [state-formation-workplan.md](state-formation-workplan.md)) decides whether the reheat
 joins the restarts; either way the method then runs as a batch of attempts cut at a cutoff, which no
 current tool does: the probe scripts run a fixed list of seeds each to its budget, on one machine.
@@ -133,13 +134,19 @@ the machines we have, each in its own hours.
    the lost attempts' re-queue; checked end to end with short S3 attempts (cut at a few steps) on all
    four, each attempt's log identical to a local run of its seed, and the daemon's own CPU and memory
    measured at rest and under load.
-5. **First use:** the method's next fresh-seed batch in measure mode, with D63's verdict deciding the
+5. **The cutoff in epochs, then first use.** Epochs trained are the time axis (the owner, 2026-10-23;
+   [experiment-design.md](experiment-design.md), section 1): the run's cutoff becomes `--cutoff-epochs`
+   (epochs trained in all at a step's end), the attempts' costs and the report's `l` in epochs. Steps
+   understate epochs early in a run (the warm-up and hold train several a step; D64's S3 43 certified at
+   step 11, epoch 23), exactly where cutoffs sit. Then the first use: the method's next fresh-seed batch in measure mode, with D63's verdict deciding the
    arm (the plain method with restarts, or the reheat with restarts), registered as its own decision
    in the state-formation workplan.
 6. **Docs and retire:** the runner in [working-notes.md](working-notes.md) (its hosts, its ledger, its
    gotchas); this plan retired, its leftovers to [next-steps.md](next-steps.md).
 
 ## Known limits
+
+- Cutoffs and costs in steps (stages 2-4) are not the time axis: epochs are (stage 5 moves them).
 
 - Restarts assume attempts independent and identically distributed: true of fresh seeds by
   construction, not of attempts on different backdrops (each backdrop has its own `t*`).

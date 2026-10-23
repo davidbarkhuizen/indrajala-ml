@@ -101,7 +101,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D61 | 2026-10-22, 08:00 | the paced coupling | the coupling paced by a trust region (`--coupling-pace`) or read from a Savitzky-Golay line (`--sharpness-smoothing`); its probe (`probe-d61.sh`), read 18:00: neither arm promising (1 of 6 rescued each) |
 | D62 | 2026-10-22, 08:00 | the run's state object | `run`'s loop-carried state one dataclass, the loop's body split into functions of it (planned) |
 | D63 | 2026-10-22, 08:15 | the collapse | reheat (the rate below the hold's level negative, the clock run back) and restarts, each arm at its own cutoff, on cost per certified machine; its probe registered 18:15 (`probe-d63.sh`) on D64's 22 seeds |
-| D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`); read 2026-10-23, 05:30: S3 and move-to-front-4 7 of 12, between its bars; 0 of 10 on the others; every failure frozen |
+| D64 | 2026-10-22, 09:00 | the fresh-seed rate | the current method (D54's cell, the margin stop under D60) on 22 fresh seeds across five backdrops (`probe-d64.sh`); read 2026-10-23, 05:30: S3 and move-to-front-4 7 of 12; re-read in epochs: 7 of 9 that ran their budget, 3 cut by the wall clock, undetermined until D67; 0 of 10 on the others; every failure frozen |
 | D65 | 2026-10-22, 10:45 | the order-biased cool | the cool's halving time times `1 + w (s - 1)`: w the machine's order from answers (0 when ordered), s the slowdown from the melting curve and relaxation; set aside at 11:05 on its stage 0 (the failures freeze, the cool does not outrun them) |
 | D66 | 2026-10-22, 11:20 | the two-phase cool | a slower re-cool after each reheat (the forward rate times `2^-k`, k reheats so far): zero for runs that never freeze; reshaped at 11:50 from an order gate that failed its stage 0 (planned, after D63's reading) |
 | D67 | 2026-10-23, 06:05 | the deadline's completion | the nine runs of D63 and D64 that the 690-minute wall-clock budget cut short of their 1,600 epochs, run again from their seeds to their epoch budget (`probe-d67.sh`); epochs the binding budget from now on |
@@ -1026,7 +1026,11 @@ owner's; D49-D54 settled under the delegation.
     steps, 182 steps per certificate against 798 running each out (24 runs); move-to-front-4 169, 157
     against 298 (11); S4 106, 318 against 3,213 (3); the successes cluster at 85-170 steps, `l` rising
     slowly past `t*` (S3: 216 at 219), so the first sizing's kill at 200 costs about 15-20% over S3's
-    estimate. (e)'s window is `t*`, no constant; the clock-held kill above is a second rule, compared on
+    estimate. **Re-read in epochs (2026-10-23; epochs are the time axis, a wall-clock deadline's stop
+    censored; D59's re-runs in place of their seeds' first runs, D59's last run included):** S3 `t*` 181
+    epochs, 236 per certificate against 836 running each out (3.5x, 24 runs); move-to-front-4 195, 206
+    against 448 (2.2x, 12 runs, one ended at the deadline); S4 124, 372 against 3,324 (8.9x, 3).
+    (e)'s window is `t*`, no constant; the clock-held kill above is a second rule, compared on
     the same runs. The comparison with (a) is `l` against `l` (the reheat changes `q` itself), on paired
     seeds: McNemar's test for the paired verdict (its paper not yet in the literature repository), the
     reheat-only certificates read apart, as above (outside Luby's model, which counts time to the first
@@ -1070,6 +1074,14 @@ owner's; D49-D54 settled under the delegation.
   `t*` adopted for the plain method in any case (D63 (e), offline); random-q16-0's existence (any
   certificate) reported; read apart: certificates only after a reheat, each reheat's depth, whether
   the re-cool froze again and where (D66's trigger), S4's codes in use and dimension around reheats.
+  **A flaw recorded mid-probe (2026-10-23, 05:30; settings unchanged):** the 690-minute wall-clock
+  budget, not the 1,600 epochs, bound its runs on `stone` under the night's load (12 at once): S4 2-5
+  and random-q16-0 4-6 reached the deadline at steps 833-1,252, their D64 twins about 1,550. Read
+  under the rule since (epochs are the binding budget and the time axis; experiment-design.md,
+  section 1): a deadline's stop censored at the epochs it reached, the arms compared per epoch, the
+  paired verdict noting each pair whose reheat run was cut shorter than its twin. Its last four runs
+  (random-q12-0 6, 7, move-to-front-4 34, 35) moved from `stone` to `pyramidon` and `klip` at their
+  checkpoints (05:25, the owner; same command, `--resume`; bit parity across machines).
 - **D64. The method's fresh-seed rate (`~/code/probe-d64.sh`, registered before its data, 2026-10-22,
   09:00; the owner: "you can run stone at a half-load today").** The method is statistical, so a
   remedy (D61's arms, D63) is adopted only on a fresh-seed rate against the current method's, which is
@@ -1978,6 +1990,8 @@ checked against `stone`'s manifest (`stone-option1-d64.sha256`) and `klip`'s (`k
 | random-q12-0 4-7 | none | 0 of 4 (0.00-0.49) | all spent |
 | random-q16-0 4-6 | none | 0 of 3 (0.00-0.56) | all spent |
 
+- **Re-read the same day with epochs as the time axis: undetermined** (three of its failures were cut
+  by the wall clock short of their epochs; the re-reading's findings below; D67 completes them).
 - **S3 and move-to-front-4 together: 7 of 12 (0.58, 0.32-0.81), between the bars:** the working
   rate's bar (at least 8) not met, "working in general" not refuted (6 or fewer). Consistent with the
   margin stop's re-runs of D55's seeds (S3 11 of 16, 0.69; move-to-front-4 7 of 8) at these sizes.
@@ -2000,10 +2014,51 @@ checked against `stone`'s manifest (`stone-option1-d64.sha256`) and `klip`'s (`k
   Move-to-front-4: `t*` 140 steps (q 0.50), `l` 278 steps against 1,128 (4.1x); 5,144 seconds against
   43,984. Minutes to each certificate: S3 1.6-47.1, move-to-front-4 40.9 and 43.5 (`stone` at half
   load by day).
+  **Re-read in epochs (2026-10-23; the owner: epochs are the time axis), the deadline's stops
+  censored** (S3 45, move-to-front-4 34, 35 ended at the 690-minute deadline, not their epoch budget):
+  S3 `l` 315 epochs per certificate at the cutoff all its certificates need (252 epochs) against
+  1,114 running each out (3.5x; `t*` 23, again on seed 43 alone); move-to-front-4 `t*` 163 epochs
+  (q 0.50), `l` 324 against 1,188 (3.7x). Steps understate epochs early in a run: the warm-up and
+  hold train several epochs a step (S3 43 certified at step 11, epoch 23), the cool about one, so a
+  whole run's ratio is 1.01-1.05 but a short cutoff's up to 2.1.
 - **So:** the method certifies about 3 in 5 runs on the ordered backdrops and none of ten on the larger
   and unstructured ones, and every failure ends in the freeze; D63's motive stands, and its paired
-  reading has its twins. Restarts at a cutoff of about 230 steps would cut the ordered backdrops' cost
-  per certificate about fourfold on these runs (D63 (e) reads it with D63's).
+  reading has its twins. Restarts at a cutoff of about 250 epochs would cut the ordered backdrops' cost
+  per certificate about 3.5-fold on these runs (in epochs, below; D63 (e) reads it with D63's).
+
+## Findings: every reading re-read with epochs as the time axis (2026-10-23)
+
+The owner, 2026-10-23: epochs, not wall-clock, are the binding budget and the time axis
+(experiment-design.md, section 1). Every run log of option 1 (`pyramidon`, `klip`, `stone`; D56's
+random-q16-0 2, 3 on `jebel` unread, both spent by their epochs) was scanned for runs a wall-clock
+deadline stopped short of their epoch budget, and every reading that used wall-clock time or steps as
+time was re-read.
+
+| probe | runs cut short (epochs reached) | re-reading |
+|---|---|---|
+| 4a (150-minute budget) | its three S3 arms (468-491 of 600) | superseded panel; its "no certificate" is at under 600 epochs |
+| D33, the adaptive cool | S3 1, 3, 5, 6 (888-924 of 1,600); move-to-front-4 3 (387) | "4 of 8, its bar met exactly" is at least 4 of 8, four censored; the verdict stands |
+| D38, the coupling at 0 | move-to-front-4 3 (153) | that run says nothing; the refutation stands on S3's 4 of 8 (its failures spent) |
+| D59, the margin stop | move-to-front-4 3 (1,212) | 10 of 11 that ran their budget, one censored; success by its rules stands |
+| D64, the fresh-seed rate | S3 45 (1,584), move-to-front-4 34 (918), 35 (1,135) | S3 and move-to-front-4 7 of 9 that ran their budget, 3 censored: **undetermined** (not "between its bars"): met at 8 of 12 if any of the three certifies, never refuted (7 already); D67 completes them |
+| D63, the collapse | S4 2-5 (892-1,091), random-q16-0 4 (1,336), 5 (1,330), 6 | its paired verdict waits on D67's completions |
+
+- **Costs in epochs** (`restart-cost`'s default since): D63 (e)'s window (above, in its entry) S3
+  3.5x, move-to-front-4 2.2x, S4 8.9x cheaper per certificate with restarts (first read in steps as
+  4.4x, 1.9x, 10x); D64's S3 3.5x, move-to-front-4 3.7x (in steps 3.9x, 4.1x). Steps understate epochs
+  early in a run (several a step in the warm-up and hold), where cutoffs sit; the batch runner's cutoff
+  moves to epochs (its workplan, stage 5).
+- **The kill at step 200** (the scaling conjecture's cost): in epochs the 10 never-formed runs read
+  here spent 85% of their 16,000 epochs after step 200 (by the clock 86% of 60 hours): unchanged.
+  Every run that formed did so by epoch 123-178 but S3 30 (epoch 871); step 200 is about epoch 215-230.
+- **Speed, in epochs to the first certificate** (the default verdict, `stone`'s copies): the seeded
+  crucible 4a''' 110-294 (median 209), the quasi-static crucible 4a'''' 27-175 (128), the adaptive cool
+  (D32, D33) 27-175, the continuous profile (D54) 27-167 (132). The continuous profile is **not faster
+  in epochs** than the quasi-static crucible; its wall-clock gain over 4a''' ("ten to fifty times", the
+  research note) was cheaper epochs (4a''' 1.76 minutes an epoch, D54 0.38, 4a'''' 0.16 on `stone`),
+  and its epochs cost about twice the quasi-static crucible's (D53's every-epoch readings, unmeasured
+  apart). Its gains are no switches, move-to-front's certificate and the rate, not speed.
+- **The freeze's lengths** (543-1,472 epochs) were read in epochs throughout: unchanged.
 
 ## A note on random machines (2026-10-20; a note, not a plan)
 

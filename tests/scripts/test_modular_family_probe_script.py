@@ -1,5 +1,6 @@
 """scripts/modular_family_probe.py's run command: which runs a pool trains, and where."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -22,3 +23,16 @@ def test_runs_trains_the_chosen_task_and_seed_pairs_alone(tmp_path: Path, monkey
 def test_runs_names_its_tasks_so_task_is_refused(tmp_path: Path):
     with pytest.raises(SystemExit):
         script.main(["run", "--runs", "word-problem-s3:1", "--task", "word-problem-s3", "--out", str(tmp_path)])
+
+
+def test_run_needs_an_epoch_budget_and_has_no_wall_clock_one_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("AB_RUNS_ROOT", str(tmp_path / "locks"))
+    # epochs are the binding budget (the owner, 2026-10-23); --budget-minutes is a runaway guard alone
+    with pytest.raises(SystemExit):
+        script.main(["run", "--runs", "word-problem-s3:1", "--factors", "1", "--out", str(tmp_path)])
+    out = tmp_path / "out"
+    assert script.main(["run", "--runs", "word-problem-s3:1", *TINY, "--out", str(out)]) == 0
+    saved = json.loads((out / "seed1" / "checkpoint.json").read_text())
+    assert saved["run"]["budget_seconds"] is None and saved["run"]["budget_epochs"] == 1
