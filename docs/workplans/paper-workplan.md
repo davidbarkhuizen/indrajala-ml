@@ -389,6 +389,20 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     than idling until T3 ends. Cons: the two tests share a ledger, split by backdrop at the reading.
   - (b) Two batches, T2 then T5. Pros: a ledger a test. Cons: a gap between them; T5's short runs
     can't fill T2's tail.
+- **D18. Where T3 runs: one batch of three cells, the longest first** (2026-10-23, before any of its
+  runs). One ledger `data/window-recurrent/paper/t3/`, measure mode, the runner taught several cells a
+  batch (each attempt names its cell; ids `<cell>.d5-family-wide-<seed>`), the arms in the order
+  `approximation-continuous` (all 400 epochs, about 2 h a run), `approximation`,
+  `approximation-linear` (about 5 times faster), on T1's hosts (`pyramidon` 3, `klip` 3, `stone` 11,
+  open all weekend: the owner) after T1. D14's registration is unchanged: the same three arms, seeds
+  and budget; only where they run.
+  - (a) *Chosen* (the owner, 2026-10-23: speeds things up in the long run). Pros: 60 attempts packed
+    on 17 slots, about 5.5 h; later tests with several arms reuse it. Cons: a runner build and PR
+    before T3 starts; the ledger's attempts change shape (an older ledger still reads).
+  - (b) Three batches, one after another. Pros: no build. Cons: 20 attempts on 17 slots leave a
+    second wave of 3 each time; about 9-10 h.
+  - (c) Three batches at once, the hosts split. Pros: no build. Cons: unbalanced (11 against 3 and 3);
+    one daemon a host, so no host serves two.
 
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 

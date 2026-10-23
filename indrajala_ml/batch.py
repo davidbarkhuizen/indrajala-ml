@@ -4,10 +4,12 @@ and its ledger, and a worker daemon on each machine that runs them, over newline
 TCP socket (D4). The standard library only, so the worker costs almost nothing at rest.
 
 A batch is a directory holding `ledger.jsonl`: its first line the batch's registration (`batch`:
-the mode, the cell, the attempts with their tasks, seeds and cutoffs), then one line per event
+the mode, the attempts with their cells, tasks, seeds and cutoffs), then one line per event
 (`assigned`, `started`, `ended`, `lost`, `done`). The controller rebuilds its state from it on start
 (D5), so it resumes after its own restart. Each attempt names a registered cell (CELLS), never a
-command line, so a worker runs nothing else.
+command line, so a worker runs nothing else; a batch may hold several cells, its attempts interleaved
+onto one fleet (an older ledger names one cell, the batch's: read as each attempt's). An attempt
+message carries its cell as it did before, so a worker at an older commit runs a newer controller's.
 
 Messages (each a JSON object on one line, with `type` and the protocol's version `v`):
 worker to controller `hello` (host, slots, the attempts it is running), `ready` (free slots),
@@ -282,9 +284,10 @@ def window_left(host: Host, now: datetime.datetime) -> float | None:
 
 @dataclass(frozen=True)
 class Attempt:
-    """One attempt: a backdrop's seed, cut at `cutoff` epochs trained (None: run to its budget)."""
+    """One attempt: a cell on a backdrop's seed, cut at `cutoff` epochs trained (None: run to its budget)."""
 
     id: str
+    cell: str
     backdrop: str
     seed: int
     cutoff: int | None = None
@@ -293,13 +296,12 @@ class Attempt:
 @dataclass(frozen=True)
 class Batch:
     """
-    A batch's registration (D3, D8): `measure` runs every attempt; `find` runs each backdrop's
+    A batch's registration (D3, D8): `measure` runs every attempt; `find` runs each cell's backdrop's
     attempts in order until `k` of them succeed (the rest never start).
     """
 
     name: str
     mode: str
-    cell: str
     attempts: tuple[Attempt, ...]
     k: int | None = None
     commit: str | None = None  # the code every worker must run (D6)
@@ -308,27 +310,38 @@ class Batch:
     def __post_init__(self) -> None:
         assert self.mode in ("measure", "find"), f"a mode: measure or find; got {self.mode}"
         assert self.mode != "find" or (self.k is not None and self.k >= 1), "find needs k >= 1"
-        assert self.cell in CELLS, f"a registered cell: one of {sorted(CELLS)}"
+        assert all(a.cell in CELLS for a in self.attempts), f"registered cells: {sorted(CELLS)}"
         assert all(a.backdrop in BACKDROPS for a in self.attempts), f"backdrops: {sorted(BACKDROPS)}"
         assert len({a.id for a in self.attempts}) == len(self.attempts), "attempts' ids unique"
+
+    @property
+    def cells(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(a.cell for a in self.attempts))
 
     def to_json(self) -> dict[str, Any]:
         return {"type": "batch", "v": VERSION, **asdict(self)}
 
     @staticmethod
     def from_json(row: dict[str, Any]) -> Batch:
-        attempts = tuple(Attempt(**a) for a in row["attempts"])
-        return Batch(row["name"], row["mode"], row["cell"], attempts, row.get("k"), row.get("commit"), row.get("crate"))
+        cell = {"cell": row["cell"]} if "cell" in row else {}  # version 1: the batch's one cell
+        attempts = tuple(Attempt(**{**cell, **a}) for a in row["attempts"])
+        return Batch(row["name"], row["mode"], attempts, row.get("k"), row.get("commit"), row.get("crate"))
 
 
-def attempts(spec: str, cutoffs: dict[str, int] | None = None) -> tuple[Attempt, ...]:
-    """Attempts from `s3:40-47,mtf4:32-35`, each backdrop cut at its `cutoffs` entry if given."""
+def attempts(spec: str, cells: Sequence[str], cutoffs: dict[str, int] | None = None) -> tuple[Attempt, ...]:
+    """
+    Attempts from `s3:40-47,mtf4:32-35` under each cell in turn (list the longest first: the fleet takes
+    them in order), each backdrop cut at its `cutoffs` entry if given. With several cells an attempt's id
+    starts with its cell's (`approximation-linear.s3-40`), so the cells' runs never share a directory.
+    """
     made: list[Attempt] = []
-    for part in spec.split(","):
-        backdrop, seeds = part.split(":")
-        first, _, last = seeds.partition("-")
-        for seed in range(int(first), int(last or first) + 1):
-            made.append(Attempt(f"{backdrop}-{seed}", backdrop, seed, (cutoffs or {}).get(backdrop)))
+    for cell in cells:
+        for part in spec.split(","):
+            backdrop, seeds = part.split(":")
+            first, _, last = seeds.partition("-")
+            for seed in range(int(first), int(last or first) + 1):
+                name = f"{backdrop}-{seed}" if len(cells) == 1 else f"{cell}.{backdrop}-{seed}"
+                made.append(Attempt(name, cell, backdrop, seed, (cutoffs or {}).get(backdrop)))
     return tuple(made)
 
 
@@ -371,19 +384,19 @@ class State:
         elif kind == "done":
             self.done = True
 
-    def succeeded(self, backdrop: str) -> int:
+    def succeeded(self, cell: str, backdrop: str) -> int:
         return sum(
             1
             for a in self.batch.attempts
-            if a.backdrop == backdrop and self.ended.get(a.id, {}).get("success") is not None
+            if (a.cell, a.backdrop) == (cell, backdrop) and self.ended.get(a.id, {}).get("success") is not None
         )
 
     def next_attempt(self) -> Attempt | None:
-        """The first attempt neither assigned nor ended, its backdrop not yet found (find mode)."""
+        """The first attempt neither assigned nor ended, its cell's backdrop not yet found (find mode)."""
         for a in self.batch.attempts:
             if a.id in self.assigned or a.id in self.ended:
                 continue
-            if self.batch.mode == "find" and self.succeeded(a.backdrop) >= (self.batch.k or 0):
+            if self.batch.mode == "find" and self.succeeded(a.cell, a.backdrop) >= (self.batch.k or 0):
                 continue
             return a
         return None
@@ -518,7 +531,7 @@ class Controller:
                 break
             self.log({"type": "assigned", "id": attempt.id, "host": host})
             self.pending[host].add(attempt.id)
-            await send(writer, {"type": "attempt", "cell": self.state.batch.cell, **asdict(attempt)})
+            await send(writer, {"type": "attempt", **asdict(attempt)})
             free -= 1
         if self.state.next_attempt() is None:
             await send(writer, {"type": "drain"})
@@ -715,8 +728,8 @@ class Worker:
                 kb = int(peak.read_text()) if peak.exists() else None
                 self.running[attempt.id] = Running(attempt, pid_file.parent, record["pid"], peak=kb)
 
-    def command(self, attempt: Attempt, cell: str) -> list[str]:
-        backdrop, chosen = BACKDROPS[attempt.backdrop], CELLS[cell]
+    def command(self, attempt: Attempt) -> list[str]:
+        backdrop, chosen = BACKDROPS[attempt.backdrop], CELLS[attempt.cell]
         cutoff = ["--cutoff-epochs", str(attempt.cutoff)] if attempt.cutoff is not None else []
         bound = ["--state-bound", str(backdrop.bound)] if chosen.bounded else []
         return [
@@ -732,7 +745,7 @@ class Worker:
             str(self.root / attempt.id),
         ]
 
-    def launch(self, attempt: Attempt, cell: str) -> Running:
+    def launch(self, attempt: Attempt) -> Running:
         directory = self.root / attempt.id
         if directory.exists():  # an earlier run's: set aside, never appended to
             lost = self.root / "lost"
@@ -748,7 +761,7 @@ class Worker:
         }
         with (directory / "run.out").open("ab") as out:  # its own session: it outlives the worker
             child = subprocess.Popen(
-                self.command(attempt, cell),
+                self.command(attempt),
                 cwd=self.code,
                 env=env,
                 stdout=out,
@@ -789,8 +802,8 @@ class Worker:
                         return False  # the controller went away: reconnect
                     message = json.loads(line)
                     if message["type"] == "attempt":
-                        fields = {k: message[k] for k in ("id", "backdrop", "seed", "cutoff")}
-                        running = self.launch(Attempt(**fields), message["cell"])
+                        fields = {k: message[k] for k in ("id", "cell", "backdrop", "seed", "cutoff")}
+                        running = self.launch(Attempt(**fields))
                         await send(writer, {"type": "started", "id": running.attempt.id, "pid": running.pid})
                     elif message["type"] == "drain":
                         self.draining = True
@@ -953,17 +966,26 @@ def alive(pid: int) -> bool:
     return True
 
 
+def groups(batch: Batch) -> dict[tuple[str, str], list[Attempt]]:
+    """A batch's attempts by cell and backdrop, the cells in their order, each one's backdrops sorted."""
+    made: dict[tuple[str, str], list[Attempt]] = {}
+    for cell in batch.cells:
+        for backdrop in sorted({a.backdrop for a in batch.attempts if a.cell == cell}):
+            made[cell, backdrop] = [a for a in batch.attempts if (a.cell, a.backdrop) == (cell, backdrop)]
+    return made
+
+
 def report(directory: Path) -> list[str]:
-    """A batch's reading: each backdrop's attempts, certificates and Wilson interval."""
+    """A batch's reading: each cell's backdrops' attempts, certificates and Wilson interval."""
     state = State.read(directory)
-    lines = [f"{state.batch.name}: {state.batch.mode}, cell {state.batch.cell}, {'done' if state.done else 'running'}"]
-    for backdrop in sorted({a.backdrop for a in state.batch.attempts}):
-        mine = [a for a in state.batch.attempts if a.backdrop == backdrop]
+    cells = state.batch.cells
+    lines = [f"{state.batch.name}: {state.batch.mode}, cell {', '.join(cells)}, {'done' if state.done else 'running'}"]
+    for (cell, backdrop), mine in groups(state.batch).items():
         ended = [state.ended[a.id] for a in mine if a.id in state.ended]
         wins = sum(1 for s in ended if s["success"] is not None)
         low, high = wilson(wins, len(ended))
         lines.append(
-            f"  {backdrop}: {len(ended)} of {len(mine)} ended, {wins} certified"
+            f"  {f'{cell} ' if len(cells) > 1 else ''}{backdrop}: {len(ended)} of {len(mine)} ended, {wins} certified"
             + (f" ({wins / len(ended):.2f}, {low:.2f}-{high:.2f})" if ended else "")
         )
     return lines

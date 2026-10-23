@@ -72,21 +72,47 @@ def run_batch(tmp_path: Path, batch: b.Batch, *workers: b.Worker) -> b.State:
 
 
 def test_attempts_read_a_seed_spec_with_each_backdrops_cutoff():
-    made = b.attempts("s3:40-42,mtf4:7", {"s3": 137})
+    made = b.attempts("s3:40-42,mtf4:7", ["continuous"], {"s3": 137})
     assert [(a.id, a.seed, a.cutoff) for a in made] == [
         ("s3-40", 40, 137),
         ("s3-41", 41, 137),
         ("s3-42", 42, 137),
         ("mtf4-7", 7, None),
     ]
-    with pytest.raises(AssertionError, match="registered cell"):
-        b.Batch("x", "measure", "nope", made)
+    with pytest.raises(AssertionError, match="registered cells"):
+        b.Batch("x", "measure", b.attempts("s3:1", ["nope"]))
     with pytest.raises(AssertionError, match="find needs k"):
-        b.Batch("x", "find", "continuous", made)
+        b.Batch("x", "find", made)
+
+
+def test_a_batch_of_several_cells_names_each_attempt_by_its_cell_and_runs_them_in_turn(tmp_path: Path):
+    made = b.attempts("s3:1-2", ["continuous", "approximation"])
+    assert [(a.id, a.cell) for a in made] == [
+        ("continuous.s3-1", "continuous"),
+        ("continuous.s3-2", "continuous"),
+        ("approximation.s3-1", "approximation"),
+        ("approximation.s3-2", "approximation"),
+    ]
+    batch = b.Batch("t", "find", made, k=1)
+    assert batch.cells == ("continuous", "approximation") and b.Batch.from_json(batch.to_json()) == batch
+    state = run_batch(tmp_path, batch, worker(tmp_path, "w", 1))  # stub: seed 2 certifies, each cell's own k
+    assert set(state.ended) == {a.id for a in made}  # seed 1 fails, so each cell runs both
+    assert b.report(tmp_path / "batch")[1:] == [
+        "  continuous s3: 2 of 2 ended, 1 certified (0.50, 0.09-0.91)",
+        "  approximation s3: 2 of 2 ended, 1 certified (0.50, 0.09-0.91)",
+    ]
+    assert "--state-bound" in worker(tmp_path, "w", 1).command(made[0])
+    assert "--state-bound" not in worker(tmp_path, "w", 1).command(made[2])
+
+
+def test_a_ledger_naming_one_cell_for_its_batch_is_read_as_each_attempts():
+    row: dict[str, Any] = {"type": "batch", "v": 1, "name": "t1", "mode": "measure", "cell": "approximation"}
+    row["attempts"] = [{"id": "d5-sum-300", "backdrop": "d5-sum", "seed": 300, "cutoff": None}]
+    assert b.Batch.from_json(row).attempts == (b.Attempt("d5-sum-300", "approximation", "d5-sum", 300),)
 
 
 def test_a_measure_batch_runs_every_attempt_across_two_workers_and_logs_each_end(tmp_path: Path):
-    batch = b.Batch("m", "measure", "continuous", b.attempts("s3:1-6"))
+    batch = b.Batch("m", "measure", b.attempts("s3:1-6", ["continuous"]))
     state = run_batch(tmp_path, batch, worker(tmp_path, "w1", 2), worker(tmp_path, "w2", 1))
     assert state.done and not state.assigned and set(state.ended) == {f"s3-{s}" for s in range(1, 7)}
     assert {i: s["success"] for i, s in state.ended.items()} == {
@@ -105,13 +131,13 @@ def test_a_measure_batch_runs_every_attempt_across_two_workers_and_logs_each_end
 
 
 def test_a_find_batch_stops_starting_attempts_once_k_have_succeeded(tmp_path: Path):
-    batch = b.Batch("f", "find", "continuous", b.attempts("s3:1-5"), k=1)
+    batch = b.Batch("f", "find", b.attempts("s3:1-5", ["continuous"]), k=1)
     state = run_batch(tmp_path, batch, worker(tmp_path, "w", 1))
     assert set(state.ended) == {"s3-1", "s3-2"} and state.ended["s3-2"]["success"] == 2  # 3-5 never start
 
 
 def test_a_cut_attempt_ends_cut_and_unsuccessful(tmp_path: Path):
-    batch = b.Batch("c", "measure", "continuous", b.attempts("s3:2,s3:4", {"s3": 3}))
+    batch = b.Batch("c", "measure", b.attempts("s3:2,s3:4", ["continuous"], {"s3": 3}))
     state = run_batch(tmp_path, batch, worker(tmp_path, "w", 2))
     assert state.ended["s3-2"]["success"] == 2 and state.ended["s3-4"] | {"peak_pss_mb": None} == {
         "success": None,
@@ -125,14 +151,14 @@ def test_a_cut_attempt_ends_cut_and_unsuccessful(tmp_path: Path):
 
 def test_the_controller_rebuilds_from_its_ledger_and_requeues_a_hosts_lost_attempt(tmp_path: Path):
     directory = tmp_path / "batch"
-    b.register(directory, b.Batch("r", "measure", "continuous", b.attempts("s3:1-3")))
+    b.register(directory, b.Batch("r", "measure", b.attempts("s3:1-3", ["continuous"])))
     controller = b.Controller(directory)
     controller.log({"type": "assigned", "id": "s3-1", "host": "h"})
     controller.log({"type": "ended", "id": "s3-1", "host": "h", "summary": b.summary(tmp_path / "none")})
     controller.log({"type": "assigned", "id": "s3-2", "host": "h"})
     rebuilt = b.Controller(directory).state  # a restarted controller
     assert set(rebuilt.ended) == {"s3-1"} and rebuilt.assigned == {"s3-2": "h"}
-    assert rebuilt.next_attempt() == b.Attempt("s3-3", "s3", 3)
+    assert rebuilt.next_attempt() == b.Attempt("s3-3", "continuous", "s3", 3)
 
     async def hello() -> None:  # h comes back without s3-2: lost, so it is queued again
         port = free_port()
@@ -144,7 +170,7 @@ def test_the_controller_rebuilds_from_its_ledger_and_requeues_a_hosts_lost_attem
         await asyncio.sleep(0.2)
         writer.close()
         serving.cancel()
-        assert again.state.next_attempt() == b.Attempt("s3-2", "s3", 2)
+        assert again.state.next_attempt() == b.Attempt("s3-2", "continuous", "s3", 2)
 
     asyncio.run(hello())
     assert '"type": "lost"' in (directory / b.LEDGER).read_text()
@@ -152,11 +178,11 @@ def test_the_controller_rebuilds_from_its_ledger_and_requeues_a_hosts_lost_attem
 
 def test_a_restarted_worker_re_adopts_its_running_attempts_from_their_pid_files(tmp_path: Path):
     first = worker(tmp_path, "w", 1, env={"STUB_SLEEP": "2"})
-    running = first.launch(b.Attempt("s3-1", "s3", 1), "continuous")
+    running = first.launch(b.Attempt("s3-1", "continuous", "s3", 1))
     assert running.pid > 0
     again = worker(tmp_path, "w", 1)  # the daemon restarted while its attempt runs
     assert list(again.running) == ["s3-1"] and again.running["s3-1"].pid == running.pid
-    assert first.command(running.attempt, "continuous")[3:5] == ["--runs", "word-problem-s3:1"]
+    assert first.command(running.attempt)[3:5] == ["--runs", "word-problem-s3:1"]
     os.killpg(running.pid, signal.SIGTERM)  # its own session
     deadline = time.monotonic() + 5
     while b.alive(running.pid) and time.monotonic() < deadline:
@@ -177,7 +203,7 @@ def test_a_hosts_window_reads_its_hours_left_and_is_none_outside_them():
 
 def test_a_worker_on_another_commit_is_refused_and_given_nothing(tmp_path: Path):
     directory = tmp_path / "batch"
-    b.register(directory, b.Batch("p", "measure", "continuous", b.attempts("s3:1-2"), commit="abc123"))
+    b.register(directory, b.Batch("p", "measure", b.attempts("s3:1-2", ["continuous"]), commit="abc123"))
     port = free_port()
 
     async def go() -> None:
@@ -195,7 +221,7 @@ def test_a_worker_on_another_commit_is_refused_and_given_nothing(tmp_path: Path)
 
 def test_a_worker_on_another_crate_is_refused_and_given_nothing(tmp_path: Path):
     directory = tmp_path / "batch"
-    b.register(directory, b.Batch("p", "measure", "continuous", b.attempts("s3:1-2"), crate="0" * 64))
+    b.register(directory, b.Batch("p", "measure", b.attempts("s3:1-2", ["continuous"]), crate="0" * 64))
     port = free_port()
 
     async def go() -> None:
@@ -214,7 +240,7 @@ def test_a_worker_on_another_crate_is_refused_and_given_nothing(tmp_path: Path):
 
 def test_a_windows_end_stops_a_hosts_attempts_and_queues_them_again(tmp_path: Path):
     directory = tmp_path / "batch"
-    b.register(directory, b.Batch("w", "measure", "continuous", b.attempts("s3:1-2")))
+    b.register(directory, b.Batch("w", "measure", b.attempts("s3:1-2", ["continuous"])))
     clock = [datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)]
     host = b.Host("w", 2, str(tmp_path), sys.executable, str(tmp_path / "w"), windows=(b.Window(b.ALL_DAYS, 12, 1),))
     port = free_port()
@@ -234,8 +260,8 @@ def test_a_windows_end_stops_a_hosts_attempts_and_queues_them_again(tmp_path: Pa
     controller = asyncio.run(go())
     ledger = (directory / b.LEDGER).read_text()
     assert ledger.count('"type": "assigned"') == 2 and ledger.count('"why": "window"') == 2
-    assert not controller.state.assigned and controller.state.next_attempt() == b.Attempt("s3-1", "s3", 1)
-    assert not controller.fits("w", b.Attempt("s3-1", "s3", 1))  # nothing given outside its hours
+    assert not controller.state.assigned and controller.state.next_attempt() == b.Attempt("s3-1", "continuous", "s3", 1)
+    assert not controller.fits("w", b.Attempt("s3-1", "continuous", "s3", 1))  # nothing given outside its hours
 
 
 def test_a_remote_attempt_is_pulled_and_checked_against_its_manifest(tmp_path: Path):
@@ -265,7 +291,7 @@ def test_the_fleets_commands_follow_each_hosts_rules():
 
 def test_a_batch_with_a_remote_host_ends_once_its_attempts_are_pulled(tmp_path: Path):
     directory = tmp_path / "batch"
-    b.register(directory, b.Batch("r", "measure", "continuous", b.attempts("s3:1-2")))
+    b.register(directory, b.Batch("r", "measure", b.attempts("s3:1-2", ["continuous"])))
     host = b.Host("w", 2, str(tmp_path), sys.executable, str(tmp_path / "w"))  # remote: its attempts pulled
     port = free_port()
 
@@ -288,8 +314,8 @@ def test_a_batch_with_a_remote_host_ends_once_its_attempts_are_pulled(tmp_path: 
 
 def test_a_division_backdrop_runs_by_p_seed_and_arm_its_log_at_the_runs_own_path(tmp_path: Path):
     w = worker(tmp_path, "w", 1)
-    attempt = b.Attempt("d5-suffix-3", "d5-suffix", 3)
-    command = w.command(attempt, "paper")
+    attempt = b.Attempt("d5-suffix-3", "paper", "d5-suffix", 3)
+    command = w.command(attempt)
     run = command[command.index("run") + 1 :]
     assert run[:6] == ["--p", "5", "--seed", "3", "--arm", "suffix"]
     assert run[6:10] == ["--vocabulary", "sum", "suffix", "token"]
@@ -297,16 +323,16 @@ def test_a_division_backdrop_runs_by_p_seed_and_arm_its_log_at_the_runs_own_path
     assert run[run.index("--factor-width") + 1] == "32" and run[run.index("--budget-epochs") + 1] == "600"
     running = b.Running(attempt, tmp_path / "w" / attempt.id, 0)
     assert w.log_of(running) == running.directory / "log.jsonl"
-    machine = b.Running(b.Attempt("s3-1", "s3", 1), tmp_path / "w" / "s3-1", 0)
+    machine = b.Running(b.Attempt("s3-1", "continuous", "s3", 1), tmp_path / "w" / "s3-1", 0)
     assert w.log_of(machine) == machine.directory / "seed1" / "log.jsonl"
-    bounded = w.command(machine.attempt, "continuous")
+    bounded = w.command(machine.attempt)
     assert bounded[bounded.index("--state-bound") + 1] == "6"
     assert b.BACKDROPS["d13-family"].args(0)[:2] == ["--p", "13"] and b.BACKDROPS["d13-family"].bound == 169
     assert "--vocabulary" not in b.BACKDROPS["d11-quotient"].args(0)  # T2's: the default vocabulary
 
 
 def test_t1s_cell_is_the_approximation_claims():
-    command = worker(Path("/tmp"), "w", 1).command(b.Attempt("d5-sum-0", "d5-sum", 0), "approximation")
+    command = worker(Path("/tmp"), "w", 1).command(b.Attempt("d5-sum-0", "approximation", "d5-sum", 0))
     assert command[command.index("--budget-epochs") + 1] == "400"
     assert not {"--fork", "--codes-ratio", "--window-width", "--state-bound"} & set(command)
 
@@ -330,9 +356,9 @@ def test_a_paper_cells_run_succeeds_at_its_first_certificate_and_a_continuous_on
 
 def test_t3s_cells_change_only_the_window_or_the_state():
     w = worker(Path("/tmp"), "w", 1)
-    base = w.command(b.Attempt("d5-family-wide-0", "d5-family-wide", 0), "approximation")
+    base = w.command(b.Attempt("d5-family-wide-0", "approximation", "d5-family-wide", 0))
     for cell, baseline in (("approximation-linear", "linear"), ("approximation-continuous", "continuous")):
-        command = w.command(b.Attempt("d5-family-wide-0", "d5-family-wide", 0), cell)
+        command = w.command(b.Attempt("d5-family-wide-0", cell, "d5-family-wide", 0))
         assert [a for a in command if a not in ("--baseline", baseline)] == base
     assert base[base.index("--vocabulary") + 1 : base.index("--vocabulary") + 4] == ["sum", "difference", "product"]
 
