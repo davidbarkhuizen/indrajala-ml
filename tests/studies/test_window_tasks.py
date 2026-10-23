@@ -185,3 +185,25 @@ def test_order_labels_name_move_to_fronts_and_the_word_problems_congruences():
     assert np.bincount(named["places {0}"]).tolist() == [2, 2, 2]  # S3 acting on 3 points
     assert np.bincount(named["parity"]).tolist() == [3, 3]  # A3's cosets
     assert wt.order_labels(wt.modular_machine(5).coordinates) == {}
+
+
+@pytest.mark.parametrize("p", [5, 7])
+def test_linear_labels_are_all_of_divisions_congruences(p: int):
+    machine = wt.modular_machine(p)
+    named = wt.linear_labels(machine.coordinates)
+    assert len(named) == p + 1 and {"A", "B", "A + B", "A - B", "A + 2B"} <= set(named)
+    assert all(machine.is_congruence(v) and sorted(np.bincount(v).tolist()) == [p] * p for v in named.values())
+    assert wt.named_labels(machine.coordinates).keys() == named.keys()
+
+    # the finest congruence joining two states is the line through their difference, so every one is a join of these
+    def blocks(labels: np.ndarray) -> tuple[int, ...]:
+        first: dict[int, int] = {}
+        return tuple(first.setdefault(int(x), len(first)) for x in labels)
+
+    lines = {blocks(v) for v in named.values()}
+    for r in range(1, p * p):
+        assert blocks(machine.congruence_closure([0 if s in (0, r) else s for s in range(p * p)])) in lines
+    assert (
+        wt.named_labels(wt.task_named("move-to-front-4").machine.coordinates).keys()
+        == wt.order_labels(wt.task_named("move-to-front-4").machine.coordinates).keys()
+    )

@@ -111,8 +111,12 @@ code and from right ones (a code right when `--d` tokens of outputs agree, defau
 distinguishing length plus one), by depth. A line a network, its JSON into `--out`.
 `approximations NETWORK... --task T` reads what each factor's code determines of the task's machine
 exactly (machine_reading.approximations): the finest approximation (a congruence's quotient) it
-determines, the named congruences that refines (an ordering machine's, window_tasks.order_labels),
-whether the factor's code is a machine of its own, and whether the factors together cover the target.
+determines, the named congruences that refines (an ordering machine's, or division's lines `A + kB`:
+window_tasks.named_labels), whether the factor's code is a machine of its own, and whether the
+factors together cover the target. The readings take `--arm` and `--vocabulary` as the run had them.
+`answers-proof LOG... --task T` is the paper's T6 (paper-workplan.md): at each `--slack` bound, the
+answers-only stop from a run's log, then Chow's test set on the stop's saved step network under the
+same bound ("out of reach" past `--limit` words), a line a bound and its JSON into `--out`.
 `trace` prints runs' logs a line per diagnosis (each factor's codes in use, the state's share, each
 answer's accuracy), marking a collapse: the codes in use below half the diagnosis before.
 `long-test` runs the long tests (the division workplan, D4: U1 and S1 at 128, 256 and 1,024
@@ -1348,6 +1352,25 @@ def main(argv: list[str]) -> int:
         action="store_true",
         help="each step's snapped answers as its row logged them (answers_stop, D53: every epoch of a continuous run)",
     )
+    proof = commands.add_parser(
+        "answers-proof",
+        help="runs' logs: the answers-only stop under each bound, then Chow's test set on the stop's saved network",
+    )
+    proof.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl, its step networks beside it")
+    proof.add_argument("--task", required=True, help="modular-division-p (the quotient) or a machine's")
+    proof.add_argument("--arm", choices=sorted(ARMS), default="family")
+    proof.add_argument(
+        "--vocabulary",
+        nargs="+",
+        choices=list(mf.OPERATIONS),
+        default=list(mf.VOCABULARY),
+        help="the operations with a token (the approximation claim's: sum difference product)",
+    )
+    proof.add_argument("--slack", type=float, nargs="+", default=[1.0, 1.1], help="each bound: the states times this")
+    proof.add_argument(
+        "--limit", type=int, default=10_000_000, help="the most test words to query; above, out of reach"
+    )
+    proof.add_argument("--out", type=Path, help="a directory for each run's <run>.answers-proof.json")
     capacity = commands.add_parser(
         "heat-capacity", help="profiled runs' logs (D32), a line per run: each factor's splits and capacity peak"
     )
@@ -1439,6 +1462,13 @@ def main(argv: list[str]) -> int:
         reading.add_argument("networks", type=Path, nargs="+")
         reading.add_argument("--task", required=True, help="modular-division-p (the quotient) or a machine's")
         reading.add_argument("--arm", choices=sorted(ARMS), default="family")
+        reading.add_argument(
+            "--vocabulary",
+            nargs="+",
+            choices=list(mf.OPERATIONS),
+            default=list(mf.VOCABULARY),
+            help="the operations with a token (the approximation claim's: sum difference product)",
+        )
         reading.add_argument("--d", type=int, help="a right code's word length (default the task's distinguishing + 1)")
         reading.add_argument("--out", type=Path, help="a directory for each network's <network>.<command>.json")
         if name == "by-length":
@@ -1607,6 +1637,38 @@ def main(argv: list[str]) -> int:
             tally[verdict["verdict"]] = tally.get(verdict["verdict"], 0) + 1
             print(f"{path}: {verdict['verdict']}, stop {verdict['stop']}, certified {verdict['certified']}", flush=True)
         print(f"bound {bound:g}: {tally}")
+        return 0
+    if args.command == "answers-proof":
+        tallies: dict[float, dict[str, int]] = {}
+        for path in args.logs:
+            result = answers_proof(path, args)
+            for b in result["bounds"]:
+                proof = b.get("chow")
+                outcome = (
+                    "-"
+                    if proof is None
+                    else "network missing"
+                    if "missing" in proof
+                    else "out of reach"
+                    if "refused" in proof
+                    else "proved"
+                    if proof["equivalent"]
+                    else "refuted"
+                )
+                tally = tallies.setdefault(b["slack"], {})
+                key = f"{b['verdict']} {outcome}"
+                tally[key] = tally.get(key, 0) + 1
+                detail = "" if proof is None or "missing" in proof else f" ({chow_line(proof)})"
+                print(
+                    f"{path}: x{b['slack']:g} bound {b['bound']}: {b['verdict']}, stop {b['stop']}, "
+                    f"certified {b['certified']}; {outcome}{detail}",
+                    flush=True,
+                )
+            if args.out is not None:
+                args.out.mkdir(parents=True, exist_ok=True)
+                (args.out / f"{path.parent.name}.answers-proof.json").write_text(json.dumps(result, indent=1))
+        for slack, tally in tallies.items():
+            print(f"x{slack:g}: {tally}")
         return 0
     if args.command == "weight-norms":
         for path in args.networks:
@@ -1861,6 +1923,63 @@ def feasibility(
     return line + (f", d {mr.word_length(machine)}" if consolidate else "")
 
 
+def chow_reading(machine: mf.QueryMachine, target: wt.Mealy, bound: int, limit: int) -> dict[str, Any]:
+    """A network's machine against the target by Chow's test set under `bound`: its codes, minimised states, the
+    verdict, the words queried and a counterexample; or "refused" when the test set exceeds `limit`."""
+    walked = mr.walk(machine, target.tokens)
+    try:
+        checked = chow.check(mr.mealy(walked), chow.machine_query(target), bound, limit=limit)
+    except ValueError as refused:
+        return {"codes": len(walked.codes), "bound": bound, "refused": str(refused)}
+    return {
+        "codes": len(walked.codes),
+        "states": checked.states,
+        "bound": bound,
+        "equivalent": checked.equivalent,
+        "words": checked.words,
+        "counterexample": None if checked.counterexample is None else list(checked.counterexample),
+    }
+
+
+def chow_line(result: dict[str, Any]) -> str:
+    """chow_reading's result, a line."""
+    if "refused" in result:
+        return f"bound {result['bound']}, {result['refused']}"
+    counterexample = result["counterexample"]
+    return (
+        f"{result['codes']} codes, minimised {result['states']}, bound {result['bound']}: "
+        f"{'equivalent' if result['equivalent'] else 'not equivalent'} after {result['words']:,} words"
+        + ("" if counterexample is None else f", counterexample of {len(counterexample)} tokens")
+    )
+
+
+def answers_proof(log: Path, args: argparse.Namespace) -> dict[str, Any]:
+    """
+    T6's reading of one run (the paper workplan): at each bound (the target's states times a slack),
+    the answers-only stop from the log (answers_stop: the logged answers all right, the minimised
+    machine within the bound; the certificate only judges it), then Chow's test set on the stop's
+    saved network under the same bound, the target a black box: the proof needing no target in the
+    loop. "network missing" where the stop's step wasn't saved.
+    """
+    target = wt.task_named(args.task).machine
+    rows = [json.loads(line) for line in log.read_text().splitlines()]
+    bounds: list[dict[str, Any]] = []
+    for slack in args.slack:
+        bound = int(target.states * slack)
+        verdict = mf.answers_stop(rows, bound)
+        reading: dict[str, Any] = {"slack": slack, **verdict, "bound": bound}
+        if verdict["stop"] is not None:
+            saved = [log.parent / f"{kind}step-{verdict['stop']}.network.json" for kind in ("", "certified-")]
+            found = next((s for s in saved if s.exists()), None)
+            if found is None:
+                reading["chow"] = {"bound": bound, "missing": str(saved[0])}
+            else:
+                machine = mf.QueryMachine(mf.load_network(str(found)), _target(args.task, args), mf.slot(args.task))
+                reading["chow"] = {"network": str(found), **chow_reading(machine, target, bound, args.limit)}
+        bounds.append(reading)
+    return {"log": str(log), "task": args.task, "bounds": bounds}
+
+
 def read_network(path: Path, args: argparse.Namespace) -> str:
     """One network's by-length or breaks (machine_reading), a line, and its JSON into --out."""
     target = wt.task_named(args.task).machine
@@ -1869,34 +1988,8 @@ def read_network(path: Path, args: argparse.Namespace) -> str:
     walk = mr.product(machine, target)
     if args.command == "chow":
         bound = int((args.bound or target.states) * args.slack)
-        machine_states = len(walk.codes)
-        try:
-            checked = chow.check(
-                mr.mealy(mr.walk(machine, target.tokens)), chow.machine_query(target), bound, limit=args.limit
-            )
-        except ValueError as refused:
-            result = {"network": str(path), "task": args.task, "bound": bound, "refused": str(refused)}
-            line = f"{path}: bound {bound}, {refused}"
-        else:
-            result = {
-                "network": str(path),
-                "task": args.task,
-                "codes": machine_states,
-                "states": checked.states,
-                "bound": bound,
-                "equivalent": checked.equivalent,
-                "words": checked.words,
-                "counterexample": None if checked.counterexample is None else list(checked.counterexample),
-            }
-            line = (
-                f"{path}: {machine_states} codes, minimised {checked.states}, bound {bound}: "
-                f"{'equivalent' if checked.equivalent else 'not equivalent'} after {checked.words:,} words"
-                + (
-                    ""
-                    if checked.counterexample is None
-                    else f", counterexample of {len(checked.counterexample)} tokens"
-                )
-            )
+        result = {"network": str(path), "task": args.task, **chow_reading(machine, target, bound, args.limit)}
+        line = f"{path}: {chow_line(result)}"
     elif args.command == "by-length":
         rows = mr.by_length(walk, sorted(args.lengths), d)
         result: dict[str, Any] = {"network": str(path), "task": args.task, "d": d, "lengths": rows}

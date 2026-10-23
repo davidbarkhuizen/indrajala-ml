@@ -303,6 +303,43 @@ def order_labels(coordinates: Coordinates | None) -> dict[str, IntArray]:
     return named | {"parity": np.array(inversions, dtype=np.int64)}
 
 
+def linear_labels(coordinates: Coordinates | None) -> dict[str, IntArray]:
+    """
+    A machine's linear forms of its coordinates mod a prime modulus, each once up to a scalar (its
+    first coefficient 1): division's "A + B" (the sum), "A - B" (the difference), "A", "B" and the
+    rest of its p + 1 lines; none when the modulus isn't prime. Division's are its congruences
+    (Mealy.is_congruence) and, with the two trivial partitions, all of them: its columns x -> 3x + v
+    are permutations whose group holds every translation (one column after another's inverse), so a
+    congruence's block through 0 is a subgroup of Z_p^2, and those are the lines.
+    """
+    if coordinates is None:
+        return {}
+    m, names = coordinates.modulus, coordinates.names
+    if m < 2 or any(m % d == 0 for d in range(2, math.isqrt(m) + 1)):
+        return {}
+
+    def term(c: int, name: str, first: bool) -> str:
+        if first:
+            return name
+        sign, size = ("-", m - c) if c > m // 2 else ("+", c)
+        return f"{sign} {name}" if size == 1 else f"{sign} {size}{name}"
+
+    named: dict[str, IntArray] = {}
+    for coefficients in itertools.product(range(m), repeat=len(names)):
+        nonzero = [c for c in coefficients if c]
+        if not nonzero or nonzero[0] != 1:
+            continue
+        terms = [(c, n) for c, n in zip(coefficients, names, strict=True) if c]
+        label = " ".join(term(c, n, j == 0) for j, (c, n) in enumerate(terms))
+        named[label] = (coordinates.values @ np.array(coefficients, dtype=np.int64)) % m
+    return named
+
+
+def named_labels(coordinates: Coordinates | None) -> dict[str, IntArray]:
+    """A machine's named partitions: an ordering machine's (order_labels), else its coordinates' linear forms (linear_labels)."""
+    return order_labels(coordinates) or linear_labels(coordinates)
+
+
 def _ordering_machine(
     n: int, actions: Sequence[Callable[[tuple[int, ...]], tuple[int, ...]]], label: Callable[[tuple[int, ...]], int]
 ) -> Mealy:

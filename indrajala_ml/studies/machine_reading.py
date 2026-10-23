@@ -277,7 +277,7 @@ def approximations(walk: Product, target: wt.Mealy) -> dict[str, Any]:
     reached states joined when one code of the factor holds both (the certificate's readout), whether
     that partition is itself a congruence, and its closure (Mealy.congruence_closure), the finest
     approximation (a homomorphic image, Egri-Nagy and Nehaniv) the factor's code determines; the
-    target's named congruences that closure refines, the finest only (window_tasks.order_labels); and
+    target's named congruences that closure refines, the finest only (window_tasks.named_labels); and
     the share of the factor's (code, token) pairs whose next code is one, 1.0 when the factor's code
     is a machine of its own. Jointly, whether the factors' approximations cover the target: their
     meet separates every reached state (then the target is a subdirect product of them, a parallel
@@ -288,7 +288,7 @@ def approximations(walk: Product, target: wt.Mealy) -> dict[str, Any]:
     lower factor alone is no congruence, so its closure, and the parallel meet, miss it.
     """
     states = sorted({s for _, s in walk.pairs})
-    named = {k: v for k, v in wt.order_labels(target.coordinates).items() if target.is_congruence(v)}
+    named = {k: v for k, v in wt.named_labels(target.coordinates).items() if target.is_congruence(v)}
     closures: list[IntArray] = []
     factors: list[dict[str, Any]] = []
     for g in range(len(walk.codes[0])):
