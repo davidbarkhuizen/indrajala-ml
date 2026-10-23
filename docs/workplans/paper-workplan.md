@@ -122,7 +122,11 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
   - (a) *Chosen:* the open release. Pros: honest about who did what; fast; no gatekeeper; anyone
     can verify. Cons: no peer review; its reach rests on links and citations.
   - (b) A human co-author in automata learning, then TMLR, LearnAut or ICGI. Pros: peer review,
-    honestly. Cons: someone to find, their checking's time. Open after (a).
+    honestly. Cons: someone to find, their checking's time. **Taken up beside (a)** (the owner,
+    2026-10-23): the owner writes to about five researchers whose work the paper builds on or
+    contrasts with (automaton extraction, proofs for learned networks, conformance testing,
+    expressivity, Mealy machines in recurrent networks), asking them to review it and consider
+    co-authorship; their names are kept out of this repository.
   - (c) An AI-authorship venue (Agents4Science-like). Cons: no 2026 edition confirmed; 1 in 5
     accepted in 2025; outside the automata audience.
 - **D7. The manuscript:** a new file, `indrajala-research/papers/learning-transducers-with-proof.tex`,
