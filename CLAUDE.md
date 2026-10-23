@@ -16,7 +16,7 @@
   session's handover.
 - **"Bit-identical" is claimed only when checked** (golden run, parity tests). The golden run may
   be re-recorded only for an owner-approved change that is more correct or fundamentally better
-  structured (docs/measurement.md, §8); never to avoid a special case's cost alone, never for style.
+  structured (docs/protocols/measurement.md, §8); never to avoid a special case's cost alone, never for style.
 - **Structure first.** The priority is a well-structured, extensible framework: when keeping the
   golden bits would need a special case, a duplicate path or a design that blocks known later
   work, prefer the better structure and re-record (§8).
@@ -24,7 +24,7 @@
 ## Studies
 
 A study that trains networks and makes claims from them follows
-[docs/experiment-design.md](docs/experiment-design.md); read it before designing one or writing its
+[docs/protocols/experiment-design.md](docs/protocols/experiment-design.md); read it before designing one or writing its
 workplan.
 
 - **Every cell must be able to succeed, and its training must exclude memorising:** the model can
@@ -37,10 +37,10 @@ workplan.
 
 ## Timing
 
-Timing a change follows [docs/measurement.md](docs/measurement.md); read it before any benchmark.
+Timing a change follows [docs/protocols/measurement.md](docs/protocols/measurement.md); read it before any benchmark.
 
 - **Development runs on `pyramidon`; timing runs on `jebel`,** started from `pyramidon` with
-  `ab.py remote --host jebel run ...` (docs/measurement.md, §4). Push both sides first.
+  `ab.py remote --host jebel run ...` (docs/protocols/measurement.md, §4). Push both sides first.
 - **Every old-against-new timing goes through `scripts/ab.py`** (`run`, then `report --brief`).
   No hand-built driver or pooling scripts: a measurement it can't express gets a probe or an
   adapter in `ab.py`, in the same PR.
@@ -51,7 +51,7 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
 - **Read `report --brief` only.** Open a raw pass file only when the brief report flags something
   it can't explain.
 - **In a crate A/B, the header's two `.so` hashes must differ** when the crate's Rust changed; the
-  same hash twice means one crate was timed on both sides (docs/measurement.md, Gotchas).
+  same hash twice means one crate was timed on both sides (docs/protocols/measurement.md, Gotchas).
 - **Put `remote ... report RUN --md FILE` into a PR body by concatenating files**, not by reading
   and retyping it.
 - **After a reboot, `ab.py remote run` re-applies `jebel`'s setup itself** (frequency policy, PL1
@@ -63,7 +63,7 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
   job or a snap refresh (measurement.md §2). Nothing else runs on `jebel` during the run;
   development on `pyramidon` carries on. Studies hold the same machine lock as `ab.py`: an A/B
   refused naming a study waits for it to end.
-- **A PR's tier decides its timing** (docs/measurement.md, §1): **0**, no timed path changed
+- **A PR's tier decides its timing** (docs/protocols/measurement.md, §1): **0**, no timed path changed
   (new functionality that leaves existing timed paths alone, docs, pure-Python code, never timed):
   no A/B; **1**, a timed path (`learn*`, `classify_rows`, the crate) changed with no speedup
   claimed: one A/B of the most relevant benchmark (§1's table) with `--order ONNO`, and a

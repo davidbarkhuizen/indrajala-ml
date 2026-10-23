@@ -179,6 +179,6 @@ structure, each recovery proved.
 
 Related: [failure-kinds.md](failure-kinds.md) (where the work stands),
 `git show df1dcac:docs/one-code-one-state-workplan.md`,
-[factorisation-machine-workplan.md](workplans/factorisation-machine-workplan.md) (a machine that discovers its
+[factorisation-machine-workplan.md](../workplans/factorisation-machine-workplan.md) (a machine that discovers its
 own decomposition), [window-recurrent-literature.md](window-recurrent-literature.md) (the terms,
 Dan et al. 2022, the classical learners).

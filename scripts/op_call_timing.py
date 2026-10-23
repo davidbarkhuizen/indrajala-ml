@@ -18,7 +18,7 @@ back-to-back benchmark loop doesn't), and training's own thread count unless `--
 pins one. `--kernel-overrides R:K` runs every cell under `set_kernel_overrides(R, K)` (0:0 is the
 default kernels; `matmul_narrow`'s rows per block and `matmul_long_k`'s slab rows), so one build
 compares kernel settings. Run old against new builds through scripts/ab.py (`--bench
-op_call_timing`), as docs/measurement.md describes.
+op_call_timing`), as docs/protocols/measurement.md describes.
 """
 
 import argparse

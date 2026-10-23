@@ -1,6 +1,6 @@
 # Next steps: work left over from completed workplans
 
-**The goal all of it serves:** [machine-discovery.md](machine-discovery.md), discovering finite-state
+**The goal all of it serves:** [machine-discovery.md](research-notes/machine-discovery.md), discovering finite-state
 machines from behaviour and known structure, each discovery proved; its route in stages A-F.
 
 A workplan is deleted once its last stage merges, and never before: only when every stage and
@@ -54,7 +54,7 @@ docs cite them by section:
 | The smallest network that adds (the addition study) | #661 | #662-#665, #672, #677, #696, models `7748416` | `git show 8990f74:docs/addition-study-workplan.md` |
 | The demos in their own repository (the demo split) | #720 | #722-#724, indrajala-demos #1-#2 | `git show 9c50fe6:docs/demos-split-workplan.md` |
 | The window loop in the crate (the window program) | #792 | #799-#802, crate #58-#59, archive #28-#30, #804 | `git show ad651d8:docs/window-program-workplan.md` |
-| Substantiating the window-recurrent adder's findings (the claims workplan, C0-C8, E1-E8) | #701 | #703-#808 (findings #712-#808), models #1; report [window-recurrent-report.md](window-recurrent-report.md) | `git show fea9de1:docs/window-recurrent-claims-workplan.md` |
+| Substantiating the window-recurrent adder's findings (the claims workplan, C0-C8, E1-E8) | #701 | #703-#808 (findings #712-#808), models #1; report [window-recurrent-report.md](research-notes/window-recurrent-report.md) | `git show fea9de1:docs/window-recurrent-claims-workplan.md` |
 | The window-recurrent adder (milestone A; its claims in the row above) | #685 | #686-#702, #809 | `git show e45944e:docs/window-recurrent-adder-workplan.md` |
 | A factored state for the window-recurrent network (C9, C9', C9'') | #737 | #738-#764, crate #57 | `git show e45944e:docs/factored-state-workplan.md` |
 | A family of modular operations on one state (option 2) | #765 | #766 | `git show e45944e:docs/modular-family-workplan.md` |
@@ -72,7 +72,7 @@ candidate optimizations) were retired the same way: `git show 0a04977:docs/optim
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention, The sequence task, Dropout among the
-tokens, Rotary positions, The addition study), [measurement.md](measurement.md)
+tokens, Rotary positions, The addition study), [measurement.md](protocols/measurement.md)
 and [rng-audit.md](audits/rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/residual_depth_study.py`'s, the patch-attention study's in
@@ -132,7 +132,7 @@ linear window) and 34.1% (the `p` 7 family). Left:
 
 ## From the window-recurrent claims (2026-10-17)
 
-Every claim decided ([window-recurrent-report.md](window-recurrent-report.md)): C0, C2, C2b, C3
+Every claim decided ([window-recurrent-report.md](research-notes/window-recurrent-report.md)): C0, C2, C2b, C3
 (working, not certified), C4 (after Holm) and C8 hold; C1 refuted for the sampled "works" and
 restated on the certificate; C6 not supported; C7 and C7' refuted (division learned later, with a
 factored state and a cover). Left:
@@ -220,7 +220,7 @@ Decided with the owner, each to become a workplan or a stage:
   2026-10-19): neither the budget (L2) nor the factors' width (L3), but the window's: at 32 wide
   instead of 16, 5 of 6 certified at 169 states against 0 of 6. The round-2 algebras' failures at
   120 states are other failure kinds (formation or conversion, extra codes): the kinds are mapped in
-  [failure-kinds.md](failure-kinds.md), each with its plan and next step.
+  [failure-kinds.md](research-notes/failure-kinds.md), each with its plan and next step.
 
 ## Beyond arithmetic: other finite-state targets (the owner and Claude, 2026-10-17)
 

@@ -2,7 +2,7 @@
 
 **Status: a note, 2026-10-20 (about 18:30), written at the owner's request for a standalone summary of
 the day's findings against the project's aim. Nothing here is planned work; the plan is
-[state-formation-workplan.md](workplans/state-formation-workplan.md), whose findings and decisions (D13-D27)
+[state-formation-workplan.md](../workplans/state-formation-workplan.md), whose findings and decisions (D13-D27)
 hold the details and the data's paths. Two registered probes (4a'', 4a''') were still running when
 it was written, so no verdict is applied here.**
 

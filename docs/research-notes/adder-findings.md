@@ -28,8 +28,8 @@ retired workplan is `git show 8990f74:docs/addition-study-workplan.md`.*
 
 ## 2. Why a fixed-depth network can't add at any length
 
-*Recorded in [arbitrary-length-addition-workplan.md](workplans/arbitrary-length-addition-workplan.md) and
-[next-steps.md](next-steps.md) (From length generalisation); the terminated plan's literature
+*Recorded in [arbitrary-length-addition-workplan.md](../workplans/arbitrary-length-addition-workplan.md) and
+[next-steps.md](../next-steps.md) (From length generalisation); the terminated plan's literature
 section is `git show c3d619b:docs/length-generalisation-workplan.md`.*
 
 - A carry can pass unchanged through a run of columns of any length, so an adder must find a
@@ -113,7 +113,7 @@ section is `git show c3d619b:docs/length-generalisation-workplan.md`.*
 
 ## The rules these findings set
 
-*Recorded in [experiment-design.md](experiment-design.md) and CLAUDE.md (Studies).*
+*Recorded in [experiment-design.md](../protocols/experiment-design.md) and CLAUDE.md (Studies).*
 
 1. **Every cell must be able to succeed:** at least as many codes as the target's minimal states.
 2. **Training must exclude memorising:** the longest training length at least `m + q - 1`.
