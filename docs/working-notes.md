@@ -211,6 +211,15 @@ where you meet a new trap; delete one that no longer holds.
   first on PYTHONPATH by the host table. A new crate: a new directory on every host, `CRATE` changed. T1 ran before the check: `pyramidon`'s crate (rust 647f23c, whose one change is
   aarch64-only NEON) differed from `klip`'s and `stone`'s (45d6a37); `same-prefix` on `d5-sum-304` gave
   31 identical rows across them (2026-10-23).
+- **A lost attempt re-run on its host appended to its old log** (T1: `d5-sum-300`, `d5-sum-302`,
+  `d5-suffix-302`, on `pyramidon`; the ledger summed both runs, 662, 681 and 596 epochs for 400). Now
+  the worker sets the old directory aside (`ROOT/lost/<attempt>-<n>`, never adopted) and `summary`
+  reads a log's last run only (a step end not after its predecessor's starts one), so re-summarising an
+  older ledger's logs corrects it. Ledgers written before the fix still hold the summed summaries.
+- **An attempt's memory is the worker's sample, not `/usr/bin/time`:** a run's pool workers are a
+  forkserver's children, outside the attempt's rusage (`time -v` saw 51 MB of a division run). The
+  worker sums PSS over the attempt's session at each look (every 2 s) and puts the peak in its summary
+  (`peak_pss_mb`); a spike shorter than a look can be missed.
 - **A host given outside its hours:** `controller --open HOST` (the owner's grant, logged in the
   ledger as `opened`); the host table is unchanged.
 

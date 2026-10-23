@@ -22,6 +22,7 @@ import contextlib
 import dataclasses
 import datetime
 import hashlib
+import itertools
 import json
 import os
 import shlex
@@ -398,9 +399,15 @@ def summary(log: Path) -> dict[str, Any]:
     never). A run whose rows don't log the strict verdict (the paper's cells: it is checked after, by
     recertifying the saved network) succeeds at its first certified step; a continuous state (T3) never
     does here (long tests judge it). Epochs as modular_family.restart_course counts them (the time
-    axis): each step end's, less the one a budget's stop logs untrained.
+    axis): each step end's, less the one a budget's stop logs untrained. Only the log's last run counts: a
+    step end that doesn't follow its predecessor's step starts a run again (a lost attempt re-run in its
+    old directory, before the worker set one aside, appended to its log). The worker adds `peak_pss_mb`.
     """
     rows = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+    ends = [i for i, r in enumerate(rows) if "end" in r and "certified" in r]
+    restarts = [i for i, j in itertools.pairwise(ends) if int(rows[j]["step"]) <= int(rows[i]["step"])]
+    if restarts:
+        rows = rows[restarts[-1] + 1 :]  # the last run's rows
     trained: dict[int, int] = {}
     total = 0
     for i, r in enumerate(rows):
@@ -643,6 +650,24 @@ class Running:
     directory: Path
     pid: int
     step: int | None = None
+    peak: int | None = None  # its session's largest sampled PSS, kB
+
+
+def session_pss(session: int, proc: Path = Path("/proc")) -> int | None:
+    """
+    The summed PSS (kB) of every process in a session: an attempt and its pool's workers (a forkserver's
+    children, outside the attempt's own rusage), shared pages counted once. None without /proc.
+    """
+    if not proc.is_dir():
+        return None
+    total = 0
+    for stat in proc.glob("[0-9]*/stat"):
+        with contextlib.suppress(OSError, ValueError, IndexError):
+            if int(stat.read_text().rpartition(")")[2].split()[3]) == session:
+                for line in (stat.parent / "smaps_rollup").read_text().splitlines():
+                    if line.startswith("Pss:"):
+                        total += int(line.split()[1])
+    return total
 
 
 class Worker:
@@ -652,7 +677,9 @@ class Worker:
     `wrapper` before the command, `pythonpath` before the worktree on PYTHONPATH), reports its start,
     progress and end (with the attempt's manifest, for the pull), stops its attempts at the controller's
     `stop` (a window's end) and re-adopts its attempts from their pid files after its own restart. Its
-    runs survive a dropped connection: it reconnects and reports.
+    runs survive a dropped connection: it reconnects and reports. An attempt run again (lost, or stopped
+    at a window's end) gets a fresh directory, the old one set aside under ROOT/lost/. Each look samples
+    an attempt's memory (session_pss); its peak, kept in its directory, goes into its summary.
     """
 
     def __init__(
@@ -684,7 +711,9 @@ class Worker:
             record = json.loads(pid_file.read_text())
             if alive(record["pid"]) and not (pid_file.parent / "ended.json").exists():
                 attempt = Attempt(**record["attempt"])
-                self.running[attempt.id] = Running(attempt, pid_file.parent, record["pid"])
+                peak = pid_file.parent / "peak_pss"
+                kb = int(peak.read_text()) if peak.exists() else None
+                self.running[attempt.id] = Running(attempt, pid_file.parent, record["pid"], peak=kb)
 
     def command(self, attempt: Attempt, cell: str) -> list[str]:
         backdrop, chosen = BACKDROPS[attempt.backdrop], CELLS[cell]
@@ -705,7 +734,11 @@ class Worker:
 
     def launch(self, attempt: Attempt, cell: str) -> Running:
         directory = self.root / attempt.id
-        directory.mkdir(parents=True, exist_ok=True)
+        if directory.exists():  # an earlier run's: set aside, never appended to
+            lost = self.root / "lost"
+            lost.mkdir(exist_ok=True)
+            directory.rename(lost / f"{attempt.id}-{sum(1 for _ in lost.glob(f'{attempt.id}-*')) + 1}")
+        directory.mkdir(parents=True)
         env = {
             **os.environ,
             **self.env,
@@ -775,11 +808,16 @@ class Worker:
         """Each running attempt's progress, and the ended ones' summaries and manifests."""
         for attempt_id, running in list(self.running.items()):
             step = last_step(self.log_of(running))
+            kb = session_pss(running.pid)
+            if kb is not None and (running.peak is None or kb > running.peak):
+                running.peak = kb
+                (running.directory / "peak_pss").write_text(str(kb))
             if step != running.step:
                 running.step = step
                 await send(writer, {"type": "progress", "id": attempt_id, "step": step})
             if not alive(running.pid):
                 result = summary(self.log_of(running))
+                result["peak_pss_mb"] = None if running.peak is None else round(running.peak / 1024, 1)
                 (running.directory / "ended.json").write_text(json.dumps(result))
                 files = manifest(running.directory)
                 await send(writer, {"type": "ended", "id": attempt_id, "summary": result, "files": files})
