@@ -339,6 +339,34 @@ def test_the_vocabulary_keeps_every_earlier_studys_tokens_and_gives_the_product_
         mf.Encoding(5, mf.PRODUCT)  # the product has no token in the earlier vocabulary
 
 
+CONTROLS = ("sum", "suffix", "token")  # T1's vocabulary: its three arms ask the same tokens
+
+
+@pytest.mark.parametrize("p", [5, 7, 11, 13])
+def test_t1s_controls_answer_the_columns_digits_not_the_state(p: int):
+    rng = random.Random(p)
+    cols = [rng.randrange(mf.COLUMNS) for _ in range(40)]
+    digits = [t // mf.BASE + t % mf.BASE for t in cols]  # a column's a + b
+    _, token = mf.Encoding(p, mf.TOKEN, CONTROLS).example(cols)
+    _, suffix = mf.Encoding(p, mf.SUFFIX, CONTROLS).example(cols)
+    _, total = mf.Encoding(p, mf.SUM, CONTROLS).example(cols)
+    states = mf.Encoding(p, mf.SUM, CONTROLS).states(cols)
+    quotients = tuple(md.quotient(A, B, p) for A, B in states)
+    assert token[0::2] == suffix[0::2] == total[0::2] == quotients  # the certified answer the same
+    assert token[1::2] == tuple(d % p for d in digits)
+    assert suffix[1::2] == tuple((d + e) % p for d, e in zip(digits, [0, *digits[:-1]], strict=True))
+    assert total[1::2] == tuple((A + B) % p for A, B in states)
+    # neither control is a function of division's state: two prefixes reach one state, their answers differ
+    seen: dict[tuple[int, int], set[int]] = {}
+    for n in range(1, 4):
+        for word in itertools.product(range(mf.COLUMNS), repeat=n):
+            (A, B) = mf.Encoding(p, mf.TOKEN, CONTROLS).states(list(word))[-1]
+            seen.setdefault((A, B), set()).add(mf.Encoding(p, mf.SUFFIX, CONTROLS).example(list(word))[1][-1])
+    assert any(len(answers) > 1 for answers in seen.values())
+    tokens = mf.Encoding(p, mf.SUFFIX, CONTROLS).example(cols)[0]
+    assert tokens[1::2] == (float(mf.COLUMNS + 1),) * len(cols)  # suffix's query token, the vocabulary's second
+
+
 def _example_by_the_states(encoding: mf.Encoding, columns: list[int]) -> tuple[tuple[float, ...], tuple[int, ...]]:
     """Encoding.example as first written (before the window-program workplan's stage 1): the states and the operations."""
     tokens: list[float] = []
