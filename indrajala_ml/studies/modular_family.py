@@ -47,6 +47,7 @@ from typing import Any, Protocol
 import numpy as np
 import numpy.typing as npt
 
+from indrajala_ml import batch as runner
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_data as md
 from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer
@@ -591,8 +592,10 @@ def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
     """
     A run's Outcome: certified at the first step's end that certified (the run stops there). A step
     stopped by a budget (`spent`, `deadline`) logs as its epochs the loop's index at the stop, an
-    epoch not trained, so one less is counted for it.
+    epoch not trained, so one less is counted for it. A log holding a re-run counts its last run only
+    (the batch runner's last_run).
     """
+    rows = runner.last_run(rows)
     ends = [row for row in rows if "end" in row]
     last = next((row for row in ends if row.get("certified")), ends[-1] if ends else rows[-1])
     epochs = sum(int(row["epochs"]) - (row["end"] in CENSORED) for row in ends if row["step"] <= last["step"])

@@ -2333,3 +2333,10 @@ def test_a_continuous_state_trains_unjudged_by_a_certificate_and_refuses_a_state
             state_bound=25,
             baseline=mf.CONTINUOUS_STATE,
         )
+
+
+def test_a_runs_outcome_counts_a_logs_last_run_only():
+    run = [{"step": s, "end": "passed", "epochs": 10, "certified": False, "seconds": float(s)} for s in (1, 2)]
+    spent = {"step": 3, "end": "spent", "epochs": 401, "certified": False, "seconds": 9.0}
+    once = mf.outcome([*run, spent])
+    assert mf.outcome([*run, *run, spent]) == once and once.epochs == 420  # a re-run appended to the log
