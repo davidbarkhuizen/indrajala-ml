@@ -68,7 +68,7 @@ plans follow, each with its plan (`next-steps.md`'s table gives the `git show` t
 | D33 | 2026-10-21 | the adaptive cool as built | `--melt-shape adaptive`: the equilibrium test, `T exp(-pace / sqrt(C))`, `pace` 0.03, `settle` 10 |
 | D33's probe | 2026-10-21, from 07:24 | the adaptive cool's existence probe | S3 seeds 0-7, mtf-4 seed 3, a convex control (`probe-d33.sh`) |
 | D34 | 2026-10-21, 08:30 | the bounded handover | `--cool-rise 0.02`: the adaptive step no colder than raises the coupling by 0.02 |
-| D34's probe | 2026-10-21, from noon | the bounded handover's probe | S3 seeds 0, 1, 3-7 under D34 (`probe-d34.sh`) |
+| D34's probe | 2026-10-21, from noon | the bounded handover's probe | S3 seeds 0, 1, 3-7 under D34 (`probe-d34.sh`); its D45 trigger met (D38 refuted), but never run: superseded that evening by the coupling from sharpness (D50) (recorded 2026-10-23, the programme audit's F33) |
 | the reasoning review | 2026-10-21 | gaps and inconsistencies | ten items (`reasoning-review-2026-10-21.md`); its re-reading of existing data in the findings |
 | D35 | 2026-10-21 | the answers-only stop | `--state-bound N`: the snapped machine's answers all right within the bound; the certificate only judges |
 | D36 | 2026-10-21 | crucible against whole | the panel's arms: the quasi-static crucible and the same cool with `--whole` (the owner; replaces D32's second arm) |

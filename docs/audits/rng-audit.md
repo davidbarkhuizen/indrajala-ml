@@ -199,11 +199,13 @@ from a passed `random.Random`. Tests and scripts may still seed the globals for 
 
 Rust never fuses `low + range * u` into an FMA. numpy's C might, depending on the compiler and
 flags. GCC in ISO C mode doesn't contract, but clang contracts within an expression by default,
-and arm64 has FMA in its baseline. Linux x86_64 wheels target a baseline without FMA, so today's
-CI can't show a difference. The PyPI plan's multi-platform CI
-([pypi-release-workplan.md](../workplans/pypi-release-workplan.md), stage 2) runs the parity tests on arm64
-and macOS and will catch it. If a numpy build contracts, record it and decide then. Don't
-pre-emptively add `mul_add`.
+and arm64 has FMA in its baseline. Linux x86_64 wheels target a baseline without FMA. CI now runs
+the crate's parity tests and every test shard on Linux arm64 as well (the
+[aarch64 workplan](../workplans/aarch64-workplan.md)'s multi-platform CI), and `litshe` (aarch64)
+holds bit parity, so a contracting numpy build on arm64 would show there; macOS is still
+unchecked (the PyPI plan's stage 2,
+[pypi-release-workplan.md](../workplans/pypi-release-workplan.md)). If a numpy build contracts,
+record it and decide then. Don't pre-emptively add `mul_add`.
 
 ### `[low, high)` is not strictly guaranteed (informational)
 

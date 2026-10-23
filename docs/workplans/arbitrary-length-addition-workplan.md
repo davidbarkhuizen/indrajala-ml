@@ -12,6 +12,11 @@ fixed-depth existence study), was terminated after its reading (next-steps, From
 generalisation). P1 is parked; P2, P3 and P7 are deferred; composing a fixed-length adder outside
 the network is parked (Parked, below).**
 
+**Milestone A done (2026-10-17):** the window-recurrent adder certified at every length (the
+claims workplan retired, its report in indrajala-research's
+`docs/research-notes/window-recurrent-report.md`). Its other pieces stay parked or deferred, untouched since
+2026-10-12; paused since 2026-10-20 with all planned work (the programme audit, 2026-10-23, F29).
+
 The addition study (README, The addition study; its workplan `git show
 8990f74:docs/addition-study-workplan.md`) asks for the smallest network that adds base-3 numbers of
 a fixed `n` digits. This plan asks what the framework lacks for an adder trained

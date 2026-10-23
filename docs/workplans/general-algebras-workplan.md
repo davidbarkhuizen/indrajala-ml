@@ -6,7 +6,11 @@ across genuinely divergent tasks ("fine tune when we can use genuinely divergent
 [next-steps.md](../next-steps.md)'s "Beyond arithmetic" item 1 and the two items deferred to it.
 D1-D9 settled under the owner's delegation, each with its options' pros and cons; D2 the owner's
 choice. E1 registered
-here, before its data; T1 and G2 are registered at their stages, before theirs.**
+here, before its data; T1 and G2 are registered at their stages, before theirs. Paused since
+2026-10-20 after round 2 (stage 4): the owner set all planned work aside for
+[state-formation-workplan.md](state-formation-workplan.md), so stages 5-8 (the trigger, the
+guard's softenings, G2) wait for a decision to resume or retire (the programme audit, 2026-10-23,
+F29).**
 
 ## Why
 
