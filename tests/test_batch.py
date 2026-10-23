@@ -14,14 +14,15 @@ import pytest
 from indrajala_ml import batch as b
 
 # A stub run (fast, deterministic): seed s even certifies at both verdicts at step s, an odd seed never;
-# the budget is 6 steps ("spent"); --cutoff-steps T cuts an attempt not certified by step T ("cut").
+# an epoch a step, the budget 6 epochs ("spent", its row logging the untrained epoch too, as a run's
+# does); --cutoff-epochs T cuts an attempt not certified by T epochs trained ("cut").
 STUB = """
 import json, os, sys, time
 from pathlib import Path
 args = sys.argv[1:]
 seed = int(args[args.index("--runs") + 1].split(":")[1])
 out = Path(args[args.index("--out") + 1]) / f"seed{seed}"
-cutoff = int(args[args.index("--cutoff-steps") + 1]) if "--cutoff-steps" in args else None
+cutoff = int(args[args.index("--cutoff-epochs") + 1]) if "--cutoff-epochs" in args else None
 sleep = float(os.environ.get("STUB_SLEEP", "0.01"))
 out.mkdir(parents=True, exist_ok=True)
 with (out / "log.jsonl").open("w") as log:
@@ -29,8 +30,8 @@ with (out / "log.jsonl").open("w") as log:
         time.sleep(sleep)
         won = seed % 2 == 0 and step == seed
         end = "passed" if won else "spent" if step == 6 else "cut" if cutoff is not None and step >= cutoff else "epoch"
-        row = {"step": step, "end": end, "state_share": 1.0, "seconds": float(step), "certified": won,
-               "certificates": {"strict": {"certified": won}}}
+        row = {"step": step, "end": end, "epochs": 2 if end == "spent" else 1, "state_share": 1.0,
+               "seconds": float(step), "certified": won, "certificates": {"strict": {"certified": won}}}
         log.write(json.dumps(row) + "\\n"); log.flush()
         if end != "epoch":
             break
@@ -114,6 +115,7 @@ def test_a_cut_attempt_ends_cut_and_unsuccessful(tmp_path: Path):
     assert state.ended["s3-2"]["success"] == 2 and state.ended["s3-4"] == {
         "success": None,
         "step": 3,
+        "epochs": 3,
         "end": "cut",
         "seconds": 3.0,
     }

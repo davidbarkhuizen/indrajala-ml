@@ -1172,10 +1172,11 @@ def main(argv: list[str]) -> int:
         "the snapped machine, at most this many steps after its first pass",
     )
     run.add_argument(
-        "--cutoff-steps",
+        "--cutoff-epochs",
         type=int,
         help="the batch runner workplan's D1 (with --continuous): an attempt not certified at both verdicts by "
-        "this step's end stops there, \"cut\" (restarts at Luby's cutoff t*; a certified run goes on)",
+        "the first step's end with this many epochs trained stops there, \"cut\" (restarts at Luby's cutoff "
+        "t*, in epochs; a certified run goes on)",
     )
     run.add_argument(
         "--coupling-cap",
@@ -1690,8 +1691,8 @@ def main(argv: list[str]) -> int:
         parser.error(
             "--coupling-pace, --sharpness-smoothing (D61) and --reheat (D63) set the continuous profile: with --continuous"
         )
-    if args.cutoff_steps is not None and (not args.continuous or args.cutoff_steps < 1):
-        parser.error("--cutoff-steps (the batch runner's D1) cuts a continuous run's attempt: with --continuous, >= 1")
+    if args.cutoff_epochs is not None and (not args.continuous or args.cutoff_epochs < 1):
+        parser.error("--cutoff-epochs (the batch runner's D1) cuts a continuous run's attempt: with --continuous, >= 1")
     if args.reheat_slowing and not args.reheat:
         parser.error("--reheat-slowing (D66) slows the re-cool after a reheat: with --reheat")
     if args.coupling_pace and args.coupling_cap < 1.0:
@@ -1786,7 +1787,7 @@ def main(argv: list[str]) -> int:
                 else None
             ),
             margin_wait=args.margin_wait,
-            cutoff_steps=args.cutoff_steps,
+            cutoff_epochs=args.cutoff_epochs,
         )
 
     for name in names:

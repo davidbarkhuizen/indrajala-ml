@@ -2574,7 +2574,7 @@ def _run_identity(
     coupling_cap: float = 1.0,
     continuous: Continuous | None = None,
     margin_wait: int | None = None,
-    cutoff_steps: int | None = None,
+    cutoff_epochs: int | None = None,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes
@@ -2613,7 +2613,7 @@ def _run_identity(
         **({"reheat": True} if continuous is not None and continuous.reheat else {}),
         **({"reheat_slowing": True} if continuous is not None and continuous.slowing else {}),
         **({"margin_wait": margin_wait} if margin_wait is not None else {}),
-        **({"cutoff_steps": cutoff_steps} if cutoff_steps is not None else {}),
+        **({"cutoff_epochs": cutoff_epochs} if cutoff_epochs is not None else {}),
     }
 
 
@@ -2667,7 +2667,7 @@ class RunConfig:
     coupling_cap: float
     continuous: Continuous | None
     margin_wait: int | None
-    cutoff_steps: int | None = None
+    cutoff_epochs: int | None = None
 
     def identity(self, first: int) -> dict[str, Any]:
         """What a resumed run must share with the run it resumes (_run_identity's)."""
@@ -2701,7 +2701,7 @@ class RunConfig:
             self.coupling_cap,
             self.continuous,
             self.margin_wait,
-            self.cutoff_steps,
+            self.cutoff_epochs,
         )
 
     def check(self) -> None:
@@ -2709,7 +2709,7 @@ class RunConfig:
         assert self.margin_wait is None or self.state_bound is not None, (
             "the margin stop waits on D35's: with a state bound"
         )
-        assert self.cutoff_steps is None or (self.continuous is not None and self.cutoff_steps >= 1), (
+        assert self.cutoff_epochs is None or (self.continuous is not None and self.cutoff_epochs >= 1), (
             "the cutoff reads D41's success at both verdicts, a continuous run's step ends: with --continuous, at least 1"
         )
         assert self.continuous is None or not self.continuous.pace or self.coupling_cap == 1.0, (
@@ -3423,9 +3423,10 @@ class _Run:
             and judged.get("certificates", {}).get("strict", {}).get("certified")
         ):
             s.succeeded = p.step  # D41's success: both verdicts
-        # the batch runner's cutoff (its D1): an attempt not certified at both verdicts by step `cutoff_steps`'s
-        # end stops there, "cut" (a run already certified goes on to its own stop)
-        cut = c.cutoff_steps is not None and p.step >= c.cutoff_steps and s.succeeded < 0 and not stopping
+        # the batch runner's cutoff (its D1, in epochs: the time axis): an attempt not certified at both
+        # verdicts by the first step end at `cutoff_epochs` epochs trained stops there, "cut" (a run
+        # already certified goes on to its own stop)
+        cut = c.cutoff_epochs is not None and s.spent >= c.cutoff_epochs and s.succeeded < 0 and not stopping
         self.record(
             {
                 "step": p.step,
@@ -3504,7 +3505,7 @@ def run(
     coupling_cap: float = 1.0,
     continuous: Continuous | None = None,
     margin_wait: int | None = None,
-    cutoff_steps: int | None = None,
+    cutoff_epochs: int | None = None,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -3573,8 +3574,9 @@ def run(
     with fewer ties than any before it (out/best-pass-step-S.network.json). W steps after the first
     pass, each step counted whether it passes or not (D60), a run none cleared stops ("waited"), its
     last row the best pass's network restored and judged as its stop's (Margin).
-    `cutoff_steps` T (with `continuous`; the batch runner workplan's D1) ends an attempt at step T's end
-    ("cut") unless some step by then was certified at both verdicts (D41), so restarts at a fixed
+    `cutoff_epochs` T (with `continuous`; the batch runner workplan's D1, in epochs since stage 5) ends
+    an attempt at the first step's end with T epochs trained in all ("cut") unless some step by then
+    was certified at both verdicts (D41), so restarts at a fixed
     cutoff (Luby et al. 1993) need no runner to stop a run; a run already certified goes on to its stop.
 
     Each step's start and each epoch's end that the step goes on from leave out/checkpoint.json:
@@ -3614,7 +3616,7 @@ def run(
         coupling_cap,
         continuous,
         margin_wait,
-        cutoff_steps,
+        cutoff_epochs,
     )
     running = _Run(config, resume)
     if not running.ended:
