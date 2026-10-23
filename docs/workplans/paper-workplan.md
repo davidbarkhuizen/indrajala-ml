@@ -92,9 +92,19 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
   at the base window (32 wide). Pros: the cell behind every scale result; simple to state; the paper
   makes no claim about state formation's remedies. Cons: the certificate is in the loop (the stop);
   K9 answers that offline (T6).
-- **D4. Where the tests run: the probe scripts on the machines as now, not the batch runner.** Pros:
-  proven tooling; the runner's stage-4 live checks aren't done. Cons: manual placement; the runner
-  waits.
+- **D4. Where the tests run: the batch runner** (revised by the owner, 2026-10-23: "should runs not
+  rather be on the batch runner - it will be faster"). Measure mode, fixed registered seeds, no
+  cutoff (each run to its epoch budget or its first certificate).
+  - (a) *Chosen:* the runner, extended (stage 3) with the paper's backdrops (division at `p` 5-13 with
+    its arms, run by `--p P --seed S`; the machines by `--runs TASK:SEED`) and cells (the division and
+    round-1 cell at the 32-wide window, its stop the first certified step, no `--state-bound`); T1's
+    short batch first, as the runner's stage-4 live check (`jebel` by day, `stone`'s bundle, a window
+    closing), before T2 and T5's long batches. Pros: every slot of every machine filled within its
+    hours, no idle gaps between hand launches; a closed window's attempt re-queued and re-run
+    identically elsewhere; one ledger a batch. Cons: a build on the runner; its live checks unproven
+    until T1's batch.
+  - (b) The probe scripts by hand (the first choice). Pros: proven. Cons: manual placement; machines
+    idle between launches.
 - **D5. Statistics:** every comparison at 20 fresh seeds an arm, Fisher's exact test (two-sided by
   default, one-sided only as registered with its direction, both reported where they differ: the
   audit's F9), Holm across the paper's registered family, Wilson intervals; screens labelled screens.
