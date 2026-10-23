@@ -148,6 +148,13 @@ the machines we have, each in its own hours.
 
 ## Known limits
 
+- **Find mode's verifier** (the programme audit's F7): restarts are optimal for Las Vegas runs, runs
+  that are right whenever they stop. The certificate makes a run so only with the target known
+  (stage A, and stage C's evaluation of a hidden target). In discovery the stop is answers-only
+  under a state bound, which gave false discoveries at a slack bound (1.1 times the target's size:
+  25 false stops, 1 false discovery); there find mode needs an exact answers-only check (Chow's test
+  set under the bound, with queries) before Luby's cost model applies.
+
 - Cutoffs and costs were in steps in stages 2-4; stage 5 moved them to epochs, the time axis. A ledger
   from before it (the stage-4 checks) holds summaries without `epochs`: `runs_of` leaves them out.
 

@@ -211,7 +211,9 @@ Every success is certified, so it's exact at every length. No run reaches its ca
      only 40-69 of the reached codes are right, and the first codes break 39-49%.
    - **Failure A:** move-to-front-5's seeds 1, 3, 4 and 5 never formed a state (2-3 codes a factor,
      share 0.21-0.24, minimised to 3).
-   So the state count alone isn't the limit: division certifies at 121 in the same cell.
+   So the state count alone isn't the limit: division certifies at 121 in the same cell. (Confounded,
+   the programme audit's F16: division trains on its two approximations' outputs beside the
+   quotient, the algebras on one output that hides most of the state.)
 
 5. **The fork's trigger, tuned across the classes (T1, registered in this stage's PR before its
    replays):** `drops` over every log from rounds 1-2 and division's (the fork probe, `p` 11, the

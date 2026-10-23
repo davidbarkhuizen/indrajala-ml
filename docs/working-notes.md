@@ -120,6 +120,12 @@ where you meet a new trap; delete one that no longer holds.
   before the next epoch sets them must be kept in the checkpoint's `Place` and re-applied (the
   couplings were not until 2026-10-21, found by the adaptive cool's resume test). A resume test whose
   factors harden at once (coupling 1) can't see such a gap: give a new profile's test soft factors.
+- **Epochs bind a run; a wall clock never does** (the programme audit's F12): the core matrix (D46,
+  2026-10-21) chose an epoch budget because "a minutes budget would give a run's outcome its
+  machine"; the probes registered that evening onward (D54-D64) still used "1,600 epochs or 690
+  minutes", and on a loaded `stone` the clock cut ten runs short (D67 re-ran them). `--budget-epochs`
+  is required now; set `--budget-minutes` only as a runaway guard far above any normal run, and
+  register its stop as censored.
 - **A run its wall-clock guard stopped resumes:** `modular_family_probe.py run` with a "deadline"
   stop keeps the last epoch's checkpoint (not "ended"), so the same command with `--resume` and a
   larger `--budget-minutes` goes on to its epoch budget as the uninterrupted run (the deadline's
@@ -171,7 +177,11 @@ where you meet a new trap; delete one that no longer holds.
 - **When trimming a stage, check which later experiments compare against the dropped cells**
   (D34 removed E2's and E6's `k` 1 comparators).
 - **Copying results between machines:** `sha256sum` on the source, `rsync`, `sha256sum -c` on
-  the destination; record the manifest's own sha256 in the findings.
+  the destination; record the manifest's own sha256 in the findings. **Don't rename or re-root on
+  the copy:** a host's manifest lists its own paths (`klip`'s `data-d64/probe-d64/...`), so a file
+  renamed on arrival (`launch.log` to `launch-klip.log`) or a different root fails `sha256sum -c`
+  on the archive (the audit's F31). Keep each host's files under its own directory as listed, or
+  write an archive-side manifest after the copy (`HOST-option1-dNN.archive.sha256`).
 - **Manifests' base directories differ:** `X.sha256` beside a directory `X` lists paths inside it
   (`e8-q4.sha256`, run from its parent); `certificates.sha256` inside `e8-q4/` lists bare names
   (run from `certificates/`); `control/results.sha256` and `matrix/results.sha256` list

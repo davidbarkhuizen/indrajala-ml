@@ -2060,6 +2060,40 @@ time was re-read.
   apart). Its gains are no switches, move-to-front's certificate and the rate, not speed.
 - **The freeze's lengths** (543-1,472 epochs) were read in epochs throughout: unchanged.
 
+## The method's constants (2026-10-23; the programme audit's F10)
+
+The current method's cell (`probe-d64.sh`: D54's cell, the margin stop under D60) and every number
+in it, by source: **derived** (from theory or the run's own readings), **measured** (read on earlier
+runs, mostly the design seeds), **inherited** (an earlier study's cell), **chosen** (a judgement). None
+has had a sensitivity reading; the owner's rule is no constants without a derivation.
+
+| constant | value | where | source |
+|---|---|---|---|
+| factors, codes a factor | 2, `--codes-ratio 32/11` (`ceil(32 sqrt(q) / 11)`) | D3 of the general algebras | inherited (division `p` 11's cell) |
+| the window's width | 32 | W1, C0 | measured (division at 169: 5 of 6 at 32) |
+| Adam's rate, batch | 0.003, 64 | the claims plan | inherited |
+| the epoch budget | 1,600 | D27, D54 | chosen (D27's budget for the crucible and growth) |
+| the warm-up's cap (the crucible's length) | 8 steps | D5, D14, D28 | chosen (D5); measured as sufficient (row 15's check) |
+| the warm-up's end | screen 1.01 (only the cap ends it) | D28 | measured (the length-3 crucibles failed) |
+| the melt's height `T_hot` | 2 `T_c` | D16 | derived (Rose's full melt above `T_c = 2 lambda_max`) |
+| the heat | from `T_hot / 64`, doubling an epoch | D15 | chosen (the owner's profile) |
+| the hold | 20 epochs | D24 | measured (4a's 10 melted to 4-5 groups) |
+| thermal noise `kappa` | 1e-2 | D17 | chosen between 1e-2 and 1e-4 (4a's tie went to `full`) |
+| the cool's halving | 30 epochs (in the clock) | D24, D49 | chosen |
+| the gate's band | `g` from 0 at 0.95 to 1 at 0.99 of the hold's level | D29, D49 | measured (0.99: certified runs' screens never fell below it); 0.95 chosen |
+| the coupling | `(S - S_0) / (1 - S_0)`, `S_0` the cool's first sharpness | D50 | derived (from the run's own sharpness) |
+| hard enough to hold `T` | sharpness 0.999 | D51 | chosen (0.1% of windows) |
+| growth | `0.02 g c` in `ln L` an epoch | D52 | chosen |
+| the stop's lengths | the step's screen, 8, 16, 24, 48 | D35 | chosen |
+| the state bound | `N = q` (exact) | D43 | chosen (the best case; slack unmeasured, F6) |
+| the margin's wait | 200 steps past the first pass | D59, D60 | chosen (the longest wait seen was 72) |
+| a near tie | snap ratio below 1.05 | the certificate (D3 of the claims plan) | chosen (a convention, both verdicts required, D41) |
+| the commitment | never on | D23, D48 | measured (the never probe's failure-A gains) |
+| the melting curve | 20 octaves, 4 temperatures an octave, 30 updates; every 25 epochs | D21, D53 | chosen (a measurement's resolution) |
+
+Not yet planned: a sensitivity reading, one constant at a time on fresh seeds on the batch runner
+(the audit's F10; the owner's call).
+
 ## A note on random machines (2026-10-20; a note, not a plan)
 
 The owner: "this approach, if it works, is likely to also work for random machines"; and a conjecture,
