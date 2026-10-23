@@ -268,6 +268,13 @@ where you meet a new trap; delete one that no longer holds.
 - **`jebel` at or below 65 W.** After a reboot PL1 comes back at 95 W: `ssh jebel 'cd
   ~/code/indrajala-ml && .venv/bin/python scripts/ab.py check --apply-setup'`, then check
   `/sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw` is 65000000.
+- **A study run on `jebel` or `stone` needs the straight-through crate on its path:** the continuous
+  cell's `--continuous` calls the crate with `straight` (the rust/ bump fb0f1be), which `jebel`'s
+  `.venv` (its checkout behind `main`) and `stone`'s lack. Put the built crate first:
+  `PY="env PYTHONPATH=$HOME/code/site-straight:WORKTREE .venv/bin/python"` (`jebel`;
+  `$LABOUR/site-straight` on `stone`). Without it every run ends in a second with
+  `window_program_learn() got an unexpected keyword argument 'straight'` (D67's first launch,
+  2026-10-23). A launcher's `ended` lines in its first minute are the sign: read one `.out`.
 - **`jebel` shares its power supply with the wifi access point:** a power cut (2026-10-18, about
   45 minutes) takes both down, so `stone` loses its network too and moves to another wifi. After one,
   re-apply `jebel`'s setup (PL1) and relaunch its study; `stone`'s runs go on.
