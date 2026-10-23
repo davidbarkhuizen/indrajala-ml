@@ -299,6 +299,96 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     machines, one change an arm. Cons: 20 runs more than (b). (b) Against A1's existing runs. Cons:
     data already read, other seeds, another commit. (c) Against T1's sum arm (the plan's first
     wording). Cons: another vocabulary and outputs, two changes at once.
+- **D15. T2 registered: the rates at scale, and the control there** (2026-10-23, before any of its
+  runs). The runner's `paper` cell (D12), measure mode, no cutoff, fresh seeds **300-319** (unused
+  on all four hosts) on four backdrops: `d7-family`, `d11-family`, `d13-family` (the cover, trained
+  on the quotient, sum and difference) and `d11-quotient` (the quotient alone): 80 runs.
+  - **Feasibility** (experiment-design.md section 1, information-flow.md; tested against the config,
+    `test_t2_and_t5s_cells_meet_their_registered_bounds`): two factors 32 wide, `ceil(32 p / 11)`
+    codes each, the cap the exclusion bound `m + q - 1`; the window 32 wide (row 3: the width W1
+    certified at 169 states); every state reachable and told apart.
+
+    | backdrop | q | codes a factor | m (x q) | cap |
+    | --- | --- | --- | --- | --- |
+    | d7-family | 49 | 21 | 441 (9.0) | 489 |
+    | d11-family, d11-quotient | 121 | 32 | 1,024 (8.5) | 1,144 |
+    | d13-family | 169 | 38 | 1,444 (8.5) | 1,612 |
+
+  - **Cost** (the budget probe, `jebel`, 2026-10-23, seed 390, outside every range, 15 minutes each,
+    8 at once, crate `crate-647f23c`; cost alone was to be read, but the runs' last rows, accuracy
+    included, were printed while their epochs were extracted: seen, set aside, no expectation below
+    uses them): peak RSS 82-93 MB a run, so memory never binds and cores set the slots; 8.5-9.1
+    seconds an epoch on average over the first 100-174 epochs, 9.3-10.1 at the last step (the quotient
+    alone 5.2 and 6.3). W1's `p` 13 spent run took 600 epochs in 113 minutes, its successes 209-255
+    epochs (29-37 minutes). So a spent run is about 2 hours, and T2 at most about 150 run-hours.
+  - **Success:** as D13: certified at the stop and recertified in both verdicts, every certified
+    network long-tested (U1, S1 at 128, 256, 1,024 columns: 140-174 minutes a network at `p` 11).
+  - **T2a, K6's rates (registered bar: a quarter).** K6 claims the cell learns these machines
+    reliably, not by a lucky seed. At each `p` it **stands** if the Wilson 95% lower bound is at
+    least 0.25 (9 of 20 or more), is **refuted** at that `p` if the upper bound is below 0.25 (1 of
+    20 or none), and is **undecided** between, reported with its rate. Expected about 10-15 of 20 at
+    each `p`: W1 5 of 6 at `p` 13 in this exact cell, and screens of another cell (width 16, the
+    default window): the `p` 11 ladder's 4 of 6 and the fork probe's 3 of 4 at `p` 7. No test across
+    `p`: the trend is reported with the slowest success's epochs against the 600 budget.
+  - **T2b, K4 at scale:** `d11-family` against `d11-quotient`, Fisher's exact, one-sided (registered
+    direction: K4 claims the approximations' outputs make the product machine learnable, so the
+    cover certifies more often), in the paper's Holm family (D5), both sides reported where they
+    differ. Expected about 0 of 20 for the quotient alone (`p` 5: 1 of 20 registered, 0 of 6 in a
+    screen; no run at `p` 11 before). **K4 at 121 states stands** if T2b holds at Holm 0.05;
+    **refuted** if the quotient alone certifies at least as often; undecided otherwise.
+  - **Then:** T4 on every certified two-factor network (D10's rules, reported as fresh); T6 on every
+    run (D11).
+  - Options: (a) *chosen*, the cover at three `p` with the quarter bar, the control at 11. Pros: W1's
+    own cell at 20 seeds; the bar can refute K6 at a `p`; the control at the scale P2 never ran.
+    Cons: the bar is a choice (a quarter: at that rate, 20 seeds find about 5 networks); K4 is
+    tested at one large `p` only. (b) The control at every `p` (`p` 7 and 13 too). Pros: K4 at each
+    scale. Cons: 40 more runs, mostly spent (about 80 run-hours); `p` 5 and 11 bracket it. (c) Rates
+    reported with no bar. Pros: no threshold to choose. Cons: nothing could refute K6, against the
+    protocol (claims and refutations registered first).
+- **D16. T5 registered: breadth rates** (2026-10-23, before any of its runs). The `paper` cell
+  (D12, width 32, where round 1 ran 16: its rates are a screen of another cell), measure mode, no
+  cutoff, the same fresh seeds 300-319, on `s3`, `s4`, `mtf4`, `rq12`, `rq16`: 100 runs.
+  - **Feasibility** (as D15, tested by the same test): `ceil(32 sqrt(q) / 11)` codes a factor.
+
+    | backdrop | q | codes a factor | m (x q) | cap |
+    | --- | --- | --- | --- | --- |
+    | s3 | 6 | 8 | 64 (10.7) | 69 |
+    | s4, mtf4 | 24 | 15 | 225 (9.4) | 248 |
+    | rq12 | 12 | 11 | 121 (10.1) | 132 |
+    | rq16 | 16 | 12 | 144 (9.0) | 159 |
+
+  - **Cost** (the probe, as D15's): the training process 69 MB at `s3` (the probe's `time -v` caught
+    only the parent of `--runs`' worker, 51 MB; noted for the runner's own measure), so memory never
+    binds; 6.1-6.6 seconds an epoch on average, 7.4-8.8 at the last step (`s3` about 3 alone). A
+    spent run about 1.5 hours; T5 at most about 150 run-hours. Round 1's S4 success took 576 of 600
+    epochs: the budget crowds there, and the slowest success is reported against it.
+  - **Success:** as D15, the long tests the machines' uniform words at 128, 256 and 1,024 (round 2's).
+  - **T5a, K7 for the algebras:** per backdrop (`s3`, `s4`, `mtf4`), D15's bar: **stands** at a
+    Wilson lower bound of 0.25 or more (9 of 20), **refuted** at 1 of 20 or none, undecided
+    between. Expected: `s4` and `mtf4` about 13 of 20 each (round 1: 4 of 6), `s3` about 3 of 20
+    (round 1: 1 of 6, a state that never forms), so `s3` is expected undecided or refuted, and K7 is
+    then stated without S3's rate claim (D2's con, measured as it is).
+  - **T5b, the random machines' limit** ("random machines only to about 12 states"): **stands** if
+    `rq12` meets the bar and `rq16` certifies 1 of 20 or none; **the limit moves** if `rq16` meets
+    the bar too (reported as found, the stronger claim); otherwise reported with both rates.
+    Expected: `rq12` about half (2 of 3 before), `rq16` none (0 of 9 at round 1's cell).
+  - **No significance test:** T5 measures rates against a bar, so it adds nothing to the Holm family.
+  - **Then:** T4 and T6 as D15.
+  - Options: (a) *chosen*, the five backdrops under the paper cell with D15's bar. Pros: one method
+    and one bar throughout; rates on networks that shaped nothing. Cons: S3 is expected to fail the
+    bar; width 32 untried on the algebras at scale. (b) Round 1's width-16 cell. Cons: two methods,
+    against D12. (c) A larger budget for the algebras (S4's crowding). Pros: fewer censored runs.
+    Cons: a second cell, against D3 and D12; the crowding is reported instead.
+- **D17. Where T2 and T5 run: one batch, longest first** (2026-10-23). One ledger
+  `data/window-recurrent/paper/t2-t5/` under the `paper` cell, attempts in the order `d13-family`,
+  `d11-family`, `d11-quotient`, `d7-family`, `s4`, `mtf4`, `rq16`, `rq12`, `s3` (the longest first,
+  so the batch's tail is short runs), on its own port beside T1's. It starts on `jebel` now (7 slots,
+  24/7 since 2026-10-23), the hosts T1 and T3 use joining after T3 (a restart; the ledger resumes),
+  so no host runs two fleets.
+  - (a) *Chosen.* Pros: one controller fills every slot across both tests; `jebel` works now rather
+    than idling until T3 ends. Cons: the two tests share a ledger, split by backdrop at the reading.
+  - (b) Two batches, T2 then T5. Pros: a ledger a test. Cons: a gap between them; T5's short runs
+    can't fill T2's tail.
 
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
@@ -383,6 +473,7 @@ manifest `paper/t4.sha256` (85 files). A factor's approximation nontrivial: 1 < 
 
 ## Machines
 
-`jebel` by day (8 at once, off overnight), `stone` weekday nights (12), `klip` (all cores, <= 85 C),
-`pyramidon` (3 small runs beside development). Memory per run measured at each registration (division
-`p` 13 the largest).
+The runner's hosts (`indrajala_ml.batch.HOSTS`): `jebel` around the clock since 2026-10-23 (7),
+`stone` weekday nights and weekends (11; opened outside them by the owner's grant), `klip` (3, <= 85
+C), `pyramidon` (3 beside development). Memory per run measured at each registration: under 100 MB
+for every backdrop of T1, T2, T3 and T5 (D13-D16), so cores set the slots.
