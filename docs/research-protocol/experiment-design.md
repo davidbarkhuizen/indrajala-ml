@@ -2,12 +2,12 @@
 
 How a learning study in this project is designed, run and judged: a study that trains networks
 and makes claims from them (the addition and sequence studies, the window-recurrent matrix, its
-claims plan's experiments). [measurement.md](measurement.md) is the other half: how a change is
+claims plan's experiments). [measurement.md](../measurement.md) is the other half: how a change is
 *timed*. Read this before designing a study or writing a study workplan.
 
 Each rule names where it was decided and what taught it, so it can be argued with from the
 evidence. "The claims plan" is the window-recurrent claims workplan, retired; its report, with the
-`git show` for the plan, is [window-recurrent-report.md](window-recurrent-report.md).
+`git show` for the plan, is [window-recurrent-report.md](../research-notes/window-recurrent-report.md).
 
 ## 1. Every condition must be able to succeed
 

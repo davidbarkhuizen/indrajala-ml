@@ -30,7 +30,7 @@ runs only (a study's arms split between machines; keys and directory unchanged).
 step's network and runs its task's catalogue (without the held-out property, B3 or U2) at each
 length: its properties, the samples (addition's B1-B3, A3, M1 and M5; division's U1 and U2), the
 cases per stratum (M3, M4; S1, S2) and M3 or S2 at 1, 2, 4, ..., n only (the long tests of
-docs/window-recurrent-report.md, D9) as given. `long-test` is those long tests over many
+docs/research-notes/window-recurrent-report.md, D9) as given. `long-test` is those long tests over many
 networks and W processes (at 128, 256 and 1,024 by default, the stratified distances doubling), each
 network's results as DIR/<run>-step-<j>.json (`check --json`'s), a network already there skipped,
 a line each of its cases and failures. `certify` writes each saved network's
@@ -177,7 +177,7 @@ beside them in `models/` (9.2 MB), and the log in `data/window-recurrent-control
 | `k` 4 `s` 4 `m` 16 | 5/5, 64/64/64/48/64 | 13, 6, 7, 5, 6 | 4/5, 64/64/12/32/64 |
 | `k` 4 `s` 16 `m` 16 | 5/5, 64/64/64/64/64 | 5, 4, 16, 6, 9 | 4/5, 64/24/64/64/0 |
 
-Findings (E1 of docs/window-recurrent-report.md: the certificate and the long tests), on
+Findings (E1 of docs/research-notes/window-recurrent-report.md: the certificate and the long tests), on
 pyramidon: `certify` over every network the matrix and the control tested (the matrix's step 3, the
 control's step 1: 105), 4-7 workers. Two verdicts (the claims workplan's D3): **robustly
 certified**, every near tie (snap ratio under 1.05) branched both ways, indrajala-ml 094a7b1
@@ -263,7 +263,7 @@ Per cell, its networks working (W10), certified and robustly certified, of 5:
 | all at once | 4 | 4 | 16 | 5 | 4 | 4 |
 | all at once | 4 | 16 | 16 | 5 | 4 | 4 |
 
-Findings (E7 of docs/window-recurrent-report.md: modular division, C7), trained on jebel
+Findings (E7 of docs/research-notes/window-recurrent-report.md: modular division, C7), trained on jebel
 (i7-9700K), indrajala-ml 67fc12f, crate 8c20e510c9a9, 6 workers, 2026-10-13 14:58 to 20:42
 (`window_recurrent_e7_p5.json` then `_p7.json`: 2 `p` x 2 arms x `k` 1 and 4 x `m` 32 and 64 x 5
 seeds, `s` 16, the matrix's settings). Results and models in `data/window-recurrent/e7-p5/` and
@@ -298,7 +298,7 @@ p 7 0fa7a105...153386c6 (was 4cae99c0...5426ada6); `certificates-strict.sha256`:
 - E7' (the claims workplan) is the test E7 meant to be: `k` 1 at 5 and 10 times the states'
   codes, 10 seeds a cell.
 
-Findings (E7' of docs/window-recurrent-report.md: modular division with enough codes,
+Findings (E7' of docs/research-notes/window-recurrent-report.md: modular division with enough codes,
 C7'), trained on jebel, indrajala-ml 9c50fe6, crate 8c20e510c9a9, 6 workers, 2026-10-13 20:45 to
 23:56 (`window_recurrent_e7_prime_p5.json` then `_p7.json`: 2 `p` x 2 arms x 2 `m` x 10 seeds,
 `k` 1, `s` 16, E7's settings; `m` 128 and 256 at `p` 5, 256 and 512 at `p` 7, about 5 and 10
@@ -334,7 +334,7 @@ none certified.
   screens 0.94-0.99). D26 kept E7's budget (no `k` 1 budget stop in E7); E7' shows a few runs it
   cut short, none near exact (best screens under 0.99).
 
-Findings (E8 of docs/window-recurrent-report.md: the modular-sum ladder's first rungs,
+Findings (E8 of docs/research-notes/window-recurrent-report.md: the modular-sum ladder's first rungs,
 C8), trained on pyramidon (Ryzen 7 3700U), indrajala-ml b886001, crate 8c20e510c9a9, 3 workers,
 2026-10-14 05:50 to 06:19 (`window_recurrent_e8_q4.json` then `_q5.json`: `q` 4 and 5 x 2 arms x
 10 seeds, `k` 1, `s` 16, `m` 32, E7''s settings). Results and models in
@@ -361,7 +361,7 @@ a4ca4818...ee347172).
   earlier experiment (addition's `k` 1 needed 6-18, its `k` 4 trained to 12). E8b is E8 trained
   past the bound.
 
-Findings (E3 and E4 of docs/window-recurrent-report.md, its stage 7: the code count and the
+Findings (E3 and E4 of docs/research-notes/window-recurrent-report.md, its stage 7: the code count and the
 curriculum against all at once, C3-C5; C0's reruns), trained on jebel (i7-9700K), indrajala-ml
 cf6ac86, crate 8c20e510c9a9, 6 workers, finished 2026-10-14 12:41 (`window_recurrent_e3_e4_trimmed.json`,
 D34: `k` 4 `s` 4, the curriculum at `m` 3, 4, 6, 8 and 16 and all at once at `m` 16, seeds 0-19,
@@ -411,7 +411,7 @@ came with E5 (its findings): C3 0.042, still holding; C4 0.088, so C4's refutati
   fit (12 of 16 pass step 3) and break at 8-12 columns: memorising, as the exclusion bound (D23)
   predicts for training to 3 windows (12 columns) with 8-16 codes.
 
-Findings (E8c of docs/window-recurrent-report.md: the modular sum as an existence test,
+Findings (E8c of docs/research-notes/window-recurrent-report.md: the modular sum as an existence test,
 C8, D35), trained on jebel (i7-9700K), indrajala-ml 713ff5f, crate abcba3d7a30e, 6 workers,
 2026-10-14 14:19 to 14:31 (`window_recurrent_e8c_q4.json` then `_q5.json`: E8b's curriculum cell,
 `k` 1, `s` 16, `m` 16, 20 steps, the cap the bound `m + q - 1`; each step's network certified, a
@@ -441,7 +441,7 @@ package code) in `e8c-q4/long-tests/` and `e8c-q5/long-tests/`, log
   the machine it found instead of training on past it (E8b: training past a certified step can
   destroy the network). Learning a counter used about twice its states in codes.
 
-Findings (E6 of docs/window-recurrent-report.md, re-registered by D37: the window without
+Findings (E6 of docs/research-notes/window-recurrent-report.md, re-registered by D37: the window without
 its transformer, as an existence test), trained on pyramidon (Ryzen 7 3700U), indrajala-ml 9114f21,
 crate abcba3d7a30e, 3 workers (memory: E8c's long tests ran beside it), 2026-10-14 17:06 to 17:26
 (`window_recurrent_e6_linear.json`: the linear window, the embedding and output layer only, at `k`
@@ -465,7 +465,7 @@ certified networks in `e6-linear/certificates-strict/` (listed in the same manif
 - The others: seed 0 fitted steps 1-3 and plateaued from step 4 until stopped at step 7; seeds 3-5
   were stopped before their first epoch (3 workers). No rate is claimed (D37).
 
-Findings (E2 of docs/window-recurrent-report.md, trimmed by D36: the snapping ablation, C2),
+Findings (E2 of docs/research-notes/window-recurrent-report.md, trimmed by D36: the snapping ablation, C2),
 trained on jebel (i7-9700K), indrajala-ml ce4015d, crate abcba3d7a30e, 6 workers, 2026-10-15 16:54
 to 21:29 (`window_recurrent_e2.json`: E3's curriculum `m` 16 cell at `k` 4 `s` 4 run by run with a
 continuous state, `m` null, seeds 0-19; 7,715 parameters, 38-109 minutes a run, 379 MB peak).
@@ -496,7 +496,7 @@ on jebel at ce4015d, 2 workers, into `e3-e4/long-tests/`, log `e2-long-tests.log
   verdict); it passes B1 at 256 and fails 1 case of 100,000 at 1,024. Sampled tests overstate
   "works"; the certificate is what extrapolates.
 
-Findings (E2b of docs/window-recurrent-report.md, D38: the snapping ablation on the plain
+Findings (E2b of docs/research-notes/window-recurrent-report.md, D38: the snapping ablation on the plain
 recurrence, E6's linear window at `k` 1 `s` 16, the curriculum to 18 columns; **exploratory by D39**:
 the snapped arm's runs ended at their first certified step, against the registered "no early stop",
 so C2b's registered test is E2b'), crate abcba3d7a30e, code at eae605d (`~/code/wt-e2b`; the results'
@@ -542,7 +542,7 @@ files, run from `data/window-recurrent`).
   is stationary, 0 of 3,000 cases wrong, 4 of 100,000 in the long tests. A snapped network (seed 0,
   step 10) keeps one code per carry from the second bin on (spread 0, no shift).
 
-Findings (E2b' of docs/window-recurrent-report.md, D39: E2b's snapped arm with no run
+Findings (E2b' of docs/research-notes/window-recurrent-report.md, D39: E2b's snapped arm with no run
 stopped early, **C2b's registered test**), `scripts/window_recurrent_e2b_prime.json` (E2b's snapped
 config but for `end_at_certified_step` off), crate abcba3d7a30e, code at cea696f (`~/code/wt-e2bp`;
 the results' "commit" is the launching checkout's, ce4015d), 20 seeds, 2,963 parameters: `jebel`,
@@ -577,7 +577,7 @@ all 20 (every break is 64), `pyramidon` at c4a91e7 (`~/code/wt-dev2`), 2 workers
   E8b's collapse past a solution, general at division, is rare at this cell (the stable-replay
   probe: 20 of 20 replays of 4 stable seeds kept the proof).
 
-Findings (E5 of docs/window-recurrent-report.md: unexplored states, C6), from the saved
+Findings (E5 of docs/research-notes/window-recurrent-report.md: unexplored states, C6), from the saved
 networks, no training, on pyramidon, 2026-10-17: `explore scripts/window_recurrent_matrix.json
 scripts/window_recurrent_e3_e4_trimmed.json --workers 4`, about 2 minutes. Every finished snapped
 run's last network, the matrix's and E3/E4's pooled: 195 networks (E3's 15 reruns of the matrix are

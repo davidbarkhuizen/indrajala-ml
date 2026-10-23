@@ -1,5 +1,5 @@
 """
-The window-recurrent study's tasks (docs/window-recurrent-report.md, stage 5, D14-D18):
+The window-recurrent study's tasks (docs/research-notes/window-recurrent-report.md, stage 5, D14-D18):
 what a window-recurrent network learns, as the harness (window_recurrent_study) and the
 certificate (window_recurrent_certificate) read it.
 

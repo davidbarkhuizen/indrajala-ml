@@ -54,4 +54,4 @@ the codes'.
 **What would break it next:** more consumers (each added approximation's answers share the stream:
 rows 3, 5); more states (more codes, longer training, more of the stream for the state: rows 1-3);
 chunked windows (rows 3, 10); discovery (an unknown target makes a state bound mandatory: rows 1,
-2; [machine-discovery.md](machine-discovery.md)).
+2; [machine-discovery.md](../research-notes/machine-discovery.md)).

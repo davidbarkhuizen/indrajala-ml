@@ -180,7 +180,7 @@ subplan revisits its own.
 
 1. **Milestone A, now the window-recurrent adder: done** (retired 2026-10-18,
    `git show e45944e:docs/window-recurrent-adder-workplan.md`; its claims in
-   [window-recurrent-report.md](../window-recurrent-report.md)).
+   [window-recurrent-report.md](../research-notes/window-recurrent-report.md)).
    As first planned (terminated, kept for the record): length generalisation, its subplan P1, P4
    bucketed and P5 with an existence study at `d` 16 and 16 layers:
    - P1, then P4 (bucketed) and P5, then a study: the column transformers trained at

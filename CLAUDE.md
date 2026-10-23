@@ -24,7 +24,7 @@
 ## Studies
 
 A study that trains networks and makes claims from them follows
-[docs/experiment-design.md](docs/experiment-design.md); read it before designing one or writing its
+[docs/research-protocol/experiment-design.md](docs/research-protocol/experiment-design.md); read it before designing one or writing its
 workplan.
 
 - **Every cell must be able to succeed, and its training must exclude memorising:** the model can

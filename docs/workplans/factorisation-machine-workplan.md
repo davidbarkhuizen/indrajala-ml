@@ -4,7 +4,7 @@
 missing infrastructure that would be required to allow the network-machine to truly perform a
 prime-factor decomposition"). Decisions D1-D12 settled under the owner's standing delegation, each
 with its options' pros and cons. Revised 2026-10-14 against
-[experiment-design.md](../experiment-design.md) and the work since (the claims workplan's E7-E8b and
+[experiment-design.md](../research-protocol/experiment-design.md) and the work since (the claims workplan's E7-E8b and
 D30-D34, the factored-state workplan): D1, D3, D4, D6, D9, D10, D11 and D12 revised, D13-D14
 added, F1 restated as an existence claim, the stages and the cost redone. D13 then set by the
 owner: **the controllers' state is factored, one factor per register**, R1 the cross-term's
@@ -12,7 +12,7 @@ first test. The owner granted the
 study one multi-day run, the concluding one (D14). D11 revised by the owner (2026-10-14): F1 keeps
 the calls given; F2's second arm learns them, factored per call level, in place of the inlined
 flat controller (which multiplies control states as a single codebook multiplied division's). F1 reversed by the owner (2026-10-14, evening; D15-D17): no traces and no given decomposition; the network learns from inputs and outputs only and finds its own decomposition ("we can't hand the network the decomposition, it should learn it itself"), trained with the exact machine forward and straight-through gradients backward (D16), and claimed in tiers, the main route a modular certificate against the specifications of the subroutines it learned (D17). Items superseded by the reversal are marked so where they stand. Stages 4-7 and the cost then restated for D15-D17, with D18 (the learned call structure's shape) and D19 (the training executor, batched) settled under delegation, and a capacity row added to each rung's feasibility (2026-10-14). No stage started.** It follows
-[factorisation-note.md](../factorisation-note.md), which states why the window-recurrent network
+[factorisation-note.md](../research-notes/factorisation-note.md), which states why the window-recurrent network
 can't factor and what a machine that can would need (P1-P5); this plan builds that machine. It
 reuses the window-recurrent network, its target-machine certificate (the claims workplan's
 stage 5, D17), the factored state's tuple certificate and harness

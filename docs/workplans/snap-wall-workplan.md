@@ -18,7 +18,7 @@ kept the proof in 10 of 10 of the same replays, against 1 of 10 without it.
 
 ## Why
 
-E2b' (docs/window-recurrent-report.md, D39) trains every snapped run past its first
+E2b' (docs/research-notes/window-recurrent-report.md, D39) trains every snapped run past its first
 certified step. Seed 6 (`curriculum-linear-k1-s16-m16-seed6`) was certified at steps 5-7 and lost
 its proof in step 8's first epoch (screen 1.000 to 0.404). A replay from its saved step-7 network
 (exact: it ends the epoch at the recorded 0.404) shows the mechanism, batch by batch:

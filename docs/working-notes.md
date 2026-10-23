@@ -2,7 +2,7 @@
 
 Hard-won operational knowledge, gathered from the session handovers (2026-10-12 to 10-14) so it
 outlives them. Each note is something that went wrong once. The rules that govern the work are
-elsewhere: CLAUDE.md, [experiment-design.md](experiment-design.md) (studies) and
+elsewhere: CLAUDE.md, [experiment-design.md](research-protocol/experiment-design.md) (studies) and
 [measurement.md](measurement.md) (timing); this file is the "how not to trip" companion. Add a note
 where you meet a new trap; delete one that no longer holds.
 
