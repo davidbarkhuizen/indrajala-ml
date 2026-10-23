@@ -226,7 +226,7 @@ Decided with the owner, each to become a workplan or a stage:
 
 The owner asked which domains to examine once the papers' work is wrapped up. Every target so far
 is an arithmetic transducer (the carry automaton, modular sums, division), the weakness
-`~/code/indrajala-papers/contribution.md` names under "Breadth": the next targets should test
+`~/code/indrajala-research/contribution.md` names under "Breadth": the next targets should test
 whether the method needs that structure. Every one below is an explicit machine, so the
 certificate applies unchanged; only the tasks are new. Each cell keeps the feasibility rules
 (codes at least the minimal states; training to the exclusion bound `m + q - 1`), which for

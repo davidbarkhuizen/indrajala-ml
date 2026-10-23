@@ -11,7 +11,7 @@ here, before its data; T1 and G2 are registered at their stages, before theirs.*
 ## Why
 
 Every target so far is an arithmetic transducer (the carry automaton, modular sums, division), the
-weakness `~/code/indrajala-papers/contribution.md` names under "Breadth". The question is whether
+weakness `~/code/indrajala-research/contribution.md` names under "Breadth". The question is whether
 the method needs that structure. Krohn-Rhodes splits every finite machine into group (permutation)
 parts and aperiodic (reset) parts, so the test is a pair of machines at those two extremes with
 everything else equal, and a random machine as the typical case between them. The groups include
