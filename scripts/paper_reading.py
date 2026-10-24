@@ -7,6 +7,11 @@ its backdrop (`indrajala_ml.batch.BACKDROPS`, by the attempt's name `<backdrop>-
 - `links DATA`: DATA/runs/<backdrop>/seed<s>, each a link to the run's log directory, as `readout`
   reads them.
 - `certify DATA [--jobs J]`: each network recertified in both verdicts into DATA/certify/.
+- `approximations DATA`: T4's reading (D10) of every certified network, a backdrop's at once, into
+  DATA/approximations/<group>.txt.
+- `proof DATA`: T6's reading (D11) of every coded run's log, the answers-only stop at the exact bound
+  and 1.1 times it, then Chow's test set, a backdrop's at once, into DATA/proof/<group>/ and
+  DATA/proof/<group>.txt.
 - `long DATA --share I/N`: the long tests (U1, S1 at 128, 256, 1,024 columns) of the I-th of N
   shares (every N-th network from the I-th, in `plan`'s order) into DATA/long-tests/<network>/, one
   at a time; a network already long-tested is skipped, so a worker restarts where it stopped. A fixed
@@ -21,7 +26,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from indrajala_ml.batch import BACKDROPS, Backdrop
+from indrajala_ml.batch import BACKDROPS, CELLS, Backdrop
 
 PROBE = Path(__file__).resolve().parent / "modular_family_probe.py"
 
@@ -36,14 +41,32 @@ class Network:
     path: Path
 
     @property
+    def group(self) -> str:
+        return group(self.attempt)
+
+    @property
     def name(self) -> str:
         return f"{self.attempt}-{self.path.name.removesuffix('.network.json')}"
 
 
 def split(attempt: str) -> tuple[str, int]:
-    """An attempt's backdrop and seed: `d11-family-300` -> (`d11-family`, 300)."""
-    backdrop, _, seed = attempt.rpartition("-")
+    """
+    An attempt's backdrop and seed: `d11-family-300` -> (`d11-family`, 300); a batch of several cells
+    names its attempts `<cell>.<backdrop>-<seed>` (T3's `approximation.d5-family-wide-300`).
+    """
+    backdrop, _, seed = group(attempt).rpartition(".")[2], None, attempt.rpartition("-")[2]
     return backdrop, int(seed)
+
+
+def group(attempt: str) -> str:
+    """An attempt's cell (if named) and backdrop, its seed left off: the unit a reading is run over."""
+    return attempt.rpartition("-")[0]
+
+
+def coded(attempt: str) -> bool:
+    """Whether the attempt's cell has codes (T3's continuous baseline has none, so no machine to read)."""
+    cell = CELLS.get(group(attempt).partition(".")[0]) if "." in attempt else None
+    return cell is None or "continuous" not in cell.args
 
 
 def run_directory(data: Path, attempt: str) -> Path:
@@ -88,7 +111,7 @@ def probe(*args: str | Path, log: Path | None = None) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("plan", "links", "certify", "long"):
+    for name in ("plan", "links", "certify", "approximations", "proof", "long"):
         command = sub.add_parser(name)
         command.add_argument("data", type=Path)
         if name == "certify":
@@ -108,6 +131,38 @@ def main() -> None:
             link.parent.mkdir(parents=True, exist_ok=True)
             link.unlink(missing_ok=True)
             link.symlink_to(Path("../..") / run_directory(data, attempt).relative_to(data))
+    elif args.command in ("approximations", "proof"):
+        out = data / args.command
+        out.mkdir(exist_ok=True)
+        if args.command == "approximations":
+            groups: dict[str, list[Path]] = {}
+            for n in found:
+                groups.setdefault(n.group, []).append(n.path)
+            extra: list[str] = []
+        else:
+            groups = {}
+            for directory in sorted((data / "attempts").iterdir()):
+                if coded(directory.name):
+                    groups.setdefault(group(directory.name), []).append(
+                        run_directory(data, directory.name) / "log.jsonl"
+                    )
+            extra = ["--slack", "1", "1.1", "--limit", "20000000"]
+        for name, paths in groups.items():
+            report = out / f"{name}.txt"
+            if report.exists():
+                continue
+            backdrop, _ = split(f"{name}-0")
+            where = ["--out", str(out / name)] if args.command == "proof" else []
+            say(f"{args.command} {name}: {len(paths)}")
+            rc = probe(
+                args.command if args.command == "approximations" else "answers-proof",
+                *paths,
+                *task_args(BACKDROPS[backdrop]),
+                *extra,
+                *where,
+                log=report,
+            )
+            say(f"{args.command} {name} exit {rc}")
     elif args.command == "certify":
         (data / "certify").mkdir(exist_ok=True)
         commands = [

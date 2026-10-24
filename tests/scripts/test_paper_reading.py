@@ -42,3 +42,10 @@ def test_shares_cover_every_network_once() -> None:
     items = [script.Network(f"s3-{i}", "s3", i, Path(f"{i}")) for i in range(7)]
     shares = [script.share(items, f"{i}/3") for i in range(3)]
     assert sorted(n.seed for part in shares for n in part) == list(range(7))
+
+
+def test_a_cells_prefix_is_read_and_a_continuous_cell_has_no_machine() -> None:
+    assert script.split("approximation.d5-family-wide-301") == ("d5-family-wide", 301)
+    assert script.group("approximation.d5-family-wide-301") == "approximation.d5-family-wide"
+    assert not script.coded("approximation-continuous.d5-family-wide-300")
+    assert script.coded("approximation-linear.d5-family-wide-300") and script.coded("s3-300")
