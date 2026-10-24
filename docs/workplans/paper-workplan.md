@@ -131,7 +131,7 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     accepted in 2025; outside the automata audience.
 - **D7. The manuscript:** a new file, `indrajala-research/papers/learning-transducers-with-proof.tex`,
   built from P1 and P2; both kept until it supersedes them, then archived (their history kept).
-- **D8. T10 decided after T1's reading:** run only if T1 leaves the approximation's role standing.
+- **D8. T10 decided after T1's reading:** run only if T1 leaves the approximation's role standing. **Decided 2026-10-24: runs** (T1a and T1b hold; "Findings: T1").
 - **D9. The pause (the owner's direction):** the experimental programme stops planning and launching
   new work. **Running registered probes run to their registered ends** (the rule: the deadline's
   completion (D67) and the reheat against restarts' (D63) moved runs, all ending today); their
@@ -458,6 +458,49 @@ manifest `paper/t4.sha256` (85 files). A factor's approximation nontrivial: 1 < 
   sum arm's factors (only ever the sum) are the sharpest observation, exploratory (not registered),
   and T1's arms (the suffix and token outputs) can test it: a factor holding a non-approximation
   output exactly would say the factor holds what it is asked, not what is an approximation.
+
+## Findings: T1, the approximation against other extra outputs (2026-10-24, read by D13's rules)
+
+The runner, one batch (`data/window-recurrent/paper/t1/`), 60 attempts at 51c4167, 2026-10-23
+to 19:05: controller on `pyramidon`; workers on `pyramidon` (crate 647f23c), `klip` and `stone`
+(crate 45d6a37: T1 started before the crate check, #969; `same-prefix` on `d5-sum-304` against a
+647f23c rerun, 31 rows identical). Three attempts (`d5-sum-300`, `d5-sum-302`, `d5-suffix-302`)
+were lost on `pyramidon` at a reconnect and re-run in their own directories, appending to their logs
+(the re-run is deterministic: the same seed, the same rows); the runner (#974) and `readout` (#976)
+now read a log's last run, so each counts once, at 400 epochs. Read on `pyramidon`: `t1/read.sh`
+(recertified in both verdicts, `t1/certify/`), the 7 long tests one at a time (2,719-3,702 s each,
+2026-10-23 19:36 to 2026-10-24 02:05; the long-test code is unchanged from 51c4167 to 028cb02), then
+`readout t1/runs --certify t1/certify --long-tests t1/long-tests --pairs sum:suffix sum:token`
+(#978) into `t1/readout-long.txt`, `long-summary` (#977) into `t1/long-tests-summary.txt`.
+
+| arm | succeeded (certified, both verdicts, long-tested) | Wilson 95% | failures near a solution | failures collapsed |
+| --- | --- | --- | --- | --- |
+| `d5-sum` (an approximation) | 6 of 20 | 0.15-0.52 | 11 of 14 | 10 |
+| `d5-suffix` (state-carrying, no approximation) | 0 of 20 | 0.00-0.16 | 0 of 20 | 2 |
+| `d5-token` (stateless) | 1 of 20 | 0.01-0.24 | 0 of 19 | 7 |
+
+- **T1a holds:** sum more often than suffix, Fisher's exact one-sided p 0.0101, Holm over the two
+  0.0202. **T1b holds:** sum more often than token, p 0.0457, Holm 0.0457. **K5's "because"
+  stands** (D13: both under 0.05): an extra output the network can learn does not help as the
+  approximation does; the state-carrying one never certified.
+- **The sum's rate is below its expectation:** 6 of 20 against about 10 (A2's arm, on its own
+  vocabulary `sum difference product`). Its failures mostly
+  came near (11 of 14 had every answer at >= 0.95 at some diagnosis) and lost it; the controls'
+  never came near. Stated so in the paper.
+- **Every certified network certified in both verdicts and passed every long-test case:** 7
+  networks (6 sum, 1 token), each minimised to 25 states, 0 wrong outputs and states, codes reached
+  59-105 (59-103 strict), snap ratio >= 1.001, logit lead >= 0.247; 375,000 cases each (U1 100,000,
+  S1 25,000, at 128, 256 and 1,024 columns), 2,625,000 in all, none failing. The sum's 6 took 55-161
+  epochs (4.6-15.8 min), the token's one 186 (19.8 min).
+- **Exploratory, not registered (D13): `approximations`** (`t1/approximations/`,
+  `approximations-sum.txt`, `approximations-token.txt`): 3 of the 6 sum networks hold `A + B`
+  exactly in one factor (5 blocks; the other factor none), as T4's sum arm did (7 of 10); no factor
+  holds another line, and the token network holds none. No suffix network certified, so T4's open
+  question (does a factor hold a trained output that is no approximation?) stays open.
+- **D8 decided:** T1 leaves the approximation's role standing, so T10 runs. It is registered in
+  its own decision before any of its runs, placed when T2/T5's batch frees the machines.
+- Data `data/window-recurrent/paper/t1/`, manifest `paper/t1.sha256` 9a8026fa...e6d745508f (1,472
+  files, run from `paper/t1`).
 
 ## Stages
 
