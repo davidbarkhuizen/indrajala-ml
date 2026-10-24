@@ -66,8 +66,9 @@ notes; the crystallisation strand can be its own later paper once it works beyon
 | **T8** | The literature, current | a sweep for 2025-2026 work on neural automaton learning, extraction and verification, state tracking and length generalisation; the related work rewritten | 0 | a day |
 
 **Optional, decided after T1 (D8):** T10, an approximation's output beside a machine the method
-fails on (random-q16-0, or S4's harder seeds), existence first: if an approximation lets a random
-machine form, K4 generalises beyond arithmetic, the paper's strongest possible addition.
+fails on, existence first: if an approximation lets a random machine form, K4 generalises beyond
+arithmetic, the paper's strongest possible addition. Redesigned in D19: random-q16-0 is primitive
+(no approximation to give), so planted machines against primitive ones of the same shape.
 
 Feasibility (experiment-design.md, information-flow.md) is written beside each cell at its
 registration: codes at least the target's states (3-10 times), the exclusion bound as the cap, the
@@ -131,7 +132,7 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     accepted in 2025; outside the automata audience.
 - **D7. The manuscript:** a new file, `indrajala-research/papers/learning-transducers-with-proof.tex`,
   built from P1 and P2; both kept until it supersedes them, then archived (their history kept).
-- **D8. T10 decided after T1's reading:** run only if T1 leaves the approximation's role standing. **Decided 2026-10-24: runs** (T1a and T1b hold; "Findings: T1").
+- **D8. T10 decided after T1's reading:** run only if T1 leaves the approximation's role standing. **Decided 2026-10-24: runs** (T1a and T1b hold; "Findings: T1"). Its design: D19.
 - **D9. The pause (the owner's direction):** the experimental programme stops planning and launching
   new work. **Running registered probes run to their registered ends** (the rule: the deadline's
   completion (D67) and the reheat against restarts' (D63) moved runs, all ending today); their
@@ -403,6 +404,91 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     second wave of 3 each time; about 9-10 h.
   - (c) Three batches at once, the hosts split. Pros: no build. Cons: unbalanced (11 against 3 and 3);
     one daemon a host, so no host serves two.
+
+- **D19. T10's design: does an approximation let a random machine form?** (drafted 2026-10-24,
+  before any of its runs; **registered only once T5's `rq12` and `rq16` rates and run times set its
+  size and budget**, the numbers marked *pending* filled then, nothing else changed.) D8 runs T10, but
+  its first named backdrop can't take it: **`random-q16-0` and `random-q12-0` are primitive** (no
+  nontrivial congruence, Rystsov and Szykuła 2023's term; the `congruences` command, #980), as is
+  every random machine in our runs and 54 of 55 random machines checked (`random-q16` seeds 0-39
+  among them; the feasibility register's row 17), so they have no approximation to be given or to find. The arithmetic and the algebras
+  have many (division its p + 1 lines; S3 4, S4 16, move-to-front-4 264), and T4 found the algebras'
+  networks holding them unasked (14 of 22 factors). **The hypothesis (H), stated as one about scale:**
+  past the sizes where primitive machines still certify (`random-q12-0`: 2 of 3, 1 of 4), a target
+  with an approximation is learnable where a primitive one of the same shape isn't, found by the
+  network (as on the algebras) or given as an output (as on division, K4). **Rivals H must beat:** the
+  state-formation work's reading of random machines' failures (the most crowded melting cascade;
+  `order`, the answers' predictability against random machines, which agrees with primitivity on all
+  five backdrops read, so the existing data can't tell them apart); and a cover by components that
+  are no quotient of the target (Krohn-Rhodes), which a congruence-free target still admits.
+  - **Arms (three, the same shape: q states, the identity and 4 random maps, 4 classes):** P0, primitive
+    random machines (`random-q<q>-<m>`); P1, planted machines (`random-planted-q<q>-b<b>-<m>`, #981:
+    random-q's machine with its states in b blocks a random b-state machine moves between), the target
+    alone; P2, P1's machines with the planted quotient given as an extra output (a build: a query token
+    asking the block, as division's encoding asks its approximations; tested, the golden run kept).
+  - **The machine is the unit:** 10 machines an arm, 2 seeds each (60 runs). P1 and P2 share their 10
+    machines (paired). Draws fixed in advance: P0 the first 10 machine seeds whose `congruences` says
+    primitive; P1 the first 10 whose only nontrivial principal congruence is the planted one (so the
+    planting is the one designed difference; draws that gain others are skipped and listed). Planting
+    also constrains the transitions (each token's target block fixed), so other properties can shift:
+    the ones measured below are compared between P0 and P1 before any run, and stated. At q 16, b 4
+    (offline, 2026-10-24): every `random-q16` seed 0-39 is primitive (P0: seeds 0-9); 47 of 60 planted
+    draws carry the planted congruence alone (P1, P2: seeds 0, 4-11, 13; the existence probe's: 15).
+    Why 10 by 2, not 5 by 4: with P0 at 0, T10a at 5 against 5 machines needs 4 of 5 planted machines succeeding (p
+    0.024; 3 of 5 gives 0.083), at 10 against 10 it needs 5 of 10 (p 0.016; 4 of 10, 0.043, misses
+    Holm's 0.025): the claim is about machines, so machines buy power where seeds don't.
+    The planted draws (an owner's question, 2026-10-24): (a) *chosen*, skip a draw that gains any other
+    congruence. Pros: the planting is the one structural difference from P0; the skipped draws carry
+    more structure, so if anything the skip works against H (conservative). Cons: a selection, so the
+    claim is about machines with exactly one approximation. (b) Every draw kept, its extra congruences
+    reported. Pros: no selection. Cons: the number of congruences varies, so a difference could be
+    more structure, not an approximation's existence, and 10 machines can't adjust for it. (c) Every
+    draw kept, read by its number of congruences. Pros: asks whether more approximations help more.
+    Cons: a second question, without the power to answer it.
+  - **Measured beside each machine, before any run:** `congruences`, `order` (rms z against its
+    ensemble; offline 2026-10-24 the planted q16-b4 draws read 0.32, 1.01 and 2.32, the b2 one 0.81,
+    against 0.86 and 1.07 for `random-q16-0` and `-1` and 6.13 for move-to-front-4: planting a
+    congruence doesn't make a machine ordered, so H and `order` come apart here), Chow's `k`, the
+    crucible depth (row 15), each token's rank (its image's size) and whether the machine
+    synchronises (a reset word). The melting cascade (the other rival) is read from P0's and P1's runs
+    afterwards, exploratorily.
+  - **Size and budget (*pending*):** q 16 if T5's `rq16` certifies at most 2 of 20 (b 4, blocks of 4);
+    otherwise the limit has moved past 16 and q is 24 (b 4, blocks of 6), P0's own rate then the
+    control's measure (no T5 rate exists there). The epoch budget T5's (`paper` cell), run times from
+    T5's `rq16`. Feasibility (rows 1, 2, 14, 15, 17) written beside each cell then.
+  - **Success:** as D13's (certified at the stop, both verdicts, every certified network long-tested).
+  - **Tests (one-sided, machine-level, Holm over the two), each against the primitive control:** T10a
+    P1 more often than P0 (found: the target alone), T10b P2 more often than P0 (given, as K4 on
+    division); each an exact Wilcoxon rank-sum over the 10 against 10 machines' success counts. Holm
+    over the two: the smaller p must reach 0.025. P2 against P1 (does giving add to having; paired,
+    a signed-rank) is reported, exploratory. The counts (0-2 a machine) tie heavily, so both tests are exact permutation tests
+    with ties (midranks), their attainable p-values computed and stated at registration; the pooled
+    Fisher's over runs is reported beside them as descriptive, never as the test. **Power, stated:**
+    with P0 at 0, a test passes when 5 of 10 machines succeed at least once (p 0.016); at a per-run
+    rate r a machine does with probability 1 - (1 - r)^2 (0.51 at r 0.3), so a rate of about 0.3 is
+    near the limit this design detects; a smaller effect reads as undecided, not as a refutation.
+  - **Expectations and refutations:** P0 about the T5 rate (at most 2 of 20 by the size's choice).
+    **H stands at q** if T10a holds (the network finds a planted approximation it isn't given); its
+    weaker form (given, as on division) if T10b holds alone; **H is refuted at q** if P1 and P2 both
+    succeed no more often than P0 (the approximation present and given, and no help); between,
+    undecided. Within
+    P1, success against `order` is read exploratorily (H predicts no dependence on `order`).
+  - **Existence first:** before the registered batch, one planted machine at q (not one of the 10), 4
+    seeds, P1 and P2,
+    on a short budget: does the cell form it at all? If neither arm ever forms, T10 isn't feasible at q
+    (row 1 holds, but no cell is shown able to succeed): drop to the next smaller q, or report T10 as
+    not run, with the probe.
+  - **Where:** the runner, when T2/T5's batch and the long tests it needs have the machines; data
+    `data/window-recurrent/paper/t10/`.
+  - Options: (a) *chosen*, planted against primitive machines of one shape, several machines an arm.
+    Pros: only the planted congruence differs; the machine is the unit, so the claim is about machines
+    with approximations, not two machines; separates H from `order`. Cons: a build (P2's output); 2
+    seeds a machine read each machine's own rate coarsely (the test doesn't need it). (b) The original
+    T10 on S4's harder seeds. Pros: no build, S4 has approximations. Cons: S4 runs take 3-4 h; it asks
+    whether an approximation rescues hard seeds of one machine, not whether having one matters, and
+    can't separate H from `order` (S4 is ordered). (c) One planted and one primitive machine, 20 seeds
+    each. Pros: the paper's usual 20 seeds. Cons: two machines, so a difference is the machines',
+    not H's.
 
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
