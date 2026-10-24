@@ -1007,14 +1007,21 @@ ARMS = {
     "product": mf.PRODUCT,
     "suffix": mf.SUFFIX,
     "token": mf.TOKEN,
+    "planted": mf.PLANTED,
 }
+MACHINE_ARMS = ("planted",)  # a machine's queries (wt.query_partitions); the rest are division's
 
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="one probe run")
-    run.add_argument("--arm", choices=sorted(ARMS), default="family", help="division's queries (not with --task)")
+    run.add_argument(
+        "--arm",
+        choices=sorted(ARMS),
+        default="family",
+        help="division's queries, or a machine's (planted: a planted machine's approximation, T10's P2)",
+    )
     seeds = run.add_mutually_exclusive_group(required=True)
     seeds.add_argument("--seed", type=int, help="one run, into --out")
     seeds.add_argument("--first-seed", type=int, help="--seeds runs from this seed, at once, into --out/seed<s>")
@@ -2079,11 +2086,17 @@ def read_network(path: Path, args: argparse.Namespace) -> str:
 
 
 def _target(task: str, args: argparse.Namespace) -> mf.Target:
-    """A task's target: division's or the modular sum's family encoding at its p (the arm's queries), else the machine's own."""
+    """
+    A task's target: division's or the modular sum's family encoding at its p (the arm's queries), else
+    the machine's own, with a machine arm's queries (any other arm: none).
+    """
+    arm = getattr(args, "arm", "family")
     if task.startswith("modular-"):
+        if arm in MACHINE_ARMS:
+            raise SystemExit(f"--arm {arm} asks a machine's approximation: not {task}'s")
         p = int(task.rsplit("-", 1)[1])
-        return mf.Encoding(p, ARMS[args.arm], tuple(getattr(args, "vocabulary", mf.VOCABULARY)))
-    return mf.target_named(task)
+        return mf.Encoding(p, ARMS[arm], tuple(getattr(args, "vocabulary", mf.VOCABULARY)))
+    return mf.target_named(task, ARMS[arm] if arm in MACHINE_ARMS else ())
 
 
 def _trigger_arguments(command: argparse.ArgumentParser) -> None:

@@ -108,6 +108,43 @@ def test_a_probe_run_trains_a_machine_and_certifies_each_step_against_it(tmp_pat
     assert certificate["task"] == "move-to-front-3" and certificate["slot"] == 0
 
 
+def test_a_planted_query_asks_the_block_of_the_state_after_each_token_and_only_the_token_is_certified():
+    """
+    T10's P2 (the paper workplan's D19): a window is the token, then the query token (the machine's
+    tokens' next, 5), its answer the planted block (state mod b) of the state the token leads to.
+    """
+    name = "random-planted-q8-b2-0"
+    encoding = mf.target_named(name, mf.PLANTED)
+    assert isinstance(encoding, mf.MachineEncoding)
+    assert (encoding.width, encoding.tokens, encoding.query_tokens, encoding.classes) == (2, 6, (5,), 4)
+    word = encoding.draw(6, random.Random(1))
+    assert set(word) <= set(range(5))  # tokens drawn from the machine's, never the query's
+    tokens, labels = encoding.example(word)
+    machine = encoding.task.machine
+    assert tokens[0::2] == tuple(float(t) for t in word) and set(tokens[1::2]) == {5.0}
+    assert labels[0::2] == machine.run(word) and labels[1::2] == tuple(s % 2 for s in machine.path(word))
+    kinds = encoding.kinds(tokens, labels)
+    assert kinds[0::2] == [f"token-{t}" for t in word] and set(kinds[1::2]) == {"planted"}
+    assert encoding.certified("token-3") and not encoding.certified("planted")
+    with pytest.raises(AssertionError, match="queries"):
+        mf.target_named("random-q16-0", mf.PLANTED)  # primitive: nothing to ask
+
+
+def test_a_planted_query_run_trains_certifies_and_long_tests_the_machine_on_slot_0(tmp_path: Path):
+    name = "random-planted-q8-b2-0"
+    encoding = mf.target_named(name, mf.PLANTED)
+    settings = mf.Settings(
+        epoch_examples=64, max_epochs=2, diagnose_every=1, screen=4, cases=8, lengths=(2,), long=(4,)
+    )
+    mf.run(encoding, [(4, 4), (4, 4)], 0, 1e9, tmp_path, settings, cap=1)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    assert "planted" in rows[0]["accuracy"] and any(k.startswith("token-") for k in rows[0]["accuracy"])
+    certificate = mf.certify_file(tmp_path / "network.json", encoding, name)
+    assert certificate["task"] == name and certificate["slot"] == 0
+    long = mf.long_test(tmp_path / "network.json", encoding, name, lengths=(8,), properties=("U1",))
+    assert set(long["lengths"]["8"]["properties"]) == {"U1"}
+
+
 # B's origins (the code-consolidation workplan's stage 2b): random-4's machine with bijections only,
 # and at other sizes; each probe's machine and its cell's feasibility (codes a factor, the cap)
 B_PROBES = {

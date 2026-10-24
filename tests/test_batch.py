@@ -331,6 +331,12 @@ def test_a_division_backdrop_runs_by_p_seed_and_arm_its_log_at_the_runs_own_path
     assert "--vocabulary" not in b.BACKDROPS["d11-quotient"].args(0)  # T2's: the default vocabulary
 
 
+def test_a_machine_backdrop_with_an_arm_asks_its_queries():
+    planted = b.Backdrop("random-planted-q16-b4-0", 16, "planted")
+    assert planted.args(3) == ["--runs", "random-planted-q16-b4-0:3", "--arm", "planted"]
+    assert b.BACKDROPS["rq16"].args(3) == ["--runs", "random-q16-0:3"]  # the default arm: none
+
+
 def test_t1s_cell_is_the_approximation_claims():
     command = worker(Path("/tmp"), "w", 1).command(b.Attempt("d5-sum-0", "approximation", "d5-sum", 0))
     assert command[command.index("--budget-epochs") + 1] == "400"

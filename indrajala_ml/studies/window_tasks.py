@@ -515,6 +515,16 @@ def planted_blocks(q: int, blocks: int) -> IntArray:
     return np.arange(q, dtype=np.int64) % blocks
 
 
+def query_partitions(name: str) -> dict[str, IntArray]:
+    """
+    A task's named approximations an encoding can ask as extra outputs, each its states' labels (a
+    congruence): a planted machine's "planted" (planted_blocks; T10's P2, the paper workplan's D19).
+    """
+    if found := re.fullmatch(r"random-planted-q(\d+)-b(\d+)-\d+", name):
+        return {"planted": planted_blocks(int(found[1]), int(found[2]))}
+    return {}
+
+
 Word = tuple[int, ...]
 
 
