@@ -1538,6 +1538,13 @@ def main(argv: list[str]) -> int:
         "congruences", help="each task's machine: its nontrivial principal congruences (its approximations' atoms)"
     )
     congruences.add_argument("tasks", nargs="+", help="task names (wt.task_named)")
+    measures = commands.add_parser(
+        "measures",
+        help="each task's machine measured before any run (the paper workplan's D19): congruences, order, "
+        "Chow's k, the crucible depth, token ranks, synchronising",
+    )
+    measures.add_argument("tasks", nargs="+", help="task names (wt.task_named)")
+    measures.add_argument("--ensemble", type=int, default=30, help="random machines drawn for order")
     summary = commands.add_parser("long-summary", help="a study's long tests: a line per run, failures, all")
     summary.add_argument("root", type=Path, help="long-test's outputs, a <run>/<network>.long-test.json each")
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
@@ -1599,6 +1606,10 @@ def main(argv: list[str]) -> int:
     if args.command == "congruences":
         for name in args.tasks:
             print(congruence_line(name), flush=True)
+        return 0
+    if args.command == "measures":
+        for name in args.tasks:
+            print(measures_line(name, args.ensemble), flush=True)
         return 0
     if args.command == "long-summary":
         print("\n".join(mf.long_summary(args.root)))
@@ -2121,6 +2132,24 @@ def congruence_line(name: str) -> str:
     listed = ", ".join(f"{b} blocks x{n}" for b, n in sorted(blocks.items(), reverse=True))
     noun = "congruence" if len(found) == 1 else "congruences"
     return f"{name}: {machine.states} states, {len(found)} nontrivial principal {noun} ({listed})"
+
+
+def measures_line(name: str, ensemble: int) -> str:
+    """
+    A task's machine measured before any run (D19): its congruences (congruence_line), its order (rms z
+    against random machines of its size), its deepest state's depth plus Chow's k (the crucible depth:
+    the feasibility register's row 15), each token's rank, and whether it synchronises.
+    """
+    machine = wt.task_named(name).machine
+    order = mf.order_against_random(machine, machine.states, ensemble)["rms_z"]
+    depth, k = machine.depth(), machine.distinguishing_length()
+    crucible = "unbounded (not minimal)" if k is None else str(depth + k)
+    ranks = ", ".join(str(rank) for rank in machine.token_ranks())
+    resets = "synchronising" if machine.synchronising() else "not synchronising"
+    return (
+        f"{congruence_line(name)}; order {order}; depth {depth}, Chow's k {k}, crucible depth {crucible}; "
+        f"token ranks {ranks}; {resets}"
+    )
 
 
 def long_test_file(path: Path, encoding: mf.Target, args: argparse.Namespace) -> str:

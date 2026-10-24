@@ -236,3 +236,26 @@ def test_a_planted_random_machine_has_its_blocks_as_a_congruence_and_random_q_s_
     assert len(planted.reachable()) == 16 and planted.distinguishing_length() is not None
     assert planted.is_congruence(wt.planted_blocks(16, 4))
     assert tuple(wt.planted_blocks(16, 4).tolist()) in planted.principal_congruences()  # its blocks numbered as found
+
+
+def test_depth_token_ranks_and_synchronising_read_a_reset_machine_and_a_group():
+    """
+    A 3-state machine with a shift (rank 3) and a reset to 0 (rank 1): depth 2 (0, 1, 2 along the
+    shift), synchronising (the reset is a reset word); S3's word problem permutes its states, so every
+    token's rank is 6 and no word joins two states.
+    """
+    transition = np.array([[1, 0], [2, 0], [0, 0]], dtype=np.int64)
+    machine = wt.Mealy(transition, transition)
+    assert machine.depth() == 2 and machine.token_ranks() == [3, 1] and machine.synchronising()
+    s3 = wt.task_named("word-problem-s3").machine
+    assert s3.token_ranks() == [6] * s3.tokens and not s3.synchronising()
+
+
+def test_synchronising_needs_every_pair_joined_not_one_token_of_low_rank():
+    """
+    Two cycles each held by a token that joins within a cycle only: ranks below the states, yet the
+    cycles never meet, so no reset word (Cerny's pairs: (0, 2) is never joined).
+    """
+    transition = np.array([[1, 0], [0, 0], [3, 2], [2, 2]], dtype=np.int64)
+    machine = wt.Mealy(transition, transition)
+    assert machine.token_ranks() == [4, 2] and not machine.synchronising()

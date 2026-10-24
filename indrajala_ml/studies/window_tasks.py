@@ -135,6 +135,39 @@ class Mealy:
                     queue.append(int(r))
         return queue
 
+    def depth(self) -> int:
+        """The deepest reachable state's distance from the start: the longest of the shortest words reaching each."""
+        distance, queue = {self.start: 0}, [self.start]
+        for s in queue:
+            for r in self.transition[s]:
+                if int(r) not in distance:
+                    distance[int(r)] = distance[s] + 1
+                    queue.append(int(r))
+        return max(distance.values())
+
+    def token_ranks(self) -> list[int]:
+        """Each token's rank: the size of its map's image (the states some state goes to on it)."""
+        return [len({int(r) for r in self.transition[:, t]}) for t in range(self.tokens)]
+
+    def synchronising(self) -> bool:
+        """
+        Whether some word (a reset word) takes every state to one: by Cerny's criterion, whether every
+        pair of states is taken to one by some word (pairs read back from the merged ones).
+        """
+        before: dict[int, set[tuple[int, int]]] = {}
+        for s, r in itertools.combinations_with_replacement(range(self.states), 2):
+            for t in range(self.tokens):
+                a, b = sorted((int(self.transition[s, t]), int(self.transition[r, t])))
+                before.setdefault(a * self.states + b, set()).add((s, r))
+        merged = {(s, s) for s in range(self.states)}
+        queue = list(merged)
+        for a, b in queue:
+            for pair in before.get(a * self.states + b, ()):
+                if pair not in merged:
+                    merged.add(pair)
+                    queue.append(pair)
+        return len(merged) == self.states * (self.states + 1) // 2
+
     def path(self, tokens: Sequence[int]) -> list[int]:
         """The states after each token of a word from the start."""
         table, state = self._table, self.start
