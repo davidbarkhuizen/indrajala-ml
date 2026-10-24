@@ -222,3 +222,17 @@ def test_principal_congruences_are_divisions_lines_s3s_cosets_and_none_for_a_ran
     s3 = wt.task_named("word-problem-s3").machine.principal_congruences()
     assert sorted(max(labels) + 1 for labels in s3) == [2, 3, 3, 3]
     assert wt.task_named("random-q16-0").machine.principal_congruences() == []
+
+
+def test_a_planted_random_machine_has_its_blocks_as_a_congruence_and_random_q_s_shape():
+    """
+    random-planted-q16-b4-0: random-q16's tokens (the identity first) and 4 classes, every state
+    reachable, minimal, and its planted blocks (s mod 4) a congruence, where random-q16-0 is primitive.
+    """
+    planted = wt.task_named("random-planted-q16-b4-0").machine
+    plain = wt.task_named("random-q16-0").machine
+    assert (planted.states, planted.tokens, planted.classes) == (plain.states, plain.tokens, plain.classes)
+    assert (planted.transition[:, 0] == np.arange(16)).all()
+    assert len(planted.reachable()) == 16 and planted.distinguishing_length() is not None
+    assert planted.is_congruence(wt.planted_blocks(16, 4))
+    assert tuple(wt.planted_blocks(16, 4).tolist()) in planted.principal_congruences()  # its blocks numbered as found
