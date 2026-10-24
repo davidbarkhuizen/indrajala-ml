@@ -608,6 +608,37 @@ now read a log's last run, so each counts once, at 400 epochs. Read on `pyramido
 - Data `data/window-recurrent/paper/t1/`, manifest `paper/t1.sha256` 9a8026fa...e6d745508f (1,472
   files, run from `paper/t1`).
 
+## Findings: T3, the snap and the transformer at scale (2026-10-24, read by D14's rules)
+
+The runner, one batch (`data/window-recurrent/paper/t3/`), 60 attempts, ended before T2/T5's
+launch; recertified in both verdicts (`t3/certify/`). Long tests on 33 networks (the control's 13
+certified, the continuous arm's 20 `network.json`; a continuous state has no certificate, so the
+long tests are its verdict): `t3/long-worker.sh`, each network claimed by an atomic `mkdir`, on
+`pyramidon` (one at a time, memory) and `jebel` (`~/code/wt-batch` at 9ef332c, its long-test code
+identical to main's; results rsynced to `t3/long-tests/`), 2026-10-24 02:06 to 16:43. Then
+`readout t3/runs --certify t3/certify --long-tests t3/long-tests --pairs
+approximation:approximation-continuous approximation:approximation-linear` into
+`t3/readout-long.txt`, `long-summary` into `t3/long-tests-summary.txt`.
+
+| arm | succeeded (certified, both verdicts, long-tested) | Wilson 95% | failures near a solution | failures collapsed |
+| --- | --- | --- | --- | --- |
+| `approximation` (the control: snapped codes, the transformer window) | 13 of 20 | 0.43-0.82 | 6 of 7 | 5 |
+| `approximation-continuous` (no codes) | 0 of 20 | 0.00-0.16 | 20 of 20 | 0 |
+| `approximation-linear` (no blocks) | 0 of 20 | 0.00-0.16 | 0 of 20 | 8 |
+
+- **T3a holds:** the control more often than the continuous arm, Fisher's exact one-sided p
+  6.44e-6, Holm over the two 1.29e-5. **K3 (the snap) stands.** Every continuous network came near
+  (every answer at >= 0.95 at some diagnosis) and every one failed every long-test case: 0 of
+  375,000 each, 7,500,000 in all, from 128 columns. A continuous state fits the training lengths
+  and drifts beyond them; the snap is what makes the learned machine hold at every length.
+- **T3b holds:** the control more often than the linear arm, p 6.44e-6, Holm 1.29e-5. **The
+  transformer's role stands:** without the blocks no run came near.
+- **Every certified control network passed every long-test case:** 13 networks, 375,000 cases each
+  (U1 100,000, S1 25,000, at 128, 256 and 1,024 columns), 4,875,000 in all, none failing; certified
+  at 50-339 epochs (6.3-67.7 min). 27 large drops in 15 control runs, 23 recovered.
+- Data `data/window-recurrent/paper/t3/`, manifest `paper/t3.sha256` b98acaa7...599130b0 (1,696
+  files, run from `paper/t3`, the claims directory left out).
+
 ## Stages
 
 1. **This plan;** the audit's standing decisions applied (F1 recorded in the state-formation
