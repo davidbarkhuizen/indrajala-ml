@@ -410,7 +410,7 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
   size and budget**, the numbers marked *pending* filled then, nothing else changed.) D8 runs T10, but
   its first named backdrop can't take it: **`random-q16-0` and `random-q12-0` are primitive** (no
   nontrivial congruence, Rystsov and Szykuła 2023's term; the `congruences` command, #980), as is
-  every random machine in our runs and 56 of 57 random machines checked (`random-q16` seeds 0-39
+  every random machine in our runs and 54 of 55 random machines checked (`random-q16` seeds 0-39
   among them; the feasibility register's row 17), so they have no approximation to be given or to find. The arithmetic and the algebras
   have many (division its p + 1 lines; S3 4, S4 16, move-to-front-4 264), and T4 found the algebras'
   networks holding them unasked (14 of 22 factors). **The hypothesis (H), stated as one about scale:**
