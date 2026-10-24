@@ -991,7 +991,7 @@ from pathlib import Path
 from typing import Any
 
 from indrajala_ml.measurement import machine_lock
-from indrajala_ml.studies import chow
+from indrajala_ml.studies import chow, inference
 from indrajala_ml.studies import machine_reading as mr
 from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_recurrent_certificate as wc
@@ -1545,6 +1545,13 @@ def main(argv: list[str]) -> int:
         "congruences", help="each task's machine: its nontrivial principal congruences (its approximations' atoms)"
     )
     congruences.add_argument("tasks", nargs="+", help="task names (wt.task_named)")
+    bars = commands.add_parser(
+        "rank-bars",
+        help="a machine-level comparison's attainable p values (the paper workplan's D19): the exact rank-sum "
+        "p for each count of machines succeeding in the tested arm, against each count in the control",
+    )
+    bars.add_argument("--machines", type=int, default=15, help="machines an arm")
+    bars.add_argument("--control", type=int, nargs="+", default=[0, 1, 2, 3], help="control machines succeeding")
     measures = commands.add_parser(
         "measures",
         help="each task's machine measured before any run (the paper workplan's D19): congruences, order, "
@@ -1617,6 +1624,9 @@ def main(argv: list[str]) -> int:
     if args.command == "measures":
         for name in args.tasks:
             print(measures_line(name, args.ensemble), flush=True)
+        return 0
+    if args.command == "rank-bars":
+        print("\n".join(rank_bars(args.machines, args.control)))
         return 0
     if args.command == "long-summary":
         print("\n".join(mf.long_summary(args.root)))
@@ -2145,6 +2155,23 @@ def congruence_line(name: str) -> str:
     listed = ", ".join(f"{b} blocks x{n}" for b, n in sorted(blocks.items(), reverse=True))
     noun = "congruence" if len(found) == 1 else "congruences"
     return f"{name}: {machine.states} states, {len(found)} nontrivial principal {noun} ({listed})"
+
+
+def rank_bars(machines: int, control: list[int]) -> list[str]:
+    """
+    For each count of control machines succeeding once, each count of tested machines succeeding once:
+    the exact one-sided rank-sum p (inference.rank_sum_greater); a machine succeeding twice ranks above
+    one succeeding once, so these are the bars when every success is a machine's only one.
+    """
+    lines: list[str] = []
+    for c in control:
+        ps = [
+            inference.rank_sum_greater([1] * k + [0] * (machines - k), [1] * c + [0] * (machines - c))
+            for k in range(machines + 1)
+        ]
+        listed = ", ".join(f"{k}: {p:.4f}" for k, p in enumerate(ps) if k > c and p < 0.2)
+        lines.append(f"{machines} against {machines}, control {c} succeeding: {listed}")
+    return lines
 
 
 def measures_line(name: str, ensemble: int) -> str:
