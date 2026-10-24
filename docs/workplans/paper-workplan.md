@@ -429,11 +429,12 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
   - **The machine is the unit:** 10 machines an arm, 2 seeds each (60 runs). P1 and P2 share their 10
     machines (paired). Draws fixed in advance: P0 the first 10 machine seeds whose `congruences` says
     primitive; P1 the first 10 whose only nontrivial principal congruence is the planted one (so the
-    planting is the one difference; draws that gain others are skipped and listed). At q 16, b 4
+    planting is the one designed difference; draws that gain others are skipped and listed). Planting
+    also constrains the transitions (each token's target block fixed), so other properties can shift:
+    the ones measured below are compared between P0 and P1 before any run, and stated. At q 16, b 4
     (offline, 2026-10-24): every `random-q16` seed 0-39 is primitive (P0: seeds 0-9); 47 of 60 planted
     draws carry the planted congruence alone (P1, P2: seeds 0, 4-11, 13; the existence probe's: 15).
-    Why 10 by 2, not
-    5 by 4: with P0 at 0, T10a at 5 against 5 machines needs 4 of 5 planted machines succeeding (p
+    Why 10 by 2, not 5 by 4: with P0 at 0, T10a at 5 against 5 machines needs 4 of 5 planted machines succeeding (p
     0.024; 3 of 5 gives 0.083), at 10 against 10 it needs 5 of 10 (p 0.016; 4 of 10, 0.043, misses
     Holm's 0.025): the claim is about machines, so machines buy power where seeds don't.
     The planted draws (an owner's question, 2026-10-24): (a) *chosen*, skip a draw that gains any other
@@ -448,21 +449,29 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     ensemble; offline 2026-10-24 the planted q16-b4 draws read 0.32, 1.01 and 2.32, the b2 one 0.81,
     against 0.86 and 1.07 for `random-q16-0` and `-1` and 6.13 for move-to-front-4: planting a
     congruence doesn't make a machine ordered, so H and `order` come apart here), Chow's `k`, the
-    crucible depth (row 15).
-  - **Size and budget (*pending*):** q the smallest of 16, 20, 24 where T5's primitive rate is at most
-    2 of 20 (`rq16`'s if it is), b 4 (blocks of q/4); the epoch budget T5's (`paper` cell), its run
-    times from T5's `rq16`. Feasibility (rows 1, 2, 14, 15, 17) written beside each cell then.
+    crucible depth (row 15), each token's rank (its image's size) and whether the machine
+    synchronises (a reset word). The melting cascade (the other rival) is read from P0's and P1's runs
+    afterwards, exploratorily.
+  - **Size and budget (*pending*):** q 16 if T5's `rq16` certifies at most 2 of 20 (b 4, blocks of 4);
+    otherwise the limit has moved past 16 and q is 24 (b 4, blocks of 6), P0's own rate then the
+    control's measure (no T5 rate exists there). The epoch budget T5's (`paper` cell), run times from
+    T5's `rq16`. Feasibility (rows 1, 2, 14, 15, 17) written beside each cell then.
   - **Success:** as D13's (certified at the stop, both verdicts, every certified network long-tested).
-  - **Tests (one-sided, machine-level, Holm over the two):** T10a P1 more often than P0 (an exact
-    Wilcoxon rank-sum over the 10 against 10 machines' success counts); T10b P2 more often than P1 (an
-    exact signed-rank over the 10 paired machines; smallest p 1/1024). Holm over the two: the smaller
-    p must reach 0.025. The counts (0-2 a machine) tie heavily, so both tests are exact permutation tests
+  - **Tests (one-sided, machine-level, Holm over the two), each against the primitive control:** T10a
+    P1 more often than P0 (found: the target alone), T10b P2 more often than P0 (given, as K4 on
+    division); each an exact Wilcoxon rank-sum over the 10 against 10 machines' success counts. Holm
+    over the two: the smaller p must reach 0.025. P2 against P1 (does giving add to having; paired,
+    a signed-rank) is reported, exploratory. The counts (0-2 a machine) tie heavily, so both tests are exact permutation tests
     with ties (midranks), their attainable p-values computed and stated at registration; the pooled
-    Fisher's over runs is reported beside them as descriptive, never as the test.
+    Fisher's over runs is reported beside them as descriptive, never as the test. **Power, stated:**
+    with P0 at 0, a test passes when 5 of 10 machines succeed at least once (p 0.016); at a per-run
+    rate r a machine does with probability 1 - (1 - r)^2 (0.51 at r 0.3), so a rate of about 0.3 is
+    near the limit this design detects; a smaller effect reads as undecided, not as a refutation.
   - **Expectations and refutations:** P0 about the T5 rate (at most 2 of 20 by the size's choice).
-    **H stands at q** if T10a holds (the network finds a planted approximation it isn't given) or, as
-    a weaker form, if P2 succeeds where P0 doesn't (given, as on division); **H is refuted at q** if
-    P1 and P2 both succeed no more than P0 (the approximation present and given, and no help). Within
+    **H stands at q** if T10a holds (the network finds a planted approximation it isn't given); its
+    weaker form (given, as on division) if T10b holds alone; **H is refuted at q** if P1 and P2 both
+    succeed no more often than P0 (the approximation present and given, and no help); between,
+    undecided. Within
     P1, success against `order` is read exploratorily (H predicts no dependence on `order`).
   - **Existence first:** before the registered batch, one planted machine at q (not one of the 10), 4
     seeds, P1 and P2,
