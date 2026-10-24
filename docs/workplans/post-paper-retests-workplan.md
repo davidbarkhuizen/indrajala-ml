@@ -13,23 +13,27 @@ specifically with helping us to not lose solutions that we otherwise do lose at 
 snap-to-finite-state - so its something we would then want to use by default - athough by itself it
 won't help us to solve everything - i think that's where we need the depth and split-then-merge
 arch"; and, after the critique of that view, the order: "we should rather look at depth and
-branching first, then return to crystallization at that point". D1-D15 settled under the owner's
+branching first, then return to crystallization at that point"; and, on T2's and T5's early reading
+(2026-10-24, the paper cell certifying S3 1 of 20 and move-to-front-4 4 of 20, against D64's
+crystallisation at 5 of 8 and 2 of 4): "that is what i was saying earlier about starting with
+crystallization and making it the default - we definitely found it to improve success": the order
+back to crystallisation first (D1 (a)), its control at its own epoch budget (D3). D1-D15 settled under the owner's
 delegation, each with its options' pros and cons. Nothing here is built or run before paper 1 is out
 (D2). Items marked *pending* are filled at each part's registration by the rules stated here, before
 that part's data.**
 
 The goal is [machine-discovery.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/machine-discovery.md)'s
 stage A: one general architecture and training method that forms a state, keeps it and certifies on
-every backdrop. Parts: **B, branching** (claims B1, B2), then **L, depth** (claim L1), then **X,
-crystallisation** (claims X1-X3), each on the default the part before it leaves.
+every backdrop. Parts: **X, crystallisation** (claims X1-X3), then **B, branching** (claims B1,
+B2), then **L, depth** (claim L1), each on the default the part before it leaves.
 
 ## The IDs, in time order
 
 | ID | When | Short label | What it is |
 |---|---|---|---|
-| D1 | 2026-10-24 | three parts in sequence | branching (B), then depth (L) on B's default, then crystallisation (X) on L's |
+| D1 | 2026-10-24, revised twice | three parts in sequence | crystallisation (X), then branching (B) on its default, then depth (L) on B's |
 | D2 | 2026-10-24 | the gate | nothing built or run before paper 1's release |
-| D3 | 2026-10-24 | the controls | each part's default's own runs; the paper cell's T2 and T5 runs reused, with a reproduction check |
+| D3 | 2026-10-24, revised | the controls | X's: the paper cell at 1,600 epochs, fresh; B's and L's: the default's own runs |
 | D4 | 2026-10-24 | the backdrops | B and L on the struggling set, by a rule fixed now, and a no-harm backdrop; X on D64's five and the set |
 | D5 | 2026-10-24 | crystallisation's arms | `continuous`; `continuous-reheat` only if the collapse's (D63's) paired verdict favours it |
 | D6 | 2026-10-24 | crystallisation's claims | X1 keeps formed solutions, X2 no harm, X3 the holdouts |
@@ -42,7 +46,7 @@ crystallisation** (claims X1-X3), each on the default the part before it leaves.
 | D13 | 2026-10-24 | seeds and statistics | 20 fresh seeds a cell; registered one-sided "helps", both sides reported; Holm a part |
 | D14 | 2026-10-24 | budgets and machines | each cell's registered epochs; time and memory from a probe; the batch runner |
 | D15 | 2026-10-24 | formed and kept | formed at state share 0.95; kept if certified; the stratified exact test |
-| stages 0-6 | 2026-10-24 | the plan's stages | the gate, builds, B, L, X, findings |
+| stages 0-6 | 2026-10-24, revised | the plan's stages | the gate, X, B's builds, B, L, findings |
 
 From earlier plans: the collapse (D63), the fresh-seed rate (D64), the deadline's completion (D67)
 and the method's constants (F10) in [state-formation-workplan.md](state-formation-workplan.md); the
@@ -74,11 +78,15 @@ since W11; depth was varied only in the primitives' early studies (plain network
 depth, residual ones didn't; two transformer layers beat one). Where the default still fails, depth
 is the untested axis of the window's capacity beside width (row 3), which W1 showed matters.
 
-**Why B and L first (the owner's order, D1).** Most failures never form a state (D64: 10 of its 15),
-and no method of keeping a solution helps those; depth and the split-then-merge window are the
-candidates for forming one. They run on the paper cell (600 epochs a run, its 20-seed rates already
-on disk), so they are cheap and soon. And crystallisation's own question is easier to answer on a
-stronger architecture: the more runs form a state, the more formed runs X1 has to read.
+**Why crystallisation first (the owner's order, D1).** T2's and T5's early reading (certificates,
+before the long tests) put the paper cell at S3 1 of 20 and move-to-front-4 4 of 20, where D64's
+crystallisation certified 5 of 8 and 2 of 4 (post hoc: other seeds, another batch). If it is the
+default, B and L tested on the paper cell would test a base about to be replaced. Two cautions,
+which X's design answers: the comparison is confounded by the budget (crystallisation trains 1,600
+epochs, the paper cell 600), so X's control is the paper cell at 1,600 (D3); and on the holdouts the
+two are alike and low (crystallisation S4 1 of 6, random-q12-0 1 of 8 in D56-D58; the paper cell
+S4 4 of 20, random-q12-0 3 of 20), where B and L are the candidates (most failures never form a
+state: D64, 10 of its 15).
 
 **Crystallisation (part X).** The state-formation strand's method, the continuous crystallisation
 (D54's cell, the margin stop under D60: the batch runner's `continuous` cell), is out of paper 1
@@ -136,14 +144,15 @@ golden run unchanged at 3.
 
 ## Decisions
 
-- **D1. Three parts in sequence: branching (B), then depth (L) on B's default, then crystallisation
-  (X) on L's: (c).**
-  - (a) Crystallisation first, then B and L on its default (the first draft). Pros: B and L tested
-    on the method the owner expects to use. Cons: B and L wait for X's long runs and then run at
+- **D1. Three parts in sequence: crystallisation (X), then branching (B) on its default, then depth
+  (L) on B's: (a), chosen again (the owner, on T2's and T5's early reading) after (c).**
+  - (a) *Chosen.* Crystallisation first, then B and L on its default. Pros: B and L tested on the
+    method the owner expects to use; the early reading's gap (S3 1 of 20 against 5 of 8) says the
+    default is likely to change. Cons: B and L wait for X's long runs and, if X is adopted, run at
     1,600 epochs (about 2.5 times the compute a run); the larger failure class (never formed) waits.
   - (b) X and B as one batch against the paper cell, then L. Pros: the machines filled sooner.
     Cons: X's keeping reading on the weaker architecture, with fewer formed runs to read.
-  - (c) *Chosen (the owner).* B, L, X. Pros: B and L at 600 epochs against controls on disk, soon;
+  - (c) *Chosen first, replaced.* B, L, X. Pros: B and L at 600 epochs against controls on disk, soon;
     they target never-formed runs; X then reads keeping on the strongest architecture, with more
     formed runs (more power for X1). Cons: B's and L's verdicts are on the paper cell's training; if
     X's method is adopted after them, their gains are checked again only by X2's harm reading and
@@ -158,9 +167,11 @@ golden run unchanged at 3.
     about this now"; a crate change in the middle of the paper's batches is a risk to them.
   - (c) After the paper's runs, before its manuscript. Pros: the machines are idle while it is
     written. Cons: not the owner's order ("done with paper 1"); the manuscript may need reruns.
-- **D3. The controls: each part's default's own 20 seeds a backdrop; the paper cell's (the default
-  until a part adopts an arm) are T2's and T5's runs, reused, with two seeds a backdrop re-run to
-  check they reproduce: (b).**
+- **D3. The controls: X's, the paper cell at crystallisation's budget (1,600 epochs), fresh, 20
+  seeds a backdrop, T5's 600-epoch runs reported beside it (so a gain is the method's, not the
+  budget's: one change); B's and L's, the default's own 20 seeds a backdrop (X's runs if
+  crystallisation is adopted); where the paper cell at 600 epochs is the control, T2's and T5's runs
+  reused, with two seeds a backdrop re-run to check they reproduce: (b).**
   - (a) A fresh control in each batch. Pros: concurrent, the same commit. Cons: 20 runs a backdrop
     repeating ones already on disk.
   - (b) *Chosen.* Pros: runs are deterministic and bit-identical across machines (experiment-design.md,
@@ -330,22 +341,24 @@ the configs.*
 ## Stages
 
 0. **The gate (D2):** paper 1 released (the paper workplan's stage 8).
-1. **B's builds (one PR each):** the crate's `merge` op (`indrajala-math-rust`, parity tests; tier 1
+1. **Part X:** D63's paired verdict read offline (D5); D15's formation reading located for the
+   control (logged on the fresh control's runs); D15's stratified exact test (`inference.py`); the
+   cells (`continuous`, `continuous-reheat` if run, the paper cell at 1,600 epochs) and their
+   feasibility rows registered (one PR); a note in the state-formation plan pointing its open test
+   items here; the batch, run to its end (memory `no-deviations-from-early-peeks`); the reading
+   (X1-X3, D10) into "Findings: X".
+2. **B's builds (one PR each):** the crate's `merge` op (`indrajala-math-rust`, parity tests; tier 1
    A/B of the window program's benchmark, `--order ONNO`), then "Bump rust/", then
    `Branches(..., merge=True)` and `--recombine` (numpy and crate paths, parity tests, the golden run
-   unchanged); `--branch-heads` for `--branches` (default 1, the retired design's; 2 here).
-2. **Part B:** the struggling set from T2's and T5's findings (D4); the cells, feasibility rows and
-   claims registered (one PR); probes first (claim nothing): both arms on the set's hardest backdrop,
-   4 seeds, a short epoch budget (if neither ever forms a state, B is reported as not run, with the
-   probe); D3's reproduction runs; the batch on the runner, run to its end (memory
-   `no-deviations-from-early-peeks`); the reading (B1, B2, harm, D10's screens) into "Findings: B".
-3. **Part L:** `--window-blocks` (pure Python, the golden run unchanged); a depth-6 probe of the
+   unchanged); `--branch-heads` for `--branches` (default 1, the retired design's; 2 here). These may
+   be built while X runs.
+3. **Part B:** the struggling set from the default's rates (D4); the cells on the default, feasibility
+   rows and claims registered (one PR); probes first (claim nothing): both arms on the set's hardest
+   backdrop, 4 seeds, a short epoch budget (if neither ever forms a state, B is reported as not run,
+   with the probe); the batch; the reading (B1, B2, harm, D10) into "Findings: B".
+4. **Part L:** `--window-blocks` (pure Python, the golden run unchanged); a depth-6 probe of the
    default, one seed, for its epoch time and memory; the set re-derived if B adopted an arm (D4);
    registered (one PR); the batch; the reading (L1, harm, D10) into "Findings: L".
-4. **Part X:** D63's paired verdict read offline (D5); D15's formation reading located for the
-   control; D15's stratified exact test (`inference.py`); the cells on L's default and their
-   feasibility rows registered (one PR); a note in the state-formation plan pointing its open test
-   items here; the batch; the reading (X1-X3, D10) into "Findings: X".
 5. **Findings** into [failure-kinds.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/failure-kinds.md)
    and the feasibility register (rows 3 and 4 re-read, a row for depth).
 6. **Retire** this plan; its leftovers (depth's bound, D7's options (b)-(d), the constants'
@@ -356,8 +369,9 @@ the configs.*
 - **B:** 2 arms x (the struggling set + 1) x 20, of 600 epochs (S4 3.2 h median in T5), plus the
   reproduction runs: for a set of 3, 160 runs; a day or two on every machine.
 - **L:** (the set + 1) x 20 of 600 epochs at about twice the epoch time.
-- **X:** (5 or more backdrops) x 20 x 1 or 2 arms of 1,600 epochs (D64's spent runs about 10 h on
-  `stone`): the largest part, days on every machine.
+- **X:** (5 or more backdrops) x 20 x 2 or 3 cells (the control at 1,600 epochs among them; a
+  certified paper-cell run stops early) of 1,600 epochs (D64's spent runs about 10 h on `stone`):
+  the largest part, days on every machine.
 
 ## Machines
 

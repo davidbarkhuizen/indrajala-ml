@@ -31,13 +31,13 @@ primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 ## After paper 1: the agreed order (the owner, 2026-10-24)
 
 1. Finish paper 1 ([paper-workplan.md](workplans/paper-workplan.md)).
-2. Branching re-tested properly (the window branches at the base width, and the owner's recombining
-   window: branch a factor, recombine before the output), then whether more network depth helps the
-   cases still struggling (varied alone, against the default's baselines). Depth has not been varied
-   on the window-recurrent architecture (only in the primitives' early studies).
-3. Then a statistically sound verdict on the continuous quasi-static crystallisation (out of the
-   paper by D2: about 3 in 5 on two backdrops, 0 of 10 beyond): whether it keeps the solutions the
-   snap to codes loses, without harm, to be the default if so.
+2. A statistically sound verdict on the continuous quasi-static crystallisation (out of the paper
+   by D2: about 3 in 5 on two backdrops, 0 of 10 beyond): whether it keeps the solutions the snap to
+   codes loses, without harm, against the paper cell at the same epoch budget; the default if so.
+3. Then, on that default, branching re-tested properly (the window branches at the base width, and
+   the owner's recombining window: branch a factor, recombine before the output), then whether more
+   network depth helps the cases still struggling (varied alone). Depth has not been varied on the
+   window-recurrent architecture (only in the primitives' early studies).
 
 The plan for all three: [post-paper-retests-workplan.md](workplans/post-paper-retests-workplan.md).
 
