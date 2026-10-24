@@ -453,6 +453,35 @@ def random_sized_machine(q: int, seed: int) -> Mealy:
             return random_labels(transition, 4, rng)
 
 
+@functools.cache
+def random_planted_machine(q: int, blocks: int, seed: int) -> Mealy:
+    """
+    random-planted-q<q>-b<b>-<seed>, the paper's T10: random-q<q>'s machine (the identity and 4 random
+    maps, 4 classes, redrawn until reachable and minimal) with one approximation planted: the states
+    in b equal blocks (state s in block s mod b), each token's target block a random b-state machine's
+    (the identity on token 0), the state within it random. So `planted_blocks` is a congruence by
+    construction, and only that differs from random-q<q>.
+    """
+    assert q % blocks == 0 and 1 < blocks < q, f"b divides q and 1 < b < q; got q {q}, b {blocks}"
+    rng = Random(f"random-planted-machine-{q}-{blocks}-{seed}")
+    while True:
+        quotient = [[c, *(rng.randrange(blocks) for _ in range(4))] for c in range(blocks)]
+        transition = np.array(
+            [
+                [s, *(rng.randrange(q // blocks) * blocks + quotient[s % blocks][t] for t in range(1, 5))]
+                for s in range(q)
+            ],
+            dtype=np.int64,
+        )
+        if len(Mealy(transition, transition).reachable()) == q:
+            return random_labels(transition, 4, rng)
+
+
+def planted_blocks(q: int, blocks: int) -> IntArray:
+    """random_planted_machine's planted approximation: state s in block s mod b."""
+    return np.arange(q, dtype=np.int64) % blocks
+
+
 Word = tuple[int, ...]
 
 
@@ -777,6 +806,7 @@ MACHINES: dict[str, Callable[..., Mealy]] = {
     r"random-(\d+)-(\d+)": random_machine,
     r"random-perm-(\d+)-(\d+)": random_permutation_machine,
     r"random-q(\d+)-(\d+)": random_sized_machine,
+    r"random-planted-q(\d+)-b(\d+)-(\d+)": random_planted_machine,
 }
 
 
