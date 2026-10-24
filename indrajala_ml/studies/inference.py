@@ -4,7 +4,9 @@ The statistics the window-recurrent claims are analysed by, fixed before any run
 two arms, the Cochran-Armitage test of a trend over a cell's code counts, the Mann-Whitney test of
 two samples (examples to pass), and Holm's correction over a family of tests. By hand (no scipy):
 Fisher's test and Mann-Whitney's without ties are exact, in integers; Cochran-Armitage and
-Mann-Whitney with ties take the normal approximation.
+Mann-Whitney with ties take the normal approximation. The paper workplan's T10 (D19) adds exact
+one-sided rank tests with ties (midranks), for small samples of tied counts: the rank sum of two
+samples and the signed rank of paired ones, each a permutation test counted in integers.
 """
 
 from __future__ import annotations
@@ -137,6 +139,59 @@ def mann_whitney(first: Sequence[float], second: Sequence[float]) -> RankTest:
         return RankTest(u, 1.0, False)
     z = max(0.0, abs(u - mean) - 0.5) / math.sqrt(variance)
     return RankTest(u, _two_sided(z), False)
+
+
+def _doubled_midranks(values: Sequence[float]) -> list[int]:
+    """Each value's midrank among them, doubled (an integer: ties share their ranks' mean)."""
+    order = sorted(values)
+    first = {v: order.index(v) for v in set(values)}  # the 0-based position of each value's first
+    return [2 * first[v] + order.count(v) + 1 for v in values]
+
+
+def rank_sum_greater(first: Sequence[float], second: Sequence[float]) -> float:
+    """
+    The exact one-sided p value of the Wilcoxon rank-sum test that `first` tends larger: under every
+    split of the pooled values into samples of the two sizes equally likely, the share whose first
+    sample's midrank sum is at least the observed one, counted exactly over the tie groups.
+    """
+    m, n = len(first), len(second)
+    assert m > 0 and n > 0
+    ranks = _doubled_midranks([*first, *second])
+    observed = sum(ranks[:m])
+    groups: dict[int, int] = {}  # each doubled midrank, its tie group's size
+    for rank in ranks:
+        groups[rank] = groups.get(rank, 0) + 1
+    ways: dict[tuple[int, int], int] = {(0, 0): 1}  # (values in the first sample, their rank sum): splits
+    for rank, size in groups.items():
+        following: dict[tuple[int, int], int] = {}
+        for (taken, total), count in ways.items():
+            for k in range(min(size, m - taken) + 1):
+                key = (taken + k, total + k * rank)
+                following[key] = following.get(key, 0) + count * math.comb(size, k)
+        ways = following
+    tail = sum(count for (taken, total), count in ways.items() if taken == m and total >= observed)
+    return float(Fraction(tail, math.comb(m + n, m)))
+
+
+def signed_rank_greater(differences: Sequence[float]) -> float:
+    """
+    The exact one-sided p value of the Wilcoxon signed-rank test that paired differences tend
+    positive: zeros dropped (Wilcoxon's convention), the rest ranked by size with midranks, and the
+    share of the 2^n sign assignments whose positive ranks sum to at least the observed; 1 with no
+    nonzero difference.
+    """
+    nonzero = [d for d in differences if d != 0]
+    if not nonzero:
+        return 1.0
+    ranks = _doubled_midranks([abs(d) for d in nonzero])
+    observed = sum(r for r, d in zip(ranks, nonzero, strict=True) if d > 0)
+    ways = {0: 1}  # a positive ranks' sum: assignments
+    for rank in ranks:
+        following = dict(ways)
+        for total, count in ways.items():
+            following[total + rank] = following.get(total + rank, 0) + count
+        ways = following
+    return float(Fraction(sum(c for total, c in ways.items() if total >= observed), 2 ** len(nonzero)))
 
 
 def holm(p_values: Sequence[float]) -> list[float]:

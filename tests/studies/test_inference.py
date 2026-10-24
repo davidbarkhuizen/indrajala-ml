@@ -102,3 +102,40 @@ def test_cochran_armitage_trend():
 def test_holm_adjusts_step_down():
     assert st.holm([0.01, 0.04, 0.03, 0.005]) == pytest.approx([0.03, 0.06, 0.06, 0.02])
     assert st.holm([0.5, 0.9]) == [1.0, 1.0] and st.holm([]) == []
+
+
+def _brute_rank_sum_greater(first: list[float], second: list[float]) -> float:
+    pooled = [*first, *second]
+    ranks = [sum(1.0 if w < v else 0.5 if w == v else 0.0 for w in pooled) + 0.5 for v in pooled]
+    observed = sum(ranks[: len(first)])
+    splits = list(itertools.combinations(range(len(pooled)), len(first)))
+    return sum(sum(ranks[i] for i in split) >= observed - 1e-9 for split in splits) / len(splits)
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [([2, 1, 1, 0], [0, 0, 1]), ([1, 1, 0, 0, 0], [0, 0, 0, 0]), ([3.0, 5.0, 4.0], [1.0, 2.0, 6.0]), ([0, 0], [1, 2])],
+)
+def test_the_exact_rank_sum_test_is_the_share_of_splits_at_least_as_extreme(first: list[float], second: list[float]):
+    assert st.rank_sum_greater(first, second) == pytest.approx(_brute_rank_sum_greater(first, second))
+
+
+def test_the_rank_sum_bars_are_d19s():
+    """T10's bars (the paper workplan's D19): with P0 at 0, 5 of 10 planted machines p 0.016, 4 of 10 0.043; one P0 success, 5 of 10 0.070."""
+    assert st.rank_sum_greater([1] * 5 + [0] * 5, [0] * 10) == pytest.approx(252 / 15504)
+    assert st.rank_sum_greater([2] * 4 + [0] * 6, [0] * 10) == pytest.approx(0.0433, abs=1e-4)
+    assert st.rank_sum_greater([1] * 5 + [0] * 5, [1] + [0] * 9) == pytest.approx(0.0704, abs=1e-4)
+
+
+@pytest.mark.parametrize("differences", [[1, 2, 3], [1, -1, 2, 0, 2], [-1, -2, 1], [0, 0], [2, 2, 1, -1, 1]])
+def test_the_exact_signed_rank_test_is_the_share_of_sign_assignments_at_least_as_extreme(differences: list[float]):
+    nonzero = [d for d in differences if d != 0]
+    if not nonzero:
+        assert st.signed_rank_greater(differences) == 1.0
+        return
+    sizes = [abs(d) for d in nonzero]
+    ranks = [sum(1.0 if w < v else 0.5 if w == v else 0.0 for w in sizes) + 0.5 for v in sizes]
+    observed = sum(r for r, d in zip(ranks, nonzero, strict=True) if d > 0)
+    signs = list(itertools.product((0, 1), repeat=len(ranks)))
+    brute = sum(sum(r for r, s in zip(ranks, sign, strict=True) if s) >= observed - 1e-9 for sign in signs) / len(signs)
+    assert st.signed_rank_greater(differences) == pytest.approx(brute)
