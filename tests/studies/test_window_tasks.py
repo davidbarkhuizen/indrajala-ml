@@ -207,3 +207,18 @@ def test_linear_labels_are_all_of_divisions_congruences(p: int):
         wt.named_labels(wt.task_named("move-to-front-4").machine.coordinates).keys()
         == wt.order_labels(wt.task_named("move-to-front-4").machine.coordinates).keys()
     )
+
+
+def test_principal_congruences_are_divisions_lines_s3s_cosets_and_none_for_a_random_machine():
+    """
+    Division's machine at p has p + 1 approximations of p blocks (its lines: A + kB and B), each a
+    principal congruence; S3's are its three point stabilisers' cosets (3 blocks) and the sign (2);
+    random-q16-0 has none (every pair of states joined closes to one block).
+    """
+    p = 5
+    lines = wt.modular_machine(p).principal_congruences()
+    assert len(lines) == p + 1 and all(max(labels) + 1 == p for labels in lines)
+    assert all(wt.modular_machine(p).is_congruence(labels) for labels in lines)
+    s3 = wt.task_named("word-problem-s3").machine.principal_congruences()
+    assert sorted(max(labels) + 1 for labels in s3) == [2, 3, 3, 3]
+    assert wt.task_named("random-q16-0").machine.principal_congruences() == []

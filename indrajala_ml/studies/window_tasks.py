@@ -207,6 +207,21 @@ class Mealy:
         blocks: dict[int, int] = {}
         return np.array([blocks.setdefault(find(s), len(blocks)) for s in range(self.states)], dtype=np.int64)
 
+    def principal_congruences(self) -> list[tuple[int, ...]]:
+        """
+        The machine's distinct nontrivial principal congruences (each pair of states joined, closed:
+        congruence_closure), finest first, as labels. Every nontrivial congruence holds one, so none
+        means the machine is primitive: no approximation but itself and the one-block machine.
+        """
+        found: set[tuple[int, ...]] = set()
+        for s, r in itertools.combinations(range(self.states), 2):
+            labels = np.arange(self.states)
+            labels[r] = s
+            closure = tuple(int(x) for x in self.congruence_closure(labels))
+            if max(closure) > 0:
+                found.add(closure)
+        return sorted(found, key=lambda labels: (-max(labels), labels))
+
     def distinguishing(self, s: int, r: int) -> list[int]:
         """The shortest word (first in token order) whose last label differs from s and from r."""
         assert s != r
