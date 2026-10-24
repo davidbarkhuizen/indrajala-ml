@@ -27,6 +27,16 @@ when the owner set planned work aside for the state-formation plan, and the snap
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
+## After paper 1: the agreed order (the owner, 2026-10-24)
+
+1. Finish paper 1 ([paper-workplan.md](workplans/paper-workplan.md)).
+2. Statistically sound tests of the work since then, mainly the state-formation strand's
+   crystallisation method (annealing; out of the paper by D2: about 3 in 5 on two backdrops, 0 of
+   10 beyond), and perhaps the window branches, re-tested properly.
+3. Then whether more network depth helps the cases still struggling. Depth has not been varied on
+   the window-recurrent architecture (only in the primitives' early studies); vary it alone first,
+   against step 2's baselines.
+
 ## Retired workplans
 
 Each one is still in git history, with its decisions (D1, D2, ...), design and stages. Code and
