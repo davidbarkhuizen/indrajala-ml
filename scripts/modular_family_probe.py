@@ -985,6 +985,7 @@ import json
 import math
 import multiprocessing
 import sys
+from collections import Counter
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -1533,6 +1534,10 @@ def main(argv: list[str]) -> int:
     separation.add_argument(
         "--live", action="store_true", help="every snapped factor read continuous (a warm-up's network, as it trained)"
     )
+    congruences = commands.add_parser(
+        "congruences", help="each task's machine: its nontrivial principal congruences (its approximations' atoms)"
+    )
+    congruences.add_argument("tasks", nargs="+", help="task names (wt.task_named)")
     summary = commands.add_parser("long-summary", help="a study's long tests: a line per run, failures, all")
     summary.add_argument("root", type=Path, help="long-test's outputs, a <run>/<network>.long-test.json each")
     readout = commands.add_parser("readout", help="a registered comparison: each arm's runs, counts, Fisher's test")
@@ -1590,6 +1595,10 @@ def main(argv: list[str]) -> int:
         pairs = [(better, other) for better, other in (pair.split(":") for pair in args.pairs)] if args.pairs else None
         arms = list(dict.fromkeys(arm for pair in pairs for arm in pair)) if pairs else args.arms
         print("\n".join(mf.readout(args.root, arms, args.certify or args.root / "certify", pairs, args.long_tests)))
+        return 0
+    if args.command == "congruences":
+        for name in args.tasks:
+            print(congruence_line(name), flush=True)
         return 0
     if args.command == "long-summary":
         print("\n".join(mf.long_summary(args.root)))
@@ -2097,6 +2106,21 @@ def logged_run(probe: functools.partial[None], seed: int, out: Path, resume: boo
     last = next(r for r in reversed(rows) if "end" in r)
     verdict = "certified" if last["certified"] else last["end"]
     return f"step {last['step']}, {verdict}, {last['seconds'] / 60:.1f} min"
+
+
+def congruence_line(name: str) -> str:
+    """
+    A task's machine's principal congruences: how many, and their blocks (how many of each); none, said so:
+    the machine is primitive (Rystsov and Szykuła 2023: its transition monoid has no nontrivial congruence).
+    """
+    machine = wt.task_named(name).machine
+    found = machine.principal_congruences()
+    if not found:
+        return f"{name}: {machine.states} states, primitive: no nontrivial congruence (no approximation but itself)"
+    blocks = Counter(max(labels) + 1 for labels in found)
+    listed = ", ".join(f"{b} blocks x{n}" for b, n in sorted(blocks.items(), reverse=True))
+    noun = "congruence" if len(found) == 1 else "congruences"
+    return f"{name}: {machine.states} states, {len(found)} nontrivial principal {noun} ({listed})"
 
 
 def long_test_file(path: Path, encoding: mf.Target, args: argparse.Namespace) -> str:
