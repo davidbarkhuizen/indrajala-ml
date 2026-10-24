@@ -436,6 +436,14 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     5 by 4: with P0 at 0, T10a at 5 against 5 machines needs 4 of 5 planted machines succeeding (p
     0.024; 3 of 5 gives 0.083), at 10 against 10 it needs 5 of 10 (p 0.016; 4 of 10, 0.043, misses
     Holm's 0.025): the claim is about machines, so machines buy power where seeds don't.
+    The planted draws (an owner's question, 2026-10-24): (a) *chosen*, skip a draw that gains any other
+    congruence. Pros: the planting is the one structural difference from P0; the skipped draws carry
+    more structure, so if anything the skip works against H (conservative). Cons: a selection, so the
+    claim is about machines with exactly one approximation. (b) Every draw kept, its extra congruences
+    reported. Pros: no selection. Cons: the number of congruences varies, so a difference could be
+    more structure, not an approximation's existence, and 10 machines can't adjust for it. (c) Every
+    draw kept, read by its number of congruences. Pros: asks whether more approximations help more.
+    Cons: a second question, without the power to answer it.
   - **Measured beside each machine, before any run:** `congruences`, `order` (rms z against its
     ensemble; offline 2026-10-24 the planted q16-b4 draws read 0.32, 1.01 and 2.32, the b2 one 0.81,
     against 0.86 and 1.07 for `random-q16-0` and `-1` and 6.13 for move-to-front-4: planting a
