@@ -132,9 +132,10 @@ WIDE = ("sum", "difference", "product")  # the approximation claim's vocabulary:
 @dataclass(frozen=True)
 class Backdrop:
     """
-    A task to run a cell on: a machine's (`run --runs TASK:SEED`, its log out/seed<s>/log.jsonl), or
-    division at its p with an arm's queries and a vocabulary (`run --p P --seed S --arm A`, its log
-    out/log.jsonl); `bound` the target's states, a bounded cell's state bound.
+    A task to run a cell on: a machine's (`run --runs TASK:SEED`, with `--arm` for a machine's queries,
+    its log out/seed<s>/log.jsonl), or division at its p with an arm's queries and a vocabulary (`run
+    --p P --seed S --arm A`, its log out/log.jsonl); `bound` the target's states, a bounded cell's state
+    bound.
     """
 
     task: str
@@ -148,7 +149,8 @@ class Backdrop:
 
     def args(self, seed: int) -> list[str]:
         if not self.division:
-            return ["--runs", f"{self.task}:{seed}"]
+            arm = [] if self.arm == "family" else ["--arm", self.arm]  # a machine's queries (T10's P2: planted)
+            return ["--runs", f"{self.task}:{seed}", *arm]
         vocabulary = ["--vocabulary", *self.vocabulary] if self.vocabulary else []
         return ["--p", self.task.removeprefix(DIVISION), "--seed", str(seed), "--arm", self.arm, *vocabulary]
 

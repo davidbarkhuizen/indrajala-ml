@@ -94,6 +94,7 @@ SUM = ("sum",)  # the family without the difference (the division workplan's sta
 PRODUCT = ("product",)
 TOKEN = ("token",)  # T1's controls: an extra output that is no approximation, state-free
 SUFFIX = ("suffix",)  # and state-carrying
+PLANTED = ("planted",)  # a planted machine's approximation asked (T10's P2: wt.query_partitions)
 QUOTIENT: tuple[str, ...] = ()
 VOCABULARY = ("sum", "difference")  # the operations with a token: every study's before the approximation claim
 WIDE = ("sum", "difference", "product")  # the approximation claim's, the same for its every arm
@@ -243,22 +244,35 @@ class Encoding:
 @dataclass(frozen=True)
 class MachineEncoding:
     """
-    Any machine's own task as the probe's target (D6): a window is one token, its answer the
-    machine's output, its kind its token (D7), every kind the certified answer's; the diagnosis
+    Any machine's own task as the probe's target (D6): a window is one token, then a query token per
+    query (a named approximation, wt.query_partitions: its answer the block of the state after the
+    token, as division's queries ask its approximations); the token's answer the machine's output,
+    its kind its token (D7), the certified answer's; each query's kind its name. The diagnosis
     shares each factor with each coordinate of the state (window_diagnostics.coordinates).
     """
 
     task: wt.Task
-    width: int = 1
-    query_tokens: tuple[int, ...] = ()
+    queries: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        known = wt.query_partitions(self.task.name)
+        assert set(self.queries) <= set(known), f"{self.task.name}'s queries are of {sorted(known)}; got {self.queries}"
+
+    @property
+    def width(self) -> int:
+        return 1 + len(self.queries)
+
+    @property
+    def query_tokens(self) -> tuple[int, ...]:
+        return tuple(range(self.task.machine.tokens, self.task.machine.tokens + len(self.queries)))
 
     @property
     def tokens(self) -> int:
-        return self.task.machine.tokens
+        return self.task.machine.tokens + len(self.queries)
 
     @property
     def classes(self) -> int:
-        return self.task.machine.classes
+        return max((self.task.machine.classes, *(int(labels.max()) + 1 for labels in self._partitions)))
 
     @property
     def target_states(self) -> int:
@@ -268,16 +282,27 @@ class MachineEncoding:
         """n uniform tokens, then the identity (token 0), as division's final zero column: its answer
         needs the state the word left, so even one token trains the state (a probe without it,
         2026-10-17: 5 of 6 runs at 6 states kept one code from step 1, where no answer needs the state)."""
-        return [rng.randrange(self.tokens) for _ in range(n)] + [0]
+        return [rng.randrange(self.task.machine.tokens) for _ in range(n)] + [0]
 
     def example(self, columns: Sequence[int]) -> Example:
-        return tuple(float(token) for token in columns), self.task.machine.run(columns)
+        machine = self.task.machine
+        if not self.queries:
+            return tuple(float(token) for token in columns), machine.run(columns)
+        tokens: list[float] = []
+        labels: list[int] = []
+        for token, label, state in zip(columns, machine.run(columns), machine.path(columns), strict=True):
+            tokens += (float(token), *(float(q) for q in self.query_tokens))
+            labels += (label, *(int(blocks[state]) for blocks in self._partitions))
+        return tuple(tokens), tuple(labels)
 
     def kinds(self, tokens: Sequence[float], labels: Sequence[int]) -> list[str]:
-        return [f"token-{int(token)}" for token in tokens]
+        width = self.width
+        return [
+            f"token-{int(tokens[i])}" if i % width == 0 else self.queries[i % width - 1] for i in range(len(tokens))
+        ]
 
     def certified(self, kind: str) -> bool:
-        return True
+        return kind not in self.queries
 
     @property
     def quantities(self) -> dict[str, Callable[[Any], int]]:
@@ -285,6 +310,12 @@ class MachineEncoding:
 
     def states(self, columns: Sequence[int]) -> list[int]:
         return self.task.machine.path(columns)
+
+    @functools.cached_property
+    def _partitions(self) -> tuple[npt.NDArray[np.int64], ...]:
+        """Each query's labels of the machine's states."""
+        known = wt.query_partitions(self.task.name)
+        return tuple(known[q] for q in self.queries)
 
 
 class Target(Protocol):
@@ -323,10 +354,10 @@ class Target(Protocol):
 
 
 def target_named(name: str, queries: tuple[str, ...] = (), vocabulary: tuple[str, ...] = VOCABULARY) -> Target:
-    """modular-division-p's Encoding (with queries and vocabulary), or any other task's MachineEncoding."""
+    """modular-division-p's Encoding (with queries and vocabulary), or any other task's MachineEncoding (with queries)."""
     if found := re.fullmatch(r"modular-division-(\d+)", name):
         return Encoding(int(found[1]), queries, vocabulary)
-    return MachineEncoding(wt.task_named(name))
+    return MachineEncoding(wt.task_named(name), queries)
 
 
 def columns(n: int, rng: random.Random) -> list[int]:
