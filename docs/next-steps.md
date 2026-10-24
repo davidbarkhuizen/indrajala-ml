@@ -31,15 +31,15 @@ primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 ## After paper 1: the agreed order (the owner, 2026-10-24)
 
 1. Finish paper 1 ([paper-workplan.md](workplans/paper-workplan.md)).
-2. Statistically sound tests of the work since then, mainly the state-formation strand's
-   crystallisation method (annealing; out of the paper by D2: about 3 in 5 on two backdrops, 0 of
-   10 beyond), and perhaps the window branches, re-tested properly.
-3. Then whether more network depth helps the cases still struggling. Depth has not been varied on
-   the window-recurrent architecture (only in the primitives' early studies); vary it alone first,
-   against step 2's baselines.
+2. Branching re-tested properly (the window branches at the base width, and the owner's recombining
+   window: branch a factor, recombine before the output), then whether more network depth helps the
+   cases still struggling (varied alone, against the default's baselines). Depth has not been varied
+   on the window-recurrent architecture (only in the primitives' early studies).
+3. Then a statistically sound verdict on the continuous quasi-static crystallisation (out of the
+   paper by D2: about 3 in 5 on two backdrops, 0 of 10 beyond): whether it keeps the solutions the
+   snap to codes loses, without harm, to be the default if so.
 
-The plan for all three, with the owner's recombining window (branch a factor, recombine before the
-output) in the branching part: [post-paper-retests-workplan.md](workplans/post-paper-retests-workplan.md).
+The plan for all three: [post-paper-retests-workplan.md](workplans/post-paper-retests-workplan.md).
 
 ## Retired workplans
 
