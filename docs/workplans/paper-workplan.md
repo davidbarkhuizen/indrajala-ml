@@ -479,11 +479,14 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     image). The probe's machine (seed 15): `order` 1.84, token ranks 16, 10, 5, 9, 6. **The backdrops**
     in `indrajala_ml/batch.py`: `t10-p0-<m>`, `t10-p1-<m>`, `t10-p2-<m>` (`--arm planted`),
     `t10-probe-p1`, `t10-probe-p2`. **The existence probe:** `t10-probe-p1` and `t10-probe-p2`, run
-    seeds 400-403 (8 runs), the `paper` cell cut at **400 epochs** (the paper cell certified T5's
-    machines at 52-394 epochs, median about 183); it passes if either arm certifies once. If neither
+    seeds 400-403 (8 runs), the `paper` cell at its **600 epochs** (amended 2026-10-24 before any of the probe's data: the
+    registered 400-epoch cut isn't expressible, the runner's `--cutoff-epochs` being for continuous
+    runs only; its first launch, `t10/probe-void/`, refused at the argument check, nothing trained;
+    the paper cell certified T5's machines at 52-394 epochs, median about 183); it passes if either
+    arm certifies once. If neither
     does, T10 drops to q 12 (b 4, blocks of 3: P0's own rate the control's measure; draws by the same
-    rules) or is reported as not run, with the probe. Where: `klip` (3 slots) while T2 and T5's long
-    tests hold `jebel` and `stone`; the batch on the runner once they end.
+    rules) or is reported as not run, with the probe. Where: `klip` and `pyramidon` (3 slots each) while T2
+    and T5's long tests hold `jebel` and `stone`; the batch on the runner once they end.
   - **Success:** as D13's (certified at the stop, both verdicts, every certified network long-tested).
   - **Tests (one-sided, machine-level, Holm over the two), each against the primitive control:** T10a
     P1 more often than P0 (found: the target alone), T10b P2 more often than P0 (given, as K4 on
