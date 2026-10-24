@@ -429,14 +429,15 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     random-q's machine with its states in b blocks a random b-state machine moves between), the target
     alone; P2, P1's machines with the planted quotient given as an extra output (a build: a query token
     asking the block, as division's encoding asks its approximations; tested, the golden run kept).
-  - **The machine is the unit:** 10 machines an arm, 2 seeds each (60 runs). P1 and P2 share their 10
-    machines (paired). Draws fixed in advance: P0 the first 10 machine seeds whose `congruences` says
+  - **The machine is the unit:** 15 machines an arm, 2 seeds each (90 runs; 10 before the power
+    amendment below). P1 and P2 share their 15 machines (paired). Draws fixed in advance: P0 the first 10 machine seeds whose `congruences` says
     primitive; P1 the first 10 whose only nontrivial principal congruence is the planted one (so the
     planting is the one designed difference; draws that gain others are skipped and listed). Planting
     also constrains the transitions (each token's target block fixed), so other properties can shift:
     the ones measured below are compared between P0 and P1 before any run, and stated. At q 16, b 4
     (offline, 2026-10-24): every `random-q16` seed 0-39 is primitive (P0: seeds 0-9); 47 of 60 planted
-    draws carry the planted congruence alone (P1, P2: seeds 0, 4-11, 13; the existence probe's: 15).
+    draws carry the planted congruence alone (P1, P2: seeds 0, 4-11, 13, 16, 18-20, 22; the existence
+    probe's: 15; P0 seeds 0-14, all primitive).
     Why 10 by 2, not 5 by 4: with P0 at 0, T10a at 5 against 5 machines needs 4 of 5 planted machines succeeding (p
     0.024; 3 of 5 gives 0.083), at 10 against 10 it needs 5 of 10 (p 0.016; 4 of 10, 0.043, misses
     Holm's 0.025): the claim is about machines, so machines buy power where seeds don't.
@@ -455,7 +456,7 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     crucible depth (row 15), each token's rank (its image's size) and whether the machine
     synchronises (a reset word). The melting cascade (the other rival) is read from P0's and P1's runs
     afterwards, exploratorily.
-  - **Size and budget (*pending*):** q 16 if T5's `rq16` certifies at most 2 of 20 (b 4, blocks of 4);
+  - **Size and budget (*pending*):** q 16 if T5's `rq16` certifies 0 of 20 (b 4, blocks of 4);
     otherwise the limit has moved past 16 and q is 24 (b 4, blocks of 6), P0's own rate then the
     control's measure (no T5 rate exists there). The epoch budget T5's (`paper` cell), run times from
     T5's `rq16`. Feasibility (rows 1, 2, 14, 15, 17) written beside each cell then.
@@ -470,7 +471,23 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     with P0 at 0, a test passes when 5 of 10 machines succeed at least once (p 0.016); at a per-run
     rate r a machine does with probability 1 - (1 - r)^2 (0.51 at r 0.3), so a rate of about 0.3 is
     near the limit this design detects; a smaller effect reads as undecided, not as a refutation.
-  - **Expectations and refutations:** P0 about the T5 rate (at most 2 of 20 by the size's choice).
+    **The power amendment (2026-10-24, before T5's `rq16` was read; the bars above are at 10 machines,
+    as drafted):** the power above held only with P0 at 0, but the size rule allowed P0 2 of 20, and
+    one P0 success moves the bar (exact, 10 against 10: 5 of 10 machines p 0.070, 6 of 10 0.029,
+    7 of 10 0.010). Simulated power of T10a (p at most 0.025), P0's per-run rate r0 against P1's r1:
+    10 machines, r0 0: 0.28, 0.65, 0.90 at r1 0.2, 0.3, 0.4; r0 0.1: 0.07, 0.20, 0.45. 15 machines,
+    r0 0: 0.69, 0.95, 1.00; r0 0.05: 0.28, 0.63, 0.88. 20 machines, r0 0: 0.89, 0.99, 1.00; r0
+    0.05: 0.40, 0.78, 0.97. Options: (a) unchanged, the conditional bars stated. Pros: no change, 60
+    runs. Cons: at P0 2 of 20, power 0.20 at r1 0.3, so T10 reads undecided even where H holds. (b)
+    The size rule tightened, q 16 only if `rq16` certifies 0 of 20, else q 24. Pros: H's own
+    statement (past the sizes where primitive machines still certify); P0 near 0. Cons: power still
+    0.65 at r1 0.3; q 24 may not form (the existence probe guards it). (c) *Chosen:* (b) and 15
+    machines an arm (90 runs). Pros: power 0.95 at r1 0.3 with P0 at 0, 0.63 if P0 leaks at 0.05;
+    the draws exist (P0 seeds 0-14 primitive; P1 the next five carrying the planted congruence
+    alone). Cons: 1.5 times the runs. (d) 20 machines. Pros: the most power. Cons: twice the runs,
+    for less gain over (c). The attainable p-values at 15 against 15 are computed at registration,
+    as before.
+  - **Expectations and refutations:** P0 about the T5 rate (0 of 20 at q 16 by the size's choice, the power amendment).
     **H stands at q** if T10a holds (the network finds a planted approximation it isn't given); its
     weaker form (given, as on division) if T10b holds alone; **H is refuted at q** if P1 and P2 both
     succeed no more often than P0 (the approximation present and given, and no help); between,
