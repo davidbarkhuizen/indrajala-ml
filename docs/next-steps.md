@@ -19,7 +19,8 @@ in progress keeps its own list: [general-algebras-workplan.md](workplans/general
 [arbitrary-length-addition-workplan.md](workplans/arbitrary-length-addition-workplan.md),
 [state-formation-workplan.md](workplans/state-formation-workplan.md),
 [aarch64-workplan.md](workplans/aarch64-workplan.md),
-[factorisation-machine-workplan.md](workplans/factorisation-machine-workplan.md), and the paused
+[factorisation-machine-workplan.md](workplans/factorisation-machine-workplan.md),
+[post-paper-retests-workplan.md](workplans/post-paper-retests-workplan.md) (gated on paper 1), and the paused
 [snap-wall-workplan.md](workplans/snap-wall-workplan.md). Of the research plans, the general
 algebras, the factorisation machine and the adders of any length have been paused since 2026-10-20,
 when the owner set planned work aside for the state-formation plan, and the snap wall since
@@ -36,6 +37,9 @@ primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 3. Then whether more network depth helps the cases still struggling. Depth has not been varied on
    the window-recurrent architecture (only in the primitives' early studies); vary it alone first,
    against step 2's baselines.
+
+The plan for all three, with the owner's recombining window (branch a factor, recombine before the
+output) in the branching part: [post-paper-retests-workplan.md](workplans/post-paper-retests-workplan.md).
 
 ## Retired workplans
 
