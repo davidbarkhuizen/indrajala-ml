@@ -406,8 +406,8 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     one daemon a host, so no host serves two.
 
 - **D19. T10's design: does an approximation let a random machine form?** (drafted 2026-10-24,
-  before any of its runs; **registered only once T5's `rq12` and `rq16` rates and run times set its
-  size and budget**, the numbers marked *pending* filled then, nothing else changed.) D8 runs T10, but
+  before any of its runs; **registered 2026-10-24, after T5's batch ended**: its size and budget
+  filled by their rules below, nothing else changed.) D8 runs T10, but
   its first named backdrop can't take it: **`random-q16-0` and `random-q12-0` are primitive** (no
   nontrivial congruence, Rystsov and Szykuła 2023's term; the `congruences` command, #980), as is
   every random machine in our runs and 54 of 55 random machines checked (`random-q16` seeds 0-39
@@ -456,10 +456,34 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     crucible depth (row 15), each token's rank (its image's size) and whether the machine
     synchronises (a reset word). The melting cascade (the other rival) is read from P0's and P1's runs
     afterwards, exploratorily.
-  - **Size and budget (*pending*):** q 16 if T5's `rq16` certifies 0 of 20 (b 4, blocks of 4);
-    otherwise the limit has moved past 16 and q is 24 (b 4, blocks of 6), P0's own rate then the
-    control's measure (no T5 rate exists there). The epoch budget T5's (`paper` cell), run times from
-    T5's `rq16`. Feasibility (rows 1, 2, 14, 15, 17) written beside each cell then.
+  - **Size and budget (registered 2026-10-24, after T5's batch ended; filled by the rules above,
+    nothing else changed):** T5's `rq16` certified **0 of 20** (every run spent at 600 epochs; the
+    certificates, so the long tests can't raise it), so **q 16, b 4 (blocks of 4)**, the draws as
+    drafted: P0 `random-q16` seeds 0-14; P1 and P2 planted seeds 0, 4-11, 13, 16, 18-20, 22 (1-3, 12,
+    14, 17 and 21 skipped: other congruences); the probe's machine seed 15. **Run seeds 400 and 401**
+    on every machine (fresh: T5 ran `random-q16-0` at 300-319). **The epoch budget: T5's, the `paper`
+    cell's 600.** T5's `rq16` runs took 113-267 minutes (median 186) to spend it on the hosts of its
+    batch, so the batch is about 90 x 3 h, half a day on every machine. **The bars** (`rank-bars
+    --machines 15`, exact, 15 against 15, Holm's 0.025 for the smaller p): P0 at 0 machines
+    succeeding, 5 machines (p 0.0211); at 1, 7 (0.0176); at 2, 9 (0.0105); at 3, 10 (0.0127).
+    **Feasibility (every cell, as D16's table for `rq16`):** row 1, 12 codes a factor, 144 joint (9.0
+    x q); row 2, the cap 159 (the exclusion bound at m 144, q 16); row 14, every state reachable and
+    every pair told apart within the check (Chow's `k` 1-2, depth 4-6, below); row 15, crucible depth
+    4-6, within its cap of 8 (descriptive: the `paper` cell has no crucible); row 17, P0 primitive, P1
+    and P2 the planted congruence alone (4 blocks of 4), checked by
+    `test_t10s_cells_meet_their_registered_bounds_and_draws`. **P0 against P1, measured before any
+    run** (`data/window-recurrent/paper/t10/measures-q16.txt`, 31 draws): crucible depth mean 4.8
+    both (4-6); Chow's `k` 1-2 both; every machine synchronising; `order` mean 0.65 (0.15-1.07)
+    against 0.83 (0.18-2.07: P1 seeds 18 at 2.07 and 5 at 1.56 above P0's maximum); P1's non-identity
+    tokens rank lower, 9.37 against 10.25 (the planting fixes each token's target block, narrowing its
+    image). The probe's machine (seed 15): `order` 1.84, token ranks 16, 10, 5, 9, 6. **The backdrops**
+    in `indrajala_ml/batch.py`: `t10-p0-<m>`, `t10-p1-<m>`, `t10-p2-<m>` (`--arm planted`),
+    `t10-probe-p1`, `t10-probe-p2`. **The existence probe:** `t10-probe-p1` and `t10-probe-p2`, run
+    seeds 400-403 (8 runs), the `paper` cell cut at **400 epochs** (the paper cell certified T5's
+    machines at 52-394 epochs, median about 183); it passes if either arm certifies once. If neither
+    does, T10 drops to q 12 (b 4, blocks of 3: P0's own rate the control's measure; draws by the same
+    rules) or is reported as not run, with the probe. Where: `klip` (3 slots) while T2 and T5's long
+    tests hold `jebel` and `stone`; the batch on the runner once they end.
   - **Success:** as D13's (certified at the stop, both verdicts, every certified network long-tested).
   - **Tests (one-sided, machine-level, Holm over the two), each against the primitive control:** T10a
     P1 more often than P0 (found: the target alone), T10b P2 more often than P0 (given, as K4 on

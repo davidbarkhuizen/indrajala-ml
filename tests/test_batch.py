@@ -418,6 +418,28 @@ def test_t2_and_t5s_cells_meet_their_registered_bounds(name: str):
     assert mf.exclusion_bound(q, factors) == cap
 
 
+def test_t10s_cells_meet_their_registered_bounds_and_draws():
+    from fractions import Fraction
+
+    from indrajala_ml.studies import modular_family as mf
+    from indrajala_ml.studies import window_tasks as wt
+
+    factors = mf.scaled_factors(16, Fraction(32, 11), 2, 32)
+    assert factors == [(32, 12), (32, 12)] and mf.exclusion_bound(16, factors) == 159  # rows 1, 2: as rq16's
+    t10 = {name: d for name, d in b.BACKDROPS.items() if name.startswith("t10-")}
+    assert len(t10) == 47 and all(d.bound == 16 for d in t10.values())
+    assert {d.arm for n, d in t10.items() if "p2" in n} == {"planted"}
+    assert {d.arm for n, d in t10.items() if "p2" not in n} == {"family"}
+    planted = wt.planted_blocks(16, 4)
+    for m in b.T10_P0:
+        assert wt.task_named(f"random-q16-{m}").machine.principal_congruences() == []  # row 17: primitive
+    for m in (*b.T10_PLANTED, b.T10_PROBE):
+        found = wt.task_named(f"random-planted-q16-b4-{m}").machine.principal_congruences()
+        assert len(found) == 1 and wt.task_named(f"random-planted-q16-b4-{m}").machine.is_congruence(planted)
+    assert b.BACKDROPS["t10-p1-0"].args(400) == ["--runs", "random-planted-q16-b4-0:400"]
+    assert b.BACKDROPS["t10-p2-0"].args(400) == ["--runs", "random-planted-q16-b4-0:400", "--arm", "planted"]
+
+
 def test_an_opened_host_takes_work_outside_its_hours():
     thursday_noon = datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)  # stone's owner's day
     assert b.window_left(b.HOSTS["stone"], thursday_noon) is None
