@@ -32,8 +32,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from indrajala_ml.data import addition_data as ad
 from indrajala_ml.studies import inference
 from indrajala_ml.studies import modular_family as mf
+from indrajala_ml.studies import window_recurrent_study as wr
+from indrajala_ml.studies import window_tasks as wt
 
 Table = Callable[[Path], list[str]]
 
@@ -332,7 +335,7 @@ def listed(values: list[int]) -> str:
 
 def p_value(p: float) -> str:
     """A p value to two significant figures, as the manuscript writes them."""
-    return f"{p:.2g}"
+    return f"{p:#.2g}"
 
 
 ADDITION_STUDIES = (("matrix", 3), ("control", 1))  # each study and the step its networks end at
@@ -376,9 +379,6 @@ def first_wrong(network: Path, triple: tuple[int, int, int]) -> tuple[int, int]:
     The shortest length, in whole windows from the operands' digits to 64 columns, at which the
     test harness reads a network's sum of this triple wrong, and its answer there.
     """
-    from indrajala_ml.data import addition_data as ad
-    from indrajala_ml.studies import window_recurrent_study as wr
-    from indrajala_ml.studies import window_tasks as wt
 
     net = wr.load_network(str(network))
     model = wr.WindowModel(net, net.columns, wt.task_named("addition"))
@@ -394,7 +394,6 @@ def first_wrong(network: Path, triple: tuple[int, int, int]) -> tuple[int, int]:
 
 def addition_certificates(data: Path) -> Numbers:
     """K2's addition numbers (Appendix A): the tests against the certificate and the long tests."""
-    from indrajala_ml.studies import window_recurrent_study as wr
 
     networks = addition_networks(data)
     working = [n for n in networks if n["result"]["works"]]
@@ -459,7 +458,6 @@ def addition_code_counts(data: Path) -> Numbers:
     family as registered: the snap (C2), the code count (C3), the curriculum (C4) and unexplored
     states (C6).
     """
-    from indrajala_ml.studies import window_recurrent_study as wr
 
     root = data / "e3-e4"
     results = [json.loads(p.read_text()) for p in sorted((root / "results").glob("*.json"))]
@@ -575,7 +573,217 @@ def addition_replays(data: Path) -> Numbers:
     }
 
 
-NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [addition_certificates, addition_code_counts, addition_replays]
+def p_math(p: float) -> str:
+    """A p value for math mode: two significant figures, in powers of ten below 0.001."""
+    if p >= 0.001:
+        return p_value(p)
+    mantissa, exponent = f"{p:.1e}".split("e")
+    return f"{mantissa} \\times 10^{{{int(exponent)}}}"
+
+
+def near(runs: list[mf.ArmRun]) -> int:
+    """How many of the runs came near a solution (every answer at least NEAR at some diagnosis)."""
+    return sum(r.outcome.peak >= mf.NEAR for r in runs)
+
+
+def wins(data: Path, test: str, arm: str) -> tuple[int, list[mf.ArmRun]]:
+    """An arm's successes and its runs."""
+    runs = batch_runs(data, test, arm)
+    return sum(r.succeeded for r in runs), runs
+
+
+def greater(first: tuple[int, list[mf.ArmRun]], second: tuple[int, list[mf.ArmRun]]) -> float:
+    """The registered comparisons' test: one-sided Fisher, the first arm succeeding more often."""
+    (a, ra), (b, rb) = first, second
+    return inference.fisher_exact_greater(a, len(ra) - a, b, len(rb) - b)
+
+
+PAPER_TESTS = {  # each test's batch and arms (T2 and T5 one batch, D17)
+    "t1": ["sum", "suffix", "token"],
+    "t3": ["approximation", "approximation-continuous", "approximation-linear"],
+    "t2-t5": ["d7-family", "d11-family", "d13-family", "d11-quotient", "s3", "s4", "mtf4", "rq12", "rq16"],
+}
+
+
+def long_tests(data: Path, test: str) -> list[tuple[bool, int, list[str], dict[str, Any]]]:
+    """A test's long tests: each network's certification (both verdicts), its cases, failures and lengths."""
+    verdicts = mf.recertifications(data / "paper" / test / "certify")
+    found: list[tuple[bool, int, list[str], dict[str, Any]]] = []
+    for path in sorted((data / "paper" / test / "long-tests").glob("*/*.long-test.json")):
+        long = json.loads(path.read_text())
+        found_verdicts = verdicts.get(long["sha256"], {})
+        certified = set(found_verdicts) == set(mf.VERDICTS) and all(found_verdicts.values())
+        found.append((certified, *wr.long_test_failures(long), long))
+    return found
+
+
+def paper_rates(data: Path) -> Numbers:
+    """K1's, K3's, K4's, K6's and K5's numbers from T1, T2, T3 and T5's batches and the approximation claim."""
+    made: Numbers = {}
+    coded = certified = 0
+    every_cases = 0
+    failing: list[bool] = []  # each long-test failure: whether its network has codes
+    for test, arms in PAPER_TESTS.items():
+        runs = [r for arm in arms for r in batch_runs(data, test, arm)]
+        coded += sum(r.coded for r in runs)
+        won = sum(r.succeeded for r in runs)
+        certified += won
+        tested = [t for t in long_tests(data, test) if t[0]]
+        if len(tested) != won or any(t[2] for t in tested):
+            raise ValueError(f"{test}: {len(tested)} certified networks long-tested against {won} successes")
+        cases = sum(t[1] for t in tested)
+        every_cases += cases
+        made[f"k1.{test}-networks"] = count(len(tested))
+        made[f"k1.{test}-cases"] = count(cases)
+        failing += [run.coded for run in runs if run.long is False]
+    made |= {
+        "k1.networks": count(105 + coded),  # with addition's 105 (Appendix A)
+        "k1.coded": count(coded),
+        "k1.certified": count(certified),
+        "k1.cases": count(every_cases),
+        "k1.failing-uncoded": count(sum(not coded_ for coded_ in failing)),
+        "k1.failing-coded": none_or(sum(failing)),
+    }
+    # K3 (T3): the control against the continuous state and the linear window, Holm over the two
+    control = wins(data, "t3", "approximation")
+    continuous = wins(data, "t3", "approximation-continuous")
+    linear = wins(data, "t3", "approximation-linear")
+    p = [greater(control, continuous), greater(control, linear)]
+    holm = inference.holm(p)
+    uncertified = [long for certified_, _, _, long in long_tests(data, "t3") if not certified_]  # the continuous
+    drifted = [
+        all(r["passed"] == 0 for length in long["lengths"].values() for r in length["properties"].values())
+        for long in uncertified
+    ]
+    made |= {
+        "k3.continuous-p": p_math(p[0]),
+        "k3.continuous-holm": p_math(holm[0]),
+        "k3.linear-same": "the same" if (p[1], holm[1]) == (p[0], holm[0]) else f"$p = {p_math(p[1])}$",
+        "k3.continuous-near": every(near(continuous[1]), len(continuous[1])),
+        "k3.continuous-failed": every(sum(drifted), len(continuous[1])),
+        "k3.continuous-from": count(min(int(n) for long in uncertified for n in long["lengths"])),
+    }
+    # K6 and K4 (T2): the rates at scale, and the cover against the quotient alone at 121 states
+    scale = [wins(data, "t2-t5", b) for b in ("d7-family", "d11-family", "d13-family")]
+    quotient = wins(data, "t2-t5", "d11-quotient")
+    made |= {
+        "k6.rates": ", ".join(str(w) for w, _ in scale[:-1]) + f" and {scale[-1][0]}",
+        "k6.seeds": count(len(scale[0][1])),
+        "k4.cover": count(scale[1][0]),
+        "k4.quotient": none_or(quotient[0]),
+        "k4.p": p_math(greater(scale[1], quotient)),
+        "k4.quotient-near": none_or(near(quotient[1])),
+    }
+    # K4 at 25 states and K5's earlier rate: the approximation claim at p 5
+    root = data / "approximation-claim"
+    claim = mf.recertifications(root / "certify")
+    rate = {arm: sum(r.certified for r in mf.arm_runs(root, arm, claim)) for arm in ("family", "sum", "quotient")}
+    made |= {
+        "k4.claim-cover": count(rate["family"]),
+        "k4.claim-quotient": count(rate["quotient"]),
+        "k5.claim-sum": count(rate["sum"]),
+    }
+    # K5 (T1): the sum against the suffix and the token, Holm over the two
+    total, suffix, token = (wins(data, "t1", arm) for arm in ("sum", "suffix", "token"))
+    p = [greater(total, suffix), greater(total, token)]
+    holm = inference.holm(p)
+    failed, came_near, _ = failures(total[1])
+    made |= {
+        "k5.sum": count(total[0]),
+        "k5.suffix": count(suffix[0]),
+        "k5.token": count(token[0]),
+        "k5.suffix-p": p_math(p[0]),
+        "k5.suffix-holm": p_math(holm[0]),
+        "k5.token-p": p_math(p[1]),
+        "k5.token-holm": p_math(holm[1]),
+        "k5.suffix-certified": none_or(suffix[0]),
+        "k5.suffix-near": none_or(near(suffix[1])),
+        "k5.sum-near": f"{came_near} of {failed}",
+    }
+    return made
+
+
+DIVISION_READINGS = (
+    ["t4/p5-division-claim-family", "t4/p5-division-claim-quotient", "t4/p5-approximation-claim-family"]
+    + ["t4/p5-approximation-claim-sum", "t4/p5-approximation-claim-quotient", "t4/p5-probe-2a", "t4/p7-probe-4"]
+    + ["t4/p7-fork", "t4/p11-ladder", "t4/p13-w1"],
+    [f"t2-t5/approximations/{b}.txt" for b in ("d7-family", "d11-family", "d13-family")],
+)
+ALGEBRA_READINGS = (  # the algebras: the groups and move-to-front (not the random machines)
+    ["t4/s3-round1", "t4/s4-round1", "t4/mtf3-round1"],
+    [f"t2-t5/approximations/{b}.txt" for b in ("s3", "s4", "mtf4")],
+)
+GROUP_READINGS = ["t4/s3-round1", "t4/s4-round1", "t2-t5/approximations/s3.txt", "t2-t5/approximations/s4.txt"]
+TRAINED_LINES = {"A + B", "A - B"}  # division's approximations trained as outputs
+
+
+def paper_readings(data: Path) -> Numbers:
+    """K8's numbers (T4): the decomposition readings, the earlier networks' and the fresh ones'."""
+
+    def nets(paths: list[str]) -> list[Reading]:
+        return [n for path in paths for n in readings(data / "paper" / path)]
+
+    def nontrivial(found: list[Reading]) -> str:
+        held = sum(1 < blocks < n.states for n in found for blocks, _ in n.factors)
+        return f"{held} of {sum(len(n.factors) for n in found)}"
+
+    made: Numbers = {}
+    for name, paths in (("first", 0), ("fresh", 1)):
+        made[f"k8.algebras-{name}"] = nontrivial(nets(ALGEBRA_READINGS[paths]))
+        made[f"k8.division-{name}"] = nontrivial(nets(DIVISION_READINGS[paths]))
+    groups = [name for n in nets(GROUP_READINGS) for _, names in n.factors for name in names]
+    division = [name for paths in DIVISION_READINGS for n in nets(paths) for _, names in n.factors for name in names]
+    lined = [  # the congruences named by networks trained on lines (not on the quotient alone)
+        name
+        for paths in DIVISION_READINGS
+        for path in paths
+        if "quotient" not in path
+        for n in readings(data / "paper" / path)
+        for _, names in n.factors
+        for name in names
+    ]
+    made |= {
+        "k8.groups-places": every(sum(name.startswith("places") for name in groups), len(groups)),
+        "k8.groups-sign": none_or(sum("sign" in name for name in groups)),
+        "k8.division-untrained": count(sum(name not in TRAINED_LINES for name in division)),
+        "k8.division-trained-lines": every(sum(name in TRAINED_LINES for name in lined), len(lined)),
+        "k8.division-one-line": every(
+            sum(len(names) == 1 for paths in DIVISION_READINGS for n in nets(paths) for _, names in n.factors if names),
+            sum(1 for paths in DIVISION_READINGS for n in nets(paths) for _, names in n.factors if names),
+        ),
+    }
+    return made
+
+
+def paper_proofs(data: Path) -> Numbers:
+    """K9's numbers (T6): the target-free proof at the exact bound and at 1.1 times it."""
+    bounds = proofs(data)
+    exact = Counter(proof_outcome(b) for b in bounds if b["slack"] == 1.0)
+    slack = Counter(proof_outcome(b) for b in bounds if b["slack"] == 1.1)
+    lengths = [len(b["chow"]["counterexample"]) for b in bounds if proof_outcome(b) == "false-stop refuted"]
+    false_stops = sum(v for k, v in slack.items() if k.startswith("false-stop"))
+    return {
+        "k9.runs": count(sum(exact.values())),
+        "k9.exact-false": none_or(sum(v for k, v in exact.items() if k.startswith("false-stop"))),
+        "k9.exact-proved": count(exact["kept proved"]),
+        "k9.exact-unproved": none_or(exact["kept out of reach"]),
+        "k9.slack-false": count(false_stops),
+        "k9.slack-proved": count(slack["false-stop proved"]),
+        "k9.slack-refuted": count(slack["false-stop refuted"]),
+        "k9.counterexamples": words(min(lengths), max(lengths)),
+        "k9.slack-false-unreached": count(slack["false-stop out of reach"]),
+        "k9.slack-kept-unreached": count(slack["kept out of reach"]),
+    }
+
+
+NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
+    addition_certificates,
+    addition_code_counts,
+    addition_replays,
+    paper_rates,
+    paper_readings,
+    paper_proofs,
+]
 PN = re.compile(r"\\pn\{([^{}]+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
 
 

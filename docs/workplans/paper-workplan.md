@@ -662,9 +662,16 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
   tool to auto-compile the appendixes numbers, even if there is no table"). Each number in the prose
   is marked `\pn{key}{value}` (the manuscript defines `\pn` to print its value); `paper_tables.py`'s
   `NUMBER_SOURCES` compute every key from the result files, `check` fails on any difference or a key
-  with no source, and `fill` writes the regenerated values in. **Stage 1 (this PR):** Appendix A's,
-  K2's and K10's addition numbers (71 marks). **Stage 2, next:** every other number in the prose
-  (K1, K3-K9 from T1-T6's data), so that the reproducibility section can say no number was typed.
+  with no source, and `fill` writes the regenerated values in. **Stage 1 (#1012):** Appendix A's,
+  K2's and K10's addition numbers (71 marks). **Stage 2 (2026-10-25):** every other measured number
+  in the results' prose (K1, K3-K9 from T1-T6's data): 131 marks in all, every one the same; the
+  numbers left unmarked are settings (lengths, bounds, seeds). p values written to two significant
+  figures throughout (0.0101 became 0.010, 6.44e-6 became 6.4e-6).
+  - **Found by stage 2, corrected:** K1's "every network a long test failed is one the certificate
+    rejected" held only vacuously (the 20 that failed are T3's continuous networks, with no
+    certificate; no coded network failed a case): restated so. K8's "each into exactly one of its
+    trained lines" omitted the quotient-alone network's factor holding `B` (T4's findings name it):
+    restated, a network trained on no approximation finding one of its own.
   - **Found by stage 1, corrected in the manuscript** (the notes' own recorded values, now
     regenerated): the first counterexample network (1,559 + 6,329 + 5,231) answers 19,680 read at
     12 columns, not 8 (at 8 it is right: it fails only after a leading zero window); the first
