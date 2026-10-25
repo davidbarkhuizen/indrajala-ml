@@ -64,6 +64,7 @@ notes; the crystallisation strand can be its own later paper once it works beyon
 | **T6** | The target-free proof (K9) | offline: on every run of T1, T2, T3 and T5, the answers-only stop at the exact bound and 1.1 times it (`answers-stop --logged` or the logged answers), then Chow's test set on each stop's network; registered expectations: no false discovery at the exact bound, the queries each proof needs | 0 (offline) | hours |
 | **T7** | Reproducibility | a script that regenerates every table and figure from the result files; a sample of runs re-run on another machine (`jebel`, `litshe`) bit for bit; every statistic recomputed; the datapack's manifest | 0-10 | a day |
 | **T8** | The literature, current | a sweep for 2025-2026 work on neural automaton learning, extraction and verification, state tracking and length generalisation; the related work rewritten | 0 | a day |
+| **T11** | K4 beyond arithmetic: do the algebras' approximations, given as outputs, make them learnable? (D20) | T5's backdrops `s3`, `s4`, `mtf4` under the `paper` cell, each with its coarsest pair of approximations that determine the state as two extra outputs, 20 fresh seeds each, against T5's rates | 60 | short but S4 (3-4 h a spent run); the probe sets it |
 
 **Optional, decided after T1 (D8):** T10, an approximation's output beside a machine the method
 fails on, existence first: if an approximation lets a random machine form, K4 generalises beyond
@@ -546,6 +547,70 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     each. Pros: the paper's usual 20 seeds. Cons: two machines, so a difference is the machines',
     not H's.
 
+- **D20. T11 registered: the groups with their approximations' outputs** (the owner, 2026-10-25:
+  "whether that helps IS most of the point of P1"; registered before any of its runs, after T5's
+  reading). K4 claims the target's approximations given as outputs make product machines learnable,
+  tested on division only (K4; T2b: `d11-family` 16 of 20 against the quotient alone 0 of 20). T5's
+  algebras trained on their answers alone and certified 1-4 of 20 (T5a), although their certified
+  networks held approximations unasked (T4: 14 of 22 factors). T11 gives the algebras theirs, as
+  division's encoding gives its sum and difference. **One change from T5:** the outputs; the `paper`
+  cell (the fork, the commitment as built, 600 epochs, stopped at the first certified step), the
+  32-wide window and T5's backdrops otherwise. The rule is now the protocol's (indrajala-research
+  `experiment-design.md` section 1, #60).
+  - **The rule (the owner's): two approximations that together determine the state, the coarsest
+    such pair** (division's cover in two factors, matching `--factors 2`): among every congruence of
+    the machine (the principal ones, `Mealy.principal_congruences`, closed under joins), the pairs
+    whose meet is the identity; the pair with the fewest blocks in total; ties to the simplest
+    quotients (the smallest transition monoids, summed); then the first in the machine's state
+    order. Computed offline 2026-10-25 (`congruences`; the closure and the search a script, made a
+    tool in T11's build):
+
+    | backdrop | congruences | the pair (blocks; monoid) | reading | tied after blocks, after monoids |
+    | --- | --- | --- | --- | --- |
+    | `s3` | 4 | 2 (2) and 3 (6) | the sign, and a point's place | 3, 3 (the three points) |
+    | `s4` | 28 | 6 (6) and 4 (24) | S3 (the Klein four-group's cosets), and a point's place | 16, 4 (the four points) |
+    | `mtf4` | 264 atoms | 6 (10) and 8 (15) | the order of items 0, 1 and 3 (`order {0, 1, 3}`), and the set of items more recent than item 2 | 4, 4 |
+
+    Each pair's states are the target's exactly (6 = 2 x 3; 24 = 6 x 4; move-to-front's 6 x 8 = 48
+    label pairs, 24 of them reached). The remaining ties are relabellings (the points, or the item
+    left out), so the state order's choice changes no structure. S3's pair holds the sign, which
+    T4 never found a network holding unasked (K8): whether it is used once given is read (T4's tool).
+  - **Arm and backdrops:** `--arm cover` (a build: `window_tasks.query_partitions` names the pair
+    for `word-problem-s3`, `word-problem-s4` and `move-to-front-4`, queries `cover-a` and `cover-b`,
+    the coarser first; the encoding asks them as T10's P2 asks its planted block; tested, the golden
+    run kept). The runner's backdrops `t11-s3`, `t11-s4`, `t11-mtf4`.
+  - **Seeds: 20 fresh a backdrop, 700-719.** Not T5's 300-319 paired: the extra outputs change the
+    output layer and the drawn examples, so a seed's run isn't T5's twin; the comparison is two
+    rates (D5).
+  - **Feasibility** (T5's, D16: the codes and caps unchanged, the queries adding outputs, not
+    states): `s3` 8 codes a factor, 64 joint (10.7 x q), cap 69; `s4` and `mtf4` 15, 225 (9.4), 248;
+    the window 32 wide (row 3); every state reachable and told apart (row 14); row 17, each pair a
+    congruence pair meeting in the identity, checked by `test_t11s_cells_meet_their_registered_bounds`.
+  - **Cost:** a column three positions (the token and two queries), as division's family; *pending:
+    the probe (one seed a backdrop, claims nothing) for epoch time and memory, then the batch's
+    range.* Where: the runner once T10's batch frees its slots.
+  - **Success:** as D13 (certified at the stop, both verdicts, every certified network long-tested,
+    D16's lengths).
+  - **T11a, K4 beyond arithmetic:** per backdrop, the cover's certified rate against T5's (`s3` 1,
+    `s4` 4, `mtf4` 4 of 20), Fisher's exact, one-sided (K4 names the direction), Holm over the three
+    in the paper's family (D5). **Stands** on a backdrop if significant at its Holm level; the exact
+    bars, one-sided: against 1 of 20, 8 at 0.0167, 7 at 0.025, 6 at 0.05; against 4 of 20, 12, 11
+    and 10. **Refuted** on a backdrop if the cover certifies no more often than T5; undecided
+    between. **K4 generalises to the algebras** if T11a stands on at least one, reported per
+    backdrop.
+  - **T11b, the reliability bar:** per backdrop, D15's bar (a Wilson lower bound of 0.25, 9 of 20),
+    reported: if met, K7 is restated as "learned reliably given their approximations".
+  - **Expected:** higher on all three, as division's 0 to 16; `s4` and `mtf4` about 10-14 of 20,
+    `s3` the least certain (its failures never formed a state, T5a; the sign never held unasked).
+  - **Then:** T4 on every certified network (do its factors hold the given pair, or others?); T6 on
+    every run (D11, its rules), reported apart.
+  - Options: (a) *chosen*, the cover pair by the rule, the `paper` cell, T5 the control. Pros: one
+    change from T5, its runs the control; the rule is division's, so K4 is tested as stated. Cons: a
+    build; T5's control ran at another commit (bit-identity of the `paper` cell's training checked by
+    the golden run, the control not rerun). (b) Every maximal approximation as an output. Cons: many
+    outputs (move-to-front's 264 atoms); not division's form. (c) One approximation only. Cons: it
+    doesn't determine the state, so not K4's cover.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
@@ -819,8 +884,8 @@ The same readout and long tests as T2's (one batch, D17).
   give; T10 asks whether a planted one changes that.
 - Collapses are common where the cell struggles (`rq16` 16 of 20 failures, `rq12` 12, `s4` 6, `s3`
   and `mtf4` 5), rare on division (at most 1 a backdrop): recorded for the failure kinds, not tested.
-- **Then:** the groups' approximations given as outputs, T11 (to be registered in its own decision
-  before any of its runs).
+- **Then:** the groups' approximations given as outputs, T11 (registered in D20, before any of its
+  runs).
 
 ## Stages
 
@@ -839,7 +904,7 @@ The same readout and long tests as T2's (one batch, D17).
    T3's continuous and linear windows in the division probe if not already there; each tested, the
    golden run unchanged.
 4. **Registrations and runs:** T1 and T3 (short, `p` 5) first; then T2 and T5 (the long ones) across
-   every machine; long tests on every certified network. Once the running probes end (D9).
+   every machine; T10 and T11 (D19, D20) once registered; long tests on every certified network. Once the running probes end (D9).
 5. **Readings:** T1-T6 by their registered rules, into the probe's findings and here.
 6. **The manuscript** (D7), every number from the data by T7's script.
 7. **Critique:** the audit's checks rerun on the manuscript; figures re-derived; a cold read (the
