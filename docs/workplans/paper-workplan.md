@@ -666,6 +666,98 @@ approximation:approximation-continuous approximation:approximation-linear` into
 - Data `data/window-recurrent/paper/t3/`, manifest `paper/t3.sha256` b98acaa7...599130b0 (1,696
   files, run from `paper/t3`, the claims directory left out).
 
+## Findings: T4 on T2's and T5's fresh networks (2026-10-25, read by D10's rules)
+
+D10's third set: `approximations` on the snapped certified network of each of T2's and T5's 60
+certified runs (recertified in both verdicts, `t2-t5/certify/`), each with its run's task, arm and
+vocabulary, 2026-10-24 (`t4-t6-reading.out`); text lines in `t2-t5/approximations/<backdrop>.txt`,
+`tally.py` (T4's rules, from the text: no JSON was written) → `tally.txt`. Read before T2/T5's long
+tests end; a network that fails one leaves this set, and the counts are redone.
+
+| set | networks | factors nontrivial | networks naming one | covers | determines |
+| --- | --- | --- | --- | --- | --- |
+| `d7-family` (`p` 7) | 17 | 9/34 | 8 | 1 | `A + B` 2, `A - B` 7 |
+| `d11-family` (`p` 11) | 16 | 9/32 | 8 | 1 | `A + B` 3, `A - B` 6 |
+| `d13-family` (`p` 13) | 15 | 6/30 | 5 | 1 | `A + B` 2, `A - B` 4 |
+| `s3` | 1 | 0/2 | - | 0 | - |
+| `s4` | 4 | 1/8 | 1 | 0 | `places {3}` 1 |
+| `mtf4` | 4 | 8/8 | 4 | 0 | `order {1, 3}` 3, `{0, 3}` 2, `{0, 1}` 1, `{1, 2}` 1, `{0, 1, 3}` 1 |
+| `rq12` | 3 | 0/6 | - | 0 | - (primitive: no nontrivial congruence exists) |
+
+- **T4a holds, exactly at its bar:** the algebras' factors 9 of 18 nontrivial (0.50; the bar a
+  half, the refutation a quarter). MTF4 carries it (8 of 8, 5 naming an `order` congruence; the
+  other 3 a two-block partition that is a congruence but no named one); S4 1 of 8, S3 0 of 2. Few
+  fresh algebra networks (9), as D10's cons said.
+- **T4b holds:** no factor holds `parity`; S4's one named congruence is a stabiliser's (`places
+  {3}`).
+- **T4c mixed, by its registered rule:** division's factors 24 of 96 nontrivial (0.25, exactly at the
+  quarter: not "fewer than a quarter", so not the expectation; far below K8's half). By `p`: 7 0.26,
+  11 0.28, 13 0.20. As in the first reading, every nontrivial division factor holds *exactly one
+  line*, always a trained one (`A - B` 17, `A + B` 7; no `A`, `B` or other line); one cover in each
+  `p`. The first reading's 0.37 on older networks and this 0.25 agree in kind: a minority of
+  division's factors decompose, each into a trained approximation; the rest hold the state jointly.
+- **For the paper:** unchanged from T4's first reading. K8 for the algebras now rests on two sets of
+  networks that didn't shape it (both T4a and T4b holding twice, the second just); on division, the
+  narrower form (a minority of factors, each a trained line), with both counts mixed as registered.
+- `rq12`'s machine is primitive, so no factor can hold a nontrivial approximation: reported, outside
+  T4a (a random machine is no algebra).
+- Manifest `paper/t4-fresh.sha256` a68ad079...1b9ea2bc (9 files, run from
+  `paper/t2-t5/approximations`).
+
+## Findings: T6, the target-free proof (2026-10-25, read by D11's rules)
+
+`answers-proof LOG... --task T --arm A --slack 1 1.1 --limit 20000000 --out DIR` on every coded run
+of T1, T2, T3 and T5, 2026-10-24 (`t4-t6-reading.out`): 280 runs, in `t1/proof`, `t3/proof` (the
+control and the linear arm; the continuous arm has no machine to read) and `t2-t5/proof`, a
+`<group>.txt` and a JSON directory each; `t6-tally.py` → `t6-tally.txt`. A stop is *kept* when the
+answers-only stop lands on the certified step, a *false stop* when it lands earlier.
+
+| outcome | exact bound | 1.1 times the bound |
+| --- | --- | --- |
+| no stop (the run never certified) | 200 | 200 |
+| kept, Chow proved | 80 | 43 |
+| kept, out of Chow's reach (`p` 11, 13) | 0 | 17 |
+| false stop, Chow proved the machine equal to the target | 0 | 5 |
+| false stop, Chow refuted | 0 | **4** |
+| false stop, out of Chow's reach (`p` 11, 13) | 0 | 11 |
+
+- **The integrity check passes:** at the exact bound every one of the 80 stops is a certified run's,
+  at its certified step, and Chow proved each (the strict verdict's equality, as the theorem says).
+- **T6a holds:** no false discovery and no false stop at the exact bound; the 200 runs that never
+  certified never stopped.
+- **T6c holds:** every certified run's answers-only stop is its certified step at the exact bound;
+  no "missed" run (0 of 80, the expectation under a tenth).
+- **T6b is refuted as registered** ("at 1.1, no wrong machine where Chow reaches"): 4 stops landed on
+  wrong machines, each refuted by Chow within its first batch of 4,096 queries, the counterexample
+  4-7 tokens:
+
+  | run | bound | stop, certified | counterexample |
+  | --- | --- | --- | --- |
+  | `d7-family-300` | 53 | step 7, step 11 | 5 tokens |
+  | `d11-family-300` | 133 | step 17, step 22 | 7 tokens |
+  | `d11-family-310` | 133 | step 13, step 32 | 5 tokens |
+  | `d13-family-316` | 185 | step 10, step 11 | 4 tokens |
+
+  Chow refuted each, so nothing false was proved: the failure is the answers-only stop rule's under
+  slack, not the proof's. The slack reading (no false stop in 90 runs) was too small a sample to
+  show it. The 5 proved false stops are the near-tie case: the network's machine already equal to
+  the target, its margin short of certification.
+- **What 1.1 costs:** the proof stays sound (it never accepted a wrong machine) but is incomplete:
+  at `p` 11 and 13 the test set exceeds the limit (5.5e9 to 1.3e19 words), so 28 stops (17 kept, 11
+  false) have the certificate's verdict only; 4 of those false stops were refuted early, the other
+  11 are undecided by Chow.
+- **Words each proof queried** (registered, reported; repeats dropped, so below D11's reach figures,
+  which count the test set before repeats, `chow.test_set_size`): at the exact bound division `p` 5
+  904, `p` 7 1,768, `p` 11 4,360, `p` 13 6,088; S3 50, S4 363, MTF4 1,187, `rq12` 305; at 1.1 `p` 5
+  73,264, `p` 7 11,603,128, S3 50, S4 9,093, MTF4 29,705, `rq12` 1,530. `rq16` and `d11-quotient`
+  never certified.
+- **For the paper:** K9 stands at the exact bound on every paper run (80 proofs, no false stop). The
+  slack claim is stated honestly: with a 10% looser bound the stop rule can land on a wrong machine
+  (4 of 80), which Chow then catches where it reaches; a discoverer who knows the size only roughly
+  needs the proof in the loop, not the stop alone.
+- Manifest `paper/t6.sha256` 25d3145d...51a94fb5 (297 files, run from `paper`: the three proof
+  directories, the tally and the reading's log).
+
 ## Stages
 
 1. **This plan;** the audit's standing decisions applied (F1 recorded in the state-formation
