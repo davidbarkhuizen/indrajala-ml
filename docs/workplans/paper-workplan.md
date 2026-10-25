@@ -928,7 +928,7 @@ The same readout and long tests as T2's (one batch, D17).
    indrajala-research's window-recurrent-literature.md (its 2026-10-23 extension: no 2025-2026
    work learns an automaton by gradient descent and proves it at every length), the papers in
    indrajala-literature; T7's `scripts/paper_tables.py` (P2's approximation table regenerated
-   identically), its further tables added with the manuscript (stage 6). **T7, 2026-10-25:** T1's, T3's, T2's and T5's tables regenerated from their batches (`tab:extra-outputs`, `tab:baselines`, `tab:scale`, `tab:breadth`), every number as their findings but T5's two medians (corrected there); T4's and T6's next. T4's reading of the 69
+   identically), its further tables added with the manuscript (stage 6). **T7, 2026-10-25:** T1's, T3's, T2's and T5's tables regenerated from their batches (`tab:extra-outputs`, `tab:baselines`, `tab:scale`, `tab:breadth`), every number as their findings but T5's two medians (corrected there); T4's (`tab:decomposition`, `tab:decomposition-fresh`) and T6's (`tab:proof`, `tab:refuted`) the same day, every number as their findings. T4's reading of the 69
    networks named in D10 is offline and may run now; T6 waits on its runs.
 3. **Builds:** T1's two control outputs (suffix and token) as answer kinds of the division encoding;
    T3's continuous and linear windows in the division probe if not already there; each tested, the

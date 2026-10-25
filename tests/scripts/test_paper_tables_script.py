@@ -78,3 +78,29 @@ def test_rate_and_arm_tables_count_only_successes(monkeypatch: pytest.MonkeyPatc
         "\\texttt{s4} & 24 & 2 of 5 & 0.12--0.77 & 100--300, 200 & 1 of 3 \\\\"
     ]
     assert script.arms_table("t1", [("sum", "sum")])(tmp_path) == ["sum & 2 of 5 & 0.12--0.77 & 1 of 3 & 1 \\\\"]
+
+
+LINE = (
+    "/x/certified-step-19.network.json: 24 states, meet 4, cover False, cascade top 0; factor 0: 11 codes,"
+    " approximation 4 blocks (congruence False, autonomous 0.545), determines places {3}; factor 1: 10 codes,"
+    " approximation 1 blocks (congruence False, autonomous 0.440), determines -"
+)
+
+
+def test_a_decomposition_row_from_text_and_json_readings(tmp_path: Path):
+    (tmp_path / "s4.txt").write_text(LINE + "\n")
+    factors = [{"approximation": [5] * 5, "determines": [line]} for line in ("A + B", "A - B")]
+    net = {"states": 25, "cover": True, "factors": factors}
+    (tmp_path / "family").mkdir()
+    (tmp_path / "family" / "a.json").write_text(script.json.dumps(net))
+    assert script.readings(tmp_path / "s4.txt") == [script.Reading(24, False, [(4, ["places {3}"]), (1, [])])]
+    rows = script.decomposition_row("s4", script.readings(tmp_path / "s4.txt") + script.readings(tmp_path / "family"))
+    assert rows == "s4 & 2 & 3/4 & 2 (1) & 1 & \\texttt{A + B} 1, \\texttt{A - B} 1, \\texttt{places \\{3\\}} 1 \\\\"
+
+
+def test_proof_outcomes_name_the_stop_and_chows_verdict():
+    chow = {"equivalent": False, "words": 4096, "counterexample": [1, 0]}
+    assert script.proof_outcome({"verdict": "silent"}) == "silent"
+    assert script.proof_outcome({"verdict": "false-stop", "chow": chow}) == "false-stop refuted"
+    assert script.proof_outcome({"verdict": "kept", "chow": {"refused": "limit"}}) == "kept out of reach"
+    assert script.natural("d7-family-300") < script.natural("d11-family-300")
