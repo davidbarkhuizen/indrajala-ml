@@ -17,10 +17,21 @@ branching first, then return to crystallization at that point"; and, on T2's and
 (2026-10-24, the paper cell certifying S3 1 of 20 and move-to-front-4 4 of 20, against D64's
 crystallisation at 5 of 8 and 2 of 4): "that is what i was saying earlier about starting with
 crystallization and making it the default - we definitely found it to improve success": the order
-back to crystallisation first (D1 (a)), its control at its own epoch budget (D3). D1-D15 settled under the owner's
+back to crystallisation first (D1 (a)), its control at its own epoch budget (D3). D1-D15 (and D19-D21) settled under the owner's
 delegation, each with its options' pros and cons. Nothing here is built or run before paper 1 is out
 (D2). Items marked *pending* are filled at each part's registration by the rules stated here, before
 that part's data.**
+
+**Revised 2026-10-25 (the owner): X is an A/B of the two methods on paper 1's task matrix (D16-D21),
+replacing its holdouts-first design.** The owner: "it qualitatively seems like we regressed in terms
+of speed and number of solutions found when we returned to finalizing P1, i.e. dropped
+crystallization ... I still want to properly assess the effect of the crystallization method"; "the
+best way to do this would be to have a matrix of tasks, with our best setup ... then run the matrix
+of tasks for a few different seeds, across both methods", for "a proper view of the effect of the
+crystallization method across tasks (and thus machine types)" and "very good analysis data for
+determining the failure modes of the crystallization method ... and if/when it is harmful". X's parts
+of D3, D4, D6, D10, D13, D14 and the whole of D15 are superseded (marked there); D1's order, D2's gate
+and D5's arm rule stand.
 
 The goal is [machine-discovery.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/machine-discovery.md)'s
 stage A: one general architecture and training method that forms a state, keeps it and certifies on
@@ -46,6 +57,12 @@ B2), then **L, depth** (claim L1), each on the default the part before it leaves
 | D13 | 2026-10-24 | seeds and statistics | 20 fresh seeds a cell; registered one-sided "helps", both sides reported; Holm a part |
 | D14 | 2026-10-24 | budgets and machines | each cell's registered epochs; time and memory from a probe; the batch runner |
 | D15 | 2026-10-24 | formed and kept | formed at state share 0.95; kept if certified; the stratified exact test |
+| D16 | 2026-10-25 | X as an A/B | the paper's method against crystallisation, aligned, on paper 1's task matrix (the owner) |
+| D17 | 2026-10-25 | the aligned settings | width 32, 1,600 epochs, the answers-only stop with the margin wait, both arms; the fork and the commitment each its own (the owner) |
+| D18 | 2026-10-25 | approximations in both arms | each task its target's approximations' outputs, the groups' built for X (the owner) |
+| D19 | 2026-10-25 | X's tasks | paper 1's nine backdrops |
+| D20 | 2026-10-25 | X's seeds | 10 a cell, the same seeds in both arms, read in pairs |
+| D21 | 2026-10-25 | X's readings | the paired effect and harm per task, epochs to a certificate, every run's failure kind and the stop's losses |
 | stages 0-6 | 2026-10-24, revised | the plan's stages | the gate, X, B's builds, B, L, findings |
 
 From earlier plans: the collapse (D63), the fresh-seed rate (D64), the deadline's completion (D67)
@@ -167,7 +184,7 @@ golden run unchanged at 3.
     about this now"; a crate change in the middle of the paper's batches is a risk to them.
   - (c) After the paper's runs, before its manuscript. Pros: the machines are idle while it is
     written. Cons: not the owner's order ("done with paper 1"); the manuscript may need reruns.
-- **D3. The controls: X's, the paper cell at crystallisation's budget (1,600 epochs), fresh, 20
+- **D3. The controls** (*X's part superseded 2026-10-25 by D16: both arms run fresh*)**: X's, the paper cell at crystallisation's budget (1,600 epochs), fresh, 20
   seeds a backdrop, T5's 600-epoch runs reported beside it (so a gain is the method's, not the
   budget's: one change); B's and L's, the default's own 20 seeds a backdrop (X's runs if
   crystallisation is adopted); where the paper cell at 600 epochs is the control, T2's and T5's runs
@@ -180,7 +197,7 @@ golden run unchanged at 3.
     runs are the next part's control. Cons: a control from an earlier commit; any difference in a
     re-run, and that backdrop's control is run fresh ((a)).
   - (c) No control: the arms' rates alone. Cons: no comparison; nothing could be adopted.
-- **D4. The backdrops.**
+- **D4. The backdrops** (*X's part superseded 2026-10-25 by D19*)**.**
   - **B and L: the struggling set, by a rule fixed now, before T2's and T5's data:** every backdrop
     of T2 and T5 whose default certified **10 or fewer of 20** (both verdicts, as the paper's), and if
     none did, the two lowest (ties to the larger machine). **Plus one no-harm backdrop**: the highest
@@ -209,7 +226,7 @@ golden run unchanged at 3.
     epochs), reported for every cell.
   - Both arms carry L's default's window (its depth and paths); the crystallisation is the one
     change.
-- **D6. Crystallisation's claims (registered; refutations stated):**
+- **D6. Crystallisation's claims** (*superseded 2026-10-25 by D21; kept for the record*)**:**
   - **X1. It keeps solutions the snap otherwise loses (the primary claim):** among the runs that
     formed a solution (D15), the share kept, `continuous` greater than the default, one-sided (the
     owner's claim names the direction), by the stratified exact test over X's backdrops (D15);
@@ -271,7 +288,7 @@ golden run unchanged at 3.
   - Each arm's failures read by kind (failure-kinds.md: formation, conversion, extra codes,
     readout), and the separability check on each failure with an exact state: does the
     recombination fix readout failures (row 5's) in particular.
-- **D10. Adoption: an arm of B or L becomes the default if it meets its claim on at least one
+- **D10. Adoption** (*X's part amended 2026-10-25: D21's adoption rule*)**: an arm of B or L becomes the default if it meets its claim on at least one
   struggling backdrop and shows harm nowhere; X's `continuous` (or `continuous-reheat`) if X1 holds
   and X2 shows no harm. Either way harm is then read on every T2 and T5 backdrop not yet in its
   batch (a 6-seed screen a backdrop, two-sided Fisher against the control's first 6 seeds), any
@@ -299,19 +316,21 @@ golden run unchanged at 3.
 - **D12. Depth's claim: L1, 6 blocks help where the default struggles:** on each backdrop of L's
   struggling set (D4), Fisher one-sided (6 greater), two-sided beside it, Holm over the set; harm on
   the no-harm backdrop, two-sided. Refuted on a backdrop if not significant.
-- **D13. Seeds and statistics: (a) 20 fresh seeds a cell** (B: 400-419, L: 500-519, X: 600-619);
+- **D13. Seeds and statistics: (a) 20 fresh seeds a cell** (B: 400-419, L: 500-519; X's 10 a cell by
+  D20);
   Wilson 95% intervals; Fisher as each claim says; Holm at 0.05 within each part's family; one-sided
   only where registered above, both sides reported where they disagree; certificate at both
   verdicts on the stop's network (D41); long tests on every certified network (the paper's D15
   rule), which confirm and don't establish. (b) 6-seed screens first. Pros: cheaper. Cons: a screen
   claims nothing, and the owner asked for sound tests; 20 tells 0.8 from 0.4.
 - **D14. Budgets and machines:** each cell's registered epochs: the paper cell 600 (B's and L's arms
-  the same), `continuous` and `continuous-reheat` 1,600 (D64's). No wall-clock budget (runaway guard
+  the same), `continuous` and `continuous-reheat` 1,600 (D64's); X's arms both 1,600 (D17). No wall-clock budget (runaway guard
   only). Time and memory a run from each part's probe, then the batch's estimate as a range; the
   batch runner on every machine, memory planned per host before launch (memory
   `machine-load-limits`). (b) A shorter budget for an arm. Cons: an arm judged on less training than
   its control is not one change.
-- **D15. Formed and kept:**
+- **D15. Formed and kept** (*superseded 2026-10-25 by D21: formation is read on every run, as a failure
+  kind, not as a claim's condition*)**:**
   - **Formed:** at some step the run's state separation share (the state-separation check: the
     share of the target's states with a code of their own, as D64's findings read "formed") reached
     **0.95** (D64's "formed then lost" at 0.99; 4a's at 0.95-0.97). For the default (codes from the
@@ -328,6 +347,108 @@ golden run unchanged at 3.
     Cons: at a handful of formed runs a backdrop, no single test has power; the owner asked for a
     verdict on the method, across backdrops.
 
+- **D16. X as an A/B: the paper's method against crystallisation, aligned (D17), on paper 1's task
+  matrix (D19), both arms with each task's approximations (D18) and run fresh (the owner,
+  2026-10-25): (a).**
+  - (a) *Chosen.* Pros: the effect across machine types, not on two design backdrops and their
+    holdouts; every run's failure is analysis data for improving the method and for seeing where it
+    harms; one comparison of the two methods as we would use them. Cons: the arms differ in more
+    than one setting (the cool, the crucible, the commitment, D17), so a difference is the method's,
+    not a component's; both arms fresh (about 180 runs, below).
+  - (b) The plan's design (D3, D4, D6): D64's five, kept among formed, a fresh control at 1,600.
+    Cons: its primary claim conditions on formation, hard to define for codes from the start; the
+    holdouts are where the method is expected to fail, read first.
+  - (c) T5's runs reused as the control at 600 epochs, only the new arm run. Pros: half the runs.
+    Cons: T5's cell stops at the first certificate, which D17 aligns away; its groups had no
+    approximations (D18); the budgets differ.
+- **D17. The aligned settings (the owner, 2026-10-25):** both arms with factors 32 wide, 1,600 epochs, and the answers-only stop under the exact state bound with the margin wait and its
+  deadline (D35, D59, D60 in the state-formation plan); the fork and the commitment each arm's own
+  (the paper arm's as paper 1 ran them; `continuous` without the fork, `--anneal-never-commit`).
+  - **The fork:** each its own (revised the same day; the owner: "if P1 has used fork, then the P1
+    arm should also use fork ... otherwise we can't compare it to P1"). Crystallisation runs without
+    it (the owner: it doesn't fit the crystallisation analogy); whether the paper cell is better
+    without it is its own test, after X. (a) *Chosen:* each its own. Pros: the paper arm is paper
+    1's cell but for the budget (its first 600 epochs paper 1's, if bit-identical), the stop (equal
+    on paper 1's runs, T6c) and the groups' approximations (paper 1's T11, if registered), so it
+    reads against paper 1 directly, and paper 1's spent runs might resume to 1,600 in place of
+    reruns (*pending: the prefix and the resume checked at registration*). Cons: one more
+    difference of the method's that isn't the crystallisation, as the commitment. (b) Off in both.
+    Cons: the paper arm no longer paper 1's cell.
+  - **The width:** 32 in both (the paper's; `--factor-width`'s default is 16, and `continuous` was
+    developed at it). Division's ladder: 0 of 6 at 16, 5 of 6 at 32 (L3). Cons: crystallisation
+    untested at 32; memory a run measured by X's probe.
+  - **The budget:** 1,600 in both, the longer (D64's). The paper arm stops at its stop, so the
+    longer budget costs only its failures.
+  - **The stop:** the answers-only stop with the margin wait. Why the two diverged: the paper's
+    (D3) stops at the first certified step, W1's, with the target-free proof read offline (T6);
+    crystallisation moved the target out of the loop for discovery (D35), then waited out near ties
+    (D59) because its soft, slowly sharpening state passed the answers on networks the default
+    verdict failed (12 of D54's and D55's runs), the wait bounded at 200 steps (D60). On the paper's
+    runs the answers-only stop landed on the certified step at the exact bound 80 of 80 times (T6c);
+    D59's certified networks had no split tie. The owner: the answers-only stop for "consistency and
+    alignment with the long-term goal", with the solutions it loses read afterwards (D21); with the
+    margin wait. (a) *Chosen.* Pros: target-free, one rule; likely the paper's stop on its own data.
+    Cons: the wait can train past an exact machine and lose it (P1's 3b), read as a loss. (b) The
+    plain answers-only stop. Cons: crystallisation's near-tie stops, a known handicap to one arm.
+    (c) The first certificate. Cons: the target in the loop. (d) Each its own. Cons: the stop
+    confounded with the method.
+  - **The commitment:** each its own (the owner: "the approaches fundamentally diverge here"): the
+    paper cell needs it (D37: S4, move-to-front-4 seed 0 and division `p` 13 certified only with
+    it); crystallisation's anneal was designed without it.
+  - *pending, at registration: both cells' full arguments, each difference from the paper's and
+    `continuous`'s registered cells listed.*
+- **D18. Approximations in both arms: each task trains with its target's approximations' outputs
+  (the owner, 2026-10-25: "groups get approximations in the A/B").**
+  - **The rule, beyond X (the owner, 2026-10-25):** "always provide approximations where we can
+    ... should be part of the protocol". So every later part (B, L) trains with them too, and the
+    owner's expected method is "continuous quasi-static crystallization with crucible, providing
+    approximations", "although this remains to be tested": X's question, not its assumption.
+  - Division's families carry theirs as in paper 1; the groups (S3, S4) and move-to-front-4 get
+    theirs, a build (P2's output, which T10 built for its planted machines, extended to a target's
+    congruence quotients); a task whose target has no proper congruence trains on its answers alone,
+    so stated.
+  - Why the groups: their certified networks learned approximations unprompted (K8, T4), but those
+    are 1-4 of 20 a backdrop; division's networks did too, yet giving the approximations took
+    `d11` from 0 of 20 (the quotient alone) to 16 of 20.
+  - Crystallisation has never trained beside an approximation (D39's (i) was never run); the owner:
+    "no problem", the A/B tests the paper's learning with and without crystallisation.
+  - *pending, at registration: each task's approximations by one rule, from `congruences` (row 17),
+    and the build's tests.*
+- **D19. X's tasks: paper 1's nine backdrops (settled under the owner's delegation):** `d7-family`,
+  `d11-family`, `d13-family`, `d11-quotient`, word-problem-s3, word-problem-s4, move-to-front-4,
+  random-q12-0, random-q16-0.
+  - (a) *Chosen.* Pros: every machine type paper 1 measured (division's covers, the quotient alone,
+    groups, a reset machine, random machines); harm readable where the paper cell works (division's
+    15-17 of 20) and gain where it struggles. Cons: division's runs are the longest (about 2 h a
+    spent run at 600 epochs).
+  - (b) Without `d13-family`. Pros: about a ninth fewer runs, the longest. Cons: the trend over
+    division's sizes read on two points.
+  - (c) T10's planted machines added. Cons: T10's question, not a machine type; wait for its reading.
+- **D20. X's seeds: 10 a cell, the same seeds in both arms (600-609), read in pairs (settled under the
+  owner's delegation):**
+  - (a) *Chosen.* Pros: the owner's "a few different seeds", enough to classify failures by kind
+    across types; pairing, if a seed draws the same initial weights in both arms (*pending: checked
+    at registration*), gives the comparison more power than two rates. Cons: per task, 10 pairs show
+    only large effects; the across-task test carries the verdict.
+  - (b) 20 (D13). Cons: twice the compute, for a reading whose main use is the failure analysis.
+  - (c) 4-6. Cons: no per-task reading at all.
+- **D21. X's readings (registered before its data; settled under the owner's delegation):**
+  - **The effect:** per task, certified (both verdicts on the stop's network, D41) in each arm, the
+    pairs' discordant counts by McNemar's exact test, two-sided; across tasks, a stratified exact
+    test of the discordant pairs (the sign of each task's difference pooled exactly), two-sided,
+    one-sided for crystallisation beside it (the owner's impression names the direction).
+  - **Harm:** a task where crystallisation is significantly lower (Holm over the nine).
+  - **Speed:** epochs to a certificate in each arm, per task, and the pairs' difference where both
+    certified (reported, with the cost in epochs per certified machine).
+  - **Failures:** every run's kind (failure-kinds.md: never formed, formed then lost (where: the
+    handover, a collapse, the snap), froze, extra codes, readout), and formation (the state
+    separation share reaching 0.95, D15's reading) read on every run of both arms.
+  - **The stop's losses:** every run certified at a step the stop didn't end on (missed, or lost in
+    the wait), and every false stop, counted per arm (the certificate logged every step as a judge).
+  - **Adoption (D10's X part, amended):** crystallisation becomes the default if the across-task
+    test favours it and no task shows harm; otherwise the paper's method stays, the failures read
+    for a remedy.
+
 ## Feasibility (each part's registration fills its rows; a test in `tests/` checks its cells)
 
 Every cell, every backdrop: rows 1 (joint codes from `--codes-ratio 32/11` at least `q`), 2 (the
@@ -341,10 +462,9 @@ the configs.*
 ## Stages
 
 0. **The gate (D2):** paper 1 released (the paper workplan's stage 8).
-1. **Part X:** D63's paired verdict read offline (D5); D15's formation reading located for the
-   control (logged on the fresh control's runs); D15's stratified exact test (`inference.py`); the
-   cells (`continuous`, `continuous-reheat` if run, the paper cell at 1,600 epochs) and their
-   feasibility rows registered (one PR); a note in the state-formation plan pointing its open test
+1. **Part X:** D63's paired verdict read offline (D5); the groups' approximations built (D18, one PR);
+   D21's exact tests (`inference.py`); the two aligned cells (D17) and their feasibility rows
+   registered (one PR); a probe of each arm at width 32 for epoch time and memory; a note in the state-formation plan pointing its open test
    items here; the batch, run to its end (memory `no-deviations-from-early-peeks`); the reading
    (X1-X3, D10) into "Findings: X".
 2. **B's builds (one PR each):** the crate's `merge` op (`indrajala-math-rust`, parity tests; tier 1
@@ -369,9 +489,8 @@ the configs.*
 - **B:** 2 arms x (the struggling set + 1) x 20, of 600 epochs (S4 3.2 h median in T5), plus the
   reproduction runs: for a set of 3, 160 runs; a day or two on every machine.
 - **L:** (the set + 1) x 20 of 600 epochs at about twice the epoch time.
-- **X:** (5 or more backdrops) x 20 x 2 or 3 cells (the control at 1,600 epochs among them; a
-  certified paper-cell run stops early) of 1,600 epochs (D64's spent runs about 10 h on `stone`):
-  the largest part, days on every machine.
+- **X:** 9 tasks x 10 seeds x 2 arms = 180 runs of up to 1,600 epochs (D64's spent runs about 10 h
+  on `stone`; a run that stops early costs less): the largest part, days on every machine.
 
 ## Machines
 
