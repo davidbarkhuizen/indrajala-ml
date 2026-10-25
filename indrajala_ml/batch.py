@@ -188,6 +188,10 @@ BACKDROPS: dict[str, Backdrop] = {  # a backdrop's short name, as attempts name 
     **{f"t10-p2-{m}": Backdrop(f"random-planted-q16-b4-{m}", 16, "planted") for m in T10_PLANTED},
     "t10-probe-p1": Backdrop(f"random-planted-q16-b4-{T10_PROBE}", 16),
     "t10-probe-p2": Backdrop(f"random-planted-q16-b4-{T10_PROBE}", 16, "planted"),
+    # T11 (paper-workplan.md, D20): T5's algebras with their coarsest cover asked as two outputs
+    "t11-s3": Backdrop("word-problem-s3", 6, "cover"),
+    "t11-s4": Backdrop("word-problem-s4", 24, "cover"),
+    "t11-mtf4": Backdrop("move-to-front-4", 24, "cover"),
 }
 
 

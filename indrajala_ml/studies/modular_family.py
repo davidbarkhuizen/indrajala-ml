@@ -95,6 +95,7 @@ PRODUCT = ("product",)
 TOKEN = ("token",)  # T1's controls: an extra output that is no approximation, state-free
 SUFFIX = ("suffix",)  # and state-carrying
 PLANTED = ("planted",)  # a planted machine's approximation asked (T10's P2: wt.query_partitions)
+COVER = ("cover-a", "cover-b")  # T11's machines' coarsest cover asked (the paper workplan's D20: wt.query_partitions)
 QUOTIENT: tuple[str, ...] = ()
 VOCABULARY = ("sum", "difference")  # the operations with a token: every study's before the approximation claim
 WIDE = ("sum", "difference", "product")  # the approximation claim's, the same for its every arm

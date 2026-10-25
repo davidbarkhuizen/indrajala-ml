@@ -255,6 +255,42 @@ class Mealy:
                 found.add(closure)
         return sorted(found, key=lambda labels: (-max(labels), labels))
 
+    def congruences(self) -> list[tuple[int, ...]]:
+        """
+        Every nontrivial congruence, finest first, as labels: the principal ones and their joins, until
+        a join gives none new (each congruence is the join of the principal ones it holds; the join of
+        two congruences is one: the states either joins, joined).
+        """
+        atoms = self.principal_congruences()
+        found, frontier = set(atoms), set(atoms)
+        while frontier:
+            joined = {join for a in frontier for b in atoms if max(join := _joined(a, b)) > 0} - found
+            found |= joined
+            frontier = joined
+        return sorted(found, key=lambda labels: (-max(labels), labels))
+
+    def quotient_monoid(self, labels: Sequence[int]) -> int:
+        """The size of the transition monoid of the approximation `labels` names (is_congruence): every map its words make of the blocks."""
+        blocks = max(labels) + 1
+        maps: list[tuple[int, ...]] = []
+        for t in range(self.tokens):
+            image = [0] * blocks
+            for s in range(self.states):
+                image[labels[s]] = labels[int(self.transition[s, t])]
+            maps.append(tuple(image))
+        seen = {tuple(range(blocks))}
+        frontier = list(seen)
+        while frontier:
+            grown: list[tuple[int, ...]] = []
+            for x in frontier:
+                for g in maps:
+                    composed = tuple(g[i] for i in x)
+                    if composed not in seen:
+                        seen.add(composed)
+                        grown.append(composed)
+            frontier = grown
+        return len(seen)
+
     def distinguishing(self, s: int, r: int) -> list[int]:
         """The shortest word (first in token order) whose last label differs from s and from r."""
         assert s != r
@@ -515,11 +551,95 @@ def planted_blocks(q: int, blocks: int) -> IntArray:
     return np.arange(q, dtype=np.int64) % blocks
 
 
+def canonical(labels: IntArray | Sequence[int]) -> tuple[int, ...]:
+    """A partition's labels renumbered by first state, as congruence_closure numbers its blocks."""
+    blocks: dict[int, int] = {}
+    return tuple(blocks.setdefault(int(label), len(blocks)) for label in labels)
+
+
+def _joined(a: Sequence[int], b: Sequence[int]) -> tuple[int, ...]:
+    """The join of two partitions: states either joins, joined (connected); numbered by first state."""
+    parent = list(range(len(a)))
+
+    def find(s: int) -> int:
+        while parent[s] != s:
+            parent[s] = parent[parent[s]]
+            s = parent[s]
+        return s
+
+    for labels in (a, b):
+        first: dict[int, int] = {}
+        for s, label in enumerate(labels):
+            parent[find(s)] = find(first.setdefault(label, s))
+    blocks: dict[int, int] = {}
+    return tuple(blocks.setdefault(find(s), len(blocks)) for s in range(len(a)))
+
+
+def coarsest_cover(machine: Mealy) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """
+    The paper workplan's D20 rule (T11; the protocol's, experiment-design.md section 1): two
+    approximations that together determine the state, the coarsest such pair: among every pair of
+    congruences (Mealy.congruences) whose meet is the identity, the fewest blocks in total; ties to
+    the simplest quotients (Mealy.quotient_monoid, summed), then the first in the machine's state
+    order. The coarser first. None for a machine with no such pair (a primitive one).
+    """
+    found = machine.congruences()
+    best: tuple[tuple[int, int, tuple[int, ...], tuple[int, ...]], ...] = ()
+    for a, b in itertools.combinations(sorted(found, key=lambda labels: (max(labels), labels)), 2):
+        if len(set(zip(a, b, strict=True))) == machine.states:
+            best += ((max(a) + max(b) + 2, machine.quotient_monoid(a) + machine.quotient_monoid(b), a, b),)
+    assert best, "no pair of approximations determines the state: a primitive machine has no cover to give"
+    _, _, a, b = min(best)
+    return a, b
+
+
+def pairings_labels(coordinates: Coordinates) -> IntArray:
+    """
+    An ordering of four items by the permutation it makes of the three pairings of its places
+    ({1, 2 | 3, 4} and the other two): S4's quotient by the Klein four-group, which is S3.
+    """
+    pairings = [((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2))]
+
+    def pairing(places: tuple[int, int]) -> int:
+        return next(i for i, p in enumerate(pairings) if tuple(sorted(places)) in p)
+
+    index: dict[tuple[int, ...], int] = {}
+    keys = [
+        tuple(pairing((row.index(a), row.index(b))) for (a, b), _ in pairings) for row in coordinates.values.tolist()
+    ]
+    return np.array([index.setdefault(key, len(index)) for key in keys], dtype=np.int64)
+
+
+def above_labels(coordinates: Coordinates, item: int) -> IntArray:
+    """An ordering by the set of items before `item` (more recent, in move-to-front's recency order)."""
+    index: dict[tuple[int, ...], int] = {}
+    keys = [tuple(sorted(row[: row.index(item)])) for row in coordinates.values.tolist()]
+    return np.array([index.setdefault(key, len(index)) for key in keys], dtype=np.int64)
+
+
+def _cover(name: str) -> tuple[IntArray, IntArray]:
+    """D20's registered pair for a T11 machine (coarsest_cover's, named), the coarser first."""
+    coordinates = task_named(name).machine.coordinates
+    assert coordinates is not None
+    named = order_labels(coordinates)
+    return {
+        "word-problem-s3": lambda: (named["parity"], named["places {0}"]),  # the sign, a point's place
+        "word-problem-s4": lambda: (named["places {0}"], pairings_labels(coordinates)),  # a point's place, S3
+        "move-to-front-4": lambda: (named["order {0, 1, 3}"], above_labels(coordinates, 2)),
+    }[name]()
+
+
+COVERED = ("word-problem-s3", "word-problem-s4", "move-to-front-4")  # T11's machines (D20)
+
+
 def query_partitions(name: str) -> dict[str, IntArray]:
     """
     A task's named approximations an encoding can ask as extra outputs, each its states' labels (a
-    congruence): a planted machine's "planted" (planted_blocks; T10's P2, the paper workplan's D19).
+    congruence): a planted machine's "planted" (planted_blocks; T10's P2, the paper workplan's D19);
+    T11's machines' "cover-a" and "cover-b" (their coarsest cover, the coarser first; D20).
     """
+    if name in COVERED:
+        return dict(zip(("cover-a", "cover-b"), _cover(name), strict=True))
     if found := re.fullmatch(r"random-planted-q(\d+)-b(\d+)-\d+", name):
         return {"planted": planted_blocks(int(found[1]), int(found[2]))}
     return {}

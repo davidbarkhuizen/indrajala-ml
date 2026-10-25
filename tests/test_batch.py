@@ -459,6 +459,24 @@ def test_t10s_cells_meet_their_registered_bounds_and_draws():
     assert b.BACKDROPS["t10-p2-0"].args(400) == ["--runs", "random-planted-q16-b4-0:400", "--arm", "planted"]
 
 
+def test_t11s_cells_meet_their_registered_bounds():
+    from fractions import Fraction
+
+    from indrajala_ml.studies import modular_family as mf
+    from indrajala_ml.studies import window_tasks as wt
+
+    for name, q, codes, cap in (("t11-s3", 6, 8, 69), ("t11-s4", 24, 15, 248), ("t11-mtf4", 24, 15, 248)):
+        backdrop = b.BACKDROPS[name]
+        assert (backdrop.bound, backdrop.arm) == (q, "cover")
+        factors = mf.scaled_factors(q, Fraction(32, 11), 2, 32)
+        assert factors == [(32, codes), (32, codes)] and mf.exclusion_bound(q, factors) == cap  # rows 1, 2: T5's
+        machine = wt.task_named(backdrop.task).machine
+        pair = [wt.query_partitions(backdrop.task)[query] for query in mf.COVER]
+        assert all(machine.is_congruence(labels) for labels in pair)  # row 17
+        assert len(set(zip(*pair, strict=True))) == q  # their meet the identity: together the state
+    assert b.BACKDROPS["t11-s4"].args(700) == ["--runs", "word-problem-s4:700", "--arm", "cover"]
+
+
 def test_an_opened_host_takes_work_outside_its_hours():
     thursday_noon = datetime.datetime(2026, 10, 22, 12, 0, tzinfo=SAST)  # stone's owner's day
     assert b.window_left(b.HOSTS["stone"], thursday_noon) is None
