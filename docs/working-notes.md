@@ -227,6 +227,11 @@ where you meet a new trap; delete one that no longer holds.
   so a controller at a newer commit serves workers pinned at an older one.
 - **A host given outside its hours:** `controller --open HOST` (the owner's grant, logged in the
   ledger as `opened`); the host table is unchanged.
+- **The controller's own host's attempts weren't copied into the batch** (T2/T5, T10's probe): only
+  remote hosts were pulled, so `pyramidon`'s attempts stayed in `~/code/batch-attempts/` with no
+  `pulled` event, and a reading of `attempts/` missed them (T2/T5's 15, copied by hand). Now every
+  host's ended attempt is pulled, the local one by rsync without ssh, and checked against its
+  manifest. A controller started before the fix still needs the hand copy (excluding `ab-runs`).
 
 ## Studies: reading them
 

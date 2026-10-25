@@ -206,8 +206,8 @@ class Host:
     A machine in the fleet (D7): its run slots (its cores less the worker's one, bounded by memory), the
     worktree pinned at the batch's commit, its python and any PYTHONPATH before the worktree's, a
     shell line to run first (stone's env.sh), a wrapper for each attempt (klip's thermal guard), its
-    attempts' root, and its hours (none: always open). `remote` hosts are reached by ssh and their
-    attempts pulled back; the controller's own machine isn't.
+    attempts' root, and its hours (none: always open). `remote` hosts are reached by ssh; every host's
+    ended attempts are pulled into the batch, the controller's own machine's by a local copy.
     """
 
     name: str
@@ -495,8 +495,8 @@ class Controller:
     already sent it and not yet started. A worker on another commit or crate than the batch's is refused
     (D6); each host's crate is recorded. With `hosts` (D7), a host is given work only inside its hours and only
     an attempt whose expected time (its cutoff times the host's seconds an epoch so far) ends inside them;
-    at a window's end its attempts are stopped and queued again. A remote host's ended attempt is pulled
-    into `attempts/` and checked against its manifest.
+    at a window's end its attempts are stopped and queued again. A host's ended attempt is pulled into
+    `attempts/` and checked against its manifest.
     """
 
     def __init__(
@@ -560,7 +560,7 @@ class Controller:
         attempt = message["id"]
         self.log({"type": "ended", "id": attempt, "host": host, "summary": message["summary"]})
         files: dict[str, str] = message.get("files", {})
-        if host in self.hosts and self.hosts[host].remote and files:
+        if host in self.hosts and files:
             destination = self.directory / "attempts" / attempt
 
             async def pulling() -> None:
@@ -646,9 +646,9 @@ class Controller:
 
 
 def pull_attempt(host: Host, attempt: str, destination: Path) -> bool:
-    """An ended attempt's directory copied from its host (rsync over ssh; retried by the caller's check)."""
+    """An ended attempt's directory copied from its host (rsync, over ssh for a remote host; retried by the caller's check)."""
     destination.mkdir(parents=True, exist_ok=True)
-    source = f"{host.name}:{host.root}/{attempt}/"
+    source = f"{host.name}:{host.root}/{attempt}/" if host.remote else f"{host.root}/{attempt}/"
     for _ in range(3):
         done = subprocess.run(["rsync", "-a", "--exclude", "ab-runs", source, f"{destination}/"], check=False)
         if done.returncode == 0:
