@@ -505,6 +505,18 @@ where you meet a new trap; delete one that no longer holds.
   ended (the waiter's `while pgrep -f algebras-round2.sh` never ended, so neither did the
   diagnostic's). Wait on a log line instead (`until grep -q "ended" .../launch.log`), and have each
   launch script write one.
+- **A second batch beside a running one on the same host needs its own code, root and port**
+  (2026-10-25, T11 on `klip` beside T10): `prepare` would move the host's `wt-batch`, which the running
+  batch's worker loads code from for every new attempt; and a worker adopts every running attempt
+  in its root from their pid files (`Worker.adopt`), so a second worker in the same root takes the
+  first batch's. So: a worktree of its own at the batch's commit (`~/code/wt-batch-<name>`), a root
+  of its own (`~/code/batch-attempts-<name>`), its controller on another port with the tunnel by hand
+  (as `batch.tunnel`; it doesn't reopen itself), and the worker started by hand (as
+  `batch.worker_line`). A controller without `--hosts` assigns to any host and **pulls nothing**
+  (`Controller.fits` and `ended` skip a host not in it): rsync the ended attempts in by hand.
+- **A direct `modular_family_probe.py run` takes the machine's run lock:** a second one started beside
+  it refuses ("not started: ... run.lock is held"); run several as one `--runs` pool, or one after
+  another. Batch attempts don't contend for it.
 - **A long test or study run from a worktree with `PYTHONPATH` still takes the main checkout's
   `.venv`, its compiled crate included:** check `git diff --stat <pinned> <main's> -- rust/` is empty
   before trusting the crate hash the results record.
