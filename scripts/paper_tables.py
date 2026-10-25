@@ -634,16 +634,18 @@ def main(argv: list[str]) -> int:
             print(f"{tex}: {changed} numbers changed")
         return 0
     differs = False
-    made_numbers = numbers(args.data)
+    made_numbers: Numbers | None = None  # computed only when a manuscript holds a number
     for tex in args.manuscripts:
         text = tex.read_text()
         held_numbers = PN.findall(text)
-        wrong = [(key, old) for key, old in held_numbers if made_numbers.get(key) != old]
+        if held_numbers and made_numbers is None:
+            made_numbers = numbers(args.data)
+        wrong = [(key, old) for key, old in held_numbers if made_numbers is None or made_numbers.get(key) != old]
         if held_numbers:
             print(f"{tex}: numbers: {len(held_numbers)}, " + (f"{len(wrong)} DIFFER" if wrong else "the same"))
         for key, old in wrong:
             differs = True
-            print(f"  {key}: manuscript {old}, regenerated {made_numbers.get(key, '(no source)')}")
+            print(f"  {key}: manuscript {old}, regenerated {(made_numbers or {}).get(key, '(no source)')}")
         for name, table in TABLES.items():
             held = manuscript_rows(text, name)
             if held is None:
