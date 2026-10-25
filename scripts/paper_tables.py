@@ -8,13 +8,16 @@ table comes from the runs' logs and recertifications, never typed by hand.
 holds and compares its rows with the manuscript's, a line per table; it exits 1 on any difference.
 
 Each table is a function of the data directory (`--data`, default data/window-recurrent), named by
-its LaTeX label. Added as the manuscript's tables are written (stage 6); begun with P2's.
+its LaTeX label. Begun with P2's; T1's, T3's, T2's and T5's from their batches (`paper/<test>/`:
+runs, recertifications, long tests), a run counted only when it succeeded (certified in both
+verdicts and every long-test case passed), as their findings count.
 """
 
 from __future__ import annotations
 
 import argparse
 import re
+import statistics
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -54,7 +57,88 @@ def approximation(data: Path) -> list[str]:
     return [arm_row(label, mf.arm_runs(root, arm, verdicts)) for arm, label in arms]
 
 
-TABLES: dict[str, Table] = {"tab:approximation": approximation}
+def median(values: list[int]) -> str:
+    """The median as the findings write it: whole, or to a half."""
+    middle = statistics.median(values)
+    return str(int(middle)) if middle == int(middle) else f"{middle:.1f}"
+
+
+def failures(runs: list[mf.ArmRun]) -> tuple[int, int, int]:
+    """An arm's failures (runs not succeeded), how many of the uncertified came near a solution, and collapsed (readout's)."""
+    stopped = [r.outcome for r in runs if r.outcome.end != "certified"]
+    return (
+        sum(not r.succeeded for r in runs),
+        sum(o.peak >= mf.NEAR for o in stopped),
+        sum(o.collapses > 0 for o in stopped),
+    )
+
+
+def succeeded(runs: list[mf.ArmRun]) -> tuple[list[mf.ArmRun], str]:
+    """An arm's successes (certified in both verdicts and long-tested, ArmRun.succeeded) and its rate's cells."""
+    won = [r for r in runs if r.succeeded]
+    low, high = inference.wilson(len(won), len(runs))
+    return won, f"{len(won)} of {len(runs)} & {low:.2f}--{high:.2f}"
+
+
+def batch_runs(data: Path, test: str, arm: str) -> list[mf.ArmRun]:
+    """A paper test's arm (its batch's runs/<arm>), each run read with its recertifications and long tests."""
+    root = data / "paper" / test
+    return mf.arm_runs(root / "runs", arm, mf.recertifications(root / "certify"), mf.long_tested(root / "long-tests"))
+
+
+def arms_table(test: str, arms: list[tuple[str, str]]) -> Table:
+    """A comparison's arms (T1, T3): succeeded of runs, the Wilson 95% interval, failures near a solution, collapsed."""
+
+    def table(data: Path) -> list[str]:
+        lines: list[str] = []
+        for arm, label in arms:
+            runs = batch_runs(data, test, arm)
+            _, rate = succeeded(runs)
+            failed, near, collapsed = failures(runs)
+            lines.append(f"{label} & {rate} & {near} of {failed} & {collapsed} \\\\")
+        return lines
+
+    return table
+
+
+def rates_table(backdrops: list[tuple[str, int]]) -> Table:
+    """T2's and T5's rates (one batch, D17): q, succeeded of runs, Wilson 95%, the successes' epochs, failures near."""
+
+    def table(data: Path) -> list[str]:
+        lines: list[str] = []
+        for backdrop, q in backdrops:
+            runs = batch_runs(data, "t2-t5", backdrop)
+            won, rate = succeeded(runs)
+            epochs = [r.outcome.epochs for r in won]
+            course = f"{span(epochs)}, {median(epochs)}" if len(epochs) > 1 else span(epochs)
+            failed, near, _ = failures(runs)
+            lines.append(f"\\texttt{{{backdrop}}} & {q} & {rate} & {course} & {near} of {failed} \\\\")
+        return lines
+
+    return table
+
+
+TABLES: dict[str, Table] = {
+    "tab:approximation": approximation,
+    "tab:extra-outputs": arms_table(
+        "t1",
+        [
+            ("sum", "sum (an approximation)"),
+            ("suffix", "suffix (state-carrying, no approximation)"),
+            ("token", "token (stateless)"),
+        ],
+    ),
+    "tab:baselines": arms_table(
+        "t3",
+        [
+            ("approximation", "snapped codes, transformer window (control)"),
+            ("approximation-continuous", "continuous state (no codes)"),
+            ("approximation-linear", "linear window (no blocks)"),
+        ],
+    ),
+    "tab:scale": rates_table([("d7-family", 49), ("d11-family", 121), ("d13-family", 169), ("d11-quotient", 121)]),
+    "tab:breadth": rates_table([("s3", 6), ("s4", 24), ("mtf4", 24), ("rq12", 12), ("rq16", 16)]),
+}
 
 
 def manuscript_rows(tex: str, label: str) -> list[str] | None:

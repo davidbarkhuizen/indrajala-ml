@@ -49,3 +49,32 @@ def test_check_reads_the_labelled_tables_rows_and_flags_a_difference(
     assert script.main(["check", str(tex)]) == 1
     printed = capsys.readouterr().out
     assert "tab:toy: 2 rows, the same" in printed and "regenerated: second & 3" in printed
+
+
+def test_median_is_whole_or_to_a_half():
+    assert script.median([157, 182, 200, 394]) == "191" and script.median([152, 184, 207, 309]) == "195.5"
+    assert script.median([95, 120, 230]) == "120"
+
+
+def arm_run(epochs: int, end: str = "certified", certified: bool = True, long: bool | None = True, peak: float = 0.5):
+    run = script.mf.Outcome(3, end, epochs, 1.0, peak, 2, 1 if peak < 0.5 else 0, 0, 0)
+    return script.mf.ArmRun(300, run, certified, {}, True, long)
+
+
+def test_rate_and_arm_tables_count_only_successes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    runs = [
+        arm_run(100),
+        arm_run(300),
+        arm_run(200, long=False),  # certified, a long test failed: a failure, but not an uncertified one
+        arm_run(600, "spent", False, None, script.mf.NEAR),
+        arm_run(600, "spent", False, None, 0.4),
+    ]
+
+    def batch_runs(data: Path, test: str, arm: str) -> list[script.mf.ArmRun]:
+        return runs
+
+    monkeypatch.setattr(script, "batch_runs", batch_runs)
+    assert script.rates_table([("s4", 24)])(tmp_path) == [
+        "\\texttt{s4} & 24 & 2 of 5 & 0.12--0.77 & 100--300, 200 & 1 of 3 \\\\"
+    ]
+    assert script.arms_table("t1", [("sum", "sum")])(tmp_path) == ["sum & 2 of 5 & 0.12--0.77 & 1 of 3 & 1 \\\\"]
