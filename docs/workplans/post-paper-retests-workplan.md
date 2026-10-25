@@ -393,6 +393,10 @@ golden run unchanged at 3.
     `continuous`'s registered cells listed.*
 - **D18. Approximations in both arms: each task trains with its target's approximations' outputs
   (the owner, 2026-10-25: "groups get approximations in the A/B").**
+  - **The rule, beyond X (the owner, 2026-10-25):** "always provide approximations where we can
+    ... should be part of the protocol". So every later part (B, L) trains with them too, and the
+    owner's expected method is "continuous quasi-static crystallization with crucible, providing
+    approximations", "although this remains to be tested": X's question, not its assumption.
   - Division's families carry theirs as in paper 1; the groups (S3, S4) and move-to-front-4 get
     theirs, a build (P2's output, which T10 built for its planted machines, extended to a target's
     congruence quotients); a task whose target has no proper congruence trains on its answers alone,
