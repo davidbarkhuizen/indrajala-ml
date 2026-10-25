@@ -586,9 +586,13 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     states): `s3` 8 codes a factor, 64 joint (10.7 x q), cap 69; `s4` and `mtf4` 15, 225 (9.4), 248;
     the window 32 wide (row 3); every state reachable and told apart (row 14); row 17, each pair a
     congruence pair meeting in the identity, checked by `test_t11s_cells_meet_their_registered_bounds`.
-  - **Cost:** a column three positions (the token and two queries), as division's family; *pending:
-    the probe (one seed a backdrop, claims nothing) for epoch time and memory, then the batch's
-    range.* Where: the runner once T10's batch frees its slots.
+  - **Cost** (the probe, 2026-10-25, `pyramidon` beside T10's three runs, seed 699, 30 epochs, claims
+    nothing; `t11/probe/`): S4 714 s alone (about 24 s an epoch), move-to-front-4 884 s and S3 1,068 s
+    in one pool (29 and 36 s), against T5's 6.1-6.6 s an epoch: a column three positions (the token
+    and two queries), on a loaded host. Peak RSS 54-63 MB (`time -v` sees only `--runs`' parent, as
+    T5's probe; T5 measured 69 MB a run), so memory never binds and cores set the slots. A spent run
+    about 2-6 h; with T5's failure rates (16-19 of 20 spent) the batch is about 150-250 run-hours,
+    about a day on the runner. Where: the runner once T10's batch frees its slots.
   - **Success:** as D13 (certified at the stop, both verdicts, every certified network long-tested,
     D16's lengths).
   - **T11a, K4 beyond arithmetic:** per backdrop, the cover's certified rate against T5's (`s3` 1,
