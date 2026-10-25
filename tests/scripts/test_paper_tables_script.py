@@ -104,3 +104,53 @@ def test_proof_outcomes_name_the_stop_and_chows_verdict():
     assert script.proof_outcome({"verdict": "false-stop", "chow": chow}) == "false-stop refuted"
     assert script.proof_outcome({"verdict": "kept", "chow": {"refused": "limit"}}) == "kept out of reach"
     assert script.natural("d7-family-300") < script.natural("d11-family-300")
+
+
+def test_numbers_are_written_as_the_manuscript_writes_them():
+    assert script.count(7) == "7" and script.count(20480) == "20{,}480" and script.count(19680) == "19{,}680"
+    assert script.words(1, 3) == "1 to 3" and script.words(3, 3) == "3"
+    assert script.none_or(0) == "none" and script.none_or(2) == "2"
+    assert script.every(20, 20) == "every" and script.every(19, 20) == "19 of 20"
+    assert script.listed([0, 1, 2, 4, 5]) == "0, 1, 2, 4 and 5" and script.listed([3]) == "3"
+    assert script.p_value(0.014182) == "0.014" and script.p_value(0.042547) == "0.043"
+    assert [script.base3_digits(x) for x in (0, 2, 3, 13119)] == [1, 1, 2, 9]
+
+
+PROSE = r"\newcommand{\pn}[2]{#2} Of \pn{toy.runs}{105} networks, \pn{toy.wrong}{19{,}680}; \pn{toy.words}{1 to 3}."
+
+
+def test_check_and_fill_hold_the_prose_numbers_to_their_regeneration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    tex = tmp_path / "paper.tex"
+    tex.write_text(PROSE)
+    monkeypatch.setattr(script, "TABLES", {})
+    made = {"toy.runs": "105", "toy.wrong": "19{,}680", "toy.words": "1 to 3"}
+
+    def source(data: Path) -> script.Numbers:
+        return dict(made)
+
+    monkeypatch.setattr(script, "NUMBER_SOURCES", [source])
+    assert script.main(["check", str(tex)]) == 0
+    assert "numbers: 3, the same" in capsys.readouterr().out
+    made["toy.wrong"] = "13{,}119"
+    assert script.main(["check", str(tex)]) == 1
+    assert "toy.wrong: manuscript 19{,}680, regenerated 13{,}119" in capsys.readouterr().out
+    assert script.main(["fill", str(tex)]) == 0
+    assert tex.read_text() == PROSE.replace("19{,}680", "13{,}119")
+    assert script.main(["check", str(tex)]) == 0
+    tex.write_text(PROSE + r" \pn{toy.missing}{1}")
+    assert script.main(["check", str(tex)]) == 1 and script.main(["fill", str(tex)]) == 1
+    assert "no source for toy.missing" in capsys.readouterr().out
+
+
+def test_numbers_refuses_a_key_from_two_sources(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    def one(data: Path) -> script.Numbers:
+        return {"a": "1"}
+
+    def two(data: Path) -> script.Numbers:
+        return {"a": "2"}
+
+    monkeypatch.setattr(script, "NUMBER_SOURCES", [one, two])
+    with pytest.raises(ValueError, match="two sources"):
+        script.numbers(tmp_path)
