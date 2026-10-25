@@ -686,20 +686,39 @@ class Running:
     peak: int | None = None  # its session's largest sampled PSS, kB
 
 
-def session_pss(session: int, proc: Path = Path("/proc")) -> int | None:
+def attempt_pss(session: int, proc: Path = Path("/proc")) -> int | None:
     """
-    The summed PSS (kB) of every process in a session: an attempt and its pool's workers (a forkserver's
-    children, outside the attempt's own rusage), shared pages counted once. None without /proc.
+    The summed PSS (kB) of an attempt: every process in its session and every process descended from
+    one (its pool's workers, a forkserver's children outside the attempt's own rusage, and a run a
+    wrapper moved into a session of its own, as klip's thermal guard's `setsid`), shared pages counted
+    once. None without /proc.
     """
     if not proc.is_dir():
         return None
-    total = 0
+    parents: dict[int, int] = {}
+    members: list[int] = []
     for stat in proc.glob("[0-9]*/stat"):
         with contextlib.suppress(OSError, ValueError, IndexError):
-            if int(stat.read_text().rpartition(")")[2].split()[3]) == session:
-                for line in (stat.parent / "smaps_rollup").read_text().splitlines():
-                    if line.startswith("Pss:"):
-                        total += int(line.split()[1])
+            fields = stat.read_text().rpartition(")")[2].split()
+            pid = int(stat.parent.name)
+            parents[pid] = int(fields[1])
+            if int(fields[3]) == session:
+                members.append(pid)
+    children: dict[int, list[int]] = {}
+    for pid, parent in parents.items():
+        children.setdefault(parent, []).append(pid)
+    tree: set[int] = set()
+    while members:
+        pid = members.pop()
+        if pid not in tree:
+            tree.add(pid)
+            members.extend(children.get(pid, ()))
+    total = 0
+    for pid in tree:
+        with contextlib.suppress(OSError, ValueError, IndexError):
+            for line in (proc / str(pid) / "smaps_rollup").read_text().splitlines():
+                if line.startswith("Pss:"):
+                    total += int(line.split()[1])
     return total
 
 
@@ -712,7 +731,7 @@ class Worker:
     `stop` (a window's end) and re-adopts its attempts from their pid files after its own restart. Its
     runs survive a dropped connection: it reconnects and reports. An attempt run again (lost, or stopped
     at a window's end) gets a fresh directory, the old one set aside under ROOT/lost/. Each look samples
-    an attempt's memory (session_pss); its peak, kept in its directory, goes into its summary.
+    an attempt's memory (attempt_pss); its peak, kept in its directory, goes into its summary.
     """
 
     def __init__(
@@ -841,7 +860,7 @@ class Worker:
         """Each running attempt's progress, and the ended ones' summaries and manifests."""
         for attempt_id, running in list(self.running.items()):
             step = last_step(self.log_of(running))
-            kb = session_pss(running.pid)
+            kb = attempt_pss(running.pid)
             if kb is not None and (running.peak is None or kb > running.peak):
                 running.peak = kb
                 (running.directory / "peak_pss").write_text(str(kb))
