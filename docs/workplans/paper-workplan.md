@@ -767,6 +767,61 @@ answers-only stop lands on the certified step, a *false stop* when it lands earl
 - Manifest `paper/t6.sha256` 25d3145d...51a94fb5 (297 files, run from `paper`: the three proof
   directories, the tally and the reading's log).
 
+## Findings: T2, the rates at scale (2026-10-25, read by D15's rules)
+
+`readout t2-t5/runs --arms ... --certify t2-t5/certify --long-tests t2-t5/long-tests`
+(`t2-t5/readout-all.txt`; the pair alone, `--pairs d11-family:d11-quotient`, in `readout.txt`). Every
+run recertified in both verdicts; every certified network long-tested (`paper_reading.py long`, 18
+shares: `jebel` 0-6 and three extras on `pyramidon`, `stone` 7-17; `long-tests-summary.txt`): **60
+networks, 34,614,000 cases, every case passed**, so no rate below changes and T4's fresh counts
+stand.
+
+| backdrop | q | certified | Wilson 95% | epochs to certify (min-max, median) | failures near a solution |
+| --- | --- | --- | --- | --- | --- |
+| `d7-family` | 49 | **17 of 20** | 0.64-0.95 | 81-474, 195 | 3 of 3 |
+| `d11-family` | 121 | **16 of 20** | 0.58-0.92 | 146-430, 261 | 2 of 4 |
+| `d13-family` | 169 | **15 of 20** | 0.53-0.89 | 187-534, 313 | 4 of 5 |
+| `d11-quotient` | 121 | **0 of 20** | 0.00-0.16 | - | 0 of 20 |
+
+- **T2a holds at every `p`** (the bar a Wilson lower bound of 0.25): 0.64, 0.58 and 0.53. K6 stands:
+  the cell learns these machines reliably at 49, 121 and 169 states, above the 10-15 of 20 expected.
+  The trend (registered as reported, not tested): the rate falls by one network a step and the
+  median epochs to certify rise (195, 261, 313); the slowest success, `d13-family` at 534 epochs, is
+  within the 600 budget, so the budget crowds at `p` 13. Near a solution (the worst answer at least
+  0.95) are 9 of the 12 failures.
+- **T2b holds:** `d11-family` 16 of 20 against `d11-quotient` 0 of 20, Fisher's exact one-sided p
+  7.7e-8, below Holm's smallest threshold in the paper's family (D5). **K4 stands at 121 states:**
+  without its approximations' outputs the quotient alone never came near (its worst answer at best
+  0.436-0.485 in every run, all 20 spent).
+- Data `data/window-recurrent/paper/t2-t5/`, manifest `paper/t2-t5.sha256` 0eee086b...4b22893fa
+  (6,960 files, run from `paper/t2-t5`), shared with T5's.
+
+## Findings: T5, breadth rates (2026-10-25, read by D16's rules)
+
+The same readout and long tests as T2's (one batch, D17).
+
+| backdrop | q | certified | Wilson 95% | epochs to certify | failures near a solution |
+| --- | --- | --- | --- | --- | --- |
+| `s3` | 6 | **1 of 20** | 0.01-0.24 | 52 | 0 of 19 |
+| `s4` | 24 | **4 of 20** | 0.08-0.42 | 157-394, 200 | 6 of 16 |
+| `mtf4` | 24 | **4 of 20** | 0.08-0.42 | 152-309, 207 | 1 of 16 |
+| `rq12` | 12 | **3 of 20** | 0.05-0.36 | 95-230, 120 | 8 of 17 |
+| `rq16` | 16 | **0 of 20** | 0.00-0.16 | - | 11 of 20 |
+
+- **T5a:** `s3` is **refuted** (1 of 20, the bar's refutation at 1 or none), as expected ("undecided
+  or refuted": a state that never forms; no failure came near). `s4` and `mtf4` are **undecided** (4
+  of 20 each, lower bounds 0.08), well below the 13 of 20 expected from round 1's 4 of 6 at width 16.
+  So **K7 is restated as existence at low rates:** the same cell certifies groups and a reset machine,
+  each certificate proved and long-tested, at 1-4 of 20; no algebra meets the reliability bar.
+- **T5b is reported with both rates:** `rq12` 3 of 20 doesn't meet the bar (lower bound 0.05), and
+  `rq16` 0 of 20, so "random machines only to about 12 states" neither stands nor moves: existence
+  at 12 states (3 of 20), none at 16. Both are primitive (D19), so neither has an approximation to
+  give; T10 asks whether a planted one changes that.
+- Collapses are common where the cell struggles (`rq16` 16 of 20 failures, `rq12` 12, `s4` 6, `s3`
+  and `mtf4` 5), rare on division (at most 1 a backdrop): recorded for the failure kinds, not tested.
+- **Then:** the groups' approximations given as outputs, T11 (to be registered in its own decision
+  before any of its runs).
+
 ## Stages
 
 1. **This plan;** the audit's standing decisions applied (F1 recorded in the state-formation
