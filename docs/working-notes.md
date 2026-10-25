@@ -219,7 +219,10 @@ where you meet a new trap; delete one that no longer holds.
 - **An attempt's memory is the worker's sample, not `/usr/bin/time`:** a run's pool workers are a
   forkserver's children, outside the attempt's rusage (`time -v` saw 51 MB of a division run). The
   worker sums PSS over the attempt's session at each look (every 2 s) and puts the peak in its summary
-  (`peak_pss_mb`); a spike shorter than a look can be missed.
+  (`peak_pss_mb`); a spike shorter than a look can be missed. **`klip`'s peaks before the fix are
+  wrong** (3.8-6.5 MB on T10's probe against `pyramidon`'s 184-221 MB): its thermal guard `setsid`s the
+  run, so the session held only the wrapper. Now the sum follows every descendant of the session's
+  processes too (`attempt_pss`); use another host's peaks for `klip`'s earlier attempts.
 - **Several cells in one batch:** `register --cell A --cell B ...` runs the spec under each cell in
   turn (list the longest first: the fleet takes attempts in order), the ids `<cell>.<backdrop>-<seed>`
   so the cells' runs never share a directory; `find` counts `k` per cell and backdrop. A ledger from

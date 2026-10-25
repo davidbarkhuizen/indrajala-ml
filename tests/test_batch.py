@@ -492,9 +492,20 @@ def test_an_attempt_run_again_gets_a_fresh_directory_its_old_one_set_aside(tmp_p
     assert not worker(tmp_path, "w", 1).running  # the set-aside directories are never adopted
 
 
+def test_an_attempts_pss_follows_a_wrappers_setsid_child_and_its_workers(tmp_path: Path):
+    proc = tmp_path / "proc"
+    # pid: (ppid, session, PSS kB): 10 the wrapper (the attempt's session), 11 the run it setsid'd, 12 a
+    # pool worker of the run's, 20 another session altogether
+    for pid, (ppid, session, kb) in {10: (1, 10, 4), 11: (10, 11, 200), 12: (11, 11, 300), 20: (1, 20, 999)}.items():
+        (proc / str(pid)).mkdir(parents=True)
+        (proc / str(pid) / "stat").write_text(f"{pid} (x y) S {ppid} {session} {session} 0 -1\n")
+        (proc / str(pid) / "smaps_rollup").write_text(f"Rss: 1 kB\nPss: {kb} kB\n")
+    assert b.attempt_pss(10, proc) == 504 and b.attempt_pss(11, proc) == 500 and b.attempt_pss(20, proc) == 999
+
+
 def test_a_sessions_pss_sums_its_processes_and_an_attempts_peak_reaches_its_summary(tmp_path: Path):
-    mine = b.session_pss(os.getsid(0))
-    assert mine is not None and mine > 0 and b.session_pss(1, tmp_path / "none") is None
+    mine = b.attempt_pss(os.getsid(0))
+    assert mine is not None and mine > 0 and b.attempt_pss(1, tmp_path / "none") is None
     state = run_batch(
         tmp_path,
         b.Batch("m", "measure", b.attempts("s3:1", ["continuous"])),
