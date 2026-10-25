@@ -214,6 +214,15 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     1.1 for `p` 11 and 13. (b) The exact bound only. Pros: proof everywhere. Cons: says nothing of a
     discoverer who knows the size only roughly. (c) 1.5 as well. Cons: out of reach for every target
     but S3 (the slack reading's table).
+  - **Amended 2026-10-25 (the owner), before any of T10's batch runs ended:** the scope extended to
+    T10's 90 batch runs (`t10/batch/`, `paper_reading.py proof`), read by the same rules and reported
+    apart from T6's 280 (T6 itself already read). At q 16 the bounds are 16 and 17, both within
+    reach (`random-q16-0` 405 and 2,430 words before repeats; every stop gets Chow's verdict). T6a
+    and T6c's expectations stand for them as registered; T6b, refuted as registered on T6's runs, is
+    read on T10's as fresh, its count of stops Chow refutes reported. The tool was checked first on
+    T10's probe (already read by its own rule, D19): its one certified run, `t10-probe-p2-401`, kept
+    at both bounds and proved (405 and 2,030 words); the other 7 silent. Reported with the probe,
+    not counted.
 - **D12. The paper's cell, exactly: W1's** (2026-10-23, stage 3, before any run of it). D3's
   "division and round-1 cell" left the factors' width open: round 1 ran `--codes-ratio 32/11` at
   width 16, W1 (the only registered result at 169 states) two factors 32 wide of 38 codes, which is
