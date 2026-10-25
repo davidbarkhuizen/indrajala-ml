@@ -917,6 +917,27 @@ The same readout and long tests as T2's (one batch, D17).
 - **Then:** the groups' approximations given as outputs, T11 (registered in D20, before any of its
   runs).
 
+## Findings: T7's reruns, bit for bit on aarch64 (2026-10-25, read by D21's rules)
+
+D21's sample, each rerun on `litshe` (aarch64, the crate's NEON path) at 7dc0915 with the crate
+647f23c, one at a time, peak 48-56 C; every original ran on x86-64.
+
+| test | run | log rows (`same-prefix`) | certified network | sha256 (both) |
+| --- | --- | --- | --- | --- |
+| T1 | `d5-sum-319` | 74 identical, `differs` None | step 9 | 45c72add3cc9d641... |
+| T3 | `approximation.d5-family-wide-319` | 65 identical, `differs` None | step 7 | aba8c525105e0fbe... |
+| T5 | `s3-302` | 65 identical, `differs` None | step 6 | abe61dcbc72de473... |
+| T2 | `d7-family-309` | 94 identical, `differs` None | step 6 | 0fb6ec7b16a44ced... |
+
+- **D21's expectation holds:** all four are bit for bit their originals, every logged row the same
+  but `seconds` and the certified network's sha256 the original's (`d7-family-309`'s six step
+  networks too). So the paper claims bit identity across x86-64 and aarch64, from the current main,
+  for the four tests' code paths (both cells, division and an algebra).
+- `d7-family-309`'s first try died at 09:34 when `litshe` lost power or crashed (52 C, not
+  heat); restarted from scratch at 14:35, its partial run kept as `d7-family-309.crashed-0934`.
+- Data `data/window-recurrent/paper/t7-reruns/`, manifest `paper/t7-reruns.sha256`
+  81e5f4d8...d5c2647be6 (71 files).
+
 ## Stages
 
 1. **This plan;** the audit's standing decisions applied (F1 recorded in the state-formation
@@ -928,7 +949,7 @@ The same readout and long tests as T2's (one batch, D17).
    indrajala-research's window-recurrent-literature.md (its 2026-10-23 extension: no 2025-2026
    work learns an automaton by gradient descent and proves it at every length), the papers in
    indrajala-literature; T7's `scripts/paper_tables.py` (P2's approximation table regenerated
-   identically), its further tables added with the manuscript (stage 6). **T7, 2026-10-25:** T1's, T3's, T2's and T5's tables regenerated from their batches (`tab:extra-outputs`, `tab:baselines`, `tab:scale`, `tab:breadth`), every number as their findings but T5's two medians (corrected there); T4's (`tab:decomposition`, `tab:decomposition-fresh`) and T6's (`tab:proof`, `tab:refuted`) the same day, every number as their findings. T4's reading of the 69
+   identically), its further tables added with the manuscript (stage 6). **T7, 2026-10-25:** T1's, T3's, T2's and T5's tables regenerated from their batches (`tab:extra-outputs`, `tab:baselines`, `tab:scale`, `tab:breadth`), every number as their findings but T5's two medians (corrected there); T4's (`tab:decomposition`, `tab:decomposition-fresh`) and T6's (`tab:proof`, `tab:refuted`) the same day, every number as their findings. **Reruns (D21), 2026-10-25:** all four bit for bit on `litshe` ("Findings: T7's reruns"). T4's reading of the 69
    networks named in D10 is offline and may run now; T6 waits on its runs.
 3. **Builds:** T1's two control outputs (suffix and token) as answer kinds of the division encoding;
    T3's continuous and linear windows in the division probe if not already there; each tested, the
