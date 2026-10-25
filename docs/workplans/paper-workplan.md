@@ -615,6 +615,29 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     outputs (move-to-front's 264 atoms); not division's form. (c) One approximation only. Cons: it
     doesn't determine the state, so not K4's cover.
 
+- **D21. T7's reruns registered: the paper's runs bit for bit on another machine** (2026-10-25,
+  before any rerun). **The sample, by a rule fixed now:** the shortest certified run (by minutes) of
+  each of T1, T3, T2 and T5, rerun on `litshe` (aarch64, the crate's NEON path; every original ran on
+  x86-64): T1 `d5-sum-319` (4.6 min on its host), T3 `approximation.d5-family-wide-319` (6.3), T5
+  `s3-302` (7.4), T2 `d7-family-309` (11.8), in that order, one at a time (<= 70 C). Each by the
+  runner's own command (`batch.BACKDROPS` and `CELLS`: the backdrop's arguments and its batch's cell),
+  at main (7dc0915) with the crate 647f23c (the batches': T2/T5's and T3's recorded, T1's attempts on
+  `pyramidon`'s; T1's `stone` attempts ran 45d6a37, `same-prefix` identical to 647f23c, T1's
+  findings).
+  - **Expectation:** each rerun bit for bit the original: `same-prefix RERUN ORIGINAL` every row the
+    same but `seconds` (`differs` None), and its certified network's sha256 the original's.
+    **Refuted** by any difference, reported with the first differing step and diagnosed (an x86-64
+    against aarch64 float difference, or code drift since the batch's commit) before T7 claims
+    reproducibility; the paper then states what reproduces (the same machine, or the certificate's
+    verdict) rather than bit identity.
+  - Options: (a) *chosen*, one shortest certified run a test on `litshe`. Pros: every test's code
+    path checked (both cells, division and an algebra), across architectures and from the current
+    main, in a few Pi hours; a certified run checks the certified network too. Cons: no spent run
+    (a failure's longer course); 4 runs, so a rare divergence could pass unseen. (b) A random sample
+    of 10. Pros: no selection. Cons: spent runs take days on a Pi. (c) `jebel` (x86-64) as well.
+    Pros: the same architecture, a cleaner reading if `litshe` differs. Cons: `jebel` is T10's;
+    deferred to stage 5's `jebel` reruns, as the handover plans.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
@@ -872,11 +895,14 @@ The same readout and long tests as T2's (one batch, D17).
 | backdrop | q | certified | Wilson 95% | epochs to certify | failures near a solution |
 | --- | --- | --- | --- | --- | --- |
 | `s3` | 6 | **1 of 20** | 0.01-0.24 | 52 | 0 of 19 |
-| `s4` | 24 | **4 of 20** | 0.08-0.42 | 157-394, 200 | 6 of 16 |
-| `mtf4` | 24 | **4 of 20** | 0.08-0.42 | 152-309, 207 | 1 of 16 |
+| `s4` | 24 | **4 of 20** | 0.08-0.42 | 157-394, 191 | 6 of 16 |
+| `mtf4` | 24 | **4 of 20** | 0.08-0.42 | 152-309, 195.5 | 1 of 16 |
 | `rq12` | 12 | **3 of 20** | 0.05-0.36 | 95-230, 120 | 8 of 17 |
 | `rq16` | 16 | **0 of 20** | 0.00-0.16 | - | 11 of 20 |
 
+- **Medians corrected by T7 (2026-10-25):** `s4`'s and `mtf4`'s were first written 200 and 207, the
+  upper of the two middle values of four (157, 182, 200, 394; 152, 184, 207, 309); the median is
+  191 and 195.5, as `paper_tables.py show tab:breadth` regenerates. Nothing else changes.
 - **T5a:** `s3` is **refuted** (1 of 20, the bar's refutation at 1 or none), as expected ("undecided
   or refuted": a state that never forms; no failure came near). `s4` and `mtf4` are **undecided** (4
   of 20 each, lower bounds 0.08), well below the 13 of 20 expected from round 1's 4 of 6 at width 16.
@@ -902,7 +928,7 @@ The same readout and long tests as T2's (one batch, D17).
    indrajala-research's window-recurrent-literature.md (its 2026-10-23 extension: no 2025-2026
    work learns an automaton by gradient descent and proves it at every length), the papers in
    indrajala-literature; T7's `scripts/paper_tables.py` (P2's approximation table regenerated
-   identically), its further tables added with the manuscript (stage 6). T4's reading of the 69
+   identically), its further tables added with the manuscript (stage 6). **T7, 2026-10-25:** T1's, T3's, T2's and T5's tables regenerated from their batches (`tab:extra-outputs`, `tab:baselines`, `tab:scale`, `tab:breadth`), every number as their findings but T5's two medians (corrected there); T4's and T6's next. T4's reading of the 69
    networks named in D10 is offline and may run now; T6 waits on its runs.
 3. **Builds:** T1's two control outputs (suffix and token) as answer kinds of the division encoding;
    T3's continuous and linear windows in the division probe if not already there; each tested, the
