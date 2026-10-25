@@ -1008,8 +1008,9 @@ ARMS = {
     "suffix": mf.SUFFIX,
     "token": mf.TOKEN,
     "planted": mf.PLANTED,
+    "cover": mf.COVER,
 }
-MACHINE_ARMS = ("planted",)  # a machine's queries (wt.query_partitions); the rest are division's
+MACHINE_ARMS = ("planted", "cover")  # a machine's queries (wt.query_partitions); the rest are division's
 
 
 def main(argv: list[str]) -> int:
@@ -1020,7 +1021,7 @@ def main(argv: list[str]) -> int:
         "--arm",
         choices=sorted(ARMS),
         default="family",
-        help="division's queries, or a machine's (planted: a planted machine's approximation, T10's P2)",
+        help="division's queries, or a machine's (planted: a planted machine's approximation, T10's P2; cover: T11's coarsest cover, D20)",
     )
     seeds = run.add_mutually_exclusive_group(required=True)
     seeds.add_argument("--seed", type=int, help="one run, into --out")
@@ -1545,6 +1546,12 @@ def main(argv: list[str]) -> int:
         "congruences", help="each task's machine: its nontrivial principal congruences (its approximations' atoms)"
     )
     congruences.add_argument("tasks", nargs="+", help="task names (wt.task_named)")
+    cover = commands.add_parser(
+        "cover-pair",
+        help="each task's machine: its coarsest cover by two approximations (the paper workplan's D20 rule, "
+        "wt.coarsest_cover; minutes at move-to-front-4), against the registered pair where there is one",
+    )
+    cover.add_argument("tasks", nargs="+", help="task names (wt.task_named)")
     bars = commands.add_parser(
         "rank-bars",
         help="a machine-level comparison's attainable p values (the paper workplan's D19): the exact rank-sum "
@@ -1620,6 +1627,10 @@ def main(argv: list[str]) -> int:
     if args.command == "congruences":
         for name in args.tasks:
             print(congruence_line(name), flush=True)
+        return 0
+    if args.command == "cover-pair":
+        for name in args.tasks:
+            print(cover_line(name), flush=True)
         return 0
     if args.command == "measures":
         for name in args.tasks:
@@ -2140,6 +2151,21 @@ def logged_run(probe: functools.partial[None], seed: int, out: Path, resume: boo
     last = next(r for r in reversed(rows) if "end" in r)
     verdict = "certified" if last["certified"] else last["end"]
     return f"step {last['step']}, {verdict}, {last['seconds'] / 60:.1f} min"
+
+
+def cover_line(name: str) -> str:
+    """
+    A task's coarsest cover (wt.coarsest_cover): each approximation's blocks and quotient monoid, and
+    whether it is the registered pair's (wt.query_partitions, up to the blocks' numbering).
+    """
+    machine = wt.task_named(name).machine
+    pair = wt.coarsest_cover(machine)
+    parts = ", ".join(f"{max(labels) + 1} blocks (monoid {machine.quotient_monoid(labels)})" for labels in pair)
+    known = wt.query_partitions(name)
+    if "cover-a" not in known:
+        return f"{name}: {parts}; no registered pair"
+    registered = tuple(wt.canonical(known[q]) for q in ("cover-a", "cover-b"))
+    return f"{name}: {parts}; {'the registered pair' if registered == pair else 'NOT the registered pair'}"
 
 
 def congruence_line(name: str) -> str:

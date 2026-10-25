@@ -130,6 +130,44 @@ def test_a_planted_query_asks_the_block_of_the_state_after_each_token_and_only_t
         mf.target_named("random-q16-0", mf.PLANTED)  # primitive: nothing to ask
 
 
+@pytest.mark.parametrize(
+    ("name", "blocks", "monoids"),
+    [("word-problem-s3", (2, 3), (2, 6)), ("word-problem-s4", (4, 6), (24, 6)), ("move-to-front-4", (6, 8), (10, 15))],
+)
+def test_a_cover_query_asks_t11s_registered_pair_of_approximations(
+    name: str, blocks: tuple[int, int], monoids: tuple[int, int]
+):
+    """
+    T11 (the paper workplan's D20): the coarsest pair of approximations that together determine the
+    state, asked as two queries after each token: S3 the sign and a point's place, S4 a point's place
+    and S3 (the Klein four-group's cosets), move-to-front-4 the order of items 0, 1 and 3 and the set
+    of items more recent than item 2.
+    """
+    encoding = mf.target_named(name, mf.COVER)
+    assert isinstance(encoding, mf.MachineEncoding) and encoding.width == 3
+    machine = encoding.task.machine
+    pair = [wt.query_partitions(name)[query] for query in mf.COVER]
+    assert tuple(int(labels.max()) + 1 for labels in pair) == blocks
+    assert tuple(machine.quotient_monoid(wt.canonical(labels)) for labels in pair) == monoids
+    assert all(machine.is_congruence(labels) for labels in pair) and len(set(zip(*pair, strict=True))) == machine.states
+    word = encoding.draw(5, random.Random(2))
+    tokens, labels = encoding.example(word)
+    path = machine.path(word)
+    assert labels[0::3] == machine.run(word) and set(tokens[1::3]) == {float(encoding.query_tokens[0])}
+    assert labels[1::3] == tuple(int(pair[0][s]) for s in path) and labels[2::3] == tuple(int(pair[1][s]) for s in path)
+    assert encoding.kinds(tokens, labels)[1:3] == ["cover-a", "cover-b"] and not encoding.certified("cover-a")
+
+
+def test_the_coarsest_cover_is_s3s_registered_pair_and_a_primitive_machine_has_none():
+    machine = wt.task_named("word-problem-s3").machine
+    assert wt.coarsest_cover(machine) == tuple(
+        wt.canonical(wt.query_partitions("word-problem-s3")[q]) for q in mf.COVER
+    )
+    assert len(machine.congruences()) == 4  # the three points' places and the sign
+    with pytest.raises(AssertionError, match="primitive"):
+        wt.coarsest_cover(wt.task_named("random-q12-0").machine)
+
+
 def test_a_planted_query_run_trains_certifies_and_long_tests_the_machine_on_slot_0(tmp_path: Path):
     name = "random-planted-q8-b2-0"
     encoding = mf.target_named(name, mf.PLANTED)
