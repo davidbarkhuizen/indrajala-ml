@@ -5,7 +5,12 @@ table comes from the runs' logs and recertifications, never typed by hand.
 
 `paper_tables.py show NAME...` prints each table's LaTeX rows (the lines between `\\midrule` and
 `\\bottomrule`). `paper_tables.py check TEX...` regenerates every table whose label a manuscript
-holds and compares its rows with the manuscript's, a line per table; it exits 1 on any difference.
+holds and compares its rows with the manuscript's, a line per table, and every number the prose
+holds as `\\pn{key}{value}` (the manuscript defines `\\pn` to print its value) against the key's
+regeneration; it exits 1 on any difference or a key with no source. `paper_tables.py numbers`
+prints every key and its value; `paper_tables.py fill TEX...` writes each `\\pn`'s regenerated
+value into the manuscript. The numbers come from NUMBER_SOURCES, each a function of the data
+directory returning its keys' values as the manuscript writes them (addition's, for Appendix A).
 
 Each table is a function of the data directory (`--data`, default data/window-recurrent), named by
 its LaTeX label. Begun with P2's; T1's, T3's, T2's and T5's rates from their batches (`paper/<test>/`:
@@ -292,6 +297,299 @@ TABLES: dict[str, Table] = {
 }
 
 
+# the numbers in the prose: each \pn{key}{value} in a manuscript, its value regenerated
+
+
+Numbers = dict[str, str]
+
+
+def count(n: int) -> str:
+    """A whole number as the manuscript writes it: thousands split by {,}."""
+    return f"{n:,}".replace(",", "{,}")
+
+
+def words(low: float, high: float, digits: int = 0) -> str:
+    """A range in words, "1 to 3"; one value alone when both ends agree."""
+    a, b = f"{low:.{digits}f}", f"{high:.{digits}f}"
+    return a if a == b else f"{a} to {b}"
+
+
+def none_or(n: int) -> str:
+    """A count that is expected to be nothing, written "none" when it is."""
+    return "none" if n == 0 else count(n)
+
+
+def every(k: int, n: int) -> str:
+    """k of n, written "every" when it is all of them."""
+    return "every" if k == n else f"{k} of {n}"
+
+
+def listed(values: list[int]) -> str:
+    """Counts in a list, "0, 1, 2, 4 and 5"."""
+    shown = [count(v) for v in values]
+    return shown[0] if len(shown) == 1 else ", ".join(shown[:-1]) + " and " + shown[-1]
+
+
+def p_value(p: float) -> str:
+    """A p value to two significant figures, as the manuscript writes them."""
+    return f"{p:.2g}"
+
+
+ADDITION_STUDIES = (("matrix", 3), ("control", 1))  # each study and the step its networks end at
+
+
+def addition_networks(data: Path) -> list[dict[str, Any]]:
+    """
+    Addition's 105 networks (the matrix's and the all-at-once control's last steps): each run's
+    result, its two certificates (branched, strict) and its long test where it had one.
+    """
+    networks: list[dict[str, Any]] = []
+    for study, step in ADDITION_STUDIES:
+        for path in sorted((data / study / "results").glob("*.json")):
+            result = json.loads(path.read_text())
+            name = f"{result['key']}-step-{step}"
+            long_test = data / "long-tests" / f"{name}.json"
+            networks.append(
+                {
+                    "study": study,
+                    "name": name,
+                    "network": data / study / "models" / result["key"] / f"step-{step}.network.json",
+                    "result": result,
+                    "branched": json.loads((data / "certificates" / f"{name}.json").read_text()),
+                    "strict": json.loads((data / "certificates-strict" / f"{name}.json").read_text()),
+                    "long": json.loads(long_test.read_text()) if long_test.exists() else None,
+                }
+            )
+    return networks
+
+
+def base3_digits(x: int) -> int:
+    """How many base-3 digits x has (1 for 0)."""
+    digits = 1
+    while x >= 3:
+        x, digits = x // 3, digits + 1
+    return digits
+
+
+def first_wrong(network: Path, triple: tuple[int, int, int]) -> tuple[int, int]:
+    """
+    The shortest length, in whole windows from the operands' digits to 64 columns, at which the
+    test harness reads a network's sum of this triple wrong, and its answer there.
+    """
+    from indrajala_ml.data import addition_data as ad
+    from indrajala_ml.studies import window_recurrent_study as wr
+    from indrajala_ml.studies import window_tasks as wt
+
+    net = wr.load_network(str(network))
+    model = wr.WindowModel(net, net.columns, wt.task_named("addition"))
+    digits = max(base3_digits(x) for x in triple)
+    start = -(-digits // net.columns) * net.columns
+    for n in range(start, 65, net.columns):
+        [labels] = model.predict(n)([triple])
+        answer = ad.from_digits(labels)
+        if answer != sum(triple):
+            return n, answer
+    raise ValueError(f"{network}: right at every length to 64")
+
+
+def addition_certificates(data: Path) -> Numbers:
+    """K2's addition numbers (Appendix A): the tests against the certificate and the long tests."""
+    from indrajala_ml.studies import window_recurrent_study as wr
+
+    networks = addition_networks(data)
+    working = [n for n in networks if n["result"]["works"]]
+    failing = [n for n in networks if not n["result"]["works"]]
+    certified = [n for n in networks if n["strict"]["certified"]]
+    reached = [len(n["strict"]["reachable"]) for n in certified]
+    minimised = sorted({len(n["strict"]["minimised"]) for n in certified})
+    uncertified = [n for n in working if not n["strict"]["certified"]]
+    wrong = [n for n in uncertified if n["result"]["break"] == 64]
+    cases = [(first_wrong(n["network"], tuple(n["strict"]["counterexample"]["addition"]["triple"])), n) for n in wrong]
+    cases.sort(key=lambda case: (case[0][0], sum(case[1]["strict"]["counterexample"]["addition"]["triple"])))
+    tested = [(n, *wr.long_test_failures(n["long"])) for n in networks if n["long"] is not None]
+    each = {cases_ for _, cases_, _ in tested}
+    if len(each) != 1:
+        raise ValueError(f"addition's long tests: {sorted(each)} cases a network, not one count")
+    failed = [n for n, _, failures in tested if failures]
+    if len(cases) != 2:
+        raise ValueError(f"addition: {len(cases)} wrong networks passing every test, not 2")
+    (first, one), (second, other) = cases
+    triple = one["strict"]["counterexample"]["addition"]["triple"]
+    long_wrong = {n["name"]: sum(int(f.rsplit(" ", 1)[1]) for f in failures) for n, _, failures in tested}
+    return {
+        "addition.matrix-runs": count(sum(n["study"] == "matrix" for n in networks)),
+        "addition.control-runs": count(sum(n["study"] == "control" for n in networks)),
+        "addition.networks": count(len(networks)),
+        "addition.failing": count(len(failing)),
+        "addition.failing-certified": none_or(
+            sum(n["strict"]["certified"] or n["branched"]["certified"] for n in failing)
+        ),
+        "addition.working": count(len(working)),
+        "addition.certified": count(sum(n["strict"]["certified"] for n in working)),
+        "addition.robust": count(sum(n["branched"]["certified"] for n in working)),
+        "addition.minimised": ", ".join(str(m) for m in minimised),
+        "addition.codes-reached": words(min(reached), max(reached)),
+        "addition.codes-median": median(reached),
+        "addition.working-uncertified": count(len(uncertified)),
+        "addition.break-early": count(sum(n["result"]["break"] < 64 for n in uncertified)),
+        "addition.wrong-passing": count(len(wrong)),
+        "addition.counterexample": " + ".join(count(x) for x in triple),
+        "addition.counterexample-answer": count(first[1]),
+        "addition.counterexample-sum": count(sum(triple)),
+        "addition.counterexample-columns": count(first[0]),
+        "addition.counterexample-other-columns": count(second[0]),
+        "addition.long-each": count(each.pop()),
+        "addition.long-cases": f"{sum(c for _, c, _ in tested) / 1e6:.2f}",
+        "addition.long-certified-passing": every(
+            sum(not f for n, _, f in tested if n["strict"]["certified"]),
+            sum(1 for n, _, _ in tested if n["strict"]["certified"]),
+        ),
+        "addition.long-failing-rejected": every(sum(not n["strict"]["certified"] for n in failed), len(failed)),
+        "addition.counterexample-long-wrong": count(long_wrong[one["name"]]),
+        "addition.counterexample-other-long-wrong": none_or(long_wrong[other["name"]]),
+    }
+
+
+CODE_COUNTS = (3, 4, 6, 8, 16)  # the code-count comparison's arms, k 4, s 4, the curriculum
+
+
+def addition_code_counts(data: Path) -> Numbers:
+    """
+    K2's registered comparison of the code count (Appendix A), with the Holm correction over its
+    family as registered: the snap (C2), the code count (C3), the curriculum (C4) and unexplored
+    states (C6).
+    """
+    from indrajala_ml.studies import window_recurrent_study as wr
+
+    root = data / "e3-e4"
+    results = [json.loads(p.read_text()) for p in sorted((root / "results").glob("*.json"))]
+
+    def cell(arm: str, m: int) -> list[dict[str, Any]]:
+        return [r for r in results if r["arm"] == arm and r["k"] == 4 and r["s"] == 4 and r["m"] == m]
+
+    def strict(r: dict[str, Any]) -> bool:
+        step = len(r["steps"])
+        return json.loads((root / "certificates-strict" / f"{r['key']}-step-{step}.json").read_text())["certified"]
+
+    arms = [cell("curriculum", m) for m in CODE_COUNTS]
+    seeds = {len(runs) for runs in arms}
+    if len(seeds) != 1:
+        raise ValueError(f"the code-count arms: {sorted(seeds)} runs, not one count")
+    trials = [len(runs) for runs in arms]
+    works = [sum(r["works"] for r in runs) for runs in arms]
+    certified = [sum(strict(r) for r in runs) for runs in arms]
+    working_trend = inference.cochran_armitage(works, trials, CODE_COUNTS)
+    certified_trend = inference.cochran_armitage(certified, trials, CODE_COUNTS)
+    # C2: E3's snapped curriculum at m 16 against E2's continuous state, working at 1,024 columns
+    # (long-tested when its break is 64)
+    snapped = cell("curriculum", 16)
+
+    def at_1024(r: dict[str, Any]) -> bool:
+        path = root / "long-tests" / f"{r['key']}-step-{len(r['steps'])}.json"
+        return r["break"] == 64 and path.exists() and not wr.long_test_failures(json.loads(path.read_text()))[1]
+
+    continuous = [json.loads(p.read_text()) for p in sorted((data / "e2" / "results").glob("*.json"))]
+    s, c = sum(at_1024(r) for r in snapped), sum(r["break"] == 64 for r in continuous)
+    snap = inference.fisher_exact(s, len(snapped) - s, c, len(continuous) - c)
+    # C4: all at once against the curriculum at m 16, working
+    a, b = sum(r["works"] for r in cell("all-at-once", 16)), works[-1]
+    curriculum = inference.fisher_exact(a, len(cell("all-at-once", 16)) - a, b, trials[-1] - b)
+    # C6: among runs whose check passed, failing against working runs reaching a new code at 16 columns
+    explored = [r for r in json.loads((data / "e5" / "e5.json").read_text()) if r["passes"]]
+    fail = [bool(r["new"]["16"]) for r in explored if not r["works"]]
+    work = [bool(r["new"]["16"]) for r in explored if r["works"]]
+    unexplored = inference.fisher_exact(sum(fail), len(fail) - sum(fail), sum(work), len(work) - sum(work))
+    holm = inference.holm([snap, working_trend.p, curriculum, unexplored])
+    return {
+        "addition.codes-seeds": count(seeds.pop()),
+        "addition.codes-m": ", ".join(str(m) for m in CODE_COUNTS[:-1]) + f" and {CODE_COUNTS[-1]}",
+        "addition.codes-working-z": f"{working_trend.z:.2f}",
+        "addition.codes-working-p": p_value(working_trend.p),
+        "addition.codes-working-holm": p_value(holm[1]),
+        "addition.codes-certified-z": f"{certified_trend.z:.2f}",
+        "addition.codes-certified-p": p_value(certified_trend.p),
+        "addition.codes-uncertified": listed([w - c for w, c in zip(works, certified, strict=True)]),
+    }
+
+
+def replays(directory: Path) -> list[dict[str, Any]]:
+    """A replay probe's runs in order (name-0, name-1, ..., name-9)."""
+    paths = [p for p in directory.glob("*.json") if p.stem.rsplit("-", 1)[-1].isdigit()]
+    return [
+        json.loads(p.read_text())
+        for p in sorted(paths, key=lambda p: (p.stem.rsplit("-", 1)[0], int(p.stem.rsplit("-", 1)[1])))
+    ]
+
+
+def kept(replay: dict[str, Any]) -> bool:
+    """A replay kept its proof: certified in both verdicts after every epoch."""
+    return all(e["certified"] and e["certified_strict"] for e in replay["epochs"])
+
+
+AMPLIFIED = 0.1  # an update five times the epochs' median (about 0.02): the cascade's start
+JUMP = 1.0  # a batch's loss past 1 after its update: a jump the loss sees (the snap-wall workplan's)
+
+
+def addition_replays(data: Path) -> Numbers:
+    """
+    K10's addition numbers (Appendix A): the 10 replays read off after every batch (`machine-diff`,
+    the same runs as P1's wall-off arm), the certificate guard on them (`replay-guard`), and four
+    networks that kept their proofs (`stable-replay`).
+    """
+    runs = replays(data / "machine-diff")
+    firsts: list[dict[str, Any]] = []
+    amplified: list[int] = []  # batches from the first flip to the first large update
+    silent = 0
+    for run in runs:
+        batches = [b for e in run["epochs"] for b in e["batches"]]
+        i = next(i for i, b in enumerate(batches) if b["pairs_changed"] > 0)
+        first = batches[i]
+        if first["wrong_pairs"] != first["pairs_changed"]:
+            raise ValueError("a first change with a right pair")
+        firsts.append(first)
+        silent += first["loss_after"] <= JUMP
+        amplified.append(next(j - i for j in range(i, len(batches)) if batches[j]["update"] > AMPLIFIED))
+    *soon, last = sorted(amplified)
+    worst = [max(b["wrong_pairs"] for e in run["epochs"] for b in e["batches"]) for run in runs]
+    guarded = replays(data / "replay-guard")
+    stable = replays(data / "stable-replay")
+    starts = {r["network"] for r in stable}
+    return {
+        "replay.count": count(len(runs)),
+        "replay.lost": count(sum(not kept(r) for r in runs)),
+        "replay.kept": count(sum(kept(r) for r in runs)),
+        "replay.first-pairs": words(min(f["pairs_changed"] for f in firsts), max(f["pairs_changed"] for f in firsts)),
+        "replay.first-norms": f"{min(f['update'] for f in firsts):.3f}--{max(f['update'] for f in firsts):.3f}",
+        "replay.silent": count(silent),
+        "replay.amplified": count(len(soon)),
+        "replay.amplified-within": words(min(soon), max(soon)),
+        "replay.amplified-last": count(last),
+        "replay.worst-wrong": words(min(worst), max(worst)),
+        "guard.count": count(len(guarded)),
+        "guard.kept": count(sum(kept(r) for r in guarded)),
+        "guard.undone": count(sum(e["rollbacks"] for r in guarded for e in r["epochs"])),
+        "guard.batches": count(sum(len(e["batches"]) for r in guarded for e in r["epochs"])),
+        "stable.networks": count(len(starts)),
+        "stable.each": count(len(stable) // len(starts)),
+        "stable.kept": every(sum(kept(r) for r in stable), len(stable)),
+    }
+
+
+NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [addition_certificates, addition_code_counts, addition_replays]
+PN = re.compile(r"\\pn\{([^{}]+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
+
+
+def numbers(data: Path) -> Numbers:
+    """Every regenerated number, by its key."""
+    made: Numbers = {}
+    for source in NUMBER_SOURCES:
+        for key, value in source(data).items():
+            if key in made:
+                raise ValueError(f"{key}: two sources")
+            made[key] = value
+    return made
+
+
 def manuscript_rows(tex: str, label: str) -> list[str] | None:
     """The rows of the table labelled `label` in a manuscript: its lines between \\midrule and \\bottomrule."""
     for table in re.findall(r"\\begin\{table\}.*?\\end\{table\}", tex, re.DOTALL):
@@ -307,17 +605,45 @@ def main(argv: list[str]) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     show = commands.add_parser("show", help="tables' rows, regenerated")
     show.add_argument("names", nargs="+", choices=sorted(TABLES))
-    check = commands.add_parser("check", help="each table a manuscript holds against its regeneration")
+    check = commands.add_parser("check", help="each table and number a manuscript holds against its regeneration")
     check.add_argument("manuscripts", type=Path, nargs="+")
+    commands.add_parser("numbers", help="every number, regenerated, by its key")
+    fill = commands.add_parser("fill", help="each \\pn's value in a manuscript replaced by its regeneration")
+    fill.add_argument("manuscripts", type=Path, nargs="+")
     args = parser.parse_args(argv)
     if args.command == "show":
         for name in args.names:
             print(f"% {name}")
             print("\n".join(TABLES[name](args.data)))
         return 0
+    if args.command == "numbers":
+        for key, value in numbers(args.data).items():
+            print(f"{key} = {value}")
+        return 0
+    if args.command == "fill":
+        made = numbers(args.data)
+        for tex in args.manuscripts:
+            text = tex.read_text()
+            unknown = sorted({key for key, _ in PN.findall(text)} - made.keys())
+            if unknown:
+                print(f"{tex}: no source for {', '.join(unknown)}")
+                return 1
+            filled = PN.sub(lambda m: f"\\pn{{{m[1]}}}{{{made[m[1]]}}}", text)
+            changed = sum(old != made[key] for key, old in PN.findall(text))
+            tex.write_text(filled)
+            print(f"{tex}: {changed} numbers changed")
+        return 0
     differs = False
+    made_numbers = numbers(args.data)
     for tex in args.manuscripts:
         text = tex.read_text()
+        held_numbers = PN.findall(text)
+        wrong = [(key, old) for key, old in held_numbers if made_numbers.get(key) != old]
+        if held_numbers:
+            print(f"{tex}: numbers: {len(held_numbers)}, " + (f"{len(wrong)} DIFFER" if wrong else "the same"))
+        for key, old in wrong:
+            differs = True
+            print(f"  {key}: manuscript {old}, regenerated {made_numbers.get(key, '(no source)')}")
         for name, table in TABLES.items():
             held = manuscript_rows(text, name)
             if held is None:

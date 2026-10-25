@@ -658,6 +658,27 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     releases before this one, against the schedule; the owner's rule names paper 1 as the one
     published.
 
+- **D23. The prose's numbers regenerated, as the tables are** (2026-10-25; the owner: "we need some
+  tool to auto-compile the appendixes numbers, even if there is no table"). Each number in the prose
+  is marked `\pn{key}{value}` (the manuscript defines `\pn` to print its value); `paper_tables.py`'s
+  `NUMBER_SOURCES` compute every key from the result files, `check` fails on any difference or a key
+  with no source, and `fill` writes the regenerated values in. **Stage 1 (this PR):** Appendix A's,
+  K2's and K10's addition numbers (71 marks). **Stage 2, next:** every other number in the prose
+  (K1, K3-K9 from T1-T6's data), so that the reproducibility section can say no number was typed.
+  - **Found by stage 1, corrected in the manuscript** (the notes' own recorded values, now
+    regenerated): the first counterexample network (1,559 + 6,329 + 5,231) answers 19,680 read at
+    12 columns, not 8 (at 8 it is right: it fails only after a leading zero window); the first
+    flips' update norms are 0.015-0.046, not 0.016-0.046 (replay 3's 0.01545); "94-164 pairs wrong
+    at the worst" is over all 10 replays, not the 9 that amplified (94-160); the code count's
+    Holm-adjusted p is 0.043 (3 times 0.01418), not 0.042 (3 times the rounded 0.014).
+  - Options: (a) *chosen*, inline checked marks `\pn{key}{value}`. Pros: the source still reads as
+    prose; every number tied to its computation; one `check` for tables and prose; `fill` updates
+    in place. Cons: markup in the source; a value's wording (e.g. "none", "every") must come from
+    its source. (b) A generated macros file (`\newcommand` per key, `\input`). Pros: compiled in
+    without a fill step. Cons: the source no longer shows its numbers; a generated file to keep in
+    sync across the two repositories. (c) A sidecar list of expected numbers matched in the text.
+    Pros: no markup. Cons: fragile matching; a number edited in the text slips past.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
