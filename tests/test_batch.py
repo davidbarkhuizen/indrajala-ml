@@ -312,6 +312,25 @@ def test_a_batch_with_a_remote_host_ends_once_its_attempts_are_pulled(tmp_path: 
     assert (directory / "attempts" / "s3-2" / "seed2" / "log.jsonl").exists()
 
 
+def test_the_controllers_own_hosts_attempts_are_copied_into_the_batch(tmp_path: Path):
+    directory = tmp_path / "batch"
+    b.register(directory, b.Batch("r", "measure", b.attempts("s3:1-2", ["continuous"])))
+    host = b.Host("w", 2, str(tmp_path), sys.executable, str(tmp_path / "w"), remote=False)  # rsync's local copy
+    port = free_port()
+
+    async def go() -> None:
+        controller = b.Controller(directory, {"w": host}, check=0.1)
+        serving = asyncio.create_task(controller.serve(port))
+        await asyncio.sleep(0.1)
+        await asyncio.wait_for(worker(tmp_path, "w", 2).serve(port, retry=0.1), timeout=30)
+        await asyncio.wait_for(serving, timeout=10)
+
+    asyncio.run(go())
+    ledger = (directory / b.LEDGER).read_text()
+    assert ledger.count('"type": "pulled"') == 2 and ledger.count('"ok": true') == 2 and '"type": "done"' in ledger
+    assert (directory / "attempts" / "s3-1" / "seed1" / "log.jsonl").exists()
+
+
 def test_a_division_backdrop_runs_by_p_seed_and_arm_its_log_at_the_runs_own_path(tmp_path: Path):
     w = worker(tmp_path, "w", 1)
     attempt = b.Attempt("d5-suffix-3", "paper", "d5-suffix", 3)
