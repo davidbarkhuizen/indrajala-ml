@@ -58,7 +58,7 @@ B2), then **L, depth** (claim L1), each on the default the part before it leaves
 | D14 | 2026-10-24 | budgets and machines | each cell's registered epochs; time and memory from a probe; the batch runner |
 | D15 | 2026-10-24 | formed and kept | formed at state share 0.95; kept if certified; the stratified exact test |
 | D16 | 2026-10-25 | X as an A/B | the paper's method against crystallisation, aligned, on paper 1's task matrix (the owner) |
-| D17 | 2026-10-25 | the aligned settings | no fork, width 32, 1,600 epochs, the answers-only stop with the margin wait, both arms; the commitment each its own (the owner) |
+| D17 | 2026-10-25 | the aligned settings | width 32, 1,600 epochs, the answers-only stop with the margin wait, both arms; the fork and the commitment each its own (the owner) |
 | D18 | 2026-10-25 | approximations in both arms | each task its target's approximations' outputs, the groups' built for X (the owner) |
 | D19 | 2026-10-25 | X's tasks | paper 1's nine backdrops |
 | D20 | 2026-10-25 | X's seeds | 10 a cell, the same seeds in both arms, read in pairs |
@@ -359,15 +359,21 @@ golden run unchanged at 3.
     Cons: its primary claim conditions on formation, hard to define for codes from the start; the
     holdouts are where the method is expected to fail, read first.
   - (c) T5's runs reused as the control at 600 epochs, only the new arm run. Pros: half the runs.
-    Cons: T5's cell has the fork and stops at the first certificate, which D17 aligns away; its
-    groups had no approximations (D18); the budgets differ.
-- **D17. The aligned settings (the owner, 2026-10-25):** both arms without the fork, factors 32 wide,
-  1,600 epochs, and the answers-only stop under the exact state bound with the margin wait and its
-  deadline (D35, D59, D60 in the state-formation plan); the commitment each arm's own (the paper
-  arm's as built; `continuous`'s `--anneal-never-commit`).
-  - **The fork:** off in both. The owner: it doesn't fit the crystallisation analogy; whether the
-    paper cell is better without it is its own test, after X. (a) Each its own. Cons: a difference
-    of the method's that isn't the crystallisation.
+    Cons: T5's cell stops at the first certificate, which D17 aligns away; its groups had no
+    approximations (D18); the budgets differ.
+- **D17. The aligned settings (the owner, 2026-10-25):** both arms with factors 32 wide, 1,600 epochs, and the answers-only stop under the exact state bound with the margin wait and its
+  deadline (D35, D59, D60 in the state-formation plan); the fork and the commitment each arm's own
+  (the paper arm's as paper 1 ran them; `continuous` without the fork, `--anneal-never-commit`).
+  - **The fork:** each its own (revised the same day; the owner: "if P1 has used fork, then the P1
+    arm should also use fork ... otherwise we can't compare it to P1"). Crystallisation runs without
+    it (the owner: it doesn't fit the crystallisation analogy); whether the paper cell is better
+    without it is its own test, after X. (a) *Chosen:* each its own. Pros: the paper arm is paper
+    1's cell but for the budget (its first 600 epochs paper 1's, if bit-identical), the stop (equal
+    on paper 1's runs, T6c) and the groups' approximations (paper 1's T11, if registered), so it
+    reads against paper 1 directly, and paper 1's spent runs might resume to 1,600 in place of
+    reruns (*pending: the prefix and the resume checked at registration*). Cons: one more
+    difference of the method's that isn't the crystallisation, as the commitment. (b) Off in both.
+    Cons: the paper arm no longer paper 1's cell.
   - **The width:** 32 in both (the paper's; `--factor-width`'s default is 16, and `continuous` was
     developed at it). Division's ladder: 0 of 6 at 16, 5 of 6 at 32 (L3). Cons: crystallisation
     untested at 32; memory a run measured by X's probe.
