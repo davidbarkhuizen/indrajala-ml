@@ -64,7 +64,7 @@ notes; the crystallisation strand can be its own later paper once it works beyon
 | **T6** | The target-free proof (K9) | offline: on every run of T1, T2, T3 and T5, the answers-only stop at the exact bound and 1.1 times it (`answers-stop --logged` or the logged answers), then Chow's test set on each stop's network; registered expectations: no false discovery at the exact bound, the queries each proof needs | 0 (offline) | hours |
 | **T7** | Reproducibility | a script that regenerates every table and figure from the result files; a sample of runs re-run on another machine (`jebel`, `litshe`) bit for bit; every statistic recomputed; the datapack's manifest | 0-10 | a day |
 | **T8** | The literature, current | a sweep for 2025-2026 work on neural automaton learning, extraction and verification, state tracking and length generalisation; the related work rewritten | 0 | a day |
-| **T10r** | Does T10b replicate on machines that didn't produce it? (D24) | P0 against P2 on fresh draws, 25 machines an arm, 2 seeds each, read alone (never pooled with T10) | 100 | about 3 h a run; about a day on the fleet after T11 |
+| **T10r** | Does T10b replicate on machines that didn't produce it? (D24) | P0 against P2 on fresh draws, 25 machines an arm, 2 seeds each, read alone (never pooled with T10) | 100 | about 3 h a run; launched 2026-10-26 beside T11 (`jebel`, `klip`, `stone`; `--tag t10r`) |
 | **T11** | K4 beyond arithmetic: do the algebras' approximations, given as outputs, make them learnable? (D20) | T5's backdrops `s3`, `s4`, `mtf4` under the `paper` cell, each with its coarsest pair of approximations that determine the state as two extra outputs, 20 fresh seeds each, against T5's rates; then T11c (D25), the given approximations in the certified networks' factors | 60 | short but S4 (3-4 h a spent run); the probe sets it |
 
 **Optional, decided after T1 (D8):** T10, an approximation's output beside a machine the method
@@ -1085,6 +1085,43 @@ D21's sample, each rerun on `litshe` (aarch64, the crate's NEON path) at 7dc0915
   heat); restarted from scratch at 14:35, its partial run kept as `d7-family-309.crashed-0934`.
 - Data `data/window-recurrent/paper/t7-reruns/`, manifest `paper/t7-reruns.sha256`
   81e5f4d8...d5c2647be6 (71 files).
+
+## Findings: T10, an approximation beside a random machine (2026-10-26, read by D19's rules)
+
+The registered batch (q 16, b 4, 15 machines an arm, run seeds 400 and 401, the `paper` cell's 600
+epochs) on the runner at e230ae9, its 14 certified networks recertified in both verdicts and
+long-tested (U1, S1 at 128, 256, 1,024 columns: 4,872,000 of 4,872,000 cases passed, no network with a
+failure). Every network certified at the stop passed both, so success is certification at the stop.
+
+| arm | machines succeeding (of 15) | runs (of 30) | per machine | epochs to certify | spent |
+| --- | --- | --- | --- | --- | --- |
+| P0, primitive | **2** | 2 | 11, 14 once | 219, 253 | 28 |
+| P1, planted, the target alone | **3** | 3 | 4, 5, 22 once | 172-235, 194 | 27 |
+| P2, planted, its quotient an output | **8** | 9 | 16 twice; 0, 4, 5, 6, 13, 19, 22 once | 71-295, 99 | 21 |
+
+- **The tests (exact one-sided rank-sum over machines' counts, midranks; Holm over two):** T10b, P2
+  against P0, **p 0.0206**, at most the smaller p's 0.025: **T10b holds.** T10a, P1 against P0, p
+  0.50: **T10a doesn't** (Holm's adjusted 0.041 and 0.50). The bar at P0 2 was 9 machines at 15
+  against 15 by the registered `rank-bars` (every success a machine's only one); P2's 8 machines pass
+  because machine 16 succeeded twice.
+- **No margin, stated:** with machine 16 succeeding once, p 0.0251, just over the bar. One run decides
+  the test. Hence T10r (D24): T10b replicated on 25 fresh machines an arm, read alone, never pooled
+  with this batch.
+- **By D19's expectations:** **H stands in its weaker form at q 16** (T10b alone: the approximation
+  helps when given, as on division, K4); not in its strong form (T10a: a planted approximation present
+  but not asked isn't found more often than none). P0's 2 of 30 runs is above the T5 rate expected
+  (0 of 20 on `random-q16-0`): primitive 16-state machines certify, rarely.
+- **Exploratory (not tests):** P2 against P1, paired over their 15 machines, signed-rank p 0.031 (P2
+  ahead on 5 machines, never behind). Within P1 success doesn't track `order` in the way H excludes:
+  P1's 3 succeeding machines' mean `order` 1.04 against 0.78, P2's 0.81 against 0.86; with 3 and 8
+  successes, no reading. P2's certificates came sooner (median 99 epochs against P0's 236 and P1's
+  194).
+- **T6 on T10's runs (D11 amended, reported apart from T6's):** at the exact bound 16 and at 17
+  (1.1 times), all 14 certified runs stopped (kept) and were proved equivalent to their machine
+  (minimised to 16 states); the other 76 stayed silent. No false stop.
+- Data `data/window-recurrent/paper/t10/`, manifest `paper/t10.sha256` 9d1ae504...30e8192 (4,389
+  files).
+- **Then:** T10r (D24), the replication.
 
 ## Stages
 
