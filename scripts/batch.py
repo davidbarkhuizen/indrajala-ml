@@ -4,9 +4,9 @@ each, over newline-delimited JSON on a TCP socket on 127.0.0.1 (indrajala_ml.bat
 
     python scripts/batch.py register DIR --name NAME --mode measure|find --cell CELL [--cell CELL ...] --attempts SPEC
                                      [--cutoff BACKDROP=EPOCHS ...] [--k K] [--commit COMMIT]
-    python scripts/batch.py prepare --hosts pyramidon,klip,stone --commit COMMIT
-    python scripts/batch.py controller DIR [--port PORT] [--hosts pyramidon,klip,stone]
-    python scripts/batch.py fleet --hosts pyramidon,klip,stone [--port PORT]
+    python scripts/batch.py prepare --hosts pyramidon,klip,stone --commit COMMIT [--tag TAG]
+    python scripts/batch.py controller DIR [--port PORT] [--hosts pyramidon,klip,stone] [--tag TAG]
+    python scripts/batch.py fleet --hosts pyramidon,klip,stone [--port PORT] [--slots HOST=N ...] [--tag TAG]
     python scripts/batch.py worker ROOT --slots N --code WORKTREE [--python PYTHON] [--host NAME] [--port PORT]
                                    [--pythonpath PATH] [--wrapper ARG ...]
     python scripts/batch.py status DIR
@@ -19,12 +19,15 @@ ROOT/<attempt>/ from WORKTREE's scripts and reconnects after a dropped connectio
 (stage 4): `prepare` puts each host's worktree at the batch's commit, `fleet` keeps a reverse ssh tunnel
 to each remote host and starts its worker (HOSTS: slots, worktree, python, hours), and the controller
 with `--hosts` gives work only inside each host's hours and pulls each remote attempt back, checked.
+A TAG sets each host's worktree and attempts' root apart (`<path>-TAG`), so a second batch runs
+beside another's workers at another commit.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import subprocess
 import sys
 from pathlib import Path
@@ -59,10 +62,15 @@ def main(argv: list[str]) -> int:
     fleet = commands.add_parser("fleet", help="each host's tunnel and worker")
     fleet.add_argument("--hosts", required=True)
     fleet.add_argument("--port", type=int, default=PORT)
+    fleet.add_argument("--slots", action="append", default=[], help="HOST=N, fewer slots than the host table's")
     controller = commands.add_parser("controller", help="serve a batch until it is done")
     controller.add_argument("dir", type=Path)
     controller.add_argument("--port", type=int, default=PORT)
     controller.add_argument("--hosts", help="the fleet's hosts: their hours and pulls (D7)")
+    for command in (prepare, fleet, controller):
+        command.add_argument(
+            "--tag", default="", help="each host's worktree and attempts' root as <path>-TAG: a batch beside another's"
+        )
     controller.add_argument(
         "--open",
         default="",
@@ -100,14 +108,22 @@ def main(argv: list[str]) -> int:
         print(f"registered {args.dir}: {len(b.State.read(args.dir).batch.attempts)} attempts")
     elif args.command == "prepare":
         repo = Path(__file__).resolve().parent.parent
+        hosts = b.tagged(b.HOSTS, args.tag)
         for name in args.hosts.split(","):
-            for command in b.prepare(b.HOSTS[name], args.commit, repo, Path("/tmp")):
+            for command in b.prepare(hosts[name], args.commit, repo, Path("/tmp")):
                 subprocess.run(command, check=True)
             print(f"{name}: at {args.commit}")
     elif args.command == "fleet":
-        asyncio.run(b.fleet([b.HOSTS[n] for n in args.hosts.split(",")], args.port))
+        hosts = b.tagged(b.HOSTS, args.tag)
+        slots = {n: int(s) for n, s in (x.split("=") for x in args.slots)}
+        if any(slots[n] > hosts[n].slots for n in slots):
+            parser.error("--slots only lowers a host's slots")
+        chosen = [dataclasses.replace(hosts[n], slots=slots.get(n, hosts[n].slots)) for n in args.hosts.split(",")]
+        asyncio.run(b.fleet(chosen, args.port))
     elif args.command == "controller":
-        hosts = {n: b.HOSTS[n] for n in args.hosts.split(",")} if args.hosts else None
+        hosts = (
+            {n: h for n, h in b.tagged(b.HOSTS, args.tag).items() if n in args.hosts.split(",")} if args.hosts else None
+        )
         opened = [n for n in args.open.split(",") if n]
         if opened and (hosts is None or not set(opened) <= set(hosts)):
             parser.error("--open names hosts among --hosts")

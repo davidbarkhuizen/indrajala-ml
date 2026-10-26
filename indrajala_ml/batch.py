@@ -291,6 +291,20 @@ def opened(hosts: dict[str, Host], names: Sequence[str]) -> dict[str, Host]:
     return {n: dataclasses.replace(h, windows=()) if n in names else h for n, h in hosts.items()}
 
 
+def tagged(hosts: dict[str, Host], tag: str) -> dict[str, Host]:
+    """
+    Each host's worktree and attempts' root set apart for one batch (`<path>-<tag>`, the wrapper's paths
+    under the root with them), so a second batch's workers run beside another's at another commit.
+    """
+
+    def apart(h: Host) -> Host:
+        root = f"{h.root}-{tag}"
+        wrapper = tuple(root + w[len(h.root) :] if w.startswith(f"{h.root}/") else w for w in h.wrapper)
+        return dataclasses.replace(h, code=f"{h.code}-{tag}", root=root, wrapper=wrapper)
+
+    return {n: apart(h) for n, h in hosts.items()} if tag else hosts
+
+
 def local_now() -> datetime.datetime:
     """The machine's local time, with its zone: hosts' hours are local wall-clock hours."""
     return datetime.datetime.now().astimezone()

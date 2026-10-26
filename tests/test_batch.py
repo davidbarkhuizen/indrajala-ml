@@ -586,6 +586,14 @@ def test_an_opened_host_takes_work_outside_its_hours():
     assert b.HOSTS["stone"].windows  # the table itself unchanged
 
 
+def test_a_tagged_batch_runs_in_its_own_worktree_and_root():
+    klip = b.tagged(b.HOSTS, "t10r")["klip"]
+    assert klip.code == "/home/david/code/wt-batch-t10r" and klip.root == "/home/david/code/batch-attempts-t10r"
+    assert klip.wrapper[0] == b.HOSTS["klip"].wrapper[0]  # the guard itself shared
+    assert klip.wrapper[1] == "/home/david/code/batch-attempts-t10r/temp"  # its temperature file its root's
+    assert b.tagged(b.HOSTS, "") is b.HOSTS and b.HOSTS["klip"].root == "/home/david/code/batch-attempts"
+
+
 def test_a_log_with_a_re_run_appended_is_summarised_from_its_last_run_only(tmp_path: Path):
     log = tmp_path / "log.jsonl"
     run = [{"step": s, "end": "epoch", "epochs": 10, "certified": False, "seconds": float(s)} for s in (1, 2, 3)]
