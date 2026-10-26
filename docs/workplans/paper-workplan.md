@@ -686,8 +686,8 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     without a fill step. Cons: the source no longer shows its numbers; a generated file to keep in
     sync across the two repositories. (c) A sidecar list of expected numbers matched in the text.
     Pros: no markup. Cons: fragile matching; a number edited in the text slips past.
-- **D24. T10r drafted: T10b replicated on fresh machines** (drafted 2026-10-26, before any of its
-  runs and before T10's long tests end; registered when the owner approves the draft). **Why:**
+- **D24. T10r registered: T10b replicated on fresh machines** (drafted 2026-10-26, before any of its
+  runs and before T10's long tests end; **registered 2026-10-26**, the owner approving the draft). **Why:**
   read provisionally on its recertified networks (the long tests still running), T10b, the planted
   approximation given as an output (P2) against primitive machines (P0), passes its registered bar
   with no margin: P0 2 of 15 machines, P2 8 of 15 (seed 16 twice), p 0.0206 against Holm's 0.025; with
