@@ -540,6 +540,26 @@ def test_t10s_cells_meet_their_registered_bounds_and_draws():
     assert b.BACKDROPS["t10-p2-0"].args(400) == ["--runs", "random-planted-q16-b4-0:400", "--arm", "planted"]
 
 
+def test_t10rs_cells_meet_their_registered_bounds_and_draws():
+    from indrajala_ml.studies import window_tasks as wt
+
+    t10r = {name: d for name, d in b.BACKDROPS.items() if name.startswith("t10r-")}
+    assert len(t10r) == 50 and len(b.T10R_P0) == len(b.T10R_PLANTED) == 25
+    assert all(d.bound == 16 for d in t10r.values())  # rows 1, 2: T10's cell, as rq16's
+    assert {d.arm for n, d in t10r.items() if "p2" in n} == {"planted"}
+    assert {d.arm for n, d in t10r.items() if "p0" in n} == {"family"}
+    assert not set(b.T10R_P0) & set(b.T10_P0) and not set(b.T10R_PLANTED) & {*b.T10_PLANTED, b.T10_PROBE}
+    planted = wt.planted_blocks(16, 4)
+    for m in b.T10R_P0:
+        assert wt.task_named(f"random-q16-{m}").machine.principal_congruences() == []  # row 17: primitive
+    for m in b.T10R_PLANTED:
+        machine = wt.task_named(f"random-planted-q16-b4-{m}").machine
+        assert len(machine.principal_congruences()) == 1 and machine.is_congruence(planted)
+    for m in (25, 26, 42, 45, 47):  # skipped: other congruences
+        assert len(wt.task_named(f"random-planted-q16-b4-{m}").machine.principal_congruences()) > 1
+    assert b.BACKDROPS["t10r-p2-23"].args(400) == ["--runs", "random-planted-q16-b4-23:400", "--arm", "planted"]
+
+
 def test_t11s_cells_meet_their_registered_bounds():
     from fractions import Fraction
 
