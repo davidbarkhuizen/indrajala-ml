@@ -12,6 +12,7 @@ import pytest
 
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_data as md
+from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_tasks as wt
 
@@ -171,7 +172,8 @@ def test_order_labels_name_move_to_fronts_and_the_word_problems_congruences():
     mtf = wt.task_named("move-to-front-4").machine
     named = wt.order_labels(mtf.coordinates)
     congruent = [k for k, v in named.items() if mtf.is_congruence(v)]
-    assert len(named) == 24 and len(congruent) == 13 and not any(k.startswith(("places", "parity")) for k in congruent)
+    assert len(named) == 29 and len(congruent) == 17 and not any(k.startswith(("places", "parity")) for k in congruent)
+    assert "pairings" not in congruent and all(f"ahead {{{i}}}" in congruent for i in range(4))
     assert sorted(np.bincount(named["order {1, 3}"]).tolist()) == [12, 12]  # a flip-flop: an age matrix's bit
     s3 = wt.task_named("word-problem-s3").machine
     named = wt.order_labels(s3.coordinates)
@@ -185,6 +187,18 @@ def test_order_labels_name_move_to_fronts_and_the_word_problems_congruences():
     assert np.bincount(named["places {0}"]).tolist() == [2, 2, 2]  # S3 acting on 3 points
     assert np.bincount(named["parity"]).tolist() == [3, 3]  # A3's cosets
     assert wt.order_labels(wt.modular_machine(5).coordinates) == {}
+    s4 = wt.task_named("word-problem-s4").machine
+    named = wt.order_labels(s4.coordinates)
+    assert s4.is_congruence(named["pairings"]) and np.bincount(named["pairings"]).tolist() == [4] * 6  # S4 / V4
+    assert not any(s4.is_congruence(v) for k, v in named.items() if k.startswith("ahead"))
+
+
+@pytest.mark.parametrize("name", wt.COVERED)
+def test_t11s_given_pairs_are_named(name: str):
+    coordinates = wt.task_named(name).machine.coordinates
+    named = wt.order_labels(coordinates)
+    pair = [wt.query_partitions(name)[query] for query in mf.COVER]
+    assert all(any(np.array_equal(given, v) for v in named.values()) for given in pair)  # D25: T4's tool names both
 
 
 @pytest.mark.parametrize("p", [5, 7])
