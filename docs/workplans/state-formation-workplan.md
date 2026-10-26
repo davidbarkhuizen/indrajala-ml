@@ -2158,6 +2158,74 @@ a slack bound from the logs: its split ties are logged only on passes at the exa
 - **Records:** the D64 copy's archive-side manifest `option1/archive-option1-d64.sha256` (2,608 files,
   sha256 c2e688ce...), written after the per-host manifests were found not to verify as copied (F31).
 
+## Findings: the crystallised networks re-read (offline, 2026-10-26)
+
+Read for the crystallisation work after paper 1 (the owner: "not intended to affect or shape P1"),
+in the light of paper 1's T4 and T5 and the sign-or-place note (indrajala-research
+`research-notes/sign-or-place.tex`). Offline, on the data already here, at indrajala-ml 99af57f
+(`approximations` naming `pairings` and `ahead {i}`) and #1019 (`factor-shares`). The readings, the
+scratch scripts first used and a README are in `option1/readings-2026-10-26/`; the numbers below
+are `factor-shares`' (`factor-shares/`) and `approximations`' (`s3/`, `mtf4/`, `s4/`, `rq12/`).
+
+**What the certified networks hold.** `approximations` had never read the continuous method's
+networks (D54-D64; K8's exploratory reading used `probe-4a3`'s move-to-front-4 networks and D26's and D29's S3 ones). Each factor's
+approximation (the finest congruence its code determines):
+
+| backdrop | networks | factors nontrivial | what they hold |
+|---|---|---|---|
+| S3 | 22 | 23 of 44 | `places` only, **never `parity`**: 7 covers by two points' places; 8 a place and a factor holding no congruence alone; 4 the whole state in one factor; 3 neither alone |
+| move-to-front-4 | 9 | 18 of 18 | `order` and `ahead` congruences; 6 covers; **4 of 9 the coarsest cover's shape**, `ahead {i}` and the order of the other three (seeds 27, 30, 31, 33; seed 31 exactly T11's pair) |
+| S4 | 1 | 2 of 2 | `places {2}`, `places {3}`; neither the sign nor the pairings |
+| random-q12-0 | 1 | 0 of 2 | the state held jointly, as it must be (primitive) |
+
+By `factor-shares`, a certified S3 factor's share of the sign reaches 0.5 only where the factor holds
+at least 0.81 of the state, rising with it (1.0 only in the 4 holding the whole state): the sign
+comes only inside most of the state, never as a factor of its own. Crystallisation learns the
+decomposition the paper cell does (T4b), so its S3 rate is not a different decomposition's.
+
+**Where the S3 failures stop** (each failed run's saved step network of highest logged state share;
+`factor-shares`):
+
+| S3 failures at their peak | state | a factor holding a place at 0.8 or more | the sign in any factor (max) |
+|---|---|---|---|
+| crystallisation, D54, D55, D64 (10) | median 0.82 (0.53-0.95) | 8 of 10 | 0.43 |
+| the paper cell, T5 (19) | median 0.19 (0.05-0.66) | 1 of 19 | 0.17 |
+
+- **Crystallisation's failures form a point's place and stall short of the state;** the paper cell's
+  mostly form nothing. Not the budget: the peaks came by step 10-270, inside 600 epochs. Otherwise
+  confounded: the anneal, the crucible, no fork, no commitment, the factor width 16 against 32. The
+  data here never separates the anneal from the crucible (the panel, 4b, never ran; D26's (c) is a
+  remark, not a test).
+- **S4's two collapses destroyed decompositions of the certified kind:** seed 2 at step 120 held
+  `places {2}` 0.92 and `places {3}` 1.00 (state 1.00; the certified seed 1's pair), 0.08 by step
+  130; seed 0 at step 130 `places {2}` 0.94 and `places {0}` 1.00 (state 1.00), 0.29 by step 140.
+  S4 fails at keeping, not forming: D63's motive, read on the factors.
+
+**Earlier readings, re-read:**
+
+- **Formed is not exact:** `state_share` is I(codes; state) / H(state) weighted as training draws
+  windows; 0.95 does not mean an exact snapped machine (S4 seed 2 at 0.999 had 2,689 reachable
+  code-state pairs at step 120). The scaling conjecture's split of forming from keeping rests on it.
+- **The random machines are primitive** (no nontrivial principal congruence, checked), so "the random
+  machines fail at forming" has a structural reading: there is no approximation to form first, where
+  S3's failures form one. That the method forms through an approximation in general is not shown
+  (S3 alone, indirectly).
+- **The melting curve's spread doesn't follow the congruences:** move-to-front-4 (264) 4.3, random-q12-0
+  (0) 3.3, S4 (16) 1.3, S3 (4) 1.0, random-q16-0 (0) 0.8; random-q12-0 breaks any order.
+
+**Withdrawn in the reading** (recorded so it isn't repeated): a "both factors on the same place"
+failure pattern and a "same place, then a switch" path to a certificate (S3 seed 47). Both came from
+`approximations`-style counts over the reachable pairs, each once, which read an inexact network's
+rare wrong codes as loudly as its common right ones. Weighted, the failures split about 3 same, 3
+different, 4 one-sided, and seed 47's second factor grew to nearly the whole state (0.98 by step
+110) rather than switching places (working-notes.md, "`approximations` reads exact networks").
+
+**Measurement gaps:** the logs carry each factor's share of the coordinates (the item at each
+position: no congruence on S3), not of the congruences, and the step networks are saved every 10
+steps, coarser than formation and certification, so the order in which factors form isn't readable
+here. `factor-shares` reads saved networks; logging the congruences' shares each diagnosis would
+close the first gap.
+
 ## A note on random machines (2026-10-20; a note, not a plan)
 
 The owner: "this approach, if it works, is likely to also work for random machines"; and a conjecture,
