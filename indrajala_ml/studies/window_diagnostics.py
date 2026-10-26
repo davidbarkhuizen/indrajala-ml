@@ -137,6 +137,27 @@ def diagnose(network: Any, task: wt.Task, lengths: Sequence[int] = LENGTHS, case
     }
 
 
+def congruence_shares(windows: Sequence[Window], machine: wt.Mealy) -> dict[str, Any]:
+    """
+    Each factor's share of each of the machine's named congruences (window_tasks.named_labels, those
+    the machine respects) and of its state, and the state's share of the whole tuple: I(code; x) / H(x)
+    over the windows, so weighted as training draws them. Valid on any network, exact or not, where
+    machine_reading.approximations' reachable pairs, each counted once, read an inexact network's rare
+    wrong codes as loudly as its common right ones.
+    """
+    named = {k: v for k, v in wt.named_labels(machine.coordinates).items() if machine.is_congruence(v)}
+    return {
+        "state": share([(w.codes, w.state) for w in windows]),
+        "factors": [
+            {
+                "state": share([(w.codes[g], w.state) for w in windows]),
+                "named": {k: share([(w.codes[g], int(v[w.state])) for w in windows]) for k, v in named.items()},
+            }
+            for g in range(len(windows[0].codes))
+        ],
+    }
+
+
 def line(name: str, diagnosis: dict[str, Any]) -> str:
     """One line: accuracy per class, each factor's shares, the state's share."""
     classes = " ".join(f"{label} {right / total:.2f}" for label, (right, total) in diagnosis["classes"].items())

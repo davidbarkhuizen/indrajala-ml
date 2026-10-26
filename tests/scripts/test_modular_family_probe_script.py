@@ -60,3 +60,20 @@ def test_answers_proof_checks_the_answers_only_stops_network_by_chows_test_set(
     (saved,) = (tmp_path / "proof").glob("*.answers-proof.json")
     exact = json.loads(saved.read_text())["bounds"][0]
     assert exact["chow"]["equivalent"] is False and exact["chow"]["counterexample"]
+
+
+def test_factor_shares_reads_a_trained_network_and_writes_every_share(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    monkeypatch.setenv("AB_RUNS_ROOT", str(tmp_path / "locks"))
+    out = tmp_path / "out"
+    assert script.main(["run", "--runs", "word-problem-s3:1", *TINY, "--out", str(out)]) == 0
+    network = out / "seed1" / "network.json"
+    capsys.readouterr()
+    args = ["factor-shares", str(network), "--task", "word-problem-s3", "--show", "0"]
+    assert script.main([*args, "--out", str(tmp_path / "shares")]) == 0
+    assert f"{network}: state " in capsys.readouterr().out
+    (saved,) = (tmp_path / "shares").glob("*.factor-shares.json")
+    read = json.loads(saved.read_text())
+    assert len(read["factors"]) == 1 and set(read["factors"][0]["named"]) >= {"parity", "places {0}"}
+    assert all(0.0 <= v <= 1.0 for v in read["factors"][0]["named"].values())
