@@ -65,7 +65,7 @@ notes; the crystallisation strand can be its own later paper once it works beyon
 | **T7** | Reproducibility | a script that regenerates every table and figure from the result files; a sample of runs re-run on another machine (`jebel`, `litshe`) bit for bit; every statistic recomputed; the datapack's manifest | 0-10 | a day |
 | **T8** | The literature, current | a sweep for 2025-2026 work on neural automaton learning, extraction and verification, state tracking and length generalisation; the related work rewritten | 0 | a day |
 | **T10r** | Does T10b replicate on machines that didn't produce it? (D24) | P0 against P2 on fresh draws, 25 machines an arm, 2 seeds each, read alone (never pooled with T10) | 100 | about 3 h a run; about a day on the fleet after T11 |
-| **T11** | K4 beyond arithmetic: do the algebras' approximations, given as outputs, make them learnable? (D20) | T5's backdrops `s3`, `s4`, `mtf4` under the `paper` cell, each with its coarsest pair of approximations that determine the state as two extra outputs, 20 fresh seeds each, against T5's rates | 60 | short but S4 (3-4 h a spent run); the probe sets it |
+| **T11** | K4 beyond arithmetic: do the algebras' approximations, given as outputs, make them learnable? (D20) | T5's backdrops `s3`, `s4`, `mtf4` under the `paper` cell, each with its coarsest pair of approximations that determine the state as two extra outputs, 20 fresh seeds each, against T5's rates; then T11c (D25), the given approximations in the certified networks' factors | 60 | short but S4 (3-4 h a spent run); the probe sets it |
 
 **Optional, decided after T1 (D8):** T10, an approximation's output beside a machine the method
 fails on, existence first: if an approximation lets a random machine form, K4 generalises beyond
@@ -744,6 +744,47 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     39 (unmeasured), little gain over (a). (e) More seeds on T10's machines, merged. Pros: no new
     draws. Cons: optional stopping; seeds don't add machines, the test's unit. (f) Keep Holm's
     0.025. Pros: T10's bar. Cons: one test, no multiplicity to correct; power falls (0.81 at 25).
+- **D25. T11c registered: does the sign form when it is asked?** (drafted and **registered
+  2026-10-26**, the owner asking for it; before any T11 network is read by `approximations`. T11's
+  batch was running; its ledger's provisional ends had been seen, its factors not.) **Why:**
+  indrajala-research `research-notes/sign-or-place.tex`. S3 has four nontrivial congruences, the sign
+  (`parity`) and the three points' places (`places {k}`), and any two of them cover the state, so
+  three of its six covers never use the sign. The sign is independent of each place and of the
+  output (each joint cell one state), so the answers alone don't favour it. T4b found no factor
+  holding the sign unasked. T11 asks for it (D20's pair: `parity`, `places {0}`), as Li et al.'s
+  parity loss does for transformers. Whether the given output decides the factors (K4's mechanism,
+  as on division, where every factor that held a line held a trained one) or the network keeps its
+  own cover and only reads the sign out decides what the paper may say of T11's rates.
+  - **The networks:** every certified T11 network that passes its long tests (D13), two factors each,
+    read by T4's tool (D10) with its run's arm (`--arm cover`): a factor's approximation is the
+    finest congruence its code determines.
+  - **T11c, S3 (registered):** each certified `s3` network is *sign-factored* if a factor's
+    approximation is exactly `parity`; *places* if both factors' approximations are `places`
+    congruences; *other* otherwise (a factor holding the whole state, or nothing). **Expected:** at
+    least half sign-factored (division's precedent). **Refuted** if none is, with at least 3
+    networks read; between, mixed; fewer than 3 networks, reported and undecided. T4b (unasked
+    networks) is not retested.
+  - **S4 and move-to-front-4 (reported, no expectation):** the share of networks with a factor whose
+    approximation is each given one (S4: `places {0}`, `pairings`; move-to-front-4: `order {0, 1,
+    3}`, `ahead {2}`), and the share whose factors are the given pair. Set beside T5's and round 1's
+    unasked networks re-read with the same names, the like-for-like control. No prior exists:
+    `pairings` and `ahead {2}` were never nameable before.
+  - **The build, before the reading (one PR, tier 0, tested):** `order_labels` names `pairings` (an
+    ordering of four items by the permutation of its places' pairings, S4's quotient by the Klein
+    four-group, as `pairings_labels`) and `ahead {i}` (the set of items ahead of item i, as
+    `above_labels`). T4's earlier readings are unchanged; a re-read can only name more.
+  - **The paper's use:** sign-factored: K4's mechanism holds on S3, and K8 reads "never the sign
+    unasked". Places: T11a's rates stand (if they do), but on S3 the paper says "given its
+    approximations, it learns S3", not that it learns the given approximation. Mixed: both reported,
+    per network.
+  - Options: (a) *chosen*, S3's sign registered, S4 and move-to-front-4 descriptive against re-read
+    unasked networks. Pros: S3 has a clear prior and a paper consequence, and its congruences are all
+    named now; the others get a control read by the same tool. Cons: a small build; S3's certified
+    networks may be few, hence the 3-network floor. (b) Expectations on all three. Pros: more claims
+    tested. Cons: no prior for `pairings` or `ahead {2}`, so the expectations would be guesses.
+    (c) Descriptive only. Pros: no rule to argue over. Cons: an unregistered reading can't qualify K8
+    or limit K4's claim. (d) Register after T11's rates are read. Cons: the rule must precede the
+    factors' data, and nothing is gained by waiting.
 
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
