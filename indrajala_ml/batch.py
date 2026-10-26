@@ -12,9 +12,10 @@ onto one fleet (an older ledger names one cell, the batch's: read as each attemp
 message carries its cell as it did before, so a worker at an older commit runs a newer controller's.
 
 Messages (each a JSON object on one line, with `type` and the protocol's version `v`):
-worker to controller `hello` (host, slots, the attempts it is running), `ready` (free slots),
-`started` (an attempt's pid), `progress` (its last step), `ended` (its summary); controller to
-worker `attempt` (an attempt to run), `drain` (no more work).
+worker to controller `hello` (host, slots, the attempts it is running and the ended ones not yet
+acknowledged), `ready` (free slots), `started` (an attempt's pid), `progress` (its last step), `ended`
+(its summary); controller to worker `attempt` (an attempt to run), `drain` (no more work), `acked` (an
+`ended` received: a report lost on a dropped connection is sent again on the next).
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ from typing import Any
 VERSION = 1
 CENSORED = ("spent", "deadline")  # modular_family.CENSORED: ends at a budget (the standard library only)
 LEDGER = "ledger.jsonl"
+ACKED = "acked"  # a worker's ROOT/acked/<attempt>: its `ended` acknowledged by the controller
 POLL = 2.0  # seconds between a worker's looks at its attempts
 
 # The continuous crystallisation's cell (D54's, with the margin stop under its deadline: D59, D60),
@@ -613,7 +615,7 @@ class Controller:
                         {"type": "hello", "host": host, "commit": message.get("commit"), "crate": message.get("crate")}
                     )
                     self.writers[host] = writer
-                    running = set(message.get("running", []))
+                    running = set(message.get("running", [])) | set(message.get("ended", []))
                     self.pending[host] = set()
                     for attempt, owner in list(self.state.assigned.items()):  # a host's attempts it no longer has
                         if owner == host and attempt not in running:
@@ -624,7 +626,10 @@ class Controller:
                     self.pending.get(host, set()).discard(message["id"])
                     self.log({"type": "started", "id": message["id"], "host": host, "pid": message["pid"]})
                 elif kind == "ended":
-                    await self.ended(host, message)
+                    attempt = message["id"]
+                    if self.state.hosts_of.get(attempt) == host and attempt not in self.state.ended:
+                        await self.ended(host, message)  # else sent again, or another batch's: acked only
+                    await send(writer, {"type": "acked", "id": attempt})
                 elif kind == "stopped":
                     self.log({"type": "lost", "id": message["id"], "host": host, "why": "window"})
                 self.settle()
@@ -735,7 +740,9 @@ class Worker:
     `wrapper` before the command, `pythonpath` before the worktree on PYTHONPATH), reports its start,
     progress and end (with the attempt's manifest, for the pull), stops its attempts at the controller's
     `stop` (a window's end) and re-adopts its attempts from their pid files after its own restart. Its
-    runs survive a dropped connection: it reconnects and reports. An attempt run again (lost, or stopped
+    runs survive a dropped connection: it reconnects and reports, an end the controller hasn't acknowledged
+    (ROOT/acked/) sent again; a connection to itself (Linux's TCP self-connect, the tunnel down) is
+    refused and tried again. An attempt run again (lost, or stopped
     at a window's end) gets a fresh directory, the old one set aside under ROOT/lost/. Each look samples
     an attempt's memory (attempt_pss); its peak, kept in its directory, goes into its summary.
     """
@@ -831,12 +838,29 @@ class Worker:
             await send(writer, {"type": "stopped", "id": attempt_id})
             del self.running[attempt_id]
 
+    def unacked(self) -> list[Path]:
+        """The ended attempts' directories whose `ended` the controller hasn't acknowledged (stopped ones aside)."""
+        return [
+            ended.parent
+            for ended in sorted(self.root.glob("*/ended.json"))
+            if not (self.root / ACKED / ended.parent.name).exists() and "stopped" not in json.loads(ended.read_text())
+        ]
+
     async def session(self, port: int) -> bool:
         """One connection: hello, then work until drained with nothing running; whether to stop."""
         reader, writer = await asyncio.open_connection("127.0.0.1", port)
         try:
+            if writer.get_extra_info("sockname") == writer.get_extra_info("peername"):
+                raise ConnectionError("connected to itself: nothing listens on the port")
+            unacked = self.unacked()
             hello = {"type": "hello", "host": self.host, "slots": self.slots, "running": list(self.running)}
+            hello["ended"] = [d.name for d in unacked]
             await send(writer, {**hello, "commit": self.commit, "crate": self.crate})
+            for directory in unacked:
+                result = json.loads((directory / "ended.json").read_text())
+                await send(
+                    writer, {"type": "ended", "id": directory.name, "summary": result, "files": manifest(directory)}
+                )
             while True:
                 free = self.slots - len(self.running)
                 if free > 0 and not self.draining:
@@ -852,12 +876,15 @@ class Worker:
                         await send(writer, {"type": "started", "id": running.attempt.id, "pid": running.pid})
                     elif message["type"] == "drain":
                         self.draining = True
+                    elif message["type"] == "acked":
+                        (self.root / ACKED).mkdir(exist_ok=True)
+                        (self.root / ACKED / message["id"]).touch()
                     elif message["type"] == "stop":
                         await self.stop(writer)
                     elif message["type"] == "refused":
                         return True  # on another commit or crate than the batch's: nothing to run here
                 await self.look(writer)
-                if self.draining and not self.running:
+                if self.draining and not self.running and not self.unacked():  # every end acknowledged
                     return True
         finally:
             writer.close()
@@ -962,7 +989,7 @@ async def tunnel(host: Host, port: int, retry: float = 10.0) -> None:
             "-o",
             "ServerAliveCountMax=4",
             "-R",
-            f"{port}:127.0.0.1:{port}",
+            f"127.0.0.1:{port}:127.0.0.1:{port}",  # IPv4 or fail and retry: never bound on ::1 alone
             host.name,
             stdin=subprocess.DEVNULL,
         )

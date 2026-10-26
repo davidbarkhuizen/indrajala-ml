@@ -190,6 +190,87 @@ def test_a_restarted_worker_re_adopts_its_running_attempts_from_their_pid_files(
     assert not b.alive(running.pid) and not worker(tmp_path, "w", 1).running  # ended: nothing to adopt
 
 
+class Dropped:
+    """A connection whose messages go nowhere (the worker connected to itself while the tunnel was down)."""
+
+    def write(self, data: bytes) -> None:
+        pass
+
+    async def drain(self) -> None:
+        pass
+
+
+def test_an_end_reported_into_a_dropped_connection_is_sent_again_and_acknowledged(tmp_path: Path):
+    batch = b.Batch("r", "measure", b.attempts("s3:2", ["continuous"]))
+    directory = tmp_path / "batch"
+    b.register(directory, batch)
+    b.Controller(directory).log({"type": "assigned", "id": "s3-2", "host": "w"})
+    first = worker(tmp_path, "w", 1)
+    running = first.launch(b.Attempt("s3-2", "continuous", "s3", 2))
+    deadline = time.monotonic() + 10
+    while b.alive(running.pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    asyncio.run(first.look(Dropped()))  # type: ignore[arg-type]  # its `ended` lost
+    assert (tmp_path / "w" / "s3-2" / "ended.json").exists() and not first.running
+    again = worker(tmp_path, "w", 1)
+    assert [d.name for d in again.unacked()] == ["s3-2"]
+    port = free_port()
+
+    async def go() -> None:
+        controller = b.Controller(directory)
+        serving = asyncio.create_task(controller.serve(port))
+        await asyncio.sleep(0.1)
+        await asyncio.wait_for(again.serve(port, retry=0.1), timeout=30)
+        await asyncio.wait_for(serving, timeout=10)
+
+    asyncio.run(go())
+    ledger = (directory / b.LEDGER).read_text()
+    assert '"type": "lost"' not in ledger and b.State.read(directory).ended["s3-2"]["success"] is not None
+    assert (tmp_path / "w" / b.ACKED / "s3-2").exists() and not again.unacked()
+
+
+def test_an_end_sent_again_or_from_another_host_is_acknowledged_and_not_logged(tmp_path: Path):
+    directory = tmp_path / "batch"
+    b.register(directory, b.Batch("r", "measure", b.attempts("s3:1-2", ["continuous"])))
+    controller = b.Controller(directory)
+    controller.log({"type": "assigned", "id": "s3-1", "host": "h"})
+    controller.log({"type": "ended", "id": "s3-1", "host": "h", "summary": b.summary(tmp_path / "none")})
+    controller.log({"type": "assigned", "id": "s3-2", "host": "h"})
+    port = free_port()
+
+    async def go() -> list[str]:
+        again = b.Controller(directory)
+        serving = asyncio.create_task(again.serve(port))
+        await asyncio.sleep(0.1)
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        await b.send(writer, {"type": "hello", "host": "g", "slots": 0, "running": [], "ended": ["s3-1", "s3-2"]})
+        for attempt in ("s3-1", "s3-2"):  # one already ended, one h's
+            await b.send(writer, {"type": "ended", "id": attempt, "summary": {"success": None}, "files": {}})
+        acked = [json.loads(await reader.readline())["id"] for _ in range(2)]
+        writer.close()
+        serving.cancel()
+        return acked
+
+    assert asyncio.run(go()) == ["s3-1", "s3-2"]
+    assert (directory / b.LEDGER).read_text().count('"type": "ended"') == 1
+    assert b.State.read(directory).assigned == {"s3-2": "h"}
+
+
+def test_a_worker_refuses_a_connection_to_itself_and_tries_again(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    port = free_port()
+    itself = socket.socket()
+    itself.bind(("127.0.0.1", port))
+    itself.connect(("127.0.0.1", port))  # Linux's TCP self-connect: nothing listens on the port
+    opened = asyncio.open_connection
+
+    async def open_connection(host: str, port: int) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        return await opened(sock=itself)
+
+    monkeypatch.setattr(asyncio, "open_connection", open_connection)
+    with pytest.raises(ConnectionError, match="itself"):
+        asyncio.run(worker(tmp_path, "w", 1).session(port))
+
+
 def test_a_hosts_window_reads_its_hours_left_and_is_none_outside_them():
     thursday_night = datetime.datetime(2026, 10, 22, 20, 0, tzinfo=SAST)  # a Thursday
     assert b.window_left(b.HOSTS["stone"], thursday_night) == 11 * 3600  # weekday nights to 07:00
