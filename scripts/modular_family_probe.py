@@ -114,6 +114,11 @@ exactly (machine_reading.approximations): the finest approximation (a congruence
 determines, the named congruences that refines (an ordering machine's, or division's lines `A + kB`:
 window_tasks.named_labels), whether the factor's code is a machine of its own, and whether the
 factors together cover the target. The readings take `--arm` and `--vocabulary` as the run had them.
+`factor-shares NETWORK... --task T` reads each factor's share of each of a machine's named congruences
+and of its state, I(code; x) / H(x) on the windows training draws (window_diagnostics.congruence_shares):
+weighted as the network meets them, so valid on inexact networks (a failure's peak, a collapse), where
+`approximations`, built for certified networks, merges states on any shared code. Its line lists each
+factor's congruences at `--show` or more; its JSON (`--out`) every share.
 `answers-proof LOG... --task T` is the paper's T6 (paper-workplan.md): at each `--slack` bound, the
 answers-only stop from a run's log, then Chow's test set on the stop's saved step network under the
 same bound ("out of reach" past `--limit` words), a line a bound and its JSON into `--out`.
@@ -994,6 +999,7 @@ from indrajala_ml.measurement import machine_lock
 from indrajala_ml.studies import chow, inference
 from indrajala_ml.studies import machine_reading as mr
 from indrajala_ml.studies import modular_family as mf
+from indrajala_ml.studies import window_diagnostics as wd
 from indrajala_ml.studies import window_recurrent_certificate as wc
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
@@ -1504,6 +1510,13 @@ def main(argv: list[str]) -> int:
             reading.add_argument("--bound", type=int, help="the state bound (default the task's states)")
             reading.add_argument("--slack", type=float, default=1.0, help="the bound times this, rounded down")
             reading.add_argument("--limit", type=int, default=10_000_000, help="the most test words to query")
+    shares = commands.add_parser(
+        "factor-shares", help="each factor's share of each of a machine's named congruences, weighted as training draws"
+    )
+    shares.add_argument("networks", type=Path, nargs="+")
+    shares.add_argument("--task", required=True, help="a machine's (word-problem-s3, move-to-front-4, ...)")
+    shares.add_argument("--show", type=float, default=0.8, help="a congruence on the line at this share or more")
+    shares.add_argument("--out", type=Path, help="a directory for each network's <network>.factor-shares.json")
     spread = commands.add_parser(
         "state-spread",
         help="saved networks' state spread: the outputs' critical temperature and effective dimension, the codes' groups",
@@ -1667,6 +1680,24 @@ def main(argv: list[str]) -> int:
         for path in args.networks:
             curves = mf.melting_curves(mf.load_network(str(path)), rows)
             print(json.dumps({"network": str(path), "step": args.step, "factors": curves}), flush=True)
+        return 0
+    if args.command == "factor-shares":
+        task = wt.task_named(args.task)
+        for path in args.networks:
+            shares = wd.congruence_shares(wd.samples(mf.load_network(str(path)), task), task.machine)
+            held: list[str] = []
+            for g, factor in enumerate(shares["factors"]):
+                factor_named: dict[str, float] = factor["named"]
+                ranked = sorted(factor_named.items(), key=lambda kv: -kv[1])
+                shown = ", ".join(f"{k} {v:.2f}" for k, v in ranked if v >= args.show)
+                held.append(f"factor {g}: state {factor['state']:.2f}, {shown or '-'}")
+            print(f"{path}: state {shares['state']:.2f}; {'; '.join(held)}", flush=True)
+            if args.out is not None:
+                args.out.mkdir(parents=True, exist_ok=True)
+                result = {"network": str(path), "task": args.task, **shares}
+                (args.out / f"{path.parent.name}.{path.stem}.factor-shares.json").write_text(
+                    json.dumps(result, indent=1)
+                )
         return 0
     if args.command in ("by-length", "breaks", "approximations", "chow"):
         for path in args.networks:

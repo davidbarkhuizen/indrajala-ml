@@ -114,3 +114,16 @@ def test_each_new_step_is_diagnosed_once_beside_its_network(tmp_path: Path):
     assert [text.split(":")[0] for text in wd.diagnose_new(tmp_path, DIVISION, load, (3,), 20)] == [
         f"{tmp_path.name} step-10"
     ]
+
+
+def test_congruence_shares_read_a_factor_holding_a_place_and_one_holding_nothing():
+    machine = wt.task_named("word-problem-s3").machine
+    named = wt.named_labels(machine.coordinates)
+    place = named["places {1}"]
+    windows = [wd.Window(0, 0, s, (int(place[s]), 0)) for s in range(machine.states) for _ in range(5)]
+    read = wd.congruence_shares(windows, machine)
+    held, idle = read["factors"]
+    assert held["named"]["places {1}"] == 1.0 and held["named"]["parity"] == 0.0  # the sign independent of a place
+    assert all(v == 0.0 for v in idle["named"].values()) and idle["state"] == 0.0
+    assert set(held["named"]) == {"first 2", "places {0}", "places {1}", "places {2}", "parity"}
+    assert 0.0 < read["state"] < 1.0 and read["state"] == held["state"]
