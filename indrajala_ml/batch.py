@@ -135,6 +135,11 @@ WIDE = ("sum", "difference", "product")  # the approximation claim's vocabulary:
 T10_P0 = tuple(range(15))
 T10_PLANTED = (0, 4, 5, 6, 7, 8, 9, 10, 11, 13, 16, 18, 19, 20, 22)
 T10_PROBE = 15
+# T10r's draws (D24), the next seeds after T10's: P0 random-q16 15-39 (all primitive); P2 the first 25
+# planted seeds from 23 whose only nontrivial principal congruence is the planted one (25, 26, 42, 45
+# and 47 gain others)
+T10R_P0 = tuple(range(15, 40))
+T10R_PLANTED = (23, 24, *range(27, 42), 43, 44, 46, *range(48, 53))
 
 
 @dataclass(frozen=True)
@@ -190,6 +195,9 @@ BACKDROPS: dict[str, Backdrop] = {  # a backdrop's short name, as attempts name 
     **{f"t10-p2-{m}": Backdrop(f"random-planted-q16-b4-{m}", 16, "planted") for m in T10_PLANTED},
     "t10-probe-p1": Backdrop(f"random-planted-q16-b4-{T10_PROBE}", 16),
     "t10-probe-p2": Backdrop(f"random-planted-q16-b4-{T10_PROBE}", 16, "planted"),
+    # T10r (D24): T10b on fresh machines, P0 against P2 alone
+    **{f"t10r-p0-{m}": Backdrop(f"random-q16-{m}", 16) for m in T10R_P0},
+    **{f"t10r-p2-{m}": Backdrop(f"random-planted-q16-b4-{m}", 16, "planted") for m in T10R_PLANTED},
     # T11 (paper-workplan.md, D20): T5's algebras with their coarsest cover asked as two outputs
     "t11-s3": Backdrop("word-problem-s3", 6, "cover"),
     "t11-s4": Backdrop("word-problem-s4", 24, "cover"),
