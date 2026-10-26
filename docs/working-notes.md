@@ -204,6 +204,16 @@ where you meet a new trap; delete one that no longer holds.
   pid alone leaves its `ssh -R` tunnels holding the remote port, and the next fleet's tunnels fail with
   "remote port forwarding failed" (harmless while the old ones forward to the same port, but they
   outlive it).
+- **A worker can connect to itself** (Linux's TCP self-connect): while its tunnel is down, a retry to
+  127.0.0.1:PORT given PORT as its own ephemeral port connects to itself, and its messages go nowhere.
+  T10 (2026-10-25/26): `stone` off the network for about 20 hours, its worker self-connected, its 11
+  ends reported into the void (dropped from its memory), and the tunnel, the IPv4 port taken, bound
+  `[::1]` alone; the controller held them as running. Recovered by stopping that worker, reopening the
+  tunnel and replaying each `ended` from its `ended.json` (the controller's own pull and check). Now
+  the worker refuses a connection to itself, the tunnel binds `127.0.0.1` (or fails and retries), and
+  the controller acks each `ended`: a worker resends the unacknowledged ones (`ROOT/acked/`) on its
+  next connection, listed in its hello so they aren't lost, and leaves a drain only once every end is
+  acked. A worker at this commit needs a controller at it (an older one never acks: no drain ends).
 - **The crate is pinned too** (D6): `register` records the crate extension's SHA-256 (`--crate`, default
   the registering machine's) and the controller refuses a worker that imports another. Builds of one
   source differ by machine, so every host imports one build: `b.CRATE` (`crate-647f23c`), the package
