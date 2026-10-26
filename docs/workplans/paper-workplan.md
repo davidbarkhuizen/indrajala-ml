@@ -64,6 +64,7 @@ notes; the crystallisation strand can be its own later paper once it works beyon
 | **T6** | The target-free proof (K9) | offline: on every run of T1, T2, T3 and T5, the answers-only stop at the exact bound and 1.1 times it (`answers-stop --logged` or the logged answers), then Chow's test set on each stop's network; registered expectations: no false discovery at the exact bound, the queries each proof needs | 0 (offline) | hours |
 | **T7** | Reproducibility | a script that regenerates every table and figure from the result files; a sample of runs re-run on another machine (`jebel`, `litshe`) bit for bit; every statistic recomputed; the datapack's manifest | 0-10 | a day |
 | **T8** | The literature, current | a sweep for 2025-2026 work on neural automaton learning, extraction and verification, state tracking and length generalisation; the related work rewritten | 0 | a day |
+| **T10r** | Does T10b replicate on machines that didn't produce it? (D24) | P0 against P2 on fresh draws, 25 machines an arm, 2 seeds each, read alone (never pooled with T10) | 100 | about 3 h a run; about a day on the fleet after T11 |
 | **T11** | K4 beyond arithmetic: do the algebras' approximations, given as outputs, make them learnable? (D20) | T5's backdrops `s3`, `s4`, `mtf4` under the `paper` cell, each with its coarsest pair of approximations that determine the state as two extra outputs, 20 fresh seeds each, against T5's rates | 60 | short but S4 (3-4 h a spent run); the probe sets it |
 
 **Optional, decided after T1 (D8):** T10, an approximation's output beside a machine the method
@@ -685,6 +686,64 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     without a fill step. Cons: the source no longer shows its numbers; a generated file to keep in
     sync across the two repositories. (c) A sidecar list of expected numbers matched in the text.
     Pros: no markup. Cons: fragile matching; a number edited in the text slips past.
+- **D24. T10r drafted: T10b replicated on fresh machines** (drafted 2026-10-26, before any of its
+  runs and before T10's long tests end; registered when the owner approves the draft). **Why:**
+  read provisionally on its recertified networks (the long tests still running), T10b, the planted
+  approximation given as an output (P2) against primitive machines (P0), passes its registered bar
+  with no margin: P0 2 of 15 machines, P2 8 of 15 (seed 16 twice), p 0.0206 against Holm's 0.025; with
+  seed 16 succeeding once, 0.0251. T10a (P1, the approximation present, not given) reads 3 of 15, p
+  0.50. A replication tests T10b on machines that didn't produce it; **it is read alone, never
+  pooled with T10** (adding machines after T10's p is seen would be optional stopping), and T10's
+  findings are written by D19 whatever T10r finds.
+  - **The question:** given its planted approximation as an output, does a random 16-state machine
+    form more often than a primitive one of the same shape? (T10b's, K4 beyond arithmetic.) P1
+    isn't repeated: T10a read flat, and the claim at stake is T10b's.
+  - **Arms (D19's, unchanged):** P0 primitive `random-q16-<m>`; P2 `random-planted-q16-b4-<m>`,
+    `--arm planted` (the block as an extra output). The `paper` cell, its 600 epochs, run seeds 400
+    and 401 on every machine (the machines are fresh draws, so the runs are; the same seeds keep
+    the cell exactly T10's).
+  - **The draws (D19's rules, the next seeds after T10's, measured 2026-10-26 before any run,
+    `data/window-recurrent/paper/t10r/measures-q16.txt`):** P0 `random-q16` seeds 15-39, all
+    primitive (as D19 found for 0-39). P2 the first 25 planted seeds from 23 whose only nontrivial
+    principal congruence is the planted one: 23, 24, 27-41, 43, 44, 46, 48-52; skipped 25, 26, 42,
+    45, 47 (other congruences). **P0 against P2, before any run:** `order` mean 0.77 (0.09-1.48)
+    against 1.11 (0.29-2.44); Chow's `k` 1-2 both; crucible depth mean 4.7 against 4.9 (4-7 both);
+    P2's non-identity tokens rank lower, 8.80 against 10.43; every machine synchronising (the same
+    shifts T10's draws showed).
+  - **Size: 25 machines an arm, 100 runs.** Simulated power (one-sided rank-sum at 0.05, 2 seeds a
+    machine; P0's per-run rate r0 against P2's r2): at T10's provisional rates (r0 0.067, r2 0.3),
+    0.68 at 15 machines, 0.82 at 20, **0.91 at 25**, 0.96 at 30; at r0 0, r2 0.2: 0.84, 0.91,
+    0.97, 0.99.
+  - **The test:** one, so no Holm: an exact one-sided Wilcoxon rank-sum (midranks) of P2's machines'
+    success counts (0-2) against P0's, **p at most 0.05**. The bars (`rank-bars --machines 25
+    --control 0 1 2 3 4 5`, every success a machine's only one): P0 at 0 machines succeeding, P2
+    needs 5 (p 0.025); at 1, 6 (0.049); at 2, 8 (0.037); at 3, 9 (0.048); at 4, 11 (0.031); at 5, 12
+    (0.036). The pooled Fisher's over runs reported beside it, descriptive.
+  - **Success:** as D13's (certified at the stop, both verdicts, every certified network
+    long-tested). T6's proof (D11 amended) on its runs, reported apart, as T10's.
+  - **Expectations and refutations:** at T10's rates, P0 about 3 of 25 machines and P2 about 13.
+    **T10b replicates** if the test passes. **Not replicated** if it doesn't: then T10b is reported
+    with T10r beside it, as one passing test not confirmed, and the paper's claim falls back to
+    existence (random machines certified given their approximation), not a rate's difference.
+  - **Feasibility (every cell, as D19's):** row 1, 12 codes a factor, 144 joint (9.0 x q); row 2,
+    the cap 159 (the exclusion bound at m 144, q 16); row 14, every state reachable, every pair told
+    apart within the check (Chow's `k` 1-2); row 15, crucible depth 4-7, within its cap of 8
+    (descriptive); row 17, P0 primitive, P2 the planted congruence alone. Tested by a backdrop test
+    beside `test_t10s_cells_meet_their_registered_bounds_and_draws`.
+  - **Where and when:** the runner, one batch longest first (P2 then P0, as T10's ledger's times
+    rank them), after T11's batch ends (about Tue 2026-10-27 morning): backdrops `t10r-p0-<m>` and
+    `t10r-p2-<m>` in `indrajala_ml/batch.py`, data `data/window-recurrent/paper/t10r/`. Cost from
+    T10's ledger: median 2.9-3.0 h a run (longest 12.0 h, a P2), so about 300 run-hours, roughly
+    12-14 h on the fleet (`stone` nights only): the release moves about a day.
+  - Options: (a) *chosen*, 25 machines an arm, P0 and P2 only, read alone at 0.05. Pros: power 0.91
+    at T10's rates; machines are the unit, so power comes from machines, not seeds; fresh draws
+    test the claim, not T10's machines. Cons: 100 runs, about a day of the fleet; the release moves.
+    (b) 15 machines an arm (T10's size). Pros: 60 runs, about 8 h. Cons: power 0.68 at T10's rates,
+    so a true effect fails to replicate a third of the time. (c) 20 machines. Pros: 80 runs. Cons:
+    power 0.82. (d) 30 machines. Pros: power 0.96. Cons: 120 runs, needs `random-q16` seeds past
+    39 (unmeasured), little gain over (a). (e) More seeds on T10's machines, merged. Pros: no new
+    draws. Cons: optional stopping; seeds don't add machines, the test's unit. (f) Keep Holm's
+    0.025. Pros: T10's bar. Cons: one test, no multiplicity to correct; power falls (0.81 at 25).
 
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
