@@ -279,6 +279,12 @@ where you meet a new trap; delete one that no longer holds.
   the loop's index at the stop (`spent`, `deadline`), not trained, so a run of `--budget-epochs
   400` sums to 401. `modular_family.outcome` (the `readout`) corrects it; sum the rows by hand and
   you must too.
+- **`approximations` reads exact networks:** it joins every reachable state pair a factor's code
+  holds and closes the partition, each reachable (code, state) pair counted once. On an inexact
+  network (a failure's peak, a collapse) a few rare wrong codes merge states, the closure falls to
+  one block, and it reads "nothing" where the factor holds a place at 0.9-1.0. Read inexact networks
+  with `factor-shares` (each factor's share of each named congruence, weighted as training draws);
+  the 2026-10-26 re-reading of option 1 withdrew two patterns read the other way.
 - **A study's end can't be read from its average rate:** later ladders are slower; quote a range.
 - **Check every figure against the data before writing it into a doc.**
 - **The addition study's harness:** `train_seconds` include the whole catalogue whenever a screen
