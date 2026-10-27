@@ -237,3 +237,35 @@ run back, the pop, the recovery, the undo again and the exhaustion on a construc
 never back past its ceiling, its identity; stop and resume mid-run (`backtracked`); the reader on a
 constructed log. The golden run bit-identical; `continuous` and `--reheat` unchanged (their tests).
 Stage 2 on `jebel` (free since the crate's A/B).
+
+**Stage 2 (2026-10-27, the probe; claims nothing).** `continuous-ireheat` (1,600 epochs,
+`--state-bound 24`) on `word-problem-s4` seeds 300-303 and D63's collapses 0 and 2, on `jebel` at
+febbff5 (crate 10dfec9's tree); read with `modular_family_probe.py transitions` and each log's
+`anneal.backtrack`. Data `data/window-recurrent/ireheat-probe/` (logs, last networks, checkpoints),
+manifest `ireheat-probe.sha256` a29a9bee... (24 files).
+
+| seed | stages | peak share (step) | share at the first reheat (step) | end (step) | codes at the end |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 18 | 0.97 (109) | 0.15 (188) | empty stack (1,021) | 8, 10 |
+| 2 | 19 | 1.0 (127) | 0.45 (173) | empty stack (1,052) | 5, 3 |
+| 300 | 18 | 1.0 (101) | 0.34 (161) | empty stack (986) | 8, 8 |
+| 301 | 22 | 1.0 (102) | 0.53 (153) | empty stack (1,147) | 8, 4 |
+| 302 | 17 | 0.98 (159) | 0.45 (204) | empty stack (984) | 4, 4 |
+| 303 | 21 | 0.98 (175) | 0.19 (222) | budget (1,555) | 14, 14 |
+
+- **None certified. By stage 2's rule the mechanism fails here:** every reheat ended in the empty
+  stack (D7) or another hold. The state formed in every run (a share of 0.97-1.0 by step 101-175,
+  17-22 stages), then was lost: the first reheat came 45-80 epochs after the peak (D2's trigger),
+  at a share of 0.15-0.53.
+- **The reheat never recovered one stage back:** each popped stage after stage, a wait (D5's 43
+  epochs) at each, 16-21 stages crossed, so the run spent 800-1,000 epochs walking back to its first
+  transition. Five ended there (D7). Seed 303 alone recovered, only at its first stage (the clock
+  46, step 1,118, a near re-melt), re-formed 13 stages (a share of 0.74 at 1,271), lost it again
+  and was popping back (7 stages) at its budget. So the incremental reheat behaved as the full
+  re-melt it was meant to avoid, slower: stage 0's "holds recover within 40 epochs or never" holds
+  after a reheat too.
+- **The loss is the bottleneck these runs show, not formation:** a state at a share near 1 formed
+  and was lost on every seed, the held cool's case (the crucible probe's base arm on the same four
+  seeds, held since about 16:30; read as the control when it ends).
+- **D8:** stage 2 does not support the incremental reheat as X's second arm; X's D5 arm stands
+  unless the owner decides otherwise (post-paper).
