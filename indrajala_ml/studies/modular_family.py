@@ -388,8 +388,9 @@ def network(
     With branches, the window branches workplan's window (wr.branched_window), each factor's
     pooling reading its own branch's end (reads OUTPUT); with answer_branch, the one-code-one-state
     workplan's R1 (wr.answer_branch_window), every factor reading the shared state branch; with
-    recombine, the post-paper workplan's recombining window (wr.recombined_window, D7), each factor
-    reading its own branch's end, the ends merged into one more block before the output. branch_heads
+    recombine, the post-paper workplan's recombining window (wr.recombined_window, D7), a two-block
+    trunk, each factor reading its own branch's end, the ends merged into one more block before the
+    output. branch_heads
     is each branch's attention heads with branches (the post-paper workplan, D8; 1 the retired
     design's). A baseline (BASELINES, the paper's T3): "linear", E6's window without its blocks
     (wr.linear_window); "continuous", every factor's state continuous, no codes (E2's)."""

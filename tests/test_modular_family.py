@@ -1498,17 +1498,19 @@ def _branch_heads(branch: Sequence[Any]) -> int:
 
 
 def test_a_recombined_run_at_width_32_records_it_and_each_factor_reads_its_own_branch(tmp_path: Path):
-    # the post-paper workplan's recombining window (D7, D8) at the base width 32, factors 32 wide: W11's
-    # first block as the trunk, a two-head block a factor, the ends merged into W11's last block
+    # the post-paper workplan's recombining window (D7, D8 (a)) at the base width 32, factors 32 wide:
+    # W11's first two blocks as the trunk, a two-head block a factor, the ends merged into W11's last
+    # block; the factors' paths 3 blocks deep, as the base's, the answers' 4
     encoding = mf.Encoding(5, mf.FAMILY)
     factors = [(32, 8), (32, 8)]
     net = mf.network(encoding, factors, 0, "output", width=32, recombine=True)
     assert len(net._pooling_reads) == 2 and len(set(net._pooling_reads)) == 2
     specs = mf.wr.recombined_window(encoding.tokens, encoding.classes, 2, 32)
     plain = mf.wr.transformer_window(encoding.tokens, encoding.classes, 32)
-    branches = specs[5]
+    branches = specs[8]
     assert isinstance(branches, mf.wr.Branches) and branches.merge and len(branches.branches) == 2
-    assert specs[:5] == plain[:5] and specs[6:] == plain[-5:]  # the trunk and the recombining block, W11's
+    assert specs[:8] == plain[:8] and specs[9:] == plain[-5:]  # the trunk and the recombining block, W11's
+    assert specs[:8] == mf.wr.branched_window(encoding.tokens, encoding.classes, 2, 32)[:8]  # branches-32's trunk
     for branch in branches.branches:
         assert _branch_heads(branch) == mf.wr.HEADS
         ffn = branch[2]

@@ -58,7 +58,7 @@ a factor and one for the answers, each factor's pooling reading its own (the pla
 gives it a shared trunk, then the state branch (W11's last block, unchanged) that every factor reads
 and the answers' own single-head branch (the one-code-one-state workplan's R1); `--branch-heads H`
 gives `--branches`' blocks H heads (the post-paper workplan's branches-32, D8); `--recombine` gives
-the window a shared block, then a two-head branch a factor, each factor's pooling reading its own,
+the window a two-block shared trunk, then a two-head branch a factor, each factor's pooling reading its own,
 the branches' ends summed into one more block before the output (the post-paper workplan's
 recombining window, D7; with `--reads output`); `--thermostat` turns
 each factor's commitment off while it uses fewer than 3 effective codes (2 ** the entropy of its
@@ -1156,8 +1156,8 @@ def main(argv: list[str]) -> int:
     run.add_argument(
         "--recombine",
         action="store_true",
-        help="the post-paper workplan's recombining window (D7): a shared block, then a two-head branch a factor, "
-        "their ends summed into one more block before the output (needs --reads output)",
+        help="the post-paper workplan's recombining window (D7): a two-block shared trunk, then a two-head branch a "
+        "factor, their ends summed into one more block before the output (needs --reads output)",
     )
     run.add_argument(
         "--answer-branch",

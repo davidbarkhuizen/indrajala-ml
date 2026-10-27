@@ -152,16 +152,18 @@ def branched_window(tokens: int, classes: int, factors: int, width: int = D, hea
 
 def recombined_window(tokens: int, classes: int, factors: int, width: int = D) -> list[LayerSpec]:
     """
-    The post-paper workplan's recombining window (D7, D8): W11's first block as the shared trunk,
-    then merged Branches, a block of HEADS heads and a LayerNorm for each of factors factors, each
-    factor's pooling reading its own branch's end; the ends summed, then the recombining block (W11's
-    last block and its LayerNorm), which the output layer reads. Every path 3 blocks deep, width its
-    stream's: the factors' paths through the trunk and their branch, the answers' through every
-    branch and the recombining block.
+    The post-paper workplan's recombining window (D7, D8 (a), the owner 2026-10-27): W11's first two
+    blocks as the shared trunk (as branched_window's), then merged Branches, a block of HEADS heads
+    and a LayerNorm for each of factors factors, each factor's pooling reading its own branch's end;
+    the ends summed, then the recombining block (W11's last block and its LayerNorm), which the
+    output layer reads. Width its stream's. The factors' paths are 3 blocks deep, as the base
+    window's and branched_window's (the trunk and their branch); the answers' 4 (the trunk, every
+    branch, the recombining block), one more than the base's: the state's depth is held, the
+    readout's isn't.
     """
     window = transformer_window(tokens, classes, width)
     block = 3  # a block's specs: its StateInput and two residual blocks
-    trunk = window[: 2 + block]  # the Embedding, the Position and the first block
+    trunk = window[: 2 + block * (BLOCKS - 1)]  # the Embedding, the Position and the first BLOCKS - 1 blocks
     recombining = window[-2 - block :]  # the last block, its LayerNorm and the output layer
     branches = Branches(tuple(_branch_block(width, HEADS) for _ in range(factors)), merge=True)
     return [*trunk, branches, *recombining]
