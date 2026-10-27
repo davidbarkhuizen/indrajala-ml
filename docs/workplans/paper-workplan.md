@@ -1317,6 +1317,19 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
   changes): the abstract and introduction on A; the method with the certificate as instrument; A1-A6
   with "What the outputs tell"; the related work refocused; the discussion's limits; the appendices
   A-G moved from today's sections; every number marked and `paper_tables.py check` passing.
+  - **The framing "found once suffices" (the owner, 2026-10-27), to write in with the abstract:**
+    every success is proved, so for a given machine one certified run settles it; a run's rate is
+    a cost (restarts, epochs a certificate, the batch report's l(t*)), not a verdict. So: the
+    method gives existence (one architecture certifies arithmetic, groups, resets and random
+    machines, some with nothing given: Appendix D read as existence, not rates); claim A says
+    approximations cut the cost (division 15 against 1 of 20; random machines 40% against 8% of
+    machines if T10r holds). Its limits, in the discussion: no certificate is silent (not yet
+    and never look alike, so a machine's rate decides when to stop); the proof needs a bound on
+    the states (T6: sound at the exact bound, wrong stops at 1.1 times it, caught by Chow's test
+    set); for an unknown machine the approximations must come from known structure or be found
+    first (Appendix E's unasked decompositions). And "more approximations, easier" is an observed
+    gradient (cover 15, sum 10, none 1; never a registered comparison), approximations not
+    information (the product, as distinguishing, 0 of 20); T12 would test its extreme.
 - **R6. The owner's summary page of every test** (supersedes indrajala-research's
   `research-notes/paper1-status.tex`).
 - **R7. Critique:** a fresh-context review of the manuscript against the data and the literature;
