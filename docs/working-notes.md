@@ -36,6 +36,11 @@ where you meet a new trap; delete one that no longer holds.
   ref").
 - **Stage files by name, never `git add -A` over a directory:** the untracked `docs/handover.md`
   was committed that way once (#582, untracked again in #583).
+- **Never `git commit -a` on `pyramidon`:** its `rust/` checkout sits at the crate its `.venv` was
+  built from (647f23c, while `main` pins 10dfec9), so `-a` commits that pointer too, and CI then
+  builds the old crate: every shard fails (`WindowProgram has no op "merge"`, #1036 and #1037,
+  2026-10-27, fixed by a commit setting `rust/` back). `git diff --stat origin/main` before pushing
+  shows it.
 
 ## Worktrees
 
