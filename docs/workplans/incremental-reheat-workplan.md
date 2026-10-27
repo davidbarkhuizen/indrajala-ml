@@ -1,6 +1,7 @@
 # Workplan: quasi-static crystallisation with incremental reheat
 
-**Status: drafted 2026-10-27 at the owner's direction; nothing built or run.** The owner, on the
+**Status: drafted 2026-10-27 at the owner's direction; stage 0 read the same day (below); the build
+and its probe brought forward by the owner (D9).** The owner, on the
 crucible probe's held cools: "stopping the cooling doesn't really help, only a reheat could allow it
 to climb out of the energy well"; on D63's reheat, which may run back to the cool's start: "that is
 bound to fail, or just be equivalent to starting again. we need a reheat where we heat it to just
@@ -31,7 +32,7 @@ stage A, and the first item of the failure kinds' ranking
 | D6 | 2026-10-27 | undoing again | not recovered after the wait at a ceiling: pop it, the next ceiling the transition before |
 | D7 | 2026-10-27 | the empty stack | back to the first transition and not recovered: the run ends, spent, for a restart |
 | D8 | 2026-10-27 | in X | the incremental reheat as X's second arm in place of D63's, if stages 0 and 2 support it |
-| D9 | 2026-10-27 | the gate | stage 0 (offline) now; the build and every run after paper 1 (the owner may bring the build forward) |
+| D9 | 2026-10-27, revised | the gate | the owner brought the build and probe forward: "run an incremental reheat probe when we can" |
 
 ## Why
 
@@ -95,8 +96,8 @@ state, so a checkpoint resumes them (`--resume`).
   - (c) The hardening events (a factor's temperature held, D51). Cons: two a run at most (one a
     factor), too coarse to undo one stage.
 - **D2. The trigger: a hold lasting one wait.**
-  - (a) *Chosen.* Pros: the hold keeps its chance first (it recovered base seed 300's collapse
-    once, after about 90 epochs); a reheat only for a hold that isn't working. Cons: epochs spent
+  - (a) *Chosen.* Pros: the hold keeps its chance first (stage 0: holds that recovered did so in 1-40 epochs);
+    a reheat only for a hold that isn't working. Cons: epochs spent
     held before the reheat (43 at the cell's halving).
   - (b) D63's: reheat as soon as the screen falls below the line's extension. Cons: reheats on every
     dip, including those the hold recovers from.
@@ -117,8 +118,8 @@ state, so a checkpoint resumes them (`--resume`).
     pace to the depth of the fall, which is what made D63's run-back unbounded in practice.
 - **D5. The wait: the cool's e-folding time, `halving / ln 2`.**
   - (a) *Chosen.* Pros: the cool's own time scale, the window D61 (c) and D63 (e) already use; no new
-    constant (43 epochs at the cell's 30). Cons: may be short for a slow recovery (base 300 took
-    about 90 held epochs).
+    constant (43 epochs at the cell's 30). Cons: may be short for a slow recovery (stage 0 found none: every
+    recovered hold within 40 epochs, every longer one never recovering).
   - (b) D63 (e)'s `t*` per backdrop. Cons: read from completed runs per backdrop, so not available
     for a new machine (discovery's case).
   - (c) Two e-folding times. Cons: a constant chosen by eye; stage 0 may motivate it (then decided
@@ -143,7 +144,8 @@ state, so a checkpoint resumes them (`--resume`).
     batch unless its verdict earns one.
   - (b) Three arms. Cons: 50% more of X's runs.
   - (c) Its own batch after X. Cons: X adopts a default without the remedy for its commonest end.
-- **D9. The gate: stage 0 now, the build after paper 1.**
+- **D9. The gate: stage 0 now, the build after paper 1. Revised 2026-10-27 by the owner to (b) and
+  the probe (stage 2) as soon as built:** "run an incremental reheat probe when we can".
   - (a) *Chosen.* Pros: stage 0 is offline (reading logs on disk), exempt from finishing the planned
     work first, and shapes the build; paper 1 keeps priority (post-paper D2). Cons: about a day's
     delay to X when it starts (the build and its tests).
@@ -194,3 +196,32 @@ transition (S3 24's, D63) has no stage to return to; D7 ends it.
 Stage 0: one to two hours on `pyramidon` (reading only). Stage 1: about half a day, its tests on
 `jebel` in a scratch copy. Stage 2: six runs at 1,600 epochs, about 5-9 hours on one machine
 overnight. X: no more runs than its D5 already allows (D8 (a)).
+
+## Findings
+
+**Stage 0 (2026-10-27, read offline from logs on disk; the reader `stage0.py`, to become
+`modular_family_probe.py transitions` in stage 1).** The runs: D63's probe (24 run logs, `--reheat`,
+`~/code/data-d63/probe-d63/` and `~/code/stone-staging/stone-d63/probe-d63/`) and the crucible
+probe's eight (`continuous`, held cools; four with the recombining window, stopped at the owner's
+request at 415-471 epochs; four without, running).
+
+- **The stages are clear in every log.** 8-24 transitions a run (new running maxima of the groups),
+  the last of them 85-146 epochs into the cool; the state share at a transition reached 0.94-1.0 in
+  the crucible probe's base runs and 0.81-0.99 in D63's S4 runs: there is something to return to.
+- **Holds either recover fast or never** (the crucible probe, 31 holds): every recovered hold
+  lasted 1-40 epochs; every hold longer than 160 never recovered (seven runs, each held to its last
+  logged epoch). D2's and D5's wait (43 epochs at the cell's halving) falls between the two, as
+  designed. (Corrected: base seed 300 did not recover after about 90 held epochs, as first read
+  from its codes mid-run; its codes re-formed but its screen never rose, and it was still held 211
+  epochs later.)
+- **The held temperature is one to a few stages below the last transition:** base 300 held at T
+  0.64/0.69 against its last transition's 0.71/0.76 (one stage); base 301 at 0.64/0.84 against
+  0.92/1.20 (several). D6's undo-again covers both.
+- **D63's uncapped reheat ran back past every stage on S4, and those runs never certified** (the
+  owner's "bound to fail, or just be equivalent to starting again"): seeds 2, 3 and 4 ran back past
+  the first transition (to the clock 30-40, a re-melt), crossing 18-20 transitions, and ended at the
+  deadline uncertified; seed 2 had a state share of 0.97 at its last transition before the reheat
+  erased it. Elsewhere D63's reheats were shallow and frequent (0-8 transitions crossed, many a few
+  epochs long), on every dip (D2 (b)'s cost). S4 seeds 0 and 5, whose reheats stayed shallow, were
+  the S4 runs that certified or came closest (seed 0 certified at 143).
+- **So D1-D7 stand as drafted;** the build follows (D9 revised).
