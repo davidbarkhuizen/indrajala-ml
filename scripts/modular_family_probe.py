@@ -2109,7 +2109,11 @@ def read_network(path: Path, args: argparse.Namespace) -> str:
         line = " ".join(f"{r['n']}:{r['exact']:.3f}/{r['named']:.3f}" for r in rows)
         line = f"{path}: d {d}, exact/named by length {line}"
     elif args.command == "approximations":
-        result = {"network": str(path), "task": args.task, **mr.approximations(walk, target)}
+        result = {
+            "network": str(path),
+            "task": args.task,
+            **mr.approximations(walk, target, wt.planted_labels(args.task)),
+        }
         top = ", ".join(str(g) for g in result["cascade"]) or "-"
         line = (
             f"{path}: {result['states']} states, meet {result['meet']}, cover {result['cover']}, cascade top {top}; "
