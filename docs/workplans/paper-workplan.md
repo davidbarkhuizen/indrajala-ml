@@ -18,10 +18,15 @@ more interesting but rests on screens and a control that can't carry its "becaus
 author's paper has to be of evident value on its evidence alone: registered comparisons at 20 seeds,
 baselines, every number re-derivable from the data, and a result nobody else has.
 
-The result nobody else has: **finite-state transducers of 100-169 states learned by gradient descent
-from input-output examples alone and proved correct at every length, and proved decompositions of
-them, read from the network.** The extracted-machine literature stops at a few states and checks by
-sampling or queries.
+The result nobody else has (corrected 2026-10-27 by the literature review, indrajala-research
+`research-notes/learned-machine-sizes.tex`): **transducers whose outputs leave the state hidden
+(S4, move-to-front-4 at 24 states; random machines at 12 and 16) learned by gradient descent from
+input-output examples alone and proved correct at every length, about five times the largest such
+machine proved before; the controlled effect of the target's approximations (division to 169
+states given its coordinates, none at 121 without); and proved decompositions read from the
+network.** No size record is claimed when the signal determines the state: Brandoit et al. 2026
+prove learned machines of up to 7,920 states trained on the state itself, and Giles et al. 1995
+learn 512-state finite memory machines.
 
 ## The paper (D1)
 
