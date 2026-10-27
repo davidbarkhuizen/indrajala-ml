@@ -650,6 +650,16 @@ def query_partitions(name: str) -> dict[str, IntArray]:
     return {}
 
 
+def planted_labels(name: str) -> dict[str, IntArray]:
+    """
+    A planted machine's planted approximation, named for the decomposition reading (the paper
+    workplan's T4', D27): {"planted": planted_blocks}; empty for any other task. T11's machines' covers
+    aren't added: their order labels already name them (T11c's registered reading, D25, unchanged).
+    """
+    known = query_partitions(name)
+    return {"planted": known["planted"]} if "planted" in known else {}
+
+
 Word = tuple[int, ...]
 
 

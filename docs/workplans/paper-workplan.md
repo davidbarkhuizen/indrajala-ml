@@ -894,6 +894,14 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     stronger claim; the state better: approximations are a weaker form of state supervision, and A
     is restated so. Cost: 40 runs of 10-55 minutes, one night on two machines; a small build (a
     `state` answer kind in the division encoding, tested, the golden run unchanged).
+    **A design question for its registration (found 2026-10-27, building ahead):** the encoding's
+    answers share one output layer of `p + 1` classes (the quotient's residues and "undefined"), and
+    the state needs `p^2` (25). Options: (a) one output layer of `p^2 + 1` classes in both arms (the
+    cover's arm leaving the extra classes unused), so the arms differ in the queries alone; (b) the
+    state's arm alone widened; (c) the state as two outputs, `A mod p` and `B mod p`. (c) is another
+    cover (each is an approximation), not the state itself, so it asks which cover, not the
+    told-the-state question; (b) adds a second difference. Leaning (a), settled at the registration.
+    Not built until R4 decides T12.
   - **T4', A6 registered beyond division (offline).** The step: A6's mechanism ("a factor that
     decomposes holds the approximation it was given") rests on division, where T4 saw it but did
     not register it (the sum arm's factors only ever the sum: exploratory). Read by T4's tool, with
@@ -904,7 +912,10 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
   - Options at R4, each candidate on its own: run it, or not. T12: Pros: answers the likeliest
     objection directly; cheap; every outcome sharpens A. Cons: a build and a night; the release a
     day later. T4': Pros: the mechanism registered on non-arithmetic machines; no runs. Cons: few
-    certified P2 networks per batch (8 machines in T10). **Leaning both, decided at R4:** T12
+    certified P2 networks per batch (8 machines in T10). **Built 2026-10-27, ahead of R4:** the
+    reading names a planted machine's planted approximation (`wt.planted_labels`, the probe's
+    `approximations`), T11's covers deliberately not added so T11c's registered reading is unchanged;
+    no T10 network has been read by it. **Leaning both, decided at R4:** T12
     dropped if R1 finds the comparison made already; either dropped if T10r fails and the paper
     narrows (above), unless the narrower argument still needs it.
 - **D28. The paper's form: D6 stands** (2026-10-27). The open release with its contribution
@@ -1279,7 +1290,10 @@ failure). Every network certified at the stop passed both, so success is certifi
 
 Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
 
-- **R1. The literature for claim A (offline, first):** a targeted search for auxiliary or
+- **R1. The literature for claim A (offline, first):** **Done 2026-10-27** (indrajala-research
+  `research-notes/approximation-claim-literature.tex`, #72; Both et al. 2025, Ronca et al. 2023 and
+  Moerman 2017 into indrajala-literature, #29): no precedent found for claim A; T12's comparison not
+  made already. The search: a targeted search for auxiliary or
   intermediate supervision by a target's quotients, congruences or algebraic decomposition (and
   against state supervision: Dan et al. 2022, Wies et al. 2023, Brandoit et al. 2026, Liu et al.
   2022), into the research notes (an extension of `learned-machine-sizes.tex` or its own note) and
@@ -1297,7 +1311,9 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
 - **R4. D27's decisions** (after R1 and T10r's reading): T12 and T4', each run or not by D27's rule.
   If run: T12's build, registration (one PR), its batch (one night), the reading; T4''s
   expectations registered (one PR), then the reading.
-- **R5. The manuscript, restructured** (`learning-transducers-with-proof.tex`, renamed if the title
+- **R5. The manuscript, restructured** (**done 2026-10-27 but for A4's T10r, A5, A6's T11c and the
+  abstract**, indrajala-research #73: the title *Learning Finite-State Transducers Through Their
+  Approximations, with Proof*; `paper_tables.py check`: 148 numbers and 11 tables the same) (`learning-transducers-with-proof.tex`, renamed if the title
   changes): the abstract and introduction on A; the method with the certificate as instrument; A1-A6
   with "What the outputs tell"; the related work refocused; the discussion's limits; the appendices
   A-G moved from today's sections; every number marked and `paper_tables.py check` passing.
