@@ -56,7 +56,11 @@ it (the window branches workplan's W1); `--branches` gives the window a shared t
 a factor and one for the answers, each factor's pooling reading its own (the plan's B1-B3; with
 `--reads output`), and `readout-tune` then trains the answers' whole branch; `--answer-branch`
 gives it a shared trunk, then the state branch (W11's last block, unchanged) that every factor reads
-and the answers' own single-head branch (the one-code-one-state workplan's R1); `--thermostat` turns
+and the answers' own single-head branch (the one-code-one-state workplan's R1); `--branch-heads H`
+gives `--branches`' blocks H heads (the post-paper workplan's branches-32, D8); `--recombine` gives
+the window a two-block shared trunk, then a two-head branch a factor, each factor's pooling reading its own,
+the branches' ends summed into one more block before the output (the post-paper workplan's
+recombining window, D7; with `--reads output`); `--thermostat` turns
 each factor's commitment off while it uses fewer than 3 effective codes (2 ** the entropy of its
 codes' use on the step's screen) and ramps it back over 20 epochs once it uses half its codebook
 (the commitment-control workplan's stage 2; levels set by `--thermostat-floor`, `-restore`,
@@ -1142,6 +1146,20 @@ def main(argv: list[str]) -> int:
         "(needs --reads output)",
     )
     run.add_argument(
+        "--branch-heads",
+        type=int,
+        default=1,
+        metavar="H",
+        help="each of --branches' blocks' attention heads (1, the retired design's; the post-paper workplan's "
+        "branches-32 has 2, D8)",
+    )
+    run.add_argument(
+        "--recombine",
+        action="store_true",
+        help="the post-paper workplan's recombining window (D7): a two-block shared trunk, then a two-head branch a "
+        "factor, their ends summed into one more block before the output (needs --reads output)",
+    )
+    run.add_argument(
         "--answer-branch",
         action="store_true",
         help="the one-code-one-state workplan's R1: a shared trunk, then the state branch (W11's last block) every "
@@ -1852,10 +1870,12 @@ def main(argv: list[str]) -> int:
         parser.error("--codes-ratio sets every factor's codes: not with --factor")
     if args.factor_width is not None and args.codes_ratio is None:
         parser.error("--factor-width sets --codes-ratio's factors' width: only with --codes-ratio")
-    if (args.branches or args.answer_branch) and args.reads != "output":
-        parser.error("--branches and --answer-branch: each factor reads a branch's end, so --reads output")
-    if args.branches and args.answer_branch:
-        parser.error("--branches or --answer-branch, not both")
+    if (args.branches or args.answer_branch or args.recombine) and args.reads != "output":
+        parser.error("--branches, --answer-branch and --recombine: each factor reads a branch's end, so --reads output")
+    if sum((args.branches, args.answer_branch, args.recombine)) > 1:
+        parser.error("--branches, --answer-branch or --recombine, one at most")
+    if args.branch_heads != 1 and not args.branches:
+        parser.error("--branch-heads: the heads of --branches' blocks")
     if args.keep_machine and args.restore_best:
         parser.error("--keep-machine or --restore-best, not both")
     if args.thermostat and (args.commitment_from is not None or args.consolidate):
@@ -1961,6 +1981,8 @@ def main(argv: list[str]) -> int:
             width=args.window_width,
             branches=args.branches,
             answer_branch=args.answer_branch,
+            recombine=args.recombine,
+            branch_heads=args.branch_heads,
             baseline=args.baseline,
             thermostat=thermostat,
             keep_machine=args.keep_machine,

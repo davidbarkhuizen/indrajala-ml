@@ -48,7 +48,7 @@ import numpy as np
 
 from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
-from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, SplitArrayLayer
+from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, MergeArrayLayer, SplitArrayLayer
 from indrajala_ml.model.layers.numpy import recurrent_array_layer as numpy_parts
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.rust import recurrent_rust_array_layer as rust_parts
@@ -124,6 +124,22 @@ class _Pooled:
 
     def downstream_batch(self) -> Any:
         return self._pooled
+
+
+class _Merged:
+    """
+    A merged branch's end (the post-paper workplan, D7) as the layer before it reads it: its Merge's
+    delta, plus its poolings' gradient if any reads it, in that order (as the crate's window program
+    adds them).
+    """
+
+    def __init__(self, merge: Any, pooled: Any) -> None:
+        self._merge = merge
+        self._pooled = pooled
+
+    def downstream_batch(self) -> Any:
+        delta = self._merge.downstream_batch()
+        return delta if self._pooled is None else delta + self._pooled
 
 
 def _summed(pooled: Any, readers: Sequence[int]) -> Any:
@@ -501,7 +517,10 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
         for i in reversed(range(len(self.layers) - 1)):
             following = self.layers[i + 1]
             readers = [g for g, r in enumerate(reads) if r == i + 1]
-            if isinstance(following, BranchArrayLayer):
+            if isinstance(following, BranchArrayLayer) and following.merge is not None:
+                merged = _Merged(following.merge, _summed(pooled, readers) if readers else None)
+                self.layers[i].compute_hidden_delta_batch(merged)
+            elif isinstance(following, BranchArrayLayer):
                 self.layers[i].compute_hidden_delta_batch(_Pooled(_summed(pooled, readers)))
             elif readers:
                 self.layers[i].compute_hidden_delta_batch(_WithPooling(following, _summed(pooled, readers)))
@@ -585,6 +604,8 @@ def _program_op(layer: Any) -> tuple[Any, ...]:
         return ("split",)
     if isinstance(layer, BranchArrayLayer):
         return ("branch",)
+    if isinstance(layer, MergeArrayLayer):
+        return ("merge",)
     if isinstance(layer, LayerNormRustArrayLayer):
         return ("layer_norm", layer.epsilon)
     # the softmax output layer is a token-wise dense layer too: it goes first

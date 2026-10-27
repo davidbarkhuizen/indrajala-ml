@@ -28,6 +28,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Fork,
     LayerNorm,
     LayerSpec,
+    Merge,
     Patches,
     Position,
     Residual,
@@ -75,9 +76,11 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
         return {"kind": "residual", "body": [layer_to_json(layer) for layer in spec.body]}
     if isinstance(spec, Branches):
         # the window branches workplan, D6: each branch's layers, in order; with reads (the
-        # one-code-one-state workplan, R1) each factor's branch, absent otherwise so earlier files don't change
+        # one-code-one-state workplan, R1) each factor's branch, absent otherwise so earlier files don't change.
+        # Merged (the post-paper workplan, D7) they are their own kind, which a reader that predates
+        # it refuses as unknown rather than loading them unmerged
         return {
-            "kind": "branches",
+            "kind": "merged_branches" if spec.merge else "branches",
             "branches": [[layer_to_json(layer) for layer in branch] for branch in spec.branches],
             **({"reads": list(spec.reads)} if spec.reads is not None else {}),
         }
@@ -127,11 +130,12 @@ def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
             return BatchNorm(**fields)
         case "residual":
             return Residual(tuple(layer_from_json(layer) for layer in spec["body"]))
-        case "branches":
+        case "branches" | "merged_branches":
             reads = spec.get("reads")
             return Branches(
                 tuple(tuple(layer_from_json(layer) for layer in branch) for branch in spec["branches"]),
                 None if reads is None else tuple(reads),
+                merge=spec["kind"] == "merged_branches",
             )
         case kind if kind in _TOKEN_SPECS:
             return _TOKEN_SPECS[kind](**fields)
@@ -232,7 +236,7 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("P",)
         case Attention():
             return ("Wq", "bq", "Wk", "bk", "Wv", "bv", "Wo", "bo")
-        case Fork() | Add() | Split() | Branch() | PoolSpec() | Patches() | Dropout() | TokenMean():
+        case Fork() | Add() | Split() | Branch() | Merge() | PoolSpec() | Patches() | Dropout() | TokenMean():
             return ()
         case Dense() if spec.bias:
             return ("W", "b")

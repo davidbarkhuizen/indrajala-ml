@@ -133,8 +133,8 @@ design backdrops. None refutes the view; X tests it.
 
 With `G` factors and the base width `D` 32:
 
-1. **The trunk:** the Embedding, the Position and W11's first block (a `StateInput`, attention of
-   two heads, the FFN).
+1. **The trunk:** the Embedding, the Position and W11's first two blocks (each a `StateInput`,
+   attention of two heads, the FFN), as `branches-32`'s (D8, revised 2026-10-27).
 2. **The branches:** one a factor, each a block of its own (a `StateInput`, attention of two heads,
    the FFN, a LayerNorm) over the trunk's tokens. Factor `g`'s pooling reads branch `g`'s end, as in
    `--branches`.
@@ -142,8 +142,10 @@ With `G` factors and the base width `D` 32:
 4. **The recombining block:** a `StateInput`, attention of two heads, the FFN, a LayerNorm, over the
    merged tokens; the output layer reads its end.
 
-Every path is three blocks deep, as W11's and `branches-32`'s (D8), so part B changes the paths'
-separation and not depth, and depth stays part L's alone. The answers' path passes through every
+The factors' paths are three blocks deep (the trunk and their branch), as W11's and
+`branches-32`'s, so part B changes the state's paths' separation and not their depth; the answers'
+path is four (the trunk, every branch, the recombining block), one more than the base's, which the
+findings state (D8, revised 2026-10-27). The answers' path passes through every
 factor's branch; the factors' paths don't pass through the answers' block, so the answers' loss
 shapes the branches but no branch reads the answers' features (`--branches`'s separation, kept).
 
@@ -271,24 +273,34 @@ golden run unchanged at 3.
     then depends on the state only through its codes. Cons: changes the output's timing and inputs;
     an output map, not a recombination; worth its own probe later.
 - **D8. Branching's arms: `branches-32` and `recombine`, at the base width 32, two heads a branch,
-  every path 3 blocks deep, on the paper cell's other settings: (b).**
+  the factors' paths 3 blocks deep, on the paper cell's other settings: (b); `recombine`'s trunk
+  two blocks (revised 2026-10-27, the owner's (a)).**
+  - *Revision (2026-10-27).* The draft's `recombine` (a one-block trunk, "every path 3 deep") was
+    wrong for the factors: a factor's pooling reads its branch's end, 2 blocks deep, where the paper
+    cell's reads the output, 3 deep. Options: (a) *chosen:* a two-block trunk, the factors 3 deep
+    (as the base's and `branches-32`'s), the answers 4: one change from `branches-32` (the answers'
+    branch replaced by the merge and the recombining block). Cons: the readout one block deeper;
+    a block's cost. (b) As drafted: the answers 3, the factors 2. Cons: the state's depth changes
+    with the separation; two changes from `branches-32`. (c) A two-block trunk, the merge, then the
+    LayerNorm and the output, no recombining block: every path 3. Cons: the factors recombine only
+    linearly before the output (D7 (a)'s nonlinear mixing lost).
   - `branches-32`: the retired design (`--branches`) at width 32 with two heads a branch: the test it
     never had (rows 3 and 4 met). `recombine`: D7's window.
   - (a) One head a branch (the owner's original conjecture). Cons: row 4: at 16 a single head
     starved the transitions on S4; at 32 one head per consumer still has half the base's heads.
     (b) *Chosen:* two heads, the base's. Pros: no consumer below the base's attention; one change
-    from the base (the separation). Cons: about `G` blocks more cost than the base. (c) A trunk of
-    two blocks before `recombine`'s branches (4 deep). Cons: depth changes too (part L's question).
-  - Each arm differs from the paper cell in the window's paths alone, at equal depth; they differ
-    from each other in the trunk's length (2 against 1) and the merge: two changes, so their
-    comparison is reported, not claimed (D9).
+    from the base (the separation). Cons: about `G` blocks more cost than the base.
+  - Each arm differs from the paper cell in the window's paths alone, the factors' at equal depth
+    (`recombine`'s answers one block deeper); they differ from each other in the answers' path
+    alone (its own branch against the merge and the recombining block): one change, but the
+    comparison is still reported, not claimed (D9's registration).
 - **D9. Branching's claims (registered):**
   - **B1. `recombine` helps where the default struggles:** on each struggling backdrop, Fisher
     one-sided (`recombine` greater; the owner's conjecture names the direction), two-sided beside it;
     Holm over the set. Refuted on a backdrop if not significant there.
   - **B2. `branches-32` helps there:** the same test.
   - **Harm, both arms:** on the no-harm backdrop, Fisher two-sided; harm if significantly lower.
-  - `recombine` against `branches-32`: rates and Fisher two-sided, reported (two changes, D8).
+  - `recombine` against `branches-32`: rates and Fisher two-sided, reported (one change since D8's revision; not registered as a claim).
   - Each arm's failures read by kind (failure-kinds.md: formation, conversion, extra codes,
     readout), and the separability check on each failure with an exact state: does the
     recombination fix readout failures (row 5's) in particular.
@@ -475,9 +487,19 @@ the configs.*
    A/B of the window program's benchmark, `--order ONNO`), then "Bump rust/", then
    `Branches(..., merge=True)` and `--recombine` (numpy and crate paths, parity tests, the golden run
    unchanged); `--branch-heads` for `--branches` (default 1, the retired design's; 2 here). These may
-   be built while X runs.
+   be built while X runs. **Built 2026-10-27, ahead of the gate, at the owner's request** ("do the
+   build work that is required for the branch-and-merge aspect ... making sure that we support
+   32-wide factors"): the crate's `merge` op (indrajala-math-rust #72, merged 2026-10-27 after its tier-1
+   A/B: no row slower), then "Bump rust/" (#1030), then `Branches(..., merge=True)`, `wr.recombined_window`,
+   `--recombine` and `--branch-heads` (numpy and crate paths, parity tests at widths 16 and 32,
+   factors 32 wide). Merged Branches are their own format-2 kind, `merged_branches`, so a reader
+   that predates them refuses the file as an unknown kind rather than loading it unmerged (an
+   unknown key inside `branches` would be ignored). Nothing is run: B's registration and probes
+   wait for the gate (D2).
 3. **Part B:** the struggling set from the default's rates (D4); the cells on the default, feasibility
-   rows and claims registered (one PR); probes first (claim nothing): both arms on the set's hardest
+   rows and claims registered (one PR); probes first (claim nothing; a candidate the owner raised
+   2026-10-27 and paused until paper 1 is done: `recombine` on 4 of T5's failed S4 seeds, 300-305,
+   307, 309-315, 317, 319, at 400 epochs, where T5's successes certified by 394; **run 2026-10-27 at the owner's request on seeds 300-303, `jebel`, the branch crate: none certified**, each to 400 epochs in 66-83 min; the formation signature as T5's, a little stronger (state share 0.20-0.30 in three against T5's 0.09-0.17 at 600; seed 301 lost its state at its last step); data `jebel:~/code/recombine-probe/`; indrajala-research's failure-kinds ranking, 2026-10-27): both arms on the set's hardest
    backdrop, 4 seeds, a short epoch budget (if neither ever forms a state, B is reported as not run,
    with the probe); the batch; the reading (B1, B2, harm, D10) into "Findings: B".
 4. **Part L:** `--window-blocks` (pure Python, the golden run unchanged); a depth-6 probe of the

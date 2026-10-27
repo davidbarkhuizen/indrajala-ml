@@ -8,13 +8,14 @@ projections at zero and one window; and saving, loading and resuming by bits.
 """
 
 import itertools
+import json
 from pathlib import Path
 from typing import Any, Protocol, cast
 
 import numpy as np
 import pytest
 
-from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer
+from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, MergeArrayLayer, SplitArrayLayer
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentArrayNetwork
@@ -107,8 +108,36 @@ def _shared(factors: int) -> list[LayerSpec]:
 
 
 SHARED_RECURRENCES = {f"{name}, one state branch": r for name, r in list(BRANCHED_RECURRENCES.items())}
+
+
+# the post-paper workplan's recombining window (D7): a shared block, a branch a factor, their ends
+# merged into one more block before the output; with two factors, three crossed, and both factors
+# reading the second branch (the first branch then learns from the merge alone)
+
+
+def _recombined(factors: int, reads: tuple[int, ...] | None = None) -> list[LayerSpec]:
+    branch = (StateInput(), ATTENTION, LayerNorm())
+    return [
+        Embedding(27, 8),
+        Position(),
+        StateInput(),
+        ATTENTION,
+        Branches((branch,) * factors, reads=reads, merge=True),
+        StateInput(),
+        FFN,
+        LayerNorm(),
+        DIGITS,
+    ]
+
+
+RECOMBINED_RECURRENCES = {f"{name}, recombined": r for name, r in list(BRANCHED_RECURRENCES.items())}
+RECOMBINED = {name: _recombined(len(r.factors)) for name, r in RECOMBINED_RECURRENCES.items()}
+RECOMBINED_RECURRENCES["two factors, recombined, one read branch"] = BRANCHED_RECURRENCES["two factors"]
+RECOMBINED["two factors, recombined, one read branch"] = _recombined(2, reads=(1, 1))
 BRANCHED_RECURRENCES.update(SHARED_RECURRENCES)
 BRANCHED.update({name: _shared(len(r.factors)) for name, r in SHARED_RECURRENCES.items()})
+BRANCHED_RECURRENCES.update(RECOMBINED_RECURRENCES)
+BRANCHED.update(RECOMBINED)
 
 
 def covering_consolidation(recurrence: WindowRecurrence) -> dict[tuple[int, ...], tuple[int, ...]]:
@@ -690,7 +719,10 @@ def test_every_factor_reads_the_state_branch_and_the_answers_branch_moves_no_sta
     assert not np.array_equal(outputs, moved_outputs)
 
 
-@pytest.mark.parametrize("name", ["two factors", "two factors, one state branch"])
+@pytest.mark.parametrize(
+    "name",
+    ["two factors", "two factors, one state branch", "two factors, recombined", "three factors, crossed, recombined"],
+)
 def test_a_branched_network_saves_and_loads_by_bits(tmp_path: Path, name: str):
     network = _network(BRANCHED[name], rule=Adam(), recurrence=BRANCHED_RECURRENCES[name])
     X, labels = _batch(2)
@@ -708,6 +740,54 @@ def test_a_branched_network_saves_and_loads_by_bits(tmp_path: Path, name: str):
             np.testing.assert_array_equal(x, y)
 
 
+def test_each_factor_reads_its_own_recombined_branch_and_the_recombining_block_moves_no_state():
+    # the recombining window (the post-paper workplan, D7): each factor reads its own branch's end
+    # (the last factor's the merge's input); the recombining block, after the merge, shapes only the
+    # answers; and the answers read every branch, the first factor's included
+    name = "two factors, recombined"
+    recurrence = BRANCHED_RECURRENCES[name]
+    network = _network(BRANCHED[name], recurrence=recurrence)
+    reads = network._pooling_reads
+    assert isinstance(network.layers[reads[0]], BranchArrayLayer)
+    assert isinstance(network.layers[reads[1]], MergeArrayLayer)
+    X = _batch(2)[0]
+    outputs, _, cells = network.window_states(X)
+    recombining = next(i for i in range(reads[1] + 1, len(network.layers) - 1) if hasattr(network.layers[i], "W"))
+    layer: Any = network.layers[recombining]
+    layer.W = layer.W + 1.0
+    moved_outputs, _, moved = network.window_states(X)
+    for before, after in zip(cells, moved, strict=True):
+        np.testing.assert_array_equal(before, after)
+    assert not np.array_equal(outputs, moved_outputs)
+    layer.W = layer.W - 1.0
+    # the first factor's branch moves the answers (through the merge) and its own factor alone
+    split = next(i for i, layer in enumerate(network.layers) if isinstance(layer, SplitArrayLayer))
+    first = next(i for i in range(split + 1, reads[0]) if hasattr(network.layers[i], "Wq"))
+    branch: Any = network.layers[first]
+    # a random change: adding a constant to every entry adds a LayerNorm's zero token sum to each query
+    branch.Wq = branch.Wq + np.random.default_rng(6).normal(size=branch.Wq.shape)
+    first_outputs, _, first_cells = network.window_states(X)
+    assert not np.array_equal(outputs, first_outputs)
+    size = recurrence.factors[0].state_size
+    np.testing.assert_array_equal(cells[1][:, size:], first_cells[1][:, size:])
+    assert not np.array_equal(cells[1][:, :size], first_cells[1][:, :size])
+
+
+def test_a_recombined_networks_merge_is_its_own_format2_kind(tmp_path: Path):
+    # a reader that predates the merge refuses the file (an unknown kind) rather than loading it unmerged;
+    # unmerged Branches' entries are as before
+    name = "two factors, recombined"
+    network = _network(BRANCHED[name], recurrence=BRANCHED_RECURRENCES[name])
+    path = tmp_path / "recombined.json"
+    network.save(str(path))
+    kinds = [layer["kind"] for layer in json.loads(path.read_text())["layers"]]
+    assert "merged_branches" in kinds and "branches" not in kinds
+    branched = _network(BRANCHED["two factors"], recurrence=BRANCHED_RECURRENCES["two factors"])
+    branched.save(str(path))
+    kinds = [layer["kind"] for layer in json.loads(path.read_text())["layers"]]
+    assert "branches" in kinds and "merged_branches" not in kinds
+
+
 @pytest.mark.parametrize(
     "branches, recurrence, message",
     [
@@ -719,6 +799,8 @@ def test_a_branched_network_saves_and_loads_by_bits(tmp_path: Path, name: str):
         (Branches(((StateInput(), FFN, LayerNorm()),) * 2, reads=(0,)), "two factors", "Branches' reads"),
         (Branches(((StateInput(), FFN, LayerNorm()),) * 2, reads=(0, 1)), "two factors", "Branches' reads"),
         (Branches(((StateInput(), FFN, LayerNorm()),) * 3, reads=(0, 0)), "two factors", "Branches' reads"),
+        # merged (the post-paper workplan, D7): one a factor, none for the answers, then the recombining layers
+        (Branches(((StateInput(), FFN, LayerNorm()),) * 3, merge=True), "two factors", "followed by the recombining"),
     ],
 )
 def test_a_window_refuses_malformed_branches(branches: Any, recurrence: str, message: str):

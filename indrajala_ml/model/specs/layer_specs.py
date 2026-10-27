@@ -222,10 +222,16 @@ class Branches:
     reads the end of branch reads[g] instead, so several factors can share one branch (the
     one-code-one-state workplan's R1: one state branch for every factor, and the answers' own);
     every branch but the answers' is read.
+
+    With `merge` (the post-paper workplan's recombining window, D7), every branch is a factor's (or,
+    with `reads`, read by one or more factors) and none is the answers': the branches' ends are
+    summed, token by token, and the layers after Branches (the recombining block and its LayerNorm)
+    read the sum before the output layer. Factor g's pooling reads the end of branch g, as without it.
     """
 
     branches: tuple[tuple[LayerSpec, ...], ...]
     reads: tuple[int, ...] | None = None
+    merge: bool = False
 
     def __post_init__(self) -> None:
         # lists given are kept as tuples, so equal windows compare equal and the spec stays hashable
@@ -284,8 +290,17 @@ class Branch:
     """
 
 
+@dataclass(frozen=True)
+class Merge:
+    """
+    Merged Branches' last layer once flattened (expand_specs), which no user writes: its input, the
+    last branch's end, plus each Branch's input (the other branches' ends), summed in branch order
+    (the post-paper workplan, D7). The last branch's factor's pooling reads its input.
+    """
+
+
 # the specs that act on tokens only, from the token part's start to its TokenMean, both included
-TokenSpec = Patches | Embedding | Position | Attention | Dropout | StateInput | TokenMean | Split | Branch
+TokenSpec = Patches | Embedding | Position | Attention | Dropout | StateInput | TokenMean | Split | Branch | Merge
 
 
 # a network's layers, one spec each: its specs with every Residual flattened
@@ -298,6 +313,7 @@ ExpandedSpec = (
     | Add
     | Split
     | Branch
+    | Merge
     | Patches
     | Embedding
     | Position
@@ -312,8 +328,8 @@ ExpandedSpec = (
 def expand_specs(specs: Sequence[LayerSpec | ExpandedSpec]) -> list[ExpandedSpec]:
     """
     specs with each Residual(body) flattened into Fork, *body, Add, and Branches into Split, each
-    branch's layers with a Branch after each but the last, in order: the one place blocks and
-    branches are flattened. Every layer index (snapshots, optimizer state, checkpoints, messages)
+    branch's layers with a Branch after each but the last, in order, then a Merge if merged: the one
+    place blocks and branches are flattened. Every layer index (snapshots, optimizer state, checkpoints, messages)
     is an index into this list. An already-expanded list is returned as it is.
     """
     expanded: list[ExpandedSpec] = []
@@ -326,6 +342,8 @@ def expand_specs(specs: Sequence[LayerSpec | ExpandedSpec]) -> list[ExpandedSpec
             for branch in firsts:
                 expanded += [*expand_specs(branch), Branch()]
             expanded += expand_specs(last)
+            if spec.merge:
+                expanded.append(Merge())
         else:
             expanded.append(spec)
     return expanded
@@ -333,10 +351,11 @@ def expand_specs(specs: Sequence[LayerSpec | ExpandedSpec]) -> list[ExpandedSpec
 
 def branch_ends(specs: Sequence[LayerSpec | ExpandedSpec]) -> list[int]:
     """
-    Each Branch's index in expand_specs(specs), in order: where each factor's pooling reads (its
-    input) in a window with branches (the window branches workplan); empty without them.
+    Each Branch's index in expand_specs(specs), then the Merge's if merged, in order: where each
+    factor's pooling reads (its input) in a window with branches (the window branches workplan; the
+    post-paper workplan, D7); empty without them.
     """
-    return [i for i, spec in enumerate(expand_specs(specs)) if isinstance(spec, Branch)]
+    return [i for i, spec in enumerate(expand_specs(specs)) if isinstance(spec, Branch | Merge)]
 
 
 def factor_reads(specs: Sequence[LayerSpec]) -> list[int]:
@@ -388,6 +407,8 @@ def spec_paths(specs: Sequence[LayerSpec]) -> list[str]:
                 paths += [f"layer {i}, branch {b} {path}" for path in spec_paths(branch)]
                 if b + 1 < len(spec.branches):
                     paths.append(f"layer {i}, branch {b} end")
+            if spec.merge:
+                paths.append(f"layer {i}, merge")
         else:
             paths.append(f"layer {i}")
     return paths

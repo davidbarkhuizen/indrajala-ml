@@ -328,3 +328,14 @@ def test_a_branched_windows_split_and_branch_have_their_ops():
     ops = [_program_op(layer)[0] for layer in network.layers]
     assert ops.count("split") == 1 and ops.count("branch") == 2
     assert [ops[r] for r in network._pooling_reads] == ["branch", "branch"]
+
+
+def test_a_recombined_windows_split_branch_and_merge_have_their_ops():
+    name = "two factors, recombined"
+    network = WindowRecurrentRustArrayNetwork.randomized(
+        (K,), BRANCHED[name], BRANCHED_RECURRENCES[name], Adam(), seed=7
+    )
+    ops = [_program_op(layer)[0] for layer in network.layers]
+    assert ops.count("split") == 1 and ops.count("branch") == 1 and ops.count("merge") == 1
+    assert [ops[r] for r in network._pooling_reads] == ["branch", "merge"]
+    assert ops.index("merge") < len(ops) - 2 and ops[-1] == "token_output"

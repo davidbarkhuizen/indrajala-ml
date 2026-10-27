@@ -96,6 +96,14 @@ where you meet a new trap; delete one that no longer holds.
   neutral directory. The crate's lint tools: `../.venv/bin/ruff` and `../.venv/bin/pyright
   --pythonpath ../.venv/bin/python` from `rust/`. The crate's ops take `heads` as a keyword after a
   `*list` unpack; `causal` is keyword-only.
+- **A constant added to every entry of a weight read after a LayerNorm moves nothing:** a token's
+  features sum to zero there (gamma 1, beta 0 at initialisation), so `W + 1` adds zero to each row's
+  product. A test that perturbs a layer to show what reads it uses a random change (the
+  recombining window's test, 2026-10-27, first passed `Wq + 1` as a no-op).
+- **Pyright on `jebel` against a branch's crate:** `jebel`'s main `.venv` holds an older crate
+  stub, so `./cli lint` there reports the newer ops' parameters (`straight`) as unknown. Give the
+  copy a temporary `pyrightconfig.json` with the branch wheel's SITE in `extraPaths` (root and
+  `tests`), never committed.
 - **Python 3.13+ dataclasses have `__replace__`**, so pyright infers a PEP 695 dataclass's type
   parameter invariant; disjoint `@overload`s avoid needing covariance.
 - **`load_network` returns `Any`**: pyright won't flag a `None` attribute on a loaded network;

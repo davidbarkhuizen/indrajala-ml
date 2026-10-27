@@ -169,9 +169,17 @@ def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool, window: bool
             _check_token_residual(spec, in_body, window)
             blocks += 1
         elif isinstance(spec, Branches):
-            assert window and not in_body and i + 1 == len(tokens), (
+            assert window and not in_body and (i + 1 == len(tokens) or spec.merge), (
                 "Branches are a window-recurrent network's, its window's last token layer, right before the output "
-                f"layer (the window branches workplan, D1, D6); got {list(tokens)!r}"
+                f"layer (the window branches workplan, D1, D6), unless merged; got {list(tokens)!r}"
+            )
+            after = tokens[i + 1 :]
+            assert not spec.merge or (after and isinstance(after[-1], LayerNorm)), (
+                "merged Branches are followed by the recombining layers, ending in a LayerNorm before the output "
+                f"layer (the post-paper workplan, D7); got {list(tokens)!r}"
+            )
+            assert not any(isinstance(s, Branches) for s in after), (
+                f"a window holds one Branches (the window branches workplan, D1); got {list(tokens)!r}"
             )
             assert len(spec.branches) >= 2, f"Branches are two or more branches; got {spec!r}"
             assert i > 0 and isinstance(tokens[i - 1], Residual), (
@@ -337,7 +345,18 @@ def validate_window_recurrent(
         f"a pooling reads the output layer's tokens or those before the first StateInput (D10); got {recurrence!r}"
     )
     branches = next((spec for spec in specs if isinstance(spec, Branches)), None)
-    if branches is not None:
+    if branches is not None and branches.merge:
+        if branches.reads is None:
+            assert len(branches.branches) == len(factors), (
+                f"merged Branches are one a factor, none for the answers (the post-paper workplan, D7): "
+                f"{len(factors)} for {len(factors)} factors; got {len(branches.branches)}"
+            )
+        else:
+            assert len(branches.reads) == len(factors) and set(branches.reads) <= set(range(len(branches.branches))), (
+                f"merged Branches' reads name each factor's branch (the post-paper workplan, D7): {len(factors)} among "
+                f"branches 0-{len(branches.branches) - 1}; got {branches.reads!r}"
+            )
+    elif branches is not None:
         if branches.reads is None:
             assert len(branches.branches) == len(factors) + 1, (
                 f"a window's Branches are one a factor and one for the answers (the window branches workplan, D1): "
@@ -350,6 +369,7 @@ def validate_window_recurrent(
                 f"or more (the one-code-one-state workplan, R1): {len(factors)} among branches 0-{read - 1}; got "
                 f"{branches.reads!r}"
             )
+    if branches is not None:
         assert recurrence.pooling.reads == OUTPUT, (
             f"with Branches each factor's pooling reads its branch's end, AttentionPooling(OUTPUT) (the window branches "
             f"workplan, D1); got {recurrence!r}"
