@@ -1267,6 +1267,44 @@ failure). Every network certified at the stop passed both, so success is certifi
   files).
 - **Then:** T10r (D24), the replication.
 
+## Findings: T10r, T10b replicated on fresh machines (2026-10-27, read by D24's rules)
+
+The registered batch (25 fresh machines an arm, P0 `random-q16` 15-39 and P2 the planted seeds 23-52
+by D24's draws, run seeds 400 and 401, the `paper` cell's 600 epochs; 100 runs) on the runner at
+fd6d1ca (crate extension 2679dd29...), its 15 certified networks recertified in both verdicts and
+long-tested (U1, S1 at 128, 256, 1,024 columns: 5,220,000 of 5,220,000 cases passed, no network with a
+failure). Every network certified at the stop passed both, so success is certification at the stop.
+
+| arm | machines succeeding (of 25) | runs (of 50) | per machine | epochs to certify | spent |
+| --- | --- | --- | --- | --- | --- |
+| P0, primitive | **2** | 2 | 18, 24 once | 114, 183 | 48 |
+| P2, planted, its quotient an output | **10** | 13 | 29, 36, 51 twice; 28, 32, 39, 43, 44, 49, 52 once | 50-436, 179 | 37 |
+
+- **The test (one, no Holm: an exact one-sided rank-sum over machines' counts, midranks):** P2
+  against P0, **p 0.0054**, at most 0.05: **T10b replicates.** The registered bar at P0 2 was 8
+  machines; P2's 10 pass it with a margin, and with each machine counted at most once p is 0.0090.
+  The pooled Fisher's over runs (descriptive): 13 of 50 against 2 of 50, one-sided p 0.0019.
+- **By D24's expectations:** P0 2 of 25 machines (about 3 expected), P2 10 of 25 (about 13): both a
+  little below T10's rates, the gap as T10's. Read alone, never pooled with T10 (D24).
+- **So A4 stands on two tests:** given its planted approximation as an output, a random 16-state
+  machine forms more often than a primitive one of the same shape (T10b, p 0.0206 with no margin;
+  T10r, p 0.0054 on 50 fresh machines). T10a (present, not given) was not repeated (D24) and stays
+  flat and underpowered (P1 3 of 15 against 2): R4's question.
+- **T6 on T10r's runs (D11 amended, reported apart from T6's):** at the exact bound 16 and at 17
+  (1.1 times), all 15 certified runs stopped and were proved equivalent to their machine
+  (minimised to 16 states); the other 85 stayed silent. 14 stops landed on the certified step
+  (kept). **One, `t10r-p2-39-400`, landed a step early (step 9, certified at 10) and was read
+  `false-stop`; diagnosed as the strict-only case (D59), not a false stop:** step 9's network fails
+  the default verdict only on a near tie (1 wrong state, on the tie; snap ratio >= 1.008, 2 near
+  ties) and certifies strictly (snap ratio 1.0: 0 wrong states), so Chow's proof and the strict
+  verdict agree, as the integrity check requires. The reader called it `false-stop` because the
+  `paper` cell's log rows carry no `certificates`, so the strict verdict read as False by default
+  (`modular_family.answers_stop`): a measurement gap, the strict verdict to be computed from the
+  saved step network where the row has none. T10 had no such stop.
+- Data `data/window-recurrent/paper/t10r/`, manifest `paper/t10r.sha256` 39eccfd6...26a623b5 (4,470
+  files).
+- **Then:** R3's `tab:planted` with T10r's rows; R4 (D27's decisions).
+
 ## Stages
 
 1. **This plan;** the audit's standing decisions applied (F1 recorded in the state-formation
