@@ -258,6 +258,7 @@ PLANTED_ARMS = [  # T10's arms (D19), the machine the unit
     ("p1", "P1, planted, the target alone"),
     ("p2", "P2, planted, its quotient an output"),
 ]
+PLANTED_TESTS = [("t10", "T10", ["p0", "p1", "p2"]), ("t10r", "T10r", ["p0", "p2"])]  # T10 and its replication (D24)
 
 
 def machine_runs(data: Path, test: str, arms: list[str]) -> dict[str, dict[int, list[mf.ArmRun]]]:
@@ -269,16 +270,19 @@ def machine_runs(data: Path, test: str, arms: list[str]) -> dict[str, dict[int, 
 
 
 def planted(data: Path) -> list[str]:
-    """T10's arms: machines succeeding, runs succeeding, the successes' epochs to certify (range, median)."""
-    runs = machine_runs(data, "t10", [arm for arm, _ in PLANTED_ARMS])
+    """T10's and T10r's arms, each test's rows apart: machines succeeding, runs succeeding, the successes' epochs to
+    certify (range, median)."""
+    labels = dict(PLANTED_ARMS)
     lines: list[str] = []
-    for arm, label in PLANTED_ARMS:
-        counts = mf.machine_successes(runs[arm])
-        every = [r for machine in runs[arm].values() for r in machine]
-        epochs = [r.outcome.epochs for r in every if r.succeeded]
-        course = f"{span(epochs)}, {median(epochs)}" if len(epochs) > 1 else span(epochs)
-        machines = f"{sum(1 for c in counts if c)} of {len(counts)}"
-        lines.append(f"{label} & {machines} & {sum(counts)} of {len(every)} & {course} \\\\")
+    for test, name, arms in PLANTED_TESTS:
+        runs = machine_runs(data, test, arms)
+        for arm in arms:
+            counts = mf.machine_successes(runs[arm])
+            every = [r for machine in runs[arm].values() for r in machine]
+            epochs = [r.outcome.epochs for r in every if r.succeeded]
+            course = f"{span(epochs)}, {median(epochs)}" if len(epochs) > 1 else span(epochs)
+            machines = f"{sum(1 for c in counts if c)} of {len(counts)}"
+            lines.append(f"{name} {labels[arm]} & {machines} & {sum(counts)} of {len(every)} & {course} \\\\")
     return lines
 
 
@@ -808,7 +812,8 @@ def paper_proofs(data: Path) -> Numbers:
 
 def paper_planted(data: Path) -> Numbers:
     """A4's numbers from T10 (D19): each arm's machines succeeding, and T10a's and T10b's rank-sum tests over the
-    machines' counts, Holm over the two, and T10b with each machine counted at most once."""
+    machines' counts, Holm over the two, and T10b with each machine counted at most once; and T10r's (D24), its
+    replication read alone: its rank-sum (no Holm), each machine at most once, and the pooled Fisher's over runs."""
     runs = machine_runs(data, "t10", [arm for arm, _ in PLANTED_ARMS])
     counts = {arm: mf.machine_successes(runs[arm]) for arm, _ in PLANTED_ARMS}
     p = [inference.rank_sum_greater(counts["p1"], counts["p0"]), inference.rank_sum_greater(counts["p2"], counts["p0"])]
@@ -822,6 +827,18 @@ def paper_planted(data: Path) -> Numbers:
         "t10.b-p": f"{p[1]:.4f}",  # four places: T10b passed by no margin (0.0206 against Holm's 0.025)
         "t10.b-holm": p_value(holm[1]),
         "t10.b-once-p": f"{once:.4f}",
+    }
+    replication = machine_runs(data, "t10r", ["p0", "p2"])  # T10r (D24): one test, no Holm, read alone
+    fresh = {arm: mf.machine_successes(replication[arm]) for arm in ("p0", "p2")}
+    runs = {arm: [r.succeeded for machine in replication[arm].values() for r in machine] for arm in ("p0", "p2")}
+    made |= {f"t10r.{arm}-machines": count(sum(1 for c in fresh[arm] if c)) for arm in ("p0", "p2")}
+    made |= {f"t10r.{arm}-runs": count(sum(runs[arm])) for arm in ("p0", "p2")}
+    made |= {
+        "t10r.machines": count(len(fresh["p0"])),
+        "t10r.runs": count(len(runs["p0"])),
+        "t10r.p": f"{inference.rank_sum_greater(fresh['p2'], fresh['p0']):.4f}",
+        "t10r.once-p": f"{inference.rank_sum_greater(mf.machine_successes(replication['p2'], 1), mf.machine_successes(replication['p0'], 1)):.4f}",
+        "t10r.fisher-p": f"{inference.fisher_exact_greater(sum(runs['p2']), len(runs['p2']) - sum(runs['p2']), sum(runs['p0']), len(runs['p0']) - sum(runs['p0'])):.4f}",
     }
     return made
 
