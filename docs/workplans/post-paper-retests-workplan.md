@@ -471,7 +471,15 @@ the configs.*
    A/B of the window program's benchmark, `--order ONNO`), then "Bump rust/", then
    `Branches(..., merge=True)` and `--recombine` (numpy and crate paths, parity tests, the golden run
    unchanged); `--branch-heads` for `--branches` (default 1, the retired design's; 2 here). These may
-   be built while X runs.
+   be built while X runs. **Built 2026-10-27, ahead of the gate, at the owner's request** ("do the
+   build work that is required for the branch-and-merge aspect ... making sure that we support
+   32-wide factors"): the crate's `merge` op (indrajala-math-rust #72, its tier-1 A/B waiting for a
+   free `jebel`), then "Bump rust/", then `Branches(..., merge=True)`, `wr.recombined_window`,
+   `--recombine` and `--branch-heads` (numpy and crate paths, parity tests at widths 16 and 32,
+   factors 32 wide). Merged Branches are their own format-2 kind, `merged_branches`, so a reader
+   that predates them refuses the file as an unknown kind rather than loading it unmerged (an
+   unknown key inside `branches` would be ignored). Nothing is run: B's registration and probes
+   wait for the gate (D2).
 3. **Part B:** the struggling set from the default's rates (D4); the cells on the default, feasibility
    rows and claims registered (one PR); probes first (claim nothing): both arms on the set's hardest
    backdrop, 4 seeds, a short epoch budget (if neither ever forms a state, B is reported as not run,

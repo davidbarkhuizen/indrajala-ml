@@ -10,7 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, SplitArrayLayer
+from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, MergeArrayLayer, SplitArrayLayer
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer
 from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import BatchNormArrayLayer
@@ -71,6 +71,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Fork,
     LayerNorm,
     LayerSpec,
+    Merge,
     Patches,
     Position,
     Split,
@@ -108,9 +109,11 @@ class ArrayLayerClasses:
     affine: LayerClass
     fork: LayerClass
     add: LayerClass
-    # a window's branches (the window branches workplan): the split (size) and a branch's end (its split)
+    # a window's branches (the window branches workplan): the split (size), a branch's end (its split)
+    # and a merged split's merge (its split; the post-paper workplan, D7)
     split: LayerClass = SplitArrayLayer
     branch: LayerClass = BranchArrayLayer
+    merge: LayerClass = MergeArrayLayer
 
 
 LAYER_CLASSES = {
@@ -287,6 +290,9 @@ def build_array_layers(
         if isinstance(spec, Branch):
             layers.append(classes.branch(splits[-1]))
             branching = splits[-1]
+            continue
+        if isinstance(spec, Merge):
+            layers.append(classes.merge(splits.pop()))
             continue
         if isinstance(spec, Fork):
             opened = classes.fork(input_size)

@@ -126,26 +126,45 @@ def transformer_window(tokens: int, classes: int, width: int = D) -> list[LayerS
     ]
 
 
-def branched_window(tokens: int, classes: int, factors: int, width: int = D) -> list[LayerSpec]:
+def _branch_block(width: int, heads: int) -> tuple[LayerSpec, ...]:
+    # a branch: W11's block, its attention of heads heads, and a LayerNorm ending it
+    return (
+        StateInput(),
+        Residual((LayerNorm(), Attention(heads=heads, causal=True))),
+        Residual(
+            (LayerNorm(), Dense(FFN // D * width, activation="relu"), Dense(width, activation="linear", bias=True))
+        ),
+        LayerNorm(),
+    )
+
+
+def branched_window(tokens: int, classes: int, factors: int, width: int = D, heads: int = 1) -> list[LayerSpec]:
     """
     The window branches workplan's window (D1, D2): W11's first two blocks as the shared trunk,
-    then Branches, a single-head block and a LayerNorm for each of factors factors and one for the
-    answers, which run on into the output layer; every path 3 blocks deep, width its stream's.
+    then Branches, a block of heads heads (1, the retired design's; the post-paper workplan's
+    branches-32 has 2, D8) and a LayerNorm for each of factors factors and one for the answers,
+    which run on into the output layer; every path 3 blocks deep, width its stream's.
     """
     window = transformer_window(tokens, classes, width)
     trunk = window[: 2 + 3 * (BLOCKS - 1)]  # the Embedding, the Position and the first BLOCKS - 1 blocks
+    return [*trunk, Branches(tuple(_branch_block(width, heads) for _ in range(factors + 1))), window[-1]]
 
-    def branch() -> tuple[LayerSpec, ...]:
-        return (
-            StateInput(),
-            Residual((LayerNorm(), Attention(heads=1, causal=True))),
-            Residual(
-                (LayerNorm(), Dense(FFN // D * width, activation="relu"), Dense(width, activation="linear", bias=True))
-            ),
-            LayerNorm(),
-        )
 
-    return [*trunk, Branches(tuple(branch() for _ in range(factors + 1))), window[-1]]
+def recombined_window(tokens: int, classes: int, factors: int, width: int = D) -> list[LayerSpec]:
+    """
+    The post-paper workplan's recombining window (D7, D8): W11's first block as the shared trunk,
+    then merged Branches, a block of HEADS heads and a LayerNorm for each of factors factors, each
+    factor's pooling reading its own branch's end; the ends summed, then the recombining block (W11's
+    last block and its LayerNorm), which the output layer reads. Every path 3 blocks deep, width its
+    stream's: the factors' paths through the trunk and their branch, the answers' through every
+    branch and the recombining block.
+    """
+    window = transformer_window(tokens, classes, width)
+    block = 3  # a block's specs: its StateInput and two residual blocks
+    trunk = window[: 2 + block]  # the Embedding, the Position and the first block
+    recombining = window[-2 - block :]  # the last block, its LayerNorm and the output layer
+    branches = Branches(tuple(_branch_block(width, HEADS) for _ in range(factors)), merge=True)
+    return [*trunk, branches, *recombining]
 
 
 def answer_branch_window(tokens: int, classes: int, factors: int, width: int = D) -> list[LayerSpec]:

@@ -50,7 +50,7 @@ import numpy.typing as npt
 from indrajala_ml import batch as runner
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_data as md
-from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer
+from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, MergeArrayLayer
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
 from indrajala_ml.model.persistence.format2 import network_to_json
 from indrajala_ml.model.persistence.load_network import load_network, network_from_state
@@ -380,20 +380,30 @@ def network(
     branches: bool = False,
     answer_branch: bool = False,
     baseline: str | None = None,
+    recombine: bool = False,
+    branch_heads: int = 1,
 ) -> Any:
     """The transformer window (W11) over the encoding's tokens, a factored state (D3), Adam; the
     poolings reading before the first StateInput (D10) or, with reads OUTPUT, the window's output.
     With branches, the window branches workplan's window (wr.branched_window), each factor's
     pooling reading its own branch's end (reads OUTPUT); with answer_branch, the one-code-one-state
-    workplan's R1 (wr.answer_branch_window), every factor reading the shared state branch. A
-    baseline (BASELINES, the paper's T3): "linear", E6's window without its blocks (wr.linear_window);
-    "continuous", every factor's state continuous, no codes (E2's)."""
-    assert not (branches or answer_branch) or reads == OUTPUT, (
+    workplan's R1 (wr.answer_branch_window), every factor reading the shared state branch; with
+    recombine, the post-paper workplan's recombining window (wr.recombined_window, D7), each factor
+    reading its own branch's end, the ends merged into one more block before the output. branch_heads
+    is each branch's attention heads with branches (the post-paper workplan, D8; 1 the retired
+    design's). A baseline (BASELINES, the paper's T3): "linear", E6's window without its blocks
+    (wr.linear_window); "continuous", every factor's state continuous, no codes (E2's)."""
+    assert not (branches or answer_branch or recombine) or reads == OUTPUT, (
         "with branches each factor reads a branch's end: reads OUTPUT"
     )
-    assert not (branches and answer_branch), "the window branches or the answers' branch, not both"
+    assert sum((branches, answer_branch, recombine)) <= 1, (
+        "the window branches, the answers' branch or the recombining window, one at most"
+    )
+    assert branch_heads == 1 or branches, "branch heads are the window branches' (--branches)"
     assert baseline is None or baseline in BASELINES, f"a baseline: one of {BASELINES}"
-    assert baseline is None or not (branches or answer_branch), "a baseline is W11's window or E6's, unbranched"
+    assert baseline is None or not (branches or answer_branch or recombine), (
+        "a baseline is W11's window or E6's, unbranched"
+    )
     recurrence = WindowRecurrence(
         tuple(Factor(s, None if baseline == CONTINUOUS_STATE else Codes(m)) for s, m in factors),
         False,
@@ -402,7 +412,9 @@ def network(
     if baseline == LINEAR:
         specs = wr.linear_window(encoding.tokens, encoding.classes, width)
     elif branches:
-        specs = wr.branched_window(encoding.tokens, encoding.classes, len(factors), width)
+        specs = wr.branched_window(encoding.tokens, encoding.classes, len(factors), width, branch_heads)
+    elif recombine:
+        specs = wr.recombined_window(encoding.tokens, encoding.classes, len(factors), width)
     elif answer_branch:
         specs = wr.answer_branch_window(encoding.tokens, encoding.classes, len(factors), width)
     else:
@@ -2762,6 +2774,8 @@ def _run_identity(
     margin_wait: int | None = None,
     cutoff_epochs: int | None = None,
     baseline: str | None = None,
+    recombine: bool = False,
+    branch_heads: int = 1,
 ) -> dict[str, Any]:
     # what a resumed run must share with the run it resumes; the consolidation workplan's settings
     # only when not their defaults, so a checkpoint from before them still resumes; not the wall-clock
@@ -2802,6 +2816,8 @@ def _run_identity(
         **({"margin_wait": margin_wait} if margin_wait is not None else {}),
         **({"cutoff_epochs": cutoff_epochs} if cutoff_epochs is not None else {}),
         **({"baseline": baseline} if baseline is not None else {}),
+        **({"recombine": True} if recombine else {}),
+        **({"branch_heads": branch_heads} if branch_heads != 1 else {}),
     }
 
 
@@ -2859,6 +2875,8 @@ class RunConfig:
     margin_wait: int | None
     cutoff_epochs: int | None = None
     baseline: str | None = None
+    recombine: bool = False
+    branch_heads: int = 1
 
     def identity(self, first: int) -> dict[str, Any]:
         """What a resumed run must share with the run it resumes (_run_identity's)."""
@@ -2893,6 +2911,8 @@ class RunConfig:
             self.margin_wait,
             self.cutoff_epochs,
             self.baseline,
+            recombine=self.recombine,
+            branch_heads=self.branch_heads,
         )
 
     def check(self) -> None:
@@ -3155,7 +3175,18 @@ class _Run:
             assert saved is not None or not (resume and (c.out / "log.jsonl").exists()), (
                 f"{c.out} has a log but no checkpoint to resume from"
             )
-            self.net = network(c.encoding, c.factors, c.seed, c.reads, c.width, c.branches, c.answer_branch, c.baseline)
+            self.net = network(
+                c.encoding,
+                c.factors,
+                c.seed,
+                c.reads,
+                c.width,
+                c.branches,
+                c.answer_branch,
+                c.baseline,
+                recombine=c.recombine,
+                branch_heads=c.branch_heads,
+            )
             if saved is not None:
                 (c.out / "log.jsonl").write_text("")  # stopped before its first checkpoint: begun again from the seed
             _write_checkpoint(c.out, self.identity, BEGUN, self.net)
@@ -3728,6 +3759,8 @@ def run(
     margin_wait: int | None = None,
     cutoff_epochs: int | None = None,
     baseline: str | None = None,
+    recombine: bool = False,
+    branch_heads: int = 1,
 ) -> None:
     """
     One probe run: the curriculum from its first step `s0` (first_length: 1 but where a stateless
@@ -3843,6 +3876,8 @@ def run(
         margin_wait,
         cutoff_epochs,
         baseline,
+        recombine=recombine,
+        branch_heads=branch_heads,
     )
     running = _Run(config, resume)
     if not running.ended:
@@ -3889,7 +3924,7 @@ def readout_only(net: Any) -> wr.FactorRates:
     output layer's input, or its branch's end) is the saved network's, and only the readout of its
     answers learns.
     """
-    ends = [i for i, layer in enumerate(net.layers) if isinstance(layer, BranchArrayLayer)]
+    ends = [i for i, layer in enumerate(net.layers) if isinstance(layer, BranchArrayLayer | MergeArrayLayer)]
     learning = range(ends[-1] + 1 if ends else len(net.layers) - 1, len(net.layers))
     return wr.FactorRates(net.optimizer, {i: 0.0 for i in range(len(net.layers) + len(net.parts)) if i not in learning})
 

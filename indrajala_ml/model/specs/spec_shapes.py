@@ -22,6 +22,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Fork,
     LayerNorm,
     LayerSpec,
+    Merge,
     Patches,
     Position,
     Split,
@@ -81,8 +82,9 @@ def spec_shapes(specs: Sequence[LayerSpec | ExpandedSpec], input_shape: InputSha
     workplan, D6), and a Position, a LayerNorm, an Attention and a Dropout keep their input's shape (a
     LayerNorm after a conv front end normalizes the flat image as one token), as does a StateInput,
     which reads tokens (the window-recurrent adder workplan, W18). A Split keeps its input's
-    shape, every branch keeps it (each Branch checks its branch's end), and each branch starts
-    from it (the window branches workplan). The specs' own arguments are checked by the layers built
+    shape, every branch keeps it (each Branch checks its branch's end, a Merge the last's), and each
+    branch starts from it (the window branches workplan); a Merge keeps it too, its branches' ends
+    summed (the post-paper workplan, D7). The specs' own arguments are checked by the layers built
     from them, not here.
     """
     shapes: list[SpecShape] = []
@@ -109,6 +111,12 @@ def spec_shapes(specs: Sequence[LayerSpec | ExpandedSpec], input_shape: InputSha
         elif isinstance(spec, Branch):
             assert shape == splits[-1], (
                 f"a branch keeps its tokens' width (the window branches workplan): it ends in {shape}, not {splits[-1]}"
+            )
+            shapes.append(SpecShape(shape, shape))
+        elif isinstance(spec, Merge):
+            split = splits.pop()
+            assert shape == split, (
+                f"a merged branch keeps its tokens' width (the post-paper workplan, D7): it ends in {shape}, not {split}"
             )
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, Add):

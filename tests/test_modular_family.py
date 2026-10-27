@@ -7,6 +7,7 @@ import json
 import math
 import random
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -1485,16 +1486,99 @@ def test_an_answer_branch_run_records_it_and_every_factor_reads_the_state_branch
     )
     identity = json.loads((tmp_path / "r1" / "checkpoint.json").read_text())["run"]
     assert identity["answer_branch"] is True and "branches" not in identity
-    with pytest.raises(AssertionError, match="not both"):
+    with pytest.raises(AssertionError, match="one at most"):
         mf.network(encoding, [(4, 4)], 0, "output", branches=True, answer_branch=True)
 
 
-@pytest.mark.parametrize("window", ["branches", "answer_branch"])
+def _branch_heads(branch: Sequence[Any]) -> int:
+    # a branch block's attention heads: its first residual block's Attention (wr's branch blocks)
+    block = branch[1]
+    assert isinstance(block, mf.wr.Residual) and isinstance(block.body[1], mf.wr.Attention)
+    return block.body[1].heads
+
+
+def test_a_recombined_run_at_width_32_records_it_and_each_factor_reads_its_own_branch(tmp_path: Path):
+    # the post-paper workplan's recombining window (D7, D8) at the base width 32, factors 32 wide: W11's
+    # first block as the trunk, a two-head block a factor, the ends merged into W11's last block
+    encoding = mf.Encoding(5, mf.FAMILY)
+    factors = [(32, 8), (32, 8)]
+    net = mf.network(encoding, factors, 0, "output", width=32, recombine=True)
+    assert len(net._pooling_reads) == 2 and len(set(net._pooling_reads)) == 2
+    specs = mf.wr.recombined_window(encoding.tokens, encoding.classes, 2, 32)
+    plain = mf.wr.transformer_window(encoding.tokens, encoding.classes, 32)
+    branches = specs[5]
+    assert isinstance(branches, mf.wr.Branches) and branches.merge and len(branches.branches) == 2
+    assert specs[:5] == plain[:5] and specs[6:] == plain[-5:]  # the trunk and the recombining block, W11's
+    for branch in branches.branches:
+        assert _branch_heads(branch) == mf.wr.HEADS
+        ffn = branch[2]
+        assert isinstance(ffn, mf.wr.Residual) and isinstance(ffn.body[2], mf.wr.Dense) and ffn.body[2].size == 32
+    settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
+    mf.run(
+        encoding,
+        factors,
+        0,
+        60,
+        tmp_path / "x",
+        settings,
+        cap=2,
+        reads="output",
+        budget_epochs=1,
+        width=32,
+        recombine=True,
+    )
+    identity = json.loads((tmp_path / "x" / "checkpoint.json").read_text())["run"]
+    assert identity["recombine"] is True and identity["width"] == 32 and "branches" not in identity
+    with pytest.raises(AssertionError, match="reads OUTPUT"):
+        mf.network(encoding, [(4, 4)], 0, recombine=True)
+    with pytest.raises(AssertionError, match="one at most"):
+        mf.network(encoding, [(4, 4)], 0, "output", branches=True, recombine=True)
+
+
+def test_a_branched_run_with_two_heads_a_branch_at_width_32_records_them(tmp_path: Path):
+    # the post-paper workplan's branches-32 (D8): the retired design at width 32, two heads a branch
+    encoding = mf.Encoding(5, mf.FAMILY)
+    specs = mf.wr.branched_window(encoding.tokens, encoding.classes, 2, 32, heads=2)
+    branches = specs[-2]
+    assert isinstance(branches, mf.wr.Branches) and len(branches.branches) == 3
+    assert all(_branch_heads(branch) == 2 for branch in branches.branches)
+    retired = mf.wr.branched_window(encoding.tokens, encoding.classes, 2, 32)[-2]
+    assert isinstance(retired, mf.wr.Branches)
+    assert all(_branch_heads(branch) == 1 for branch in retired.branches)  # one by default, the retired design's
+    settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
+    mf.run(
+        encoding,
+        [(32, 8), (32, 8)],
+        0,
+        60,
+        tmp_path / "b",
+        settings,
+        cap=2,
+        reads="output",
+        budget_epochs=1,
+        width=32,
+        branches=True,
+        branch_heads=2,
+    )
+    identity = json.loads((tmp_path / "b" / "checkpoint.json").read_text())["run"]
+    assert identity["branches"] is True and identity["branch_heads"] == 2
+    with pytest.raises(AssertionError, match="branch heads"):
+        mf.network(encoding, [(4, 4)], 0, "output", recombine=True, branch_heads=2)
+
+
+@pytest.mark.parametrize("window", ["branches", "answer_branch", "recombine"])
 def test_tuning_a_branched_readout_trains_the_answers_branch_alone(tmp_path: Path, window: str):
+    # recombined, the answers' own path is the recombining block after the merge
     encoding = mf.Encoding(5, mf.FAMILY)
     path = tmp_path / "network.json"
     branched = mf.network(
-        encoding, [(4, 4), (4, 4)], 0, "output", branches=window == "branches", answer_branch=window == "answer_branch"
+        encoding,
+        [(4, 4), (4, 4)],
+        0,
+        "output",
+        branches=window == "branches",
+        answer_branch=window == "answer_branch",
+        recombine=window == "recombine",
     )
     branched.save(str(path))
     mf.tune_readout(path, encoding, "modular-division-5", 2, tmp_path / "tuned", 1, mf.Settings(epoch_examples=64))
