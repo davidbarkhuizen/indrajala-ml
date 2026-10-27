@@ -1222,6 +1222,13 @@ D21's sample, each rerun on `litshe` (aarch64, the crate's NEON path) at 7dc0915
   heat); restarted from scratch at 14:35, its partial run kept as `d7-family-309.crashed-0934`.
 - Data `data/window-recurrent/paper/t7-reruns/`, manifest `paper/t7-reruns.sha256`
   81e5f4d8...d5c2647be6 (71 files).
+- **`jebel`'s reruns (D21 (c), 2026-10-27):** the same four on `jebel` (x86-64; three originals
+  ran on `stone`, `d7-family-309`'s on `jebel` itself at the batch's commit), at 7dc0915 with the
+  crate 647f23c (its extension 2679dd29..., the batches'), one at a time by the runner's own command
+  (`Worker.command`), 23:12-23:25: all four bit for bit again (74, 65, 65 and 94 rows identical, `differs` None; the same four certified
+  networks' sha256, and `d7-family-309`'s six step networks). Data
+  `data/window-recurrent/paper/t7-reruns-jebel/`, manifest `paper/t7-reruns-jebel.sha256`
+  656e152b4c53c24b... (55 files).
 
 ## Findings: T10, an approximation beside a random machine (2026-10-26, read by D19's rules)
 
@@ -1303,7 +1310,7 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
   on its networks; read Wed); T11c (Wed-Thu, T4's tool at 99af57f or later). Each its findings
   section here, a PR, a manifest.
 - **R3. T7's remaining work:** the tables for T10, T10r and T11 in `paper_tables.py`, their prose
-  marks (D23), `jebel`'s reruns (D21). **T10's, 2026-10-27:** the per-machine reading made a tool
+  marks (D23), `jebel`'s reruns (D21; done 2026-10-27, bit for bit, "Findings: T7's reruns"). **T10's, 2026-10-27:** the per-machine reading made a tool
   (`mf.machine_unit_runs`, `machine_unit_readout`; `paper_reading.py machines DATA --test t10
   --arms p0 p1 p2 --pairs p1:p0 p2:p0`), T10's scratch script retired; it reproduces "Findings: T10"
   exactly (2, 3 and 8 machines; T10b `p` 0.0206, Holm 0.041; 0.0251 with each machine once).
