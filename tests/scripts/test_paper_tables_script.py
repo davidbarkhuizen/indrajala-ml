@@ -94,14 +94,19 @@ def test_the_planted_table_and_numbers_count_machines_and_runs(monkeypatch: pyte
 
     monkeypatch.setattr(script, "machine_runs", machine_runs)
     assert script.planted(tmp_path) == [
-        "P0, primitive & 1 of 2 & 1 of 4 & 200 \\\\",
-        "P1, planted, the target alone & 0 of 2 & 0 of 4 & -- \\\\",
-        "P2, planted, its quotient an output & 2 of 2 & 3 of 4 & 80--120, 100 \\\\",
+        "T10 P0, primitive & 1 of 2 & 1 of 4 & 200 \\\\",
+        "T10 P1, planted, the target alone & 0 of 2 & 0 of 4 & -- \\\\",
+        "T10 P2, planted, its quotient an output & 2 of 2 & 3 of 4 & 80--120, 100 \\\\",
+        "T10r P0, primitive & 1 of 2 & 1 of 4 & 200 \\\\",  # T10r (D24): its own rows, P0 and P2 only
+        "T10r P2, planted, its quotient an output & 2 of 2 & 3 of 4 & 80--120, 100 \\\\",
     ]
     numbers = script.paper_planted(tmp_path)
     assert numbers["t10.p2-machines"] == "2" and numbers["t10.machines"] == "2"
     assert numbers["t10.b-p"] == f"{script.inference.rank_sum_greater([1, 2], [1, 0]):.4f}"
     assert numbers["t10.b-once-p"] == f"{script.inference.rank_sum_greater([1, 1], [1, 0]):.4f}"
+    assert numbers["t10r.p2-runs"] == "3" and numbers["t10r.runs"] == "4"
+    assert numbers["t10r.p"] == numbers["t10.b-p"]  # the same counts, one test with no Holm
+    assert numbers["t10r.fisher-p"] == f"{script.inference.fisher_exact_greater(3, 1, 1, 3):.4f}"
 
 
 LINE = (
