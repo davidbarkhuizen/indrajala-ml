@@ -9,6 +9,69 @@ programme, and focus on doing the work to finalize the paper." D1-D9 settled und
 delegation, each with its options' pros and cons; the owner may reopen any. Supersedes P1 and P2 as
 separate submissions (both stay as source drafts until the paper replaces them).**
 
+**Refocused 2026-10-27 (D26-D28), the plan in force from then; the sections from "Why one paper" to
+"The paper (D1)" are the first plan, kept for the record.** After the literature review of learned
+machines' sizes (indrajala-research `research-notes/learned-machine-sizes.tex`: no size record when
+the signal tells the state), the owner: "what would the single strongest contribution be? then
+focus the paper on that, and include as appendices any supporting material that is required/novel
+but not focussed ... the smallest and most focussed option ... most likely to be published"; and on
+tests: "assume that we will wait to include all ongoing tests, but ideally not do any more (we
+could allow one final additional test, but only if it is very strongly motivated for as filling an
+important gap)".
+
+## The paper, refocused (D26)
+
+**Working title:** *Learning finite-state transducers through their approximations, with proof.*
+
+**The question:** what must the training signal carry for gradient descent to come to compute a
+finite-state transducer exactly at every length? **The claim (A):** trained on the target's
+answers and on some of its *approximations* (its homomorphic images, quotients by congruences of its
+states) as extra outputs, a network learns transducers it does not learn from the answers alone;
+the help is the approximations' being approximations, not their being extra outputs, nor their
+carrying state; and where the network decomposes its state, its factors hold the approximations it
+was given. Every learned machine is proved equal to its target at every length by a complete
+certificate, so "learned" is exact, not sampled.
+
+**The told-the-state question, met in the main text.** A cover (division's sum and difference)
+determines the state, so training on it tells the network the state's coordinates; that state
+supervision helps is known (Dan et al. 2022; Brandoit et al. 2026, to 7,920 states). The paper's
+answer is its controls: a learnable output that carries state but is no approximation (the suffix)
+certifies 0 of 20 against the sum's 6 (T1); the product, as distinguishing as the sum and no
+approximation, 0 of 20; one approximation alone (the sum) 10 of 20, telling the state only with the
+quotient's help (22 of 25 classes at `p` 5); and T10's planted approximation tells 4 blocks of 16
+states. A section "What the outputs tell" states for every arm how much of the state its outputs
+determine (computed, as the sizes note did).
+
+| part | claim | evidence (registered) | status |
+| --- | --- | --- | --- |
+| A1 | Approximations make a product machine learnable that the answers alone don't | the approximation claim (`p` 5: cover 15, sum 10, none 1, product 0 of 20); T2 (`p` 11: cover 16 against quotient alone 0 of 20, Fisher `p` 7.7e-8) | read |
+| A2 | Because they are approximations | T1 (sum 6 against suffix 0, `p` 0.010, and token 1, `p` 0.046, of 20); the product's 0 of 20 | read |
+| A3 | At scale | T2: cover 17, 16, 15 of 20 at 49, 121, 169 states | read |
+| A4 | Beyond arithmetic, with the state partly hidden: given, an approximation helps; present but not given, it doesn't | T10 (T10b: P2 8 against P0 2 of 15 machines, `p` 0.0206, no margin; T10a: P1 3 against 2, `p` 0.50); **T10r** (D24) the replication | T10 read; **T10r running: decisive for A4** |
+| A5 | Beyond arithmetic, groups and resets given approximations that determine the state | **T11** (D20): S3, S4, move-to-front-4 against T5's rates | running; read Wed |
+| A6 | The mechanism: a factor that decomposes holds the approximation it was given | T4 (every one of division's 43 nontrivial factors holds exactly one line, almost always a trained one; the sum arm's only ever the sum: exploratory); **T11c** (D25: does S3's sign form when asked) | T4 read; T11c registered, pending |
+
+The certificate is the method's instrument (a method section, its counts in Appendix A). The
+discussion states the limits: the answers-only rates where the state stays hidden (Appendix D), and
+that approximations must be known to be given (machine discovery's open problem).
+
+**Appendices (supporting, each required by the main text or new; none claimed in the abstract):**
+
+| appendix | content | from |
+| --- | --- | --- |
+| A | The certificate: construction, completeness, robust certification against near ties, the long tests; 385 networks, every certified one passing every long-test case | K1 |
+| B | Addition: sampled tests overstate (two networks passing every sampled test are wrong; more codes buy test-passing networks, not correct ones), and training past a proof destroys it (replays, the guard) | K2, K10 (today's Appendix A) |
+| C | The method's controls: the snap against a continuous state, the transformer against a linear window | K3 (T3) |
+| D | Machines with the state hidden: S4 and move-to-front-4 at 24 states, random machines at 12 and 16, proved, at low rates; the literature's map by signal and check | K7 (T5, T10's P0), the sizes note |
+| E | Decompositions read on networks not given approximations: the groups' factors hold a point's stabiliser, never the sign | K8's unasked part (T4) |
+| F | The proof with no target in the loop: the answers-only stop and Chow's test set | K9 (T6) |
+| G | Reproducibility: every number regenerated, the reruns bit for bit on aarch64, the manifests | T7 |
+
+**Related work, refocused:** auxiliary and intermediate supervision (Caruana 1997; Dan et al. 2022;
+Wies et al. 2023; Liu et al. 2022's partial observations; Brandoit et al. 2026's labelled states and
+factored heads; Li et al. 2025's sign route) first; the algebra (Krohn-Rhodes, holonomy, the
+covering lemma); then learned and extracted automata, briefly, with the sizes map in Appendix D.
+
 ## Why one paper, and what bar it has to clear
 
 The audit's assessment (2026-10-23, in chat; the findings in indrajala-research
@@ -28,7 +91,7 @@ network.** No size record is claimed when the signal determines the state: Brand
 prove learned machines of up to 7,920 states trained on the state itself, and Giles et al. 1995
 learn 512-state finite memory machines.
 
-## The paper (D1)
+## The paper (D1; superseded by D26)
 
 **Working title:** *Learning finite-state transducers exactly by gradient descent, with proof.*
 
@@ -791,6 +854,64 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     or limit K4's claim. (d) Register after T11's rates are read. Cons: the rule must precede the
     factors' data, and nothing is gained by waiting.
 
+- **D26. The refocus: one claim, the approximations, the rest as appendices** (2026-10-27, the
+  owner choosing (a) from the options below). **Why:** the sizes review removed the size claim
+  (learned machines told their state are proved far larger elsewhere), and the owner asked for the
+  single strongest contribution, the paper focused on it, the smallest and most publishable.
+  - (a) *Chosen:* the approximations (A1-A6 above). Pros: the strongest statistics we have
+    (registered, 20 seeds, effects of 16 against 0 of 20); a controlled cause (T1, the product);
+    replicated across sizes; a mechanism (T4, T11c); general and actionable ("train on the target's
+    approximations"); its novelty checked before the manuscript (stage R1). Cons: close to known
+    state supervision (met by the controls, above); its reach beyond arithmetic rests on T10r and
+    T11, both running; the release slips a few days.
+  - (b) The paper as revised on 2026-10-27 (K1-K10, the approximations as spine among many). Pros:
+    the least rewriting. Cons: broad; reviewers set the size claims beside Brandoit et al. and the
+    hidden-state rates (4 of 20) read as weak; no single message.
+  - (c) The decompositions read exactly (K8). Pros: no precedent found. Cons: descriptive, a
+    narrow audience, partly mixed (T4c).
+  - (d) Hidden-state machines proved (K7). Pros: about five times the prior proved size. Cons: low
+    rates; larger hidden-state machines learned (tested only) exist (Liu et al. 2022).
+  - (e) Wait for stronger hidden-state results (the post-paper plan). Cons: weeks to months, no
+    guarantee; the strongest results unpublished meanwhile.
+- **D27. The tests: the running ones read; further tests only to complete claim A's argument**
+  (2026-10-27, the owner: "wait to include all ongoing tests, but ideally not do any more"; then
+  "we can do more than one additional test as long as it is strongly required, the idea being ...
+  to complete our argument, not to expand it further"). Read as registered and included: T10r
+  (D24), T11 (D20) and T11c (D25), T7's remaining tables and `jebel`'s reruns. **The rule for any
+  further test:** it completes a step the main text makes whose evidence is now indirect,
+  exploratory or missing; it asks no new question and adds no backdrop or claim; it is registered
+  as every test here (before its data; 20 fresh seeds an arm where it runs networks); it is decided
+  at stage R4, once the literature search (R1) and T10r's reading are in. Offline readings of
+  networks already trained fall under the same rule (registered before the reading). Two
+  candidates meet it now (drafts, not registered):
+  - **T12, the state itself as the extra output (runs).** The step: A2's "because they are
+    approximations" against the told-the-state reading, answered now only indirectly (the suffix,
+    the product). At `p` 5, two arms on 20 fresh seeds each: the cover (sum and difference), and the
+    *state* as one extra output (`A mod p, B mod p` as one of 25 classes: the finest approximation,
+    the identity congruence). What each outcome says: the state as good as the cover: A reads "any
+    approximation, the state itself included", and the cover's help is said plainly to be state
+    supervision's; the cover better: coarse approximations help beyond being told the state, the
+    stronger claim; the state better: approximations are a weaker form of state supervision, and A
+    is restated so. Cost: 40 runs of 10-55 minutes, one night on two machines; a small build (a
+    `state` answer kind in the division encoding, tested, the golden run unchanged).
+  - **T4', A6 registered beyond division (offline).** The step: A6's mechanism ("a factor that
+    decomposes holds the approximation it was given") rests on division, where T4 saw it but did
+    not register it (the sum arm's factors only ever the sum: exploratory). Read by T4's tool, with
+    expectations registered before: T1's sum-arm networks (does a factor hold `A + B`, and only it),
+    and T10's and T10r's certified P2 networks (does a factor hold the planted congruence, the
+    approximation they were given, against their P1 and P0 networks read the same way). T11c
+    already registers the same question for the groups. Cost: hours, no runs.
+  - Options at R4, each candidate on its own: run it, or not. T12: Pros: answers the likeliest
+    objection directly; cheap; every outcome sharpens A. Cons: a build and a night; the release a
+    day later. T4': Pros: the mechanism registered on non-arithmetic machines; no runs. Cons: few
+    certified P2 networks per batch (8 machines in T10). **Leaning both, decided at R4:** T12
+    dropped if R1 finds the comparison made already; either dropped if T10r fails and the paper
+    narrows (above), unless the narrower argument still needs it.
+- **D28. The paper's form: D6 stands** (2026-10-27). The open release with its contribution
+  statement, and the owner's letters to researchers for review and co-authorship (D6 (b)). A
+  focused paper suits a venue better if a co-author joins (TMLR, ICGI or LearnAut); that remains
+  the owner's to pursue, and nothing here waits on it.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
@@ -1153,6 +1274,49 @@ failure). Every network certified at the stop passed both, so success is certifi
 8. **The release (D6):** the datapack on Zenodo with a DOI, the repositories public (the literature's
    third-party PDFs excepted), the manuscript with its contribution statement and a page on how to
    verify it; then the owner's approach to Anthropic.
+
+### From 2026-10-27, the refocused paper (D26-D28)
+
+Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
+
+- **R1. The literature for claim A (offline, first):** a targeted search for auxiliary or
+  intermediate supervision by a target's quotients, congruences or algebraic decomposition (and
+  against state supervision: Dan et al. 2022, Wies et al. 2023, Brandoit et al. 2026, Liu et al.
+  2022), into the research notes (an extension of `learned-machine-sizes.tex` or its own note) and
+  the papers into indrajala-literature. If A has been shown, D26 is reopened before any writing.
+- **R2. The readings in flight, by their registered rules:** T10r (its batch ends Tue evening; long
+  tests overnight on `jebel` and `stone`; read Wed); T11 (long tests end Wed about 05:00; T4 and T6
+  on its networks; read Wed); T11c (Wed-Thu, T4's tool at 99af57f or later). Each its findings
+  section here, a PR, a manifest.
+- **R3. T7's remaining work:** the tables for T10, T10r and T11 in `paper_tables.py`, their prose
+  marks (D23), `jebel`'s reruns (D21).
+- **R4. D27's decisions** (after R1 and T10r's reading): T12 and T4', each run or not by D27's rule.
+  If run: T12's build, registration (one PR), its batch (one night), the reading; T4''s
+  expectations registered (one PR), then the reading.
+- **R5. The manuscript, restructured** (`learning-transducers-with-proof.tex`, renamed if the title
+  changes): the abstract and introduction on A; the method with the certificate as instrument; A1-A6
+  with "What the outputs tell"; the related work refocused; the discussion's limits; the appendices
+  A-G moved from today's sections; every number marked and `paper_tables.py check` passing.
+- **R6. The owner's summary page of every test** (supersedes indrajala-research's
+  `research-notes/paper1-status.tex`).
+- **R7. Critique:** a fresh-context review of the manuscript against the data and the literature;
+  the audit's checks rerun; corrections.
+- **R8. The release (D6, D28):** the datapack on Zenodo, the repositories public (third-party PDFs
+  excepted), the manuscript with its contribution statement and a page on how to verify it.
+
+| when (estimates) | what |
+| --- | --- |
+| Tue 27 Oct | R1; this plan's PR; T10r's batch ends |
+| Wed 28 Oct | R2: T10r's and T11's readings; R4's decision |
+| Thu 29 Oct | R2: T11c; R3; T4' (if decided); R5 begins (T12's night, if run) |
+| Fri 30 Oct - Sun 1 Nov | R5 (T12's reading Fri, if run); R6 |
+| Mon 2 - Tue 3 Nov | R7 |
+| **about Wed 4 Nov** | **R8, the release** (a reading slipping a day moves it a day) |
+
+**If a running test fails its claim:** T10r not replicating T10b: A4 reported as not replicated (T10
+and T10r both stated, never pooled), claim A scoped to arithmetic and the groups (T11). T11 below
+its bars: A5 reported as measured, the claim scoped to arithmetic and the random machines. Both:
+claim A on arithmetic alone (A1-A3, A6 on division), D26 reconsidered with the owner before R5.
 
 ## Machines
 
