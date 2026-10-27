@@ -489,8 +489,8 @@ the configs.*
    unchanged); `--branch-heads` for `--branches` (default 1, the retired design's; 2 here). These may
    be built while X runs. **Built 2026-10-27, ahead of the gate, at the owner's request** ("do the
    build work that is required for the branch-and-merge aspect ... making sure that we support
-   32-wide factors"): the crate's `merge` op (indrajala-math-rust #72, its tier-1 A/B waiting for a
-   free `jebel`), then "Bump rust/", then `Branches(..., merge=True)`, `wr.recombined_window`,
+   32-wide factors"): the crate's `merge` op (indrajala-math-rust #72, merged 2026-10-27 after its tier-1
+   A/B: no row slower), then "Bump rust/" (#1030), then `Branches(..., merge=True)`, `wr.recombined_window`,
    `--recombine` and `--branch-heads` (numpy and crate paths, parity tests at widths 16 and 32,
    factors 32 wide). Merged Branches are their own format-2 kind, `merged_branches`, so a reader
    that predates them refuses the file as an unknown kind rather than loading it unmerged (an
