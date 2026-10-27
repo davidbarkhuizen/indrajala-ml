@@ -1569,6 +1569,62 @@ def readout(
     return lines
 
 
+MACHINE_UNIT = re.compile(r"^(?P<test>.+)-(?P<arm>[^-]+)-(?P<machine>\d+)$")  # <test>-<arm>-<machine>, T10's backdrops
+
+
+def machine_unit_runs(
+    root: Path,
+    test: str,
+    arms: Sequence[str],
+    verdicts: Mapping[str, Mapping[float, bool]],
+    long: Mapping[str, bool],
+) -> dict[str, dict[int, list[ArmRun]]]:
+    """
+    A test whose unit is the machine (the paper workplan's D19, D24: T10, T10r): each arm's machines,
+    each with its runs (arm_runs of root/<test>-<arm>-<machine>/seed<s>), read with their
+    recertifications and long tests; a run counts when it succeeded (ArmRun.succeeded).
+    """
+    found: dict[str, dict[int, list[ArmRun]]] = {arm: {} for arm in arms}
+    for directory in sorted(root.iterdir()):
+        named = MACHINE_UNIT.match(directory.name)
+        if named is None or named["test"] != test or named["arm"] not in found:
+            continue
+        found[named["arm"]][int(named["machine"])] = arm_runs(root, directory.name, verdicts, long)
+    return found
+
+
+def machine_successes(machines: Mapping[int, Sequence[ArmRun]], cap: int | None = None) -> list[int]:
+    """Each machine's successful runs, in machine order; with `cap`, each count at most cap (D24's sensitivity)."""
+    counts = [sum(r.succeeded for r in machines[m]) for m in sorted(machines)]
+    return counts if cap is None else [min(c, cap) for c in counts]
+
+
+def machine_unit_readout(
+    runs: Mapping[str, Mapping[int, Sequence[ArmRun]]], pairs: Sequence[tuple[str, str]]
+) -> list[str]:
+    """
+    A machine-unit test's reading (D19, D24): each arm's machines succeeding, its runs succeeding, and
+    each machine's count; for each pair (first, second), the exact one-sided rank-sum test over the
+    machines' counts that the first tends larger (midranks), Holm-adjusted over the pairs; and each
+    p again with every machine's count capped at one (whether a machine succeeding twice decides it).
+    """
+    lines: list[str] = []
+    for arm, machines in runs.items():
+        counts = machine_successes(machines)
+        every = sum(len(r) for r in machines.values())
+        each = ", ".join(f"{m}: {c}" for m, c in zip(sorted(machines), counts, strict=True) if c)
+        lines.append(
+            f"{arm}: {sum(1 for c in counts if c)} of {len(counts)} machines, {sum(counts)} of {every} runs ({each or 'none'})"
+        )
+    ps = [inference.rank_sum_greater(machine_successes(runs[a]), machine_successes(runs[b])) for a, b in pairs]
+    capped = [
+        inference.rank_sum_greater(machine_successes(runs[a], 1), machine_successes(runs[b], 1)) for a, b in pairs
+    ]
+    for (a, b), p, adjusted, once in zip(pairs, ps, inference.holm(ps), capped, strict=True):
+        lines.append(f"{a} > {b}: rank-sum p {p:.4f}, Holm {adjusted:.4f}; each machine at most once: p {once:.4f}")
+    return lines
+
+
 def long_summary(root: Path) -> list[str]:
     """
     A study's long tests (long-test --out root/<run>, a <network>.long-test.json each): a line per

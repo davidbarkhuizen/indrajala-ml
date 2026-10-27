@@ -19,6 +19,7 @@ is the table that pulls each duplicate to its representative.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -271,13 +272,14 @@ def _refines(fine: IntArray, coarse: IntArray, states: list[int]) -> bool:
     return all(image.setdefault(int(fine[s]), int(coarse[s])) == int(coarse[s]) for s in states)
 
 
-def approximations(walk: Product, target: wt.Mealy) -> dict[str, Any]:
+def approximations(walk: Product, target: wt.Mealy, extra: Mapping[str, IntArray] | None = None) -> dict[str, Any]:
     """
     What each factor's code determines of the target exactly, over the pairs the start reaches: the
     reached states joined when one code of the factor holds both (the certificate's readout), whether
     that partition is itself a congruence, and its closure (Mealy.congruence_closure), the finest
     approximation (a homomorphic image, Egri-Nagy and Nehaniv) the factor's code determines; the
-    target's named congruences that closure refines, the finest only (window_tasks.named_labels); and
+    target's named congruences that closure refines, the finest only (window_tasks.named_labels, and
+    `extra`'s, a task's further names: window_tasks.planted_labels); and
     the share of the factor's (code, token) pairs whose next code is one, 1.0 when the factor's code
     is a machine of its own. Jointly, whether the factors' approximations cover the target: their
     meet separates every reached state (then the target is a subdirect product of them, a parallel
@@ -288,7 +290,9 @@ def approximations(walk: Product, target: wt.Mealy) -> dict[str, Any]:
     lower factor alone is no congruence, so its closure, and the parallel meet, miss it.
     """
     states = sorted({s for _, s in walk.pairs})
-    named = {k: v for k, v in wt.named_labels(target.coordinates).items() if target.is_congruence(v)}
+    named = {
+        k: v for k, v in (wt.named_labels(target.coordinates) | dict(extra or {})).items() if target.is_congruence(v)
+    }
     closures: list[IntArray] = []
     factors: list[dict[str, Any]] = []
     for g in range(len(walk.codes[0])):

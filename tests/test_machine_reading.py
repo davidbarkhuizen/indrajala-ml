@@ -229,3 +229,25 @@ def test_divisions_sum_and_difference_held_apart_read_as_its_lines_and_cover_it(
     assert result["cover"] and result["meet"] == p * p
     assert total["congruence"] and total["approximation"] == [p] * p and total["determines"] == ["A + B"]
     assert difference["congruence"] and difference["determines"] == ["A - B"]
+
+
+def test_a_planted_machines_planted_approximation_is_named_when_given_and_t11s_covers_are_not_added():
+    # the paper workplan's T4' (D27): a network holding a planted machine's block in one factor and the
+    # state in the other reads "planted" for the first; without the task's names it determines nothing
+    name = "random-planted-q16-b4-0"
+    target = wt.task_named(name).machine
+    blocks = wt.planted_blocks(16, 4)
+
+    def held(s: int) -> wc.State:
+        return (int(blocks[s]), s)
+
+    network = Pairs(
+        {held(s): [held(int(r)) for r in target.transition[s]] for s in range(target.states)},
+        {held(s): target.output[s].tolist() for s in range(target.states)},
+    )
+    block, state = mr.approximations(mr.product(network, target), target, wt.planted_labels(name))["factors"]
+    assert block["congruence"] and block["approximation"] == [4] * 4 and block["determines"] == ["planted"]
+    assert state["approximation"] == [1] * 16
+    unnamed = mr.approximations(mr.product(network, target), target)["factors"][0]
+    assert unnamed["approximation"] == [4] * 4 and unnamed["determines"] == []
+    assert wt.planted_labels("word-problem-s3") == {} and wt.planted_labels("modular-division-5") == {}

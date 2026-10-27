@@ -80,6 +80,30 @@ def test_rate_and_arm_tables_count_only_successes(monkeypatch: pytest.MonkeyPatc
     assert script.arms_table("t1", [("sum", "sum")])(tmp_path) == ["sum & 2 of 5 & 0.12--0.77 & 1 of 3 & 1 \\\\"]
 
 
+def test_the_planted_table_and_numbers_count_machines_and_runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    # T10 (D19): the machine the unit; P2's machine 1 succeeding twice is one machine, two runs
+    fail = arm_run(600, "spent", False, None)
+    machines = {
+        "p0": {0: [arm_run(200), fail], 1: [fail, fail]},
+        "p1": {0: [fail, fail], 1: [fail, fail]},
+        "p2": {0: [arm_run(80), fail], 1: [arm_run(100), arm_run(120)]},
+    }
+
+    def machine_runs(data: Path, test: str, arms: list[str]) -> dict[str, dict[int, list[script.mf.ArmRun]]]:
+        return machines
+
+    monkeypatch.setattr(script, "machine_runs", machine_runs)
+    assert script.planted(tmp_path) == [
+        "P0, primitive & 1 of 2 & 1 of 4 & 200 \\\\",
+        "P1, planted, the target alone & 0 of 2 & 0 of 4 & -- \\\\",
+        "P2, planted, its quotient an output & 2 of 2 & 3 of 4 & 80--120, 100 \\\\",
+    ]
+    numbers = script.paper_planted(tmp_path)
+    assert numbers["t10.p2-machines"] == "2" and numbers["t10.machines"] == "2"
+    assert numbers["t10.b-p"] == f"{script.inference.rank_sum_greater([1, 2], [1, 0]):.4f}"
+    assert numbers["t10.b-once-p"] == f"{script.inference.rank_sum_greater([1, 1], [1, 0]):.4f}"
+
+
 LINE = (
     "/x/certified-step-19.network.json: 24 states, meet 4, cover False, cascade top 0; factor 0: 11 codes,"
     " approximation 4 blocks (congruence False, autonomous 0.545), determines places {3}; factor 1: 10 codes,"
