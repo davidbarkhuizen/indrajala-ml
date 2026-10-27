@@ -359,6 +359,16 @@ where you meet a new trap; delete one that no longer holds.
 - **`jebel` shares its power supply with the wifi access point:** a power cut (2026-10-18, about
   45 minutes) takes both down, so `stone` loses its network too and moves to another wifi. After one,
   re-apply `jebel`'s setup (PL1) and relaunch its study; `stone`'s runs go on.
+- **`stone` can drop off the wifi with no power cut** (2026-10-21: it jumped to another network;
+  the owner moves it back to hlatikulu). Its runs survive (launched with `setsid`); only ssh
+  waiters on `pyramidon` die. Wait on `stone` by polling `timeout 30 ssh stone 'pgrep -f ...'`,
+  reading an ssh failure as "still running", never as "ended"; wrap a launching ssh in `timeout
+  20` and confirm the launch by its log.
+- **`pgrep -f`/`pkill -f` over ssh match the remote shell's own command line** when the ssh command
+  has more than one part (`ssh host 'for p in $(pgrep -f PAT) ...'`): the `bash -c` carrying it
+  contains PAT, so killing its process group kills the ssh session (exit 255) halfway through
+  (2026-10-27, twice). List the targets first (`ps -eo pid,pgid,args`), then kill those process
+  groups by number in a second call; a single-command `ssh host 'pgrep -f PAT'` (a waiter) is safe.
 - **`jebel.local` sometimes doesn't resolve** (mDNS): try its address (it was `192.168.1.88`). A
   connection that opens but times out "during banner exchange" means `jebel` is thrashing, not
   down.
