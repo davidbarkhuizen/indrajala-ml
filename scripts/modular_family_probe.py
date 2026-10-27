@@ -1271,6 +1271,14 @@ def main(argv: list[str]) -> int:
         "passes back over released; growth only forward",
     )
     run.add_argument(
+        "--incremental-reheat",
+        action="store_true",
+        help="the incremental reheat workplan's D1-D7 (with --continuous, not --reheat): a hold lasting the cool's "
+        "e-folding time runs the clock back along the cool's path, an epoch of clock an epoch, to just above the "
+        "latest transition (a new most code groups in a factor), holds there as long, and undoes the stage "
+        "before only if the screen hasn't recovered; none left, the run ends",
+    )
+    run.add_argument(
         "--sharpness-smoothing",
         action="store_true",
         help="the state formation workplan's D61 (c) (with --continuous): the coupling read from the sharpness "
@@ -1439,6 +1447,12 @@ def main(argv: list[str]) -> int:
         "longest freeze, the reheats",
     )
     cool.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    stages = commands.add_parser(
+        "transitions",
+        help="runs' logs, a line per run: the cool's stages of crystallisation (a factor's most code groups), "
+        "its holds and their recoveries, its reheats and the stages they crossed (the incremental reheat's stage 0)",
+    )
+    stages.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
     prefix = commands.add_parser(
         "same-prefix",
         help="a paired arm's logs against their controls', a line per pair: the rows identical, the cool's start, "
@@ -1824,6 +1838,11 @@ def main(argv: list[str]) -> int:
             course = mf.cool_course([json.loads(line) for line in path.read_text().splitlines()])
             print(f"{path}: {mf.cool_summary(course)}", flush=True)
         return 0
+    if args.command == "transitions":
+        for path in args.logs:
+            course = mf.transitions_course([json.loads(line) for line in path.read_text().splitlines()])
+            print(f"{path}: {mf.transitions_summary(course)}", flush=True)
+        return 0
     if args.command == "same-prefix":
         if len(args.pairs) % 2:
             raise SystemExit("same-prefix: give logs in pairs, LOG CONTROL")
@@ -1905,6 +1924,8 @@ def main(argv: list[str]) -> int:
         )
     if args.cutoff_epochs is not None and (not args.continuous or args.cutoff_epochs < 1):
         parser.error("--cutoff-epochs (the batch runner's D1) cuts a continuous run's attempt: with --continuous, >= 1")
+    if args.incremental_reheat and (not args.continuous or args.reheat):
+        parser.error("--incremental-reheat sets the continuous cool's reheat: with --continuous, not --reheat")
     if args.reheat_slowing and not args.reheat:
         parser.error("--reheat-slowing (D66) slows the re-cool after a reheat: with --reheat")
     if args.coupling_pace and args.coupling_cap < 1.0:
@@ -1999,6 +2020,7 @@ def main(argv: list[str]) -> int:
                     smooth=args.sharpness_smoothing,
                     reheat=args.reheat,
                     slowing=args.reheat_slowing,
+                    incremental=args.incremental_reheat,
                 )
                 if args.continuous
                 else None

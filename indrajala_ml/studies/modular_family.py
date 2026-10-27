@@ -39,7 +39,7 @@ import re
 import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Hashable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Protocol
@@ -1068,6 +1068,87 @@ def cool_summary(course: Mapping[str, Any] | None) -> str:
         f"cool {course['epochs']} epochs from step {course['start']}; {course['jumps']} jumps (largest "
         f"{course['largest']:g}, first at step {course['jump']}), screen fall at step {course['fall']}: "
         f"{order}; {held}; {course['reheats']} reheats (first at step {course['reheat']})"
+    )
+
+
+def transitions_course(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
+    """
+    A run's stages of crystallisation, holds and reheats, read from its log (the incremental reheat
+    workplan's stage 0): each stage as `Backtrack.recorded` keeps it (D1: an epoch of the cool at which a
+    factor's code groups pass their running maximum), with its step, clock, temperatures, groups and
+    the state share last read; each hold (a stretch of the clock stopped, D49), its start, epochs and
+    whether the clock moved forward after it; each reheat (a stretch of it running back), how far back,
+    the stages it crossed and whether it passed the first. None for a run with no cool.
+    """
+    cool = [r for r in rows if r.get("anneal", {}).get("phase") == "cool"]
+    if not cool:
+        return None
+    share: dict[int, float] = {}
+    for r in rows:
+        if "accuracy" in r and "state_share" in r:
+            share[int(r["step"])] = float(r["state_share"])
+    backtrack = Backtrack()
+    stages: list[dict[str, Any]] = []
+    holds: list[dict[str, Any]] = []
+    reheats: list[dict[str, Any]] = []
+    hold: dict[str, Any] | None = None
+    back: dict[str, Any] | None = None
+    last_share = 0.0
+    for r in cool:
+        a = r["anneal"]
+        step, clock, rate = int(r["step"]), float(a["clock"]), float(a["rate"])
+        last_share = share.get(step, last_share)
+        before = len(backtrack.stages)
+        backtrack = backtrack.recorded(a["groups"], clock, True)
+        if len(backtrack.stages) > before:
+            stages.append(
+                {
+                    "step": step,
+                    "clock": round(clock, 3),
+                    "temperature": [None if t is None else round(t, 3) for t in a["temperature"]],
+                    "groups": a["groups"],
+                    "share": last_share,
+                }
+            )
+        if rate == 0 and hold is None:
+            hold = {"step": step, "clock": round(clock, 3), "stages": len(stages), "epochs": 0, "recovered": False}
+        if hold is not None:
+            if rate > 0:
+                holds.append(dict(hold, recovered=True))
+                hold = None
+            else:
+                hold["epochs"] += 1
+        if rate < 0 and back is None:
+            back = {"step": step, "from": clock, "to": clock}
+        if back is not None:
+            back["to"] = min(back["to"], clock)
+            if rate > 0:
+                reheats.append(back)
+                back = None
+    holds += [hold] if hold is not None else []
+    reheats += [back] if back is not None else []
+    first = backtrack.stages[0][0] if backtrack.stages else None
+    for b in reheats:
+        b["crossed"] = sum(1 for st in backtrack.stages if st[0] > b["to"])
+        b["past_first"] = first is not None and b["to"] < first
+    return {"stages": stages, "holds": holds, "reheats": reheats}
+
+
+def transitions_summary(course: Mapping[str, Any] | None) -> str:
+    """transitions_course's reading on one line."""
+    if course is None:
+        return "no cool"
+    stages, holds, reheats = course["stages"], course["holds"], course["reheats"]
+    last = stages[-1] if stages else None
+    recovered = [h["epochs"] for h in holds if h["recovered"]]
+    unrecovered = [h["epochs"] for h in holds if not h["recovered"]]
+    deep = sum(1 for b in reheats if b["past_first"])
+    return (
+        f"{len(stages)} stages (peak share {max((s['share'] for s in stages), default=0.0):g}"
+        + (f", last at step {last['step']} T {last['temperature']}" if last is not None else "")
+        + f"); {len(holds)} holds (recovered within {max(recovered, default=0)} epochs; "
+        f"{len(unrecovered)} not, longest {max(unrecovered, default=0)}); {len(reheats)} reheats "
+        f"({max((b['crossed'] for b in reheats), default=0)} stages crossed at most, {deep} past the first)"
     )
 
 
@@ -2364,7 +2445,8 @@ class Continuous:
     a held temperature the clock passes back over is released; growth only forward. `slowing` (D66,
     with `reheat`) halves the forward rate after each reheat (a stretch of the rate below 0, counted
     when it next rises above 0): the re-cool through the zone at half the pace of the pass before, the
-    run back unchanged; a run that never reheats is unchanged.
+    run back unchanged; a run that never reheats is unchanged. `incremental` (the incremental reheat
+    workplan's D1-D7, apart from `reheat`) undoes the cool one stage at a time (`Backtrack`).
     """
 
     low: float = 0.95
@@ -2377,6 +2459,7 @@ class Continuous:
     smooth: bool = field(default=False, repr=False)  # D61 (c); in the run's identity apart
     reheat: bool = field(default=False, repr=False)  # D63 (a); in the run's identity apart
     slowing: bool = field(default=False, repr=False)  # D66; in the run's identity apart
+    incremental: bool = field(default=False, repr=False)  # the incremental reheat; in the run's identity apart
 
     def rate(self, screen: float, level: float) -> float:
         """The share of an epoch the cool's clock advances (D49), from the screen before it against the hold's level."""
@@ -2439,6 +2522,64 @@ def growth_screen(crucible: int, length: float) -> list[int]:
 
 
 @dataclass(frozen=True)
+class Backtrack:
+    """
+    The incremental reheat (the incremental reheat workplan, D1-D7): the cool undone one stage of
+    crystallisation at a time. A stage is a transition, an epoch of the forward cool at which a soft
+    factor's code groups pass their running maximum (D1); each is kept as the clock of the epoch
+    before it, where the temperatures were just above the split, and every factor's maximum then. A
+    hold (the clock stopped, D49) lasting `wait` epochs starts a reheat (D2): the clock runs back along
+    the cool's own profile at most an epoch of clock an epoch (D4, quasi-static) to the latest stage's
+    clock and no further (D3); there the stage is popped, the maxima reset to its, and the clock held
+    for `wait` epochs (D5). A screen recovered resumes the cool; not recovered, the stage before is the
+    next ceiling (D6); none left, the run is exhausted and ends (D7). `mode` is "cool", "back" or
+    "wait"; `clock` the last epoch's.
+    """
+
+    maxima: list[int] = field(default_factory=list[int])
+    stages: list[list[float]] = field(default_factory=list[list[float]])
+    clock: float = 0.0
+    mode: str = "cool"
+    ceiling: float = 0.0
+    waited: int = 0
+    exhausted: bool = False
+
+    def moved(self, rate: float, clock: float, wait: int) -> tuple[float, Backtrack]:
+        """The clock's move this epoch from the last epoch's `clock`, and the state after it: D2-D7 on D49's `rate`."""
+        if self.mode == "back":
+            return self.toward(self.ceiling, clock)
+        if rate > 0:
+            return rate, replace(self, mode="cool", waited=0)
+        if self.waited + 1 < wait:
+            return 0.0, replace(self, waited=self.waited + 1)
+        if not self.stages:  # D7: nothing formed is left to return to
+            return 0.0, replace(self, waited=self.waited + 1, exhausted=True)
+        return replace(self, mode="back", ceiling=self.stages[-1][0], waited=0).toward(self.stages[-1][0], clock)
+
+    def toward(self, ceiling: float, clock: float) -> tuple[float, Backtrack]:
+        """D3, D4: an epoch of the run back toward `ceiling`; arrived, the stage popped and the hold at it begun (D5)."""
+        move = max(ceiling - clock, -1.0)
+        if clock + move > ceiling + 1e-9:
+            return move, self
+        stage = self.stages[-1]
+        return move, replace(self, mode="wait", waited=0, stages=self.stages[:-1], maxima=[int(m) for m in stage[1:]])
+
+    def recorded(self, groups: Sequence[int | None], clock: float, cooling: bool) -> Backtrack:
+        """The epoch's `groups` read (D1) at its `clock`: a stage pushed if the forward cool passed a factor's maximum."""
+        if not cooling or self.mode != "cool":
+            return replace(self, clock=clock)
+        maxima = list(self.maxima) or [-1] * len(groups)
+        before = list(maxima)
+        split = False
+        for g, n in enumerate(groups):
+            if n is not None and n > maxima[g]:
+                split = split or maxima[g] >= 0
+                maxima[g] = n
+        stages = [*self.stages, [self.clock, *before]] if split else self.stages
+        return replace(self, maxima=maxima, stages=stages, clock=clock)
+
+
+@dataclass(frozen=True)
 class ContinuousState:
     """
     What the continuous crystallisation carries from epoch to epoch (D49-D52): the clock's held share,
@@ -2446,7 +2587,7 @@ class ContinuousState:
     longest length; with D61's `pace` each factor's allowance and its coupling last set, with
     `smooth` the cool's readings within its window, each the clock and every factor's sharpness
     (empty before the cool); with D66's `slowing` the reheats so far and whether the clock is running
-    back.
+    back; with `incremental`, the incremental reheat's stages and mode (`Backtrack`).
     """
 
     held: float
@@ -2459,6 +2600,7 @@ class ContinuousState:
     history: list[list[float]] = field(default_factory=list[list[float]])
     reheats: int = 0
     back: bool = False
+    backtrack: Backtrack | None = None
 
 
 @dataclass(frozen=True)
@@ -2501,10 +2643,13 @@ def continuous_epoch(
     length = state.length
     held, rate = state.held, 1.0
     reheats, back = state.reheats, state.back
+    backtrack = state.backtrack
     if warm_up.phase(trained - held - 1) == "cool":
         rate = continuous.rate(screen, level)
         if continuous.slowing:
             rate, reheats, back = continuous.slowed(rate, reheats, back)
+        if backtrack is not None:  # the incremental reheat: the clock's move from the last epoch's
+            rate, backtrack = backtrack.moved(rate, trained - 1 - held, round(warm_up.halving / math.log(2)))
         held = min(held + 1.0 - rate, trained - warm_up.heat - warm_up.hold)  # D63 (a): never back past the cool
     clock = trained - held
     phase = warm_up.phase(clock)
@@ -2555,6 +2700,9 @@ def continuous_epoch(
     net.set_couplings(couplings)
     net.set_straight(True)
     net.set_commitments(beta)
+    groups = code_groups(net, temperatures, warm_up.kappa)
+    if backtrack is not None:
+        backtrack = backtrack.recorded(groups, clock, phase == "cool")
     thermo = {
         "anneal": {
             "temperature": temperatures,
@@ -2562,7 +2710,7 @@ def continuous_epoch(
             "hard": [None if v is None else round(v[1], 4) for v in sharp],
             "beta": [round(b, 4) for b in beta],
             "phase": phase,
-            "groups": code_groups(net, temperatures, warm_up.kappa),
+            "groups": groups,
             "energy": [None if e is None else round(e[0], 6) for e in heat],
             "capacity": [None if e is None else round(e[1], 6) for e in heat],
             "coupling": [round(c, 4) for c in couplings],
@@ -2574,6 +2722,19 @@ def continuous_epoch(
             **({"allowance": [round(a, 6) for a in allowance]} if continuous.pace else {}),
             **({"smoothed": [round(m, 6) for m in smoothed]} if continuous.smooth else {}),
             **({"reheats": reheats} if continuous.slowing else {}),
+            **(
+                {
+                    "backtrack": {
+                        "mode": backtrack.mode,
+                        "stages": len(backtrack.stages),
+                        "ceiling": round(backtrack.ceiling, 3),
+                        "waited": backtrack.waited,
+                        **({"exhausted": True} if backtrack.exhausted else {}),
+                    }
+                }
+                if backtrack is not None
+                else {}
+            ),
         }
     }
     grown = (
@@ -2582,7 +2743,9 @@ def continuous_epoch(
         else length
     )
     return ContinuousEpoch(
-        ContinuousState(held, list(state.hot), floors, sharp_from, grown, allowance, last, history, reheats, back),
+        ContinuousState(
+            held, list(state.hot), floors, sharp_from, grown, allowance, last, history, reheats, back, backtrack
+        ),
         phase,
         rate,
         couplings,
@@ -2798,6 +2961,7 @@ class Place:
     reheats: int = 0  # Continuous: the reheats so far (D66)
     back: bool = False  # Continuous: the clock running back (D66)
     succeeded: int = -1  # the cutoff: the first step certified at both verdicts (D41), -1 before one
+    backtrack: dict[str, Any] = field(default_factory=dict[str, Any])  # Continuous: the incremental reheat's
 
 
 def _run_identity(
@@ -2870,6 +3034,7 @@ def _run_identity(
         **({"sharpness_smoothing": True} if continuous is not None and continuous.smooth else {}),
         **({"reheat": True} if continuous is not None and continuous.reheat else {}),
         **({"reheat_slowing": True} if continuous is not None and continuous.slowing else {}),
+        **({"incremental_reheat": True} if continuous is not None and continuous.incremental else {}),
         **({"margin_wait": margin_wait} if margin_wait is not None else {}),
         **({"cutoff_epochs": cutoff_epochs} if cutoff_epochs is not None else {}),
         **({"baseline": baseline} if baseline is not None else {}),
@@ -3113,6 +3278,7 @@ class RunState:
             [list(h) for h in place.history],
             place.reheats,
             place.back,
+            Backtrack(**place.backtrack) if place.backtrack else None,
         )
         state.margin = Margin(config.margin_wait, place.first_pass, place.best_pass, place.best_ties)
         state.succeeded = place.succeeded
@@ -3162,6 +3328,7 @@ class RunState:
             self.cstate.reheats,
             self.cstate.back,
             self.succeeded,
+            asdict(self.cstate.backtrack) if self.cstate.backtrack is not None else {},
         )
 
 
@@ -3385,6 +3552,9 @@ class _Run:
                 break
             if c.budget_epochs is not None and s.spent >= c.budget_epochs:
                 stop = "spent"
+                break
+            if s.cstate.backtrack is not None and s.cstate.backtrack.exhausted:
+                stop = "spent"  # the incremental reheat's D7: back to the first stage, not recovered
                 break
             ended = self.run_epoch(p, epoch)
             if ended == "fork":
@@ -3778,7 +3948,14 @@ class _Run:
         s.cooling = Cooling.start(s.hot) if warm_up.shape == "adaptive" else None
         s.fixed = p.step if c.crucible else 0
         if c.continuous is not None:  # D51, D52: no temperature held yet; growth from the crucible's length
-            s.cstate = ContinuousState(0.0, list(s.hot), [0.0] * len(self.snapped), [], float(s.fixed))
+            s.cstate = ContinuousState(
+                0.0,
+                list(s.hot),
+                [0.0] * len(self.snapped),
+                [],
+                float(s.fixed),
+                backtrack=Backtrack() if c.continuous.incremental else None,
+            )
         self.record({"step": p.step, "warm_up_end": made, **({"crucible": s.fixed} if c.crucible else {})})
         self.net.save(str(c.out / "network.json"))
 

@@ -225,3 +225,15 @@ request at 415-471 epochs; four without, running).
   epochs long), on every dip (D2 (b)'s cost). S4 seeds 0 and 5, whose reheats stayed shallow, were
   the S4 runs that certified or came closest (seed 0 certified at 143).
 - **So D1-D7 stand as drafted;** the build follows (D9 revised).
+
+**Stage 1 (2026-10-27, built).** `--incremental-reheat` (with `--continuous`, not `--reheat`):
+`modular_family.Backtrack` (the stages, the mode, the ceiling and the wait; `moved` the clock's move
+by D2-D7, `recorded` D1's stages) carried in `ContinuousState` and the checkpoint (`Place.backtrack`),
+logged each cool epoch as `anneal.backtrack` (mode, stages, ceiling, waited, exhausted); an exhausted
+run ends `spent` (D7). The wait is `round(halving / ln 2)`. The cell `continuous-ireheat` in
+`batch.CELLS`. The reader `modular_family_probe.py transitions LOG ...` (stage 0's, on the same stage
+rule). Tests: the stage rule (a flicker no stage, a hard factor, only cooling forward), the hold, the
+run back, the pop, the recovery, the undo again and the exhaustion on a constructed state; a run
+never back past its ceiling, its identity; stop and resume mid-run (`backtracked`); the reader on a
+constructed log. The golden run bit-identical; `continuous` and `--reheat` unchanged (their tests).
+Stage 2 on `jebel` (free since the crate's A/B).

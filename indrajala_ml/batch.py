@@ -119,6 +119,9 @@ class Cell:
 CELLS: dict[str, Cell] = {
     "continuous": Cell(tuple(CONTINUOUS_CELL), bounded=True),
     "continuous-reheat": Cell((*CONTINUOUS_CELL, "--reheat"), bounded=True),
+    "continuous-ireheat": Cell(
+        (*CONTINUOUS_CELL, "--incremental-reheat"), bounded=True
+    ),  # incremental-reheat-workplan.md
     "paper": Cell(tuple(PAPER_CELL)),
     "approximation": Cell(tuple(APPROXIMATION_CELL)),
     # T3's baselines: the approximation claim's cell with only the window (E6's) or the state (E2's) changed
