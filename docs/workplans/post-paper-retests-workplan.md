@@ -495,7 +495,7 @@ the configs.*
 3. **Part B:** the struggling set from the default's rates (D4); the cells on the default, feasibility
    rows and claims registered (one PR); probes first (claim nothing; a candidate the owner raised
    2026-10-27 and paused until paper 1 is done: `recombine` on 4 of T5's failed S4 seeds, 300-305,
-   307, 309-315, 317, 319, at 400 epochs, where T5's successes certified by 394): both arms on the set's hardest
+   307, 309-315, 317, 319, at 400 epochs, where T5's successes certified by 394; **run 2026-10-27 at the owner's request on seeds 300-303, `jebel`, the branch crate: none certified**, each to 400 epochs in 66-83 min; the formation signature as T5's, a little stronger (state share 0.20-0.30 in three against T5's 0.09-0.17 at 600; seed 301 lost its state at its last step); data `jebel:~/code/recombine-probe/`; indrajala-research's failure-kinds ranking, 2026-10-27): both arms on the set's hardest
    backdrop, 4 seeds, a short epoch budget (if neither ever forms a state, B is reported as not run,
    with the probe); the batch; the reading (B1, B2, harm, D10) into "Findings: B".
 4. **Part L:** `--window-blocks` (pure Python, the golden run unchanged); a depth-6 probe of the
