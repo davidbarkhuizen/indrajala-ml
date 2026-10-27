@@ -746,6 +746,16 @@ RESUMABLE: dict[str, dict[str, Any]] = {
             low=1.2, high=2.0, growth=0.5, curve_every=3, save_every=2, reheat=True, slowing=True
         ),
     },
+    "backtracked": {  # the incremental reheat: its stages, mode and wait carried over every stop
+        "encoding": mf.Encoding(5, mf.FAMILY),
+        "settings": RESUMED,
+        "cap": 6,
+        "budget_epochs": 14,
+        "anneal": mf.Anneal(start=1.0, halving=1, ramp=1, hard=0.0, commit=False),
+        "warm_up": mf.WarmUp(screen=2.0, cap=2, heat=1, hold=1, halving=3),
+        "crucible": True,
+        "continuous": mf.Continuous(low=1.2, high=2.0, growth=0.5, curve_every=3, save_every=2, incremental=True),
+    },
 }
 
 
@@ -1018,6 +1028,89 @@ def test_a_reheated_run_runs_its_clock_back_to_the_cools_start_and_grows_only_fo
     assert identity["reheat"] is True and "reheat" not in identity["continuous"]  # in the identity apart
 
 
+def test_the_incremental_reheat_records_a_stage_at_each_new_most_groups_only_cooling_forward():
+    b = mf.Backtrack().recorded([4, 3], 10.0, True)
+    assert b.maxima == [4, 3] and b.stages == [] and b.clock == 10.0  # the first reading sets the maxima
+    b = b.recorded([5, 3], 11.0, True)
+    assert b.maxima == [5, 3] and b.stages == [[10.0, 4, 3]]  # D1: the epoch before the split, the maxima then
+    b = b.recorded([4, 3], 12.0, True).recorded([5, 3], 13.0, True)
+    assert len(b.stages) == 1  # a flicker back to the maximum is no stage
+    b = b.recorded([5, None], 14.0, True).recorded([6, 4], 15.0, True)
+    assert b.stages[-1] == [14.0, 5, 3] and b.maxima == [6, 4]  # a hard factor read as no groups
+    assert b.recorded([9, 9], 16.0, False).stages == b.stages  # not in the cool
+    assert mf.Backtrack(mode="wait").recorded([9, 9], 16.0, True).stages == []  # not cooling forward
+
+
+def test_the_incremental_reheat_holds_then_runs_back_a_stage_at_a_time_and_ends_with_none_left():
+    b = mf.Backtrack(maxima=[6, 4], stages=[[20.0, 3, 3], [30.0, 5, 4]])
+    assert b.moved(0.7, 40.0, 3) == (0.7, b)  # cooling: the rate as D49's
+    rate, b = b.moved(0.0, 40.0, 3)
+    rate, b = b.moved(0.0, 40.0, 3)
+    assert rate == 0.0 and b.waited == 2 and b.mode == "cool"  # D2: held, short of the wait
+    rate, b = b.moved(0.0, 40.0, 3)
+    assert rate == -1.0 and b.mode == "back" and b.ceiling == 30.0  # D2, D3: the wait over, back to the latest
+    for clock in (39.0, 38.0, 37.0, 36.0, 35.0, 34.0, 33.0, 32.0):
+        rate, b = b.moved(0.5, clock, 3)  # D4: an epoch of clock an epoch, whatever the screen
+        assert rate == -1.0 and b.mode == "back"
+    rate, b = b.moved(0.5, 31.0, 3)
+    assert rate == -1.0 and b.mode == "wait" and b.stages == [[20.0, 3, 3]] and b.maxima == [5, 4]  # popped
+    recovered = b.moved(0.4, 30.0, 3)
+    assert recovered == (0.4, mf.Backtrack(maxima=[5, 4], stages=[[20.0, 3, 3]], ceiling=30.0))  # D5: resumed
+    for _ in range(2):
+        rate, b = b.moved(0.0, 30.0, 3)
+    rate, b = b.moved(0.0, 30.0, 3)
+    assert rate == -1.0 and b.mode == "back" and b.ceiling == 20.0  # D6: the stage before
+    rate, b = b.moved(0.0, 20.5, 3)
+    assert rate == -0.5 and b.mode == "wait" and b.stages == [] and b.maxima == [3, 3]  # no further than it
+    for _ in range(3):
+        rate, b = b.moved(0.0, 20.0, 3)
+    assert rate == 0.0 and b.exhausted  # D7: none left
+
+
+def test_the_transitions_reading_finds_the_stages_holds_and_reheats_in_a_log():
+    def row(step: int, clock: float, groups: list[int], rate: float) -> dict[str, Any]:
+        return {
+            "step": step,
+            "anneal": {"phase": "cool", "clock": clock, "rate": rate, "groups": groups, "temperature": [1.0, 1.0]},
+        }
+
+    rows: list[dict[str, Any]] = [
+        row(1, 1.0, [2, 2], 1.0),
+        {"step": 2, "accuracy": {}, "state_share": 0.5},
+        row(2, 2.0, [3, 2], 1.0),
+        row(3, 3.0, [3, 4], 1.0),
+        row(4, 3.0, [3, 4], 0.0),
+        row(5, 3.0, [3, 4], 0.0),
+        row(6, 3.5, [3, 4], 0.5),
+        row(7, 2.5, [3, 4], -1.0),
+        row(8, 1.5, [3, 4], -1.0),
+        row(9, 2.0, [3, 4], 0.5),
+        row(10, 2.0, [3, 4], 0.0),
+    ]
+    course = mf.transitions_course(rows)
+    assert course is not None
+    assert [s["step"] for s in course["stages"]] == [2, 3] and course["stages"][0]["share"] == 0.5
+    assert [(h["step"], h["epochs"], h["recovered"]) for h in course["holds"]] == [(4, 2, True), (10, 1, False)]
+    assert course["reheats"] == [{"step": 7, "from": 2.5, "to": 1.5, "crossed": 1, "past_first": False}]
+    assert "2 stages" in mf.transitions_summary(course) and mf.transitions_course([]) is None
+
+
+def test_an_incremental_reheat_run_never_runs_back_past_its_first_stage_and_ends_when_exhausted(tmp_path: Path):
+    config = dict(RESUMABLE["backtracked"], budget_epochs=60)
+    encoding, settings = config.pop("encoding"), config.pop("settings")
+    mf.run(encoding, [(4, 4)], 0, 1e9, tmp_path, settings, **config)
+    rows = [json.loads(line) for line in (tmp_path / "log.jsonl").read_text().splitlines()]
+    cool = [r["anneal"] for r in rows if r.get("anneal", {}).get("phase") == "cool"]
+    assert cool and all("backtrack" in a for a in cool)
+    assert all(a["rate"] >= -1.0 for a in cool)  # D4: quasi-static
+    warm_up = config["warm_up"]
+    assert all(a["clock"] >= warm_up.heat + warm_up.hold for a in cool)
+    backs = [a for a in cool if a["backtrack"]["mode"] == "back"]
+    assert all(a["clock"] >= a["backtrack"]["ceiling"] for a in backs)  # D3: never past the ceiling
+    identity = json.loads((tmp_path / "checkpoint.json").read_text())["run"]
+    assert identity["incremental_reheat"] is True and "incremental" not in identity["continuous"]
+
+
 def test_the_margin_stop_waits_past_a_split_tie_and_stops_once_none_splits(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -1158,6 +1251,12 @@ def test_a_stopped_run_resumes_as_if_it_had_not_stopped(tmp_path: Path, monkeypa
     elif kind == "slowed":  # the reheats logged every cool epoch, the rate below 0 at some stop
         cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
         assert cool and all("reheats" in a for a in cool) and any(a["rate"] < 0 for a in cool)
+    elif (
+        kind == "backtracked"
+    ):  # the incremental reheat's state logged every cool epoch, held or reheating at some stop
+        cool = [r["anneal"] for r in whole[0] if r.get("anneal", {}).get("phase") == "cool"]
+        assert cool and all("backtrack" in a for a in cool)
+        assert any(a["backtrack"]["waited"] > 0 or a["backtrack"]["mode"] != "cool" for a in cool)
     elif kind == "uncommitted":
         assert any("fork" in r for r in whole[0]) and [step for step, _ in ends] == [1, 2]
     elif kind == "restored":
