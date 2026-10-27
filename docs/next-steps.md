@@ -41,6 +41,44 @@ primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 The plan for all three: [post-paper-retests-workplan.md](workplans/post-paper-retests-workplan.md).
 
+## From the learned machines' sizes review (2026-10-27): three parts of Brandoit et al.'s NFSM
+
+Brandoit et al. 2026 (`brandoit-2026-length-independent-state-tracking` in the literature
+repository) certify every seed, 40 of 40, on group word problems up to M11 (7,920 states). Their
+setting is easier than ours: the state is labelled at every position, and the heads are sized to a
+known decomposition. Their solver is not general, so it does not carry over whole (indrajala-research
+`research-notes/learned-machine-sizes.tex`, "Why Brandoit et al. succeed on every seed"). Three of
+its parts could transfer. The owner asked for them to be kept as options (2026-10-27). Each would be
+probed first, then registered against the default on every backdrop, by the general-architecture
+rule; none is planned yet. Each keeps the state factored, one table or codebook per factor.
+
+- **Token-indexed transition tables.** Each factor's next code is a table indexed by the column's
+  token: a learned `m x m` logit matrix per token, column-wise arg max, straight-through Gumbel. Our
+  transformer instead computes the next code from the codes and the window. Every weight setting is
+  then an exact machine, and the certificate is a table read.
+  - Pros: removes the continuous code space, where our codes merge, states are lost and near
+    solutions collapse (K10); the certificate becomes trivial; parallel scan.
+  - Cons: a factor's transition can no longer read the other factor's code within a step. Their
+    heads are a direct product, and cascades need stacked layers, so a cascade target (division's
+    coordinates interact) needs depth or a joint table. `m^2` logits per token per factor.
+    Division's 9 tokens are cheap; wider alphabets are not. It is a different model class, not a
+    tweak: K3's snap-against-continuous result would need re-establishing.
+- **A loss focused on the first wrong answer.** Weight 1 up to the first wrong output in a sequence,
+  `exp(-3 (t - t*))` after it. Later errors follow from the first, and full weight on them pulls
+  transitions away from the target. Ours weights every column equally.
+  - Pros: cheap, a loss change only; it fits our curriculum and the one-answer-per-column outputs.
+  - Cons: their first error names one wrong transition because the state is labelled. With the state
+    hidden, the first wrong answer only bounds where the state went wrong, possibly many columns
+    earlier, so the focus may land late. That is untested without state labels.
+- **Exploration kept alive at the first error.** A penalty on a transition column's logit spread
+  beyond the Gumbel noise's standard deviation, at the first error only, so a wrong entry stays
+  revisitable. Ours has no exploration once the snap commits. The fork (restart on collapse) is the
+  nearest thing.
+  - Pros: aims at our failure mode, near solutions that lose a state and never recover it; small.
+  - Cons: it assumes table logits (the first option) or an analogue on our code distances, and
+    needs Gumbel sampling in the snap. Its coefficient schedule (0.03 decaying to 0.003) is theirs,
+    tuned for labelled states.
+
 ## Retired workplans
 
 Each one is still in git history, with its decisions (D1, D2, ...), design and stages. Code and
