@@ -65,7 +65,7 @@ B2), then **L, depth** (claim L1), each on the default the part before it leaves
 | D21 | 2026-10-25 | X's readings | the paired effect and harm per task, epochs to a certificate, every run's failure kind and the stop's losses |
 | stages 0-6 | 2026-10-24, revised | the plan's stages | the gate, X, B's builds, B, L, findings |
 
-From earlier plans: the collapse (D63), the fresh-seed rate (D64), the deadline's completion (D67)
+From later plans: the incremental reheat (D1-D9 of [incremental-reheat-workplan.md](incremental-reheat-workplan.md)). From earlier plans: the collapse (D63), the fresh-seed rate (D64), the deadline's completion (D67)
 and the method's constants (F10) in [state-formation-workplan.md](state-formation-workplan.md); the
 window branches' W1, W2, B1-B3 (`git show e7f1ff6:docs/window-branches-workplan.md`; their B1-B3 are
 written "the window branches' B1" here, to keep them apart from this plan's B1, B2); the paper's T2
@@ -228,6 +228,10 @@ golden run unchanged at 3.
     epochs), reported for every cell.
   - Both arms carry L's default's window (its depth and paths); the crystallisation is the one
     change.
+  - **Amended 2026-10-27 (pending X's registration):** the owner's quasi-static crystallisation
+    with incremental reheat ([incremental-reheat-workplan.md](incremental-reheat-workplan.md), its
+    D8) is X's second arm in place of `continuous-reheat` if that plan's stage 0 and probe support
+    it; D63's verdict is read and reported beside it.
 - **D6. Crystallisation's claims** (*superseded 2026-10-25 by D21; kept for the record*)**:**
   - **X1. It keeps solutions the snap otherwise loses (the primary claim):** among the runs that
     formed a solution (D15), the share kept, `continuous` greater than the default, one-sided (the
