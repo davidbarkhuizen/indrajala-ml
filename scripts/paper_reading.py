@@ -16,6 +16,10 @@ its backdrop (`indrajala_ml.batch.BACKDROPS`, by the attempt's name `<backdrop>-
   shares (every N-th network from the I-th, in `plan`'s order) into DATA/long-tests/<network>/, one
   at a time; a network already long-tested is skipped, so a worker restarts where it stopped. A fixed
   share a worker needs no claims (T3's `mkdir` claims once let two workers take one network).
+- `machines DATA --test T --arms A ... --pairs A:B ...`: a test whose unit is the machine (D19, D24:
+  T10, T10r), its backdrops `<T>-<arm>-<machine>`, read from DATA/runs (after `links`) with the
+  recertifications and long tests: each arm's machines and runs succeeding, and each pair's exact
+  one-sided rank-sum test over the machines' counts, Holm-adjusted (mf.machine_unit_readout).
 """
 
 import argparse
@@ -27,6 +31,7 @@ from datetime import datetime
 from pathlib import Path
 
 from indrajala_ml.batch import BACKDROPS, CELLS, Backdrop
+from indrajala_ml.studies import modular_family as mf
 
 PROBE = Path(__file__).resolve().parent / "modular_family_probe.py"
 
@@ -111,15 +116,31 @@ def probe(*args: str | Path, log: Path | None = None) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("plan", "links", "certify", "approximations", "proof", "long"):
+    for name in ("plan", "links", "certify", "approximations", "proof", "long", "machines"):
         command = sub.add_parser(name)
         command.add_argument("data", type=Path)
         if name == "certify":
             command.add_argument("--jobs", type=int, default=1)
         if name == "long":
             command.add_argument("--share", default="0/1", metavar="I/N")
+        if name == "machines":
+            command.add_argument("--test", required=True, help="the backdrops' prefix: t10, t10r")
+            command.add_argument("--arms", nargs="+", required=True)
+            command.add_argument("--pairs", nargs="+", required=True, metavar="A:B", help="A tends larger than B")
     args = parser.parse_args()
     data: Path = args.data
+    if args.command == "machines":
+        runs = mf.machine_unit_runs(
+            data / "runs",
+            args.test,
+            args.arms,
+            mf.recertifications(data / "certify"),
+            mf.long_tested(data / "long-tests"),
+        )
+        pairs = [tuple(pair.split(":")) for pair in args.pairs]
+        for line in mf.machine_unit_readout(runs, [(a, b) for a, b in pairs]):
+            print(line)
+        return
     found = list(networks(data))
     if args.command == "plan":
         for network in found:

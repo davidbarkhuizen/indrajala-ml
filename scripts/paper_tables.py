@@ -253,6 +253,35 @@ def refuted(data: Path) -> list[str]:
     return lines
 
 
+PLANTED_ARMS = [  # T10's arms (D19), the machine the unit
+    ("p0", "P0, primitive"),
+    ("p1", "P1, planted, the target alone"),
+    ("p2", "P2, planted, its quotient an output"),
+]
+
+
+def machine_runs(data: Path, test: str, arms: list[str]) -> dict[str, dict[int, list[mf.ArmRun]]]:
+    """A machine-unit test's runs (D19, D24): its batch's runs/<test>-<arm>-<machine>, read with its recertifications
+    and long tests."""
+    root = data / "paper" / test / "batch"
+    verdicts, long = mf.recertifications(root / "certify"), mf.long_tested(root / "long-tests")
+    return mf.machine_unit_runs(root / "runs", test, arms, verdicts, long)
+
+
+def planted(data: Path) -> list[str]:
+    """T10's arms: machines succeeding, runs succeeding, the successes' epochs to certify (range, median)."""
+    runs = machine_runs(data, "t10", [arm for arm, _ in PLANTED_ARMS])
+    lines: list[str] = []
+    for arm, label in PLANTED_ARMS:
+        counts = mf.machine_successes(runs[arm])
+        every = [r for machine in runs[arm].values() for r in machine]
+        epochs = [r.outcome.epochs for r in every if r.succeeded]
+        course = f"{span(epochs)}, {median(epochs)}" if len(epochs) > 1 else span(epochs)
+        machines = f"{sum(1 for c in counts if c)} of {len(counts)}"
+        lines.append(f"{label} & {machines} & {sum(counts)} of {len(every)} & {course} \\\\")
+    return lines
+
+
 TABLES: dict[str, Table] = {
     "tab:approximation": approximation,
     "tab:extra-outputs": arms_table(
@@ -295,6 +324,7 @@ TABLES: dict[str, Table] = {
             for b in ("d7-family", "d11-family", "d13-family", "s3", "s4", "mtf4", "rq12")
         ]
     ),
+    "tab:planted": planted,
     "tab:proof": proof,
     "tab:refuted": refuted,
 }
@@ -776,6 +806,26 @@ def paper_proofs(data: Path) -> Numbers:
     }
 
 
+def paper_planted(data: Path) -> Numbers:
+    """A4's numbers from T10 (D19): each arm's machines succeeding, and T10a's and T10b's rank-sum tests over the
+    machines' counts, Holm over the two, and T10b with each machine counted at most once."""
+    runs = machine_runs(data, "t10", [arm for arm, _ in PLANTED_ARMS])
+    counts = {arm: mf.machine_successes(runs[arm]) for arm, _ in PLANTED_ARMS}
+    p = [inference.rank_sum_greater(counts["p1"], counts["p0"]), inference.rank_sum_greater(counts["p2"], counts["p0"])]
+    holm = inference.holm(p)
+    once = inference.rank_sum_greater(mf.machine_successes(runs["p2"], 1), mf.machine_successes(runs["p0"], 1))
+    made: Numbers = {f"t10.{arm}-machines": count(sum(1 for c in counts[arm] if c)) for arm, _ in PLANTED_ARMS}
+    made |= {
+        "t10.machines": count(len(counts["p0"])),
+        "t10.a-p": p_value(p[0]),
+        "t10.a-holm": p_value(holm[0]),
+        "t10.b-p": f"{p[1]:.4f}",  # four places: T10b passed by no margin (0.0206 against Holm's 0.025)
+        "t10.b-holm": p_value(holm[1]),
+        "t10.b-once-p": f"{once:.4f}",
+    }
+    return made
+
+
 NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
     addition_certificates,
     addition_code_counts,
@@ -783,6 +833,7 @@ NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
     paper_rates,
     paper_readings,
     paper_proofs,
+    paper_planted,
 ]
 PN = re.compile(r"\\pn\{([^{}]+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
 

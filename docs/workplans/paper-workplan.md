@@ -1289,7 +1289,11 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
   on its networks; read Wed); T11c (Wed-Thu, T4's tool at 99af57f or later). Each its findings
   section here, a PR, a manifest.
 - **R3. T7's remaining work:** the tables for T10, T10r and T11 in `paper_tables.py`, their prose
-  marks (D23), `jebel`'s reruns (D21).
+  marks (D23), `jebel`'s reruns (D21). **T10's, 2026-10-27:** the per-machine reading made a tool
+  (`mf.machine_unit_runs`, `machine_unit_readout`; `paper_reading.py machines DATA --test t10
+  --arms p0 p1 p2 --pairs p1:p0 p2:p0`), T10's scratch script retired; it reproduces "Findings: T10"
+  exactly (2, 3 and 8 machines; T10b `p` 0.0206, Holm 0.041; 0.0251 with each machine once).
+  `tab:planted` and the `t10.*` numbers in `paper_tables.py`. T10r's reading uses the same tool.
 - **R4. D27's decisions** (after R1 and T10r's reading): T12 and T4', each run or not by D27's rule.
   If run: T12's build, registration (one PR), its batch (one night), the reading; T4''s
   expectations registered (one PR), then the reading.

@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.data import modular_data as md
+from indrajala_ml.studies import inference
 from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_tasks as wt
 
@@ -334,6 +335,53 @@ def test_readout_with_long_tests_counts_a_certified_run_only_long_tested_and_a_c
     assert mf.readout(tmp_path, ["family", "continuous"], tmp_path / "certify")[10].startswith(
         "continuous: 0 of 2 certified"
     )
+
+
+def test_a_machine_unit_test_counts_each_machines_successes_and_ranks_the_arms_machines(tmp_path: Path):
+    # the paper workplan's D19 and D24 (T10, T10r): backdrops <test>-<arm>-<machine>, two seeds a
+    # machine, a run counted when certified in both verdicts and long-tested
+    (tmp_path / "certify").mkdir()
+    (tmp_path / "long").mkdir()
+
+    def run(backdrop: str, seed: int, succeeded: bool) -> None:
+        out = tmp_path / "runs" / backdrop / f"seed{seed}"
+        out.mkdir(parents=True)
+        end = {"step": 4, "end": "passed" if succeeded else "spent", "epochs": 7, "seconds": 60.0}
+        end |= {"certified": succeeded, "accuracy": {"answers": 1.0 if succeeded else 0.3}, "factors": [{"codes": 9}]}
+        (out / "log.jsonl").write_text(json.dumps(end) + "\n")
+        if not succeeded:
+            return
+        network = f"{backdrop}-{seed}".encode()
+        (out / "certified-step-4.network.json").write_bytes(network)
+        sha = hashlib.sha256(network).hexdigest()
+        for ratio in mf.VERDICTS:
+            result = {"sha256": sha, "snap_ratio": ratio, "certified": True}
+            (tmp_path / "certify" / f"{backdrop}-{seed}-{ratio}.certificate.json").write_text(json.dumps(result))
+        long = {"sha256": sha, "lengths": {"128": {"properties": {"U1": {"cases": 4, "passed": 4}}}}}
+        (tmp_path / "long" / f"{backdrop}-{seed}").mkdir()
+        (tmp_path / "long" / f"{backdrop}-{seed}" / "net.long-test.json").write_text(json.dumps(long))
+
+    wins = {"p0": {0: 0, 1: 0, 2: 1}, "p2": {3: 2, 4: 1, 5: 0}}  # each machine's successes, of two seeds
+    for arm, machines in wins.items():
+        for machine, won in machines.items():
+            for seed in (400, 401):
+                run(f"t10-{arm}-{machine}", seed, seed - 400 < won)
+    run("t10r-p2-9", 400, True)  # another test's backdrop: not read
+    runs = mf.machine_unit_runs(
+        tmp_path / "runs",
+        "t10",
+        ["p0", "p2"],
+        mf.recertifications(tmp_path / "certify"),
+        mf.long_tested(tmp_path / "long"),
+    )
+    assert sorted(runs["p0"]) == [0, 1, 2] and sorted(runs["p2"]) == [3, 4, 5]
+    assert mf.machine_successes(runs["p2"]) == [2, 1, 0] and mf.machine_successes(runs["p2"], 1) == [1, 1, 0]
+    lines = mf.machine_unit_readout(runs, [("p2", "p0")])
+    assert lines[0] == "p0: 1 of 3 machines, 1 of 6 runs (2: 1)"
+    assert lines[1] == "p2: 2 of 3 machines, 3 of 6 runs (3: 2, 4: 1)"
+    p = inference.rank_sum_greater([2, 1, 0], [0, 0, 1])
+    once = inference.rank_sum_greater([1, 1, 0], [0, 0, 1])
+    assert lines[2] == f"p2 > p0: rank-sum p {p:.4f}, Holm {p:.4f}; each machine at most once: p {once:.4f}"
 
 
 def test_each_screen_row_logs_every_answer_kinds_share_beside_the_pooled_one(tmp_path: Path):
