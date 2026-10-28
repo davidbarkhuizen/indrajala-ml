@@ -311,3 +311,16 @@ in `data/window-recurrent/state-formation/`, output `quench-reading.txt`).
   fine-tune), the quench's own definition (snap and freeze the codes, then train the rest or stop),
   and the seed count for a phase-space sample. Into the post-paper retests (X) as a candidate arm,
   registered there.
+- **The assessment (2026-10-28, noted at the owner's request):** the owner's conjecture (quench once
+  the state forms; lock-in wanted; many seeds sample the phase space) is largely supported, with three
+  qualifications for the build. (1) The trigger is the certificate, checked each epoch (as these cells
+  already do), not the state share's peak: at the peak 5 of 6 S4 runs held wrong machines. With the
+  target known that is an existence search; for discovery, T6's answers-only stop with Chow's set.
+  (2) The simplest quench is to stop at the first strictly certified epoch: stopping fixes the
+  machine; freezing the codes and training on matters only for the robust verdict. (3) Whether a
+  quenched network must also pass the robust verdict (the paper's success rule: both verdicts; all 7
+  recovered targets had near ties) is the owner's decision before the arm is registered. With the
+  strict trigger the archive's successes would be 67 of 127, against 47 robust (13 runs stopped at a
+  strict certificate, 7 recovered). The evidence is offline and post hoc (probe variants mixed, some
+  seeds repeated): it motivates a registered quench arm in X with fresh seeds, sized by the target's
+  rate of appearance (S4 here about 1 in 6), not adoption.
