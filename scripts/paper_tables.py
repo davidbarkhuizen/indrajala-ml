@@ -293,7 +293,7 @@ def groups(data: Path) -> list[str]:
 PLANTED_ARMS = [  # T10's arms (D19), the machine the unit
     ("p0", "P0, primitive"),
     ("p1", "P1, planted, the target alone"),
-    ("p2", "P2, planted, its quotient an output"),
+    ("p2", "P2, planted, its congruence quotient an output"),
 ]
 PLANTED_TESTS = [("t10", "T10", ["p0", "p1", "p2"]), ("t10r", "T10r", ["p0", "p2"])]  # T10 and its replication (D24)
 
@@ -390,10 +390,10 @@ TABLES: dict[str, Table] = {
     "tab:decomposition": decomposition_table(
         [
             ("$p$ 5 division claim, family", ["t4/p5-division-claim-family"]),
-            ("$p$ 5 division claim, quotient", ["t4/p5-division-claim-quotient"]),
+            ("$p$ 5 division claim, modular quotient", ["t4/p5-division-claim-quotient"]),
             ("$p$ 5 approximation claim, family", ["t4/p5-approximation-claim-family"]),
             ("$p$ 5 approximation claim, sum", ["t4/p5-approximation-claim-sum"]),
-            ("$p$ 5 approximation claim, quotient", ["t4/p5-approximation-claim-quotient"]),
+            ("$p$ 5 approximation claim, modular quotient", ["t4/p5-approximation-claim-quotient"]),
             ("$p$ 5 probe 2a (apart)", ["t4/p5-probe-2a"]),
             ("$p$ 7 probe 4 and fork probe", ["t4/p7-probe-4", "t4/p7-fork"]),
             ("$p$ 11 ladder", ["t4/p11-ladder"]),
