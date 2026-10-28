@@ -49,7 +49,7 @@ determine (computed, as the sizes note did).
 | A3 | At scale | T2: cover 17, 16, 15 of 20 at 49, 121, 169 states | read |
 | A4 | Beyond arithmetic, with the state partly hidden: given, an approximation helps; present but not given, it doesn't | T10 (T10b: P2 8 against P0 2 of 15 machines, `p` 0.0206, no margin; T10a: P1 3 against 2, `p` 0.50); **T10r** (D24) the replication | T10 read; **T10r running: decisive for A4** |
 | A5 | Beyond arithmetic, groups and resets given approximations that determine the state | **T11** (D20): S3, S4, move-to-front-4 against T5's rates | running; read Wed |
-| A6 | The mechanism: a factor that decomposes holds the approximation it was given | T4 (every one of division's 43 nontrivial factors holds exactly one line, almost always a trained one; the sum arm's only ever the sum: exploratory); **T11c** (D25: does S3's sign form when asked) | T4 read; T11c registered, pending |
+| A6 | The mechanism: a factor that decomposes holds the approximation it was given | T4 (every one of division's 43 nontrivial factors holds exactly one line, almost always a trained one; the sum arm's only ever the sum: exploratory); **T11c** (D25: does S3's sign form when asked) | T4 read; T11c registered, pending; **T4'** (D30) registered, T10's and T10r's P2 networks |
 
 The certificate is the method's instrument (a method section, its counts in Appendix A). The
 discussion states the limits: the answers-only rates where the state stays hidden (Appendix D), and
@@ -922,6 +922,52 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
   statement, and the owner's letters to researchers for review and co-authorship (D6 (b)). A
   focused paper suits a venue better if a co-author joins (TMLR, ICGI or LearnAut); that remains
   the owner's to pursue, and nothing here waits on it.
+- **D29. R4 decided: T12 and T4' run; the P1 repeat deferred** (the owner, 2026-10-28: "T12 with (a)
+  and T4', skip the P1 repeat for the moment"). R1 found T12's comparison not made already, and
+  T10r held, so neither candidate was dropped by D27's conditions.
+  - **T12 runs with D27's design (a):** one output layer of `p^2 + 1` classes in both arms, the
+    cover's arm leaving the extra classes unused, so the arms differ in their queries alone. Its
+    build and registration are one PR (D31), its batch one night, before any of its data.
+  - **T4' runs, narrowed to the networks no one has read** (D30). D27's draft named T1's sum-arm
+    networks, but T1's findings read them already (exploratory: 3 of 6 hold `A + B` in a factor), so
+    an expectation registered now would follow its data. They stay exploratory, cited beside T4'.
+  - **The P1 repeat (T10a) deferred, not refused.** T10a stays as read: flat and underpowered (P1 3 of
+    15 machines against P0 2), and A4 states "present but not given" as *no help detected*, never as
+    *no help*. Reopened only by the owner; a repeat would need power stated for P1's observed rate.
+- **D30. T4' registered: does a factor hold the planted approximation it was given?** (registered
+  2026-10-28, before any T10 or T10r network is read by `approximations`; their rates, long tests and
+  T6 are read, their factors not.) **Why:** A6 ("a factor that decomposes holds the approximation it
+  was given") rests on division alone, where T4 saw it unregistered; T11c (D25) asks it of the
+  groups. T10's machines are random: a planted machine (`random-planted-q16-b4-<m>`) has exactly one
+  nontrivial congruence, the planted one (4 blocks of 4 states), and a primitive one none
+  (`measures-q16.txt`). So a factor's approximation (T4's, the finest congruence its code determines)
+  can only be trivial (1 block), the planted one (4) or the whole state (16): nothing between to
+  argue over.
+  - **The networks:** every certified network of T10's and T10r's batches (each passed its long
+    tests), read by T4's tool (D10, `paper_reading.py approximations`) with its run's arm, the
+    planted approximation named (`wt.planted_labels`, #1027): P2 (given it as an output) 9 in T10,
+    13 in T10r; P1 (present, not given) 3; P0 (primitive) 4. A network is *planted-factored* if a
+    factor's approximation is exactly the planted one; *whole* if not, and a factor's is the whole
+    state; *joint* if both factors' are trivial (the state held only jointly).
+  - **T4' (registered), P2's 22 networks, T10's and T10r's together** (one reading of factors, not
+    a rate: D24's "never pooled" guards T10b's test, which this doesn't redo). **Expected:** at least
+    half planted-factored (division's arms given one approximation, the sum: 10 of 16 networks held
+    it in a factor, T4's 7 of 10 and T1's 3 of 6). **Refuted** if at most 2 of 22 are; between,
+    mixed. Each batch's count reported beside the pooled one.
+  - **P1 and P0 (reported, no expectation):** P1's 3 networks, the same names (does a factor hold
+    the planted approximation it isn't given: K8's "never unasked" off division, three networks
+    only); P0's 4 (whole or joint only). Too few for a test.
+  - **The paper's use:** met: A6 reads beyond division, "on random machines too, a factor that
+    decomposes holds the approximation it was given". Mixed: the count stated, A6 kept to division
+    with the random machines beside it. Refuted: A6 says the mechanism is division's, and the
+    random machines learn the planted approximation's help without a factor holding it.
+  - Options: (a) *chosen*, P2 registered, pooled over both batches, P1 and P0 reported. Pros: 22
+    networks, the most this data gives; the three outcomes can't be confused. Cons: the bar borrows
+    division's rate on a different family of machines. (b) T10 and T10r registered apart. Pros: a
+    replication inside the reading. Cons: 9 networks alone are thin, and both batches are read at
+    once anyway. (c) P2 against P1 as a test. Pros: the sharpest form of the question. Cons: 3 P1
+    networks give no power (the P1 repeat is deferred, D29). (d) Descriptive only. Cons: an
+    unregistered reading can't extend A6, D27's reason for T4'.
 
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
@@ -1354,6 +1400,8 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
   exactly (2, 3 and 8 machines; T10b `p` 0.0206, Holm 0.041; 0.0251 with each machine once).
   `tab:planted` and the `t10.*` numbers in `paper_tables.py`. T10r's reading uses the same tool.
 - **R4. D27's decisions** (after R1 and T10r's reading): T12 and T4', each run or not by D27's rule.
+  **Decided 2026-10-28 (D29):** both run, T12 with design (a); T4' registered (D30); the P1 repeat
+  deferred.
   If run: T12's build, registration (one PR), its batch (one night), the reading; T4''s
   expectations registered (one PR), then the reading.
 - **R5. The manuscript, restructured** (**done 2026-10-27 but for A4's T10r, A5, A6's T11c and the
@@ -1386,8 +1434,8 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
 | --- | --- |
 | Tue 27 Oct | R1; this plan's PR; T10r's batch ends |
 | Wed 28 Oct | R2: T10r's and T11's readings; R4's decision |
-| Thu 29 Oct | R2: T11c; R3; T4' (if decided); R5 begins (T12's night, if run) |
-| Fri 30 Oct - Sun 1 Nov | R5 (T12's reading Fri, if run); R6 |
+| Thu 29 Oct | R2: T11c; R3; T4' (D30); R5 begins; T12's night (D29) |
+| Fri 30 Oct - Sun 1 Nov | R5 (T12's reading Fri); R6 |
 | Mon 2 - Tue 3 Nov | R7 |
 | **about Wed 4 Nov** | **R8, the release** (a reading slipping a day moves it a day) |
 
