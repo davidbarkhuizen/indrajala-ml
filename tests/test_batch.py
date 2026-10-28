@@ -655,3 +655,12 @@ def test_a_sessions_pss_sums_its_processes_and_an_attempts_peak_reaches_its_summ
         worker(tmp_path, "w", 1, {"STUB_SLEEP": "0.3"}),
     )
     assert state.ended["s3-1"]["peak_pss_mb"] > 1
+
+
+def test_an_attempt_reruns_by_the_workers_own_command(tmp_path: Path):
+    attempt = b.Attempt("s3-7", "approximation", "s3", 7, cutoff=120)
+    made = b.attempt_command(attempt, "python", "probe.py", tmp_path / "rerun")
+    assert made[:3] == ["python", "probe.py", "run"] and made[-2:] == ["--out", str(tmp_path / "rerun")]
+    assert made[made.index("--cutoff-epochs") + 1] == "120"
+    w = worker(tmp_path, "w", 1)
+    assert w.command(attempt) == b.attempt_command(attempt, w.python, w.script, w.root / attempt.id)
