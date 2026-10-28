@@ -1710,7 +1710,10 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
   `research-notes/paper1-status.tex`). **Done 2026-10-28** (`research-notes/paper1-tests.tex`,
   indrajala-research #87): every test read.
 - **R7. Critique:** a fresh-context review of the manuscript against the data and the literature;
-  the audit's checks rerun; corrections.
+  the audit's checks rerun; corrections. **Done 2026-10-28 but for the owner's cold read:** two fresh-context
+  reviews and the mechanical checks (indrajala-research `review-2026-10-28-r7-findings.md`, every
+  finding and its resolution); the owner's decisions D32-D36; corrections in research #91-#106 and
+  literature #32-#34; the contribution statement drafted (D6 amended); the summary page updated.
 - **R8. The release (D6, D28):** the datapack on Zenodo, the repositories public (third-party PDFs
   excepted), the manuscript with its contribution statement and a page on how to verify it.
 
