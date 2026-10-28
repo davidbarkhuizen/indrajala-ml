@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from indrajala_ml.batch import BACKDROPS
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.studies import inference
 from indrajala_ml.studies import modular_family as mf
@@ -255,6 +256,38 @@ def refuted(data: Path) -> list[str]:
     return lines
 
 
+GROUPS = [("s3", 6), ("s4", 24), ("mtf4", 24)]  # T11's backdrops (D20), each against T5's rate
+
+
+def group_tests(data: Path) -> list[tuple[str, int, list[mf.ArmRun], list[mf.ArmRun], float, float]]:
+    """T11a (D20): each algebra's runs given its cover, against T5's on its answers alone; Fisher's exact, one-sided, Holm over the three."""
+    pairs = [(b, q, batch_runs(data, "t11/batch", f"t11-{b}"), batch_runs(data, "t2-t5", b)) for b, q in GROUPS]
+    p = [
+        inference.fisher_exact_greater(
+            sum(r.succeeded for r in given),
+            sum(not r.succeeded for r in given),
+            sum(r.succeeded for r in alone),
+            sum(not r.succeeded for r in alone),
+        )
+        for _, _, given, alone in pairs
+    ]
+    return [
+        (b, q, given, alone, pv, h) for (b, q, given, alone), pv, h in zip(pairs, p, inference.holm(p), strict=True)
+    ]
+
+
+def groups(data: Path) -> list[str]:
+    """T11's rates (tab:groups): each algebra on its answers alone (T5) and given its cover, Wilson 95%, Fisher's p and Holm."""
+    lines: list[str] = []
+    for backdrop, q, given, alone, p, holm in group_tests(data):
+        _, rate = succeeded(given)
+        lines.append(
+            f"\\texttt{{{backdrop}}} & {q} & {sum(r.succeeded for r in alone)} of {len(alone)} & {rate}"
+            f" & ${p_math(p)}$ & ${p_math(holm)}$ \\\\"
+        )
+    return lines
+
+
 PLANTED_ARMS = [  # T10's arms (D19), the machine the unit
     ("p0", "P0, primitive"),
     ("p1", "P1, planted, the target alone"),
@@ -333,6 +366,7 @@ TABLES: dict[str, Table] = {
     "tab:planted": planted,
     "tab:proof": proof,
     "tab:refuted": refuted,
+    "tab:groups": groups,
 }
 
 
@@ -850,6 +884,52 @@ def paper_planted(data: Path) -> Numbers:
     return made
 
 
+def paper_groups(data: Path) -> Numbers:
+    """A5's numbers from T11 (D20): each algebra's successes given its cover, T5's, the Holm-adjusted p, and the long tests."""
+    made: Numbers = {}
+    for backdrop, _, given, alone, _, holm in group_tests(data):
+        made[f"t11.{backdrop}"] = count(sum(r.succeeded for r in given))
+        made[f"t11.{backdrop}-alone"] = count(sum(r.succeeded for r in alone))
+        made[f"t11.{backdrop}-holm"] = p_math(holm)
+    long = mf.long_tested(data / "paper" / "t11" / "batch" / "long-tests")
+    made["t11.networks"] = count(len(long))
+    return made
+
+
+def holds(reading: Reading, name: str, blocks: int) -> bool:
+    """Whether a factor of the network holds exactly the named congruence: it determines it with its blocks."""
+    return any(n == blocks and name in names for n, names in reading.factors)
+
+
+T11C_GIVEN = {
+    "s3": [("parity", 2)],
+    "s4": [("places {0}", 4), ("pairings", 6)],
+    "mtf4": [("order {0, 1, 3}", 6), ("ahead {2}", 8)],
+}
+
+
+def paper_factors(data: Path) -> Numbers:
+    """A6's numbers: T11c (D25), the certified T11 networks whose factors hold each given approximation exactly, and
+    the given pair; T4' (D30), the planted machines' certified networks with a factor holding the planted one."""
+    made: Numbers = {}
+    for backdrop, given in T11C_GIVEN.items():
+        found = readings(data / "paper" / "t11" / "batch" / "approximations" / f"t11-{backdrop}.txt")
+        made[f"t11c.{backdrop}-networks"] = count(len(found))
+        for name, blocks in given:
+            made[f"t11c.{backdrop}-{name.split()[0]}"] = count(sum(holds(r, name, blocks) for r in found))
+        if len(given) > 1:
+            made[f"t11c.{backdrop}-pair"] = none_or(sum(all(holds(r, n, b) for n, b in given) for r in found))
+    planted: dict[str, list[bool]] = {"p1": [], "p2": []}
+    for test in ("t10", "t10r"):
+        for path in sorted((data / "paper" / test / "batch" / "approximations").glob(f"{test}-p[12]-*.txt")):
+            blocks = len(set(wt.planted_labels(BACKDROPS[path.stem].task)["planted"].tolist()))
+            planted[path.stem.split("-")[1]] += [holds(r, "planted", blocks) for r in readings(path)]
+    for arm, found in planted.items():
+        made[f"t4p.{arm}"] = none_or(sum(found))
+        made[f"t4p.{arm}-networks"] = count(len(found))
+    return made
+
+
 NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
     addition_certificates,
     addition_code_counts,
@@ -858,6 +938,8 @@ NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
     paper_readings,
     paper_proofs,
     paper_planted,
+    paper_groups,
+    paper_factors,
 ]
 PN = re.compile(r"\\pn\{([^{}]+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
 
