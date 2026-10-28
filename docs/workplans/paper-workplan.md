@@ -1140,6 +1140,17 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     reader can check anything. (c) The verify pack alone. Pros: small. Cons: the training traces
     lost; the full manifests unmatched.
 
+- **D38. The release, now (settled 2026-10-28 by the owner).** The datapack (D37) goes on Zenodo
+  now, before the co-authors' verification (the data and code are facts to check; the claims stay in
+  the unpublished paper): **CC BY 4.0**; **the owner as creator**, Claude credited accurately and in
+  full in the description (the contributions statement's wording); no sandbox run (the draft is
+  reviewed in the browser and the owner presses Publish). Zenodo's DOI is reserved on the draft and
+  filled into the README, the paper and the letters before upload. **indrajala-research goes public**
+  (indrajala-ml and indrajala-math-rust already are; both MIT); a pre-public scan (2026-10-28) found
+  no secrets and the co-author candidates named only as cited authors. **indrajala-literature:** the
+  PDFs and texts not openly licensed move to a separate private repository first; then it goes
+  public.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
