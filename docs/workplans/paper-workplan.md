@@ -1127,6 +1127,13 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     the readings, so they attest the files as they are now, not at the time): `paper/t11-runs.sha256`
     2c987d15 (1,818 files), `paper/t12-runs.sha256` 7e3d4e75 (795), `control/models.sha256` b5718acd
     (30). Now every file the check reads, and every certified network, is in a manifest.
+  - **`scripts/datapack.py` (2026-10-28):** `reads`, `build`, `check`. Building it found the scope
+    short of what the check reads: Appendix B's replays (`machine-diff`), and `e2` and `e5`, are now
+    in the addition part; `e3-e4/long-tests/` had no manifest, `e3-e4/long-tests.sha256` e6d1067d
+    (9 files, hashed 2026-10-28) added. **The verify pack alone reproduces the paper:** extracted
+    into an empty directory, `verify.sha256` verifies and `paper_tables.py --data <it> check` passes
+    (2,762 files, 419 MB compressed). Built into `~/code/datapack/`; the full pack's parts next
+    (`build --parts ...`, about 44 GB raw).
   - Options: (a) *chosen*, the full pack and the verify pack. Pros: an archive of record and a quick
     route to every number and certificate; the verify pack's hashes are the cited ones. Cons: two
     packs to build and describe. (b) The full pack alone. Pros: one thing. Cons: 44 GB before a
