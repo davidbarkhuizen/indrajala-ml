@@ -132,6 +132,9 @@ def test_proof_outcomes_name_the_stop_and_chows_verdict():
     assert script.proof_outcome({"verdict": "silent"}) == "silent"
     assert script.proof_outcome({"verdict": "false-stop", "chow": chow}) == "false-stop refuted"
     assert script.proof_outcome({"verdict": "kept", "chow": {"refused": "limit"}}) == "kept out of reach"
+    assert (
+        script.proof_outcome({"verdict": "strict-only", "chow": {**chow, "equivalent": True}}) == "strict-only proved"
+    )
     assert script.natural("d7-family-300") < script.natural("d11-family-300")
 
 
