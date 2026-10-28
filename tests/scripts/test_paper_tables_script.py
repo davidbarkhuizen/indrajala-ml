@@ -94,6 +94,31 @@ def test_the_groups_table_tests_each_algebra_against_its_answers_alone(monkeypat
     ]
 
 
+def test_the_state_table_and_numbers_test_the_cover_against_the_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    cover = [arm_run(100)] * 11 + [arm_run(600, "spent", False, None, 0.4)] * 9
+    state = [arm_run(200), arm_run(300), arm_run(200, long=False)] + [arm_run(600, "spent", False, None, 0.4)] * 17
+
+    def batch_runs(data: Path, test: str, arm: str) -> list[script.mf.ArmRun]:
+        assert test == "t12/batch"
+        return cover if arm == "d5-cover" else state
+
+    monkeypatch.setattr(script, "batch_runs", batch_runs)
+    assert script.state(tmp_path) == [
+        "the sum and the difference (cover) & 11 of 20 & 0.34--0.74 & 100 & 100 \\\\",
+        "the state, $A p + B$ & 2 of 20 & 0.03--0.30 & 200--300 & 250 \\\\",
+    ]
+    approximations = tmp_path / "paper" / "t12" / "batch" / "approximations"
+    approximations.mkdir(parents=True)
+    line = "n.json: 25 states, meet 5, cover False, cascade top 0; factor 0: 13 codes, approximation {} blocks (x), determines {}"
+    (approximations / "d5-cover.txt").write_text(line.format(5, "A - B") + "\n" + line.format(1, "-") + "\n")
+    (approximations / "d5-state.txt").write_text(line.format(5, "A + B") + "\n")  # a line, not a coordinate
+    made = script.paper_state(tmp_path)
+    assert made["t12.cover"] == "11" and made["t12.state"] == "2"
+    assert made["t12.p"] == script.p_value(script.inference.fisher_exact(11, 9, 2, 18))
+    assert (made["t12.cover-networks"], made["t12.cover-lines"]) == ("2", "1")
+    assert (made["t12.state-networks"], made["t12.state-lines"]) == ("1", "none")
+
+
 def test_a_factor_holds_a_congruence_only_with_its_blocks():
     reading = script.Reading(24, False, [(6, ["pairings", "parity"]), (2, ["parity"])])
     assert script.holds(reading, "parity", 2)
