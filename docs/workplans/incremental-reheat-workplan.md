@@ -279,3 +279,35 @@ manifest `ireheat-probe.sha256` a29a9bee... (24 files).
   `stone:~/labour/crucible-probe/`.
 - **D8:** stage 2 does not support the incremental reheat as X's second arm; X's D5 arm stands
   unless the owner decides otherwise (post-paper).
+
+**The quench reading (2026-10-28, offline, claims nothing; the owner: "everything has been pointing
+in the direction of the quench at the peak"; that a quench locks in whatever machine the network holds
+is wanted: an existence search samples the phase space with many seeds, so different machines
+solidify, and the certificate picks the right one).** Each cool epoch's end row already holds the
+snapped network's two verdicts (a zero-epoch quench). Read on every continuous run that logs both:
+option 1's probes (D54-D67, 121 runs), the incremental-reheat probe and its control (`quench-reading.py`
+in `data/window-recurrent/state-formation/`, output `quench-reading.txt`).
+
+- **When the state was lost, it was lost after the cool passed its peak, not in the hold:** on the six
+  S4 runs (seeds 0, 2, 300-303) the state share fell below 0.9 2-15 epochs after its peak while the
+  clock still cooled (T 0.6-1.2), and the screen's hold followed 1-22 epochs later, 36-88% of the
+  share already gone. The melt plateau (epochs 15-34) precedes any state (share at most 0.28).
+- **A high state share is not the target:** at the peak five of those six held machines of 58-91
+  minimised states (the target 24), 40-131 wrong states. **Seed 300 held the target**: strictly
+  certified at steps 101 and 104 (24 states, nothing wrong; 246 near ties, so not robustly), lost by
+  110, never certified again (held, reheated or not).
+- **Across the archive, 7 of the 67 runs that failed after running on had held the target**,
+  strictly certified for 1-7 epochs and then lost: `d57` S4 seed 0 (130-134), `d59` move-to-front-4
+  seed 3 (131-148), `d59` S3 seed 35 (77-130), `d61` pace S3 seed 25 (130), `d61` smooth S3 seed 35
+  (94-116), `d63` move-to-front-4 seed 34 (381-455) and the S4 seed 300 above. Each was a wrong machine
+  within 1-3 epochs after.
+- **Every robustly certified run (47) was strictly certified first or at once:** by 0-72 epochs,
+  median 3. So a quench at the first strict certificate never comes later than the run's certificate.
+- **So the quench's case:** on these runs, quenching at the first strictly certified epoch would have
+  kept 7 more targets (the run's own snaps fixed, so its machine is the strictly certified one), and
+  the certificate is the trigger in an existence search (the target known). For discovery (no target)
+  the trigger is T6's answers-only stop with Chow's set. Open for the build (post-paper): whether a
+  quenched network must pass the robust verdict too (near ties fixed by the quench, or a short hard
+  fine-tune), the quench's own definition (snap and freeze the codes, then train the rest or stop),
+  and the seed count for a phase-space sample. Into the post-paper retests (X) as a candidate arm,
+  registered there.
