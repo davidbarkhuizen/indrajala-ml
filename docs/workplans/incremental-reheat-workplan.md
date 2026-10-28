@@ -266,6 +266,16 @@ manifest `ireheat-probe.sha256` a29a9bee... (24 files).
   after a reheat too.
 - **The loss is the bottleneck these runs show, not formation:** a state at a share near 1 formed
   and was lost on every seed, the held cool's case (the crucible probe's base arm on the same four
-  seeds, held since about 16:30; read as the control when it ends).
+  seeds, the control below).
+- **The control, the held cool (read 2026-10-28):** the crucible probe's base arm (`continuous`, no
+  reheat, 1,600 epochs) on S4 seeds 300-303, on `stone` at 6d808a5, read with `transitions`: 17-22
+  stages, the last at step 93-122 (peak share 0.77-1.0), then one hold of 1,375-1,442 epochs that
+  never recovered (its shorter holds recovered within 0-40 epochs, as stage 0 found); none certified,
+  each ending `spent` at step 1,553-1,558 with 1-4 codes a factor and a state share of 0-0.08. So
+  both arms lose the state they form; the incremental reheat walks back to its first transition,
+  the held cool forgets in place. Neither keeps it, and D8 stands. Data
+  `data/window-recurrent/crucible-probe/` (logs, last networks, checkpoints, `transitions.out`),
+  manifest `crucible-probe.sha256` c4ea3db0 (17 files); the step networks stay on
+  `stone:~/labour/crucible-probe/`.
 - **D8:** stage 2 does not support the incremental reheat as X's second arm; X's D5 arm stands
   unless the owner decides otherwise (post-paper).
