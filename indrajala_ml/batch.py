@@ -132,6 +132,7 @@ CELLS: dict[str, Cell] = {
 DIVISION = "modular-division-"
 T1_VOCABULARY = ("sum", "suffix", "token")  # T1's arms ask the same tokens (paper-workplan.md, T1)
 WIDE = ("sum", "difference", "product")  # the approximation claim's vocabulary: T3's cover, as A1's
+T12_VOCABULARY = ("sum", "difference", "state")  # T12's arms ask the same tokens: the cover, the state (D31)
 # T10's draws (D19): P0 the first 15 random-q16 seeds (all primitive); P1 and P2 the first 15 planted
 # q16-b4 seeds whose only nontrivial principal congruence is the planted one (1-3, 12, 14, 17 and 21
 # gain others; 15 the existence probe's)
@@ -191,6 +192,10 @@ BACKDROPS: dict[str, Backdrop] = {  # a backdrop's short name, as attempts name 
     "d11-quotient": division(11, "quotient"),
     # T3: the cover at p 5 on the approximation claim's vocabulary (A1's arm), under each window and state
     "d5-family-wide": division(5, "family", WIDE),
+    # T12 (paper-workplan.md, D31): at p 5 the cover against the state as the one extra output, on one
+    # vocabulary (so one output layer of p^2 classes in both arms)
+    "d5-cover": division(5, "family", T12_VOCABULARY),
+    "d5-state": division(5, "state", T12_VOCABULARY),
     # T10 (paper-workplan.md, D19, at q 16): P0 primitive random machines, P1 planted ones (the target
     # alone), P2 the same machines with the planted quotient asked (`--arm planted`); the probe's machine
     **{f"t10-p0-{m}": Backdrop(f"random-q16-{m}", 16) for m in T10_P0},

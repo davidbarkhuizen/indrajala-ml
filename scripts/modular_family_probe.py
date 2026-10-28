@@ -1015,6 +1015,7 @@ ARMS = {
     "quotient": mf.QUOTIENT,
     "sum": mf.SUM,
     "product": mf.PRODUCT,
+    "state": mf.STATE,
     "suffix": mf.SUFFIX,
     "token": mf.TOKEN,
     "planted": mf.PLANTED,
