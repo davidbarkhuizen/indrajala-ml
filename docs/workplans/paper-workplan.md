@@ -1046,6 +1046,17 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     data fit state supervision as well; T12 leans the other way. (c) Recentre on T10r. Pros: the one
     separating result. Cons: one replication of 25 machines, planting's structural shift a confound.
 
+- **D34. A6 scoped to where it holds (R7's C7, settled 2026-10-28 by the owner).** The abstract,
+  intro, contribution 4 and the fourth limit no longer say every factor holding an approximation
+  holds a given one: on division (exploratory, read beside T4) and S3 (T11c, registered) it does;
+  elsewhere factors rarely hold the given ones (move-to-front-4's mostly smaller orders; some of
+  T12's state networks hold A or B), and the help does not need them to. T4c and T4' are stated by
+  their registered rules (both mixed). A6 stays a section and a contribution.
+  - Options: (a) *chosen*, scope the claim. Pros: true as written; keeps the one mechanistic
+    reading. Cons: a modest contribution. (b) Demote A6 from the contributions. Pros: contributions
+    on robust registered results only. Cons: loses the "read exactly" angle. (c) Keep the universal
+    wording with caveats. Pros: least rewriting. Cons: reads as an overclaim.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
