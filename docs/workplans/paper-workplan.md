@@ -988,7 +988,8 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     target `q` 25 in both arms, and every output a function of division's state, so the machine all
     the outputs need has 25 states; joint codes 16 x 16 = 256, 10.2 times. The cap 280 = m + 25 - 1,
     the exclusion bound. The window 16 wide: this cell certified at `p` 5 (A1, A2, T1). Every state
-    reachable and told apart at one column (row 14).
+    reachable and told apart at one column (row 14). Probe (2026-10-28, `klip`, seed 999, 3 epochs,
+    both arms): the output layer 25 wide in each, 75-77 MB a run, 5-6 s an epoch.
   - **Success:** as D13's (certified at the stop and recertified in both verdicts, every certified
     network long-tested: U1, S1 at 128, 256, 1,024 columns).
   - **The test (two-sided: each direction says something, D27):** T12, `d5-cover` against `d5-state`,
