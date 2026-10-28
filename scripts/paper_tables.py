@@ -215,7 +215,7 @@ def proofs(data: Path) -> list[dict[str, Any]]:
 
 
 def proof_outcome(bound: dict[str, Any]) -> str:
-    """A bound's outcome: no stop (silent), or the stop (kept, false-stop) with Chow's verdict."""
+    """A bound's outcome: no stop (silent), or the stop (kept, strict-only, false-stop) with Chow's verdict."""
     if bound["verdict"] == "silent":
         return "silent"
     chow = bound["chow"]
@@ -227,6 +227,8 @@ PROOF_ROWS = [
     ("silent", "no stop (the run never certified)"),
     ("kept proved", "kept, Chow proved"),
     ("kept out of reach", "kept, out of Chow's reach"),
+    ("strict-only proved", "stop certified, not robustly; Chow proved"),
+    ("strict-only out of reach", "stop certified, not robustly; out of Chow's reach"),
     ("false-stop proved", "false stop, Chow proved the machine equal to the target"),
     ("false-stop refuted", "false stop, Chow refuted"),
     ("false-stop out of reach", "false stop, out of Chow's reach"),
@@ -796,13 +798,18 @@ def paper_proofs(data: Path) -> Numbers:
     slack = Counter(proof_outcome(b) for b in bounds if b["slack"] == 1.1)
     lengths = [len(b["chow"]["counterexample"]) for b in bounds if proof_outcome(b) == "false-stop refuted"]
     false_stops = sum(v for k, v in slack.items() if k.startswith("false-stop"))
+    strict_only = sum(v for k, v in slack.items() if k.startswith("strict-only"))
     return {
         "k9.runs": count(sum(exact.values())),
         "k9.exact-false": none_or(sum(v for k, v in exact.items() if k.startswith("false-stop"))),
         "k9.exact-proved": count(exact["kept proved"]),
         "k9.exact-unproved": none_or(exact["kept out of reach"]),
+        "k9.slack-early": count(false_stops + strict_only),
+        "k9.slack-strict": count(strict_only),
+        "k9.slack-strict-proved": count(slack["strict-only proved"]),
+        "k9.slack-strict-unreached": count(slack["strict-only out of reach"]),
         "k9.slack-false": count(false_stops),
-        "k9.slack-proved": count(slack["false-stop proved"]),
+        "k9.slack-proved": none_or(slack["false-stop proved"]),
         "k9.slack-refuted": count(slack["false-stop refuted"]),
         "k9.counterexamples": words(min(lengths), max(lengths)),
         "k9.slack-false-unreached": count(slack["false-stop out of reach"]),

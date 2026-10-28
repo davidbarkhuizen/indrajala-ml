@@ -1253,6 +1253,16 @@ answers-only stop lands on the certified step, a *false stop* when it lands earl
   stops, not 20; the paper's `tab:proof` and `tab:refuted` and their prose to be regenerated (R3).
   Data `paper/t6-strict/` (a report per group and bound) and `t6-strict.py`, manifest
   `paper/t6-strict.sha256` 90ca0abb (219 files).
+- **Re-run 2026-10-28 (R3, the durable route): `paper_reading.py proof` with the fixed reader** on
+  T1, T2-T5, T3, T10 and T10r (main at 1400aa4, crate 647f23c, on `stone` from a copy of the logs and
+  the stops' step networks; about 6 minutes in all). Against the old reports, paths aside, the only
+  changes are the 9 relabels above (`false-stop` to `strict-only`) and T10r's `t10r-p2-39-400` (both
+  bounds, as its findings diagnosed); every stop, Chow verdict and word count the same. The old
+  reports kept as each batch's `proof-loose/`; manifest `paper/t6-proof.sha256` 3f95ba94 (579
+  files). `paper_tables.py` counts the strict-only stops apart (`tab:proof`'s two "certified, not
+  robustly" rows; `k9.slack-early`, `k9.slack-strict*`); `tab:proof` now reads, at 1.1 times the
+  bound, 9 strict-only (5 proved, 4 out of reach) and 11 false (0 proved, 4 refuted, 7 out of reach).
+  Every false stop Chow reached was a wrong machine.
 ## Findings: T2, the rates at scale (2026-10-25, read by D15's rules)
 
 `readout t2-t5/runs --arms ... --certify t2-t5/certify --long-tests t2-t5/long-tests`
