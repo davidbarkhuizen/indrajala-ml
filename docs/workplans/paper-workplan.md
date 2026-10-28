@@ -218,6 +218,13 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     the right person; review it, then decide whether the findings hold, whether it merits
     publication, and only then whether you would accept a request to co-author). Check both
     venues' own policy pages before submitting.
+  - **Author roles (the owner, 2026-10-28):** the letters' fourth step asks a co-author who agrees
+    with the findings whether they would act as **corresponding author**, the one who answers for
+    the findings to the editors and reviewers (the owner can't defend every line). Author order:
+    the owner first (he directed the work), then the co-authors; the corresponding author need not
+    be first. Not the verifier as first author: in ML, first authorship signals who did the main
+    work, which would contradict the contributions statement. The statement stays the record of
+    who did what.
   - (c) An AI-authorship venue (Agents4Science-like). Cons: no 2026 edition confirmed; 1 in 5
     accepted in 2025; outside the automata audience.
 - **D7. The manuscript:** a new file, `indrajala-research/papers/learning-transducers-with-proof.tex`,
