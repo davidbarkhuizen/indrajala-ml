@@ -45,7 +45,7 @@ determine (computed, as the sizes note did).
 | part | claim | evidence (registered) | status |
 | --- | --- | --- | --- |
 | A1 | Approximations make a product machine learnable that the answers alone don't | the approximation claim (`p` 5: cover 15, sum 10, none 1, product 0 of 20); T2 (`p` 11: cover 16 against quotient alone 0 of 20, Fisher `p` 7.7e-8) | read |
-| A2 | Because they are approximations | T1 (sum 6 against suffix 0, `p` 0.010, and token 1, `p` 0.046, of 20); the product's 0 of 20 | read; **T12** (D31) registered: the cover against the state itself |
+| A2 | Because they are approximations | T1 (sum 6 against suffix 0, `p` 0.010, and token 1, `p` 0.046, of 20); the product's 0 of 20 | read; **T12 read (D31): "neither"**, the cover 11 of 20 against the state 17, two-sided `p` 0.082: A reads "any approximation, the state itself included" |
 | A3 | At scale | T2: cover 17, 16, 15 of 20 at 49, 121, 169 states | read |
 | A4 | Beyond arithmetic, with the state partly hidden: given, an approximation helps; present but not given, it doesn't | T10 (T10b: P2 8 against P0 2 of 15 machines, `p` 0.0206, no margin; T10a: P1 3 against 2, `p` 0.50); **T10r** (D24) the replication | T10 read; **T10r running: decisive for A4** |
 | A5 | Beyond arithmetic, groups and resets given approximations that determine the state | **T11** (D20): S3, S4, move-to-front-4 against T5's rates | **read: stands on S4 (16 of 20 against 4) and move-to-front-4 (18 against 4); S3 undecided (5 against 1)** |
@@ -1511,6 +1511,43 @@ blocks (`t11/t11c-tally.py`, `t11c-tally.txt`).
   on S4 and move-to-front-4 (T11a) does not need a factor holding the given approximation, as A4's
   doesn't (T4'): A6 stays division's and S3's, the others counted beside it.
 - Data `t11/batch/approximations/`, `t11/t11c-control/`, in `paper/t11.sha256`.
+
+## Findings: T12, the cover against the state itself (2026-10-28, read by D31's rules)
+
+The batch ended 06:48 (40 of 40 runs, no peeks). `paper_reading.py links`, `certify` (28 networks,
+56 of 56 certificates passed), `approximations`, `proof`; `readout t12/batch/runs --arms d5-cover
+d5-state --certify ... --long-tests ...` (`t12/batch/readout-all.txt`); every certified network
+long-tested in 14 shares (`jebel`, `klip`, `stone`; shares 6 and 7 moved from `klip` to `jebel` when
+`klip` swapped with four, their stopped logs kept as `share-<i>-klip-stopped.out`), gathered into
+`t12/batch/long-tests/`, each result's sha256 its network's: **28 networks, 10,500,000 cases, every
+case passed** (`long-tests-summary.txt`). Fisher's exact, two-sided (`inference.fisher_exact`).
+
+| arm | succeeded | Wilson 95% | epochs to certify (median) | failures near / collapsed |
+| --- | --- | --- | --- | --- |
+| `d5-cover` (the sum and the difference) | **11 of 20** | 0.34-0.74 | 51-249 (122) | 4 of 9 / 8 |
+| `d5-state` (the state, `A p + B`) | **17 of 20** | 0.64-0.95 | 45-216 (127) | 3 of 3 / 3 |
+
+- **T12 reads "neither": `p` 0.082, no difference detected at 20 seeds an arm** (not shown equal).
+  By D31, A reads "any approximation, the state itself included", and the cover's help is said
+  plainly to be consistent with state supervision: these runs do not show coarse approximations
+  helping beyond telling the network its state. What A2's controls still rule out is an extra output
+  that tells about the state without being an approximation (T1's suffix, 0 of 20; the product, 0
+  of 20). The state's direction is the nominal one (17 against 11).
+- **Expectations:** the cover about A1's 15 of 20, read 11, below it (15's 0.75 just outside 11's
+  interval, 0.34-0.74), but above the "at most 5" that would have left the reading undecided; no expectation for the
+  state.
+- **Exploratory (not registered):** epochs to certify alike (medians 122 and 127). `approximations`
+  (`t12/batch/approximations/`): no factor can hold the whole state (16 codes, 25 states), so both
+  arms split it. A factor of a cover network that determines an approximation determines one of its
+  lines (`A + B` or `A - B`: 6 of 11 networks, 8 of 22 factors); one of a state network determines a
+  coordinate (`A` or `B`: 5 of 17 networks, 6 of 34 factors), never a line. So told the state, the
+  network splits it, when it does, by its coordinates, not by the cover's lines.
+- **T6 on T12's runs (D11, reported apart):** at the exact bound (25) every certified run stopped at
+  its certified step, each proved by Chow's set; no false stop. At 1.1 times it (27), 4 strict-only
+  stops 1-2 steps early (`d5-cover-331`, `d5-state-323`, `-333`, `-338`), each proved; no false
+  stop. `t12/batch/proof/`.
+- `paper_tables.py`: `tab:state` and `t12.*` (#1050). Manifest `paper/t12.sha256` 00b2b828 (159
+  files: certify, long tests, approximations, proof, readout, ledger, the summary).
 
 ## Stages
 
