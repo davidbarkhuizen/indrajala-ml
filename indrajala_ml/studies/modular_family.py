@@ -80,6 +80,9 @@ OPERATIONS: dict[str, Callable[[int, int, int], int]] = {
     "sum": lambda A, B, p: (A + B) % p,
     "difference": lambda A, B, p: (A - B) % p,
     "product": lambda A, B, p: (A * B) % p,  # not an approximation (the approximation claim)
+    # the state itself, A p + B: the finest approximation (the identity congruence), T12's arm (the
+    # paper workplan's D31); its p^2 answers widen the output layer (Encoding.classes)
+    "state": lambda A, B, p: A * p + B,
 }
 # the paper's T1 controls (paper-workplan.md): outputs of the columns read, not of the state (A, B), so
 # no approximation of division's machine: a column's digit sum (its token a + b) and, with the column
@@ -92,6 +95,7 @@ QUERIES = (*OPERATIONS, *COLUMN_OPERATIONS)  # every operation a query token can
 FAMILY = ("sum", "difference")
 SUM = ("sum",)  # the family without the difference (the division workplan's stage 3 option)
 PRODUCT = ("product",)
+STATE = ("state",)  # T12's: the state as the one extra output
 TOKEN = ("token",)  # T1's controls: an extra output that is no approximation, state-free
 SUFFIX = ("suffix",)  # and state-carrying
 PLANTED = ("planted",)  # a planted machine's approximation asked (T10's P2: wt.query_partitions)
@@ -132,7 +136,11 @@ class Encoding:
 
     @property
     def classes(self) -> int:
-        return self.p + 1  # residues and undefined
+        """
+        The output layer's: residues and undefined (p + 1), or the state's p^2 when the vocabulary has
+        it, so arms on one vocabulary share the layer as they share the tokens (D31's design (a)).
+        """
+        return self.p * self.p if "state" in self.vocabulary else self.p + 1
 
     def query_token(self, operation: str) -> int:
         return COLUMNS + self.vocabulary.index(operation)

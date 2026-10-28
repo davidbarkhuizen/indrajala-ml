@@ -45,7 +45,7 @@ determine (computed, as the sizes note did).
 | part | claim | evidence (registered) | status |
 | --- | --- | --- | --- |
 | A1 | Approximations make a product machine learnable that the answers alone don't | the approximation claim (`p` 5: cover 15, sum 10, none 1, product 0 of 20); T2 (`p` 11: cover 16 against quotient alone 0 of 20, Fisher `p` 7.7e-8) | read |
-| A2 | Because they are approximations | T1 (sum 6 against suffix 0, `p` 0.010, and token 1, `p` 0.046, of 20); the product's 0 of 20 | read |
+| A2 | Because they are approximations | T1 (sum 6 against suffix 0, `p` 0.010, and token 1, `p` 0.046, of 20); the product's 0 of 20 | read; **T12** (D31) registered: the cover against the state itself |
 | A3 | At scale | T2: cover 17, 16, 15 of 20 at 49, 121, 169 states | read |
 | A4 | Beyond arithmetic, with the state partly hidden: given, an approximation helps; present but not given, it doesn't | T10 (T10b: P2 8 against P0 2 of 15 machines, `p` 0.0206, no margin; T10a: P1 3 against 2, `p` 0.50); **T10r** (D24) the replication | T10 read; **T10r running: decisive for A4** |
 | A5 | Beyond arithmetic, groups and resets given approximations that determine the state | **T11** (D20): S3, S4, move-to-front-4 against T5's rates | running; read Wed |
@@ -968,6 +968,55 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     once anyway. (c) P2 against P1 as a test. Pros: the sharpest form of the question. Cons: 3 P1
     networks give no power (the P1 repeat is deferred, D29). (d) Descriptive only. Cons: an
     unregistered reading can't extend A6, D27's reason for T4'.
+- **D31. T12 registered: the state itself as the extra output** (registered 2026-10-28, before any
+  of its runs; the owner decided it at R4, D29). **Why:** A2's "because they are approximations"
+  against the told-the-state reading (D27): the cover may help only by telling the network part of
+  its state. The state itself, `A mod p, B mod p` as one answer, is the finest approximation (the
+  identity congruence) and all of the state.
+  - **Arms:** division at `p` 5, the quotient plus extra outputs, on one vocabulary (`sum difference
+    state`) and the same 20 fresh seeds, **320-339** (the runner's `p` 5 batches used 300-319, the
+    approximation claim 200-219): `d5-cover` (the sum and the difference, A1's arm on T12's
+    vocabulary) and `d5-state` (the state as one output, `A p + B`). The runner's `approximation`
+    cell, as T1's (D13): two factors of 16, reading the output, the default window, 400 epochs, stop
+    at certified, no fork; measure mode, no cutoff.
+  - **The output layer, design (a) (D29):** one layer in both arms, sized by the vocabulary as the
+    embedding is (`Encoding.classes`): `p^2` classes, 25. The draft's `p^2 + 1` counted "undefined"
+    apart, but it is the quotient's class `p`, one of the 25 labels the state's answers use, so the
+    layer is the largest label plus one. The cover's arm leaves 20 classes unused; the arms differ in
+    their queries alone. The default vocabularies keep `p + 1` (every earlier study, the golden run).
+  - **Feasibility** (experiment-design.md section 1, information-flow.md): the certified answer's
+    target `q` 25 in both arms, and every output a function of division's state, so the machine all
+    the outputs need has 25 states; joint codes 16 x 16 = 256, 10.2 times. The cap 280 = m + 25 - 1,
+    the exclusion bound. The window 16 wide: this cell certified at `p` 5 (A1, A2, T1). Every state
+    reachable and told apart at one column (row 14). Probe (2026-10-28, `klip`, seed 999, 3 epochs,
+    both arms): the output layer 25 wide in each, 75-77 MB a run, 5-6 s an epoch.
+  - **Success:** as D13's (certified at the stop and recertified in both verdicts, every certified
+    network long-tested: U1, S1 at 128, 256, 1,024 columns).
+  - **The test (two-sided: each direction says something, D27):** T12, `d5-cover` against `d5-state`,
+    Fisher's exact, two-sided, at 0.05 (one test at its reading; the paper's family at the end, D5).
+  - **Expectations and what each reading says:** the cover about A1's rate (15 of 20); no
+    expectation for the state. **The cover more often (T12 holds that way):** coarse approximations
+    help beyond being told the state, the stronger claim A2 then makes. **The state more often:**
+    approximations are a weaker form of state supervision, and A is restated so. **Neither:** no
+    difference detected at 20 seeds an arm (not shown equal): A reads "any approximation, the state
+    itself included", and the cover's help is said plainly to be consistent with state supervision.
+    If the cover certifies at most 5 of 20 (far below A1's 15, its feasibility in doubt on this
+    vocabulary), the reading is reported and undecided.
+  - **Exploratory, not registered:** each arm's epochs to certify (rates are cost, R5's framing);
+    `approximations` on every certified network (does a state-arm factor hold the whole state, or
+    lines as the cover's do?).
+  - **Where:** the runner: the controller on `pyramidon`, workers on `klip` and `jebel` (`stone`
+    holds T11's long tests); data `data/window-recurrent/paper/t12/`, findings here, with a manifest.
+  - **The build (this PR, tier 0: a new query and arm, the timed paths unchanged):** the `state`
+    operation (`mf.OPERATIONS`), its arm (`mf.STATE`, the probe's `--arm state`), the vocabulary's
+    layer (`Encoding.classes`), the backdrops `d5-cover` and `d5-state` (`batch.T12_VOCABULARY`);
+    tested; the golden run unchanged.
+  - Options: (a) *chosen*, two-sided, the three readings named. Pros: every outcome sharpens A, as
+    D27 asked; no direction prejudged. Cons: a two-sided bar costs power against a one-sided one.
+    (b) One-sided, the cover expected better. Pros: more power for the stronger claim. Cons:
+    prejudges the result; the state's winning would be unreadable. (c) An equivalence test for
+    "as good as". Pros: would license "the same". Cons: 20 seeds an arm can't power it (D27's cost
+    was 40 runs).
 
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 

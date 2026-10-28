@@ -484,6 +484,22 @@ def test_t1_and_t3s_cells_meet_their_registered_bounds():
     assert all(b.BACKDROPS[n].vocabulary == b.T1_VOCABULARY for n in ("d5-sum", "d5-suffix", "d5-token"))
 
 
+def test_t12s_arms_are_the_cover_and_the_state_on_one_vocabulary_under_the_approximation_cell():
+    # paper-workplan.md D31: at p 5 the cover (sum, difference) against the state; every output a
+    # function of division's 25 states, so the joint codes (256) and the cap (280) are T1's
+    from indrajala_ml.studies import modular_family as mf
+
+    assert {b.BACKDROPS[name].arm for name in ("d5-cover", "d5-state")} == {"family", "state"}
+    assert all(b.BACKDROPS[n].vocabulary == b.T12_VOCABULARY for n in ("d5-cover", "d5-state"))
+    assert all(b.BACKDROPS[n].bound == 25 for n in ("d5-cover", "d5-state"))
+    args = b.BACKDROPS["d5-state"].args(320)
+    assert args[:6] == ["--p", "5", "--seed", "320", "--arm", "state"] and args[6:] == [
+        "--vocabulary",
+        *b.T12_VOCABULARY,
+    ]
+    assert mf.exclusion_bound(25, [(16, 16), (16, 16)]) == 280
+
+
 # paper-workplan.md D15, D16: each backdrop's states q, codes a factor and cap (the exclusion bound) under the paper cell
 T2_T5 = {
     "d7-family": (49, 21, 489),

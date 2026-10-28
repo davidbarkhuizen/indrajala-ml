@@ -51,6 +51,20 @@ def test_the_quotient_alone_is_division_one_token_a_window():
     assert encoding.tokens == 11 and encoding.classes == 6
 
 
+def test_the_state_arm_asks_the_state_itself_and_t12s_vocabulary_widens_both_arms_layer():
+    # the paper workplan's T12 (D31, design (a)): the state A p + B as the one extra output, the cover's
+    # arm on the same vocabulary, so both share one output layer of p^2 classes and differ in queries alone
+    p, vocabulary = 5, ("sum", "difference", "state")
+    cols = md.column_tokens((17, 40), 6)
+    state, cover = mf.Encoding(p, mf.STATE, vocabulary), mf.Encoding(p, mf.FAMILY, vocabulary)
+    (tokens, labels), (_, covered) = state.example(cols), cover.example(cols)
+    assert labels[0::2] == covered[0::3] == md.answers((17, 40), 6, p)  # the certified answer the same
+    assert labels[1::2] == tuple(A * p + B for A, B in state.states(cols))
+    assert set(tokens[1::2]) == {float(mf.COLUMNS + 2)}  # the state's token, the vocabulary's third
+    assert state.classes == cover.classes == p * p and max(labels) < state.classes
+    assert mf.Encoding(p, mf.FAMILY).classes == mf.Encoding(p, mf.FAMILY, mf.WIDE).classes == p + 1  # as before
+
+
 def test_the_sum_arm_asks_the_sum_alone_with_the_familys_token():
     encoding = mf.Encoding(5, mf.SUM)
     pair, n = (17, 40), 4
