@@ -1072,6 +1072,18 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     Pros: nothing to defend. Cons: discards a real distinction. (c) Define only in Appendix D. Pros:
     minimal. Cons: the intro's claim rests on terms met only in an appendix.
 
+- **D36. Two quotients named apart (R7's C12 with L4, settled 2026-10-28 by the owner).**
+  Division's output A B^-1 mod p is the *modular quotient*; the algebraic sense is the *congruence
+  quotient*; machines combine by the *direct product* (AB mod p stays "the product"). The data's arm
+  names (`d11-quotient`, `*-quotient`) are unchanged; Method maps them. Quotients named by their
+  congruence ("by the identity congruence", "by the Klein four-group") stay as written.
+  - Options: (a) *chosen, the owner's refinement*: "modular quotient" and "congruence quotient". Pros:
+    every use unambiguous; "quotient" kept in both established senses; text and arm names aligned.
+    Cons: a repeated modifier. (b) "The ratio" for the output. Pros: one word each. Cons: text and
+    arm names differ; "ratio" less exact for A B^-1 in Z_p. (c) "Arithmetic quotient". Cons: a term
+    of art elsewhere (quotients of symmetric spaces). (d) A disambiguating sentence only. Cons: the
+    abstract meets the clash before Method.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
