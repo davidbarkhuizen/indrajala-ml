@@ -1602,7 +1602,9 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
   deferred.
   If run: T12's build, registration (one PR), its batch (one night), the reading; T4''s
   expectations registered (one PR), then the reading.
-- **R5. The manuscript, restructured** (**done 2026-10-27 but for A4's T10r, A5, A6's T11c and the
+- **R5. The manuscript, restructured** (**done 2026-10-28:** A5 and A6's T11c (indrajala-research #80), T6's
+  strict re-run (#79), A2's T12 (#83), the discussion as prose (#84), the abstract (#85), the owner's framing
+  "found once suffices" (#86), Aichernig 2024 read in full (#82); first **done 2026-10-27 but for A4's T10r, A5, A6's T11c and the
   abstract**, indrajala-research #73: the title *Learning Finite-State Transducers Through Their
   Approximations, with Proof*; `paper_tables.py check`: 148 numbers and 11 tables the same) (`learning-transducers-with-proof.tex`, renamed if the title
   changes): the abstract and introduction on A; the method with the certificate as instrument; A1-A6
@@ -1622,7 +1624,8 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
     gradient (cover 15, sum 10, none 1; never a registered comparison), approximations not
     information (the product, as distinguishing, 0 of 20); T12 would test its extreme.
 - **R6. The owner's summary page of every test** (supersedes indrajala-research's
-  `research-notes/paper1-status.tex`).
+  `research-notes/paper1-status.tex`). **Done 2026-10-28** (`research-notes/paper1-tests.tex`,
+  indrajala-research #87): every test read.
 - **R7. Critique:** a fresh-context review of the manuscript against the data and the literature;
   the audit's checks rerun; corrections.
 - **R8. The release (D6, D28):** the datapack on Zenodo, the repositories public (third-party PDFs
