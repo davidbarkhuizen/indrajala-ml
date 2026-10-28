@@ -207,6 +207,24 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     certificate, `paper_tables.py check`, the registered protocol, R7's fresh-context reviews, and
     the co-authors' verification. Faults the co-authors find are corrected, or the claim withdrawn,
     before publication.
+  - **Revised 2026-10-28 (the owner): arXiv and TMLR.** With human co-authors who verify, the paper
+    goes to arXiv once they have, and to TMLR at once; the datapack on Zenodo now (D37). The author
+    list is the humans (the owner and the co-authors); Claude is credited in the contributions and
+    AI statement, not the author block (arXiv and TMLR admit no AI author; both hold the authors
+    fully responsible; arXiv bans for a year on incontrovertible unchecked LLM output, since
+    2026-05-14; TMLR's editors now interview authors who can't explain their papers, so at least
+    one co-author must be able to explain and defend the whole paper). Co-authors re-assessed in
+    that light and the letters rewritten (the owner's structure: we did this research; we judged you
+    the right person; review it, then decide whether the findings hold, whether it merits
+    publication, and only then whether you would accept a request to co-author). Check both
+    venues' own policy pages before submitting.
+  - **Author roles (the owner, 2026-10-28):** the letters' fourth step asks a co-author who agrees
+    with the findings whether they would act as **corresponding author**, the one who answers for
+    the findings to the editors and reviewers (the owner can't defend every line). Author order:
+    the owner first (he directed the work), then the co-authors; the corresponding author need not
+    be first. Not the verifier as first author: in ML, first authorship signals who did the main
+    work, which would contradict the contributions statement. The statement stays the record of
+    who did what.
   - (c) An AI-authorship venue (Agents4Science-like). Cons: no 2026 edition confirmed; 1 in 5
     accepted in 2025; outside the automata audience.
 - **D7. The manuscript:** a new file, `indrajala-research/papers/learning-transducers-with-proof.tex`,
