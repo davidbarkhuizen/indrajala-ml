@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import dataclasses
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -87,6 +88,10 @@ def main(argv: list[str]) -> int:
     worker.add_argument("--wrapper", action="append", default=[], help="an argument before each attempt's command")
     for name in ("status", "report"):
         commands.add_parser(name).add_argument("dir", type=Path)
+    rerun = commands.add_parser("command", help="the command that reruns one attempt of a batch, from its ledger")
+    rerun.add_argument("dir", type=Path)
+    rerun.add_argument("attempt", help="the attempt's id, e.g. d5-sum-319")
+    rerun.add_argument("--out", type=Path, required=True, help="the rerun's directory (never the original's)")
     args = parser.parse_args(argv)
 
     if args.command == "register":
@@ -143,6 +148,14 @@ def main(argv: list[str]) -> int:
             wrapper=args.wrapper,
         )
         asyncio.run(worker.serve(args.port))
+    elif args.command == "command":
+        state = b.State.read(args.dir)
+        attempt = next((a for a in state.batch.attempts if a.id == args.attempt), None)
+        if attempt is None:
+            raise SystemExit(f"{args.attempt}: no such attempt in {args.dir}'s ledger")
+        if args.out.resolve().is_relative_to(args.dir.resolve()):
+            raise SystemExit("--out: inside the batch's directory, beside the originals; a rerun writes elsewhere")
+        print(shlex.join(b.attempt_command(attempt, sys.executable, "scripts/modular_family_probe.py", args.out)))
     elif args.command == "status":
         state = b.State.read(args.dir)
         print(f"{len(state.ended)} ended, {len(state.assigned)} running ({dict(state.assigned)}), done {state.done}")

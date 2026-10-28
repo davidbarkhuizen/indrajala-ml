@@ -13,8 +13,9 @@ by hash. It fails if any of them is attested by no manifest in MANIFESTS.
 `datapack.py build TEX --out DIR` writes into DIR: `verify.tar.gz` and `verify.sha256`, the verify
 pack and its manifest, made of the cited manifests' own lines (paths relative to `--data`, hashes
 unchanged); `full-<part>.tar.gz` for each part, holding its manifests and every file they list, at
-the paths they list, symlinks followed (`--parts` builds some parts only); and `MANIFEST.sha256`, the
-hash of every archive written and of every manifest in MANIFESTS. Each manifest verifies with
+the paths they list, symlinks followed (`--parts` builds some parts only); `README.md`, the record's
+how-to-verify page (docs/datapack/README.md); and `MANIFEST.sha256`, the hash of every archive
+written, of the README and of every manifest in MANIFESTS. Each manifest verifies with
 `sha256sum -c` from its base, the directory its paths are relative to (`manifest_base`).
 
 `datapack.py check DIR` re-hashes every archive DIR's `MANIFEST.sha256` lists and every file inside
@@ -27,6 +28,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import sys
 import tarfile
 from collections.abc import Iterable
@@ -78,6 +80,7 @@ def entries(manifest: Path) -> list[tuple[str, str]]:
     return [(digest, path) for digest, path in (line.split("  ", 1) for line in lines)]
 
 
+README = Path(__file__).resolve().parent.parent / "docs" / "datapack" / "README.md"  # the record's how-to-verify page
 BASES = {"paper/t4-fresh.sha256": "paper/t2-t5/approximations"}  # run from where its files were read
 
 
@@ -176,7 +179,8 @@ def build(data: Path, tex: Path, out: Path, parts: list[str]) -> None:
                 add(archive, data, [manifest])
                 add(archive, data, sorted({os.path.normpath(base / path) for _, path in entries(data / manifest)}))
         print(f"full-{part}: {sum(len(entries(data / m)) for m in MANIFESTS[part])} files")
-    written = sorted(out.glob("*.tar.gz")) + [out / "verify.sha256"]
+    shutil.copyfile(README, out / "README.md")
+    written = sorted(out.glob("*.tar.gz")) + [out / "verify.sha256", out / "README.md"]
     lines = [f"{sha256(path)}  {path.name}" for path in written]
     lines += [f"{sha256(data / m)}  manifests/{m}" for ms in MANIFESTS.values() for m in ms]
     (out / "MANIFEST.sha256").write_text("\n".join(lines) + "\n")

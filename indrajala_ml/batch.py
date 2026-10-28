@@ -346,6 +346,14 @@ class Attempt:
     cutoff: int | None = None
 
 
+def attempt_command(attempt: Attempt, python: str, script: str, out: Path) -> list[str]:
+    """The command that runs an attempt: its backdrop's and cell's arguments, its bound and cutoff, into `out`."""
+    backdrop, chosen = BACKDROPS[attempt.backdrop], CELLS[attempt.cell]
+    cutoff = ["--cutoff-epochs", str(attempt.cutoff)] if attempt.cutoff is not None else []
+    bound = ["--state-bound", str(backdrop.bound)] if chosen.bounded else []
+    return [python, script, "run", *backdrop.args(attempt.seed), *chosen.args, *bound, *cutoff, "--out", str(out)]
+
+
 @dataclass(frozen=True)
 class Batch:
     """
@@ -811,21 +819,7 @@ class Worker:
                 self.running[attempt.id] = Running(attempt, pid_file.parent, record["pid"], peak=kb)
 
     def command(self, attempt: Attempt) -> list[str]:
-        backdrop, chosen = BACKDROPS[attempt.backdrop], CELLS[attempt.cell]
-        cutoff = ["--cutoff-epochs", str(attempt.cutoff)] if attempt.cutoff is not None else []
-        bound = ["--state-bound", str(backdrop.bound)] if chosen.bounded else []
-        return [
-            *self.wrapper,
-            self.python,
-            self.script,
-            "run",
-            *backdrop.args(attempt.seed),
-            *chosen.args,
-            *bound,
-            *cutoff,
-            "--out",
-            str(self.root / attempt.id),
-        ]
+        return [*self.wrapper, *attempt_command(attempt, self.python, self.script, self.root / attempt.id)]
 
     def launch(self, attempt: Attempt) -> Running:
         directory = self.root / attempt.id
