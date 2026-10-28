@@ -1291,6 +1291,14 @@ answers-only stop lands on the certified step, a *false stop* when it lands earl
   robustly" rows; `k9.slack-early`, `k9.slack-strict*`); `tab:proof` now reads, at 1.1 times the
   bound, 9 strict-only (5 proved, 4 out of reach) and 11 false (0 proved, 4 refuted, 7 out of reach).
   Every false stop Chow reached was a wrong machine.
+- **R7's M1 (2026-10-28): the four older manifests repointed.** The re-run rewrote reports that
+  `t2-t5.sha256`, `t6.sha256`, `t10.sha256` and `t10r.sha256` list under `proof/` (9, 14, 135 and 150
+  entries), so those manifests failed as written (the audit's F31). Each failing entry now names its
+  `proof-loose/` copy, the hash unchanged and checked; every other entry as before; all four verify
+  from their directories (`t2-t5` from `paper/t2-t5`, the rest from `paper`). New manifest hashes:
+  `t2-t5` 147da1c4...db3a4679, `t6` 5abf58ea...4d1eac21, `t10` 0e16b493...d399ca80, `t10r`
+  c0051a99...92adb476; the originals in `~/code/backups/manifests-2026-10-28/`.
+
 ## Findings: T2, the rates at scale (2026-10-25, read by D15's rules)
 
 `readout t2-t5/runs --arms ... --certify t2-t5/certify --long-tests t2-t5/long-tests`
@@ -1478,7 +1486,7 @@ manifest `paper/t4prime.sha256` 9a9e0bbb (27 files).
   counted: given its planted approximation, a factor holding it exactly in 5 of 22 certified
   networks, and never in a network not given it; the rest learn with the state held jointly. So the
   approximation's help (A4) does not need a factor that holds it.
-- Data as above; T10's and T10r's manifests (`t10.sha256`, `t10r.sha256`) unchanged.
+- Data as above; T10's and T10r's manifests (`t10.sha256`, `t10r.sha256`) unchanged by T4' (repointed since, R7's M1, below).
 
 ## Findings: T11, the groups given their approximations (2026-10-28, read by D20's rules)
 

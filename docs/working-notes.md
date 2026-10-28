@@ -308,6 +308,13 @@ where you meet a new trap; delete one that no longer holds.
   processes run the module's `CANDIDATES` only; `patch_study.parameter_count` is numpy-only; don't
   test its catalogue's generalisation at `n` 2; a screen passing isn't a pass.
 
+- **A re-run that rewrites result files in place breaks every older manifest listing them:** keep
+  the old files beside (as `proof-loose/`), repoint the old manifest's entries to them, and verify
+  every manifest (`sha256sum -c` from its directory) before calling a data set archived.
+- **A paper fetched into indrajala-literature may already sit in indrajala-research's `extra.bib`
+  as "not held":** drop the `extra.bib` entry in the same change, or bibtex fails on the repeated
+  key and research's CI goes red.
+
 ## Code internals
 
 - **The window study's API** (`indrajala_ml/studies/window_recurrent_study.py` as `wr`):
