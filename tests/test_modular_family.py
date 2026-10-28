@@ -2121,6 +2121,12 @@ def test_answers_stop_judges_the_first_step_right_within_the_bound_by_the_certif
     # a stop exact at snap ratio 1.0 but not with near ties branched (the margin's case, D59)
     strict = {**_step_end(1, True, 6, False), "certificates": {"strict": {"certified": True}}}
     assert mf.answers_stop(run(strict), 6)["verdict"] == "strict-only"
+    # a row logging no certificates (the `paper` cell's): the saved step network's verdict, when given
+    bare = run(_step_end(1, True, 6, False), _step_end(2, True, 6, True))
+    assert mf.answers_stop(bare, 6)["verdict"] == "false-stop"  # nothing to read the strict verdict from
+    assert mf.answers_stop(bare, 6, strict=lambda step: step == 1)["verdict"] == "strict-only"
+    assert mf.answers_stop(bare, 6, strict=lambda step: None)["verdict"] == "false-stop"  # not saved
+    assert mf.answers_stop(run(strict), 6, strict=lambda step: False)["verdict"] == "strict-only"  # the log's first
 
 
 def test_formation_course_reads_when_the_state_formed_was_kept_and_the_melting_curves_crowding():

@@ -995,6 +995,7 @@ import math
 import multiprocessing
 import sys
 from collections import Counter
+from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -1412,6 +1413,14 @@ def main(argv: list[str]) -> int:
         action="store_true",
         help="each step's snapped answers as its row logged them (answers_stop, D53: every epoch of a continuous run)",
     )
+    stop.add_argument("--arm", choices=sorted(ARMS), default="family", help="the run's, for the strict verdict")
+    stop.add_argument(
+        "--vocabulary",
+        nargs="+",
+        choices=list(mf.QUERIES),
+        default=list(mf.VOCABULARY),
+        help="the run's, for the strict verdict (a row with none: its saved step network's, with --task)",
+    )
     proof = commands.add_parser(
         "answers-proof",
         help="runs' logs: the answers-only stop under each bound, then Chow's test set on the stop's saved network",
@@ -1774,7 +1783,8 @@ def main(argv: list[str]) -> int:
                 if "end" in row and isinstance(row.get("answers_stop"), dict)
             }
             reader = logged.get if args.logged else snapped if args.snapped else None
-            verdict = mf.answers_stop(rows, bound, reader)
+            strict = None if args.task is None else strict_reader(path, args.task, args)
+            verdict = mf.answers_stop(rows, bound, reader, strict)
             tally[verdict["verdict"]] = tally.get(verdict["verdict"], 0) + 1
             print(f"{path}: {verdict['verdict']}, stop {verdict['stop']}, certified {verdict['certified']}", flush=True)
         print(f"bound {bound:g}: {tally}")
@@ -2111,6 +2121,22 @@ def chow_line(result: dict[str, Any]) -> str:
     )
 
 
+def strict_reader(log: Path, task: str, args: argparse.Namespace) -> Callable[[int], bool | None]:
+    """
+    A run's step's strict verdict (snap ratio 1.0, D59) from its saved network, for logs whose rows
+    carry no `certificates` (answers_stop's `strict`); None where the step's network wasn't saved.
+    """
+
+    def strict(step: int) -> bool | None:
+        saved = log.parent / f"step-{step}.network.json"
+        if not saved.exists():
+            return None
+        machine = mf.QueryMachine(mf.load_network(str(saved)), _target(task, args), mf.slot(task))
+        return wc.certify(machine, wt.task_named(task), snap_ratio=1.0).certified
+
+    return strict
+
+
 def answers_proof(log: Path, args: argparse.Namespace) -> dict[str, Any]:
     """
     T6's reading of one run (the paper workplan): at each bound (the target's states times a slack),
@@ -2124,7 +2150,7 @@ def answers_proof(log: Path, args: argparse.Namespace) -> dict[str, Any]:
     bounds: list[dict[str, Any]] = []
     for slack in args.slack:
         bound = int(target.states * slack)
-        verdict = mf.answers_stop(rows, bound)
+        verdict = mf.answers_stop(rows, bound, strict=strict_reader(log, args.task, args))
         reading: dict[str, Any] = {"slack": slack, **verdict, "bound": bound}
         if verdict["stop"] is not None:
             saved = [log.parent / f"{kind}step-{verdict['stop']}.network.json" for kind in ("", "certified-")]

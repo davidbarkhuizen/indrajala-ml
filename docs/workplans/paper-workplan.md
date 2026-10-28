@@ -1239,6 +1239,20 @@ answers-only stop lands on the certified step, a *false stop* when it lands earl
 - Manifest `paper/t6.sha256` 25d3145d...51a94fb5 (297 files, run from `paper`: the three proof
   directories, the tally and the reading's log).
 
+- **Corrected 2026-10-28: the strict verdict read from the saved step networks (the measurement
+  gap T10r's findings named).** The `paper` and `approximation` cells' log rows carry no
+  `certificates`, so `answers_stop` read every uncertified stop as `false-stop`, never `strict-only`
+  (exact at snap ratio 1.0, failing the default only on a near tie, D59). The reader now certifies the
+  stop's saved step network at 1.0 where the row logs none (`answers_stop`'s `strict`, the probe's
+  `strict_reader`, in `answers-proof` and `answers-stop`). Re-judged on every run above (`answers-stop`
+  at both bounds, the stop steps unchanged, so Chow's outcomes stand): at 1.1 times the bound, **9 of
+  the 20 false stops are strict-only** (`d5-sum-317`; T3's `308`, `314`; `d7-family-304`, `309`;
+  `d11-family-318`; `d13-family-307`, `308`, `318`): every one of the 5 read "false-stop proved" and 4
+  of the 11 "out of reach". **11 stay false stops** (4 refuted by Chow's set, 7 out of reach). At the
+  exact bound none changes (no false stop there). So the loose bound's wrong machines are 11 of its 80
+  stops, not 20; the paper's `tab:proof` and `tab:refuted` and their prose to be regenerated (R3).
+  Data `paper/t6-strict/` (a report per group and bound) and `t6-strict.py`, manifest
+  `paper/t6-strict.sha256` 90ca0abb (219 files).
 ## Findings: T2, the rates at scale (2026-10-25, read by D15's rules)
 
 `readout t2-t5/runs --arms ... --certify t2-t5/certify --long-tests t2-t5/long-tests`

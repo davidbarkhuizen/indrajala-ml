@@ -1273,6 +1273,7 @@ def answers_stop(
     rows: Sequence[Mapping[str, Any]],
     bound: float,
     snapped: Callable[[int], Mapping[str, float] | None] | None = None,
+    strict: Callable[[int], bool | None] | None = None,
 ) -> dict[str, Any]:
     """
     An answers-only stop, read offline from a run's log.jsonl (the reasoning review's item 1): the first
@@ -1284,7 +1285,9 @@ def answers_stop(
     network, in a run that certified later), "false-discovery" (in a run that never certified),
     "missed" (the run certified before the rule passed) or "silent" (neither). `snapped(step)` replaces
     the logged answers with a saved network's (snapped_answers) for runs whose logged answers are a
-    soft network's (option 1's coupling); None where the step's network wasn't saved.
+    soft network's (option 1's coupling); None where the step's network wasn't saved. `strict(step)`
+    the step's saved network's strict verdict where its row logs none (a cell that certifies once, the
+    `paper` cell's: without it, "strict-only" read as "false-stop"); None where it wasn't saved.
     """
     ends = [row for row in rows if "end" in row and "certified" in row]
     certified = next((int(row["step"]) for row in ends if row["certified"]), None)
@@ -1294,12 +1297,12 @@ def answers_stop(
                 {**row.get("accuracy", {}), **row.get("long", {})} if snapped is None else snapped(int(row["step"]))
             )
             if answers and all(v == 1.0 for v in answers.values()):
-                strict = row.get("certificates", {}).get("strict", {}).get("certified", False)
+                logged = row.get("certificates", {}).get("strict", {}).get("certified")
                 verdict = (
                     "kept"
                     if row["certified"]
                     else "strict-only"
-                    if strict
+                    if (logged if logged is not None or strict is None else strict(int(row["step"])))
                     else "false-stop"
                     if certified is not None
                     else "false-discovery"
