@@ -321,6 +321,50 @@ def planted(data: Path) -> list[str]:
     return lines
 
 
+T12_ARMS = [  # T12's arms (D31): division at p 5, the same vocabulary and seeds, the extra outputs differing
+    ("d5-cover", "the sum and the difference (cover)"),
+    ("d5-state", "the state, $A p + B$"),
+]
+
+
+def state_test(data: Path) -> tuple[list[list[mf.ArmRun]], float]:
+    """T12 (D31): each arm's runs, and Fisher's exact test of the cover against the state, two-sided."""
+    cover, state = (batch_runs(data, "t12/batch", arm) for arm, _ in T12_ARMS)
+    a, c = sum(r.succeeded for r in cover), sum(r.succeeded for r in state)
+    return [cover, state], inference.fisher_exact(a, len(cover) - a, c, len(state) - c)
+
+
+def state(data: Path) -> list[str]:
+    """T12's rates (tab:state): each arm's successes of its runs, Wilson 95%, and its successes' epochs, their span and median."""
+    lines: list[str] = []
+    for (_, label), runs in zip(T12_ARMS, state_test(data)[0], strict=True):
+        won, rate = succeeded(runs)
+        epochs = [r.outcome.epochs for r in won]
+        lines.append(f"{label} & {rate} & {span(epochs)} & {median(epochs) if epochs else '--'} \\\\")
+    return lines
+
+
+T12_LINES = {"d5-cover": [("A + B", 5), ("A - B", 5)], "d5-state": [("A", 5), ("B", 5)]}  # each arm's lines read
+
+
+def paper_state(data: Path) -> Numbers:
+    """A2's numbers from T12 (D31): each arm's successes, the two-sided p, the long tests, and (exploratory) the
+    certified networks with a factor holding one of the trained lines (the cover's) or a coordinate (the state's)."""
+    (cover, state_runs), p = state_test(data)
+    made: Numbers = {
+        "t12.cover": count(sum(r.succeeded for r in cover)),
+        "t12.state": count(sum(r.succeeded for r in state_runs)),
+        "t12.p": p_value(p),
+        "t12.networks": count(len(mf.long_tested(data / "paper" / "t12" / "batch" / "long-tests"))),
+    }
+    for arm, lines in T12_LINES.items():
+        found = readings(data / "paper" / "t12" / "batch" / "approximations" / f"{arm}.txt")
+        key = arm.removeprefix("d5-")
+        made[f"t12.{key}-networks"] = count(len(found))
+        made[f"t12.{key}-lines"] = none_or(sum(any(holds(r, n, b) for n, b in lines) for r in found))
+    return made
+
+
 TABLES: dict[str, Table] = {
     "tab:approximation": approximation,
     "tab:extra-outputs": arms_table(
@@ -367,6 +411,7 @@ TABLES: dict[str, Table] = {
     "tab:proof": proof,
     "tab:refuted": refuted,
     "tab:groups": groups,
+    "tab:state": state,
 }
 
 
@@ -939,6 +984,7 @@ NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
     paper_proofs,
     paper_planted,
     paper_groups,
+    paper_state,
     paper_factors,
 ]
 PN = re.compile(r"\\pn\{([^{}]+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
