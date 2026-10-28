@@ -89,9 +89,52 @@ def test_the_groups_table_tests_each_algebra_against_its_answers_alone(monkeypat
 
     monkeypatch.setattr(script, "batch_runs", batch_runs)
     monkeypatch.setattr(script, "GROUPS", [("s4", 24)])
+
+    def paper_family(data: Path) -> dict[str, tuple[float, float]]:
+        return {"t11-s4": (1.8e-4, 0.0014)}  # Holm the family's
+
+    monkeypatch.setattr(script, "paper_family", paper_family)
     assert script.groups(tmp_path) == [
-        "\\texttt{s4} & 24 & 4 of 20 & 16 of 20 & 0.58--0.92 & $1.8 \\times 10^{-4}$ & $1.8 \\times 10^{-4}$ \\\\"
+        "\\texttt{s4} & 24 & 4 of 20 & 16 of 20 & 0.58--0.92 & $1.8 \\times 10^{-4}$ & $0.0014$ \\\\"
     ]
+
+
+def test_the_paper_family_adjusts_over_every_registered_test(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    def wins(data: Path, test: str, arm: str) -> tuple[int, list[script.mf.ArmRun]]:
+        return 0, []
+
+    def greater(first: object, second: object) -> float:
+        return 0.01
+
+    def machine_runs(data: Path, test: str, arms: list[str]) -> dict[str, dict[int, list[script.mf.ArmRun]]]:
+        return {arm: {} for arm in arms}
+
+    def machine_successes(runs: dict[int, list[script.mf.ArmRun]]) -> list[int]:
+        return []
+
+    def rank_sum_greater(first: list[int], second: list[int]) -> float:
+        return 0.02
+
+    def state_test(data: Path) -> tuple[list[list[script.mf.ArmRun]], float]:
+        return [], 0.08
+
+    def group_tests(data: Path) -> list[tuple[str, int, list[script.mf.ArmRun], list[script.mf.ArmRun], float]]:
+        return [(b, q, [], [], 0.001) for b, q in script.GROUPS]
+
+    for name, stub in [("wins", wins), ("greater", greater), ("machine_runs", machine_runs)]:
+        monkeypatch.setattr(script, name, stub)
+    for name, stub in [("state_test", state_test), ("group_tests", group_tests)]:
+        monkeypatch.setattr(script, name, stub)
+    monkeypatch.setattr(script.mf, "machine_successes", machine_successes)
+    monkeypatch.setattr(script.inference, "rank_sum_greater", rank_sum_greater)
+    script.paper_family.cache_clear()
+    family = script.paper_family(tmp_path)
+    script.paper_family.cache_clear()
+    tests = ["t1a", "t1b", "t2b", "t3a", "t3b", "t10a", "t10b", "t10r", "t12", "t11-s3", "t11-s4", "t11-mtf4"]
+    assert list(family) == tests
+    assert family["t11-s4"] == (0.001, pytest.approx(0.012))  # 12 tests, the three smallest
+    assert family["t1a"] == (0.01, pytest.approx(0.09))  # five 0.01s after them: 9 times
+    assert family["t12"] == (0.08, pytest.approx(0.09))  # 0.08 alone, but Holm never steps down
 
 
 def test_the_state_table_and_numbers_test_the_cover_against_the_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
