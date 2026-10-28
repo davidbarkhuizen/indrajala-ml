@@ -492,8 +492,10 @@ def test_t12s_arms_are_the_cover_and_the_state_on_one_vocabulary_under_the_appro
     assert {b.BACKDROPS[name].arm for name in ("d5-cover", "d5-state")} == {"family", "state"}
     assert all(b.BACKDROPS[n].vocabulary == b.T12_VOCABULARY for n in ("d5-cover", "d5-state"))
     assert all(b.BACKDROPS[n].bound == 25 for n in ("d5-cover", "d5-state"))
-    assert b.BACKDROPS["d5-state"].args(320) == [
-        "--p", "5", "--seed", "320", "--arm", "state", "--vocabulary", "sum", "difference", "state"
+    args = b.BACKDROPS["d5-state"].args(320)
+    assert args[:6] == ["--p", "5", "--seed", "320", "--arm", "state"] and args[6:] == [
+        "--vocabulary",
+        *b.T12_VOCABULARY,
     ]
     assert mf.exclusion_bound(25, [(16, 16), (16, 16)]) == 280
 
