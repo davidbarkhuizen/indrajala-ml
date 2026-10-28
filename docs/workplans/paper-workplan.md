@@ -1057,6 +1057,21 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     on robust registered results only. Cons: loses the "read exactly" angle. (c) Keep the universal
     wording with caveats. Pros: least rewriting. Cons: reads as an overclaim.
 
+- **D35. "Told", "hidden" and "proved" defined; the record restated (R7's L1, with C11 and L5-L8;
+  settled 2026-10-28 by the owner).** Method defines told (what the network is given up to a column,
+  inputs and training targets, determines the state; fed-back outputs included), hidden, and proved
+  (the machine the trained network itself computes shown equal at every length; an extracted
+  surrogate is not the network). The intro's record: "the machines whose trained network is itself
+  proved equal to the target", Omlin & Giles 1996's extracted 10-state DFA in a footnote. Aichernig
+  2024 counts as proved (its hardmax inference network is the extracted machine). Appendix D gets its
+  body (T5a's reading; the literature's map by signal and check, with Liu's Dyck(4,8) at 4,681,
+  DeepDFA's best-5-of-10, Giles's run averages, Zeng's 4 shown), its two draft notes gone.
+  - Options: (a) *chosen*, define both in Method, restate on the network itself, footnote Omlin &
+    Giles. Pros: precise and defensible; the surrogate distinction is the certificate's real
+    difference. Cons: narrower-sounding; a paragraph more. (b) Drop the record, sizes descriptive.
+    Pros: nothing to defend. Cons: discards a real distinction. (c) Define only in Appendix D. Pros:
+    minimal. Cons: the intro's claim rests on terms met only in an appendix.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
