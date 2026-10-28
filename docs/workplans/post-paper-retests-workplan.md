@@ -63,6 +63,7 @@ B2), then **L, depth** (claim L1), each on the default the part before it leaves
 | D19 | 2026-10-25 | X's tasks | paper 1's nine backdrops |
 | D20 | 2026-10-25 | X's seeds | 10 a cell, the same seeds in both arms, read in pairs |
 | D21 | 2026-10-25 | X's readings | the paired effect and harm per task, epochs to a certificate, every run's failure kind and the stop's losses |
+| C1-C5 | 2026-10-28 | Aichernig's candidates | five candidate arms or tools from Aichernig et al. 2024, not decided (below) |
 | stages 0-6 | 2026-10-24, revised | the plan's stages | the gate, X, B's builds, B, L, findings |
 
 From later plans: the incremental reheat (D1-D9 of [incremental-reheat-workplan.md](incremental-reheat-workplan.md)). From earlier plans: the collapse (D63), the fresh-seed rate (D64), the deadline's completion (D67)
@@ -464,6 +465,63 @@ golden run unchanged at 3.
   - **Adoption (D10's X part, amended):** crystallisation becomes the default if the across-task
     test favours it and no task shows harm; otherwise the paper's method stays, the failures read
     for a remedy.
+
+## Candidates from Aichernig et al. 2024 (recorded 2026-10-28, the owner: "record them in the post-paper workplan"; not decided)
+
+Aichernig, König, Mateis, Pferscher and Tappler, *Learning Minimal Automata with Recurrent Neural
+Networks* (SoSyM 23:625-655; indrajala-literature `aichernig-2024-learning-minimal-automata-rnn`),
+read in full 2026-10-28; the manuscript revised for it (indrajala-research #82). Their method: one
+flat state of `k` categories, softmax in training and hardmax at inference, so the inferred network
+is a `k`-state Mealy machine; a regulariser, each step's state against its own hardmax (cross-entropy,
+`C` 0.001), constant from the first step; Adam on a fixed trace sample (L* logs or random walks), all
+of it trained on; each epoch the hardmax machine run on the sample, stopping at the first 100%; the
+machine read off the sample's traces, minimised and compared with the target up to isomorphism; the
+size unknown, searched downward from the prefix tree's bound by retraining at each minimised size
+until it recurs (their Algorithm 4); activation, depth and `C` tuned per target. Results: the
+minimal machine (2-5 states: Tomita 1-7, three BLE devices) in most of 10 runs a setup; failures
+from samples missing transitions (right size, wrong transitions) or a non-minimal machine (CC2650, 6-7
+for 5). They leave larger machines open.
+
+Each candidate is decided at X's registration (stage 1), with X's size in mind (180 runs already,
+memory `short-focused-experiments`): an arm added there replaces or joins one, each with its own
+feasibility row; none is a paper 1 test (D27 of the paper workplan). Not taken from them: tuning per
+target (memory `general-architecture-tasks-as-backdrops`), a flat state (memory `factored-not-flat`),
+training on a fixed sample without the exclusion bound, and their check (the certificate's
+enumeration of every reachable code under every input supersedes reading the sample's traces).
+
+- **C1. Their stop is the quench at the first certificate (corroboration, no arm of its own).** They
+  test the hard machine every epoch without committing training to it and stop at the first perfect
+  one, with no anneal, at high rates. This is the quench reading's simplest quench (the
+  incremental-reheat workplan's last section; memory `quench-at-the-peak`). Pros: independent
+  support for the quench as X's lead remedy for state loss. Cons: at 2-5 states, tuned per target; it
+  says nothing about keeping a state at 24.
+- **C2. A constant commitment regulariser, against the cool.** Their pull towards one-hot acts from
+  the first step at a fixed small weight, with no temperature; ours, the paper cell's commitment, is
+  ramped in after the soft phase (the state-formation plan's D9, D19) and crystallisation runs
+  without it (`--anneal-never-commit`, D17). The candidate: their form on each factor (per-factor,
+  the codes kept factored), as an arm beside `continuous`. Pros: no schedule to tune; aims at the
+  formed-then-lost state (the slow cool loses it 2-15 epochs past its peak). Cons: one more
+  coefficient (theirs varied per BLE device); it may hold a wrong machine as firmly as the right one
+  (C3); tuned, by the rule, on the divergent backdrops, not division (memory
+  `tune-on-divergent-tasks`).
+- **C3. Pressure towards few states (a diagnostic first).** Their read-off machines are near minimal
+  (e.g. 6 minimising to 5) though `k` starts in the hundreds or thousands; ours reach 40-103 codes for
+  25 states (T12's certified cover networks), and 5 of 6 S4 peaks held wrong machines of 58-91 minimised
+  states against 24. First, offline: each run's codes reached against its minimised states, at the
+  peak and at the stop, on X's runs, by failure kind. An arm only if wrong machines prove a failure
+  kind of their own. Pros: aims at the wrong-machine failure the quench reading found. Cons: it may
+  fight the capacity the approximations' factors need; the diagnostic costs a reader, not runs.
+- **C4. Search the size downward (for discovery, the stage after A).** T6 found the answers-only stop
+  unreliable at 1.1 times the bound, and Chow's test set grows exponentially in the slack. Their loop,
+  retraining at the minimised machine's size until the size recurs, would shrink the slack until Chow's
+  set reaches it: a stop with no known size. Pros: the discovery goal's own question
+  (machine-discovery.md, stages A-F). Cons: each step is a round of seeds; it belongs after X and B,
+  in the discovery stages, not here.
+- **C5. Known structure as a loss term.** For BLE they add a loss pulling the last state to the
+  initial one, every trace ending in a terminate request: a known fact of the machine, used in
+  training. It is the goal's "behaviour plus known structure" in its simplest form. Pros: a template
+  for a known structure given as a loss, beside approximations given as outputs. Cons: a different
+  question from X's; for machine-discovery.md's stages, not this plan.
 
 ## Feasibility (each part's registration fills its rows; a test in `tests/` checks its cells)
 
