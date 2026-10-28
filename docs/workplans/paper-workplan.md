@@ -1018,6 +1018,19 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     "as good as". Pros: would license "the same". Cons: 20 seeds an arm can't power it (D27's cost
     was 40 runs).
 
+- **D32. The paper's family applied (R7's C1, settled 2026-10-28 by the owner).** The paper's
+  registered Holm family (D5; D13, D14, D15, D20, D31 deferred to it) had been applied only within
+  each test, though the manuscript said "across the paper's family". Applied now over the 12
+  registered tests: T1a, T1b, T2b, T3a, T3b, T10a, T10b, T10r, T11's three, T12, each at its p as
+  registered (`paper_tables.py`'s `paper_family`; the `family.*` keys). Read at 0.05: T1a 0.061, T1b
+  0.18 and T10b 0.10 no longer hold; T10r (0.038), T2b, T3a/b and T11's S4 (0.0014) and
+  move-to-front-4 (7.5e-5) hold; S3 (0.25) stays undecided. A2's sum-against-suffix and -token
+  become descriptive; A4 rests on T10r.
+  - Options: (a) *chosen*, apply the registered family, T10r in it. Pros: what was registered; T10r
+    survives inside it. Cons: A2's two contrasts lose significance. (b) Keep within-test Holm and say
+    why. Pros: the numbers stay. Cons: a change of rule after the data. (c) Both reported, the
+    family the verdict. Pros: transparent. Cons: longer, the same verdicts as (a).
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10

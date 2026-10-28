@@ -29,6 +29,7 @@ import sys
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -259,8 +260,9 @@ def refuted(data: Path) -> list[str]:
 GROUPS = [("s3", 6), ("s4", 24), ("mtf4", 24)]  # T11's backdrops (D20), each against T5's rate
 
 
-def group_tests(data: Path) -> list[tuple[str, int, list[mf.ArmRun], list[mf.ArmRun], float, float]]:
-    """T11a (D20): each algebra's runs given its cover, against T5's on its answers alone; Fisher's exact, one-sided, Holm over the three."""
+def group_tests(data: Path) -> list[tuple[str, int, list[mf.ArmRun], list[mf.ArmRun], float]]:
+    """T11a (D20): each algebra's runs given its cover, against T5's on its answers alone; Fisher's exact, one-sided
+    (Holm over the paper's family, `paper_family`)."""
     pairs = [(b, q, batch_runs(data, "t11/batch", f"t11-{b}"), batch_runs(data, "t2-t5", b)) for b, q in GROUPS]
     p = [
         inference.fisher_exact_greater(
@@ -271,15 +273,15 @@ def group_tests(data: Path) -> list[tuple[str, int, list[mf.ArmRun], list[mf.Arm
         )
         for _, _, given, alone in pairs
     ]
-    return [
-        (b, q, given, alone, pv, h) for (b, q, given, alone), pv, h in zip(pairs, p, inference.holm(p), strict=True)
-    ]
+    return [(b, q, given, alone, pv) for (b, q, given, alone), pv in zip(pairs, p, strict=True)]
 
 
 def groups(data: Path) -> list[str]:
     """T11's rates (tab:groups): each algebra on its answers alone (T5) and given its cover, Wilson 95%, Fisher's p and Holm."""
     lines: list[str] = []
-    for backdrop, q, given, alone, p, holm in group_tests(data):
+    family = paper_family(data)
+    for backdrop, q, given, alone, p in group_tests(data):
+        holm = family[f"t11-{backdrop}"][1]
         _, rate = succeeded(given)
         lines.append(
             f"\\texttt{{{backdrop}}} & {q} & {sum(r.succeeded for r in alone)} of {len(alone)} & {rate}"
@@ -713,6 +715,34 @@ def greater(first: tuple[int, list[mf.ArmRun]], second: tuple[int, list[mf.ArmRu
     return inference.fisher_exact_greater(a, len(ra) - a, b, len(rb) - b)
 
 
+@cache
+def paper_family(data: Path) -> dict[str, tuple[float, float]]:
+    """The paper's registered family (D5; R7's C1, T10r in it): each registered test's p, as registered (one- or
+    two-sided), and its Holm-adjusted p over the whole family."""
+    t1 = wins(data, "t1", "sum")
+    t3 = wins(data, "t3", "approximation")
+    planted = machine_runs(data, "t10", ["p0", "p1", "p2"])
+    t10 = {arm: mf.machine_successes(runs) for arm, runs in planted.items()}
+    fresh = {arm: mf.machine_successes(runs) for arm, runs in machine_runs(data, "t10r", ["p0", "p2"]).items()}
+    p = {
+        "t1a": greater(t1, wins(data, "t1", "suffix")),
+        "t1b": greater(t1, wins(data, "t1", "token")),
+        "t2b": greater(wins(data, "t2-t5", "d11-family"), wins(data, "t2-t5", "d11-quotient")),
+        "t3a": greater(t3, wins(data, "t3", "approximation-continuous")),
+        "t3b": greater(t3, wins(data, "t3", "approximation-linear")),
+        "t10a": inference.rank_sum_greater(t10["p1"], t10["p0"]),
+        "t10b": inference.rank_sum_greater(t10["p2"], t10["p0"]),
+        "t10r": inference.rank_sum_greater(fresh["p2"], fresh["p0"]),
+        "t12": state_test(data)[1],
+    } | {f"t11-{backdrop}": pv for backdrop, _, _, _, pv in group_tests(data)}
+    return dict(zip(p, zip(p.values(), inference.holm(list(p.values())), strict=True), strict=True))
+
+
+def family_holm(data: Path) -> Numbers:
+    """Each registered test's Holm-adjusted p over the paper's family."""
+    return {f"family.{test}": p_math(holm) for test, (_, holm) in paper_family(data).items()}
+
+
 PAPER_TESTS = {  # each test's batch and arms (T2 and T5 one batch, D17)
     "t1": ["sum", "suffix", "token"],
     "t3": ["approximation", "approximation-continuous", "approximation-linear"],
@@ -759,12 +789,10 @@ def paper_rates(data: Path) -> Numbers:
         "k1.failing-uncoded": count(sum(not coded_ for coded_ in failing)),
         "k1.failing-coded": none_or(sum(failing)),
     }
-    # K3 (T3): the control against the continuous state and the linear window, Holm over the two
-    control = wins(data, "t3", "approximation")
+    # K3 (T3): the control against the continuous state and the linear window, Holm over the paper's family
     continuous = wins(data, "t3", "approximation-continuous")
-    linear = wins(data, "t3", "approximation-linear")
-    p = [greater(control, continuous), greater(control, linear)]
-    holm = inference.holm(p)
+    family = paper_family(data)
+    p, holm = zip(family["t3a"], family["t3b"], strict=True)
     uncertified = [long for certified_, _, _, long in long_tests(data, "t3") if not certified_]  # the continuous
     drifted = [
         all(r["passed"] == 0 for length in long["lengths"].values() for r in length["properties"].values())
@@ -798,10 +826,9 @@ def paper_rates(data: Path) -> Numbers:
         "k4.claim-quotient": count(rate["quotient"]),
         "k5.claim-sum": count(rate["sum"]),
     }
-    # K5 (T1): the sum against the suffix and the token, Holm over the two
+    # K5 (T1): the sum against the suffix and the token, Holm over the paper's family
     total, suffix, token = (wins(data, "t1", arm) for arm in ("sum", "suffix", "token"))
-    p = [greater(total, suffix), greater(total, token)]
-    holm = inference.holm(p)
+    p, holm = zip(family["t1a"], family["t1b"], strict=True)
     failed, came_near, _ = failures(total[1])
     made |= {
         "k5.sum": count(total[0]),
@@ -902,15 +929,14 @@ def paper_planted(data: Path) -> Numbers:
     replication read alone: its rank-sum (no Holm), each machine at most once, and the pooled Fisher's over runs."""
     runs = machine_runs(data, "t10", [arm for arm, _ in PLANTED_ARMS])
     counts = {arm: mf.machine_successes(runs[arm]) for arm, _ in PLANTED_ARMS}
-    p = [inference.rank_sum_greater(counts["p1"], counts["p0"]), inference.rank_sum_greater(counts["p2"], counts["p0"])]
-    holm = inference.holm(p)
+    p, holm = zip(paper_family(data)["t10a"], paper_family(data)["t10b"], strict=True)
     once = inference.rank_sum_greater(mf.machine_successes(runs["p2"], 1), mf.machine_successes(runs["p0"], 1))
     made: Numbers = {f"t10.{arm}-machines": count(sum(1 for c in counts[arm] if c)) for arm, _ in PLANTED_ARMS}
     made |= {
         "t10.machines": count(len(counts["p0"])),
         "t10.a-p": p_value(p[0]),
         "t10.a-holm": p_value(holm[0]),
-        "t10.b-p": f"{p[1]:.4f}",  # four places: T10b passed by no margin (0.0206 against Holm's 0.025)
+        "t10.b-p": f"{p[1]:.4f}",  # four places: T10b passed within T10 by no margin (0.0206 against 0.025)
         "t10.b-holm": p_value(holm[1]),
         "t10.b-once-p": f"{once:.4f}",
     }
@@ -932,7 +958,9 @@ def paper_planted(data: Path) -> Numbers:
 def paper_groups(data: Path) -> Numbers:
     """A5's numbers from T11 (D20): each algebra's successes given its cover, T5's, the Holm-adjusted p, and the long tests."""
     made: Numbers = {}
-    for backdrop, _, given, alone, _, holm in group_tests(data):
+    family = paper_family(data)
+    for backdrop, _, given, alone, _ in group_tests(data):
+        holm = family[f"t11-{backdrop}"][1]
         made[f"t11.{backdrop}"] = count(sum(r.succeeded for r in given))
         made[f"t11.{backdrop}-alone"] = count(sum(r.succeeded for r in alone))
         made[f"t11.{backdrop}-holm"] = p_math(holm)
@@ -986,6 +1014,7 @@ NUMBER_SOURCES: list[Callable[[Path], Numbers]] = [
     paper_groups,
     paper_state,
     paper_factors,
+    family_holm,
 ]
 PN = re.compile(r"\\pn\{([^{}]+)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
 
