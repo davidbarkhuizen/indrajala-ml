@@ -1031,6 +1031,21 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     why. Pros: the numbers stay. Cons: a change of rule after the data. (c) Both reported, the
     family the verdict. Pros: transparent. Cons: longer, the same verdicts as (a).
 
+- **D33. What the help is, retreated to the registered (R7's C2 with L2, settled 2026-10-28 by the
+  owner).** After T12's "neither" and the paper's family (D32), the manuscript no longer claims the
+  help is the approximations' own rather than their telling the state: the state did at least as
+  well as the cover; T1's controls are descriptive; the product tells less of the state than the sum
+  beside the quotient (10 classes of 25 against 22, C3). The registered evidence that a coarse
+  approximation (one leaving the state undetermined) helps is T10r. Brandoit 2026 placed honestly:
+  each head trained on a congruence, the state labelled; ours differs by outputs without states and a
+  coarse approximation alone. A5's pairs determine the state too (C10); the cover is not called
+  coarse (C8).
+  - Options: (a) *chosen*, retreat to what is registered. Pros: every sentence on a registered
+    result; no exposure to Brandoit. Cons: contribution 2 shrinks; "why" moves to future work. (b)
+    Keep "approximation, not information" as a hypothesis. Pros: the thesis stays visible. Cons: the
+    data fit state supervision as well; T12 leans the other way. (c) Recentre on T10r. Pros: the one
+    separating result. Cons: one replication of 25 machines, planting's structural shift a confound.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
