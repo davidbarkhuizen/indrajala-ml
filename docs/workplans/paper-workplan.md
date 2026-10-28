@@ -49,7 +49,7 @@ determine (computed, as the sizes note did).
 | A3 | At scale | T2: cover 17, 16, 15 of 20 at 49, 121, 169 states | read |
 | A4 | Beyond arithmetic, with the state partly hidden: given, an approximation helps; present but not given, it doesn't | T10 (T10b: P2 8 against P0 2 of 15 machines, `p` 0.0206, no margin; T10a: P1 3 against 2, `p` 0.50); **T10r** (D24) the replication | T10 read; **T10r running: decisive for A4** |
 | A5 | Beyond arithmetic, groups and resets given approximations that determine the state | **T11** (D20): S3, S4, move-to-front-4 against T5's rates | running; read Wed |
-| A6 | The mechanism: a factor that decomposes holds the approximation it was given | T4 (every one of division's 43 nontrivial factors holds exactly one line, almost always a trained one; the sum arm's only ever the sum: exploratory); **T11c** (D25: does S3's sign form when asked) | T4 read; T11c registered, pending; **T4'** (D30) registered, T10's and T10r's P2 networks |
+| A6 | The mechanism: a factor that decomposes holds the approximation it was given | T4 (every one of division's 43 nontrivial factors holds exactly one line, almost always a trained one; the sum arm's only ever the sum: exploratory); **T11c** (D25: does S3's sign form when asked) | T4 read; T11c registered, pending; **T4'** (D30) read: mixed, 5 of 22 P2 networks hold the planted approximation in a factor, no P1 network |
 
 The certificate is the method's instrument (a method section, its counts in Appendix A). The
 discussion states the limits: the answers-only rates where the state stays hidden (Appendix D), and
@@ -1350,6 +1350,34 @@ failure). Every network certified at the stop passed both, so success is certifi
 - Data `data/window-recurrent/paper/t10r/`, manifest `paper/t10r.sha256` 39eccfd6...26a623b5 (4,470
   files).
 - **Then:** R3's `tab:planted` with T10r's rows; R4 (D27's decisions).
+
+## Findings: T4', a factor holding the planted approximation (2026-10-28, read by D30's rules)
+
+`paper_reading.py approximations` at be968f9 on every certified network of T10's and T10r's batches
+(29), each with its run's arm, the planted approximation named (`wt.planted_labels`); outputs
+`t10/batch/approximations/`, `t10r/batch/approximations/` and each batch's `approximations.out`,
+manifest `paper/t4prime.sha256` 9a9e0bbb (27 files).
+
+| arm | networks | planted-factored | whole | joint |
+| --- | --- | --- | --- | --- |
+| P2 (given), T10 | 9 | 1 (`t10-p2-16-400`) | 0 | 8 |
+| P2 (given), T10r | 13 | 4 (`28-400`, `49-401`, `51-401`, `52-401`) | 0 | 9 |
+| **P2, both** | **22** | **5** | 0 | 17 |
+| P1 (present, not given) | 3 | 0 | 0 | 3 |
+| P0 (primitive) | 4 | - | 0 | 4 |
+
+- **T4' mixed, by its registered rule:** 5 of 22 P2 networks planted-factored (0.23), below the
+  expectation (at least 11) and above the refutation (at most 2). By batch 1 of 9 and 4 of 13.
+- **Read beside it (not registered):** where a factor decomposes it holds exactly the planted
+  approximation (4 blocks, its codes 6-11), the other factor nothing (meet 4, no cover), as division's
+  sum arm held the sum and nothing else; no factor anywhere holds the whole state, so every other
+  network holds the state only jointly. P1's 3 networks, the approximation present but not asked,
+  hold it in no factor (K8's "never unasked", off division, on three networks only).
+- **For the paper (D30's use, mixed):** A6 stays division's, with the random machines beside it,
+  counted: given its planted approximation, a factor holding it exactly in 5 of 22 certified
+  networks, and never in a network not given it; the rest learn with the state held jointly. So the
+  approximation's help (A4) does not need a factor that holds it.
+- Data as above; T10's and T10r's manifests (`t10.sha256`, `t10r.sha256`) unchanged.
 
 ## Stages
 
