@@ -80,6 +80,28 @@ def test_rate_and_arm_tables_count_only_successes(monkeypatch: pytest.MonkeyPatc
     assert script.arms_table("t1", [("sum", "sum")])(tmp_path) == ["sum & 2 of 5 & 0.12--0.77 & 1 of 3 & 1 \\\\"]
 
 
+def test_the_groups_table_tests_each_algebra_against_its_answers_alone(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    given = [arm_run(100)] * 16 + [arm_run(600, "spent", False, None, 0.4)] * 4
+    alone = [arm_run(100)] * 4 + [arm_run(600, "spent", False, None, 0.4)] * 16
+
+    def batch_runs(data: Path, test: str, arm: str) -> list[script.mf.ArmRun]:
+        return given if test == "t11/batch" else alone
+
+    monkeypatch.setattr(script, "batch_runs", batch_runs)
+    monkeypatch.setattr(script, "GROUPS", [("s4", 24)])
+    assert script.groups(tmp_path) == [
+        "\\texttt{s4} & 24 & 4 of 20 & 16 of 20 & 0.58--0.92 & $1.8 \\times 10^{-4}$ & $1.8 \\times 10^{-4}$ \\\\"
+    ]
+
+
+def test_a_factor_holds_a_congruence_only_with_its_blocks():
+    reading = script.Reading(24, False, [(6, ["pairings", "parity"]), (2, ["parity"])])
+    assert script.holds(reading, "parity", 2)
+    assert script.holds(reading, "pairings", 6)
+    assert not script.holds(reading, "places {0}", 4)
+    assert not script.holds(script.Reading(24, False, [(6, ["parity"])]), "parity", 2)
+
+
 def test_the_planted_table_and_numbers_count_machines_and_runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     # T10 (D19): the machine the unit; P2's machine 1 succeeding twice is one machine, two runs
     fail = arm_run(600, "spent", False, None)
