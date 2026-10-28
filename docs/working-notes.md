@@ -124,7 +124,10 @@ where you meet a new trap; delete one that no longer holds.
   a `k` 1 long test on an E8c network grows past 1.6 GB at 1,024 columns, and with a `k` 4
   `certify` (about 620 MB) beside it the machine swapped. A `certify` pool worker at `k` 4 takes
   about 440-620 MB though one in-process probe measured 45 MB; at most 3 such workers on
-  `pyramidon`.
+  `pyramidon`. **At most 2 long-test shares on `klip`** (5.3 GB): a `paper_reading.py long` child on
+  a 16 x 16-code network grows to 1.0-1.3 GB at 1,024 columns, and 4 shares swapped it
+  (2026-10-28). Stopping a share means its `modular_family_probe.py long-test` child too: killing the
+  parent leaves the child running, orphaned.
 - **`/tmp` on `pyramidon` is RAM-backed (tmpfs) with a per-user quota:** scratch copies of study
   data cost memory, and a test writing many run directories filled the quota (2026-10-18). Remove
   each one's files as it goes (the resume test does).
