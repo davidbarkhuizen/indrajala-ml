@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -33,6 +34,7 @@ import sys
 import tarfile
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import paper_tables
@@ -180,57 +182,130 @@ def build(data: Path, tex: Path, out: Path, parts: list[str]) -> None:
                 add(archive, data, sorted({os.path.normpath(base / path) for _, path in entries(data / manifest)}))
         print(f"full-{part}: {sum(len(entries(data / m)) for m in MANIFESTS[part])} files")
     shutil.copyfile(README, out / "README.md")
-    written = sorted(out.glob("*.tar.gz")) + [out / "verify.sha256", out / "README.md"]
-    lines = [f"{sha256(path)}  {path.name}" for path in written]
+    split(out)
+    write_manifest(data, out)
+
+
+SPLIT = 10**9  # bytes: an archive above this is uploaded in parts, each on its own connection (Zenodo's are slow)
+
+
+def split(out: Path) -> None:
+    """Each archive above SPLIT into `<name>.part-00`, `-01`, ..., the whole moved to `out/whole/`."""
+    (out / "whole").mkdir(exist_ok=True)
+    for path in sorted(out.glob("*.tar.gz")):
+        if path.stat().st_size <= SPLIT:
+            continue
+        count = 0
+        with path.open("rb") as f:
+            for block in iter(lambda: f.read(SPLIT), b""):
+                (out / f"{path.name}.part-{count:02d}").write_bytes(block)
+                count += 1
+        path.rename(out / "whole" / path.name)
+        print(f"{path.name}: {count} parts")
+
+
+def archive_sources(out: Path, name: str) -> list[Path]:
+    """An archive's bytes: the whole file, or its parts in order."""
+    whole = [p for p in (out / name, out / "whole" / name) if p.exists()]
+    return whole[:1] or sorted(out.glob(f"{name}.part-*"))
+
+
+def write_manifest(data: Path, out: Path) -> None:
+    """MANIFEST.sha256: every archive whole (rejoined from its parts if split), every part, the verify
+    manifest, the README and every manifest in MANIFESTS."""
+    names = sorted({p.name.split(".part-")[0] for p in out.glob("*.tar.gz*")} | {p.name for p in out.glob("whole/*")})
+    lines = [f"{sha256_of(archive_sources(out, name))}  {name}" for name in names]
+    lines += [f"{sha256(p)}  {p.name}" for p in sorted(out.glob("*.tar.gz.part-*"))]
+    lines += [f"{sha256(out / n)}  {n}" for n in ("verify.sha256", "README.md")]
     lines += [f"{sha256(data / m)}  manifests/{m}" for ms in MANIFESTS.values() for m in ms]
     (out / "MANIFEST.sha256").write_text("\n".join(lines) + "\n")
 
 
+def sha256_of(paths: list[Path]) -> str:
+    """The SHA-256 of files' bytes one after another."""
+    digest = hashlib.sha256()
+    for path in paths:
+        with path.open("rb") as f:
+            for block in iter(lambda: f.read(1 << 20), b""):
+                digest.update(block)
+    return digest.hexdigest()
+
+
+class Joined(io.RawIOBase):
+    """Files read as one stream, in order: an archive's parts rejoined without writing it out."""
+
+    def __init__(self, paths: list[Path]) -> None:
+        self.paths, self.f = list(paths), None
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer: Any) -> int:
+        while True:
+            if self.f is None:
+                if not self.paths:
+                    return 0
+                self.f = self.paths.pop(0).open("rb")
+            n = self.f.readinto(buffer)
+            if n:
+                return n
+            self.f.close()
+            self.f = None
+
+
 def check(out: Path) -> bool:
-    """Every archive's hash, and every file inside it against the manifests it carries."""
+    """Every archive's hash, and every file inside it against the manifests it carries, each archive
+    read once as a stream (a gzip stream can't seek back cheaply, so members are hashed as they pass)."""
     good = True
     for digest, name in entries(out / "MANIFEST.sha256"):
         if name.startswith("manifests/"):
             continue
-        if sha256(out / name) != digest:
-            print(f"{name}: hash differs")
+        sources = archive_sources(out, name) if name.endswith(".tar.gz") else [out / name]
+        if not sources or not all(p.exists() for p in sources) or sha256_of(sources) != digest:
+            print(f"{name}: missing or its hash differs")
             good = False
             continue
         if not name.endswith(".tar.gz"):
             continue
-        with tarfile.open(out / name) as archive:
-            inside = {m.name: m for m in archive.getmembers() if m.isfile()}
-            if name == "verify.tar.gz":
-                carried = [("", entries(out / "verify.sha256"))]
-            else:
-                part = name.removeprefix("full-").removesuffix(".tar.gz")
-                carried = [(m, _members(archive, inside, m)) for m in MANIFESTS[part]]
-            for manifest, lines in carried:
-                base = Path(manifest).parent if manifest else Path(".")
-                for expected, path in lines:
-                    member = inside.get(os.path.normpath(base / path)) or _based(inside, manifest, path)
-                    f = archive.extractfile(member) if member else None
-                    if f is None or hashlib.sha256(f.read()).hexdigest() != expected:
-                        print(f"{name}: {path} missing or differs")
-                        good = False
-        print(f"{name}: checked")
+        inside: dict[str, str] = {}  # member -> sha256
+        carried: dict[str, bytes] = {}  # the archive's manifests, by their path
+        part = name.removeprefix("full-").removesuffix(".tar.gz")
+        manifests = [] if name == "verify.tar.gz" else MANIFESTS[part]
+        with tarfile.open(fileobj=io.BufferedReader(Joined(sources), 1 << 20), mode="r|gz") as archive:
+            for member in archive:
+                f = archive.extractfile(member) if member.isfile() else None
+                if f is None:
+                    continue
+                content = f.read()
+                inside[member.name] = hashlib.sha256(content).hexdigest()
+                if member.name in manifests:
+                    carried[member.name] = content
+        if name == "verify.tar.gz":
+            expected = [(Path("."), entries(out / "verify.sha256"))]
+        else:
+            expected = [(_base_inside(inside, m, _lines(carried[m])), _lines(carried[m])) for m in manifests]
+        for base, lines in expected:
+            for digest_expected, path in lines:
+                if inside.get(os.path.normpath(base / path)) != digest_expected:
+                    print(f"{name}: {path} missing or differs")
+                    good = False
+        print(f"{name}: checked, {len(inside)} files")
     return good
 
 
-def _members(archive: tarfile.TarFile, inside: dict[str, tarfile.TarInfo], manifest: str) -> list[tuple[str, str]]:
-    f = archive.extractfile(inside[manifest])
-    assert f is not None
-    lines = [line for line in f.read().decode().splitlines() if line.strip()]
+def _lines(text: bytes) -> list[tuple[str, str]]:
+    lines = [line for line in text.decode().splitlines() if line.strip()]
     return [(digest, path) for digest, path in (line.split("  ", 1) for line in lines)]
 
 
-def _based(inside: dict[str, tarfile.TarInfo], manifest: str, path: str) -> tarfile.TarInfo | None:
-    """A manifest's listed path inside the archive under its stem's directory or the root."""
+def _base_inside(inside: dict[str, str], manifest: str, lines: list[tuple[str, str]]) -> Path:
+    """Where a carried manifest's paths sit inside its archive: BASES's, else the first of its own
+    directory, its stem's and the root that holds every listed file."""
     own = Path(manifest).parent
-    for base in [Path(BASES.get(manifest, own / Path(manifest).stem)), Path(".")]:
-        if (member := inside.get(os.path.normpath(base / path))) is not None:
-            return member
-    return None
+    for base in [Path(BASES[manifest])] if manifest in BASES else [own, own / Path(manifest).stem, Path(".")]:
+        if all(os.path.normpath(base / path) in inside for _, path in lines):
+            return base
+    return own
 
 
 def main(argv: list[str]) -> int:
@@ -243,6 +318,8 @@ def main(argv: list[str]) -> int:
     make.add_argument("tex", type=Path)
     make.add_argument("--out", type=Path, required=True)
     make.add_argument("--parts", nargs="*", choices=sorted(MANIFESTS), default=sorted(MANIFESTS))
+    parted = commands.add_parser("split", help="archives above 1 GB into parts, and MANIFEST.sha256 rewritten")
+    parted.add_argument("out", type=Path)
     checked = commands.add_parser("check", help="every archive and every file inside, re-hashed")
     checked.add_argument("out", type=Path)
     args = parser.parse_args(argv)
@@ -254,6 +331,10 @@ def main(argv: list[str]) -> int:
         return 0
     if args.command == "build":
         build(args.data, args.tex, args.out, args.parts)
+        return 0
+    if args.command == "split":
+        split(args.out)
+        write_manifest(args.data, args.out)
         return 0
     return 0 if check(args.out) else 1
 

@@ -15,7 +15,15 @@ rerun.
 | `verify.tar.gz` (about 0.4 GB) | what `paper_tables.py check` reads to regenerate every number and table in the paper, plus every certified network (2,762 files) |
 | `verify.sha256` | the verify pack's manifest: each file's SHA-256, the same hashes the paper's manifests cite |
 | `full-<part>.tar.gz` (about 20 GB in all) | every file the paper's manifests list, one archive per test (`t1`, `t2-t5`, ..., `t12-runs`), plus `approximation-claim` and `addition`; each archive carries its manifests |
-| `MANIFEST.sha256` | the SHA-256 of every archive and of every manifest |
+| `MANIFEST.sha256` | the SHA-256 of every archive (whole), of every part, and of every manifest |
+
+The full pack's archives above 1 GB are uploaded in 1 GB parts (`full-t2-t5.tar.gz.part-00`, `-01`,
+...), each on its own connection. Rejoin them before use; `MANIFEST.sha256` holds both the parts'
+hashes and the whole archive's:
+
+```bash
+for a in $(ls *.part-00 | sed 's/.part-00$//'); do cat "$a".part-* > "$a"; done
+```
 
 The verify pack is enough to check every claim; the full pack is the archive of record (every
 training log, every step's network, every reading).
@@ -105,10 +113,11 @@ Raspberry Pi 5) and on x86-64, from the code at release: all four matched bit fo
 
 ## 5. The full pack
 
-Extract every `full-*.tar.gz` into one directory. Each manifest verifies with `sha256sum -c` from its
+Rejoin the split archives (above), then extract every `full-*.tar.gz` into one directory. Each manifest verifies with `sha256sum -c` from its
 own directory or its stem's (`paper/t2-t5.sha256` from `paper/t2-t5/`), with one exception,
 `paper/t4-fresh.sha256`, from `paper/t2-t5/approximations/`. `datapack.py check` does all of it,
-re-hashing every archive and every file inside against the manifests each archive carries:
+re-hashing every archive (whole, or rejoined from its parts in place) and every file inside against
+the manifests each archive carries:
 
 ```bash
 .venv/bin/python scripts/datapack.py check <the directory holding the downloaded files>
