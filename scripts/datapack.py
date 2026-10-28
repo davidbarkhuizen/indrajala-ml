@@ -187,7 +187,8 @@ def build(data: Path, tex: Path, out: Path, parts: list[str]) -> None:
 
 
 def check(out: Path) -> bool:
-    """Every archive's hash, and every file inside it against the manifests it carries."""
+    """Every archive's hash, and every file inside it against the manifests it carries, each archive
+    read once as a stream (a gzip stream can't seek back cheaply, so members are hashed as they pass)."""
     good = True
     for digest, name in entries(out / "MANIFEST.sha256"):
         if name.startswith("manifests/"):
@@ -198,39 +199,45 @@ def check(out: Path) -> bool:
             continue
         if not name.endswith(".tar.gz"):
             continue
-        with tarfile.open(out / name) as archive:
-            inside = {m.name: m for m in archive.getmembers() if m.isfile()}
-            if name == "verify.tar.gz":
-                carried = [("", entries(out / "verify.sha256"))]
-            else:
-                part = name.removeprefix("full-").removesuffix(".tar.gz")
-                carried = [(m, _members(archive, inside, m)) for m in MANIFESTS[part]]
-            for manifest, lines in carried:
-                base = Path(manifest).parent if manifest else Path(".")
-                for expected, path in lines:
-                    member = inside.get(os.path.normpath(base / path)) or _based(inside, manifest, path)
-                    f = archive.extractfile(member) if member else None
-                    if f is None or hashlib.sha256(f.read()).hexdigest() != expected:
-                        print(f"{name}: {path} missing or differs")
-                        good = False
-        print(f"{name}: checked")
+        inside: dict[str, str] = {}  # member -> sha256
+        carried: dict[str, bytes] = {}  # the archive's manifests, by their path
+        part = name.removeprefix("full-").removesuffix(".tar.gz")
+        manifests = [] if name == "verify.tar.gz" else MANIFESTS[part]
+        with tarfile.open(out / name, "r|gz") as archive:
+            for member in archive:
+                f = archive.extractfile(member) if member.isfile() else None
+                if f is None:
+                    continue
+                content = f.read()
+                inside[member.name] = hashlib.sha256(content).hexdigest()
+                if member.name in manifests:
+                    carried[member.name] = content
+        if name == "verify.tar.gz":
+            expected = [(Path("."), entries(out / "verify.sha256"))]
+        else:
+            expected = [(_base_inside(inside, m, _lines(carried[m])), _lines(carried[m])) for m in manifests]
+        for base, lines in expected:
+            for digest_expected, path in lines:
+                if inside.get(os.path.normpath(base / path)) != digest_expected:
+                    print(f"{name}: {path} missing or differs")
+                    good = False
+        print(f"{name}: checked, {len(inside)} files")
     return good
 
 
-def _members(archive: tarfile.TarFile, inside: dict[str, tarfile.TarInfo], manifest: str) -> list[tuple[str, str]]:
-    f = archive.extractfile(inside[manifest])
-    assert f is not None
-    lines = [line for line in f.read().decode().splitlines() if line.strip()]
+def _lines(text: bytes) -> list[tuple[str, str]]:
+    lines = [line for line in text.decode().splitlines() if line.strip()]
     return [(digest, path) for digest, path in (line.split("  ", 1) for line in lines)]
 
 
-def _based(inside: dict[str, tarfile.TarInfo], manifest: str, path: str) -> tarfile.TarInfo | None:
-    """A manifest's listed path inside the archive under its stem's directory or the root."""
+def _base_inside(inside: dict[str, str], manifest: str, lines: list[tuple[str, str]]) -> Path:
+    """Where a carried manifest's paths sit inside its archive: BASES's, else the first of its own
+    directory, its stem's and the root that holds every listed file."""
     own = Path(manifest).parent
-    for base in [Path(BASES.get(manifest, own / Path(manifest).stem)), Path(".")]:
-        if (member := inside.get(os.path.normpath(base / path))) is not None:
-            return member
-    return None
+    for base in [Path(BASES[manifest])] if manifest in BASES else [own, own / Path(manifest).stem, Path(".")]:
+        if all(os.path.normpath(base / path) in inside for _, path in lines):
+            return base
+    return own
 
 
 def main(argv: list[str]) -> int:
