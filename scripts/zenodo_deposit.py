@@ -10,9 +10,10 @@ file bucket are kept in DIR's `zenodo.json`, so each command resumes the same dr
 `zenodo_deposit.py reserve DIR` creates a draft with a pre-reserved DOI and prints the DOI, to be
 filled into the README, the paper and the letters before the upload. `zenodo_deposit.py metadata DIR`
 sets the draft's metadata from docs/datapack/zenodo-metadata.json. `zenodo_deposit.py upload DIR`
-uploads every file in DIR (but `zenodo.json`), skipping those already there with the same MD5, and
-checks each against the checksum Zenodo reports. `zenodo_deposit.py status DIR` compares the draft's
-files with DIR's.
+uploads every file at DIR's top level (but `zenodo.json`; `datapack.py split` leaves the large
+archives in parts there, the wholes in `whole/`), `--connections` at once, the largest first,
+skipping those already there with the same MD5, and checks each against the checksum Zenodo reports. `zenodo_deposit.py status DIR` compares the
+draft's files with DIR's.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import hashlib
 import json
 import sys
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +74,7 @@ def remote_files(draft: dict[str, Any], token: str) -> dict[str, str]:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--token-file", type=Path, default=Path.home() / ".zenodo-token")
+    parser.add_argument("--connections", type=int, default=12, help="files uploaded at once")
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("reserve", "metadata", "upload", "status"):
         commands.add_parser(name).add_argument("dir", type=Path)
@@ -106,17 +109,21 @@ def main(argv: list[str]) -> int:
             mark = "uploaded" if there.get(path.name) == md5(path) else "missing or differs"
             print(f"{path.name}: {mark}")
         return 0
-    for path in local_files(out):
+
+    def send(path: Path) -> str:
         local = md5(path)
         if there.get(path.name) == local:
-            print(f"{path.name}: there already")
-            continue
+            return f"{path.name}: there already"
         with path.open("rb") as f:
             made = request("PUT", f"{draft['bucket']}/{path.name}", token, data=f, size=path.stat().st_size)
         reported = made["checksum"].removeprefix("md5:")
         if reported != local:
             raise SystemExit(f"{path.name}: Zenodo reports MD5 {reported}, the file's is {local}")
-        print(f"{path.name}: uploaded, {path.stat().st_size / 1e9:.2f} GB, MD5 checked")
+        return f"{path.name}: uploaded, {path.stat().st_size / 1e9:.2f} GB, MD5 checked"
+
+    with ThreadPoolExecutor(args.connections) as pool:  # Zenodo's connections are slow one by one
+        for line in pool.map(send, sorted(local_files(out), key=lambda p: -p.stat().st_size)):
+            print(line, flush=True)
     return 0
 
 

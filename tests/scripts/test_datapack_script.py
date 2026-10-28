@@ -76,3 +76,28 @@ def test_a_changed_file_fails_the_check(monkeypatch: pytest.MonkeyPatch, tmp_pat
     (data / "a" / "runs" / "two.json").write_text("changed")
     script.build(data, Path("paper.tex"), out, ["a"])
     assert not script.check(out)
+
+
+def test_a_split_archive_checks_from_its_parts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    data, out = tmp_path / "data", tmp_path / "out"
+    toy(data)
+    for i in range(20):  # enough to spread the archive over several parts
+        write(data / "a" / "runs" / f"more-{i}.json", str(i) * 500)
+    lines = (data / "a.sha256").read_text()
+    lines += "".join(f"{hashlib.sha256((str(i) * 500).encode()).hexdigest()}  runs/more-{i}.json\n" for i in range(20))
+    (data / "a.sha256").write_text(lines)
+    monkeypatch.setattr(script, "MANIFESTS", {"a": ["a.sha256"]})
+    monkeypatch.setattr(script, "certified_networks", no_networks)
+    monkeypatch.setattr(script, "SPLIT", 300)
+
+    def check_reads(data: Path, tex: Path) -> set[str]:
+        return {"a/runs/one.json"}
+
+    monkeypatch.setattr(script, "check_reads", check_reads)
+    script.build(data, Path("paper.tex"), out, ["a"])
+    parts = sorted(out.glob("full-a.tar.gz.part-*"))
+    assert len(parts) > 1 and not (out / "full-a.tar.gz").exists() and (out / "whole" / "full-a.tar.gz").exists()
+    (out / "whole" / "full-a.tar.gz").unlink()  # a reader has the parts only
+    assert script.check(out)
+    parts[0].write_bytes(b"x" + parts[0].read_bytes()[1:])
+    assert not script.check(out)
