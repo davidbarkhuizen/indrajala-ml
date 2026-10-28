@@ -1,7 +1,9 @@
 # Verifying paper 1
 
 This is the datapack for *Learning Finite-State Transducers Through Their Approximations, with Proof*
-([PAPER LINK]), archived at [DATAPACK DOI]. It holds only what the paper cites. Everything here can
+(manuscript in preparation; its LaTeX source is in
+[indrajala-research](https://github.com/davidbarkhuizen/indrajala-research), `papers/`), archived at
+[doi:10.5281/zenodo.23733575](https://doi.org/10.5281/zenodo.23733575). It holds only what the paper cites. Everything here can
 be checked without trusting its authors: the files against their hashes, every number in the paper
 against the files, every learned machine against its target, and the training itself against a
 rerun.
@@ -20,14 +22,14 @@ training log, every step's network, every reading).
 
 ## Setup
 
-The code is [indrajala-ml](https://github.com/davidbarkhuizen/indrajala-ml) at [RELEASE TAG], with its
+The code is [indrajala-ml](https://github.com/davidbarkhuizen/indrajala-ml) at `paper1-v1`, with its
 native crate [indrajala-math-rust](https://github.com/davidbarkhuizen/indrajala-math-rust) as a
 submodule; the manuscript's source is in
-[indrajala-research](https://github.com/davidbarkhuizen/indrajala-research) at [RELEASE TAG].
+[indrajala-research](https://github.com/davidbarkhuizen/indrajala-research) at `paper1-v1`.
 
 ```bash
 git clone --recurse-submodules https://github.com/davidbarkhuizen/indrajala-ml
-cd indrajala-ml && git checkout [RELEASE TAG]
+cd indrajala-ml && git checkout paper1-v1
 ./cli setup   # .venv, Python dependencies, a release build of the crate (needs a Rust toolchain)
 git clone https://github.com/davidbarkhuizen/indrajala-research ../indrajala-research
 ```
