@@ -48,8 +48,8 @@ determine (computed, as the sizes note did).
 | A2 | Because they are approximations | T1 (sum 6 against suffix 0, `p` 0.010, and token 1, `p` 0.046, of 20); the product's 0 of 20 | read; **T12** (D31) registered: the cover against the state itself |
 | A3 | At scale | T2: cover 17, 16, 15 of 20 at 49, 121, 169 states | read |
 | A4 | Beyond arithmetic, with the state partly hidden: given, an approximation helps; present but not given, it doesn't | T10 (T10b: P2 8 against P0 2 of 15 machines, `p` 0.0206, no margin; T10a: P1 3 against 2, `p` 0.50); **T10r** (D24) the replication | T10 read; **T10r running: decisive for A4** |
-| A5 | Beyond arithmetic, groups and resets given approximations that determine the state | **T11** (D20): S3, S4, move-to-front-4 against T5's rates | running; read Wed |
-| A6 | The mechanism: a factor that decomposes holds the approximation it was given | T4 (every one of division's 43 nontrivial factors holds exactly one line, almost always a trained one; the sum arm's only ever the sum: exploratory); **T11c** (D25: does S3's sign form when asked) | T4 read; T11c registered, pending; **T4'** (D30) read: mixed, 5 of 22 P2 networks hold the planted approximation in a factor, no P1 network |
+| A5 | Beyond arithmetic, groups and resets given approximations that determine the state | **T11** (D20): S3, S4, move-to-front-4 against T5's rates | **read: stands on S4 (16 of 20 against 4) and move-to-front-4 (18 against 4); S3 undecided (5 against 1)** |
+| A6 | The mechanism: a factor that decomposes holds the approximation it was given | T4 (every one of division's 43 nontrivial factors holds exactly one line, almost always a trained one; the sum arm's only ever the sum: exploratory); **T11c** (D25: does S3's sign form when asked) | T4 read; **T11c read: S3 sign-factored 4 of 5 (as expected); S4 and move-to-front-4 rarely hold the given ones**; **T4'** (D30) read: mixed, 5 of 22 P2 networks hold the planted approximation in a factor, no P1 network |
 
 The certificate is the method's instrument (a method section, its counts in Appendix A). The
 discussion states the limits: the answers-only rates where the state stays hidden (Appendix D), and
@@ -1441,6 +1441,66 @@ manifest `paper/t4prime.sha256` 9a9e0bbb (27 files).
   networks, and never in a network not given it; the rest learn with the state held jointly. So the
   approximation's help (A4) does not need a factor that holds it.
 - Data as above; T10's and T10r's manifests (`t10.sha256`, `t10r.sha256`) unchanged.
+
+## Findings: T11, the groups given their approximations (2026-10-28, read by D20's rules)
+
+`paper_reading.py links`, `readout t11/batch/runs --arms t11-s3 t11-s4 t11-mtf4 --certify ...
+--long-tests ...` (`t11/batch/readout-all.txt`); every certified network recertified in both
+verdicts and long-tested (shares on `pyramidon`, `klip`, `stone` and `jebel`, gathered into
+`t11/batch/long-tests/`, each result's sha256 its network's; the 9 tested twice agree): **39 networks,
+14,238,000 cases, every case passed** (`long-tests-summary.txt`). Fisher's exact, one-sided, Holm over
+the three (`inference.fisher_exact_greater`, `holm`).
+
+| backdrop | T11 (cover) | Wilson 95% | T5 (answers alone) | `p` | Holm | T11a | T11b (9 of 20) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `s3` | **5 of 20** | 0.11-0.47 | 1 of 20 | 0.091 | 0.091 | undecided | not met |
+| `s4` | **16 of 20** | 0.58-0.92 | 4 of 20 | 0.00018 | 0.00036 | **stands** | **met** |
+| `mtf4` | **18 of 20** | 0.70-0.97 | 4 of 20 | 8.3e-06 | 2.5e-05 | **stands** | **met** |
+
+- **T11a stands on `s4` and `mtf4`, so K4 generalises to the algebras** (D20: at least one). `s3` is
+  undecided: 5 of 20 against 1, short of the bar's 6, not refuted (more than T5's 1).
+- **T11b:** `s4` and `mtf4` meet the reliability bar, so K7 is restated for them as "learned
+  reliably given their approximations"; `s3` doesn't.
+- **As expected** for `s4` and `mtf4` (about 10-14 of 20; read 16 and 18), and `s3` the least
+  certain. Failures: `s3` 15 (2 near a solution, 6 collapsed), `s4` 4 (1, 1), `mtf4` 2 (2, 0).
+- **T6 on T11's runs (D11, reported apart):** at the exact bound (6, 24, 24) and at 1.1 times it, no
+  false stop and no false discovery; every stop proved by Chow's set. One stop is strict-only at both
+  bounds (`t11-mtf4-708`, stop 9, certified 10; proved). `t11/batch/proof/`.
+- Manifest `paper/t11.sha256` fa1ab98e (246 files: certify, long tests, approximations, proof,
+  readout, ledger, T11c's control and tallies).
+
+## Findings: T11c, the given approximations in the factors (2026-10-28, read by D25's rules)
+
+`paper_reading.py approximations t11/batch` (T4's tool, `--arm cover`) on the 39 certified networks;
+a factor *is* a named approximation when its finest congruence determines that one with exactly its
+blocks (`t11/t11c-tally.py`, `t11c-tally.txt`).
+
+- **T11c on S3 holds: sign-factored, 4 of 5** (`701`, `707`, `708`, `714`: one factor exactly
+  `parity`, the other holding nothing alone); `704` other (neither factor determines a nontrivial
+  quotient alone; the state held jointly). Expected at least half, with at least 3 read: **as
+  expected**. So K4's mechanism holds on S3: given, the sign forms, where T4b never found it unasked;
+  K8 reads "never the sign unasked". No network holds `places {0}`: the second factor carries the
+  rest of the state jointly, not the given place.
+- **S4 and move-to-front-4 (reported, no expectation),** against T5's and round 1's unasked networks
+  re-read with the same names (`t11/t11c-control/`; round 1's four move-to-front-4 networks shaped K8,
+  as D10 notes):
+
+  | set | networks | a factor `places {0}` / `order {0, 1, 3}` | a factor `pairings` / `ahead {2}` | the given pair |
+  | --- | --- | --- | --- | --- |
+  | `s4`, T11 | 16 | 4 | 1 | 1 (`705`) |
+  | `s4`, unasked | 8 | 0 | 0 | 0 |
+  | `mtf4`, T11 | 18 | 1 | 1 | 0 |
+  | `mtf4`, unasked | 8 | 2 | 1 | 1 (round 1's seed 1) |
+
+  Up to relabelling (any point's place, any three items' order, any `ahead {i}`; not registered,
+  D20's ties being relabellings): `s4` T11 4 of 16 a place, unasked 4 of 8 (points 1-3, never 0);
+  `mtf4` T11 1 and 1 of 18, unasked 3 and 1 of 8. On S4 the given output picks *which* point's place
+  a factor holds (every T11 place is the asked point 0) but not *whether* one forms; in 12 of 16 S4
+  networks neither factor determines a nontrivial quotient alone, and 16 of 18 move-to-front ones hold
+  neither given approximation (their factors smaller orders, `order {0, 1}` and the like). So the help
+  on S4 and move-to-front-4 (T11a) does not need a factor holding the given approximation, as A4's
+  doesn't (T4'): A6 stays division's and S3's, the others counted beside it.
+- Data `t11/batch/approximations/`, `t11/t11c-control/`, in `paper/t11.sha256`.
 
 ## Stages
 
