@@ -1,0 +1,26 @@
+{
+  "title": "Learning Finite-State Transducers Through Their Approximations, with Proof: the datapack",
+  "upload_type": "dataset",
+  "version": "1.0",
+  "license": "cc-by-4.0",
+  "access_right": "open",
+  "creators": [
+    {"name": "Barkhuizen, David", "affiliation": "Independent researcher"}
+  ],
+  "keywords": [
+    "finite-state transducers",
+    "Mealy machines",
+    "recurrent neural networks",
+    "automata learning",
+    "formal verification",
+    "algebraic automata theory",
+    "reproducibility"
+  ],
+  "description": "<p>The data behind the paper <i>Learning Finite-State Transducers Through Their Approximations, with Proof</i> (manuscript in preparation): the results of every test the paper reports (training logs, every step's network, certificates in both verdicts, long tests, proofs and readings), each test's files listed with their SHA-256 hashes in manifests, and a verify pack from which every number and table in the paper is regenerated.</p><p><b>Start with README.md.</b> It says how to check the files against their hashes, regenerate every number and table, rerun a certificate on a learned network, and rerun training bit for bit. The verify pack (verify.tar.gz, about 0.4 GB) is enough for all of it; the full pack (full-*.tar.gz, one archive per test) is the archive of record.</p><p><b>How this work was done.</b> David Barkhuizen posed the question, learning finite-state machines from their behaviour and known structure, with proof, and directed the research programme throughout, steering it as results came in: he set its goal and its rules of evidence (claims registered before their data, no acting on early looks, every cell able to succeed), redirected it when findings called for it, decided at each decision point among options laid out with their costs, and decided what the paper claims and how it is published. Claude (Opus 5.5, a model made by Anthropic), working through Claude Code, an agentic harness that gave it a shell, the repositories and the machines the runs used, did the rest, at every stage: the literature search and reading; the method's design; the code, the training and certification library and its native crate; the registration of every test before its data, and the runs; the analysis; the building of this datapack and its verification tools; and the drafting of the paper. Claude is not listed as a creator because it cannot be accountable for the record; this note says who did what.</p><p>The findings have not yet been verified independently: the paper's human co-authors, when they join, are to verify them before it is published. Anthropic as an organisation has not been involved in this work and has not consented to, reviewed or endorsed it.</p>",
+  "notes": "Code: indrajala-ml (MIT) with its native crate indrajala-math-rust (MIT), at tag [RELEASE TAG]; the manuscript's source: indrajala-research (CC BY 4.0), at tag [RELEASE TAG].",
+  "related_identifiers": [
+    {"identifier": "https://github.com/davidbarkhuizen/indrajala-ml", "relation": "isSupplementedBy", "resource_type": "software"},
+    {"identifier": "https://github.com/davidbarkhuizen/indrajala-math-rust", "relation": "isSupplementedBy", "resource_type": "software"},
+    {"identifier": "https://github.com/davidbarkhuizen/indrajala-research", "relation": "isSupplementedBy", "resource_type": "publication-preprint"}
+  ]
+}
