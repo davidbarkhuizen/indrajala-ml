@@ -1093,6 +1093,28 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     of art elsewhere (quotients of symmetric spaces). (d) A disambiguating sentence only. Cons: the
     abstract meets the clash before Method.
 
+- **D37. The datapack: paper 1's data only, in two packs (settled 2026-10-28 by the owner).** One
+  Zenodo record holding only what paper 1 cites (nothing of `state-formation/` or the other earlier
+  studies, which wait for the paper that uses them): **the full pack**, every file paper 1's
+  manifests list (`paper/`, `approximation-claim/`, addition's `matrix`, `control`,
+  `certificates`, `long-tests`, `e3-e4`, `stable-replay`, `replay-guard`; about 44 GB, as
+  compressed archives under Zenodo's per-record limits), the archive of record; and **the verify
+  pack**, what `paper_tables.py check` reads (2,540 files, 0.02 GB, traced by an audit hook) plus
+  the 222 long-tested networks (0.48 GB), so anyone can regenerate every number and rerun every
+  certificate without the full download. The verify pack's manifest is the original manifests'
+  lines for its files, hashes unchanged.
+  - **Found building it (2026-10-28):** `t11.sha256` and `t12.sha256` list the certificates, long
+    tests and proofs but not the runs (logs and certified networks: 67 networks, 99 + 68 files the
+    check reads), and addition's `control/models/` had no manifest. Added, hashed 2026-10-28 (after
+    the readings, so they attest the files as they are now, not at the time): `paper/t11-runs.sha256`
+    2c987d15 (1,818 files), `paper/t12-runs.sha256` 7e3d4e75 (795), `control/models.sha256` b5718acd
+    (30). Now every file the check reads, and every certified network, is in a manifest.
+  - Options: (a) *chosen*, the full pack and the verify pack. Pros: an archive of record and a quick
+    route to every number and certificate; the verify pack's hashes are the cited ones. Cons: two
+    packs to build and describe. (b) The full pack alone. Pros: one thing. Cons: 44 GB before a
+    reader can check anything. (c) The verify pack alone. Pros: small. Cons: the training traces
+    lost; the full manifests unmatched.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
