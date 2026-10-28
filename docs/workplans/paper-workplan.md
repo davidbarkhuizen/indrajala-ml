@@ -198,6 +198,15 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     contrasts with (automaton extraction, proofs for learned networks, conformance testing,
     expressivity, Mealy machines in recurrent networks), asking them to review it and consider
     co-authorship; their names are kept out of this repository.
+  - **Amended 2026-10-28 (the owner): co-authors verify.** Human co-authors sign on in exchange for
+    verifying, or finding fault with, the existing findings. The contribution statement and the AI
+    declaration may assume such co-authors (not yet named): they, not the owner, carry the
+    independent check of the claims; the owner's part stays direction and decisions, Claude's the
+    design, code, runs, analysis and drafting. The declaration names the model and harness (Claude
+    Opus 5.5 through Claude Code), the use at every stage, and what verification was: the
+    certificate, `paper_tables.py check`, the registered protocol, R7's fresh-context reviews, and
+    the co-authors' verification. Faults the co-authors find are corrected, or the claim withdrawn,
+    before publication.
   - (c) An AI-authorship venue (Agents4Science-like). Cons: no 2026 edition confirmed; 1 in 5
     accepted in 2025; outside the automata audience.
 - **D7. The manuscript:** a new file, `indrajala-research/papers/learning-transducers-with-proof.tex`,
