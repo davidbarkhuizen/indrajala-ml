@@ -1774,6 +1774,12 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
   literature #32-#34; the contribution statement drafted (D6 amended); the summary page updated.
 - **R8. The release (D6, D28):** the datapack on Zenodo, the repositories public (third-party PDFs
   excepted), the manuscript with its contribution statement and a page on how to verify it.
+  **Done 2026-10-29:** the datapack published on Zenodo (record 23733575,
+  https://doi.org/10.5281/zenodo.23733575, CC BY 4.0), its README the verify page
+  (`docs/datapack/README.md`); every repository public; tags `paper1-v1` (the code and manuscript
+  as the numbers were computed) and `paper1-v1.1` (adds only the datapack tools for archives in
+  parts); the contribution statement in the manuscript; the four co-author letters sent with the
+  PDF. The paper itself is not posted: arXiv and TMLR wait for the verification (D6).
 
 | when (estimates) | what |
 | --- | --- |
