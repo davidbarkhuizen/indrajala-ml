@@ -62,7 +62,7 @@ where you meet a new trap; delete one that no longer holds.
 - **Which package a worktree imports:** pytest imports the worktree's (rootdir); `python -c` and
   scripts import the main checkout's unless `PYTHONPATH=.` (the script's directory, not the cwd,
   is on `sys.path`; `indrajala_ml` is a namespace package with the editable finder). This holds
-  for `scripts/golden_training_run.py` too. To prove a test fails without a fix, revert the fix in
+  for `scripts/measurement/golden_training_run.py` too. To prove a test fails without a fix, revert the fix in
   the worktree (`git diff > patch; git checkout file; ...; git apply patch`).
 - **A config's paths are relative to the cwd:** to run a study command from a worktree on the main
   checkout's data, link `data/` or write a config copy with absolute paths.
@@ -211,7 +211,7 @@ where you meet a new trap; delete one that no longer holds.
   same path overwrites the first. Name them `certify/<task>-seed<s>-certified-step-<n>[.strict].certificate.json`
   (the strict verdict with `--snap-ratio 1.05`), with `certify.log` beside them.
 
-### The batch runner (`scripts/batch.py`, `indrajala_ml/batch.py`)
+### The batch runner (`scripts/runner/batch.py`, `indrajala_ml/batch.py`)
 
 - **The ledger's commit must be the full sha:** workers report theirs in full and the controller
   compares exactly, so a short `--commit` refused every worker (2026-10-23, T1's first start; nothing
@@ -362,7 +362,7 @@ where you meet a new trap; delete one that no longer holds.
   Before a run on `jebel`: `uptime`, its processes, `pgrep -f '^/usr/bin/python3
   /usr/bin/unattended-upgrade'` and `pgrep -x dpkg`.
 - **`jebel` at or below 65 W.** After a reboot PL1 comes back at 95 W: `ssh jebel 'cd
-  ~/code/indrajala-ml && .venv/bin/python scripts/ab.py check --apply-setup'`, then check
+  ~/code/indrajala-ml && .venv/bin/python scripts/measurement/ab.py check --apply-setup'`, then check
   `/sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw` is 65000000.
 - **A study run on `jebel` or `stone` needs the straight-through crate on its path:** the continuous
   cell's `--continuous` calls the crate with `straight` (the rust/ bump fb0f1be), which `jebel`'s
@@ -419,7 +419,7 @@ where you meet a new trap; delete one that no longer holds.
   (4 cores, 8 threads), 5 GB, so about 3 small runs at once. Always on, all cores; the owner's
   limit (2026-10-21): <= 85 C, ideally <= 80 C. **CPU boost is off** (`cpu-boost-off.service`;
   `/sys/devices/system/cpu/cpufreq/boost` reads 0): boost overheats it. **Run every job under the
-  thermal guard** `scripts/thermal_guard.sh LOG [STOP] -- COMMAND...`: it starts the command in its own
+  thermal guard** `scripts/runner/thermal_guard.sh LOG [STOP] -- COMMAND...`: it starts the command in its own
   process group, logs the k10temp sensor every 5 s to LOG and stops the group at STOP C (85) or
   above, with an "ended, status N, peak T C" line. A waiter there watches the probe's "probe ended" line
   or the guard's process gone (`pgrep -f "[t]hermal_guard.sh <its LOG's directory>"`).
@@ -435,7 +435,7 @@ where you meet a new trap; delete one that no longer holds.
 - **The addition harness's `crate` field hashes the crate's `__init__.py`**, not the `.so`: it
   doesn't identify the build (fixed in the length-generalisation workplan's stage 7). To check a
   venv's crate, hash the extension module.
-- **The golden run** (`.venv/bin/python scripts/golden_training_run.py check
+- **The golden run** (`.venv/bin/python scripts/measurement/golden_training_run.py check
   data/refactoring/golden_run.json`; untracked, per machine) has 124 networks on both machines
   since #705, each version archived in `indrajala-benchmarks`; earlier versions are kept beside it
   as `golden_run.before-<change>.json`. The one tracked file there is `golden_run_rust.json`
@@ -479,7 +479,7 @@ where you meet a new trap; delete one that no longer holds.
 - **On `litshe` a worktree's `git submodule update --init rust` fails** with "transport 'file' not
   allowed" (its submodule URL is the local crate repo): `git -c protocol.file.allow=always
   submodule update --init rust`.
-- **`scripts/fetch_datasets.py --help` fetches** (no argument parser); harmless when the files are
+- **`scripts/data/fetch_datasets.py --help` fetches** (no argument parser); harmless when the files are
   present.
 
 ## Background jobs and the shell (for agents)
@@ -488,7 +488,7 @@ where you meet a new trap; delete one that no longer holds.
   output file). Check `ps` before calling a waiter gone or broken; an old session's waiter can
   notify a new session, and its notification is real too (read it, check what it watched).
 - **A waiter's `pgrep -f` pattern matches its own command line**, and other waiters' too: anchor
-  on the python process, `pgrep -f "^.venv/bin/python scripts/window_recurrent_study.py run"`.
+  on the python process, `pgrep -f "^.venv/bin/python scripts/studies/window_recurrent_study.py run"`.
 - **An ssh that launches a nohup job holds on while the job runs** unless stdin is `/dev/null`;
   used on purpose it is the job's waiter (`setsid nohup ... < /dev/null`). Stopping a local
   background task doesn't kill its remote job.

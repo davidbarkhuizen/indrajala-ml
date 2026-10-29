@@ -1,11 +1,11 @@
-"""scripts/paper_tables.py: the paper's tables regenerated and checked against a manuscript."""
+"""scripts/paper/paper_tables.py: the paper's tables regenerated and checked against a manuscript."""
 
 import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "paper"))
 import paper_tables as script  # scripts/ isn't a package
 
 TEX = r"""

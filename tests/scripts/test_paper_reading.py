@@ -1,9 +1,9 @@
-"""scripts/paper_reading.py: each network found where its backdrop logs, read with its backdrop's task, in fixed shares."""
+"""scripts/paper/paper_reading.py: each network found where its backdrop logs, read with its backdrop's task, in fixed shares."""
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "paper"))
 import paper_reading as script  # scripts/ isn't a package
 
 from indrajala_ml.batch import BACKDROPS

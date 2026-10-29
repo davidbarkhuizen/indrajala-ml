@@ -1,7 +1,7 @@
 """
 A character-level text corpus as next-token examples (the sequence task workplan, D2-D4): Tiny
 Shakespeare, Herodotus in Rawlinson's translation, Ibn Khaldun's Muqaddimah in Arabic, or Euclid's
-Elements in Heath's translation, each fetched and checksum-verified by scripts/fetch_datasets.py
+Elements in Heath's translation, each fetched and checksum-verified by scripts/data/fetch_datasets.py
 and read as UTF-8 (all but the Muqaddimah are ASCII).
 
 The vocabulary is the corpus's characters, sorted, each a token id by its place. The first

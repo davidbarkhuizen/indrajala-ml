@@ -1,6 +1,6 @@
 """
 The addition study's candidates and harness (the addition study workplan's Stage 3, retired:
-git show 8990f74:docs/addition-study-workplan.md; scripts/addition_study.py).
+git show 8990f74:docs/addition-study-workplan.md; scripts/studies/addition_study.py).
 
 A candidate is an encoder, a network spec with its size knobs, and a decoder: build() gives a Model
 that trains an epoch on a batch of triples and adds (an Adder, as addition_data's catalogue

@@ -34,7 +34,7 @@ extend-exclude = ["rust"]  # the crate's own repo (submodule)
 [tool.ruff.lint.per-file-ignores]
 # B023: the timing closures are called inside the loop iteration that defines them.
 "indrajala_ml/measurement/conv_comparison.py" = ["B023"]
-"scripts/accuracy_pass_timing.py" = ["B023"]
+"scripts/measurement/accuracy_pass_timing.py" = ["B023"]
 
 # pinned in ./cli (pyright_version); `./cli lint` runs it. Strict everywhere. The tests read
 # internals (a layer's _grad_W, a trainer's _training_accuracy) on purpose, so tests/ allows
@@ -43,4 +43,4 @@ extend-exclude = ["rust"]  # the crate's own repo (submodule)
 [tool.pyright]
 include = ["indrajala_ml", "tests", "scripts"]
 typeCheckingMode = "strict"
-executionEnvironments = [{ root = "tests", extraPaths = [".", "scripts"], reportPrivateUsage = false }]
+executionEnvironments = [{ root = "tests", extraPaths = [".", "scripts/measurement", "scripts/studies", "scripts/paper", "scripts/data", "scripts/runner"], reportPrivateUsage = false }]

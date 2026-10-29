@@ -1,4 +1,4 @@
-"""The patch geometry study's networks (scripts/patch_geometry_study.py)."""
+"""The patch geometry study's networks (scripts/studies/patch_geometry_study.py)."""
 
 import random
 import sys
@@ -13,7 +13,7 @@ from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 from indrajala_ml.studies import batch_size_scaling as bss
 from indrajala_ml.studies import common, patch_study
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "studies"))
 import multi_head_attention_study as multi_head  # scripts/ isn't a package
 import patch_geometry_study as study  # scripts/ isn't a package
 

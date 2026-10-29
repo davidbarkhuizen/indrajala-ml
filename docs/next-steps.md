@@ -93,11 +93,11 @@ normalization, Residual connections, Layer norm and attention, The sequence task
 tokens, Rotary positions, The addition study), [measurement.md](measurement.md)
 and [rng-audit.md](audits/rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
-`scripts/residual_depth_study.py`'s, the patch-attention study's in
-`scripts/patch_attention_study.py`'s, the multi-head attention study's in
-`scripts/multi_head_attention_study.py`'s, the sequence study's in `scripts/sequence_study.py`'s,
-the attention dropout study's in `scripts/attention_dropout_study.py`'s, the rotary study's in
-`scripts/rotary_study.py`'s, the addition study's in `scripts/addition_study.py`'s.
+`scripts/studies/residual_depth_study.py`'s, the patch-attention study's in
+`scripts/studies/patch_attention_study.py`'s, the multi-head attention study's in
+`scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
+the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
+`scripts/studies/rotary_study.py`'s, the addition study's in `scripts/studies/addition_study.py`'s.
 
 ## From the programme audit (2026-10-23; the workplan retired the same day)
 
@@ -150,7 +150,7 @@ an option. The answers' own branch with the factors on a shared state branch is 
 
 The window-recurrent network's window loop runs in the crate on Rust, inference and training, by
 bits the per-layer path's (`per_layer_windows`, `per_layer_gradients`, `per_layer_path`;
-`scripts/window_program_check.py` checks saved networks). Before and after on `jebel` (stage 6,
+`scripts/studies/window_program_check.py` checks saved networks). Before and after on `jebel` (stage 6,
 from before stage 1 to the end, tier 2): a real study run (a `p` 5 family probe run, 40 epochs) 32.9%
 faster (139 s to 93 s), the family long test 46.6% (21.1 s to 11.3 s), the training steps 43.9% (E2b''s
 linear window) and 34.1% (the `p` 7 family). Left:
@@ -225,7 +225,7 @@ Decided with the owner, each to become a workplan or a stage:
   approximations exists: the test of whether one approximation helps where no cover does. Later,
   `a = 0` adds resets.
 - **The approximation claim: done, A1-A3 hold** (2026-10-17; the workplan retired:
-  `git show c201622:docs/approximation-claim-workplan.md`; findings in `scripts/modular_family_probe.py`'s docstring).
+  `git show c201622:docs/approximation-claim-workplan.md`; findings in `scripts/studies/modular_family_probe.py`'s docstring).
   The sum alone certifies 10 of 20 against the quotient alone's 1 and the product's 0: the sum, an
   approximation, helps where an equally distinguishing non-approximation, which the network doesn't
   learn, doesn't. Whether it helps *because* it is an approximation needs a learnable
@@ -415,7 +415,7 @@ The old conv plan's timing and demo stages were for a rule that holds, and stay 
 
 ## From the A/B harness
 
-- **Count the savings.** After the first two real A/Bs through `scripts/ab.py`, count the agent
+- **Count the savings.** After the first two real A/Bs through `scripts/measurement/ab.py`, count the agent
   turns and characters read per A/B from the session transcripts, against the numbers before the
   harness: 20-30 checks and 40-130K characters of raw output per A/B. Record the result here.
 - **Waiting on CI** (`gh pr checks --watch` loops) is worth a similar treatment.
@@ -569,7 +569,7 @@ Not planned yet:
 The workplan settled `Attention(heads, key_size)`, the parameters packed with heads as row blocks
 (D2), and every implementation and the crate in three blocks per pass: project, attend, combine
 (D4). The patch study's open margin is answered: at 5 seeds attention then FFN beats FFN alone by
-0.40 +- 0.30 points, on 4 of 5 seeds (`scripts/multi_head_attention_study.py`).
+0.40 +- 0.30 points, on 4 of 5 seeds (`scripts/studies/multi_head_attention_study.py`).
 
 - **The extension points** (the workplan's D6, D7), each a field with a default, added by the work
   that uses it:
@@ -586,7 +586,7 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
 - **GELU** (D5 (c)), ViT's FFN activation, an activation for `Dense`: it needs `erf`, which stable
   Rust lacks (the `tanh` form is a different function), in all three implementations and the crate.
   Planned with SwiGLU as roadmap step 13 ([ffn-activations-workplan.md](workplans/ffn-activations-workplan.md)).
-- **The study's other arms** (D8 (b), (c)): run on 2026-10-09 (`scripts/patch_geometry_study.py`,
+- **The study's other arms** (D8 (b), (c)): run on 2026-10-09 (`scripts/studies/patch_geometry_study.py`,
   findings in its docstring). Patch 4 (`T = 49`) costs every arm 0.4 to 1.2 points at 5 epochs;
   the low-rank bound still doesn't measurably bind (+0.42 +- 0.83 for `key_size=32`); heads start
   to help with more or wider tokens (+0.6 over one head at `T = 49` and at `d = 64`); and `d = 64`
@@ -619,7 +619,7 @@ with the mean of the `T` cross-entropies as the `"sequence"` network shape (D6),
 `Attention(causal=True)`, `-inf` on the future scores before the max shift (D7), in all three
 implementations and the crate; four corpora, each in its own dataset repository (D2, D3); fixed
 non-overlapping windows of 65 characters, the last 10% held out (D4). The study
-(`scripts/sequence_study.py`, D9) found every arm where D9 expected it (README, The sequence task).
+(`scripts/studies/sequence_study.py`, D9) found every arm where D9 expected it (README, The sequence task).
 
 - **Generation** (D11 (b)): `scripts/sample_text.py`, a sliding window of the last `T` characters,
   sampling from the output at the last position, `T` forward passes per window's worth of text. The
@@ -661,7 +661,7 @@ dropout on `P` (D3), one `(N, h, T, T)` mask a batch drawn row-major (D4), and a
 `Dropout(p)` after `Position` and ending a block's body (D2); the crate's attention ops take
 `dropout`, `training` and `rng` keywords (D5); all three implementations, their masks by bits (D6);
 format 2 entries and three golden entries (D7, D9). The study (D8, #666;
-`scripts/attention_dropout_study.py`'s docstring) found the sequence study's gaps mostly the text's
+`scripts/studies/attention_dropout_study.py`'s docstring) found the sequence study's gaps mostly the text's
 shift (on a split from across the text Euclid's 0.49 bits per character falls to 0.04, Tiny
 Shakespeare's 0.30 to 0.07), and dropout narrowing every gap by raising the training loss, at a
 cost of 0.01 to 0.35 bits held out; the one gain is attention dropout 0.1 on Euclid's contiguous
@@ -698,7 +698,7 @@ The workplan built rotary position embedding as an attention option, `Attention(
 rotary_base=10000.0)` (D2), rotating half (feature `j` with `j + d_k / 2`, D3), its angles one
 table per layer from Python's `math` so all three implementations rotate by the same bits (D4), the
 crate's attention ops taking `cos` and `sin` (D5), and one position scheme per token part (D6).
-The study (D8; `scripts/rotary_study.py`'s docstring) found rotary lower held out than learned
+The study (D8; `scripts/studies/rotary_study.py`'s docstring) found rotary lower held out than learned
 positions on every corpus and arm, 0.024 to 0.062 bits per character at epoch 10 (39 of 40 seeds),
 at +3.5% an epoch alone; so new sequence models default to rotary (D9, the README's sequence
 example).
@@ -835,7 +835,7 @@ as a submodule; the measurement tools they lived beside are in `indrajala_ml/mea
 ## From the addition study
 
 The catalogue, the eight candidates and the unattended harness are in the README (The addition
-study); the sweep's findings are in `scripts/addition_study.py`'s docstring. The first three entries
+study); the sweep's findings are in `scripts/studies/addition_study.py`'s docstring. The first three entries
 were recorded while the sweep ran (2026-10-11); the rest are the workplan's leftovers: its
 decisions' unchosen options and its Excluded for missing infrastructure (`git show 8990f74:docs/addition-study-workplan.md`).
 

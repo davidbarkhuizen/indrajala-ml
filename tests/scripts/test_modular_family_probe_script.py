@@ -1,4 +1,4 @@
-"""scripts/modular_family_probe.py's run command: which runs a pool trains, and where."""
+"""scripts/studies/modular_family_probe.py's run command: which runs a pool trains, and where."""
 
 import json
 import sys
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "studies"))
 import modular_family_probe as script  # scripts/ isn't a package
 
 TINY = ["--factors", "1", "--budget-epochs", "1", "--workers", "2"]

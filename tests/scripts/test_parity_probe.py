@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(REPO / "scripts"))
+sys.path.insert(0, str(REPO / "scripts" / "measurement"))
 import parity_probe  # scripts/ isn't a package
 
 

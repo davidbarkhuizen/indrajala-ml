@@ -11,7 +11,7 @@ from indrajala_ml.measurement import machine_profile as mp
 from indrajala_ml.measurement import machine_profile_capture as mpc
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPT_PATH = REPO_ROOT / "scripts/machine_profile.py"
+SCRIPT_PATH = REPO_ROOT / "scripts/measurement/machine_profile.py"
 # the benchmark machine (ab.py's PROFILE_REFERENCE), the laptop before it (an AMD cpufreq policy)
 # and the aarch64 timing machine (cpufreq-dt, no RAPL, thermal limits)
 PROFILE_PATHS = [

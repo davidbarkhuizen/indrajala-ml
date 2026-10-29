@@ -1,4 +1,4 @@
-"""scripts/window_recurrent_study.py's run, check and certify commands."""
+"""scripts/studies/window_recurrent_study.py's run, check and certify commands."""
 
 import contextlib
 import json
@@ -10,7 +10,7 @@ import pytest
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "studies"))
 import window_recurrent_study as script  # scripts/ isn't a package
 
 

@@ -1347,7 +1347,7 @@ before the panel's (4b) registration and before the coupling probe's (D38) data.
 
 ## Findings: stage 2, option 1's understanding (2026-10-20)
 
-`state-spread` (`scripts/modular_family_probe.py`, `mf.state_spread`): each factor's `h` sampled at a
+`state-spread` (`scripts/studies/modular_family_probe.py`, `mf.state_spread`): each factor's `h` sampled at a
 step's screen lengths (100 cases a length), on saved step networks. Data in
 data/window-recurrent/state-formation/spread/ (`anneal-arm2.jsonl`, `s3-never-round1.jsonl`), manifest
 `spread.sha256` (run from state-formation/).
@@ -1437,7 +1437,7 @@ from state-formation/, with the void panel's).
 
 ## Findings: the state separation check (2026-10-20)
 
-`state-separation` (`scripts/modular_family_probe.py`, `mf.state_separation`): whether a network's cell
+`state-separation` (`scripts/studies/modular_family_probe.py`, `mf.state_separation`): whether a network's cell
 outputs `h` determine the target machine's state, the target read only to measure: leave-one-out
 nearest neighbour's and nearest target centroid's accuracy on the joint `h` and each factor's, against
 chance (the commonest state's share); a warm-up's network read live (`--live`, its continuous factors
@@ -1706,7 +1706,7 @@ each log. Data in data/window-recurrent/state-formation/option1/probe-d32/.
   predicted 0.029). Not the grouping threshold (it biases the other way); 4a's `quiet` arm (`kappa`
   1e-4) split within a fifth of an octave of the curve, so the material moving after the warm-up or
   the thermal noise (`kappa` 1e-2) parting codes; unread, a look in the panel.
-- **Tools:** `heat-capacity` (each factor's splits and capacity peak); `scripts/profile_page.py`, a
+- **Tools:** `heat-capacity` (each factor's splits and capacity peak); `scripts/studies/profile_page.py`, a
   run's course as one page (stacked time series of T, capacity, energy, groups, coupling and screen;
   their overlay rescaled; and each factor's phase diagram, its codes on their principal axis against T
   from the saved step networks, beside the melting curve).
@@ -2287,7 +2287,7 @@ a random machine would just need a very slow cool.**
 ## Stages
 
 1. **This plan** (docs). Before it, the night's findings PR (the existing data, at the owner's direction).
-2. **Option 1, understanding:** D3's two measurements, as subcommands of `scripts/modular_family_probe.py`
+2. **Option 1, understanding:** D3's two measurements, as subcommands of `scripts/studies/modular_family_probe.py`
    (`critical-temperature`, `effective-dimension`), with tests; findings here.
 3. **Option 1, build:** the crate's per-factor continuous mode (`indrajala-math-rust` first, then a
    "Bump rust/" PR); the harness's `--warm-up` (D4, D5, D10), k-means codes (D6), `tau_0` (D7), on the

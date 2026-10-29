@@ -1,7 +1,7 @@
 # Probe launches
 
 The shell scripts that launched the probes and studies run by hand, before the batch runner
-(`scripts/batch.py`) took over launching, placing and moving runs. They are kept **verbatim**, as
+(`scripts/runner/batch.py`) took over launching, placing and moving runs. They are kept **verbatim**, as
 they ran from `~/code/` on `pyramidon`, and in `jebel/` and `stone/` those that ran only from
 `jebel`'s `~/code/` and `stone`'s `~/labour/` (copied 2026-10-29, timestamps kept; a script the
 machines shared is kept once, at the top). Their paths

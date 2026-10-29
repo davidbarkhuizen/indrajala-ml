@@ -89,7 +89,7 @@ scheme behind D3 was settled by adding step 8.
 - **D5. The vocabulary. Settled: (a).**
   - (a) *Chosen.* A tokenizer file beside the model, `<model>.tokenizer.json`:
     `{"kind": "characters", "corpus": ..., "sha256": ..., "symbols": ...}`, the corpus's name and
-    its pinned checksum (`scripts/fetch_datasets.py`), the symbols in id order; `sample` refuses one
+    its pinned checksum (`scripts/data/fetch_datasets.py`), the symbols in id order; `sample` refuses one
     whose size isn't the model's output size. Pros: `kind` admits a BPE or word-level tokenizer
     later without touching format 2; the usual model and tokenizer split. Cons: two files to keep
     together.

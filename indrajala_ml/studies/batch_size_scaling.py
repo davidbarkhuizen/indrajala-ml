@@ -1,6 +1,6 @@
 """
 The pieces shared by the batch-size-scaling study (#365-#368): its sweep script
-(scripts/batch_size_scaling_sweep.py), its timing script (scripts/batch_size_timing.py) and its
+(scripts/studies/batch_size_scaling_sweep.py), its timing script (scripts/measurement/batch_size_timing.py) and its
 runner (indrajala_ml/studies/batch_size_scaling_run.py).
 
 The question: does the linear learning-rate scaling rule (Goyal et al. 2017: multiply the rate

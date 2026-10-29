@@ -83,7 +83,7 @@ def test_a_spread_dataset_cuts_each_piece_into_its_own_windows(tmp_path: Path):
         load_text_dataset(str(path), split_by="random")  # pyright: ignore[reportArgumentType]
 
 
-# ---- the real corpus, fetched by ./cli setup (scripts/fetch_datasets.py)
+# ---- the real corpus, fetched by ./cli setup (scripts/data/fetch_datasets.py)
 
 
 def test_the_corpus_is_tiny_shakespeare():

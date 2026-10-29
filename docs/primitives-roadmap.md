@@ -78,13 +78,13 @@ in next-steps.md).
 
 Residual connections, dense blocks `out = x + F(x)` with identity shortcuts, were done on
 2026-10-01; the retired workplan and its open work (conv blocks, projection shortcuts) are in
-next-steps.md. The depth study (`scripts/residual_depth_study.py`) found what He et al. 2016
+next-steps.md. The depth study (`scripts/studies/residual_depth_study.py`) found what He et al. 2016
 predict: plain networks get worse with depth and residual ones don't.
 
 Layer norm (over tokens and in flat dense networks) and single-head self-attention were done on
 2026-10-02, as a small vision transformer on MNIST: `Patches`, a token-wise `Dense` embedding,
 learned `Position`s, pre-LN attention and FFN blocks, and `TokenMean`. The retired workplan and its
-open work are in next-steps.md. The patch-attention study (`scripts/patch_attention_study.py`)
+open work are in next-steps.md. The patch-attention study (`scripts/studies/patch_attention_study.py`)
 found the expected result, weakly: attention then FFN beats FFN alone by less than a standard
 deviation, and the conv network beats every patch model at this data size.
 
@@ -92,7 +92,7 @@ Multi-head attention was done on 2026-10-09: `Attention(heads, key_size)` in all
 implementations and the crate, each restructured into the same three blocks (project, attend,
 combine) with named places for masking, dropout and grouped heads; a transformer layer is the
 attention and FFN blocks step 4 built, written again for depth. The retired workplan and its open
-work are in next-steps.md. The multi-head attention study (`scripts/multi_head_attention_study.py`)
+work are in next-steps.md. The multi-head attention study (`scripts/studies/multi_head_attention_study.py`)
 found that more heads change nothing at this size (16 tokens of 32), and depth helps: two layers of
 4 heads reach 97.0%, a point under the conv network. The case made for step 5 is in this file's
 history: `git show d70cf0f:docs/primitives-roadmap.md`.
@@ -102,7 +102,7 @@ a token-wise softmax output with the mean per-token cross-entropy (the `"sequenc
 and `Attention(causal=True)`, the mask in attend before the max shift, in all three
 implementations and the crate; four character-level corpora (Tiny Shakespeare, Herodotus, the
 *Muqaddimah*, Euclid's *Elements*), each in its own dataset repository. The retired workplan and
-its open work are in next-steps.md. The sequence study (`scripts/sequence_study.py`) found what
+its open work are in next-steps.md. The sequence study (`scripts/studies/sequence_study.py`) found what
 the literature predicts: a per-token model only reaches the bigram floor, one causal attention
 layer takes 0.8 to 1.5 bits per character under it, a second layer 0.09 to 0.17 more (2-layer:
 Euclid 1.50, Herodotus 1.95, Tiny Shakespeare 2.48, the *Muqaddimah* 2.79), and without the mask
@@ -113,7 +113,7 @@ Dropout in attention was done on 2026-10-11: `Attention(dropout=p)`, inverted dr
 attention weights before the weighted sum of the values, and a token-wise `Dropout(p)` after
 `Position` and ending a block's body (GPT's `attn_pdrop`, `embd_pdrop` and `resid_pdrop`), in all
 three implementations and the crate, their masks by bits in all three. The retired workplan and its
-open work are in next-steps.md. The attention-dropout study (`scripts/attention_dropout_study.py`)
+open work are in next-steps.md. The attention-dropout study (`scripts/studies/attention_dropout_study.py`)
 found the sequence study's train/held-out gaps mostly the text's shift (Euclid's 0.49 bits per
 character falls to 0.04 on a split from across the text), and dropout narrowing them by fitting
 the training text worse, a cost of 0.01 to 0.35 bits held out at 10 epochs. The case made for step

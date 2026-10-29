@@ -1,5 +1,5 @@
 """
-scripts/ab.py: the report on archived A/Bs (tests/fixtures/ab/, each with the table its PR
+scripts/measurement/ab.py: the report on archived A/Bs (tests/fixtures/ab/, each with the table its PR
 published), and run/extend end to end on a toy probe in a temporary repository. Nothing is timed.
 """
 
@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "measurement"))
 import ab  # scripts/ isn't a package
 
 from indrajala_ml.measurement import benchmark_archive
@@ -575,8 +575,16 @@ def test_every_adapter_names_its_script_and_output(tmp_path: Path) -> None:
         if adapter.name == "cmd":
             continue
         command = adapter.command(ab.REPO, list(adapter.default_args), tmp_path / "out.json")
-        assert Path(command[0]) == ab.REPO / f"scripts/{adapter.name}.py" and Path(command[0]).is_file()
+        assert Path(command[0]) == ab.REPO / f"scripts/measurement/{adapter.name}.py" and Path(command[0]).is_file()
         assert command[-1] == str(tmp_path / "out.json")
+
+
+def test_a_tree_from_before_the_grouping_runs_its_scripts_from_scripts(tmp_path: Path) -> None:
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts/focused_benchmark.py").write_text("")
+    assert ab.ADAPTERS["focused_benchmark"].command(tmp_path, [], tmp_path / "out.json")[0] == str(
+        tmp_path / "scripts/focused_benchmark.py"
+    )
 
 
 # ---- stage 3: crate A/Bs, on fake extension modules (nothing is built)
@@ -931,7 +939,7 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> _Clock:
     clock = _Clock()
     monkeypatch.setattr(ab.time, "monotonic", clock.monotonic)
     monkeypatch.setattr(ab.time, "sleep", clock.sleep)
-    monkeypatch.setattr(ab, "busy_processes", lambda: ["python3 600% scripts/addition_study.py"])
+    monkeypatch.setattr(ab, "busy_processes", lambda: ["python3 600% scripts/studies/addition_study.py"])
     return clock
 
 
@@ -960,7 +968,7 @@ def test_a_load_that_stays_high_is_refused_naming_the_busy(monkeypatch: pytest.M
     _loads(monkeypatch, clock, [(0, 6.0)])
     with pytest.raises(ab.AbError, match=r"load is 6.00, over this machine's 1.5, after waiting 5 minutes") as refused:
         ab.wait_for_quiet(1.5, allow=False)
-    assert refused.value.tail == ["python3 600% scripts/addition_study.py"]
+    assert refused.value.tail == ["python3 600% scripts/studies/addition_study.py"]
     assert clock.now == ab.LOAD_WAIT_S
 
 
@@ -1157,13 +1165,17 @@ def test_the_check_re_applies_the_setup_once(tmp_path: Path, monkeypatch: pytest
 def test_apply_setup_runs_only_an_installed_copy_of_the_checkouts_script(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts/measurement").mkdir(parents=True)
     (tmp_path / ab.SETUP_SCRIPT).write_text("#!/bin/sh\necho set\n")
     monkeypatch.setattr(ab, "SETUP_COPY", tmp_path / "installed")
-    with pytest.raises(ab.AbError, match="isn't installed: the owner runs sudo scripts/install_benchmark_setup.sh"):
+    with pytest.raises(
+        ab.AbError, match="isn't installed: the owner runs sudo scripts/measurement/install_benchmark_setup.sh"
+    ):
         ab.apply_setup(tmp_path)
     (tmp_path / "installed").write_text("#!/bin/sh\necho old\n")
-    with pytest.raises(ab.AbError, match="differs from scripts/benchmark_machine_setup.sh: the owner re-runs"):
+    with pytest.raises(
+        ab.AbError, match="differs from scripts/measurement/benchmark_machine_setup.sh: the owner re-runs"
+    ):
         ab.apply_setup(tmp_path)
 
 

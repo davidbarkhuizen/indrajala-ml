@@ -1,4 +1,4 @@
-"""scripts/migrate_factored_state.py: old files rewritten as today's code writes them (the factored-state workplan, stage 5)."""
+"""scripts/data/migrate_factored_state.py: old files rewritten as today's code writes them (the factored-state workplan, stage 5)."""
 
 import hashlib
 import json
@@ -14,7 +14,7 @@ from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
 from tests.studies.test_window_recurrent_certificate import CarryMachine, TaskMachine
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "data"))
 import migrate_factored_state as migrate  # scripts/ isn't a package
 
 

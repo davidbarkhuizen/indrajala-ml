@@ -93,7 +93,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol; `sequence_study.py`, the sequence study's; `attention_dropout_study.py`, the attention-dropout study's |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
-| `scripts/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
+| `scripts/data/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
 | `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention, multi-head attention and sequence studies and the refactoring golden run; see `docs/measurement.md` |
 | `docs/` | the measurement guide, working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open workplans, `docs/audits/` the RNG audit and the dated reviews. The research notes and the research protocols (experiment design, feasibility checklist) are in [indrajala-research](https://github.com/davidbarkhuizen/indrajala-research)'s `docs/` |
 
@@ -483,7 +483,7 @@ they do today. On Rust a dense layer's hidden delta is one fused call that reads
 `(body_first.delta @ body_first.W + add.delta) * f'(a)` (`layer_hidden_delta_skip` and its ReLU
 and dropout forms), which computes the same bits as the crate's unfused downstream, add and mask.
 
-`scripts/residual_depth_study.py` trains plain and residual networks of 2 to 16 hidden layers on
+`scripts/studies/residual_depth_study.py` trains plain and residual networks of 2 to 16 hidden layers on
 MNIST. Without batch norm the plain network collapses to one class from 8 layers, its first
 layer's gradient vanishing, while the residual one holds 96.9%; with batch norm the plain network
 loses 2 points by 16 layers and the residual one 0.3 (the findings are in its docstring).
@@ -635,12 +635,12 @@ layer's `W` in one fused call (Residual connections); right before a `LayerNorm`
 body starts with one, there is no `W` to read, and a sigmoid, ReLU or dropout layer takes the next
 layer's downstream and a mask op instead, its own expression unchanged.
 
-`scripts/patch_attention_study.py` trains patch models with an FFN block, an attention block, or
+`scripts/studies/patch_attention_study.py` trains patch models with an FFN block, an attention block, or
 both, against a conv network and a dense one, on MNIST under Adam (3 seeds, 5 epochs). Attention
 then FFN beats FFN alone by less than a standard deviation, 95.8% against 95.4%; the attention
 block alone is the weakest, 92.4%, below the dense control's 93.9%; and the conv network wins,
 98.0%, as Dosovitskiy et al. 2020 predict at this data size (the findings are in its docstring).
-`scripts/multi_head_attention_study.py` reruns the attention-then-FFN model with 1, 2 and 4 heads,
+`scripts/studies/multi_head_attention_study.py` reruns the attention-then-FFN model with 1, 2 and 4 heads,
 4 heads of 32 features, and two layers, at 5 seeds. At this size more heads change nothing (96.1%,
 96.2%, 96.0%), wider heads stay within noise, and a second layer helps on every seed: two layers of
 4 heads reach 97.0%, a point under the conv network with 11% of its parameters.
@@ -681,7 +681,7 @@ print(sequence_evaluate(network, held_out).bits_per_token)
   1.1 M characters, 65 symbols), the default everywhere; Herodotus' *Histories* in Rawlinson's
   translation; Ibn Khaldun's *Muqaddimah* in Arabic; and Euclid's *Elements* in Heath's translation.
   Each lives in its own `indrajala-datasets-*` repository, cleaned there by a script that rebuilds
-  it byte for byte from a pinned source, and `scripts/fetch_datasets.py` fetches and
+  it byte for byte from a pinned source, and `scripts/data/fetch_datasets.py` fetches and
   checksum-verifies it into `data/<name>/`, as it does MNIST. The *Muqaddimah*'s text is
   CC BY-NC-SA 4.0 (OpenITI's), fetched for study and never redistributed here; Euclid's encoding is
   Perseus's, CC BY-SA 4.0.
@@ -727,7 +727,7 @@ read `P`, whose masked weights are already 0), the embedding is `embedding_forwa
 `(N * T, d)` rows. Format 2 saves an `"embedding"` entry and its `E`, writes `"causal"` only when
 true, and records the `"sequence"` shape (Saving and loading).
 
-`scripts/sequence_study.py` trains a 1- and 2-layer causal transformer (`d = 64`, 4 heads), an
+`scripts/studies/sequence_study.py` trains a 1- and 2-layer causal transformer (`d = 64`, 4 heads), an
 FFN-only model and the 2-layer model without its mask against counted unigram and bigram floors,
 on all four corpora, under Adam (5 seeds, 10 epochs, numpy). Held-out bits per character at 2
 layers: Euclid 1.50, Herodotus 1.95, Tiny Shakespeare 2.48, the *Muqaddimah* 2.79. A per-token
@@ -800,7 +800,7 @@ On Rust the crate's attention forward ops take `dropout`, `training` and `rng` k
 return the mask beside the caches (`None` when nothing was drawn), and the downstream op takes it;
 the token layer is `token_dropout_forward` and `token_dropout_downstream`.
 
-`scripts/attention_dropout_study.py` trains the sequence study's 2-layer model with each
+`scripts/studies/attention_dropout_study.py` trains the sequence study's 2-layer model with each
 mechanism at 0.1, both at 0.1 and both at 0.2, against no dropout, on Euclid, Tiny Shakespeare and
 Herodotus, with the last 10% held out and with a spread split (each of 100 blocks' last tenth),
 under Adam (5 seeds, 10 epochs, one rate, numpy). The train/held-out gaps the sequence study found
@@ -866,7 +866,7 @@ On Rust the crate's attention forward ops and downstream op take `cos` and `sin`
 layer's table as arrays; the downstream returns `dQ` and `dK` rotated back, so the gradient op
 takes no table.
 
-`scripts/rotary_study.py` trained the sequence study's 1- and 2-layer models with rotary attention
+`scripts/studies/rotary_study.py` trained the sequence study's 1- and 2-layer models with rotary attention
 and no `Position` against the learned-position models, seed for seed, on all four corpora (Adam, 10
 epochs, 5 seeds, numpy). Rotary is lower held out on every corpus and arm, by 0.024 to 0.062 bits
 per character at epoch 10 (39 of 40 seeds lower), and 0.65 to 0.89 points more accurate, with
@@ -896,14 +896,14 @@ seeds.
   each column's digits as an unordered multiset), a string-format transformer, an FFN-only
   control, dense networks per sum digit, and two dense regressions. A new candidate, or a new
   property, is one more entry.
-- **The harness** (`scripts/addition_study.py`) runs a JSON config unattended: it bisects each
+- **The harness** (`scripts/studies/addition_study.py`) runs a JSON config unattended: it bisects each
   shape's width, writes every run's result and trained model atomically, resumes a stopped sweep
   and builds its report at any time.
 
 ```bash
-OPENBLAS_NUM_THREADS=1 python scripts/addition_study.py run scripts/addition_sweep.json
-python scripts/addition_study.py report scripts/addition_sweep.json --md report.md
-python scripts/addition_study.py check data/addition/sweep/models/<run>
+OPENBLAS_NUM_THREADS=1 python scripts/studies/addition_study.py run scripts/studies/configs/addition_sweep.json
+python scripts/studies/addition_study.py report scripts/studies/configs/addition_sweep.json --md report.md
+python scripts/studies/addition_study.py check data/addition/sweep/models/<run>
 ```
 
 Only the column transformers passed the calibration, so the sweep (619 runs on `jebel`) searched
@@ -930,7 +930,7 @@ A structural refactoring changes structure only, never numerics. Every stage kee
 test passing, and:
 
 - **Training stays bit-identical.** Before the first stage, record a golden run on `main` with
-  `python scripts/golden_training_run.py record data/refactoring/golden_run.json` (ignored by
+  `python scripts/measurement/golden_training_run.py record data/refactoring/golden_run.json` (ignored by
   git: numpy's BLAS makes the file valid only on the machine that recorded it). Each stage must
   pass `... check data/refactoring/golden_run.json`, the same bits, not within a tolerance. It
   catches a 1-ULP change to the learning rate. It trains the networks of all three
@@ -938,7 +938,7 @@ test passing, and:
   they are also committed as `data/refactoring/golden_run_rust.json`, which CI checks on every
   PR (`... check data/refactoring/golden_run_rust.json` checks it on any machine).
 - **No hot-path slowdown.** A stage that touches `learn*` or `classify_rows` is timed old against
-  new with `scripts/ab.py` ([docs/measurement.md](docs/measurement.md)). It must be within noise.
+  new with `scripts/measurement/ab.py` ([docs/measurement.md](docs/measurement.md)). It must be within noise.
 - **Public names stay.** The demos (indrajala-demos), `ensemble_train.py` and the tests construct
   the concrete classes by name, and saved model files must still load:
   `tests/model/persistence/test_legacy_saved_models.py` loads a committed file for every class that has `save`
@@ -947,7 +947,7 @@ test passing, and:
 ## Docs
 
 - [docs/measurement.md](docs/measurement.md): how to time a change: the machines, the tools, A/Bs
-  with `scripts/ab.py`, the benchmarking tiers, and the rules for a timing claim in a PR.
+  with `scripts/measurement/ab.py`, the benchmarking tiers, and the rules for a timing claim in a PR.
 - [`indrajala-benchmarks`](https://github.com/davidbarkhuizen/indrajala-benchmarks): the archive
   of golden runs, A/B runs with their reports, and the machine profiles they ran on; CI there
   re-renders every report with `ab.py` (measurement.md, §10).

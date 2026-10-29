@@ -1,5 +1,5 @@
 """
-The sequence task's study (the sequence task workplan, stage 8, D9; scripts/sequence_study.py):
+The sequence task's study (the sequence task workplan, stage 8, D9; scripts/studies/sequence_study.py):
 next-character prediction on the four corpora (D2), numpy, Adam at batch 32, one learning rate per
 corpus and arm, the trainer's epoch loop, and the held-out windows' mean per-token cross-entropy in
 bits per character and per-token accuracy after every epoch (D8).

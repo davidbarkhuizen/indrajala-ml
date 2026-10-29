@@ -1,4 +1,4 @@
-"""scripts/thermal_probe.py: workers under a thermal watch, stopped over the limit."""
+"""scripts/measurement/thermal_probe.py: workers under a thermal watch, stopped over the limit."""
 
 import json
 import sys
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "measurement"))
 import thermal_probe as probe  # scripts/ isn't a package
 
 

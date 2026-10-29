@@ -1,6 +1,6 @@
 """
 One heavy job at a time on a machine (the study-runs workplan's D1 and D2, retired: git show
-868838e:docs/study-runs-workplan.md): an A/B's run or extend (scripts/ab.py) or a study's training
+868838e:docs/study-runs-workplan.md): an A/B's run or extend (scripts/measurement/ab.py) or a study's training
 stage. Each holds an flock on RUNS_ROOT/run.lock for as long as its process lives, so a killed job
 never leaves it held, and writes one JSON line naming itself (what, kind, pid, since); a second is
 refused with that line. RUNS_ROOT is ab.py's runs root (its --runs-root, else AB_RUNS_ROOT, else

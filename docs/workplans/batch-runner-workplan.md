@@ -121,7 +121,7 @@ the machines we have, each in its own hours.
    tests (a cut run's rows identical to the uncut run's up to the cutoff); the golden run unchanged;
    `restart-cost` reading "cut" as a finished failure. Tier 0 by its timing (no timed path), the
    golden run because it touches the run's loop.
-3. **The controller and the worker, on one machine** (D3, D4, D5, D8): `scripts/batch.py` with
+3. **The controller and the worker, on one machine** (D3, D4, D5, D8): `scripts/runner/batch.py` with
    `controller` (the queue, the ledger, the protocol's server on 127.0.0.1), `worker` (the daemon:
    slots, launch, report, re-adopt), `register`, `status`, `report` (the measure mode's rates and `l`,
    the find mode's certificates); the protocol versioned and tested with a stub run (fast,

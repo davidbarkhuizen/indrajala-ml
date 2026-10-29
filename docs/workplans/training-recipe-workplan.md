@@ -13,7 +13,7 @@ clipping by global norm; and the sequence models trained to convergence with the
 ## Why
 
 Neither of the sequence study's transformers had converged at 10 epochs: their held-out losses
-still fell by 0.01 to 0.05 bits per character over the last three (`scripts/sequence_study.py`).
+still fell by 0.01 to 0.05 bits per character over the last three (`scripts/studies/sequence_study.py`).
 They train at a constant Adam rate. The decoders the study's models follow train with warmup then
 cosine decay to a tenth of the peak (Radford et al. 2018: warmup, then cosine to 0; nanoGPT:
 warmup, then cosine to `min_lr = lr / 10`; Loshchilov & Hutter 2017, SGDR, for the cosine form).

@@ -1,6 +1,6 @@
 """
 The attention-dropout study (the attention-dropout workplan, stage 8, D8;
-scripts/attention_dropout_study.py): does dropout close the sequence study's train/held-out gaps,
+scripts/studies/attention_dropout_study.py): does dropout close the sequence study's train/held-out gaps,
 and how much of each gap is overfitting rather than the held-out text being different?
 
 The model and protocol are the sequence study's 2-layer arm (indrajala_ml/studies/sequence_study.py):

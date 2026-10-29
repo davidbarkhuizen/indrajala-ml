@@ -170,7 +170,7 @@ def test_golden_versions_chain_by_previous_not_by_name_and_a_correction_takes_th
 
 
 def test_golden_script_archives_onto_a_new_branch_without_training(archive: Path, tmp_path: Path) -> None:
-    sys.path.insert(0, str(REPO / "scripts"))
+    sys.path.insert(0, str(REPO / "scripts" / "measurement"))
     import golden_training_run
 
     golden = _golden(tmp_path, {"a": ["0x1p+0"]})
@@ -207,7 +207,7 @@ def test_golden_script_archives_onto_a_new_branch_without_training(archive: Path
 
 
 def test_golden_script_compares_two_runs_by_backend(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    sys.path.insert(0, str(REPO / "scripts"))
+    sys.path.insert(0, str(REPO / "scripts" / "measurement"))
     import golden_training_run
 
     first = _golden(tmp_path, {"numpy a": ["0x1p+0"], "rust a": ["0x1p+0", "0x1p+1"], "rust b": ["0x1p+0"]})

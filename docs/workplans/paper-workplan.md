@@ -1127,7 +1127,7 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
     the readings, so they attest the files as they are now, not at the time): `paper/t11-runs.sha256`
     2c987d15 (1,818 files), `paper/t12-runs.sha256` 7e3d4e75 (795), `control/models.sha256` b5718acd
     (30). Now every file the check reads, and every certified network, is in a manifest.
-  - **`scripts/datapack.py` (2026-10-28):** `reads`, `build`, `check`. Building it found the scope
+  - **`scripts/paper/datapack.py` (2026-10-28):** `reads`, `build`, `check`. Building it found the scope
     short of what the check reads: Appendix B's replays (`machine-diff`), and `e2` and `e5`, are now
     in the addition part; `e3-e4/long-tests/` had no manifest, `e3-e4/long-tests.sha256` e6d1067d
     (9 files, hashed 2026-10-28) added. **The verify pack alone reproduces the paper:** extracted
@@ -1190,7 +1190,7 @@ manifest `paper/t4.sha256` (85 files). A factor's approximation nontrivial: 1 < 
   approximation it was given; about a third do, the rest hold the state jointly.
 - **A check for P2 before the manuscript (done 2026-10-23, exploratory, not T4):** P2's "the learned
   state is not factored by residue" reads the modular-family probe's first division networks
-  (`modular-family-probe/family-output-seed0`, `seed1`; `scripts/modular_family_probe.py`'s
+  (`modular-family-probe/family-output-seed0`, `seed1`; `scripts/studies/modular_family_probe.py`'s
   docstring), not probe 2a's. Its numbers are seed 1's **step 6**, which is not a solved step: 98.7%
   right on samples, it fails the certificate (1,025 wrong outputs). The two networks that certified
   (seed 1 step 11, seed 0 step 12), read by `approximations` now: **no factor of either determines
@@ -1700,7 +1700,7 @@ case passed** (`long-tests-summary.txt`). Fisher's exact, two-sided (`inference.
    lines named in `approximations`, the readings' `--vocabulary`, `answers-proof`); T8's sweep in
    indrajala-research's window-recurrent-literature.md (its 2026-10-23 extension: no 2025-2026
    work learns an automaton by gradient descent and proves it at every length), the papers in
-   indrajala-literature; T7's `scripts/paper_tables.py` (P2's approximation table regenerated
+   indrajala-literature; T7's `scripts/paper/paper_tables.py` (P2's approximation table regenerated
    identically), its further tables added with the manuscript (stage 6). **T7, 2026-10-25:** T1's, T3's, T2's and T5's tables regenerated from their batches (`tab:extra-outputs`, `tab:baselines`, `tab:scale`, `tab:breadth`), every number as their findings but T5's two medians (corrected there); T4's (`tab:decomposition`, `tab:decomposition-fresh`) and T6's (`tab:proof`, `tab:refuted`) the same day, every number as their findings. **Reruns (D21), 2026-10-25:** all four bit for bit on `litshe` ("Findings: T7's reruns"). T4's reading of the 69
    networks named in D10 is offline and may run now; T6 waits on its runs.
 3. **Builds:** T1's two control outputs (suffix and token) as answer kinds of the division encoding;
