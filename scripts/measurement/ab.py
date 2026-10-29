@@ -1069,6 +1069,8 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
         for side in ("old", "new", "script"):
             if side in manifest:
                 manifest[side]["tree"] = str(ensure_worktree(repo, manifest[side]["commit"]))
+        if adapter.name != "cmd":  # the report names it without the tree, which may be gone by then
+            manifest["command"] = _pass_command(adapter, Path(manifest[manifest["script_from"]]["tree"]), bench_args)
         if crates["old"] != crates["new"]:  # switch the crate per pass; the venv is never touched
             for side in ("old", "new"):
                 crate = crates[side]
@@ -1688,6 +1690,12 @@ def _script_source(manifest: dict[str, Any]) -> str:
 SCRIPTS_GROUPED = datetime.datetime(2026, 10, 29, 8, 18, 55, tzinfo=datetime.UTC)
 
 
+def _pass_command(adapter: Adapter, script_tree: Path, args: list[str]) -> str:
+    """A pass's command as the report shows it: the script relative to its tree."""
+    command = " ".join(["python", *adapter.command(script_tree, args, Path("<pass output>"))])
+    return command.replace(str(script_tree) + "/", "")
+
+
 def _ab_path(manifest: dict[str, Any]) -> str:
     created = datetime.datetime.fromisoformat(manifest["created"])
     return "scripts/ab.py" if created < SCRIPTS_GROUPED else "scripts/measurement/ab.py"
@@ -1699,9 +1707,13 @@ def protocol_paragraph(data: ReportData) -> str:
     script_tree = Path(manifest.get(manifest["script_from"], {}).get("tree", "<tree>"))
     if manifest["bench"] == "cmd":  # the probe as given: resolving it here would depend on the cwd
         command = " ".join(["python", *manifest["args"]])
+    elif "command" in manifest:  # recorded when the run started
+        command = manifest["command"]
     else:
-        command = " ".join(["python", *adapter.command(script_tree, manifest["args"], Path("<pass output>"))])
-        command = command.replace(str(script_tree) + "/", "")
+        command = _pass_command(adapter, script_tree, manifest["args"])
+        if not script_tree.exists() and _ab_path(manifest) == "scripts/measurement/ab.py":
+            # the tree is gone (the archive's check): the grouped path, as _script found it then
+            command = command.replace("python scripts/", "python scripts/measurement/", 1)
     extension: dict[str, Any] = manifest.get("extension") or {}
     text = (
         f"Old `{manifest['old']['commit'][:7]}` against new `{manifest['new']['commit'][:7]}`, run with "
