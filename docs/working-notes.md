@@ -508,7 +508,7 @@ where you meet a new trap; delete one that no longer holds.
 - **A scheduled stop kills itself the same way:** `stone`'s stop for D55 ran `pkill -f
   "option1/probe-[d]55"` inside a `bash -c` whose own command line named `.../probe-d55/launch.log`
   (to write the "stopped" line), so the pattern matched its own shell: the runs stopped, but no
-  "stopped" line was written. Put a scheduled stop in a script file (`~/labour/stop-d64.sh`), so the
+  "stopped" line was written. Put a scheduled stop in a script file (as `docs/probe-launches/stone/stop-d64.sh` was), so the
   command line that runs it holds no pattern.
 - **Never chain a local launch after a remote one in one command:** when the launching ssh hangs
   (the line above), the Bash tool backgrounds the command and everything after the ssh runs when it
@@ -520,7 +520,7 @@ where you meet a new trap; delete one that no longer holds.
   the worktree's path. `indrajala_ml` is a namespace package, so check which copy loads (a
   one-line script in the worktree's `scripts/` printing a module's `__file__`): run as a script,
   the worktree's loads; `python -c` from the main checkout loads the main checkout's. E2 ran this
-  way (`~/code/wt-e2`, launched by `~/code/e2-launch.sh` on `jebel`).
+  way (`~/code/wt-e2`, launched by `docs/probe-launches/jebel/e2-launch.sh`).
 - **Never develop in a worktree a queued or running study imports from:** a launcher that waits
   imports the worktree as it is when the study starts (and records its commit then). Keep a separate
   worktree for development (`~/code/wt-dev`); `~/code/wt-e2b` on `pyramidon` was nearly launched on a

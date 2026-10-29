@@ -2,7 +2,9 @@
 
 The shell scripts that launched the probes and studies run by hand, before the batch runner
 (`scripts/batch.py`) took over launching, placing and moving runs. They are kept **verbatim**, as
-they ran from `~/code/` on `pyramidon` (copied 2026-10-29, timestamps kept). Their paths
+they ran from `~/code/` on `pyramidon`, and in `jebel/` and `stone/` those that ran only from
+`jebel`'s `~/code/` and `stone`'s `~/labour/` (copied 2026-10-29, timestamps kept; a script the
+machines shared is kept once, at the top). Their paths
 (`~/code/wt-*`, `~/labour/`, scratchpad sites, process ids) are the ones of that time and no longer
 resolve. They are records, not tools: don't run them.
 
@@ -27,6 +29,16 @@ Retired workplans are in `docs/next-steps.md`'s "Retired workplans" and in git h
 | `stage5-post-launch.sh`, `stage5-long-tests.sh`, `stage5-long-tests-finish.sh`, `fork-long-tests.sh`, `p11-long-tests.sh` | division's stage 5 and its long tests (D4, D8); the fork probe's and the p 11 ladder's long tests | division (retired) |
 | `e2b-snapped-launch.sh`, `e2b-long-tests.sh`, `e2b-prime-long-tests.sh`, `e2b-long-nets*.txt`, `e2b-prime-long-nets-20.txt` | E2b and E2b', their long tests and the networks tested | the claims workplan (retired) |
 
-Not kept: `~/code/merge-779.sh` and `stone-slots0.sh` (one-off operations) and
-`collapse-drops-analysis.py` (the `drops` reading replaced it). `e2-launch.sh`, which the working
-notes name, was already gone.
+`jebel/` holds the division ladder, the general algebras' rounds, code consolidation (A, B, P2),
+the window branches (B2, W1, W2, B3), one-code-one-state (C0, C2, R3/R4), the commitment diagnostic,
+E2, E2b and E2b', the fork probe, the stable-seed replay and the night guard; `stone/` the ladder's
+L2 and L3, P1, the window branches' B1 and B3, R1, the never probe's arms, option 1's panel, the
+whole-distribution timing, a throughput benchmark, and D63's and D64's scheduled stops and moves.
+Each header names its workplan; most are retired (see above).
+
+Not kept: `~/code/merge-779.sh` and `stone-slots0.sh` (one-off operations); `collapse-drops-analysis.py`
+(the `drops` reading replaced it); `jebel`'s `classify.py` and `ties.py` (`readout`), `stone`'s
+`epochs_to_cert.py` and `epochs_to_cert2.py` (`restart-cost`), `l2read.py` (`progress`),
+`scan_plain.py` (a one-off of D67's) and `replay_ended.py` (the runner resends an unacknowledged
+`ended` since 2026-10-26). `stone`'s `~/labour/env.sh`, its sandbox, stays in place: the batch
+runner sources it.
