@@ -2351,3 +2351,20 @@ a random machine would just need a very slow cool.**
 
 `stone`: about half its 12 cores by day, all at night (the panel's 12 runs at night). `pyramidon`:
 development, up to about 4 small workers. `jebel`: up, 06:00-18:00 only (its power load overnight), timing.
+
+## Records: the runners' data consolidated (2026-10-29)
+
+Every probe's data is now on `pyramidon`, in the gitignored `data/window-recurrent/` (the owner: no
+test data in git), and the runners' copies are removed. Brought over on 2026-10-29 because no copy
+was here: D32 (`option1/probe-d32/`, which this plan named before it existed here), D33
+(`option1/probe-d33/`), D38 (`option1/probe-d38/`: `jebel`'s S3 seeds 0-7 with every step's network,
+`stone`'s move-to-front-4 seed 3, `jebel`'s reading in `reading-jebel/`, each host's launch log as
+`launch-<host>.log`), D56 (`option1/probe-d56/`), D59's `jebel` share (move-to-front-4 24, 26, 29;
+`launch-jebel.log`), the 4a'' move-to-front-4 arms (`option1/probe-4a3/`), the whole-distribution
+timing (`option1/time-whole/`), D54's parity check (`option1/d54-parity/`) and D63's move-to-front-4
+34, 35 states at their move from `stone` (`option1/probe-d63/moved-from-stone/`). One archive-side
+manifest for all 6,075 files, the other studies' pieces included (the paper's budget probe in
+`paper/budget-probe-2026-10-23/`, `klip`'s thermal-guard logs in `klip-thermal-guard/`):
+`runners-archive-2026-10-29.sha256`, sha256 207d9eaeabeaffa8.... The exact code of the probes run
+from branches since squash-merged is tagged `probe/*` (e.g. `probe/warm-up-d26-f0064cb`,
+`probe/d54-dddd8d3`).

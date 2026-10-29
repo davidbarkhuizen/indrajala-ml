@@ -192,6 +192,12 @@ where you meet a new trap; delete one that no longer holds.
   has its modules loaded and doesn't care.
 - **When trimming a stage, check which later experiments compare against the dropped cells**
   (D34 removed E2's and E6's `k` 1 comparators).
+- **A probe run at a branch's commit: tag the commit (`probe/<name>-<sha>`) and push the tag
+  before the PR is squash-merged.** The squash leaves the branch's commits unreachable, and once the
+  branch is deleted git's gc removes them: the registration's "at <commit>" then names nothing (13
+  such commits were found and tagged on 2026-10-29). **And bring each runner's data to `pyramidon`
+  when its probe ends** (`data/window-recurrent/`, a manifest): D32, D33, D38 and D56 existed only on
+  `stone` and `jebel` until then, though a workplan named their place here.
 - **Copying results between machines:** `sha256sum` on the source, `rsync`, `sha256sum -c` on
   the destination; record the manifest's own sha256 in the findings. **Don't rename or re-root on
   the copy:** a host's manifest lists its own paths (`klip`'s `data-d64/probe-d64/...`), so a file
