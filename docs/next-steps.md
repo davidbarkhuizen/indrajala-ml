@@ -20,11 +20,10 @@ in progress keeps its own list: [general-algebras-workplan.md](workplans/general
 [state-formation-workplan.md](workplans/state-formation-workplan.md),
 [aarch64-workplan.md](workplans/aarch64-workplan.md),
 [factorisation-machine-workplan.md](workplans/factorisation-machine-workplan.md),
-[post-paper-retests-workplan.md](workplans/post-paper-retests-workplan.md) (gated on paper 1), and the paused
-[snap-wall-workplan.md](workplans/snap-wall-workplan.md). Of the research plans, the general
-algebras, the factorisation machine and the adders of any length have been paused since 2026-10-20,
-when the owner set planned work aside for the state-formation plan, and the snap wall since
-2026-10-16; each waits for a decision to resume or retire (the programme audit's F29). The order
+and [post-paper-retests-workplan.md](workplans/post-paper-retests-workplan.md) (gated on paper 1).
+Of the research plans, the general algebras, the factorisation machine and the adders of any length
+have been paused since 2026-10-20, when the owner set planned work aside for the state-formation
+plan; each waits for a decision to resume or retire (the programme audit's F29). The order
 of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
@@ -83,6 +82,8 @@ docs cite them by section:
 | One code, one state (R1-R4, C0, C2) | #873 | #874, #875, #878, #879, #883 | `git show df1dcac:docs/one-code-one-state-workplan.md` |
 | A population of runs selected by their machines (level 2, not built) | #882 | - | `git show df1dcac:docs/population-workplan.md` |
 | An audit of the research programme (2026-10-23) | #953 | indrajala-research #48-#50, #954 | `git show 4ea65cc:docs/workplans/programme-audit-workplan.md`; the four reviews at indrajala-research's top level (`review-2026-10-23-*.md`) |
+| The batch runner (restarts at a cutoff; a controller and a worker on each machine) | #935 | #943, #944, #946, #948, #952, #956 | `git show 53d7fef:docs/workplans/batch-runner-workplan.md` |
+| The snap wall (an asymmetric margin on the snap; P1, C1 refuted) | #787 | #788, #789, #793, #797, #803 | `git show 53d7fef:docs/workplans/snap-wall-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -98,6 +99,33 @@ and [rng-audit.md](audits/rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the addition study's in `scripts/studies/addition_study.py`'s.
+
+## From the batch runner and the snap wall (retired 2026-10-29)
+
+The runner is built and in use (paper 1's batches); its hosts, ledger and gotchas are in
+[working-notes.md](working-notes.md), The batch runner. Its known limits, still open:
+
+- **Find mode's verifier** (the programme audit's F7): restarts are optimal for Las Vegas runs,
+  right whenever they stop. The certificate makes a run so only with the target known. In discovery
+  the stop is answers-only under a state bound, which gave false discoveries at a slack bound (1.1
+  times the target's size: 25 false stops, 1 false discovery); find mode there needs an exact
+  answers-only check (Chow's test set under the bound, with queries) before Luby's cost model applies.
+- Restarts assume attempts independent and identically distributed: true of fresh seeds, not of
+  attempts on different backdrops (each has its own `t*`).
+- A cut attempt keeps its last step's networks, but a certificate that would have come after the
+  cutoff is lost by design (the reheat's late recoveries are the case).
+- A ledger from before stage 5 (the stage-4 checks) holds summaries without `epochs`; `runs_of`
+  leaves them out. `stone`'s wifi makes its pulls the likeliest to fail; a pull is retried.
+
+The snap wall: P1 refuted C1 (a wall on the snap's margin lost the proof in 8 of 10 replays, 9 of 10
+without), and the registered margins didn't set the collapsing seed apart (the wall aimed at the
+wrong quantity). Paused by the owner (2026-10-16), then overtaken by the state formation plan; its
+stages 3-5 were conditional on C1. To resume from: the candidate read after the data (the
+collapsing seed snaps its 3 minimised states to 8 codes, the others to 3-5; spare codes beside each
+other could swap or merge under an update), which a registered probe on networks with many codes in
+use would test; and the guard, which took up its follow-up (`git show
+ed0e378:docs/guard-training-workplan.md`). The wall acts only on states training visits; the
+certificate stays the proof.
 
 ## From the programme audit (2026-10-23; the workplan retired the same day)
 

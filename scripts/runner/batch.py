@@ -1,5 +1,5 @@
 """
-The batch runner (docs/workplans/batch-runner-workplan.md): a controller on one machine and a worker daemon on
+The batch runner (its workplan retired: git show 53d7fef:docs/workplans/batch-runner-workplan.md): a controller on one machine and a worker daemon on
 each, over newline-delimited JSON on a TCP socket on 127.0.0.1 (indrajala_ml.batch).
 
     python scripts/runner/batch.py register DIR --name NAME --mode measure|find --cell CELL [--cell CELL ...] --attempts SPEC
