@@ -1,5 +1,5 @@
 """
-A curriculum step replayed from a saved network (docs/workplans/snap-wall-workplan.md): what further training
+A curriculum step replayed from a saved network (the snap wall workplan, retired: git show 53d7fef:docs/workplans/snap-wall-workplan.md): what further training
 does to it, batch by batch, and whether its proof survives. From a saved step's network (optionally
 converted to numpy, its weights, Adam's moments and generator kept; optionally with the snap wall
 on), some epochs of a step's data drawn by a named generator, as a run's step draws them:

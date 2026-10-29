@@ -1,5 +1,5 @@
 """
-The batch runner (docs/workplans/batch-runner-workplan.md, stage 3): a controller that owns a batch's attempts
+The batch runner (its workplan's stage 3, retired: git show 53d7fef:docs/workplans/batch-runner-workplan.md): a controller that owns a batch's attempts
 and its ledger, and a worker daemon on each machine that runs them, over newline-delimited JSON on a
 TCP socket (D4). The standard library only, so the worker costs almost nothing at rest.
 

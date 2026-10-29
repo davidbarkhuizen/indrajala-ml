@@ -249,7 +249,7 @@ class GRUArrayLayer:
         return dU_in, dC
 
 
-WALL_RATIO = 1.5  # the snap wall's ratio (docs/workplans/snap-wall-workplan.md, D4)
+WALL_RATIO = 1.5  # the snap wall's ratio (the snap wall workplan's D4, retired)
 WALL_EPS = 1e-12  # added to the wall's squared distances: a state on its code has a finite log ratio
 
 
@@ -266,7 +266,7 @@ class CodesArrayLayer:
     the code-consolidation workplan, D1), the commitment holds h to E[targets] instead of its own
     code: commitment * ||h - sg[E[targets]]||^2; None, to its own.
 
-    With wall above 0, the snap wall too (docs/workplans/snap-wall-workplan.md): per state, with e1 its code
+    With wall above 0, the snap wall too (git show 53d7fef:docs/workplans/snap-wall-workplan.md): per state, with e1 its code
     and e2 the next nearest, s = log((q2 + eps) / (q1 + eps)) of their squared distances, the loss
     wall * weight * gate * max(0, log(wall_ratio^2) - s)^2, gate the state's example's (1 when its
     every digit is right, set by the network before backward; None, every example's 1), its
