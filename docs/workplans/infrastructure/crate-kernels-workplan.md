@@ -1,7 +1,7 @@
 # Workplan: the crate's kernel loose ends (from the aarch64 plan)
 
-**Status: D1-D5 settled (2026-10-29) for extensibility, speed and production; no stage started.
-`litshe` is powered off: the owner powers it on before stage 2.**
+**Status: D1-D5 settled (2026-10-29) for extensibility, speed and production. Stage 1 closed (no
+consistent gain on x86: 4K aliasing); stages 2-4 under way.**
 
 The aarch64 plan (retired: `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md`)
 made the crate bit-identical across x86_64 and aarch64 and gave the Pi its NEON kernels. It left
@@ -87,6 +87,35 @@ Every option's pros and cons, as settled.
   doesn't persist, it is recorded as placement and closed. Pros: no change without a cause; the
   probe is cheap (single-core, minutes). Cons: may end with "not found", which is an answer.
 
+- **D6: release builds compile in one codegen unit** (`[profile.release] codegen-units = 1`).
+  Settled (a), 2026-10-29, from stage 2's findings.
+  - (a) One unit. Pros: what LLVM inlines no longer depends on how rustc splits the crate, so a
+    change in one file can't move another's code (stage 2's cause, and the 10-90% swings in
+    untouched rows on jebel); no special case in the code; on `litshe` 38 rows faster, 3 slower.
+    Cons: slower release builds; on jebel the old `cr_exp::map` path (sigmoid, softmax) +16-37%,
+    a path stage 4 removes, so the two are timed together.
+  - (b) A wrapper never inlined around `matmul_long_k`'s column range, on aarch64 only (crate #75).
+    Pros: recovers the accumulate fully (aligned, every shape at #64's time); x86's code
+    byte-identical. Cons: a special case, and the next change can move the units again: the
+    wrapper itself took a `Zip` out of `max_pool_downstream_batch` (pool 6x6 +54%).
+  - (c) Leave it. Pros: nothing to do. Cons: every crate change keeps moving unrelated kernels.
+
+- **D7: a kernel's speed doesn't depend on where the linker puts it.** Settled (a), 2026-10-29
+  (the owner chose to pin the build over shipping stage 4 as it stood, or stopping).
+  - (a) The crate's `.cargo/config.toml`: on x86_64 no branch crosses or ends on a 32-byte boundary
+    (`-x86-branches-within-32B-boundaries`, the mitigation for the Skylake-derived cores' JCC
+    erratum: jebel is an i7-9700K); on aarch64 loops and functions aligned to 64 bytes. With D6,
+    and checked by `scripts/measurement/kernel_code_diff.py`, which compares two builds' machine code
+    function by function. Pros: an A/B moves only the rows whose code changed (on jebel,
+    the vector `exp` against D6 and D7 alone: the `exp` rows faster, 263 within noise, none slower;
+    on `litshe` 259 within noise, one +2.3%); layout only, so no bit moves. Cons: `.text` 2% larger
+    on x86 (padding).
+  - (b) Explicit inline attributes on each hot kernel. Pros: pins what is inlined. Cons: with D6
+    the kernels' code already holds still (the tool: the vector `exp` changes only the functions
+    it touches); the swings that remained came from placement, which attributes don't fix.
+  - (c) Read every A/B through aligned controls. Pros: no build change. Cons: doubles every run, and
+    function alignment alone left the x86 swings (stage 1's aligned run).
+
 ## Stages
 
 One PR per stage; a crate stage lands in `indrajala-math-rust` first, then a "Bump rust/" PR. Every
@@ -105,12 +134,75 @@ unaffected (x86 code only).
 
 Done when the bump merges with its A/B.
 
+**Closed 2026-10-29: no consistent gain; not merged** (crate #73, ml #1087, both left unmerged;
+the kernels on the crate's `avx2-transpose` branch).
+
+- **The kernel as D4 has it** (source quads outermost; crate 37da6f1). Tier 2 on jebel,
+  `2026-10-29-bump-rust-avx2-transpose-focused_benchmark` (ONNONO):
+  - transposes of 32 rows were 18-36% faster (`(32, 30).T` 0.83 to 0.56 µs), and dense and conv-tail
+    `accumulate_gradient_batch` b32 6.6-8.1% faster;
+  - but dense 10 x 30 `transpose` b512 (`(512, 10).T`) was +52% (4.0 to 6.1 µs), attention 16 x 32
+    `accumulate_gradient_batch` b32 +22% (203 to 246 µs), and dense `accumulate_gradient_batch`
+    b512 +4-5%.
+- **Not placement.** The same A/B with every function aligned to 64 bytes
+  (`2026-10-29-avx2-transpose-aligned`, crate tags `probe/align-10dfec9` and
+  `probe/align-avx2-transpose`; the transpose, `accumulate_gradient_batch` and `sum_axis0` rows):
+  `sum_axis0` flat, the transpose +49% at `(512, 10)` and attention's accumulate +13% (b32) and
+  +4.8% (b512) still there. Column quads outermost (crate 3276b06,
+  `2026-10-29-avx2-transpose-column-first`) changed nothing.
+- **The cause: 4K aliasing.** Timed directly on jebel (each build's wheel, `Array.T`, best of 9),
+  the AVX2 kernel loses only where the output's rows lie a multiple of 4 KB apart:
+  `(512, 30)` 14.2 against 21.8 µs and `(1024, 10)` 8.1 against 12.2, but `(520, 30)` 11.6
+  against 11.2 and `(504, 10)` level. Its loads interleave with stores to four output rows whose
+  addresses share their low 12 bits, which an Intel core reads as a dependence.
+- **A variant** (both row quads of a block loaded before either is stored, each output row's 8
+  values stored together; crate 20c1d5d), timed the same way, interleaved over 3 rounds: against
+  the scalar block, `(512, 10)` -8%, `(512, 32)` -8% and `(32, k)` -18% to -35%, but `(32, 784)` +8%,
+  `(32, 5408)` +15% and `(520, 30)` +17%. Still not a gain on every shape.
+- **What it would take:** a transpose that never interleaves its loads with stores to rows 4 KB
+  apart, such as one that gathers a block into a contiguous buffer before writing it out. A design
+  of its own, not D4's; it goes to next-steps.md when this plan retires. The NEON kernel is
+  unaffected (`litshe`: every transpose 37-58% faster, crate #71).
+- The crate README's stale path to the aarch64 plan, which stage 1's PR fixed, moves to stage 4's
+  crate PR.
+
 ### Stage 2: conv `accumulate_gradient` (D5)
 
 The probe on `litshe` as D5 says; its findings recorded here; a fix, if the cause is real and
 fixable, as stage 2b in its own crate PR (tier 2 on `litshe`).
 
 Done when the findings merge.
+
+**Findings (2026-10-29): the cause is how rustc splits the crate; the fix is one codegen unit (D6).**
+
+- **It persists.** `2026-10-29-align-probe-10dfec9` on `litshe`: 10dfec9 against 0a6910b (#64),
+  both with every function aligned to 64 bytes (crate tags `probe/align-10dfec9`, the old probe's
+  a722c7c): conv `accumulate_gradient` +4.2% to +11.2% on 5 of 6 shapes, numpy's rows flat. The
+  old probe compared #64 with #65 directly, so there was nothing to bisect.
+- **Not the source.** #65 left the accumulate's code alone; it removed `matmul_narrow`, another
+  caller of the tiled kernel. The symbols show what changed: before, `matmul_long_k`'s column
+  closure was a function of its own (1,488 bytes) with the kernel inlined into it; after, the closure
+  is inlined into `matmul_long_k` (2,164 bytes) and the kernel (`tiled_row_range_neon::<2>`) is a
+  call.
+- **A wrapper restores it** (crate #75): the closure through a generic `#[inline(never)]` function on
+  aarch64 compiles back to the 1,488-byte shape, and aligned (`2026-10-29-long-k-wrapper-aligned`)
+  every shape is at #64's time (26x26x8 72.3 to 65.0 µs, #64 65.1). x86's `.text` stays
+  byte-identical to 10dfec9's. But unaligned (`2026-10-29-long-k-wrapper-litshe`) pool 6x6
+  `downstream_batch` b32 was +54%: `max_pool_downstream_batch`, its source untouched, now calls
+  `Zip::new` instead of inlining it. **The mechanism:** rustc splits the crate into 16 codegen units,
+  LLVM can't inline across them, and which unit a generic lands in moves with any change.
+- **The same on jebel.** Every crate change in this plan moved untouched rows there: the transpose
+  +60-94% (a named function in `linalg.rs`), conv `forward` +3-20% (the vector `exp`), pool
+  -11% to -32%.
+- **One codegen unit** (crate #76, `2026-10-29-codegen-units-1-litshe` and `-jebel`):
+  - on `litshe`, 38 rows faster and 3 slower: conv `accumulate_gradient` -7% to -8% (the loss
+    recovered) and dense `downstream`/`hidden_delta` -11% to -15%; pool 6x6 `downstream_batch` b32
+    +21%; conv-tail `sgd step` +65%, an allocator mode, not code (the kernel's instructions are
+    identical; the new side's loops range 116-285 µs and the fastest equals the old median);
+  - on jebel, 20 faster and 11 slower: pool `downstream` -17% to -32%; dense `forward_batch` +35% and
+    attention `forward_batch` +16%, the `cr_exp::map` path stage 4 replaces.
+
+  So D6 (a), evaluated with stage 4, against 10dfec9 on both machines; #75 closes.
 
 ### Stage 3: the narrow-`k` gap: threads first (D3)
 
