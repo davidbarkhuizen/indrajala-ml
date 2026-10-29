@@ -125,11 +125,19 @@ def test_training_and_its_data_leave_the_global_random_untouched():
     random.seed(7)
     before = random.getstate()
 
+    # each generator passed and seeded: drawn from OS entropy, a student's boundary sometimes misses
+    # the bounds and the disagreement sampling can't find one class (CI, 2026-10-29)
     bounds = square_bounds(10.0)
-    reference, training_data = reachable_reference_and_training_data(1, 2, bounds, 40)
-    linear = LinearClassifierNetwork.randomized(1, 2, bounds)
-    train_linear_classifier_network(linear, training_data, epochs=2, reference_classifier=reference)
-    backprop = BackpropClassifierNetwork.randomized([3], 2, bounds)
-    train_backprop_network_mini_batch(backprop, training_data, 8, epochs=2, reference_classifier=reference)
+    reference, training_data = reachable_reference_and_training_data(
+        1, 2, bounds, 40, rng=default_rng(1), data_rng=random.Random(2)
+    )
+    linear = LinearClassifierNetwork.randomized(1, 2, bounds, seed=3)
+    train_linear_classifier_network(
+        linear, training_data, epochs=2, reference_classifier=reference, rng=random.Random(4)
+    )
+    backprop = BackpropClassifierNetwork.randomized([3], 2, bounds, seed=5)
+    train_backprop_network_mini_batch(
+        backprop, training_data, 8, epochs=2, reference_classifier=reference, rng=random.Random(6)
+    )
 
     assert random.getstate() == before
