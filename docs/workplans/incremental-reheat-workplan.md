@@ -158,8 +158,8 @@ state, so a checkpoint resumes them (`--resume`).
 0. **The offline reading** (now; on `pyramidon`, from logs on disk; a durable tool,
    `modular_family_probe.py transitions LOG ...`). For every run of D63's probe (22 seeds,
    `--reheat`; `option1/probe-d63/`), its D64 twins
-   (`option1/probe-d67-d64/`) and the crucible probe's eight (`klip:~/code/crucible-probe/`,
-   `stone:~/labour/crucible-probe/`): each transition (clock, temperatures, groups), the state share
+   (`option1/probe-d67-d64/`) and the crucible probe's eight (then on `klip` and `stone`;
+   `data/window-recurrent/crucible-probe/` since 2026-10-29): each transition (clock, temperatures, groups), the state share
    and screen at each; each hold (its start, length, the temperature, whether it recovered); each of
    D63's reheats (how far back it ran: how many transitions it crossed, whether it passed the first,
    and whether the run then recovered or certified). **Read for:** how often a hold or collapse
@@ -277,8 +277,9 @@ manifest `ireheat-probe.sha256` a29a9bee... (24 files).
   both arms lose the state they form; the incremental reheat walks back to its first transition,
   the held cool forgets in place. Neither keeps it, and D8 stands. Data
   `data/window-recurrent/crucible-probe/` (logs, last networks, checkpoints, `transitions.out`),
-  manifest `crucible-probe.sha256` c4ea3db0 (17 files); the step networks stay on
-  `stone:~/labour/crucible-probe/`.
+  manifest `crucible-probe.sha256` c4ea3db0 (17 files). Since 2026-10-29 all of it there: the step
+  networks from `stone`, the recombining arm from `klip` (its states when moved from `jebel` in
+  `moved-from-jebel/`), manifest `crucible-probe.archive-2026-10-29.sha256` aa2657d5 (895 files).
 - **D8:** stage 2 does not support the incremental reheat as X's second arm; X's D5 arm stands
   unless the owner decides otherwise (post-paper).
 
