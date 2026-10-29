@@ -1,7 +1,7 @@
 # Workplan: the crate's kernel loose ends (from the aarch64 plan)
 
-**Status: D1-D5 settled (2026-10-29) for extensibility, speed and production; no stage started.
-`litshe` is powered off: the owner powers it on before stage 2.**
+**Status: D1-D5 settled (2026-10-29) for extensibility, speed and production. Stage 1 closed (no
+consistent gain on x86: 4K aliasing); stages 2-4 under way.**
 
 The aarch64 plan (retired: `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md`)
 made the crate bit-identical across x86_64 and aarch64 and gave the Pi its NEON kernels. It left
@@ -104,6 +104,38 @@ The kernel in the crate, its tests (every shape class: multiples of 8, odd edges
 unaffected (x86 code only).
 
 Done when the bump merges with its A/B.
+
+**Closed 2026-10-29: no consistent gain; not merged** (crate #73, ml #1087, both left unmerged;
+the kernels on the crate's `avx2-transpose` branch).
+
+- **The kernel as D4 has it** (source quads outermost; crate 37da6f1). Tier 2 on jebel,
+  `2026-10-29-bump-rust-avx2-transpose-focused_benchmark` (ONNONO):
+  - transposes of 32 rows were 18-36% faster (`(32, 30).T` 0.83 to 0.56 µs), and dense and conv-tail
+    `accumulate_gradient_batch` b32 6.6-8.1% faster;
+  - but dense 10 x 30 `transpose` b512 (`(512, 10).T`) was +52% (4.0 to 6.1 µs), attention 16 x 32
+    `accumulate_gradient_batch` b32 +22% (203 to 246 µs), and dense `accumulate_gradient_batch`
+    b512 +4-5%.
+- **Not placement.** The same A/B with every function aligned to 64 bytes
+  (`2026-10-29-avx2-transpose-aligned`, crate tags `probe/align-10dfec9` and
+  `probe/align-avx2-transpose`; the transpose, `accumulate_gradient_batch` and `sum_axis0` rows):
+  `sum_axis0` flat, the transpose +49% at `(512, 10)` and attention's accumulate +13% (b32) and
+  +4.8% (b512) still there. Column quads outermost (crate 3276b06,
+  `2026-10-29-avx2-transpose-column-first`) changed nothing.
+- **The cause: 4K aliasing.** Timed directly on jebel (each build's wheel, `Array.T`, best of 9),
+  the AVX2 kernel loses only where the output's rows lie a multiple of 4 KB apart:
+  `(512, 30)` 14.2 against 21.8 µs and `(1024, 10)` 8.1 against 12.2, but `(520, 30)` 11.6
+  against 11.2 and `(504, 10)` level. Its loads interleave with stores to four output rows whose
+  addresses share their low 12 bits, which an Intel core reads as a dependence.
+- **A variant** (both row quads of a block loaded before either is stored, each output row's 8
+  values stored together; crate 20c1d5d), timed the same way, interleaved over 3 rounds: against
+  the scalar block, `(512, 10)` -8%, `(512, 32)` -8% and `(32, k)` -18% to -35%, but `(32, 784)` +8%,
+  `(32, 5408)` +15% and `(520, 30)` +17%. Still not a gain on every shape.
+- **What it would take:** a transpose that never interleaves its loads with stores to rows 4 KB
+  apart, such as one that gathers a block into a contiguous buffer before writing it out. A design
+  of its own, not D4's; it goes to next-steps.md when this plan retires. The NEON kernel is
+  unaffected (`litshe`: every transpose 37-58% faster, crate #71).
+- The crate README's stale path to the aarch64 plan, which stage 1's PR fixed, moves to stage 4's
+  crate PR.
 
 ### Stage 2: conv `accumulate_gradient` (D5)
 
