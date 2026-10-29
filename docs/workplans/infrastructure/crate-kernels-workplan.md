@@ -87,6 +87,19 @@ Every option's pros and cons, as settled.
   doesn't persist, it is recorded as placement and closed. Pros: no change without a cause; the
   probe is cheap (single-core, minutes). Cons: may end with "not found", which is an answer.
 
+- **D6: release builds compile in one codegen unit** (`[profile.release] codegen-units = 1`).
+  Settled (a), 2026-10-29, from stage 2's findings.
+  - (a) One unit. Pros: what LLVM inlines no longer depends on how rustc splits the crate, so a
+    change in one file can't move another's code (stage 2's cause, and the 10-90% swings in
+    untouched rows on jebel); no special case in the code; on `litshe` 38 rows faster, 3 slower.
+    Cons: slower release builds; on jebel the old `cr_exp::map` path (sigmoid, softmax) +16-37%,
+    a path stage 4 removes, so the two are timed together.
+  - (b) A wrapper never inlined around `matmul_long_k`'s column range, on aarch64 only (crate #75).
+    Pros: recovers the accumulate fully (aligned, every shape at #64's time); x86's code
+    byte-identical. Cons: a special case, and the next change can move the units again: the
+    wrapper itself took a `Zip` out of `max_pool_downstream_batch` (pool 6x6 +54%).
+  - (c) Leave it. Pros: nothing to do. Cons: every crate change keeps moving unrelated kernels.
+
 ## Stages
 
 One PR per stage; a crate stage lands in `indrajala-math-rust` first, then a "Bump rust/" PR. Every
@@ -143,6 +156,37 @@ The probe on `litshe` as D5 says; its findings recorded here; a fix, if the caus
 fixable, as stage 2b in its own crate PR (tier 2 on `litshe`).
 
 Done when the findings merge.
+
+**Findings (2026-10-29): the cause is how rustc splits the crate; the fix is one codegen unit (D6).**
+
+- **It persists.** `2026-10-29-align-probe-10dfec9` on `litshe`: 10dfec9 against 0a6910b (#64),
+  both with every function aligned to 64 bytes (crate tags `probe/align-10dfec9`, the old probe's
+  a722c7c): conv `accumulate_gradient` +4.2% to +11.2% on 5 of 6 shapes, numpy's rows flat. The
+  old probe compared #64 with #65 directly, so there was nothing to bisect.
+- **Not the source.** #65 left the accumulate's code alone; it removed `matmul_narrow`, another
+  caller of the tiled kernel. The symbols show what changed: before, `matmul_long_k`'s column
+  closure was a function of its own (1,488 bytes) with the kernel inlined into it; after, the closure
+  is inlined into `matmul_long_k` (2,164 bytes) and the kernel (`tiled_row_range_neon::<2>`) is a
+  call.
+- **A wrapper restores it** (crate #75): the closure through a generic `#[inline(never)]` function on
+  aarch64 compiles back to the 1,488-byte shape, and aligned (`2026-10-29-long-k-wrapper-aligned`)
+  every shape is at #64's time (26x26x8 72.3 to 65.0 µs, #64 65.1). x86's `.text` stays
+  byte-identical to 10dfec9's. But unaligned (`2026-10-29-long-k-wrapper-litshe`) pool 6x6
+  `downstream_batch` b32 was +54%: `max_pool_downstream_batch`, its source untouched, now calls
+  `Zip::new` instead of inlining it. **The mechanism:** rustc splits the crate into 16 codegen units,
+  LLVM can't inline across them, and which unit a generic lands in moves with any change.
+- **The same on jebel.** Every crate change in this plan moved untouched rows there: the transpose
+  +60-94% (a named function in `linalg.rs`), conv `forward` +3-20% (the vector `exp`), pool
+  -11% to -32%.
+- **One codegen unit** (crate #76, `2026-10-29-codegen-units-1-litshe` and `-jebel`):
+  - on `litshe`, 38 rows faster and 3 slower: conv `accumulate_gradient` -7% to -8% (the loss
+    recovered) and dense `downstream`/`hidden_delta` -11% to -15%; pool 6x6 `downstream_batch` b32
+    +21%; conv-tail `sgd step` +65%, an allocator mode, not code (the kernel's instructions are
+    identical; the new side's loops range 116-285 µs and the fastest equals the old median);
+  - on jebel, 20 faster and 11 slower: pool `downstream` -17% to -32%; dense `forward_batch` +35% and
+    attention `forward_batch` +16%, the `cr_exp::map` path stage 4 replaces.
+
+  So D6 (a), evaluated with stage 4, against 10dfec9 on both machines; #75 closes.
 
 ### Stage 3: the narrow-`k` gap: threads first (D3)
 
