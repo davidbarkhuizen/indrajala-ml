@@ -23,17 +23,17 @@
   "notes": "Code: indrajala-ml (MIT) with its native crate indrajala-math-rust (MIT), at tag paper1-v1.1; the manuscript's source: indrajala-research (CC BY 4.0), at tag paper1-v1.1.",
   "related_identifiers": [
     {
-      "identifier": "https://github.com/davidbarkhuizen/indrajala-ml",
+      "identifier": "https://github.com/davidbarkhuizen/indrajala-ml/tree/paper1-v1.1",
       "relation": "isSupplementedBy",
       "resource_type": "software"
     },
     {
-      "identifier": "https://github.com/davidbarkhuizen/indrajala-math-rust",
+      "identifier": "https://github.com/davidbarkhuizen/indrajala-math-rust/tree/paper1-v1.1",
       "relation": "isSupplementedBy",
       "resource_type": "software"
     },
     {
-      "identifier": "https://github.com/davidbarkhuizen/indrajala-research",
+      "identifier": "https://github.com/davidbarkhuizen/indrajala-research/tree/paper1-v1.1",
       "relation": "isSupplementedBy",
       "resource_type": "publication-preprint"
     }

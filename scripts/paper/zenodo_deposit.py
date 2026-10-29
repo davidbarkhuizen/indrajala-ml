@@ -14,6 +14,11 @@ uploads every file at DIR's top level (but `zenodo.json`; `datapack.py split` le
 archives in parts there, the wholes in `whole/`), `--connections` at once, the largest first,
 skipping those already there with the same MD5, and checks each against the checksum Zenodo reports. `zenodo_deposit.py status DIR` compares the
 draft's files with DIR's.
+
+`zenodo_deposit.py edit DIR [--dry-run]` changes a published record's metadata, no new version (its DOI
+and files stay): it lists the fields of zenodo-metadata.json that differ from the record's, then
+unlocks the record for editing and sets them; the owner reviews the edit and presses Publish (or
+Discard). With `--dry-run` it only lists them.
 """
 
 from __future__ import annotations
@@ -78,6 +83,9 @@ def main(argv: list[str]) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("reserve", "metadata", "upload", "status"):
         commands.add_parser(name).add_argument("dir", type=Path)
+    edit = commands.add_parser("edit", help="a published record's metadata from zenodo-metadata.json; never publishes")
+    edit.add_argument("dir", type=Path)
+    edit.add_argument("--dry-run", action="store_true", help="only list the fields that would change")
     args = parser.parse_args(argv)
     token = args.token_file.read_text().strip()
     out: Path = args.dir
@@ -102,6 +110,21 @@ def main(argv: list[str]) -> int:
             raise SystemExit(f"{METADATA}: fill [RELEASE TAG] first")
         request("PUT", f"{API}/deposit/depositions/{draft['id']}", token, body={"metadata": metadata})
         print(f"draft {draft['id']}: metadata set; review it at {draft['html']}")
+        return 0
+    if args.command == "edit":
+        url = f"{API}/deposit/depositions/{draft['id']}"
+        record = request("GET", url, token)
+        current, wanted = record["metadata"], json.loads(METADATA.read_text())
+        changed = sorted(key for key in wanted if current.get(key) != wanted[key])
+        print(f"record {draft['id']} ({record['state']}): {', '.join(changed) or 'nothing'} differs")
+        if args.dry_run or not changed:
+            return 0
+        if record["state"] == "done":  # published: unlock it for editing first
+            request("POST", f"{url}/actions/edit", token)
+        request("PUT", url, token, body={"metadata": current | {key: wanted[key] for key in changed}})
+        print(
+            f"record {draft['id']}: {', '.join(changed)} set, not published; review and press Publish at {draft['html']}"
+        )
         return 0
     there = remote_files(draft, token)
     if args.command == "status":

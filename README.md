@@ -2,6 +2,12 @@
 
 fast neural network classifiers from first-principles with no ML framework dependencies
 
+**Paper 1** (*Learning Finite-State Transducers Through Their Approximations, with Proof*): its code
+is this repository at tag [`paper1-v1.1`](https://github.com/davidbarkhuizen/indrajala-ml/tree/paper1-v1.1)
+(the native crate and the manuscript at the same tag in their repositories), and its data the
+datapack [doi:10.5281/zenodo.23733575](https://doi.org/10.5281/zenodo.23733575), whose README says
+how to verify every number. `main` has moved on since (its `scripts/` grouped, for one).
+
 ## The name
 
 *Indrajala* is Sanskrit for "Indra's net". From
