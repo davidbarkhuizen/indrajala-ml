@@ -71,6 +71,7 @@ docs cite them by section:
 | An audit of the research programme (2026-10-23) | #953 | indrajala-research #48-#50, #954 | `git show 4ea65cc:docs/workplans/programme-audit-workplan.md`; the four reviews at indrajala-research's top level (`review-2026-10-23-*.md`) |
 | The batch runner (restarts at a cutoff; a controller and a worker on each machine) | #935 | #943, #944, #946, #948, #952, #956 | `git show 53d7fef:docs/workplans/batch-runner-workplan.md` |
 | The snap wall (an asymmetric margin on the snap; P1, C1 refuted) | #787 | #788, #789, #793, #797, #803 | `git show 53d7fef:docs/workplans/snap-wall-workplan.md` |
+| aarch64 on a Raspberry Pi 5, the crate bit-identical across architectures (D1-D10) | #721 | #722, #806, #810, #813, #842, #843, #846, #869, #880, #902, #926, crate #62-#65, #71 | `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -86,6 +87,26 @@ and [rng-audit.md](audits/rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the addition study's in `scripts/studies/addition_study.py`'s.
+
+## From aarch64 (retired 2026-10-29)
+
+Every stage done: the crate gives the same bits on x86_64 and aarch64 (its own correctly rounded
+`exp`, D6's rules for relu, softmax's maximum and `powi`), checked on every PR by the committed Rust
+reference (`data/refactoring/golden_run_rust.json`) on both architectures' CI runners; `litshe` has
+its timing setup, and its NEON kernels (the matrix and dot products, the transpose) are in. Four
+kernel loose ends have their own plan,
+[crate-kernels-workplan.md](workplans/infrastructure/crate-kernels-workplan.md): a vector `exp`, the
+narrow-`k` gap to numpy, conv `accumulate_gradient`'s unexplained slowdown, an AVX2 transpose. Left
+open here:
+
+- **musl's golden run:** CI builds and tests the crate on musl (Alpine, both architectures), not
+  the committed reference. A check to add if musl becomes a target.
+- **All-core work on `litshe`:** four cores at 2.4 GHz pass 65 C in about 2.5 minutes in its
+  passive case, so its passes are single-threaded. Sustained all-core work within the limits (65 C
+  ideal, 70 C hard) needs an active cooler: the owner's decision.
+- Other aarch64 machines (Graviton, Apple silicon) are checked by the committed reference alone.
+- SVE (not on the Pi 5's Cortex-A76) and AVX-512 kernels follow the canonical order (D5).
+- numpy's cross-machine behaviour stays unclaimed (D1); if ever wanted, a question about OpenBLAS.
 
 ## From the batch runner and the snap wall (retired 2026-10-29)
 

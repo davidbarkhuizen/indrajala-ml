@@ -201,7 +201,7 @@ Rust never fuses `low + range * u` into an FMA. numpy's C might, depending on th
 flags. GCC in ISO C mode doesn't contract, but clang contracts within an expression by default,
 and arm64 has FMA in its baseline. Linux x86_64 wheels target a baseline without FMA. CI now runs
 the crate's parity tests and every test shard on Linux arm64 as well (the
-[aarch64 workplan](../workplans/infrastructure/aarch64-workplan.md)'s multi-platform CI), and `litshe` (aarch64)
+aarch64 workplan's multi-platform CI, retired: `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md`), and `litshe` (aarch64)
 holds bit parity, so a contracting numpy build on arm64 would show there; macOS is still
 unchecked (the PyPI plan's stage 2,
 [pypi-release-workplan.md](../workplans/infrastructure/pypi-release-workplan.md)). If a numpy build contracts,

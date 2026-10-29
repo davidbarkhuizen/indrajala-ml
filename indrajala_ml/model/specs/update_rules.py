@@ -44,7 +44,7 @@ class Adam:
 def powi(base: float, exponent: int) -> float:
     """
     base^exponent for exponent >= 0 by square-and-multiply from the exponent's low bit, the crate's
-    order (src/scalar.rs; docs/workplans/infrastructure/aarch64-workplan.md, D6), so the three implementations agree; the C
+    order (src/scalar.rs; the aarch64 workplan's D6, retired: git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md), so the three implementations agree; the C
     library's pow, which ** calls, rounds differently.
     """
     result = 1.0
