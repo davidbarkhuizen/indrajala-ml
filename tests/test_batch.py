@@ -364,7 +364,7 @@ def test_the_fleets_commands_follow_each_hosts_rules():
     assert stone.startswith("source ~/labour/env.sh; ") and f"PYTHONPATH=/home/david/labour/{b.CRATE}:" in stone
     assert "--slots 11" in stone and "setsid nohup" in stone and stone.endswith("< /dev/null &")
     klip = b.worker_line(b.HOSTS["klip"], 47111)
-    assert "--wrapper=/home/david/code/thermal-guard.sh" in klip and "--wrapper=--" in klip
+    assert "--wrapper=scripts/thermal_guard.sh" in klip and "--wrapper=--" in klip
     steps = b.prepare(b.HOSTS["stone"], "abc123", Path("/repo"), Path("/tmp"))
     assert steps[1][3:5] == ["bundle", "create"] and "--no-recurse-submodules" in steps[3][2]
     assert b.prepare(b.HOSTS["klip"], "abc123", Path("/repo"), Path("/tmp"))[0][2].startswith("cd ~/code/indrajala-ml")

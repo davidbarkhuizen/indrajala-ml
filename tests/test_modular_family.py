@@ -255,6 +255,11 @@ def test_outcome_stops_at_the_first_certified_step_and_counts_its_epochs():
     assert mf.outcome(rows[:1]).end == "running"
     spent = row(3, 7, 0.4, end="spent", epochs=6, certified=False, seconds=330.0)  # 5 trained
     assert mf.outcome([*rows[:4], spent]).epochs == 48
+    assert mf.progress(rows[:4]) == "step 2 plateau, 43 epochs, 5 min, peak 0.997 at step 2"
+    annealing = {"step": 2, "epoch": 6, "seconds": 250.0, "anneal": {"phase": "cool"}}
+    assert mf.progress([*rows[:3], annealing]) == (
+        "step 2 running at epoch 6, 3 epochs before it, 4.2 min, peak 0.997 at step 2, anneal cool"
+    )
 
 
 def test_readout_counts_a_run_only_when_recertified_in_both_verdicts(tmp_path: Path):
