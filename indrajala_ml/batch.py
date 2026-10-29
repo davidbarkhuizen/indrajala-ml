@@ -227,7 +227,7 @@ class Host:
     """
     A machine in the fleet (D7): its run slots (its cores less the worker's one, bounded by memory), the
     worktree pinned at the batch's commit, its python and any PYTHONPATH before the worktree's, a
-    shell line to run first (stone's env.sh), a wrapper for each attempt (klip's thermal guard), its
+    shell line to run first (stone's env.sh), a wrapper for each attempt (klip's thermal guard, run from the worktree), its
     attempts' root, and its hours (none: always open). `remote` hosts are reached by ssh; every host's
     ended attempts are pulled into the batch, the controller's own machine's by a local copy.
     """
@@ -270,7 +270,7 @@ HOSTS: dict[str, Host] = {
         "/home/david/code/indrajala-ml/.venv/bin/python",
         "/home/david/code/batch-attempts",
         pythonpath=f"/home/david/code/{CRATE}",
-        wrapper=("/home/david/code/thermal-guard.sh", "/home/david/code/batch-attempts/temp", "85", "--"),
+        wrapper=("scripts/thermal_guard.sh", "/home/david/code/batch-attempts/temp", "85", "--"),
     ),
     "jebel": Host(
         "jebel",

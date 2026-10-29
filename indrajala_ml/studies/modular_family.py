@@ -671,6 +671,26 @@ def outcome(rows: Sequence[Mapping[str, Any]], drop: float = 0.5) -> Outcome:
     )
 
 
+def progress(rows: Sequence[Mapping[str, Any]]) -> str:
+    """
+    A run's progress from its log.jsonl, running or ended, as a line: its Outcome (the last step, how it
+    ended, epochs trained in the steps that ended, minutes, the best worst answer and its step), or for
+    a run still in a step, that step and its epoch; and the anneal's last phase, if it anneals.
+    """
+    rows = runner.last_run(rows)
+    o, last = outcome(rows), rows[-1]
+    phase = next((r["anneal"]["phase"] for r in reversed(rows) if "phase" in r.get("anneal", {})), None)
+    if o.end != "certified" and "end" not in last:  # the step in flight's diagnoses count to the peak
+        at = f"step {last['step']} running at epoch {last.get('epoch', '-')}, {o.epochs} epochs before it"
+        minutes = round(float(last.get("seconds", 0.0)) / 60, 1)
+        best = max((r for r in rows if "accuracy" in r), key=_worst, default=None)
+        peak, peak_step = (o.peak, o.peak_step) if best is None else (min(best["accuracy"].values()), best["step"])
+    else:
+        at, minutes, peak, peak_step = f"step {o.step} {o.end}, {o.epochs} epochs", o.minutes, o.peak, o.peak_step
+    line = f"{at}, {minutes:g} min, peak {peak:.3f} at step {peak_step}"
+    return line if phase is None else f"{line}, anneal {phase}"
+
+
 def _anneal_at(rows: Sequence[Mapping[str, Any]], row: Mapping[str, Any]) -> Mapping[str, Any]:
     """The anneal at a diagnosis: its own, or the last epoch's before it (a step's end logs none)."""
     at = next(i for i, r in enumerate(rows) if r is row)

@@ -1393,6 +1393,8 @@ def main(argv: list[str]) -> int:
     long.add_argument("--out", type=Path, required=True)
     trace = commands.add_parser("trace", help="runs' logs, a line per diagnosis, collapses marked")
     trace.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
+    progress = commands.add_parser("progress", help="runs' logs, running or ended, a line per run: how far each got")
+    progress.add_argument("logs", type=Path, nargs="+", help="each run's log.jsonl")
     population = commands.add_parser(
         "population", help="seeded crystallisations' logs (D26, D27), a line per run: early observables, the outcome"
     )
@@ -1749,6 +1751,10 @@ def main(argv: list[str]) -> int:
         for path in args.logs:
             print(f"== {path}")
             print("\n".join(mf.trace([json.loads(line) for line in path.read_text().splitlines()])))
+        return 0
+    if args.command == "progress":
+        for path in args.logs:
+            print(f"{path}: {mf.progress([json.loads(line) for line in path.read_text().splitlines()])}", flush=True)
         return 0
     if args.command == "population":
         for path in args.logs:

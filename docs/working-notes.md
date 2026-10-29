@@ -419,10 +419,10 @@ where you meet a new trap; delete one that no longer holds.
   (4 cores, 8 threads), 5 GB, so about 3 small runs at once. Always on, all cores; the owner's
   limit (2026-10-21): <= 85 C, ideally <= 80 C. **CPU boost is off** (`cpu-boost-off.service`;
   `/sys/devices/system/cpu/cpufreq/boost` reads 0): boost overheats it. **Run every job under the
-  thermal guard** `~/code/thermal-guard.sh LOG [STOP] -- COMMAND...`: it starts the command in its own
+  thermal guard** `scripts/thermal_guard.sh LOG [STOP] -- COMMAND...`: it starts the command in its own
   process group, logs the k10temp sensor every 5 s to LOG and stops the group at STOP C (85) or
   above, with an "ended, status N, peak T C" line. A waiter there watches the probe's "probe ended" line
-  or the guard's process gone (`pgrep -f "[t]hermal-guard.sh <its LOG's directory>"`).
+  or the guard's process gone (`pgrep -f "[t]hermal_guard.sh <its LOG's directory>"`).
 - **Local `ab.py run` on `pyramidon`** needs `AB_CRATE_REPO=/home/david/code/indrajala-ml/rust` and
   `--skip-profile`; diagnostics only. `ab.py remote run` names the run after the laptop's branch:
   pass `--name`.
