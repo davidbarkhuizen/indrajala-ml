@@ -25,17 +25,20 @@
     {
       "identifier": "https://github.com/davidbarkhuizen/indrajala-ml/tree/paper1-v1.1",
       "relation": "isSupplementedBy",
-      "resource_type": "software"
+      "resource_type": "software",
+      "scheme": "url"
     },
     {
       "identifier": "https://github.com/davidbarkhuizen/indrajala-math-rust/tree/paper1-v1.1",
       "relation": "isSupplementedBy",
-      "resource_type": "software"
+      "resource_type": "software",
+      "scheme": "url"
     },
     {
       "identifier": "https://github.com/davidbarkhuizen/indrajala-research/tree/paper1-v1.1",
       "relation": "isSupplementedBy",
-      "resource_type": "publication-preprint"
+      "resource_type": "publication-preprint",
+      "scheme": "url"
     }
   ]
 }
