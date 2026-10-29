@@ -2,7 +2,7 @@
 
 **Status: a dated note, written at the owner's request ("do a fresh review of our research
 programme for internal consistency"), after the program's restructuring (D35-D39) and before the
-panel's (4b) registration.** Read against [state-formation-workplan.md](../workplans/state-formation-workplan.md)
+panel's (4b) registration.** Read against [state-formation-workplan.md](../workplans/research/state-formation-workplan.md)
 (D1-D39), [reasoning-review-2026-10-21.md](reasoning-review-2026-10-21.md) (the morning's review),
 [failure-kinds.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/failure-kinds.md), [machine-discovery.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/machine-discovery.md),
 [information-flow.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/protocols/information-flow.md), [experiment-design.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/protocols/experiment-design.md), the

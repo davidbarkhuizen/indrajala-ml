@@ -3,7 +3,7 @@
 **Status: a dated note, written at the owner's request ("review our internal findings and papers,
 and specifically our line of reasoning, in the light of what we now know ... are there obvious
 things we have missed, or obvious inconsistencies in our reasoning"), with no further literature
-review.** Read against [state-formation-workplan.md](../workplans/state-formation-workplan.md) (D13-D34),
+review.** Read against [state-formation-workplan.md](../workplans/research/state-formation-workplan.md) (D13-D34),
 [failure-kinds.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/failure-kinds.md), [machine-discovery.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/machine-discovery.md),
 [information-flow.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/protocols/information-flow.md), the status note
 (`~/code/indrajala-research/research-notes/state-formation-status.tex`) and `contribution.md`, with the adaptive

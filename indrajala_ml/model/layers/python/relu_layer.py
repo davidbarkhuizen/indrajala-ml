@@ -8,7 +8,7 @@ from indrajala_ml.model.layers.python.backprop_node import BackpropNode
 
 def relu_activation(z: float) -> float:
     """
-    max(0, z), shared with ConvUnit, by the crate's rule (docs/workplans/aarch64-workplan.md, D6): +0.0 for
+    max(0, z), shared with ConvUnit, by the crate's rule (docs/workplans/infrastructure/aarch64-workplan.md, D6): +0.0 for
     both zeros and a NaN propagated (max(0.0, z) dropped it).
     """
     return z if z > 0.0 or math.isnan(z) else 0.0

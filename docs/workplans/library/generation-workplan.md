@@ -5,7 +5,7 @@ speed. Stage 1 (this plan) done. Starts after step 8 (rotary positions, done 202
 next-steps, From rotary positions), whose rotated keys this plan's cache keeps valid as its window
 slides. Its `train` builds rotary models by default (the rotary workplan's D9).**
 
-Roadmap step 9 ([primitives-roadmap.md](../primitives-roadmap.md)): sampling text from a trained
+Roadmap step 9 ([primitives-roadmap.md](../../primitives-roadmap.md)): sampling text from a trained
 sequence model, character by character, through an incremental decoding path: each new character
 costs one token's pass, with every earlier token's keys and values cached.
 

@@ -3,7 +3,7 @@
 **Status: written 2026-10-17, at the owner's request: wrap up division, run the ladder, then the
 general (non-arithmetic) algebras, and tune the fork's trigger and the certificate guard there,
 across genuinely divergent tasks ("fine tune when we can use genuinely divergent tasks"). Takes up
-[next-steps.md](../next-steps.md)'s "Beyond arithmetic" item 1 and the two items deferred to it.
+[next-steps.md](../../next-steps.md)'s "Beyond arithmetic" item 1 and the two items deferred to it.
 D1-D9 settled under the owner's delegation, each with its options' pros and cons; D2 the owner's
 choice. E1 registered
 here, before its data; T1 and G2 are registered at their stages, before theirs. Paused since
