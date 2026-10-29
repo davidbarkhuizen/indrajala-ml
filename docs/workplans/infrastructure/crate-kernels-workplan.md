@@ -216,6 +216,35 @@ Done when the findings merge.
 
 Done when the findings merge.
 
+**Findings (2026-10-29), for the multithreading work (D3).** `scripts/measurement/thread_cost_probe.py`
+(`scoped_spawn_cost.rs` beside it: `std::thread::scope` spawning and joining N threads that do no
+work, as the crate's threaded calls do), on each machine's main crate (10dfec9), µs per call; the
+outputs in `pyramidon:~/data/indrajala-ml/runs/probes/2026-10-29-thread-cost/`.
+
+| | jebel | `litshe` |
+| --- | --- | --- |
+| an empty scoped spawn, 1 / 2 / 3 / 4 threads | 20.5 / 29.9 / 42.2 / 51.8 | 28.5 / 46.9 / 67.1 / 86.3 |
+| `(32, 30) @ (30, 784)`, crate at 1 / 2 / 4 threads | 31.6 / 48.7 / 60.2 | 126.7 / 107.3 / 152.3 |
+| the same, numpy at 1 / 2 / 4 OpenBLAS threads | 41.0 / 23.0 / 22.9 | 109.4 / 57.5 / 56.9 |
+| `(512, 30) @ (30, 784)`, crate at 1 / 2 / 4 threads | 478 / 388 / 277 | 2,451 / 2,473 / 2,169 |
+| the same, numpy at 1 / 2 / 4 threads | 499 / 290 / 168 | 2,073 / 2,685 / 3,463 |
+
+- **A thread costs about 10 µs on jebel and 19 µs on `litshe`, plus a first one's 20-28.** The
+  crate spawns on every threaded call, so at b32 the threads cost more than the product (jebel: 31.6
+  µs on one thread, 60.2 on four). That is why the threading threshold stays at 8M flops (the
+  aarch64 plan's sweep found nothing lower that gains).
+- **A pool would gain:** at b32, the product's own share split (jebel about 8 µs at four threads
+  against numpy's 23; `litshe` about 32 against 57) instead of a spawn per call; at b512, the spawns'
+  50-90 µs on calls of 0.3-2.5 ms, a few percent. Products below the threshold (every dense layer
+  at b32) only thread with a pool.
+- **One thread, the kernel against OpenBLAS:** the crate is faster on jebel (31.6 against 41.0 µs;
+  478 against 499 at b512) and 16-18% slower on `litshe` (126.7 against 109.4; 2,451 against 2,073),
+  the gap the old plan measured. Its cause is not measured: `perf` isn't usable on `litshe`
+  (`perf_event_paranoid` 4, and raising it is the owner's step), so it stays a question for the
+  multithreading work, which will time the kernels again.
+- **`litshe`'s memory bandwidth bounds b512:** the crate gains 11% from four threads, and OpenBLAS
+  loses 67% (2,073 to 3,463 µs): four cores contend for one memory bus.
+
 ### Stage 4: the vector `exp` (D1, D2)
 
 1. `exp_into` with NEON and AVX2 fast paths; tested bit for bit against the scalar `exp` on the
