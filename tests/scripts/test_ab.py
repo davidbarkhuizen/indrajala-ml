@@ -1379,3 +1379,16 @@ def test_wait_until_cool_refuses_after_its_wait(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(ab, "THERMAL_WAIT_S", 0)
     with pytest.raises(ab.AbError, match=r"the CPU is at 60.0 C, not below this machine's 55 C"):
         ab.wait_until_cool(LIMITS)
+
+
+@pytest.mark.parametrize(
+    "created, path",
+    [
+        ("2026-10-29T10:18:54+02:00", "scripts/ab.py"),  # a second before #1076 merged
+        ("2026-10-29T10:18:55+02:00", "scripts/measurement/ab.py"),
+        ("2026-10-08T09:00:00+02:00", "scripts/ab.py"),
+    ],
+)
+def test_the_report_names_the_ab_path_its_run_was_made_with(created: str, path: str):
+    # the archive re-renders every stored report with the current ab.py (its --reproduce check)
+    assert ab._ab_path({"created": created}) == path  # pyright: ignore[reportPrivateUsage]

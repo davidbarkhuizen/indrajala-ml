@@ -1683,6 +1683,16 @@ def _script_source(manifest: dict[str, Any]) -> str:
     return f"the script from the {manifest['script_from']} tree"
 
 
+# When #1076 moved ab.py from scripts/ to scripts/measurement/ (its merge, UTC). A report names the
+# path its run was made with, so the archive's stored reports still reproduce.
+SCRIPTS_GROUPED = datetime.datetime(2026, 10, 29, 8, 18, 55, tzinfo=datetime.UTC)
+
+
+def _ab_path(manifest: dict[str, Any]) -> str:
+    created = datetime.datetime.fromisoformat(manifest["created"])
+    return "scripts/ab.py" if created < SCRIPTS_GROUPED else "scripts/measurement/ab.py"
+
+
 def protocol_paragraph(data: ReportData) -> str:
     manifest = data.manifest
     adapter = ADAPTERS[manifest["bench"]]
@@ -1695,7 +1705,7 @@ def protocol_paragraph(data: ReportData) -> str:
     extension: dict[str, Any] = manifest.get("extension") or {}
     text = (
         f"Old `{manifest['old']['commit'][:7]}` against new `{manifest['new']['commit'][:7]}`, run with "
-        f"`scripts/measurement/ab.py`: passes in the order {manifest['order']}"
+        f"`{_ab_path(manifest)}`: passes in the order {manifest['order']}"
     )
     for extend in manifest["extends"]:
         last = extend["first_pass"] + len(extend["order"]) - 1
