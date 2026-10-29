@@ -11,11 +11,11 @@ The profile has two parts:
   commits). It is recorded for context and never compared.
 
 A recorded profile may also carry noise_rules, set by hand from the machine's A/As: the thresholds
-scripts/ab.py reports by on that machine. They are never captured; `profile --out` onto an
+scripts/measurement/ab.py reports by on that machine. They are never captured; `profile --out` onto an
 existing profile keeps them.
 
-    python scripts/machine_profile.py profile [--out FILE]
-    python scripts/machine_profile.py compare REFERENCE [CURRENT]
+    python scripts/measurement/machine_profile.py profile [--out FILE]
+    python scripts/measurement/machine_profile.py compare REFERENCE [CURRENT]
 """
 
 import argparse

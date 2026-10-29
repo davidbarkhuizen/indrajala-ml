@@ -1,14 +1,14 @@
 """
-The patch-model studies' protocol (scripts/patch_attention_study.py, the layer-norm and attention
-workplan's D11; scripts/multi_head_attention_study.py, the multi-head attention workplan's D8;
-scripts/patch_geometry_study.py, its D8 (b) and (c)): full MNIST, numpy, Adam at batch 32, one
+The patch-model studies' protocol (scripts/studies/patch_attention_study.py, the layer-norm and attention
+workplan's D11; scripts/studies/multi_head_attention_study.py, the multi-head attention workplan's D8;
+scripts/studies/patch_geometry_study.py, its D8 (b) and (c)): full MNIST, numpy, Adam at batch 32, one
 learning rate per arm, the trainer's epoch loop.
 
 A study names its arms and a function from an arm to its layers; everything else is shared:
 
 - the patch models' parts: 16 patches of 7 x 7 embedded as d = 32 features with learned
   positions, FFN blocks 64 wide, the mean over the tokens, a layer norm and a softmax output (the
-  patch size, d and the FFN width are arguments, for scripts/patch_geometry_study.py);
+  patch size, d and the FFN width are arguments, for scripts/studies/patch_geometry_study.py);
 - a run (run_config): fan-in-aware initialization from the seed, the epochs, test accuracy after
   every epoch, the parameter count, and the seconds per epoch spent in learn_batch;
 - the stages: `time` (one epoch of one arm, which sizes the grid), `tune` (each arm over the rates,

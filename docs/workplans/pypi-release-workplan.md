@@ -73,7 +73,7 @@ own platform.
   does at the Python boundary, and stage 2 changes where the published wheel is built (a
   manylinux container). Each stage measures its own change. None assumes it is free.
 - **The golden run is bit-exact.** abi3 doesn't touch the kernels, so
-  `scripts/golden_training_run.py check` must pass bit-identical. A difference means the change
+  `scripts/measurement/golden_training_run.py check` must pass bit-identical. A difference means the change
   reached arithmetic, and it must be explained, not accepted within a tolerance.
 - **Old against new timing:** commit each build first and alternate the builds, as
   [measurement.md](../measurement.md)'s protocols say (a stash once made

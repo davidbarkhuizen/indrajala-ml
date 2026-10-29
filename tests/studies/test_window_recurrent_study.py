@@ -582,7 +582,7 @@ def test_a_config_names_its_task(tmp_path: Path):
 
 def test_e3_e4_reruns_the_matrix_and_control_at_their_cells():
     """C0: E3 and E4's seeds 0-4 at the matrix's and the control's cells are those runs again, same keys and settings."""
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     e3_e4, matrix, control = (
         wr.load_config(scripts / f"window_recurrent_{name}.json") for name in ("e3_e4", "matrix", "control")
     )
@@ -600,7 +600,7 @@ def test_e3_e4_reruns_the_matrix_and_control_at_their_cells():
 
 def test_e3_e4_trimmed_is_e3_e4s_k4_cells_without_m32():
     """D34: the trimmed stage 7 is a subset of E3 and E4's runs, in their directory, and keeps C0's reruns at k 4."""
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     trimmed, e3_e4, matrix, control = (
         wr.load_config(scripts / f"window_recurrent_{name}.json")
         for name in ("e3_e4_trimmed", "e3_e4", "matrix", "control")
@@ -616,7 +616,7 @@ def test_e3_e4_trimmed_is_e3_e4s_k4_cells_without_m32():
 def test_e2_is_e3s_curriculum_m16_cell_with_a_continuous_state():
     """The claims workplan's D36: E2 at k 4 s 4 only, E3's settings and seeds, so its runs compare
     with E3's curriculum runs at m 16 seed by seed."""
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     e3 = wr.load_config(scripts / "window_recurrent_e3_e4_trimmed.json")
     e2 = wr.load_config(scripts / "window_recurrent_e2.json")
     assert e2.runs == [
@@ -629,7 +629,7 @@ def test_e2b_is_e6s_linear_cell_snapped_against_continuous():
     """The claims workplan's D38: E6's linear window at k 1 s 16, 20 seeds an arm, m 16 against a
     continuous state, the curriculum capped at the exclusion bound, every snapped step certified and
     no run stopped early; one study an arm, the same cell and settings but for m."""
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     snapped = wr.load_config(scripts / "window_recurrent_e2b_snapped.json")
     continuous = wr.load_config(scripts / "window_recurrent_e2b_continuous.json")
     e6 = wr.load_config(scripts / "window_recurrent_e6_linear.json")
@@ -644,7 +644,7 @@ def test_e2b_is_e6s_linear_cell_snapped_against_continuous():
 def test_e2b_prime_is_e2b_snapped_with_no_run_stopped_early():
     """The claims workplan's D39: E2b's snapped arm again, every run trained to the cap past its first
     certified step, so that it differs from E2b's continuous arm in the snap alone."""
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     prime = wr.load_config(scripts / "window_recurrent_e2b_prime.json")
     snapped = wr.load_config(scripts / "window_recurrent_e2b_snapped.json")
     assert prime.runs == snapped.runs and prime.workers == snapped.workers
@@ -656,7 +656,7 @@ def test_e2b_prime_is_e2b_snapped_with_no_run_stopped_early():
 def test_e6_is_an_existence_test_past_the_exclusion_bound(window: str):
     """The claims workplan's D37: E6's window (D21) at k 1 s 16 m 16 on addition, trained to the cap
     m + states - 1, E8c's protocol (6 seeds, each step certified, stopped at the first certified run)."""
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     e6 = wr.load_config(scripts / f"window_recurrent_e6_{window}.json")
     states = wt.ADDITION.machine.states
     assert e6.runs == [wr.RunSpec("curriculum", 1, 16, 16, seed, window=window) for seed in range(6)]
@@ -667,7 +667,7 @@ def test_e6_is_an_existence_test_past_the_exclusion_bound(window: str):
 
 
 def test_e7_prime_is_e7s_k1_cells_with_five_and_ten_times_the_states_codes():
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     for p, codes in ((5, {128, 256}), (7, {256, 512})):
         e7_prime, e7 = (wr.load_config(scripts / f"window_recurrent_{name}_p{p}.json") for name in ("e7_prime", "e7"))
         states = wt.task_named(f"modular-division-{p}").machine.states
@@ -677,7 +677,7 @@ def test_e7_prime_is_e7s_k1_cells_with_five_and_ten_times_the_states_codes():
 
 
 def test_e8_is_the_modular_sum_at_e7_primes_settings_with_32_codes():
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     e7_prime = wr.load_config(scripts / "window_recurrent_e7_prime_p5.json")
     for q in (4, 5):
         e8 = wr.load_config(scripts / f"window_recurrent_e8_q{q}.json")
@@ -704,7 +704,7 @@ def network_states(spec: wr.RunSpec) -> int | None:
 def test_every_configs_codes_can_hold_its_tasks_machine():
     """D23: every snapped cell has at least as many codes as its task's minimal machine has states
     (each machine is minimal and every state reachable: test_window_tasks), or a recorded reason."""
-    for path in sorted((Path(__file__).parents[2] / "scripts").glob("window_recurrent_*.json")):
+    for path in sorted((Path(__file__).parents[2] / "scripts" / "studies" / "configs").glob("window_recurrent_*.json")):
         study = wr.load_config(path)
         for spec in study.runs:
             states, m = wt.task_named(spec.task).machine.states, network_states(spec)
@@ -715,7 +715,7 @@ def test_every_configs_codes_can_hold_its_tasks_machine():
 
 
 def test_e8b_is_e8_trained_long_enough_that_no_smaller_wrong_machine_fits():
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     e8 = wr.load_config(scripts / "window_recurrent_e8_q4.json")
     for q in (4, 5):
         e8b = wr.load_config(scripts / f"window_recurrent_e8b_q{q}.json")
@@ -748,7 +748,7 @@ BEFORE_THE_EXCLUSION_BOUND = {
 def test_e8c_is_e8bs_curriculum_cell_as_an_existence_test():
     """The claims workplan's D35: E8b's curriculum cell and settings, 6 seeds, each step certified and
     each rung stopped at its first certified run."""
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     for q in (4, 5):
         e8b = wr.load_config(scripts / f"window_recurrent_e8b_q{q}.json")
         e8c = wr.load_config(scripts / f"window_recurrent_e8c_q{q}.json")
@@ -760,7 +760,7 @@ def test_e8c_is_e8bs_curriculum_cell_as_an_existence_test():
 def test_every_new_config_trains_long_enough_to_rule_out_a_wrong_machine():
     """D23: a snapped cell's longest training length (steps x k columns) is at least m + states - 1,
     so a network exactly right on its training lengths is its task's machine."""
-    for path in sorted((Path(__file__).parents[2] / "scripts").glob("window_recurrent_*.json")):
+    for path in sorted((Path(__file__).parents[2] / "scripts" / "studies" / "configs").glob("window_recurrent_*.json")):
         if path.name in BEFORE_THE_EXCLUSION_BOUND:
             continue
         study = wr.load_config(path)
@@ -782,7 +782,9 @@ def test_c9_is_one_factored_division_cell_capped_at_the_product_bound(
     curriculum, two independent factors of width 16, each with codes for its residue (A or B, 5
     states), 6 seeds, trained to the cap m_1 m_2 + q - 1, each step certified and the study stopped
     at its first certified run; C9' with E8c's counter (16 codes) and a wall-clock budget."""
-    study = wr.load_config(Path(__file__).parents[2] / "scripts" / f"window_recurrent_{name}.json")
+    study = wr.load_config(
+        Path(__file__).parents[2] / "scripts" / "studies" / "configs" / f"window_recurrent_{name}.json"
+    )
     task = wt.task_named("modular-division-5")
     assert {(s.arm, s.k, s.state, s.cross, s.reads, s.task) for s in study.runs} == {
         ("curriculum", 1, ((16, codes), (16, codes)), False, BEFORE_STATE, task.name)
@@ -792,7 +794,9 @@ def test_c9_is_one_factored_division_cell_capped_at_the_product_bound(
     assert study.settings.steps == cap == codes * codes + task.machine.states - 1
     assert study.settings.certify_steps and study.settings.stop_at_certified
     assert study.settings == dataclasses.replace(
-        wr.load_config(Path(__file__).parents[2] / "scripts" / "window_recurrent_e8b_q5.json").settings,
+        wr.load_config(
+            Path(__file__).parents[2] / "scripts" / "studies" / "configs" / "window_recurrent_e8b_q5.json"
+        ).settings,
         seeds=6,
         steps=cap,
         certify_steps=True,
@@ -809,7 +813,7 @@ def test_c9_double_prime_is_c9_prime_with_a_spare_factor_staggered(name: str, se
     """The factored-state workplan's C9'' (D14-D17): C9''s cell with a third factor of 16 codes,
     the factors staggered at 0.1 of the rate, the cap the product bound 16^3 + 25 - 1, a 4 h budget;
     seeds 0-5 on jebel and 6-8 on pyramidon, one directory."""
-    scripts = Path(__file__).parents[2] / "scripts"
+    scripts = Path(__file__).parents[2] / "scripts" / "studies" / "configs"
     study = wr.load_config(scripts / f"window_recurrent_{name}.json")
     c9_prime = wr.load_config(scripts / "window_recurrent_factored_p5_m16.json")
     task = wt.task_named("modular-division-5")

@@ -1,5 +1,5 @@
 """
-The rotary-positions study (the rotary-positions workplan, stage 8, D8; scripts/rotary_study.py):
+The rotary-positions study (the rotary-positions workplan, stage 8, D8; scripts/studies/rotary_study.py):
 do rotary positions inside attention match the learned Position the sequence study's transformers
 add to their tokens, on every corpus, and what does the rotation cost per epoch?
 

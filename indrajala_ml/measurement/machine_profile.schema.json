@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Machine profile",
-  "description": "The benchmark machine's profile (indrajala_ml/measurement/machine_profile.py). identity is compared between profiles; state is recorded only; noise_rules, set by hand from the machine's A/As, are the thresholds scripts/ab.py reports by on that machine.",
+  "description": "The benchmark machine's profile (indrajala_ml/measurement/machine_profile.py). identity is compared between profiles; state is recorded only; noise_rules, set by hand from the machine's A/As, are the thresholds scripts/measurement/ab.py reports by on that machine.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -589,7 +589,7 @@
       }
     },
     "thermal": {
-      "description": "optional, set by hand: the machine's thermal limits, which scripts/ab.py holds every pass to (litshe's: the owner's rule for the Raspberry Pi 5). A pass waits for the CPU to cool below start_below_c, is stopped over abort_c and fails over max_c; the limits are inclusive.",
+      "description": "optional, set by hand: the machine's thermal limits, which scripts/measurement/ab.py holds every pass to (litshe's: the owner's rule for the Raspberry Pi 5). A pass waits for the CPU to cool below start_below_c, is stopped over abort_c and fails over max_c; the limits are inclusive.",
       "type": "object",
       "additionalProperties": false,
       "required": [

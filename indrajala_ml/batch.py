@@ -270,7 +270,7 @@ HOSTS: dict[str, Host] = {
         "/home/david/code/indrajala-ml/.venv/bin/python",
         "/home/david/code/batch-attempts",
         pythonpath=f"/home/david/code/{CRATE}",
-        wrapper=("scripts/thermal_guard.sh", "/home/david/code/batch-attempts/temp", "85", "--"),
+        wrapper=("scripts/runner/thermal_guard.sh", "/home/david/code/batch-attempts/temp", "85", "--"),
     ),
     "jebel": Host(
         "jebel",
@@ -791,7 +791,7 @@ class Worker:
         slots: int,
         python: str,
         code: Path,
-        script: str = "scripts/modular_family_probe.py",
+        script: str = "scripts/studies/modular_family_probe.py",
         host: str | None = None,
         env: dict[str, str] | None = None,
         poll: float = POLL,
@@ -975,7 +975,7 @@ def worker_line(host: Host, port: int) -> str:
     path = ":".join(p for p in (host.pythonpath, host.code) if p)
     args = [
         host.python,
-        "scripts/batch.py",
+        "scripts/runner/batch.py",
         "worker",
         host.root,
         "--slots",

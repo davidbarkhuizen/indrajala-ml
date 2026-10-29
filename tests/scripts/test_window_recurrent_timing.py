@@ -1,5 +1,5 @@
 """
-scripts/window_recurrent_timing.py: the case names parse to the cells they name, the old names
+scripts/measurement/window_recurrent_timing.py: the case names parse to the cells they name, the old names
 keep their meaning, and each kind's step runs and its breakdown accounts for the step. Nothing is timed.
 """
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "measurement"))
 import window_recurrent_timing as timing  # scripts/ isn't a package
 
 

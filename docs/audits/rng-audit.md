@@ -23,7 +23,7 @@ harnesses:
   pins how the stdlib `random`'s stream relates to numpy's.
 - `tests/test_pcg64.py`: `indrajala_ml/pcg64.py`, a pure-Python port of numpy's `default_rng`
   for the pure-Python networks, against numpy and the crate, bit for bit.
-- `scripts/rng_audit.py quality | time`: statistical checks, and per-draw timing with one process
+- `scripts/measurement/rng_audit.py quality | time`: statistical checks, and per-draw timing with one process
   per backend.
 
 Measured on an AMD Ryzen 7 3700U, Python 3.14, numpy 2.5.3. The crate's CI runs the parity tests
@@ -143,7 +143,7 @@ provide. A probe build that exposed `(pos, key[0])` confirmed each case against 
 
 ### Statistical quality
 
-`scripts/rng_audit.py quality --repeats 20`, 10M draws per generator (rerun 2026-10-01 with the
+`scripts/measurement/rng_audit.py quality --repeats 20`, 10M draws per generator (rerun 2026-10-01 with the
 crate's PCG64 row):
 
 | Generator | chi-square z (4096 bins) | KS p | lag-1 z | call-to-call z |
@@ -165,7 +165,7 @@ the generator, and each crate row differs from its numpy row only by the entropy
 
 ### Speed
 
-`scripts/rng_audit.py time --repeats 5`, nanoseconds per draw, median over processes:
+`scripts/measurement/rng_audit.py time --repeats 5`, nanoseconds per draw, median over processes:
 
 | Case | crate legacy | crate PCG64 | numpy legacy | numpy PCG64 |
 |---|---:|---:|---:|---:|

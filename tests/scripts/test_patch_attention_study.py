@@ -1,4 +1,4 @@
-"""The patch-attention study's networks (scripts/patch_attention_study.py)."""
+"""The patch-attention study's networks (scripts/studies/patch_attention_study.py)."""
 
 import random
 import sys
@@ -12,7 +12,7 @@ from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 from indrajala_ml.studies import batch_size_scaling as bss
 from indrajala_ml.studies import common, patch_study
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "studies"))
 import patch_attention_study as study  # scripts/ isn't a package
 
 # counted by hand: the embedding 49 * 32 + 32, positions 16 * 32, layer norms 2 * 32 each, an

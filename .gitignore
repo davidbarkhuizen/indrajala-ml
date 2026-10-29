@@ -165,7 +165,7 @@ data/mnist/*.parquet
 data/mnist/*.bin
 data/mnist/trained_model.json
 
-# the sequence task's corpora, fetched by scripts/fetch_datasets.py - not committed
+# the sequence task's corpora, fetched by scripts/data/fetch_datasets.py - not committed
 data/tinyshakespeare/
 data/herodotus-rawlinson/
 data/muqaddimah/
@@ -181,19 +181,19 @@ data/euclid-heath/
 # CI's cached indrajala_math_rust wheel (./cli setup --rust-wheel-dir)
 .rust-wheel/
 
-# refactoring's golden training run (scripts/golden_training_run.py) - valid only on the machine
+# refactoring's golden training run (scripts/measurement/golden_training_run.py) - valid only on the machine
 # that recorded it, since numpy's products go through BLAS; its Rust entries are the same on every
 # machine, so they are committed (the aarch64 workplan, D7)
 data/refactoring/*
 !data/refactoring/golden_run_rust.json
 
-# local outputs of the residual depth study (scripts/residual_depth_study.py --out)
+# local outputs of the residual depth study (scripts/studies/residual_depth_study.py --out)
 data/residual/
 data/attention/
 
-# the addition study's sweeps (scripts/addition_study.py): results and trained models
+# the addition study's sweeps (scripts/studies/addition_study.py): results and trained models
 data/addition/
-# the window-recurrent adder's (scripts/window_recurrent_study.py): results and each run's steps
+# the window-recurrent adder's (scripts/studies/window_recurrent_study.py): results and each run's steps
 data/window-recurrent/
 
 # the studies' result files, each with its provenance (indrajala_ml/studies/common.py, default_out)

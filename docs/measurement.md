@@ -1,7 +1,7 @@
 # Measurement
 
 How to time a change in this repository: when to measure, how to prepare the machine, which tool
-answers which question, how to run an A/B with `scripts/ab.py` and read its report, the protocols
+answers which question, how to run an A/B with `scripts/measurement/ab.py` and read its report, the protocols
 behind it, what goes wrong, and the rules a timing claim in a PR must meet. It stands alone: every
 timing PR and workplan relies on it, not only optimization work.
 
@@ -59,12 +59,12 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
 - **Development runs on the laptop (`pyramidon`); `jebel` only benchmarks,** driven from the
   laptop over ssh with `ab.py remote --host jebel` ([§4](#4-running-an-ab-with-abpy)). Edits,
   builds, tests and lint carry on on the laptop during a run.
-- **The setup script, once per boot.** `scripts/benchmark_machine_setup.sh` sets the frequency
+- **The setup script, once per boot.** `scripts/measurement/benchmark_machine_setup.sh` sets the frequency
   policy the profile records (governor, EPP, turbo, PL1), `perf_event_paranoid` 2, and holds snap
   refreshes for 24 hours, then prints what it set. None of it survives a reboot (the snap hold
   expires), and the machine check below refuses a run until it is applied. `ab.py remote run`
   applies it after a reboot by itself, through a root-owned copy that a sudoers entry allows
-  without a password: the owner installs both once with `sudo scripts/install_benchmark_setup.sh`
+  without a password: the owner installs both once with `sudo scripts/measurement/install_benchmark_setup.sh`
   on `jebel`, and again whenever the setup script changes (`ab.py` refuses to run a copy that
   differs from the checkout's). By hand on `jebel`: `ab.py check --apply-setup`.
 - **The Raspberry Pi 5 (`litshe`) is the aarch64 timing machine** (the aarch64 workplan, stage 5),
@@ -82,7 +82,7 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   `max_c` (65) and is stopped at once over `abort_c` (70); each pass's peak is kept in the
   manifest (`peak_c`) and the report's machine line gives the passes' range. It has no active
   cooler: one busy core holds 51-60 C, and two pass 65 C after about 15 minutes
-  (`scripts/thermal_probe.py`, 2026-10-18: from 49.6 C, 59-61 C by minute 4, 62-64 C by minute 10,
+  (`scripts/measurement/thermal_probe.py`, 2026-10-18: from 49.6 C, 59-61 C by minute 4, 62-64 C by minute 10,
   stopped at 65.55 C after 885 s, no throttle), so sustained work there is one core.
 - **Check the machine yourself, then go.** Before a timing run or a long sweep, read `jebel`'s
   1-minute load and its running processes (`ssh jebel uptime`, `ssh jebel ps -eo pcpu,comm
@@ -136,7 +136,7 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   its worker processes), rename its run directory to `<run>-browser-open` without reading it, and
   start again once the 1-minute load is below 1.0.
 - **Check the machine's identity.** `ab.py` does this itself. By hand:
-  `python scripts/machine_profile.py compare docs/machine_profiles/i7-9700k.json`, in the
+  `python scripts/measurement/machine_profile.py compare docs/machine_profiles/i7-9700k.json`, in the
   same shell and environment as the benchmark. It exits 1 and names each changed identity field:
   CPU, caches, cpufreq policy (governor, EPP, turbo, the `intel_pstate` mode), the package power
   limits, kernel,
@@ -171,22 +171,22 @@ From the quick survey to the decisive number:
 | question | tool | notes |
 | --- | --- | --- |
 | Which ops look slow? | `python -m indrajala_ml.measurement.layer_op_timing` | every layer op, numpy and Rust interleaved; batch rows can be far off (interleaving). Finds candidates, never judges them. |
-| How fast is one op? | `python scripts/focused_benchmark.py` | loops of about 20 ms, median of 9, each (case, backend) in its own process; faults per call; `--matmul MxKxN`, `--rust-threads`, `--openblas-threads`, `--malloc both`, `--kernel-overrides`. **The number to quote.** |
+| How fast is one op? | `python scripts/measurement/focused_benchmark.py` | loops of about 20 ms, median of 9, each (case, backend) in its own process; faults per call; `--matmul MxKxN`, `--rust-threads`, `--openblas-threads`, `--malloc both`, `--kernel-overrides`. **The number to quote.** |
 | Faults or compute? | `focused_benchmark.py --malloc both` | glibc defaults against both allocator thresholds at 1e9; a time that drops with the faults was paying for them. |
-| Why is it slow (or slow in some processes)? | `python scripts/perf_region.py -- driver.py` | hardware counters for only the region a driver marks (`with counted():`), per unit of work, one row per process; `OPENBLAS_NUM_THREADS=1` unless `--openblas-threads`. Needs `perf_event_paranoid` <= 2. For cycles per instruction, `perf record` the driver and `perf annotate` the op. |
-| One op per call inside real training | `python scripts/op_call_timing.py` | every call of chosen crate functions timed in a conv-demo training run, grouped by argument shapes (so layers come apart), plus the run's seconds; `--rust-threads`, `--kernel-overrides`. Sees training's thread count and cache state. |
-| One op's share of real epochs | `python scripts/epoch_op_profile.py` | cProfile of Rust training by crate op. Resolves changes of a few % that epoch timing can't. |
-| A training-path change | `python scripts/prepared_dataset_timing.py time` | one trainer epoch per process, dense full MNIST and the conv subset, both backends; `--epochs N`. The default A/B benchmark. |
-| An accuracy pass, per row against batched | `python scripts/accuracy_pass_timing.py time` | all demo architectures, both backends; counts differing predictions. |
-| Dense full-MNIST epochs, broken down | `python scripts/batch_size_timing.py time` / `profile` | epoch, step loop, one accuracy pass and conversions apart, per batch size. Its accuracy-pass column times the old tuple path. |
+| Why is it slow (or slow in some processes)? | `python scripts/measurement/perf_region.py -- driver.py` | hardware counters for only the region a driver marks (`with counted():`), per unit of work, one row per process; `OPENBLAS_NUM_THREADS=1` unless `--openblas-threads`. Needs `perf_event_paranoid` <= 2. For cycles per instruction, `perf record` the driver and `perf annotate` the op. |
+| One op per call inside real training | `python scripts/measurement/op_call_timing.py` | every call of chosen crate functions timed in a conv-demo training run, grouped by argument shapes (so layers come apart), plus the run's seconds; `--rust-threads`, `--kernel-overrides`. Sees training's thread count and cache state. |
+| One op's share of real epochs | `python scripts/measurement/epoch_op_profile.py` | cProfile of Rust training by crate op. Resolves changes of a few % that epoch timing can't. |
+| A training-path change | `python scripts/measurement/prepared_dataset_timing.py time` | one trainer epoch per process, dense full MNIST and the conv subset, both backends; `--epochs N`. The default A/B benchmark. |
+| An accuracy pass, per row against batched | `python scripts/measurement/accuracy_pass_timing.py time` | all demo architectures, both backends; counts differing predictions. |
+| Dense full-MNIST epochs, broken down | `python scripts/measurement/batch_size_timing.py time` / `profile` | epoch, step loop, one accuracy pass and conversions apart, per batch size. Its accuracy-pass column times the old tuple path. |
 | The Rust/numpy ratios end to end | `python -m indrajala_ml.measurement.conv_comparison` | about 3 minutes; median of 5 from identical weights, UCI digits and a 2000-row MNIST subset, plus a Rust op profile. |
-| Old against new, any of the above | `python scripts/ab.py run --bench <benchmark>` | [§4](#4-running-an-ab-with-abpy). Every script above with an adapter, and any probe. |
+| Old against new, any of the above | `python scripts/measurement/ab.py run --bench <benchmark>` | [§4](#4-running-an-ab-with-abpy). Every script above with an adapter, and any probe. |
 | A threading setting | `set_matmul_threading(t, threshold)` | in one process, no rebuild; accept only on end-to-end numbers. |
 | A kernel setting | `set_kernel_overrides(rows_per_block, k_block)` | `matmul_narrow`'s rows per block and `matmul_long_k`'s slab rows, no rebuild; `--kernel-overrides R:K` in the scripts above. |
 
 ## 4. Running an A/B with `ab.py`
 
-**The rule: every old-against-new timing goes through `scripts/ab.py`.** Hand-built driver
+**The rule: every old-against-new timing goes through `scripts/measurement/ab.py`.** Hand-built driver
 scripts, pooling scripts and tables retyped into PR bodies are not used. A measurement `ab.py`
 can't express gets a probe or an adapter, in the same PR (below).
 
@@ -206,9 +206,9 @@ Benchmarks: `prepared_dataset_timing`, `focused_benchmark`, `epoch_op_profile`,
 **A training-path change** (commit it first; `--new` defaults to `HEAD`, `--old` to `main`):
 
 ```
-python scripts/ab.py run --bench prepared_dataset_timing        # ONNONO, --repeats 5, ~30 min
-python scripts/ab.py report --brief                              # when it exits
-python scripts/ab.py report --md ab-table.md                     # the table for the PR body
+python scripts/measurement/ab.py run --bench prepared_dataset_timing        # ONNONO, --repeats 5, ~30 min
+python scripts/measurement/ab.py report --brief                              # when it exits
+python scripts/measurement/ab.py report --md ab-table.md                     # the table for the PR body
 ```
 
 `run` checks the machine, runs each side once at the benchmark's smallest settings (a smoke run,
@@ -220,7 +220,7 @@ to the benchmark: `-- --configs "conv B=32" --repeats 5 --epochs 2`.
 **A crate change** (committed in `indrajala-math-rust`):
 
 ```
-python scripts/ab.py run --bench prepared_dataset_timing --old main --new main \
+python scripts/measurement/ab.py run --bench prepared_dataset_timing --old main --new main \
     --old-crate 638ff13 --new-crate 750d83a --control-backend numpy
 ```
 
@@ -242,7 +242,7 @@ per line, `{"case": ..., "metric": ..., "value": ..., "unit": ...}`, optionally 
 true`. Other lines are ignored.
 
 ```
-python scripts/ab.py run --bench cmd -- scripts/my_probe.py --its-args
+python scripts/measurement/ab.py run --bench cmd -- scripts/my_probe.py --its-args
 ```
 
 A relative probe path is taken from the new tree when it's there, else from the current
@@ -252,7 +252,7 @@ directory. A probe that proves useful becomes a script with an adapter (a small 
 **A shifted pass.** When the report names one, add the passes it asks for:
 
 ```
-python scripts/ab.py extend --order NO      # numbered after the existing passes
+python scripts/measurement/ab.py extend --order NO      # numbered after the existing passes
 ```
 
 **Into a PR.** Put the `--md` file into the PR body by concatenating files, not by retyping it.
@@ -266,9 +266,9 @@ laptop (push them first: `jebel` fetches them), names the run after the laptop's
 machine check and re-applies the setup if it fails, starts the run detached, and waits there:
 
 ```
-python scripts/ab.py remote --host jebel run --bench prepared_dataset_timing --order ONNO
-python scripts/ab.py remote --host jebel report RUN --md ab-table.md   # the file is written here
-python scripts/ab.py remote --host jebel archive RUN --reason "#NNN: what it claims"
+python scripts/measurement/ab.py remote --host jebel run --bench prepared_dataset_timing --order ONNO
+python scripts/measurement/ab.py remote --host jebel report RUN --md ab-table.md   # the file is written here
+python scripts/measurement/ab.py remote --host jebel archive RUN --reason "#NNN: what it claims"
 ```
 
 The run never depends on the ssh session. If the connection drops, or the laptop sleeps, only the
@@ -393,7 +393,7 @@ What to do next:
   spin for a while (`OPENBLAS_THREAD_TIMEOUT`) before they sleep. On the i7, the conv tail's
   `downstream_batch` right after a threaded numpy product took 1.56x its time after a 1 s sleep at
   batch 512 (threaded in Rust: 4.0 against 2.56 ms) and 1.09x at batch 32 (one thread)
-  (`scripts/openblas_spin_probe.py`, stage 6). The numpy product also evicts the op's data: even
+  (`scripts/measurement/openblas_spin_probe.py`, stage 6). The numpy product also evicts the op's data: even
   after the sleep, batch 32 read 8.7% slower than with no numpy call. Any per-op ratio measured
   interleaved with threaded numpy is suspect; the conv demo interleaves (unmeasured effect, at
   most the start of each run).
@@ -488,7 +488,7 @@ Single-example training is chaotically sensitive to rounding: networks trained f
 weights by numpy and Rust, or by numpy against itself with one weight nudged by 1 ULP, agree on
 only 71-83% of test predictions after training, though they stay within 1e-15 through the first
 UCI epoch. So a change is judged by step-by-step parity (per-step agreement to about 1e-15), never
-by end-of-run accuracy. The golden run (`scripts/golden_training_run.py check
+by end-of-run accuracy. The golden run (`scripts/measurement/golden_training_run.py check
 data/refactoring/golden_run.json`, about 2 s) pins 124 networks bit for bit. Its 41 Rust entries
 are also a committed, machine-independent reference (`data/refactoring/golden_run_rust.json`,
 the aarch64 workplan's D7), checked in CI; a change that moves them re-records it
@@ -564,7 +564,7 @@ saying so.
 **An A/B or A/A run:**
 
 ```
-python scripts/ab.py archive [RUN ...] --reason "#NNN: what it claims"
+python scripts/measurement/ab.py archive [RUN ...] --reason "#NNN: what it claims"
 ```
 
 It refuses a run still going, a failed run without `--reason`, and a run directory holding any
@@ -576,7 +576,7 @@ matches. A run from before identity hashes, or run without the machine check, na
 **A golden run version** (it doesn't train; it archives the file as it is):
 
 ```
-python scripts/golden_training_run.py archive data/refactoring/golden_run.json \
+python scripts/measurement/golden_training_run.py archive data/refactoring/golden_run.json \
     --reason new-functionality --note "#NNN: what it adds" --commit <recorded at>
 ```
 

@@ -1,0 +1,217 @@
+"""
+The accuracy sweeps of the batch-size-scaling study (findings in indrajala_ml/studies/batch_size_scaling.py),
+on full MNIST with the Rust backend.
+
+    python scripts/studies/batch_size_scaling_sweep.py baseline --out baseline.json
+    python scripts/studies/batch_size_scaling_sweep.py scaling --lr32 0.0=3.0 --lr32 0.9=0.5 --out scaling.json
+    python scripts/studies/batch_size_scaling_sweep.py baseline --architecture conv --momenta 0.9 --epochs 2 --seeds 3
+    python scripts/studies/batch_size_scaling_sweep.py scaling --architecture conv --lr32 0.0=2 \
+        --batch-sizes 32 128 512 --warmups 0 1 --epochs 3 --seeds 3
+    python scripts/studies/batch_size_scaling_sweep.py scaling --architecture conv-bn --group-size 32 --lr32 0.0=2 \
+        --batch-sizes 32 128 512 --warmups 0 1 --epochs 3 --seeds 3
+
+`baseline` (stage 1) sweeps the batch-32 rate at momentum 0.0 and 0.9 (or the --momenta given).
+`scaling` (stage 2) runs every batch size x rate (scaled,
+unscaled) x warmup x momentum cell, with each momentum's own batch-32 rate from stage 1.
+conv-bn (the conv network with batch norm) takes --group-size for ghost groups; without it, plain batch
+norm. One invocation runs one group size. Both print per-epoch test accuracy (mean ± sd over seeds) and write every run's raw result to --out as
+JSON.
+
+Each worker loads the dataset itself, once per process (about 0.5 GB each), rather than having
+it pickled through the pool.
+"""
+
+import argparse
+import statistics
+import sys
+from pathlib import Path
+from typing import Any
+
+from indrajala_ml.measurement import machine_lock
+from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
+from indrajala_ml.studies import batch_size_scaling as bss
+from indrajala_ml.studies.common import default_out, load_mnist, mean_sd, provenance, table, write_results
+
+BASELINE_RATES = {
+    "dense": [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
+    "conv": [0.03125, 0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0],
+    # batch norm is known to tolerate higher rates: the conv ladder, extended
+    "conv-bn": [0.03125, 0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0],
+}
+MOMENTA = [0.0, 0.9]
+BATCH_SIZES = [32, 128, 512, 1024]
+WARMUP_EPOCHS = [0.0, 0.25, 1.0]
+SEEDS = [0, 1, 2, 3, 4]
+EPOCHS = 5
+WORKERS = 4  # each worker holds its own copy of the dataset; memory, not cores, is the limit
+STABLE_ACCURACY = 0.20  # chance (0.10) plus a margin: every seed must end at least here
+
+# (batch_size, rate, warmup_epochs, momentum)
+Config = tuple[int, float, float, float]
+
+
+def run_config(context: dict[str, Any], config: Config, seed: int) -> dict[str, Any]:
+    batch_size, rate, warmup_epochs, momentum = config
+    train_data, test_data = load_mnist(context)
+    return bss.train_and_evaluate(
+        "rust",
+        train_data,
+        test_data,
+        batch_size,
+        rate,
+        warmup_epochs,
+        momentum,
+        context["epochs"],
+        seed,
+        context["architecture"],
+        context["group_size"],
+    )
+
+
+def per_epoch_row(runs: list[dict[str, Any]]) -> list[str]:
+    epochs = len(runs[0]["test_accuracies"])
+    return [mean_sd([run["test_accuracies"][e] for run in runs]) for e in range(epochs)]
+
+
+def final_accuracies(runs: list[dict[str, Any]]) -> list[float]:
+    return [run["test_accuracies"][-1] for run in runs]
+
+
+def baseline(
+    context: dict[str, Any], seeds: list[int], rates: list[float], momenta: list[float]
+) -> dict[Config, list[dict[str, Any]]]:
+    configs: list[Config] = [(bss.BASE_BATCH_SIZE, rate, 0.0, momentum) for momentum in momenta for rate in rates]
+    results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=WORKERS, report_progress=True)
+
+    epochs = context["epochs"]
+    for momentum in momenta:
+        print(f"\n### momentum {momentum}\n")
+        rows: list[list[str]] = []
+        for rate in rates:
+            runs = results[(bss.BASE_BATCH_SIZE, rate, 0.0, momentum)]
+            finals = final_accuracies(runs)
+            stable = min(finals) >= STABLE_ACCURACY
+            rows.append([f"{rate:g}"] + per_epoch_row(runs) + [f"{min(finals):.2%}", "yes" if stable else "no"])
+        print(table(["rate"] + [f"epoch {e + 1}" for e in range(epochs)] + ["worst seed", "stable"], rows))
+
+        stable_rates = [
+            rate
+            for rate in rates
+            if min(final_accuracies(results[(bss.BASE_BATCH_SIZE, rate, 0.0, momentum)])) >= STABLE_ACCURACY
+        ]
+        if stable_rates:
+            best = max(
+                stable_rates,
+                key=lambda rate: statistics.mean(final_accuracies(results[(bss.BASE_BATCH_SIZE, rate, 0.0, momentum)])),
+            )
+            finals = final_accuracies(results[(bss.BASE_BATCH_SIZE, best, 0.0, momentum)])
+            print(f"\nlr_32 = {best:g}: batch-32 band {mean_sd(finals)} (min {min(finals):.2%}, max {max(finals):.2%})")
+    return results
+
+
+def scaling(
+    context: dict[str, Any], seeds: list[int], lr32: dict[float, float], batch_sizes: list[int], warmups: list[float]
+) -> dict[Config, list[dict[str, Any]]]:
+    configs: list[Config] = []
+    labels: dict[Config, str] = {}
+    for momentum, base_rate in lr32.items():
+        for batch_size in batch_sizes:
+            for warmup in warmups:
+                for rate_kind, rate in (
+                    ("scaled", bss.scaled_learning_rate(base_rate, batch_size)),
+                    ("unscaled", base_rate),
+                ):
+                    # at batch 32 the two rates coincide; run the cell once
+                    if batch_size == bss.BASE_BATCH_SIZE and rate_kind == "unscaled":
+                        continue
+                    config: Config = (batch_size, rate, warmup, momentum)
+                    configs.append(config)
+                    labels[config] = rate_kind
+    results = run_parameter_sweep(configs, seeds, run_config, context, worker_count=WORKERS, report_progress=True)
+
+    epochs = context["epochs"]
+    train_size = context["train_size"]
+    for momentum, base_rate in lr32.items():
+        band_runs = results[(bss.BASE_BATCH_SIZE, base_rate, 0.0, momentum)]
+        band = final_accuracies(band_runs)
+        low, high = min(band), max(band)
+        print(f"\n### momentum {momentum}, lr_32 = {base_rate:g}")
+        print(f"batch-32 band (no warmup, final epoch): {mean_sd(band)}, seeds span {low:.2%} - {high:.2%}\n")
+        rows: list[list[str]] = []
+        for config in configs:
+            batch_size, rate, warmup, config_momentum = config
+            if config_momentum != momentum:
+                continue
+            runs = results[config]
+            mean = statistics.mean(final_accuracies(runs))
+            steps = bss.warmup_steps(warmup, train_size, batch_size)
+            rows.append(
+                [str(batch_size), labels[config], f"{rate:g}", f"{warmup:g} ({steps})", str(runs[0]["steps"])]
+                + per_epoch_row(runs)
+                + ["yes" if low <= mean <= high else ("above" if mean > high else "no")]
+            )
+        print(
+            table(
+                ["B", "rate", "value", "warmup epochs (steps)", "total steps"]
+                + [f"epoch {e + 1}" for e in range(epochs)]
+                + ["in band"],
+                rows,
+            )
+        )
+    return results
+
+
+def _parse_lr32(values: list[str]) -> dict[float, float]:
+    pairs = [value.split("=") for value in values]
+    return {float(momentum): float(rate) for momentum, rate in pairs}
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("stage", choices=["baseline", "scaling"])
+    parser.add_argument("--architecture", choices=bss.ARCHITECTURES, default="dense")
+    parser.add_argument("--group-size", type=int, help="conv-bn: ghost groups of this many examples")
+    parser.add_argument("--momenta", type=float, nargs="+", default=MOMENTA, help="baseline")
+    parser.add_argument("--lr32", action="append", default=[], help="momentum=rate, once per momentum (scaling)")
+    parser.add_argument(
+        "--out", help="write every run's raw result here as JSON (default: data/studies/<study>/<stage>-<time>.json)"
+    )
+    parser.add_argument("--limit", type=int, help="use only the first LIMIT train and test rows (smoke runs)")
+    parser.add_argument("--epochs", type=int, default=EPOCHS)
+    parser.add_argument("--seeds", type=int, default=len(SEEDS))
+    parser.add_argument(
+        "--batch-sizes", type=int, nargs="+", default=BATCH_SIZES, help="scaling; include 32 for the band"
+    )
+    parser.add_argument("--warmups", type=float, nargs="+", default=WARMUP_EPOCHS, help="warmup epochs (scaling)")
+    args = parser.parse_args(argv)
+    with machine_lock.study():
+        made_by = provenance(argv)
+        if args.group_size is not None and args.architecture != "conv-bn":
+            sys.exit("--group-size is for --architecture conv-bn only")
+
+        context: dict[str, Any] = {
+            "train_path": bss.TRAIN_PATH,
+            "test_path": bss.TEST_PATH,
+            "limit": args.limit,
+            "epochs": args.epochs,
+            "train_size": args.limit or 60000,
+            "architecture": args.architecture,
+            "group_size": args.group_size,
+        }
+        seeds = SEEDS[: args.seeds]
+
+        if args.stage == "baseline":
+            results = baseline(context, seeds, BASELINE_RATES[args.architecture], args.momenta)
+        else:
+            lr32 = _parse_lr32(args.lr32)
+            if not lr32:
+                sys.exit("scaling needs --lr32 momentum=rate for each momentum")
+            if bss.BASE_BATCH_SIZE not in args.batch_sizes or 0.0 not in args.warmups:
+                sys.exit(f"scaling needs batch size {bss.BASE_BATCH_SIZE} and warmup 0 for the batch-32 band")
+            results = scaling(context, seeds, lr32, args.batch_sizes, args.warmups)
+
+        write_results(Path(args.out) if args.out else default_out("batch-size-scaling", args.stage), made_by, results)
+
+
+if __name__ == "__main__":
+    main()

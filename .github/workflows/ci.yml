@@ -99,7 +99,7 @@ jobs:
           path: .venv
           key: venv-${{ runner.os }}-${{ runner.arch }}-py${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt') }}
 
-      # Keyed on scripts/fetch_datasets.py's own content, which embeds every dataset's pinned
+      # Keyed on scripts/data/fetch_datasets.py's own content, which embeds every dataset's pinned
       # tag and each file's expected SHA-256 - so bumping either one changes the hash and
       # invalidates the cache automatically, rather than risking a stale cache silently serving
       # old data forever. MNIST and the sequence task's four corpora.
@@ -112,7 +112,7 @@ jobs:
             data/herodotus-rawlinson
             data/muqaddimah
             data/euclid-heath
-          key: datasets-${{ hashFiles('scripts/fetch_datasets.py') }}
+          key: datasets-${{ hashFiles('scripts/data/fetch_datasets.py') }}
 
       # The crate's release wheel, keyed on the rust/ submodule commit, the maturin pin in ./cli
       # and the interpreter (the wheel is cp310-specific). Most PRs move none of them, so a hit
@@ -156,4 +156,4 @@ jobs:
       # architectures (D7).
       - name: Golden run (Rust)
         if: matrix.part.suite == 'rust/tests/'
-        run: .venv/bin/python scripts/golden_training_run.py check data/refactoring/golden_run_rust.json
+        run: .venv/bin/python scripts/measurement/golden_training_run.py check data/refactoring/golden_run_rust.json

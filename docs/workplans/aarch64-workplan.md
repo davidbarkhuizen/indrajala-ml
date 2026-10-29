@@ -202,7 +202,7 @@ Done when the findings are merged.
    last-place bits apart from their first training step (OpenBLAS's ARM kernels and GCC's
    contractions, as expected and not claimed, D1). jebel's and pyramidon's files are
    byte-identical. Recording it takes 2 s on the Pi.
-3. **The per-op probes** (`scripts/parity_probe.py`, new here: `record` on each machine,
+3. **The per-op probes** (`scripts/measurement/parity_probe.py`, new here: `record` on each machine,
    `compare` two records value by value as uint64; pyramidon, jebel and litshe):
    - `exp`: the crate's and Python's `math.exp`, 2^20 inputs in [-20, 20] and 2^18 over the
      whole finite range: **every value bit-identical** on all three machines. glibc 2.43 runs
@@ -258,7 +258,7 @@ Done when the Pi's Rust entries equal jebel's bit for bit.
    41 and Python 31 of 42 (Adam's `powi`). jebel's and pyramidon's files are byte-identical;
    **litshe against jebel: Rust 41 of 41 and Python 42 of 42 bit-identical**, the stage's done
    condition; numpy 7 of 41 (not claimed, D1).
-5. **`scripts/parity_probe.py`** on all three: jebel's and pyramidon's records identical;
+5. **`scripts/measurement/parity_probe.py`** on all three: jebel's and pyramidon's records identical;
    litshe against jebel, `exp` (the crate's and `math.exp`,
    2^20 + 2^18 inputs), Adam, relu all identical; softmax 18 of 21, the three a NaN from
    `inf - inf` (D6, refined).

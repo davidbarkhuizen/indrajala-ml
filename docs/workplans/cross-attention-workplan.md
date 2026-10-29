@@ -101,7 +101,7 @@ Each lists the options considered, with pros and cons, and the choice.
 
 1. **This workplan.**
 2. **The dataset repository** (D4), the owner's to create; its `clean.py`, alignment report and
-   tag; `scripts/fetch_datasets.py`'s entry; a loader of pairs.
+   tag; `scripts/data/fetch_datasets.py`'s entry; a loader of pairs.
 3. **Specs**: `CrossAttention`, `EncoderDecoderNetwork`, validation, format 2.
 4. **numpy**: the network (D2), `CrossAttention` (D3); tests by hand (with one memory token, every
    weight is 1; padding in the memory changes nothing).

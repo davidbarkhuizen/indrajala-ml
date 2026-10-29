@@ -1,6 +1,6 @@
 """
 The benchmark archive (docs/measurement.md, §10): a clone of davidbarkhuizen/indrajala-benchmarks
-that scripts/ab.py archive and scripts/golden_training_run.py archive add records to, one PR per batch.
+that scripts/measurement/ab.py archive and scripts/measurement/golden_training_run.py archive add records to, one PR per batch.
 Its FORMAT.md describes the records; its CI validates them and re-renders every run's reports.
 
 A batch starts on a fresh branch from the archive's main (`start`), copies its records and the

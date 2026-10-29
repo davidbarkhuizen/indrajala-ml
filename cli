@@ -80,7 +80,7 @@ install_maturin () {
 fetch_data () {
 
     echo "fetching datasets ..."
-    python scripts/fetch_datasets.py
+    python scripts/data/fetch_datasets.py
     echo "... fetched datasets"
 }
 

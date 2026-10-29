@@ -1,6 +1,6 @@
 """
 The window-recurrent adder's harness (the window-recurrent adder workplan, stage 8;
-scripts/window_recurrent_study.py), for any of window_tasks' tasks (the claims workplan's stage 5):
+scripts/studies/window_recurrent_study.py), for any of window_tasks' tasks (the claims workplan's stage 5):
 addition, the matrix's, or modular division.
 
 A run is one task, arm, window size k, state width s, code count m and seed: W11's window (d 16, 3

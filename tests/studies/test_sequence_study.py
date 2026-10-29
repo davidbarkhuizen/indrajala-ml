@@ -1,4 +1,4 @@
-"""The sequence task's study (indrajala_ml/studies/sequence_study.py, scripts/sequence_study.py)."""
+"""The sequence task's study (indrajala_ml/studies/sequence_study.py, scripts/studies/sequence_study.py)."""
 
 import json
 import math

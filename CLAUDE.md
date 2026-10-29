@@ -45,7 +45,7 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
 
 - **Development runs on `pyramidon`; timing runs on `jebel`,** started from `pyramidon` with
   `ab.py remote --host jebel run ...` (docs/measurement.md, §4). Push both sides first.
-- **Every old-against-new timing goes through `scripts/ab.py`** (`run`, then `report --brief`).
+- **Every old-against-new timing goes through `scripts/measurement/ab.py`** (`run`, then `report --brief`).
   No hand-built driver or pooling scripts: a measurement it can't express gets a probe or an
   adapter in `ab.py`, in the same PR.
 - **Launch `ab.py remote --host jebel run` in the background and don't poll.** Its exit is the
@@ -60,7 +60,7 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
   and retyping it.
 - **After a reboot, `ab.py remote run` re-applies `jebel`'s setup itself** (frequency policy, PL1
   65 W, `thermald` stopped, snap refreshes held), through the root-owned copy the owner installs
-  with `sudo scripts/install_benchmark_setup.sh`. When it says the copy is missing or stale, ask
+  with `sudo scripts/measurement/install_benchmark_setup.sh`. When it says the copy is missing or stale, ask
   the owner to run that in their own terminal on `jebel`.
 - **Check `jebel`, then go; don't ask.** Before a run, check its `uptime` and `ps` over ssh;
   `pkill -x` Brave, Firefox and Zed there if they are running, and wait out a high load, an apt
@@ -76,7 +76,7 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
   change, or new machine: the full baseline. Tier 2 and 3 runs go to the archive once the PR
   merges (`ab.py archive`, §10). Every change that could reach training results (the
   package, the crate, the golden run's script or its data) passes the golden run:
-  `.venv/bin/python scripts/golden_training_run.py check data/refactoring/golden_run.json`.
+  `.venv/bin/python scripts/measurement/golden_training_run.py check data/refactoring/golden_run.json`.
   A change that can't (docs, machine profiles, CI config) needs no golden run.
 
 ## Testing
