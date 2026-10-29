@@ -2367,4 +2367,11 @@ manifest for all 6,075 files, the other studies' pieces included (the paper's bu
 `paper/budget-probe-2026-10-23/`, `klip`'s thermal-guard logs in `klip-thermal-guard/`):
 `runners-archive-2026-10-29.sha256`, sha256 207d9eaeabeaffa8.... The exact code of the probes run
 from branches since squash-merged is tagged `probe/*` (e.g. `probe/warm-up-d26-f0064cb`,
-`probe/d54-dddd8d3`).
+`probe/d54-dddd8d3`). The
+runners' last pieces followed the same day (D54's and D56's parity checks as `option1/d54-parity-klip/`
+and `option1/d56-parity-jebel/`, `stone`'s 4b bits check as `option1/bits-4b-stone/`, T3's and T10's
+long-test shares under `paper/`, `jebel`'s `probes/`, `klip`'s check logs):
+`runners-archive-2-2026-10-29.sha256`, 112 files, sha256 a3563c2e09a8005c...; and the addition
+study's stage 5 sweep from `jebel` as `data/addition/sweep-jebel/` (`sweep-jebel.sha256`, 1,857
+files, fc0d7f97a23408f8...). The runners now hold only what runs use: each checkout and venv,
+`crate-647f23c`, `wt-batch`, `stone`'s `env.sh`, `wheels`, `ab-runs` and `wt-branches`.

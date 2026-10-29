@@ -474,8 +474,8 @@ where you meet a new trap; delete one that no longer holds.
   `~/code/ab-worktrees` to `~/data/indrajala-ml/runs/ab`) is invisible to the new `ab.py` until moved,
   with no A/B running: `R=~/data/indrajala-ml/runs/ab; mkdir -p $R/runs && mv ~/code/ab-runs/20*-* $R/runs/
   && mv ~/code/ab-runs/* $R/ && mv ~/code/ab-worktrees $R/worktrees && git -C ~/code/indrajala-ml
-  worktree repair $R/worktrees/*`, then `rmdir ~/code/ab-runs`. Moved: `pyramidon`; `jebel` and
-  `litshe` still to move (`jebel` after D67's runs end, with its checkout's pull).
+  worktree repair $R/worktrees/*`, then `rmdir ~/code/ab-runs`. Moved: `pyramidon`, `jebel` (2026-10-29,
+  54 runs and 49 worktrees); `litshe` still to move.
 - **Archiving a `litshe` run:** `ab.py remote --host litshe archive` fails (no archive clone there,
   and no GitHub credentials). Copy it here and archive it from `pyramidon`: `rsync -a
   litshe:data/indrajala-ml/runs/ab/runs/<run> ~/data/indrajala-ml/runs/ab/runs/`, then
