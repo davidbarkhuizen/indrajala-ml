@@ -229,7 +229,7 @@ above 1 in one update, the update norms.
    the network's weights, its optimizer's state and its generator restored, the batch skipped.
    `pyramidon`, code `~/code/wt-guard` (ad651d8 and the guard, as merged), P1's 10 replays as run
    (seed 6's step 7, numpy, 2 epochs of step 8, generators `snap-wall-p1-0..9`, wall off).
-   **Registered** in `~/code/replay-guard.sh`'s header before the data: works if 8 or more of 10
+   **Registered** in `docs/probe-launches/replay-guard.sh`'s header before the data: works if 8 or more of 10
    end certified in both verdicts. Data `data/window-recurrent/replay-guard/`, manifest
    `replay-guard.sha256` (7947cab8...d59d2646, 21 files, run from `data/window-recurrent`).
    - **It works: 10 of 10 end certified in both verdicts** (without the guard 1 of 10), each after
