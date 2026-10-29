@@ -36,11 +36,13 @@ where you meet a new trap; delete one that no longer holds.
   ref").
 - **Stage files by name, never `git add -A` over a directory:** the untracked `docs/handover.md`
   was committed that way once (#582, untracked again in #583).
-- **Never `git commit -a` on `pyramidon`:** its `rust/` checkout sits at the crate its `.venv` was
+- **Never `git commit -a` or `git add -A` on `pyramidon`; add paths by name:** its `rust/` checkout sits at the crate its `.venv` was
   built from (647f23c, while `main` pins 10dfec9), so `-a` commits that pointer too, and CI then
   builds the old crate: every shard fails (`WindowProgram has no op "merge"`, #1036 and #1037,
   2026-10-27, fixed by a commit setting `rust/` back). `git diff --stat origin/main` before pushing
-  shows it.
+  shows it. Again 2026-10-29: #1086 (`add -A`) and #1090 (`commit -a`) set main's `rust/` to two
+  unmerged crate branches' commits, so A/Bs whose old side resolved through `main` timed the wrong
+  crate until #1092 set it back; name the crates (`--old-crate`, `--new-crate`) in a crate A/B.
 
 ## Worktrees
 
@@ -480,6 +482,11 @@ where you meet a new trap; delete one that no longer holds.
   && mv ~/code/ab-runs/* $R/ && mv ~/code/ab-worktrees $R/worktrees && git -C ~/code/indrajala-ml
   worktree repair $R/worktrees/*`, then `rmdir ~/code/ab-runs`. Moved: `pyramidon`, `jebel` (2026-10-29,
   54 runs and 49 worktrees); `litshe` still to move.
+- **A host's first `ab.py remote run` from a checkout older than #1076** (its `scripts/ab.py`, before
+  `scripts/` was grouped) fails after `--sync` with "No such file or directory:
+  .../scripts/benchmark_machine_setup.sh": the old script syncs the checkout to main, then looks for
+  the setup at its old path. The checkout is now at main, so run the same command again (jebel,
+  2026-10-29).
 - **Archiving a `litshe` run:** `ab.py remote --host litshe archive` fails (no archive clone there,
   and no GitHub credentials). Copy it here and archive it from `pyramidon`: `rsync -a
   litshe:data/indrajala-ml/runs/ab/runs/<run> ~/data/indrajala-ml/runs/ab/runs/`, then

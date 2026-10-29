@@ -367,6 +367,17 @@ What to do next:
 
 ## 7. Gotchas
 
+- **A crate change moves code it doesn't touch.** With the default 16 codegen units, what LLVM
+  inlines depends on how rustc splits the crate: on jebel, every crate change of 2026-10-29 moved
+  untouched microsecond rows by 10-90% (the transpose, pool, conv `forward`), and aligning every
+  function (`-C llvm-args=-align-all-functions=6`) didn't hold all of it. Before reading a row the
+  change doesn't touch as a regression, compare that function's instructions in the two builds
+  (`scripts/measurement/kernel_code_diff.py OLD.so NEW.so`, function by function): the same
+  instructions mean placement, different ones the units. The crate kernels workplan's D6 compiles
+  release builds in one unit and D7 keeps placement from moving a kernel's speed (x86 branches off
+  32-byte boundaries, the JCC erratum; aarch64 loops and functions aligned); with both, an A/B moves
+  only the rows whose code changed.
+
 - **`ab.py run` checks the machine profile before the load** (fixed 2026-10-14; it was the other
   way round): a host with no profile, or a changed identity, is refused at once, not after waiting
   out a high load (up to 5 minutes) and being refused for the load.
