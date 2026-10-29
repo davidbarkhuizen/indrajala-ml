@@ -480,6 +480,11 @@ where you meet a new trap; delete one that no longer holds.
   && mv ~/code/ab-runs/* $R/ && mv ~/code/ab-worktrees $R/worktrees && git -C ~/code/indrajala-ml
   worktree repair $R/worktrees/*`, then `rmdir ~/code/ab-runs`. Moved: `pyramidon`, `jebel` (2026-10-29,
   54 runs and 49 worktrees); `litshe` still to move.
+- **A host's first `ab.py remote run` from a checkout older than #1076** (its `scripts/ab.py`, before
+  `scripts/` was grouped) fails after `--sync` with "No such file or directory:
+  .../scripts/benchmark_machine_setup.sh": the old script syncs the checkout to main, then looks for
+  the setup at its old path. The checkout is now at main, so run the same command again (jebel,
+  2026-10-29).
 - **Archiving a `litshe` run:** `ab.py remote --host litshe archive` fails (no archive clone there,
   and no GitHub credentials). Copy it here and archive it from `pyramidon`: `rsync -a
   litshe:data/indrajala-ml/runs/ab/runs/<run> ~/data/indrajala-ml/runs/ab/runs/`, then
