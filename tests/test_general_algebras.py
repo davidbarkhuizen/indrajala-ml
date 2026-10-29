@@ -1,4 +1,4 @@
-"""The general algebras' machines and their probe target (docs/workplans/general-algebras-workplan.md, D1-D3, D6, D7)."""
+"""The general algebras' machines and their probe target (docs/workplans/research/general-algebras-workplan.md, D1-D3, D6, D7)."""
 
 import json
 import math

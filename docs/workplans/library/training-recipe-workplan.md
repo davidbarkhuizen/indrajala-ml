@@ -4,7 +4,7 @@
 for extensibility, speed and real-world production (the owner's direction, 2026-10-10). Stage 1
 (this plan) done.**
 
-Roadmap step 10 ([primitives-roadmap.md](../primitives-roadmap.md)): the optimization recipe
+Roadmap step 10 ([primitives-roadmap.md](../../primitives-roadmap.md)): the optimization recipe
 production language models train with (GPT-3, Brown et al. 2020, §2.3 and appendix B: Adam with
 decoupled weight decay 0.1, the gradient's global norm clipped to 1.0, linear warmup then cosine
 decay): learning-rate schedules as data the trainer reads and a run file records, AdamW, and

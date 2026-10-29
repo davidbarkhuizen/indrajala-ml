@@ -7,29 +7,16 @@ A workplan is deleted once its last stage merges, and never before: only when ev
 decision is resolved and only future work is left. Whatever it left open (its "After this plan"
 list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
 "not planned yet" means only that no workplan has taken it up. A workplan still
-in progress keeps its own list: [general-algebras-workplan.md](workplans/general-algebras-workplan.md),
-[pypi-release-workplan.md](workplans/pypi-release-workplan.md),
-[generation-workplan.md](workplans/generation-workplan.md),
-[training-recipe-workplan.md](workplans/training-recipe-workplan.md),
-[segments-workplan.md](workplans/segments-workplan.md),
-[context-length-workplan.md](workplans/context-length-workplan.md),
-[ffn-activations-workplan.md](workplans/ffn-activations-workplan.md),
-[grouped-query-attention-workplan.md](workplans/grouped-query-attention-workplan.md),
-[cross-attention-workplan.md](workplans/cross-attention-workplan.md),
-[arbitrary-length-addition-workplan.md](workplans/arbitrary-length-addition-workplan.md),
-[state-formation-workplan.md](workplans/state-formation-workplan.md),
-[aarch64-workplan.md](workplans/aarch64-workplan.md),
-[factorisation-machine-workplan.md](workplans/factorisation-machine-workplan.md),
-and [post-paper-retests-workplan.md](workplans/post-paper-retests-workplan.md) (gated on paper 1).
-Of the research plans, the general algebras, the factorisation machine and the adders of any length
-have been paused since 2026-10-20, when the owner set planned work aside for the state-formation
-plan; each waits for a decision to resume or retire (the programme audit's F29). The order
-of the next ML
+in progress keeps its own list; the open ones are indexed, by group, in
+[workplans/README.md](workplans/README.md). Of the research plans, the general algebras, the
+factorisation machine and the adders of any length have been paused since 2026-10-20, when the owner
+set planned work aside for the state-formation plan; each waits for a decision to resume or retire
+(the programme audit's F29). The order of the next ML
 primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## After paper 1: the agreed order (the owner, 2026-10-24)
 
-1. Finish paper 1 ([paper-workplan.md](workplans/paper-workplan.md)).
+1. Finish paper 1 ([paper-workplan.md](workplans/research/paper-workplan.md)).
 2. A statistically sound verdict on the continuous quasi-static crystallisation (out of the paper
    by D2: about 3 in 5 on two backdrops, 0 of 10 beyond): whether it keeps the solutions the snap to
    codes loses, without harm, against the paper cell at the same epoch budget; the default if so.
@@ -38,7 +25,7 @@ primitives is in [primitives-roadmap.md](primitives-roadmap.md).
    network depth helps the cases still struggling (varied alone). Depth has not been varied on the
    window-recurrent architecture (only in the primitives' early studies).
 
-The plan for all three: [post-paper-retests-workplan.md](workplans/post-paper-retests-workplan.md).
+The plan for all three: [post-paper-retests-workplan.md](workplans/research/post-paper-retests-workplan.md).
 
 ## Retired workplans
 
@@ -148,7 +135,7 @@ Its S3/S4 corrections are merged (indrajala-research #50, #954). Left, the owner
 ## From the commitment, one-code-one-state, consolidation and population plans (retired 2026-10-20)
 
 The owner abandoned these plans' remaining claims on 2026-10-20 and set
-[state-formation-workplan.md](workplans/state-formation-workplan.md) in their place (the night's results are in
+[state-formation-workplan.md](workplans/research/state-formation-workplan.md) in their place (the night's results are in
 the probe script's findings). Built and kept as options: `--commitment-from`, `--thermostat`
 (retired as a remedy), `--anneal` (as built it merges codes: the new plan's option 1 rebuilds its
 start), `--keep-machine` and `--counterexamples` (R3/R4: C2 worked, 5 of 12), `--answer-branch` (R1,
@@ -258,7 +245,7 @@ Decided with the owner, each to become a workplan or a stage:
   approximation, helps where an equally distinguishing non-approximation, which the network doesn't
   learn, doesn't. Whether it helps *because* it is an approximation needs a learnable
   non-approximation control (the programme audit's F3): the paper's T1
-  ([paper-workplan.md](workplans/paper-workplan.md)). Open: whether any approximation helps (one control,
+  ([paper-workplan.md](workplans/research/paper-workplan.md)). Open: whether any approximation helps (one control,
   the product, at one machine), and at larger `p`; the affine map above tests one
   approximation where no cover exists.
 - **Terms** (settled with the owner, the division paper): target machine and its output function;
@@ -361,7 +348,7 @@ worth running. In the order recommended, after one item that runs across them:
 with the S5 word problem: it turns "arithmetic only" into a finding and tests whether the cover
 result generalises. When it is taken up: a workplan with a feasibility table per cell (states,
 alphabet, codes, the exclusion bound against the curriculum's cap).
-**Taken up (2026-10-17)** by [general-algebras-workplan.md](workplans/general-algebras-workplan.md): S_n, move-to-front
+**Taken up (2026-10-17)** by [general-algebras-workplan.md](workplans/research/general-algebras-workplan.md): S_n, move-to-front
 and random machines over the same states at 6, 24 and 120, then the trigger and the guard tuned
 across them (the two items above).
 
@@ -613,7 +600,7 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
 
 - **GELU** (D5 (c)), ViT's FFN activation, an activation for `Dense`: it needs `erf`, which stable
   Rust lacks (the `tanh` form is a different function), in all three implementations and the crate.
-  Planned with SwiGLU as roadmap step 13 ([ffn-activations-workplan.md](workplans/ffn-activations-workplan.md)).
+  Planned with SwiGLU as roadmap step 13 ([ffn-activations-workplan.md](workplans/library/ffn-activations-workplan.md)).
 - **The study's other arms** (D8 (b), (c)): run on 2026-10-09 (`scripts/studies/patch_geometry_study.py`,
   findings in its docstring). Patch 4 (`T = 49`) costs every arm 0.4 to 1.2 points at 5 epochs;
   the low-rank bound still doesn't measurably bind (+0.42 +- 0.83 for `key_size=32`); heads start
@@ -878,7 +865,7 @@ decisions' unchosen options and its Excluded for missing infrastructure (`git sh
     optimiser's;
   - steps 13 and 14 (FFN activations, grouped heads) at the sizes where each component matters
     most.
-- **Milestone A's baseline** ([arbitrary-length-addition-workplan.md](workplans/arbitrary-length-addition-workplan.md),
+- **Milestone A's baseline** ([arbitrary-length-addition-workplan.md](workplans/research/arbitrary-length-addition-workplan.md),
   H2). The saved models use a learned `Position` tied to their `T`, so they can't be run at
   another length. Milestone A retrains the column transformers with rotary or no positions at the
   sweep's threshold sizes, rates and budget: the sweep tells it what to train, not what to load.

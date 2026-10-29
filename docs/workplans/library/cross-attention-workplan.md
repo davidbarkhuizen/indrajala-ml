@@ -4,7 +4,7 @@
 production (the owner's direction, 2026-10-10). The dataset repository (D4) is the owner's to
 create, as the corpora's were. Stage 1 (this plan) done.**
 
-Roadmap step 15 ([primitives-roadmap.md](../primitives-roadmap.md)): attention from one sequence to
+Roadmap step 15 ([primitives-roadmap.md](../../primitives-roadmap.md)): attention from one sequence to
 another, and the encoder-decoder transformer it builds (Vaswani et al. 2017, §3.1, §3.2.3), on a
 real translation task: Greek to English, Herodotus and Euclid, aligned passage by passage from the
 same Perseus sources the corpora came from. All three implementations and the crate.

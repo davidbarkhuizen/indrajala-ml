@@ -566,7 +566,7 @@ the configs.*
 5. **Findings** into [failure-kinds.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/failure-kinds.md)
    and the feasibility register (rows 3 and 4 re-read, a row for depth).
 6. **Retire** this plan; its leftovers (depth's bound, D7's options (b)-(d), the constants'
-   sensitivity, F10) to [next-steps.md](../next-steps.md).
+   sensitivity, F10) to [next-steps.md](../../next-steps.md).
 
 ## The size, roughly (each part's probe replaces it)
 

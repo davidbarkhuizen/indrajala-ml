@@ -4,7 +4,7 @@
 production (the owner's direction, 2026-10-10); D9's golden re-record approved by the owner
 (2026-10-10) under measurement.md §8. Stage 1 (this plan) done.**
 
-Roadmap step 12 ([primitives-roadmap.md](../primitives-roadmap.md)): sequence models over windows of
+Roadmap step 12 ([primitives-roadmap.md](../../primitives-roadmap.md)): sequence models over windows of
 256 and 1,024 characters, not 64, with the attention that makes that affordable (tiled, with an
 online softmax, never holding an `(N, h, T, T)` array), training windows that change every epoch,
 and a study of what longer context buys on the long-form corpora, with and without step 11's

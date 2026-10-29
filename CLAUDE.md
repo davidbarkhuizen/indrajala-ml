@@ -5,7 +5,7 @@
 - **One focused PR per chunk of work, from a feature branch**, never on `main`: branch, commit,
   push, open the PR, wait for CI to pass, squash-merge, `git pull` on `main`, then delete the local
   and remote branch.
-- **Multi-stage changes start with a workplan doc** (`docs/workplans/<name>-workplan.md`). Settle its owner
+- **Multi-stage changes start with a workplan doc** (`docs/workplans/<group>/<name>-workplan.md`: `research/`, `library/` or `infrastructure/`, [docs/workplans/README.md](docs/workplans/README.md)). Settle its owner
   decisions (D1, D2, ...) and write the answers into the doc before opening its PR. Each stage is
   its own PR, merged before the next. A stage that changes the crate lands in
   `indrajala-math-rust` first, then a "Bump rust/" PR here.

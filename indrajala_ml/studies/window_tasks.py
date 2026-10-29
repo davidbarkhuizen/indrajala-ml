@@ -20,7 +20,7 @@ and B both 0), so an alignment's zero columns are part of the word like any othe
 - **modular-sum-q:** the same pairs and tokens; the automaton of (A + B) mod q, q states, its output
   the running sum (q classes); modular_data's sum catalogue (the claims workplan's E8).
 
-The general algebras (docs/workplans/general-algebras-workplan.md, D1, D2): three machines over the n!
+The general algebras (docs/workplans/research/general-algebras-workplan.md, D1, D2): three machines over the n!
 orderings of n items, n + 1 tokens, token 0 the identity, each output the label of the state
 after the token in n classes, hiding most of the state; a case is a word of tokens (MachineTask).
 
