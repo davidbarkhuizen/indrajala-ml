@@ -37,5 +37,5 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 
 | workplan | state |
 | --- | --- |
-| [crate-kernels-workplan.md](infrastructure/crate-kernels-workplan.md) | the aarch64 plan's kernel loose ends: an AVX2 transpose, conv accumulate's slowdown, the narrow-`k` gap, a vector `exp`; stage 1 closed (no gain), 2-4 under way |
+| [crate-kernels-workplan.md](infrastructure/crate-kernels-workplan.md) | the aarch64 plan's kernel loose ends: an AVX2 transpose, conv accumulate's slowdown, the narrow-`k` gap, a vector `exp`; complete: the vector `exp`; one codegen unit and x86 branch padding (D6, D7); stage 1 closed (4K aliasing) |
 | [pypi-release-workplan.md](infrastructure/pypi-release-workplan.md) | deferred to the 1.0 release |

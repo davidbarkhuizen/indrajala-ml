@@ -1,7 +1,7 @@
 # Workplan: the crate's kernel loose ends (from the aarch64 plan)
 
-**Status: D1-D5 settled (2026-10-29) for extensibility, speed and production. Stage 1 closed (no
-consistent gain on x86: 4K aliasing); stages 2-4 under way.**
+**Status: complete (2026-10-29). D1-D7 settled; stage 1 closed with no consistent gain (4K
+aliasing); stage 2's cause found and fixed by D6; stage 3 measured; stage 4 merged (#1088).**
 
 The aarch64 plan (retired: `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md`)
 made the crate bit-identical across x86_64 and aarch64 and gave the Pi its NEON kernels. It left
@@ -257,6 +257,23 @@ outputs in `pyramidon:~/data/indrajala-ml/runs/probes/2026-10-29-thread-cost/`.
    old side, to read how much of the C library's speed is back.
 
 Done when the bump merges with both machines' A/Bs.
+
+**Done (2026-10-29): crate #74, with #76 (D6, D7), bump #1088.**
+
+- **The kernel (D1, D2).**
+  - `cr_exp::exp_into` and `exp_in_place` run `exp_body`'s fast path in AVX2+FMA's 4 lanes and NEON's 2, operation for operation, with FMA only where the scalar has `mul_add`.
+  - A lane whose rounding test fails, or whose input is outside the ordinary range, is redone by the scalar `exp_body`.
+  - Every call site goes through it (softmax, sigmoid in `fused.rs` and batch norm, the GRU's gates and `tanh`, the soft codes' weights), each as an arithmetic pass, `exp_in_place`, and an arithmetic pass. `cr_exp::map` and `exp_inline` are gone.
+- **Bits.**
+  - The lanes match the scalar `exp` bit for bit on every test input at every lane offset, and on 2^24 random inputs per machine (pyramidon, `litshe`).
+  - Two mutations each fail 8 of 11 tests: an unfused `fmsub`, and the rounding test skipped.
+  - The golden run is bit-identical on both machines.
+- **Speed: only the `exp` paths move, once D6 and D7 pin the build.**
+  - jebel, `2026-10-29-jcc-vector-exp-jebel` against D6 and D7 alone: dense `forward_batch` -16% to -55% (10 x 30 b512 77.7 to 35.4 µs), single-example `forward` -19%, attention `forward_batch` -9% to -10%; 263 rows within noise, none slower.
+  - jebel, window program (`-settings-vector-exp-window-jebel`): forward -6% to -20%, `learn` -2% to -11%.
+  - `litshe`, D6 on both sides (`-vector-exp-cgu1-litshe`, `-window-litshe`): dense `forward_batch` -12%, window forward -11% and `learn` -7%. Some untouched rows moved with placement, which `litshe` doesn't pin (D7). The same pair with loops and functions aligned (`-a64-align-vector-exp-litshe`) shows 259 within noise and one +2.3%.
+- **Before D6 and D7, the same kernel's A/Bs couldn't be read.** On jebel, conv `forward` was +3-20% with no `exp` in it, and with D6 alone the matrix products were +10-35%; neither came from code the change touched (`kernel_code_diff.py`).
+- **Against the C library's `exp`** (`2026-10-17-cr-exp-focused`, dense `forward_batch` +17-32% when `cr_exp` came in): the vector `exp` more than wins it back on the dense rows, -16% to -55% against the scalar `cr_exp`.
 
 ## After this plan
 
