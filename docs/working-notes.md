@@ -508,7 +508,7 @@ where you meet a new trap; delete one that no longer holds.
 - **A scheduled stop kills itself the same way:** `stone`'s stop for D55 ran `pkill -f
   "option1/probe-[d]55"` inside a `bash -c` whose own command line named `.../probe-d55/launch.log`
   (to write the "stopped" line), so the pattern matched its own shell: the runs stopped, but no
-  "stopped" line was written. Put a scheduled stop in a script file (as `docs/probe-launches/stone/stop-d64.sh` was), so the
+  "stopped" line was written. Put a scheduled stop in a script file (as `docs/probe-launches/stone/stop-d64.sh` at 40d66d9 was), so the
   command line that runs it holds no pattern.
 - **Never chain a local launch after a remote one in one command:** when the launching ssh hangs
   (the line above), the Bash tool backgrounds the command and everything after the ssh runs when it
@@ -520,7 +520,7 @@ where you meet a new trap; delete one that no longer holds.
   the worktree's path. `indrajala_ml` is a namespace package, so check which copy loads (a
   one-line script in the worktree's `scripts/` printing a module's `__file__`): run as a script,
   the worktree's loads; `python -c` from the main checkout loads the main checkout's. E2 ran this
-  way (`~/code/wt-e2`, launched by `docs/probe-launches/jebel/e2-launch.sh`).
+  way (`~/code/wt-e2`, launched by `docs/probe-launches/jebel/e2-launch.sh` at 40d66d9).
 - **Never develop in a worktree a queued or running study imports from:** a launcher that waits
   imports the worktree as it is when the study starts (and records its commit then). Keep a separate
   worktree for development (`~/code/wt-dev`); `~/code/wt-e2b` on `pyramidon` was nearly launched on a
@@ -545,7 +545,7 @@ where you meet a new trap; delete one that no longer holds.
   `python3 -I`. Papers go to the literature repository (`davidbarkhuizen/indrajala-literature`,
   cloned beside this one).
 - **A `mkdir` claim over ssh isn't a perfect lock:** stage 5's shared long tests
-  (`docs/probe-launches/stage5-long-tests.sh`, each worker claiming a network by `ssh pyramidon mkdir ...`) had
+  (`docs/probe-launches/stage5-long-tests.sh` at 40d66d9, each worker claiming a network by `ssh pyramidon mkdir ...`) had
   two of `jebel`'s workers start the same network in the same second (2026-10-16), cause not found.
   Harmless for an idempotent test (one result overwrote the other); for anything that isn't, have
   each worker take a fixed share instead.
