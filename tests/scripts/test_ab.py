@@ -1406,4 +1406,6 @@ def test_the_report_names_the_pass_command_without_the_run_tree(tmp_path: Path) 
 
     manifest["command"] = "python scripts/measurement/focused_benchmark.py --recorded"  # since this change
     (run / "manifest.json").write_text(json.dumps(manifest))
-    assert "ran `python scripts/measurement/focused_benchmark.py --recorded`" in ab.protocol_paragraph(ab.report_data(run))
+    assert "ran `python scripts/measurement/focused_benchmark.py --recorded`" in ab.protocol_paragraph(
+        ab.report_data(run)
+    )
