@@ -157,7 +157,7 @@ state, so a checkpoint resumes them (`--resume`).
 
 0. **The offline reading** (now; on `pyramidon`, from logs on disk; a durable tool,
    `modular_family_probe.py transitions LOG ...`). For every run of D63's probe (22 seeds,
-   `--reheat`; `~/code/data-d63/probe-d63/`, archived as `option1/probe-d63/`), its D64 twins
+   `--reheat`; `option1/probe-d63/`), its D64 twins
    (`option1/probe-d67-d64/`) and the crucible probe's eight (`klip:~/code/crucible-probe/`,
    `stone:~/labour/crucible-probe/`): each transition (clock, temperatures, groups), the state share
    and screen at each; each hold (its start, length, the temperature, whether it recovered); each of
@@ -201,8 +201,10 @@ overnight. X: no more runs than its D5 already allows (D8 (a)).
 
 **Stage 0 (2026-10-27, read offline from logs on disk; the reader `stage0.py`, to become
 `modular_family_probe.py transitions` in stage 1).** The runs: D63's probe (24 run logs, `--reheat`,
-`~/code/data-d63/probe-d63/` and `~/code/stone-staging/stone-d63/probe-d63/`) and the crucible
-probe's eight (`continuous`, held cools; four with the recombining window, stopped at the owner's
+then in `~/code/data-d63/probe-d63/` and `~/code/stone-staging/stone-d63/probe-d63/`; all in
+`option1/probe-d63/` since 2026-10-29, random-q12-0 6 and 7 with their move from `stone` in
+`moved-from-stone/`, manifest `archive-option1-d63-d67-2026-10-29.sha256`, sha256 962f55776dda03e3...) and
+the crucible probe's eight (`continuous`, held cools; four with the recombining window, stopped at the owner's
 request at 415-471 epochs; four without, running).
 
 - **The stages are clear in every log.** 8-24 transitions a run (new running maxima of the groups),
