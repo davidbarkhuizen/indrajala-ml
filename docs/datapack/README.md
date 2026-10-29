@@ -30,14 +30,14 @@ training log, every step's network, every reading).
 
 ## Setup
 
-The code is [indrajala-ml](https://github.com/davidbarkhuizen/indrajala-ml) at `paper1-v1`, with its
+The code is [indrajala-ml](https://github.com/davidbarkhuizen/indrajala-ml) at `paper1-v1.1`, with its
 native crate [indrajala-math-rust](https://github.com/davidbarkhuizen/indrajala-math-rust) as a
 submodule; the manuscript's source is in
-[indrajala-research](https://github.com/davidbarkhuizen/indrajala-research) at `paper1-v1`.
+[indrajala-research](https://github.com/davidbarkhuizen/indrajala-research) at `paper1-v1.1`.
 
 ```bash
 git clone --recurse-submodules https://github.com/davidbarkhuizen/indrajala-ml
-cd indrajala-ml && git checkout paper1-v1
+cd indrajala-ml && git checkout paper1-v1.1
 ./cli setup   # .venv, Python dependencies, a release build of the crate (needs a Rust toolchain)
 git clone https://github.com/davidbarkhuizen/indrajala-research ../indrajala-research
 ```
@@ -133,5 +133,8 @@ the manifests each archive carries:
 - **Re-read reports.** Where a later re-read (the strict reader, T6) rewrote a test's proof reports,
   the test's manifest names the originals, kept beside them in `proof-loose/`; `t6-proof.sha256`
   covers the rewritten ones.
+- **Two tags.** `paper1-v1` is the code and manuscript as the paper's numbers were computed;
+  `paper1-v1.1` adds only the datapack's tools for archives in parts (indrajala-ml #1068), which step
+  5 needs. Training, certification and the tables are the same at both.
 - **What is not here.** Earlier exploratory studies the paper does not cite (the state-formation
   work among them) are left for the papers that use them.
