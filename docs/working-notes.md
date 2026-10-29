@@ -364,6 +364,10 @@ where you meet a new trap; delete one that no longer holds.
 
 ## Machines
 
+- **`sudo` needs a password on `jebel`, `stone` and `klip`; `litshe` alone has passwordless sudo.**
+  An agent can't sudo on the first three, and the owner's `! ssh -t host sudo ...` fails too (a `!`
+  command has no tty: "a terminal is required to authenticate"); the owner runs those in a terminal
+  of their own.
 - **Development on `pyramidon`, timing and long studies on `jebel`** (measurement.md section 4).
   Before a run on `jebel`: `uptime`, its processes, `pgrep -f '^/usr/bin/python3
   /usr/bin/unattended-upgrade'` and `pgrep -x dpkg`.
