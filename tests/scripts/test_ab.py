@@ -1392,3 +1392,18 @@ def test_wait_until_cool_refuses_after_its_wait(monkeypatch: pytest.MonkeyPatch)
 def test_the_report_names_the_ab_path_its_run_was_made_with(created: str, path: str):
     # the archive re-renders every stored report with the current ab.py (its --reproduce check)
     assert ab._ab_path({"created": created}) == path  # pyright: ignore[reportPrivateUsage]
+
+
+def test_the_report_names_the_pass_command_without_the_run_tree(tmp_path: Path) -> None:
+    # the archive's check re-renders a report where the run's tree doesn't exist
+    run = tmp_path / "run"
+    shutil.copytree(FIXTURES / "pyo3-focused", run)
+    manifest = json.loads((run / "manifest.json").read_text())
+    manifest["new"]["tree"] = manifest["old"]["tree"] = str(tmp_path / "gone")
+    manifest["created"] = "2026-10-29T12:00:00+02:00"  # after #1076 grouped scripts/
+    (run / "manifest.json").write_text(json.dumps(manifest))
+    assert "ran `python scripts/measurement/focused_benchmark.py" in ab.protocol_paragraph(ab.report_data(run))
+
+    manifest["command"] = "python scripts/measurement/focused_benchmark.py --recorded"  # since this change
+    (run / "manifest.json").write_text(json.dumps(manifest))
+    assert "ran `python scripts/measurement/focused_benchmark.py --recorded`" in ab.protocol_paragraph(ab.report_data(run))
