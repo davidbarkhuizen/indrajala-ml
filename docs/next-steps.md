@@ -71,6 +71,7 @@ docs cite them by section:
 | An audit of the research programme (2026-10-23) | #953 | indrajala-research #48-#50, #954 | `git show 4ea65cc:docs/workplans/programme-audit-workplan.md`; the four reviews at indrajala-research's top level (`review-2026-10-23-*.md`) |
 | The batch runner (restarts at a cutoff; a controller and a worker on each machine) | #935 | #943, #944, #946, #948, #952, #956 | `git show 53d7fef:docs/workplans/batch-runner-workplan.md` |
 | The snap wall (an asymmetric margin on the snap; P1, C1 refuted) | #787 | #788, #789, #793, #797, #803 | `git show 53d7fef:docs/workplans/snap-wall-workplan.md` |
+| The crate's kernel loose ends: the vector `exp`, the build pinned (D1-D7) | #1084 | #1089, #1093, #1095-#1097, crate #74, #76, bump #1088 | `git show 7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md` |
 | aarch64 on a Raspberry Pi 5, the crate bit-identical across architectures (D1-D10) | #721 | #722, #806, #810, #813, #842, #843, #846, #869, #880, #902, #926, crate #62-#65, #71 | `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
@@ -88,14 +89,35 @@ and [rng-audit.md](audits/rng-audit.md). The batch-size studies' findings are in
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the addition study's in `scripts/studies/addition_study.py`'s.
 
+## From the crate kernels (retired 2026-10-29)
+
+Done: the vector `exp` (D1, D2), every call site through it; conv `accumulate_gradient`'s slowdown
+explained (rustc's codegen units) and fixed by one unit (D6); x86 branches kept off 32-byte
+boundaries (D7, the JCC erratum), so a jebel A/B moves only the rows whose code changed; what a
+threaded call costs, measured for the multithreading work (D3). Read it with `git show
+7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md`. Left open:
+
+- **A transpose for x86 that doesn't lose to 4K aliasing** (stage 1, closed): the AVX2 kernel lost
+  up to 52% where the output's rows lie a multiple of 4 KB apart (512 rows). One that gathers a
+  block into a contiguous buffer before writing it out, never interleaving loads with stores to
+  aliasing rows, is the candidate; the measured kernels are on the crate's `avx2-transpose` branch.
+- **The multithreading work** takes stage 3's findings: a thread costs about 10 µs on jebel and 19
+  on `litshe` per call; a pool would open the threading threshold (8M flops) to the b32 products.
+- **The one-thread kernel's 16-18% gap to OpenBLAS on `litshe`:** not explained; `perf` there needs
+  `linux-tools-raspi` and `kernel.perf_event_paranoid` lowered (the owner's step).
+- **`litshe`'s placement isn't pinned** (D7): aligning loops and functions held its kernels still but
+  cost short loops 7-16%, so its A/Bs are read with `scripts/measurement/kernel_code_diff.py` (a row
+  whose function's instructions didn't change moved with placement). A cheaper pin (loops at 32
+  bytes, functions only) is untried.
+- An SVE or AVX-512 `exp` and transpose follow D1 and D4 when a machine with them is in hand.
+
 ## From aarch64 (retired 2026-10-29)
 
 Every stage done: the crate gives the same bits on x86_64 and aarch64 (its own correctly rounded
 `exp`, D6's rules for relu, softmax's maximum and `powi`), checked on every PR by the committed Rust
 reference (`data/refactoring/golden_run_rust.json`) on both architectures' CI runners; `litshe` has
 its timing setup, and its NEON kernels (the matrix and dot products, the transpose) are in. Four
-kernel loose ends have their own plan,
-[crate-kernels-workplan.md](workplans/infrastructure/crate-kernels-workplan.md): a vector `exp`, the
+kernel loose ends had their own plan, the crate kernels (retired, above): a vector `exp`, the
 narrow-`k` gap to numpy, conv `accumulate_gradient`'s unexplained slowdown, an AVX2 transpose. Left
 open here:
 
