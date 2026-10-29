@@ -728,7 +728,7 @@ jebel at night, but running at 50% capacity".
   same cool with `--whole`) on word-problem-s3 and move-to-front-4, fresh seeds (S3 crucible and mtf-4
   whole 8-23, S3 whole and mtf-4 crucible 8-15: 48 runs), 600 epochs on every machine, D35's stop at
   the exact bound, D41's success, D45's coupling rule; expectations, refutations and analysis in
-  `docs/probe-launches/probe-4b-core.sh`'s header (registered before its data). The large tier (S5, mtf-5, division)
+  `indrajala-research/registrations/state-formation/probe-4b-core.sh`'s header (registered before its data). The large tier (S5, mtf-5, division)
   waits for a machine that can run it or a cheaper length distribution (a design question, not
   settled); the harm and random-machine cells (D37) are add-ons, not in this matrix.
   - (a) *Chosen* (the owner's question; settled under the delegation). Pros: every claim option 1
@@ -760,7 +760,7 @@ we can smoothly transition down the energy profile. then let's just test that." 
 owner's; D49-D54 settled under the delegation.
 
 - **D47. The core matrix (D46) set aside, unlaunched.** Its registration stands in
-  `docs/probe-launches/probe-4b-core.sh`; the continuous method replaces the method it would have measured. The
+  `indrajala-research/registrations/state-formation/probe-4b-core.sh`; the continuous method replaces the method it would have measured. The
   coupling probe (D38) and the adaptive cool's probe (D33's) run to their registered ends.
 - **D48. The continuous crystallisation (`--continuous`): every switch of option 1's profile that can
   be continuous made so, all at once, and tested as one method.** One event stays: the warm-up's end,
@@ -828,7 +828,7 @@ owner's; D49-D54 settled under the delegation.
   - (a) *Chosen.* Pros: a failure's mechanism read from the log; the time series `population` reads.
     Cons: each epoch's certificate and answers cost seconds (measured at the build).
   - (b) Readings offline on saved networks, as now. Cons: what the owner named: most of the path unseen.
-- **D54. The continuous crystallisation's existence probe (`docs/probe-launches/probe-d54.sh`, registered before
+- **D54. The continuous crystallisation's existence probe (`indrajala-research/registrations/state-formation/probe-d54.sh`, registered before
   its data).** word-problem-s3 seeds 0-7 (the crucible's design seeds: 4a'''' 8 of 8, D38 in flight)
   and move-to-front-4 seeds 0-3 (the crucible's control on seed 3 never certified; its whole runs
   certified seed 3), each D48's method from the crucible's cell, the commitment never back, D35's stop
@@ -837,7 +837,7 @@ owner's; D49-D54 settled under the delegation.
     the reset machine the crucible failed. Cons: design seeds; a rate on fresh seeds waits for a
     matrix of the method that survives.
   - (b) Fresh seeds at once. Cons: existence first (the memory's rule): one working cell before a rate.
-- **D55. The continuous crystallisation's fresh-seed matrix (`docs/probe-launches/probe-d55.sh`, registered before
+- **D55. The continuous crystallisation's fresh-seed matrix (`indrajala-research/registrations/state-formation/probe-d55.sh`, registered before
   its data, 2026-10-21, 20:50).** D54's existence bar met on its design seeds (S3 6 of 8 by then,
   move-to-front-4 seed 0 certified; its last two S3 runs still running, its reading to come), the
   owner asking for the night's spare capacity: D54's cell unchanged on seeds no run has touched,
@@ -853,7 +853,7 @@ owner's; D49-D54 settled under the delegation.
     question (near ties) is settled, which it measures rather than fixes.
   - (b) Wait for D54's reading and the margin decision. Cons: a night's machines idle for a reading
     that can't change the cell.
-- **D56. The continuous crystallisation on an unstructured machine (`docs/probe-launches/probe-d56.sh`, registered
+- **D56. The continuous crystallisation on an unstructured machine (`indrajala-research/registrations/state-formation/probe-d56.sh`, registered
   before its data, 2026-10-22, 00:40).** `jebel`'s four night cores freed by D38's S3 arm: D54's cell
   unchanged on random-q16-0 seeds 0-3 (D37's random cells, seeds 0 and 1: 0 of 6 at round 1's cell
   by extra codes and lost near solutions; the consolidation plan's control, B and A each 0 of 6).
@@ -866,7 +866,7 @@ owner's; D49-D54 settled under the delegation.
     D55's rate; a backdrop whose failures so far were extra codes, which a schedule may not reach.
   - (b) More fresh seeds for D55. Cons: grows a registered matrix (the memory's rule: no growing
     matrices); D55's 24 runs already size its rate.
-- **D57. The continuous crystallisation on S4 (`docs/probe-launches/probe-d57.sh`, registered before its data,
+- **D57. The continuous crystallisation on S4 (`indrajala-research/registrations/state-formation/probe-d57.sh`, registered before its data,
   2026-10-22, 00:50).** `pyramidon`'s three slots freed by D55's slice: D54's cell unchanged on
   word-problem-s4 seeds 0-2 (seeds 0 and 1 D37's harm cells, certified before only with the
   commitment, which D48 never turns on). Feasibility: q 24, 15 codes a factor, m 225 (9.4 q), cap 248,
@@ -878,7 +878,7 @@ owner's; D49-D54 settled under the delegation.
     backdrop beside D56's, on cores otherwise idle. Cons: three seeds, existence only.
   - (b) Division `p` 13 (the other harm cell). Cons: its 169 states make a run memory-heavy, past
     `pyramidon`'s three slots.
-- **D58. The continuous crystallisation on the random control (`docs/probe-launches/probe-d58.sh`, registered
+- **D58. The continuous crystallisation on the random control (`indrajala-research/registrations/state-formation/probe-d58.sh`, registered
   before its data, 2026-10-22, 02:50).** `klip`'s slots freed by D55's slice: D54's cell unchanged on
   random-q12-0 seeds 0-3 (D37's control backdrop; the general algebras' consolidation certified 2 of 3
   at about 12 states). Feasibility: q 12, 11 codes a factor, m 121 (10.1 q), cap 132, width 32; row 15:
@@ -899,7 +899,7 @@ owner's; D49-D54 settled under the delegation.
   without the target; on D55's 19 stopped networks it is above 0 on each of the 9 early stops and 0 on
   each of the 10 certified. The stop: a step D35's stop passes ends the run only when no tie splits
   and no label is a near tie, at most 200 steps after the first such pass ("waited"), that pass's
-  network kept. Its probe (`docs/probe-launches/probe-d59.sh`, registered before its data): the 12 re-run from
+  network kept. Its probe (`indrajala-research/registrations/state-formation/probe-d59.sh`, registered before its data): the 12 re-run from
   their seeds (word-problem-s3 27, 29, 33, 35, 36 and move-to-front-4 24, 26, 29, 30 from D55;
   move-to-front-4 1, 2, 3 from D54), each bit-identical to its first run up to its first pass.
   Expectations: at least 8 of 12 succeed (D41), refuted at 4 or fewer; a run exact at 1.0 at its first
@@ -947,7 +947,7 @@ owner's; D49-D54 settled under the delegation.
     coupling 0.16-0.53 below the sharpness's, and froze it with the clock (random-q16-0's).
   - (a) A fixed cap on the move (0.05, the pre-continuous bound). Cons: a constant (the owner: "we
     can't [use] a fixed constant").
-  Its probe (`docs/probe-launches/probe-d61.sh`, registered before its data): both arms, D54's cell with D59's
+  Its probe (`indrajala-research/registrations/state-formation/probe-d61.sh`, registered before its data): both arms, D54's cell with D59's
   margin stop under D60, on the failures word-problem-s3 24, 25, 35, random-q16-0 0, 1 and
   move-to-front-4 3 (lost its pass with only 6 such moves: the jumps' counter-case) and the clean
   word-problem-s3 26 and move-to-front-4 24, 16 runs on `jebel` (8 at once by day, a queued run
@@ -1054,7 +1054,7 @@ owner's; D49-D54 settled under the delegation.
   read from its arm's runs; if the reheat's is cheaper per certificate, both are adopted together.
   Restarts only multiply a rate above zero: where `q` is 0 (random-q16-0, 0 of 11 runs on 7 seeds),
   the reheat must first make forming possible.
-  **Its probe** (`docs/probe-launches/probe-d63.sh`, sha256 b32f5c2995709114..., registered 2026-10-22, 18:15,
+  **Its probe** (`indrajala-research/registrations/state-formation/probe-d63.sh`, sha256 b32f5c2995709114..., registered 2026-10-22, 18:15,
   after D61's reading and before its data): D64's cell plus `--reheat`, no D61 arm (neither was
   promising), on D64's 22 seeds (word-problem-s3 40-47, move-to-front-4 32-35, word-problem-s4 3-5,
   random-q16-0 4-6, random-q12-0 4-7), each paired with its D64 twin; word-problem-s4 0 and 2 (D57's
@@ -1082,7 +1082,7 @@ owner's; D49-D54 settled under the delegation.
   paired verdict noting each pair whose reheat run was cut shorter than its twin. Its last four runs
   (random-q12-0 6, 7, move-to-front-4 34, 35) moved from `stone` to `pyramidon` and `klip` at their
   checkpoints (05:25, the owner; same command, `--resume`; bit parity across machines).
-- **D64. The method's fresh-seed rate (`docs/probe-launches/probe-d64.sh`, registered before its data, 2026-10-22,
+- **D64. The method's fresh-seed rate (`indrajala-research/registrations/state-formation/probe-d64.sh`, registered before its data, 2026-10-22,
   09:00; the owner: "you can run stone at a half-load today").** The method is statistical, so a
   remedy (D61's arms, D63) is adopted only on a fresh-seed rate against the current method's, which is
   known only from D59's re-runs of D55's seeds (S3 11 of 16, move-to-front-4 7 of 8); and "in general"
@@ -1239,7 +1239,7 @@ owner's; D49-D54 settled under the delegation.
   - (c) A fixed slow band around the melting point. Cons: a constant width; slows every run.
   - (d) The order weight (D65) on the pace. Cons: no weight met its criteria.
   - (e) A hotter start (the owner's aside). Cons: adds time only at the top of an exponential cool.
-- **D67. The deadline's completion (`docs/probe-launches/probe-d67.sh`, sha256 411f31578d966b10, registered
+- **D67. The deadline's completion (`indrajala-research/registrations/state-formation/probe-d67.sh`, sha256 411f31578d966b10, registered
   2026-10-23, 06:05, before its data, its header's "06:45" a slip; the owner: "make epochs the binding budget from now on - that
   approach is thermodynamically consistent"; "systematically work through and re-process any data
   that might be affected").** A run's budget is its epochs (1,600); the 690-minute wall-clock budget,
@@ -2318,7 +2318,7 @@ a random machine would just need a very slow cool.**
      `probe-d34.sh`, on `pyramidon` once 4a'''s S3 arm ends; it no longer gates the panel (D36).
    - **The restructured order (D35-D39):** the builds (`--state-bound`, the snapped
      answers at each step's end, `--coupling-cap`; pure Python, tested; built 2026-10-21); D38's coupling
-     probe (`docs/probe-launches/probe-d38.sh`, registered before its data; on `stone` from 18:00); then:
+     probe (`indrajala-research/registrations/state-formation/probe-d38.sh`, registered before its data; on `stone` from 18:00); then:
   - **The continuous crystallisation (D47-D54):** the core matrix set aside; the crate's `straight`
     (`indrajala-math-rust` first, then a "Bump rust/" PR), then `--continuous` (D49-D53, pure Python,
     tested, the golden run unchanged without it), then D54's probe, registered in its script.

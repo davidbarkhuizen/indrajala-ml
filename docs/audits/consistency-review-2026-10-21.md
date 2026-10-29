@@ -6,7 +6,7 @@ panel's (4b) registration.** Read against [state-formation-workplan.md](../workp
 (D1-D39), [reasoning-review-2026-10-21.md](reasoning-review-2026-10-21.md) (the morning's review),
 [failure-kinds.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/failure-kinds.md), [machine-discovery.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/machine-discovery.md),
 [information-flow.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/protocols/information-flow.md), [experiment-design.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/protocols/experiment-design.md), the
-probes' headers (`docs/probe-launches/probe-d33.sh`, `probe-d34.sh`, `probe-d38.sh`), the harness
+probes' headers (`indrajala-research/registrations/state-formation/probe-d33.sh`, `probe-d34.sh`, `probe-d38.sh`), the harness
 (`indrajala_ml/studies/modular_family.py`) and the status note
 (`~/code/indrajala-research/research-notes/state-formation-status.tex`). The adaptive cool's existence probe (D33's
 probe) and the handover probe's S3 arm (4a'') were still running, and the coupling probe (D38)
