@@ -100,6 +100,22 @@ Every option's pros and cons, as settled.
     wrapper itself took a `Zip` out of `max_pool_downstream_batch` (pool 6x6 +54%).
   - (c) Leave it. Pros: nothing to do. Cons: every crate change keeps moving unrelated kernels.
 
+- **D7: a kernel's speed doesn't depend on where the linker puts it.** Settled (a), 2026-10-29
+  (the owner chose to pin the build over shipping stage 4 as it stood, or stopping).
+  - (a) The crate's `.cargo/config.toml`: on x86_64 no branch crosses or ends on a 32-byte boundary
+    (`-x86-branches-within-32B-boundaries`, the mitigation for the Skylake-derived cores' JCC
+    erratum: jebel is an i7-9700K); on aarch64 loops and functions aligned to 64 bytes. With D6,
+    and checked by `scripts/measurement/kernel_code_diff.py`, which compares two builds' machine code
+    function by function. Pros: an A/B moves only the rows whose code changed (on jebel,
+    the vector `exp` against D6 and D7 alone: the `exp` rows faster, 263 within noise, none slower;
+    on `litshe` 259 within noise, one +2.3%); layout only, so no bit moves. Cons: `.text` 2% larger
+    on x86 (padding).
+  - (b) Explicit inline attributes on each hot kernel. Pros: pins what is inlined. Cons: with D6
+    the kernels' code already holds still (the tool: the vector `exp` changes only the functions
+    it touches); the swings that remained came from placement, which attributes don't fix.
+  - (c) Read every A/B through aligned controls. Pros: no build change. Cons: doubles every run, and
+    function alignment alone left the x86 swings (stage 1's aligned run).
+
 ## Stages
 
 One PR per stage; a crate stage lands in `indrajala-math-rust` first, then a "Bump rust/" PR. Every
