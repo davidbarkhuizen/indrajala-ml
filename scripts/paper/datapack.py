@@ -14,7 +14,8 @@ by hash. It fails if any of them is attested by no manifest in MANIFESTS.
 pack and its manifest, made of the cited manifests' own lines (paths relative to `--data`, hashes
 unchanged); `full-<part>.tar.gz` for each part, holding its manifests and every file they list, at
 the paths they list, symlinks followed (`--parts` builds some parts only); `README.md`, the record's
-how-to-verify page (docs/datapack/README.md); and `MANIFEST.sha256`, the hash of every archive
+how-to-verify page (`--readme`, by default indrajala-research's docs/datapack/README.md in the
+sibling clone); and `MANIFEST.sha256`, the hash of every archive
 written, of the README and of every manifest in MANIFESTS. Each manifest verifies with
 `sha256sum -c` from its base, the directory its paths are relative to (`manifest_base`).
 
@@ -82,7 +83,8 @@ def entries(manifest: Path) -> list[tuple[str, str]]:
     return [(digest, path) for digest, path in (line.split("  ", 1) for line in lines)]
 
 
-README = Path(__file__).resolve().parents[2] / "docs" / "datapack" / "README.md"  # the record's how-to-verify page
+# the record's how-to-verify page, kept with the paper in the sibling indrajala-research clone
+README = Path(__file__).resolve().parents[3] / "indrajala-research" / "docs" / "datapack" / "README.md"
 BASES = {"paper/t4-fresh.sha256": "paper/t2-t5/approximations"}  # run from where its files were read
 
 
@@ -167,7 +169,7 @@ def add(archive: tarfile.TarFile, data: Path, paths: Iterable[str]) -> None:
             archive.addfile(info, f)
 
 
-def build(data: Path, tex: Path, out: Path, parts: list[str]) -> None:
+def build(data: Path, tex: Path, out: Path, parts: list[str], readme: Path = README) -> None:
     out.mkdir(parents=True, exist_ok=True)
     files = verify_files(data, tex)
     (out / "verify.sha256").write_text("".join(f"{digest}  {path}\n" for path, digest in files.items()))
@@ -181,7 +183,7 @@ def build(data: Path, tex: Path, out: Path, parts: list[str]) -> None:
                 add(archive, data, [manifest])
                 add(archive, data, sorted({os.path.normpath(base / path) for _, path in entries(data / manifest)}))
         print(f"full-{part}: {sum(len(entries(data / m)) for m in MANIFESTS[part])} files")
-    shutil.copyfile(README, out / "README.md")
+    shutil.copyfile(readme, out / "README.md")
     split(out)
     write_manifest(data, out)
 
@@ -318,6 +320,7 @@ def main(argv: list[str]) -> int:
     make.add_argument("tex", type=Path)
     make.add_argument("--out", type=Path, required=True)
     make.add_argument("--parts", nargs="*", choices=sorted(MANIFESTS), default=sorted(MANIFESTS))
+    make.add_argument("--readme", type=Path, default=README, help="the record's how-to-verify page")
     parted = commands.add_parser("split", help="archives above 1 GB into parts, and MANIFEST.sha256 rewritten")
     parted.add_argument("out", type=Path)
     checked = commands.add_parser("check", help="every archive and every file inside, re-hashed")
@@ -330,7 +333,7 @@ def main(argv: list[str]) -> int:
         print(f"{len(files)} files, {size / 1e9:.2f} GB, every one attested", file=sys.stderr)
         return 0
     if args.command == "build":
-        build(args.data, args.tex, args.out, args.parts)
+        build(args.data, args.tex, args.out, args.parts, args.readme)
         return 0
     if args.command == "split":
         split(args.out)
