@@ -19,7 +19,8 @@ draft's files with DIR's.
 `zenodo_deposit.py edit DIR [--dry-run]` changes a published record's metadata, no new version (its DOI
 and files stay): it lists the fields of the metadata file that differ from the record's, then
 unlocks the record for editing and sets them; the owner reviews the edit and presses Publish (or
-Discard). With `--dry-run` it only lists them.
+Discard). With `--dry-run` it only lists them. `metadata` and `edit` refuse a file with a placeholder
+left unfilled (`[RELEASE TAG]`, `[PAPER DOI]`).
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -36,6 +38,17 @@ from typing import Any
 API = "https://zenodo.org/api"
 # the datapack record's metadata, kept with the paper in the sibling indrajala-research clone
 METADATA = Path(__file__).resolve().parents[3] / "indrajala-research" / "docs" / "datapack" / "zenodo-metadata.json"
+
+
+PLACEHOLDER = re.compile(r"\[[A-Z][A-Z ]*\]")  # a field still to fill, e.g. [RELEASE TAG], [PAPER DOI]
+
+
+def filled(path: Path) -> dict[str, Any]:
+    """The metadata file's fields, refused while any placeholder is left unfilled."""
+    text = path.read_text()
+    if left := sorted(set(PLACEHOLDER.findall(text))):
+        raise SystemExit(f"{path}: fill {', '.join(left)} first")
+    return json.loads(text)
 
 
 def request(method: str, url: str, token: str, body: Any = None, data: Any = None, size: int | None = None) -> Any:
@@ -108,16 +121,15 @@ def main(argv: list[str]) -> int:
         return 0
     draft = state(out)
     if args.command == "metadata":
-        metadata = json.loads(args.metadata.read_text()) | {"prereserve_doi": True}
-        if "[RELEASE TAG]" in json.dumps(metadata):
-            raise SystemExit(f"{args.metadata}: fill [RELEASE TAG] first")
+        metadata = filled(args.metadata) | {"prereserve_doi": True}
         request("PUT", f"{API}/deposit/depositions/{draft['id']}", token, body={"metadata": metadata})
         print(f"draft {draft['id']}: metadata set; review it at {draft['html']}")
         return 0
     if args.command == "edit":
+        wanted = filled(args.metadata)
         url = f"{API}/deposit/depositions/{draft['id']}"
         record = request("GET", url, token)
-        current, wanted = record["metadata"], json.loads(args.metadata.read_text())
+        current = record["metadata"]
         changed = sorted(key for key in wanted if current.get(key) != wanted[key])
         print(f"record {draft['id']} ({record['state']}): {', '.join(changed) or 'nothing'} differs")
         if args.dry_run or not changed:
