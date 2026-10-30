@@ -101,7 +101,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
 | `scripts/data/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
 | `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention, multi-head attention and sequence studies and the refactoring golden run; see `docs/measurement.md` |
-| `docs/` | the measurement guide, working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open workplans, `docs/rng-audit.md` the RNG audit. The research notes, the research protocols (experiment design, feasibility checklist) and the dated reviews are in [indrajala-research](https://github.com/davidbarkhuizen/indrajala-research) |
+| `docs/` | the measurement guide, working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open library and infrastructure workplans, `docs/rng-audit.md` the RNG audit. The research notes, the research protocols (experiment design, feasibility checklist), the research workplans and the dated reviews are in [indrajala-research](https://github.com/davidbarkhuizen/indrajala-research) |
 
 ## Models
 

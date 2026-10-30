@@ -4,20 +4,12 @@ The open workplans, grouped. A workplan is retired (deleted) once every stage an
 resolved; its leftovers then move to [next-steps.md](../next-steps.md), whose "Retired workplans"
 table says how to read each retired one from git history.
 
-## `research/`: the research programme
+## The research workplans: in indrajala-research
 
-Studies, probes and the paper. The owner's long-run aim is to split the research out of
-indrajala-ml (it bloats the core for reuse); this group is what would move.
-
-| workplan | state |
-| --- | --- |
-| [paper-workplan.md](research/paper-workplan.md) | paper 1: released (tag `paper1-v1.1`, its datapack on Zenodo), out for verification; the stand-alone preprint on Zenodo Sat 31 Oct if no reply by Friday (D39, R9) |
-| [post-paper-retests-workplan.md](research/post-paper-retests-workplan.md) | after paper 1: crystallisation (X), then branching and depth |
-| [incremental-reheat-workplan.md](research/incremental-reheat-workplan.md) | stage 0 read; the build and its probe after paper 1 (D9), X's second arm declined (D8) |
-| [state-formation-workplan.md](research/state-formation-workplan.md) | option 1 worked to a decision (the method); options 2-4 shelved (D31) |
-| [general-algebras-workplan.md](research/general-algebras-workplan.md) | rounds 1-2 done; the fork's trigger and the guard to tune here (stages 5-7); paused since 2026-10-20 |
-| [arbitrary-length-addition-workplan.md](research/arbitrary-length-addition-workplan.md) | a high-level plan; paused since 2026-10-20 |
-| [factorisation-machine-workplan.md](research/factorisation-machine-workplan.md) | a high-level plan; paused since 2026-10-20 |
+Studies, probes and the papers moved to indrajala-research's
+[`docs/workplans/`](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/workplans/README.md) on 2026-10-30 (the owner's aim: the research out of
+indrajala-ml, which it bloats for reuse). Their names in this repository's code and docs
+(`paper-workplan.md` D13, ...) mean those files.
 
 ## `library/`: the ML primitives
 

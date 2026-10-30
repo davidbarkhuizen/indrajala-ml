@@ -5,7 +5,7 @@
 - **One focused PR per chunk of work, from a feature branch**, never on `main`: branch, commit,
   push, open the PR, wait for CI to pass, squash-merge, `git pull` on `main`, then delete the local
   and remote branch.
-- **Multi-stage changes start with a workplan doc** (`docs/workplans/<group>/<name>-workplan.md`: `research/`, `library/` or `infrastructure/`, [docs/workplans/README.md](docs/workplans/README.md)). Settle its owner
+- **Multi-stage changes start with a workplan doc** (`docs/workplans/<group>/<name>-workplan.md`: `library/` or `infrastructure/`, [docs/workplans/README.md](docs/workplans/README.md); a research workplan goes in `../indrajala-research/docs/workplans/`). Settle its owner
   decisions (D1, D2, ...) and write the answers into the doc before opening its PR. Each stage is
   its own PR, merged before the next. A stage that changes the crate lands in
   `indrajala-math-rust` first, then a "Bump rust/" PR here.
@@ -28,8 +28,8 @@ research repository: `../indrajala-research/docs/protocols/experiment-design.md`
 clone ([on GitHub](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/protocols/experiment-design.md));
 read it, and the feasibility checklist beside it (`information-flow.md`), before designing one or
 writing its workplan. The research notes (findings, reports, the literature review, the failure
-kinds, the goal) are there too, in `docs/research-notes/`; the workplans, where findings are
-registered and recorded, stay here.
+kinds, the goal) are there too, in `docs/research-notes/`, and so are the research workplans, where
+findings are registered and recorded, in `docs/workplans/` (moved from here 2026-10-30).
 
 - **Every cell must be able to succeed, and its training must exclude memorising:** the model can
   represent the target (codes at least its minimal states), and the longest training length is at
