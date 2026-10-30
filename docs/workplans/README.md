@@ -29,5 +29,5 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 
 | workplan | state |
 | --- | --- |
-| [pypi-release-workplan.md](infrastructure/pypi-release-workplan.md) | deferred to the 1.0 release |
+| [pypi-release-workplan.md](infrastructure/pypi-release-workplan.md) | reopened 2026-10-30: the first release, 0.1.0 |
 | [studies-repo-workplan.md](infrastructure/studies-repo-workplan.md) | the studies' clean-moving code to indrajala-studies; planned, starts after paper 1's preprint |
