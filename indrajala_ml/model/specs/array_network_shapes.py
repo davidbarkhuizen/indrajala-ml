@@ -28,6 +28,37 @@ else:
         pass
 
 
+class ConvArguments:
+    """
+    A conv preset's constructor arguments, checked and stored under their names, on every
+    implementation (ArrayConvShape, ConvMultiClassBackpropClassifierNetwork; the DRY third pass
+    workplan, D6).
+    """
+
+    class_count: int
+    input_height: int
+    input_width: int
+    conv_specs: list[ConvSpec | PoolSpec]
+    dense_layer_sizes: list[int]
+
+    def _set_conv_arguments(
+        self,
+        input_height: int,
+        input_width: int,
+        conv_specs: Sequence[ConvSpec | PoolSpec],
+        dense_layer_sizes: list[int],
+        class_count: int,
+    ) -> None:
+        validate_class_count(class_count)
+        validate_layer_sizes(dense_layer_sizes, label="dense_layer_sizes", noun="dense hidden layer")
+        assert any(isinstance(spec, ConvSpec) for spec in conv_specs), "conv_specs must contain at least one ConvSpec"
+        self.class_count = class_count
+        self.input_height = input_height
+        self.input_width = input_width
+        self.conv_specs = list(conv_specs)
+        self.dense_layer_sizes = dense_layer_sizes
+
+
 class ArrayMultiClassShape[A: BackendArray](_ShapeBase[A]):
     """
     The multiclass shape over ArrayNetworkBase, for either backend: argmax classify_state,
@@ -149,7 +180,7 @@ else:
     _SingleOutputHostBase = _ShapeBase
 
 
-class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
+class ArrayConvShape[A: BackendArray](ConvArguments, _ConvShapeBase[A]):
     """
     The convolutional shape over the multiclass shape, for either backend: a front end of conv and
     max-pool layers (one ConvSpec or PoolSpec each, in order), one or more dense hidden layers, and
@@ -183,16 +214,8 @@ class ArrayConvShape[A: BackendArray](_ConvShapeBase[A]):
         class_count: int,
     ) -> None:
 
-        validate_class_count(class_count)
-        validate_layer_sizes(dense_layer_sizes, label="dense_layer_sizes", noun="dense hidden layer")
-        assert any(isinstance(spec, ConvSpec) for spec in conv_specs), "conv_specs must contain at least one ConvSpec"
-
-        self.class_count = class_count
+        self._set_conv_arguments(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
         self.dimension = input_height * input_width
-        self.input_height = input_height
-        self.input_width = input_width
-        self.conv_specs = list(conv_specs)
-        self.dense_layer_sizes = dense_layer_sizes
 
         # past the multiclass shape's __init__, whose flat layer_sizes can't describe conv layers,
         # to the backend's base
@@ -281,7 +304,32 @@ class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
         raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
 
 
-class SequentialSequenceShape[A: BackendArray](_ShapeBase[A]):
+class TokenWiseOutput[A: BackendArray](_ShapeBase[A]):
+    """
+    The hooks of a network whose output is a softmax over class_count classes for each token (the
+    DRY third pass workplan, D5): its probabilities a list per token, classify_state the per-token
+    argmax. SequentialSequenceShape and WindowRecurrentShape (a digit per column) list it first.
+    """
+
+    class_count: int
+
+    def predict_probabilities(self, state: tuple[float, ...]) -> list[list[float]]:
+        """Each token's class probabilities."""
+        values = self._forward(state).tolist()
+        width = self.class_count
+        return [values[i : i + width] for i in range(0, len(values), width)]
+
+    def classify_state(self, state: tuple[float, ...]) -> tuple[int, ...]:
+        return self._classify_output(self._forward(state))
+
+    def _classify_output(self, output: A) -> tuple[int, ...]:
+        return self._classify_output_batch(self.backend.matrix([output.tolist()]))[0]
+
+    def _classify_output_batch(self, output_batch: A) -> list[tuple[int, ...]]:
+        return self.backend.argmax_token_rows(output_batch, self.class_count)
+
+
+class SequentialSequenceShape[A: BackendArray](TokenWiseOutput[A]):
     """
     The sequence shape over ArrayNetworkBase, for either backend (the sequence task workplan, D6):
     a network of any accepted layer specs whose output layer is token-wise (token_wise_output), a
@@ -314,21 +362,6 @@ class SequentialSequenceShape[A: BackendArray](_ShapeBase[A]):
 
     def _update_rule(self) -> UpdateRule:
         return self.update_rule
-
-    def predict_probabilities(self, state: tuple[float, ...]) -> list[list[float]]:
-        """Each token's class probabilities."""
-        values = self._forward(state).tolist()
-        width = self.class_count
-        return [values[i : i + width] for i in range(0, len(values), width)]
-
-    def classify_state(self, state: tuple[float, ...]) -> tuple[int, ...]:
-        return self._classify_output(self._forward(state))
-
-    def _classify_output(self, output: A) -> tuple[int, ...]:
-        return self._classify_output_batch(self.backend.matrix([output.tolist()]))[0]
-
-    def _classify_output_batch(self, output_batch: A) -> list[tuple[int, ...]]:
-        return self.backend.argmax_token_rows(output_batch, self.class_count)
 
     def _target_array(self, category: Sequence[int]) -> A:
         target = self.backend.zeros(self.tokens * self.class_count)

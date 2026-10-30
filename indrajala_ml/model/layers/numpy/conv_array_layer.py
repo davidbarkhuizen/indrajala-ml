@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar
+from typing import ClassVar
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
@@ -11,6 +11,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from indrajala_ml.model.layers.array.array_parameters import WeightAndBias
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray, relu
 from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer
+from indrajala_ml.model.specs.hidden_layers import BatchOnly, DeltaIsDownstream, Hidden
 from indrajala_ml.model.specs.single_example import refuse_single_example
 from indrajala_ml.model.specs.window_geometry import output_size, validate_conv_arguments
 
@@ -179,7 +180,9 @@ class ConvArrayLayer(WeightAndBias[FloatArray], ConvGeometryArrayLayer):
         self.grad_b = np.zeros(self.channel_count)
 
 
-class LinearConvArrayLayer(ConvGeometryArrayLayer):
+class LinearConvArrayLayer(
+    Hidden[FloatArray], BatchOnly[FloatArray], DeltaIsDownstream[FloatArray], ConvGeometryArrayLayer
+):
     """
     The conv layer before a batch-norm layer (the batch-norm workplan, D1 and D2): ConvArrayLayer's
     products, without the bias and the ReLU, in the same channel-major layout. Its delta is its
@@ -207,21 +210,6 @@ class LinearConvArrayLayer(ConvGeometryArrayLayer):
         # classify_state's single-example forward pass
         self.a = self.forward_batch(x[np.newaxis, :])[0]
         return self.a
-
-    def compute_output_delta(self, reference: FloatArray) -> None:
-        raise NotImplementedError("a linear conv layer is hidden, before a batch-norm layer")
-
-    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
-        raise NotImplementedError("a linear conv layer is hidden, before a batch-norm layer")
-
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        refuse_single_example(self)
-
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self.delta_batch = next_layer.downstream_batch()
-
-    def downstream(self) -> FloatArray:
-        refuse_single_example(self)
 
     def downstream_batch(self) -> FloatArray:
         return self._downstream(self.delta_batch)

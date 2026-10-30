@@ -14,14 +14,14 @@ from indrajala_ml.model.persistence.format2 import PYTHON
 from indrajala_ml.model.persistence.format2_persistence import Format2Persistence
 from indrajala_ml.model.protocols.layer_protocols import GeneratorLayer, TrainableLayer
 from indrajala_ml.model.specs.bounds import validate_batch, validate_input_bounds
-from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.layer_specs import LayerSpec
 from indrajala_ml.model.specs.single_example import (
     batch_norm_index,
     refuse_single_example_groups,
     refuse_single_example_network,
 )
+from indrajala_ml.model.specs.spec_hooks import SpecHooks
 from indrajala_ml.model.specs.spec_shapes import InputShape
-from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
 
@@ -31,7 +31,7 @@ from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 class BackpropNetworkBase[
     LayerT: TrainableLayer = BackpropLayer,
     OutputT: BackpropLayer | TokenSoftmaxLayer = BackpropLayer,
-](Format2Persistence[list[list[Any]], list[WeightSetState]]):
+](SpecHooks, Format2Persistence[list[list[Any]], list[WeightSetState]]):
     """
     What every pure-Python network shares: layers built from layer specs (layer_specs.py,
     python_layer_builder.py) behind a StateLayer, the forward pass, the optimizer (_update_rule,
@@ -119,26 +119,6 @@ class BackpropNetworkBase[
         self._rng = rng
         for layer in self._generator_layers:
             layer.set_rng(rng)
-
-    def _window_state_size(self) -> int | None:
-        # a window-recurrent network's state width, with which its specs are built as a window
-        # (build_python_layers); None for every other network
-        return None
-
-    def _hidden_spec(self, size: int) -> Dense:
-        # a dense hidden layer; the ReLU and dropout siblings return theirs
-        return Dense(size)
-
-    def _output_spec(self, size: int) -> Dense:
-        # the output layer; the softmax and cross-entropy siblings return theirs
-        return Dense(size, output=True)
-
-    def _dense_specs(self, layer_sizes: Sequence[int], output_size: int) -> list[LayerSpec]:
-        return [*(self._hidden_spec(size) for size in layer_sizes), self._output_spec(output_size)]
-
-    def _update_rule(self) -> UpdateRule:
-        # plain SGD; the momentum, Adam and L2 siblings return their rule, from their hyperparameters
-        return SGD()
 
     @classmethod
     def randomized(cls, *args: Any, seed: Any = None, rng: Pcg64Generator | None = None, **kwargs: Any) -> Self:

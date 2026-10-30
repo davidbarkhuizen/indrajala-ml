@@ -1,0 +1,37 @@
+"""
+The hooks a network builds its layer specs and update rule from, on every implementation (the DRY
+third pass workplan, D4): ArrayNetworkBase and BackpropNetworkBase list SpecHooks, and a sibling
+(the ReLU, dropout, softmax and cross-entropy presets, the rule presets, the window-recurrent
+network) overrides the hook it changes.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
+
+
+class SpecHooks:
+    """A network's default specs (sigmoid dense layers) and rule (plain SGD)."""
+
+    def _window_state_size(self) -> int | None:
+        # a window-recurrent network's state width, with which its specs are built as a window
+        # (build_array_layers, build_python_layers); None for every other network
+        return None
+
+    def _hidden_spec(self, size: int) -> Dense:
+        # a dense hidden layer; the ReLU and dropout siblings return theirs
+        return Dense(size)
+
+    def _output_spec(self, size: int) -> Dense:
+        # the output layer; the softmax and cross-entropy siblings return theirs
+        return Dense(size, output=True)
+
+    def _dense_specs(self, layer_sizes: Sequence[int], output_size: int) -> list[LayerSpec]:
+        return [*(self._hidden_spec(size) for size in layer_sizes), self._output_spec(output_size)]
+
+    def _update_rule(self) -> UpdateRule:
+        # plain SGD; the momentum, Adam and L2 siblings return their rule, from their hyperparameters
+        return SGD()

@@ -24,17 +24,17 @@ from indrajala_ml.model.protocols.array_protocols import (
 )
 from indrajala_ml.model.protocols.layer_protocols import GeneratorLayer
 from indrajala_ml.model.specs.bounds import validate_batch
-from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
+from indrajala_ml.model.specs.layer_specs import LayerSpec
 from indrajala_ml.model.specs.single_example import (
     batch_norm_index,
     refuse_single_example_groups,
     refuse_single_example_network,
 )
+from indrajala_ml.model.specs.spec_hooks import SpecHooks
 from indrajala_ml.model.specs.spec_shapes import InputShape
-from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
 
 
-class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], list[A]]):
+class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple[A, ...]], list[A]]):
     """
     What every array-backed network shares, numpy and Rust (NumpyArrayNetworkBase and
     RustArrayNetworkBase set the backend, A being its array type): layers built from layer specs
@@ -100,26 +100,6 @@ class ArrayNetworkBase[A: BackendArray](Format2Persistence[list[tuple[A, ...]], 
         self._rng = rng
         for layer in self._generator_layers:
             layer.set_rng(rng)
-
-    def _window_state_size(self) -> int | None:
-        # a window-recurrent network's state width, with which its specs are built as a window
-        # (build_array_layers); None for every other network
-        return None
-
-    def _hidden_spec(self, size: int) -> Dense:
-        # a dense hidden layer; the ReLU and dropout siblings return theirs
-        return Dense(size)
-
-    def _output_spec(self, size: int) -> Dense:
-        # the output layer; the softmax and cross-entropy siblings return theirs
-        return Dense(size, output=True)
-
-    def _dense_specs(self, layer_sizes: Sequence[int], output_size: int) -> list[LayerSpec]:
-        return [*(self._hidden_spec(size) for size in layer_sizes), self._output_spec(output_size)]
-
-    def _update_rule(self) -> UpdateRule:
-        # plain SGD; the momentum, Adam and L2 siblings return their rule, from their hyperparameters
-        return SGD()
 
     def _new_optimizer(self) -> ArrayOptimizer[A]:
         return self.backend.optimizer(self._update_rule())

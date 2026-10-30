@@ -10,11 +10,11 @@ from indrajala_ml.model.layers.python.max_pool_layer import MaxPoolLayer, PoolSp
 from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
     MultiClassBackpropClassifierNetwork,
 )
-from indrajala_ml.model.specs.bounds import validate_class_count, validate_layer_sizes
+from indrajala_ml.model.specs.array_network_shapes import ConvArguments
 
 
 class ConvMultiClassBackpropClassifierNetwork(
-    MultiClassBackpropClassifierNetwork[ConvLayer | MaxPoolLayer | BackpropLayer]
+    ConvArguments, MultiClassBackpropClassifierNetwork[ConvLayer | MaxPoolLayer | BackpropLayer]
 ):
     """
     A convolutional MultiClassBackpropClassifierNetwork: a front end of ConvLayers and
@@ -57,15 +57,7 @@ class ConvMultiClassBackpropClassifierNetwork(
         class_count: int,
     ) -> None:
 
-        validate_class_count(class_count)
-        validate_layer_sizes(dense_layer_sizes, label="dense_layer_sizes", noun="dense hidden layer")
-        assert any(isinstance(spec, ConvSpec) for spec in conv_specs), "conv_specs must contain at least one ConvSpec"
-
-        self.class_count = class_count
-        self.input_height = input_height
-        self.input_width = input_width
-        self.conv_specs = list(conv_specs)
-        self.dense_layer_sizes = dense_layer_sizes
+        self._set_conv_arguments(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
 
         dimension = input_height * input_width
         # past the multiclass network's __init__ to BackpropNetworkBase's

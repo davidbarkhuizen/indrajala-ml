@@ -16,6 +16,7 @@ import numpy as np
 
 from indrajala_ml.model.layers.array.array_parameters import GammaAndBeta, RunningAverages
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray, relu, sigmoid
+from indrajala_ml.model.specs.hidden_layers import BatchOnly, Hidden
 from indrajala_ml.model.specs.single_example import ghost_groups, refuse_single_example
 
 # a group's (m, d, var, std): its value count per feature, and what the backward pass reads
@@ -27,7 +28,9 @@ def sum_rows(values: FloatArray) -> FloatArray:
     return np.cumsum(values, axis=0)[-1]
 
 
-class BatchNormArrayLayer(GammaAndBeta[FloatArray], RunningAverages[FloatArray]):
+class BatchNormArrayLayer(
+    Hidden[FloatArray], BatchOnly[FloatArray], GammaAndBeta[FloatArray], RunningAverages[FloatArray]
+):
     """
     y = gamma * xhat + beta, then the activation, xhat normalized with the batch's statistics in
     training and the running averages in inference. gamma and beta are trained, without weight
@@ -145,15 +148,6 @@ class BatchNormArrayLayer(GammaAndBeta[FloatArray], RunningAverages[FloatArray])
         self.running_var = (1 - rate) * self.running_var + rate * (ss / (m - 1))
         return A, xhat, (m, d, var, std)
 
-    def compute_output_delta(self, reference: FloatArray) -> None:
-        raise NotImplementedError("a batch-norm layer is hidden")
-
-    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
-        raise NotImplementedError("a batch-norm layer is hidden")
-
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        refuse_single_example(self)
-
     def compute_hidden_delta_batch(self, next_layer: Any) -> None:
         # dl/dy: the downstream times the activation's derivative, as ArrayLayer's and
         # ReLUArrayLayer's hidden deltas
@@ -163,9 +157,6 @@ class BatchNormArrayLayer(GammaAndBeta[FloatArray], RunningAverages[FloatArray])
             self.delta_batch = downstream * self.A * (1.0 - self.A)
         else:
             self.delta_batch = downstream * (self.A > 0.0)
-
-    def downstream(self) -> FloatArray:
-        refuse_single_example(self)
 
     def downstream_batch(self) -> FloatArray:
         # dl/dx, the linear layer's delta: the paper's § 3 chain rule, term by term, per group
