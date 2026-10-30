@@ -1,7 +1,7 @@
 # Workplan: remove duplicated code, third pass (DRY, 2026-10-30)
 
 **Status: in progress; decisions D1-D10 settled (2026-10-30, delegated to Claude by the owner's
-standing rule). Stages 1-8 open.**
+standing rule). Stage 1 done; stages 2-8 open.**
 
 The first two passes (`git show e066333:docs/dry-workplan.md`, #506-#515; `git show
 88e1815:docs/dry-rerun-workplan.md`, #550-#557) and the rerun after multi-head attention
@@ -25,10 +25,11 @@ linear layers still write their refusals by hand.
 - **A clone scan.** `symilar`, the earlier passes' tool, is not installed in the venv, so the scan
   was a window hash over normalised lines (strings and numbers masked; blank, comment, import and
   bracket-only lines dropped) at 8 and 10 lines, over `indrajala_ml/`, `scripts/`, `tests/`,
-  `rust/tests/` and `cli`. Lines inside a reported clone, either side counted: package 3.4%
-  (1147 of 34085), scripts 2.0%, tests 4.3%, crate tests 2.3%. These are not comparable with the
-  earlier `symilar` percentages (a different count); stage 1 makes the scan a repo tool so later
-  reruns are.
+  `rust/tests/` and `cli`, now `scripts/measurement/duplicates.py` (stage 1, which also skips a
+  window of one line repeated). Lines inside a reported clone, either side counted, at 8 lines:
+  package 3.4% (1147 of 34085), scripts 1.8%, tests 4.2%, crate tests 2.0%; at 10 lines: 2.2%,
+  1.4%, 2.7%, 1.2%. These are not comparable with the earlier `symilar` percentages (a different
+  count).
 - **Function names defined in more than one module** (`^def name`), and test helpers defined in
   more than one file.
 - **The twin classes read side by side**: the preset classes across the three implementations,
@@ -196,7 +197,7 @@ Every stage is one PR and passes `./cli lint`, `./cli test` and
 (bit-identical). No public class, module or function a demo, test or saved file uses is renamed or
 deleted. No stage gets an A/B (D2).
 
-### Stage 1: the audit as a repo tool
+### Stage 1: the audit as a repo tool (done)
 
 - `scripts/measurement/duplicates.py`: the scan above (stdlib only), reporting clone pairs and the
   share of lines in clones per tree, with tests. next-steps.md's "From the DRY audit" names it
