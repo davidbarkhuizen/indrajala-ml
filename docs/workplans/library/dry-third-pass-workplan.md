@@ -1,7 +1,7 @@
 # Workplan: remove duplicated code, third pass (DRY, 2026-10-30)
 
 **Status: in progress; decisions D1-D10 settled (2026-10-30, delegated to Claude by the owner's
-standing rule). Stage 1 done; stages 2-8 open.**
+standing rule). Stages 1-2 done; stages 3-8 open.**
 
 The first two passes (`git show e066333:docs/dry-workplan.md`, #506-#515; `git show
 88e1815:docs/dry-rerun-workplan.md`, #550-#557) and the rerun after multi-head attention
@@ -203,7 +203,13 @@ deleted. No stage gets an A/B (D2).
   share of lines in clones per tree, with tests. next-steps.md's "From the DRY audit" names it
   as the rerun's method, with this audit's numbers as the baseline.
 
-### Stage 2: the shared hooks and mixins (findings 2-6, D4-D8)
+### Stage 2: the shared hooks and mixins (findings 2-6, D4-D8) (done)
+
+- `model/specs/spec_hooks.py`'s `SpecHooks`; `TokenWiseOutput` and `ConvArguments` in
+  `specs/array_network_shapes.py` (`ConvArguments` a typed mixin rather than D6's function, so
+  pyright sees the attributes it sets); `RecurrenceSchedule` in `specs/window_recurrence.py`;
+  `BatchOnly` in `specs/hidden_layers.py`, taken by the batch-norm layers too (next-steps.md's
+  leftover named them with the linear ones), their refusals now `Hidden`'s message.
 
 ### Stage 3: the per-rule presets (finding 1, D3)
 
