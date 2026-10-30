@@ -1,9 +1,9 @@
 # Workplan: publish indrajala-math-rust to PyPI
 
-**Status: deferred to the 1.0 release (the owner, 2026-10-13): until then indrajala-ml and its
-dependents use the crate and each other as git submodules, and 1.0 starts semantic versioning.
-Stage 2's multi-platform CI (no publishing) is taken up earlier by the aarch64 workplan. Stage 0
-needs the repo owner's PyPI and GitHub accounts; stages 1-5 are planned.**
+**Status: reopened by the owner (2026-10-30), the first release 0.1.0 (it was deferred to 1.0 on
+2026-10-13). Stages run 1 to 5 in order; stage 0, the owner's accounts, is needed only for stage 5's
+first upload, so it is done just before stage 5. The aarch64 workplan (retired) already made the
+crate's CI test glibc and musl on x86_64 and aarch64 (dev builds, not wheels).**
 
 The goal is to publish the Rust crate (the `rust/` submodule,
 [indrajala-math-rust](https://github.com/davidbarkhuizen/indrajala-math-rust)) on PyPI as
@@ -19,10 +19,9 @@ own platform.
 
 - **Anyone can use it.** Today the crate installs only from a source checkout, with rustup and
   maturin. Many more people can run `pip install`.
-- **Other platforms test what has only been assumed.** Only Linux x86_64 with AVX2 has ever built
-  or run the crate. On aarch64 the scalar matmul fallback is the only path, so the ~2,375 op tests
-  there run the fallback for real. Today it is tested only indirectly, through the parity claims
-  about the AVX2 path. Windows and macOS find anything in the build or tests that assumes Linux.
+- **Other platforms test what has only been assumed.** Linux (glibc and musl, x86_64 and aarch64)
+  is built and tested on every PR since the aarch64 workplan; macOS and Windows have never built
+  the crate. They find anything in the build or tests that assumes Linux.
 - **Each decision is measured and recorded.** The abi3 choice and the manylinux build could
   change per-call overhead, so each is timed against the current build before it is adopted (the
   rules in [measurement.md](../../measurement.md)).
@@ -35,15 +34,22 @@ own platform.
   Python), and all four pyclasses opt out of the by-value `FromPyObject` (`skip_from_py_object`).
 - `rust/pyproject.toml`: name, version, `license = "MIT"`, `requires-python = ">=3.14"`. It has no
   description, authors, URLs or classifiers.
-- Of the 14 source files, 4 use `#[pyclass]` (`Array`, `ConvGeometry`, `SeedSequence`, `Generator`).
+- Of the 19 source files, 6 pyclasses (`Array`, `ConvGeometry`, `SeedSequence`, `Generator`,
+  `RecurrenceStep`, `WindowProgram`).
   Every function borrows its arrays (`&RustArray`), so no call copies an array at the boundary.
 - The AVX2/FMA code is gated with `#[cfg(target_arch = "x86_64")]` and picked at runtime with
   `is_x86_feature_detected!`. A portable x86_64 wheel still uses AVX2 where the CPU has it, and
-  aarch64 compiles only the scalar path.
-- `indrajala_math_rust.pyi` and `py.typed` are already in the wheel. stubtest and pyright already
+  falls back to scalar code where it doesn't. aarch64 has NEON kernels (the matrix and dot products,
+  the transpose; NEON is in aarch64's baseline), bit-identical to the x86_64 paths.
+- `indrajala_math_rust.pyi` and `py.typed` are already in the wheel (maturin adds `py.typed`
+  beside the root stub; checked in `.venv` on 2026-10-30). stubtest and pyright already
   check the stub in CI.
-- The crate CI (`rust/.github/workflows/ci.yml`) has one Linux job: rustfmt, clippy, ruff,
-  `maturin develop --release`, stubtest, pyright and pytest, on Python 3.14.
+- The crate CI (`rust/.github/workflows/ci.yml`): a glibc job on `ubuntu-latest` and
+  `ubuntu-24.04-arm` (rustfmt, clippy, ruff, `maturin develop --release`, stubtest, pyright and
+  pytest, Python 3.14), and a musl job on both (an Alpine container by `docker run`: build and
+  pytest). About 3,000 op tests. No wheels are built, and nothing on macOS or Windows.
+- The version is written twice, `0.1.0` in both `Cargo.toml` and `pyproject.toml` (stage 3 makes
+  Cargo's the only one).
 - indrajala-ml builds the crate from the submodule with `./cli build-rust` and pins maturin 1.15.0
   there. That stays as it is (see Out of scope).
 
@@ -92,18 +98,30 @@ Each stage is one PR or more in the crate repo, followed by a submodule bump PR 
 with `./cli build-rust && ./cli test` green. The crate's CI and indrajala-ml's CI both pass
 before merge.
 
-### Stage 0: accounts (owner, no code)
+### Stage 0: accounts (owner, no code; done just before stage 5)
 
-1. On pypi.org and test.pypi.org, add a **pending trusted publisher** for the project
-   `indrajala-math-rust`: owner `davidbarkhuizen`, repo `indrajala-math-rust`, workflow
-   `release.yml`, environment `pypi` (TestPyPI: `testpypi`). A pending publisher lets the first
-   upload create the project, so the name is claimed on the first release.
-2. In the crate repo's GitHub settings, create the `pypi` and `testpypi` environments. Put a
-   required reviewer on `pypi` and restrict it to `v*` tags. Restrict `testpypi` to
+PyPI and TestPyPI are separate sites with separate accounts. Nothing here needs a token: trusted
+publishing lets the release workflow upload as itself.
+
+1. **Open the two accounts:** register at <https://pypi.org/account/register/> and at
+   <https://test.pypi.org/account/register/> (the same username on both is simplest), and verify
+   the email each sends. Uploads need a verified primary email.
+2. **Two-factor authentication on both** (PyPI requires it to publish): Account settings, "Add 2FA
+   with authentication application" (a TOTP app) or "with security device" (a hardware key). Save
+   the recovery codes each site then shows, offline: they are the only way back in if the device
+   is lost.
+3. **A pending trusted publisher on each site** for the project `indrajala-math-rust` (Your
+   projects, Publishing, "Add a new pending publisher", GitHub): owner `davidbarkhuizen`, repository
+   `indrajala-math-rust`, workflow `release.yml`, environment `pypi` (TestPyPI: `testpypi`). A
+   pending publisher lets the first upload create the project, so the name is claimed on the first
+   release, not before.
+4. **In the crate repo's GitHub settings** (Environments): create `pypi` and `testpypi`. Put the
+   owner as required reviewer on `pypi` and restrict it to `v*` tags; restrict `testpypi` to
    `testpypi-v*` tags.
-3. Enable 2FA on both PyPI accounts if it isn't on already. PyPI requires it.
 
-Done when both pending publishers are listed and both environments exist.
+Steps 1-3 are the owner's own (their accounts, passwords and 2FA); Claude gives step 4's settings
+or does it with `gh api` if the owner prefers. Done when both pending publishers are listed and
+both environments exist.
 
 ### Stage 1: abi3 or one wheel per interpreter, measured
 
@@ -131,7 +149,8 @@ Done when the decision is merged and recorded with its numbers.
 ### Stage 2: multi-platform build and test on every push and PR
 
 Restructure the crate CI into a reusable workflow (`build-test.yml`, `on: workflow_call`), called
-by `ci.yml` (push and PR to `main`) and later by `release.yml` (tags).
+by `ci.yml` (push and PR to `main`) and later by `release.yml` (tags). Today's glibc and musl jobs
+(dev builds, both architectures) become the Linux rows below: the same tests, run on wheels.
 
 1. **Lint** (one Linux job, as now): rustfmt, clippy, ruff, pyright.
 2. **Build** (matrix, `PyO3/maturin-action` pinned to the release that ships maturin 1.15.0, or
@@ -156,7 +175,8 @@ by `ci.yml` (push and PR to `main`) and later by `release.yml` (tags).
    interpreter if stage 1 chose per-interpreter wheels). This runs on the platform's own runner,
    or in an Alpine container for musl. Download the wheel, install it into a clean venv with
    `pytest numpy mypy`, and run `pytest tests/` and stubtest from outside the checkout. This is
-   the step that runs the aarch64 scalar fallback against the numpy references.
+   the step that runs each platform's kernels (and x86_64's scalar fallback, where a runner lacks
+   AVX2) against the numpy references.
 4. **sdist test** (Linux): `pip install` the sdist with rustup present, then run the tests. This
    proves the sdist builds with the pinned toolchain.
 5. **A package check**: `twine check --strict` over every wheel and the sdist. Also check that the
