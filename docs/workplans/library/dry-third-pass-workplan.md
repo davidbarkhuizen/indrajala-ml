@@ -1,7 +1,7 @@
 # Workplan: remove duplicated code, third pass (DRY, 2026-10-30)
 
 **Status: in progress; decisions D1-D10 settled (2026-10-30, delegated to Claude by the owner's
-standing rule). Stages 1-5 done; stages 6-8 open.**
+standing rule). Stages 1-6 done; stages 7-8 open.**
 
 The first two passes (`git show e066333:docs/dry-workplan.md`, #506-#515; `git show
 88e1815:docs/dry-rerun-workplan.md`, #550-#557) and the rerun after multi-head attention
@@ -240,7 +240,13 @@ deleted. No stage gets an A/B (D2).
   Tests collected in the changed files before and after: 185 (studies and window-recurrent), 390
   (prepared dataset), 371 (batch norm).
 
-### Stage 6: the per-implementation network scenarios (finding 16, D10)
+### Stage 6: the per-implementation network scenarios (finding 16, D10) (done)
+
+- `tests/model/networks/test_sequence_network.py` runs learn against a batch of one (the
+  sequence, rotary and attention-dropout models) and the rotary and dropout save round trip once
+  each, on conftest's `implementation` fixture: 15 copies removed, 613 tests collected in the ten
+  files before and after. The sequence save tests stay in each file: each checks its own class
+  and file fields.
 
 ### Stage 7: the crate's test helpers (finding 11, D10)
 
