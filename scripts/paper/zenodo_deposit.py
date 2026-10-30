@@ -9,14 +9,15 @@ file bucket are kept in DIR's `zenodo.json`, so each command resumes the same dr
 
 `zenodo_deposit.py reserve DIR` creates a draft with a pre-reserved DOI and prints the DOI, to be
 filled into the README, the paper and the letters before the upload. `zenodo_deposit.py metadata DIR`
-sets the draft's metadata from docs/datapack/zenodo-metadata.json. `zenodo_deposit.py upload DIR`
+sets the draft's metadata from `--metadata FILE`, by default indrajala-research's
+docs/datapack/zenodo-metadata.json in the sibling clone (the datapack's; the preprint's is beside it). `zenodo_deposit.py upload DIR`
 uploads every file at DIR's top level (but `zenodo.json`; `datapack.py split` leaves the large
 archives in parts there, the wholes in `whole/`), `--connections` at once, the largest first,
 skipping those already there with the same MD5, and checks each against the checksum Zenodo reports. `zenodo_deposit.py status DIR` compares the
 draft's files with DIR's.
 
 `zenodo_deposit.py edit DIR [--dry-run]` changes a published record's metadata, no new version (its DOI
-and files stay): it lists the fields of zenodo-metadata.json that differ from the record's, then
+and files stay): it lists the fields of the metadata file that differ from the record's, then
 unlocks the record for editing and sets them; the owner reviews the edit and presses Publish (or
 Discard). With `--dry-run` it only lists them.
 """
@@ -33,7 +34,8 @@ from pathlib import Path
 from typing import Any
 
 API = "https://zenodo.org/api"
-METADATA = Path(__file__).resolve().parents[2] / "docs" / "datapack" / "zenodo-metadata.json"
+# the datapack record's metadata, kept with the paper in the sibling indrajala-research clone
+METADATA = Path(__file__).resolve().parents[3] / "indrajala-research" / "docs" / "datapack" / "zenodo-metadata.json"
 
 
 def request(method: str, url: str, token: str, body: Any = None, data: Any = None, size: int | None = None) -> Any:
@@ -80,10 +82,11 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--token-file", type=Path, default=Path.home() / ".zenodo-token")
     parser.add_argument("--connections", type=int, default=12, help="files uploaded at once")
+    parser.add_argument("--metadata", type=Path, default=METADATA, help="the record's metadata (metadata, edit)")
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("reserve", "metadata", "upload", "status"):
         commands.add_parser(name).add_argument("dir", type=Path)
-    edit = commands.add_parser("edit", help="a published record's metadata from zenodo-metadata.json; never publishes")
+    edit = commands.add_parser("edit", help="a published record's metadata from --metadata; never publishes")
     edit.add_argument("dir", type=Path)
     edit.add_argument("--dry-run", action="store_true", help="only list the fields that would change")
     args = parser.parse_args(argv)
@@ -105,16 +108,16 @@ def main(argv: list[str]) -> int:
         return 0
     draft = state(out)
     if args.command == "metadata":
-        metadata = json.loads(METADATA.read_text()) | {"prereserve_doi": True}
+        metadata = json.loads(args.metadata.read_text()) | {"prereserve_doi": True}
         if "[RELEASE TAG]" in json.dumps(metadata):
-            raise SystemExit(f"{METADATA}: fill [RELEASE TAG] first")
+            raise SystemExit(f"{args.metadata}: fill [RELEASE TAG] first")
         request("PUT", f"{API}/deposit/depositions/{draft['id']}", token, body={"metadata": metadata})
         print(f"draft {draft['id']}: metadata set; review it at {draft['html']}")
         return 0
     if args.command == "edit":
         url = f"{API}/deposit/depositions/{draft['id']}"
         record = request("GET", url, token)
-        current, wanted = record["metadata"], json.loads(METADATA.read_text())
+        current, wanted = record["metadata"], json.loads(args.metadata.read_text())
         changed = sorted(key for key in wanted if current.get(key) != wanted[key])
         print(f"record {draft['id']} ({record['state']}): {', '.join(changed) or 'nothing'} differs")
         if args.dry_run or not changed:
