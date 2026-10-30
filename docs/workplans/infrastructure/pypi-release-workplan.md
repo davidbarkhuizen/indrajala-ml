@@ -55,7 +55,7 @@ own platform.
 
 ## Decisions
 
-- **PyPI only, not crates.io.** A cdylib-only crate is of no use to another Rust crate.
+- **PyPI only in this plan, not crates.io.** A cdylib-only crate is of no use to another Rust crate; crates.io waits for a later workplan (After this plan).
 - **Trusted publishing** (OIDC from GitHub Actions) with `pypa/gh-action-pypi-publish`, so there
   are no API tokens. It also generates PEP 740 attestations. Each index gets its own GitHub
   environment (`testpypi`, `pypi`), and `pypi` requires a reviewer.
@@ -264,10 +264,15 @@ Done when `pip install indrajala-math-rust` works on every shipped platform and 
 - A **benchmark wheel matrix**: time the published wheels on each platform's runner. Only for a
   clear question, since GitHub runner timings are noise-dominated.
 - Later releases follow the Releasing section and need no plan.
+- **The crate on crates.io too, if feasible** (the owner, 2026-10-30): a separate, later workplan.
+  Today's crate is a cdylib of pyo3 bindings, of no use to another Rust crate; publishing it would
+  first split it into a pure-Rust library crate (the kernels, `rlib`, no pyo3) and the Python
+  bindings over it. That workplan settles whether the split is worth it (the bit-identity and
+  timing checks it needs, the API a Rust user would get) before anything is published.
 
 ## Out of scope
 
-- crates.io (a cdylib is of no use there).
+- crates.io (a cdylib is of no use there; a later workplan, above).
 - Linux i686, armv7, ppc64le and s390x, and any platform without a native GitHub runner to test on.
 - Making indrajala-ml depend on the PyPI package, or publishing indrajala-ml itself.
 - Any kernel change. Stages 1-2 time the build changes but don't optimize.
