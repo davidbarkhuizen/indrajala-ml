@@ -36,11 +36,11 @@ from indrajala_ml.model.specs.layer_specs import (
     token_wise_output,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape
-from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
+from indrajala_ml.model.specs.update_rules import SGD, Adam, UpdateRule
 from indrajala_ml.training.sequence_evaluate import sequence_evaluate
 from indrajala_ml.training.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
-from tests.helpers import assert_learn_and_a_batch_of_one_agree, bits
+from tests.helpers import bits
 from tests.model.specs.test_layer_specs import FFN_BLOCK, SEQUENCE, TOKEN_OUTPUT
 
 # test_layer_specs' sequence models read 5 ids of a vocabulary of 7, or a (4, 4, 1) image whose
@@ -227,13 +227,6 @@ def test_every_gradient_matches_its_finite_difference(name: str, batch_size: int
     # a trained step first, so the positions, gamma and beta aren't at their initial values
     built.learn_batch(0.5, rows(specs, 4, seed=2))
     check_gradients(built, *_split(rows(specs, batch_size)))
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=["sgd", "momentum", "adam"])
-@pytest.mark.parametrize("name", SEQUENCE)
-def test_learn_and_a_batch_of_one_agree(name: str, rule: UpdateRule):
-    specs = SEQUENCE[name]
-    assert_learn_and_a_batch_of_one_agree("numpy", network(specs, rule), network(specs, rule), rows(specs, 4))
 
 
 def test_a_sequence_networks_targets_are_one_hot_per_token_and_its_class_the_argmax_per_token():

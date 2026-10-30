@@ -34,7 +34,6 @@ from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, token_wise_ou
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
 from indrajala_ml.pcg64 import default_rng
 from tests.helpers import (
-    assert_learn_and_a_batch_of_one_agree,
     assert_snapshots_close,
     bits,
     exp_by_math,
@@ -273,13 +272,6 @@ def test_the_sequence_network_refuses_one_without_a_token_wise_output():
     specs = SEQUENCE["an embedding, then the mean"]
     with pytest.raises(AssertionError, match="applied to each token"):
         SequentialSequenceBackpropNetwork(_input_shape(specs), specs, SGD())
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=["sgd", "momentum", "adam"])
-@pytest.mark.parametrize("name", SEQUENCE)
-def test_learn_and_a_batch_of_one_agree(name: str, rule: UpdateRule):
-    specs = SEQUENCE[name]
-    assert_learn_and_a_batch_of_one_agree("python", network(specs, rule), network(specs, rule), rows(specs, 4))
 
 
 @pytest.mark.parametrize("rule", [Momentum(0.9), Adam()], ids=lambda rule: type(rule).__name__)

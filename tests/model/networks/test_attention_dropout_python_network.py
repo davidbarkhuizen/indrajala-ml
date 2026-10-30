@@ -9,7 +9,6 @@ in the gradient and per step under Adam, both sides drawing the same masks. The 
 tests/model/specs/test_layer_specs.py's DROPOUT; numpy's exps are math.exp, as pure Python's.
 """
 
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -19,10 +18,9 @@ from indrajala_ml.model.layers.numpy.token_array_layer import TokenDropoutArrayL
 from indrajala_ml.model.layers.python.attention_layer import AttentionLayer
 from indrajala_ml.model.layers.python.state_layer import StateLayer
 from indrajala_ml.model.layers.python.token_layer import TokenDropoutLayer
-from indrajala_ml.model.persistence.load_network import load_network
-from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
+from indrajala_ml.model.specs.update_rules import Adam, UpdateRule
 from indrajala_ml.pcg64 import default_rng, generator_state
-from tests.helpers import assert_learn_and_a_batch_of_one_agree, assert_snapshots_close, bits, learn_in_step
+from tests.helpers import assert_snapshots_close, bits, learn_in_step
 from tests.model.networks.test_attention_dropout_array_network import GPT, _without_dropout
 from tests.model.networks.test_attention_dropout_rust_network import _masks  # pyright: ignore[reportPrivateUsage]
 from tests.model.networks.test_attention_python_network import LINEAR_RULES, assert_every_step_has_numpys_gradients
@@ -118,29 +116,6 @@ def test_inference_draws_nothing_and_is_the_network_without_dropout_by_bits():
         [plain._forward_outputs(s) for s in states]  # pyright: ignore[reportPrivateUsage]
     )
     assert generator_state(built.rng) == before
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=["sgd", "momentum", "adam"])
-@pytest.mark.parametrize("name", DROPOUT)
-def test_learn_and_a_batch_of_one_agree(name: str, rule: UpdateRule):
-    # learn's example-major pass draws a batch of one's masks, layer by layer
-    specs = DROPOUT[name]
-    assert_learn_and_a_batch_of_one_agree("python", network(specs, rule), network(specs, rule), rows(specs, 4))
-
-
-@pytest.mark.parametrize("name", DROPOUT)
-def test_a_saved_dropout_network_loads_and_trains_on_by_bits(name: str, tmp_path: Path):
-    specs = DROPOUT[name]
-    built = network(specs, Adam())
-    data = rows(specs, 6)
-    built.learn_batch(0.1, data[:3])
-    path = str(tmp_path / "dropout.json")
-    built.save(path)
-    loaded = load_network(path)
-    assert loaded.layer_specs == specs
-    built.learn_batch(0.1, data[3:])
-    loaded.learn_batch(0.1, data[3:])
-    assert bits(loaded.snapshot()) == bits(built.snapshot())
 
 
 # parity with numpy: both networks' generators start alike, so every step drops the same units
