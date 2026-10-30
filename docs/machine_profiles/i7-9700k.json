@@ -94,7 +94,9 @@
         }
       },
       "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
-      "crate_release_profile": "default",
+      "crate_release_profile": {
+        "codegen-units": 1
+      },
       "thread_env": {
         "OPENBLAS_NUM_THREADS": null,
         "OMP_NUM_THREADS": null,
@@ -104,26 +106,26 @@
     }
   },
   "state": {
-    "captured_at": "2026-10-08T06:21:06Z",
+    "captured_at": "2026-10-30T14:04:25Z",
     "hostname": "jebel",
     "load_average": [
-      3.3,
-      5.86,
-      3.74
+      0.08,
+      0.08,
+      0.04
     ],
-    "memory_available_mib": 29283,
+    "memory_available_mib": 30163,
     "cpu_mhz_now": {
-      "min": 800,
-      "max": 4793
+      "min": 4498,
+      "max": 4598
     },
     "power": {
       "on_ac": null,
       "battery_percent": null
     },
     "commits": {
-      "repo": "c6f7e0993d26dc9bedb6f9b72450fb17972b7d1c",
+      "repo": "70afb41a887451be8ba8e7b568174caf87635b81",
       "repo_dirty": false,
-      "rust": "66ecc0de6fd2419d5ee886ee20d18406edcf61c4"
+      "rust": "47705031b65677b886f2d140ee54a3ccc9240192"
     }
   },
   "noise_rules": {
