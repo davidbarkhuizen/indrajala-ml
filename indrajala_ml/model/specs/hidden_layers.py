@@ -7,7 +7,9 @@ bases, so they replace a base's sigmoid formulas; a method it writes itself repl
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NoReturn
+
+from indrajala_ml.model.specs.single_example import refuse_single_example
 
 
 class Hidden[A]:
@@ -34,6 +36,20 @@ class DeltaIsDownstream[A]:
 
     def compute_hidden_delta_batch(self, next_layer: Any) -> None:
         self.delta_batch = next_layer.downstream_batch()
+
+
+class BatchOnly[A]:
+    """
+    A layer that trains on batches only (batch norm and the linear layer before it: the batch-norm
+    workplan, D4), so it refuses a one-example step's delta and downstream (the DRY third pass
+    workplan, D8).
+    """
+
+    def compute_hidden_delta(self, next_layer: Any) -> NoReturn:
+        refuse_single_example(self)
+
+    def downstream(self) -> NoReturn:
+        refuse_single_example(self)
 
 
 class ParameterFree[A]:

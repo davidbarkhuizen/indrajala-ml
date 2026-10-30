@@ -154,6 +154,43 @@ def set_commitments(factors: Sequence[Any], commitments: Sequence[float]) -> Non
             factor.codes.commitment = float(commitment)
 
 
+class RecurrenceSchedule:
+    """
+    The training schedule's setters a recurrence layer shares on either backend (the DRY third pass
+    workplan, D7): each factor's temperature, continuous flag and coupling, checked against its
+    factor parts, from the next training step on. set_commitments and set_straight stay each
+    backend's, which does its own work after the shared check.
+    """
+
+    factors: Sequence[Any]
+    temperatures: list[float | None]
+    continuous: list[bool]
+    couplings: list[float]
+
+    def set_temperatures(self, temperatures: Sequence[float | None]) -> None:
+        """Each factor's codes' temperature in training from the next step on (None: hard)."""
+        check_temperatures(self.factors, temperatures)
+        self.temperatures = list(temperatures)
+
+    def set_continuous(self, continuous: Sequence[bool]) -> None:
+        """
+        Each snapped factor run unsnapped from the next training step on, its cell's output passed on
+        and its codes unread (the state formation workplan's warm-up, D4); in inference too when
+        `reading` (the screen). The initial state stays snapped (D11).
+        """
+        check_continuous(self.factors, continuous, self.temperatures)
+        self.continuous = list(continuous)
+
+    def set_couplings(self, couplings: Sequence[float]) -> None:
+        """
+        Each factor's next state `(1 - l) h + l q` from the next training step on (the state formation
+        workplan's gradual handover, D25: 1, its code; 0, its cell's output, its codes still learning
+        from it); in inference too when `reading` (the screen). The initial state stays snapped.
+        """
+        check_couplings(self.factors, couplings, self.continuous)
+        self.couplings = list(couplings)
+
+
 def commitment_targets(consolidation: Consolidation, indices: Sequence[Sequence[int]]) -> list[list[int]] | None:
     """
     Each factor's commitment target, a code index per example, after a snap to indices (each

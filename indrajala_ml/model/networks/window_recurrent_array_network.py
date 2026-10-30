@@ -41,7 +41,7 @@ from __future__ import annotations
 
 from collections.abc import Generator, Iterator, Sequence
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Self, cast
+from typing import Any, ClassVar, NamedTuple, Self, cast
 
 import indrajala_math_rust as pa
 import numpy as np
@@ -60,6 +60,7 @@ from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArra
 from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT, NetworkFile
 from indrajala_ml.model.protocols.array_protocols import BackendArray, TrainedArrayLayer
+from indrajala_ml.model.specs.array_network_shapes import TokenWiseOutput
 from indrajala_ml.model.specs.bounds import validate_class_count
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, factor_reads
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
@@ -72,17 +73,6 @@ from indrajala_ml.model.specs.window_recurrence import (
     validate_consolidation,
 )
 from indrajala_ml.pcg64 import generator_state, set_generator_state
-
-if TYPE_CHECKING:
-    from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
-
-    # the mixin subclasses ArrayNetworkBase for the type checker only, as array_network_shapes.py's
-    # do, so the registry walks over ArrayNetworkBase's subclasses find the two networks, not it
-    _ShapeBase = ArrayNetworkBase
-else:
-
-    class _ShapeBase[A]:
-        pass
 
 
 class _Parts(NamedTuple):
@@ -154,7 +144,7 @@ def _summed(pooled: Any, readers: Sequence[int]) -> Any:
     return total
 
 
-class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
+class WindowRecurrentShape[A: BackendArray](TokenWiseOutput[A]):
     """
     The module's network over ArrayNetworkBase, for either backend: its window's layers
     (self.layers) and its own parts (self.parts). A mixin, listed before the backend's base.
@@ -400,22 +390,7 @@ class WindowRecurrentShape[A: BackendArray](_ShapeBase[A]):
                 self.backend.row_range(states, start, min(start + CLASSIFY_CHUNK_ROWS, len(prepared)))
             )
 
-    # the shape's hooks: a digit per column, as a sequence network's per token
-
-    def predict_probabilities(self, state: tuple[float, ...]) -> list[list[float]]:
-        """Each column's digit probabilities."""
-        values = self._forward(state).tolist()
-        width = self.class_count
-        return [values[i : i + width] for i in range(0, len(values), width)]
-
-    def classify_state(self, state: tuple[float, ...]) -> tuple[int, ...]:
-        return self._classify_output(self._forward(state))
-
-    def _classify_output(self, output: A) -> tuple[int, ...]:
-        return self._classify_output_batch(self.backend.matrix([output.tolist()]))[0]
-
-    def _classify_output_batch(self, output_batch: A) -> list[tuple[int, ...]]:
-        return self.backend.argmax_token_rows(output_batch, self.class_count)
+    # the shape's hooks: a digit per column (TokenWiseOutput's predictions, as a sequence network's per token)
 
     def _target_batch_array(self, categories: Sequence[Sequence[int]]) -> A:
         columns = len(categories[0])

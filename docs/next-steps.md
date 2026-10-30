@@ -538,9 +538,6 @@ Not planned yet:
   every implementation runs takes conftest's `implementation` fixture (`tests/model/networks/test_{attention,residual,layer_norm}_network.py`). A new layer
   kind extends these rather than adding a copy. A study takes its cached MNIST
   loading, mean ± sd cells and Markdown tables from `indrajala_ml/studies/common.py`.
-- **The linear, conv and batch-norm layers' own output-delta refusals** (the rerun's stage 1).
-  They are hand-written, with their own messages, rather than taken from `Hidden`; they were not
-  in the rerun's findings. Move them onto the mixin when one of those layers is next touched.
 - **The builders' wiring loop** (the rerun's D6). The fork, add and body-first loop is the same in
   `python_layer_builder.py` and `array_layer_builder.py`; sharing it needs callbacks for the fork
   and the add, more indirection than its 12 lines are worth. Revisit if another layer kind that

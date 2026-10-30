@@ -9,10 +9,11 @@ import indrajala_math_rust as pa
 from indrajala_ml.model.layers.array.array_parameters import GammaAndBeta, RunningAverages
 from indrajala_ml.model.layers.rust.residual_rust_array_layer import ForkRustArrayLayer
 from indrajala_ml.model.layers.rust.rust_array_layer import before_layer_norm
+from indrajala_ml.model.specs.hidden_layers import BatchOnly, Hidden
 from indrajala_ml.model.specs.single_example import ghost_groups, refuse_single_example
 
 
-class BatchNormRustArrayLayer(GammaAndBeta[pa.Array], RunningAverages[pa.Array]):
+class BatchNormRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], GammaAndBeta[pa.Array], RunningAverages[pa.Array]):
     """
     BatchNormArrayLayer on the Rust backend, each method one Rust call (the crate's batch_norm.rs),
     which computes the README's expressions (Batch normalization) as the numpy layer does: given
@@ -116,15 +117,6 @@ class BatchNormRustArrayLayer(GammaAndBeta[pa.Array], RunningAverages[pa.Array])
         )
         return self.A
 
-    def compute_output_delta(self, reference: pa.Array) -> None:
-        raise NotImplementedError("a batch-norm layer is hidden")
-
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
-        raise NotImplementedError("a batch-norm layer is hidden")
-
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        refuse_single_example(self)
-
     def compute_hidden_delta_batch(self, next_layer: Any) -> None:
         # dl/dy: the downstream times the activation's derivative
         assert self._was_training, "the backward pass needs a training forward pass's batch statistics"
@@ -140,9 +132,6 @@ class BatchNormRustArrayLayer(GammaAndBeta[pa.Array], RunningAverages[pa.Array])
             self.delta_batch = pa.layer_hidden_delta_batch(next_layer.W, next_layer.delta_batch, self.A)
         else:
             self.delta_batch = pa.array_relu_mask(next_layer.downstream_batch(), self.A)
-
-    def downstream(self) -> pa.Array:
-        refuse_single_example(self)
 
     def downstream_batch(self) -> pa.Array:
         # dl/dx, the linear layer's delta: the paper's § 3 chain rule, term by term

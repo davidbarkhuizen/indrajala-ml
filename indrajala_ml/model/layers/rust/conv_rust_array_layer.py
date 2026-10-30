@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar
+from typing import ClassVar
 
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.array.array_parameters import WeightAndBias
 from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer
+from indrajala_ml.model.specs.hidden_layers import BatchOnly, DeltaIsDownstream, Hidden
 from indrajala_ml.model.specs.single_example import refuse_single_example
 from indrajala_ml.model.specs.window_geometry import validate_conv_arguments
 
@@ -126,7 +127,7 @@ class ConvRustArrayLayer(WeightAndBias[pa.Array], ConvGeometryRustArrayLayer):
         self.grad_b = pa.Array.zeros(self.channel_count)
 
 
-class LinearConvRustArrayLayer(ConvGeometryRustArrayLayer):
+class LinearConvRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], DeltaIsDownstream[pa.Array], ConvGeometryRustArrayLayer):
     """
     LinearConvArrayLayer on the Rust backend: ConvRustArrayLayer's products without the bias and
     the ReLU, before a batch-norm layer, each method one call (conv.rs's conv_linear_*). Its delta
@@ -152,21 +153,6 @@ class LinearConvRustArrayLayer(ConvGeometryRustArrayLayer):
         # classify_state's single-example forward pass
         self.a, self._cols = pa.conv_linear_forward_batch(self.W, x, self.geometry)
         return self.a
-
-    def compute_output_delta(self, reference: pa.Array) -> None:
-        raise NotImplementedError("a linear conv layer is hidden, before a batch-norm layer")
-
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
-        raise NotImplementedError("a linear conv layer is hidden, before a batch-norm layer")
-
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        refuse_single_example(self)
-
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self.delta_batch = next_layer.downstream_batch()
-
-    def downstream(self) -> pa.Array:
-        refuse_single_example(self)
 
     def accumulate_gradient(self, input_activation: pa.Array) -> None:
         refuse_single_example(self)
