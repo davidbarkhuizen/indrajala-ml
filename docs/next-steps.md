@@ -103,8 +103,15 @@ threaded call costs, measured for the multithreading work (D3). Read it with `gi
   aliasing rows, is the candidate; the measured kernels are on the crate's `avx2-transpose` branch.
 - **The multithreading work** takes stage 3's findings: a thread costs about 10 µs on jebel and 19
   on `litshe` per call; a pool would open the threading threshold (8M flops) to the b32 products.
-- **The one-thread kernel's 16-18% gap to OpenBLAS on `litshe`:** not explained; `perf` there needs
-  `linux-tools-raspi` and `kernel.perf_event_paranoid` lowered (the owner's step).
+- **The one-thread kernel's 16-18% gap to OpenBLAS on `litshe`: backend stalls.** `perf stat`
+  (2026-10-30; `perf` installed, `perf_event_paranoid` 1), `(32, 30) @ (30, 784)` 20,500 times on one
+  thread: crate 6.41G cycles, 13.39G instructions (IPC 2.09), 2.02G backend-stall cycles, 29M cache
+  misses; numpy 5.62G, 13.17G (IPC 2.34), 1.21G, 126M. The same instructions and fewer misses: the
+  whole gap (+0.79G cycles) is backend stalls (+0.82G), the kernel waiting on its own FMA chains
+  (each output a serial chain over `k` = 30, the bit-identical order). Narrowing it keeps the order
+  and puts more independent outputs in flight per tile (the old plan timed seven tile shapes at
+  b32, none faster; at narrow `k` a wider tile is the candidate). For the kernel work beside the
+  multithreading.
 - **`litshe`'s placement isn't pinned** (D7): aligning loops and functions held its kernels still but
   cost short loops 7-16%, so its A/Bs are read with `scripts/measurement/kernel_code_diff.py` (a row
   whose function's instructions didn't change moved with placement). A cheaper pin (loops at 32
