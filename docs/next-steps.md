@@ -82,7 +82,7 @@ candidate optimizations) were retired the same way: `git show 0a04977:docs/optim
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention, The sequence task, Dropout among the
 tokens, Rotary positions, The addition study), [measurement.md](measurement.md)
-and [rng-audit.md](audits/rng-audit.md). The batch-size studies' findings are in
+and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/studies/residual_depth_study.py`'s, the patch-attention study's in
 `scripts/studies/patch_attention_study.py`'s, the multi-head attention study's in
@@ -608,7 +608,7 @@ Not planned yet:
 ## From the RNG draw order
 
 From one seed, every pure-Python network with an array twin now builds numpy's weights and draws
-numpy's dropout masks by bits ([rng-audit.md](audits/rng-audit.md)), and the parity tests seed both
+numpy's dropout masks by bits ([rng-audit.md](rng-audit.md)), and the parity tests seed both
 sides. Left over:
 
 - **The bounds-width networks' draws** (D1 (c)): `BackpropClassifierNetwork`'s presets and

@@ -101,7 +101,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
 | `scripts/data/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
 | `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention, multi-head attention and sequence studies and the refactoring golden run; see `docs/measurement.md` |
-| `docs/` | the measurement guide, working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open workplans, `docs/audits/` the RNG audit and the dated reviews. The research notes and the research protocols (experiment design, feasibility checklist) are in [indrajala-research](https://github.com/davidbarkhuizen/indrajala-research)'s `docs/` |
+| `docs/` | the measurement guide, working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open workplans, `docs/rng-audit.md` the RNG audit. The research notes, the research protocols (experiment design, feasibility checklist) and the dated reviews are in [indrajala-research](https://github.com/davidbarkhuizen/indrajala-research) |
 
 ## Models
 
@@ -207,7 +207,7 @@ hand-computed examples, and the reference the array implementations are checked 
 never used for performance (speed/timing) measurement; only the numpy and Rust implementations
 are timed. Accuracy comparisons of pure-Python models are fine. From one seed, every pure-Python
 network with an array twin starts with numpy's and Rust's weights and draws their dropout masks,
-by bits (`tests/model/networks/test_seeded_init_parity.py`; [docs/audits/rng-audit.md](docs/audits/rng-audit.md)),
+by bits (`tests/model/networks/test_seeded_init_parity.py`; [docs/rng-audit.md](docs/rng-audit.md)),
 so a parity test seeds all sides alike.
 
 ## Saving and loading
@@ -970,7 +970,7 @@ test passing, and:
   masking, all done.
 - [docs/next-steps.md](docs/next-steps.md): the work left over from completed workplans, and how
   to read those workplans in git history.
-- [docs/audits/rng-audit.md](docs/audits/rng-audit.md): the random number generators in use, how the crate's
+- [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's
   reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and the open RNG work.
 
 ## License

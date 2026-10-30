@@ -4,7 +4,7 @@ The random number generators this project uses: how the Rust crate's generator
 (`rust/src/random.rs`) reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and
 what is still open. The crate also has a PCG64 `Generator` (`rust/src/generator.rs`) that
 reproduces numpy's `default_rng` bit for bit, which the Rust networks draw from (the RNG generators
-workplan, retired: [next-steps.md](../next-steps.md)). The measurements and checks come from these
+workplan, retired: [next-steps.md](next-steps.md)). The measurements and checks come from these
 harnesses:
 
 - `rust/tests/test_random_numpy_parity.py`: the crate against `np.random`, bit for bit. It covers
@@ -56,7 +56,7 @@ so a stopped run resumes by bits. Stage 7 also deleted `seed_everything` and `ba
 crate keeps its MT19937 module functions (`pa.seed`, `pa.random`, `pa.uniform`), mirroring
 `np.random` (D7), and nothing in `indrajala_ml` calls them.
 
-Since the RNG draw-order workplan (retired: [next-steps.md](../next-steps.md)), pure Python draws
+Since the RNG draw-order workplan (retired: [next-steps.md](next-steps.md)), pure Python draws
 in numpy's order too. A layer draws its whole weight matrix row by row, then its biases
 (`fan_in_aware_weights_and_biases`), and an attention layer draws each projection that way, `q, k,
 v, o` in turn. A network with dropout trains layer-major, so each dropout layer draws its batch's
@@ -204,7 +204,7 @@ the crate's parity tests and every test shard on Linux arm64 as well (the
 aarch64 workplan's multi-platform CI, retired: `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md`), and `litshe` (aarch64)
 holds bit parity, so a contracting numpy build on arm64 would show there; macOS is still
 unchecked (the PyPI plan's stage 2,
-[pypi-release-workplan.md](../workplans/infrastructure/pypi-release-workplan.md)). If a numpy build contracts,
+[pypi-release-workplan.md](workplans/infrastructure/pypi-release-workplan.md)). If a numpy build contracts,
 record it and decide then. Don't pre-emptively add `mul_add`.
 
 ### `[low, high)` is not strictly guaranteed (informational)
