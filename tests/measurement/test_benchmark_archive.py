@@ -5,6 +5,7 @@ the archive's clone (no remote, so a batch branches from HEAD), with no network.
 
 import gzip
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +17,8 @@ from indrajala_ml.measurement import benchmark_archive
 
 REPO = Path(__file__).resolve().parent.parent.parent
 I7 = REPO / "docs/machine_profiles/i7-9700k.json"
+# its archived snapshot's stamp, from its capture time, so a re-recorded profile needs no edit here
+I7_STAMP = re.sub(r"[-:]", "", json.loads(I7.read_text())["state"]["captured_at"])
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -56,13 +59,13 @@ def test_index_lines_go_newest_first_new_before_old_on_a_date(archive: Path) -> 
 
 
 def test_a_profile_is_snapshotted_once_and_an_edited_one_takes_the_next_name(archive: Path, tmp_path: Path) -> None:
-    assert benchmark_archive.add_profile(archive, I7) == ("machines/jebel/20261008T062106Z-profile.json", True)
-    assert benchmark_archive.add_profile(archive, I7) == ("machines/jebel/20261008T062106Z-profile.json", False)
+    assert benchmark_archive.add_profile(archive, I7) == (f"machines/jebel/{I7_STAMP}-profile.json", True)
+    assert benchmark_archive.add_profile(archive, I7) == (f"machines/jebel/{I7_STAMP}-profile.json", False)
     edited = json.loads(I7.read_text())
     edited["noise_rules"]["shifted_pass"] = 0.03
     (tmp_path / "edited.json").write_text(json.dumps(edited))
     assert benchmark_archive.add_profile(archive, tmp_path / "edited.json") == (
-        "machines/jebel/20261008T062106Z-2-profile.json",
+        f"machines/jebel/{I7_STAMP}-2-profile.json",
         True,
     )
 
@@ -103,7 +106,7 @@ def test_golden_versions_name_what_was_added_and_refuse_a_moved_entry_as_new_fun
     assert paths == [
         f"golden/jebel/2026-10-07-{commit7}.json.gz",
         f"golden/jebel/2026-10-07-{commit7}.md",
-        "machines/jebel/20261008T062106Z-profile.json",
+        f"machines/jebel/{I7_STAMP}-profile.json",
     ]
     assert summary.endswith("the first version on jebel, 1 entries")
     assert lines[0].startswith(f"- 2026-10-07 · jebel · golden · [2026-10-07-{commit7}.json.gz]")
@@ -200,7 +203,7 @@ def test_golden_script_archives_onto_a_new_branch_without_training(archive: Path
                 f"golden/jebel/2026-10-07-{_git(REPO, 'rev-parse', '--short=7', 'HEAD')}{s}"
                 for s in (".json.gz", ".md")
             ),
-            "machines/jebel/20261008T062106Z-profile.json",
+            f"machines/jebel/{I7_STAMP}-profile.json",
             "INDEX.md",
         ]
     )

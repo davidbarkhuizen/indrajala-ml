@@ -8,6 +8,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -791,6 +792,8 @@ def test_a_host_without_a_profile_is_refused(
 
 RYZEN = REPO / "docs/machine_profiles/ryzen7-3700u.json"
 I7 = REPO / "docs/machine_profiles/i7-9700k.json"
+# its archived snapshot's stamp, from its capture time, so a re-recorded profile needs no edit here
+I7_STAMP = re.sub(r"[-:]", "", json.loads(I7.read_text())["state"]["captured_at"])
 
 
 @pytest.fixture
@@ -913,7 +916,7 @@ def test_archive_cites_the_profile_a_run_checked_and_refuses_one_re_recorded_sin
     assert "names its own profile: archive it without --profile" in capsys.readouterr().err
     assert _archive(archive_clone, str(run)) == 0
     record = json.loads((archive_clone / "runs/jebel/2026-09-29-pr480/record.json").read_text())
-    assert (record["profile"], record["profile_source"]) == ("machines/jebel/20261008T062106Z-profile.json", "checked")
+    assert (record["profile"], record["profile_source"]) == (f"machines/jebel/{I7_STAMP}-profile.json", "checked")
 
     assert _archive(archive_clone, str(_checked_run(tmp_path / "b", "0" * 64))) == 1
     assert "i7-9700k.json was re-recorded with another identity since the run" in capsys.readouterr().err
