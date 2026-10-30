@@ -33,7 +33,7 @@ recurrence.
 
 Before step 7, a fix, not a primitive: pure Python's random draws in numpy's order, so that all
 three implementations start, and drop out, alike from one seed; done (2026-10-10, #649-#652;
-[rng-audit.md](audits/rng-audit.md)). Step 7's attention dropout then tests its masks in all three by
+[rng-audit.md](rng-audit.md)). Step 7's attention dropout then tests its masks in all three by
 bits.
 
 7. **Dropout in attention**: done (2026-10-11), on the attention weights and token-wise, for the
