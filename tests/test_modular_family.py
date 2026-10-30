@@ -2663,3 +2663,49 @@ def test_long_summary_counts_every_run_and_names_a_failing_one(tmp_path: Path):
         "token-2: 18 of 20 passed (U1@128 1, U1@256 1), 2 failures listed, sha256 token-200000",
         "all: 38 of 40 passed; networks with a failure: token-2",
     ]
+
+
+@dataclasses.dataclass(frozen=True)
+class _Profile:
+    """A continuous profile's flags, as the identity reads them."""
+
+    pace: bool = True
+    smooth: bool = False
+    reheat: bool = True
+    slowing: bool = False
+    incremental: bool = True
+
+
+_PLAIN: dict[str, Any] = {
+    "encoding": mf.target_named("random-3-0"), "factors": ((3, 3),), "seed": 7, "budget_seconds": None, "out": Path("x"),
+    "settings": mf.PROBE, "cap": 5, "reads": "all", "budget_epochs": 100, "fork": None, "guard": False, "long_tail": None,
+    "consolidate": False, "restore_best": False, "commitment_from": None, "width": mf.wr.D, "branches": False,
+    "answer_branch": False, "thermostat": None, "keep_machine": False, "counterexamples": None, "anneal": None, "warm_up": None,
+    "whole": False, "crucible": False, "state_bound": None, "coupling_cap": 1.0, "continuous": None, "margin_wait": None,
+}  # fmt: skip
+_COMMON = {
+    "target_states": 6, "tokens": 4, "factors": [[3, 3]], "seed": 7, "settings": repr(mf.PROBE), "cap": 5,
+    "reads": "all", "budget_epochs": 100,
+}  # fmt: skip
+
+
+def test_a_runs_identity_names_its_defaults_alone_and_every_other_setting():
+    # the identity a checkpoint records, fixed: a resumed run compares it, so its keys and values never change
+    plain = mf.RunConfig(**_PLAIN)
+    assert plain.identity(1) == {**_COMMON, "fork": None, "guard": False}
+    changes: dict[str, Any] = {
+        "fork": "F", "guard": True, "long_tail": 3, "consolidate": True, "restore_best": True,
+        "commitment_from": 2, "width": 32, "branches": True, "answer_branch": True, "thermostat": "T",
+        "keep_machine": True, "counterexamples": 0.5, "anneal": "A", "warm_up": "W", "whole": True,
+        "crucible": True, "state_bound": 4, "coupling_cap": 0.5, "continuous": _Profile(), "margin_wait": 3,
+        "cutoff_epochs": 50, "baseline": "b", "recombine": True, "branch_heads": 2,
+    }  # fmt: skip
+    every = dataclasses.replace(plain, **changes)
+    assert every.identity(2) == {
+        **_COMMON, "fork": "'F'", "guard": True, "first": 2, "long_tail": 3, "consolidate": True,
+        "restore_best": True, "commitment_from": 2, "width": 32, "branches": True, "answer_branch": True,
+        "thermostat": "'T'", "keep_machine": True, "counterexamples": 0.5, "anneal": "'A'", "warm_up": "'W'",
+        "whole": True, "crucible": True, "state_bound": 4, "coupling_cap": 0.5, "continuous": repr(_Profile()),
+        "coupling_pace": True, "reheat": True, "incremental_reheat": True, "margin_wait": 3, "cutoff_epochs": 50,
+        "baseline": "b", "recombine": True, "branch_heads": 2,
+    }  # fmt: skip

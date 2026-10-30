@@ -38,7 +38,7 @@ import random
 import re
 import time
 from collections import Counter, defaultdict
-from collections.abc import Callable, Collection, Hashable, Mapping, Sequence
+from collections.abc import Callable, Collection, Hashable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from fractions import Fraction
 from pathlib import Path
@@ -1960,6 +1960,32 @@ class Anneal:
         return [c * max(level - self.tail, 0) / self.ramp for level, c in zip(levels, full, strict=True)]
 
 
+def _soft_assignments(
+    net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], temperatures: Sequence[float | None]
+) -> Iterator[tuple[int, list[tuple[int, float, np.ndarray, np.ndarray]]]]:
+    """
+    Every window's cell outputs over the rows given (lists of windows, one length each), a step at a
+    time: the step's window count and, for each soft factor g at its temperature t (one not at None),
+    (g, t, D, A), D each output's squared distances to the factor's codes and A the codes' softmax
+    weights at t before normalising (training's, shifted by each row's least distance). hardness,
+    sharpness and thermals read them (the DRY third pass workplan, D9).
+    """
+    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
+    for batch in rows:
+        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
+        for cell in cells[1:]:
+            H = np.array(cell.tolist(), dtype=float)
+            soft: list[tuple[int, float, np.ndarray, np.ndarray]] = []
+            for g, (factor, t) in enumerate(zip(net.recurrence_layer.factors, temperatures, strict=True)):
+                if t is None:
+                    continue
+                E = np.array(factor.codes.E.tolist(), dtype=float)
+                h = H[:, starts[g] : starts[g] + E.shape[1]]
+                D = np.sum((h[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
+                soft.append((g, t, D, np.exp(-(D - D.min(axis=1)[:, np.newaxis]) / t)))
+            yield len(H), soft
+
+
 def hardness(
     net: Any, rows: Sequence[Sequence[tuple[Any, Any]]], temperatures: Sequence[float | None], hard: float
 ) -> list[float | None]:
@@ -1968,22 +1994,12 @@ def hardness(
     length each), whose largest weight at its temperature (the codes' softmax, as training's) is above
     `hard`; None for a factor at None (annealing's test, D8: the network's own, never the target's).
     """
-    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
     above = [0] * len(temperatures)
     total = 0
-    for batch in rows:
-        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
-        for cell in cells[1:]:
-            H = np.array(cell.tolist(), dtype=float)
-            total += len(H)
-            for g, (factor, t) in enumerate(zip(net.recurrence_layer.factors, temperatures, strict=True)):
-                if t is None:
-                    continue
-                E = np.array(factor.codes.E.tolist(), dtype=float)
-                h = H[:, starts[g] : starts[g] + E.shape[1]]
-                D = np.sum((h[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
-                A = np.exp(-(D - D.min(axis=1)[:, np.newaxis]) / t)
-                above[g] += int(np.sum(A.max(axis=1) / A.sum(axis=1) > hard))
+    for windows, soft in _soft_assignments(net, rows, temperatures):
+        total += windows
+        for g, _, _, A in soft:
+            above[g] += int(np.sum(A.max(axis=1) / A.sum(axis=1) > hard))
     return [None if t is None else above[g] / max(total, 1) for g, t in enumerate(temperatures)]
 
 
@@ -1996,25 +2012,15 @@ def sharpness(
     as training's), and D8's share of them above `hard` (hardness's, read every epoch, D53); None for
     a factor at None.
     """
-    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
     largest = [0.0] * len(temperatures)
     above = [0] * len(temperatures)
     total = 0
-    for batch in rows:
-        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
-        for cell in cells[1:]:
-            H = np.array(cell.tolist(), dtype=float)
-            total += len(H)
-            for g, (factor, t) in enumerate(zip(net.recurrence_layer.factors, temperatures, strict=True)):
-                if t is None:
-                    continue
-                E = np.array(factor.codes.E.tolist(), dtype=float)
-                h = H[:, starts[g] : starts[g] + E.shape[1]]
-                D = np.sum((h[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
-                A = np.exp(-(D - D.min(axis=1)[:, np.newaxis]) / t)
-                weights = A.max(axis=1) / A.sum(axis=1)
-                largest[g] += float(np.sum(weights))
-                above[g] += int(np.sum(weights > hard))
+    for windows, soft in _soft_assignments(net, rows, temperatures):
+        total += windows
+        for g, _, _, A in soft:
+            weights = A.max(axis=1) / A.sum(axis=1)
+            largest[g] += float(np.sum(weights))
+            above[g] += int(np.sum(weights > hard))
     n = max(total, 1)
     return [None if t is None else (largest[g] / n, above[g] / n) for g, t in enumerate(temperatures)]
 
@@ -2028,26 +2034,16 @@ def thermals(
     energy), and the mean of its variance under the assignment over `T^2`, `d<D>/dT` (its specific heat,
     peaking at a phase transition); None for a factor at None. Exact, no sampling; the target unread.
     """
-    starts = [sum(f.state_size for f in net.recurrence.factors[:g]) for g in range(len(net.recurrence.factors))]
     energy = [0.0] * len(temperatures)
     spread = [0.0] * len(temperatures)
     total = 0
-    for batch in rows:
-        _, _, cells = net.window_states(net.backend.matrix([tokens for tokens, _ in batch]))
-        for cell in cells[1:]:
-            H = np.array(cell.tolist(), dtype=float)
-            total += len(H)
-            for g, (factor, t) in enumerate(zip(net.recurrence_layer.factors, temperatures, strict=True)):
-                if t is None:
-                    continue
-                E = np.array(factor.codes.E.tolist(), dtype=float)
-                h = H[:, starts[g] : starts[g] + E.shape[1]]
-                D = np.sum((h[:, np.newaxis, :] - E[np.newaxis, :, :]) ** 2, axis=2)
-                A = np.exp(-(D - D.min(axis=1)[:, np.newaxis]) / t)
-                P = A / A.sum(axis=1)[:, np.newaxis]
-                mean = np.sum(P * D, axis=1)
-                energy[g] += float(mean.sum())
-                spread[g] += float(np.sum(np.sum(P * D**2, axis=1) - mean**2))
+    for windows, soft in _soft_assignments(net, rows, temperatures):
+        total += windows
+        for g, _, D, A in soft:
+            P = A / A.sum(axis=1)[:, np.newaxis]
+            mean = np.sum(P * D, axis=1)
+            energy[g] += float(mean.sum())
+            spread[g] += float(np.sum(np.sum(P * D**2, axis=1) - mean**2))
     n = max(total, 1)
     return [None if t is None else (energy[g] / n, spread[g] / n / (t * t)) for g, t in enumerate(temperatures)]
 
@@ -2995,85 +2991,6 @@ class Place:
     backtrack: dict[str, Any] = field(default_factory=dict[str, Any])  # Continuous: the incremental reheat's
 
 
-def _run_identity(
-    encoding: Target,
-    factors: Sequence[tuple[int, int]],
-    seed: int,
-    settings: Settings,
-    cap: int,
-    reads: str,
-    budget_epochs: int | None,
-    fork: Fork | None,
-    guard: bool,
-    first: int,
-    long_tail: int | None,
-    consolidate: bool,
-    restore_best: bool,
-    commitment_from: int | None,
-    width: int = wr.D,
-    branches: bool = False,
-    answer_branch: bool = False,
-    thermostat: Thermostat | None = None,
-    keep_machine: bool = False,
-    counterexamples: float | None = None,
-    anneal: Anneal | None = None,
-    warm_up: WarmUp | None = None,
-    whole: bool = False,
-    crucible: bool = False,
-    state_bound: int | None = None,
-    coupling_cap: float = 1.0,
-    continuous: Continuous | None = None,
-    margin_wait: int | None = None,
-    cutoff_epochs: int | None = None,
-    baseline: str | None = None,
-    recombine: bool = False,
-    branch_heads: int = 1,
-) -> dict[str, Any]:
-    # what a resumed run must share with the run it resumes; the consolidation workplan's settings
-    # only when not their defaults, so a checkpoint from before them still resumes; not the wall-clock
-    # guard (a runaway guard alone since epochs bind), so a run its deadline stopped resumes with a larger one
-    return {
-        "target_states": encoding.target_states,
-        "tokens": encoding.tokens,
-        "factors": [list(f) for f in factors],
-        "seed": seed,
-        "settings": repr(settings),
-        "cap": cap,
-        "reads": reads,
-        "budget_epochs": budget_epochs,
-        "fork": None if fork is None else repr(fork),
-        "guard": guard,
-        **({"first": first} if first != 1 else {}),
-        **({"long_tail": long_tail} if long_tail is not None else {}),
-        **({"consolidate": True} if consolidate else {}),
-        **({"restore_best": True} if restore_best else {}),
-        **({"commitment_from": commitment_from} if commitment_from is not None else {}),
-        **({"width": width} if width != wr.D else {}),
-        **({"branches": True} if branches else {}),
-        **({"answer_branch": True} if answer_branch else {}),
-        **({"thermostat": repr(thermostat)} if thermostat is not None else {}),
-        **({"keep_machine": True} if keep_machine else {}),
-        **({"counterexamples": counterexamples} if counterexamples is not None else {}),
-        **({"anneal": repr(anneal)} if anneal is not None else {}),
-        **({"warm_up": repr(warm_up)} if warm_up is not None else {}),
-        **({"whole": True} if whole else {}),
-        **({"crucible": True} if crucible else {}),
-        **({"state_bound": state_bound} if state_bound is not None else {}),
-        **({"coupling_cap": coupling_cap} if coupling_cap < 1.0 else {}),
-        **({"continuous": repr(continuous)} if continuous is not None else {}),
-        **({"coupling_pace": True} if continuous is not None and continuous.pace else {}),
-        **({"sharpness_smoothing": True} if continuous is not None and continuous.smooth else {}),
-        **({"reheat": True} if continuous is not None and continuous.reheat else {}),
-        **({"reheat_slowing": True} if continuous is not None and continuous.slowing else {}),
-        **({"incremental_reheat": True} if continuous is not None and continuous.incremental else {}),
-        **({"margin_wait": margin_wait} if margin_wait is not None else {}),
-        **({"cutoff_epochs": cutoff_epochs} if cutoff_epochs is not None else {}),
-        **({"baseline": baseline} if baseline is not None else {}),
-        **({"recombine": True} if recombine else {}),
-        **({"branch_heads": branch_heads} if branch_heads != 1 else {}),
-    }
-
-
 COUNTEREXAMPLE_WORDS = 256  # R4's words at most (D6)
 BEGUN, ENDED = "begun", "ended"  # a checkpoint's place before the run's first row, and after its last
 GUARD = "budget_seconds"  # the wall-clock guard, in identities from before it left them (ignored on resume)
@@ -3132,41 +3049,52 @@ class RunConfig:
     branch_heads: int = 1
 
     def identity(self, first: int) -> dict[str, Any]:
-        """What a resumed run must share with the run it resumes (_run_identity's)."""
-        return _run_identity(
-            self.encoding,
-            self.factors,
-            self.seed,
-            self.settings,
-            self.cap,
-            self.reads,
-            self.budget_epochs,
-            self.fork,
-            self.guard,
-            first,
-            self.long_tail,
-            self.consolidate,
-            self.restore_best,
-            self.commitment_from,
-            self.width,
-            self.branches,
-            self.answer_branch,
-            self.thermostat,
-            self.keep_machine,
-            self.counterexamples,
-            self.anneal,
-            self.warm_up,
-            self.whole,
-            self.crucible,
-            self.state_bound,
-            self.coupling_cap,
-            self.continuous,
-            self.margin_wait,
-            self.cutoff_epochs,
-            self.baseline,
-            recombine=self.recombine,
-            branch_heads=self.branch_heads,
-        )
+        """
+        What a resumed run must share with the run it resumes: the consolidation workplan's settings
+        only when not their defaults, so a checkpoint from before them still resumes; not the
+        wall-clock guard (a runaway guard alone since epochs bind), so a run its deadline stopped
+        resumes with a larger one.
+        """
+        return {
+            "target_states": self.encoding.target_states,
+            "tokens": self.encoding.tokens,
+            "factors": [list(f) for f in self.factors],
+            "seed": self.seed,
+            "settings": repr(self.settings),
+            "cap": self.cap,
+            "reads": self.reads,
+            "budget_epochs": self.budget_epochs,
+            "fork": None if self.fork is None else repr(self.fork),
+            "guard": self.guard,
+            **({"first": first} if first != 1 else {}),
+            **({"long_tail": self.long_tail} if self.long_tail is not None else {}),
+            **({"consolidate": True} if self.consolidate else {}),
+            **({"restore_best": True} if self.restore_best else {}),
+            **({"commitment_from": self.commitment_from} if self.commitment_from is not None else {}),
+            **({"width": self.width} if self.width != wr.D else {}),
+            **({"branches": True} if self.branches else {}),
+            **({"answer_branch": True} if self.answer_branch else {}),
+            **({"thermostat": repr(self.thermostat)} if self.thermostat is not None else {}),
+            **({"keep_machine": True} if self.keep_machine else {}),
+            **({"counterexamples": self.counterexamples} if self.counterexamples is not None else {}),
+            **({"anneal": repr(self.anneal)} if self.anneal is not None else {}),
+            **({"warm_up": repr(self.warm_up)} if self.warm_up is not None else {}),
+            **({"whole": True} if self.whole else {}),
+            **({"crucible": True} if self.crucible else {}),
+            **({"state_bound": self.state_bound} if self.state_bound is not None else {}),
+            **({"coupling_cap": self.coupling_cap} if self.coupling_cap < 1.0 else {}),
+            **({"continuous": repr(self.continuous)} if self.continuous is not None else {}),
+            **({"coupling_pace": True} if self.continuous is not None and self.continuous.pace else {}),
+            **({"sharpness_smoothing": True} if self.continuous is not None and self.continuous.smooth else {}),
+            **({"reheat": True} if self.continuous is not None and self.continuous.reheat else {}),
+            **({"reheat_slowing": True} if self.continuous is not None and self.continuous.slowing else {}),
+            **({"incremental_reheat": True} if self.continuous is not None and self.continuous.incremental else {}),
+            **({"margin_wait": self.margin_wait} if self.margin_wait is not None else {}),
+            **({"cutoff_epochs": self.cutoff_epochs} if self.cutoff_epochs is not None else {}),
+            **({"baseline": self.baseline} if self.baseline is not None else {}),
+            **({"recombine": True} if self.recombine else {}),
+            **({"branch_heads": self.branch_heads} if self.branch_heads != 1 else {}),
+        }
 
     def check(self) -> None:
         """The settings' combinations a run allows (an AssertionError naming the first it doesn't)."""
