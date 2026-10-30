@@ -118,6 +118,13 @@ threaded call costs, measured for the multithreading work (D3). Read it with `gi
   whose function's instructions didn't change moved with placement). A cheaper pin (loops at 32
   bytes, functions only) is untried.
 - An SVE or AVX-512 `exp` and transpose follow D1 and D4 when a machine with them is in hand.
+- **x86 placement still moves a row through the uop cache** (the release workplan's stage 2b,
+  2026-10-30): moving conv's forward into the core left its instructions as they were (874 against
+  883, the same `memcpy` site) and made it 3-4.5% slower on jebel: `perf stat` showed instructions
+  +0.45%, cycles +2.6-3.5%, the uops from the legacy decoder +12% and the uops not delivered +42%,
+  resource stalls unchanged. D7's JCC padding keeps branches off 32-byte boundaries but not a hot
+  loop's place in the uop cache's 32-byte windows. A layout that holds it (loops aligned to 32 bytes
+  on x86, `-C llvm-args=-align-loops=32`, timed as a full baseline) is the candidate.
 
 ## From aarch64 (retired 2026-10-29)
 
