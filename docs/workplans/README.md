@@ -25,8 +25,9 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 | [grouped-query-attention-workplan.md](library/grouped-query-attention-workplan.md) | step 14: grouped- and multi-query attention |
 | [cross-attention-workplan.md](library/cross-attention-workplan.md) | step 15: cross-attention and an encoder-decoder model |
 
-## `infrastructure/`: machines and release
+## `infrastructure/`: machines, release and repositories
 
 | workplan | state |
 | --- | --- |
 | [pypi-release-workplan.md](infrastructure/pypi-release-workplan.md) | reopened 2026-10-30: the first release, 0.1.0 |
+| [studies-repo-workplan.md](infrastructure/studies-repo-workplan.md) | the studies' clean-moving code to indrajala-studies; planned, starts after paper 1's preprint |
