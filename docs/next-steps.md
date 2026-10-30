@@ -506,9 +506,14 @@ Not planned yet:
   in all three implementations). D2 waited for more presets before choosing a shared form; that
   point has come, and the form is the next DRY pass's to choose.
 - **Rerun the audit after each new primitive**, so new copies are caught while they are small:
-  `symilar` (pylint's duplicate finder, with `-i --ignore-docstrings --ignore-imports
-  --ignore-signatures`) over `indrajala_ml/`, `scripts/` and `tests/`, a search for function names
-  defined in more than one module, and the twin classes read side by side. The 2026-10-01 audit
+  `.venv/bin/python scripts/measurement/duplicates.py` (the clone scan, over the package, the
+  scripts, both test suites and `cli`, at 8 lines, and `--lines 10`), a search for function names
+  defined in more than one module, and the twin classes read side by side. The third pass
+  (2026-10-30, [dry-third-pass-workplan.md](workplans/library/dry-third-pass-workplan.md)) made the
+  scan a repo tool; its baseline, at d38f8b6, at 8 lines: package 3.4%, scripts 1.8%, tests 4.2%,
+  crate tests 2.0%; at 10: 2.2%, 1.4%, 2.7%, 1.2%. Earlier passes used `symilar` (pylint's
+  duplicate finder, `-i --ignore-docstrings --ignore-imports --ignore-signatures`), whose
+  percentages below count differently. The 2026-10-01 audit
   found 0.29% duplicated at 8 lines or more in the package, and 0.91% at 10 lines or more in the
   tests.
   The rerun of 2026-10-02 (the DRY rerun workplan, #550-#557) found 0.20% at 8 lines or more in
