@@ -46,17 +46,53 @@ def _picklable_checkpoint(checkpoint: object) -> object:
     return checkpoint
 
 
+@dataclasses.dataclass(frozen=True)
+class _Training[ClassifierT: BinaryClassifier]:
+    """What every class's job shares: the classifier, its shape and its training (it pickles)."""
+
+    layer_sizes: list[int]
+    dimension: int
+    input_bounds: list[tuple[float, float]]
+    learning_rate: float
+    epochs: int
+    classifier_cls: BinaryClassifierClass[ClassifierT]
+
+
+@dataclasses.dataclass(frozen=True)
+class _Job[ClassifierT: BinaryClassifier]:
+    """
+    One class's job: its label, its trainer's seed (OS entropy when None) and its network's
+    SeedSequence child, and the shared training.
+    """
+
+    label: int
+    seed: int | None
+    network_seed: SeedSequence
+    training: _Training[ClassifierT]
+
+
+@dataclasses.dataclass(frozen=True)
+class _DecodedJob[ClassifierT: BinaryClassifier](_Job[ClassifierT]):
+    """A job for a decoded dataset, carrying its class's binary dataset."""
+
+    binary_dataset: list[tuple[tuple[float, ...], float]]
+
+
+@dataclasses.dataclass(frozen=True)
+class _IndexedJob[ClassifierT: BinaryClassifier](_Job[ClassifierT]):
+    """
+    A job for a dataset too large to send decoded: a path, a record_loader (e.g.
+    mnist_data.load_mnist_records_at_indices) and the (index, category) pairs
+    select_balanced_indices chose, so the worker loads only its own examples.
+    """
+
+    path: str
+    record_loader: RecordLoader
+    index_category_pairs: list[tuple[int, float]]
+
+
 def _train_classifier_on_binary_dataset[ClassifierT: BinaryClassifier](
-    label: int,
-    binary_dataset: list[tuple[tuple[float, ...], float]],
-    layer_sizes: list[int],
-    dimension: int,
-    input_bounds: list[tuple[float, float]],
-    learning_rate: float,
-    epochs: int,
-    seed: int | None,
-    network_seed: SeedSequence,
-    classifier_cls: BinaryClassifierClass[ClassifierT],
+    job: _Job[ClassifierT], binary_dataset: list[tuple[tuple[float, ...], float]]
 ) -> tuple[int, object, TrainingDiagnostic]:
     """
     The training both Pool workers share, given a binary dataset: one class's classifier_cls, with
@@ -68,123 +104,44 @@ def _train_classifier_on_binary_dataset[ClassifierT: BinaryClassifier](
     entropy when it is None (the RNG generators workplan, D6, D9).
     """
 
-    student = classifier_cls.randomized(layer_sizes, dimension, input_bounds, seed=network_seed)
+    t = job.training
+    student = t.classifier_cls.randomized(t.layer_sizes, t.dimension, t.input_bounds, seed=job.network_seed)
     result = train_linear_classifier_network(
-        student, binary_dataset, learning_rate=learning_rate, epochs=epochs, rng=random.Random(seed)
+        student, binary_dataset, learning_rate=t.learning_rate, epochs=t.epochs, rng=random.Random(job.seed)
     )
 
-    return label, _picklable_checkpoint(student.checkpoint()), result.diagnostic
+    return job.label, _picklable_checkpoint(student.checkpoint()), result.diagnostic
 
 
-def _train_one_classifier(
-    args: tuple[
-        int,
-        list[tuple[tuple[float, ...], float]],
-        list[int],
-        int,
-        list[tuple[float, float]],
-        float,
-        int,
-        int | None,
-        SeedSequence,
-        BinaryClassifierClass[BinaryClassifier],
-    ],
+def _train_one_classifier[ClassifierT: BinaryClassifier](
+    job: _DecodedJob[ClassifierT],
 ) -> tuple[int, object, TrainingDiagnostic]:
     """
     The Pool worker for a decoded dataset (module-level, so it pickles).
     """
 
-    (
-        label,
-        binary_dataset,
-        layer_sizes,
-        dimension,
-        input_bounds,
-        learning_rate,
-        epochs,
-        seed,
-        network_seed,
-        classifier_cls,
-    ) = args
-
-    return _train_classifier_on_binary_dataset(
-        label,
-        binary_dataset,
-        layer_sizes,
-        dimension,
-        input_bounds,
-        learning_rate,
-        epochs,
-        seed,
-        network_seed,
-        classifier_cls,
-    )
+    return _train_classifier_on_binary_dataset(job, job.binary_dataset)
 
 
-def _train_one_indexed_classifier(
-    args: tuple[
-        int,
-        str,
-        RecordLoader,
-        list[tuple[int, float]],
-        list[int],
-        int,
-        list[tuple[float, float]],
-        float,
-        int,
-        int | None,
-        SeedSequence,
-        BinaryClassifierClass[BinaryClassifier],
-    ],
+def _train_one_indexed_classifier[ClassifierT: BinaryClassifier](
+    job: _IndexedJob[ClassifierT],
 ) -> tuple[int, object, TrainingDiagnostic]:
     """
-    The Pool worker for datasets too large to send decoded: it gets a path, a record_loader (e.g.
-    mnist_data.load_mnist_records_at_indices) and the (index, category) pairs
-    select_balanced_indices chose, and loads only its own examples.
+    The Pool worker for datasets too large to send decoded: it loads only its own examples.
     """
-
-    (
-        label,
-        path,
-        record_loader,
-        index_category_pairs,
-        layer_sizes,
-        dimension,
-        input_bounds,
-        learning_rate,
-        epochs,
-        seed,
-        network_seed,
-        classifier_cls,
-    ) = args
 
     # index_category_pairs already arrives shuffled (select_balanced_indices' own last step) -
     # loading records in that same order, via zip below, needs no further shuffling here
-    indices = [index for index, _ in index_category_pairs]
-    categories_in_order = [category for _, category in index_category_pairs]
-    records = record_loader(path, indices)
+    indices = [index for index, _ in job.index_category_pairs]
+    categories_in_order = [category for _, category in job.index_category_pairs]
+    records = job.record_loader(job.path, indices)
     binary_dataset = [(state, category) for (state, _label), category in zip(records, categories_in_order)]
 
-    return _train_classifier_on_binary_dataset(
-        label,
-        binary_dataset,
-        layer_sizes,
-        dimension,
-        input_bounds,
-        learning_rate,
-        epochs,
-        seed,
-        network_seed,
-        classifier_cls,
-    )
+    return _train_classifier_on_binary_dataset(job, binary_dataset)
 
 
 def _assemble_ensemble_from_results[ClassifierT: BinaryClassifier](
-    results: list[tuple[int, object, TrainingDiagnostic]],
-    layer_sizes: list[int],
-    dimension: int,
-    input_bounds: list[tuple[float, float]],
-    classifier_cls: BinaryClassifierClass[ClassifierT],
+    results: list[tuple[int, object, TrainingDiagnostic]], training: _Training[ClassifierT]
 ) -> tuple[EnsembleBackpropClassifierNetwork[ClassifierT], dict[int, TrainingDiagnostic]]:
     """
     The tail of every ensemble trainer, parallel or serial: sorts the (label, checkpoint,
@@ -198,7 +155,7 @@ def _assemble_ensemble_from_results[ClassifierT: BinaryClassifier](
     classifiers: list[ClassifierT] = []
     diagnostics: dict[int, TrainingDiagnostic] = {}
     for label, checkpoint, diagnostic in results:
-        student = classifier_cls(layer_sizes, dimension, input_bounds)
+        student = training.classifier_cls(training.layer_sizes, training.dimension, training.input_bounds)
         student.restore_checkpoint(checkpoint)
         classifiers.append(student)
         diagnostics[label] = diagnostic
@@ -210,10 +167,7 @@ def _collect_ensemble_results[ClassifierT: BinaryClassifier](
     pool: multiprocessing.pool.Pool,
     worker_fn: Callable[..., tuple[int, object, TrainingDiagnostic]],
     jobs: Iterable[Any],
-    layer_sizes: list[int],
-    dimension: int,
-    input_bounds: list[tuple[float, float]],
-    classifier_cls: BinaryClassifierClass[ClassifierT],
+    training: _Training[ClassifierT],
 ) -> tuple[EnsembleBackpropClassifierNetwork[ClassifierT], dict[int, TrainingDiagnostic]]:
     """
     Runs worker_fn over jobs with pool.imap and hands the results to
@@ -221,7 +175,7 @@ def _collect_ensemble_results[ClassifierT: BinaryClassifier](
     """
 
     results = list(pool.imap(worker_fn, jobs))
-    return _assemble_ensemble_from_results(results, layer_sizes, dimension, input_bounds, classifier_cls)
+    return _assemble_ensemble_from_results(results, training)
 
 
 def train_ensemble_parallel[ClassifierT: BinaryClassifier = BackpropClassifierNetwork](
@@ -258,6 +212,7 @@ def train_ensemble_parallel[ClassifierT: BinaryClassifier = BackpropClassifierNe
 
     rng = random.Random(seed)
     network_seeds = SeedSequence(seed).spawn(class_count)
+    training = _Training(layer_sizes, dimension, input_bounds, learning_rate, epochs, classifier_cls)
 
     positive_counts = [sum(1 for _, label in dataset if label == target) for target in range(class_count)]
     estimated_examples_per_classifier = 2 * max(positive_counts)
@@ -270,23 +225,10 @@ def train_ensemble_parallel[ClassifierT: BinaryClassifier = BackpropClassifierNe
         for label in range(class_count):
             binary_dataset = build_balanced_binary_dataset(dataset, label, class_count, rng)
             job_seed = rng.randrange(2**31) if seed is not None else None
-            yield (
-                label,
-                binary_dataset,
-                layer_sizes,
-                dimension,
-                input_bounds,
-                learning_rate,
-                epochs,
-                job_seed,
-                network_seeds[label],
-                classifier_cls,
-            )
+            yield _DecodedJob(label, job_seed, network_seeds[label], training, binary_dataset)
 
     with multiprocessing.Pool(actual_worker_count) as pool:
-        return _collect_ensemble_results(
-            pool, _train_one_classifier, jobs(), layer_sizes, dimension, input_bounds, classifier_cls
-        )
+        return _collect_ensemble_results(pool, _train_one_classifier, jobs(), training)
 
 
 def train_ensemble_parallel_from_indices[ClassifierT: BinaryClassifier = BackpropClassifierNetwork](
@@ -318,6 +260,7 @@ def train_ensemble_parallel_from_indices[ClassifierT: BinaryClassifier = Backpro
 
     rng = random.Random(seed)
     network_seeds = SeedSequence(seed).spawn(class_count)
+    training = _Training(layer_sizes, dimension, input_bounds, learning_rate, epochs, classifier_cls)
 
     positive_counts = [labels.count(target) for target in range(class_count)]
     estimated_examples_per_classifier = 2 * max(positive_counts)
@@ -331,25 +274,12 @@ def train_ensemble_parallel_from_indices[ClassifierT: BinaryClassifier = Backpro
         for label in range(class_count):
             index_category_pairs = select_balanced_indices(labels, label, class_count, rng)
             job_seed = rng.randrange(2**31) if seed is not None else None
-            yield (
-                label,
-                path,
-                record_loader,
-                index_category_pairs,
-                layer_sizes,
-                dimension,
-                input_bounds,
-                learning_rate,
-                epochs,
-                job_seed,
-                network_seeds[label],
-                classifier_cls,
+            yield _IndexedJob(
+                label, job_seed, network_seeds[label], training, path, record_loader, index_category_pairs
             )
 
     with multiprocessing.Pool(actual_worker_count) as pool:
-        return _collect_ensemble_results(
-            pool, _train_one_indexed_classifier, jobs(), layer_sizes, dimension, input_bounds, classifier_cls
-        )
+        return _collect_ensemble_results(pool, _train_one_indexed_classifier, jobs(), training)
 
 
 def train_ensemble_serial_from_indices[ClassifierT: BinaryClassifier = BackpropClassifierNetwork](
@@ -373,6 +303,7 @@ def train_ensemble_serial_from_indices[ClassifierT: BinaryClassifier = BackpropC
 
     rng = random.Random(seed)
     network_seeds = SeedSequence(seed).spawn(class_count)
+    training = _Training(layer_sizes, dimension, input_bounds, learning_rate, epochs, classifier_cls)
 
     results: list[tuple[int, object, TrainingDiagnostic]] = []
     for label in range(class_count):
@@ -380,21 +311,8 @@ def train_ensemble_serial_from_indices[ClassifierT: BinaryClassifier = BackpropC
         job_seed = rng.randrange(2**31) if seed is not None else None
         results.append(
             _train_one_indexed_classifier(
-                (
-                    label,
-                    path,
-                    record_loader,
-                    index_category_pairs,
-                    layer_sizes,
-                    dimension,
-                    input_bounds,
-                    learning_rate,
-                    epochs,
-                    job_seed,
-                    network_seeds[label],
-                    classifier_cls,
-                )
+                _IndexedJob(label, job_seed, network_seeds[label], training, path, record_loader, index_category_pairs)
             )
         )
 
-    return _assemble_ensemble_from_results(results, layer_sizes, dimension, input_bounds, classifier_cls)
+    return _assemble_ensemble_from_results(results, training)
