@@ -1,6 +1,6 @@
 # Workplan: publish indrajala-math-rust on PyPI and crates.io
 
-**Status: in progress since 2026-10-30: stage 1 decided (no abi3), stage 2 done (crate #78, #79), stage 3 next. The owner asked for one plan covering both indexes before the PyPI
+**Status: in progress since 2026-10-30: stages 1-5 done (crate #78-#82); stage 7's TestPyPI rehearsal next. The owner asked for one plan covering both indexes before the PyPI
 work starts. It replaces the PyPI-only plan (`pypi-release-workplan.md`, reopened the same day for
 0.1.0), which was folded in here. The first release is 0.1.0 on both indexes. Stages run 1 to 7 in
 order. Stage 0, the owner's accounts, is done just before stage 7. The retired aarch64 workplan
@@ -316,6 +316,11 @@ Done when the bindings hold no arithmetic and the core builds, tests and documen
 4. List the sdist's and the `.crate`'s contents (`maturin sdist`, `cargo package --list`), and
    read one wheel's `METADATA`.
 
+**Done 2026-10-30 (crate #80, ml #1126).** The PyPI README is `README-pypi.md` (the repo README
+stays the contributors'), the crates.io one `core/README.md`; `core/LICENSE` links the root's. The
+sdist leaves out the repo's `CLAUDE.md` and `.github/`. `cargo publish --dry-run` passed (30 files,
+100 KiB), a wheel's `METADATA` held every field, and the README's example ran.
+
 ### Stage 4: multi-platform build and test on every push and PR
 
 A reusable workflow (`build-test.yml`, `on: workflow_call`), called by `ci.yml` (push and PR) and
@@ -354,6 +359,29 @@ Also before merging, recorded in the PR:
 - the CI wall time before and after, as the median of three runs;
 - **the manylinux wheel against the local build** on `jebel`, with the stage 1 protocol.
 
+**Done 2026-10-30 (crate #81).** Every runner label exists (`macos-15-intel` is the Intel macOS
+one), and the matrix runs 33 jobs: Python 3.14 and 3.15 (stage 1's per-interpreter wheels). The MSRV
+build is the pinned toolchain's (`rust-version` 1.98, the pin 1.98.1). miri runs the core's contract
+and generator tests (its scalar paths: miri reports no AVX2), on a nightly beside the pin. Every
+runner reproduces the core's bit fixtures. What the new platforms found:
+
+- **numpy's own builds on macOS and Windows arm64 contract `uniform`'s `low + range * u` to an
+  FMA**, a last-bit difference from every other platform (ml's `docs/rng-audit.md` had anticipated
+  it: "record it and decide then"). Decided: the crate stays unfused everywhere, its contract being
+  one set of bits on every machine; the parity tests compare it with numpy's formula computed from
+  numpy's own `random()` stream, and a test still compares numpy's own `uniform` where the build
+  doesn't contract (skipped where it does). The attention tests' recorded digests draw their inputs
+  from the crate's own PCG64.
+- `os.sched_getaffinity` is Linux-only (a test's CPU count).
+
+CI wall time: a median 2:14 before (three runs, 4 jobs), 15:00 after (15:00, 15:14, 10:29; 33 jobs).
+**The CI's manylinux_2_28 wheel against a local build** of the same commit: every one of the
+extension's 1,688 functions compiles to the same instructions but a few libc shims (glibc 2.28's
+`stat`, `rint`); timed on `jebel` (ml's `ab.py` takes a prebuilt `.whl` as a side's crate since ml
+#1127), `epoch_op_profile` was within noise but conv's forward (+0.6-1.5%, "small"), and
+`focused_benchmark`'s dense single-example rows (+15-26%) came with 10 of 81 numpy controls moved,
+which that run can't resolve. The published wheel runs the local build's code at its speed.
+
 ### Stage 5: the release workflow
 
 `release.yml`, `on: push: tags: ['v*', 'testpypi-v*']`:
@@ -373,6 +401,12 @@ Also before merging, recorded in the PR:
 
 Also, a `Releasing` section in the crate README: bump the workspace version by PR, merge, tag
 `testpypi-v<version>`, check it, tag `v<version>`, and approve `crates-io` and `pypi`.
+
+**Done 2026-10-30 (crate #82).** The verify job's checks were run locally (the right tag accepted, a
+wrong version refused). The PyPI publish waits for the crates.io one on a `v*` tag and runs without
+it on `testpypi-v*`; every publish skips a version its index has, so a failed run is re-run, never
+retagged. Stage 0's environments exist (`crates-io` and `pypi`: the owner as reviewer, `v*` tags
+only; `testpypi`: `testpypi-v*` tags only).
 
 ### Stage 6: switch crates.io to trusted publishing (after stage 7's first publish)
 
