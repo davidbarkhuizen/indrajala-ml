@@ -499,12 +499,6 @@ Not planned yet:
 
 ## From the DRY audit
 
-- **The per-rule presets** (the workplan's D2). The preset classes that set a rule each repeat a
-  hyperparameter `__init__` and a two-line `_update_rule`. There were 12 at the audit (Adam,
-  Momentum, conv Momentum and L2, each in pure Python, numpy and Rust); the presets workplan
-  brought them to 27 (`Momentum`, `Adam` and `WeightDecay`, each one-output, multiclass and conv,
-  in all three implementations). D2 waited for more presets before choosing a shared form; that
-  point has come, and the form is the next DRY pass's to choose.
 - **Rerun the audit after each new primitive**, so new copies are caught while they are small:
   `.venv/bin/python scripts/measurement/duplicates.py` (the clone scan, over the package, the
   scripts, both test suites and `cli`, at 8 lines, and `--lines 10`), a search for function names
