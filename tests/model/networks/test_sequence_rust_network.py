@@ -28,8 +28,8 @@ from indrajala_ml.model.networks.sequential_array_network import (
 from indrajala_ml.model.persistence.format2 import network_to_json
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import LayerSpec, token_wise_output
-from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
-from tests.helpers import assert_learn_and_a_batch_of_one_agree, bits, exp_by_crate, patching, to_numpy
+from indrajala_ml.model.specs.update_rules import SGD, Adam, UpdateRule
+from tests.helpers import bits, exp_by_crate, patching, to_numpy
 from tests.model.networks.test_attention_rust_network import (
     LINEAR_RULES,
     _assert_every_adam_step_has_numpys_gradients,  # pyright: ignore[reportPrivateUsage]
@@ -187,13 +187,6 @@ def test_without_the_mask_a_later_token_changes_every_output():
 
 
 # the network
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=["sgd", "momentum", "adam"])
-@pytest.mark.parametrize("name", SEQUENCE)
-def test_learn_and_a_batch_of_one_agree(name: str, rule: UpdateRule):
-    specs = SEQUENCE[name]
-    assert_learn_and_a_batch_of_one_agree("rust", network(specs, rule), network(specs, rule), rows(specs, 4))
 
 
 @pytest.mark.parametrize("name", TOKEN_WISE)

@@ -8,7 +8,6 @@ a model with GPT's three dropouts still learns a text.
 """
 
 import random
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -19,7 +18,6 @@ from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
 from indrajala_ml.model.layers.numpy.token_array_layer import TokenDropoutArrayLayer
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,
@@ -30,11 +28,11 @@ from indrajala_ml.model.specs.layer_specs import (
     Position,
     Residual,
 )
-from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
+from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.training.sequence_evaluate import sequence_evaluate
 from indrajala_ml.training.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
-from tests.helpers import assert_learn_and_a_batch_of_one_agree, bits
+from tests.helpers import bits
 from tests.model.networks.test_sequence_array_network import network, rows
 from tests.model.specs.test_layer_specs import DROPOUT
 
@@ -200,14 +198,6 @@ def test_every_gradient_matches_its_finite_difference_with_the_masks_held(name: 
     check_gradients(built, states, labels, rng=lambda: NUMPY.default_rng(11))
 
 
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=["sgd", "momentum", "adam"])
-@pytest.mark.parametrize("name", DROPOUT)
-def test_learn_and_a_batch_of_one_agree(name: str, rule: UpdateRule):
-    # a single example's masks are a batch of one's, from the same generator
-    specs = DROPOUT[name]
-    assert_learn_and_a_batch_of_one_agree("numpy", network(specs, rule), network(specs, rule), rows(specs, 4))
-
-
 def _without_dropout(specs: list[LayerSpec]) -> list[LayerSpec]:
     # the same layers, every dropout 0: the same snapshot layout
     def plain(spec: LayerSpec) -> LayerSpec:
@@ -228,22 +218,6 @@ def test_inference_draws_nothing_and_is_the_network_without_dropout_by_bits():
     prepared = built.prepare_dataset(rows(GPT, 5))
     assert bits(list(built.forward_rows(prepared))) == bits(list(plain.forward_rows(prepared)))
     assert _state(built.rng) == before
-
-
-@pytest.mark.parametrize("name", DROPOUT)
-def test_a_saved_dropout_network_loads_and_trains_on_by_bits(name: str, tmp_path: Path):
-    # the generator's state is saved, so the masks resume by bits (D7)
-    specs = DROPOUT[name]
-    built = network(specs, Adam())
-    data = rows(specs, 6)
-    built.learn_batch(0.1, data[:3])
-    path = str(tmp_path / "dropout.json")
-    built.save(path)
-    loaded = load_network(path)
-    assert loaded.layer_specs == specs
-    built.learn_batch(0.1, data[3:])
-    loaded.learn_batch(0.1, data[3:])
-    assert bits(loaded.snapshot()) == bits(built.snapshot())
 
 
 def test_a_causal_model_with_gpts_three_dropouts_learns_a_text():

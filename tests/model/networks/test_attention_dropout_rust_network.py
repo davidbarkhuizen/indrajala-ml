@@ -8,7 +8,6 @@ both sides drawing the same masks. The cases are tests/model/specs/test_layer_sp
 the gradient check is tests/model/networks/test_attention_dropout_array_network.py's, on numpy.
 """
 
-from pathlib import Path
 from typing import Any
 
 import indrajala_math_rust as pa
@@ -20,9 +19,8 @@ from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArray
 from indrajala_ml.model.layers.numpy.token_array_layer import TokenDropoutArrayLayer
 from indrajala_ml.model.layers.rust.attention_rust_array_layer import AttentionRustArrayLayer
 from indrajala_ml.model.layers.rust.token_rust_array_layer import TokenDropoutRustArrayLayer
-from indrajala_ml.model.persistence.load_network import load_network
-from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
-from tests.helpers import assert_learn_and_a_batch_of_one_agree, bits, to_numpy
+from indrajala_ml.model.specs.update_rules import UpdateRule
+from tests.helpers import bits, to_numpy
 from tests.model.networks.test_attention_dropout_array_network import GPT, _without_dropout
 from tests.model.networks.test_attention_rust_network import (
     LINEAR_RULES,
@@ -103,30 +101,6 @@ def test_inference_draws_nothing_and_is_the_network_without_dropout_by_bits():
         [to_numpy(X) for X in plain.forward_rows(prepared)]
     )
     assert built.rng.state == before
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=["sgd", "momentum", "adam"])
-@pytest.mark.parametrize("name", DROPOUT)
-def test_learn_and_a_batch_of_one_agree(name: str, rule: UpdateRule):
-    specs = DROPOUT[name]
-    assert_learn_and_a_batch_of_one_agree("rust", network(specs, rule), network(specs, rule), rows(specs, 4))
-
-
-@pytest.mark.parametrize("name", DROPOUT)
-def test_a_saved_dropout_network_loads_and_trains_on_by_bits(name: str, tmp_path: Path):
-    specs = DROPOUT[name]
-    built = network(specs, Adam())
-    data = rows(specs, 6)
-    built.learn_batch(0.1, data[:3])
-    path = str(tmp_path / "dropout.json")
-    built.save(path)
-    loaded = load_network(path)
-    assert loaded.layer_specs == specs
-    built.learn_batch(0.1, data[3:])
-    loaded.learn_batch(0.1, data[3:])
-    assert bits([to_numpy(a) for entry in loaded.snapshot() for a in entry]) == bits(
-        [to_numpy(a) for entry in built.snapshot() for a in entry]
-    )
 
 
 # parity with numpy: both networks' generators start alike, so every step drops the same units

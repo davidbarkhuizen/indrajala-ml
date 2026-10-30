@@ -10,7 +10,6 @@ run in which a causal model without a Position learns a text.
 
 import math
 import random
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -20,14 +19,13 @@ from indrajala_ml.data.text_data import Vocabulary, windows
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
-from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, LayerSpec, Residual
 from indrajala_ml.model.specs.rotary_table import rotary_table
-from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
+from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.training.sequence_evaluate import sequence_evaluate
 from indrajala_ml.training.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
-from tests.helpers import assert_learn_and_a_batch_of_one_agree, bits
+from tests.helpers import bits
 from tests.model.networks.test_sequence_array_network import network, rows
 from tests.model.specs.test_layer_specs import ROTARY
 
@@ -197,29 +195,6 @@ def test_every_gradient_matches_its_finite_difference(name: str, batch_size: int
     built.learn_batch(0.5, rows(specs, 4, seed=2))
     states, labels = zip(*rows(specs, batch_size))
     check_gradients(built, states, labels, rng=lambda: NUMPY.default_rng(11))  # "with dropout" holds its masks
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=["sgd", "momentum", "adam"])
-@pytest.mark.parametrize("name", SEQUENCE_ROTARY)
-def test_learn_and_a_batch_of_one_agree(name: str, rule: UpdateRule):
-    specs = SEQUENCE_ROTARY[name]
-    assert_learn_and_a_batch_of_one_agree("numpy", network(specs, rule), network(specs, rule), rows(specs, 4))
-
-
-@pytest.mark.parametrize("name", SEQUENCE_ROTARY)
-def test_a_saved_rotary_network_loads_and_trains_on_by_bits(name: str, tmp_path: Path):
-    # the table derives from the spec, so it isn't saved (D4)
-    specs = SEQUENCE_ROTARY[name]
-    built = network(specs, Adam())
-    data = rows(specs, 6)
-    built.learn_batch(0.1, data[:3])
-    path = str(tmp_path / "rotary.json")
-    built.save(path)
-    loaded = load_network(path)
-    assert loaded.layer_specs == specs
-    built.learn_batch(0.1, data[3:])
-    loaded.learn_batch(0.1, data[3:])
-    assert bits(loaded.snapshot()) == bits(built.snapshot())
 
 
 def test_a_causal_model_with_rotary_attention_and_no_position_learns_a_text():

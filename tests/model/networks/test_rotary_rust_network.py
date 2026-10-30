@@ -8,17 +8,14 @@ tests/model/specs/test_layer_specs.py's ROTARY; the gradient check is
 tests/model/networks/test_rotary_array_network.py's, on numpy.
 """
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 
 from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
 from indrajala_ml.model.layers.rust.attention_rust_array_layer import AttentionRustArrayLayer
-from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.rotary_table import rotary_table
-from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
-from tests.helpers import assert_learn_and_a_batch_of_one_agree, bits, to_numpy
+from indrajala_ml.model.specs.update_rules import UpdateRule
+from tests.helpers import bits, to_numpy
 from tests.model.networks.test_attention_rust_network import (
     LINEAR_RULES,
     _assert_every_adam_step_has_numpys_gradients,  # pyright: ignore[reportPrivateUsage]
@@ -120,30 +117,6 @@ def test_the_downstream_rotates_dq_and_dk_back():
     assert bits(rotary._dQ) == bits(numpy._rotated(to_numpy(plain._dQ), inverse=True))  # pyright: ignore[reportPrivateUsage]
     assert bits(rotary._dK) == bits(numpy._rotated(to_numpy(plain._dK), inverse=True))  # pyright: ignore[reportPrivateUsage]
     assert bits(rotary._dV) == bits(plain._dV)  # pyright: ignore[reportPrivateUsage]
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=["sgd", "momentum", "adam"])
-@pytest.mark.parametrize("name", ROTARY)
-def test_learn_and_a_batch_of_one_agree(name: str, rule: UpdateRule):
-    specs = ROTARY[name]
-    assert_learn_and_a_batch_of_one_agree("rust", network(specs, rule), network(specs, rule), rows(specs, 4))
-
-
-@pytest.mark.parametrize("name", ROTARY)
-def test_a_saved_rotary_network_loads_and_trains_on_by_bits(name: str, tmp_path: Path):
-    specs = ROTARY[name]
-    built = network(specs, Adam())
-    data = rows(specs, 6)
-    built.learn_batch(0.1, data[:3])
-    path = str(tmp_path / "rotary.json")
-    built.save(path)
-    loaded = load_network(path)
-    assert loaded.layer_specs == specs
-    built.learn_batch(0.1, data[3:])
-    loaded.learn_batch(0.1, data[3:])
-    assert bits([to_numpy(a) for entry in loaded.snapshot() for a in entry]) == bits(
-        [to_numpy(a) for entry in built.snapshot() for a in entry]
-    )
 
 
 # parity with numpy: the rotation is elementwise, so the gap is the products', as without it

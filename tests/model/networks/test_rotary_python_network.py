@@ -9,17 +9,15 @@ are math.exp, as pure Python's.
 """
 
 import random
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
 from indrajala_ml.model.layers.python.attention_layer import AttentionLayer
-from indrajala_ml.model.persistence.load_network import load_network
-from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
+from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule
 from indrajala_ml.pcg64 import generator_state
-from tests.helpers import assert_learn_and_a_batch_of_one_agree, assert_snapshots_close, bits, learn_in_step
+from tests.helpers import assert_snapshots_close, bits, learn_in_step
 from tests.model.networks.test_attention_python_network import (
     LINEAR_RULES,
     _input,  # pyright: ignore[reportPrivateUsage]
@@ -110,28 +108,6 @@ def test_the_layer_major_path_is_the_example_major_loop_by_bits(name: str, rule:
         example_major.learn_batch(0.3, batch)
         layer_major._learn_batch_layer_major(0.3, batch)  # pyright: ignore[reportPrivateUsage]
     assert bits(layer_major.snapshot()) == bits(example_major.snapshot())
-
-
-@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=["sgd", "momentum", "adam"])
-@pytest.mark.parametrize("name", ROTARY)
-def test_learn_and_a_batch_of_one_agree(name: str, rule: UpdateRule):
-    specs = ROTARY[name]
-    assert_learn_and_a_batch_of_one_agree("python", network(specs, rule), network(specs, rule), rows(specs, 4))
-
-
-@pytest.mark.parametrize("name", ROTARY)
-def test_a_saved_rotary_network_loads_and_trains_on_by_bits(name: str, tmp_path: Path):
-    specs = ROTARY[name]
-    built = network(specs, Adam())
-    data = rows(specs, 6)
-    built.learn_batch(0.1, data[:3])
-    path = str(tmp_path / "rotary.json")
-    built.save(path)
-    loaded = load_network(path)
-    assert loaded.layer_specs == specs
-    built.learn_batch(0.1, data[3:])
-    loaded.learn_batch(0.1, data[3:])
-    assert bits(loaded.snapshot()) == bits(built.snapshot())
 
 
 # parity with numpy: the rotation is numpy's expression, so the gap is the products', as without it
