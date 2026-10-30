@@ -25,6 +25,7 @@ from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE
 from indrajala_ml.studies import inference
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
+from tests.studies.helpers import TINY
 
 # small catalogue sizes, and test lengths past A3's and M1's exhaustive spaces, so a check is quick
 SMALL = wr.Settings(
@@ -273,19 +274,7 @@ def test_the_arms_steps():
 
 @pytest.mark.parametrize("task", ["addition", "modular-division-5", "modular-sum-4"])
 def test_a_run_trains_each_step_saves_it_and_resumes_after_the_last_saved(tmp_path: Path, task: str):
-    settings = wr.Settings(
-        epoch_examples=64,
-        max_epochs=1,
-        patience=1,
-        screen=20,
-        steps=2,
-        test_lengths=(3,),
-        sampled=50,
-        relation_sampled=10,
-        per_stratum=5,
-        codes_cases=20,
-        seeds=1,
-    )
+    settings = TINY
     study = wr.Study(tmp_path, settings, [wr.RunSpec("curriculum", 1, 4, 3, 0, task)], 0)
     lines: list[str] = []
     results = wr.run(study, log=lines.append)
@@ -311,19 +300,7 @@ _TIMES = ("train_seconds", "screen_seconds", "check_seconds", "tests")
 
 def test_a_rerun_reproduces_its_run_and_a_change_shows(tmp_path: Path):
     """C0: the same run in two directories matches but for timings and provenance; a changed weight or result shows."""
-    settings = wr.Settings(
-        epoch_examples=64,
-        max_epochs=1,
-        patience=1,
-        screen=20,
-        steps=2,
-        test_lengths=(3,),
-        sampled=50,
-        relation_sampled=10,
-        per_stratum=5,
-        codes_cases=20,
-        seeds=1,
-    )
+    settings = TINY
     spec = wr.RunSpec("curriculum", 1, 4, 3, 0)
     original, rerun = tmp_path / "original", tmp_path / "rerun"
     for directory in (original, rerun):
@@ -361,19 +338,7 @@ def test_differences_name_each_path():
 
 def test_a_continuous_run_trains_without_codes(tmp_path: Path):
     """E2: m None builds a continuous state; its run counts no codes and the report says so."""
-    settings = wr.Settings(
-        epoch_examples=64,
-        max_epochs=1,
-        patience=1,
-        screen=20,
-        steps=2,
-        test_lengths=(3,),
-        sampled=50,
-        relation_sampled=10,
-        per_stratum=5,
-        codes_cases=20,
-        seeds=1,
-    )
+    settings = TINY
     spec = wr.RunSpec("curriculum", 1, 4, None, 0)
     assert spec.key == "curriculum-k1-s4-continuous-seed0"
     study = wr.Study(tmp_path, settings, [spec], 0)
@@ -388,19 +353,7 @@ def test_a_continuous_run_trains_without_codes(tmp_path: Path):
 
 def test_explore_counts_the_codes_past_the_check_lengths(tmp_path: Path):
     """E5: a run's last network's codes at its check lengths and past them, the new ones apart."""
-    settings = wr.Settings(
-        epoch_examples=64,
-        max_epochs=1,
-        patience=1,
-        screen=20,
-        steps=2,
-        test_lengths=(3,),
-        sampled=50,
-        relation_sampled=10,
-        per_stratum=5,
-        codes_cases=20,
-        seeds=1,
-    )
+    settings = TINY
     spec, unrun = wr.RunSpec("curriculum", 1, 4, 3, 0), wr.RunSpec("curriculum", 1, 4, 3, 1)
     study = wr.Study(tmp_path, settings, [spec], 0)
     wr.run(study, log=lambda line: None)
@@ -509,19 +462,7 @@ def test_e6s_windows_drop_the_attention_or_every_block():
 
 
 def test_a_baseline_window_run_names_its_window(tmp_path: Path):
-    settings = wr.Settings(
-        epoch_examples=64,
-        max_epochs=1,
-        patience=1,
-        screen=20,
-        steps=1,
-        test_lengths=(3,),
-        sampled=50,
-        relation_sampled=10,
-        per_stratum=5,
-        codes_cases=20,
-        seeds=1,
-    )
+    settings = dataclasses.replace(TINY, steps=1)
     spec = wr.RunSpec("curriculum", 1, 4, 3, 0, window="ffn")
     study = wr.Study(tmp_path, settings, [spec], 0)
     result = wr.run(study, log=lambda line: None)[spec.key]
@@ -845,19 +786,6 @@ def _certified(network: Any, spec: wr.RunSpec, path: Path) -> dict[str, Any]:
     return {"certified": True, "correct": True, "states": 25, "minimised": 25, "factors": ["A", "B"], "seconds": 0.0}
 
 
-TINY = wr.Settings(
-    epoch_examples=64,
-    max_epochs=1,
-    patience=1,
-    screen=20,
-    steps=2,
-    test_lengths=(3,),
-    sampled=50,
-    relation_sampled=10,
-    per_stratum=5,
-    codes_cases=20,
-    seeds=1,
-)
 FACTORED_TASK = wt.ModularDivision(5).name
 FACTORED = wr.RunSpec("curriculum", 1, 8, None, 0, FACTORED_TASK, factors=((4, 8), (4, 8)), reads=BEFORE_STATE)
 

@@ -32,7 +32,15 @@ from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRul
 from indrajala_ml.pcg64 import default_rng
 from indrajala_ml.training.train import train_backprop_network_mini_batch
 from tests.gradient_check import check_gradients
-from tests.helpers import assert_snapshots_close, bits, exp_by_math, learn_in_step, patching, sigmoid_by
+from tests.helpers import (
+    assert_a_checkpoint_resumes_training_by_bits,
+    assert_snapshots_close,
+    bits,
+    exp_by_math,
+    learn_in_step,
+    patching,
+    sigmoid_by,
+)
 from tests.model.networks.test_batch_norm_array_network import (
     BETA,
     EPSILON,
@@ -455,17 +463,7 @@ def test_snapshot_carries_the_running_averages_and_restore_returns_them():
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
 def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
     network = _network("two pairs", rule)
-    network.learn_batch(0.1, _rows(6))
-    checkpoint = network.checkpoint()
-
-    network.learn_batch(0.1, _rows(5, seed=7))
-    network.learn_batch(0.1, _rows(4, seed=8))
-    trained = bits(network.snapshot())
-
-    network.restore_checkpoint(checkpoint)
-    network.learn_batch(0.1, _rows(5, seed=7))
-    network.learn_batch(0.1, _rows(4, seed=8))
-    assert bits(network.snapshot()) == trained
+    assert_a_checkpoint_resumes_training_by_bits(network, _rows(6), [_rows(5, seed=7), _rows(4, seed=8)])
 
 
 # parity with numpy

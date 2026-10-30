@@ -75,10 +75,11 @@ WINDOW: list[LayerSpec] = [
     Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
 ]
 
-# how to build each class; a class missing here fails test_every_class_has_a_constructor.
+# how to build each numpy class (its Rust twin, named with RustArray, is built alike: _rust_twin);
+# a class missing here fails test_every_class_has_a_constructor.
 # Both twins' generators are reseeded before each step (_seed_step), so the dropout classes
 # draw the same masks.
-CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
+NUMPY_CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "VectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "AdamVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
     "ConvVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
@@ -112,56 +113,23 @@ CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "L2ArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, l2_lambda=0.01),
     "MomentumArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, momentum=0.9),
     "ReLUArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
-    "RustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
-    "AdamRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
-    "ConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
-    "CrossEntropyRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
-    "DropoutRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.3),
-    "L2RustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.01),
-    "MomentumRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT, 0.9),
-    "MomentumConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
-        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.9
-    ),
-    "AdamConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
-    "L2ConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
-        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.01
-    ),
-    "ReLUConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT),
-    "DropoutConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
-        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT, 0.3
-    ),
-    "CrossEntropyConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
-        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT
-    ),
-    "SoftmaxConvRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
-        SIDE, SIDE, CONV_SPECS, [5], CLASS_COUNT
-    ),
-    "ReLURustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
-    "SoftmaxRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, CLASS_COUNT),
-    "RustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
-    "CrossEntropyRustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
-    "AdamRustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
-    "DropoutRustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, drop_probability=0.3),
-    "L2RustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, l2_lambda=0.01),
-    "MomentumRustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION, momentum=0.9),
-    "ReLURustArrayBackpropClassifierNetwork": lambda cls: cls([5], DIMENSION),
     "SequentialVectorizedMultiClassBackpropClassifierNetwork": lambda cls: cls(
         (DIMENSION,), SEQUENTIAL_MULTICLASS, Momentum(0.9)
     ),
-    "SequentialRustArrayMultiClassBackpropClassifierNetwork": lambda cls: cls(
-        (DIMENSION,), SEQUENTIAL_MULTICLASS, Momentum(0.9)
-    ),
     "SequentialArrayBackpropClassifierNetwork": lambda cls: cls((DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT, Adam()),
-    "SequentialRustArrayBackpropClassifierNetwork": lambda cls: cls((DIMENSION,), SEQUENTIAL_SINGLE_OUTPUT, Adam()),
     "SequentialSequenceArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
-    "SequentialSequenceRustArrayNetwork": lambda cls: cls((DIMENSION,), SEQUENCE, Adam()),
     "WindowRecurrentArrayNetwork": lambda cls: cls(
         (DIMENSION,), WINDOW, WindowRecurrence((Factor(2, Codes(3)),)), Adam()
     ),
-    "WindowRecurrentRustArrayNetwork": lambda cls: cls(
-        (DIMENSION,), WINDOW, WindowRecurrence((Factor(2, Codes(3)),)), Adam()
-    ),
 }
+
+
+def _rust_twin(name: str) -> str:
+    # the Rust class's name: the numpy name's Vectorized, or else its first Array, as RustArray
+    return name.replace("Vectorized", "RustArray", 1) if "Vectorized" in name else name.replace("Array", "RustArray", 1)
+
+
+CONSTRUCTORS = {**NUMPY_CONSTRUCTORS, **{_rust_twin(name): build for name, build in NUMPY_CONSTRUCTORS.items()}}
 
 
 def _is_rust(cls: type[Any]) -> bool:

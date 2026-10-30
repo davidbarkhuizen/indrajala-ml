@@ -27,7 +27,7 @@ from indrajala_ml.model.networks.sequential_array_network import SequentialArray
 from indrajala_ml.model.specs.update_rules import SGD, Adam, UpdateRule, WeightDecay
 from indrajala_ml.pcg64 import default_rng
 from tests.gradient_check import check_gradients
-from tests.helpers import assert_snapshots_close, bits
+from tests.helpers import assert_a_checkpoint_resumes_training_by_bits, assert_snapshots_close, bits
 from tests.model.networks.test_attention_python_network import assert_every_step_has_numpys_gradients
 from tests.model.networks.test_batch_norm_array_network import EPSILON, RATE, RULES, _reference
 from tests.model.networks.test_batch_norm_conv_array_network import (
@@ -308,17 +308,7 @@ def test_a_one_example_training_step_is_refused_naming_the_layer():
 @pytest.mark.parametrize("rule", RULES, ids=lambda rule: type(rule).__name__)
 def test_a_checkpoint_resumes_training_by_bits(rule: UpdateRule):
     network = _network("two conv pairs", rule)
-    network.learn_batch(0.1, _rows(4))
-    checkpoint = network.checkpoint()
-
-    network.learn_batch(0.1, _rows(3, seed=7))
-    network.learn_batch(0.1, _rows(2, seed=8))
-    trained = bits(network.snapshot())
-
-    network.restore_checkpoint(checkpoint)
-    network.learn_batch(0.1, _rows(3, seed=7))
-    network.learn_batch(0.1, _rows(2, seed=8))
-    assert bits(network.snapshot()) == trained
+    assert_a_checkpoint_resumes_training_by_bits(network, _rows(4), [_rows(3, seed=7), _rows(2, seed=8)])
 
 
 # "after a relu conv" under Adam is compared step by step instead (below)
