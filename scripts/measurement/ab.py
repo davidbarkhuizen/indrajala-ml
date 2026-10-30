@@ -86,7 +86,9 @@ Crate A/Bs: when the sides' crate commits differ (each tree's rust/ submodule, o
 wheel under ROOT/wheels/<sha>/ (from a `git archive` of ~/code/indrajala-math-rust, with
 the toolchain it pins) and installed with `pip install --target` into a site directory there,
 which goes on PYTHONPATH after the tree; each pass checks the extension's hash. The venv is never
-touched. When they are equal, both sides use the venv's extension.
+touched. When they are equal, both sides use the venv's extension. A path to a `.whl` file in place of
+a crate commit times that prebuilt wheel (a CI build against a local one, say): it is cached under
+ROOT/wheels/wheel-<its sha256>/ and used as a built wheel is; on a remote host, the path is the host's.
 """
 
 from __future__ import annotations
@@ -606,13 +608,13 @@ def extract_crate(crate: str, source: Path) -> None:
     subprocess.run(["tar", "-x", "--touch", "-C", str(source)], input=archive.stdout, check=True)
 
 
-CRATE_BUILD_INPUTS = ("src", "build.rs", "Cargo.toml", "Cargo.lock", "pyproject.toml", "rust-toolchain.toml")
+CRATE_BUILD_INPUTS = ("src", "core", "build.rs", "Cargo.toml", "Cargo.lock", "pyproject.toml", "rust-toolchain.toml")
 
 
 def check_crate_builds(crates: dict[str, str], shas: dict[str, str]) -> None:
     """Raises when the sides' crate commits differ in what the extension is built from but their
     extensions are the same file: one side's build is stale, and the A/B would time one crate twice."""
-    if shas["old"] != shas["new"]:
+    if shas["old"] != shas["new"] or any(crate.startswith(PREBUILT) for crate in crates.values()):
         return
     changed = _git(CRATE_REPO, "diff", "--name-only", crates["old"], crates["new"], "--", *CRATE_BUILD_INPUTS)
     if changed:
@@ -683,8 +685,34 @@ def ensure_site(crate: str) -> tuple[Path, str]:
     return site, hashlib.sha256(extensions[0].read_bytes()).hexdigest()
 
 
+PREBUILT = "wheel-"  # a crate key for a prebuilt wheel: the prefix, then its file's sha256
+
+
+def prebuilt_crate(path: Path) -> str:
+    """A prebuilt wheel as a side's crate (a CI or index build, timed against a local build): its key
+    is its sha256, and it's copied into its own wheel directory, where `ensure_wheel` finds it as it
+    finds a built one, so the site, the extension's hash and every pass's check are a commit's."""
+    key = PREBUILT + hashlib.sha256(path.read_bytes()).hexdigest()
+    wheel_dir = _wheel_dir(key)
+    if not sorted(wheel_dir.glob("*.whl")):
+        wheel_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, wheel_dir / path.name)
+    return key
+
+
+def crate_label(crate: str) -> str:
+    """A side's crate as a report names it: a commit's short sha, or a prebuilt wheel's hash."""
+    return f"wheel {crate[len(PREBUILT) : len(PREBUILT) + 12]}" if crate.startswith(PREBUILT) else crate[:7]
+
+
 def resolve_crate(ref: str) -> str:
-    """A crate commit's full sha from the crate repository, fetching once if it isn't there."""
+    """A crate commit's full sha from the crate repository, fetching once if it isn't there; a path to
+    a `.whl` file is a prebuilt wheel (`prebuilt_crate`)."""
+    if ref.endswith(".whl"):
+        path = Path(ref).expanduser()
+        if not path.is_file():
+            raise AbError(f"prebuilt wheel {ref!r} not found")
+        return prebuilt_crate(path)
     for attempt in range(2):
         result = subprocess.run(
             ["git", "-C", str(CRATE_REPO), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
@@ -1570,7 +1598,7 @@ def _commits_line(manifest: dict[str, Any], data: ReportData) -> str:
     )
     if manifest["old"].get("site"):
         line += "; crate " + " vs ".join(
-            f"{side} {manifest[side]['crate'][:7]} (.so {manifest[side]['extension_sha'][:12]})"
+            f"{side} {crate_label(manifest[side]['crate'])} (.so {manifest[side]['extension_sha'][:12]})"
             for side in ("old", "new")
         )
     return line
@@ -1733,7 +1761,7 @@ def protocol_paragraph(data: ReportData) -> str:
     )
     if manifest["old"].get("site"):
         builds = " and ".join(
-            f"{side} crate `{manifest[side]['crate'][:7]}` (extension sha256 `{manifest[side]['extension_sha'][:12]}`)"
+            f"{side} crate `{crate_label(manifest[side]['crate'])}` (extension sha256 `{manifest[side]['extension_sha'][:12]}`)"
             for side in ("old", "new")
         )
         text += (
@@ -1885,8 +1913,12 @@ def _run_parser(run: argparse.ArgumentParser) -> argparse.ArgumentParser:
     run.add_argument("--name", help="default <branch>-<bench>")
     run.add_argument("--control-backend", choices=["numpy", "rust"], help="also read this backend's rows as controls")
     run.add_argument("--script-from", default="new", help="old, new, or a commit whose benchmark script both sides run")
-    run.add_argument("--old-crate", help="crate commit for the old side (default: its tree's rust/ submodule)")
-    run.add_argument("--new-crate", help="crate commit for the new side (default: its tree's rust/ submodule)")
+    run.add_argument(
+        "--old-crate", help="crate commit, or a prebuilt .whl, for the old side (default: its tree's rust/ submodule)"
+    )
+    run.add_argument(
+        "--new-crate", help="crate commit, or a prebuilt .whl, for the new side (default: its tree's rust/ submodule)"
+    )
     return run
 
 

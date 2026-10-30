@@ -721,6 +721,34 @@ def test_crate_ab_end_to_end(toy_repo: Path, toy_crates: list[str], capsys: pyte
     )
 
 
+def test_a_core_change_is_a_change_the_extension_is_built_from(toy_crates: list[str]) -> None:
+    base = _commit_crate({"core/src/lib.rs": "// 1\n"})
+    core = _commit_crate({"core/src/lib.rs": "// 2\n"})
+    with pytest.raises(ab.AbError, match="differ in core/src/lib.rs but built the same extension"):
+        ab.check_crate_builds({"old": base, "new": core}, {"old": "a" * 64, "new": "a" * 64})
+
+
+def test_a_prebuilt_wheel_is_a_sides_crate(
+    toy_repo: Path, toy_crates: list[str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    wheel = _fake_wheel(tmp_path / "ci", b"the CI's extension")
+    key = ab.resolve_crate(str(wheel))
+    assert key == ab.PREBUILT + hashlib.sha256(wheel.read_bytes()).hexdigest()
+    assert ab.resolve_crate(str(wheel)) == key  # cached: copied once
+    assert ab.crate_label(key) == f"wheel {key[len(ab.PREBUILT) : len(ab.PREBUILT) + 12]}"
+    with pytest.raises(ab.AbError, match="not found"):
+        ab.resolve_crate(str(tmp_path / "missing.whl"))
+    ab.check_crate_builds({"old": toy_crates[0], "new": key}, {"old": "a" * 64, "new": "a" * 64})
+    args = ["run", "--bench", "cmd", "--old", "HEAD", "--order", "ON", "--skip-profile"]
+    assert _run(toy_repo, *args, "--old-crate", toy_crates[0], "--new-crate", str(wheel), "--", "scripts/probe.py") == 0
+    manifest = json.loads((ab.find_run(None) / "manifest.json").read_text())
+    assert manifest["new"]["crate"] == key
+    assert (Path(manifest["new"]["site"]) / "indrajala_math_rust").is_dir()
+    capsys.readouterr()
+    assert _run(toy_repo, "report", "--brief") == 0
+    assert f"vs new {ab.crate_label(key)} (.so" in capsys.readouterr().out.splitlines()[0]
+
+
 def test_clean_removes_unreferenced_wheels(
     toy_repo: Path, toy_crates: list[str], capsys: pytest.CaptureFixture[str]
 ) -> None:
