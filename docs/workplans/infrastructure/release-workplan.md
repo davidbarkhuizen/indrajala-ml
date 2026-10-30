@@ -1,6 +1,6 @@
 # Workplan: publish indrajala-math-rust on PyPI and crates.io
 
-**Status: planned (2026-10-30). The owner asked for one plan covering both indexes before the PyPI
+**Status: in progress since 2026-10-30: stage 1 decided (no abi3), stage 2a done (D6). The owner asked for one plan covering both indexes before the PyPI
 work starts. It replaces the PyPI-only plan (`pypi-release-workplan.md`, reopened the same day for
 0.1.0), which was folded in here. The first release is 0.1.0 on both indexes. Stages run 1 to 7 in
 order. Stage 0, the owner's accounts, is done just before stage 7. The retired aarch64 workplan
@@ -108,10 +108,20 @@ Settled by Claude (the owner delegates workplan choices). Each records the optio
     is the structure we keep. Con: the first wheel waits for the split. No user is waiting on 0.1.0.
   - Stage 2a is a feasibility probe. If the split can't keep the kernels' speed, crates.io drops out
     (recorded here) and the PyPI stages run unchanged on today's single crate.
-- **Cross-crate inlining (D6): decided by the stage 2a measurement, not assumed.** The candidates:
-  `lto = "fat"` in the workspace release profile (closest to today's one-crate build), or `#[inline]`
-  on the core's hot entry points. Either way, the published `rlib` is built the way a Rust user's
-  build will build it, and that is the build the A/B times.
+- **Cross-crate inlining (D6): no LTO; `#[inline]` on a core entry point where a measurement shows
+  the call costs** (settled 2026-10-30 by stage 2a, crate #78). Each candidate was timed on `jebel`
+  against crate main 4770503, full protocol (ONNONO), with `focused_benchmark` on the three dense
+  shapes and `epoch_op_profile` on conv and conv-conv:
+
+  | build | focused_benchmark | epoch_op_profile |
+  | --- | --- | --- |
+  | split, no LTO (8904670) | four small transposes +9-13% (about 0.1 µs a call); the rest within noise | nothing slower beyond +2.8%; `conv_forward_batch` -2% |
+  | split, fat LTO (8679cc8) | conv tail b32 downstream and accumulate +5-7% | `layer_downstream_batch` +7-8% |
+  | split, no LTO, `transpose` `#[inline]` (3eb8a7b) | nothing slower, all 72 controls within noise; transposes b32 -5-6% | (only `transpose` changed) |
+
+  Fat LTO moved code it didn't need to and lost on the conv tail, so it is out. The published
+  `rlib` is then built exactly as a Rust user's build builds it. Each later stage 2b PR times its
+  group, and adds `#[inline]` where a row shows the call.
 - **Testing (D7): the Python op suite stays the numerical reference; the core gets its own
   `cargo test`.** The 3,000 numpy tests run through the bindings, which call the core, so they test
   the core's arithmetic. The core adds tests of its contract (shapes, errors, edge cases), doctests on
@@ -209,6 +219,23 @@ the stable C API, so some fast paths become slower calls.
 
 It comes first because it touches only the boundary, which the split then rebuilds. Done when the
 decision is merged and recorded.
+
+**Decided 2026-10-30: one wheel per interpreter, no abi3.** `abi3-py314` built after one change
+(under the stable API a tuple has no `as_slice`; `from_rows` reads it with `iter`), and passed the
+tests and the golden run bit-identical. Timed on `jebel` against crate main 4770503 (crate branch
+`abi3-py314`, 93fa771, not merged), full protocol:
+
+- `focused_benchmark`, the three dense shapes: 10 consistent rows, 7 of them slower. Single-example
+  `hidden_delta` at 30 x 784 was +19.8%, `downstream_batch` b32 +15.0%, `sgd step` at 10 x 30 +8.3%,
+  and `downstream` +6.5%. 7 of 72 numpy controls also moved, so this run alone couldn't resolve
+  changes of that size.
+- `epoch_op_profile`, conv and conv-conv: all 7 consistent rows were slower, among them
+  `conv_forward_batch` (mini-batch) +3.9%, `layer_downstream_batch` +8.5%, and single-example
+  `layer_apply_accumulated_gradient` +20-28%.
+
+That's a regression on hot paths in the direction abi3's slower boundary predicts, so it isn't
+adopted. Each release builds a wheel for each supported CPython (3.14 today; 3.15 is added when it
+ships), and stage 4's matrix tests each one.
 
 ### Stage 2: the split into `indrajala-math` and `indrajala-math-py`
 
