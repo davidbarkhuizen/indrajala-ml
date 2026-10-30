@@ -37,7 +37,7 @@ Beside the roadmap:
 
 | workplan | state |
 | --- | --- |
-| [dry-third-pass-workplan.md](library/dry-third-pass-workplan.md) | the third DRY pass (2026-10-30): audit done, D1-D10 settled, stages 1-6 done, stages 7-8 open |
+| [dry-third-pass-workplan.md](library/dry-third-pass-workplan.md) | the third DRY pass (2026-10-30): audit done, D1-D10 settled, stages 1-7 done, stage 8 open |
 
 ## `infrastructure/`: machines and release
 

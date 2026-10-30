@@ -1,7 +1,7 @@
 # Workplan: remove duplicated code, third pass (DRY, 2026-10-30)
 
 **Status: in progress; decisions D1-D10 settled (2026-10-30, delegated to Claude by the owner's
-standing rule). Stages 1-6 done; stages 7-8 open.**
+standing rule). Stages 1-7 done; stage 8 open.**
 
 The first two passes (`git show e066333:docs/dry-workplan.md`, #506-#515; `git show
 88e1815:docs/dry-rerun-workplan.md`, #550-#557) and the rerun after multi-head attention
@@ -248,9 +248,11 @@ deleted. No stage gets an A/B (D2).
   files before and after. The sequence save tests stay in each file: each checks its own class
   and file fields.
 
-### Stage 7: the crate's test helpers (finding 11, D10)
+### Stage 7: the crate's test helpers (finding 11, D10) (done)
 
-- In `indrajala-math-rust` first, then a "Bump rust/" PR here.
+- In `indrajala-math-rust` first (#77): `tests/array_helpers.py` (`bits`, `to_numpy`,
+  `to_array`) for nine op test files; then this repository's "Bump rust/" PR. `test_cr_exp.py`'s
+  and `test_linalg.py`'s `_bits`, on scalars, stay.
 
 ### Stage 8: rerun the audit; retire this plan
 
