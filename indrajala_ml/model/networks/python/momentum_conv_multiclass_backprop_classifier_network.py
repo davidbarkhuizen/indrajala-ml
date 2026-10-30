@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import ClassVar
 
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.networks.python.conv_multiclass_backprop_classifier_network import (
     ConvMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import Momentum
 
 
-class MomentumConvMultiClassBackpropClassifierNetwork(ConvMultiClassBackpropClassifierNetwork):
+class MomentumConvMultiClassBackpropClassifierNetwork(RulePreset, ConvMultiClassBackpropClassifierNetwork):
     """
     A momentum sibling of ConvMultiClassBackpropClassifierNetwork: its optimizer applies the
     Momentum rule, Goyal et al. 2017's eq. (9), to every conv kernel and dense node. g is a
@@ -22,7 +22,7 @@ class MomentumConvMultiClassBackpropClassifierNetwork(ConvMultiClassBackpropClas
     momentum only.
     """
 
-    hyperparameters: ClassVar[tuple[str, ...]] = ("momentum",)
+    rule = Momentum
 
     def __init__(
         self,
@@ -35,6 +35,3 @@ class MomentumConvMultiClassBackpropClassifierNetwork(ConvMultiClassBackpropClas
     ) -> None:
         self.momentum = momentum
         super().__init__(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-
-    def _update_rule(self) -> Momentum:
-        return Momentum(self.momentum)

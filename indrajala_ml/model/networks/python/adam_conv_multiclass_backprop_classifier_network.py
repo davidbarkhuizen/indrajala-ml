@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import ClassVar
 
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.networks.python.conv_multiclass_backprop_classifier_network import (
     ConvMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON, Adam
 
 
-class AdamConvMultiClassBackpropClassifierNetwork(ConvMultiClassBackpropClassifierNetwork):
+class AdamConvMultiClassBackpropClassifierNetwork(RulePreset, ConvMultiClassBackpropClassifierNetwork):
     """
     The Adam sibling of ConvMultiClassBackpropClassifierNetwork: its optimizer applies the Adam
     rule, with beta1/beta2/epsilon defaulting to Kingma & Ba's published values, to every conv
@@ -20,7 +20,7 @@ class AdamConvMultiClassBackpropClassifierNetwork(ConvMultiClassBackpropClassifi
     AdamConvRustArrayMultiClassBackpropClassifierNetwork.
     """
 
-    hyperparameters: ClassVar[tuple[str, ...]] = ("beta1", "beta2", "epsilon")
+    rule = Adam
 
     def __init__(
         self,
@@ -37,6 +37,3 @@ class AdamConvMultiClassBackpropClassifierNetwork(ConvMultiClassBackpropClassifi
         self.beta2 = beta2
         self.epsilon = epsilon
         super().__init__(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-
-    def _update_rule(self) -> Adam:
-        return Adam(self.beta1, self.beta2, self.epsilon)

@@ -7,16 +7,17 @@ from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classi
 )
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON, Adam
 
 
-class AdamConvRustArrayMultiClassBackpropClassifierNetwork(ConvRustArrayMultiClassBackpropClassifierNetwork):
+class AdamConvRustArrayMultiClassBackpropClassifierNetwork(RulePreset, ConvRustArrayMultiClassBackpropClassifierNetwork):
     """
     AdamConvVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the optimizer's Adam
     rule for the conv, dense and output layers.
     """
 
-    hyperparameters = ("beta1", "beta2", "epsilon")
+    rule = Adam
 
     def __init__(
         self,
@@ -33,6 +34,3 @@ class AdamConvRustArrayMultiClassBackpropClassifierNetwork(ConvRustArrayMultiCla
         self.beta2 = beta2
         self.epsilon = epsilon
         super().__init__(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-
-    def _update_rule(self) -> Adam:
-        return Adam(self.beta1, self.beta2, self.epsilon)

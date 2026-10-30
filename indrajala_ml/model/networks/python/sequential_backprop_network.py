@@ -27,6 +27,7 @@ from indrajala_ml.model.protocols.classification import argmax_first_occurrence
 from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
 from indrajala_ml.model.specs.bounds import validate_class_count
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, refuse_token_wise_output, token_wise_output
+from indrajala_ml.model.specs.spec_hooks import GivenRule
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
 from indrajala_ml.model.specs.update_rules import UpdateRule
 
@@ -38,7 +39,7 @@ def _bounds(input_shape: InputShape, input_bounds: list[tuple[float, float]] | N
     return [(0.0, 1.0)] * math.prod(input_shape) if input_bounds is None else input_bounds
 
 
-class SequentialMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork[TrainableLayer]):
+class SequentialMultiClassBackpropClassifierNetwork(GivenRule, MultiClassBackpropClassifierNetwork[TrainableLayer]):
     """
     A multiclass network of any accepted layer specs (layer_specs.py) and update rule, with the
     multiclass network's argmax classification, one-hot targets and fan-in-aware randomize.
@@ -70,9 +71,6 @@ class SequentialMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifier
             layers, input_shape, _bounds(input_shape, input_bounds)
         )
 
-    def _update_rule(self) -> UpdateRule:
-        return self.update_rule
-
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
         return cls(file.input_shape, file.layers, file.update_rule, file.input_bounds)
@@ -83,7 +81,7 @@ class SequentialMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifier
         raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
 
 
-class SequentialBackpropClassifierNetwork(BackpropClassifierNetwork[TrainableLayer]):
+class SequentialBackpropClassifierNetwork(GivenRule, BackpropClassifierNetwork[TrainableLayer]):
     """
     SequentialMultiClassBackpropClassifierNetwork over the single-output network: its output layer
     has one node. It randomizes fan-in-aware, as FanInAwareBackpropClassifierNetwork and the array
@@ -110,9 +108,6 @@ class SequentialBackpropClassifierNetwork(BackpropClassifierNetwork[TrainableLay
 
         super(BackpropClassifierNetwork, self).__init__(layers, input_shape, _bounds(input_shape, input_bounds))
 
-    def _update_rule(self) -> UpdateRule:
-        return self.update_rule
-
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
         return cls(file.input_shape, file.layers, file.update_rule, file.input_bounds)
@@ -126,7 +121,7 @@ class SequentialBackpropClassifierNetwork(BackpropClassifierNetwork[TrainableLay
         randomize_fan_in_aware(self)
 
 
-class SequentialSequenceBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSoftmaxLayer]):
+class SequentialSequenceBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLayer, TokenSoftmaxLayer]):
     """
     The sequence shape in pure Python (the sequence task workplan, D6, D10), SequentialSequenceShape's
     counterpart: a network of any accepted layer specs whose output layer is token-wise
@@ -160,9 +155,6 @@ class SequentialSequenceBackpropNetwork(BackpropNetworkBase[TrainableLayer, Toke
 
         super().__init__(layers, input_shape, _bounds(input_shape, input_bounds))
         self.tokens = spec_shapes(layers, input_shape)[-1].output_shape[0]
-
-    def _update_rule(self) -> UpdateRule:
-        return self.update_rule
 
     def _forward(self, state: tuple[float, ...]) -> list[float]:
         return self._forward_outputs(state)

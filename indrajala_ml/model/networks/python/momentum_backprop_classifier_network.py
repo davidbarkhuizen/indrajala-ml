@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
 from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import Momentum
 
 
-class MomentumBackpropClassifierNetwork(BackpropClassifierNetwork):
+class MomentumBackpropClassifierNetwork(RulePreset, BackpropClassifierNetwork):
     """
     A momentum sibling of BackpropClassifierNetwork: its optimizer applies the Momentum rule,
     Goyal et al. 2017's eq. (9), to every trainable layer. It replaces Rumelhart, Hinton &
@@ -21,7 +20,7 @@ class MomentumBackpropClassifierNetwork(BackpropClassifierNetwork):
     momentum is more often validated with mini-batches.
     """
 
-    hyperparameters: ClassVar[tuple[str, ...]] = ("momentum",)
+    rule = Momentum
 
     def __init__(
         self,
@@ -32,6 +31,3 @@ class MomentumBackpropClassifierNetwork(BackpropClassifierNetwork):
     ) -> None:
         self.momentum = momentum
         super().__init__(layer_sizes, dimension, input_bounds)
-
-    def _update_rule(self) -> Momentum:
-        return Momentum(self.momentum)

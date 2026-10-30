@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from indrajala_ml.model.networks.numpy.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import WeightDecay
 
 
-class L2ArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
+class L2ArrayBackpropClassifierNetwork(RulePreset, ArrayBackpropClassifierNetwork):
     """
     The L2 (weight decay) sibling of ArrayBackpropClassifierNetwork: its optimizer applies the
     WeightDecay rule, with l2_lambda required (keyword-only, after the ignored input_bounds), as in
@@ -12,7 +13,7 @@ class L2ArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
     snapshot()/restore() of W/b is complete.
     """
 
-    hyperparameters = ("l2_lambda",)
+    rule = WeightDecay
 
     def __init__(
         self,
@@ -24,6 +25,3 @@ class L2ArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
     ) -> None:
         self.l2_lambda = l2_lambda
         super().__init__(layer_sizes, dimension, input_bounds)
-
-    def _update_rule(self) -> WeightDecay:
-        return WeightDecay(self.l2_lambda)

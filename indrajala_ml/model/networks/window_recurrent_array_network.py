@@ -63,6 +63,7 @@ from indrajala_ml.model.protocols.array_protocols import BackendArray, TrainedAr
 from indrajala_ml.model.specs.array_network_shapes import TokenWiseOutput
 from indrajala_ml.model.specs.bounds import validate_class_count
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, factor_reads
+from indrajala_ml.model.specs.spec_hooks import GivenRule
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_window_recurrent
 from indrajala_ml.model.specs.update_rules import UpdateRule
@@ -144,7 +145,7 @@ def _summed(pooled: Any, readers: Sequence[int]) -> Any:
     return total
 
 
-class WindowRecurrentShape[A: BackendArray](TokenWiseOutput[A]):
+class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
     """
     The module's network over ArrayNetworkBase, for either backend: its window's layers
     (self.layers) and its own parts (self.parts). A mixin, listed before the backend's base.
@@ -192,9 +193,6 @@ class WindowRecurrentShape[A: BackendArray](TokenWiseOutput[A]):
 
     def _window_state_size(self) -> int | None:
         return self.recurrence.state_size
-
-    def _update_rule(self) -> UpdateRule:
-        return self.update_rule
 
     @property
     def consolidation(self) -> Consolidation:

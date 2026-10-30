@@ -7,10 +7,13 @@ from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.networks.numpy.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import Momentum
 
 
-class MomentumConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMultiClassBackpropClassifierNetwork):
+class MomentumConvVectorizedMultiClassBackpropClassifierNetwork(
+    RulePreset, ConvVectorizedMultiClassBackpropClassifierNetwork
+):
     """
     The momentum sibling of ConvVectorizedMultiClassBackpropClassifierNetwork, and the numpy
     counterpart of MomentumConvMultiClassBackpropClassifierNetwork: the optimizer's Momentum rule
@@ -19,7 +22,7 @@ class MomentumConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMu
     every momentum network.
     """
 
-    hyperparameters = ("momentum",)
+    rule = Momentum
 
     def __init__(
         self,
@@ -32,6 +35,3 @@ class MomentumConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMu
     ) -> None:
         self.momentum = momentum
         super().__init__(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-
-    def _update_rule(self) -> Momentum:
-        return Momentum(self.momentum)

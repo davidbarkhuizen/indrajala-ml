@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from indrajala_ml.model.networks.numpy.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import Momentum
 
 
-class MomentumArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
+class MomentumArrayBackpropClassifierNetwork(RulePreset, ArrayBackpropClassifierNetwork):
     """
     The momentum sibling of ArrayBackpropClassifierNetwork: its optimizer applies the Momentum
     rule, with momentum required (keyword-only, after the ignored input_bounds), as in
@@ -12,7 +13,7 @@ class MomentumArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
     velocities.
     """
 
-    hyperparameters = ("momentum",)
+    rule = Momentum
 
     def __init__(
         self,
@@ -24,6 +25,3 @@ class MomentumArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
     ) -> None:
         self.momentum = momentum
         super().__init__(layer_sizes, dimension, input_bounds)
-
-    def _update_rule(self) -> Momentum:
-        return Momentum(self.momentum)
