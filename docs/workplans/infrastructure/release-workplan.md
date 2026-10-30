@@ -79,10 +79,13 @@ Settled by Claude (the owner delegates workplan choices). Each records the optio
     left for a later plan, after the studies move.
 - **Workspace layout (D2): one repo, a Cargo workspace with two members.**
   `indrajala-math` (`core/`, `rlib`, published) holds the array type, the kernels, the RNG and the
-  window program, with no pyo3. `indrajala-math-py` (`python/`, `cdylib`, `publish = false`) holds
-  only the pyclasses: newtypes over the core's types, argument conversion and error mapping. maturin
-  builds `python/`, and `rust/pyproject.toml` stays at the root with `manifest-path`, so
-  `./cli build-rust` keeps working from `rust/`.
+  window program, with no pyo3. The bindings stay the root package (`src/`, `cdylib`, `publish =
+  false`; amended 2026-10-30 from a `python/` member, so maturin, `pyproject.toml` and
+  `./cli build-rust` are unchanged). They hold only the pyclasses, argument conversion and error
+  mapping. The core's operations take borrowed views (`ArrayView`: a slice and a shape) and return
+  an owned `Array`. The pyclass `Array` keeps its own fields, lends them as a view, and takes a
+  result's buffer by move, so nothing is copied at the boundary and no struct literal in the
+  bindings changes.
   - *Two repos.* Con: every kernel change would need two PRs and a pin.
   - *One crate with a `python` cargo feature.* Pro: smallest change. Con: the published crate would
     still carry pyo3 code under `cfg`, and the boundary stays mixed into every file.
@@ -169,6 +172,10 @@ Each stage is one or more PRs in the crate repo, each followed by a "Bump rust/"
 `./cli build-rust && ./cli test` and the golden run green.
 
 ### Stage 0: accounts (the owner, no code; done just before stage 7)
+
+Progress (2026-10-30): the PyPI, TestPyPI and crates.io accounts are open, and each email is
+verified. Still to do: 2FA on PyPI and TestPyPI (step 2); the pending publishers (step 3); the
+crates.io token (step 4, just before the first publish); and the environments (step 5).
 
 1. **PyPI and TestPyPI:** register at <https://pypi.org/account/register/> and
    <https://test.pypi.org/account/register/> (the same username on both is simplest), and verify
