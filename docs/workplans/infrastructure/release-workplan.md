@@ -1,6 +1,6 @@
 # Workplan: publish indrajala-math-rust on PyPI and crates.io
 
-**Status: in progress since 2026-10-30: stage 1 decided (no abi3), stage 2a done (D6). The owner asked for one plan covering both indexes before the PyPI
+**Status: in progress since 2026-10-30: stage 1 decided (no abi3), stage 2 done (crate #78, #79), stage 3 next. The owner asked for one plan covering both indexes before the PyPI
 work starts. It replaces the PyPI-only plan (`pypi-release-workplan.md`, reopened the same day for
 0.1.0), which was folded in here. The first release is 0.1.0 on both indexes. Stages run 1 to 7 in
 order. Stage 0, the owner's accounts, is done just before stage 7. The retired aarch64 workplan
@@ -183,9 +183,9 @@ Each stage is one or more PRs in the crate repo, each followed by a "Bump rust/"
 
 ### Stage 0: accounts (the owner, no code; done just before stage 7)
 
-Progress (2026-10-30): the PyPI, TestPyPI and crates.io accounts are open, and each email is
-verified. Still to do: 2FA on PyPI and TestPyPI (step 2); the pending publishers (step 3); the
-crates.io token (step 4, just before the first publish); and the environments (step 5).
+Progress (2026-10-30): the PyPI, TestPyPI and crates.io accounts are open, each email verified;
+2FA is on PyPI and TestPyPI; both pending publishers are set (step 3). Still to do: the crates.io
+token (step 4, just before the first publish) and the environments (step 5).
 
 1. **PyPI and TestPyPI:** register at <https://pypi.org/account/register/> and
    <https://test.pypi.org/account/register/> (the same username on both is simplest), and verify
@@ -270,6 +270,35 @@ indrajala-ml's tests must pass unchanged.
 The core gets its own README for crates.io.
 
 Done when the bindings hold no arithmetic and the core builds, tests and documents without pyo3.
+
+**Done 2026-10-30 (crate #79, ml #1124).** What changed from the plan above:
+
+- **One PR for 2b and 2c, a commit a group.** The groups weren't independent: `factored` and
+  `program` call the moved `recurrent` and `ops` helpers, so they couldn't build until those had
+  moved, and the groups follow the modules' dependencies instead (leaves; the RNG; `fused` and
+  `ufuncs`; then `attention`, `recurrent`, `factored`, `tokens`, `program` and `mnist`). The PR was
+  timed once, at the full protocol, rather than once a group at tier 1.
+- **The core's operations borrow `&Array`** (D2, amended again): 2a's views gave way to a newtype.
+  The Python `Array` holds a core `Array` and derefs to it, so a core operation takes it with no
+  copy and moved code keeps its own calls. `ConvGeometry` and `Generator` are newtypes over the
+  core's too; the bindings keep only what reads or builds Python objects (3,675 lines against the
+  core's 8,693).
+- **`Array` holds its own invariant** (2c's audit): with public fields a Rust user could build an
+  `Array` whose buffer was shorter than its shape, and the SIMD kernels read by the shape, so safe
+  code could read out of bounds. The fields are `pub(crate)`; `Array::new` checks, `from_matrix`
+  asserts (documented), and `data()`, `data_mut()` (a slice), `shape()` and `into_data()` read it.
+- **The tests (D7):** each kernel family's output bits as a hash in `core/tests/fixtures/bits.txt`,
+  reproduced exactly on `litshe` (NEON); both generators against numpy's published draws
+  (`np.random.seed(42)`, `default_rng(42)`); the contract (errors, not panics); a doctest. CI runs
+  them on all four Linux jobs. miri moves to stage 4 (it needs a nightly toolchain beside the pin).
+- **Timing** (jebel, full protocol, against crate main 615b5fd: `focused_benchmark` over conv, pool,
+  dense and attention, `epoch_op_profile`, `op_call_timing`): within noise everywhere but conv's
+  forward, +3-4.5% (conv-conv's mini-batch run +1.9%), and `default_rng` (+35-40%, once a run,
+  microseconds). conv's forward compiles to the same instructions; `perf stat` puts its cost in the
+  front end (uops from the legacy decoder +12%, not delivered +42%, back-end stalls unchanged): a
+  placement effect in the uop cache that D7's JCC padding doesn't bound, so it isn't a cost of the
+  split and isn't held against it (`#[inline]` on conv's forward ops, D6's remedy, didn't move it).
+  A layout that holds it is in next-steps.md, "From the crate kernels".
 
 ### Stage 3: package metadata and both READMEs
 
