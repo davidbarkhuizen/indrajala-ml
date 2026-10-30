@@ -1,7 +1,7 @@
 # Workplan: remove duplicated code, third pass (DRY, 2026-10-30)
 
 **Status: in progress; decisions D1-D10 settled (2026-10-30, delegated to Claude by the owner's
-standing rule). Stages 1-3 done; stages 4-8 open.**
+standing rule). Stages 1-4 done; stages 5-8 open.**
 
 The first two passes (`git show e066333:docs/dry-workplan.md`, #506-#515; `git show
 88e1815:docs/dry-rerun-workplan.md`, #550-#557) and the rerun after multi-head attention
@@ -218,7 +218,15 @@ deleted. No stage gets an A/B (D2).
   written in 8 classes (3 shapes and 3 pure-Python Sequential networks, both window-recurrent
   ones), now one `GivenRule` mixin beside it.
 
-### Stage 4: named jobs, `_git` and the study's loops (findings 7-10, D9)
+### Stage 4: named jobs, `_git` and the study's loops (findings 7-10, D9) (done)
+
+- The ensemble trainer's jobs are frozen dataclasses (`_Training`, shared, and `_DecodedJob` or
+  `_IndexedJob`); `RunConfig.identity` builds the identity itself, pinned by
+  `test_a_runs_identity_names_its_defaults_alone_and_every_other_setting`, captured from the old
+  code before the change; `_soft_assignments` feeds the three readings.
+- **`_git` (finding 8) stays as it is,** an amendment to D9 found doing it: `ab.py`'s raises
+  `AbError` with stderr's lines, which its callers and tests read, against the archive's
+  `ArchiveError` with a message. Sharing it would need an error factory for four lines.
 
 ### Stage 5: the test helpers (findings 12-15, 17, D10)
 
