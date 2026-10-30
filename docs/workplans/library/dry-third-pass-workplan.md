@@ -1,7 +1,7 @@
 # Workplan: remove duplicated code, third pass (DRY, 2026-10-30)
 
 **Status: in progress; decisions D1-D10 settled (2026-10-30, delegated to Claude by the owner's
-standing rule). Stages 1-4 done; stages 5-8 open.**
+standing rule). Stages 1-5 done; stages 6-8 open.**
 
 The first two passes (`git show e066333:docs/dry-workplan.md`, #506-#515; `git show
 88e1815:docs/dry-rerun-workplan.md`, #550-#557) and the rerun after multi-head attention
@@ -228,7 +228,17 @@ deleted. No stage gets an A/B (D2).
   `AbError` with stderr's lines, which its callers and tests read, against the archive's
   `ArchiveError` with a message. Sharing it would need an error factory for four lines.
 
-### Stage 5: the test helpers (findings 12-15, 17, D10)
+### Stage 5: the test helpers (findings 12-15, 17, D10) (done)
+
+- `tests/studies/helpers.py` (D10's `doubles.py`, named as `tests/helpers.py`): `CarryTable` and
+  `TINY`, the study tests' smallest settings, which test_window_recurrent_study.py already had at
+  its foot; six of the seven copies were it, the seventh `TINY` at two epochs.
+- The four schedules' program-against-per-layer tests are one test over `SCHEDULES`; the
+  prepared-dataset constructors are written for the numpy classes and the Rust twins derived by
+  name (`_rust_twin`); `assert_a_checkpoint_resumes_training_by_bits` in `tests/helpers.py` serves
+  four batch-norm files (the pure-Python dense and conv ones too, not only finding 17's pair).
+  Tests collected in the changed files before and after: 185 (studies and window-recurrent), 390
+  (prepared dataset), 371 (batch norm).
 
 ### Stage 6: the per-implementation network scenarios (finding 16, D10)
 
