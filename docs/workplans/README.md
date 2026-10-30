@@ -11,7 +11,7 @@ indrajala-ml (it bloats the core for reuse); this group is what would move.
 
 | workplan | state |
 | --- | --- |
-| [paper-workplan.md](research/paper-workplan.md) | paper 1: released (tag `paper1-v1.1`, its datapack on Zenodo), out for verification |
+| [paper-workplan.md](research/paper-workplan.md) | paper 1: released (tag `paper1-v1.1`, its datapack on Zenodo), out for verification; the stand-alone preprint on Zenodo Sat 31 Oct if no reply by Friday (D39, R9) |
 | [post-paper-retests-workplan.md](research/post-paper-retests-workplan.md) | after paper 1: crystallisation (X), then branching and depth |
 | [incremental-reheat-workplan.md](research/incremental-reheat-workplan.md) | stage 0 read; the build and its probe after paper 1 (D9), X's second arm declined (D8) |
 | [state-formation-workplan.md](research/state-formation-workplan.md) | option 1 worked to a decision (the method); options 2-4 shelved (D31) |
