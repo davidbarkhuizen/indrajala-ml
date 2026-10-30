@@ -73,6 +73,7 @@ docs cite them by section:
 | The snap wall (an asymmetric margin on the snap; P1, C1 refuted) | #787 | #788, #789, #793, #797, #803 | `git show 53d7fef:docs/workplans/snap-wall-workplan.md` |
 | The crate's kernel loose ends: the vector `exp`, the build pinned (D1-D7) | #1084 | #1089, #1093, #1095-#1097, crate #74, #76, bump #1088 | `git show 7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md` |
 | aarch64 on a Raspberry Pi 5, the crate bit-identical across architectures (D1-D10) | #721 | #722, #806, #810, #813, #842, #843, #846, #869, #880, #902, #926, crate #62-#65, #71 | `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md` |
+| Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -503,9 +504,12 @@ Not planned yet:
   `.venv/bin/python scripts/measurement/duplicates.py` (the clone scan, over the package, the
   scripts, both test suites and `cli`, at 8 lines, and `--lines 10`), a search for function names
   defined in more than one module, and the twin classes read side by side. The third pass
-  (2026-10-30, [dry-third-pass-workplan.md](workplans/library/dry-third-pass-workplan.md)) made the
+  (2026-10-30; retired, in the table above) made the
   scan a repo tool; its baseline, at d38f8b6, at 8 lines: package 3.4%, scripts 1.8%, tests 4.2%,
-  crate tests 2.0%; at 10: 2.2%, 1.4%, 2.7%, 1.2%. Earlier passes used `symilar` (pylint's
+  crate tests 2.0%; at 10: 2.2%, 1.4%, 2.7%, 1.2%. After it (#1101-#1108), at 8 lines: package
+  2.2%, scripts 1.8%, tests 3.1%, crate tests 2.0%; at 10: 1.3%, 1.4%, 1.6%, 1.2% (the scripts' and
+  the crate tests' copies left are under the scan's 8 lines, or not copies: below). Earlier passes
+  used `symilar` (pylint's
   duplicate finder, `-i --ignore-docstrings --ignore-imports --ignore-signatures`), whose
   percentages below count differently. The 2026-10-01 audit
   found 0.29% duplicated at 8 lines or more in the package, and 0.91% at 10 lines or more in the
@@ -525,17 +529,42 @@ Not planned yet:
   the optimizers share `OptimizerBase` and `ArrayOptimizerBase`, and a layer's optimizer accessors
   are `WeightAndBias`, `GammaAndBeta` or `AttentionProjections` (`array_parameters.py`). A hidden
   layer takes its output-delta refusals, its downstream-as-delta methods and its no-op gradient
-  accumulation from `model/specs/hidden_layers.py` (`Hidden`, `DeltaIsDownstream`, `ParameterFree`); a
+  accumulation from `model/specs/hidden_layers.py` (`Hidden`, `DeltaIsDownstream`, `ParameterFree`,
+  and `BatchOnly` for a layer that trains on batches only); a network its spec and rule hooks from
+  `model/specs/spec_hooks.py` (`SpecHooks`; a rule preset `RulePreset`, which derives its
+  hyperparameters from the rule's fields; a network given its rule `GivenRule`); a token-wise
+  output its predictions from `TokenWiseOutput` and a conv preset its argument checks from
+  `ConvArguments` (`specs/array_network_shapes.py`); a recurrence layer its schedule's setters from
+  `RecurrenceSchedule` (`specs/window_recurrence.py`); a
   pure-Python gamma-and-beta row from `GammaAsWeights`; a token shape from
   `spec_shapes.token_shape`. Tests share `bits`, `split`, `max_relative_gap`, `patching`,
-  `randomized`, `learn_in_step` and the `assert_*` scenarios (`tests/helpers.py`), and a scenario
-  every implementation runs takes conftest's `implementation` fixture (`tests/model/networks/test_{attention,residual,layer_norm}_network.py`). A new layer
+  `randomized`, `learn_in_step` and the `assert_*` scenarios (`tests/helpers.py`, the checkpoint
+  resume among them), the study tests `CarryTable` and `TINY` (`tests/studies/helpers.py`), the
+  crate's op tests `bits`, `to_numpy` and `to_array` (`rust/tests/array_helpers.py`), and a
+  scenario every implementation runs takes conftest's `implementation` fixture
+  (`tests/model/networks/test_{attention,residual,layer_norm,sequence}_network.py`). A new layer
   kind extends these rather than adding a copy. A study takes its cached MNIST
   loading, mean ± sd cells and Markdown tables from `indrajala_ml/studies/common.py`.
 - **The builders' wiring loop** (the rerun's D6). The fork, add and body-first loop is the same in
   `python_layer_builder.py` and `array_layer_builder.py`; sharing it needs callbacks for the fork
   and the add, more indirection than its 12 lines are worth. Revisit if another layer kind that
   links layers arrives.
+
+- **The third pass's leftovers** (its rerun at stage 8, the 8-line scan):
+  - *The presets' typed `__init__`s* (its D3): each preset keeps its own signature, which differs
+    by implementation (the numpy one-output presets take `input_bounds` optional and their
+    hyperparameter keyword-only; the pure-Python ones `input_bounds` required). One `__init__` per
+    rule and topology would change public signatures: an API decision, for the 1.0 release.
+  - *Inside single test files:* `rust/tests/test_window_program.py` (two 22-line set-ups),
+    `rust/tests/test_attention_ops.py`, `tests/array_network_contract.py`,
+    `tests/model/persistence/test_format2.py`, `tests/measurement/test_machine_profile_capture.py`,
+    and the pure-Python and Rust sequence files' embedding tests (13 lines). Each a helper inside its
+    file, when it is next touched.
+  - *The pure-Python recurrence layer's set-up* (14 lines, the numpy one's first lines): shared
+    when the pure-Python layer gains the schedule's setters.
+  - *Not copies:* `modular_family_probe.py`'s flag blocks (different flags, the same shape);
+    `tests/test_pcg64.py` against `rust/tests/test_random_pcg64_parity.py` (each suite's own,
+    standalone); `ab.py`'s and the archive's `_git` (different errors, which their callers read).
 
 Not planned yet:
 
