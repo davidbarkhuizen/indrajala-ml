@@ -33,6 +33,12 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 | [grouped-query-attention-workplan.md](library/grouped-query-attention-workplan.md) | step 14: grouped- and multi-query attention |
 | [cross-attention-workplan.md](library/cross-attention-workplan.md) | step 15: cross-attention and an encoder-decoder model |
 
+Beside the roadmap:
+
+| workplan | state |
+| --- | --- |
+| [dry-third-pass-workplan.md](library/dry-third-pass-workplan.md) | the third DRY pass (2026-10-30): audit done, D1-D10 settled, stages 1-8 open |
+
 ## `infrastructure/`: machines and release
 
 | workplan | state |
