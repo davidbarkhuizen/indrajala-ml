@@ -1151,6 +1151,47 @@ window 32 wide (row 3), the crucible row not applying (no crucible).
   PDFs and texts not openly licensed move to a separate private repository first; then it goes
   public.
 
+- **D39. Self-publish the paper on Zenodo if no co-author replies (settled 2026-10-30 by the
+  owner).** The owner: "I haven't received any replies to any of the outreach emails ... we already
+  have 6 views and 18 downloads on the data pack - so if no-one replies by end of day today (Friday)
+  - then I think we should just self-publish on Zenodo". **The trigger:** no reply from any of the
+  four researchers by the end of Friday 30 October; a decline doesn't stop it; a reply that engages
+  (an offer to review, a question) goes to the owner before anything is published. **Then, Saturday
+  31 October (R9):** the paper as a stand-alone preprint on Zenodo, its own record beside the
+  datapack's. The details below were settled by Claude under the owner's standing delegation; the
+  owner may reopen any.
+  - (a) *Chosen:* a Zenodo preprint now. Pros: the claims become citable and checkable beside the
+    data already being downloaded; a DOI and a date; no gatekeeper; the co-author route stays open
+    (a later version, with co-authors, goes to arXiv and TMLR as D6 has it). Cons: no review; its
+    reach rests on links.
+  - (b) Wait longer for replies. Pros: a co-author's check before the claims are public. Cons: open
+    ended; the datapack is already public without the paper that reads it.
+  - (c) arXiv now, without co-authors. Cons: an independent author needs an endorsement; arXiv holds
+    the author to every line and bans for a year on unchecked LLM output (D6), which the owner can't
+    meet alone.
+  - **The stand-alone manuscript:** the author block the owner alone ("Independent researcher"),
+    Claude credited in the statement, not the author block (D6, D38); every draft note gone, the
+    title page's "Draft ... not for circulation" replaced by "Preprint, version 1" and the date. The
+    contributions statement keeps its account of who did what, drops the verifying co-authors, and
+    says plainly that no independent human check has been made yet and invites one, with how
+    (the verify page, the certificate, `paper_tables.py check`); the responsibility sentence says
+    the owner takes responsibility for publishing it and for its direction, not that he has checked
+    every line (the honest-collaboration rule, and the AI declaration without an "independently
+    verified" line). The paragraph naming the researcher approached at Anthropic goes, by the draft
+    note's own rule (she hasn't joined), and with it the competing-interests note; Anthropic's
+    non-involvement stays. "This journal" becomes the venues by name. Nothing else changes: every
+    number as tagged `paper1-v1`, `paper_tables.py check` passing.
+  - **The record:** Publication / Preprint, CC BY 4.0, the owner as creator, Claude's part in the
+    description in the statement's words (D38's form); related identifier *is supplemented by* the
+    datapack's DOI, and the datapack's record edited (metadata only, `zenodo_deposit.py edit`) to
+    *is supplement to* the paper's. The DOI is reserved on the draft and printed on the title page
+    before upload; the owner reviews both drafts in the browser and presses Publish. The PDF's
+    commit tagged `paper1-v1.2` (the manuscript only; code and numbers unchanged).
+  - **After:** the letters' offer stands; a short note to the four with the DOI is the owner's to
+    send or not. A co-author's verification later makes a new version (co-authors in the author
+    block, the statement restored to D6's) and the arXiv and TMLR route; check both venues' policy
+    on a prior preprint then.
+
 ## Findings: T4, the decomposition reading (2026-10-23, read by D10's rules)
 
 `data/window-recurrent/paper/t4/read.sh` at 533ec4d (D10 merged first), on the 69 networks D10
@@ -1780,6 +1821,15 @@ Stages 1-5 above are done for T1-T7 and T10; stages 6-8 are replaced by these.
   as the numbers were computed) and `paper1-v1.1` (adds only the datapack tools for archives in
   parts); the contribution statement in the manuscript; the four co-author letters sent with the
   PDF. The paper itself is not posted: arXiv and TMLR wait for the verification (D6).
+- **R9. The stand-alone preprint (D39), Saturday 31 October if no reply by Friday's end.**
+  - *Friday:* the stand-alone manuscript on an open, unmerged PR in indrajala-research (D39's
+    changes, built through `make`, `paper_tables.py check` passing, no draft note left);
+    `zenodo_deposit.py` taking `--metadata`, and the preprint's metadata beside the datapack's
+    (`docs/datapack/paper-zenodo-metadata.json`); the owner reads the PDF.
+  - *Friday's end:* the owner's go (no reply), or the owner decides on a reply that engages.
+  - *Saturday:* the DOI reserved and put on the title page; the PR merged and `paper1-v1.2` tagged;
+    the PDF uploaded; the datapack's relation set (`edit`); the owner presses Publish on both. Then
+    the datapack README, the research repository's summary page and this plan link the paper's DOI.
 
 | when (estimates) | what |
 | --- | --- |
