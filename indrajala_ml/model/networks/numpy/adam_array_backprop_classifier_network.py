@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from indrajala_ml.model.networks.numpy.array_backprop_classifier_network import ArrayBackpropClassifierNetwork
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON, Adam
 
 
-class AdamArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
+class AdamArrayBackpropClassifierNetwork(RulePreset, ArrayBackpropClassifierNetwork):
     """
     The Adam sibling of ArrayBackpropClassifierNetwork: its optimizer applies the Adam rule, with
     beta1/beta2/epsilon (keyword-only, after the ignored input_bounds) defaulting to Kingma & Ba's
@@ -12,7 +13,7 @@ class AdamArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
     not Adam's m/v/t.
     """
 
-    hyperparameters = ("beta1", "beta2", "epsilon")
+    rule = Adam
 
     def __init__(
         self,
@@ -28,6 +29,3 @@ class AdamArrayBackpropClassifierNetwork(ArrayBackpropClassifierNetwork):
         self.beta2 = beta2
         self.epsilon = epsilon
         super().__init__(layer_sizes, dimension, input_bounds)
-
-    def _update_rule(self) -> Adam:
-        return Adam(self.beta1, self.beta2, self.epsilon)

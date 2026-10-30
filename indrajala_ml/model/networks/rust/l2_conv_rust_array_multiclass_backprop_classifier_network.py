@@ -7,16 +7,17 @@ from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classi
 )
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import WeightDecay
 
 
-class L2ConvRustArrayMultiClassBackpropClassifierNetwork(ConvRustArrayMultiClassBackpropClassifierNetwork):
+class L2ConvRustArrayMultiClassBackpropClassifierNetwork(RulePreset, ConvRustArrayMultiClassBackpropClassifierNetwork):
     """
     L2ConvVectorizedMultiClassBackpropClassifierNetwork on the Rust backend: the optimizer's
     WeightDecay rule for the conv, dense and output layers.
     """
 
-    hyperparameters = ("l2_lambda",)
+    rule = WeightDecay
 
     def __init__(
         self,
@@ -29,6 +30,3 @@ class L2ConvRustArrayMultiClassBackpropClassifierNetwork(ConvRustArrayMultiClass
     ) -> None:
         self.l2_lambda = l2_lambda
         super().__init__(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-
-    def _update_rule(self) -> WeightDecay:
-        return WeightDecay(self.l2_lambda)

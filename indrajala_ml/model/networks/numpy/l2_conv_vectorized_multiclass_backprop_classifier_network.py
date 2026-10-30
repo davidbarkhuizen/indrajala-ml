@@ -7,10 +7,13 @@ from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.networks.numpy.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import WeightDecay
 
 
-class L2ConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMultiClassBackpropClassifierNetwork):
+class L2ConvVectorizedMultiClassBackpropClassifierNetwork(
+    RulePreset, ConvVectorizedMultiClassBackpropClassifierNetwork
+):
     """
     The L2 (weight decay) sibling of ConvVectorizedMultiClassBackpropClassifierNetwork, and the
     numpy counterpart of L2RegularizedConvMultiClassBackpropClassifierNetwork: the optimizer's
@@ -18,7 +21,7 @@ class L2ConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMultiCla
     no weights, so they are unchanged.
     """
 
-    hyperparameters = ("l2_lambda",)
+    rule = WeightDecay
 
     def __init__(
         self,
@@ -31,6 +34,3 @@ class L2ConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMultiCla
     ) -> None:
         self.l2_lambda = l2_lambda
         super().__init__(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-
-    def _update_rule(self) -> WeightDecay:
-        return WeightDecay(self.l2_lambda)

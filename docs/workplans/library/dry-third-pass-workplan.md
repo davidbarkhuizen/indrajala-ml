@@ -1,7 +1,7 @@
 # Workplan: remove duplicated code, third pass (DRY, 2026-10-30)
 
 **Status: in progress; decisions D1-D10 settled (2026-10-30, delegated to Claude by the owner's
-standing rule). Stages 1-2 done; stages 3-8 open.**
+standing rule). Stages 1-3 done; stages 4-8 open.**
 
 The first two passes (`git show e066333:docs/dry-workplan.md`, #506-#515; `git show
 88e1815:docs/dry-rerun-workplan.md`, #550-#557) and the rerun after multi-head attention
@@ -211,7 +211,12 @@ deleted. No stage gets an A/B (D2).
   `BatchOnly` in `specs/hidden_layers.py`, taken by the batch-norm layers too (next-steps.md's
   leftover named them with the linear ones), their refusals now `Hidden`'s message.
 
-### Stage 3: the per-rule presets (finding 1, D3)
+### Stage 3: the per-rule presets (finding 1, D3) (done)
+
+- `RulePreset` in `model/specs/spec_hooks.py`, on the 27 presets. Found while doing it, and done
+  here: the Sequential and window-recurrent networks' `_update_rule`, `return self.update_rule`,
+  written in 8 classes (3 shapes and 3 pure-Python Sequential networks, both window-recurrent
+  ones), now one `GivenRule` mixin beside it.
 
 ### Stage 4: named jobs, `_git` and the study's loops (findings 7-10, D9)
 

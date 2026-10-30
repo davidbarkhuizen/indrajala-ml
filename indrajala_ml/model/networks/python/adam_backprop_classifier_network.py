@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
 from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON, Adam
 
 
-class AdamBackpropClassifierNetwork(BackpropClassifierNetwork):
+class AdamBackpropClassifierNetwork(RulePreset, BackpropClassifierNetwork):
     """
     An Adam (Kingma & Ba, 2014) sibling of BackpropClassifierNetwork: its optimizer applies the
     Adam rule to every trainable layer, a per-parameter adaptive learning rate from bias-corrected
@@ -16,7 +15,7 @@ class AdamBackpropClassifierNetwork(BackpropClassifierNetwork):
     Single-output only, like the other weight-update siblings of the per-node family.
     """
 
-    hyperparameters: ClassVar[tuple[str, ...]] = ("beta1", "beta2", "epsilon")
+    rule = Adam
 
     def __init__(
         self,
@@ -31,6 +30,3 @@ class AdamBackpropClassifierNetwork(BackpropClassifierNetwork):
         self.beta2 = beta2
         self.epsilon = epsilon
         super().__init__(layer_sizes, dimension, input_bounds)
-
-    def _update_rule(self) -> Adam:
-        return Adam(self.beta1, self.beta2, self.epsilon)

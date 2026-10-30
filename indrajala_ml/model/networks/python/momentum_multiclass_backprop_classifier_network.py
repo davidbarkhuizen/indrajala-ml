@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
 from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
     MultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import Momentum
 
 
-class MomentumMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
+class MomentumMultiClassBackpropClassifierNetwork(RulePreset, MultiClassBackpropClassifierNetwork):
     """
     The momentum sibling of MultiClassBackpropClassifierNetwork: its optimizer applies the
     Momentum rule, with momentum required, as in MomentumBackpropClassifierNetwork. The
@@ -16,7 +15,7 @@ class MomentumMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNe
     MomentumRustArrayMultiClassBackpropClassifierNetwork.
     """
 
-    hyperparameters: ClassVar[tuple[str, ...]] = ("momentum",)
+    rule = Momentum
 
     def __init__(
         self,
@@ -28,6 +27,3 @@ class MomentumMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNe
     ) -> None:
         self.momentum = momentum
         super().__init__(layer_sizes, dimension, input_bounds, class_count)
-
-    def _update_rule(self) -> Momentum:
-        return Momentum(self.momentum)

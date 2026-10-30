@@ -43,6 +43,7 @@ from indrajala_ml.model.protocols.classification import argmax_first_occurrence
 from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
 from indrajala_ml.model.specs.bounds import validate_batch, validate_class_count
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, branch_ends
+from indrajala_ml.model.specs.spec_hooks import GivenRule
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
 from indrajala_ml.model.specs.spec_validation import validate_window_recurrent
 from indrajala_ml.model.specs.update_rules import UpdateRule
@@ -57,7 +58,7 @@ from indrajala_ml.pcg64 import generator_state, set_generator_state
 Batch = Sequence[tuple[tuple[float, ...], Sequence[int]]]
 
 
-class WindowRecurrentBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSoftmaxLayer]):
+class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLayer, TokenSoftmaxLayer]):
     """
     The module's network: its window's layers (trainable_layers, built behind a StateLayer of k
     inputs) and its own parts (parts). It saves and loads in format 2 only, with the shape
@@ -110,9 +111,6 @@ class WindowRecurrentBackpropNetwork(BackpropNetworkBase[TrainableLayer, TokenSo
 
     def _window_state_size(self) -> int | None:
         return self.recurrence.state_size
-
-    def _update_rule(self) -> UpdateRule:
-        return self.update_rule
 
     @property
     def consolidation(self) -> Consolidation:

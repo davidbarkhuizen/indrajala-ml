@@ -11,6 +11,7 @@ from indrajala_ml.model.persistence.format2 import NetworkFile
 from indrajala_ml.model.protocols.array_protocols import BackendArray
 from indrajala_ml.model.specs.bounds import validate_class_count, validate_layer_sizes
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, refuse_token_wise_output, token_wise_output
+from indrajala_ml.model.specs.spec_hooks import GivenRule
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
 from indrajala_ml.model.specs.update_rules import UpdateRule
 
@@ -230,7 +231,7 @@ class ArrayConvShape[A: BackendArray](ConvArguments, _ConvShapeBase[A]):
         return load_conv_model_state(cls, state, cls._extra_init_kwargs(state))
 
 
-class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
+class SequentialMultiClassShape[A: BackendArray](GivenRule, _ConvShapeBase[A]):
     """
     A multiclass network of any accepted layer specs (layer_specs.py) and update rule, over the
     multiclass shape's argmax classification and one-hot targets: the generic counterpart of the
@@ -259,9 +260,6 @@ class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
         # to the backend's base
         super(ArrayMultiClassShape, self).__init__(layers, input_shape)
 
-    def _update_rule(self) -> UpdateRule:
-        return self.update_rule
-
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
         # any format-2 file of its shape, preset or not, numpy or Rust
@@ -273,7 +271,7 @@ class SequentialMultiClassShape[A: BackendArray](_ConvShapeBase[A]):
         raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
 
 
-class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
+class SequentialSingleOutputShape[A: BackendArray](GivenRule, _SingleOutputHostBase[A]):
     """SequentialMultiClassShape over the single-output shape: its output layer has one node."""
 
     preset_arguments: ClassVar[tuple[str, ...] | None] = None
@@ -289,9 +287,6 @@ class SequentialSingleOutputShape[A: BackendArray](_SingleOutputHostBase[A]):
         self.update_rule = update_rule
 
         super(ArraySingleOutputShape, self).__init__(layers, input_shape)
-
-    def _update_rule(self) -> UpdateRule:
-        return self.update_rule
 
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
@@ -329,7 +324,7 @@ class TokenWiseOutput[A: BackendArray](_ShapeBase[A]):
         return self.backend.argmax_token_rows(output_batch, self.class_count)
 
 
-class SequentialSequenceShape[A: BackendArray](TokenWiseOutput[A]):
+class SequentialSequenceShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
     """
     The sequence shape over ArrayNetworkBase, for either backend (the sequence task workplan, D6):
     a network of any accepted layer specs whose output layer is token-wise (token_wise_output), a
@@ -359,9 +354,6 @@ class SequentialSequenceShape[A: BackendArray](TokenWiseOutput[A]):
 
         super().__init__(layers, input_shape)
         self.tokens = spec_shapes(layers, input_shape)[-1].output_shape[0]
-
-    def _update_rule(self) -> UpdateRule:
-        return self.update_rule
 
     def _target_array(self, category: Sequence[int]) -> A:
         target = self.backend.zeros(self.tokens * self.class_count)

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
 from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import WeightDecay
 
 
-class L2RegularizedBackpropClassifierNetwork(BackpropClassifierNetwork):
+class L2RegularizedBackpropClassifierNetwork(RulePreset, BackpropClassifierNetwork):
     """
     An L2 (weight decay) sibling of BackpropClassifierNetwork: its optimizer applies the
     WeightDecay rule, adding l2_lambda * weight to every weight's gradient; biases aren't
@@ -20,7 +19,7 @@ class L2RegularizedBackpropClassifierNetwork(BackpropClassifierNetwork):
     networks don't overfit enough for a weight penalty to help.
     """
 
-    hyperparameters: ClassVar[tuple[str, ...]] = ("l2_lambda",)
+    rule = WeightDecay
 
     def __init__(
         self,
@@ -31,6 +30,3 @@ class L2RegularizedBackpropClassifierNetwork(BackpropClassifierNetwork):
     ) -> None:
         self.l2_lambda = l2_lambda
         super().__init__(layer_sizes, dimension, input_bounds)
-
-    def _update_rule(self) -> WeightDecay:
-        return WeightDecay(self.l2_lambda)

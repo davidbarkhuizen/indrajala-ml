@@ -7,10 +7,13 @@ from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.networks.numpy.conv_vectorized_multiclass_backprop_classifier_network import (
     ConvVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import DEFAULT_BETA1, DEFAULT_BETA2, DEFAULT_EPSILON, Adam
 
 
-class AdamConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMultiClassBackpropClassifierNetwork):
+class AdamConvVectorizedMultiClassBackpropClassifierNetwork(
+    RulePreset, ConvVectorizedMultiClassBackpropClassifierNetwork
+):
     """
     The Adam sibling of ConvVectorizedMultiClassBackpropClassifierNetwork, and the numpy
     counterpart of AdamConvMultiClassBackpropClassifierNetwork: the optimizer's Adam rule for the
@@ -18,7 +21,7 @@ class AdamConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMultiC
     values. Pool layers have no weights, so they are unchanged.
     """
 
-    hyperparameters = ("beta1", "beta2", "epsilon")
+    rule = Adam
 
     def __init__(
         self,
@@ -35,6 +38,3 @@ class AdamConvVectorizedMultiClassBackpropClassifierNetwork(ConvVectorizedMultiC
         self.beta2 = beta2
         self.epsilon = epsilon
         super().__init__(input_height, input_width, conv_specs, dense_layer_sizes, class_count)
-
-    def _update_rule(self) -> Adam:
-        return Adam(self.beta1, self.beta2, self.epsilon)

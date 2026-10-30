@@ -8,9 +8,11 @@ network) overrides the hook it changes.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import fields
+from typing import Any, ClassVar
 
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec
-from indrajala_ml.model.specs.update_rules import SGD, UpdateRule
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
 
 
 class SpecHooks:
@@ -35,3 +37,32 @@ class SpecHooks:
     def _update_rule(self) -> UpdateRule:
         # plain SGD; the momentum, Adam and L2 siblings return their rule, from their hyperparameters
         return SGD()
+
+
+class GivenRule:
+    """A network built with its update rule as an argument (the Sequential and window-recurrent networks)."""
+
+    update_rule: UpdateRule
+
+    def _update_rule(self) -> UpdateRule:
+        return self.update_rule
+
+
+class RulePreset:
+    """
+    A preset that trains with one update rule, from hyperparameters it stores under the rule's field
+    names (the DRY third pass workplan, D3): `rule` names the rule, `hyperparameters` (which the
+    format-2 file and the legacy envelope record) are its dataclass fields, and _update_rule builds
+    it from them. Listed first, ahead of the preset's network; the preset's own typed __init__
+    stores each hyperparameter.
+    """
+
+    rule: ClassVar[type[Momentum | Adam | WeightDecay]]
+    hyperparameters: ClassVar[tuple[str, ...]]
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        cls.hyperparameters = tuple(f.name for f in fields(cls.rule))
+
+    def _update_rule(self) -> UpdateRule:
+        return self.rule(**{name: getattr(self, name) for name in self.hyperparameters})

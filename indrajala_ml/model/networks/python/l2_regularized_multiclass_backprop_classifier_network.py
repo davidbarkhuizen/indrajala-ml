@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
 from indrajala_ml.model.networks.python.multiclass_backprop_classifier_network import (
     MultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.specs.spec_hooks import RulePreset
 from indrajala_ml.model.specs.update_rules import WeightDecay
 
 
-class L2RegularizedMultiClassBackpropClassifierNetwork(MultiClassBackpropClassifierNetwork):
+class L2RegularizedMultiClassBackpropClassifierNetwork(RulePreset, MultiClassBackpropClassifierNetwork):
     """
     The L2 (weight decay) sibling of MultiClassBackpropClassifierNetwork: its optimizer applies the
     WeightDecay rule, with l2_lambda required, as in L2RegularizedBackpropClassifierNetwork. The
@@ -16,7 +15,7 @@ class L2RegularizedMultiClassBackpropClassifierNetwork(MultiClassBackpropClassif
     L2RustArrayMultiClassBackpropClassifierNetwork.
     """
 
-    hyperparameters: ClassVar[tuple[str, ...]] = ("l2_lambda",)
+    rule = WeightDecay
 
     def __init__(
         self,
@@ -28,6 +27,3 @@ class L2RegularizedMultiClassBackpropClassifierNetwork(MultiClassBackpropClassif
     ) -> None:
         self.l2_lambda = l2_lambda
         super().__init__(layer_sizes, dimension, input_bounds, class_count)
-
-    def _update_rule(self) -> WeightDecay:
-        return WeightDecay(self.l2_lambda)
