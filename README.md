@@ -965,8 +965,9 @@ test passing, and:
   Ryzen laptop's numbers beside them.
 - [docs/i7-9700k-rust-optimization.md](docs/i7-9700k-rust-optimization.md): where the Rust crate
   lags numpy on the benchmark machine, and what to investigate for each gap.
-- [docs/workplans/infrastructure/pypi-release-workplan.md](docs/workplans/infrastructure/pypi-release-workplan.md): publishing the Rust crate to
-  PyPI, with multi-platform wheels built and tested on every push, PR and release tag.
+- [docs/workplans/infrastructure/release-workplan.md](docs/workplans/infrastructure/release-workplan.md): publishing the Rust crate to
+  PyPI (multi-platform wheels) and crates.io (a pure-Rust core split from the bindings), built and
+  tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
   attention, multi-head attention and a transformer block, and a sequence task with causal
