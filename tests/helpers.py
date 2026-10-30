@@ -401,6 +401,25 @@ def assert_randomize_breaks_symmetry(network: BackpropNetworkBase[Any]) -> None:
     assert len(set(weight_sets)) == len(weight_sets)
 
 
+def assert_a_checkpoint_resumes_training_by_bits(
+    network: Any, first: Sequence[Any], after: Sequence[Sequence[Any]]
+) -> None:
+    """
+    A network checkpointed after a learn_batch of `first`, then trained on each batch of `after`,
+    trains the same from its restored checkpoint, by bits.
+    """
+    network.learn_batch(0.1, first)
+    checkpoint = network.checkpoint()
+    for batch in after:
+        network.learn_batch(0.1, batch)
+    trained = bits(network.snapshot())
+
+    network.restore_checkpoint(checkpoint)
+    for batch in after:
+        network.learn_batch(0.1, batch)
+    assert bits(network.snapshot()) == trained
+
+
 def assert_snapshot_restore_round_trip(network: _Snapshottable, step: Callable[[], object], times: int = 5) -> None:
     """
     Snapshot, apply `step` `times` times (asserting the network moved), restore, and assert

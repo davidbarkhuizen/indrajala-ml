@@ -4,6 +4,7 @@ the turns, the optimizer's rate per factor on a real factored network, and a ste
 """
 
 import contextlib
+import dataclasses
 import json
 import random
 from collections.abc import Generator, Sequence
@@ -15,6 +16,7 @@ import pytest
 
 from indrajala_ml.studies import window_recurrent_study as wr
 from indrajala_ml.studies import window_tasks as wt
+from tests.studies.helpers import TINY
 
 DIVISION = wt.ModularDivision(5)
 THREE = ((4, 8), (4, 8), (4, 8))
@@ -142,19 +144,7 @@ def test_a_staggered_step_turns_to_each_factor_at_its_plateau_then_ends(monkeypa
 
 
 def test_a_staggered_run_carries_its_turns_and_resumes_them(tmp_path: Path):
-    settings = wr.Settings(
-        epoch_examples=64,
-        max_epochs=2,
-        patience=1,
-        screen=20,
-        steps=2,
-        test_lengths=(3,),
-        sampled=50,
-        relation_sampled=10,
-        per_stratum=5,
-        codes_cases=20,
-        seeds=1,
-    )
+    settings = dataclasses.replace(TINY, max_epochs=2)
     study = wr.Study(tmp_path, settings, [spec()], 0)
     result = wr.run(study, log=lambda line: None)[spec().key]
     assert result["stagger"] == 0.1 and all("turns" in step for step in result["steps"])

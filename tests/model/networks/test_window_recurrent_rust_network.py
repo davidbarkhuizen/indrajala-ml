@@ -10,6 +10,7 @@ masks again, one window with the state's projections at zero is the Rust sequenc
 by bits, and a saved network loads and resumes by bits.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -225,68 +226,6 @@ def test_coupled_training_and_screen_have_numpys(recurrence: str, soft: bool):
     _assert_close([(numpy.forward_windows(X),)], [(rust.forward_windows(RUST.matrix(X.tolist())),)], 1e-10)
 
 
-@pytest.mark.parametrize("recurrence", RECURRENCES)
-def test_coupled_trainings_program_is_the_rust_per_layer_path_by_bits(recurrence: str):
-    rust, _ = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
-    per_layer, _ = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
-    for network in (rust, per_layer):
-        network.set_couplings(_couplings(network))
-    X, labels = _batch(3, examples=4)
-    rust.rng, per_layer.rng = RUST.default_rng(5), RUST.default_rng(5)
-    X_rust = RUST.matrix(X.tolist())
-    rust._accumulate_gradients(X_rust, rust._target_batch_array(labels))
-    per_layer.per_layer_gradients(X_rust, per_layer._target_batch_array(labels))
-    for a, b in zip(
-        [layer for layer in [*rust.layers, *rust.parts] if hasattr(layer, "gradients")],
-        [layer for layer in [*per_layer.layers, *per_layer.parts] if hasattr(layer, "gradients")],
-        strict=True,
-    ):
-        for x, y in zip(a.gradients(), b.gradients(), strict=True):
-            assert bits(x) == bits(y)
-
-
-@pytest.mark.parametrize("recurrence", RECURRENCES)
-def test_continuous_trainings_program_is_the_rust_per_layer_path_by_bits(recurrence: str):
-    rust, _ = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
-    per_layer, _ = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
-    free = [f.codes is not None for f in rust.recurrence.factors]
-    for network in (rust, per_layer):
-        network.set_continuous(free)
-    X, labels = _batch(3, examples=4)
-    rust.rng, per_layer.rng = RUST.default_rng(5), RUST.default_rng(5)
-    X_rust = RUST.matrix(X.tolist())
-    rust._accumulate_gradients(X_rust, rust._target_batch_array(labels))
-    per_layer.per_layer_gradients(X_rust, per_layer._target_batch_array(labels))
-    for a, b in zip(
-        [layer for layer in [*rust.layers, *rust.parts] if hasattr(layer, "gradients")],
-        [layer for layer in [*per_layer.layers, *per_layer.parts] if hasattr(layer, "gradients")],
-        strict=True,
-    ):
-        for x, y in zip(a.gradients(), b.gradients(), strict=True):
-            assert bits(x) == bits(y)
-
-
-@pytest.mark.parametrize("recurrence", RECURRENCES)
-def test_soft_trainings_program_is_the_rust_per_layer_path_by_bits(recurrence: str):
-    rust, _ = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
-    per_layer, _ = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
-    temperatures = [None if f.codes is None else 0.5 + 0.25 * g for g, f in enumerate(rust.recurrence.factors)]
-    for network in (rust, per_layer):
-        network.set_temperatures(temperatures)
-    X, labels = _batch(3, examples=4)
-    rust.rng, per_layer.rng = RUST.default_rng(5), RUST.default_rng(5)
-    X_rust = RUST.matrix(X.tolist())
-    rust._accumulate_gradients(X_rust, rust._target_batch_array(labels))
-    per_layer.per_layer_gradients(X_rust, per_layer._target_batch_array(labels))
-    for a, b in zip(
-        [layer for layer in [*rust.layers, *rust.parts] if hasattr(layer, "gradients")],
-        [layer for layer in [*per_layer.layers, *per_layer.parts] if hasattr(layer, "gradients")],
-        strict=True,
-    ):
-        for x, y in zip(a.gradients(), b.gradients(), strict=True):
-            assert bits(x) == bits(y)
-
-
 def _straight_soft(network: Any) -> None:
     # every snapped factor soft, coupled below 1, its gradient straight through (the workplan's D51)
     network.set_temperatures([None if f.codes is None else 0.75 for f in network.recurrence.factors])
@@ -309,12 +248,31 @@ def test_straight_soft_coupled_training_has_numpys(recurrence: str):
     _assert_close(expected, actual, 1e-10)
 
 
+def _continuous(network: Any) -> None:
+    network.set_continuous([f.codes is not None for f in network.recurrence.factors])
+
+
+def _soft(network: Any) -> None:
+    network.set_temperatures(
+        [None if f.codes is None else 0.5 + 0.25 * g for g, f in enumerate(network.recurrence.factors)]
+    )
+
+
+SCHEDULES: dict[str, Callable[[Any], None]] = {
+    "coupled": lambda network: network.set_couplings(_couplings(network)),
+    "continuous": _continuous,
+    "soft": _soft,
+    "straight_soft_coupled": _straight_soft,
+}
+
+
 @pytest.mark.parametrize("recurrence", RECURRENCES)
-def test_straight_soft_coupled_trainings_program_is_the_rust_per_layer_path_by_bits(recurrence: str):
+@pytest.mark.parametrize("schedule", SCHEDULES)
+def test_each_schedules_training_program_is_the_rust_per_layer_path_by_bits(schedule: str, recurrence: str):
     rust, _ = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
     per_layer, _ = _pair(WINDOW, SGD(), recurrence=RECURRENCES[recurrence])
     for network in (rust, per_layer):
-        _straight_soft(network)
+        SCHEDULES[schedule](network)
     X, labels = _batch(3, examples=4)
     rust.rng, per_layer.rng = RUST.default_rng(5), RUST.default_rng(5)
     X_rust = RUST.matrix(X.tolist())
