@@ -50,8 +50,8 @@ this repository as a submodule; the library itself needs neither matplotlib nor 
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
-| `tests/` | ~7400 | this package: models, training, data loaders, Rust-vs-numpy parity |
-| `rust/tests/` | ~2400 | the submodule's own `indrajala_math_rust` API, checked against numpy |
+| `tests/` | ~9900 | this package: models, training, data loaders, Rust-vs-numpy parity |
+| `rust/tests/` | ~3000 | the submodule's own `indrajala_math_rust` API, checked against numpy |
 
 Both need the submodule checked out **and** built into `.venv`: `tests/` imports
 `indrajala_math_rust` directly, and `rust/tests/` only exists once the submodule is initialised.
@@ -65,10 +65,12 @@ git submodule update --init   # populate rust/
 ./cli test
 ```
 
-CI (`.github/workflows/ci.yml`) runs `./cli setup --no-os-packages --rust-wheel-dir .rust-wheel`
-then `./cli test <suite>` on every push and PR, one parallel job per suite, plus a `lint` job
-(`./cli lint`). It skips apt (CI's python is not apt's), and caches `.venv`, MNIST and the
-crate's release wheel, keyed on the `rust/` submodule commit, so the crate only compiles when
+CI (`.github/workflows/ci.yml`) runs `./cli setup --rust-wheel-dir .rust-wheel` then `./cli test
+<suite>` on every push and PR, in parallel jobs on x86_64 and aarch64 (arm64): `rust/tests/` whole
+and `tests/` in 8 shards (`--shard I/8`, `tests/conftest.py`), the `rust/tests/` job also checking
+the golden run's committed Rust reference (`data/refactoring/golden_run_rust.json`), plus a `lint` job (`./cli
+setup --rust-wheel-dir .rust-wheel --no-data`, then `./cli lint`). It caches `.venv`, the datasets and
+the crate's release wheel, keyed on the `rust/` submodule commit, so the crate only compiles when
 the submodule moves.
 
 ## Linting
@@ -93,14 +95,15 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | Path | Contents |
 | --- | --- |
 | `indrajala_ml/model/` | classifier networks and their layers |
+| `indrajala_ml/` (top level) | `batch.py`, the batch runner's controller and workers (`scripts/runner/batch.py`); `pcg64.py`, numpy's `default_rng` in pure Python; `geometry.py`, the linear classifier's polygon targets |
 | `indrajala_ml/training/` | training loops (`train.py`), synthetic training data, run checkpoints, evaluation (disagreement rate, accuracy, confusion matrix), one-vs-rest ensemble training over multiprocessing (`ensemble_train.py`) |
-| `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; the text corpora's (`text_data.py`); `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
-| `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks; the per-op timing (`layer_op_timing.py`) and the conv Rust/numpy comparison (`conv_comparison.py`) the timing scripts build on, and their timing helpers (`timing.py`) |
-| `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol; `sequence_study.py`, the sequence study's; `attention_dropout_study.py`, the attention-dropout study's |
+| `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; the text corpora's (`text_data.py`); base-3 addition (`addition_data.py`) and modular arithmetic (`modular_data.py`) for the window-recurrent studies; `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
+| `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks; the per-op timing (`layer_op_timing.py`) and the conv Rust/numpy comparison (`conv_comparison.py`) the timing scripts build on, and their timing helpers (`timing.py`); the benchmark archive's records (`benchmark_archive.py`); the machine lock, one heavy job at a time (`machine_lock.py`) |
+| `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol; `sequence_study.py`, the sequence study's; `attention_dropout_study.py`, the attention-dropout study's; `rotary_study.py` and `addition_study.py`; the window-recurrent harness (`window_recurrent_study.py`), its tasks (`window_tasks.py`, `modular_family.py`), its certificate (`window_recurrent_certificate.py`, `chow.py`), its readings (`window_diagnostics.py`, `window_drift.py`, `machine_reading.py`, `window_replay.py`), the guard and collapse trigger (`certificate_guard.py`, `collapse.py`) and the claims' statistics (`inference.py`) |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
 | `scripts/data/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
-| `scripts/` (the rest) | benchmark, profiling and sweep tools, `ab.py` (old-against-new timing A/Bs), the residual depth study, the patch-attention, multi-head attention and sequence studies and the refactoring golden run; see `docs/measurement.md` |
+| `scripts/` (the rest) | grouped by purpose ([scripts/README.md](scripts/README.md)): `measurement/` (`ab.py`, the benchmarks, probes and the golden run; see `docs/measurement.md`), `runner/` (the batch runner), `studies/` (one script per study, `configs/`), `paper/` (paper 1's tables, datapack and Zenodo deposit) |
 | `docs/` | the measurement guide, working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open library and infrastructure workplans, `docs/rng-audit.md` the RNG audit. The research notes, the research protocols (experiment design, feasibility checklist), the research workplans and the dated reviews are in [indrajala-research](https://github.com/davidbarkhuizen/indrajala-research) |
 
 ## Models
@@ -968,6 +971,11 @@ test passing, and:
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
   attention, multi-head attention and a transformer block, and a sequence task with causal
   masking, all done.
+- [docs/working-notes.md](docs/working-notes.md): the gotchas: worktrees, CI, studies, the
+  machines and ssh.
+- [scripts/README.md](scripts/README.md): the scripts' groups.
+- [docs/next-machine-recommendation.md](docs/next-machine-recommendation.md): a buying guide for
+  the next benchmark machine (2026-10-08).
 - [docs/next-steps.md](docs/next-steps.md): the work left over from completed workplans, and how
   to read those workplans in git history.
 - [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's

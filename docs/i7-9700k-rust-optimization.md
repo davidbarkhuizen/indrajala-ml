@@ -13,6 +13,12 @@ ratio table, the kernel protocol configurations and the epoch shares. The laptop
 were measured at the same code (D11). Ratios are Rust / numpy time, so above 1 means Rust lags.
 Absolute times aren't compared across machines, only ratios.
 
+**The numbers predate later crate work (status, 2026-10-30):** none of items 1-5 has been taken up
+as written, but the crate has changed since 2026-10-08: the conv downstream runs per example,
+threaded over examples (crate #65, 2026-10-18), NEON kernels for aarch64 (#63, #64), the vector
+`exp` and a build pinned to one codegen unit (the crate kernels plan, retired; next-steps.md, "From
+the crate kernels"). Re-measure a row (`op_call_timing.py` through `ab.py`) before acting on it.
+
 ## The gaps
 
 Every per-op row that lags numpy on the i7 or got markedly worse than on the laptop, with the

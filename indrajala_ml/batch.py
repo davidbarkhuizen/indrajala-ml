@@ -249,7 +249,7 @@ WEEKDAYS, ALL_DAYS = (0, 1, 2, 3, 4), (0, 1, 2, 3, 4, 5, 6)
 # commit and put before the worktree on PYTHONPATH, so every host's crate hash is the same and a venv's
 # own build (rebuilt in development) never reaches a batch. rust/ at 647f23c, built on pyramidon.
 CRATE = "crate-647f23c"
-# The owner's rules as data (2026-10-22): jebel by day only (solar), stone weekday nights and all weekend,
+# The owner's rules as data (2026-10-22; jebel on the grid around the clock since 2026-10-23): stone weekday nights and all weekend,
 # the laptops always; slots are cores less the worker's, bounded by memory (pyramidon and klip 5 GB):
 # klip all its cores (the owner: "klip always on, all cores", <= 85 C under the thermal guard; about
 # 220 MB a paper-cell run, 7 runs about 1.5 GB), pyramidon 3 beside development.

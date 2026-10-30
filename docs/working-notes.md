@@ -287,7 +287,7 @@ where you meet a new trap; delete one that no longer holds.
 - **`certified` = no wrong output, no wrong state, no output near tie;** `correct` without
   `certified` means an output near tie only. A carry counterexample shows as a wrong sum only
   through the next window and only at alignment 0, which the harness's hash picks for few cases:
-  feed it with `wr.example(triple, n - k, k, 0)`, not `WindowAdder`.
+  feed it with `wr.example(task, case, n - k, k, 0)` (alignment 0), not the harness's hashed draw.
 - **The certificate is fast at `k` 1** (about 2 s a 40-network pass) and slow at `k` 4 (minutes a
   network).
 - **The long-test JSON:** `lengths -> n -> properties -> id -> {cases, passed, failures}`;
@@ -481,7 +481,7 @@ where you meet a new trap; delete one that no longer holds.
   with no A/B running: `R=~/data/indrajala-ml/runs/ab; mkdir -p $R/runs && mv ~/code/ab-runs/20*-* $R/runs/
   && mv ~/code/ab-runs/* $R/ && mv ~/code/ab-worktrees $R/worktrees && git -C ~/code/indrajala-ml
   worktree repair $R/worktrees/*`, then `rmdir ~/code/ab-runs`. Moved: `pyramidon`, `jebel` (2026-10-29,
-  54 runs and 49 worktrees); `litshe` still to move.
+  54 runs and 49 worktrees), `litshe` (2026-10-29); none left.
 - **A host's first `ab.py remote run` from a checkout older than #1076** (its `scripts/ab.py`, before
   `scripts/` was grouped) fails after `--sync` with "No such file or directory:
   .../scripts/benchmark_machine_setup.sh": the old script syncs the checkout to main, then looks for
