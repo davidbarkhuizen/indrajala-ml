@@ -427,7 +427,7 @@ where you meet a new trap; delete one that no longer holds.
   takes 0.89x `jebel`'s time at 4 workers, 1.34x at 8 and 1.93x at 12, so 12 adds about 4% over 8:
   use 8. Measured only on early steps and 3.5-minute bursts; a long run's sustained clocks may be
   lower on a 15 W laptop.
-- **`klip`, the fourth machine: studies only.** `ssh klip` (192.168.1.104); Ryzen 7 3700U laptop
+- **`klip`, the fourth machine: studies only; off for now (the owner, 2026-10-30): leave it out of `--hosts`.** `ssh klip` (192.168.1.104); Ryzen 7 3700U laptop
   (4 cores, 8 threads), 5 GB, so about 3 small runs at once. Always on, all cores; the owner's
   limit (2026-10-21): <= 85 C, ideally <= 80 C. **CPU boost is off** (`cpu-boost-off.service`;
   `/sys/devices/system/cpu/cpufreq/boost` reads 0): boost overheats it. **Run every job under the
