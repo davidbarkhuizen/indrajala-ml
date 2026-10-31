@@ -117,6 +117,33 @@ Left to the owner (2026-10-10):
   - (c) A grid of peaks (1x, 2x, 4x) at full length on Tiny Shakespeare, the best used everywhere.
     Cons: about twice the cost.
 
+Settled 2026-10-31, before the study's data (the owner settled D7 and D8; this records how they run):
+
+- **D11. The study's registration. Settled.** `indrajala_ml/studies/lr_schedule_study.py`, with the
+  script in `scripts/studies/` (scripts are grouped since 2026-10-29). The model: the 2-layer arm
+  with rotary attention and no Position (the rotary-positions workplan's D9) and no dropout (the
+  attention-dropout study: dropout raised the held-out loss at this size everywhere but across
+  Euclid's shift). Both splits of step 7 on all four corpora (its loader has both everywhere): 24
+  cells of 5 seeds, 120 runs of 30 epochs; the arms share seeds, so initial weights and shuffles.
+  The cosine arms warm up for one epoch's steps, then decay over the other 29 epochs' to a tenth at
+  the last step. Each run's result is written as it finishes, and a restarted sweep skips the runs
+  it finds (resumption by whole runs); seed 0's final networks are saved with their tokenizers, for
+  step 9's `sample_text.py`. The claims, on the final-epoch held-out bits per character, paired by
+  (corpus, split, seed), 40 pairs a comparison (a screen at 5 seeds a cell):
+  - **C1**, cosine against constant, **one-sided**: cosine lower (a decaying rate ends nearer a
+    minimum than the constant rate's noise, this plan's Why). Holds when at least 26 of 40 pairs are
+    lower (sign test, one-sided p < 0.05 after Holm over C1 and C2); refuted otherwise. Under D8 a
+    loss is reported as possibly an under-tuned peak.
+  - **C2**, the recipe against cosine, **two-sided** (no direction: weight decay and clipping are
+    regularization and stability, not predicted at this size and length): differs when the
+    two-sided sign test is below 0.05 after Holm (at most 13 or at least 27 of 40 lower);
+    undecided otherwise.
+  - Descriptive only: each cell's means and paired differences, each arm's fall over its last three
+    epochs (converged or not), the training bits (the gap), the seconds per epoch.
+  - Hosts (the owner, 2026-10-31: "use all of stone and jebels resources"): `jebel` runs Herodotus
+    and the *Muqaddimah*, `stone` Tiny Shakespeare and Euclid, by their measured throughput; the
+    report merges the two result files.
+
 ## Stages
 
 1. **This workplan.**
