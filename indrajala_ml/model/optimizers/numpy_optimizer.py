@@ -6,6 +6,7 @@ The numpy networks' optimizer (array_optimizer_base.py): each rule's formulas on
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import cast
 
 import numpy as np
@@ -39,12 +40,14 @@ class NumpyOptimizer(ArrayOptimizerBase[FloatArray, TrainedArrayLayer[FloatArray
             squares += float(np.vdot(gradient, gradient))
         return squares
 
-    def _gradients(self, layer: TrainedArrayLayer[FloatArray]) -> list[FloatArray]:
+    def _gradients(self, layer: TrainedArrayLayer[FloatArray]) -> Sequence[FloatArray]:
         # the layer's gradients as a rule reads them: times the clip factor during a step that
-        # clips (OptimizerBase.step)
+        # clips (OptimizerBase.step); the layer's own tuple otherwise, so an unclipped step builds
+        # nothing
         scale = self._gradient_scale
-        gradients = layer.gradients()
-        return list(gradients) if scale is None else [gradient * scale for gradient in gradients]
+        if scale is None:
+            return layer.gradients()
+        return [gradient * scale for gradient in layer.gradients()]
 
     def step_single(
         self, index: int, layer: ArrayNetworkLayer[FloatArray], input_activation: FloatArray, learning_rate: float
