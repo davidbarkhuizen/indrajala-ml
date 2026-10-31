@@ -20,6 +20,7 @@ import pytest
 from indrajala_ml.data import addition_data as ad
 from indrajala_ml.data import modular_data as md
 from indrajala_ml.model.persistence.load_network import load_network
+from indrajala_ml.model.specs import window_presets as wp
 from indrajala_ml.model.specs.layer_specs import Attention, Residual, StateInput
 from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE
 from indrajala_ml.studies import inference
@@ -452,9 +453,9 @@ def test_e6s_windows_drop_the_attention_or_every_block():
         network = wr.build(wt.ADDITION, 1, 16, 8, 0, window)
         assert network.recurrence.snapped
     transformer, linear, ffn = (inner(wr.WINDOWS[w](wt.ADDITION)) for w in ("transformer", "linear", "ffn"))
-    assert sum(isinstance(spec, Attention) for spec in transformer) == wr.BLOCKS
+    assert sum(isinstance(spec, Attention) for spec in transformer) == wp.BLOCKS
     assert not any(isinstance(spec, Attention) for spec in linear + ffn)
-    assert sum(isinstance(spec, StateInput) for spec in ffn) == wr.BLOCKS
+    assert sum(isinstance(spec, StateInput) for spec in ffn) == wp.BLOCKS
     assert sum(isinstance(spec, StateInput) for spec in linear) == 1
     assert all(getattr(spec, "activation", "linear") in ("linear", "softmax") for spec in linear)
     assert wr.RunSpec("curriculum", 1, 16, 8, 0, window="linear").key == "curriculum-linear-k1-s16-m8-seed0"
