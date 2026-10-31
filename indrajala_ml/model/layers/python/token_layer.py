@@ -21,13 +21,14 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from indrajala_ml.model.layers.python.base_node import AbstractNode
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_biases
 from indrajala_ml.model.layers.python.relu_layer import relu_activation, relu_delta
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer, PassNode
+from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.pcg64 import Pcg64Generator, default_rng
 
@@ -169,7 +170,7 @@ class DropoutTokenNode(TokenNode):
         self._mask: float | None = None
 
 
-class TokenDropoutLayer(ParameterFreeLayer[DropoutTokenNode]):
+class TokenDropoutLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[DropoutTokenNode]):
     """
     Inverted dropout of each token's features (the attention-dropout workplan, D2, D6), in training
     only: each node draws its mask value m from the network's generator, node by node, m = 1.0 if
@@ -205,6 +206,10 @@ class TokenDropoutLayer(ParameterFreeLayer[DropoutTokenNode]):
             else:
                 node._mask = None  # pyright: ignore[reportPrivateUsage]
                 node.activate(x)
+
+    def decode_rows(self, R: list[list[float]]) -> list[list[float]]:
+        # the identity, as in inference
+        return R
 
     def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         for own_index, node in enumerate(self.nodes):
@@ -242,7 +247,7 @@ class TokenMeanLayer(ParameterFreeLayer[TokenNode]):
         return self.nodes[own_index % self.size].delta / self.tokens
 
 
-class EmbeddingLayer(ParameterFreeLayer[TokenNode]):
+class EmbeddingLayer(RowDecoding[Any], ParameterFreeLayer[TokenNode]):
     """
     T token ids, each in [0, vocabulary), as T tokens of size features: token t is row x_t of a
     learned (vocabulary, size) table E (the sequence task workplan, D5), one weight set per row.
@@ -260,11 +265,12 @@ class EmbeddingLayer(ParameterFreeLayer[TokenNode]):
         self.nodes = [TokenNode() for _ in range(tokens * size)]
         self.size = len(self.nodes)
 
-    def _ids(self) -> list[int]:
-        # the input's token ids, refused unless each is a whole number in [0, vocabulary)
-        values = [node.value() for node in self.input_layer.nodes]
+    def _ids(self, values: Sequence[float] | None = None) -> list[int]:
+        # the input's token ids (or a decode's), refused unless each is a whole number in [0, vocabulary)
+        if values is None:
+            values = [node.value() for node in self.input_layer.nodes]
         ids = [int(value) for value in values]
-        assert ids == values and min(ids) >= 0 and max(ids) < self.vocabulary, (
+        assert ids == list(values) and min(ids) >= 0 and max(ids) < self.vocabulary, (
             f"an Embedding reads token ids, whole numbers in [0, {self.vocabulary})"
         )
         return ids
@@ -274,6 +280,10 @@ class EmbeddingLayer(ParameterFreeLayer[TokenNode]):
         for t, token_id in enumerate(self._ids()):
             for j, weight in enumerate(self.rows[token_id].weights):
                 self.nodes[t * d + j].activate(weight)
+
+    def decode_rows(self, R: Sequence[float]) -> list[list[float]]:
+        # L ids as their L rows of E
+        return [list(self.rows[token_id].weights) for token_id in self._ids(R)]
 
     def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         for own_index, node in enumerate(self.nodes):
@@ -323,6 +333,19 @@ class PositionLayer(ParameterFreeLayer[TokenNode]):
         for i, (node, input_node) in enumerate(zip(self.nodes, self.input_layer.nodes)):
             node.activate(input_node.value() + self.rows[i // d].weights[i % d])
 
+    def start_decoding(self) -> None:
+        return None
+
+    def prefill(self, X: list[list[float]], cache: Any) -> list[list[float]]:
+        return [self._added(x, t) for t, x in enumerate(X)]
+
+    def step(self, x: list[list[float]], cache: Any, position: int) -> list[list[float]]:
+        assert position < len(self.rows), f"a learned Position has {len(self.rows)} rows; got position {position}"
+        return [self._added(x[0], position)]
+
+    def _added(self, x: Sequence[float], t: int) -> list[float]:
+        return [x_j + p_j for x_j, p_j in zip(x, self.rows[t].weights, strict=True)]
+
     def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)
@@ -343,7 +366,7 @@ class PositionLayer(ParameterFreeLayer[TokenNode]):
             row.set_weights(list(weights))
 
 
-class TokenDenseLayer(ParameterFreeLayer[TokenNode]):
+class TokenDenseLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[TokenNode]):
     """
     A dense layer acting on each token (D4), its units (W's rows and b) shared over the tokens:
     z_tk = sum_j(x_tj * W_kj) + b_k, then ReLU or the identity. Its units are drawn as a dense
@@ -360,12 +383,19 @@ class TokenDenseLayer(ParameterFreeLayer[TokenNode]):
         self.units = [WeightRow(self.input_size) for _ in range(size)]
         self.nodes = [TokenNode() for _ in range(tokens * size)]
 
+    def _token(self, x: Sequence[float]) -> list[float]:
+        # one token's outputs from its features
+        z = [fold([x_j * w_j for x_j, w_j in zip(x, unit.weights)]) + unit.bias for unit in self.units]
+        return [relu_activation(z_k) for z_k in z] if self.activation == "relu" else z
+
     def forward(self) -> None:
         for t in range(self.tokens):
-            x = token_values(self.input_layer.nodes, t, self.input_size)
-            for k, unit in enumerate(self.units):
-                z = fold([x_j * w_j for x_j, w_j in zip(x, unit.weights)]) + unit.bias
-                self.nodes[t * self.size + k].activate(relu_activation(z) if self.activation == "relu" else z)
+            outputs = self._token(token_values(self.input_layer.nodes, t, self.input_size))
+            for k, value in enumerate(outputs):
+                self.nodes[t * self.size + k].activate(value)
+
+    def decode_rows(self, R: list[list[float]]) -> list[list[float]]:
+        return [self._token(x) for x in R]
 
     def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         for own_index, node in enumerate(self.nodes):
@@ -429,15 +459,12 @@ class TokenSoftmaxLayer(TokenDenseLayer):
         super().__init__(input_layer, size, tokens, "linear")
         self.nodes = [TokenOutputNode(tokens) for _ in range(tokens * size)]
 
-    def forward(self) -> None:
-        for t in range(self.tokens):
-            x = token_values(self.input_layer.nodes, t, self.input_size)
-            z = [fold([x_j * w_j for x_j, w_j in zip(x, unit.weights)]) + unit.bias for unit in self.units]
-            m = max(z)
-            e = [exp(z_k - m) for z_k in z]
-            total = fold(e)
-            for k, e_k in enumerate(e):
-                self.nodes[t * self.size + k].activate(e_k / total)
+    def _token(self, x: Sequence[float]) -> list[float]:
+        z = [fold([x_j * w_j for x_j, w_j in zip(x, unit.weights)]) + unit.bias for unit in self.units]
+        m = max(z)
+        e = [exp(z_k - m) for z_k in z]
+        total = fold(e)
+        return [e_k / total for e_k in e]
 
     def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         raise NotImplementedError("a token-wise softmax layer is the output layer: its deltas are the output's")

@@ -19,6 +19,7 @@ from typing import Any, ClassVar
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.layers.python.backprop_node import BackpropNode
 from indrajala_ml.model.layers.python.base_node import AbstractNode
+from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer, WeightSet
 from indrajala_ml.pcg64 import Pcg64Generator
 
@@ -118,7 +119,7 @@ class ParameterFreeLayer[NodeT: PassNode]:
         pass
 
 
-class ForkLayer(ParameterFreeLayer[ForkNode]):
+class ForkLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[ForkNode]):
     """
     A residual block's first layer: its nodes pass the input layer's values on, and its delta is
     the sum of the two paths' gradients, the body's (its first layer's downstream_sum) and the
@@ -141,13 +142,18 @@ class ForkLayer(ParameterFreeLayer[ForkNode]):
         for node in self.nodes:
             node.forward()
 
+    def decode_rows(self, R: list[list[float]]) -> list[list[float]]:
+        # kept for the add (the generation workplan, D2)
+        self.decoded = R
+        return R
+
     def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         # next_layer is body_first
         for own_index, (node, add_node) in enumerate(zip(self.nodes, self.add.nodes)):
             node.delta = next_layer.downstream_sum(own_index) + add_node.delta
 
 
-class AddLayer(ParameterFreeLayer[AddNode]):
+class AddLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[AddNode]):
     """
     A residual block's last layer: each node the body's output plus the block's input, which its
     fork passed on. Its delta is the next layer's downstream_sum, and its downstream_sum is its
@@ -167,6 +173,11 @@ class AddLayer(ParameterFreeLayer[AddNode]):
     def forward(self) -> None:
         for node in self.nodes:
             node.forward()
+
+    def decode_rows(self, R: list[list[float]]) -> list[list[float]]:
+        return [
+            [y + x for y, x in zip(body, kept, strict=True)] for body, kept in zip(R, self.fork.decoded, strict=True)
+        ]
 
     def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         for own_index, node in enumerate(self.nodes):

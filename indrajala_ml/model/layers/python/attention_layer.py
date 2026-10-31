@@ -34,6 +34,13 @@ bits on the same Q and K. The backward pass rotates dQ and dK back, dq_j = dq'_j
 and dq_{j+d_k/2} = dq'_{j+d_k/2} c - dq'_j s, before project's products and the gradients. The
 caches _Q and _K are the rotated ones, _dQ and _dK the unrotated ones' gradients.
 
+A causal layer decodes (the generation workplan, D2, D3): prefill is the forward pass's blocks on
+the prompt's L <= T token rows, keeping their rotated keys and values in an AttentionCache; step
+projects one token, rotates its query and key by its position's row of the table (extended past T),
+appends its key and value, dropping the oldest past T, and attends from its query to every cached
+key, unmasked. Each sum is the full pass's left fold over the same terms, the masked keys' exact
+zeros left off, so a decode's bits are the full pass's within the window.
+
 The softmax's exp is this module's exp, which tests may replace, as attention_array_layer's.
 """
 
@@ -53,6 +60,7 @@ from indrajala_ml.model.layers.python.token_layer import (
     snapshot_rows,
     token_values,
 )
+from indrajala_ml.model.protocols.decoding_protocols import refuse_non_causal_decoding
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 from indrajala_ml.model.specs.rotary_table import rotary_table
 from indrajala_ml.pcg64 import Pcg64Generator, default_rng
@@ -93,6 +101,18 @@ def _dropped(A: Matrix, M: Matrix, keep: float) -> Matrix:
 def _side_by_side(blocks: Sequence[Matrix]) -> Matrix:
     # _columns' inverse: the blocks' rows joined, block 0's first
     return [[value for block in blocks for value in block[t]] for t in range(len(blocks[0]))]
+
+
+class AttentionCache:
+    """One decode's rotated keys K and values V, rows of h * d_k, the last c <= T tokens', oldest first."""
+
+    def __init__(self) -> None:
+        self.K: Matrix = []
+        self.V: Matrix = []
+
+    def append(self, K: Matrix, V: Matrix, window: int) -> None:
+        self.K = (self.K + K)[-window:]
+        self.V = (self.V + V)[-window:]
 
 
 class AttentionLayer(ParameterFreeLayer[TokenNode]):
@@ -185,13 +205,22 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
     def _head(self, A: Matrix, i: int) -> Matrix:
         return _columns(A, i * self.key_size, self.key_size)
 
-    def _rotated(self, A: Matrix, inverse: bool = False) -> Matrix:
-        # (T, h * d_k), each head's features j and j + d_k / 2 of row t rotated by token t's angles,
-        # or back
+    def _angles(self, start: int, tokens: int) -> tuple[Matrix, Matrix]:
+        # the table's rows for positions start to start + tokens - 1, extended (doubled) past its rows,
+        # which don't change
         assert self._table is not None
+        if start + tokens > len(self._table[0]):
+            positions = max(start + tokens, 2 * len(self._table[0]))
+            self._table = rotary_table(positions, self.key_size, self.rotary_base)
+        cos, sin = self._table
+        return cos[start : start + tokens], sin[start : start + tokens]
+
+    def _rotated(self, A: Matrix, inverse: bool = False, start: int = 0) -> Matrix:
+        # (T, h * d_k), each head's features j and j + d_k / 2 of row t rotated by token t's angles,
+        # or back; a decode's rows from position start
         d_k, half = self.key_size, self.key_size // 2
         out: Matrix = []
-        for row, cos, sin in zip(A, *self._table, strict=True):
+        for row, cos, sin in zip(A, *self._angles(start, len(A)), strict=True):
             new = list(row)
             for i in range(self.heads):
                 for j in range(half):
@@ -205,16 +234,18 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
 
     # project, attend, combine: the forward pass's blocks
 
-    def _project(self, X: Matrix) -> tuple[Matrix, Matrix, Matrix]:
-        # each over all heads, (T, h * d_k); a rotary layer's Q and K then rotated
+    def _project(self, X: Matrix, start: int = 0) -> tuple[Matrix, Matrix, Matrix]:
+        # each over all heads, (T, h * d_k); a rotary layer's Q and K then rotated (a decode's rows
+        # from position start)
         Q, K, V = _affine(X, self.queries), _affine(X, self.keys), _affine(X, self.values)
         if self._table is not None:
-            return self._rotated(Q), self._rotated(K), V
+            return self._rotated(Q, start=start), self._rotated(K, start=start), V
         return Q, K, V
 
-    def _attend(self, Q: Matrix, K: Matrix, V: Matrix) -> tuple[Matrix, Matrix, Matrix | None]:
+    def _attend(self, Q: Matrix, K: Matrix, V: Matrix, masked: bool = True) -> tuple[Matrix, Matrix, Matrix | None]:
         # each head's weights, mix and mask: P (T, h * T), H (T, h * d_k) and M (T, h * T, or None
-        # when nothing is drawn), packed
+        # when nothing is drawn), packed; a causal layer masks unless the keys are all at or before
+        # the queries (a decode's step)
         dropping = self.training and self.dropout > 0.0
         weights: list[Matrix] = []
         mixes: list[Matrix] = []
@@ -224,7 +255,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
             P: Matrix = []
             for i_query, q in enumerate(Qi):
                 s = [_dot(q, k) / self.scale for k in Ki]
-                if self.causal:
+                if self.causal and masked:
                     s[i_query + 1 :] = [-math.inf] * (len(s) - i_query - 1)
                 m = max(s)
                 e = [exp(s_u - m) for s_u in s]
@@ -251,6 +282,26 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         out = self._combine(self._H)
         for node, value in zip(self.nodes, (value for row in out for value in row)):
             node.activate(value)
+
+    # decoding (the generation workplan, D2, D3)
+
+    def start_decoding(self) -> AttentionCache:
+        refuse_non_causal_decoding(self.causal)
+        return AttentionCache()
+
+    def prefill(self, X: Matrix, cache: AttentionCache) -> Matrix:
+        # the prompt's L <= T rows at positions 0 to L - 1: the forward pass's blocks on L tokens
+        Q, K, V = self._project(X)
+        cache.append(K, V, self.tokens)
+        _P, H, _M = self._attend(Q, K, V)
+        return self._combine(H)
+
+    def step(self, x: Matrix, cache: AttentionCache, position: int) -> Matrix:
+        # one token's row at position: its query against the cached keys, its own appended
+        q, k, v = self._project(x, start=position)
+        cache.append(k, v, self.tokens)
+        _P, H, _M = self._attend(q, cache.K, cache.V, masked=False)
+        return self._combine(H)
 
     # the backward pass's blocks, last first
 

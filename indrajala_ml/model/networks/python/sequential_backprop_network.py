@@ -16,6 +16,7 @@ import math
 from collections.abc import Sequence
 from typing import Any, ClassVar, Self
 
+from indrajala_ml.generation.decoder import Decoder
 from indrajala_ml.model.layers.python.token_layer import TokenSoftmaxLayer
 from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase, randomize_fan_in_aware
@@ -26,7 +27,14 @@ from indrajala_ml.model.persistence.format2 import NetworkFile
 from indrajala_ml.model.protocols.classification import argmax_first_occurrence
 from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
 from indrajala_ml.model.specs.bounds import validate_class_count
-from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, refuse_token_wise_output, token_wise_output
+from indrajala_ml.model.specs.layer_specs import (
+    Dense,
+    LayerSpec,
+    Position,
+    expand_specs,
+    refuse_token_wise_output,
+    token_wise_output,
+)
 from indrajala_ml.model.specs.spec_hooks import GivenRule
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
 from indrajala_ml.model.specs.update_rules import UpdateRule
@@ -167,6 +175,21 @@ class SequentialSequenceBackpropNetwork(GivenRule, BackpropNetworkBase[Trainable
 
     def classify_state(self, state: tuple[float, ...]) -> tuple[int, ...]:
         return tuple(argmax_first_occurrence(token) for token in self.predict_probabilities(state))
+
+    def decoder(self) -> Decoder:
+        """
+        A Decoder over this network's layers (the generation workplan, D2), its rows lists of floats:
+        prefill(ids), then step(id), each the last token's probabilities. Refuses a network whose layers
+        can't all decode.
+        """
+        return Decoder(
+            self.trainable_layers,
+            self.tokens,
+            ids_input=lambda ids: [float(i) for i in ids],
+            last_row=lambda out: list(out[-1]),
+            full_pass=lambda ids: self.predict_probabilities(tuple(float(i) for i in ids))[-1],
+            learned_positions=any(isinstance(spec, Position) for spec in expand_specs(self.layer_specs)),
+        )
 
     def learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], tuple[int, ...]]]) -> None:
         self._learn_batch(learning_rate, batch)

@@ -19,6 +19,7 @@ from typing import Any, ClassVar
 from indrajala_ml.model.layers.python.batch_norm_layer import GammaAsWeights, fold
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer, PassNode
 from indrajala_ml.model.layers.python.token_layer import token_values
+from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
 
 
@@ -51,7 +52,7 @@ class LayerNormNode(PassNode):
         self._activation = value
 
 
-class LayerNormLayer(ParameterFreeLayer[LayerNormNode]):
+class LayerNormLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[LayerNormNode]):
     """
     y = gamma * xhat + beta over each of tokens tokens of features features, gamma and beta shared
     over the tokens. A flat layer is one token of its whole size, a conv front end's image
@@ -71,18 +72,26 @@ class LayerNormLayer(ParameterFreeLayer[LayerNormNode]):
     def _token(self, t: int) -> Sequence[LayerNormNode]:
         return self.nodes[t * self.features : (t + 1) * self.features]
 
-    def forward(self) -> None:
+    def _normalized(self, x: Sequence[float]) -> tuple[list[float], float, list[float]]:
+        # one token's y, its std and xhat
         d = self.features
+        mu = fold(x) / d
+        c = [x_j - mu for x_j in x]
+        var = fold([c_j * c_j for c_j in c]) / d
+        std = math.sqrt(var + self.epsilon)
+        xhat = [c_j / std for c_j in c]
+        return [channel.gamma * xhat_j + channel.beta for xhat_j, channel in zip(xhat, self.channels)], std, xhat
+
+    def forward(self) -> None:
         for t in range(self.tokens):
-            x = token_values(self.input_layer.nodes, t, d)
-            mu = fold(x) / d
-            c = [x_j - mu for x_j in x]
-            var = fold([c_j * c_j for c_j in c]) / d
-            std = math.sqrt(var + self.epsilon)
-            for node, c_j, channel in zip(self._token(t), c, self.channels):
-                node.xhat = c_j / std
+            y, std, xhat = self._normalized(token_values(self.input_layer.nodes, t, self.features))
+            for node, y_j, xhat_j in zip(self._token(t), y, xhat):
+                node.xhat = xhat_j
                 node.std = std
-                node.activate(channel.gamma * node.xhat + channel.beta)
+                node.activate(y_j)
+
+    def decode_rows(self, R: list[list[float]]) -> list[list[float]]:
+        return [self._normalized(x)[0] for x in R]
 
     def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
         # the delta, the next layer's downstream, then each token's dl/dx, which needs all of the
