@@ -43,4 +43,4 @@ extend-exclude = ["rust"]  # the crate's own repo (submodule)
 [tool.pyright]
 include = ["indrajala_ml", "tests", "scripts"]
 typeCheckingMode = "strict"
-executionEnvironments = [{ root = "tests", extraPaths = [".", "scripts/measurement", "scripts/studies", "scripts/data"], reportPrivateUsage = false }]
+executionEnvironments = [{ root = "tests", extraPaths = [".", "scripts/generation", "scripts/measurement", "scripts/studies", "scripts/data"], reportPrivateUsage = false }]
