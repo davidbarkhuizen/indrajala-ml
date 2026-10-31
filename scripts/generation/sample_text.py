@@ -100,9 +100,9 @@ def train(args: argparse.Namespace) -> None:
 def sample(args: argparse.Namespace) -> None:
     network: Any = load_network(args.model)
     tokenizer = CharacterTokenizer.load(tokenizer_path(args.model))
-    if len(tokenizer) != network.class_count:
+    if tokenizer.output_classes != network.class_count:
         sys.exit(
-            f"{tokenizer_path(args.model)} has {len(tokenizer)} symbols; the model's output has {network.class_count}"
+            f"{tokenizer_path(args.model)} has {tokenizer.output_classes} output classes; the model's output has {network.class_count}"
         )
     if not args.prompt:
         sys.exit("a prompt has at least one character")
