@@ -26,6 +26,7 @@ import numpy.typing as npt
 
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray, relu
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
+from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 
 exp = np.exp
 
@@ -131,7 +132,7 @@ class TokenMeanArrayLayer(_ParameterFree):
         return np.broadcast_to(share, (n, self.tokens, self.size)).reshape(n, self.input_size)
 
 
-class TokenDropoutArrayLayer(_ParameterFree):
+class TokenDropoutArrayLayer(RowDecoding[FloatArray], _ParameterFree):
     """
     Inverted dropout of each token's features (the attention-dropout workplan, D2), in training
     only: an (N, T * d) mask M per forward batch, drawn row-major from the network's generator
@@ -139,6 +140,7 @@ class TokenDropoutArrayLayer(_ParameterFree):
     keep. In inference it passes its input on and draws nothing. training and rng are set as a
     dense dropout layer's (DropoutArrayLayer); the mask the forward pass drew, None when it drew
     none, is what the backward pass reads, since the network switches training off before it.
+    It decodes as the identity, as it is in inference.
     """
 
     def __init__(self, tokens: int, features: int, drop_probability: float) -> None:
@@ -164,6 +166,9 @@ class TokenDropoutArrayLayer(_ParameterFree):
         self._mask_batch = (self.rng.random(X.shape) >= self._drop_probability).astype(np.float64)
         return X * self._mask_batch / self._keep_probability
 
+    def decode_rows(self, R: FloatArray) -> FloatArray:
+        return R
+
     def _backward(self, downstream: FloatArray) -> None:
         mask = self._mask_batch
         self.delta_batch = downstream if mask is None else downstream * mask / self._keep_probability
@@ -172,13 +177,14 @@ class TokenDropoutArrayLayer(_ParameterFree):
         return self.delta_batch
 
 
-class EmbeddingArrayLayer(BatchShaped):
+class EmbeddingArrayLayer(RowDecoding[FloatArray], BatchShaped):
     """
     T token ids, each in [0, vocabulary), as T tokens of size features: token t is row x_t of a
     learned (vocabulary, size) table E (the sequence task workplan, D5), a new array. The first
     layer, so it sends nothing back. E's gradient is a scatter-add of its delta's rows into the rows
     they read, in row order (example by example, token by token): np.add.at, unbuffered, a left fold
-    per row of E. E is drawn as a weight matrix of fan-in size, and not decayed, as P isn't.
+    per row of E. E is drawn as a weight matrix of fan-in size, and not decayed, as P isn't. It
+    decodes L ids, an (L,) vector, as their (L, size) rows.
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
@@ -212,6 +218,9 @@ class EmbeddingArrayLayer(BatchShaped):
     def forward_batch(self, X: FloatArray) -> FloatArray:
         return self.E[self._ids(X)].reshape(X.shape[0], self.size)
 
+    def decode_rows(self, R: FloatArray) -> FloatArray:
+        return self.E[self._ids(R)]
+
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream
 
@@ -230,7 +239,9 @@ class PositionArrayLayer(BatchShaped):
     """
     A learned (T, d) table P added to the tokens (D7), starting at zero and never decayed:
     out_t = x_t + P_t, a new array. Its delta is its downstream, and P's gradient is that delta
-    summed over the examples.
+    summed over the examples. It decodes a prompt's L tokens by adding P's first L rows, and the
+    token at position t by adding P_t, t < T: past T a learned position has no row, and the Decoder
+    falls back to a full pass (D3).
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
@@ -253,6 +264,16 @@ class PositionArrayLayer(BatchShaped):
     def forward_batch(self, X: FloatArray) -> FloatArray:
         return X + self.P.reshape(self.size)
 
+    def start_decoding(self) -> None:
+        return None
+
+    def prefill(self, X: FloatArray, cache: Any) -> FloatArray:
+        return X + self.P[: X.shape[0]]
+
+    def step(self, x: FloatArray, cache: Any, position: int) -> FloatArray:
+        assert position < self.P.shape[0], f"a learned Position has {self.P.shape[0]} rows; got position {position}"
+        return x + self.P[position]
+
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream
 
@@ -266,11 +287,12 @@ class PositionArrayLayer(BatchShaped):
         self.grad_P = np.zeros(self.P.shape)
 
 
-class TokenDenseArrayLayer(BatchShaped, ArrayLayer):
+class TokenDenseArrayLayer(RowDecoding[FloatArray], BatchShaped, ArrayLayer):
     """
     A dense layer acting on each token, its W (size, input_size) and b shared over the tokens (D4):
     ReLUArrayLayer's or AffineArrayLayer's expressions on the (N * T, input_size) rows. Its W and b
-    are drawn and stepped as a dense layer's.
+    are drawn and stepped as a dense layer's. It decodes the new tokens' rows by the same
+    expressions (_forward_rows).
     """
 
     def __init__(self, size: int, input_size: int, tokens: int, activation: Literal["relu", "linear"]) -> None:
@@ -278,11 +300,18 @@ class TokenDenseArrayLayer(BatchShaped, ArrayLayer):
         self.tokens = tokens
         self.activation = activation
 
+    def _forward_rows(self, R: FloatArray) -> FloatArray:
+        # (rows, input_size) to (rows, size)
+        Z = R @ self.W.T + self.b
+        return relu(Z) if self.activation == "relu" else Z
+
     def forward_batch(self, X: FloatArray) -> FloatArray:
         n = X.shape[0]
-        Z = X.reshape(n * self.tokens, self.input_size) @ self.W.T + self.b
-        self.A = (relu(Z) if self.activation == "relu" else Z).reshape(n, self.tokens * self.size)
+        self.A = self._forward_rows(X.reshape(n * self.tokens, self.input_size)).reshape(n, self.tokens * self.size)
         return self.A
+
+    def decode_rows(self, R: FloatArray) -> FloatArray:
+        return self._forward_rows(R)
 
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream * (self.A > 0.0) if self.activation == "relu" else downstream
@@ -313,12 +342,10 @@ class TokenSoftmaxArrayLayer(TokenDenseArrayLayer):
         assert size >= 2, f"a softmax layer needs at least 2 nodes to normalize over; got size={size}"
         super().__init__(size, input_size, tokens, "linear")
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
-        n = X.shape[0]
-        Z = X.reshape(n * self.tokens, self.input_size) @ self.W.T + self.b
+    def _forward_rows(self, R: FloatArray) -> FloatArray:
+        Z = R @ self.W.T + self.b
         e = exp(Z - Z.max(axis=1, keepdims=True))
-        self.A = (e / np.cumsum(e, axis=1)[:, -1:]).reshape(n, self.tokens * self.size)
-        return self.A
+        return e / np.cumsum(e, axis=1)[:, -1:]
 
     def compute_output_delta(self, reference: FloatArray) -> None:
         self.compute_output_delta_batch(reference[np.newaxis, :])

@@ -9,6 +9,9 @@ add and to its body's first layer.
 The network's loops don't change: each layer reads only the next one in the backward pass, and the
 fork reaches its add through the reference it is built with. The backward pass runs in reverse, so
 the add's delta and the body's are computed before the fork reads them.
+
+Both decode (the generation workplan, D2): the fork keeps the new tokens' rows, which its add adds
+to the body's; neither keeps anything between calls.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray
+from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 
 
@@ -35,7 +39,7 @@ class AffineArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], ArrayL
         return self.A
 
 
-class ForkArrayLayer(Hidden[FloatArray], ParameterFree[FloatArray]):
+class ForkArrayLayer(RowDecoding[FloatArray], Hidden[FloatArray], ParameterFree[FloatArray]):
     """
     A residual block's first layer: forward passes its input on unchanged, and keeps it (x, or X
     for a batch) for its add. Its delta is the sum of the two paths' gradients, the body's
@@ -58,6 +62,10 @@ class ForkArrayLayer(Hidden[FloatArray], ParameterFree[FloatArray]):
         self.X = X
         return X
 
+    def decode_rows(self, R: FloatArray) -> FloatArray:
+        self.decoded = R
+        return R
+
     def compute_hidden_delta(self, next_layer: Any) -> None:
         # next_layer is body_first
         self.delta = next_layer.downstream() + self.add.delta
@@ -72,7 +80,9 @@ class ForkArrayLayer(Hidden[FloatArray], ParameterFree[FloatArray]):
         return self.delta_batch
 
 
-class AddArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], ParameterFree[FloatArray]):
+class AddArrayLayer(
+    RowDecoding[FloatArray], Hidden[FloatArray], DeltaIsDownstream[FloatArray], ParameterFree[FloatArray]
+):
     """
     A residual block's last layer: the body's output plus the block's input, y + x, which its fork
     kept. Its delta is its downstream from the next layer, and its downstream is its delta, which
@@ -91,6 +101,9 @@ class AddArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], Parameter
     def forward_batch(self, X: FloatArray) -> FloatArray:
         self.A = X + self.fork.X
         return self.A
+
+    def decode_rows(self, R: FloatArray) -> FloatArray:
+        return R + self.fork.decoded
 
     def downstream(self) -> FloatArray:
         return self.delta

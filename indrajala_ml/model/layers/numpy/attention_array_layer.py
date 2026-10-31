@@ -29,6 +29,13 @@ backward pass rotates dQ and dK back, dq_j = dq'_j c + dq'_{j+d_k/2} s and dq_{j
 dq'_{j+d_k/2} c - dq'_j s, before project's products and the gradients. V isn't rotated. An
 unrotated layer computes what it did before the rotation.
 
+A causal layer decodes (the generation workplan, D2, D3): prefill is the forward pass's blocks on
+the prompt's L <= T tokens, and keeps their rotated keys and values, (L, h * d_k) each, in an
+AttentionCache; step projects one token, rotates its query and key by its position (rotary_table
+extended past T), appends its key and value to the cache, dropping the oldest past T, and attends
+from its query to every cached key, unmasked, since none is later. So a rotary layer's window slides
+exactly: scores depend on distances up to T - 1, as in training.
+
 The softmax's exp is this module's exp, which tests replace with another implementation's (it
 isn't correctly rounded), as batch norm's tests replace sigmoid.
 """
@@ -43,6 +50,7 @@ from indrajala_ml.model.layers.array.array_parameters import AttentionProjection
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
+from indrajala_ml.model.protocols.decoding_protocols import refuse_non_causal_decoding
 from indrajala_ml.model.specs.rotary_table import rotary_table
 
 exp = np.exp
@@ -51,6 +59,18 @@ exp = np.exp
 def _transpose(stack: FloatArray) -> FloatArray:
     # each matrix of a stack transposed
     return stack.swapaxes(-1, -2)
+
+
+class AttentionCache:
+    """One decode's rotated keys K and values V, (c, h * d_k) each, the last c <= T tokens', oldest first."""
+
+    def __init__(self, width: int) -> None:
+        self.K: FloatArray = np.zeros((0, width))
+        self.V: FloatArray = np.zeros((0, width))
+
+    def append(self, K: FloatArray, V: FloatArray, window: int) -> None:
+        self.K = np.concatenate((self.K, K))[-window:]
+        self.V = np.concatenate((self.V, V))[-window:]
 
 
 class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
@@ -99,10 +119,20 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         self.rotary_base = rotary_base
         self._rotary = positions == "rotary"
         if self._rotary:
-            cos, sin = rotary_table(tokens, self.key_size, rotary_base)
-            # (T, 1, d_k / 2): each token's row, the same for every example and head
-            self._cos = np.array(cos)[:, np.newaxis, :]
-            self._sin = np.array(sin)[:, np.newaxis, :]
+            self._extend_table(tokens)
+
+    def _extend_table(self, positions: int) -> None:
+        cos, sin = rotary_table(positions, self.key_size, self.rotary_base)
+        # (positions, 1, d_k / 2): each token's row, the same for every example and head
+        self._cos = np.array(cos)[:, np.newaxis, :]
+        self._sin = np.array(sin)[:, np.newaxis, :]
+
+    def _angles(self, start: int, tokens: int) -> tuple[FloatArray, FloatArray]:
+        # cos and sin of positions start to start + tokens - 1, the table extended (doubled) past its rows; the
+        # rows already there don't change
+        if start + tokens > self._cos.shape[0]:
+            self._extend_table(max(start + tokens, 2 * self._cos.shape[0]))
+        return self._cos[start : start + tokens], self._sin[start : start + tokens]
 
     def set_rng(self, rng: np.random.Generator) -> None:
         self.rng = rng
@@ -117,38 +147,50 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         # an (N, T * width) batch, or any stack of the same values, as (N * T, width) rows
         return batch.reshape(-1, width)
 
-    def _heads(self, rows: FloatArray) -> FloatArray:
-        # (N * T, h * d_k) rows as the (N, h, T, d_k) view: head i's columns, per example
-        return rows.reshape(-1, self.tokens, self.heads, self.key_size).transpose(0, 2, 1, 3)
+    def _heads(self, rows: FloatArray, tokens: int | None = None) -> FloatArray:
+        # (N * T, h * d_k) rows as the (N, h, T, d_k) view: head i's columns, per example; a decode's
+        # tokens given
+        T = self.tokens if tokens is None else tokens
+        return rows.reshape(-1, T, self.heads, self.key_size).transpose(0, 2, 1, 3)
 
     def _side_by_side(self, heads: FloatArray) -> FloatArray:
         # _heads' inverse: (N, h, T, d_k) as (N * T, h * d_k) rows (a copy when h > 1)
         return heads.transpose(0, 2, 1, 3).reshape(-1, self.width)
 
-    def _rotated(self, rows: FloatArray, inverse: bool = False) -> FloatArray:
+    def _rotated(
+        self, rows: FloatArray, inverse: bool = False, start: int = 0, tokens: int | None = None
+    ) -> FloatArray:
         # (N * T, h * d_k) rows, each head's features j and j + d_k / 2 rotated by the row's token's
-        # angles, or back
-        x = rows.reshape(-1, self.tokens, self.heads, self.key_size)
+        # angles, or back; a decode's tokens from position start
+        T = self.tokens if tokens is None else tokens
+        x = rows.reshape(-1, T, self.heads, self.key_size)
         half = self.key_size // 2
-        a, b, c, s = x[..., :half], x[..., half:], self._cos, self._sin
+        c, s = self._angles(start, T)
+        a, b = x[..., :half], x[..., half:]
         pairs = (a * c + b * s, b * c - a * s) if inverse else (a * c - b * s, a * s + b * c)
         return np.concatenate(pairs, axis=-1).reshape(rows.shape)
 
     # project, attend, combine: the forward pass's blocks
 
-    def _project(self, R: FloatArray) -> tuple[FloatArray, FloatArray, FloatArray]:
+    def _project(
+        self, R: FloatArray, start: int = 0, tokens: int | None = None
+    ) -> tuple[FloatArray, FloatArray, FloatArray]:
         # each the product, then the bias, over all heads: (N * T, h * d_k) each; a rotary layer's
-        # Q and K then rotated
+        # Q and K then rotated (a decode's tokens from position start)
         Q, K, V = R @ self.Wq.T + self.bq, R @ self.Wk.T + self.bk, R @ self.Wv.T + self.bv
         if self._rotary:
-            return self._rotated(Q), self._rotated(K), V
+            return self._rotated(Q, start=start, tokens=tokens), self._rotated(K, start=start, tokens=tokens), V
         return Q, K, V
 
-    def _attend(self, Q: FloatArray, K: FloatArray, V: FloatArray) -> tuple[FloatArray, FloatArray]:
-        # per example and head, on (N, h, T, d_k) views: the weights P (N, h, T, T) and H
+    def _attend(
+        self, Q: FloatArray, K: FloatArray, V: FloatArray, masked: bool = True
+    ) -> tuple[FloatArray, FloatArray]:
+        # per example and head, on (N, h, T, d_k) views: the weights P (N, h, T, T) and H; a causal
+        # layer masks unless the keys are all at or before the queries (a decode's step)
         S = (Q @ _transpose(K)) / self.scale
-        if self.causal:
-            S = np.where(self._future, -np.inf, S)
+        if self.causal and masked:
+            T = S.shape[-1]
+            S = np.where(self._future[:T, :T], -np.inf, S)
         m = S.max(axis=-1, keepdims=True)
         e = exp(S - m)
         P = e / np.cumsum(e, axis=-1)[..., -1:]
@@ -170,6 +212,28 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         self._H = self._side_by_side(H)
         self.A = self._combine(self._H).reshape(X.shape)
         return self.A
+
+    # decoding (the generation workplan, D2, D3)
+
+    def start_decoding(self) -> AttentionCache:
+        refuse_non_causal_decoding(self.causal)
+        return AttentionCache(self.width)
+
+    def prefill(self, X: FloatArray, cache: AttentionCache) -> FloatArray:
+        # the prompt's (L, d) rows, L <= T, at positions 0 to L - 1: the forward pass's blocks on L tokens
+        L = X.shape[0]
+        Q, K, V = self._project(X, tokens=L)
+        cache.append(K, V, self.tokens)
+        _P, H = self._attend(self._heads(Q, L), self._heads(K, L), self._heads(V, L))
+        return self._combine(self._side_by_side(H))
+
+    def step(self, x: FloatArray, cache: AttentionCache, position: int) -> FloatArray:
+        # one token's (1, d) row at position: its query against the cached keys, its own appended
+        q, k, v = self._project(x, start=position, tokens=1)
+        cache.append(k, v, self.tokens)
+        c = cache.K.shape[0]
+        _P, H = self._attend(self._heads(q, 1), self._heads(cache.K, c), self._heads(cache.V, c), masked=False)
+        return self._combine(self._side_by_side(H))
 
     # the backward pass's blocks, last first
 
