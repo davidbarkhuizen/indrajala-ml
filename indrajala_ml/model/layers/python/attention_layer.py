@@ -34,11 +34,13 @@ bits on the same Q and K. The backward pass rotates dQ and dK back, dq_j = dq'_j
 and dq_{j+d_k/2} = dq'_{j+d_k/2} c - dq'_j s, before project's products and the gradients. The
 caches _Q and _K are the rotated ones, _dQ and _dK the unrotated ones' gradients.
 
-A causal layer decodes (the generation workplan, D2, D3): prefill is the forward pass's blocks on
-the prompt's L <= T token rows, keeping their rotated keys and values in an AttentionCache; step
-projects one token, rotates its query and key by its position's row of the table (extended past T),
-appends its key and value, dropping the oldest past T, and attends from its query to every cached
-key, unmasked. Each sum is the full pass's left fold over the same terms, the masked keys' exact
+A causal layer decodes (the generation workplan, D2, D3; the segments workplan, D8): prefill is the
+forward pass's blocks on each of a batch's prompts' L <= T token rows, masked by segment when the
+batch has segments, keeping each row's last segment's rotated keys and values in an AttentionCache;
+step projects one token a row, rotates its query and key by its column's row of the table (extended
+past T), appends its key and value to its row's cache, emptied first when the token starts a
+segment, dropping the oldest past T, and attends from its query to every cached key, unmasked: the
+cache holds the keys a masked pass would leave unmasked, and no others. Each sum is the full pass's left fold over the same terms, the masked keys' exact
 zeros left off, so a decode's bits are the full pass's within the window.
 
 The softmax's exp is this module's exp, which tests may replace, as attention_array_layer's.
@@ -106,15 +108,23 @@ def _side_by_side(blocks: Sequence[Matrix]) -> Matrix:
 
 
 class AttentionCache:
-    """One decode's rotated keys K and values V, rows of h * d_k, the last c <= T tokens', oldest first."""
+    """
+    One decode's rotated keys K and values V per row of its batch, rows of h * d_k: each row's current
+    segment's, its last c <= T tokens', oldest first (the segments workplan, D8 (b)), and that
+    segment's id (1 for every row of a batch without segments).
+    """
 
     def __init__(self) -> None:
-        self.K: Matrix = []
-        self.V: Matrix = []
+        self.K: list[Matrix] = []
+        self.V: list[Matrix] = []
+        self.segments: list[int] = []
 
-    def append(self, K: Matrix, V: Matrix, window: int) -> None:
-        self.K = (self.K + K)[-window:]
-        self.V = (self.V + V)[-window:]
+    def append(self, n: int, k: Matrix, v: Matrix, segment: int, window: int) -> None:
+        # row n's new key and value, after emptying its cache when they start a segment (or are a pad's)
+        if segment != self.segments[n] or segment == 0:
+            self.K[n], self.V[n], self.segments[n] = [], [], segment
+        self.K[n] = (self.K[n] + k)[-window:]
+        self.V[n] = (self.V[n] + v)[-window:]
 
 
 class AttentionLayer(ParameterFreeLayer[TokenNode]):
@@ -297,19 +307,35 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         refuse_non_causal_decoding(self.causal)
         return AttentionCache()
 
-    def prefill(self, X: Matrix, cache: AttentionCache) -> Matrix:
-        # the prompt's L <= T rows at positions 0 to L - 1: the forward pass's blocks on L tokens
-        Q, K, V = self._project(X)
-        cache.append(K, V, self.tokens)
-        _P, H, _M = self._attend(Q, K, V)
-        return self._combine(H)
+    def prefill(self, X: Matrix, cache: AttentionCache, context: ForwardContext) -> Matrix:
+        # N prompts' N * L rows, L <= T, at columns 0 to L - 1: the forward pass's blocks on each
+        # row's L tokens, masked by segment when the batch has segments; each row keeps its last
+        # segment's keys and values
+        L = len(X) // context.examples
+        out: Matrix = []
+        for n in range(context.examples):
+            Q, K, V = self._project(X[n * L : (n + 1) * L])
+            segments = None if context.segments is None else list(context.segments[n])
+            _P, H, _M = self._attend(Q, K, V, segments=segments)
+            last = 1 if segments is None else segments[-1]
+            keep = [t for t in range(L) if segments is None or segments[t] == last]
+            cache.K.append([K[t] for t in keep][-self.tokens :])
+            cache.V.append([V[t] for t in keep][-self.tokens :])
+            cache.segments.append(last)
+            out += self._combine(H)
+        return out
 
-    def step(self, x: Matrix, cache: AttentionCache, position: int) -> Matrix:
-        # one token's row at position: its query against the cached keys, its own appended
-        q, k, v = self._project(x, start=position)
-        cache.append(k, v, self.tokens)
-        _P, H, _M = self._attend(q, cache.K, cache.V, masked=False)
-        return self._combine(H)
+    def step(self, x: Matrix, cache: AttentionCache, context: ForwardContext) -> Matrix:
+        # one token a row at context.column: each query against its row's cache, its own key and
+        # value appended, unmasked, since the cache holds its segment's keys only (D8 (b))
+        out: Matrix = []
+        for n, row in enumerate(x):
+            q, k, v = self._project([row], start=context.column)
+            segment = 1 if context.segments is None else context.segments[n][0]
+            cache.append(n, k, v, segment, self.tokens)
+            _P, H, _M = self._attend(q, cache.K[n], cache.V[n], masked=False)
+            out += self._combine(H)
+        return out
 
     # the backward pass's blocks, last first
 

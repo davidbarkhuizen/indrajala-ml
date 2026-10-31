@@ -29,12 +29,15 @@ backward pass rotates dQ and dK back, dq_j = dq'_j c + dq'_{j+d_k/2} s and dq_{j
 dq'_{j+d_k/2} c - dq'_j s, before project's products and the gradients. V isn't rotated. An
 unrotated layer computes what it did before the rotation.
 
-A causal layer decodes (the generation workplan, D2, D3): prefill is the forward pass's blocks on
-the prompt's L <= T tokens, and keeps their rotated keys and values, (L, h * d_k) each, in an
-AttentionCache; step projects one token, rotates its query and key by its position (rotary_table
-extended past T), appends its key and value to the cache, dropping the oldest past T, and attends
-from its query to every cached key, unmasked, since none is later. So a rotary layer's window slides
-exactly: scores depend on distances up to T - 1, as in training.
+A causal layer decodes (the generation workplan, D2, D3; the segments workplan, D8): prefill is the
+forward pass's blocks on a batch of N prompts' L <= T tokens, masked by segment when the batch has
+segments, and keeps their rotated keys and values, (N, L, h * d_k) each, and their segments, in an
+AttentionCache; step projects one token a row, rotates its query and key by its column
+(rotary_table extended past T), appends its key and value to its row's cache, dropping the oldest
+past T, and attends from its query to every cached key of its row, none of which is later: unmasked
+without segments, and with them masking another segment's keys and pads' (D4), one batched product
+per head. So a rotary layer's window slides exactly: scores depend on distances up to T - 1, as in
+training.
 
 The softmax's exp is this module's exp, which tests replace with another implementation's (it
 isn't correctly rounded), as batch norm's tests replace sigmoid.
@@ -65,15 +68,30 @@ def _transpose(stack: FloatArray) -> FloatArray:
 
 
 class AttentionCache:
-    """One decode's rotated keys K and values V, (c, h * d_k) each, the last c <= T tokens', oldest first."""
+    """
+    One decode's rotated keys K and values V, (N, c, h * d_k) each, the last c <= T columns' of the
+    batch's N rows, oldest first; and each key's segment, (N, c), or None while the batch has none
+    (every key then in segment 1).
+    """
 
     def __init__(self, width: int) -> None:
-        self.K: FloatArray = np.zeros((0, width))
-        self.V: FloatArray = np.zeros((0, width))
+        self.width = width
+        self.K: FloatArray = np.zeros((0, 0, width))
+        self.V: FloatArray = np.zeros((0, 0, width))
+        self.segments: npt.NDArray[np.intp] | None = None
 
-    def append(self, K: FloatArray, V: FloatArray, window: int) -> None:
-        self.K = np.concatenate((self.K, K))[-window:]
-        self.V = np.concatenate((self.V, V))[-window:]
+    def start(self, K: FloatArray, V: FloatArray, segments: npt.NDArray[np.intp] | None) -> None:
+        self.K, self.V, self.segments = K, V, segments
+
+    def append(self, K: FloatArray, V: FloatArray, segments: npt.NDArray[np.intp] | None, window: int) -> None:
+        # K and V (N, 1, h * d_k), segments (N, 1) or None
+        if segments is not None and self.segments is None:
+            self.segments = np.ones(self.K.shape[:2], dtype=np.intp)
+        if self.segments is not None:
+            assert segments is not None, "a batch with segments keeps them"
+            self.segments = np.concatenate((self.segments, segments), axis=1)[:, -window:]
+        self.K = np.concatenate((self.K, K), axis=1)[:, -window:]
+        self.V = np.concatenate((self.V, V), axis=1)[:, -window:]
 
 
 class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
@@ -231,20 +249,34 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         refuse_non_causal_decoding(self.causal)
         return AttentionCache(self.width)
 
-    def prefill(self, X: FloatArray, cache: AttentionCache) -> FloatArray:
-        # the prompt's (L, d) rows, L <= T, at positions 0 to L - 1: the forward pass's blocks on L tokens
-        L = X.shape[0]
+    def prefill(self, X: FloatArray, cache: AttentionCache, context: ForwardContext) -> FloatArray:
+        # N prompts' (N * L, d) rows, L <= T, at columns 0 to L - 1: the forward pass's blocks on L
+        # tokens, masked by segment when the batch has segments
+        N = context.examples
+        L = X.shape[0] // N
         Q, K, V = self._project(X, tokens=L)
-        cache.append(K, V, self.tokens)
-        _P, H = self._attend(self._heads(Q, L), self._heads(K, L), self._heads(V, L))
+        segments = None if context.segments is None else np.asarray(context.segments, dtype=np.intp)
+        cache.start(K.reshape(N, L, self.width), V.reshape(N, L, self.width), segments)
+        blocked = None if segments is None else attention_blocked(segments)
+        _P, H = self._attend(self._heads(Q, L), self._heads(K, L), self._heads(V, L), blocked=blocked)
         return self._combine(self._side_by_side(H))
 
-    def step(self, x: FloatArray, cache: AttentionCache, position: int) -> FloatArray:
-        # one token's (1, d) row at position: its query against the cached keys, its own appended
-        q, k, v = self._project(x, start=position, tokens=1)
-        cache.append(k, v, self.tokens)
-        c = cache.K.shape[0]
-        _P, H = self._attend(self._heads(q, 1), self._heads(cache.K, c), self._heads(cache.V, c), masked=False)
+    def step(self, x: FloatArray, cache: AttentionCache, context: ForwardContext) -> FloatArray:
+        # one token a row, (N, d), at context.column: each query against its row's cached keys, its
+        # own appended, masking keys of another segment or a pad's but its own (D4, D8)
+        N = x.shape[0]
+        q, k, v = self._project(x, start=context.column, tokens=1)
+        segments = None if context.segments is None else np.asarray(context.segments, dtype=np.intp).reshape(N, 1)
+        cache.append(k.reshape(N, 1, self.width), v.reshape(N, 1, self.width), segments, self.tokens)
+        c = cache.K.shape[1]
+        blocked = None
+        if cache.segments is not None:
+            assert segments is not None
+            blocked = (cache.segments != segments) | (cache.segments == 0)
+            blocked[:, -1] = False
+            blocked = blocked[:, np.newaxis, :]
+        K, V = cache.K.reshape(N * c, self.width), cache.V.reshape(N * c, self.width)
+        _P, H = self._attend(self._heads(q, 1), self._heads(K, c), self._heads(V, c), masked=False, blocked=blocked)
         return self._combine(self._side_by_side(H))
 
     # the backward pass's blocks, last first

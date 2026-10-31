@@ -943,18 +943,30 @@ returns a `Decoder` holding one cache per token layer, in all three implementati
 decoder = network.decoder()
 p = decoder.prefill(ids)  # the prompt; the last token's probabilities over the vocabulary
 p = decoder.step(next_id)  # one token's pass; its probabilities for the next
+ps = decoder.prefill_batch(prompts)  # several prompts, left-padded to the longest: a list per row
+ps = decoder.step_batch(next_ids)  # one token a row
 ```
 
 - **The protocol** (`indrajala_ml/model/protocols/decoding_protocols.py`): each token layer has
-  `start_decoding()`, `prefill(X, cache)` (the prompt's first `T` tokens' rows) and `step(x,
-  cache, position)`. A token-wise layer decodes its rows by its forward's expressions and keeps
-  nothing. Attention keeps its rotated keys and values: a step projects one token, rotates its
-  query and key by its position, appends its key and value, and attends from its query to every
-  cached key. A non-causal attention, `TokenMean` or `Patches` is refused at `decoder()`.
+  `start_decoding()`, `prefill(X, cache, context)` (a batch's prompts' first `T` columns' rows)
+  and `step(x, cache, context)` (one token a row); the context (`ForwardContext`) gives the
+  batch's size, the pass's column and, when the batch has segments, each token's segment and
+  position. A token-wise layer decodes its rows by its forward's expressions and keeps nothing.
+  Attention keeps its rotated keys and values: a step projects one token a row, rotates its query
+  and key by its column, appends its key and value, and attends from its query to its row's
+  cached keys. A non-causal attention, `TokenMean` or `Patches` is refused at `decoder()`.
+- **Batches and segments** (the segments workplan, D8): a single prompt is a batch of one. Prompts
+  of different lengths are left-padded, so every row decodes at the same column; a model whose
+  `Embedding` has segments masks the pads and starts a paragraph at each separator, in a prompt or
+  stepped: its tokens attend within it, a learned `Position` counting from its first token, as in
+  training. A model without segments has no pad and decodes prompts of one length. numpy masks a
+  batched cache by the keys' segments; Rust and pure Python keep each row's current paragraph's
+  keys only, the crate's `attention_step` per row.
 - **Past the window** each attention's cache drops its oldest key and value, so a rotary model's
   window slides exactly: scores depend on distances up to `T - 1`, as in training, and context
   still reaches further back through the layers. A model with no positions slides the same way. A
-  learned `Position` has no row past `T`, so from there each token is a full pass over the last
+  learned `Position` has no row past `T`: while each row's paragraph lies in the window its decode
+  stays cached and exact, and once one outgrows it each token is a full pass over every row's last
   `T` tokens, exact but uncached, with one warning.
 - **Parity** (D7): within the window a decode is its implementation's full pass by bits in pure
   Python and on Rust (the crate's `attention_step` is one chain per output, as its forward op),

@@ -117,6 +117,41 @@ Each lists the options considered, with pros and cons, and the choice.
   form batched decoders use), the pads segment 0 and masked, each row's positions counted from its
   first real token (D5). The array networks' `forward_rows` and `sequence_evaluate` accept padded
   examples too.
+  - **D8's form, settled at stage 8 (2026-10-31).** Each choice's options, pros and cons:
+    - *One decoder, a batch.* (a) *Chosen.* The Decoder decodes a batch of N prompts
+      (`prefill_batch`, `step_batch`); `prefill(ids)` and `step(id)` are a batch of one. Every
+      decoding layer's `prefill(X, cache, context)` and `step(x, cache, context)` take the batch's
+      rows (N * L, then N) and a forward context with N (`examples`), the pass's first column
+      (`column`, the rotary angles') and, when the batch has segments, each token's segment and
+      position. Pros: one path; a single prompt with a separator gets its paragraph mask and
+      positions too (step 9's decoder had neither, so it decoded such a prompt unlike training);
+      a batch of one with no special ids is today's computation, bit for bit. Cons: every decoding
+      layer's signature changes in all three implementations. (b) A second, batched decoder beside
+      step 9's. Cons: two paths, and the single one stays wrong on separators.
+    - *Padding.* (a) *Chosen.* Left-padded to the longest prompt, as D8 says. Prompts of one length
+      need no pad, so a model without segments decodes them (it refuses prompts of different
+      lengths). (b) Padded to the window T, so the prefill is the forward pass's own shape. Cons:
+      every prefill and step pays for T keys; a model without a pad can't decode a short prompt.
+    - *The step's mask.* The decoder tracks each row's segment (1 + the separators before the
+      token; a pad's 0) and position (from the segment's first token, D5), by segments.py's
+      rules. (a) *Chosen for numpy:* the cache keeps each key's segment and the step masks keys of
+      another segment or a pad's (its own key never), one batched product per head; with no
+      segments, no mask, today's path. (b) *Chosen for Rust and pure Python:* each row's cache
+      holds its current segment's keys only, emptied when a row starts a segment, so the step
+      attends to the whole cache unmasked: the crate's `attention_step` per row, unchanged, and
+      pure Python's per-row folds, the masked zeros left off as now. Equal to (a), since a masked
+      weight is exactly 0. Pros of the split: numpy batches now; the crate needs no new op yet.
+      Cons: two cache forms until a batched crate step (with the keys' segments) lets Rust take
+      (a), which next-steps.md records.
+    - *A learned Position past the window* (step 9's D3, per row). A row's cached decode is exact
+      while its current segment lies in the window (position < T): its query reads only that
+      segment's keys, all decoded with training's positions. Once any real row's position reaches T,
+      every step from there is a full pass over each row's last T tokens (a padded batch through
+      the network's forward pass, its own segment context), said once, as step 9's decoder did
+      past T.
+    - *A paragraph's first token.* D6 counts no target whose input is a separator, so the
+      distribution a decode draws after a separator is an untrained one; recorded in
+      next-steps.md (a begin-of-paragraph token, or counting that target, is a later choice).
 - **D9. Speed. Settled.** The mask is computed per head from the segment ids inside the crate's
   attend, never materialized as an `(N, T, T)` array in the crate. A batch whose segments are all
   1 (no packing, no padding) takes today's causal path, bit for bit and at today's speed. Skipping

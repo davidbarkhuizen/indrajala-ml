@@ -903,9 +903,17 @@ within rounding on numpy (D7).
 - **numpy's cached step is overhead-bound:** 5.1x uncached against Rust's 12.1x (jebel, the
   2-layer model). A step is a dozen small numpy calls per layer; a fused step would make it
   arithmetic-bound, but nothing needs numpy's decode fast yet.
-- **One sequence at a time.** A batch of decodes (several prompts, or beams) needs padded
-  inference batches, which step 11 (segments) brings; the Decoder's caches are per decode
-  already, so a batch is a cache with an example axis.
+- **Batches of decodes** came with step 11 (the segments workplan, D8): `prefill_batch` and
+  `step_batch`, left-padded. Beams build on them.
+- **A batched crate step.** Rust's batched decode runs `attention_step` once a row, each row's
+  cache its current paragraph's keys (the segments workplan, D8 (b)); a crate step over an
+  `(N, c)` cache with the keys' segments, numpy's form (D8 (a)), would batch it and give the two
+  one cache form.
+- **A paragraph's first token is drawn from an untrained row.** Training counts no target whose
+  input is a separator (the segments workplan, D6), so after a separator a decode samples from a
+  distribution no loss shaped. A begin-of-paragraph token, or counting that target (its input the
+  separator, attending to its own paragraph), would train it; step 12's longer windows are where
+  generating several paragraphs matters.
 - **A prompt longer than `T`** is prefilled up to `T` and then stepped token by token. A
   band-masked prefill in chunks of `T` would be one pass per chunk, and is exact.
 - **A learned `Position` past `T`** falls back to a full pass per token (D3 (a)), which is exact

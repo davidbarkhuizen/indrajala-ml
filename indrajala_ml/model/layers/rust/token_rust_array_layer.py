@@ -232,13 +232,22 @@ class PositionRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
     def start_decoding(self) -> None:
         return None
 
-    def prefill(self, X: pa.Array, cache: Any) -> pa.Array:
-        # the prompt's L rows plus P's first L
-        return X + self.P.take_rows(list(range(X.shape[0])))
+    def prefill(self, X: pa.Array, cache: Any, context: ForwardContext) -> pa.Array:
+        # N prompts' (N * L, d) rows plus each its position's row of P, or, with no segments, rows 0 to L - 1 each
+        if context.positions is not None:
+            positions = [int(t) for row in context.positions.tolist() for t in row]
+        else:
+            positions = list(range(X.shape[0] // context.examples)) * context.examples
+        return X + self.P.take_rows(positions)
 
-    def step(self, x: pa.Array, cache: Any, position: int) -> pa.Array:
-        assert position < self.tokens, f"a learned Position has {self.tokens} rows; got position {position}"
-        return x + self.P.take_rows([position])
+    def step(self, x: pa.Array, cache: Any, context: ForwardContext) -> pa.Array:
+        # one token a row plus its position's row, or, with no segments, the column's
+        if context.positions is not None:
+            positions = [int(row[0]) for row in context.positions.tolist()]
+        else:
+            positions = [context.column] * x.shape[0]
+        assert max(positions) < self.tokens, f"a learned Position has {self.tokens} rows; got {max(positions)}"
+        return x + self.P.take_rows(positions)
 
     def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self.delta
