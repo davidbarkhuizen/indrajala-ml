@@ -7,6 +7,7 @@ network) overrides the hook it changes.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Sequence
 from dataclasses import fields
 from typing import Any, ClassVar
@@ -62,7 +63,11 @@ class RulePreset:
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        cls.hyperparameters = tuple(f.name for f in fields(cls.rule))
+        # the rule's fields the preset's __init__ takes: a field added to a rule since (Adam's
+        # weight_decay, the training-recipe workplan, D9) keeps its default, so the presets' files
+        # and envelopes are unchanged
+        taken = inspect.signature(cls.__init__).parameters
+        cls.hyperparameters = tuple(f.name for f in fields(cls.rule) if f.name in taken)
 
     def _update_rule(self) -> UpdateRule:
         return self.rule(**{name: getattr(self, name) for name in self.hyperparameters})

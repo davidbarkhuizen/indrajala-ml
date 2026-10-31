@@ -7,6 +7,7 @@ examples.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 # Kingma & Ba (2014)'s published defaults. Unlike momentum's coefficient these have defaults:
@@ -30,11 +31,27 @@ class Momentum:
 
 @dataclass(frozen=True)
 class Adam:
-    """Kingma & Ba 2014, Algorithm 1, on g / B, with one step count t for the whole network."""
+    """
+    Kingma & Ba 2014, Algorithm 1, on g / B, with one step count t for the whole network; with
+    weight_decay, AdamW (Loshchilov & Hutter 2019, Algorithm 2; the training-recipe workplan, D9):
+    decoupled weight decay on the weights only (biases, gamma, beta and the position and embedding
+    tables aren't decayed, as WeightDecay treats them), in PyTorch's AdamW grouping, w * (1 - lr *
+    weight_decay) - lr * m_hat / (sqrt(v_hat) + epsilon). At 0, the default, the factor is exactly
+    1.0: Adam's bits.
+    """
 
     beta1: float = DEFAULT_BETA1
     beta2: float = DEFAULT_BETA2
     epsilon: float = DEFAULT_EPSILON
+    weight_decay: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not (math.isfinite(self.weight_decay) and self.weight_decay >= 0.0):
+            raise ValueError(f"weight_decay must be finite and at least 0; got {self.weight_decay!r}")
+
+    def decay_factor(self, learning_rate: float) -> float:
+        """1 - learning_rate * weight_decay, a decayed weight's factor before the Adam step."""
+        return 1.0 - learning_rate * self.weight_decay
 
     def bias_corrections(self, t: int) -> tuple[float, float]:
         """1 - beta1^t and 1 - beta2^t, every implementation's (the crate's in src/fused.rs)."""

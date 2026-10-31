@@ -175,6 +175,8 @@ class RustOptimizer(ArrayOptimizerBase[pa.Array, _Pair, tuple[pa.Array, pa.Array
             rule.epsilon,
             learning_rate,
             batch_size,
+            # AdamW's decay on the pair's weight; the op never decays its b (D9)
+            weight_decay=rule.weight_decay if pair.decayed else 0.0,
         )
         self._store_pair_state(index, pair, 2, [m_w, v_w, m_b, v_b])
         return w, b
